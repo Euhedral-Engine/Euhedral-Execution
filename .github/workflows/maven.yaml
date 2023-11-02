@@ -1,0 +1,62 @@
+name: Euhedral Execution Compile
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache macOS SDK
+        id: cache-macos-sdk
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/mise/installs/macos-sdk
+          key: macos-sdk-26.1-v1
+
+      - name: Cache Maven dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      - name: Download macOS SDK headers for Zig
+        if: ${{ !env.ACT && steps.cache-macos-sdk.outputs.cache-hit != 'true' }}
+        run: |
+          sudo apt-get update && sudo apt-get install -y xz-utils
+          mkdir -p ~/.local/share/mise/installs/macos-sdk
+          curl -f -L -s https://github.com/joseluisq/macosx-sdks/releases/download/26.1/MacOSX26.1.sdk.tar.xz | tar -xJ --strip-components=1 -C ~/.local/share/mise/installs/macos-sdk/
+
+      - name: Install mise tools
+        uses: jdx/mise-action@v2
+        with:
+          install: true
+          cache: true
+
+      - name: Fetch and Merge Multi-OS JNI Headers
+        if: ${{ !env.ACT }}
+        run: |
+          MISE_JDK_PATH=$(mise where java)
+          INCLUDE_DIR="$MISE_JDK_PATH/include"
+          mkdir -p "$INCLUDE_DIR/darwin" "$INCLUDE_DIR/win32"
+          
+          cp "$INCLUDE_DIR/linux/jni_md.h" "$INCLUDE_DIR/darwin/jni_md.h"
+          cp "$INCLUDE_DIR/linux/jni_md.h" "$INCLUDE_DIR/win32/jni_md.h"
+          
+          echo "Final JNI Include Directory Layout:"
+          ls -R "$INCLUDE_DIR"
+
+      - name: Build with Maven
+        run: |
+          mise exec -- mvn -B verify --file pom.xml
