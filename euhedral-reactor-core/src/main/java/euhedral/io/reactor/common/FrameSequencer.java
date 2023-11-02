@@ -1,0 +1,130 @@
+package euhedral.io.reactor.common;
+
+import euhedral.atomics.PaddedAtomicLong;
+import euhedral.hashing.HasherApi;
+import euhedral.io.impl.FrameFactory;
+import euhedral.io.impl.FrameFactory.FrameCreate;
+import euhedral.io.impl.FrameFactory.FrameReplace;
+import euhedral.io.impl.FrameManager;
+import euhedral.queues.PartitionedUnboundedSpscArrayQueue;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
+import org.reactivestreams.Publisher;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Sinks;
+import reactor.core.publisher.Sinks.EmitResult;
+
+public class FrameSequencer<T, R> {
+
+    private final long ingestPassword;
+    private final long sequencePassword;
+
+    private final PaddedAtomicLong wip = new PaddedAtomicLong(0);
+    private final PartitionedUnboundedSpscArrayQueue<SequencedFrame<T, R>> sequence = new PartitionedUnboundedSpscArrayQueue<>(
+            1, 32_768, 1);
+
+    private final Sinks.Many<R> output = Sinks.unsafe().many().unicast()
+            .onBackpressureBuffer(new PartitionedUnboundedSpscArrayQueue<>(8_192));
+
+    public FrameSequencer(long ingestPassword) {
+        this.ingestPassword = ingestPassword;
+        this.sequencePassword = HasherApi.combine(ingestPassword, ingestPassword + HasherApi.BASE_SEED);
+    }
+
+    public void drain(long password) {
+        if (password == sequencePassword) {
+            drainInternal();
+        }
+    }
+
+    public Function<Flux<T>, Publisher<SequencedFrame<T, R>>> mapTransformer(
+            Function<T, R> function,
+            int recycleCapacity) {
+        return flux -> map(flux, function, recycleCapacity);
+    }
+
+    public Flux<SequencedFrame<T, R>> map(Flux<T> flux, Function<T, R> function,
+            int recycleCapacity) {
+        final AtomicBoolean killSwitch = new AtomicBoolean(false);
+
+        FrameManager<T, SequencedFrame<T, R>> recycler = new FrameManager<>(recycleCapacity,
+                ingestPassword);
+        FrameCreate<T, SequencedFrame<T, R>> frameCreate = (idHash, data) -> {
+            SequencedFrame<T, R> frame = new SequencedFrame<>(idHash, data,
+                    function,
+                    killSwitch, this, recycler);
+            frame.setOrdered(false);
+            registerFrame(frame);
+            return frame;
+        };
+        FrameReplace<T, SequencedFrame<T, R>> frameReplace = (data, oldFrame) -> {
+            oldFrame.replace(data);
+            oldFrame.setOrdered(false);
+            registerFrame(oldFrame);
+        };
+        recycler.setFactory(new FrameFactory<>(frameCreate, frameReplace));
+
+        return flux.map(obj -> recycler.generate(obj, ingestPassword))
+                .doFinally(sig -> {
+                    killSwitch.set(true);
+                    sequence.clear();
+                    output.tryEmitComplete();
+                    recycler.close();
+                });
+    }
+
+    public Flux<R> output() {
+        return output.asFlux();
+    }
+
+    private void drainInternal() {
+        if (this.wip.getAndIncrement() == 0) {
+            try {
+                do {
+                    SequencedFrame<T, R> frame;
+                    while ((frame = this.sequence.peek()) != null) {
+                        if (frame.isReady()) {
+                            SequencedFrame<T, R> temp = this.sequence.poll();
+                            while (frame != temp) {
+                                temp = this.sequence.poll();
+                                if (temp == null) {
+                                    break;
+                                }
+                            }
+                            if (temp == null) {
+                                break;
+                            }
+
+                            EmitResult result;
+                            while (!(result = output.tryEmitNext(frame.getRetVal())).isSuccess()) {
+                                if (result == EmitResult.FAIL_CANCELLED
+                                        || result == EmitResult.FAIL_TERMINATED
+                                        || result == EmitResult.FAIL_ZERO_SUBSCRIBER) {
+                                    frame.kill();
+                                    this.sequence.clear();
+                                    this.output.tryEmitComplete();
+                                    return;
+                                }
+                                Thread.yield();
+                            }
+                        } else {
+                            break;
+                        }
+                    }
+                } while (this.wip.decrementAndGet() != 0);
+            } catch (Throwable t) {
+                System.err.println("Uncaught Exception: " + t.getMessage());
+            } finally {
+                this.wip.setRelease(0);
+            }
+        }
+    }
+
+    private void registerFrame(SequencedFrame<T, R> frame) {
+        frame.setSequencerPassword(sequencePassword);
+        while (!this.sequence.offer(frame)) {
+            Thread.onSpinWait();
+        }
+    }
+}

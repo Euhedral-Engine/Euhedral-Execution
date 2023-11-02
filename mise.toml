@@ -1,0 +1,11 @@
+[tools]
+apple-codesign = "latest"
+java = "25"
+maven = "latest"
+zig = "0.16.0"
+
+[tool_alias]
+apple-codesign = "github:indygreg/apple-platform-rs"
+
+[env]
+SDKROOT   = "{{env.HOME}}/.local/share/mise/installs/macos-sdk"
