@@ -24,6 +24,7 @@
 		<java.version>17</java.version>
 
 		<h2.version>2.4.240</h2.version>
+		<jackson.version>3.0.4</jackson.version>
 		<lombok.version>1.18.42</lombok.version>
 		<spring-boot.version>4.0.1</spring-boot.version>
 	</properties>
@@ -40,6 +41,12 @@
 				<groupId>jakarta.persistence</groupId>
 				<artifactId>jakarta.persistence-api</artifactId>
 				<version>3.2.0</version>
+			</dependency>
+
+			<dependency>
+				<groupId>tools.jackson.core</groupId>
+				<artifactId>jackson-databind</artifactId>
+				<version>${jackson.version}</version>
 			</dependency>
 
 			<dependency>
@@ -92,5 +99,6 @@
 
 	<modules>
 		<module>euhedral-spring</module>
+		<module>euhedral-data-models</module>
 	</modules>
 </project>
