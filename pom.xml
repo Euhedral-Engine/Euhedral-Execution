@@ -10,7 +10,7 @@
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 
-	<groupId>com.ccri.euhedral</groupId>
+	<groupId>com.euhedral</groupId>
 	<artifactId>euhedral-backend</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<packaging>pom</packaging>
@@ -23,9 +23,12 @@
 		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 		<java.version>17</java.version>
 
-		<h2.version>2.4.240</h2.version>
 		<jackson.version>3.0.4</jackson.version>
+		<junit-jupiter.version>6.0.2</junit-jupiter.version>
 		<lombok.version>1.18.42</lombok.version>
+		<reactor-test.version>3.7.12</reactor-test.version>
+		<r2dbc-h2.version>1.0.1.RELEASE</r2dbc-h2.version>
+		<h2.version>2.2.224</h2.version>
 		<spring-boot.version>4.0.1</spring-boot.version>
 	</properties>
 
@@ -65,9 +68,14 @@
 				<version>${spring-boot.version}</version>
 			</dependency>
 			<dependency>
-				<groupId>org.springframework.data</groupId>
-				<artifactId>spring-data-jpa</artifactId>
+				<groupId>org.springframework.boot</groupId>
+				<artifactId>spring-boot-starter-data-r2dbc</artifactId>
 				<version>${spring-boot.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.postgresql</groupId>
+				<artifactId>r2dbc-postgresql</artifactId>
+				<version>1.0.8.RELEASE</version>
 			</dependency>
 			<dependency>
 				<groupId>org.springframework.boot</groupId>
@@ -76,21 +84,28 @@
 			</dependency>
 
 			<dependency>
-				<groupId>com.h2database</groupId>
-				<artifactId>h2</artifactId>
-				<version>${h2.version}</version>
+				<groupId>org.assertj</groupId>
+				<artifactId>assertj-core</artifactId>
+				<version>3.9.1</version>
+				<scope>test</scope>
+			</dependency>
+			<dependency>
+				<groupId>org.junit.jupiter</groupId>
+				<artifactId>junit-jupiter</artifactId>
+				<version>${junit-jupiter.version}</version>
+				<scope>test</scope>
+			</dependency>
+
+			<dependency>
+				<groupId>io.projectreactor</groupId>
+				<artifactId>reactor-test</artifactId>
+				<version>${reactor-test.version}</version>
 				<scope>test</scope>
 			</dependency>
 
 			<dependency>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-starter-test</artifactId>
-				<version>${spring-boot.version}</version>
-				<scope>test</scope>
-			</dependency>
-			<dependency>
-				<groupId>org.springframework.boot</groupId>
-				<artifactId>spring-boot-starter-data-jpa-test</artifactId>
 				<version>${spring-boot.version}</version>
 				<scope>test</scope>
 			</dependency>
