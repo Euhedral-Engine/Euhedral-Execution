@@ -1,6 +1,7 @@
 package euhedral.common.io.dispatch;
 
 import euhedral.common.io.dispatch.interfaces.SlotManager;
+import euhedral.common.io.dispatch.utils.ResourceMonitor;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.ratelimiter.RateLimiter;
 import io.github.resilience4j.ratelimiter.RateLimiterConfig;
@@ -13,6 +14,7 @@ import io.micrometer.core.instrument.Timer;
 import java.time.Duration;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -30,29 +32,71 @@ import reactor.core.publisher.Sinks.One;
 import reactor.core.scheduler.Scheduler;
 import reactor.util.retry.Retry;
 
+/**
+ * Adaptive concurrency and rate control implementation designed to
+ * provide stable, resource-aware ingress governance.
+ *
+ * <p>This class regulates request dispatch using layered feedback mechanisms:
+ *
+ * <ul>
+ *     <li>Latency-based adaptive concurrency (Vegas-style estimation)</li>
+ *     <li>Resource-aware concurrency envelope (CPU and memory pressure)</li>
+ *     <li>Dynamic waiter queue capping</li>
+ *     <li>Configurable overload handling (reject, delay, or drop)</li>
+ *     <li>Integrated rate limiting and circuit breaking</li>
+ * </ul>
+ *
+ * <h2>Control Model</h2>
+ *
+ * <ul>
+ *     <li><b>Hard maximum</b> - absolute configured concurrency ceiling.</li>
+ *     <li><b>Effective maximum</b> - resource-adjusted concurrency envelope.</li>
+ *     <li><b>Current concurrency</b> - latency-driven adaptive value bounded by effective maximum.</li>
+ * </ul>
+ *
+ * The effective maximum is derived from CPU and memory utilization and
+ * updated smoothly to prevent oscillation. The adaptive concurrency logic
+ * adjusts within this envelope based on observed latency and queueing.
+ *
+ * <h2>Admission Control</h2>
+ *
+ * When concurrency is saturated, callers enter a waiter queue. The queue
+ * capacity scales with the effective concurrency to prevent unbounded memory
+ * growth. If the queue reaches capacity, behavior is governed by
+ * {@link OverloadStrategy}
+ *
+ * Overload conditions represent admission control decisions and should
+ * generally be ignored by the CircuitBreader.
+ *
+ * <h2>Threading</h2>
+ *
+ * This class is non-blocking and designed for use with reactive pipelines
+ * and virtual threads. Coordination relies on atomic primitives and
+ * lock-free data structures.
+ *
+ * <p> Intended for use as a global ingress governor or per-service adaptive
+ * dispatcher.</p>
+ * </p>
+ */
 @Getter(AccessLevel.PROTECTED)
 public class DefaultSlotManager implements SlotManager {
 
     @Getter
-    protected final int maxRatePerSecond;
-    @Getter
-    protected final int minRatePerSecond;
-    @Getter
-    protected final int concurrencyLimit;
-    @Getter
-    protected final long targetLatencyNs;
-
+    protected final Config config;
+    protected final ResourceMonitor resourceMonitor;
+    protected final Scheduler scheduler;
     // State
     protected final AtomicInteger inFlight = new AtomicInteger(0);
     protected final AtomicInteger currentConcurrency = new AtomicInteger(0);
+    protected final AtomicInteger effectiveConcurrencyLimit = new AtomicInteger(1);
     protected final AtomicInteger currentRate = new AtomicInteger(0);
-
     protected final AtomicLong baseLatencyNs = new AtomicLong(Long.MAX_VALUE);
     protected final AtomicLong windowStartNs = new AtomicLong(0);
     protected final AtomicLong windowMinLatencyNs = new AtomicLong(Long.MAX_VALUE);
+    // Waiters
     protected final ConcurrentLinkedDeque<One<Void>> waiters = new ConcurrentLinkedDeque<>();
-    protected final Scheduler scheduler;
-
+    protected final AtomicInteger effectiveMaxWaiters = new AtomicInteger();
+    protected final AtomicInteger currentWaiters = new AtomicInteger(0);
     // Metrics
     protected final AtomicLong lastMeasuredLatencyNs = new AtomicLong(500_000_000L);
     protected final AtomicLong previousWindowCount = new AtomicLong(0);
@@ -66,30 +110,27 @@ public class DefaultSlotManager implements SlotManager {
     // Resilience
     protected volatile RateLimiter rateLimiter;
 
-    public DefaultSlotManager(int initialRatePerSecond, int minRatePerSecond, int maxRatePerSecond,
-            int initialConcurrency, int concurrencyLimit,
-            @NonNull Duration targetLatency,
+    public DefaultSlotManager(@NonNull Config config,
+            ResourceMonitor resourceMonitor,
             @NonNull CircuitBreaker circuitBreaker,
             @NonNull Scheduler scheduler) {
-        this(initialRatePerSecond, minRatePerSecond, maxRatePerSecond, initialConcurrency,
-                concurrencyLimit, targetLatency, circuitBreaker, scheduler, null);
+        this(config, resourceMonitor, circuitBreaker, scheduler, null);
     }
 
-    public DefaultSlotManager(int initialRatePerSecond, int minRatePerSecond, int maxRatePerSecond,
-            int initialConcurrency, int concurrencyLimit,
-            @NonNull Duration targetLatency,
+    public DefaultSlotManager(@NonNull Config config,
+            ResourceMonitor resourceMonitor,
             @NonNull CircuitBreaker circuitBreaker,
             @NonNull Scheduler scheduler, MeterRegistry registry) {
-        this.maxRatePerSecond = maxRatePerSecond;
-        this.minRatePerSecond = minRatePerSecond;
-        this.concurrencyLimit = concurrencyLimit;
+        this.config = config;
+        this.resourceMonitor = resourceMonitor;
         this.scheduler = scheduler;
-        this.targetLatencyNs = targetLatency.toNanos();
 
-        this.currentRate.set(initialRatePerSecond);
-        this.currentConcurrency.set(initialConcurrency);
+        this.currentRate.set(config.initialRatePerSecond);
+        this.currentConcurrency.set(config.initialConcurrency);
+        this.effectiveConcurrencyLimit.set(config.maxConcurrency);
+        this.effectiveMaxWaiters.set(config.maxWaiters);
 
-        this.rateLimiter = buildRateLimiter(initialRatePerSecond);
+        this.rateLimiter = buildRateLimiter(config.initialRatePerSecond);
         this.circuitBreaker = circuitBreaker;
         this.registry = registry;
 
@@ -173,6 +214,13 @@ public class DefaultSlotManager implements SlotManager {
             }
 
             Sinks.One<Void> waiter = Sinks.one();
+
+            int waiterLimit = effectiveMaxWaiters.get();
+            if (currentWaiters.incrementAndGet() > waiterLimit) {
+                currentWaiters.decrementAndGet();
+                return handleOverload(waiterLimit);
+            }
+
             waiters.add(waiter);
 
             if (tryAcquireAfterEnqueue(waiter)) {
@@ -191,8 +239,10 @@ public class DefaultSlotManager implements SlotManager {
                             sample.stop(slotAcquisitionTimer);
                         }
                     })
-                    .doOnCancel(() -> waiters.remove(waiter))
-                    .doOnError(e -> waiters.remove(waiter));
+                    .doFinally(sig -> {
+                        waiters.remove(waiter);
+                        currentWaiters.decrementAndGet();
+                    });
         });
     }
 
@@ -216,6 +266,7 @@ public class DefaultSlotManager implements SlotManager {
 
             if (inFlight.compareAndSet(current, current + 1)) {
                 waiters.remove(waiter);
+                currentWaiters.decrementAndGet();
                 return true;
             }
         }
@@ -255,6 +306,8 @@ public class DefaultSlotManager implements SlotManager {
         baseLatencyNs.updateAndGet(prev -> Math.min(prev, minLatency));
 
         double queueEstimate = getVegasQueueEstimate(latencyNs);
+        updateEffectiveConcurrencyLimit();
+        updateWaiterLimit();
         updateConcurrency(queueEstimate);
 
         tryResetWindow();
@@ -272,13 +325,13 @@ public class DefaultSlotManager implements SlotManager {
             return 0.0;
         }
 
-        // Standard Vegas calculation: (Expected - Actual) / Expected
-        // Simplified to: Concurrency * (Latency - Base) / Latency
-        if (latencyNs > 0) {
-            return (double) currentConcurrency.get() * (latencyNs - base) / (double) latencyNs;
-        }
+        double target = config.targetLatencyNanos() > 0 ? config.targetLatencyNanos() : base;
+        double normalized = (latencyNs - base) / (target - base);
+        normalized = Math.max(0.0, normalized);
 
-        return 0.0;
+        // Standard Vegas calculation: (Expected - Actual) / Expected
+        // Simplified to currentConcurrency * scaledQueueDepth
+        return currentConcurrency.get() * normalized;
     }
 
     protected void updateConcurrency(double queueEstimate) {
@@ -321,7 +374,8 @@ public class DefaultSlotManager implements SlotManager {
             }
 
             // Apply bounds and drain waiting threads
-            int finalLimit = Math.max(2, Math.min(nextConcurrency, concurrencyLimit));
+            int finalLimit = Math.max(2,
+                    Math.min(nextConcurrency, effectiveConcurrencyLimit.get()));
             drainWaiters();
             return finalLimit;
         });
@@ -351,6 +405,80 @@ public class DefaultSlotManager implements SlotManager {
         }
     }
 
+    protected void updateEffectiveConcurrencyLimit() {
+        if (resourceMonitor == null) {
+            return;
+        }
+
+        double cpu = resourceMonitor.cpuUtilization();
+        double mem = resourceMonitor.memoryUtilization();
+
+        double pressure = Math.max(cpu, mem);
+
+        double factor;
+
+        if (pressure < 0.70) {
+            factor = 1.0;
+        } else {
+            double normalized = (pressure - 0.70) / 0.30;
+            factor = 1.0 - (0.7 * normalized);
+        }
+
+        factor = Math.clamp(factor, 0.3, 1.0);
+        int target = (int) Math.ceil(config.maxConcurrency * factor);
+
+        // Shrink fast, grow slow
+        effectiveConcurrencyLimit.updateAndGet(current -> {
+            if (target < current) {
+                int next = (int) Math.ceil(current * 0.85);
+                return Math.max(target, next);
+            } else {
+                int delta = target - current;
+                return current + Math.max(1, delta / 8);
+            }
+        });
+    }
+
+    protected void updateWaiterLimit() {
+        effectiveMaxWaiters.updateAndGet(current -> {
+            int effective = effectiveConcurrencyLimit.get();
+            int target = Math.clamp(effective * 6L, 100, config.maxWaiters);
+
+            if (target < current) {
+                int next = (int) Math.ceil(current * 0.8);
+                return Math.max(target, next);
+            } else {
+                int delta = target - current;
+                int next = current + Math.max(10, delta / 6);
+                return Math.min(target, next);
+            }
+        });
+    }
+
+    protected Mono<Void> handleOverload(int limit) {
+        return switch (config.overloadStrategy) {
+            case REJECT -> Mono.error(new OverloadException("Wait queue full (cap=" + limit + ")"));
+            case DELAY -> {
+                double pressure = currentWaiters.get() / (double) effectiveMaxWaiters.get();
+                pressure = Math.clamp(pressure, 0.0, 2.0);
+
+                long baseDelay = 2 + ThreadLocalRandom.current().nextLong(3);
+                long maxDelay = 50;
+
+                long delayMs = (long) (baseDelay + (maxDelay * pressure * pressure));
+                delayMs = Math.clamp(delayMs, baseDelay, maxDelay);
+
+                yield Mono.delay(Duration.ofMillis(delayMs)).then(acquirePermit());
+            }
+            case DROP_SILENT -> Mono.empty();
+        };
+    }
+
+    @Override
+    public int getConcurrencyLimit() {
+        return config.maxConcurrency();
+    }
+
     private void registerPrometheusMetrics() {
         Gauge.builder("dispatch.concurrency.current", currentConcurrency, AtomicInteger::get)
                 .description("Current adaptive concurrency limit")
@@ -367,5 +495,28 @@ public class DefaultSlotManager implements SlotManager {
         Gauge.builder("dispatch.rate.current", currentRate, AtomicInteger::get)
                 .description("Current dispatch rate (dispatch/sec)")
                 .register(registry);
+    }
+
+    public enum OverloadStrategy {
+        REJECT,
+        DELAY,
+        DROP_SILENT
+    }
+
+    public record Config(int initialRatePerSecond, int minRatePerSecond, int maxRatePerSecond,
+                         int initialConcurrency, int maxConcurrency, int maxWaiters,
+                         Duration targetLatency, OverloadStrategy overloadStrategy) {
+
+        public long targetLatencyNanos() {
+            return targetLatency().toNanos();
+        }
+
+    }
+
+    public static final class OverloadException extends RuntimeException {
+
+        public OverloadException(String message) {
+            super(message);
+        }
     }
 }
