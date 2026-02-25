@@ -1,173 +1,213 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
-	<modelVersion>4.0.0</modelVersion>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
 
-	<parent>
-		<groupId>org.springframework.boot</groupId>
-		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>4.0.1</version>
-		<relativePath/> <!-- lookup parent from repository -->
-	</parent>
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>4.0.1</version>
+    <relativePath/> <!-- lookup parent from repository -->
+  </parent>
 
-	<groupId>com.euhedral</groupId>
-	<artifactId>euhedral-backend</artifactId>
-	<version>0.0.1-SNAPSHOT</version>
-	<packaging>pom</packaging>
+  <groupId>com.euhedral</groupId>
+  <artifactId>euhedral-backend</artifactId>
+  <version>0.0.1-SNAPSHOT</version>
+  <packaging>pom</packaging>
 
-	<name>euhedral-backend</name>
-	<description>Backend sources for the Clio project</description>
+  <name>euhedral-backend</name>
+  <description>Backend sources for the Clio project</description>
 
-	<properties>
-		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-		<java.version>21</java.version>
-		<maven.compiler.source>21</maven.compiler.source>
-		<maven.compiler.target>21</maven.compiler.target>
-		<maven.compiler.release>21</maven.compiler.release>
-		<maven.compiler.proc>full</maven.compiler.proc>
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+    <java.version>21</java.version>
+    <maven.compiler.source>21</maven.compiler.source>
+    <maven.compiler.target>21</maven.compiler.target>
+    <maven.compiler.release>21</maven.compiler.release>
+    <maven.compiler.proc>full</maven.compiler.proc>
 
-		<lombok.version>1.18.42</lombok.version>
-		<h2.version>2.2.224</h2.version>
-		<cloudevents.version>4.0.1</cloudevents.version>
-		<reactor-test.version>3.7.12</reactor-test.version>
-		<r2dbc-h2.version>1.0.1.RELEASE</r2dbc-h2.version>
-		<spring-boot.version>4.0.1</spring-boot.version>
-		<spring-cloud.version>2025.1.1</spring-cloud.version>
-	</properties>
+    <argLine/>
 
-	<modules>
-		<module>euhedral-common</module>
-	</modules>
+    <lombok.version>1.18.42</lombok.version>
+    <h2.version>2.2.224</h2.version>
+    <cloudevents.version>4.0.1</cloudevents.version>
+    <reactor-test.version>3.7.12</reactor-test.version>
+    <r2dbc-h2.version>1.0.1.RELEASE</r2dbc-h2.version>
+    <spring-boot.version>4.0.1</spring-boot.version>
+    <spring-cloud.version>2025.1.1</spring-cloud.version>
+  </properties>
 
-	<dependencyManagement>
-		<dependencies>
-			<dependency>
-				<groupId>org.springframework.boot</groupId>
-				<artifactId>spring-boot-dependencies</artifactId>
-				<version>${spring-boot.version}</version>
-				<type>pom</type>
-				<scope>import</scope>
-			</dependency>
+  <modules>
+    <module>euhedral-spring</module>
+    <module>euhedral-common</module>
+  </modules>
 
-			<dependency>
-				<groupId>org.springframework.cloud</groupId>
-				<artifactId>spring-cloud-dependencies</artifactId>
-				<version>${spring-cloud.version}</version>
-				<type>pom</type>
-				<scope>import</scope>
-			</dependency>
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-dependencies</artifactId>
+        <version>${spring-boot.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
 
-			<dependency>
-				<groupId>io.grpc</groupId>
-				<artifactId>grpc-bom</artifactId>
-				<version>1.76.2</version>
-				<type>pom</type>
-				<scope>import</scope>
-			</dependency>
+      <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-dependencies</artifactId>
+        <version>${spring-cloud.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
 
-			<dependency>
-				<groupId>org.springframework.grpc</groupId>
-				<artifactId>spring-grpc-dependencies</artifactId>
-				<version>1.0.2</version>
-				<type>pom</type>
-				<scope>import</scope>
-			</dependency>
+      <dependency>
+        <groupId>io.github.resilience4j</groupId>
+        <artifactId>resilience4j-bom</artifactId>
+        <version>2.3.0</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
 
-			<dependency>
-				<groupId>org.springframework.cloud</groupId>
-				<artifactId>spring-cloud-stream-binder-kafka</artifactId>
-				<version>5.0.1</version>
-				<exclusions>
-					<exclusion>
-						<groupId>org.lz4</groupId>
-						<artifactId>lz4-java</artifactId>
-					</exclusion>
-				</exclusions>
-			</dependency>
+      <dependency>
+        <groupId>io.grpc</groupId>
+        <artifactId>grpc-bom</artifactId>
+        <version>1.76.2</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
 
-			<dependency>
-				<groupId>org.springframework.boot</groupId>
-				<artifactId>spring-boot-starter-elasticsearch</artifactId>
-				<version>9.2.4</version>
-			</dependency>
+      <dependency>
+        <groupId>org.springframework.grpc</groupId>
+        <artifactId>spring-grpc-dependencies</artifactId>
+        <version>1.0.2</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
 
-			<dependency>
-				<groupId>org.projectlombok</groupId>
-				<artifactId>lombok</artifactId>
-				<version>${lombok.version}</version>
-			</dependency>
+      <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-stream-binder-kafka</artifactId>
+        <version>5.0.1</version>
+        <exclusions>
+          <exclusion>
+            <groupId>org.lz4</groupId>
+            <artifactId>lz4-java</artifactId>
+          </exclusion>
+        </exclusions>
+      </dependency>
 
-			<dependency>
-				<groupId>jakarta.persistence</groupId>
-				<artifactId>jakarta.persistence-api</artifactId>
-				<version>3.2.0</version>
-			</dependency>
+      <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-elasticsearch</artifactId>
+        <version>9.2.4</version>
+      </dependency>
 
-			<dependency>
-				<groupId>at.yawk.lz4</groupId>
-				<artifactId>lz4-java</artifactId>
-				<version>1.8.1</version>
-			</dependency>
+      <dependency>
+        <groupId>org.projectlombok</groupId>
+        <artifactId>lombok</artifactId>
+        <version>${lombok.version}</version>
+      </dependency>
 
-			<dependency>
-				<groupId>org.postgresql</groupId>
-				<artifactId>r2dbc-postgresql</artifactId>
-				<version>1.0.8.RELEASE</version>
-			</dependency>
+      <dependency>
+        <groupId>jakarta.persistence</groupId>
+        <artifactId>jakarta.persistence-api</artifactId>
+        <version>3.2.0</version>
+      </dependency>
 
-			<dependency>
-				<groupId>org.assertj</groupId>
-				<artifactId>assertj-core</artifactId>
-				<version>3.9.1</version>
-				<scope>test</scope>
-			</dependency>
+      <dependency>
+        <groupId>at.yawk.lz4</groupId>
+        <artifactId>lz4-java</artifactId>
+        <version>1.8.1</version>
+      </dependency>
 
-			<dependency>
-				<groupId>io.projectreactor</groupId>
-				<artifactId>reactor-test</artifactId>
-				<version>${reactor-test.version}</version>
-				<scope>test</scope>
-			</dependency>
+      <dependency>
+        <groupId>org.postgresql</groupId>
+        <artifactId>r2dbc-postgresql</artifactId>
+        <version>1.0.8.RELEASE</version>
+      </dependency>
 
-			<dependency>
-				<groupId>io.cloudevents</groupId>
-				<artifactId>cloudevents-spring</artifactId>
-				<version>${cloudevents.version}</version>
-			</dependency>
+      <dependency>
+        <groupId>org.assertj</groupId>
+        <artifactId>assertj-core</artifactId>
+        <version>3.9.1</version>
+        <scope>test</scope>
+      </dependency>
 
-			<dependency>
-				<groupId>org.mapstruct</groupId>
-				<artifactId>mapstruct</artifactId>
-				<version>1.5.5.Final</version>
-			</dependency>
+      <dependency>
+        <groupId>io.projectreactor</groupId>
+        <artifactId>reactor-test</artifactId>
+        <version>${reactor-test.version}</version>
+        <scope>test</scope>
+      </dependency>
 
-			<dependency>
-				<groupId>org.springframework.boot</groupId>
-				<artifactId>spring-boot-starter-test</artifactId>
-				<version>${spring-boot.version}</version>
-				<scope>test</scope>
-			</dependency>
-		</dependencies>
-	</dependencyManagement>
+      <dependency>
+        <groupId>io.cloudevents</groupId>
+        <artifactId>cloudevents-spring</artifactId>
+        <version>${cloudevents.version}</version>
+      </dependency>
 
-	<build>
-		<extensions>
-			<extension>
-				<groupId>kr.motd.maven</groupId>
-				<artifactId>os-maven-plugin</artifactId>
-				<version>1.7.1</version>
-			</extension>
-		</extensions>
+      <dependency>
+        <groupId>org.mapstruct</groupId>
+        <artifactId>mapstruct</artifactId>
+        <version>1.5.5.Final</version>
+      </dependency>
 
-		<pluginManagement>
-			<plugins>
-				<plugin>
-					<groupId>org.xolstice.maven.plugins</groupId>
-					<artifactId>protobuf-maven-plugin</artifactId>
-					<version>0.6.1</version>
-				</plugin>
-			</plugins>
-		</pluginManagement>
-	</build>
+      <dependency>
+        <groupId>org.hdrhistogram</groupId>
+        <artifactId>HdrHistogram</artifactId>
+        <version>2.2.2</version>
+      </dependency>
+
+      <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-test</artifactId>
+        <version>${spring-boot.version}</version>
+        <scope>test</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <build>
+    <extensions>
+      <extension>
+        <groupId>kr.motd.maven</groupId>
+        <artifactId>os-maven-plugin</artifactId>
+        <version>1.7.1</version>
+      </extension>
+    </extensions>
+
+    <pluginManagement>
+      <plugins>
+        <plugin>
+          <groupId>org.xolstice.maven.plugins</groupId>
+          <artifactId>protobuf-maven-plugin</artifactId>
+          <version>0.6.1</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-surefire-plugin</artifactId>
+          <version>3.5.4</version> <!-- Use latest version -->
+          <configuration>
+            <argLine>
+              @{argLine}
+              -javaagent:${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar
+              -Xshare:off
+            </argLine>
+          </configuration>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-failsafe-plugin</artifactId>
+          <version>3.5.4</version>
+          <configuration>
+            <argLine>
+              -javaagent:${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar
+            </argLine>
+          </configuration>
+        </plugin>
+      </plugins>
+    </pluginManagement>
+  </build>
 </project>
