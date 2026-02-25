@@ -15,5 +15,7 @@ public interface SlotManager {
     @NonNull
     <T> Mono<T> acquireSlot(@NonNull Supplier<Mono<T>> work);
 
+    double getPressure();
+
     int getConcurrencyLimit();
 }
