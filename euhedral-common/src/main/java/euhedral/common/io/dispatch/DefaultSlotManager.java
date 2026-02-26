@@ -4,7 +4,11 @@ import euhedral.common.io.dispatch.interfaces.SlotManager;
 import euhedral.common.io.dispatch.utils.LatencyRecorder;
 import euhedral.common.io.dispatch.utils.ResourceMonitor;
 import euhedral.common.io.dispatch.utils.ResourceMonitor.HardwareUtilization;
+import euhedral.common.io.dispatch.utils.WorkCancelled;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker.State;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.github.resilience4j.ratelimiter.RateLimiter;
 import io.github.resilience4j.ratelimiter.RateLimiterConfig;
 import io.github.resilience4j.ratelimiter.RequestNotPermitted;
@@ -22,6 +26,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 import lombok.AccessLevel;
@@ -30,6 +35,7 @@ import org.jspecify.annotations.NonNull;
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.SignalType;
 import reactor.core.publisher.Sinks;
 import reactor.core.publisher.Sinks.EmitResult;
 import reactor.core.publisher.Sinks.One;
@@ -67,7 +73,7 @@ import reactor.util.retry.Retry;
  * When concurrency is saturated, callers enter a waiter queue. The queue
  * capacity scales with the effective concurrency to prevent unbounded memory
  * growth. If the queue reaches capacity, behavior is governed by
- * {@link OverloadStrategy}
+ * {@link OverflowStrategy}
  * <p>
  * Overload conditions represent admission control decisions and should
  * generally be ignored by the CircuitBreader.
@@ -104,7 +110,7 @@ public class DefaultSlotManager implements SlotManager {
     protected final Sinks.Many<Object> failureBroadcast = Sinks.many().multicast()
             .onBackpressureBuffer();
     // Resilience
-    protected final CircuitBreaker circuitBreaker;
+    private CircuitBreaker circuitBreaker;
     // Prometheus
     private final MeterRegistry registry;
     private final Timer dispatchTimer;
@@ -113,17 +119,14 @@ public class DefaultSlotManager implements SlotManager {
     protected AtomicReference<HardwareUtilization> hardwareUtilization;
     protected RateLimiter rateLimiter;
 
-    public DefaultSlotManager(@NonNull Config config,
-            @NonNull ResourceMonitor resourceMonitor,
-            @NonNull CircuitBreaker circuitBreaker,
-            @NonNull Scheduler scheduler) {
+    public DefaultSlotManager(@NonNull Config config, @NonNull ResourceMonitor resourceMonitor,
+            @NonNull CircuitBreaker circuitBreaker, @NonNull Scheduler scheduler) {
         this(config, resourceMonitor, circuitBreaker, scheduler, null);
     }
 
-    public DefaultSlotManager(@NonNull Config config,
-            @NonNull ResourceMonitor resourceMonitor,
-            @NonNull CircuitBreaker circuitBreaker,
-            @NonNull Scheduler scheduler, MeterRegistry registry) {
+    public DefaultSlotManager(@NonNull Config config, @NonNull ResourceMonitor resourceMonitor,
+            @NonNull CircuitBreaker circuitBreaker, @NonNull Scheduler scheduler,
+            MeterRegistry registry) {
         this.config = config;
         this.resourceMonitor = resourceMonitor;
         this.scheduler = scheduler;
@@ -137,33 +140,27 @@ public class DefaultSlotManager implements SlotManager {
                 : config.latencyRecorder;
 
         this.rateLimiter = configureRateLimiter(config.initialRatePerSecond);
-        this.rateLimiter.getEventPublisher()
-                .onFailure(this.failureBroadcast::tryEmitNext);
+        this.rateLimiter.getEventPublisher().onFailure(this.failureBroadcast::tryEmitNext);
 
         this.circuitBreaker = circuitBreaker;
-        this.circuitBreaker.getEventPublisher()
-                .onError(this.failureBroadcast::tryEmitNext);
+        configureCircuitBreaker();
 
         this.registry = registry;
 
         this.hardwareUtilization = new AtomicReference<>(resourceMonitor.getUtilization());
         resourceMonitor.addListener().publishOn(scheduler).subscribe(this::updateUtilization);
 
-        this.failureBroadcast.asFlux()
-                .doOnNext(err -> recentErrors.incrementAndGet())
-                .window(Duration.ofSeconds(1))
-                .flatMap(window -> Mono.delay(Duration.ofSeconds(2)))
+        this.failureBroadcast.asFlux().doOnNext(err -> recentErrors.incrementAndGet())
+                .window(Duration.ofSeconds(1)).flatMap(window -> Mono.delay(Duration.ofSeconds(2)))
                 .subscribe(v -> recentErrors.set(0));
 
         if (registry != null) {
             this.dispatchTimer = Timer.builder(config.metricPrefix + ".dispatch.latency")
                     .description("Latency of dispatched work including queue time")
-                    .publishPercentileHistogram()
-                    .register(registry);
+                    .publishPercentileHistogram().register(registry);
             this.slotAcquisitionTimer = Timer.builder(
                             config.metricPrefix + ".dispatch.slot.acquisition.latency")
-                    .description("Latency of acquiring a slot")
-                    .publishPercentileHistogram()
+                    .description("Latency of acquiring a slot").publishPercentileHistogram()
                     .register(registry);
             registerPrometheusMetrics();
         } else {
@@ -173,44 +170,63 @@ public class DefaultSlotManager implements SlotManager {
     }
 
     protected RateLimiter configureRateLimiter(int ratePerSecond) {
-        RateLimiterConfig config = RateLimiterConfig.custom()
-                .limitForPeriod(ratePerSecond)
-                .limitRefreshPeriod(Duration.ofSeconds(1))
-                .timeoutDuration(Duration.ZERO)
-                .build();
+        RateLimiterConfig config = RateLimiterConfig.custom().limitForPeriod(ratePerSecond)
+                .limitRefreshPeriod(Duration.ofSeconds(1)).timeoutDuration(Duration.ZERO).build();
 
         return RateLimiter.of("defaultSlotManager", config);
     }
 
+    protected void configureCircuitBreaker() {
+        String cbName = this.circuitBreaker.getName();
+        CircuitBreakerConfig cbConfig = this.circuitBreaker.getCircuitBreakerConfig();
+        Predicate<Throwable> existingPredicate = cbConfig.getIgnoreExceptionPredicate();
+
+        var updated = CircuitBreakerConfig.from(cbConfig)
+                .ignoreException(throwable ->
+                        throwable instanceof WorkCancelled || existingPredicate.test(throwable))
+                .build();
+
+        if(config.cbRegistry == null) {
+            this.circuitBreaker = CircuitBreaker.of(cbName, updated);
+        } else {
+            this.circuitBreaker = config.cbRegistry.circuitBreaker(cbName, updated);
+        }
+
+        this.circuitBreaker.getEventPublisher()
+                .onError(this.failureBroadcast::tryEmitNext);
+    }
+
     protected <T> UnaryOperator<Publisher<T>> getRateLimiter() {
         return publisher -> Mono.from(publisher)
-                .transformDeferred(RateLimiterOperator.of(this.rateLimiter))
-                .retryWhen(Retry.backoff(Long.MAX_VALUE, Duration.ofMillis(20))
-                        .filter(throwable -> throwable instanceof RequestNotPermitted)
-                        .jitter(0.5)
-                        .scheduler(scheduler));
+                .transformDeferred(RateLimiterOperator.of(this.rateLimiter)).retryWhen(
+                        Retry.backoff(Long.MAX_VALUE, Duration.ofMillis(20))
+                                .filter(throwable -> throwable instanceof RequestNotPermitted)
+                                .jitter(0.5).scheduler(scheduler));
     }
 
     @Override
     @NonNull
     public <T> Mono<T> acquireSlot(@NonNull Supplier<Mono<T>> work) {
-        return Mono.defer(work)
-                .transformDeferred(getRateLimiter())
+        return Mono.defer(work).transformDeferred(getRateLimiter())
                 .transformDeferred(CircuitBreakerOperator.of(circuitBreaker))
-                .as(readyWork ->
-                        acquirePermit().then(Mono.defer(() -> {
-                            long startNs = scheduler.now(TimeUnit.NANOSECONDS);
-                            Timer.Sample sample = (registry == null) ? null : Timer.start(registry);
+                .as(readyWork -> acquirePermit().then(Mono.defer(() -> {
+                    long startNs = scheduler.now(TimeUnit.NANOSECONDS);
+                    Timer.Sample sample = (registry == null) ? null : Timer.start(registry);
 
-                            return readyWork.doFinally(sig -> {
-                                if (sample != null) {
-                                    sample.stop(dispatchTimer);
-                                }
-                                releasePermit(); // Guaranteed decrement + drain
-                                updateMetrics(scheduler.now(TimeUnit.NANOSECONDS) - startNs);
-                            });
-                        }))
-                );
+                    return readyWork.doFinally(sig -> {
+                        releasePermit();
+
+                        if (sig == SignalType.ON_COMPLETE) {
+                            if (sample != null) {
+                                sample.stop(dispatchTimer);
+                            }
+                            updateMetrics(scheduler.now(TimeUnit.NANOSECONDS) - startNs);
+                        } else if(registry != null) {
+                            registry.counter(config.metricPrefix + ".execution_aborted", "signal", sig.name())
+                                    .increment();
+                        }
+                    });
+                })));
     }
 
     protected Mono<Void> acquirePermit() {
@@ -229,23 +245,20 @@ public class DefaultSlotManager implements SlotManager {
             int waiterLimit = effectiveMaxWaiters.get();
             if (currentWaiters.incrementAndGet() > waiterLimit) {
                 currentWaiters.decrementAndGet();
-                return handleOverload(waiterLimit);
+                return handleOverflow(waiterLimit);
             }
 
             Sinks.One<Void> waiter = Sinks.one();
             waiters.add(waiter);
 
-            return waiter.asMono()
-                    .timeout(Duration.ofSeconds(30), scheduler)
-                    .then(Mono.defer(this::acquirePermit))
-                    .onErrorMap(TimeoutException.class,
+            return waiter.asMono().timeout(Duration.ofSeconds(30), scheduler)
+                    .then(Mono.defer(this::acquirePermit)).onErrorMap(TimeoutException.class,
                             e -> new RuntimeException("Timed out waiting for concurrency slot"))
                     .doOnSuccess(v -> {
                         if (sample != null) {
                             sample.stop(slotAcquisitionTimer);
                         }
-                    })
-                    .doFinally(sig -> {
+                    }).doFinally(sig -> {
                         if (waiters.remove(waiter)) {
                             currentWaiters.decrementAndGet();
                         }
@@ -341,6 +354,12 @@ public class DefaultSlotManager implements SlotManager {
 
     protected void updateEffectiveConcurrencyLimit() {
         HardwareUtilization utilization = this.hardwareUtilization.get();
+        CircuitBreaker.State cbState = circuitBreaker.getState();
+
+        if (cbState == CircuitBreaker.State.OPEN || cbState == CircuitBreaker.State.FORCED_OPEN) {
+            effectiveConcurrencyLimit.set(10);
+            return;
+        }
 
         double pressure = utilization.pressure();
         double capacity = utilization.availableCpus();
@@ -358,7 +377,9 @@ public class DefaultSlotManager implements SlotManager {
 
         // Smooth the Transition (Asymmetric: Drop fast, Grow slow)
         effectiveConcurrencyLimit.updateAndGet(current -> {
-            if (target < current) {
+            if(cbState == CircuitBreaker.State.HALF_OPEN) {
+                return Math.min(target, 50);
+            } else if (target < current) {
                 return Math.max(target, (int) Math.ceil(current * 0.85)); // Drop 15%
             } else {
                 int delta = target - current;
@@ -383,8 +404,8 @@ public class DefaultSlotManager implements SlotManager {
         });
     }
 
-    protected Mono<Void> handleOverload(int limit) {
-        return switch (config.overloadStrategy) {
+    protected Mono<Void> handleOverflow(int limit) {
+        return switch (config.overflowStrategy) {
             case REJECT -> Mono.error(new OverloadException("Wait queue full (cap=" + limit + ")"));
             case DELAY -> {
                 double pressure = currentWaiters.get() / (double) effectiveMaxWaiters.get();
@@ -404,9 +425,12 @@ public class DefaultSlotManager implements SlotManager {
 
     @Override
     public double getPressure() {
-        if (circuitBreaker.getState().allowPublish) {
-            return 1.0;
-        }
+        double cbPressure = switch (circuitBreaker.getState()) {
+            case OPEN, FORCED_OPEN -> 1.0;
+            case HALF_OPEN -> 0.85;
+            default -> 0;
+        };
+
         double errorPenalty = Math.min(0.4, recentErrors.get() * 0.05);
 
         // Thresholds
@@ -414,8 +438,7 @@ public class DefaultSlotManager implements SlotManager {
         int beta = Math.max(6, (int) (6 * Math.log10(currentLimit)));
 
         double queueEstimate = latencyRecorder.getVegasQueueEstimate(
-                latencyRecorder.getPercentile(50),
-                latencyRecorder.getTargetLatencyNs(),
+                latencyRecorder.getPercentile(50), latencyRecorder.getTargetLatencyNs(),
                 currentLimit);
 
         // (Latency-based)
@@ -429,7 +452,8 @@ public class DefaultSlotManager implements SlotManager {
         // Accumulation of waiters forces the upstream to back off.
         double totalDownstream = (waiters.isEmpty()) ? vegasPressure : 0.8 + (waiterPressure * 0.2);
 
-        return Math.clamp(Math.max(totalDownstream, hardwarePressure) + errorPenalty, 0.0, 1.0);
+        double currentBasePressure = Math.max(totalDownstream, hardwarePressure);
+        return Math.clamp(Math.max(currentBasePressure, cbPressure) + errorPenalty, 0.0, 1.0);
     }
 
     @Override
@@ -447,41 +471,33 @@ public class DefaultSlotManager implements SlotManager {
 
     private void registerPrometheusMetrics() {
         Gauge.builder(config.metricPrefix + ".dispatch.concurrency.current", currentConcurrency,
-                        AtomicInteger::get)
-                .description("Current adaptive concurrency limit")
+                        AtomicInteger::get).description("Current adaptive concurrency limit")
                 .register(registry);
 
         Gauge.builder(config.metricPrefix + ".dispatch.inflight.count", inFlight,
-                        AtomicInteger::get)
-                .description("Number of dispatches being executed")
+                        AtomicInteger::get).description("Number of dispatches being executed")
                 .register(registry);
 
         Gauge.builder(config.metricPrefix + ".dispatch.waiters.count", waiters, Queue::size)
-                .description("Number of requests in the waiter queue")
-                .register(registry);
+                .description("Number of requests in the waiter queue").register(registry);
 
         Gauge.builder(config.metricPrefix + ".dispatch.rate.current", currentRate,
-                        AtomicInteger::get)
-                .description("Current dispatch rate (dispatch/sec)")
+                        AtomicInteger::get).description("Current dispatch rate (dispatch/sec)")
                 .register(registry);
     }
 
-    public enum OverloadStrategy {
-        REJECT,
-        DELAY,
-        DROP_SILENT
+    public enum OverflowStrategy {
+        REJECT, DELAY, DROP_SILENT
     }
 
-    public record Config(int initialRatePerSecond,
-                         int initialConcurrency, int maxWaiters,
-                         OverloadStrategy overloadStrategy,
-                         LatencyRecorder latencyRecorder, String metricPrefix) {
+    public record Config(int initialRatePerSecond, int initialConcurrency, int maxWaiters,
+                         OverflowStrategy overflowStrategy, LatencyRecorder latencyRecorder, CircuitBreakerRegistry cbRegistry,
+                         String metricPrefix) {
 
-        public Config(int initialRatePerSecond,
-                int initialConcurrency, int maxWaiters,
-                OverloadStrategy overloadStrategy) {
-            this(initialRatePerSecond, initialConcurrency,
-                    maxWaiters, overloadStrategy, null, null);
+        public Config(int initialRatePerSecond, int initialConcurrency, int maxWaiters,
+                OverflowStrategy overflowStrategy) {
+            this(initialRatePerSecond, initialConcurrency, maxWaiters, overflowStrategy, null, null,
+                    null);
         }
     }
 
