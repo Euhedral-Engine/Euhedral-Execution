@@ -1,58 +1,75 @@
 package euhedral.common.io.dispatch.utils;
 
+import euhedral.common.io.dispatch.utils.CgroupV2Metrics.CpuMetrics;
+import euhedral.common.io.dispatch.utils.SystemUtilization.HardwareUtilization;
+import euhedral.common.io.dispatch.utils.SystemUtilization.SystemSnapshot;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Duration;
+import java.util.BitSet;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicReferenceArray;
 import java.util.function.LongSupplier;
-import jdk.internal.platform.Container;
-import jdk.internal.platform.Metrics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Sinks;
+import reactor.core.scheduler.Scheduler;
 
 public final class ContainerAwareResourceMonitor implements ResourceMonitor, AutoCloseable {
 
-    private final Metrics metrics = Container.metrics();
+    private static final double NS_TO_SEC = 1.0 / 1_000_000_000.0;
 
     private final Logger logger = LoggerFactory.getLogger(this.getClass());
+    private final Scheduler scheduler;
+    private final NumaMapper numaMapper;
 
-    private final AtomicReference<Double> availableCpus = new AtomicReference<>(0.0);
+    private final CgroupV2Metrics metrics;
+
+    private final AtomicReference<Double> quotaCpus = new AtomicReference<>(0.0);
     private final AtomicReference<Double> cpuUsageRatio = new AtomicReference<>(0.0);
     private final AtomicReference<Double> cpuThrottleRatio = new AtomicReference<>(0.0);
+    private final AtomicReferenceArray<Double> perCpuPressureRatio;
+    private final AtomicReferenceArray<Double> perCpuThrottleRatio;
     private final AtomicReference<Double> memUsageRatio = new AtomicReference<>(0.0);
+    private final AtomicLong memPerCpuUsageBytes = new AtomicLong(0);
     private final AtomicReference<Double> ioBytesPerSecond = new AtomicReference<>(0.0);
     private final AtomicReference<Double> ioPressure = new AtomicReference<>(0.0);
 
     private final Sinks.Many<HardwareUtilization> listeners = Sinks.many().multicast()
-            .onBackpressureBuffer();
-
+            .onBackpressureBuffer(1);
     private final AtomicReference<Double> peakIoBps = new AtomicReference<>(1024 * 1024.0);
-    private volatile long lastCpuUsageNs = 0;
-    private volatile long lastThrottleNs = 0;
-    private volatile long lastIoBytes = 0;
-    private volatile long lastWallClockNs;
-    private volatile boolean running;
-
     private final LongSupplier timeSupplierNs;
     private final Duration sampleRate;
     private final double smoothingFactor;
-    private Thread pollingThread;
 
-    public ContainerAwareResourceMonitor(Duration sampleRate) {
-        this(sampleRate,
-                () -> Duration.ofMillis(System.currentTimeMillis()).toNanos());
-    }
+    private volatile HardwareUtilization hardwareUtilization;
+    private volatile SystemSnapshot snapshot;
+    private volatile BitSet globalEffectiveCpus;
+    private volatile long lastCpuUsageNs;
+    private volatile long lastThrottleNs;
+    private volatile long lastIoBytes;
+    private volatile long lastWallClockNs;
+    private volatile boolean running = false;
+    private Disposable pollingThread;
 
     public ContainerAwareResourceMonitor(Duration sampleRate,
-            LongSupplier timeSupplierNs) {
+            Scheduler scheduler) {
+        this.scheduler = scheduler;
+        this.numaMapper = NumaMapper.INSTANCE;
         this.sampleRate = sampleRate;
-        this.timeSupplierNs = timeSupplierNs;
+        this.timeSupplierNs = () -> scheduler.now(TimeUnit.NANOSECONDS);
         this.lastWallClockNs = timeSupplierNs.getAsLong();
+        this.perCpuPressureRatio = new AtomicReferenceArray<>(numaMapper.getCpuCount());
+        this.perCpuThrottleRatio = new AtomicReferenceArray<>(numaMapper.getCpuCount());
 
         double dt = Math.max(1.0, (double) sampleRate.toMillis()) / 1000.0;
-        double tau = 3.0;
+        double tau = 3.0; // 3 Seconds
         double smoothingFactor = 1.0 - Math.exp(-dt / tau);
 
         if (!Double.isFinite(smoothingFactor) || smoothingFactor <= 0) {
@@ -61,88 +78,115 @@ public final class ContainerAwareResourceMonitor implements ResourceMonitor, Aut
             this.smoothingFactor = Math.clamp(smoothingFactor, 0.01, 1.0);
         }
 
-        start();
+        CgroupV2Metrics metrics = null;
+        try {
+            Optional<String> cgroupV2Path = Files.lines(Paths.get("/proc/self/cgroup"))
+                    .filter(line -> line.startsWith("0::"))
+                    .map(line -> line.substring(3))
+                    .findFirst();
+
+            if (cgroupV2Path.isPresent()) {
+                String path = cgroupV2Path.get();
+
+                String fsPath = "/sys/fs/cgroup" + (path.equals("/") ? "" : path);
+                Path cgroupPath = Paths.get(fsPath);
+                metrics = new CgroupV2Metrics(cgroupPath, numaMapper.getCpuCount(), timeSupplierNs);
+            } else {
+                logger.error("Not a cgroupV2 environment.");
+            }
+        } catch (Exception e) {
+            logger.error("Could not read cgroup.", e);
+        }
+        this.metrics = metrics;
+        if (metrics != null) {
+            start();
+        }
     }
 
+    @Override
     public void start() {
+        if (metrics == null) {
+            logger.error(
+                    "Container metrics not available on this platform. Monitor will not start.");
+            return;
+        }
+
         if (running) {
             return;
         }
-        running = true;
+        init();
+        poll();
 
-        pollingThread = Thread.startVirtualThread(this::runLoop);
+        running = true;
+        pollingThread = scheduler.schedulePeriodically(this::runLoop, 0, sampleRate.toNanos(),
+                TimeUnit.NANOSECONDS);
+    }
+
+    private void init() {
+        this.lastWallClockNs = timeSupplierNs.getAsLong();
+        CpuMetrics cpuMetrics = metrics.getCpuMetrics();
+
+        this.lastCpuUsageNs = cpuMetrics.getUsageNs();
+        this.lastThrottleNs = cpuMetrics.getThrottledNs();
+        this.lastIoBytes = metrics.getIoBytes();
     }
 
     @Override
-    public void close() {
+    public void close() throws Exception {
         running = false;
         if (pollingThread != null) {
-            pollingThread.interrupt();
+            pollingThread.dispose();
         }
-    }
-
-    @Override
-    public double availableCpus() {
-        return availableCpus.get();
-    }
-
-    @Override
-    public double cpuUtilization() {
-        return cpuUsageRatio.get();
-    }
-
-    @Override
-    public double cpuThrottleRatio() {
-        return cpuThrottleRatio.get();
-    }
-
-    @Override
-    public double memoryUtilization() {
-        return memUsageRatio.get();
-    }
-
-    @Override
-    public double ioBytesPerSecond() {
-        return ioBytesPerSecond.get();
-    }
-
-    @Override
-    public double ioPressure() {
-        return ioPressure.get();
+        listeners.tryEmitComplete();
     }
 
     @Override
     public HardwareUtilization getUtilization() {
-        return new HardwareUtilization(availableCpus(), cpuUtilization(), memoryUtilization(),
-                cpuThrottleRatio(),
-                ioBytesPerSecond(), ioPressure.get());
+        return hardwareUtilization;
+    }
+
+    @Override
+    public SystemSnapshot getSystemSnapshot() {
+        return this.snapshot;
     }
 
     @Override
     public Flux<HardwareUtilization> addListener() {
-        return listeners.asFlux();
+        return listeners.asFlux().publishOn(scheduler);
     }
 
     private void runLoop() {
-        while (running) {
-            poll();
-            listeners.tryEmitNext(getUtilization());
-
-            try {
-                Thread.sleep(sampleRate);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                break;
-            }
+        if (!running) {
+            pollingThread.dispose();
+            return;
         }
+
+        poll();
+        listeners.tryEmitNext(hardwareUtilization);
     }
 
     private void poll() {
         try {
-            updateCpu();
-            updateMemory();
-            updateIO();
-            lastWallClockNs = timeSupplierNs.getAsLong();
+            this.snapshot = metrics.getSnapshot();
+            updateCpu(snapshot);
+            updateMemory(snapshot);
+            updateIO(snapshot);
+            lastWallClockNs = snapshot.timeNs();
+
+            long memoryLimit = Math.clamp(snapshot.memoryLimit(), 0, 1_000_000_000_000_000L);
+            hardwareUtilization = new HardwareUtilization(lastWallClockNs, quotaCpus.get(),
+                    cpuUsageRatio.get(),
+                    globalEffectiveCpus,
+                    perCpuPressureRatio,
+                    cpuThrottleRatio.get(), perCpuThrottleRatio,
+                    memoryLimit,
+                    memoryLimit / snapshot.availableCpus(),
+                    memUsageRatio.get(),
+                    memPerCpuUsageBytes.get(),
+                    ioBytesPerSecond.get(), ioPressure.get(), snapshot);
+            if (numaMapper != null) {
+                numaMapper.update(hardwareUtilization);
+            }
         } catch (Exception e) {
             logger.error("Failed to update utilization", e);
         }
@@ -150,80 +194,112 @@ public final class ContainerAwareResourceMonitor implements ResourceMonitor, Aut
 
     // CPU
 
-    private void updateCpu() {
-        long quota = metrics.getCpuQuota();
-        long period = metrics.getCpuPeriod();
-        double availableCpus;
+    private void updateCpu(SystemSnapshot snapshot) {
+        long deltaUsage = snapshot.cpuUsage() - lastCpuUsageNs;
+        long deltaThrottle = snapshot.cpuThrottle() - lastThrottleNs;
+        long deltaTime = Math.max(snapshot.timeNs() - lastWallClockNs,
+                Duration.ofMillis(10).toNanos());
 
-        if (quota > 0 && period > 0) {
-            availableCpus = (double) quota / period;
-        } else {
-            availableCpus = Runtime.getRuntime().availableProcessors();
+        if (deltaTime <= 0) {
+            return;
         }
 
-        long now = timeSupplierNs.getAsLong();
-        long cpuUsage = metrics.getCpuUsage();
-        long cpuThrottle = metrics.getCpuThrottledTime();
-
-        long deltaUsage = cpuUsage - lastCpuUsageNs;
-        long deltaThrottle = cpuThrottle - lastThrottleNs;
-        long deltaTime = now - lastWallClockNs;
-
-        double rawCpuUtil = deltaUsage / (double) deltaTime / availableCpus;
+        double rawCpuUtil = deltaUsage / (double) deltaTime / snapshot.quotaCpus();
         double rawThrottle = deltaThrottle / (double) deltaTime;
+        updatePerCpuUtilization(deltaTime, deltaThrottle, snapshot);
 
-        lastCpuUsageNs = cpuUsage;
-        lastThrottleNs = cpuThrottle;
+        lastCpuUsageNs = snapshot.cpuUsage();
+        lastThrottleNs = snapshot.cpuThrottle();
         cpuUsageRatio.updateAndGet(
                 old -> ewma(old, !Double.isFinite(rawCpuUtil) ? 0.0 : rawCpuUtil));
         cpuThrottleRatio.updateAndGet(
                 old -> ewma(old, !Double.isFinite(rawThrottle) ? 0.0 : rawThrottle));
-        this.availableCpus.set(availableCpus);
+        this.quotaCpus.set(snapshot.quotaCpus());
+    }
+
+    private void updatePerCpuUtilization(long deltaTimeNs, long deltaTotalThrottleNs,
+            SystemSnapshot snapshot) {
+        BitSet effective = snapshot.effectiveCpus();
+        double[] currentPressureSnapshot = snapshot.pressurePerCpu();
+
+        if (effective == null || currentPressureSnapshot == null) {
+            return;
+        }
+
+        double totalThrottleRatio = (double) deltaTotalThrottleNs / deltaTimeNs;
+        double available = quotaCpus.get();
+
+        for (int i = effective.nextSetBit(0); i >= 0; i = effective.nextSetBit(i + 1)) {
+            double deltaPressureNs = currentPressureSnapshot[i] * 1000.0;
+
+            double cpuPressureRatio = deltaPressureNs / deltaTimeNs;
+
+            double cpuThrottle = (available > 0)
+                    ? (cpuPressureRatio / available) * totalThrottleRatio
+                    : 0;
+
+            updateRatio(perCpuPressureRatio, i, Math.max(0, cpuPressureRatio));
+            updateRatio(perCpuThrottleRatio, i, Math.max(0, cpuThrottle));
+        }
+        this.globalEffectiveCpus = effective;
     }
 
     // Memory
 
-    private void updateMemory() {
-        long usage = metrics.getMemoryUsage();
-        long max = metrics.getMemoryLimit();
+    private void updateMemory(SystemSnapshot snapshot) {
+        long workingMemory = Math.max(0, snapshot.memoryUsage() - snapshot.inactiveFileMemory());
 
-        if (max > 0 && max < 1_000_000_000_000_000L) {
-            double rawUtil = (double) usage / max;
-            if (Double.isFinite(rawUtil)) {
-                memUsageRatio.updateAndGet(old -> ewma(old, rawUtil));
+        if (snapshot.memoryLimit() > 0 && snapshot.memoryLimit() < 1_000_000_000_000_000L) {
+            double workingMemoryUtil = (double) workingMemory / snapshot.memoryLimit();
+
+            double availableCpus = snapshot.availableCpus();
+
+            if (Double.isFinite(workingMemoryUtil)) {
+                memUsageRatio.updateAndGet(
+                        old -> ewma(old, Math.clamp(workingMemoryUtil, 0.0, 1.0)));
+
+                if (availableCpus > 0) {
+                    // Density relative to the physical core count visible in the container
+                    this.memPerCpuUsageBytes.set((long) (((double) workingMemory / snapshot.memoryLimit()) * availableCpus));
+                }
             }
         }
     }
 
     // IO
-    private void updateIO() {
-        long ioBytes = metrics.getBlkIOServiced();
-        long now = timeSupplierNs.getAsLong();
-        double deltaTime = now - lastWallClockNs;
+    private void updateIO(SystemSnapshot snapshot) {
+        long deltaTimeNs = snapshot.timeNs() - lastWallClockNs;
 
-        if (deltaTime > 0) {
-            long delta = (lastIoBytes == 0) ? 0 : ioBytes - lastIoBytes;
-            double rawBps = (double) delta / (deltaTime / TimeUnit.SECONDS.toNanos(1));
+        if (deltaTimeNs > 0) {
+            double deltaTimeSec = deltaTimeNs * NS_TO_SEC;
 
-            lastIoBytes = ioBytes;
-            ioBytesPerSecond.updateAndGet(old -> {
-                if (old <= 0) {
-                    return rawBps;
-                }
-                return (smoothingFactor * rawBps) + (1 - smoothingFactor) * old;
-            });
+            // Calculate raw Bytes Per Second
+            long deltaBytes = (lastIoBytes == 0) ? 0 : snapshot.ioBytes() - lastIoBytes;
+            double rawBps = deltaBytes / deltaTimeSec;
 
-            peakIoBps.updateAndGet(peak -> Math.max(ioBytes, peak * 0.9999));
-            double rawIoRatio = ioBytes / peakIoBps.get();
+            ioBytesPerSecond.updateAndGet(old -> ewma(old, rawBps));
+            peakIoBps.updateAndGet(peak -> Math.max(rawBps, peak * 0.9999));
 
+            double currentPeak = peakIoBps.get();
+            double rawIoRatio = (currentPeak > 0) ? ioBytesPerSecond.get() / currentPeak : 0.0;
+
+            lastIoBytes = snapshot.ioBytes();
             ioPressure.set(Math.clamp(rawIoRatio, 0.0, 1.0));
         }
     }
 
-    private double ewma(double oldVal, double newVal) {
+    private void updateRatio(AtomicReferenceArray<Double> array, int index, double newValue) {
+        array.updateAndGet(index, old -> ewma(old == null ? 0.0 : old, newValue));
+    }
+
+    private double ewma(Double oldVal, Double newVal) {
+        if (newVal == null) {
+            return 0.0;
+        }
+
         double clampedNew = Math.clamp(newVal, 0.0, 1.0);
 
-        if (oldVal <= 0) {
+        if (oldVal == null || oldVal <= 0) {
             return clampedNew;
         }
 
