@@ -1,46 +1,52 @@
 package euhedral.common.io.dispatch;
 
+import euhedral.common.io.dispatch.control_plane.CloneConfig;
+import euhedral.common.io.dispatch.flow_control.DirectOutputFlux;
+import euhedral.common.io.dispatch.flow_control.IngestSequencer;
+import euhedral.common.io.dispatch.flow_control.IngestSequencer.WakeHook;
+import euhedral.common.io.dispatch.frames.AbstractFrame;
+import euhedral.common.io.dispatch.frames.QueueFrame.DrainBuffer;
+import euhedral.common.io.dispatch.interfaces.CloneableObject;
 import euhedral.common.io.dispatch.interfaces.SlotManager;
-import euhedral.common.io.dispatch.utils.LatencyRecorder;
-import euhedral.common.io.dispatch.utils.ResourceMonitor;
-import euhedral.common.io.dispatch.utils.ResourceMonitor.HardwareUtilization;
-import euhedral.common.io.dispatch.utils.WorkCancelled;
+import euhedral.common.io.dispatch.utils.FlowRecorder;
+import euhedral.common.io.dispatch.utils.PinnedThreadExecutor;
+import euhedral.common.io.dispatch.utils.SystemUtilization.CoreSnapshot;
+import euhedral.common.io.dispatch.utils.SystemUtilization.CpuSnapshot;
+import euhedral.common.io.dispatch.utils.SystemUtilization.HardwareUtilization;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
-import io.github.resilience4j.circuitbreaker.CircuitBreaker.State;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.github.resilience4j.ratelimiter.RateLimiter;
 import io.github.resilience4j.ratelimiter.RateLimiterConfig;
-import io.github.resilience4j.ratelimiter.RequestNotPermitted;
-import io.github.resilience4j.reactor.circuitbreaker.operator.CircuitBreakerOperator;
-import io.github.resilience4j.reactor.ratelimiter.operator.RateLimiterOperator;
 import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.Timer;
 import java.time.Duration;
-import java.util.Queue;
-import java.util.concurrent.ConcurrentLinkedDeque;
-import java.util.concurrent.ThreadLocalRandom;
+import java.util.ArrayList;
+import java.util.BitSet;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.LockSupport;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
-import java.util.function.UnaryOperator;
 import lombok.AccessLevel;
 import lombok.Getter;
+import org.jctools.queues.MpscUnboundedXaddArrayQueue;
+import org.jctools.queues.SpscUnboundedArrayQueue;
 import org.jspecify.annotations.NonNull;
 import org.reactivestreams.Publisher;
+import org.reactivestreams.Subscription;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import reactor.core.CoreSubscriber;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import reactor.core.publisher.SignalType;
 import reactor.core.publisher.Sinks;
 import reactor.core.publisher.Sinks.EmitResult;
-import reactor.core.publisher.Sinks.One;
-import reactor.core.scheduler.Scheduler;
-import reactor.util.retry.Retry;
 
 /**
  * Adaptive concurrency and rate control implementation designed to provide stable, resource-aware
@@ -68,16 +74,6 @@ import reactor.util.retry.Retry;
  * updated smoothly to prevent oscillation. The adaptive concurrency logic
  * adjusts within this envelope based on observed latency and queueing.
  *
- * <h2>Admission Control</h2>
- * <p>
- * When concurrency is saturated, callers enter a waiter queue. The queue
- * capacity scales with the effective concurrency to prevent unbounded memory
- * growth. If the queue reaches capacity, behavior is governed by
- * {@link OverflowStrategy}
- * <p>
- * Overload conditions represent admission control decisions and should
- * generally be ignored by the CircuitBreader.
- *
  * <h2>Threading</h2>
  * <p>
  * This class is non-blocking and designed for use with reactive pipelines
@@ -93,87 +89,115 @@ public class DefaultSlotManager implements SlotManager {
 
     @Getter
     protected final Config config;
-    protected final ResourceMonitor resourceMonitor;
-    protected final Scheduler scheduler;
-    // State
-    protected final AtomicInteger inFlight = new AtomicInteger(0);
-    protected final AtomicInteger currentConcurrency = new AtomicInteger(0);
-    protected final AtomicInteger effectiveConcurrencyLimit = new AtomicInteger(1);
-    protected final AtomicInteger currentRate = new AtomicInteger(0);
-    // Waiters
-    protected final ConcurrentLinkedDeque<One<Void>> waiters = new ConcurrentLinkedDeque<>();
-    protected final AtomicInteger currentWaiters = new AtomicInteger(0);
-    protected final AtomicInteger effectiveMaxWaiters = new AtomicInteger();
-    protected final AtomicLong measurementCount = new AtomicLong();
-    protected final LatencyRecorder latencyRecorder;
+    protected final Metrics metrics;
+    protected final FlowRecorder latencyRecorder;
+    protected final AtomicBoolean running = new AtomicBoolean(false);
     protected final AtomicLong recentErrors = new AtomicLong(0);
     protected final Sinks.Many<Object> failureBroadcast = Sinks.many().multicast()
             .onBackpressureBuffer();
-    // Resilience
-    private CircuitBreaker circuitBreaker;
-    // Prometheus
-    private final MeterRegistry registry;
-    private final Timer dispatchTimer;
-    private final Timer slotAcquisitionTimer;
-    // Metrics
+    protected final AtomicInteger inFlight = new AtomicInteger(0);
+    protected final SpscUnboundedArrayQueue<AbstractFrame> buffer;
+    protected final DrainBuffer bufferWrapper;
+    protected final Sinks.Many<AbstractFrame> completeSink = Sinks.many().unicast()
+            .onBackpressureBuffer(new MpscUnboundedXaddArrayQueue<>(2048, 4));
+    private final Thread shutdownHook;
+    private final Logger logger;
+    private final int cpuId;
+    @Getter
+    private final PinnedThreadExecutor pinnedExecutor;
+    private final Sinks.Many<Failure> errorSink = Sinks.many().unicast()
+            .onBackpressureBuffer(new MpscUnboundedXaddArrayQueue<>(1024));
+
+    private final DirectOutputFlux outputFlux;
+    private final RateLimiter rateLimiter;
     protected AtomicReference<HardwareUtilization> hardwareUtilization;
-    protected RateLimiter rateLimiter;
 
-    public DefaultSlotManager(@NonNull Config config, @NonNull ResourceMonitor resourceMonitor,
-            @NonNull CircuitBreaker circuitBreaker, @NonNull Scheduler scheduler) {
-        this(config, resourceMonitor, circuitBreaker, scheduler, null);
-    }
+    protected volatile int baseCap;
+    protected volatile int currentRate;
+    protected volatile int currentConcurrency;
+    protected volatile int effectiveConcurrencyLimit;
 
-    public DefaultSlotManager(@NonNull Config config, @NonNull ResourceMonitor resourceMonitor,
-            @NonNull CircuitBreaker circuitBreaker, @NonNull Scheduler scheduler,
-            MeterRegistry registry) {
+    protected volatile boolean parked = false;
+    protected volatile boolean drainMode = false;
+    protected volatile CoreSnapshot coreSnapshot = null;
+
+    protected volatile IngestSequencer ingest = null;
+
+    private CircuitBreaker circuitBreaker;
+    private WakeHook wakeHook;
+    private Thread cycleThread;
+
+    public DefaultSlotManager(@NonNull Config config, CircuitBreaker circuitBreaker) {
         this.config = config;
-        this.resourceMonitor = resourceMonitor;
-        this.scheduler = scheduler;
 
-        this.currentRate.set(config.initialRatePerSecond);
-        this.currentConcurrency.set(config.initialConcurrency);
-        this.effectiveConcurrencyLimit.set(config.initialConcurrency);
-        this.effectiveMaxWaiters.set(config.maxWaiters);
+        this.buffer = new SpscUnboundedArrayQueue<>(4096);
+        this.bufferWrapper = new DrainBuffer(buffer);
 
-        this.latencyRecorder = config.latencyRecorder == null ? new LatencyRecorder(scheduler)
-                : config.latencyRecorder;
+        this.currentRate = config.initialRatePerSecond;
+        this.currentConcurrency = Math.max(1, config.initialConcurrency);
+        this.effectiveConcurrencyLimit = config.initialConcurrency;
+
+        this.latencyRecorder = new FlowRecorder();
 
         this.rateLimiter = configureRateLimiter(config.initialRatePerSecond);
         this.rateLimiter.getEventPublisher().onFailure(this.failureBroadcast::tryEmitNext);
 
-        this.circuitBreaker = circuitBreaker;
+        this.circuitBreaker =
+                circuitBreaker == null ? CircuitBreaker.ofDefaults("DefaultSlotManager")
+                        : circuitBreaker;
         configureCircuitBreaker();
 
-        this.registry = registry;
-
-        this.hardwareUtilization = new AtomicReference<>(resourceMonitor.getUtilization());
-        resourceMonitor.addListener().publishOn(scheduler).subscribe(this::updateUtilization);
+        if (config.cloneConfig == null) {
+            this.cpuId = -1;
+            this.pinnedExecutor = null;
+            this.logger = LoggerFactory.getLogger(DefaultSlotManager.class);
+        } else {
+            int[] cpus = getCpus(config.cloneConfig.effectiveCpus());
+            this.cpuId = cpus[0];
+            this.pinnedExecutor = PinnedThreadExecutor.getOrSetIfAbsent(cpus[0],
+                    config.cloneConfig.shardName() + "-DefaultSlotManager-"
+                            + config.cloneConfig.coreId(),
+                    Thread.MAX_PRIORITY, false);
+            this.logger = LoggerFactory.getLogger(
+                    config.cloneConfig.shardName() + "-DefaultSlotManager");
+        }
 
         this.failureBroadcast.asFlux().doOnNext(err -> recentErrors.incrementAndGet())
-                .window(Duration.ofSeconds(1)).flatMap(window -> Mono.delay(Duration.ofSeconds(2)))
+                .window(Duration.ofSeconds(1)).flatMap(_ -> Mono.delay(Duration.ofSeconds(2)))
                 .subscribe(v -> recentErrors.set(0));
 
-        if (registry != null) {
-            this.dispatchTimer = Timer.builder(config.metricPrefix + ".dispatch.latency")
-                    .description("Latency of dispatched work including queue time")
-                    .publishPercentileHistogram().register(registry);
-            this.slotAcquisitionTimer = Timer.builder(
-                            config.metricPrefix + ".dispatch.slot.acquisition.latency")
-                    .description("Latency of acquiring a slot").publishPercentileHistogram()
-                    .register(registry);
-            registerPrometheusMetrics();
-        } else {
-            this.dispatchTimer = null;
-            this.slotAcquisitionTimer = null;
-        }
+        final long[] avgLatency = new long[]{0};
+        this.metrics = new Metrics(config.meterRegistry, config, inFlight, () -> avgLatency[0],
+                () -> currentConcurrency,
+                () -> currentRate);
+
+        outputFlux = new DirectOutputFlux(buffer, frame -> frame.setCompletionSink(completeSink));
+        this.completeSink.asFlux().subscribe((frame) -> {
+            if (!frame.isCancelledExecution() && frame.getStartNs() > 0) {
+                long now = System.nanoTime();
+                latencyRecorder.record(now, now - frame.getStartNs());
+                if ((latencyRecorder.getEffectiveMeasurementWindowCount(now) & 31) == 0) {
+                    updateMetrics(now - frame.getStartNs());
+                }
+                avgLatency[0] = latencyRecorder.getAverageUnits();
+            }
+            inFlight.decrementAndGet();
+            frame.doFinally();
+        });
+
+        this.errorSink.asFlux().subscribe(
+                failure -> circuitBreaker.onError(failure.duration(), TimeUnit.NANOSECONDS,
+                        failure.exception()));
+
+        this.shutdownHook = new Thread(this::close);
+        Runtime.getRuntime().addShutdownHook(this.shutdownHook);
     }
 
     protected RateLimiter configureRateLimiter(int ratePerSecond) {
         RateLimiterConfig config = RateLimiterConfig.custom().limitForPeriod(ratePerSecond)
                 .limitRefreshPeriod(Duration.ofSeconds(1)).timeoutDuration(Duration.ZERO).build();
 
-        return RateLimiter.of("defaultSlotManager", config);
+        return RateLimiter.of("DefaultSlotManager", config);
     }
 
     protected void configureCircuitBreaker() {
@@ -181,246 +205,340 @@ public class DefaultSlotManager implements SlotManager {
         CircuitBreakerConfig cbConfig = this.circuitBreaker.getCircuitBreakerConfig();
         Predicate<Throwable> existingPredicate = cbConfig.getIgnoreExceptionPredicate();
 
-        var updated = CircuitBreakerConfig.from(cbConfig)
-                .ignoreException(throwable ->
-                        throwable instanceof WorkCancelled || existingPredicate.test(throwable))
-                .build();
+        var updated = CircuitBreakerConfig.from(cbConfig).ignoreException(
+                throwable -> throwable instanceof AbstractFrame || existingPredicate.test(
+                        throwable)).build();
 
-        if(config.cbRegistry == null) {
+        if (config.cbRegistry == null) {
             this.circuitBreaker = CircuitBreaker.of(cbName, updated);
         } else {
             this.circuitBreaker = config.cbRegistry.circuitBreaker(cbName, updated);
         }
 
-        this.circuitBreaker.getEventPublisher()
-                .onError(this.failureBroadcast::tryEmitNext);
+        this.circuitBreaker.getEventPublisher().onError(this.failureBroadcast::tryEmitNext);
     }
 
-    protected <T> UnaryOperator<Publisher<T>> getRateLimiter() {
-        return publisher -> Mono.from(publisher)
-                .transformDeferred(RateLimiterOperator.of(this.rateLimiter)).retryWhen(
-                        Retry.backoff(Long.MAX_VALUE, Duration.ofMillis(20))
-                                .filter(throwable -> throwable instanceof RequestNotPermitted)
-                                .jitter(0.5).scheduler(scheduler));
-    }
-
-    @Override
-    @NonNull
-    public <T> Mono<T> acquireSlot(@NonNull Supplier<Mono<T>> work) {
-        return Mono.defer(work).transformDeferred(getRateLimiter())
-                .transformDeferred(CircuitBreakerOperator.of(circuitBreaker))
-                .as(readyWork -> acquirePermit().then(Mono.defer(() -> {
-                    long startNs = scheduler.now(TimeUnit.NANOSECONDS);
-                    Timer.Sample sample = (registry == null) ? null : Timer.start(registry);
-
-                    return readyWork.doFinally(sig -> {
-                        releasePermit();
-
-                        if (sig == SignalType.ON_COMPLETE) {
-                            if (sample != null) {
-                                sample.stop(dispatchTimer);
-                            }
-                            updateMetrics(scheduler.now(TimeUnit.NANOSECONDS) - startNs);
-                        } else if(registry != null) {
-                            registry.counter(config.metricPrefix + ".execution_aborted", "signal", sig.name())
-                                    .increment();
-                        }
-                    });
-                })));
-    }
-
-    protected Mono<Void> acquirePermit() {
-        return Mono.defer(() -> {
-            Timer.Sample sample = registry == null ? null : Timer.start(registry);
-
-            int limit = currentConcurrency.get();
-            int current = inFlight.get();
-
-            if (current < limit && inFlight.compareAndSet(current, current + 1)) {
-                if (sample != null) {
-                    sample.stop(slotAcquisitionTimer);
-                }
-                return Mono.empty(); // Success
-            }
-            int waiterLimit = effectiveMaxWaiters.get();
-            if (currentWaiters.incrementAndGet() > waiterLimit) {
-                currentWaiters.decrementAndGet();
-                return handleOverflow(waiterLimit);
-            }
-
-            Sinks.One<Void> waiter = Sinks.one();
-            waiters.add(waiter);
-
-            return waiter.asMono().timeout(Duration.ofSeconds(30), scheduler)
-                    .then(Mono.defer(this::acquirePermit)).onErrorMap(TimeoutException.class,
-                            e -> new RuntimeException("Timed out waiting for concurrency slot"))
-                    .doOnSuccess(v -> {
-                        if (sample != null) {
-                            sample.stop(slotAcquisitionTimer);
-                        }
-                    }).doFinally(sig -> {
-                        if (waiters.remove(waiter)) {
-                            currentWaiters.decrementAndGet();
-                        }
-                    });
-        });
-    }
-
-    protected void releasePermit() {
-        inFlight.decrementAndGet();
-        drainWaiters();
-    }
-
-    protected void drainWaiters() {
-        while (true) {
-            Sinks.One<Void> waiter = waiters.pollFirst();
-            if (waiter == null) {
-                return;
-            }
-
-            currentWaiters.decrementAndGet();
-            Sinks.EmitResult result = waiter.tryEmitEmpty();
-
-            if (result.isSuccess()) {
-                return;
-            }
-
-            if (result == EmitResult.FAIL_NON_SERIALIZED) {
-                waiters.addFirst(waiter);
-                currentWaiters.incrementAndGet();
-            }
+    private int[] getCpus(BitSet effective) {
+        int[] cpus = new int[effective.cardinality()];
+        int idx = 0;
+        for (int c = effective.nextSetBit(0); c >= 0; c = effective.nextSetBit(c + 1)) {
+            cpus[idx++] = c;
         }
+        return cpus;
     }
 
     protected void updateMetrics(long latencyNs) {
-        latencyRecorder.recordLatency(latencyNs);
+        latencyRecorder.record(latencyNs);
 
-        double queueEstimate = latencyRecorder.getVegasQueueEstimate(latencyNs,
-                latencyRecorder.getTargetLatencyNs(), currentConcurrency.get());
+        double queueEstimate = latencyRecorder.getVegasQueueEstimate(latencyNs, currentConcurrency);
+
         updateEffectiveConcurrencyLimit();
-        updateWaiterLimit();
-
-        if (measurementCount.get() > 15) {
-            updateConcurrency(queueEstimate);
-        }
-
-        measurementCount.incrementAndGet();
+        updateConcurrency(queueEstimate);
     }
 
     protected void updateConcurrency(double queueEstimate) {
-        double throughput = latencyRecorder.getSmoothedThroughputPerSec();
-        currentRate.set((int) throughput);
+        if (drainMode) {
+            this.currentConcurrency = effectiveConcurrencyLimit;
+            return;
+        }
 
-        currentConcurrency.updateAndGet(current -> {
-            // Vegas Dynamic Thresholds
-            int alpha = Math.max(3, (int) (3 * Math.log10(current)));
-            int beta = Math.max(6, (int) (6 * Math.log10(current)));
+        long throughputPerSec = latencyRecorder.getThroughputNs() * 1_000_000_000L;
+        currentRate = (int) throughputPerSec;
 
-            int next;
-            if (queueEstimate > beta) {
-                next = (int) Math.max(current * 0.75, 2); // -15%
-            } else if (queueEstimate < alpha / 2.0) {
-                next = current + Math.max(2, (int) Math.ceil(current * 0.1)); // +10%
-            } else if (queueEstimate < alpha) {
-                next = current + 1;
-            } else { // Little's Law
-                double medianLatencySec =
-                        latencyRecorder.getPercentile(50.0) / (double) Duration.ofSeconds(1)
-                                .toNanos();
-                int ideal = (int) Math.ceil(throughput * medianLatencySec);
+        int current = currentConcurrency;
 
-                // Move 30% of the way to the ideal anchor
-                next = current + (int) (0.3 * (ideal - current));
+        // Vegas Dynamic Thresholds
+        int logOfCurrent = calculateLog2(current);
+        int alpha = Math.max(3, 3 * logOfCurrent);
+        int beta = Math.max(6, 6 * logOfCurrent);
+
+        int next;
+        if (queueEstimate > beta) {
+            int decrease = ((current * 9830) >> 16); // 9830/65536 ~= 15%
+            next = current - Math.max(1, decrease);
+        } else if (queueEstimate < (alpha >> 1)) {
+            int increase = ((current * 6553) >> 16); // 6553/65536 ~= 10%
+            next = current + Math.max(2, increase);
+        } else if (queueEstimate < alpha) {
+            next = current + 1;
+        } else { // Little's Law
+            long ideal = latencyRecorder.getThroughputNs();
+            long diff = ideal - current;
+            // Move 30% of the way to the ideal anchor
+            int step = (int) ((diff * 19661) >> 16); // 19661/65536 ≈ 0.3
+
+            if (step == 0 && diff != 0) {
+                step = (diff > 0) ? 1 : -1;
             }
 
-            // Hard bound by the ResourceMonitor's effective limit
-            return Math.clamp(next, 2, effectiveConcurrencyLimit.get());
-        });
+            next = current + step;
+        }
 
-        updateRateLimiter(throughput);
+        this.currentConcurrency = Math.clamp(next, 2, effectiveConcurrencyLimit);
+        updateRateLimiter(throughputPerSec);
     }
 
-    private void updateRateLimiter(double throughput) {
-        if (hardwareUtilization.get().pressure() < 0.90) {
-            int targetRps = Math.max(10, (int) throughput);
+    private void updateRateLimiter(long throughputPerSec) {
+        boolean underUtilized;
+        if (config.cloneConfig == null) {
+            underUtilized = hardwareUtilization.get().pressure() < 0.90;
+        } else {
+            underUtilized = coreSnapshot.cpuSnapshots()[cpuId].pressure() < 0.90;
+        }
+
+        if (underUtilized) {
+            int targetRps = Math.max(10, (int) throughputPerSec);
             int currentRps = rateLimiter.getRateLimiterConfig().getLimitForPeriod();
 
             // Use a 5% dead-band to prevent jitter
-            if (Math.abs(currentRps - targetRps) > (currentRps * 0.05)) {
+            if (Math.abs(currentRps - targetRps) > ((currentRps * 3276) >> 16)) {
                 rateLimiter.changeLimitForPeriod(targetRps);
             }
         }
     }
 
+    private int calculateLog2(int current) {
+        int log2 = 31 - Integer.numberOfLeadingZeros(Math.max(current, 1));
+
+        return Math.max(3, log2);
+    }
+
     protected void updateEffectiveConcurrencyLimit() {
-        HardwareUtilization utilization = this.hardwareUtilization.get();
         CircuitBreaker.State cbState = circuitBreaker.getState();
 
-        if (cbState == CircuitBreaker.State.OPEN || cbState == CircuitBreaker.State.FORCED_OPEN) {
-            effectiveConcurrencyLimit.set(10);
+        if (!drainMode && (cbState == CircuitBreaker.State.OPEN
+                || cbState == CircuitBreaker.State.FORCED_OPEN)) {
+            effectiveConcurrencyLimit = 10;
             return;
         }
 
-        double pressure = utilization.pressure();
-        double capacity = utilization.availableCpus();
+        CoreSnapshot coreSnapshot = this.coreSnapshot;
+        CpuSnapshot snapshot = coreSnapshot.cpuSnapshots()[cpuId];
 
-        int baseCap = (int) (capacity * 200);
+        double pressure = snapshot.pressure();
+        int baseCap = (int) (snapshot.quotaCpus() * config.concurrencyMultiplier);
 
-        // Calculate the Pressure Factor (Quadratic Decay)
-        double factor = 1.0;
+        final int[] target = new int[1];
         if (pressure > 0.70) {
-            double x = (pressure - 0.70) / 0.30;
-            factor = 1.0 - (0.8 * (x * x));
+            double normPressure = (pressure - 0.70) / 0.30;
+            target[0] = (int) (baseCap * (1.0 - (0.8 * normPressure)));
+        } else {
+            target[0] = baseCap;
+        }
+        target[0] = Math.max(10, target[0]);
+
+        int current = this.effectiveConcurrencyLimit;
+        if (drainMode) {
+            this.effectiveConcurrencyLimit = (int) (baseCap * 0.8);
+        } else if (cbState == CircuitBreaker.State.HALF_OPEN) {
+            this.effectiveConcurrencyLimit = Math.min(target[0], 50);
+        } else if (target[0] < current) {
+            this.effectiveConcurrencyLimit = target[0]; // Fast Drop
+        } else {
+            // Slow Rise: move 1/8th of the way
+            int delta = target[0] - current;
+            this.effectiveConcurrencyLimit = current + Math.max(1, delta >> 3);
         }
 
-        int target = (int) Math.max(10, Math.ceil(baseCap * factor));
+    }
 
-        // Smooth the Transition (Asymmetric: Drop fast, Grow slow)
-        effectiveConcurrencyLimit.updateAndGet(current -> {
-            if(cbState == CircuitBreaker.State.HALF_OPEN) {
-                return Math.min(target, 50);
-            } else if (target < current) {
-                return Math.max(target, (int) Math.ceil(current * 0.85)); // Drop 15%
-            } else {
-                int delta = target - current;
-                return current + Math.max(1, delta / 8); // Rise 1/8 of change
+    @Override
+    public void close() {
+        if (running.compareAndSet(true, false)) {
+            if(ingest != null) {
+                ingest.removeThread(cycleThread);
+                ingest.close();
+            }
+            if (cycleThread != null) {
+                try {
+                    LockSupport.unpark(cycleThread);
+                    cycleThread.interrupt();
+                    cycleThread.join(500);
+                } catch (Exception ignored) {
+                }
+                cycleThread = null;
+            }
+            dumpLocks();
+            AbstractFrame frame;
+            while ((frame = buffer.poll()) != null) {
+                frame.kill();
+            }
+            buffer.clear();
+            completeSink.tryEmitComplete();
+            metrics.close();
+            try {
+                Runtime.getRuntime().removeShutdownHook(shutdownHook);
+            } catch (Exception ignored) {
+
+            }
+        }
+        logger.info("Closed");
+    }
+
+    public void dumpLocks() {
+        if (pinnedExecutor != null) {
+            pinnedExecutor.close();
+        }
+    }
+
+    @Override
+    public Publisher<AbstractFrame> process(Publisher<AbstractFrame> flux) {
+        ingest(flux);
+        return output();
+    }
+
+    @Override
+    public void ingest(Publisher<AbstractFrame> frameFlux) {
+        if (frameFlux instanceof IngestSequencer sequencer && ingest == null) {
+            ingest = sequencer;
+            wakeHook = new WakeHook(cycleThread);
+            sequencer.setWakeHook(wakeHook);
+            LockSupport.unpark(cycleThread);
+        }
+    }
+
+    @Override
+    public Publisher<AbstractFrame> output() {
+        return outputFlux;
+    }
+
+    @Override
+    public void errorChannel(Publisher<Failure> errorFlux) {
+        errorFlux.subscribe(new CoreSubscriber<>() {
+            @Override
+            public void onSubscribe(Subscription subscription) {
+                subscription.request(Long.MAX_VALUE);
+            }
+
+            @Override
+            public void onNext(Failure failure) {
+                EmitResult result;
+                while (!(result = errorSink.tryEmitNext(failure)).isSuccess()) {
+                    if (result == EmitResult.FAIL_CANCELLED || result == EmitResult.FAIL_TERMINATED
+                            || result == EmitResult.FAIL_ZERO_SUBSCRIBER) {
+                        logger.error("CRITICAL: No error sink available to report failure.",
+                                failure.exception());
+                        break;
+                    }
+                    Thread.onSpinWait();
+                }
+            }
+
+            @Override
+            public void onError(Throwable throwable) {
+                logger.error("Error", throwable);
+            }
+
+            @Override
+            public void onComplete() {
+
             }
         });
     }
 
-    protected void updateWaiterLimit() {
-        int effective = effectiveConcurrencyLimit.get();
-        effectiveMaxWaiters.updateAndGet(current -> {
-            int target = Math.clamp(effective * 6L, 10, config.maxWaiters);
+    public void start() {
+        if (running.compareAndSet(false, true)) {
+            CloneConfig cloneConfig = config.cloneConfig;
+            if (cloneConfig != null) {
 
-            if (target < current) {
-                int next = (int) Math.ceil(current * 0.8);
-                return Math.max(target, next);
+                pinnedExecutor.execute(() -> {
+                    this.cycleThread = Thread.currentThread();
+
+                    logger.info("Pinned to Core {} CPU {}", cloneConfig.coreId(), cpuId);
+                    cycle();
+                });
             } else {
-                int delta = target - current;
-                int next = current + Math.max(10, delta / 6);
-                return Math.min(target, next);
+                cycle();
             }
-        });
+        }
     }
 
-    protected Mono<Void> handleOverflow(int limit) {
-        return switch (config.overflowStrategy) {
-            case REJECT -> Mono.error(new OverloadException("Wait queue full (cap=" + limit + ")"));
-            case DELAY -> {
-                double pressure = currentWaiters.get() / (double) effectiveMaxWaiters.get();
-                pressure = Math.clamp(pressure, 0.0, 2.0);
+    private void cycle() {
+        try {
+            int chunkSize = 4096;
 
-                long baseDelay = 2 + ThreadLocalRandom.current().nextLong(3);
-                long maxDelay = 50;
+            int parks = 0;
+            int bufferCount = 0;
+            long idleIterations = 0;
+            while (running.get() && !Thread.currentThread().isInterrupted()) {
 
-                long delayMs = (long) (baseDelay + (maxDelay * pressure * pressure));
-                delayMs = Math.clamp(delayMs, baseDelay, maxDelay);
+                int currentConcurrency = this.currentConcurrency;
+                int currInFlight = inFlight.get();
+                int quota = currentConcurrency - currInFlight;
 
-                yield Mono.delay(Duration.ofMillis(delayMs)).then(acquirePermit());
+                int processed = 0;
+                if (acquirePermission(quota)) {
+                    processed = bufferCount > 0 && quota > 0 ? outputFlux.drain(quota) : 0;
+                    bufferCount -= processed;
+                }
+                if (processed > 0) {
+                    this.inFlight.addAndGet(processed);
+                }
+
+                if (ingest != null) {
+                    int lowWaterMark = Math.min(currentConcurrency >> 2, chunkSize >> 2);
+
+                    if (bufferCount <= lowWaterMark) {
+                        bufferCount += ingest.drain(bufferWrapper, chunkSize - bufferCount);
+                    }
+                }
+
+                if (processed > 0) {
+                    parks = 0;
+                    idleIterations = 0;
+                    if ((processed & 128) == 0) {
+                        Thread.onSpinWait();
+                    }
+                } else {
+                    idleIterations++;
+                    if (idleIterations >= config.idleCyclePolicy.idleParkThreshold) {
+                        parks = Math.min(++parks, 20);
+                        if (wakeHook != null) {
+                            wakeHook.parked = true;
+                        }
+                        LockSupport.parkNanos(parks * 1_000L);
+                        idleIterations = config.idleCyclePolicy.idleParkThreshold;
+                        if (wakeHook != null) {
+                            wakeHook.parked = false;
+                        }
+                    } else if (idleIterations >= config.idleCyclePolicy.idleYieldThreshold) {
+                        Thread.yield();
+                    } else if (idleIterations >= config.idleCyclePolicy.idleSpinThreshold) {
+                        Thread.onSpinWait();
+                    }
+                }
             }
-            case DROP_SILENT -> Mono.empty();
-        };
+        } catch (Throwable e) {
+            logger.error("Error", e);
+        } finally {
+            running.set(false);
+            parked = false;
+        }
+    }
+
+    protected boolean acquirePermission(int quota) {
+        return drainMode || (circuitBreaker.tryAcquirePermission());
+    }
+
+    @Override
+    public DefaultSlotManager clone(CloneConfig cloneConfig) {
+        String cbName = this.circuitBreaker.getName();
+        CircuitBreakerConfig cbConfig = this.circuitBreaker.getCircuitBreakerConfig();
+
+        CircuitBreaker copyCB = null;
+        if (cloneConfig != null) {
+            if (config.cbRegistry == null) {
+                copyCB = CircuitBreaker.of(
+                        cloneConfig.shardName() + "-" + cbName + "-core-" + cloneConfig.coreId(),
+                        cbConfig);
+            } else {
+                copyCB = config.cbRegistry.circuitBreaker(
+                        cloneConfig.shardName() + "-" + cbName + "-core-" + cloneConfig.coreId(),
+                        cbConfig);
+            }
+        }
+
+        return new DefaultSlotManager(config.clone(cloneConfig), copyCB);
     }
 
     @Override
@@ -428,83 +546,172 @@ public class DefaultSlotManager implements SlotManager {
         double cbPressure = switch (circuitBreaker.getState()) {
             case OPEN, FORCED_OPEN -> 1.0;
             case HALF_OPEN -> 0.85;
-            default -> 0;
+            default -> 0.0;
         };
+        if (cbPressure >= 1.0) {
+            return 1.0;
+        }
+
+        double hardwarePressure = 0.0;
+        if (config.cloneConfig != null) {
+            CoreSnapshot snapshot = coreSnapshot;
+            if (snapshot != null) {
+                hardwarePressure = snapshot.cpuSnapshots()[cpuId].pressure();
+            }
+        }
+
+        int alpha = Math.max(3, 3 * calculateLog2(currentConcurrency));
+        int beta = Math.max(6, 6 * alpha);
+
+        // Get the queue estimate from your new FlowRecorder (latency version)
+        // We use long-based math for the estimate, then cast to double for the final mix.
+        long queueEstimate = latencyRecorder.getVegasQueueEstimate(
+                latencyRecorder.getAverageUnits(), // Passing "actual" units
+                currentConcurrency);
+
+        double vegasPressure = (double) queueEstimate / beta;
 
         double errorPenalty = Math.min(0.4, recentErrors.get() * 0.05);
 
-        // Thresholds
-        int currentLimit = currentConcurrency.get();
-        int beta = Math.max(6, (int) (6 * Math.log10(currentLimit)));
-
-        double queueEstimate = latencyRecorder.getVegasQueueEstimate(
-                latencyRecorder.getPercentile(50), latencyRecorder.getTargetLatencyNs(),
-                currentLimit);
-
-        // (Latency-based)
-        double vegasPressure = queueEstimate / beta;
-        // (Concurrency-based)
-        double waiterPressure = (double) waiters.size() / Math.max(1, effectiveMaxWaiters.get());
-        // (Resource-based)
-        double hardwarePressure = hardwareUtilization.get().pressure();
-
-        // If we have waiters, we are effectively at full capacity.
-        // Accumulation of waiters forces the upstream to back off.
-        double totalDownstream = (waiters.isEmpty()) ? vegasPressure : 0.8 + (waiterPressure * 0.2);
-
-        double currentBasePressure = Math.max(totalDownstream, hardwarePressure);
-        return Math.clamp(Math.max(currentBasePressure, cbPressure) + errorPenalty, 0.0, 1.0);
-    }
-
-    @Override
-    public int getConcurrencyLimit() {
-        return effectiveConcurrencyLimit.get();
+        double base = Math.max(vegasPressure, hardwarePressure);
+        return Math.clamp(Math.max(base, cbPressure) + errorPenalty, 0.0, 1.0);
     }
 
     public Flux<Object> addFailureListener() {
         return this.failureBroadcast.asFlux();
     }
 
-    private void updateUtilization(HardwareUtilization utilization) {
-        this.hardwareUtilization.set(utilization);
+    @Override
+    public boolean isStarted() {
+        return running.get();
     }
 
-    private void registerPrometheusMetrics() {
-        Gauge.builder(config.metricPrefix + ".dispatch.concurrency.current", currentConcurrency,
-                        AtomicInteger::get).description("Current adaptive concurrency limit")
-                .register(registry);
-
-        Gauge.builder(config.metricPrefix + ".dispatch.inflight.count", inFlight,
-                        AtomicInteger::get).description("Number of dispatches being executed")
-                .register(registry);
-
-        Gauge.builder(config.metricPrefix + ".dispatch.waiters.count", waiters, Queue::size)
-                .description("Number of requests in the waiter queue").register(registry);
-
-        Gauge.builder(config.metricPrefix + ".dispatch.rate.current", currentRate,
-                        AtomicInteger::get).description("Current dispatch rate (dispatch/sec)")
-                .register(registry);
+    @Override
+    public boolean isDrained() {
+        return inFlight.get() == 0 && buffer.isEmpty();
     }
 
-    public enum OverflowStrategy {
-        REJECT, DELAY, DROP_SILENT
+    @Override
+    public void update(CoreSnapshot snapshot) {
+        this.coreSnapshot = snapshot;
     }
 
-    public record Config(int initialRatePerSecond, int initialConcurrency, int maxWaiters,
-                         OverflowStrategy overflowStrategy, LatencyRecorder latencyRecorder, CircuitBreakerRegistry cbRegistry,
-                         String metricPrefix) {
+    @Override
+    public void setDrainMode(boolean value) {
+        this.drainMode = value;
+    }
 
-        public Config(int initialRatePerSecond, int initialConcurrency, int maxWaiters,
-                OverflowStrategy overflowStrategy) {
-            this(initialRatePerSecond, initialConcurrency, maxWaiters, overflowStrategy, null, null,
-                    null);
+    public static final class Metrics implements AutoCloseable {
+
+        public final MeterRegistry registry;
+        private final List<Meter> meters = new ArrayList<>();
+
+        public Metrics(MeterRegistry registry, Config config, AtomicInteger inFlight,
+                Supplier<Long> latency,
+                Supplier<Integer> currentConcurrency, Supplier<Integer> currentRate) {
+            this.registry = registry;
+
+            if (registry != null && config.cloneConfig != null) {
+                String coreId = String.valueOf(config.cloneConfig.coreId());
+
+                meters.add(Gauge.builder(config.metricPrefix + ".inFlight.latency", latency)
+                        .description("Average time of completion for in-flight work in nanos.")
+                        .tag("core", coreId)
+                        .baseUnit("nanoseconds").register(registry));
+
+                meters.add(Gauge.builder(config.metricPrefix + ".dispatch.concurrency.current",
+                                currentConcurrency).description("Current adaptive concurrency limit")
+                        .tag("core", coreId)
+                        .register(registry));
+
+                meters.add(Gauge.builder(config.metricPrefix + ".dispatch.inflight.count", inFlight,
+                                AtomicInteger::get).description("Number of frames being executed")
+                        .tag("core", coreId)
+                        .register(registry));
+
+                meters.add(Gauge.builder(config.metricPrefix + ".dispatch.throughput", currentRate)
+                        .description("Current dispatch rate (dispatch/sec)")
+                        .tag("core", coreId)
+                        .register(registry));
+            }
+        }
+
+        @Override
+        public void close() {
+            meters.forEach(Meter::close);
+            meters.clear();
         }
     }
 
-    public static final class OverloadException extends RuntimeException {
+    public record Config(CloneConfig cloneConfig, int initialRatePerSecond, int initialConcurrency,
+                         int concurrencyMultiplier, int maxBuffer, IdleCyclePolicy idleCyclePolicy,
+                         CircuitBreakerRegistry cbRegistry,
+                         MeterRegistry meterRegistry, String metricPrefix) implements
+            CloneableObject {
 
-        public OverloadException(String message) {
-            super(message);
+        public static final int VIRTUAL_THREAD_MULT = 20_000;
+
+        public static Config powerSavingDefault(
+                CircuitBreakerRegistry cbRegistry, MeterRegistry meterRegistry,
+                String metricPrefix) {
+            return new Config(null, 1000, 2, 10, 256, IdleCyclePolicy.POWER_SAVING,
+                    cbRegistry, meterRegistry, metricPrefix);
+        }
+
+        public static Config elasticVirtualDefault(
+                CircuitBreakerRegistry cbRegistry, MeterRegistry meterRegistry,
+                String metricPrefix) {
+            return new Config(null, 10_000, VIRTUAL_THREAD_MULT, VIRTUAL_THREAD_MULT, 16_384,
+                    IdleCyclePolicy.DEFAULT, cbRegistry, meterRegistry, metricPrefix);
+        }
+
+        public static Config mixedWorkDefault(
+                CircuitBreakerRegistry cbRegistry,
+                MeterRegistry meterRegistry, String metricPrefix) {
+            return new Config(null, 2000, 20, 256, 1024, IdleCyclePolicy.DEFAULT,
+                    cbRegistry, meterRegistry, metricPrefix);
+        }
+
+        public static Config lowLatencyDefault(
+                CircuitBreakerRegistry cbRegistry, MeterRegistry meterRegistry,
+                String metricPrefix) {
+            return new Config(null, 2000, 1, 2, 64, IdleCyclePolicy.LOW_LATENCY,
+                    cbRegistry, meterRegistry, metricPrefix);
+        }
+
+        public static Config highThroughputDefault(
+                CircuitBreakerRegistry cbRegistry, MeterRegistry meterRegistry,
+                String metricPrefix) {
+            return new Config(null, 5000, 64, 128, 4096, IdleCyclePolicy.HIGH_THROUGHPUT,
+                    cbRegistry, meterRegistry, metricPrefix);
+        }
+
+        @Override
+        public Config clone(CloneConfig cloneConfig) {
+            MeterRegistry meterRegistry = null;
+            if (cloneConfig != null) {
+                meterRegistry = cloneConfig.meterRegistry();
+            }
+            return new Config(cloneConfig, initialRatePerSecond, initialConcurrency,
+                    concurrencyMultiplier, maxBuffer, idleCyclePolicy, cbRegistry,
+                    meterRegistry, metricPrefix);
+        }
+
+        @Override
+        public void close() {
+        }
+
+        public record IdleCyclePolicy(long idleSpinThreshold, long idleYieldThreshold,
+                                      long idleParkThreshold) {
+
+            public static final IdleCyclePolicy DEFAULT = new IdleCyclePolicy(1_000, 10_000,
+                    100_000);
+            public static final IdleCyclePolicy LOW_LATENCY = new IdleCyclePolicy(100_000,
+                    1_000_000,
+                    1_000_000_000);
+            public static final IdleCyclePolicy HIGH_THROUGHPUT = new IdleCyclePolicy(100, 1_000,
+                    10_000);
+            public static final IdleCyclePolicy POWER_SAVING = new IdleCyclePolicy(0, 0, 0);
         }
     }
 }

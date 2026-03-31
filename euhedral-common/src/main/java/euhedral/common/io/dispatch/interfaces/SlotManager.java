@@ -1,21 +1,13 @@
 package euhedral.common.io.dispatch.interfaces;
 
-import java.util.function.Supplier;
-import org.jspecify.annotations.NonNull;
-import reactor.core.publisher.Flux;
-import reactor.core.publisher.Mono;
+import euhedral.common.io.dispatch.control_plane.CloneConfig;
+import euhedral.common.io.dispatch.utils.PinnedThreadExecutor;
 
-public interface SlotManager {
-
-    @NonNull
-    default <T> Flux<T> acquireSlot(@NonNull Flux<T> flux) {
-        return flux.concatMap(item -> acquireSlot(() -> Mono.just(item)));
-    }
-
-    @NonNull
-    <T> Mono<T> acquireSlot(@NonNull Supplier<Mono<T>> work);
+public interface SlotManager extends CloneableObject, AutoCloseable {
 
     double getPressure();
 
-    int getConcurrencyLimit();
+    PinnedThreadExecutor getPinnedExecutor();
+
+    SlotManager clone(CloneConfig cloneConfig);
 }

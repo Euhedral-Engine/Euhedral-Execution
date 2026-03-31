@@ -1,0 +1,30 @@
+<assembly xmlns="http://maven.apache.org/ASSEMBLY/2.2.0"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/ASSEMBLY/2.2.0 http://maven.apache.org">
+  <id>jar-with-dependencies</id>
+  <formats>
+    <format>jar</format>
+  </formats>
+  <includeBaseDirectory>false</includeBaseDirectory>
+  <fileSets>
+    <!-- Include Main Classes -->
+    <fileSet>
+      <directory>${project.build.outputDirectory}</directory>
+      <outputDirectory>/</outputDirectory>
+    </fileSet>
+    <!-- Include Test Classes (where your TestRunner lives) -->
+    <fileSet>
+      <directory>${project.build.testOutputDirectory}</directory>
+      <outputDirectory>/</outputDirectory>
+    </fileSet>
+  </fileSets>
+  <dependencySets>
+    <dependencySet>
+      <outputDirectory>/</outputDirectory>
+      <useProjectArtifact>true</useProjectArtifact>
+      <unpack>true</unpack>
+      <!-- Include test-scope dependencies like AffinityLock -->
+      <scope>test</scope>
+    </dependencySet>
+  </dependencySets>
+</assembly>
