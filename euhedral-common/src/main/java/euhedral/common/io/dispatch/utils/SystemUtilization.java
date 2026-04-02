@@ -18,6 +18,7 @@ public interface SystemUtilization {
     record CoreSnapshot(
             int coreId,
             double quotaCpus,
+            long period,
             long globalMemoryLimit,
             long globalBytesUsed,
             long coreMemoryLimit,
@@ -31,6 +32,7 @@ public interface SystemUtilization {
     record CpuSnapshot(
             int cpuId,
             double quotaCpus,
+            long period,
             long globalMemoryLimit,
             long globalBytesUsed,
             long coreMemoryLimit,
@@ -43,7 +45,7 @@ public interface SystemUtilization {
 
     }
 
-    record SystemSnapshot(long timeNs, int availableCpus, double quotaCpus, long cpuUsage,
+    record SystemSnapshot(long timeNs, int availableCpus, double quotaCpus, long period, long cpuUsage,
                           long cpuThrottle,
                           BitSet effectiveCpus, double[] pressurePerCpu,
                           long memoryLimit, long memoryUsage, long inactiveFileMemory,
@@ -52,7 +54,7 @@ public interface SystemUtilization {
     }
 
 
-    record HardwareUtilization(long timestampNs, double quotaCpus, double quotaCpuUsage,
+    record HardwareUtilization(long timestampNs, double quotaCpus, double quotaCpuUsage, long period,
                                BitSet globalEffectiveCpus,
                                AtomicReferenceArray<Double> perQuotaCpuPressure,
                                double cpuThrottleRatio,
@@ -114,7 +116,7 @@ public interface SystemUtilization {
             }
 
             long coreMemoryPool = perCpuMemoryPool * cpuCount;
-            return new CoreSnapshot(coreId, cpuQuotaPool, globalMemoryPool,
+            return new CoreSnapshot(coreId, cpuQuotaPool, period, globalMemoryPool,
                     (long) (globalMemoryPool * totalMemoryUtilization), coreMemoryPool,
                     (double) (memPerCpuUsageBytes * cpuCount) / coreMemoryPool, effectiveCpus,
                     cpuSnapshots);
@@ -123,7 +125,7 @@ public interface SystemUtilization {
 
         public CpuSnapshot getCpuSnapshot(int cpuId, double cpuQuota, int coreCpuCount) {
             if (cpuId < 0 || cpuId >= perQuotaCpuPressure.length()) {
-                return new CpuSnapshot(cpuId, cpuQuota,
+                return new CpuSnapshot(cpuId, cpuQuota, period,
                         globalMemoryPool, (long) (globalMemoryPool * totalMemoryUtilization), 0, 0,
                         0, 0, 0, 0);
             }
@@ -138,15 +140,15 @@ public interface SystemUtilization {
 
             double io = ioPressure * 0.8;
             double combinedPressure = Math.clamp(
-                    Math.max(Math.max(cpuPressure, (double) memPerCpuUsageBytes / globalMemoryPool),
+                    Math.max(Math.max(cpuPressure, (double) memPerCpuUsageBytes / (perCpuMemoryPool * coreCpuCount)),
                             io),
                     0.0, 1.0
             );
 
-            return new CpuSnapshot(cpuId, cpuQuota,
+            return new CpuSnapshot(cpuId, cpuQuota, period,
                     globalMemoryPool, (long) (globalMemoryPool * totalMemoryUtilization),
                     coreCpuCount * perCpuMemoryPool,
-                    (double) memPerCpuUsageBytes / globalMemoryPool,
+                    (double) memPerCpuUsageBytes / (perCpuMemoryPool * coreCpuCount),
                     stallRatio,
                     throttleRatio,
                     combinedPressure,

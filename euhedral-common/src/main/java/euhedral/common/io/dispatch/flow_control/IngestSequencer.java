@@ -7,6 +7,7 @@ import euhedral.common.io.dispatch.utils.FlowRecorder;
 import java.util.BitSet;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.LockSupport;
+import lombok.Getter;
 import lombok.Setter;
 import org.jctools.queues.MpscUnboundedXaddArrayQueue;
 import org.reactivestreams.Subscriber;
@@ -19,12 +20,16 @@ public abstract class IngestSequencer extends FluxNode implements AutoCloseable 
     protected final QueueFrame[] queueRing;
     protected final int mask;
 
+    @Getter
     protected final FlowRecorder fillRecorder;
+    @Getter
     protected final FlowRecorder bytesPerBatchRecorder;
+    @Getter
     protected final FlowRecorder batchRecorder;
 
     protected final AtomicLong totalCount = new AtomicLong(0);
     protected final AtomicLong totalQueuedSizeBytes = new AtomicLong(0);
+    protected long totalQueueWeight = 0;
 
     protected int head = 0;
     @Setter
@@ -68,16 +73,17 @@ public abstract class IngestSequencer extends FluxNode implements AutoCloseable 
             queueHandles[i].subscribe(new QueueSubscriber(i));
         }
         setDrain(true);
-        setDownstreamMapping(mappings, queueHandles);
+        super.setDownstreamMapping(mappings, queueHandles);
         setDrain(false);
     }
 
-    public boolean setDownstreamMapping(BitSet active, FluxInterceptor[] interceptors) {
+    @Override
+    public boolean setDownstreamMapping(BitSet active, FluxEdge[] edges) {
         return false;
     }
 
-    public int drain(QueueFrame.DrainBuffer drainBuffer, int demand) {
-        if (demand <= 0) {
+    public int drain(QueueFrame.DrainBuffer drainBuffer, int maxFill, long demand) {
+        if (maxFill <= 0) {
             return 0;
         }
 
@@ -85,45 +91,63 @@ public abstract class IngestSequencer extends FluxNode implements AutoCloseable 
 
         int totalDrain = 0;
         long totalBytesDrained = 0;
-        for (int i = 0; i < demand && cycles <= queueRing.length; ) {
+        long totalQueueWeight = 0;
+        for (int i = 0; i < maxFill && cycles <= queueRing.length; ) {
             QueueFrame queue = queueRing[head];
-            if (queue.isEmpty()) {
-                head = (head + 1) & mask;
-                cycles++;
-                continue;
+
+            int quota = (int) queue.getQuota();
+            if(quota <= 0) {
+                refillQueueQuota(queue);
+                quota = (int) queue.getQuota();
             }
 
-            int quota = getQueueQuota(queue);
-            long drainedBytes = queue.getSizeBytes();
             int drainCount = queue.drain(drainBuffer, quota);
-            drainedBytes -= queue.getSizeBytes();
+            long drainedBytes = drainBuffer.drainedBytes;
 
-            i += drainCount;
-            totalBytesDrained += drainedBytes;
-            totalDrain += drainCount;
+            if(drainCount > 0) {
+                i += drainCount;
+                totalBytesDrained += drainedBytes;
+                totalDrain += drainCount;
+                totalQueueWeight += queue.getWeight();
+
+                recordDrainMetrics(queue, drainCount);
+                cycles = 0;
+            } else {
+                cycles++;
+            }
 
             head = (head + 1) & mask;
-            if (drainCount == 0) {
-                cycles++;
-            } else {
-                recordDrainMetrics(queue, drainCount);
-            }
         }
-        long now = System.nanoTime();
-        totalCount.getAndAdd(-totalDrain);
-        totalQueuedSizeBytes.getAndAdd(-totalBytesDrained);
-        bytesPerBatchRecorder.record(now, totalBytesDrained);
-        batchRecorder.record(now, totalDrain);
-        hookOnDrain(totalDrain);
+        if(totalDrain > 0) {
+            long now = System.nanoTime();
+            totalCount.getAndAdd(-totalDrain);
+            totalQueuedSizeBytes.getAndAdd(-totalBytesDrained);
+            this.totalQueueWeight = totalQueueWeight;
+            bytesPerBatchRecorder.record(now, totalBytesDrained);
+            batchRecorder.record(now, totalDrain);
+        }
+        hookOnDrain(demand);
         return totalDrain;
     }
 
-    protected abstract void hookOnDrain(int totalDrain);
+    protected abstract void hookOnDrain(long demand);
 
-    protected abstract int getQueueQuota(QueueFrame queue);
+    protected abstract int refillQueueQuota(QueueFrame queue);
+
+    protected long getMaxQueueCount() {
+        return Long.MAX_VALUE;
+    }
 
     protected void recordDrainMetrics(QueueFrame queue, long drainCount) {
 
+    }
+
+    public long getCount() {
+        return totalCount.get();
+    }
+
+    public boolean isEmpty() {
+        return totalCount.get() <= 0;
     }
 
     @Override

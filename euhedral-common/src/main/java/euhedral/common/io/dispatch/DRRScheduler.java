@@ -2,13 +2,13 @@ package euhedral.common.io.dispatch;
 
 import euhedral.common.io.dispatch.control_plane.CloneConfig;
 import euhedral.common.io.dispatch.flow_control.DemandCoordinator.FluxEdge;
+import euhedral.common.io.dispatch.flow_control.DemandCoordinator.UpstreamQueue;
 import euhedral.common.io.dispatch.flow_control.IngestSequencer;
 import euhedral.common.io.dispatch.frames.AbstractFrame;
 import euhedral.common.io.dispatch.frames.QueueFrame;
 import euhedral.common.io.dispatch.interfaces.CloneableObject;
 import euhedral.common.io.dispatch.interfaces.DispatchPreProcess;
 import euhedral.common.io.dispatch.utils.FlowRecorder;
-import euhedral.common.io.dispatch.utils.NumaMapper;
 import euhedral.common.io.dispatch.utils.SystemUtilization.CoreSnapshot;
 import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.Gauge;
@@ -35,7 +35,6 @@ public class DRRScheduler extends IngestSequencer implements DispatchPreProcess,
     protected final Metrics metrics;
     protected final int coreId;
 
-    protected final FlowRecorder starvationRecorder = new FlowRecorder();
     protected final AtomicReference<Double> capFactor = new AtomicReference<>(1.0);
 
     protected Callable<Double> downstreamPressure;
@@ -45,12 +44,8 @@ public class DRRScheduler extends IngestSequencer implements DispatchPreProcess,
     protected volatile long totalBytesCap;
 
     protected volatile boolean drainMode = false;
-    protected volatile int systemCoreCount = 1;
     protected long lastRequestNs = 0;
-    protected int lastUpstreamCount = 0;
-    protected int drainCount = 0;
-    protected int baseMask = 7;
-    protected long adaptiveMask = 7;
+
 
     public DRRScheduler(@NonNull Config config, @Nullable CoreSnapshot snapshot) {
         this(config, snapshot, () -> 0.0);
@@ -99,94 +94,12 @@ public class DRRScheduler extends IngestSequencer implements DispatchPreProcess,
     }
 
     @Override
-    protected void hookOnDrain(int totalDrain) {
+    protected void hookOnDrain(long demand) {
         long nowNs = System.nanoTime();
 
-        int upCount = getThreadUpstreamCount();
-        if (upCount > 0) {
-            starvationRecorder.record(nowNs, totalDrain == 0 ? 1 : 0);
-        }
-
-        long effectiveCount = fillRecorder.getEffectiveMeasurementWindowCount(nowNs);
-
-        long minWindowCount = 32;
-        if (effectiveCount >= minWindowCount) {
-            if (totalDrain > 0 && (drainCount & adaptiveMask) == 0) {
-                return;
-            }
-        }
-
-
-        long avgFill = fillRecorder.getAverageUnits();
-        long avgDrain = Math.max(batchRecorder.getAverageUnits(), 1);
-
-        double fillDrainRatio = (double) avgFill / avgDrain;
-
-        double starvationLevel = starvationRecorder.getRollingAveragePerRecording(nowNs);
-        int starvationBoost = (int) Math.min(starvationLevel * 16, 16);
-        int fillPenalty = (fillDrainRatio >= 1.0)
-                ? 0
-                : (int) ((1.0 - fillDrainRatio) * 4.0);
-
-        long newMask = Math.min(63, baseMask + starvationBoost + fillPenalty);
-        adaptiveMask = (adaptiveMask * 3 + newMask) >> 2;
-
-        long original = getThreadDemand();
-
-        long consumed = totalDrain > original ? original : totalDrain;
-        long demand = addAndGetThreadDemand(-consumed);
         long avgFramesPerBatch = Math.max(batchRecorder.getAverageUnits(), 1);
-
-        if (avgFramesPerBatch <= 1 && upCount == 0) {
-            lastUpstreamCount = upCount;
-
-            if (demand > 0) {
-                pull();
-            } else {
-                long init = Math.min(1024, Math.max(1, (long) (totalBytesCap * 0.01 / 1024)));
-                request(init);
-
-                addAndGetThreadDemand(init);
-            }
-            return;
-        }
-
-        long queueSize = totalCount.get();
-        long queueCount = Math.max(demand + queueSize, 1);
-
-        int log = calculateLog2((int) Math.min(queueCount, Integer.MAX_VALUE));
-
-        long alpha = Math.max(3, 3L * log);
-        long beta = Math.max(6, 6L * log);
-        long queueEst = getVegasEstimate();
-
-        long pacingNs = getRequestPacingNs(alpha, beta, queueEst);
-
-        if (nowNs - lastRequestNs < pacingNs) {
-            return;
-        }
-
-        long avgBytesPerBatch = Math.max(1, bytesPerBatchRecorder.getAverageUnits());
-        long avgFrameSize = Math.max(64, avgBytesPerBatch / avgFramesPerBatch);
-
-        long lastInterval = batchRecorder.getLastInterval();
-        long lookaheadNs = Math.clamp(lastInterval << 1, 1_000_000L, 50_000_000L); // 1ms - 50ms
-
-        long fillPrediction = fillRecorder.estimateFutureUnits(lookaheadNs);
-        long drainPrediction = batchRecorder.estimateFutureUnits(lookaheadNs);
-
-        long framesNeeded = Math.min(drainPrediction, fillPrediction);
-
-        if (queueEst < alpha) {
-            framesNeeded += (framesNeeded >> 2);
-        }
-
-        double starvationFactor = Math.clamp(starvationRecorder.getRollingAveragePerRecording(nowNs),
-                    0.5, 3.0);
-
-        if (upCount < lastUpstreamCount) {
-            starvationFactor *= 1.25;
-        }
+        long avgBytesPerBatch = bytesPerBatchRecorder.getAverageUnits();
+        long avgFrameSize = avgBytesPerBatch == 0 ? 1024 : Math.max(64, avgBytesPerBatch / avgFramesPerBatch);
 
         long maxBytes = (long) (totalBytesCap * capFactor.get());
         long actualBytes = totalQueuedSizeBytes.get();
@@ -194,69 +107,53 @@ public class DRRScheduler extends IngestSequencer implements DispatchPreProcess,
         long byteQuota = Math.max(0, maxBytes - actualBytes);
         long frameQuota = byteQuota / avgFrameSize;
 
-        long finalRequest = (long) Math.min(demand + framesNeeded * starvationFactor, frameQuota);
+        long safeDemand = Math.max(0, demand);
+        long finalRequest = Math.min(safeDemand, frameQuota);
 
         if (snapshot != null) {
+            long hardCap = (long) (snapshot.globalMemoryLimit() * 0.8);
             long projected = finalRequest * avgFrameSize + snapshot.globalBytesUsed();
-            if (finalRequest > 0 && projected > snapshot.globalMemoryLimit() * 0.8) {
-                pull();
-                return;
+            long layerWidth = getLayerWidth();
+            if (finalRequest > 0 && projected > hardCap) {
+                finalRequest = (hardCap - snapshot.globalBytesUsed()) / (avgFrameSize * layerWidth);
             }
         }
 
         if (finalRequest > 0) {
-            lastUpstreamCount = upCount;
             lastRequestNs = nowNs;
             request(finalRequest);
-        } else if(finalRequest == 0 && upCount > 0) {
-            request(1);
-        }else if (demand > 0) {
-            pull();
+        } else {
+            lastRequestNs = nowNs;
+            request(64);
         }
     }
 
-    protected long getVegasEstimate() {
-        long queueCount = Math.max(getThreadDemand() + totalCount.get(), 1);
-        return batchRecorder.getVegasQueueEstimate(queueCount, 1);
-    }
+    protected int refillQueueQuota(QueueFrame node) {
+        long quota = Math.max(0, node.getQuota() - node.getDrainCycles());
+        node.setQuota(quota);
 
-    private int calculateLog2(int current) {
-        int log2 = 31 - Integer.numberOfLeadingZeros(Math.max(current, 1));
-
-        return Math.max(3, log2);
-    }
-
-    protected long getRequestPacingNs(long alpha, long beta, long queueEst) {
-        long pacingNs = Math.clamp(
-                batchRecorder.getThroughputNs(),
-                1_000_000L,
-                50_000_000L
-        );
-
-        if (queueEst < alpha) {
-            pacingNs -= pacingNs >> 3;
-        } else if (queueEst > beta) {
-            pacingNs += pacingNs >> 2;
-        }
-        return Math.clamp(pacingNs, 1_000_000L, 50_000_000L);
-    }
-
-    protected int getQueueQuota(QueueFrame node) {
-        if ((node.getDrainCount() & 256) == 0) {
-            updateQuantum(node);
+        if (quota > 0) {
+            return (int) quota;
         }
 
-        long quota = node.getQuota() + node.getWeight();
+        updateQuantum(node);
+        quota = node.getQuota() + node.getWeight();
         node.setQuota(quota < 0 ? Long.MAX_VALUE : quota);
 
         long avgSize = Math.max(1, node.getAvgFrameSize().get());
 
-        long limit = quota / avgSize;
-        node.setQuota(quota - (avgSize * limit));
+        long recentFrames = Math.max(1, batchRecorder.getRollingSum());
+        long recentBytes = Math.max(1, bytesPerBatchRecorder.getRollingSum());
 
-        int burstLimit = (int) Math.max(32, limit * 2);
-        burstLimit = drainMode ? node.getQueueCount() : burstLimit;
-        return burstLimit;
+        long proportionalQuota = (recentFrames * avgSize) + (recentBytes / 2);
+
+        long scaledQuota = Math.max(64, proportionalQuota);
+
+        scaledQuota = scaledQuota * node.getWeight() / Math.max(1, totalQueueWeight);
+
+        node.setQuota(scaledQuota);
+
+        return drainMode ? node.getQueueCount() : (int) (scaledQuota / avgSize);
     }
 
     protected void updateQuantum(QueueFrame node) {
@@ -300,9 +197,7 @@ public class DRRScheduler extends IngestSequencer implements DispatchPreProcess,
         if (snapshot == null) {
             return;
         }
-        systemCoreCount = NumaMapper.INSTANCE.getSystemTopology().effectiveCpus().get()
-                .cardinality();
-
+        this.snapshot = snapshot;
         this.totalBytesCap = snapshot.coreMemoryLimit();
         double currentPressure;
         try {
@@ -318,6 +213,19 @@ public class DRRScheduler extends IngestSequencer implements DispatchPreProcess,
             double alpha = (target < curr) ? 0.2 : 0.02;
             return Math.clamp((curr * (1.0 - alpha)) + (target * alpha), 0.15, 1.0);
         });
+    }
+
+    @Override
+    protected long getMaxQueueCount() {
+        long avgFramesPerBatch = Math.max(batchRecorder.getAverageUnits(), 1);
+        long avgBytesPerBatch = bytesPerBatchRecorder.getAverageUnits();
+        long avgFrameSize = avgBytesPerBatch == 0 ? 1024 : Math.max(64, avgBytesPerBatch / avgFramesPerBatch);
+
+        long maxBytes = (long) (totalBytesCap * capFactor.get());
+        long actualBytes = totalQueuedSizeBytes.get();
+
+        long byteQuota = Math.max(0, maxBytes - actualBytes);
+        return byteQuota / avgFrameSize;
     }
 
     @Override

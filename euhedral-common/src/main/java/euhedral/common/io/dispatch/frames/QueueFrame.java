@@ -1,19 +1,17 @@
 package euhedral.common.io.dispatch.frames;
 
+import euhedral.common.io.dispatch.utils.FlowRecorder;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.Getter;
 import lombok.Setter;
 import org.jctools.queues.MessagePassingQueue;
 import org.jctools.queues.SpscUnboundedArrayQueue;
-import org.jctools.util.PaddedAtomicLong;
 import org.jspecify.annotations.NonNull;
 
 public class QueueFrame extends AbstractFrame implements AutoCloseable {
 
     protected final long idHash;
     protected final MessagePassingQueue<AbstractFrame> queue;
-    protected final PaddedAtomicLong queueCount = new PaddedAtomicLong(0);
-    protected final AtomicLong queueSizeBytes = new AtomicLong();
     protected final double smoothingFactor;
     @Getter
     protected final AtomicLong avgFrameSize = new AtomicLong(1024);
@@ -24,7 +22,10 @@ public class QueueFrame extends AbstractFrame implements AutoCloseable {
     protected long weight = 1024;
 
     @Getter
-    protected long drainCount = 0;
+    protected long drainCycles = 0;
+
+    @Getter
+    protected long lastBytesDrained = 0;
 
     @Getter
     @Setter
@@ -47,13 +48,11 @@ public class QueueFrame extends AbstractFrame implements AutoCloseable {
     }
 
     public boolean isEmpty() {
-        return queueCount.get() == 0;
+        return queue.isEmpty();
     }
 
     public boolean enqueue(AbstractFrame frame) {
         if (queue.relaxedOffer(frame)) {
-            queueCount.incrementAndGet();
-            queueSizeBytes.addAndGet(frame.getSizeBytes());
             avgFrameSize.getAndUpdate(curr ->
                     (long) ((1 - smoothingFactor) * curr + smoothingFactor * frame.getSizeBytes())
             );
@@ -67,12 +66,11 @@ public class QueueFrame extends AbstractFrame implements AutoCloseable {
             return 0;
         }
 
+        drainBuffer.drainCount = 0;
+        drainBuffer.drainedBytes = 0;
         int count = this.queue.drain(drainBuffer, limit);
         if (count > 0) {
-            queueCount.addAndGet(-count);
-            queueSizeBytes.addAndGet(-drainBuffer.drainedBytes);
-            drainBuffer.drainedBytes = 0;
-            drainCount++;
+            drainCycles++;
         }
 
         return count;
@@ -110,7 +108,8 @@ public class QueueFrame extends AbstractFrame implements AutoCloseable {
 
     @Override
     public long getSizeBytes() {
-        return queueSizeBytes.get();
+        long size = queue.size() * avgFrameSize.get();
+        return size < 0 ? Long.MAX_VALUE : size;
     }
 
     @Override
@@ -145,6 +144,9 @@ public class QueueFrame extends AbstractFrame implements AutoCloseable {
 
         public final MessagePassingQueue<AbstractFrame> buffer;
 
+        public final FlowRecorder arrivalLatencyRecorder = new FlowRecorder();
+
+        public long drainCount = 0;
         public long drainedBytes = 0;
 
         public DrainBuffer(MessagePassingQueue<AbstractFrame> buffer) {
@@ -156,6 +158,11 @@ public class QueueFrame extends AbstractFrame implements AutoCloseable {
             while (!buffer.relaxedOffer(frame)) {
                 Thread.onSpinWait();
             }
+            if(frame.getIngestNs() > 0) {
+                long now = System.nanoTime();
+                arrivalLatencyRecorder.record(now, now - frame.getIngestNs());
+            }
+            drainCount++;
             drainedBytes += frame.getSizeBytes();
         }
     }

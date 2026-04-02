@@ -176,6 +176,7 @@ public final class ContainerAwareResourceMonitor implements ResourceMonitor, Aut
             long memoryLimit = Math.clamp(snapshot.memoryLimit(), 0, 1_000_000_000_000_000L);
             hardwareUtilization = new HardwareUtilization(lastWallClockNs, quotaCpus.get(),
                     cpuUsageRatio.get(),
+                    snapshot.period(),
                     globalEffectiveCpus,
                     perCpuPressureRatio,
                     cpuThrottleRatio.get(), perCpuThrottleRatio,

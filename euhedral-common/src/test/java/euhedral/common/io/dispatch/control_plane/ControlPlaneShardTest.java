@@ -88,7 +88,7 @@ class ControlPlaneShardTest {
     private static NodeSnapshot getNodeSnapshot(NodeTopology topology) {
         CoreSnapshot[] coreSnapshots = new CoreSnapshot[topology.effectiveCores().get().length()];
         for (int i = 0; i < coreSnapshots.length; i++) {
-            coreSnapshots[i] = new CoreSnapshot(i, 0, 0, 0, 0, 0,
+            coreSnapshots[i] = new CoreSnapshot(i, 0, 100_000, 0, 0, 0, 0,
                     topology.effectiveCoreToCpu().get()[i],
                     null);
         }

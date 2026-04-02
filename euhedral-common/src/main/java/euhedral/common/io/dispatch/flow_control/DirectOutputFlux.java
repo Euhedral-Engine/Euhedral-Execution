@@ -29,7 +29,7 @@ public class DirectOutputFlux implements Publisher<AbstractFrame>, Subscription 
         this.applyToEach = applyToEach;
     }
 
-    public int drain(int max) {
+    public int drain(long max) {
         if (max == 0 || subscriber == null || cancelled) {
             return 0;
         }

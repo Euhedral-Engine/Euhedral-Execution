@@ -36,7 +36,13 @@ public abstract class AbstractFrame extends WorkCancelled {
     private DispatchOrders dispatchOrders;
 
     @Getter
+    @Setter
     private long startNs;
+
+    @Getter
+    @Setter
+    private long ingestNs;
+
     private Many<AbstractFrame> completionSink;
     private long notifyCompletePassword;
 

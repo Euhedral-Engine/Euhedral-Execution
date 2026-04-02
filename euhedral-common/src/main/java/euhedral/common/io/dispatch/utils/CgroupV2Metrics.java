@@ -86,7 +86,7 @@ public class CgroupV2Metrics {
         long inactiveFile = getInactiveFile();
         long ioBytes = getIoBytes();
 
-        return new SystemSnapshot(now, availableCpus, quotaCpus, cpuUsage, cpuThrottle,
+        return new SystemSnapshot(now, availableCpus, quotaCpus, period, cpuUsage, cpuThrottle,
                 effectiveCpus,
                 pressurePerCpu,
                 memoryLimit, memoryUsage, inactiveFile, ioBytes);
@@ -141,19 +141,17 @@ public class CgroupV2Metrics {
 
     public long[] getCpuMax() {
         int bytesRead = readFileToBuffer(cpuMaxPath);
-        // If file is missing or empty, treat as unlimited
         if (bytesRead <= 0) {
-            return new long[]{-1, 100000};
+            return new long[]{Runtime.getRuntime().availableProcessors(), 100_000};
         }
 
         int spaceIdx = findByte(0, bytesRead, (byte) ' ');
 
-        // In cgroup v2, the first part is either a number or the string "max"
         int quotaEnd = (spaceIdx == -1) ? bytesRead : spaceIdx;
 
         long quota = isMax(0, quotaEnd) ? -1 : parseBytesLong(0, quotaEnd);
 
-        long period = (spaceIdx != -1) ? parseBytesLong(spaceIdx + 1, bytesRead) : 100000;
+        long period = (spaceIdx != -1) ? parseBytesLong(spaceIdx + 1, bytesRead) : 100_000;
 
         return new long[]{quota, period};
     }

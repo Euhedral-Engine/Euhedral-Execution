@@ -12,40 +12,27 @@ public class FlowRecorder {
     public static final int SHIFT = 16;
     public static final int SCALE = 1 << SHIFT;
     public static final int MASK = SCALE - 1;
-
-    private enum EwmaRemainder {
-        RATE, VAR_RATE, UNIT, VAR_UNIT
-    }
-
     private final long minWindowNs, maxWindowNs;
-
     private long dynamicWindowNs = 3_000_000_000L;
-
     private long prevWindowCount = 0;
     private long currWindowCount = 0;
-
     private long windowStartNs;
-
     @Getter
     private long lastRecordingTime;
     @Getter
     private long lastInterval;
-
-    @Getter
     private long averageRate, rateVariation = 0L;
-
-    @Getter
     private long averageUnits, unitVariation = 0L;
+    private long averageInterval, intervalVariation = 0L;
     @Getter
     private long rollingSum = 0;
     private long rollingRemainder = 0;
-
-    private long rateRemainder, varRateRemainder, unitRemainder, varUnitRemainder;
-
+    private long rateRemainder, varRateRemainder, unitRemainder, varUnitRemainder, intervalRemainder, varIntervRemainder;
 
     public FlowRecorder() {
         this(Duration.ofMillis(100), Duration.ofSeconds(5));
     }
+
 
     public FlowRecorder(@NonNull Duration minWindowSize, @NonNull Duration maxWindowSize) {
         this.minWindowNs = minWindowSize.toNanos();
@@ -68,7 +55,7 @@ public class FlowRecorder {
         currWindowCount += units;
         lastInterval = interval;
 
-        int alpha = getRatio(interval, interval + dynamicWindowNs);
+        int alpha = getRatio(interval, averageInterval + dynamicWindowNs);
         alpha = Math.max(655, Math.min(SCALE, alpha));
 
         long decayDelta = (-rollingSum) * alpha;
@@ -80,10 +67,21 @@ public class FlowRecorder {
         rollingSum += appliedDecay;
         rollingSum += units;
 
-        long currentRateScaled = getRatio(units << SHIFT, interval);
         long currentUnitsScaled = units << SHIFT;
+        long currentRateScaled = getRatio(currentUnitsScaled, interval);
 
-        updateMetrics(currentRateScaled, currentUnitsScaled, alpha);
+        long elapsed = now - lastRecordingTime;
+        if (elapsed > dynamicWindowNs) {
+            int decayAlpha = getRatio(dynamicWindowNs, elapsed + dynamicWindowNs);
+            averageRate = ewma(averageRate, 0, decayAlpha, EwmaRemainder.RATE);
+            averageUnits = ewma(averageUnits, 0, decayAlpha, EwmaRemainder.UNIT);
+            averageInterval = ewma(averageInterval, 0, decayAlpha, EwmaRemainder.INTERVAL);
+            rateVariation = ewma(rateVariation, 0, decayAlpha, EwmaRemainder.VAR_RATE);
+            unitVariation = ewma(unitVariation, 0, decayAlpha, EwmaRemainder.VAR_UNIT);
+            intervalVariation = ewma(averageInterval, 0, decayAlpha, EwmaRemainder.VAR_INTERVAL);
+        }
+
+        updateMetrics(currentRateScaled, currentUnitsScaled, interval, alpha);
 
         if (averageRate > 0) {
             int varRatio = getRatio(rateVariation, averageRate);
@@ -100,33 +98,44 @@ public class FlowRecorder {
         }
     }
 
-    private void updateMetrics(long currentRate, long currentUnits, int alpha) {
+    private void updateMetrics(long currentRate, long currentUnits, long currentInterval,
+            int alpha) {
         averageRate = ewma(averageRate, currentRate, alpha, EwmaRemainder.RATE);
-        rateVariation = ewma(rateVariation, Math.abs(currentRate - averageRate), alpha, EwmaRemainder.VAR_RATE);
+        rateVariation = ewma(rateVariation, Math.abs(currentRate - averageRate), alpha,
+                EwmaRemainder.VAR_RATE);
 
         averageUnits = ewma(averageUnits, currentUnits, alpha, EwmaRemainder.UNIT);
-        unitVariation = ewma(unitVariation, Math.abs(currentUnits - averageUnits), alpha, EwmaRemainder.VAR_UNIT);
+        unitVariation = ewma(unitVariation, Math.abs(currentUnits - averageUnits), alpha,
+                EwmaRemainder.VAR_UNIT);
+
+        averageInterval = ewma(averageInterval, currentInterval, alpha, EwmaRemainder.INTERVAL);
+        intervalVariation = ewma(intervalVariation, Math.abs(currentInterval - averageInterval),
+                alpha, EwmaRemainder.VAR_INTERVAL);
     }
 
     private long ewma(long oldVal, long newVal, int alpha, EwmaRemainder type) {
         long delta = (newVal - oldVal) * alpha;
 
-        long remainder = switch(type) {
+        long remainder = switch (type) {
             case RATE -> rateRemainder;
             case VAR_RATE -> varRateRemainder;
             case UNIT -> unitRemainder;
             case VAR_UNIT -> varUnitRemainder;
+            case INTERVAL -> intervalRemainder;
+            case VAR_INTERVAL -> varIntervRemainder;
         };
 
         long totalDelta = delta + remainder;
         long appliedDelta = totalDelta >> SHIFT;
 
         long newRemainder = totalDelta & MASK;
-        switch(type) {
+        switch (type) {
             case RATE -> rateRemainder = newRemainder;
             case VAR_RATE -> varRateRemainder = newRemainder;
             case UNIT -> unitRemainder = newRemainder;
             case VAR_UNIT -> varUnitRemainder = newRemainder;
+            case INTERVAL -> intervalRemainder = newRemainder;
+            case VAR_INTERVAL -> varIntervRemainder = newRemainder;
         }
 
         return oldVal + appliedDelta;
@@ -140,6 +149,23 @@ public class FlowRecorder {
             return SCALE;
         }
         return (int) ((num << SHIFT) / den);
+    }
+
+    public long getAverageUnits() {
+        return (averageUnits + unitVariation) >> SHIFT;
+    }
+
+    public long getAverageRate() {
+        return (averageRate + rateVariation) >> SHIFT;
+    }
+
+    public long getAverageInterval() {
+        return (averageInterval + intervalVariation) >> SHIFT;
+    }
+
+    public double getRollingAveragePerRecording(long now) {
+        long count = getEffectiveMeasurementWindowCount(now) >> SHIFT;
+        return count == 0 ? 0.0 : (double) rollingSum / count;
     }
 
     public long getEffectiveMeasurementWindowCount(long now) {
@@ -157,17 +183,12 @@ public class FlowRecorder {
         return prevContribution + (currWindowCount << SHIFT);
     }
 
-    public double getRollingAveragePerRecording(long now) {
-        long count = getEffectiveMeasurementWindowCount(now) >> SHIFT;
-        return count == 0 ? 0.0 : (double) rollingSum / count;
-    }
-
     public long getThroughputNs() {
         if (averageRate == 0) {
             return 0;
         }
 
-        long numerator = averageUnits + unitVariation;
+        long numerator = (averageUnits + unitVariation) >> SHIFT;
         long denominator = (averageRate + rateVariation) >> SHIFT;
 
         return (denominator <= 0) ? 0 : numerator / denominator;
@@ -181,6 +202,23 @@ public class FlowRecorder {
 
     public long estimateFutureUnits(long lookAheadNs) {
         return ((averageRate + rateVariation) * lookAheadNs) >> SHIFT;
+    }
+
+    /**
+     * Returns an estimate of how much time it would take to record the units
+     *
+     * @param units Desired units
+     * @return Time needed to wait for them
+     */
+    public long estimateIntervalNsForUnits(long units) {
+        long avgInterval = (averageInterval + intervalVariation) >> SHIFT;
+        long avgUnits = (averageUnits + unitVariation) >> SHIFT;
+
+        if (avgUnits <= 0) {
+            return avgInterval;
+        }
+
+        return (units * avgInterval) / avgUnits;
     }
 
     /**
@@ -212,5 +250,9 @@ public class FlowRecorder {
         long diff = unitsScaled - averageUnits;
 
         return (scaler * diff) / denominator;
+    }
+
+    private enum EwmaRemainder {
+        RATE, VAR_RATE, UNIT, VAR_UNIT, INTERVAL, VAR_INTERVAL
     }
 }
