@@ -4,7 +4,7 @@ import euhedral.common.io.dispatch.flow_control.DemandCoordinator.FluxEdge;
 import euhedral.common.io.dispatch.flow_control.DemandCoordinator.UpstreamHandle;
 import euhedral.common.io.dispatch.frames.AbstractFrame;
 import euhedral.common.io.dispatch.utils.KeyHasher;
-import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import java.util.BitSet;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -19,7 +19,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class FluxNode extends FluxEdge implements AutoCloseable {
-
     protected final boolean terminal;
 
     protected final Logger logger;
@@ -35,16 +34,15 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
     protected final AtomicBoolean drain;
 
     @Contended
-    protected volatile int[] mappings = new int[0];
-
-    protected volatile long[] masks = new long[0];
+    protected volatile RoutingState routingState = new RoutingState(new int[0]);
 
     public FluxNode(String name, int downstreamCount) {
         this(name, downstreamCount, RoutingFunction.DEFAULT, false);
     }
 
     @SuppressWarnings("unchecked")
-    public FluxNode(String name, int downstreamCount, RoutingFunction routingFunction, boolean terminal) {
+    public FluxNode(String name, int downstreamCount, RoutingFunction routingFunction,
+            boolean terminal) {
         AtomicBoolean drain = new AtomicBoolean(false);
         super(drain);
         this.terminal = terminal;
@@ -70,25 +68,21 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
             return false;
         }
 
-        LockSupport.parkNanos(1_000);
-
-
         FluxEdge first = null;
         FluxEdge prev = null;
         FluxEdge curr = null;
-        int[] nextMappings = new int[active.cardinality()];
         int mIdx = 0;
+        int[] mappings = new int[active.cardinality()];
         for (int i = 0; i < downstreams.length; i++) {
-            if(i < handles.length && handles[i] != null) {
+            if (i < handles.length && handles[i] != null) {
                 handles[i].index = i;
             }
             if (active.get(i)) {
-
-                nextMappings[mIdx++] = i;
+                mappings[mIdx++] = i;
                 handles[i].setParent(this);
                 downstreams[i] = handles[i];
 
-                if(curr == null) {
+                if (curr == null) {
                     first = handles[i];
                     curr = handles[i];
                 } else if (prev == null) {
@@ -103,11 +97,11 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
                 }
             }
         }
-        if(curr != null) {
+        if (curr != null) {
             curr.sibling = first;
         }
 
-        this.mappings = nextMappings;
+        this.routingState = new RoutingState(mappings);
 
         for (int i = 0; i < downstreams.length; i++) {
             if (!active.get(i) && downstreams[i] != null) {
@@ -157,7 +151,7 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
                     down.setParent(parent);
                 }
             }
-        } else if(subscription instanceof UpstreamInterceptor interceptor) {
+        } else if (subscription instanceof UpstreamInterceptor interceptor) {
             super.onSubscribe(interceptor);
         } else {
             UpstreamInterceptor interceptor = new UpstreamInterceptor();
@@ -166,27 +160,21 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
     }
 
     @Override
+    public int getLayerWidth() {
+        if(parent != null) {
+            return parent.getLayerWidth();
+        }
+        return super.getLayerWidth();
+    }
+
+    @Override
     public void onNext(AbstractFrame frame) {
         drainSpin();
-
-        long upCount = getUpstreamCount();
-        int mapLen = mappings.length;
-
-        if(!terminal && upCount < (mapLen >>> 1) && !frame.isOrdered()) {
-            int index;
-            // Check if power of 2
-            if(((mapLen - 1) & mapLen) == 0) {
-                index = (int) frame.getIdHash() & (mapLen - 1);
-            } else {
-                index = (int) Math.unsignedMultiplyHigh(frame.getIdHash(), mapLen);
-            }
-            downstreams[mappings[index]].onNext(frame);
-            return;
-        }
+        RoutingState state = this.routingState;
+        int mapLen = state.mappings.length;
 
         int logicalIdx = routingFunction.route(frame, mapLen);
-        int id = mappings[logicalIdx];
-
+        int id = state.mappings[logicalIdx];
         downstreams[id].onNext(frame);
     }
 
@@ -220,7 +208,7 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
 
     @Override
     public boolean equals(Object other) {
-        if(other instanceof FluxNode o) {
+        if (other instanceof FluxNode o) {
             return o.hash == hash;
         }
         return false;
@@ -228,8 +216,24 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
 
     @FunctionalInterface
     public interface RoutingFunction {
-        RoutingFunction DEFAULT = (frame, mapSize) -> (int) Math.unsignedMultiplyHigh(frame.getCombinedHash(), mapSize);
+
+        RoutingFunction DEFAULT = (frame, mapSize) -> (int) Math.unsignedMultiplyHigh(
+                frame.getCombinedHash(), mapSize);
+
         int route(AbstractFrame frame, int mapSize);
+    }
+
+    protected static final class RoutingState {
+
+        final int[] mappings;
+        final int mask;
+        final boolean isPow2;
+
+        RoutingState(int[] mappings) {
+            this.mappings = mappings;
+            this.isPow2 = (mappings.length & (mappings.length - 1)) == 0;
+            this.mask = mappings.length - 1;
+        }
     }
 
     @Contended
@@ -237,6 +241,7 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
 
         public Subscription upstream;
         public volatile boolean complete = false;
+        private long count = 0;
 
         @Override
         public void onSubscribe(@NonNull Subscription subscription) {
@@ -246,6 +251,12 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
 
         @Override
         public void onNext(AbstractFrame frame) {
+            if((count++ & 64) == 0) {
+                frame.setIngestNs(System.nanoTime());
+
+            } else {
+                frame.setIngestNs(0);
+            }
             FluxNode.this.onNext(frame);
         }
 

@@ -12,7 +12,6 @@ import euhedral.common.io.dispatch.utils.FlowRecorder;
 import euhedral.common.io.dispatch.utils.PinnedThreadExecutor;
 import euhedral.common.io.dispatch.utils.SystemUtilization.CoreSnapshot;
 import euhedral.common.io.dispatch.utils.SystemUtilization.CpuSnapshot;
-import euhedral.common.io.dispatch.utils.SystemUtilization.HardwareUtilization;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
@@ -29,7 +28,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -90,7 +88,7 @@ public class DefaultSlotManager implements SlotManager {
     @Getter
     protected final Config config;
     protected final Metrics metrics;
-    protected final FlowRecorder latencyRecorder;
+    protected final FlowRecorder executionLatency;
     protected final AtomicBoolean running = new AtomicBoolean(false);
     protected final AtomicLong recentErrors = new AtomicLong(0);
     protected final Sinks.Many<Object> failureBroadcast = Sinks.many().multicast()
@@ -109,19 +107,18 @@ public class DefaultSlotManager implements SlotManager {
             .onBackpressureBuffer(new MpscUnboundedXaddArrayQueue<>(1024));
 
     private final DirectOutputFlux outputFlux;
-    private final RateLimiter rateLimiter;
-    protected AtomicReference<HardwareUtilization> hardwareUtilization;
 
-    protected volatile int baseCap;
-    protected volatile int currentRate;
-    protected volatile int currentConcurrency;
-    protected volatile int effectiveConcurrencyLimit;
+    protected volatile long currentRate;
+    protected volatile long currentConcurrency;
+    protected volatile long effectiveConcurrencyLimit;
 
     protected volatile boolean parked = false;
     protected volatile boolean drainMode = false;
     protected volatile CoreSnapshot coreSnapshot = null;
 
     protected volatile IngestSequencer ingest = null;
+
+    private long executions = 0;
 
     private CircuitBreaker circuitBreaker;
     private WakeHook wakeHook;
@@ -137,10 +134,7 @@ public class DefaultSlotManager implements SlotManager {
         this.currentConcurrency = Math.max(1, config.initialConcurrency);
         this.effectiveConcurrencyLimit = config.initialConcurrency;
 
-        this.latencyRecorder = new FlowRecorder();
-
-        this.rateLimiter = configureRateLimiter(config.initialRatePerSecond);
-        this.rateLimiter.getEventPublisher().onFailure(this.failureBroadcast::tryEmitNext);
+        this.executionLatency = new FlowRecorder();
 
         this.circuitBreaker =
                 circuitBreaker == null ? CircuitBreaker.ofDefaults("DefaultSlotManager")
@@ -171,15 +165,18 @@ public class DefaultSlotManager implements SlotManager {
                 () -> currentConcurrency,
                 () -> currentRate);
 
-        outputFlux = new DirectOutputFlux(buffer, frame -> frame.setCompletionSink(completeSink));
+        outputFlux = new DirectOutputFlux(buffer, frame -> {
+            if((executions++ & 31) == 0) {
+                frame.setStartNs(System.nanoTime());
+            }
+            frame.setCompletionSink(completeSink);
+        });
         this.completeSink.asFlux().subscribe((frame) -> {
             if (!frame.isCancelledExecution() && frame.getStartNs() > 0) {
                 long now = System.nanoTime();
-                latencyRecorder.record(now, now - frame.getStartNs());
-                if ((latencyRecorder.getEffectiveMeasurementWindowCount(now) & 31) == 0) {
-                    updateMetrics(now - frame.getStartNs());
-                }
-                avgLatency[0] = latencyRecorder.getAverageUnits();
+                executionLatency.record(now, now - frame.getStartNs());
+                updateMetrics(now - frame.getStartNs());
+                avgLatency[0] = executionLatency.getAverageUnits();
             }
             inFlight.decrementAndGet();
             frame.doFinally();
@@ -191,13 +188,6 @@ public class DefaultSlotManager implements SlotManager {
 
         this.shutdownHook = new Thread(this::close);
         Runtime.getRuntime().addShutdownHook(this.shutdownHook);
-    }
-
-    protected RateLimiter configureRateLimiter(int ratePerSecond) {
-        RateLimiterConfig config = RateLimiterConfig.custom().limitForPeriod(ratePerSecond)
-                .limitRefreshPeriod(Duration.ofSeconds(1)).timeoutDuration(Duration.ZERO).build();
-
-        return RateLimiter.of("DefaultSlotManager", config);
     }
 
     protected void configureCircuitBreaker() {
@@ -228,9 +218,10 @@ public class DefaultSlotManager implements SlotManager {
     }
 
     protected void updateMetrics(long latencyNs) {
-        latencyRecorder.record(latencyNs);
+        executionLatency.record(latencyNs);
 
-        double queueEstimate = latencyRecorder.getVegasQueueEstimate(latencyNs, currentConcurrency);
+        double queueEstimate = executionLatency.getVegasQueueEstimate(latencyNs,
+                currentConcurrency);
 
         updateEffectiveConcurrencyLimit();
         updateConcurrency(queueEstimate);
@@ -242,30 +233,28 @@ public class DefaultSlotManager implements SlotManager {
             return;
         }
 
-        long throughputPerSec = latencyRecorder.getThroughputNs() * 1_000_000_000L;
-        currentRate = (int) throughputPerSec;
+        currentRate = executionLatency.getThroughputNs() * 1_000_000_000L;
 
-        int current = currentConcurrency;
+        long current = currentConcurrency;
 
         // Vegas Dynamic Thresholds
-        int logOfCurrent = calculateLog2(current);
-        int alpha = Math.max(3, 3 * logOfCurrent);
-        int beta = Math.max(6, 6 * logOfCurrent);
+        long logOfCurrent = calculateLog2(current);
+        long alpha = Math.max(3, 3 * logOfCurrent);
+        long beta = Math.max(6, 6 * logOfCurrent);
 
-        int next;
+        long next;
         if (queueEstimate > beta) {
-            int decrease = ((current * 9830) >> 16); // 9830/65536 ~= 15%
+            long decrease = ((current * 9830) >> 16); // ~15%
             next = current - Math.max(1, decrease);
         } else if (queueEstimate < (alpha >> 1)) {
-            int increase = ((current * 6553) >> 16); // 6553/65536 ~= 10%
+            long increase = ((current * 6553) >> 16); // ~10%
             next = current + Math.max(2, increase);
         } else if (queueEstimate < alpha) {
             next = current + 1;
         } else { // Little's Law
-            long ideal = latencyRecorder.getThroughputNs();
+            long ideal = executionLatency.getThroughputNs();
             long diff = ideal - current;
-            // Move 30% of the way to the ideal anchor
-            int step = (int) ((diff * 19661) >> 16); // 19661/65536 ≈ 0.3
+            int step = (int) ((diff * 19661) >> 16); // ~0.3
 
             if (step == 0 && diff != 0) {
                 step = (diff > 0) ? 1 : -1;
@@ -275,77 +264,25 @@ public class DefaultSlotManager implements SlotManager {
         }
 
         this.currentConcurrency = Math.clamp(next, 2, effectiveConcurrencyLimit);
-        updateRateLimiter(throughputPerSec);
     }
 
-    private void updateRateLimiter(long throughputPerSec) {
-        boolean underUtilized;
-        if (config.cloneConfig == null) {
-            underUtilized = hardwareUtilization.get().pressure() < 0.90;
-        } else {
-            underUtilized = coreSnapshot.cpuSnapshots()[cpuId].pressure() < 0.90;
-        }
-
-        if (underUtilized) {
-            int targetRps = Math.max(10, (int) throughputPerSec);
-            int currentRps = rateLimiter.getRateLimiterConfig().getLimitForPeriod();
-
-            // Use a 5% dead-band to prevent jitter
-            if (Math.abs(currentRps - targetRps) > ((currentRps * 3276) >> 16)) {
-                rateLimiter.changeLimitForPeriod(targetRps);
-            }
-        }
-    }
-
-    private int calculateLog2(int current) {
-        int log2 = 31 - Integer.numberOfLeadingZeros(Math.max(current, 1));
+    private long calculateLog2(long current) {
+        long log2 = 63 - Long.numberOfLeadingZeros(Math.max(current, 1));
 
         return Math.max(3, log2);
     }
 
     protected void updateEffectiveConcurrencyLimit() {
-        CircuitBreaker.State cbState = circuitBreaker.getState();
-
-        if (!drainMode && (cbState == CircuitBreaker.State.OPEN
-                || cbState == CircuitBreaker.State.FORCED_OPEN)) {
-            effectiveConcurrencyLimit = 10;
-            return;
-        }
-
-        CoreSnapshot coreSnapshot = this.coreSnapshot;
-        CpuSnapshot snapshot = coreSnapshot.cpuSnapshots()[cpuId];
-
-        double pressure = snapshot.pressure();
-        int baseCap = (int) (snapshot.quotaCpus() * config.concurrencyMultiplier);
-
-        final int[] target = new int[1];
-        if (pressure > 0.70) {
-            double normPressure = (pressure - 0.70) / 0.30;
-            target[0] = (int) (baseCap * (1.0 - (0.8 * normPressure)));
-        } else {
-            target[0] = baseCap;
-        }
-        target[0] = Math.max(10, target[0]);
-
-        int current = this.effectiveConcurrencyLimit;
-        if (drainMode) {
-            this.effectiveConcurrencyLimit = (int) (baseCap * 0.8);
-        } else if (cbState == CircuitBreaker.State.HALF_OPEN) {
-            this.effectiveConcurrencyLimit = Math.min(target[0], 50);
-        } else if (target[0] < current) {
-            this.effectiveConcurrencyLimit = target[0]; // Fast Drop
-        } else {
-            // Slow Rise: move 1/8th of the way
-            int delta = target[0] - current;
-            this.effectiveConcurrencyLimit = current + Math.max(1, delta >> 3);
-        }
-
+        CpuSnapshot cpuSnapshot = coreSnapshot.cpuSnapshots()[cpuId];
+        long throughput = executionLatency.getThroughputNs();
+        long limit = throughput - (long)(throughput * (1.0 - cpuSnapshot.pressure()));
+        this.effectiveConcurrencyLimit = Math.max(limit, config.initialConcurrency);
     }
 
     @Override
     public void close() {
         if (running.compareAndSet(true, false)) {
-            if(ingest != null) {
+            if (ingest != null) {
                 ingest.removeThread(cycleThread);
                 ingest.close();
             }
@@ -406,7 +343,7 @@ public class DefaultSlotManager implements SlotManager {
     public void errorChannel(Publisher<Failure> errorFlux) {
         errorFlux.subscribe(new CoreSubscriber<>() {
             @Override
-            public void onSubscribe(Subscription subscription) {
+            public void onSubscribe(@NonNull Subscription subscription) {
                 subscription.request(Long.MAX_VALUE);
             }
 
@@ -456,19 +393,23 @@ public class DefaultSlotManager implements SlotManager {
     private void cycle() {
         try {
             int chunkSize = 4096;
+            long minDemand = chunkSize << 3;
+
+            FlowRecorder idleRecorder = new FlowRecorder();
+            FlowRecorder arrivalLatency = bufferWrapper.arrivalLatencyRecorder;
+            FlowRecorder drainBatchRecorder = null;
 
             int parks = 0;
             int bufferCount = 0;
-            long idleIterations = 0;
             while (running.get() && !Thread.currentThread().isInterrupted()) {
 
-                int currentConcurrency = this.currentConcurrency;
+                long currentConcurrency = this.currentConcurrency;
                 int currInFlight = inFlight.get();
-                int quota = currentConcurrency - currInFlight;
+                long quota = Math.max(0, currentConcurrency - currInFlight);
 
                 int processed = 0;
-                if (acquirePermission(quota)) {
-                    processed = bufferCount > 0 && quota > 0 ? outputFlux.drain(quota) : 0;
+                if (quota > 0 && bufferCount > 0 && acquirePermission()) {
+                    processed = outputFlux.drain(quota);
                     bufferCount -= processed;
                 }
                 if (processed > 0) {
@@ -476,35 +417,57 @@ public class DefaultSlotManager implements SlotManager {
                 }
 
                 if (ingest != null) {
-                    int lowWaterMark = Math.min(currentConcurrency >> 2, chunkSize >> 2);
+
+                    if (drainBatchRecorder == null) {
+                        drainBatchRecorder = ingest.getBatchRecorder();
+                    }
+                    int lowWaterMark = chunkSize >> 2;
 
                     if (bufferCount <= lowWaterMark) {
-                        bufferCount += ingest.drain(bufferWrapper, chunkSize - bufferCount);
+                        long ingestCount = ingest.getCount();
+
+                        long arrivalThroughput = arrivalLatency.getThroughputNs();
+                        long executionThroughput = executionLatency.getThroughputNs();
+                        long targetThroughput = Math.max(arrivalThroughput, executionThroughput);
+
+                        int maxFill = chunkSize - bufferCount;
+
+                        long demand = targetThroughput - (ingestCount + bufferCount);
+                        demand = Math.max(demand, minDemand);
+
+                        int drained = ingest.drain(bufferWrapper, maxFill, demand);
+                        bufferCount += drained;
                     }
                 }
 
                 if (processed > 0) {
                     parks = 0;
-                    idleIterations = 0;
+                    idleRecorder.record(System.nanoTime(), 0);
                     if ((processed & 128) == 0) {
                         Thread.onSpinWait();
                     }
                 } else {
-                    idleIterations++;
-                    if (idleIterations >= config.idleCyclePolicy.idleParkThreshold) {
-                        parks = Math.min(++parks, 20);
+                    long now = System.nanoTime();
+                    idleRecorder.record(now, 1);
+
+                    double idleRatio = idleRecorder.getRollingAveragePerRecording(now);
+                    if (idleRatio < 0.25) {
+                        Thread.onSpinWait();
+                    } else if (idleRatio < 0.6) {
+                        Thread.yield();
+                    } else {
+                        parks = Math.min(parks + 1, 20);
+
                         if (wakeHook != null) {
                             wakeHook.parked = true;
                         }
-                        LockSupport.parkNanos(parks * 1_000L);
-                        idleIterations = config.idleCyclePolicy.idleParkThreshold;
+
+                        long parkNs = parks * 1_000L;
+                        LockSupport.parkNanos(parkNs);
+
                         if (wakeHook != null) {
                             wakeHook.parked = false;
                         }
-                    } else if (idleIterations >= config.idleCyclePolicy.idleYieldThreshold) {
-                        Thread.yield();
-                    } else if (idleIterations >= config.idleCyclePolicy.idleSpinThreshold) {
-                        Thread.onSpinWait();
                     }
                 }
             }
@@ -516,8 +479,8 @@ public class DefaultSlotManager implements SlotManager {
         }
     }
 
-    protected boolean acquirePermission(int quota) {
-        return drainMode || (circuitBreaker.tryAcquirePermission());
+    protected boolean acquirePermission() {
+        return drainMode || circuitBreaker.tryAcquirePermission();
     }
 
     @Override
@@ -552,26 +515,17 @@ public class DefaultSlotManager implements SlotManager {
             return 1.0;
         }
 
-        double hardwarePressure = 0.0;
-        if (config.cloneConfig != null) {
-            CoreSnapshot snapshot = coreSnapshot;
-            if (snapshot != null) {
-                hardwarePressure = snapshot.cpuSnapshots()[cpuId].pressure();
-            }
-        }
+        long alpha = Math.max(3, 3 * calculateLog2(currentConcurrency));
+        long beta = Math.max(6, 6 * alpha);
 
-        int alpha = Math.max(3, 3 * calculateLog2(currentConcurrency));
-        int beta = Math.max(6, 6 * alpha);
-
-        // Get the queue estimate from your new FlowRecorder (latency version)
-        // We use long-based math for the estimate, then cast to double for the final mix.
-        long queueEstimate = latencyRecorder.getVegasQueueEstimate(
-                latencyRecorder.getAverageUnits(), // Passing "actual" units
+        long queueEstimate = executionLatency.getVegasQueueEstimate(
+                executionLatency.getAverageUnits(),
                 currentConcurrency);
 
         double vegasPressure = (double) queueEstimate / beta;
 
         double errorPenalty = Math.min(0.4, recentErrors.get() * 0.05);
+        double hardwarePressure = coreSnapshot != null ? coreSnapshot.cpuSnapshots()[cpuId].pressure() : 0.0;
 
         double base = Math.max(vegasPressure, hardwarePressure);
         return Math.clamp(Math.max(base, cbPressure) + errorPenalty, 0.0, 1.0);
@@ -608,7 +562,7 @@ public class DefaultSlotManager implements SlotManager {
 
         public Metrics(MeterRegistry registry, Config config, AtomicInteger inFlight,
                 Supplier<Long> latency,
-                Supplier<Integer> currentConcurrency, Supplier<Integer> currentRate) {
+                Supplier<Long> currentConcurrency, Supplier<Long> currentRate) {
             this.registry = registry;
 
             if (registry != null && config.cloneConfig != null) {
@@ -644,45 +598,24 @@ public class DefaultSlotManager implements SlotManager {
     }
 
     public record Config(CloneConfig cloneConfig, int initialRatePerSecond, int initialConcurrency,
-                         int concurrencyMultiplier, int maxBuffer, IdleCyclePolicy idleCyclePolicy,
+                         int concurrencyMultiplier, int maxBuffer,
                          CircuitBreakerRegistry cbRegistry,
                          MeterRegistry meterRegistry, String metricPrefix) implements
             CloneableObject {
 
         public static final int VIRTUAL_THREAD_MULT = 20_000;
 
-        public static Config powerSavingDefault(
-                CircuitBreakerRegistry cbRegistry, MeterRegistry meterRegistry,
-                String metricPrefix) {
-            return new Config(null, 1000, 2, 10, 256, IdleCyclePolicy.POWER_SAVING,
-                    cbRegistry, meterRegistry, metricPrefix);
-        }
-
         public static Config elasticVirtualDefault(
                 CircuitBreakerRegistry cbRegistry, MeterRegistry meterRegistry,
                 String metricPrefix) {
             return new Config(null, 10_000, VIRTUAL_THREAD_MULT, VIRTUAL_THREAD_MULT, 16_384,
-                    IdleCyclePolicy.DEFAULT, cbRegistry, meterRegistry, metricPrefix);
+                    cbRegistry, meterRegistry, metricPrefix);
         }
 
         public static Config mixedWorkDefault(
                 CircuitBreakerRegistry cbRegistry,
                 MeterRegistry meterRegistry, String metricPrefix) {
-            return new Config(null, 2000, 20, 256, 1024, IdleCyclePolicy.DEFAULT,
-                    cbRegistry, meterRegistry, metricPrefix);
-        }
-
-        public static Config lowLatencyDefault(
-                CircuitBreakerRegistry cbRegistry, MeterRegistry meterRegistry,
-                String metricPrefix) {
-            return new Config(null, 2000, 1, 2, 64, IdleCyclePolicy.LOW_LATENCY,
-                    cbRegistry, meterRegistry, metricPrefix);
-        }
-
-        public static Config highThroughputDefault(
-                CircuitBreakerRegistry cbRegistry, MeterRegistry meterRegistry,
-                String metricPrefix) {
-            return new Config(null, 5000, 64, 128, 4096, IdleCyclePolicy.HIGH_THROUGHPUT,
+            return new Config(null, 2000, 20, 256, 1024,
                     cbRegistry, meterRegistry, metricPrefix);
         }
 
@@ -693,25 +626,12 @@ public class DefaultSlotManager implements SlotManager {
                 meterRegistry = cloneConfig.meterRegistry();
             }
             return new Config(cloneConfig, initialRatePerSecond, initialConcurrency,
-                    concurrencyMultiplier, maxBuffer, idleCyclePolicy, cbRegistry,
+                    concurrencyMultiplier, maxBuffer, cbRegistry,
                     meterRegistry, metricPrefix);
         }
 
         @Override
         public void close() {
-        }
-
-        public record IdleCyclePolicy(long idleSpinThreshold, long idleYieldThreshold,
-                                      long idleParkThreshold) {
-
-            public static final IdleCyclePolicy DEFAULT = new IdleCyclePolicy(1_000, 10_000,
-                    100_000);
-            public static final IdleCyclePolicy LOW_LATENCY = new IdleCyclePolicy(100_000,
-                    1_000_000,
-                    1_000_000_000);
-            public static final IdleCyclePolicy HIGH_THROUGHPUT = new IdleCyclePolicy(100, 1_000,
-                    10_000);
-            public static final IdleCyclePolicy POWER_SAVING = new IdleCyclePolicy(0, 0, 0);
         }
     }
 }

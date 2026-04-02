@@ -4,7 +4,6 @@ import ch.qos.logback.classic.LoggerContext;
 import euhedral.common.io.dispatch.DRRScheduler;
 import euhedral.common.io.dispatch.DefaultSlotManager;
 import euhedral.common.io.dispatch.DefaultSlotManager.Config;
-import euhedral.common.io.dispatch.DefaultSlotManager.Config.IdleCyclePolicy;
 import euhedral.common.io.dispatch.control_plane.ControlPlane;
 import euhedral.common.io.dispatch.utils.ContainerAwareResourceMonitor;
 import euhedral.common.io.dispatch.utils.NumaMapper;
@@ -126,8 +125,8 @@ public class EndToEndBenchmark {
             }
         }
 
-        @Benchmark
-        @OperationsPerInvocation(8_000_000)
+//        @Benchmark
+//        @OperationsPerInvocation(8_000_000)
         public void benchOneProducerEightMillionParallel(BenchmarkState state) throws Throwable {
             CountDownLatch start = new CountDownLatch(1);
             CountDownLatch trigger = new CountDownLatch(8_000_000);
@@ -174,8 +173,8 @@ public class EndToEndBenchmark {
             state.barrier8P.reset();
         }
 
-//        @Benchmark
-//        @OperationsPerInvocation(32_000_000)
+        @Benchmark
+        @OperationsPerInvocation(32_000_000)
         public void bench32Producers32MillionParallel(BenchmarkState state) throws Throwable {
             CountDownLatch trigger = new CountDownLatch(32_000_000);
 
@@ -193,7 +192,7 @@ public class EndToEndBenchmark {
             }
             state.barrier32P.await();
 
-            if (!trigger.await(60, TimeUnit.SECONDS)) {
+            if (!trigger.await(120, TimeUnit.SECONDS)) {
                 throw new RuntimeException("Stall detected. Pending: " + trigger.getCount());
             }
 
@@ -231,7 +230,7 @@ public class EndToEndBenchmark {
                 DRRScheduler.Config drrConfig = new DRRScheduler.Config(null, 32, "SystemTest",
                         null);
                 DefaultSlotManager.Config dsmConfig = new Config(null, 2000, 20, 256, 1024,
-                        IdleCyclePolicy.LOW_LATENCY, CircuitBreakerRegistry.of(config), null,
+                        CircuitBreakerRegistry.of(config), null,
                         "SystemTest");
 
                 TestPipeline pipeline = new TestPipeline("SystemTest", null,

@@ -161,6 +161,11 @@ public class ControlPlaneShard implements AutoCloseable {
             this.clones = nextClones;
             this.activeCoreIds = nextCores;
             this.coreDistributor.get().setDownstreamMapping(newCores, nextHandles);
+            for(var clone : clones) {
+                if(clone != null) {
+                    clone.setDrainMode(false);
+                }
+            }
             this.coreDistributor.get().setDrain(false);
             rebalancing.set(false);
         }
@@ -197,8 +202,8 @@ public class ControlPlaneShard implements AutoCloseable {
                 });
 
         clone.setDrainMode(rebalancing.get());
-        clone.update(snapshot);
         clone.start();
+        clone.update(snapshot);
         return clone;
     }
 
