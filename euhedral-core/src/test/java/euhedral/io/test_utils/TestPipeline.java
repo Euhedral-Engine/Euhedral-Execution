@@ -1,0 +1,55 @@
+package euhedral.io.test_utils;
+
+import euhedral.io.AbstractCloneablePipeline;
+import euhedral.io.AbstractExecutor;
+import euhedral.io.control_plane.CloneConfig;
+import euhedral.io.frames.AbstractFrame;
+import euhedral.io.interfaces.DispatchPreProcess;
+import euhedral.io.interfaces.SlotManager;
+import euhedral.io.utils.PinnedThreadExecutor;
+import org.openjdk.jmh.infra.Blackhole;
+
+public class TestPipeline extends AbstractCloneablePipeline {
+
+    private final String name;
+
+    public TestPipeline(String name, CloneConfig config, DispatchPreProcess scheduler,
+            SlotManager slotManager, AbstractExecutor executor) {
+        super(name, config, scheduler, slotManager, executor);
+        this.name = name;
+    }
+
+    @Override
+    public TestPipeline clone(CloneConfig cloneConfig) {
+        return new TestPipeline(name, cloneConfig, this.preProcess, this.slotManager,
+                this.executor);
+    }
+
+    public static class TestExecutor extends AbstractExecutor {
+
+        private final PinnedThreadExecutor executor;
+        private final Blackhole bh;
+
+        public TestExecutor(PinnedThreadExecutor executor, Blackhole bh) {
+            super(executor);
+            this.executor = executor;
+            this.bh = bh;
+        }
+
+        @Override
+        public void execute(AbstractFrame frame) {
+            bh.consume(frame);
+        }
+
+        @Override
+        public AbstractExecutor clone(CloneConfig cloneConfig) {
+            return new TestExecutor(this.executor, this.bh);
+        }
+
+        @Override
+        public AbstractExecutor clone(CloneConfig cloneConfig,
+                PinnedThreadExecutor executor) {
+            return new TestExecutor(executor, this.bh);
+        }
+    }
+}
