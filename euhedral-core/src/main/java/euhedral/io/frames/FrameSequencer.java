@@ -15,7 +15,7 @@ import reactor.core.scheduler.Schedulers;
 
 public class FrameSequencer<R> {
 
-    private static final SequencedFrame SIGNAL_FRAME = new SequencedFrame("", -1, -1, 0, null, null,
+    private static final SequencedFrame SIGNAL_FRAME = new SequencedFrame( -1, -1, null, null,
             null, null, null);
 
     private final long ingestPassword;
@@ -46,9 +46,7 @@ public class FrameSequencer<R> {
 
     @SuppressWarnings("unchecked")
     public <T> Flux<AbstractFrame> map(Flux<T> flux, Function<T, R> function) {
-        final String id = ThreadLocalRandom.current().nextLong() + "";
-        final long idHash = KeyHasher.getHash(id);
-        final long destinationHash = KeyHasher.mix(ThreadLocalRandom.current().nextLong());
+        final long idHash = KeyHasher.mix(ThreadLocalRandom.current().nextLong());
         final AtomicBoolean killSwitch = new AtomicBoolean(false);
 
         final long[] seed = new long[]{KeyHasher.combine(ThreadLocalRandom.current().nextLong(), ThreadLocalRandom.current().nextLong())};
@@ -68,7 +66,7 @@ public class FrameSequencer<R> {
                 sequencedFrame = buffer[idx[0]];
                 sequencedFrame.replace(idx[1]++, obj);
             } else {
-                sequencedFrame = new SequencedFrame(id, idHash, idx[1]++, destinationHash, obj,
+                sequencedFrame = new SequencedFrame(idHash, idx[1]++, obj,
                         (Function<Object, Object>) function,
                         killSwitch, (FrameSequencer<Object>) this, recycler);
             }

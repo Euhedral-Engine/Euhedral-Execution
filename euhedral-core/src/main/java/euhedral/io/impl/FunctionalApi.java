@@ -1,20 +1,16 @@
-package euhedral.io;
+package euhedral.io.impl;
 
-import euhedral.io.control_plane.CloneConfig;
+import euhedral.io.DRRScheduler;
+import euhedral.io.DRRScheduler.Config;
+import euhedral.io.DefaultSlotManager;
 import euhedral.io.control_plane.ControlPlane;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.frames.ConsumerFrame;
 import euhedral.io.frames.FrameSequencer;
 import euhedral.io.frames.FunctionFrame;
 import euhedral.io.frames.RunnableFrame;
-import euhedral.io.frames.SequencedFrame;
-import euhedral.io.interfaces.DispatchPreProcess;
-import euhedral.io.interfaces.SlotManager;
 import euhedral.io.utils.KeyHasher;
 import euhedral.io.utils.MpscFrameRecycler;
-import euhedral.io.utils.PinnedThreadExecutor;
-import io.github.resilience4j.circuitbreaker.CircuitBreaker;
-import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -28,55 +24,58 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Sinks;
 import reactor.core.publisher.Sinks.EmitResult;
 
-public class NumaAwareExecutor implements AutoCloseable {
+public class FunctionalApi implements AutoCloseable {
 
-    private static AtomicReference<NumaAwareExecutor> INSTANCE = new AtomicReference<>();
+    private static final AtomicReference<FunctionalApi> INSTANCE = new AtomicReference<>();
 
-    public static NumaAwareExecutor get() {
+    public static FunctionalApi get() {
         return INSTANCE.get();
     }
 
-    public static NumaAwareExecutor getOrCreate(String name, int recycleCapacityPerStream,
-            CircuitBreakerRegistry cbRegistry, @Nullable
-            MeterRegistry meterRegistry) {
-        return INSTANCE.updateAndGet(curr -> {
-            if (curr != null && !curr.closed) {
-                return curr;
-            }
-
-            return new NumaAwareExecutor(name, recycleCapacityPerStream,
-                    cbRegistry.circuitBreaker(name + "-CircuitBreaker"),
-                    new DRRScheduler.Config(null, 32, name, meterRegistry),
-                    DefaultSlotManager.Config.balancedDefault(
-                            cbRegistry, meterRegistry, name));
-        });
+    public static FunctionalApi getOrCreate(String name, int recycleCapacityPerStream,
+            @Nullable MeterRegistry meterRegistry) {
+        FunctionalApi api = INSTANCE.get();
+        if (api != null) {
+            return api;
+        }
+        if (ControlPlane.get() != null) {
+            throw new RuntimeException("A ControlPlaneInstance is already in use");
+        }
+        api = new FunctionalApi(name, recycleCapacityPerStream,
+                new Config(null, 32, name, meterRegistry),
+                DefaultSlotManager.Config.balancedDefault(
+                        meterRegistry, name));
+        INSTANCE.set(api);
+        return api;
     }
 
-    public static NumaAwareExecutor getOrCreate(String name, int recycleCapacityPerStream,
-            CircuitBreaker circuitBreaker, DRRScheduler.Config drrConfig,
+    public static FunctionalApi getOrCreate(String name, int recycleCapacityPerStream,
+            Config drrConfig,
             DefaultSlotManager.Config slotManagerConfig) {
-        return INSTANCE.updateAndGet(curr -> {
-            if (curr != null) {
-                return curr;
-            }
-
-            return new NumaAwareExecutor(name, recycleCapacityPerStream, circuitBreaker, drrConfig,
-                    slotManagerConfig);
-        });
+        FunctionalApi api = INSTANCE.get();
+        if (api != null) {
+            return api;
+        }
+        if (ControlPlane.get() != null) {
+            throw new RuntimeException("A ControlPlaneInstance is already in use");
+        }
+        api = new FunctionalApi(name, recycleCapacityPerStream, drrConfig,
+                slotManagerConfig);
+        INSTANCE.set(api);
+        return api;
     }
+
     private final ControlPlane controlPlane;
     private final int recycleCapacity;
 
-    private volatile boolean closed = false;
+    private final AtomicBoolean closed = new AtomicBoolean(false);
 
-    protected NumaAwareExecutor(String name, int recycleCapacityPerStream,
-            CircuitBreaker circuitBreaker,
-            DRRScheduler.Config drrConfig, DefaultSlotManager.Config slotManagerConfig) {
+    protected FunctionalApi(String name, int recycleCapacityPerStream,
+            Config drrConfig, DefaultSlotManager.Config slotManagerConfig) {
         this.recycleCapacity = recycleCapacityPerStream;
 
         DRRScheduler drr = new DRRScheduler(drrConfig, null);
-        DefaultSlotManager slotManager = new DefaultSlotManager(slotManagerConfig,
-                circuitBreaker);
+        DefaultSlotManager slotManager = new DefaultSlotManager(slotManagerConfig);
 
         FunctionalPipeline pipeline = new FunctionalPipeline(name, null, drr, slotManager,
                 new FunctionalExecutor(null));
@@ -86,19 +85,26 @@ public class NumaAwareExecutor implements AutoCloseable {
     }
 
     public <T, R> Flux<R> applyParallelReturnOrdered(Flux<T> input, Function<T, R> function) {
+        if (closed.get()) {
+            throw new RuntimeException("This FunctionalApi instance is closed.");
+        }
+
         final long password = KeyHasher.combine(ThreadLocalRandom.current().nextLong(),
                 ThreadLocalRandom.current().nextLong());
 
         FrameSequencer<R> sequencer = new FrameSequencer<>(password);
         Flux<AbstractFrame> frameFlux = sequencer.map(input, function);
 
-        return sequencer.output().doOnSubscribe(_ -> controlPlane.ingest(frameFlux));
+        return sequencer.output().doOnSubscribe(sub -> controlPlane.ingest(frameFlux));
     }
 
     @SuppressWarnings("unchecked")
     public <T, R> Flux<R> apply(Flux<T> input, Function<T, R> function, boolean ordered) {
-        final String id = ThreadLocalRandom.current().nextLong() + "";
-        final long idHash = KeyHasher.getHash(id);
+        if (closed.get()) {
+            throw new RuntimeException("This FunctionalApi instance is closed.");
+        }
+
+        final long idHash = KeyHasher.mix(ThreadLocalRandom.current().nextLong());
         final long[] seed = new long[]{ThreadLocalRandom.current().nextLong()};
         final long password = KeyHasher.combine(ThreadLocalRandom.current().nextLong(),
                 ThreadLocalRandom.current().nextLong());
@@ -136,7 +142,7 @@ public class NumaAwareExecutor implements AutoCloseable {
                 frame = recycleBuffer[--recycleCount[0]];
                 frame.replace(obj);
             } else {
-                frame = new FunctionFrame(id, idHash, idHash,
+                frame = new FunctionFrame(idHash,
                         (Function<Object, Object>) function, (Consumer<Object>) consumer, dead,
                         recycler);
                 frame.setPayload(obj);
@@ -162,9 +168,11 @@ public class NumaAwareExecutor implements AutoCloseable {
         if (times <= 0) {
             return;
         }
+        if (closed.get()) {
+            throw new RuntimeException("This FunctionalApi instance is closed.");
+        }
 
-        final String id = ThreadLocalRandom.current().nextLong() + "";
-        final long idHash = KeyHasher.getHash(id);
+        final long idHash = KeyHasher.mix(ThreadLocalRandom.current().nextLong());
         final long[] seed = new long[]{ThreadLocalRandom.current().nextLong()};
         final long password = KeyHasher.combine(ThreadLocalRandom.current().nextLong(),
                 ThreadLocalRandom.current().nextLong());
@@ -189,7 +197,7 @@ public class NumaAwareExecutor implements AutoCloseable {
                 if (recycleCount[0] - 1 > 0) {
                     frame = recycleBuffer[--recycleCount[0]];
                 } else {
-                    frame = new RunnableFrame(id, idHash, idHash,
+                    frame = new RunnableFrame(idHash,
                             runnable, dead, recycler);
                 }
                 frame.setOrdered(false);
@@ -208,8 +216,11 @@ public class NumaAwareExecutor implements AutoCloseable {
 
     @SuppressWarnings("unchecked")
     public <T> void accept(Flux<T> input, Consumer<T> consumer, boolean ordered) {
-        final String id = ThreadLocalRandom.current().nextLong() + "";
-        final long idHash = KeyHasher.getHash(id);
+        if (closed.get()) {
+            throw new RuntimeException("This FunctionalApi instance is closed.");
+        }
+
+        final long idHash = KeyHasher.mix(ThreadLocalRandom.current().nextLong());
         final long[] seed = new long[]{ThreadLocalRandom.current().nextLong()};
         final long password = KeyHasher.combine(ThreadLocalRandom.current().nextLong(),
                 ThreadLocalRandom.current().nextLong());
@@ -231,7 +242,7 @@ public class NumaAwareExecutor implements AutoCloseable {
                 frame = recycleBuffer[--recycleCount[0]];
                 frame.replace(obj);
             } else {
-                frame = new ConsumerFrame(id, idHash, idHash, (Consumer<Object>) consumer,
+                frame = new ConsumerFrame(idHash, (Consumer<Object>) consumer,
                         dead,
                         recycler);
                 frame.setPayload(obj);
@@ -252,57 +263,9 @@ public class NumaAwareExecutor implements AutoCloseable {
 
     @Override
     public void close() throws Exception {
+        if (!closed.compareAndSet(false, true)) {
+            return;
+        }
         this.controlPlane.close();
-    }
-
-    private static class FunctionalPipeline extends AbstractCloneablePipeline {
-
-        public FunctionalPipeline(String name, CloneConfig cloneConfig,
-                DispatchPreProcess preProcess,
-                SlotManager slotManager,
-                FunctionalExecutor executor) {
-            super(name, cloneConfig, preProcess, slotManager, executor);
-        }
-
-        @Override
-        public FunctionalPipeline clone(CloneConfig cloneConfig) {
-            return new FunctionalPipeline(name, cloneConfig, preProcess, slotManager,
-                    (FunctionalExecutor) executor);
-        }
-    }
-
-    private static class FunctionalExecutor extends AbstractExecutor {
-
-        private final PinnedThreadExecutor executor;
-
-        FunctionalExecutor(PinnedThreadExecutor executor) {
-            super(executor);
-            this.executor = executor;
-        }
-
-        @Override
-        public void execute(AbstractFrame frame) {
-            if (!frame.isAlive()) {
-                frame.throwMeAsError();
-            }
-
-            switch (frame) {
-                case SequencedFrame s -> s.apply();
-                case ConsumerFrame c -> c.consume();
-                case FunctionFrame f -> f.apply();
-                case RunnableFrame r -> r.run();
-                default -> frame.throwMeAsError();
-            }
-        }
-
-        @Override
-        public FunctionalExecutor clone(CloneConfig cloneConfig) {
-            return new FunctionalExecutor(executor);
-        }
-
-        @Override
-        public FunctionalExecutor clone(CloneConfig cloneConfig, PinnedThreadExecutor executor) {
-            return new FunctionalExecutor(executor);
-        }
     }
 }

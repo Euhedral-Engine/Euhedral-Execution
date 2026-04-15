@@ -4,26 +4,23 @@ import euhedral.io.DRRScheduler;
 import euhedral.io.DefaultSlotManager;
 import euhedral.io.DefaultSlotManager.Config;
 import euhedral.io.control_plane.ControlPlane;
-import euhedral.io.utils.PinnedThreadExecutor;
 import euhedral.io.test_utils.TestFrame;
 import euhedral.io.test_utils.TestPipeline;
 import euhedral.io.test_utils.TestPipeline.TestExecutor;
 import euhedral.io.test_utils.TestPublisher;
+import euhedral.io.utils.PinnedThreadExecutor;
 import com.github.dockerjava.api.async.ResultCallback;
 import com.github.dockerjava.api.command.ExecCreateCmdResponse;
 import com.github.dockerjava.api.model.Capability;
 import com.github.dockerjava.api.model.Frame;
-import io.github.resilience4j.circuitbreaker.CircuitBreaker;
-import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
-import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import java.io.File;
 import java.time.Duration;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.LockSupport;
 import org.jctools.util.PaddedAtomicLong;
 import org.junit.jupiter.api.Test;
 import org.openjdk.jmh.annotations.Benchmark;
@@ -40,6 +37,7 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
 import org.openjdk.jmh.infra.Blackhole;
+import org.openjdk.jmh.profile.AsyncProfiler;
 import org.openjdk.jmh.results.format.ResultFormatType;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.options.Options;
@@ -79,7 +77,8 @@ public class SteadyStateBenchmark {
                 .withAttachStderr(true)
                 .withCmd("java", "--add-exports", "java.base/jdk.internal.platform=ALL-UNNAMED",
                         "--add-exports", "java.base/jdk.internal.vm.annotation=ALL-UNNAMED",
-                        "-XX:-RestrictContended", "-Daffinity.logging.level=OFF",
+                        "--enable-native-access=ALL-UNNAMED",
+                        "-XX:-RestrictContended",
                         "-Dorg.slf4j.simpleLogger.defaultLogLevel=error", "-cp", "/app/test.jar",
                         RUNNER).exec();
 
@@ -96,39 +95,35 @@ public class SteadyStateBenchmark {
     @State(Scope.Benchmark)
     public static class BenchmarkState {
 
+        public final TestFrame[] parallelFramePool = TestFrame.generateParallel(64_000_000);
         public ExecutorService producerPool;
-        public TestFrame[] parallelFramePool;
-        private ControlPlane controlPlane;
+        private ControlPlane controlPlane = null;
 
         @Setup(Level.Trial)
         public void setupExecutor(Blackhole bh) {
-            CircuitBreakerConfig config = CircuitBreakerConfig.custom()
-                    .slidingWindowType(CircuitBreakerConfig.SlidingWindowType.TIME_BASED)
-                    .slidingWindowSize(10).minimumNumberOfCalls(50000).failureRateThreshold(10)
-                    .waitDurationInOpenState(Duration.ofSeconds(5))
-                    .permittedNumberOfCallsInHalfOpenState(1000)
-                    .writableStackTraceEnabled(false).build();
-            CircuitBreaker circuitBreaker = CircuitBreaker.of("SystemTest", config);
-
             DRRScheduler.Config drrConfig = new DRRScheduler.Config(null, 32, "SystemTest",
                     null);
-            DefaultSlotManager.Config dsmConfig = Config.lowLatencyDefault(
-                    CircuitBreakerRegistry.of(config), null, "SystemTest");
+            DefaultSlotManager.Config dsmConfig = Config.lowLatencyDefault(null, "SystemTest");
 
             TestPipeline pipeline = new TestPipeline("SystemTest", null,
                     new DRRScheduler(drrConfig, null),
-                    new DefaultSlotManager(dsmConfig, circuitBreaker),
+                    new DefaultSlotManager(dsmConfig),
                     new TestExecutor(null, bh));
             controlPlane = ControlPlane.getOrCreate("SystemTest", pipeline,
                     null);
-            parallelFramePool = TestFrame.generateParallel(64_000_000);
+
             producerPool = Executors.newFixedThreadPool(1);
+        }
+
+        @TearDown(Level.Iteration)
+        public void coolDown() throws InterruptedException {
+            Thread.sleep(Duration.ofSeconds(2));
         }
 
         @TearDown(Level.Trial)
         public void tearDownTrial() {
             try {
-                Arrays.fill(parallelFramePool, null);
+                producerPool.close();
                 controlPlane.close();
                 PinnedThreadExecutor.closeAll();
             } catch (Exception e) {
@@ -141,18 +136,26 @@ public class SteadyStateBenchmark {
     @OutputTimeUnit(TimeUnit.NANOSECONDS)
     @State(Scope.Benchmark)
     @Warmup(iterations = 1)
-    @Measurement(iterations = 5)
+    @Measurement(iterations = 1)
     @Fork(value = 1)
     public static class BenchmarkRunner {
 
         static void main(String[] args) throws Exception {
             Options optSteadyState = new OptionsBuilder().include(
                             SteadyStateBenchmark.class.getSimpleName()).addProfiler("stack")
-                    .addProfiler("gc").jvmArgs("-XX:-RestrictContended",
+                    .addProfiler("gc")
+                    .addProfiler(AsyncProfiler.class,
+                            "libPath=/app/lib/libasyncProfiler.so;" +
+                                    "event=itimer;" +
+                                    "interval=100000;" +
+                                    "alloc=64k;" +
+                                    "output=jfr;" +
+                                    "dir=/opt/results/async-profiler")
+                    .jvmArgs("-XX:-RestrictContended",
                             "--add-exports", "java.base/jdk.internal.platform=ALL-UNNAMED",
                             "--add-exports", "java.base/jdk.internal.vm.annotation=ALL-UNNAMED",
-                            "-XX:-RestrictContended", "-Daffinity.logging.level=OFF",
-                            "-Daffinity.logging.level=OFF",
+                            "--enable-native-access=ALL-UNNAMED",
+                            "-XX:-RestrictContended",
                             "-Djava.library.path=/app/lib/libasyncProfiler.so",
                             "-Dorg.slf4j.simpleLogger.defaultLogLevel=error")
                     .resultFormat(ResultFormatType.JSON)
@@ -166,7 +169,7 @@ public class SteadyStateBenchmark {
         public void benchOneProducer64MillionParallel(BenchmarkState state) throws Throwable {
             CountDownLatch start = new CountDownLatch(1);
             CountDownLatch end = new CountDownLatch(1);
-            PaddedAtomicLong countDown = new PaddedAtomicLong(64_000_000);
+            PaddedAtomicLong countDown = new PaddedAtomicLong(64_000_000L);
 
             state.producerPool.submit(() -> {
                 TestPublisher subscription = new TestPublisher(state.parallelFramePool);
@@ -176,14 +179,21 @@ public class SteadyStateBenchmark {
                 } catch (InterruptedException e) {
                     throw new RuntimeException(e);
                 }
+
                 state.controlPlane.ingest(subscription);
             });
             start.countDown();
 
-            if (!end.await(60 * 5, TimeUnit.SECONDS)) {
+            if (!end.await(60 * 2, TimeUnit.SECONDS)) {
                 throw new RuntimeException("Stall detected. Pending: " + countDown.get());
             }
         }
+
+//        @Benchmark
+//        public void profileIdleState() {
+//            Blackhole.consumeCPU(100);
+//            LockSupport.parkNanos(1_000_000_000);
+//        }
     }
 
 }

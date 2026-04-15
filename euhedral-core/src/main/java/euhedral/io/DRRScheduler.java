@@ -1,15 +1,19 @@
 package euhedral.io;
 
+import static euhedral.io.utils.MathFunctions.clampDouble;
+
 import euhedral.io.control_plane.CloneConfig;
 import euhedral.io.flow_control.FluxEdge;
 import euhedral.io.flow_control.IngestSequencer;
 import euhedral.io.flow_control.UpstreamQueue;
 import euhedral.io.frames.AbstractFrame;
+import euhedral.io.frames.DummyInitFrame;
 import euhedral.io.frames.QueueFrame;
 import euhedral.io.interfaces.CloneableObject;
 import euhedral.io.interfaces.DispatchPreProcess;
+import euhedral.io.resource_monitoring.SystemUtilization.CoreSnapshot;
 import euhedral.io.utils.DrainBuffer;
-import euhedral.io.utils.SystemUtilization.CoreSnapshot;
+import euhedral.io.utils.FlowRecorder.FlowSnapshot;
 import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Meter;
@@ -29,7 +33,7 @@ import org.slf4j.LoggerFactory;
 @SuppressWarnings("ManualMinMaxCalculation")
 public class DRRScheduler extends IngestSequencer implements DispatchPreProcess, CloneableObject {
 
-    protected final Logger logger = LoggerFactory.getLogger(this.getClass());
+    protected final Logger logger;
     protected final Config config;
     protected final Metrics metrics;
     protected final int coreId;
@@ -43,8 +47,6 @@ public class DRRScheduler extends IngestSequencer implements DispatchPreProcess,
     protected volatile long totalBytesCap;
 
     protected UpstreamQueue upstream;
-    protected long upstreamCount = 0;
-    protected volatile boolean drainMode = false;
 
     public DRRScheduler(@NonNull Config config, @Nullable CoreSnapshot snapshot) {
         this(config, snapshot, () -> 0.0);
@@ -52,7 +54,10 @@ public class DRRScheduler extends IngestSequencer implements DispatchPreProcess,
 
     public DRRScheduler(@NonNull Config config, @Nullable CoreSnapshot snapshot,
             @NonNull Callable<Double> downstreamPressure) {
+        super(getName(config), config.maxSubQueues);
+        this.logger = LoggerFactory.getLogger(getName(config));
         this.config = config;
+        this.snapshot = snapshot;
         this.downstreamPressure = downstreamPressure;
         if (snapshot != null) {
             this.totalBytesCap = snapshot.coreMemoryLimit();
@@ -62,64 +67,51 @@ public class DRRScheduler extends IngestSequencer implements DispatchPreProcess,
             this.coreId = -1;
         }
 
-        String name = config.cloneConfig != null ? config.cloneConfig.shardName() + "-DRRScheduler-"
-                + config.cloneConfig.coreId() : "DRRScheduler";
-
-        super(name, config.maxSubQueues);
-
         this.metrics = new Metrics(config.metricPrefix, coreId, capFactor, totalQueuedSizeBytes,
                 () -> pressure, config.registry);
 
     }
 
-    @Override
-    public Publisher<AbstractFrame> process(Publisher<AbstractFrame> frameFlux) {
-        ingest(frameFlux);
-        return output();
+    public static String getName(Config config) {
+        return config.cloneConfig != null ? config.cloneConfig.shardName() + "-DRRScheduler-"
+                                            + config.cloneConfig.coreId() : "DRRScheduler";
     }
 
     @Override
-    public void ingest(Publisher<AbstractFrame> frameFlux) {
-        if (frameFlux instanceof FluxEdge dh) {
-            onSubscribe(dh);
-        } else {
-            frameFlux.subscribe(this);
+    public void firstTouch() {
+        totalCount.set(0);
+        totalQueueWeight = 0;
+        totalQueuedSizeBytes.set(0);
+
+        int totalInserts = 3 * CHUNK_SIZE;
+        for (var queue : queueRing) {
+            for (int i = 0; i < totalInserts; i++) {
+                queue.enqueue(DummyInitFrame.INSTANCE);
+            }
+            queue.clear();
         }
-    }
+        fillRecorder.record(1, true);
+        fillBytesRecorder.record(1, false);
+        drainRecorder.record(1, false);
+        drainBytesRecorder.record(1, false);
 
-    @Override
-    public Publisher<AbstractFrame> output() {
-        return this;
+        fillRecorder.reset(false);
+        fillBytesRecorder.reset(false);
+        drainRecorder.reset(false);
+        drainBytesRecorder.reset(false);
     }
 
     @Override
     public void hookOnDrain(long demand) {
-        if(getUpstreamCount() > 0) {
+        if (demand <= 0) {
+            return;
+        }
+
+        if (getUpstreamCount() > 0) {
             upstream.pull(demand);
         } else {
             super.request(demand);
         }
-    }
-
-    @Override
-    public void pull(DrainBuffer buffer, long demand) {
-        if(getUpstreamCount() > 0) {
-            upstream.pull(buffer, demand);
-        } else {
-            super.pull(buffer, demand);
-        }
-    }
-
-    public long getUpstreamCount() {
-        if (upstream == null) {
-            upstream = getThreadUpstreamQueue();
-            this.hash = Thread.currentThread().threadId();
-        }
-        long newCount = upstream.getCachedUpCount();
-        if (newCount != upstreamCount || newCount == 0) {
-            upstreamCount = upstream.getTrueUpstreamCount();
-        }
-        return upstreamCount;
     }
 
     protected int refillQueueQuota(QueueFrame node) {
@@ -148,7 +140,7 @@ public class DRRScheduler extends IngestSequencer implements DispatchPreProcess,
         node.setDrainCycles(0);
         node.setQuota(scaledQuota);
 
-        return drainMode ? node.getQueueCount() : (int) (scaledQuota / avgSize);
+        return drain.get() ? node.getQueueCount() : (int) (scaledQuota / avgSize);
     }
 
     protected void updateQuantum(QueueFrame node) {
@@ -160,7 +152,9 @@ public class DRRScheduler extends IngestSequencer implements DispatchPreProcess,
         long targetQuantum = avgSize << 1;
         long currentWeight = node.getWeight();
 
-        double cv = fillBytesRecorder.getUnitCV();
+        FlowSnapshot flowSnapshot = fillBytesRecorder.getFlowSnapshot();
+        fillBytesRecorder.refreshSnapshot(flowSnapshot, true);
+        double cv = flowSnapshot.unitCV;
         double clampedCV = (cv > 0.5) ? 0.5 : (cv < 0.0 ? 0.0 : cv);
 
         long delta = targetQuantum - currentWeight;
@@ -188,6 +182,28 @@ public class DRRScheduler extends IngestSequencer implements DispatchPreProcess,
     }
 
     @Override
+    public long getUpstreamCount() {
+        if(upstream == null) {
+            upstream = getThreadUpstreamQueue();
+        }
+        return upstream.getCachedUpCount();
+    }
+
+    @Override
+    public long getMaxQueuedBytes() {
+        if (snapshot != null) {
+            return (long) (snapshot.coreMemoryLimit() * 0.8);
+        }
+        return (long) (Runtime.getRuntime().maxMemory() * 0.8);
+    }
+
+    @Override
+    public void close() {
+        metrics.close();
+        super.close();
+    }
+
+    @Override
     public void update(CoreSnapshot snapshot) {
         if (snapshot == null) {
             return;
@@ -196,7 +212,7 @@ public class DRRScheduler extends IngestSequencer implements DispatchPreProcess,
         this.totalBytesCap = snapshot.coreMemoryLimit();
         double currentPressure;
         try {
-            currentPressure = Math.clamp(this.downstreamPressure.call(), 0.0, 1.0);
+            currentPressure = clampDouble(this.downstreamPressure.call(), 0.0, 1.0);
         } catch (Exception ignored) {
             currentPressure = 1.0;
         }
@@ -206,22 +222,51 @@ public class DRRScheduler extends IngestSequencer implements DispatchPreProcess,
         capFactor.updateAndGet(curr -> {
             // Fast Drop (0.2), Slow Rise (0.02)
             double alpha = (target < curr) ? 0.2 : 0.02;
-            return Math.clamp((curr * (1.0 - alpha)) + (target * alpha), 0.15, 1.0);
+            return clampDouble((curr * (1.0 - alpha)) + (target * alpha), 0.15, 1.0);
         });
     }
 
     @Override
-    public long getMaxQueuedBytes() {
-        if(snapshot != null) {
-            return (long) (snapshot.coreMemoryLimit() * 0.8);
+    public Publisher<? extends AbstractFrame> process(
+            Publisher<? extends AbstractFrame> frameFlux) {
+        ingest(frameFlux);
+        return output();
+    }
+
+    @Override
+    public void ingest(Publisher<? extends AbstractFrame> frameFlux) {
+        if (frameFlux instanceof FluxEdge dh) {
+            onSubscribe(dh);
+        } else {
+            frameFlux.subscribe(this);
         }
-        return (long) (Runtime.getRuntime().maxMemory() * 0.8);
+    }
+
+    @Override
+    public DRRScheduler output() {
+        return this;
+    }
+
+    @Override
+    public boolean isDrained() {
+        return totalCount.get() == 0;
+    }
+
+    @Override
+    public void pull(DrainBuffer buffer, long demand) {
+        if (upstream == null) {
+            upstream = getThreadUpstreamQueue();
+        }
+        if (upstream.getCachedUpCount() > 0) {
+            upstream.pull(buffer, demand);
+        } else {
+            super.pull(buffer, demand);
+        }
     }
 
     @Override
     public void setDrainMode(boolean value) {
         super.drain.set(value);
-        this.drainMode = value;
     }
 
     @Override
@@ -232,17 +277,6 @@ public class DRRScheduler extends IngestSequencer implements DispatchPreProcess,
     @Override
     public DRRScheduler clone(CloneConfig cloneConfig) {
         return new DRRScheduler(config.clone(cloneConfig), snapshot);
-    }
-
-    @Override
-    public boolean isDrained() {
-        return totalCount.get() == 0;
-    }
-
-    @Override
-    public void close() {
-        metrics.close();
-        super.close();
     }
 
     public static class Metrics implements AutoCloseable {

@@ -3,7 +3,7 @@ package euhedral.io.interfaces;
 import euhedral.io.control_plane.CloneConfig;
 import euhedral.io.utils.PinnedThreadExecutor;
 
-public interface SlotManager extends CloneableObject, AutoCloseable {
+public interface SlotManager extends CloneableObject {
 
     double getPressure();
 

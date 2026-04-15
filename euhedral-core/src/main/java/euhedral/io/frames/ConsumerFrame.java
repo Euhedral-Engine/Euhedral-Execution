@@ -7,27 +7,20 @@ import lombok.Setter;
 
 public class ConsumerFrame extends AbstractFrame {
 
-    private final String id;
     private final Consumer<Object> consumer;
     private final AtomicBoolean killSwitch;
     @Setter
     private Object payload;
 
-    public ConsumerFrame(String id, long idHash, long destinationHash, Consumer<Object> consumer, AtomicBoolean killSwitch,
+    public ConsumerFrame(long idHash, Consumer<Object> consumer, AtomicBoolean killSwitch,
             MpscFrameRecycler recycler) {
-        super(idHash, destinationHash, recycler);
-        this.id = id;
+        super(idHash, recycler);
         this.consumer = consumer;
         this.killSwitch = killSwitch;
     }
 
     public void consume() {
         consumer.accept(payload);
-    }
-
-    @Override
-    public String getId() {
-        return id;
     }
 
     @Override
@@ -47,6 +40,5 @@ public class ConsumerFrame extends AbstractFrame {
 
     public void replace(Object object) {
         this.payload = object;
-        setCancelledExecution(false);
     }
 }

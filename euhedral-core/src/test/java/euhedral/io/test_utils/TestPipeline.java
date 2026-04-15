@@ -5,6 +5,7 @@ import euhedral.io.AbstractExecutor;
 import euhedral.io.control_plane.CloneConfig;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.interfaces.DispatchPreProcess;
+import euhedral.io.interfaces.PipelineExecutor;
 import euhedral.io.interfaces.SlotManager;
 import euhedral.io.utils.PinnedThreadExecutor;
 import org.openjdk.jmh.infra.Blackhole;
@@ -14,13 +15,13 @@ public class TestPipeline extends AbstractCloneablePipeline {
     private final String name;
 
     public TestPipeline(String name, CloneConfig config, DispatchPreProcess scheduler,
-            SlotManager slotManager, AbstractExecutor executor) {
+            SlotManager slotManager, PipelineExecutor executor) {
         super(name, config, scheduler, slotManager, executor);
         this.name = name;
     }
 
     @Override
-    public TestPipeline clone(CloneConfig cloneConfig) {
+    public TestPipeline hookOnClone(CloneConfig cloneConfig) {
         return new TestPipeline(name, cloneConfig, this.preProcess, this.slotManager,
                 this.executor);
     }
@@ -38,7 +39,9 @@ public class TestPipeline extends AbstractCloneablePipeline {
 
         @Override
         public void execute(AbstractFrame frame) {
-            bh.consume(frame);
+            if(bh != null) {
+                bh.consume(frame);
+            }
         }
 
         @Override

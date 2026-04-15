@@ -1,12 +1,12 @@
 package euhedral.io.frames;
 
+import euhedral.io.control_plane.RoutingPolicy;
 import euhedral.io.errors.WorkCancelled;
-import euhedral.io.utils.KeyHasher;
+import euhedral.io.flow_control.LockFreeSink;
+import euhedral.io.resource_monitoring.NumaMapper.OriginLocation;
 import euhedral.io.utils.MpscFrameRecycler;
 import lombok.Getter;
 import lombok.Setter;
-import reactor.core.publisher.Sinks.EmitResult;
-import reactor.core.publisher.Sinks.Many;
 
 /**
  * Base unit of work within the Clio Execution Fabric.
@@ -19,8 +19,8 @@ import reactor.core.publisher.Sinks.Many;
  * to be reset and dispatched again.
  *
  * <p><b>Ordering:</b> Reliable sequencing depends on unique, well-distributed hashes.
- * Use {@link euhedral.io.utils.KeyHasher} to prevent collisions that can
- * degrade performance or break ordering guarantees.
+ * Use {@link euhedral.io.utils.KeyHasher} to prevent collisions that can degrade performance or break
+ * ordering guarantees.
  */
 public abstract class AbstractFrame extends WorkCancelled {
 
@@ -31,8 +31,10 @@ public abstract class AbstractFrame extends WorkCancelled {
     protected volatile long combinedHash;
     @Getter
     @Setter
-    private long destinationHash;
-
+    private OriginLocation origin;
+    @Getter
+    @Setter
+    private RoutingPolicy routingPolicy;
     @Getter
     @Setter
     private long startNs;
@@ -41,7 +43,7 @@ public abstract class AbstractFrame extends WorkCancelled {
     @Setter
     private long ingestNs;
 
-    private Many<AbstractFrame> completionSink;
+    private LockFreeSink completionSink;
     private long notifyCompletePassword;
 
     @Getter
@@ -56,15 +58,11 @@ public abstract class AbstractFrame extends WorkCancelled {
     @Setter
     private boolean useVThread = false;
 
-    public AbstractFrame(long idHash, long destinationHash,
-            MpscFrameRecycler recycler) {
+    public AbstractFrame(long idHash, MpscFrameRecycler recycler) {
         this.idHash = idHash;
-        this.destinationHash = destinationHash;
         this.recycler = recycler;
-        this.combinedHash = KeyHasher.combine(idHash, destinationHash);
+        this.combinedHash = idHash;
     }
-
-    public abstract String getId();
 
     public final long getIdHash() {
         return idHash;
@@ -93,7 +91,7 @@ public abstract class AbstractFrame extends WorkCancelled {
      *
      * @param completionSink Sink to return the frame to.
      */
-    public final void setCompletionSink(Many<AbstractFrame> completionSink) {
+    public final void setCompletionSink(LockFreeSink completionSink) {
         this.completionSink = completionSink;
     }
 
@@ -114,17 +112,9 @@ public abstract class AbstractFrame extends WorkCancelled {
      *
      * @param password notifyCompletePassword password
      */
-    public final void notifyComplete(long startNs, long password) {
-        this.startNs = startNs;
+    public final void notifyComplete(long password) {
         if (notifyCompletePassword == password) {
-            EmitResult result;
-            while (!(result = completionSink.tryEmitNext(this)).isSuccess()) {
-                if (result == EmitResult.FAIL_CANCELLED || result == EmitResult.FAIL_TERMINATED
-                        || result == EmitResult.FAIL_ZERO_SUBSCRIBER) {
-                    this.kill();
-                    throw new IllegalStateException(
-                            "CRITICAL: No upstream connection to signal cancellation.");
-                }
+            while (!completionSink.relaxedOffer(this)) {
                 Thread.onSpinWait();
             }
             notifyCompletePassword = 0;
@@ -143,21 +133,32 @@ public abstract class AbstractFrame extends WorkCancelled {
      *
      */
     public void doFinally() {
-        setCancelledExecution(false);
+        reset();
         recycle();
+    }
+
+    public final void reset() {
+        combinedHash = idHash;
+        startNs = 0;
+        ingestNs = 0;
+        completionSink = null;
+        notifyCompletePassword = 0;
+        cancelledExecution = false;
     }
 
     /**
      * Sends the frame back to the creator for reuse.
      */
     public final void recycle() {
-        recycler.recycle(this);
+        if (recycler != null) {
+            recycler.recycle(this);
+        }
     }
 
     /**
      * Throws this class as an error. This is used as a way to quickly stop execution of this frame.
-     * {@link euhedral.common.io.dispatch AbstractExecutor} handles this by default. UpstreamHandle
-     * callers should handle this error.
+     * {@link com.ccri.euhedral.common.io.dispatch AbstractExecutor} handles this by default.
+     * UpstreamHandle callers should handle this error.
      */
     public final void throwMeAsError() {
         throw this;
