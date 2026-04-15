@@ -6,6 +6,7 @@ import org.jctools.queues.MessagePassingQueue;
 public class DrainBuffer implements MessagePassingQueue.Consumer<AbstractFrame> {
 
     public final MessagePassingQueue<AbstractFrame> buffer;
+    private final boolean threadSafe;
 
     public final FlowRecorder arrivalLatencyRecorder = new FlowRecorder();
 
@@ -15,8 +16,9 @@ public class DrainBuffer implements MessagePassingQueue.Consumer<AbstractFrame> 
     public long drainCount = 0;
     public long drainedBytes = 0;
 
-    public DrainBuffer(MessagePassingQueue<AbstractFrame> buffer) {
+    public DrainBuffer(MessagePassingQueue<AbstractFrame> buffer, boolean threadSafe) {
         this.buffer = buffer;
+        this.threadSafe = threadSafe;
     }
 
     public void reset() {
@@ -34,7 +36,7 @@ public class DrainBuffer implements MessagePassingQueue.Consumer<AbstractFrame> 
         }
         if(frame.getIngestNs() > 0) {
             long now = System.nanoTime();
-            arrivalLatencyRecorder.record(now, now - frame.getIngestNs());
+            arrivalLatencyRecorder.record(now, now - frame.getIngestNs(), threadSafe);
         }
         if(frame.isOrdered()) {
             long hash = (xor1 ^ frame.getCombinedHash()) ^ xor2;

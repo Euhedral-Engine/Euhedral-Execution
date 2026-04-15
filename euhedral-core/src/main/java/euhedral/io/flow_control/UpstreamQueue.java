@@ -17,7 +17,7 @@ public class UpstreamQueue {
         if (queue == null) {
             queue = new UpstreamQueue();
             UP_QUEUE.set(queue);
-            map.put(Thread.currentThread().threadId(), queue);
+            map.put(Thread.currentThread().getId(), queue);
             counter.incrementAndGet();
         }
         return queue;
@@ -33,7 +33,7 @@ public class UpstreamQueue {
     private long cachedUpCount = 0;
 
     public long getTrueUpstreamCount() {
-        return upstreamCount.get();
+        return (cachedUpCount = upstreamCount.get());
     }
 
     public void pull(long demand) {

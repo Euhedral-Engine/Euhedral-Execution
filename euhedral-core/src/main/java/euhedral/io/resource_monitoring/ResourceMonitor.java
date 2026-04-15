@@ -1,22 +1,21 @@
-package euhedral.io.utils;
+package euhedral.io.resource_monitoring;
 
-import euhedral.io.utils.CgroupV2Metrics.CpuMetrics;
-import euhedral.io.utils.SystemUtilization.HardwareUtilization;
-import euhedral.io.utils.SystemUtilization.SystemSnapshot;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import static euhedral.io.utils.MathFunctions.clampDouble;
+import static euhedral.io.utils.MathFunctions.clampLong;
+
+import euhedral.io.resource_monitoring.SystemUtilization.HardwareUtilization;
+import euhedral.io.resource_monitoring.SystemUtilization.SystemSnapshot;
+import euhedral.io.resource_monitoring.providers.OSResourceProviderPicker;
+import euhedral.io.resource_monitoring.providers.ResourceProvider;
+import euhedral.io.utils.ThreadTimerResolution.Linux;
 import java.time.Duration;
 import java.util.BitSet;
-import java.util.Optional;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.AtomicReferenceArray;
-import java.util.function.LongSupplier;
+import java.util.concurrent.locks.LockSupport;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Sinks;
 import reactor.core.scheduler.Scheduler;
@@ -29,8 +28,9 @@ public final class ResourceMonitor implements AutoCloseable {
     private final Logger logger = LoggerFactory.getLogger(this.getClass());
     private final Scheduler scheduler;
     private final NumaMapper numaMapper;
+    private final long sampleRateNs;
 
-    private final CgroupV2Metrics metrics;
+    private final ResourceProvider metrics;
 
     private final AtomicReference<Double> quotaCpus = new AtomicReference<>(0.0);
     private final AtomicReference<Double> cpuUsageRatio = new AtomicReference<>(0.0);
@@ -45,8 +45,6 @@ public final class ResourceMonitor implements AutoCloseable {
     private final Sinks.Many<HardwareUtilization> listeners = Sinks.many().multicast()
             .onBackpressureBuffer(1);
     private final AtomicReference<Double> peakIoBps = new AtomicReference<>(1024 * 1024.0);
-    private final LongSupplier timeSupplierNs;
-    private final Duration sampleRate;
     private final double smoothingFactor;
 
     private volatile HardwareUtilization hardwareUtilization;
@@ -57,14 +55,13 @@ public final class ResourceMonitor implements AutoCloseable {
     private volatile long lastIoBytes;
     private volatile long lastWallClockNs;
     private volatile boolean running = false;
-    private Disposable pollingThread;
+    private Thread pollingThread;
 
     public ResourceMonitor(Duration sampleRate) {
         this.scheduler = Schedulers.boundedElastic();
         this.numaMapper = NumaMapper.INSTANCE;
-        this.sampleRate = sampleRate;
-        this.timeSupplierNs = () -> scheduler.now(TimeUnit.NANOSECONDS);
-        this.lastWallClockNs = timeSupplierNs.getAsLong();
+        this.sampleRateNs = sampleRate.toNanos();
+        this.lastWallClockNs = System.nanoTime();
         this.perCpuPressureRatio = new AtomicReferenceArray<>(numaMapper.getCpuCount());
         this.perCpuThrottleRatio = new AtomicReferenceArray<>(numaMapper.getCpuCount());
 
@@ -75,39 +72,17 @@ public final class ResourceMonitor implements AutoCloseable {
         if (!Double.isFinite(smoothingFactor) || smoothingFactor <= 0) {
             this.smoothingFactor = 0.0645; // Fallback to 1 - e^(-0.2/3.0)
         } else {
-            this.smoothingFactor = Math.clamp(smoothingFactor, 0.01, 1.0);
+            this.smoothingFactor = clampDouble(smoothingFactor, 0.01, 1.0);
         }
 
-        CgroupV2Metrics metrics = null;
-        try {
-            Optional<String> cgroupV2Path = Files.lines(Paths.get("/proc/self/cgroup"))
-                    .filter(line -> line.startsWith("0::"))
-                    .map(line -> line.substring(3))
-                    .findFirst();
-
-            if (cgroupV2Path.isPresent()) {
-                String path = cgroupV2Path.get();
-
-                String fsPath = "/sys/fs/cgroup" + (path.equals("/") ? "" : path);
-                Path cgroupPath = Paths.get(fsPath);
-                metrics = new CgroupV2Metrics(cgroupPath, numaMapper.getCpuCount(), timeSupplierNs);
-            } else {
-                logger.error("Not a cgroupV2 environment.");
-            }
-        } catch (Exception e) {
-            logger.error("Could not read cgroup.", e);
-        }
-        this.metrics = metrics;
-        if (metrics != null) {
-            start();
-        }
+        this.metrics = OSResourceProviderPicker.INSTANCE;
+        start();
     }
 
     public void start() {
         if (metrics == null) {
-            logger.error(
+            throw new RuntimeException(
                     "Container metrics not available on this platform. Monitor will not start.");
-            return;
         }
 
         if (running) {
@@ -117,26 +92,35 @@ public final class ResourceMonitor implements AutoCloseable {
         poll();
 
         running = true;
-        pollingThread = scheduler.schedulePeriodically(this::runLoop, 0, sampleRate.toNanos(),
-                TimeUnit.NANOSECONDS);
+        pollingThread = new Thread(this::runLoop);
+        pollingThread.start();
     }
 
     private void init() {
-        this.lastWallClockNs = timeSupplierNs.getAsLong();
-        CpuMetrics cpuMetrics = metrics.getCpuMetrics();
+        this.lastWallClockNs = System.nanoTime();
+        SystemSnapshot snapshot = metrics.getSnapshot();
 
-        this.lastCpuUsageNs = cpuMetrics.getUsageNs();
-        this.lastThrottleNs = cpuMetrics.getThrottledNs();
-        this.lastIoBytes = metrics.getIoBytes();
+        this.lastCpuUsageNs = snapshot.cpuUsage();
+        ;
+        this.lastThrottleNs = snapshot.cpuThrottle();
+        this.lastIoBytes = snapshot.ioBytes();
     }
 
     @Override
     public void close() {
-        running = false;
-        if (pollingThread != null) {
-            pollingThread.dispose();
+        if (running) {
+            running = false;
+            if (pollingThread != null) {
+                try {
+                    pollingThread.interrupt();
+                    LockSupport.unpark(pollingThread);
+                    pollingThread.join(500);
+                } catch (Throwable ignored) {
+
+                }
+            }
+            listeners.tryEmitComplete();
         }
-        listeners.tryEmitComplete();
     }
 
     public HardwareUtilization getUtilization() {
@@ -152,13 +136,25 @@ public final class ResourceMonitor implements AutoCloseable {
     }
 
     private void runLoop() {
-        if (!running) {
-            pollingThread.dispose();
-            return;
+        String os = System.getProperty("os.name").toLowerCase();
+        if (os.contains("linux")) {
+            Linux.setResolution(1);
         }
 
-        poll();
-        listeners.tryEmitNext(hardwareUtilization);
+        long now;
+        while (running && !Thread.interrupted()) {
+            now = System.nanoTime();
+            poll();
+            listeners.tryEmitNext(hardwareUtilization);
+
+            long dT = System.nanoTime() - now;
+            long deadline = sampleRateNs + now - dT;
+            long temp;
+            while ((temp = System.nanoTime()) <= deadline) {
+                LockSupport.parkNanos(deadline - temp);
+            }
+        }
+        close();
     }
 
     private void poll() {
@@ -169,7 +165,7 @@ public final class ResourceMonitor implements AutoCloseable {
             updateIO(snapshot);
             lastWallClockNs = snapshot.timeNs();
 
-            long memoryLimit = Math.clamp(snapshot.memoryLimit(), 0, 1_000_000_000_000_000L);
+            long memoryLimit = clampLong(snapshot.memoryLimit(), 0, 1_000_000_000_000_000L);
             hardwareUtilization = new HardwareUtilization(lastWallClockNs, quotaCpus.get(),
                     cpuUsageRatio.get(),
                     snapshot.period(),
@@ -253,11 +249,13 @@ public final class ResourceMonitor implements AutoCloseable {
 
             if (Double.isFinite(workingMemoryUtil)) {
                 memUsageRatio.updateAndGet(
-                        old -> ewma(old, Math.clamp(workingMemoryUtil, 0.0, 1.0)));
+                        old -> ewma(old, clampDouble(workingMemoryUtil, 0.0, 1.0)));
 
                 if (availableCpus > 0) {
                     // Density relative to the physical core count visible in the container
-                    this.memPerCpuUsageBytes.set((long) (((double) workingMemory / snapshot.memoryLimit()) * availableCpus));
+                    this.memPerCpuUsageBytes.set(
+                            (long) (((double) workingMemory / snapshot.memoryLimit())
+                                    * availableCpus));
                 }
             }
         }
@@ -281,7 +279,7 @@ public final class ResourceMonitor implements AutoCloseable {
             double rawIoRatio = (currentPeak > 0) ? ioBytesPerSecond.get() / currentPeak : 0.0;
 
             lastIoBytes = snapshot.ioBytes();
-            ioPressure.set(Math.clamp(rawIoRatio, 0.0, 1.0));
+            ioPressure.set(clampDouble(rawIoRatio, 0.0, 1.0));
         }
     }
 
@@ -294,7 +292,7 @@ public final class ResourceMonitor implements AutoCloseable {
             return 0.0;
         }
 
-        double clampedNew = Math.clamp(newVal, 0.0, 1.0);
+        double clampedNew = clampDouble(newVal, 0.0, 1.0);
 
         if (oldVal == null || oldVal <= 0) {
             return clampedNew;

@@ -1,33 +1,55 @@
-package euhedral.io.utils;
+package euhedral.io.resource_monitoring;
 
-import euhedral.io.utils.SystemUtilization.HardwareUtilization;
+import euhedral.io.resource_monitoring.SystemUtilization.HardwareUtilization;
 import java.util.BitSet;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.AtomicReferenceArray;
 import lombok.Getter;
+import net.openhft.affinity.Affinity;
 import net.openhft.affinity.AffinityLock;
 import net.openhft.affinity.CpuLayout;
 
 public class NumaMapper {
+
     public static final NumaMapper INSTANCE;
 
     static {
         INSTANCE = new NumaMapper();
     }
 
+    public static OriginLocation locateMe() {
+        int cpu = Affinity.getCpu();
+        int core = INSTANCE.getPhysicalCore(cpu);
+        int socket = INSTANCE.getSocket(core);
+        return new OriginLocation(cpu, core, socket);
+    }
+
+    public int getPhysicalCore(int cpu) {
+        int[] map = cpuToCore;
+        if (cpu < 0 || cpu >= map.length) {
+            return -1;
+        }
+
+        return map[cpu];
+    }
+
+    public int getSocket(int core) {
+        int[] map = coreToNode;
+        return (core >= 0 && core < map.length) ? map[core] : -1;
+    }
+
     private final AtomicInteger globalTopologyVersion = new AtomicInteger(-1);
     private final CpuLayout layout = AffinityLock.cpuLayout();
+
     @Getter
     private final SystemTopology systemTopology;
-
     private final CpuInfo[] cpuInfo;
     private final int[] cpuToCore;
     private final int[] coreToNode;
     private final BitSet[] coreToCpus;
     private final BitSet[] nodeToCores;
-
-    private final AtomicReferenceArray<NodeTopology> effectiveNodeTopologies;
+    private final AtomicReferenceArray<SocketTopology> effectiveNodeTopologies;
 
     public NumaMapper() {
         int maxCoreId = -1;
@@ -83,7 +105,7 @@ public class NumaMapper {
 
         for (int i = 0; i < numSockets; i++) {
             effectiveNodeTopologies.set(i,
-                    new NodeTopology(new AtomicInteger(-1),
+                    new SocketTopology(new AtomicInteger(-1),
                             new AtomicReference<>(new BitSet(coreToCpus.length)),
                             new AtomicReference<>(new BitSet(cpuInfo.length)),
                             new AtomicReference<>(new BitSet[coreToCpus.length])));
@@ -92,6 +114,8 @@ public class NumaMapper {
 
     public void update(HardwareUtilization utilization) {
         BitSet globalEffectiveCpus = utilization.globalEffectiveCpus();
+        globalEffectiveCpus.and(getReservable());
+
         BitSet globalEffectiveCores = new BitSet(coreToCpus.length);
         for (int cpu = globalEffectiveCpus.nextSetBit(0); cpu >= 0;
                 cpu = globalEffectiveCpus.nextSetBit(cpu + 1)) {
@@ -100,7 +124,6 @@ public class NumaMapper {
         }
 
         BitSet[] effectiveCoreToCpus = buildCoreToCpus(globalEffectiveCpus);
-        tryExcludeCore0(globalEffectiveCores, globalEffectiveCpus, effectiveCoreToCpus[0]);
 
         BitSet globalEffectiveNodes = new BitSet(nodeToCores.length);
         BitSet nodeUpdated = new BitSet(nodeToCores.length);
@@ -108,7 +131,7 @@ public class NumaMapper {
         for (int cpu = 0; cpu < layout.cpus(); cpu++) {
             int core = cpuToCore[cpu];
             int node = coreToNode[core];
-            NodeTopology topology = effectiveNodeTopologies.get(node);
+            SocketTopology topology = effectiveNodeTopologies.get(node);
 
             if (topology.effectiveCores.get().get(core) != globalEffectiveCores.get(core)) {
                 nodeUpdated.set(node);
@@ -123,13 +146,13 @@ public class NumaMapper {
             }
         }
 
-        boolean globalUpdate = !systemTopology.effectiveNodes.get().equals(globalEffectiveNodes);
+        boolean globalUpdate = !systemTopology.effectiveSockets.get().equals(globalEffectiveNodes);
 
         BitSet[] effectiveNodeToCores = buildNodeToCores(globalEffectiveCores);
         for (int node = nodeUpdated.nextSetBit(0); node >= 0;
                 node = nodeUpdated.nextSetBit(node + 1)) {
-            NodeTopology nodeTopology = effectiveNodeTopologies.get(node);
-            nodeTopology.version.incrementAndGet();
+            SocketTopology socketTopology = effectiveNodeTopologies.get(node);
+            socketTopology.version.incrementAndGet();
 
             BitSet effectiveCores = effectiveNodeToCores[node];
             BitSet effectiveCpus = new BitSet(cpuInfo.length);
@@ -140,14 +163,14 @@ public class NumaMapper {
                 }
             }
 
-            nodeTopology.effectiveCores.set(effectiveCores);
-            nodeTopology.effectiveCpus.set(effectiveCpus);
-            nodeTopology.effectiveCoreToCpu.set(effectiveCoreToCpus);
+            socketTopology.effectiveCores.set(effectiveCores);
+            socketTopology.effectiveCpus.set(effectiveCpus);
+            socketTopology.effectiveCoreToCpu.set(effectiveCoreToCpus);
         }
 
         if (globalUpdate) {
             this.globalTopologyVersion.incrementAndGet();
-            this.systemTopology.effectiveNodes().set(globalEffectiveNodes);
+            this.systemTopology.effectiveSockets().set(globalEffectiveNodes);
             this.systemTopology.effectiveCores().set(globalEffectiveCores);
             this.systemTopology.effectiveCpus().set(globalEffectiveCpus);
         }
@@ -180,52 +203,59 @@ public class NumaMapper {
         return nodeToCores;
     }
 
-    private void tryExcludeCore0(BitSet effectiveCores, BitSet effectiveCpus, BitSet core0ToCpus) {
-        if (!effectiveCores.get(0) || effectiveCores.cardinality() < 2) {
-            return;
+    public static BitSet getReservable() {
+        String reservedAffinity = System.getProperty(AffinityLock.AFFINITY_RESERVED);
+        if (AffinityLock.BASE_AFFINITY != null && (reservedAffinity == null
+                || reservedAffinity.trim().isEmpty())) {
+            BitSet reserverable = new BitSet(AffinityLock.PROCESSORS);
+            reserverable.set(1, AffinityLock.PROCESSORS, true);
+            reserverable.andNot(AffinityLock.BASE_AFFINITY);
+            if (reserverable.isEmpty() && AffinityLock.PROCESSORS > 1) {
+                reserverable.set(1, AffinityLock.PROCESSORS);
+                return reserverable;
+            }
+            return reserverable;
         }
 
-
-        effectiveCores.clear(0);
-        if (core0ToCpus != null) {
-            effectiveCpus.andNot(core0ToCpus);
-            core0ToCpus.clear();
+        reservedAffinity = reservedAffinity.trim();
+        long[] longs = new long[1 + (reservedAffinity.length() - 1) / 16];
+        int end = reservedAffinity.length();
+        for (int i = 0; i < longs.length; i++) {
+            int begin = Math.max(0, end - 16);
+            longs[i] = Long.parseLong(reservedAffinity.substring(begin, end), 16);
+            end = begin;
         }
-    }
-
-    public int getPhysicalCore(int cpu) {
-        return cpuToCore[cpu];
-    }
-
-    public int getNodeId(int core) {
-        int[] map = coreToNode;
-        return (core >= 0 && core < map.length) ? map[core] : -1;
-    }
-
-    public int getNodeCount() {
-        return layout.sockets();
+        return BitSet.valueOf(longs);
     }
 
     public int getCpuCount() {
         return layout.cpus();
     }
 
-    public NodeTopology getNodeTopology(int nodeId) {
-        if (nodeId < 0 || nodeId >= effectiveNodeTopologies.length()) {
+    public int getCoreCount() {
+        return coreToCpus.length;
+    }
+
+    public int getSocketCount() {
+        return layout.sockets();
+    }
+
+    public SocketTopology getSocketTopology(int socketId) {
+        if (socketId < 0 || socketId >= effectiveNodeTopologies.length()) {
             return null;
         }
-        return effectiveNodeTopologies.get(nodeId);
+        return effectiveNodeTopologies.get(socketId);
     }
 
     /**
-     * Gets all available CPU cores for a node. Available != Usable
+     * Gets all available CPU cores for a socket. Available != Usable
      *
-     * @param nodeId Id of the node.
-     * @return All cores associated with the node
+     * @param socketId Id of the socket.
+     * @return All cores associated with the socket
      */
-    public BitSet getAllCoresForNode(int nodeId) {
+    public BitSet getAllCoresForSocket(int socketId) {
         BitSet[] map = nodeToCores;
-        return (nodeId >= 0 && nodeId < map.length) ? map[nodeId] : null;
+        return (socketId >= 0 && socketId < map.length) ? map[socketId] : null;
     }
 
     public long getGlobalVersion() {
@@ -236,17 +266,21 @@ public class NumaMapper {
 
     }
 
-    public record SystemTopology(AtomicReference<BitSet> effectiveNodes,
+    public record SocketTopology(AtomicInteger version, AtomicReference<BitSet> effectiveCores,
+                                 AtomicReference<BitSet> effectiveCpus,
+                                 AtomicReference<BitSet[]> effectiveCoreToCpu) {
+
+    }
+
+    public record SystemTopology(AtomicReference<BitSet> effectiveSockets,
                                  AtomicReference<BitSet> effectiveCores,
                                  AtomicReference<BitSet> effectiveCpus,
-                                 AtomicReferenceArray<NodeTopology> nodeTopologies,
+                                 AtomicReferenceArray<SocketTopology> socketTopologies,
                                  AtomicInteger globalVersion) {
 
     }
 
-    public record NodeTopology(AtomicInteger version, AtomicReference<BitSet> effectiveCores,
-                               AtomicReference<BitSet> effectiveCpus,
-                               AtomicReference<BitSet[]> effectiveCoreToCpu) {
+    public record OriginLocation(int cpu, int core, int socket) {
 
     }
 }

@@ -26,7 +26,7 @@ public class FluxEdge extends UpstreamHandle implements Publisher<AbstractFrame>
     private final AtomicBoolean addingUpstream = new AtomicBoolean(false);
     private final WeakHashMap<UpstreamHandle, Boolean> upstreamHandles = new WeakHashMap<>();
 
-    private final AtomicBoolean drain;
+    protected final AtomicBoolean drain;
     private final PaddedAtomicLong upstreamCount = new PaddedAtomicLong(0);
     private final PaddedAtomicLong threadCount = new PaddedAtomicLong(0);
     public volatile Subscriber<? super AbstractFrame> downstream = null;
@@ -70,6 +70,7 @@ public class FluxEdge extends UpstreamHandle implements Publisher<AbstractFrame>
                 }
                 queue.addUpstream(handle);
             }
+            queue.getTrueUpstreamCount();
             addingUpstream.lazySet(false);
         }
         return queue;
@@ -85,7 +86,7 @@ public class FluxEdge extends UpstreamHandle implements Publisher<AbstractFrame>
             return;
         }
 
-        var queue = aggregators.remove(thread.threadId());
+        var queue = aggregators.remove(thread.getId());
         if (queue != null) {
             threadCount.decrementAndGet();
             upstreamQueues = aggregators.values();
@@ -94,10 +95,6 @@ public class FluxEdge extends UpstreamHandle implements Publisher<AbstractFrame>
 
     public long getHash() {
         return 0;
-    }
-
-    public boolean canFastPath(AbstractFrame frame) {
-        return false;
     }
 
     public long getUpstreamCount() {
@@ -130,8 +127,11 @@ public class FluxEdge extends UpstreamHandle implements Publisher<AbstractFrame>
             return;
         }
 
+        acquireLock();
         this.parent = parent;
         transferToParent();
+        releaseLock();
+        this.parent.transferToParent();
     }
 
     @Override
@@ -150,6 +150,7 @@ public class FluxEdge extends UpstreamHandle implements Publisher<AbstractFrame>
             return;
         }
 
+        FluxEdge parent = this.parent;
         if (parent != null) {
             parent.request(num);
             return;
@@ -165,6 +166,7 @@ public class FluxEdge extends UpstreamHandle implements Publisher<AbstractFrame>
             return;
         }
 
+        FluxEdge parent = this.parent;
         if (parent != null) {
             parent.pull(buffer, demand);
             return;
@@ -180,8 +182,9 @@ public class FluxEdge extends UpstreamHandle implements Publisher<AbstractFrame>
         parent.aggregators.putAll(aggregators);
         parent.upstreamCount.addAndGet(upstreamCount.get());
         parent.threadCount.addAndGet(threadCount.get());
+        parent.upstreamHandles.putAll(upstreamHandles);
+        upstreamHandles.clear();
         aggregators.clear();
-        parent.transferToParent();
     }
 
     @Override
@@ -236,31 +239,31 @@ public class FluxEdge extends UpstreamHandle implements Publisher<AbstractFrame>
                 subscription.cancel();
                 return;
             }
+            acquireLock();
             if (parent != null) {
+                releaseLock();
                 parent.onSubscribe(upstream);
                 return;
             }
-
-            int cycles = 0;
-            while (drain.get()) {
-                if (cycles++ < 128) {
-                    Thread.onSpinWait();
-                } else if (cycles < 512) {
-                    Thread.yield();
-                } else {
-                    cycles = 0;
-                    LockSupport.parkNanos(1_000);
-                }
-            }
             if (threadCount.get() <= 0) {
+                releaseLock();
                 subscription.cancel();
                 return;
             }
 
             try {
-                while (!addingUpstream.compareAndSet(false, true)) {
-                    Thread.onSpinWait();
+                int cycles = 0;
+                while (drain.get()) {
+                    if (cycles++ < 128) {
+                        Thread.onSpinWait();
+                    } else if (cycles < 512) {
+                        Thread.yield();
+                    } else {
+                        cycles = 0;
+                        LockSupport.parkNanos(1_000);
+                    }
                 }
+
                 upstreamHandles.put(upstream, true);
 
                 if (upstreamQueues.size() != threadCount.get()) {
@@ -271,11 +274,29 @@ public class FluxEdge extends UpstreamHandle implements Publisher<AbstractFrame>
                 }
                 upstreamCount.incrementAndGet();
             } finally {
-                addingUpstream.set(false);
+                releaseLock();
             }
         } else {
             subscription.cancel();
         }
+    }
+
+    private void acquireLock() {
+        int cycles = 0;
+        while (!addingUpstream.compareAndSet(false, true)) {
+            if(cycles++ < 128) {
+                Thread.onSpinWait();
+            } else if (cycles < 512) {
+                Thread.yield();
+            } else {
+                cycles = 0;
+                LockSupport.parkNanos(1_000);
+            }
+        }
+    }
+
+    private void releaseLock() {
+        addingUpstream.set(false);
     }
 
     @Override

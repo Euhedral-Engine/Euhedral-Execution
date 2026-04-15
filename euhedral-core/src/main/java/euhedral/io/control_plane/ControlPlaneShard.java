@@ -1,13 +1,18 @@
 package euhedral.io.control_plane;
 
+import static euhedral.io.utils.MathFunctions.unsignedMultiplyHigh;
+
 import euhedral.io.flow_control.FluxEdge;
 import euhedral.io.flow_control.FluxNode;
+import euhedral.io.flow_control.NoOpSubscriber;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.interfaces.CloneableObject;
-import euhedral.io.utils.NumaMapper.NodeTopology;
-import euhedral.io.utils.ResourceMonitor;
-import euhedral.io.utils.SystemUtilization.CoreSnapshot;
-import euhedral.io.utils.SystemUtilization.NodeSnapshot;
+import euhedral.io.resource_monitoring.NumaMapper;
+import euhedral.io.resource_monitoring.NumaMapper.OriginLocation;
+import euhedral.io.resource_monitoring.NumaMapper.SocketTopology;
+import euhedral.io.resource_monitoring.ResourceMonitor;
+import euhedral.io.resource_monitoring.SystemUtilization.CoreSnapshot;
+import euhedral.io.resource_monitoring.SystemUtilization.NodeSnapshot;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.util.BitSet;
@@ -24,34 +29,34 @@ import lombok.Getter;
 import org.jctools.queues.SpscArrayQueue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import reactor.core.publisher.BaseSubscriber;
 
 public class ControlPlaneShard implements AutoCloseable {
 
-    private final Logger logger;
-    private final ResourceMonitor resourceMonitor;
+    protected final Logger logger;
+    protected final ResourceMonitor resourceMonitor;
 
     @Getter
-    private final int shardId;
+    protected final int shardId;
     @Getter
-    private final String shardName;
+    protected final String shardName;
 
-    private final AtomicBoolean started = new AtomicBoolean(false);
-    private final AtomicBoolean rebalancing = new AtomicBoolean(false);
-    private final AtomicInteger coresToDrain = new AtomicInteger(0);
+    protected final AtomicBoolean started = new AtomicBoolean(false);
+    protected final AtomicBoolean rebalancing = new AtomicBoolean(false);
+    protected final AtomicInteger coresToDrain = new AtomicInteger(0);
 
-    private final AtomicReference<FluxNode> coreDistributor = new AtomicReference<>();
+    protected final AtomicReference<FluxNode> coreDistributor = new AtomicReference<>();
 
-    private final MeterRegistry meterRegistry;
+    protected final MeterRegistry meterRegistry;
 
-    private final CloneableObject cloneableObject;
+    protected final CloneableObject cloneableObject;
 
-    private volatile long currentVersion = -1;
-    private volatile ExecutorService shardExecutor;
+    protected volatile long currentVersion = -1;
+    protected volatile ExecutorService shardExecutor;
 
-    private CloneableObject[] clones;
-    private FluxEdge[] coreHandles;
-    private int[] activeCoreIds = new int[0];
+    protected CloneableObject[] clones;
+    protected FluxEdge[] coreHandles;
+    protected int[] activeCoreIds = new int[0];
+    protected volatile int[] reverseMapping = new int[0];
 
     public ControlPlaneShard(int shardId, String shardName,
             CloneableObject obj,
@@ -67,7 +72,7 @@ public class ControlPlaneShard implements AutoCloseable {
         this.coreHandles = new FluxEdge[0];
     }
 
-    public void start(NodeSnapshot snapshot, NodeTopology topology, FluxEdge upstream) {
+    public void start(NodeSnapshot snapshot, SocketTopology topology, FluxEdge upstream) {
         if (!started.compareAndSet(false, true)) {
             return;
         }
@@ -82,11 +87,22 @@ public class ControlPlaneShard implements AutoCloseable {
     }
 
     protected int route(AbstractFrame frame, int mapSize) {
+        RoutingPolicy policy = frame.getRoutingPolicy();
+        if(policy != null && policy.level > RoutingPolicy.SOCKET_LOCAL.level) {
+            int[] reverseMapping = this.reverseMapping;
+            OriginLocation location = frame.getOrigin();
+            int node = location != null ? location.core() : -1;
+
+            if (node >= 0 && node < reverseMapping.length && (node = reverseMapping[node]) < mapSize && node >= 0) {
+                return node;
+            }
+        }
+
         long rotated = Long.rotateLeft(frame.getCombinedHash(), 31);
-        return (int) Math.unsignedMultiplyHigh(rotated, mapSize);
+        return (int) unsignedMultiplyHigh(rotated, mapSize);
     }
 
-    public void update(NodeSnapshot snapshot, NodeTopology topology) {
+    public void update(NodeSnapshot snapshot, SocketTopology topology) {
         if (!started.get() || rebalancing.get()) {
             logger.error(
                     "Cannot update if not started or rebalancing. Started: {} Rebalancing: {} CoresToDrain: {}",
@@ -113,7 +129,7 @@ public class ControlPlaneShard implements AutoCloseable {
     }
 
     @SuppressWarnings({"resource"})
-    protected void handleTopologyChange(NodeSnapshot snapshot, NodeTopology topology) {
+    protected void handleTopologyChange(NodeSnapshot snapshot, SocketTopology topology) {
         if (!rebalancing.compareAndSet(false, true)) {
             return;
         }
@@ -124,22 +140,27 @@ public class ControlPlaneShard implements AutoCloseable {
         // Get new mapping
         BitSet newCores = topology.effectiveCores().get();
         int[] nextCores = new int[newCores.cardinality()];
+
         CloneableObject[] nextClones = new CloneableObject[topology.effectiveCores()
                 .get().length()];
         FluxEdge[] nextHandles = new FluxEdge[topology.effectiveCores().get()
                 .length()];
 
+        int idx = 0;
+        int[] reverseMapping = new int[NumaMapper.INSTANCE.getCoreCount()];
         for (int i = newCores.nextSetBit(0); i >= 0; i = newCores.nextSetBit(i + 1)) {
             nextHandles[i] = i >= clones.length ? null : coreHandles[i];
             nextHandles[i] =
                     nextHandles[i] == null ? new FluxEdge(distributor.getDrainFlag())
                             : nextHandles[i];
+            reverseMapping[i] = idx++;
         }
         this.coreHandles = nextHandles;
 
         distributor.setDownstreamMapping(newCores, nextHandles);
+        this.reverseMapping = reverseMapping;
 
-        int idx = 0;
+        idx = 0;
         // Create new clones
         for (int i = newCores.nextSetBit(0); i >= 0; i = newCores.nextSetBit(i + 1)) {
             if (i >= clones.length || clones[i] == null) {
@@ -196,9 +217,7 @@ public class ControlPlaneShard implements AutoCloseable {
         nextClones[coreId] = clone;
 
         clone.ingest(coreHandles[coreId]);
-        clone.output()
-                .subscribe(new BaseSubscriber<>() {
-                });
+        clone.output().subscribe(new NoOpSubscriber());
 
         clone.setDrainMode(rebalancing.get());
         clone.start();

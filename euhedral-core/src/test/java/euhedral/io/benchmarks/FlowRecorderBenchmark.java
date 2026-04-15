@@ -1,6 +1,7 @@
 package euhedral.io.benchmarks;
 
 import euhedral.io.utils.FlowRecorder;
+import euhedral.io.utils.FlowRecorder.FlowSnapshot;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import org.openjdk.jmh.annotations.Benchmark;
@@ -54,9 +55,8 @@ public class FlowRecorderBenchmark {
     public void benchmark(Blackhole bh) {
         for(int i = 0; i < 1_000_000; i++) {
             long now = System.nanoTime();
-            recorder.record(now, random[i]);
-            bh.consume(recorder.getThroughputNs());
-            bh.consume(recorder.getEffectiveMeasurementWindowCount(now));
+            recorder.record(now, random[i], false);
+            bh.consume(recorder);
         }
     }
 }
