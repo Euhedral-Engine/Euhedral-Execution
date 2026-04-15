@@ -4,18 +4,17 @@ import euhedral.io.DRRScheduler;
 import euhedral.io.DRRScheduler.Config;
 import euhedral.io.DefaultSlotManager;
 import euhedral.io.control_plane.ControlPlane;
-import euhedral.io.frames.AbstractFrame;
 import euhedral.io.frames.ConsumerFrame;
-import euhedral.io.frames.FrameSequencer;
 import euhedral.io.frames.FunctionFrame;
 import euhedral.io.frames.RunnableFrame;
+import euhedral.io.frames.SequencedFrame;
 import euhedral.io.utils.KeyHasher;
-import euhedral.io.utils.MpscFrameRecycler;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.LockSupport;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import org.jctools.queues.MpscUnboundedXaddArrayQueue;
@@ -93,7 +92,7 @@ public class FunctionalApi implements AutoCloseable {
                 ThreadLocalRandom.current().nextLong());
 
         FrameSequencer<R> sequencer = new FrameSequencer<>(password);
-        Flux<AbstractFrame> frameFlux = sequencer.map(input, function);
+        Flux<SequencedFrame> frameFlux = sequencer.map(input, function);
 
         return sequencer.output().doOnSubscribe(sub -> controlPlane.ingest(frameFlux));
     }
@@ -104,8 +103,6 @@ public class FunctionalApi implements AutoCloseable {
             throw new RuntimeException("This FunctionalApi instance is closed.");
         }
 
-        final long idHash = KeyHasher.mix(ThreadLocalRandom.current().nextLong());
-        final long[] seed = new long[]{ThreadLocalRandom.current().nextLong()};
         final long password = KeyHasher.combine(ThreadLocalRandom.current().nextLong(),
                 ThreadLocalRandom.current().nextLong());
 
@@ -116,6 +113,7 @@ public class FunctionalApi implements AutoCloseable {
                 .onBackpressureBuffer(new MpscUnboundedXaddArrayQueue<>(2048));
 
         final Consumer<R> consumer = (obj) -> {
+            int cycles = 0;
             EmitResult result;
             while (!(result = returnSink.tryEmitNext(obj)).isSuccess()) {
                 if (result == EmitResult.FAIL_CANCELLED || result == EmitResult.FAIL_TERMINATED
@@ -124,37 +122,33 @@ public class FunctionalApi implements AutoCloseable {
                     killSwitch.tryEmitEmpty();
                     break;
                 }
-                Thread.onSpinWait();
+                if(cycles++ < 128) {
+                    Thread.onSpinWait();
+                } else if(cycles < 512) {
+                    Thread.yield();
+                } else {
+                    LockSupport.parkNanos(20_000);
+                    cycles = 0;
+                }
             }
         };
 
-        int[] recycleCount = new int[]{0};
-        FunctionFrame[] recycleBuffer = new FunctionFrame[recycleCapacity];
-        MpscFrameRecycler recycler = new MpscFrameRecycler(recycleCapacity, password);
-
-        final Flux<AbstractFrame> framed = input.takeUntilOther(killSwitch.asMono()).map(obj -> {
-            if (recycleCount[0] == 0) {
-                recycleCount[0] = recycler.batchPoll(recycleBuffer, password);
-            }
-
-            FunctionFrame frame;
-            if (recycleCount[0] - 1 > 0) {
-                frame = recycleBuffer[--recycleCount[0]];
-                frame.replace(obj);
-            } else {
-                frame = new FunctionFrame(idHash,
-                        (Function<Object, Object>) function, (Consumer<Object>) consumer, dead,
-                        recycler);
-                frame.setPayload(obj);
-            }
+        FrameManager<Object, FunctionFrame> recycler = new FrameManager<>(recycleCapacity,
+                password);
+        recycler.setFactory(new FrameFactory<>((idHash, data) -> {
+            FunctionFrame frame = new FunctionFrame(idHash,
+                    (Function<Object, Object>) function, (Consumer<Object>) consumer, dead,
+                    recycler);
+            frame.setPayload(data);
             frame.setOrdered(ordered);
-
-            if (!ordered) {
-                frame.randomizeHash(seed[0]++);
-            }
-
             return frame;
-        });
+        }, (data, oldFrame) -> {
+            oldFrame.setOrdered(ordered);
+            oldFrame.replace(data);
+        }));
+
+        final Flux<FunctionFrame> framed = input.takeUntilOther(killSwitch.asMono())
+                .map(obj -> recycler.generate(obj, password));
 
         return returnSink.asFlux().doOnSubscribe(
                         sub -> controlPlane.ingest(framed))
@@ -172,31 +166,25 @@ public class FunctionalApi implements AutoCloseable {
             throw new RuntimeException("This FunctionalApi instance is closed.");
         }
 
-        final long idHash = KeyHasher.mix(ThreadLocalRandom.current().nextLong());
-        final long[] seed = new long[]{ThreadLocalRandom.current().nextLong()};
         final long password = KeyHasher.combine(ThreadLocalRandom.current().nextLong(),
                 ThreadLocalRandom.current().nextLong());
 
-        int[] recycleCount = new int[]{0};
-        RunnableFrame[] recycleBuffer = new RunnableFrame[Math.min((int) times, recycleCapacity)];
-        MpscFrameRecycler recycler = new MpscFrameRecycler(recycleCapacity, password);
+        final long idHash = KeyHasher.mix(ThreadLocalRandom.current().nextLong());
+        final long[] seed = new long[]{KeyHasher.mix(ThreadLocalRandom.current().nextLong())};
+
+        FrameManager<Void, RunnableFrame> recycler = new FrameManager<>(recycleCapacity,
+                password);
 
         final Sinks.One<Void> killSwitch = Sinks.unsafe().one();
         final AtomicBoolean dead = new AtomicBoolean(false);
 
-        Flux<AbstractFrame> framed = Flux.generate(AtomicLong::new, (state, sink) -> {
+        Flux<RunnableFrame> framed = Flux.generate(AtomicLong::new, (state, sink) -> {
             long count = state.get();
             if (count == times) {
                 sink.complete();
             } else {
-                if (recycleCount[0] == 0) {
-                    recycleCount[0] = recycler.batchPoll(recycleBuffer, password);
-                }
-
-                RunnableFrame frame;
-                if (recycleCount[0] - 1 > 0) {
-                    frame = recycleBuffer[--recycleCount[0]];
-                } else {
+                RunnableFrame frame = recycler.get(password);
+                if (frame == null) {
                     frame = new RunnableFrame(idHash,
                             runnable, dead, recycler);
                 }
@@ -220,41 +208,27 @@ public class FunctionalApi implements AutoCloseable {
             throw new RuntimeException("This FunctionalApi instance is closed.");
         }
 
-        final long idHash = KeyHasher.mix(ThreadLocalRandom.current().nextLong());
-        final long[] seed = new long[]{ThreadLocalRandom.current().nextLong()};
+        final AtomicBoolean dead = new AtomicBoolean(false);
+
         final long password = KeyHasher.combine(ThreadLocalRandom.current().nextLong(),
                 ThreadLocalRandom.current().nextLong());
 
-        int[] recycleCount = new int[]{0};
-        ConsumerFrame[] recycleBuffer = new ConsumerFrame[recycleCapacity];
-        MpscFrameRecycler recycler = new MpscFrameRecycler(recycleCapacity, password);
-
-        final Sinks.One<Void> killSwitch = Sinks.unsafe().one();
-        final AtomicBoolean dead = new AtomicBoolean(false);
-
-        Flux<AbstractFrame> framed = input.takeUntilOther(killSwitch.asMono()).map(obj -> {
-            if (recycleCount[0] == 0) {
-                recycleCount[0] = recycler.batchPoll(recycleBuffer, password);
-            }
-
-            ConsumerFrame frame;
-            if (recycleCount[0] - 1 > 0) {
-                frame = recycleBuffer[--recycleCount[0]];
-                frame.replace(obj);
-            } else {
-                frame = new ConsumerFrame(idHash, (Consumer<Object>) consumer,
-                        dead,
-                        recycler);
-                frame.setPayload(obj);
-            }
+        FrameManager<Object, ConsumerFrame> recycler = new FrameManager<>(recycleCapacity, password);
+        recycler.setFactory(new FrameFactory<>((idHash, data) -> {
+            ConsumerFrame frame = new ConsumerFrame(idHash, (Consumer<Object>) consumer,
+                    dead,
+                    recycler);
+            frame.setPayload(data);
             frame.setOrdered(ordered);
-
-            if (!ordered) {
-                frame.randomizeHash(seed[0]++);
-            }
-
             return frame;
-        });
+        }, (data, oldFrame) -> {
+            oldFrame.replace(data);
+            oldFrame.setOrdered(ordered);
+        }));
+
+        Sinks.One<Void> killSwitch = Sinks.unsafe().one();
+
+        Flux<ConsumerFrame> framed = input.takeUntilOther(killSwitch.asMono()).map(obj -> recycler.generate(obj, password));
         controlPlane.ingest(framed.doOnCancel(() -> {
             dead.set(true);
             killSwitch.tryEmitEmpty();
