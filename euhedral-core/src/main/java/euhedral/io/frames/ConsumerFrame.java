@@ -1,6 +1,6 @@
 package euhedral.io.frames;
 
-import euhedral.io.utils.MpscFrameRecycler;
+import euhedral.io.impl.FrameManager;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import lombok.Setter;
@@ -13,7 +13,7 @@ public class ConsumerFrame extends AbstractFrame {
     private Object payload;
 
     public ConsumerFrame(long idHash, Consumer<Object> consumer, AtomicBoolean killSwitch,
-            MpscFrameRecycler recycler) {
+            FrameManager<Object, ConsumerFrame> recycler) {
         super(idHash, recycler);
         this.consumer = consumer;
         this.killSwitch = killSwitch;

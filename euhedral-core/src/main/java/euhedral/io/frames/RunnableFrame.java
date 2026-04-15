@@ -1,6 +1,6 @@
 package euhedral.io.frames;
 
-import euhedral.io.utils.MpscFrameRecycler;
+import euhedral.io.impl.FrameManager;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class RunnableFrame extends AbstractFrame {
@@ -9,7 +9,7 @@ public class RunnableFrame extends AbstractFrame {
     private final AtomicBoolean killSwitch;
 
     public RunnableFrame(long idHash, Runnable runnable, AtomicBoolean killSwitch,
-            MpscFrameRecycler recycler) {
+            FrameManager<Void, RunnableFrame> recycler) {
         super(idHash, recycler);
         this.runnable = runnable;
         this.killSwitch = killSwitch;

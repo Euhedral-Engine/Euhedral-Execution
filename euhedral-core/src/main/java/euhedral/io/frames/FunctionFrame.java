@@ -1,6 +1,6 @@
 package euhedral.io.frames;
 
-import euhedral.io.utils.MpscFrameRecycler;
+import euhedral.io.impl.FrameManager;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -18,7 +18,7 @@ public class FunctionFrame extends AbstractFrame {
 
 
     public FunctionFrame(long idHash, Function<Object, Object> function, Consumer<Object> callback, AtomicBoolean killSwitch,
-            MpscFrameRecycler recycler) {
+            FrameManager<Object, FunctionFrame> recycler) {
         super(idHash, recycler);
         this.function = function;
         this.callback = callback;

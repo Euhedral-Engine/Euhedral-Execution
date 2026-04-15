@@ -1,6 +1,6 @@
 package euhedral.io.frames;
 
-public class DummyInitFrame extends AbstractFrame {
+public final class DummyInitFrame extends AbstractFrame {
     public static final DummyInitFrame INSTANCE = new DummyInitFrame();
 
     private DummyInitFrame() {

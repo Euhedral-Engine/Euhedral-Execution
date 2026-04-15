@@ -4,6 +4,7 @@ import euhedral.io.DRRScheduler;
 import euhedral.io.DefaultSlotManager;
 import euhedral.io.DefaultSlotManager.Config;
 import euhedral.io.control_plane.ControlPlane;
+import euhedral.io.impl.FrameManager;
 import euhedral.io.test_utils.TestFrame;
 import euhedral.io.test_utils.TestPipeline;
 import euhedral.io.test_utils.TestPipeline.TestExecutor;
@@ -14,7 +15,6 @@ import com.github.dockerjava.api.command.ExecCreateCmdResponse;
 import com.github.dockerjava.api.model.Capability;
 import com.github.dockerjava.api.model.Frame;
 import java.io.File;
-import java.time.Duration;
 import java.util.Collections;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -115,11 +115,6 @@ public class SteadyStateBenchmark {
             producerPool = Executors.newFixedThreadPool(1);
         }
 
-        @TearDown(Level.Iteration)
-        public void coolDown() throws InterruptedException {
-            Thread.sleep(Duration.ofSeconds(2));
-        }
-
         @TearDown(Level.Trial)
         public void tearDownTrial() {
             try {
@@ -184,16 +179,34 @@ public class SteadyStateBenchmark {
             });
             start.countDown();
 
+            long startNs = System.nanoTime();
             if (!end.await(60 * 2, TimeUnit.SECONDS)) {
                 throw new RuntimeException("Stall detected. Pending: " + countDown.get());
             }
+
+            int cycles = 0;
+            FrameManager<Void, TestFrame> recycler = state.parallelFramePool[0].getRecycler();
+            long deadline = startNs + TimeUnit.SECONDS.toNanos(60 * 2);
+            while (countDown.get() > 0 && System.nanoTime() < deadline) {
+                countDown.getAndUpdate(curr -> curr - recycler.dump(curr, TestFrame.PASSWORD));
+                if (cycles++ < 128) {
+                    Thread.onSpinWait();
+                } else if (cycles < 512) {
+                    Thread.yield();
+                } else {
+                    LockSupport.parkNanos(5_000);
+                    cycles = 0;
+                }
+            }
         }
 
-//        @Benchmark
-//        public void profileIdleState() {
-//            Blackhole.consumeCPU(100);
-//            LockSupport.parkNanos(1_000_000_000);
-//        }
+        /// This test is for profiling the idle state. It also helps the cpu cool down and prepare
+        /// for the next iteration.
+        @Benchmark
+        public void profileIdleState() {
+            Blackhole.consumeCPU(100);
+            LockSupport.parkNanos(1_000_000_000);
+        }
     }
 
 }
