@@ -1,7 +1,6 @@
 package euhedral.io;
 
 import static euhedral.io.utils.MathFunctions.clampDouble;
-import static euhedral.io.utils.MathFunctions.clampInt;
 import static euhedral.io.utils.MathFunctions.clampLong;
 import static euhedral.io.utils.MathFunctions.log2;
 
@@ -92,10 +91,12 @@ public class DefaultSlotManager implements SlotManager {
     protected final FlowRecorder executionLatency;
 
     protected final SpscUnboundedUnpaddedArrayQueue<AbstractFrame> buffer;
-    protected final int chunkSize;
+    protected final int bufferSize;
     protected final DrainBuffer bufferWrapper;
 
     protected final LockFreeSink completeSink;
+    protected final int maxUpdateInterval;
+
     private final Thread shutdownHook;
     private final int cpuId;
     @Getter
@@ -116,7 +117,9 @@ public class DefaultSlotManager implements SlotManager {
     protected volatile int inFlight = 0;
 
     private int bufferCount = 0;
-    private long executions = 0;
+    private int updateIntervalMask = 1;
+    private long dispatches = 0;
+    private int completed = 0;
     private double concurrencyFactor = 1.0;
     private int stabilityCounter = 0;
 
@@ -129,17 +132,18 @@ public class DefaultSlotManager implements SlotManager {
     public DefaultSlotManager(@NonNull Config config) {
         this.config = config;
 
-        int chunkSize = Integer.highestOneBit((config.bufferChunkSize - 1) << 1);
-        chunkSize = clampInt(chunkSize, 64, 16_392);
+        int bufferSize = Integer.highestOneBit((config.bufferSize - 1) << 1);
+        bufferSize = Math.max(bufferSize, 64);
 
-        this.buffer = new SpscUnboundedUnpaddedArrayQueue<>(chunkSize);
-        this.completeSink = new LockFreeSink(new MpscUnboundedXaddArrayQueue<>(chunkSize, 4),
+        this.buffer = new SpscUnboundedUnpaddedArrayQueue<>(bufferSize);
+        this.completeSink = new LockFreeSink(new MpscUnboundedXaddArrayQueue<>(bufferSize, 4),
                 frame -> {
                     this.inFlight--;
                     this.receivingOrderedWork = upstreamCount == 1 && frame.isOrdered();
+                    this.completed++;
                     frame.doFinally();
                 }, this::recordCompletion);
-        this.chunkSize = chunkSize;
+        this.bufferSize = bufferSize;
         this.bufferWrapper = new DrainBuffer(buffer, false);
 
         this.currentRate = config.initialConcurrency;
@@ -147,6 +151,7 @@ public class DefaultSlotManager implements SlotManager {
         this.effectiveConcurrencyLimit = config.initialConcurrency;
 
         this.executionLatency = new FlowRecorder();
+        this.maxUpdateInterval = Integer.highestOneBit(Math.max(config.maxUpdateInterval, 2));
 
         if (config.cloneConfig == null) {
             this.cpuId = -1;
@@ -167,10 +172,8 @@ public class DefaultSlotManager implements SlotManager {
                 () -> currentConcurrency,
                 () -> currentRate);
 
-        int interval = Math.max(config.latencyRecordInterval, 1);
-        int mask = Integer.highestOneBit((interval - 1) << 1) - 1;
         outputFlux = new DirectOutputFlux(buffer, frame -> {
-            if ((executions++ & mask) == 0) {
+            if ((dispatches++ & updateIntervalMask) == 0) {
                 frame.setStartNs(System.nanoTime());
             } else {
                 frame.setStartNs(0);
@@ -230,7 +233,7 @@ public class DefaultSlotManager implements SlotManager {
 
     @Override
     public void firstTouch() {
-        for (int i = 0; i < chunkSize * 2; i++) {
+        for (int i = 0; i < bufferSize * 2; i++) {
             buffer.add(DummyInitFrame.INSTANCE);
         }
         buffer.clear();
@@ -268,7 +271,7 @@ public class DefaultSlotManager implements SlotManager {
 
     private void cycle() {
         try {
-            final long lowWaterMark = chunkSize >> 2;
+            final long lowWaterMark = bufferSize >> 2;
 
             FlowSnapshot fillSnapshot = null;
             FlowSnapshot fillBytesSnapshot = null;
@@ -283,8 +286,10 @@ public class DefaultSlotManager implements SlotManager {
             long maxParkNs = config.idleCyclePolicy.maxParkTime.toNanos();
             while (running.get() && !Thread.currentThread().isInterrupted()) {
                 receivingOrderedWork = false;
-                if (completeSink.drain() > config.latencyRecordInterval) {
+                completeSink.drain();
+                if (completed > updateIntervalMask) {
                     updateLimits();
+                    completed = 0;
                 }
 
                 long currentConcurrency = this.currentConcurrency;
@@ -352,7 +357,7 @@ public class DefaultSlotManager implements SlotManager {
                         drainRateVar, arrivalLatencyVar, bufferCount + ingestCount,
                         (long) avgFrameSize, ingest.getMaxQueuedBytes());
 
-                long maxFill = chunkSize - bufferCount;
+                long maxFill = bufferSize - bufferCount;
                 if (demand < maxFill) {
                     demand += maxFill - bufferCount;
                 }
@@ -362,7 +367,7 @@ public class DefaultSlotManager implements SlotManager {
                 if (!receivingOrderedWork && nowNs < demandWaitNs) {
                     demand = 0;
                 } else if (!receivingOrderedWork) {
-                    boolean warmedUp = ingest.getFillRecorder().getRollingSum() > chunkSize
+                    boolean warmedUp = ingest.getFillRecorder().getRollingSum() > bufferSize
                             && fillSnapshot.avgInterval > 0
                             && fillSnapshot.avgUnits > 0;
 
@@ -388,7 +393,7 @@ public class DefaultSlotManager implements SlotManager {
 
                             double intervalCount = maxFill / avgFill;
 
-                            long maxWaitNs = (long) (execLatency * chunkSize / 2);
+                            long maxWaitNs = (long) (execLatency * bufferSize / 2);
                             maxWaitNs = Math.min(maxWaitNs, maxParkNs);
 
                             long fillWait = (long) (intervalCount * fillInterval);
@@ -416,13 +421,23 @@ public class DefaultSlotManager implements SlotManager {
         FlowSnapshot flowSnapshot = executionLatency.getFlowSnapshot();
         executionLatency.refreshSnapshot(flowSnapshot, false);
 
-        avgLatency = (long) (flowSnapshot.avgUnits + flowSnapshot.unitVariation);
+        double avgVariance = flowSnapshot.unitVariation;
+        int updateInterval = updateIntervalMask + 1;
+        double scaledVariance = avgVariance * updateInterval;
+
+        if (scaledVariance >= updateInterval) {
+            updateIntervalMask = Math.min(updateInterval << 1, maxUpdateInterval) - 1;
+        } else if (scaledVariance <= (updateInterval >>> 1)) {
+            updateIntervalMask = Math.max(2, updateInterval >>> 1) - 1;
+        }
+
+        avgLatency = (long) (flowSnapshot.avgUnits + avgVariance);
 
         double queueEstimate = executionLatency.getVegasQueueEstimate(flowSnapshot,
                 flowSnapshot.avgUnits,
                 currentConcurrency);
 
-        long ideal = flowSnapshot.throughputNs;
+        long ideal = flowSnapshot.throughputNs * updateInterval;
         updateEffectiveConcurrencyLimit(ideal);
         updateConcurrency(ideal, queueEstimate);
     }
@@ -520,15 +535,15 @@ public class DefaultSlotManager implements SlotManager {
                 }
 
                 if (upstreamCount == 0) {
-                    long count = ingest.drain(bufferWrapper, chunkSize - bufferCount, 0);
+                    long count = ingest.drain(bufferWrapper, bufferSize - bufferCount, 0);
                     if (count > 0) {
                         bufferCount += (int) count;
                         break;
                     }
                 }
 
-                if (ingest.getCount() >= (chunkSize >> 3)) {
-                    long count = ingest.drain(bufferWrapper, chunkSize - bufferCount, 0);
+                if (ingest.getCount() >= (bufferSize >> 3)) {
+                    long count = ingest.drain(bufferWrapper, bufferSize - bufferCount, 0);
                     bufferCount += (int) count;
                     break;
                 }
@@ -680,21 +695,21 @@ public class DefaultSlotManager implements SlotManager {
         }
     }
 
-    public record Config(CloneConfig cloneConfig, int initialConcurrency, int bufferChunkSize,
-                         int bufferChunkCount, int latencyRecordInterval,
+    public record Config(CloneConfig cloneConfig, int initialConcurrency, int bufferSize,
+                         int maxUpdateInterval,
                          IdleCyclePolicy idleCyclePolicy,
                          MeterRegistry meterRegistry, String metricPrefix) implements
             CloneableObject {
 
         public static Config balancedDefault(
                 MeterRegistry meterRegistry, String metricPrefix) {
-            return new Config(null, 5000, 4_096, 2, 64, IdleCyclePolicy.DEFAULT,
+            return new Config(null, 4_096, 4_096, 1024, IdleCyclePolicy.DEFAULT,
                     meterRegistry, metricPrefix);
         }
 
         public static Config lowLatencyDefault(
                 MeterRegistry meterRegistry, String metricPrefix) {
-            return new Config(null, 5000, 4_096, 2, 128, IdleCyclePolicy.LOW_LATENCY,
+            return new Config(null, 4_096, 4_096, 512, IdleCyclePolicy.LOW_LATENCY,
                     meterRegistry, metricPrefix);
         }
 
@@ -704,8 +719,8 @@ public class DefaultSlotManager implements SlotManager {
             if (cloneConfig != null) {
                 meterRegistry = cloneConfig.meterRegistry();
             }
-            return new Config(cloneConfig, initialConcurrency, bufferChunkSize, bufferChunkCount,
-                    latencyRecordInterval,
+            return new Config(cloneConfig, initialConcurrency, bufferSize,
+                    maxUpdateInterval,
                     idleCyclePolicy,
                     meterRegistry, metricPrefix);
         }

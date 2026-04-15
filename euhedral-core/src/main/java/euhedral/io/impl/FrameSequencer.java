@@ -1,7 +1,7 @@
-package euhedral.io.frames;
+package euhedral.io.impl;
 
+import euhedral.io.frames.SequencedFrame;
 import euhedral.io.utils.KeyHasher;
-import euhedral.io.utils.MpscFrameRecycler;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongHeapPriorityQueue;
 import java.util.concurrent.ThreadLocalRandom;
@@ -15,7 +15,7 @@ import reactor.core.scheduler.Schedulers;
 
 public class FrameSequencer<R> {
 
-    private static final SequencedFrame SIGNAL_FRAME = new SequencedFrame( -1, -1, null, null,
+    private static final SequencedFrame SIGNAL_FRAME = new SequencedFrame(-1, -1, null, null,
             null, null, null);
 
     private final long ingestPassword;
@@ -36,68 +36,12 @@ public class FrameSequencer<R> {
         Flux.merge(ingest.asFlux())
                 .publishOn(Schedulers.boundedElastic())
                 .subscribe(frame -> {
-                    if(frame.getSequenceNumber() != -1) {
+                    if (frame.getSequenceNumber() != -1) {
                         frameData.put(frame.getSequenceNumber(), frame);
                         sequenceHeap.enqueue(frame.getSequenceNumber());
                     }
                     drainInternal();
                 });
-    }
-
-    @SuppressWarnings("unchecked")
-    public <T> Flux<AbstractFrame> map(Flux<T> flux, Function<T, R> function) {
-        final long idHash = KeyHasher.mix(ThreadLocalRandom.current().nextLong());
-        final AtomicBoolean killSwitch = new AtomicBoolean(false);
-
-        final long[] seed = new long[]{KeyHasher.combine(ThreadLocalRandom.current().nextLong(), ThreadLocalRandom.current().nextLong())};
-
-        final MpscFrameRecycler recycler = new MpscFrameRecycler(32_768, ingestPassword);
-
-        final int[] idx = new int[]{-1, 0};
-        final SequencedFrame[] buffer = new SequencedFrame[1024];
-
-        return flux.map(obj -> {
-            if (idx[0] < 0) {
-                idx[0] = recycler.batchPoll(buffer, ingestPassword);
-            }
-
-            SequencedFrame sequencedFrame;
-            if (--idx[0] >= 0) {
-                sequencedFrame = buffer[idx[0]];
-                sequencedFrame.replace(idx[1]++, obj);
-            } else {
-                sequencedFrame = new SequencedFrame(idHash, idx[1]++, obj,
-                        (Function<Object, Object>) function,
-                        killSwitch, (FrameSequencer<Object>) this, recycler);
-            }
-            sequencedFrame.setOrdered(false);
-            sequencedFrame.randomizeHash(seed[0]++);
-            registerFrame(sequencedFrame);
-
-            return (AbstractFrame) sequencedFrame;
-        }).doFinally(sig -> {
-            killSwitch.set(true);
-            sequenceHeap.clear();
-            frameData.clear();
-            ingest.tryEmitComplete();
-            output.tryEmitComplete();
-            recycler.close();
-        });
-    }
-
-    public Flux<R> output() {
-        return output.asFlux();
-    }
-
-    public void notifyComplete(long password) {
-        if(password == sequencePassword) {
-            ingest.tryEmitNext(SIGNAL_FRAME);
-        }
-    }
-
-    private void registerFrame(SequencedFrame frame) {
-        frame.setSequencerPassword(sequencePassword);
-        ingest.tryEmitNext(frame);
     }
 
     @SuppressWarnings("unchecked")
@@ -127,6 +71,52 @@ public class FrameSequencer<R> {
             } else {
                 break;
             }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public <T> Flux<SequencedFrame> map(Flux<T> flux, Function<T, R> function) {
+        final AtomicBoolean killSwitch = new AtomicBoolean(false);
+
+        final int[] idx = new int[]{0};
+
+        FrameManager<Object, SequencedFrame> recycler = new FrameManager<>(32_768, ingestPassword);
+        recycler.setFactory(new FrameFactory<>((idHash, data) -> {
+            SequencedFrame frame = new SequencedFrame(idHash, idx[0]++, data,
+                    (Function<Object, Object>) function,
+                    killSwitch, (FrameSequencer<Object>) this, recycler);
+            frame.setOrdered(false);
+            registerFrame(frame);
+            return frame;
+        }, (data, oldFrame) -> {
+            oldFrame.replace(idx[0]++, data);
+            oldFrame.setOrdered(false);
+            registerFrame(oldFrame);
+        }));
+
+        return flux.map(obj -> recycler.generate(obj, ingestPassword))
+                .doFinally(sig -> {
+                    killSwitch.set(true);
+                    sequenceHeap.clear();
+                    frameData.clear();
+                    ingest.tryEmitComplete();
+                    output.tryEmitComplete();
+                    recycler.close();
+                });
+    }
+
+    private void registerFrame(SequencedFrame frame) {
+        frame.setSequencerPassword(sequencePassword);
+        ingest.tryEmitNext(frame);
+    }
+
+    public Flux<R> output() {
+        return output.asFlux();
+    }
+
+    public void notifyComplete(long password) {
+        if (password == sequencePassword) {
+            ingest.tryEmitNext(SIGNAL_FRAME);
         }
     }
 }
