@@ -1,6 +1,8 @@
 package euhedral.io.test_utils;
 
+import euhedral.io.control_plane.RoutingPolicy;
 import euhedral.io.frames.AbstractFrame;
+import euhedral.io.resource_monitoring.NumaMapper;
 import euhedral.io.utils.KeyHasher;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ThreadLocalRandom;
@@ -13,20 +15,22 @@ public final class TestFrame extends AbstractFrame {
     public CountDownLatch trigger;
     public boolean ordered;
 
-    public TestFrame(long idHash, long destinationHash) {
-        this(idHash, destinationHash, true);
+    public TestFrame(long idHash) {
+        this(idHash, true);
     }
 
-    public TestFrame(long idHash, long destinationHash, boolean ordered) {
-        super(idHash, destinationHash, null);
+    public TestFrame(long idHash, boolean ordered) {
+        super(idHash, null);
         this.ordered = ordered;
+        this.setOrigin(NumaMapper.locateMe());
     }
 
     public static TestFrame[] generateParallel(int count) {
         final long idHash = KeyHasher.mix(ThreadLocalRandom.current().nextLong());
         TestFrame[] frames = new TestFrame[count];
         for (int i = 0; i < count; i++) {
-            frames[i] = new TestFrame(idHash, KeyHasher.getHash("seed-" + i), false);
+            frames[i] = new TestFrame(idHash, false);
+            frames[i].randomizeHash(KeyHasher.getHash("seed-" + i));
         }
         return frames;
     }
@@ -37,14 +41,11 @@ public final class TestFrame extends AbstractFrame {
 
         TestFrame[] frames = new TestFrame[count];
         for(int i = 0; i < count; i++) {
-            frames[i] = new TestFrame(idHash, orderedSeed, true);
+            frames[i] = new TestFrame(idHash, true);
+            frames[i].randomizeHash(orderedSeed);
+            frames[i].setRoutingPolicy(RoutingPolicy.CORE_LOCAL);
         }
         return frames;
-    }
-
-    @Override
-    public String getId() {
-        return "";
     }
 
     @Override

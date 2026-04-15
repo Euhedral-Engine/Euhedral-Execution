@@ -12,11 +12,7 @@ import com.github.dockerjava.api.async.ResultCallback;
 import com.github.dockerjava.api.command.ExecCreateCmdResponse;
 import com.github.dockerjava.api.model.Capability;
 import com.github.dockerjava.api.model.Frame;
-import io.github.resilience4j.circuitbreaker.CircuitBreaker;
-import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
-import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import java.io.File;
-import java.time.Duration;
 import java.util.Collections;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
@@ -39,11 +35,11 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
 import org.openjdk.jmh.infra.Blackhole;
+import org.openjdk.jmh.profile.AsyncProfiler;
 import org.openjdk.jmh.results.format.ResultFormatType;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
-import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.BindMode;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -81,8 +77,9 @@ public class EndToEndBenchmark {
                 .withAttachStderr(true)
                 .withCmd("java", "--add-exports", "java.base/jdk.internal.platform=ALL-UNNAMED",
                         "--add-exports", "java.base/jdk.internal.vm.annotation=ALL-UNNAMED",
-                        "-XX:-RestrictContended", "-Daffinity.logging.level=OFF",
-                        "-Dorg.slf4j.simpleLogger.defaultLogLevel=error", "-cp", "/app/test.jar",
+                        "-XX:-RestrictContended",
+                        "-Dorg.slf4j.simpleLogger.defaultLogLevel=error",
+                        "-cp", "/app/test.jar",
                         RUNNER).exec();
 
         container.getDockerClient().execStartCmd(execCreateCmdResponse.getId())
@@ -108,28 +105,30 @@ public class EndToEndBenchmark {
                             ControlPlaneBenchmark.class.getSimpleName())
                     .addProfiler("stack")
                     .addProfiler("gc")
-//                    .addProfiler(AsyncProfiler.class,
-//                            "libPath=/app/lib/libasyncProfiler.so;" +
-//                                    "event=itimer;" +
-//                                    "interval=100000;" +
-//                                    "alloc=64k;" +
-//                                    "output=jfr;" +
-//                                    "dir=/opt/results/async-profiler")
+                    .addProfiler(AsyncProfiler.class,
+                            "libPath=/app/lib/libasyncProfiler.so;" +
+                                    "event=itimer;" +
+                                    "interval=100000;" +
+                                    "alloc=64k;" +
+                                    "output=jfr;" +
+                                    "dir=/opt/results/async-profiler")
                     .jvmArgs("-XX:-RestrictContended",
+                            "--enable-native-access=ALL-UNNAMED",
                             "--add-exports", "java.base/jdk.internal.platform=ALL-UNNAMED",
                             "--add-exports", "java.base/jdk.internal.vm.annotation=ALL-UNNAMED",
-                            "-XX:-RestrictContended", "-Daffinity.logging.level=OFF",
-                            "-Daffinity.logging.level=OFF",
+                            "--enable-native-access=ALL-UNNAMED",
+                            "-XX:-RestrictContended",
                             "-Djava.library.path=/app/lib/libasyncProfiler.so",
-                            "-Dorg.slf4j.simpleLogger.defaultLogLevel=error")
+                            "-Dorg.slf4j.simpleLogger.defaultLogLevel=error"
+                    )
                     .resultFormat(ResultFormatType.JSON)
-                    .result("/opt/results/benchmark-result.json")
+                    .result("/opt/results/e2e-benchmark-result.json")
                     .build();
             new Runner(opt).run();
         }
 
-        //        @Benchmark
-//        @OperationsPerInvocation(8_000_000)
+        @Benchmark
+        @OperationsPerInvocation(8_000_000)
         public void benchOneProducerEightMillionOrdered(BenchmarkState state) throws Throwable {
             CountDownLatch start = new CountDownLatch(1);
             CountDownLatch end = new CountDownLatch(1);
@@ -137,7 +136,7 @@ public class EndToEndBenchmark {
 
             state.producerPool.submit(() -> {
                 TestPublisher subscription = new TestPublisher(state.orderedFramePool);
-                subscription.reset(end, countDown);
+//                subscription.reset(end, countDown);
                 try {
                     start.await();
                 } catch (InterruptedException e) {
@@ -152,8 +151,8 @@ public class EndToEndBenchmark {
             }
         }
 
-        @Benchmark
-        @OperationsPerInvocation(32_000_000)
+//        @Benchmark
+//        @OperationsPerInvocation(32_000_000)
         public void benchOneProducer32MillionParallel(BenchmarkState state) throws Throwable {
             CountDownLatch start = new CountDownLatch(1);
             CountDownLatch end = new CountDownLatch(1);
@@ -161,7 +160,7 @@ public class EndToEndBenchmark {
 
             state.producerPool.submit(() -> {
                 TestPublisher subscription = new TestPublisher(state.parallelFramePool);
-                subscription.reset(end, countDown);
+//                subscription.reset(end, countDown);
                 try {
                     start.await();
                 } catch (InterruptedException e) {
@@ -187,7 +186,7 @@ public class EndToEndBenchmark {
                 state.producerPool.submit(() -> {
                     try {
                         state.barrier8P.await();
-                        state.publishers[id].reset(end, countDown);
+//                        state.publishers[id].reset(end, countDown);
                         state.controlPlane.ingest(state.publishers[id]);
                     } catch (Exception e) {
                         e.printStackTrace();
@@ -202,7 +201,7 @@ public class EndToEndBenchmark {
             state.barrier8P.reset();
         }
 
-        //        @Benchmark
+//        @Benchmark
 //        @OperationsPerInvocation(32_000_000)
         public void bench32Producers32MillionParallel(BenchmarkState state) throws Throwable {
             CountDownLatch end = new CountDownLatch(1);
@@ -213,7 +212,7 @@ public class EndToEndBenchmark {
                 state.producerPool.submit(() -> {
                     try {
                         state.barrier32P.await();
-                        state.publishers[id].reset(end, countDown);
+//                        state.publishers[id].reset(end, countDown);
                         state.controlPlane.ingest(state.publishers[id]);
                     } catch (Exception e) {
                         e.printStackTrace();
@@ -242,22 +241,13 @@ public class EndToEndBenchmark {
 
             @Setup(Level.Trial)
             public void setupExecutor(Blackhole bh) {
-                CircuitBreakerConfig config = CircuitBreakerConfig.custom()
-                        .slidingWindowType(CircuitBreakerConfig.SlidingWindowType.TIME_BASED)
-                        .slidingWindowSize(10).minimumNumberOfCalls(50000).failureRateThreshold(10)
-                        .waitDurationInOpenState(Duration.ofSeconds(5))
-                        .permittedNumberOfCallsInHalfOpenState(1000)
-                        .writableStackTraceEnabled(false).build();
-                CircuitBreaker circuitBreaker = CircuitBreaker.of("SystemTest", config);
-
                 DRRScheduler.Config drrConfig = new DRRScheduler.Config(null, 32, "SystemTest",
                         null);
-                DefaultSlotManager.Config dsmConfig = Config.lowLatencyDefault(
-                        CircuitBreakerRegistry.of(config), null, "SystemTest");
+                DefaultSlotManager.Config dsmConfig = Config.lowLatencyDefault(null, "SystemTest");
 
                 TestPipeline pipeline = new TestPipeline("SystemTest", null,
                         new DRRScheduler(drrConfig, null),
-                        new DefaultSlotManager(dsmConfig, circuitBreaker),
+                        new DefaultSlotManager(dsmConfig),
                         new TestExecutor(null, bh));
                 controlPlane = ControlPlane.getOrCreate("SystemTest", pipeline,
                         null);

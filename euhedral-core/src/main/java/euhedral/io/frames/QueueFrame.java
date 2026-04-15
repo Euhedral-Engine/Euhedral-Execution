@@ -43,7 +43,7 @@ public class QueueFrame extends AbstractFrame implements AutoCloseable {
 
     public QueueFrame(long idHash, double smoothingFactor,
             MessagePassingQueue<AbstractFrame> queue) {
-        super(idHash, 0, null);
+        super(idHash, null);
         this.idHash = idHash;
         this.smoothingFactor = smoothingFactor;
         this.queue = queue;
@@ -61,6 +61,14 @@ public class QueueFrame extends AbstractFrame implements AutoCloseable {
             return true;
         }
         return false;
+    }
+
+    public void clear() {
+        avgFrameSize.set(1024);
+        weight = 1024;
+        drainCycles = 0;
+        lastBytesDrained = 0;
+        quota = 0;
     }
 
     public int drain(@NonNull DrainBuffer drainBuffer, int limit) {
@@ -99,11 +107,6 @@ public class QueueFrame extends AbstractFrame implements AutoCloseable {
 
     public int getQueueCount() {
         return queue.size();
-    }
-
-    @Override
-    public String getId() {
-        return idHash + "";
     }
 
     @Override

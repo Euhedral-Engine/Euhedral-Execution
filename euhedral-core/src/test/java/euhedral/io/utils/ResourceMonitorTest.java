@@ -2,7 +2,8 @@ package euhedral.io.utils;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import euhedral.io.utils.SystemUtilization.HardwareUtilization;
+import euhedral.io.resource_monitoring.ResourceMonitor;
+import euhedral.io.resource_monitoring.SystemUtilization.HardwareUtilization;
 import com.github.dockerjava.api.command.ExecCreateCmdResponse;
 import java.io.File;
 import java.time.Duration;

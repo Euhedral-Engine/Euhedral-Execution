@@ -4,8 +4,6 @@ import net.openhft.hashing.LongHashFunction;
 
 public final class KeyHasher {
 
-    private static final long SEED = 0x9e3779b97f4a7c15L;
-
     public static long getHash(byte[] data) {
         return LongHashFunction.xx3().hashBytes(data);
     }
@@ -32,7 +30,6 @@ public final class KeyHasher {
         return LongHashFunction.xx3().hashLong(hash);
     }
 
-    // MurmurHash3
     public static long combine(long hash1, long hash2) {
         return LongHashFunction.xx3(hash1).hashLong(hash2);
     }

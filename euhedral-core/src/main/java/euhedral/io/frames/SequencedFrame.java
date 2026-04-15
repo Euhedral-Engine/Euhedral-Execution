@@ -8,8 +8,6 @@ import lombok.Setter;
 
 public class SequencedFrame extends AbstractFrame {
 
-    private final String id;
-
     private final AtomicBoolean killSwitch;
 
     private final FrameSequencer<Object> sequencer;
@@ -34,11 +32,10 @@ public class SequencedFrame extends AbstractFrame {
     @Getter
     private boolean ready = false;
 
-    public SequencedFrame(String id, long idHash, int sequenceNumber, long destinationHash,
+    public SequencedFrame(long idHash, int sequenceNumber,
             Object payload, Function<Object, Object> function, AtomicBoolean killSwitch, FrameSequencer<Object> sequencer,
             MpscFrameRecycler recycler) {
-        super(idHash, destinationHash, recycler);
-        this.id = id;
+        super(idHash, recycler);
         this.killSwitch = killSwitch;
         this.sequencer = sequencer;
         this.sequenceNumber = sequenceNumber;
@@ -48,11 +45,6 @@ public class SequencedFrame extends AbstractFrame {
 
     public void apply() {
         retVal = function.apply(payload);
-    }
-
-    @Override
-    public String getId() {
-        return id;
     }
 
     @Override
@@ -71,11 +63,11 @@ public class SequencedFrame extends AbstractFrame {
     }
 
     public void replace(int sequenceNumber, Object payload) {
+        reset();
         this.sequenceNumber = sequenceNumber;
         this.payload = payload;
         this.retVal = null;
         this.ready = false;
-        setCancelledExecution(false);
     }
 
     @Override

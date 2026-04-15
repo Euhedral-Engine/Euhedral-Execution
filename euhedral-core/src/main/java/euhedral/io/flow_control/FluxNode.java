@@ -1,5 +1,7 @@
 package euhedral.io.flow_control;
 
+import static euhedral.io.utils.MathFunctions.unsignedMultiplyHigh;
+
 import euhedral.io.flow_control.UpstreamQueue.UpstreamHandle;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.utils.DrainBuffer;
@@ -26,7 +28,6 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
     @Contended
     protected final FluxEdge[] downstreams;
     protected final RoutingFunction routingFunction;
-    protected final AtomicBoolean drain;
     private final PaddedAtomicLong wip;
     @Contended
     protected volatile RoutingState routingState = new RoutingState(new int[0]);
@@ -43,10 +44,8 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
     @SuppressWarnings("unchecked")
     public FluxNode(String name, int downstreamCount, RoutingFunction routingFunction,
             boolean terminal) {
-        AtomicBoolean drain = new AtomicBoolean(false);
-        super(drain);
+        super(new AtomicBoolean(false));
         this.terminal = terminal;
-        this.drain = drain;
         this.logger = LoggerFactory.getLogger(name);
         this.name = name;
         this.downstreams = new FluxEdge[downstreamCount];
@@ -61,7 +60,7 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
         }
     }
 
-    public void ingest(Publisher<AbstractFrame> flux) {
+    public void ingest(Publisher<? extends AbstractFrame> flux) {
         flux.subscribe(new UpstreamInterceptor());
     }
 
@@ -128,12 +127,6 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
     }
 
     @Override
-    public boolean canFastPath(AbstractFrame frame) {
-        long hash = (xor1 ^ frame.getCombinedHash()) ^ xor2;
-        return hash == frame.getCombinedHash();
-    }
-
-    @Override
     public void onSubscribe(Subscription subscription) {
         if (subscription instanceof FluxEdge dh) {
             super.onSubscribe(dh);
@@ -186,6 +179,7 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
             }
         }
 
+        FluxEdge parent = this.parent;
         if (parent != null) {
             parent.pull(buffer, demand);
         }
@@ -232,7 +226,7 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
     @FunctionalInterface
     public interface RoutingFunction {
 
-        RoutingFunction DEFAULT = (frame, mapSize) -> (int) Math.unsignedMultiplyHigh(
+        RoutingFunction DEFAULT = (frame, mapSize) -> (int) unsignedMultiplyHigh(
                 frame.getCombinedHash(), mapSize);
 
         int route(AbstractFrame frame, int mapSize);

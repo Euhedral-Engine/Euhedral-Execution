@@ -8,8 +8,6 @@ import lombok.Setter;
 
 public class FunctionFrame extends AbstractFrame {
 
-    private final String id;
-
     final Function<Object, Object> function;
     final Consumer<Object> callback;
 
@@ -19,10 +17,9 @@ public class FunctionFrame extends AbstractFrame {
     private Object payload;
 
 
-    public FunctionFrame(String id, long idHash, long destinationHash, Function<Object, Object> function, Consumer<Object> callback, AtomicBoolean killSwitch,
+    public FunctionFrame(long idHash, Function<Object, Object> function, Consumer<Object> callback, AtomicBoolean killSwitch,
             MpscFrameRecycler recycler) {
-        super(idHash, destinationHash, recycler);
-        this.id = id;
+        super(idHash, recycler);
         this.function = function;
         this.callback = callback;
         this.killSwitch = killSwitch;
@@ -30,11 +27,6 @@ public class FunctionFrame extends AbstractFrame {
 
     public void apply() {
         callback.accept(function.apply(payload));
-    }
-
-    @Override
-    public String getId() {
-        return id;
     }
 
     @Override
@@ -54,6 +46,5 @@ public class FunctionFrame extends AbstractFrame {
 
     public <T> void replace(T payload) {
         this.payload = payload;
-        setCancelledExecution(false);
     }
 }

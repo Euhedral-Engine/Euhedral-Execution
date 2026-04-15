@@ -1,28 +1,24 @@
-package euhedral.io.utils;
+package euhedral.io.resource_monitoring.providers;
 
-import euhedral.io.utils.SystemUtilization.SystemSnapshot;
+import euhedral.io.resource_monitoring.NumaMapper;
+import euhedral.io.resource_monitoring.SystemUtilization.SystemSnapshot;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.BitSet;
-import java.util.function.LongSupplier;
 import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- * Maps Cgroup V2 Aggregate Pressure to Logical CPUs using /proc/stat activity.
- */
-public class CgroupV2Metrics {
+public class CgroupV2Resources implements ResourceProvider {
 
     private static final byte[] inactiveFileBytes = "inactive_file".getBytes(
             StandardCharsets.US_ASCII);
     private static final byte[] rbytesKey = "rbytes=".getBytes(StandardCharsets.US_ASCII);
     private static final byte[] wbytesKey = "wbytes=".getBytes(StandardCharsets.US_ASCII);
 
-    private final Logger logger = LoggerFactory.getLogger(CgroupV2Metrics.class);
-    private final LongSupplier timeSupplierNs;
+    private final Logger logger = LoggerFactory.getLogger(CgroupV2Resources.class);
     private final byte[] buffer = new byte[65_536];
 
     private final Path cpuMaxPath;
@@ -39,8 +35,7 @@ public class CgroupV2Metrics {
     private final CpuMetrics cpuMetrics = new CpuMetrics();
     private long lastTotalStallUsec = 0;
 
-    public CgroupV2Metrics(Path cgroupPath, int totalCpus, LongSupplier timeSupplierNs) {
-        this.timeSupplierNs = timeSupplierNs;
+    public CgroupV2Resources(Path cgroupPath) {
         this.cpuMaxPath = cgroupPath.resolve("cpu.max");
         this.cpuStatPath = cgroupPath.resolve("cpu.stat");
         this.effectiveCpuPath = cgroupPath.resolve("cpuset.cpus.effective");
@@ -49,15 +44,16 @@ public class CgroupV2Metrics {
         this.memoryCurrentPath = cgroupPath.resolve("memory.current");
         this.memoryStatPath = cgroupPath.resolve("memory.stat");
         this.ioStatPath = cgroupPath.resolve("io.stat");
-        this.totalCpus = totalCpus;
+        this.totalCpus = NumaMapper.INSTANCE.getCpuCount();
         this.effectiveCpus = new BitSet(totalCpus);
         this.lastCpuActiveTime = new long[totalCpus];
     }
 
+    @Override
     public SystemSnapshot getSnapshot() {
-        long now = timeSupplierNs.getAsLong();
+        long now = System.nanoTime();
 
-        // --- CPU Logic ---
+        // --- CPU ---
         int availableCpus = Runtime.getRuntime().availableProcessors();
         BitSet effectiveCpus = getEffectiveCpuSet();
 
@@ -133,6 +129,15 @@ public class CgroupV2Metrics {
         return effectiveCpus;
     }
 
+    private int readFileToBuffer(Path path) {
+        try (FileInputStream fis = new FileInputStream(path.toFile())) {
+            return fis.read(buffer);
+        } catch (IOException e) {
+            logger.error("Failed to read file", e);
+            return -1;
+        }
+    }
+
     public CpuMetrics getCpuMetrics() {
         cpuMetrics.updateCpuStats();
         return cpuMetrics;
@@ -153,6 +158,33 @@ public class CgroupV2Metrics {
         long period = (spaceIdx != -1) ? parseBytesLong(spaceIdx + 1, bytesRead) : 100_000;
 
         return new long[]{quota, period};
+    }
+
+    // --- Memory & IO ---
+
+    private long parseBytesLong(int start, int end) {
+        long res = 0;
+        for (int i = start; i < end; i++) {
+            byte b = buffer[i];
+            if (b >= '0' && b <= '9') {
+                res = res * 10 + (b - '0');
+            }
+        }
+        return res;
+    }
+
+    private boolean isMax(int start, int end) {
+        return buffer[start] == 'm' && buffer[start + 1] == 'a'
+                && buffer[start + 2] == 'x';
+    }
+
+    private int findByte(int start, int end, byte target) {
+        for (int i = start; i < end; i++) {
+            if (buffer[i] == target) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     /**
@@ -212,40 +244,6 @@ public class CgroupV2Metrics {
             }
         }
         return cpuPressure;
-    }
-
-    // --- Memory & IO ---
-
-    public long getMemoryLimit() {
-        int len = readFileToBuffer(memoryMaxPath);
-        return isMax(0, len) ? Runtime.getRuntime().maxMemory() : parseBytesLong(0, len);
-    }
-
-    public long getMemoryUsage() {
-        int len = readFileToBuffer(memoryCurrentPath);
-        return parseBytesLong(0, len);
-    }
-
-    public long getInactiveFile() {
-        int len = readFileToBuffer(memoryStatPath);
-        if (len <= 0) {
-            return 0;
-        }
-
-        int pos = 0;
-        while (pos < len) {
-            if (buffer[pos] == 'i') {
-                if (matchKey(pos, inactiveFileBytes)) {
-                    return parseLongAfterKey(pos + 13, len);
-                }
-            }
-            // Move to next line
-            while (pos < len && buffer[pos] != '\n') {
-                pos++;
-            }
-            pos++;
-        }
-        return 0;
     }
 
     /**
@@ -309,6 +307,68 @@ public class CgroupV2Metrics {
         return 0;
     }
 
+    private long parseLongAt(int pos, int len) {
+        long res = 0;
+        while (pos < len && buffer[pos] >= '0' && buffer[pos] <= '9') {
+            res = res * 10 + (buffer[pos++] - '0');
+        }
+        return res;
+    }
+
+    public long getMemoryLimit() {
+        int len = readFileToBuffer(memoryMaxPath);
+        return isMax(0, len) ? Runtime.getRuntime().maxMemory() : parseBytesLong(0, len);
+    }
+
+    public long getMemoryUsage() {
+        int len = readFileToBuffer(memoryCurrentPath);
+        return parseBytesLong(0, len);
+    }
+
+    public long getInactiveFile() {
+        int len = readFileToBuffer(memoryStatPath);
+        if (len <= 0) {
+            return 0;
+        }
+
+        int pos = 0;
+        while (pos < len) {
+            if (buffer[pos] == 'i') {
+                if (matchKey(pos, inactiveFileBytes)) {
+                    return parseLongAfterKey(pos + 13, len);
+                }
+            }
+            // Move to next line
+            while (pos < len && buffer[pos] != '\n') {
+                pos++;
+            }
+            pos++;
+        }
+        return 0;
+    }
+
+    private boolean matchKey(int pos, byte[] key) {
+        for (int i = 0; i < key.length; i++) {
+            if (buffer[pos + i] != key[i]) {
+                return false;
+            }
+        }
+        byte following = buffer[pos + key.length];
+        return following == ' ' || following == '\t';
+    }
+
+    private long parseLongAfterKey(int pos, int len) {
+        // Skip spaces/tabs between key and value
+        while (pos < len && (buffer[pos] == ' ' || buffer[pos] == '\t')) {
+            pos++;
+        }
+        long res = 0;
+        while (pos < len && buffer[pos] >= '0' && buffer[pos] <= '9') {
+            res = res * 10 + (buffer[pos++] - '0');
+        }
+        return res;
+    }
+
     public long getIoBytes() {
         int len = readFileToBuffer(ioStatPath);
         if (len <= 0) {
@@ -346,70 +406,6 @@ public class CgroupV2Metrics {
         }
 
         return currentRead + currentWrite;
-    }
-
-    private long parseLongAt(int pos, int len) {
-        long res = 0;
-        while (pos < len && buffer[pos] >= '0' && buffer[pos] <= '9') {
-            res = res * 10 + (buffer[pos++] - '0');
-        }
-        return res;
-    }
-
-    private int readFileToBuffer(Path path) {
-        try (FileInputStream fis = new FileInputStream(path.toFile())) {
-            return fis.read(buffer);
-        } catch (IOException e) {
-            logger.error("Failed to read file", e);
-            return -1;
-        }
-    }
-
-    private boolean matchKey(int pos, byte[] key) {
-        for (int i = 0; i < key.length; i++) {
-            if (buffer[pos + i] != key[i]) {
-                return false;
-            }
-        }
-        byte following = buffer[pos + key.length];
-        return following == ' ' || following == '\t';
-    }
-
-    private long parseBytesLong(int start, int end) {
-        long res = 0;
-        for (int i = start; i < end; i++) {
-            byte b = buffer[i];
-            if (b >= '0' && b <= '9') {
-                res = res * 10 + (b - '0');
-            }
-        }
-        return res;
-    }
-
-    private boolean isMax(int start, int end) {
-        return buffer[start] == 'm' && buffer[start + 1] == 'a'
-                && buffer[start + 2] == 'x';
-    }
-
-    private int findByte(int start, int end, byte target) {
-        for (int i = start; i < end; i++) {
-            if (buffer[i] == target) {
-                return i;
-            }
-        }
-        return -1;
-    }
-
-    private long parseLongAfterKey(int pos, int len) {
-        // Skip spaces/tabs between key and value
-        while (pos < len && (buffer[pos] == ' ' || buffer[pos] == '\t')) {
-            pos++;
-        }
-        long res = 0;
-        while (pos < len && buffer[pos] >= '0' && buffer[pos] <= '9') {
-            res = res * 10 + (buffer[pos++] - '0');
-        }
-        return res;
     }
 
     public class CpuMetrics {

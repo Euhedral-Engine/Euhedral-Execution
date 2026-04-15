@@ -11,12 +11,12 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import euhedral.io.utils.NumaMapper;
-import euhedral.io.utils.NumaMapper.NodeTopology;
-import euhedral.io.utils.NumaMapper.SystemTopology;
-import euhedral.io.utils.ResourceMonitor;
-import euhedral.io.utils.SystemUtilization.HardwareUtilization;
-import euhedral.io.utils.SystemUtilization.NodeSnapshot;
+import euhedral.io.resource_monitoring.NumaMapper;
+import euhedral.io.resource_monitoring.NumaMapper.SocketTopology;
+import euhedral.io.resource_monitoring.NumaMapper.SystemTopology;
+import euhedral.io.resource_monitoring.ResourceMonitor;
+import euhedral.io.resource_monitoring.SystemUtilization.HardwareUtilization;
+import euhedral.io.resource_monitoring.SystemUtilization.NodeSnapshot;
 import java.time.Duration;
 import java.util.BitSet;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -49,22 +49,22 @@ class ControlPlaneTest {
     public void testInitialization() {
         SystemTopology systemTopology = getSystemTopology();
 
-        NodeSnapshot[] snapshots = new NodeSnapshot[systemTopology.effectiveNodes().get()
+        NodeSnapshot[] snapshots = new NodeSnapshot[systemTopology.effectiveSockets().get()
                 .cardinality()];
 
         createControlPlaneWithMocks(systemTopology, snapshots);
 
         verify(mockMapper, times(1)).getSystemTopology();
-        verify(mockMapper, times(2)).getNodeCount();
+        verify(mockMapper, times(2)).getSocketCount();
 
         verify(mockShard, times(1)).clone(eq(0), any());
         verify(mockShard, times(1)).clone(eq(1), any());
         verify(mockShard, times(4)).isStarted();
         verify(mockShard, times(1)).start(eq(snapshots[0]),
-                eq(systemTopology.nodeTopologies().get(0)),
+                eq(systemTopology.socketTopologies().get(0)),
                 any());
         verify(mockShard, times(1)).start(eq(snapshots[1]),
-                eq(systemTopology.nodeTopologies().get(1)),
+                eq(systemTopology.socketTopologies().get(1)),
                 any());
 
         verify(mockResourceMonitor, times(1)).addListener();
@@ -86,12 +86,12 @@ class ControlPlaneTest {
     public void testGlobalRebalance() throws Exception {
         SystemTopology systemTopology = getSystemTopology();
 
-        NodeSnapshot[] snapshots = new NodeSnapshot[systemTopology.effectiveNodes().get()
+        NodeSnapshot[] snapshots = new NodeSnapshot[systemTopology.effectiveSockets().get()
                 .cardinality()];
 
         createControlPlaneWithMocks(systemTopology, snapshots);
 
-        systemTopology.effectiveNodes().get().clear(0);
+        systemTopology.effectiveSockets().get().clear(0);
         systemTopology.effectiveCores().get().clear(0, 2);
         systemTopology.effectiveCpus().get().clear(0, 4);
         systemTopology.globalVersion().incrementAndGet();
@@ -105,16 +105,16 @@ class ControlPlaneTest {
         verify(mockShard, times(1)).clone(eq(0), any());
         verify(mockShard, times(1)).clone(eq(1), any());
         verify(mockShard, times(1)).start(eq(snapshots[0]),
-                eq(systemTopology.nodeTopologies().get(0)),
+                eq(systemTopology.socketTopologies().get(0)),
                 any());
         verify(mockShard, times(1)).start(eq(snapshots[1]),
-                eq(systemTopology.nodeTopologies().get(1)),
+                eq(systemTopology.socketTopologies().get(1)),
                 any());
 
-        verify(mockShard, times(0)).update(snapshots[0], systemTopology.nodeTopologies().get(0));
+        verify(mockShard, times(0)).update(snapshots[0], systemTopology.socketTopologies().get(0));
         verify(mockShard, times(0)).close();
         verify(mockShard, times(1)).shutDownShard(any());
-        verify(mockShard, times(1)).update(snapshots[1], systemTopology.nodeTopologies().get(1));
+        verify(mockShard, times(1)).update(snapshots[1], systemTopology.socketTopologies().get(1));
 
         verify(mockUtilization, times(1)).getNodeSnapshot(eq(0), any(), anyDouble());
         verify(mockUtilization, times(2)).getNodeSnapshot(eq(1), any(), anyDouble());
@@ -136,13 +136,13 @@ class ControlPlaneTest {
         effectiveCores.set(0, 4);
         effectiveCpus.set(0, 8);
 
-        AtomicReferenceArray<NodeTopology> topologies = new AtomicReferenceArray<>(2);
+        AtomicReferenceArray<SocketTopology> topologies = new AtomicReferenceArray<>(2);
         for (int i = 0; i < topologies.length(); i++) {
             BitSet cores = new BitSet(4);
             BitSet cpus = new BitSet(8);
             cores.set(i * 2, i * 2 + 1);
             cpus.set(i * 4, i * 4 + 4);
-            topologies.set(i, new NodeTopology(new AtomicInteger(0), new AtomicReference<>(cores),
+            topologies.set(i, new SocketTopology(new AtomicInteger(0), new AtomicReference<>(cores),
                     new AtomicReference<>(cpus), new AtomicReference<>()));
         }
 
@@ -159,10 +159,10 @@ class ControlPlaneTest {
                     snapshots[i]);
             when(mockShard.clone(eq(i), any())).thenReturn(mockShard);
         }
-        when(mockMapper.getNodeId(0)).thenReturn(0);
-        when(mockMapper.getNodeId(1)).thenReturn(0);
-        when(mockMapper.getNodeId(2)).thenReturn(1);
-        when(mockMapper.getNodeId(3)).thenReturn(1);
+        when(mockMapper.getSocket(0)).thenReturn(0);
+        when(mockMapper.getSocket(1)).thenReturn(0);
+        when(mockMapper.getSocket(2)).thenReturn(1);
+        when(mockMapper.getSocket(3)).thenReturn(1);
 
         for(int i = 0; i < 4; i++) {
             when(mockMapper.getPhysicalCore(i * 2)).thenReturn(i);
@@ -170,7 +170,7 @@ class ControlPlaneTest {
         }
 
         when(mockMapper.getSystemTopology()).thenReturn(systemTopology);
-        when(mockMapper.getNodeCount()).thenReturn(systemTopology.nodeTopologies().length());
+        when(mockMapper.getSocketCount()).thenReturn(systemTopology.socketTopologies().length());
         when(mockShard.isStarted()).thenReturn(false);
 
         ControlPlane.getOrCreate("TestControlPlane", mockShard);

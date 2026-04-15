@@ -4,8 +4,12 @@ import euhedral.io.control_plane.CloneConfig;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.interfaces.CloneableObject;
 import euhedral.io.interfaces.DispatchPreProcess;
+import euhedral.io.interfaces.PipelineExecutor;
 import euhedral.io.interfaces.SlotManager;
-import euhedral.io.utils.SystemUtilization.CoreSnapshot;
+import euhedral.io.resource_monitoring.SystemUtilization.CoreSnapshot;
+import euhedral.io.utils.PinnedThreadExecutor;
+import java.util.concurrent.Callable;
+import java.util.concurrent.Future;
 import org.reactivestreams.Publisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,22 +23,19 @@ public abstract class AbstractCloneablePipeline implements
 
     protected final DispatchPreProcess preProcess;
     protected final SlotManager slotManager;
-    protected final AbstractExecutor executor;
+    protected final PipelineExecutor executor;
 
     public AbstractCloneablePipeline(String name, CloneConfig cloneConfig,
             DispatchPreProcess preProcess,
             SlotManager slotManager,
-            AbstractExecutor executor) {
+            PipelineExecutor executor) {
         this.logger = LoggerFactory.getLogger(name);
         this.config = cloneConfig;
         this.name = name;
         this.preProcess = preProcess.clone(cloneConfig);
         this.slotManager = slotManager.clone(cloneConfig);
         this.executor = executor.clone(cloneConfig, slotManager.getPinnedExecutor());
-        init();
-    }
 
-    private void init() {
         preProcess.setDownstreamPressureMonitor(slotManager::getPressure);
     }
 
@@ -62,18 +63,18 @@ public abstract class AbstractCloneablePipeline implements
     }
 
     @Override
-    public Publisher<AbstractFrame> process(Publisher<AbstractFrame> frameFlux) {
+    public Publisher<? extends AbstractFrame> process(Publisher<? extends AbstractFrame> frameFlux) {
         ingest(frameFlux);
         return output();
     }
 
     @Override
-    public void ingest(Publisher<AbstractFrame> frameFlux) {
+    public void ingest(Publisher<? extends AbstractFrame> frameFlux) {
         preProcess.ingest(frameFlux);
     }
 
     @Override
-    public Publisher<AbstractFrame> output() {
+    public Publisher<? extends AbstractFrame> output() {
         return executor.output();
     }
 
@@ -115,7 +116,37 @@ public abstract class AbstractCloneablePipeline implements
     }
 
     @Override
-    public abstract AbstractCloneablePipeline clone(CloneConfig cloneConfig);
+    public final AbstractCloneablePipeline clone(CloneConfig cloneConfig) {
+        int cpu = cloneConfig.effectiveCpus().nextSetBit(0);
+
+        boolean createdExecutor = false;
+        PinnedThreadExecutor executor = PinnedThreadExecutor.get(cpu);
+
+        if(executor == null) {
+            executor = PinnedThreadExecutor.getOrSetIfAbsent(cpu, cloneConfig.shardName() + "-" + AbstractCloneablePipeline.class, Thread.MAX_PRIORITY, true);
+            createdExecutor = true;
+        }
+
+        Future<AbstractCloneablePipeline> allocated = executor.submit(() -> {
+            AbstractCloneablePipeline pipeline = hookOnClone(cloneConfig);
+            pipeline.firstTouch();
+            return pipeline;
+        });
+        AbstractCloneablePipeline retVal;
+
+        try {
+            retVal = allocated.get();
+        } catch (Throwable t) {
+            throw new RuntimeException("Failed to allocate the AbstractCloneablePipeline implementation.", t);
+        }
+
+        if(createdExecutor) {
+            executor.shutdownNow();
+        }
+        return retVal;
+    }
+
+    public abstract AbstractCloneablePipeline hookOnClone(CloneConfig cloneConfig);
 
     @Override
     public void close() throws Exception {

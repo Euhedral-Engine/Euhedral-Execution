@@ -11,10 +11,10 @@ import static org.mockito.Mockito.when;
 import euhedral.io.flow_control.FluxEdge;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.interfaces.CloneableObject;
-import euhedral.io.utils.NumaMapper.NodeTopology;
-import euhedral.io.utils.ResourceMonitor;
-import euhedral.io.utils.SystemUtilization.CoreSnapshot;
-import euhedral.io.utils.SystemUtilization.NodeSnapshot;
+import euhedral.io.resource_monitoring.NumaMapper.SocketTopology;
+import euhedral.io.resource_monitoring.ResourceMonitor;
+import euhedral.io.resource_monitoring.SystemUtilization.CoreSnapshot;
+import euhedral.io.resource_monitoring.SystemUtilization.NodeSnapshot;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.BitSet;
 import java.util.concurrent.TimeUnit;
@@ -43,7 +43,7 @@ class ControlPlaneShardTest {
                 mockResourceMonitor,
                 mockMeterRegistry);
 
-        NodeTopology topology = getTopology();
+        SocketTopology topology = getTopology();
         NodeSnapshot snapshot = getNodeSnapshot(topology);
         CloneConfig[] configs = getConfigs(snapshot, topology, mockResourceMonitor,
                 mockMeterRegistry);
@@ -67,7 +67,7 @@ class ControlPlaneShardTest {
         assertTrue(shard.isStarted(), "Expected the shard to be marked started");
     }
 
-    private static NodeTopology getTopology() {
+    private static SocketTopology getTopology() {
         AtomicInteger version = new AtomicInteger(0);
         AtomicReference<BitSet> effectiveCores = new AtomicReference<>(new BitSet(2));
         AtomicReference<BitSet> effectiveCpus = new AtomicReference<>(new BitSet(4));
@@ -81,10 +81,10 @@ class ControlPlaneShardTest {
         core2cpu[0].set(1);
         core2cpu[1].set(2);
         core2cpu[1].set(3);
-        return new NodeTopology(version, effectiveCores, effectiveCpus, effectiveCoreToCpu);
+        return new SocketTopology(version, effectiveCores, effectiveCpus, effectiveCoreToCpu);
     }
 
-    private static NodeSnapshot getNodeSnapshot(NodeTopology topology) {
+    private static NodeSnapshot getNodeSnapshot(SocketTopology topology) {
         CoreSnapshot[] coreSnapshots = new CoreSnapshot[topology.effectiveCores().get().length()];
         for (int i = 0; i < coreSnapshots.length; i++) {
             coreSnapshots[i] = new CoreSnapshot(i, 0, 100_000, 0, 0, 0, 0, 0,
@@ -95,7 +95,7 @@ class ControlPlaneShardTest {
         return new NodeSnapshot(0, topology.effectiveCores().get(), 0, 0, 0, 0, coreSnapshots, 0);
     }
 
-    private static CloneConfig[] getConfigs(NodeSnapshot snapshot, NodeTopology topology,
+    private static CloneConfig[] getConfigs(NodeSnapshot snapshot, SocketTopology topology,
             ResourceMonitor resourceMonitor, MeterRegistry meterRegistry) {
         CloneConfig[] configs = new CloneConfig[topology.effectiveCores().get().cardinality()];
         for (int i = 0; i < configs.length; i++) {
@@ -129,14 +129,14 @@ class ControlPlaneShardTest {
                 mockResourceMonitor,
                 mockMeterRegistry);
 
-        NodeTopology topo1 = getTopology(); // Version 0, Core 0 and 1 active
+        SocketTopology topo1 = getTopology(); // Version 0, Core 0 and 1 active
         shard.start(getNodeSnapshot(topo1), topo1, upstream);
 
         verify(clones[0]).start();
         verify(clones[1]).start();
 
         // Trigger Rebalance: Drop Core 0
-        NodeTopology topo2 = getTopology();
+        SocketTopology topo2 = getTopology();
         topo2.version().incrementAndGet();
         topo2.effectiveCores().get().clear(0);
         topo2.effectiveCpus().get().clear(0, 2);

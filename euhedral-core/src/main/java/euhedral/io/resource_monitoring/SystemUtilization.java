@@ -1,4 +1,6 @@
-package euhedral.io.utils;
+package euhedral.io.resource_monitoring;
+
+import static euhedral.io.utils.MathFunctions.clampDouble;
 
 import java.util.BitSet;
 import java.util.concurrent.atomic.AtomicReferenceArray;
@@ -120,7 +122,8 @@ public interface SystemUtilization {
             }
 
             long coreMemoryPool = perCpuMemoryPool * cpuCount;
-            return new CoreSnapshot(coreId, cpuQuotaPool, period, effectiveCpus.cardinality(), globalMemoryPool,
+            return new CoreSnapshot(coreId, cpuQuotaPool, period, effectiveCpus.cardinality(),
+                    globalMemoryPool,
                     (long) (globalMemoryPool * totalMemoryUtilization), coreMemoryPool,
                     (double) (memPerCpuUsageBytes * cpuCount) / coreMemoryPool, effectiveCpus,
                     cpuSnapshots);
@@ -146,8 +149,8 @@ public interface SystemUtilization {
             double io = ioPressure * 0.8;
             double combinedPressure =
                     1.0 - ((1.0 - cpuPressure) *
-                    (1.0 - io) *
-                    (1.0 - memUtil));
+                            (1.0 - io) *
+                            (1.0 - memUtil));
 
             return new CpuSnapshot(cpuId, cpuQuota, period, globalEffectiveCpus.cardinality(),
                     globalMemoryPool, (long) (globalMemoryPool * totalMemoryUtilization),
@@ -163,8 +166,17 @@ public interface SystemUtilization {
         public double pressure() {
             double cpu = 1.0 - (1.0 - cpuThrottleRatio);
             double io = ioPressure * 0.8;
+            double pressure = Math.max(Math.max(cpu, totalMemoryUtilization), io);
 
-            return Math.clamp(Math.max(Math.max(cpu, totalMemoryUtilization), io), 0.0, 1.0);
+            return clampDouble(pressure, 0.0, 1.0);
+        }
+
+        public HardwareUtilization clone() {
+            return new HardwareUtilization(timestampNs, quotaCpus, quotaCpuUsage, period,
+                    (BitSet) globalEffectiveCpus.clone(), perQuotaCpuPressure, cpuThrottleRatio,
+                    perQuotaCpuThrottleRatio, globalMemoryPool, perCpuMemoryPool,
+                    totalMemoryUtilization, memPerCpuUsageBytes, ioBytesPerSecond, ioPressure,
+                    snapshot);
         }
     }
 }

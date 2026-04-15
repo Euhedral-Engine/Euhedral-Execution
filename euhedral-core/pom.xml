@@ -120,6 +120,17 @@
   </dependencies>
 
   <build>
+    <resources>
+      <resource>
+        <directory>src/main/resources</directory>
+        <filtering>false</filtering>
+        <excludes>
+          <exclude>**/.zig-cache/**</exclude>
+          <exclude>**.zig</exclude>
+          <exclude>**.zon</exclude>
+        </excludes>
+      </resource>
+    </resources>
     <plugins>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
@@ -144,29 +155,40 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
-        <version>3.13.0</version>
+        <version>3.11.0</version>
+        <executions>
+          <execution>
+            <id>default-compile</id>
+            <goals><goal>compile</goal></goals>
+            <configuration>
+              <source>17</source>
+              <target>17</target>
+            </configuration>
+          </execution>
+          <execution>
+            <id>java21-compile</id>
+            <goals><goal>compile</goal></goals>
+            <configuration>
+              <source>21</source>
+              <target>21</target>
+              <compileSourceRoots>
+                <root>${project.basedir}/src/main/java21</root>
+              </compileSourceRoots>
+              <outputDirectory>${project.build.outputDirectory}/META-INF/versions/21</outputDirectory>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>3.5.0</version>
         <configuration>
-          <release combine.self="override"></release>
-          <compilerArgs>
-            <arg>--add-exports</arg>
-            <arg>java.base/jdk.internal.platform=ALL-UNNAMED</arg>
-            <arg>--add-exports</arg>
-            <arg>java.base/jdk.internal.vm.annotation=ALL-UNNAMED</arg>
-
-            <arg>-proc:full</arg>
-          </compilerArgs>
-          <annotationProcessorPaths>
-            <path>
-              <groupId>org.projectlombok</groupId>
-              <artifactId>lombok</artifactId>
-              <version>${lombok.version}</version>
-            </path>
-            <path>
-              <groupId>org.openjdk.jmh</groupId>
-              <artifactId>jmh-generator-annprocess</artifactId>
-              <version>1.37</version>
-            </path>
-          </annotationProcessorPaths>
+          <archive>
+            <manifestEntries>
+              <Multi-Release>true</Multi-Release>
+            </manifestEntries>
+          </archive>
         </configuration>
       </plugin>
       <plugin>
