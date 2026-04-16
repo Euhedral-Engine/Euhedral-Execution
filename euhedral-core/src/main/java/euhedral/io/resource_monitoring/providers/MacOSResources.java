@@ -20,10 +20,10 @@ public class MacOSResources implements ResourceProvider {
             String filePath;
             String suffix;
             if (arch.startsWith("aarch64") || arch.contains("arm64")) {
-                filePath = "/monitoring/mac_resources_arm64.dylib";
+                filePath = "/monitoring/bin/mac_resources_arm64.dylib";
                 suffix = "mac_resources_arm64.dylib";
             } else {
-                filePath = "/monitoring/mac_resources_x64.dylib";
+                filePath = "/monitoring/bin/mac_resources_x64.dylib";
                 suffix = "mac_resources_x64.dylib";
             }
 
