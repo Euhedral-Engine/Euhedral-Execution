@@ -16,12 +16,13 @@ import java.util.concurrent.atomic.AtomicReferenceArray;
 import java.util.concurrent.locks.LockSupport;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Sinks;
 import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
 
-public final class ResourceMonitor implements AutoCloseable {
+public final class ResourceMonitor implements Disposable, AutoCloseable {
 
     private static final double NS_TO_SEC = 1.0 / 1_000_000_000.0;
 
@@ -55,6 +56,7 @@ public final class ResourceMonitor implements AutoCloseable {
     private volatile long lastIoBytes;
     private volatile long lastWallClockNs;
     private volatile boolean running = false;
+    private volatile boolean disposed = false;
     private Thread pollingThread;
 
     public ResourceMonitor(Duration sampleRate) {
@@ -80,6 +82,10 @@ public final class ResourceMonitor implements AutoCloseable {
     }
 
     public void start() {
+        if(disposed) {
+            throw new IllegalStateException("This ResourceMonitor is disposed.");
+        }
+
         if (metrics == null) {
             throw new RuntimeException(
                     "Container metrics not available on this platform. Monitor will not start.");
@@ -107,19 +113,32 @@ public final class ResourceMonitor implements AutoCloseable {
     }
 
     @Override
-    public void close() {
-        if (running) {
-            running = false;
-            if (pollingThread != null) {
-                try {
-                    pollingThread.interrupt();
-                    LockSupport.unpark(pollingThread);
-                    pollingThread.join(500);
-                } catch (Throwable ignored) {
+    public void dispose() {
+        close();
+    }
 
+    @Override
+    public boolean isDisposed() {
+        return disposed;
+    }
+
+    @Override
+    public void close() {
+        if(!disposed) {
+            disposed = true;
+            if (running) {
+                running = false;
+                if (pollingThread != null) {
+                    try {
+                        pollingThread.interrupt();
+                        LockSupport.unpark(pollingThread);
+                        pollingThread.join(500);
+                    } catch (Throwable ignored) {
+
+                    }
                 }
+                listeners.tryEmitComplete();
             }
-            listeners.tryEmitComplete();
         }
     }
 

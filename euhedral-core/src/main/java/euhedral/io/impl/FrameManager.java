@@ -29,6 +29,9 @@ public class FrameManager<T, F extends AbstractFrame> implements AutoCloseable {
 
     @Setter
     private FrameFactory<T, F> factory;
+    @Getter
+    private long totalRecycled = 0;
+
     private int idx = 0;
 
     public FrameManager(int chunkSize, int pooledChunks,
@@ -52,7 +55,7 @@ public class FrameManager<T, F extends AbstractFrame> implements AutoCloseable {
 
     public @NonNull F generate(T data, long password) {
         if (password != this.password) {
-            return null;
+            throw new RuntimeException("Incorrect password for this FrameFactory.");
         }
         if(factory == null) {
             throw new RuntimeException("Cannot generate frames with a null FrameFactory.");
@@ -80,6 +83,7 @@ public class FrameManager<T, F extends AbstractFrame> implements AutoCloseable {
     private @Nullable F get() {
         if (idx == 0) {
             idx = recycleQueue.drain(this::drain, buffer.length);
+            totalRecycled += idx;
         }
         if (idx > 0) {
             F frame = (F) buffer[--idx];
