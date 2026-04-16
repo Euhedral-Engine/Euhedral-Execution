@@ -15,10 +15,10 @@ public class WindowsResources implements ResourceProvider {
             String filePath;
             String suffix;
             if (arch.startsWith("aarch64") || arch.contains("arm64")) {
-                filePath = "/monitoring/windows_resources_arm64.dll";
+                filePath = "/monitoring/bin/windows_resources_arm64.dll";
                 suffix = "windows_resources_arm64.dll";
             } else {
-                filePath = "/monitoring/windows_resources_x64.dll";
+                filePath = "/monitoring/bin/windows_resources_x64.dll";
                 suffix = "windows_resources_x64.dll";
             }
 
