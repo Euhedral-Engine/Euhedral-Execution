@@ -26,3 +26,11 @@
 /dist/
 /nbdist/
 /.nb-gradle/
+
+### Misc
+**/*.zig
+**/*.zon
+**/.zig-cache/
+**/async-profiler*/
+**/.tool-versions
+**/.profileconfig.json
