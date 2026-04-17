@@ -156,11 +156,12 @@ public class DefaultSlotManager implements SlotManager {
         } else {
             int[] cpus = config.cloneConfig.getCpuSet();
             this.cpuId = cpus[0];
+            String name = config.cloneConfig.shardName() + "-DefaultSlotManager-"
+                    + config.cloneConfig.coreId();
+
             this.pinnedExecutor = PinnedThreadExecutor.getOrSetIfAbsent(cpus[0],
-                    config.cloneConfig.shardName() + "-DefaultSlotManager-"
-                            + config.cloneConfig.coreId(), Thread.MAX_PRIORITY, false);
-            this.logger = LoggerFactory.getLogger(
-                    config.cloneConfig.shardName() + "-DefaultSlotManager");
+                    name, Thread.MAX_PRIORITY, false);
+            this.logger = LoggerFactory.getLogger(name);
         }
 
         this.metrics = new Metrics(config.meterRegistry, config, () -> inFlight, () -> avgLatency,
