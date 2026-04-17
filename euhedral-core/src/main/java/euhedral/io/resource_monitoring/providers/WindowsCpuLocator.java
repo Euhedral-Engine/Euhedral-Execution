@@ -17,12 +17,14 @@ public class WindowsCpuLocator {
 
     static {
         boolean loaded = false;
-        try {
-            // Test if the library can actually perform a call
-            INSTANCE.getCpu();
-            loaded = true;
-        } catch (Throwable e) {
-            LOGGER.warn("Unable to load JNA library for getting cpu", e);
+        if(System.getProperty("os.name").toLowerCase().contains("win")) {
+            try {
+                // Test if the library can actually perform a call
+                INSTANCE.getCpu();
+                loaded = true;
+            } catch (Throwable e) {
+                LOGGER.warn("Unable to load JNA library for getting cpu", e);
+            }
         }
         LOADED = loaded;
     }
