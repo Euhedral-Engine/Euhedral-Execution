@@ -5,7 +5,7 @@
   <modelVersion>4.0.0</modelVersion>
   <parent>
     <groupId>com.euhedral</groupId>
-    <artifactId>euhedral-backend</artifactId>
+    <artifactId>euhedral-execution</artifactId>
     <version>0.0.1-SNAPSHOT</version>
   </parent>
 
@@ -27,15 +27,6 @@
       <groupId>io.projectreactor</groupId>
       <artifactId>reactor-core</artifactId>
       <scope>compile</scope>
-    </dependency>
-
-    <dependency>
-      <groupId>io.github.resilience4j</groupId>
-      <artifactId>resilience4j-circuitbreaker</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>io.github.resilience4j</groupId>
-      <artifactId>resilience4j-micrometer</artifactId>
     </dependency>
 
     <dependency>

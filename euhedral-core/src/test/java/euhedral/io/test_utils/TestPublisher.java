@@ -11,6 +11,7 @@ import org.reactivestreams.Subscription;
 
 public class TestPublisher implements Publisher<AbstractFrame>, Subscription {
 
+    @Getter
     private final TestFrame[] myFrames;
 
     private PaddedAtomicLong countDown;

@@ -23,7 +23,7 @@ public class FlowRecorder {
     @Getter
     private final FlowSnapshot flowSnapshot = new FlowSnapshot();
 
-    private long dynamicWindowNs = 0;
+    private long dynamicWindowNs;
     private long prevWindowCount = 0;
     private long currWindowCount = 0;
     @Getter
@@ -173,7 +173,7 @@ public class FlowRecorder {
         }
 
         long interval = (now - lastRecordingTime);
-        if (now <= 0) {
+        if (now <= 0 || interval <= 0) {
             if (threadSafeRecord) {
                 releaseLock();
             }
