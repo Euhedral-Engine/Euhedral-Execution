@@ -5,6 +5,8 @@ import java.util.BitSet;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.AtomicReferenceArray;
+
+import euhedral.io.resource_monitoring.providers.WindowsCpuLocator;
 import lombok.Getter;
 import net.openhft.affinity.Affinity;
 import net.openhft.affinity.AffinityLock;
@@ -19,7 +21,12 @@ public class NumaMapper {
     }
 
     public static OriginLocation locateMe() {
-        int cpu = Affinity.getCpu();
+        int cpu;
+        if(WindowsCpuLocator.LOADED) {
+            cpu = WindowsCpuLocator.INSTANCE.getCpu();
+        } else {
+            cpu = Affinity.getCpu();
+        }
         int core = INSTANCE.getPhysicalCore(cpu);
         int socket = INSTANCE.getSocket(core);
         return new OriginLocation(cpu, core, socket);

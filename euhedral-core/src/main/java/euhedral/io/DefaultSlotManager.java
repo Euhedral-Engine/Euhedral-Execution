@@ -525,22 +525,24 @@ public class DefaultSlotManager implements SlotManager {
             while (parks-- > 0) {
                 park(state.maxParkNs);
 
-                if (upstreamCount != ingest.getUpstreamCount()) {
-                    break;
-                }
+                if(ingest != null) {
+                    if (upstreamCount != ingest.getUpstreamCount()) {
+                        break;
+                    }
 
-                if (upstreamCount == 0) {
-                    long count = ingest.drain(bufferWrapper, bufferSize - state.bufferCount, 0);
-                    if (count > 0) {
+                    if (upstreamCount == 0) {
+                        long count = ingest.drain(bufferWrapper, bufferSize - state.bufferCount, 0);
+                        if (count > 0) {
+                            state.bufferCount += (int) count;
+                            break;
+                        }
+                    }
+
+                    if (ingest.getCount() >= (bufferSize >> 3)) {
+                        long count = ingest.drain(bufferWrapper, bufferSize - state.bufferCount, 0);
                         state.bufferCount += (int) count;
                         break;
                     }
-                }
-
-                if (ingest.getCount() >= (bufferSize >> 3)) {
-                    long count = ingest.drain(bufferWrapper, bufferSize - state.bufferCount, 0);
-                    state.bufferCount += (int) count;
-                    break;
                 }
             }
         }
