@@ -2,11 +2,18 @@ package euhedral.io.resource_monitoring.providers;
 
 import euhedral.io.resource_monitoring.NumaMapper;
 import euhedral.io.resource_monitoring.SystemUtilization.SystemSnapshot;
+
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.util.BitSet;
+import java.util.Optional;
+import java.util.stream.Stream;
+
 import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,19 +42,58 @@ public class CgroupV2Resources implements ResourceProvider {
     private final CpuMetrics cpuMetrics = new CpuMetrics();
     private long lastTotalStallUsec = 0;
 
-    public CgroupV2Resources(Path cgroupPath) {
-        this.cpuMaxPath = cgroupPath.resolve("cpu.max");
-        this.cpuStatPath = cgroupPath.resolve("cpu.stat");
-        this.effectiveCpuPath = cgroupPath.resolve("cpuset.cpus.effective");
-        this.pressurePath = cgroupPath.resolve("cpu.pressure");
-        this.memoryMaxPath = cgroupPath.resolve("memory.max");
-        this.memoryCurrentPath = cgroupPath.resolve("memory.current");
-        this.memoryStatPath = cgroupPath.resolve("memory.stat");
-        this.ioStatPath = cgroupPath.resolve("io.stat");
+    public CgroupV2Resources() throws Throwable{
+        Path userPath = getCgroupV2UserPath();
+
+        this.cpuMaxPath = resolveCgroupPath(userPath, "cpu.max");
+        this.cpuStatPath = resolveCgroupPath(userPath, "cpu.stat");
+        this.effectiveCpuPath = resolveCgroupPath(userPath, "cpuset.cpus.effective");
+        this.pressurePath = resolveCgroupPath(userPath, "cpu.pressure");
+        this.memoryMaxPath = resolveCgroupPath(userPath, "memory.max");
+        this.memoryCurrentPath = resolveCgroupPath(userPath, "memory.current");
+        this.memoryStatPath = resolveCgroupPath(userPath, "memory.stat");
+        this.ioStatPath = resolveCgroupPath(userPath, "io.stat");
         this.totalCpus = NumaMapper.INSTANCE.getCpuCount();
         this.effectiveCpus = new BitSet(totalCpus);
         this.lastCpuActiveTime = new long[totalCpus];
     }
+
+    public static Path getCgroupV2UserPath() throws Throwable {
+        Optional<String> cgroupV2Path;
+        try(Stream<String> lines = Files.lines(Paths.get("/proc/self/cgroup"))) {
+            cgroupV2Path = lines.filter(line -> line.startsWith("0::"))
+                    .map(line -> line.substring(3))
+                    .findFirst();
+        }
+
+        if (cgroupV2Path.isPresent()) {
+            String path = cgroupV2Path.get();
+
+            String fsPath = "/sys/fs/cgroup" + (path.equals("/") ? "" : path);
+            return Paths.get(fsPath);
+        }
+        throw new RuntimeException("cgroupV2 not supported.");
+    }
+
+    private static Path resolveCgroupPath(Path userPath, String controller) {
+        Path resolvedUser = userPath.resolve(controller);
+        if (resolvedUser.toFile().exists()) {
+            return resolvedUser;
+        }
+
+        try {
+            String controllerName = controller.split("\\.")[0];
+            Path subtreeControl = userPath.getParent().resolve("cgroup.subtree_control");
+
+            if (Files.isWritable(subtreeControl)) {
+                Files.writeString(subtreeControl, "+" + controllerName, StandardOpenOption.APPEND);
+            }
+        } catch (Throwable ignored) {
+        }
+
+        return resolvedUser.toFile().exists() ? resolvedUser : Paths.get("/sys/fs/cgroup").resolve(controller);
+    }
+
 
     @Override
     public SystemSnapshot getSnapshot() {
@@ -95,6 +141,7 @@ public class CgroupV2Resources implements ResourceProvider {
         effectiveCpus.clear();
         int len = readFileToBuffer(effectiveCpuPath);
         if (len <= 0) {
+            effectiveCpus.set(0, totalCpus);
             return effectiveCpus;
         }
 
@@ -144,18 +191,18 @@ public class CgroupV2Resources implements ResourceProvider {
     }
 
     public long[] getCpuMax() {
-        int bytesRead = readFileToBuffer(cpuMaxPath);
-        if (bytesRead <= 0) {
+        int len = readFileToBuffer(cpuMaxPath);
+        if (len <= 0) {
             return new long[]{Runtime.getRuntime().availableProcessors(), 100_000};
         }
 
-        int spaceIdx = findByte(0, bytesRead, (byte) ' ');
+        int spaceIdx = findByte(0, len, (byte) ' ');
 
-        int quotaEnd = (spaceIdx == -1) ? bytesRead : spaceIdx;
+        int quotaEnd = (spaceIdx == -1) ? len : spaceIdx;
 
-        long quota = isMax(0, quotaEnd) ? -1 : parseBytesLong(0, quotaEnd);
+        long quota = isMax() ? -1 : parseBytesLong(0, quotaEnd);
 
-        long period = (spaceIdx != -1) ? parseBytesLong(spaceIdx + 1, bytesRead) : 100_000;
+        long period = (spaceIdx != -1) ? parseBytesLong(spaceIdx + 1, len) : 100_000;
 
         return new long[]{quota, period};
     }
@@ -173,9 +220,9 @@ public class CgroupV2Resources implements ResourceProvider {
         return res;
     }
 
-    private boolean isMax(int start, int end) {
-        return buffer[start] == 'm' && buffer[start + 1] == 'a'
-                && buffer[start + 2] == 'x';
+    private boolean isMax() {
+        return buffer[0] == 'm' && buffer[1] == 'a'
+                && buffer[2] == 'x';
     }
 
     private int findByte(int start, int end, byte target) {
@@ -262,7 +309,7 @@ public class CgroupV2Resources implements ResourceProvider {
                 break;
             }
 
-            // /proc/stat columns (0-indexed):
+            // /proc/stat columns:
             // 0:user, 1:nice, 2:system, 3:idle, 4:iowait, 5:irq, 6:softirq, 7:steal
             // Active = 0, 1, 2, 5, 6, 7
             if (column == 0 || column == 1 || column == 2 || column == 5 || column == 6
@@ -273,7 +320,6 @@ public class CgroupV2Resources implements ResourceProvider {
                 }
                 sum += val;
             } else {
-                // Just skip the number
                 while (pos < len && buffer[pos] >= '0' && buffer[pos] <= '9') {
                     pos++;
                 }
@@ -317,7 +363,7 @@ public class CgroupV2Resources implements ResourceProvider {
 
     public long getMemoryLimit() {
         int len = readFileToBuffer(memoryMaxPath);
-        return isMax(0, len) ? Runtime.getRuntime().maxMemory() : parseBytesLong(0, len);
+        return isMax() ? Runtime.getRuntime().maxMemory() : parseBytesLong(0, len);
     }
 
     public long getMemoryUsage() {

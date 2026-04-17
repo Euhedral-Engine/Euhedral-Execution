@@ -3,6 +3,7 @@ package euhedral.io.resource_monitoring.providers;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Arrays;
 import java.util.Optional;
 
 public class OSResourceProviderPicker {
@@ -17,20 +18,10 @@ public class OSResourceProviderPicker {
             OS = OSName.LINUX;
             ResourceProvider instance = null;
             try {
-                Optional<String> cgroupV2Path = Files.lines(Paths.get("/proc/self/cgroup"))
-                        .filter(line -> line.startsWith("0::"))
-                        .map(line -> line.substring(3))
-                        .findFirst();
-
-                if (cgroupV2Path.isPresent()) {
-                    String path = cgroupV2Path.get();
-
-                    String fsPath = "/sys/fs/cgroup" + (path.equals("/") ? "" : path);
-                    Path cgroupPath = Paths.get(fsPath);
-                    instance = new CgroupV2Resources(cgroupPath);
-                }
-            } catch (Exception ignored) {
-                System.err.println("cgroupV1 is not supported");
+                instance = new CgroupV2Resources();
+            } catch (Throwable t) {
+                System.err.println("cgroupV2 is not supported");
+                System.err.println(Arrays.toString(t.getStackTrace()));
             }
             INSTANCE = instance;
         } else if (os.contains("win")) {
