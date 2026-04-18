@@ -21,17 +21,19 @@ import euhedral.io.utils.DemandOptimizer;
 import euhedral.io.utils.DrainBuffer;
 import euhedral.io.utils.FlowRecorder;
 import euhedral.io.utils.FlowRecorder.FlowSnapshot;
-import euhedral.io.utils.PinnedThreadExecutor;
-import euhedral.io.utils.ThreadTimerResolution;
+import euhedral.io.utils.pinning.PinnedThreadExecutor;
+import euhedral.io.utils.pinning.ThreadTimerResolution;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.MeterRegistry;
+
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.Supplier;
+
 import lombok.AccessLevel;
 import lombok.Getter;
 import org.jctools.queues.MpscUnboundedXaddArrayQueue;
@@ -134,8 +136,8 @@ public class DefaultSlotManager implements SlotManager {
         this.bufferWrapper = new DrainBuffer(buffer, false);
         this.state = new CycleState();
 
-        this.completeSink = new LockFreeSink(new MpscUnboundedXaddArrayQueue<>(bufferSize, 4),
-                frame -> {
+        this.completeSink =
+                new LockFreeSink(new MpscUnboundedXaddArrayQueue<>(bufferSize, 4), frame -> {
                     this.inFlight--;
                     state.receivingOrderedWork = upstreamCount == 1 && frame.isOrdered();
                     state.completed++;
@@ -159,8 +161,9 @@ public class DefaultSlotManager implements SlotManager {
             String name = config.cloneConfig.shardName() + "-DefaultSlotManager-"
                     + config.cloneConfig.coreId();
 
-            this.pinnedExecutor = PinnedThreadExecutor.getOrSetIfAbsent(cpus[0],
-                    name, Thread.MAX_PRIORITY, false);
+            this.pinnedExecutor =
+                    PinnedThreadExecutor.getOrSetIfAbsent(cpus[0], name, Thread.MAX_PRIORITY,
+                            false);
             this.logger = LoggerFactory.getLogger(name);
         }
 
@@ -432,8 +435,9 @@ public class DefaultSlotManager implements SlotManager {
 
         avgLatency = (long) (flowSnapshot.avgUnits + avgVariance);
 
-        double queueEstimate = executionLatency.getVegasQueueEstimate(flowSnapshot,
-                flowSnapshot.avgUnits, currentConcurrency);
+        double queueEstimate =
+                executionLatency.getVegasQueueEstimate(flowSnapshot, flowSnapshot.avgUnits,
+                        currentConcurrency);
 
         long ideal = flowSnapshot.throughputNs * updateInterval;
         updateEffectiveConcurrencyLimit(ideal);
@@ -448,13 +452,14 @@ public class DefaultSlotManager implements SlotManager {
         long adaptiveCap = ideal << 2;
 
         double pressure = cpuSnapshot.pressure();
-        adaptiveCap = (long) (adaptiveCap * (1.0 - pressure * 0.5));
+        pressure *= cpuSnapshot.isPCore() ? 0.5 : 0.7;
+        adaptiveCap = (long) (adaptiveCap * (1.0 - pressure));
 
         long cpuCount = cpuSnapshot.globalCpuCount();
-        long hardwareMax = cpuCount * 4096;
+        long hardwareMax = cpuCount * bufferSize;
 
-        this.effectiveConcurrencyLimit = Math.max(config.initialConcurrency,
-                Math.min(adaptiveCap, hardwareMax));
+        this.effectiveConcurrencyLimit =
+                clampLong(adaptiveCap, config.initialConcurrency, hardwareMax);
     }
 
     protected void updateConcurrency(long ideal, double queueEstimate) {
@@ -526,7 +531,7 @@ public class DefaultSlotManager implements SlotManager {
             while (parks-- > 0) {
                 park(state.maxParkNs);
 
-                if(ingest != null) {
+                if (ingest != null) {
                     if (upstreamCount != ingest.getUpstreamCount()) {
                         break;
                     }
@@ -690,16 +695,24 @@ public class DefaultSlotManager implements SlotManager {
 
     public record Config(CloneConfig cloneConfig, int initialConcurrency, int bufferSize,
                          int maxUpdateInterval, IdleCyclePolicy idleCyclePolicy,
-                         MeterRegistry meterRegistry, String metricPrefix) implements
-            CloneableObject {
+                         MeterRegistry meterRegistry, String metricPrefix)
+            implements CloneableObject {
 
-        public static Config balancedDefault(MeterRegistry meterRegistry, String metricPrefix) {
-            return new Config(null, 4_096, 4_096, 1024, IdleCyclePolicy.DEFAULT, meterRegistry,
+        public static Config powerSavingDefault(MeterRegistry meterRegistry, String metricPrefix) {
+            return new Config(null, 1_024, 4_096, 256, IdleCyclePolicy.POWER_SAVING, meterRegistry,
                     metricPrefix);
         }
 
+        public static Config balancedDefault(MeterRegistry meterRegistry, String metricPrefix) {
+            return new Config(null, 4_096, 4_096, 512, IdleCyclePolicy.DEFAULT, meterRegistry,
+                    metricPrefix);
+        }
+
+        /// This default uses a maxUpdateInterval of 1024. Higher intervals reduce unneeded
+        /// recomputation of limits and execution latency recording. They also reduce sensitivity to
+        /// micro jitter.
         public static Config lowLatencyDefault(MeterRegistry meterRegistry, String metricPrefix) {
-            return new Config(null, 4_096, 4_096, 512, IdleCyclePolicy.LOW_LATENCY, meterRegistry,
+            return new Config(null, 4_096, 4_096, 1024, IdleCyclePolicy.LOW_LATENCY, meterRegistry,
                     metricPrefix);
         }
 
@@ -717,18 +730,21 @@ public class DefaultSlotManager implements SlotManager {
         public void close() {
         }
 
-        /**
-         * Defines how the DefaultSlotManager will react when it doesn't process work in a cycle.
-         * Setting these values higher than 1.0 disables them.
-         *
-         */
+        /// Defines how the DefaultSlotManager will react when it doesn't process work in a cycle.
+        /// Setting the threshold values higher than 1.0 disables them.
+        ///
+        /// @param spinThreshold Upper limit defined by idleCyles / totalCycles for using Thread.onSpinWait()
+        /// @param yieldThreshold Upper limit defined by idleCyles / totalCycles for using Thread.yield()
+        /// @param maxParkTime Max duration of each LockSupport.parkNanos()
         public record IdleCyclePolicy(double spinThreshold, double yieldThreshold,
                                       Duration maxParkTime) {
 
-            public static IdleCyclePolicy DEFAULT = new IdleCyclePolicy(0.25, 0.60,
-                    Duration.ofMillis(10));
-            public static IdleCyclePolicy LOW_LATENCY = new IdleCyclePolicy(0.40, 0.80,
-                    Duration.ofNanos(20_000));
+            public static IdleCyclePolicy DEFAULT =
+                    new IdleCyclePolicy(0.25, 0.60, Duration.ofMillis(10));
+            public static IdleCyclePolicy LOW_LATENCY =
+                    new IdleCyclePolicy(0.40, 0.80, Duration.ofNanos(20_000));
+            public static IdleCyclePolicy POWER_SAVING =
+                    new IdleCyclePolicy(2.0, 2.0, Duration.ofNanos(100_000));
         }
     }
 
@@ -737,7 +753,8 @@ public class DefaultSlotManager implements SlotManager {
         public final long maxParkNs = config.idleCyclePolicy.maxParkTime.toNanos();
         public final long lowWaterMark = bufferSize >> 2;
 
-        public final FlowSnapshot arrivalLatencySnapshot = bufferWrapper.arrivalLatencyRecorder.getFlowSnapshot();
+        public final FlowSnapshot arrivalLatencySnapshot =
+                bufferWrapper.arrivalLatencyRecorder.getFlowSnapshot();
         public final FlowRecorder idleRecorder = new FlowRecorder();
 
         public FlowSnapshot fillSnapshot = null;

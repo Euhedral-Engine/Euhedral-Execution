@@ -20,8 +20,8 @@ import org.slf4j.LoggerFactory;
 
 public class CgroupV2Resources implements ResourceProvider {
 
-    private static final byte[] inactiveFileBytes = "inactive_file".getBytes(
-            StandardCharsets.US_ASCII);
+    private static final byte[] inactiveFileBytes =
+            "inactive_file".getBytes(StandardCharsets.US_ASCII);
     private static final byte[] rbytesKey = "rbytes=".getBytes(StandardCharsets.US_ASCII);
     private static final byte[] wbytesKey = "wbytes=".getBytes(StandardCharsets.US_ASCII);
 
@@ -42,7 +42,7 @@ public class CgroupV2Resources implements ResourceProvider {
     private final CpuMetrics cpuMetrics = new CpuMetrics();
     private long lastTotalStallUsec = 0;
 
-    public CgroupV2Resources() throws Throwable{
+    public CgroupV2Resources() throws Throwable {
         Path userPath = getCgroupV2UserPath();
 
         this.cpuMaxPath = resolveCgroupPath(userPath, "cpu.max");
@@ -60,10 +60,10 @@ public class CgroupV2Resources implements ResourceProvider {
 
     public static Path getCgroupV2UserPath() throws Throwable {
         Optional<String> cgroupV2Path;
-        try(Stream<String> lines = Files.lines(Paths.get("/proc/self/cgroup"))) {
-            cgroupV2Path = lines.filter(line -> line.startsWith("0::"))
-                    .map(line -> line.substring(3))
-                    .findFirst();
+        try (Stream<String> lines = Files.lines(Paths.get("/proc/self/cgroup"))) {
+            cgroupV2Path =
+                    lines.filter(line -> line.startsWith("0::")).map(line -> line.substring(3))
+                            .findFirst();
         }
 
         if (cgroupV2Path.isPresent()) {
@@ -91,7 +91,8 @@ public class CgroupV2Resources implements ResourceProvider {
         } catch (Throwable ignored) {
         }
 
-        return resolvedUser.toFile().exists() ? resolvedUser : Paths.get("/sys/fs/cgroup").resolve(controller);
+        return resolvedUser.toFile().exists() ? resolvedUser
+                : Paths.get("/sys/fs/cgroup").resolve(controller);
     }
 
 
@@ -128,8 +129,7 @@ public class CgroupV2Resources implements ResourceProvider {
         long ioBytes = getIoBytes();
 
         return new SystemSnapshot(now, availableCpus, quotaCpus, period, cpuUsage, cpuThrottle,
-                effectiveCpus,
-                pressurePerCpu,
+                getCoreTypeMask(true), getCoreTypeMask(false), effectiveCpus, pressurePerCpu,
                 memoryLimit, memoryUsage, inactiveFile, ioBytes);
     }
 
@@ -193,7 +193,7 @@ public class CgroupV2Resources implements ResourceProvider {
     public long[] getCpuMax() {
         int len = readFileToBuffer(cpuMaxPath);
         if (len <= 0) {
-            return new long[]{Runtime.getRuntime().availableProcessors(), 100_000};
+            return new long[] {Runtime.getRuntime().availableProcessors(), 100_000};
         }
 
         int spaceIdx = findByte(0, len, (byte) ' ');
@@ -204,7 +204,7 @@ public class CgroupV2Resources implements ResourceProvider {
 
         long period = (spaceIdx != -1) ? parseBytesLong(spaceIdx + 1, len) : 100_000;
 
-        return new long[]{quota, period};
+        return new long[] {quota, period};
     }
 
     // --- Memory & IO ---
@@ -221,8 +221,7 @@ public class CgroupV2Resources implements ResourceProvider {
     }
 
     private boolean isMax() {
-        return buffer[0] == 'm' && buffer[1] == 'a'
-                && buffer[2] == 'x';
+        return buffer[0] == 'm' && buffer[1] == 'a' && buffer[2] == 'x';
     }
 
     private int findByte(int start, int end, byte target) {
@@ -353,6 +352,37 @@ public class CgroupV2Resources implements ResourceProvider {
         return 0;
     }
 
+    private BitSet getCoreTypeMask(boolean getPCores) {
+        int cpuCount = Runtime.getRuntime().availableProcessors();
+        long[] maxFreqs = new long[cpuCount];
+        long systemMax = 0;
+
+        for (int i = 0; i < cpuCount; i++) {
+            long freq;
+            try (FileInputStream fis = new FileInputStream(
+                    "/sys/devices/system/cpu/cpu" + i + "/cpufreq/cpuinfo_max_freq")) {
+                int len = fis.read(buffer);
+                freq = parseLongAt(0, len);
+            } catch (Throwable ignored) {
+                freq = 0;
+            }
+            maxFreqs[i] = freq;
+            if (freq > systemMax) {
+                systemMax = freq;
+            }
+        }
+
+        long threshold = (long) (systemMax * 0.80);
+        BitSet bitSet = new BitSet(cpuCount);
+
+        for (int i = 0; i < cpuCount; i++) {
+            boolean isP = maxFreqs[i] >= threshold;
+
+            bitSet.set(i, isP == getPCores);
+        }
+        return bitSet;
+    }
+
     private long parseLongAt(int pos, int len) {
         long res = 0;
         while (pos < len && buffer[pos] >= '0' && buffer[pos] <= '9') {
@@ -456,12 +486,12 @@ public class CgroupV2Resources implements ResourceProvider {
 
     public class CpuMetrics {
 
-        private static final byte[] usageUsecBytes = "usage_usec".getBytes(
-                StandardCharsets.US_ASCII);
-        private static final byte[] throttledUsecBytes = "throttled_usec".getBytes(
-                StandardCharsets.US_ASCII);
-        private static final byte[] throttledCountBytes = "throttled_count".getBytes(
-                StandardCharsets.US_ASCII);
+        private static final byte[] usageUsecBytes =
+                "usage_usec".getBytes(StandardCharsets.US_ASCII);
+        private static final byte[] throttledUsecBytes =
+                "throttled_usec".getBytes(StandardCharsets.US_ASCII);
+        private static final byte[] throttledCountBytes =
+                "throttled_count".getBytes(StandardCharsets.US_ASCII);
 
         @Getter
         private long usageNs;

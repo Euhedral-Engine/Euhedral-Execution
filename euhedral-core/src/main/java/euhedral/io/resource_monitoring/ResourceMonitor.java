@@ -7,13 +7,14 @@ import euhedral.io.resource_monitoring.SystemUtilization.HardwareUtilization;
 import euhedral.io.resource_monitoring.SystemUtilization.SystemSnapshot;
 import euhedral.io.resource_monitoring.providers.OSResourceProviderPicker;
 import euhedral.io.resource_monitoring.providers.ResourceProvider;
-import euhedral.io.utils.ThreadTimerResolution.Linux;
+import euhedral.io.utils.pinning.ThreadTimerResolution.Linux;
 import java.time.Duration;
 import java.util.BitSet;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.AtomicReferenceArray;
 import java.util.concurrent.locks.LockSupport;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.Disposable;
@@ -192,7 +193,7 @@ public final class ResourceMonitor implements Disposable, AutoCloseable {
                     perCpuPressureRatio,
                     cpuThrottleRatio.get(), perCpuThrottleRatio,
                     memoryLimit,
-                    memoryLimit / snapshot.availableCpus(),
+                    memoryLimit / snapshot.totalCpus(),
                     memUsageRatio.get(),
                     memPerCpuUsageBytes.get(),
                     ioBytesPerSecond.get(), ioPressure.get(), snapshot);
@@ -253,6 +254,12 @@ public final class ResourceMonitor implements Disposable, AutoCloseable {
             updateRatio(perCpuPressureRatio, i, Math.max(0, cpuPressureRatio));
             updateRatio(perCpuThrottleRatio, i, Math.max(0, cpuThrottle));
         }
+
+        for(int i = effective.nextClearBit(0); i >= 0 && i < snapshot.totalCpus(); i = effective.nextClearBit(i + 1)) {
+            perCpuPressureRatio.set(i, 0.0);
+            perCpuThrottleRatio.set(i, 0.0);
+        }
+
         this.globalEffectiveCpus = effective;
     }
 
@@ -264,7 +271,7 @@ public final class ResourceMonitor implements Disposable, AutoCloseable {
         if (snapshot.memoryLimit() > 0 && snapshot.memoryLimit() < 1_000_000_000_000_000L) {
             double workingMemoryUtil = (double) workingMemory / snapshot.memoryLimit();
 
-            double availableCpus = snapshot.availableCpus();
+            double availableCpus = snapshot.totalCpus();
 
             if (Double.isFinite(workingMemoryUtil)) {
                 memUsageRatio.updateAndGet(

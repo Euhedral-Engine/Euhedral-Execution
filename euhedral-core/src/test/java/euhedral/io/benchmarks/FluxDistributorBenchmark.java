@@ -1,6 +1,6 @@
 package euhedral.io.benchmarks;
 
-import euhedral.io.utils.PinnedThreadExecutor;
+import euhedral.io.utils.pinning.PinnedThreadExecutor;
 import euhedral.io.test_utils.TestFrame;
 import java.util.concurrent.TimeUnit;
 import org.openjdk.jmh.annotations.Benchmark;
@@ -21,7 +21,6 @@ import org.openjdk.jmh.infra.Blackhole;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
-import org.slf4j.LoggerFactory;
 
 @BenchmarkMode({Mode.SampleTime, Mode.AverageTime})
 @OutputTimeUnit(TimeUnit.NANOSECONDS)

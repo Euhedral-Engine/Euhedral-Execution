@@ -1,4 +1,4 @@
-package euhedral.io.utils;
+package euhedral.io.utils.pinning;
 
 import static euhedral.io.utils.MathFunctions.clampInt;
 
@@ -67,11 +67,15 @@ public class PinnedThreadExecutor extends AbstractExecutorService implements Aut
     private final NonBlockingHashSet<Thread> threadPool = new NonBlockingHashSet<>();
     private final Thread cleanup;
 
+    @Getter
+    private final int cpu;
+
     private volatile String name;
     private volatile int priority;
     private volatile boolean daemon;
 
     private PinnedThreadExecutor(String name, int cpu, int priority, boolean daemon) {
+        this.cpu = cpu;
         this.name = name;
         this.priority = priority;
         this.daemon = daemon;
