@@ -7,8 +7,8 @@ import euhedral.io.interfaces.DispatchPreProcess;
 import euhedral.io.interfaces.PipelineExecutor;
 import euhedral.io.interfaces.SlotManager;
 import euhedral.io.resource_monitoring.SystemUtilization.CoreSnapshot;
-import euhedral.io.utils.PinnedThreadExecutor;
-import java.util.concurrent.Callable;
+import euhedral.io.utils.pinning.PinnedThreadExecutor;
+
 import java.util.concurrent.Future;
 import org.reactivestreams.Publisher;
 import org.slf4j.Logger;

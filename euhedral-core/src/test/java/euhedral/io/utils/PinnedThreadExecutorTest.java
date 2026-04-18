@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+
+import euhedral.io.utils.pinning.PinnedThreadExecutor;
 import net.openhft.affinity.Affinity;
 import org.junit.jupiter.api.Test;
 
@@ -11,7 +13,8 @@ class PinnedThreadExecutorTest {
     @Test
     void testVirtualThreadAffinity() throws Exception {
         int targetCpu = 1; // Assume CPU 1 for test
-        PinnedThreadExecutor executor = PinnedThreadExecutor.getOrSetIfAbsent(targetCpu, "Core-1-Worker", 5, true);
+        euhedral.io.utils.pinning.PinnedThreadExecutor
+                executor = euhedral.io.utils.pinning.PinnedThreadExecutor.getOrSetIfAbsent(targetCpu, "Core-1-Worker", 5, true);
 
         CompletableFuture<Integer> cpuCheck = new CompletableFuture<>();
 
@@ -28,7 +31,8 @@ class PinnedThreadExecutorTest {
 
     @Test
     void testDaemonAndPriority() throws Exception {
-        PinnedThreadExecutor executor = PinnedThreadExecutor.getOrSetIfAbsent(0, "Priority-Test", 8, true);
+        euhedral.io.utils.pinning.PinnedThreadExecutor
+                executor = euhedral.io.utils.pinning.PinnedThreadExecutor.getOrSetIfAbsent(0, "Priority-Test", 8, true);
 
         CompletableFuture<Boolean> isDaemon = new CompletableFuture<>();
         CompletableFuture<Integer> priority = new CompletableFuture<>();
@@ -45,7 +49,8 @@ class PinnedThreadExecutorTest {
 
     @Test
     void testCarrierAndVThreadAlignment() throws Exception {
-        PinnedThreadExecutor core2 = PinnedThreadExecutor.getOrSetIfAbsent(2, "Core2-Executor", 10, true);
+        euhedral.io.utils.pinning.PinnedThreadExecutor
+                core2 = PinnedThreadExecutor.getOrSetIfAbsent(2, "Core2-Executor", 10, true);
 
         CompletableFuture<Integer> carrierCpu = new CompletableFuture<>();
         CompletableFuture<Integer> vThreadCpu = new CompletableFuture<>();

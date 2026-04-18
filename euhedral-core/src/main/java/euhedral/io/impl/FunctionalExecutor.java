@@ -7,7 +7,7 @@ import euhedral.io.frames.ConsumerFrame;
 import euhedral.io.frames.FunctionFrame;
 import euhedral.io.frames.RunnableFrame;
 import euhedral.io.frames.SequencedFrame;
-import euhedral.io.utils.PinnedThreadExecutor;
+import euhedral.io.utils.pinning.PinnedThreadExecutor;
 
 public class FunctionalExecutor extends AbstractExecutor {
     FunctionalExecutor(PinnedThreadExecutor executorService) {

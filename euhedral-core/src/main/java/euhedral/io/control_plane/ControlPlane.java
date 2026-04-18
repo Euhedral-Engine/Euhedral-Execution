@@ -12,8 +12,8 @@ import euhedral.io.resource_monitoring.NumaMapper.SocketTopology;
 import euhedral.io.resource_monitoring.NumaMapper.SystemTopology;
 import euhedral.io.resource_monitoring.ResourceMonitor;
 import euhedral.io.resource_monitoring.SystemUtilization.HardwareUtilization;
-import euhedral.io.resource_monitoring.SystemUtilization.NodeSnapshot;
-import euhedral.io.utils.PinnedThreadExecutor;
+import euhedral.io.resource_monitoring.SystemUtilization.SocketSnapshot;
+import euhedral.io.utils.pinning.PinnedThreadExecutor;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.util.Arrays;
@@ -25,7 +25,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.LockSupport;
-import net.openhft.affinity.AffinityLock;
+
 import org.reactivestreams.Publisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -77,7 +77,7 @@ public class ControlPlane implements AutoCloseable {
     protected final FluxEdge[] shardHandles;
 
     protected volatile int[] activeNodeIds = new int[0];
-    protected volatile int currentGlobalVersion = Integer.MIN_VALUE;
+    protected volatile int currentGlobalVersion = -1;
 
     protected volatile boolean primed = false;
     protected volatile int[] weightedShardMap = new int[0];
@@ -177,7 +177,7 @@ public class ControlPlane implements AutoCloseable {
                 SocketTopology topology = systemTopology.socketTopologies().get(nodeId);
                 ControlPlaneShard shard = this.shards[nodeId];
 
-                NodeSnapshot snapshot = utilization.getNodeSnapshot(nodeId,
+                SocketSnapshot snapshot = utilization.getNodeSnapshot(nodeId,
                         topology.effectiveCoreToCpu().get(),
                         getShardQuota(nodeId, quotaPool));
                 CompletableFuture.runAsync(() -> {
@@ -210,7 +210,7 @@ public class ControlPlane implements AutoCloseable {
         double quotaPool = utilization.quotaCpus();
         for (int node = newNodes.nextSetBit(0); node >= 0; node = newNodes.nextSetBit(node + 1)) {
             SocketTopology topology = systemTopology.socketTopologies().get(node);
-            NodeSnapshot snapshot = utilization.getNodeSnapshot(node,
+            SocketSnapshot snapshot = utilization.getNodeSnapshot(node,
                     topology.effectiveCoreToCpu().get(),
                     getShardQuota(node, quotaPool));
 
@@ -278,7 +278,7 @@ public class ControlPlane implements AutoCloseable {
         this.weightedShardMap = weightedShardMap;
     }
 
-    protected void startShard(int shardId, NodeSnapshot snapshot, SocketTopology topology) {
+    protected void startShard(int shardId, SocketSnapshot snapshot, SocketTopology topology) {
         if (shards[shardId].isStarted()) {
             return;
         }

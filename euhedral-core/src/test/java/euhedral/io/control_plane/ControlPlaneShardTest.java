@@ -14,7 +14,7 @@ import euhedral.io.interfaces.CloneableObject;
 import euhedral.io.resource_monitoring.NumaMapper.SocketTopology;
 import euhedral.io.resource_monitoring.ResourceMonitor;
 import euhedral.io.resource_monitoring.SystemUtilization.CoreSnapshot;
-import euhedral.io.resource_monitoring.SystemUtilization.NodeSnapshot;
+import euhedral.io.resource_monitoring.SystemUtilization.SocketSnapshot;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.BitSet;
 import java.util.concurrent.TimeUnit;
@@ -44,7 +44,7 @@ class ControlPlaneShardTest {
                 mockMeterRegistry);
 
         SocketTopology topology = getTopology();
-        NodeSnapshot snapshot = getNodeSnapshot(topology);
+        SocketSnapshot snapshot = getNodeSnapshot(topology);
         CloneConfig[] configs = getConfigs(snapshot, topology, mockResourceMonitor,
                 mockMeterRegistry);
 
@@ -84,18 +84,18 @@ class ControlPlaneShardTest {
         return new SocketTopology(version, effectiveCores, effectiveCpus, effectiveCoreToCpu);
     }
 
-    private static NodeSnapshot getNodeSnapshot(SocketTopology topology) {
+    private static SocketSnapshot getNodeSnapshot(SocketTopology topology) {
         CoreSnapshot[] coreSnapshots = new CoreSnapshot[topology.effectiveCores().get().length()];
         for (int i = 0; i < coreSnapshots.length; i++) {
             coreSnapshots[i] = new CoreSnapshot(i, 0, 100_000, 0, 0, 0, 0, 0,
                     topology.effectiveCoreToCpu().get()[i],
-                    null);
+                    null, true);
         }
 
-        return new NodeSnapshot(0, topology.effectiveCores().get(), 0, 0, 0, 0, coreSnapshots, 0);
+        return new SocketSnapshot(0, topology.effectiveCores().get(), 0, 0, 0, 0, coreSnapshots, 0);
     }
 
-    private static CloneConfig[] getConfigs(NodeSnapshot snapshot, SocketTopology topology,
+    private static CloneConfig[] getConfigs(SocketSnapshot snapshot, SocketTopology topology,
             ResourceMonitor resourceMonitor, MeterRegistry meterRegistry) {
         CloneConfig[] configs = new CloneConfig[topology.effectiveCores().get().cardinality()];
         for (int i = 0; i < configs.length; i++) {
@@ -142,7 +142,7 @@ class ControlPlaneShardTest {
         topo2.effectiveCpus().get().clear(0, 2);
         topo2.effectiveCoreToCpu().get()[0].clear();
 
-        NodeSnapshot snap2 = getNodeSnapshot(topo2);
+        SocketSnapshot snap2 = getNodeSnapshot(topo2);
 
         when(clones[0].isDrained()).thenReturn(true);
         when(clones[0].getCore()).thenReturn(0);

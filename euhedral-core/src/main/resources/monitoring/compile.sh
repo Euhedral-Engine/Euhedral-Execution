@@ -4,7 +4,9 @@ mkdir bin
 
 clean ()
 {
-  rm -f ./bin/windows_resources.lib ./bin/windows_resources.pdb ./bin/windows_resources_arm64.lib ./bin/windows_resources_arm64.pdb ./bin/windows_resources_x64.lib ./bin/windows_resources_x64.pdb
+  rm -f ./bin/windows_resources.lib ./bin/windows_resources.pdb \
+        ./bin/windows_resources_arm64.lib ./bin/windows_resources_arm64.pdb \
+        ./bin/windows_resources_x64.lib ./bin/windows_resources_x64.pdb
 }
 
 zig c++ -target aarch64-windows-gnu -shared -O3 -s -o ./bin/windows_resources_arm64.dll \

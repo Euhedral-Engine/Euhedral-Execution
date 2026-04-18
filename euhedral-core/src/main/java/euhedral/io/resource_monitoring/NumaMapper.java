@@ -1,6 +1,7 @@
 package euhedral.io.resource_monitoring;
 
 import euhedral.io.resource_monitoring.SystemUtilization.HardwareUtilization;
+
 import java.util.BitSet;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -22,7 +23,7 @@ public class NumaMapper {
 
     public static OriginLocation locateMe() {
         int cpu;
-        if(WindowsCpuLocator.LOADED) {
+        if (WindowsCpuLocator.LOADED) {
             cpu = WindowsCpuLocator.INSTANCE.getCpu();
         } else {
             cpu = Affinity.getCpu();
@@ -79,8 +80,8 @@ public class NumaMapper {
         effectiveNodeTopologies = new AtomicReferenceArray<>(socketArraySize);
         systemTopology = new SystemTopology(new AtomicReference<>(new BitSet(socketArraySize)),
                 new AtomicReference<>(new BitSet(coreArraySize)),
-                new AtomicReference<>(new BitSet(cpuInfo.length)),
-                effectiveNodeTopologies, globalTopologyVersion);
+                new AtomicReference<>(new BitSet(cpuInfo.length)), effectiveNodeTopologies,
+                globalTopologyVersion);
 
         init();
     }
@@ -111,11 +112,10 @@ public class NumaMapper {
         }
 
         for (int i = 0; i < numSockets; i++) {
-            effectiveNodeTopologies.set(i,
-                    new SocketTopology(new AtomicInteger(-1),
-                            new AtomicReference<>(new BitSet(coreToCpus.length)),
-                            new AtomicReference<>(new BitSet(cpuInfo.length)),
-                            new AtomicReference<>(new BitSet[coreToCpus.length])));
+            effectiveNodeTopologies.set(i, new SocketTopology(new AtomicInteger(-1),
+                    new AtomicReference<>(new BitSet(coreToCpus.length)),
+                    new AtomicReference<>(new BitSet(cpuInfo.length)),
+                    new AtomicReference<>(new BitSet[coreToCpus.length])));
         }
     }
 
