@@ -1,10 +1,6 @@
 package euhedral.io.resource_monitoring.providers;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.Arrays;
-import java.util.Optional;
 
 public class OSResourceProviderPicker {
 
@@ -37,9 +33,6 @@ public class OSResourceProviderPicker {
     }
 
     public enum OSName {
-        LINUX,
-        WINDOWS,
-        OSX,
-        UNKNOWN
+        LINUX, WINDOWS, OSX, UNKNOWN
     }
 }

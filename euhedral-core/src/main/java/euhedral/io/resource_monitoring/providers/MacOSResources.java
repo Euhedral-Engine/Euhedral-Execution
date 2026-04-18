@@ -63,10 +63,7 @@ public class MacOSResources implements ResourceProvider {
 
         long now = System.nanoTime();
 
-        // CPU
-
         long[] cpuTimes = getCpuTimes();
-
         long totalCpuTime = cpuTimes.length > 0 ? cpuTimes[0] : 0;
 
         long cpuUsageDelta = 0;
@@ -96,28 +93,19 @@ public class MacOSResources implements ResourceProvider {
         BitSet effectiveCpus = new BitSet(availableCpus);
         effectiveCpus.set(0, availableCpus);
 
-        // Memory
-
-        long[] mem = getMemorySnapshot();
-
-        long memoryLimit = mem.length > 0 ? mem[0] : 0;
-        long memoryUsage = mem.length > 1 ? mem[1] : 0;
-        long inactiveFile = mem.length > 2 ? mem[2] : 0;
-
         long ioBytes = getIoBytes();
 
-        return new SystemSnapshot(
+        return SystemSnapshot.create(
                 now,
                 availableCpus,
-                availableCpus, // macOS has no quota cpus
-                100_000L, // macOS has no cgroup period; kept for compatibility
+                availableCpus, // MacOS has no quota cpus
+                100_000, // MacOS has no cgroup period; kept for compatibility
                 cpuUsageDelta,
                 cpuThrottle,
+                getCoreTypeMask(true), getCoreTypeMask(false),
                 effectiveCpus,
                 pressurePerCpu,
-                memoryLimit,
-                memoryUsage,
-                inactiveFile,
+                getMemorySnapshot(),
                 ioBytes
         );
     }
@@ -129,4 +117,6 @@ public class MacOSResources implements ResourceProvider {
     public static native long[] getMemorySnapshot();
 
     public static native long getIoBytes();
+
+    public static native long[][] getCoreTypeMask(boolean getPCores);
 }

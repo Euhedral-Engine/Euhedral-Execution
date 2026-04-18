@@ -1,4 +1,4 @@
-package euhedral.io.utils;
+package euhedral.io.utils.pinning;
 
 import com.sun.jna.Library;
 import com.sun.jna.Native;

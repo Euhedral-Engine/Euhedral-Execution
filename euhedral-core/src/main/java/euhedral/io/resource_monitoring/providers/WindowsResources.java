@@ -1,6 +1,9 @@
 package euhedral.io.resource_monitoring.providers;
 
 import euhedral.io.resource_monitoring.SystemUtilization.SystemSnapshot;
+
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.BitSet;
 
 public class WindowsResources implements ResourceProvider {
@@ -28,12 +31,11 @@ public class WindowsResources implements ResourceProvider {
                     throw new RuntimeException(filePath + " not found in resources");
                 }
 
-                var tempFile = java.nio.file.Files.createTempFile("monitoring_",
-                        suffix);
+                var tempFile = Files.createTempFile("monitoring_", suffix);
                 tempFile.toFile().deleteOnExit();
 
-                java.nio.file.Files.copy(in, tempFile,
-                        java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                Files.copy(in, tempFile,
+                        StandardCopyOption.REPLACE_EXISTING);
 
                 System.load(tempFile.toAbsolutePath().toString());
             } catch (Throwable ignored) {
@@ -79,28 +81,19 @@ public class WindowsResources implements ResourceProvider {
         long cpuUsage = cpuTimes.length > 0 ? cpuTimes[0] : 0;
         long cpuThrottle = cpuTimes.length > 1 ? cpuTimes[1] : 0;
 
-        // Memory
-        long[] mem = getMemorySnapshot();
-
-        long memoryLimit = mem.length > 0 ? mem[0] : 0;
-        long memoryUsage = mem.length > 1 ? mem[1] : 0;
-        long inactiveFile = mem.length > 2 ? mem[2] : 0;
-
-        // IO
         long ioBytes = getIoBytes();
 
-        return new SystemSnapshot(
+        return SystemSnapshot.create(
                 now,
                 availableCpus,
                 quotaCpus,
                 period,
                 cpuUsage,
                 cpuThrottle,
+                getCoreTypeMask(true), getCoreTypeMask(false),
                 effectiveCpus,
                 pressurePerCpu,
-                memoryLimit,
-                memoryUsage,
-                inactiveFile,
+                getMemorySnapshot(),
                 ioBytes
         );
     }
@@ -116,6 +109,8 @@ public class WindowsResources implements ResourceProvider {
     public static native long[] getMemorySnapshot();
 
     public static native long getIoBytes();
+
+    public static native long[][] getCoreTypeMask(boolean getPCores);
 
     private static BitSet toBitSet(long mask) {
         BitSet bs = new BitSet();

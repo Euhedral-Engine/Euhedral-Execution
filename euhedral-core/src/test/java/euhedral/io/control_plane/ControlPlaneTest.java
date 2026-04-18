@@ -16,7 +16,7 @@ import euhedral.io.resource_monitoring.NumaMapper.SocketTopology;
 import euhedral.io.resource_monitoring.NumaMapper.SystemTopology;
 import euhedral.io.resource_monitoring.ResourceMonitor;
 import euhedral.io.resource_monitoring.SystemUtilization.HardwareUtilization;
-import euhedral.io.resource_monitoring.SystemUtilization.NodeSnapshot;
+import euhedral.io.resource_monitoring.SystemUtilization.SocketSnapshot;
 import java.time.Duration;
 import java.util.BitSet;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -49,7 +49,7 @@ class ControlPlaneTest {
     public void testInitialization() {
         SystemTopology systemTopology = getSystemTopology();
 
-        NodeSnapshot[] snapshots = new NodeSnapshot[systemTopology.effectiveSockets().get()
+        SocketSnapshot[] snapshots = new SocketSnapshot[systemTopology.effectiveSockets().get()
                 .cardinality()];
 
         createControlPlaneWithMocks(systemTopology, snapshots);
@@ -86,7 +86,7 @@ class ControlPlaneTest {
     public void testGlobalRebalance() throws Exception {
         SystemTopology systemTopology = getSystemTopology();
 
-        NodeSnapshot[] snapshots = new NodeSnapshot[systemTopology.effectiveSockets().get()
+        SocketSnapshot[] snapshots = new SocketSnapshot[systemTopology.effectiveSockets().get()
                 .cardinality()];
 
         createControlPlaneWithMocks(systemTopology, snapshots);
@@ -152,9 +152,9 @@ class ControlPlaneTest {
     }
 
     private void createControlPlaneWithMocks(SystemTopology systemTopology,
-            NodeSnapshot[] snapshots) {
+            SocketSnapshot[] snapshots) {
         for (int i = 0; i < snapshots.length; i++) {
-            snapshots[i] = mock(NodeSnapshot.class);
+            snapshots[i] = mock(SocketSnapshot.class);
             when(mockUtilization.getNodeSnapshot(eq(i), any(), anyDouble())).thenReturn(
                     snapshots[i]);
             when(mockShard.clone(eq(i), any())).thenReturn(mockShard);

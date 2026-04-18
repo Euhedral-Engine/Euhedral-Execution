@@ -12,7 +12,7 @@ import euhedral.io.resource_monitoring.NumaMapper.OriginLocation;
 import euhedral.io.resource_monitoring.NumaMapper.SocketTopology;
 import euhedral.io.resource_monitoring.ResourceMonitor;
 import euhedral.io.resource_monitoring.SystemUtilization.CoreSnapshot;
-import euhedral.io.resource_monitoring.SystemUtilization.NodeSnapshot;
+import euhedral.io.resource_monitoring.SystemUtilization.SocketSnapshot;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.util.BitSet;
@@ -47,7 +47,6 @@ public class ControlPlaneShard implements AutoCloseable {
     protected final AtomicReference<FluxNode> coreDistributor = new AtomicReference<>();
 
     protected final MeterRegistry meterRegistry;
-
     protected final CloneableObject cloneableObject;
 
     protected volatile long currentVersion = -1;
@@ -72,7 +71,7 @@ public class ControlPlaneShard implements AutoCloseable {
         this.coreHandles = new FluxEdge[0];
     }
 
-    public void start(NodeSnapshot snapshot, SocketTopology topology, FluxEdge upstream) {
+    public void start(SocketSnapshot snapshot, SocketTopology topology, FluxEdge upstream) {
         if (!started.compareAndSet(false, true)) {
             return;
         }
@@ -102,7 +101,7 @@ public class ControlPlaneShard implements AutoCloseable {
         return (int) unsignedMultiplyHigh(rotated, mapSize);
     }
 
-    public void update(NodeSnapshot snapshot, SocketTopology topology) {
+    public void update(SocketSnapshot snapshot, SocketTopology topology) {
         if (!started.get() || rebalancing.get()) {
             logger.error(
                     "Cannot update if not started or rebalancing. Started: {} Rebalancing: {} CoresToDrain: {}",
@@ -129,7 +128,7 @@ public class ControlPlaneShard implements AutoCloseable {
     }
 
     @SuppressWarnings({"resource"})
-    protected void handleTopologyChange(NodeSnapshot snapshot, SocketTopology topology) {
+    protected void handleTopologyChange(SocketSnapshot snapshot, SocketTopology topology) {
         if (!rebalancing.compareAndSet(false, true)) {
             return;
         }
@@ -137,7 +136,6 @@ public class ControlPlaneShard implements AutoCloseable {
         FluxNode distributor = coreDistributor.get();
         distributor.setDrain(true);
 
-        // Get new mapping
         BitSet newCores = topology.effectiveCores().get();
         int[] nextCores = new int[newCores.cardinality()];
 
@@ -225,7 +223,7 @@ public class ControlPlaneShard implements AutoCloseable {
         return clone;
     }
 
-    private void drainAndPruneClones(BitSet active, NodeSnapshot snapshot,
+    private void drainAndPruneClones(BitSet active, SocketSnapshot snapshot,
             CloneableObject[] nextClones) {
         logger.info("Draining and pruning clones.");
 
