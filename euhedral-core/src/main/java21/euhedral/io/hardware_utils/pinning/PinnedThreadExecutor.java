@@ -1,4 +1,4 @@
-package euhedral.io.utils.pinning;
+package euhedral.io.hardware_utils.pinning;
 
 import static euhedral.io.utils.MathFunctions.clampInt;
 
@@ -23,14 +23,15 @@ import org.jspecify.annotations.NonNull;
 public class PinnedThreadExecutor extends AbstractExecutorService implements AutoCloseable {
 
     private static final Cleaner CLEANER = Cleaner.create();
-    private static final ConcurrentHashMap<Long, WeakReference<PinnedThreadExecutor>> PINNED_EXECUTORS = new ConcurrentHashMap<>(
+    private static final ConcurrentHashMap<Long, WeakReference<euhedral.io.hardware_utils.pinning.PinnedThreadExecutor>> PINNED_EXECUTORS = new ConcurrentHashMap<>(
             512);
 
-    public static PinnedThreadExecutor getOrSetIfAbsent(long cpu, String name, int priority,
+    public static euhedral.io.hardware_utils.pinning.PinnedThreadExecutor getOrSetIfAbsent(long cpu, String name, int priority,
             boolean daemon) {
         var exec = get(cpu);
         if (exec == null) {
-            PinnedThreadExecutor executor = new PinnedThreadExecutor(name, (int) cpu, priority,
+            euhedral.io.hardware_utils.pinning.PinnedThreadExecutor
+                    executor = new euhedral.io.hardware_utils.pinning.PinnedThreadExecutor(name, (int) cpu, priority,
                     daemon);
             PINNED_EXECUTORS.put(cpu, new WeakReference<>(executor));
             return executor;
@@ -38,7 +39,7 @@ public class PinnedThreadExecutor extends AbstractExecutorService implements Aut
         return exec;
     }
 
-    public static PinnedThreadExecutor get(long cpu) {
+    public static euhedral.io.hardware_utils.pinning.PinnedThreadExecutor get(long cpu) {
         var executor = PINNED_EXECUTORS.get(cpu);
         if (executor != null) {
             if (executor.get() != null && !executor.get().isShutdown()) {
@@ -52,7 +53,7 @@ public class PinnedThreadExecutor extends AbstractExecutorService implements Aut
 
     public static void closeAll() {
         for (var exec : PINNED_EXECUTORS.values()) {
-            PinnedThreadExecutor executor = exec.get();
+            euhedral.io.hardware_utils.pinning.PinnedThreadExecutor executor = exec.get();
             if (executor != null) {
                 executor.close();
             }
@@ -248,10 +249,10 @@ public class PinnedThreadExecutor extends AbstractExecutorService implements Aut
     private static class CleanupState implements Runnable {
 
         private final long cpu;
-        private final PinnedThreadExecutor executor;
+        private final euhedral.io.hardware_utils.pinning.PinnedThreadExecutor executor;
         private final AtomicReference<AffinityLock> lock;
 
-        CleanupState(long cpu, PinnedThreadExecutor executor,
+        CleanupState(long cpu, euhedral.io.hardware_utils.pinning.PinnedThreadExecutor executor,
                 AtomicReference<AffinityLock> lock) {
             this.cpu = cpu;
             this.executor = executor;

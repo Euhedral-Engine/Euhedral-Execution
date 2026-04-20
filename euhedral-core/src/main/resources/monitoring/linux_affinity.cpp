@@ -10,7 +10,7 @@
 
 extern "C" {
 JNIEXPORT jint JNICALL
-Java_euhedral_io_utils_pinning_LinuxAffinity_setThreadAffinity(JNIEnv *env, jclass clazz, jlongArray maskArray) {
+Java_euhedral_io_hardware_1utils_pinning_LinuxAffinity_setThreadAffinity(JNIEnv *env, jclass clazz, jlongArray maskArray) {
     jsize len = env->GetArrayLength(maskArray);
     if (len == 0) {
       return -1;

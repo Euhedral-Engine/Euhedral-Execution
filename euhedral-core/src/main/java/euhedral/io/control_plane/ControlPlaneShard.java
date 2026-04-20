@@ -113,10 +113,10 @@ public class ControlPlaneShard implements AutoCloseable {
         if (this.currentVersion != nextVersion) {
             if (currentVersion >= 0) {
                 logger.warn(
-                        "Detected change in topology. Initiating shard rebalance for version {}",
+                        "Detected change in topology. Initiating shard rebalance for topology V{}",
                         nextVersion);
             } else {
-                logger.info("Initializing clones for topology version {}", nextVersion);
+                logger.info("Initializing clones for topology V{}", nextVersion);
             }
             this.currentVersion = nextVersion;
             handleTopologyChange(snapshot, topology);

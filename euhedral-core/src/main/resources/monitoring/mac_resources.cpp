@@ -102,6 +102,48 @@ Java_euhedral_io_resource_1monitoring_providers_MacOSResources_getIoBytes(JNIEnv
     return 0;
 }
 
+JNIEXPORT jobjectArray JNICALL
+Java_euhedral_io_resource_1monitoring_providers_MacOSResources_getCoreTypeMask(JNIEnv *env, jobject obj, jboolean getPCores) {
+    const char* levelKey = getPCores ? "hw.perflevel0.logicalcpu" : "hw.perflevel1.logicalcpu";
+
+    int targetCoreCount = 0;
+    size_t size = sizeof(targetCoreCount);
+    if (sysctlbyname(levelKey, &targetCoreCount, &size, NULL, 0) != 0) {
+        return nullptr;
+    }
+
+    // MacOS typically clusters E-cores first or last depending on the SoC.
+    int totalCores = 0;
+    size = sizeof(totalCores);
+    sysctlbyname("hw.logicalcpu", &totalCores, &size, NULL, 0);
+
+    // Usually E-Cores are first
+    int eCoreCount = 0;
+    size = sizeof(eCoreCount);
+    sysctlbyname("hw.perflevel1.logicalcpu", &eCoreCount, &size, NULL, 0);
+
+    unsigned __int64 mask = 0;
+    if (getPCores) {
+        for (int i = eCoreCount; i < totalCores; i++) {
+            mask |= (1ULL << i);
+        }
+    } else {
+        for (int i = 0; i < eCoreCount; i++) {
+            mask |= (1ULL << i);
+        }
+    }
+
+    jclass longArrayClass = env->FindClass("[J");
+    jobjectArray outerArray = env->NewObjectArray(1, longArrayClass, nullptr);
+
+    jlongArray innerArray = env->NewLongArray(1);
+    jlong jmask = (jlong)mask;
+    env->SetLongArrayRegion(innerArray, 0, 1, &jmask);
+    env->SetObjectArrayElement(outerArray, 0, innerArray);
+
+    return outerArray;
+}
+
 }
 
 #endif

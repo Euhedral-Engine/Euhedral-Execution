@@ -1,4 +1,4 @@
-package euhedral.io.utils.pinning;
+package euhedral.io.hardware_utils.pinning;
 
 import static euhedral.io.utils.MathFunctions.clampInt;
 

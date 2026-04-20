@@ -2,8 +2,6 @@ package euhedral.io.frames;
 
 import euhedral.io.utils.DrainBuffer;
 import java.util.concurrent.atomic.AtomicLong;
-import lombok.Getter;
-import lombok.Setter;
 import org.jctools.queues.MessagePassingQueue;
 import org.jctools.queues.SpscUnboundedArrayQueue;
 import org.jspecify.annotations.NonNull;
@@ -12,40 +10,16 @@ public class QueueFrame extends AbstractFrame implements AutoCloseable {
 
     protected final long idHash;
     protected final MessagePassingQueue<AbstractFrame> queue;
-    protected final double smoothingFactor;
-    @Getter
-    protected final AtomicLong avgFrameSize = new AtomicLong(1024);
-    @Getter
-    @Setter
-    protected volatile int index = -1;
-    @Getter
-    @Setter
-    protected long weight = 1024;
-
-    @Getter
-    @Setter
-    protected long drainCycles = 0;
-
-    @Getter
-    protected long lastBytesDrained = 0;
-
-    @Getter
-    @Setter
-    protected long quota = 0;
+    protected final AtomicLong sizeBytes = new AtomicLong(0);
 
     public QueueFrame(long idHash) {
-        this(idHash, 0.1);
+        this(idHash, new SpscUnboundedArrayQueue<>(4096));
     }
 
-    public QueueFrame(long idHash, double smoothingFactor) {
-        this(idHash, smoothingFactor, new SpscUnboundedArrayQueue<>(4096));
-    }
-
-    public QueueFrame(long idHash, double smoothingFactor,
+    public QueueFrame(long idHash,
             MessagePassingQueue<AbstractFrame> queue) {
         super(idHash, null);
         this.idHash = idHash;
-        this.smoothingFactor = smoothingFactor;
         this.queue = queue;
     }
 
@@ -55,20 +29,14 @@ public class QueueFrame extends AbstractFrame implements AutoCloseable {
 
     public boolean enqueue(AbstractFrame frame) {
         if (queue.relaxedOffer(frame)) {
-            avgFrameSize.getAndUpdate(curr ->
-                    (long) ((1 - smoothingFactor) * curr + smoothingFactor * frame.getSizeBytes())
-            );
+            sizeBytes.accumulateAndGet(frame.getSizeBytes(), QueueFrame::addCap);
             return true;
         }
         return false;
     }
 
     public void clear() {
-        avgFrameSize.set(1024);
-        weight = 1024;
-        drainCycles = 0;
-        lastBytesDrained = 0;
-        quota = 0;
+        queue.clear();
     }
 
     public int drain(@NonNull DrainBuffer drainBuffer, int limit) {
@@ -76,33 +44,14 @@ public class QueueFrame extends AbstractFrame implements AutoCloseable {
             return 0;
         }
 
+        drainBuffer.drainCount = 0;
+        drainBuffer.drainedBytes = 0;
         int count = this.queue.drain(drainBuffer, limit);
-        if (count > 0) {
-            drainCycles++;
-        }
 
+        if(count > 0) {
+            sizeBytes.accumulateAndGet(-drainBuffer.drainedBytes, QueueFrame::addCap);
+        }
         return count;
-    }
-
-    public long smoothWeight(long target, double cv) {
-        double stepPercent = 0.25 - (cv * 0.5);
-        if (stepPercent < 0.05) {
-            stepPercent = 0.05;
-        } else if (stepPercent > 0.25) {
-            stepPercent = 0.25;
-        }
-
-        long maxStep = (long) (weight * stepPercent);
-        long delta = target - weight;
-
-        if (delta > maxStep) {
-            target = weight + maxStep;
-        } else if (delta < -maxStep) {
-            target = weight - maxStep;
-        }
-
-        weight = (long) (weight * 0.9 + target * 0.1);
-        return weight;
     }
 
     public int getQueueCount() {
@@ -111,8 +60,7 @@ public class QueueFrame extends AbstractFrame implements AutoCloseable {
 
     @Override
     public long getSizeBytes() {
-        long size = queue.size() * avgFrameSize.get();
-        return size < 0 ? Long.MAX_VALUE : size;
+        return sizeBytes.get();
     }
 
     @Override
@@ -139,8 +87,9 @@ public class QueueFrame extends AbstractFrame implements AutoCloseable {
         close();
     }
 
-    public QueueFrame clone(long idHash) {
-        return new QueueFrame(idHash, smoothingFactor);
+    private static long addCap(long num1, long num2) {
+        long sum = num1 + num2;
+        return sum < 0 ? Long.MAX_VALUE : sum;
     }
 }
 

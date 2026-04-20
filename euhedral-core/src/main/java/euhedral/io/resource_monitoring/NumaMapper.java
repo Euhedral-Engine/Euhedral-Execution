@@ -57,7 +57,7 @@ public class NumaMapper {
     private final int[] coreToNode;
     private final BitSet[] coreToCpus;
     private final BitSet[] nodeToCores;
-    private final AtomicReferenceArray<SocketTopology> effectiveNodeTopologies;
+    private final AtomicReferenceArray<SocketTopology> effectiveSocketTopologies;
 
     public NumaMapper() {
         int maxCoreId = -1;
@@ -77,10 +77,10 @@ public class NumaMapper {
         }
         int socketArraySize = Math.max(64, maxSocketId + 1);
         nodeToCores = new BitSet[socketArraySize];
-        effectiveNodeTopologies = new AtomicReferenceArray<>(socketArraySize);
+        effectiveSocketTopologies = new AtomicReferenceArray<>(socketArraySize);
         systemTopology = new SystemTopology(new AtomicReference<>(new BitSet(socketArraySize)),
                 new AtomicReference<>(new BitSet(coreArraySize)),
-                new AtomicReference<>(new BitSet(cpuInfo.length)), effectiveNodeTopologies,
+                new AtomicReference<>(new BitSet(cpuInfo.length)), effectiveSocketTopologies,
                 globalTopologyVersion);
 
         init();
@@ -112,7 +112,7 @@ public class NumaMapper {
         }
 
         for (int i = 0; i < numSockets; i++) {
-            effectiveNodeTopologies.set(i, new SocketTopology(new AtomicInteger(-1),
+            effectiveSocketTopologies.set(i, new SocketTopology(new AtomicInteger(-1),
                     new AtomicReference<>(new BitSet(coreToCpus.length)),
                     new AtomicReference<>(new BitSet(cpuInfo.length)),
                     new AtomicReference<>(new BitSet[coreToCpus.length])));
@@ -138,7 +138,7 @@ public class NumaMapper {
         for (int cpu = 0; cpu < layout.cpus(); cpu++) {
             int core = cpuToCore[cpu];
             int node = coreToNode[core];
-            SocketTopology topology = effectiveNodeTopologies.get(node);
+            SocketTopology topology = effectiveSocketTopologies.get(node);
 
             if (topology.effectiveCores.get().get(core) != globalEffectiveCores.get(core)) {
                 nodeUpdated.set(node);
@@ -158,7 +158,7 @@ public class NumaMapper {
         BitSet[] effectiveNodeToCores = buildNodeToCores(globalEffectiveCores);
         for (int node = nodeUpdated.nextSetBit(0); node >= 0;
                 node = nodeUpdated.nextSetBit(node + 1)) {
-            SocketTopology socketTopology = effectiveNodeTopologies.get(node);
+            SocketTopology socketTopology = effectiveSocketTopologies.get(node);
             socketTopology.version.incrementAndGet();
 
             BitSet effectiveCores = effectiveNodeToCores[node];
@@ -172,7 +172,7 @@ public class NumaMapper {
 
             socketTopology.effectiveCores.set(effectiveCores);
             socketTopology.effectiveCpus.set(effectiveCpus);
-            socketTopology.effectiveCoreToCpu.set(effectiveCoreToCpus);
+            socketTopology.effectiveCoreToCpu.set(buildCoreToCpus(effectiveCpus));
         }
 
         if (globalUpdate) {
@@ -197,7 +197,7 @@ public class NumaMapper {
     }
 
     private BitSet[] buildNodeToCores(BitSet effectiveCores) {
-        BitSet[] nodeToCores = new BitSet[effectiveNodeTopologies.length()];
+        BitSet[] nodeToCores = new BitSet[effectiveSocketTopologies.length()];
 
         for (int core = effectiveCores.nextSetBit(0); core >= 0;
                 core = effectiveCores.nextSetBit(core + 1)) {
@@ -248,10 +248,10 @@ public class NumaMapper {
     }
 
     public SocketTopology getSocketTopology(int socketId) {
-        if (socketId < 0 || socketId >= effectiveNodeTopologies.length()) {
+        if (socketId < 0 || socketId >= effectiveSocketTopologies.length()) {
             return null;
         }
-        return effectiveNodeTopologies.get(socketId);
+        return effectiveSocketTopologies.get(socketId);
     }
 
     /**
