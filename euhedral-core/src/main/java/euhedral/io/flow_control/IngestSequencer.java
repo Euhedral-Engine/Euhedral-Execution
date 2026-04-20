@@ -6,20 +6,25 @@ import euhedral.io.frames.AbstractFrame;
 import euhedral.io.frames.QueueFrame;
 import euhedral.io.utils.DrainBuffer;
 import euhedral.io.utils.FlowRecorder;
+
 import java.util.BitSet;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.LockSupport;
+
 import lombok.Getter;
 import lombok.Setter;
 import org.jctools.queues.MpscUnboundedXaddArrayQueue;
+import org.jctools.util.PaddedAtomicLong;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 
 public abstract class IngestSequencer extends FluxNode implements AutoCloseable {
-    protected static final int CHUNK_SIZE = 8_192;
+
+    protected final int chunkSize;
     protected final double smoothingFactor;
 
     protected final QueueFrame[] queueRing;
+    protected final QueueStats[] queueStats;
     protected final int mask;
 
     @Getter
@@ -39,8 +44,8 @@ public abstract class IngestSequencer extends FluxNode implements AutoCloseable 
     @Setter
     protected WakeHook wakeHook;
 
-    public IngestSequencer(String name, int maxConnections) {
-        super(name, getConnectionCapacity(maxConnections), RoutingFunction.DEFAULT, true);
+    public IngestSequencer(String name, int subQueues, int chunkSize) {
+        super(name, getSubQueueCount(subQueues), RoutingFunction.DEFAULT, true);
 
         double dt = 0.1;
         double tau = 2.0; // 2 Seconds
@@ -51,22 +56,24 @@ public abstract class IngestSequencer extends FluxNode implements AutoCloseable 
         } else {
             this.smoothingFactor = clampDouble(smoothingFactor, 0.01, 1.0);
         }
-        int connectionCapacity = getConnectionCapacity(maxConnections);
+        int queueCount = getSubQueueCount(subQueues);
 
+        this.chunkSize = chunkSize;
         this.fillRecorder = new FlowRecorder();
         this.fillBytesRecorder = new FlowRecorder();
         this.drainRecorder = new FlowRecorder();
         this.drainBytesRecorder = new FlowRecorder();
-        this.queueRing = new QueueFrame[connectionCapacity];
-        this.mask = connectionCapacity - 1;
+        this.queueRing = new QueueFrame[queueCount];
+        this.queueStats = new QueueStats[queueCount];
+        this.mask = queueCount - 1;
 
-        BitSet mappings = new BitSet(connectionCapacity);
-        mappings.set(0, connectionCapacity);
-        FluxEdge[] queueHandles = new FluxEdge[connectionCapacity];
+        BitSet mappings = new BitSet(queueCount);
+        mappings.set(0, queueCount);
+        FluxEdge[] queueHandles = new FluxEdge[queueCount];
 
-        for (int i = 0; i < connectionCapacity; i++) {
-            QueueFrame queue = new QueueFrame(0, smoothingFactor,
-                    new MpscUnboundedXaddArrayQueue<>(CHUNK_SIZE, 2));
+        for (int i = 0; i < queueCount; i++) {
+            queueStats[i] = new QueueStats(i);
+            QueueFrame queue = new QueueFrame(0, new MpscUnboundedXaddArrayQueue<>(chunkSize, 2));
             queueRing[i] = queue;
             queueHandles[i] = new FluxEdge(super.drain);
             queueHandles[i].subscribe(new QueueSubscriber(i));
@@ -76,11 +83,11 @@ public abstract class IngestSequencer extends FluxNode implements AutoCloseable 
         setDrain(false);
     }
 
-    private static int getConnectionCapacity(int maxConnections) {
-        if (maxConnections <= 1) {
+    protected static int getSubQueueCount(int maxQueues) {
+        if (maxQueues <= 1) {
             return 1;
         } else {
-            return Integer.highestOneBit((maxConnections - 1) << 1);
+            return Integer.highestOneBit((maxQueues - 1) << 1);
         }
     }
 
@@ -103,17 +110,17 @@ public abstract class IngestSequencer extends FluxNode implements AutoCloseable 
         long totalQueueWeight = 0;
 
         long initialCount = totalCount.get();
-        for (int i = 0; i < maxFill && cycles <= queueRing.length && initialCount > 0; ) {
+        for (int i = 0; i < maxFill && cycles <= queueRing.length && initialCount > 0;) {
             QueueFrame queue = queueRing[head];
+            QueueStats stats = queueStats[head];
 
-            int quota = (int) queue.getQuota();
+            int quota = (int) stats.quotaBytes;
             if (quota <= 0) {
-                quota = refillQueueQuota(queue);
+                refillQueueQuota(stats);
+                quota = (int) stats.quotaBytes;
             }
             quota = (int) Math.min(quota, maxFill - totalDrain);
 
-            drainBuffer.drainCount = 0;
-            drainBuffer.drainedBytes = 0;
             int drainCount = queue.drain(drainBuffer, quota);
             long drainedBytes = drainBuffer.drainedBytes;
 
@@ -121,9 +128,12 @@ public abstract class IngestSequencer extends FluxNode implements AutoCloseable 
                 i += drainCount;
                 totalBytesDrained += drainedBytes;
                 totalDrain += drainCount;
-                totalQueueWeight += queue.getWeight();
+                totalQueueWeight += stats.weight;
+                stats.drainCycles++;
+                stats.quotaBytes -= drainedBytes;
+                stats.lastBytesDrained = drainedBytes;
 
-                recordDrainMetrics(queue, drainCount);
+                recordDrainMetrics(queue, stats, drainCount);
                 cycles = 0;
             } else {
                 cycles++;
@@ -136,8 +146,7 @@ public abstract class IngestSequencer extends FluxNode implements AutoCloseable 
             totalQueuedSizeBytes.getAndAdd(-totalBytesDrained);
             this.totalQueueWeight = totalQueueWeight;
         }
-        drainBuffer.drainCount = 0;
-        drainBuffer.drainedBytes = 0;
+        drainBuffer.reset();
         if (totalDrain < maxFill) {
             pull(drainBuffer, maxFill - totalDrain);
         }
@@ -146,11 +155,6 @@ public abstract class IngestSequencer extends FluxNode implements AutoCloseable 
         drainBytesRecorder.record(now, totalBytesDrained + drainBuffer.drainedBytes, true);
         hookOnDrain(demand);
 
-        if (drainBuffer.uniqueOrdered > this.uniqueOrdered) {
-            uniqueOrdered = drainBuffer.uniqueOrdered;
-            xor1 = drainBuffer.xor1;
-            xor2 = drainBuffer.xor2;
-        }
         totalDrain += drainBuffer.drainCount;
         drainBuffer.reset();
         return totalDrain;
@@ -160,11 +164,11 @@ public abstract class IngestSequencer extends FluxNode implements AutoCloseable 
         request(demand);
     }
 
-    protected int refillQueueQuota(QueueFrame queue) {
-        return Integer.MAX_VALUE;
+    protected void refillQueueQuota(QueueStats stats) {
+        stats.quotaBytes = Integer.MAX_VALUE;
     }
 
-    protected void recordDrainMetrics(QueueFrame queue, long drainCount) {
+    protected void recordDrainMetrics(QueueFrame queue, QueueStats stats, long drainCount) {
 
     }
 
@@ -216,14 +220,16 @@ public abstract class IngestSequencer extends FluxNode implements AutoCloseable 
             }
 
             long size = frame.getSizeBytes();
-            size = size <= 0 ? 256 : size;
+            long adjustedSize = size <= 0 ? 256 : size;
+            queueStats[idx].avgFrameSize.getAndUpdate(
+                    curr -> (long) ((1 - smoothingFactor) * curr + smoothingFactor * adjustedSize));
 
-            totalQueuedSizeBytes.addAndGet(size);
+            totalQueuedSizeBytes.addAndGet(adjustedSize);
             long count = totalCount.incrementAndGet();
             if ((count & 63) == 0) {
                 long now = System.nanoTime();
                 fillRecorder.record(now, 64, true);
-                fillBytesRecorder.record(now, size, true);
+                fillBytesRecorder.record(now, adjustedSize, true);
             }
 
             if (wakeHook != null) {
@@ -244,6 +250,29 @@ public abstract class IngestSequencer extends FluxNode implements AutoCloseable 
         @Override
         public void onComplete() {
 
+        }
+    }
+
+    protected static class QueueStats {
+
+        public final int index;
+        public final PaddedAtomicLong avgFrameSize = new PaddedAtomicLong(1024);
+
+        public long weight = 1024;
+        public long drainCycles = 0;
+        public long lastBytesDrained = 0;
+        public long quotaBytes = 0;
+
+        public QueueStats(int index) {
+            this.index = index;
+        }
+
+        public void reset() {
+            avgFrameSize.set(1024);
+            weight = 1024;
+            drainCycles = 0;
+            lastBytesDrained = 0;
+            quotaBytes = 0;
         }
     }
 }

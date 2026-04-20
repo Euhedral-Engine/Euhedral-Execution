@@ -127,4 +127,48 @@ Java_euhedral_io_resource_1monitoring_providers_WindowsResources_getIoBytes(JNIE
     return 0;
 }
 
+// Gets P-cores or E-cores. Returns a grouped bitmask long[group][0].
+JNIEXPORT jobjectArray JNICALL
+Java_euhedral_io_resource_1monitoring_providers_WindowsResources_getCoreTypeMask(JNIEnv *env, jobject obj, jboolean getPCores) {
+    DWORD length = 0;
+        GetLogicalProcessorInformationEx(RelationProcessorCore, nullptr, &length);
+        std::vector<BYTE> buffer(length);
+        if (!GetLogicalProcessorInformationEx(RelationProcessorCore, (PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX)buffer.data(), &length)) {
+            return nullptr;
+        }
+
+        unsigned __int64 groupMasks[64] = { 0 };
+        int maxGroupReached = 0;
+
+        BYTE* ptr = buffer.data();
+        while (ptr < buffer.data() + length) {
+            auto info = (PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX)ptr;
+            if (info->Relationship == RelationProcessorCore) {
+                bool isTarget = getPCores ? (info->Processor.EfficiencyClass > 0)
+                                          : (info->Processor.EfficiencyClass == 0);
+                if (isTarget) {
+                    for (WORD i = 0; i < info->Processor.GroupCount; ++i) {
+                        WORD g = info->Processor.GroupMask[i].Group;
+                        groupMasks[g] |= info->Processor.GroupMask[i].Mask;
+                        if (g > maxGroupReached) maxGroupReached = g;
+                    }
+                }
+            }
+            ptr += info->Size;
+        }
+
+        // Create the outer array: long[groups][]
+        jclass longArrayClass = env->FindClass("[J");
+        jobjectArray outerArray = env->NewObjectArray(maxGroupReached + 1, longArrayClass, nullptr);
+
+        for (int i = 0; i <= maxGroupReached; i++) {
+            jlongArray innerArray = env->NewLongArray(1);
+            jlong maskVal = (jlong)groupMasks[i];
+            env->SetLongArrayRegion(innerArray, 0, 1, &maskVal);
+            env->SetObjectArrayElement(outerArray, i, innerArray);
+        }
+
+        return outerArray;
+}
+
 }

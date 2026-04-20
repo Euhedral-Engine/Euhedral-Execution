@@ -13,7 +13,7 @@ import euhedral.io.resource_monitoring.NumaMapper.SystemTopology;
 import euhedral.io.resource_monitoring.ResourceMonitor;
 import euhedral.io.resource_monitoring.SystemUtilization.HardwareUtilization;
 import euhedral.io.resource_monitoring.SystemUtilization.SocketSnapshot;
-import euhedral.io.utils.pinning.PinnedThreadExecutor;
+import euhedral.io.hardware_utils.pinning.PinnedThreadExecutor;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.util.Arrays;
@@ -161,10 +161,10 @@ public class ControlPlane implements AutoCloseable {
 
         if (this.currentGlobalVersion != nextVersion) {
             if (!primed) {
-                logger.info("Initializing the ControlPlane for version {}", nextVersion);
+                logger.info("Initializing the ControlPlane for topology V{}", nextVersion);
             } else {
                 logger.warn(
-                        "Detected change in global topology. Initiating global rebalance for version {}",
+                        "Detected change in global topology. Initiating global rebalance for topology V{}",
                         nextVersion);
             }
             this.currentGlobalVersion = nextVersion;

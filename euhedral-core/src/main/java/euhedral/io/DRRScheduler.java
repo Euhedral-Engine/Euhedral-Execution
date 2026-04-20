@@ -9,21 +9,24 @@ import euhedral.io.flow_control.UpstreamQueue;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.frames.DummyInitFrame;
 import euhedral.io.frames.QueueFrame;
+import euhedral.io.hardware_utils.CpuCacheSizes;
+import euhedral.io.hardware_utils.CpuCacheSizes.CpuCacheLayout;
 import euhedral.io.interfaces.CloneableObject;
 import euhedral.io.interfaces.DispatchPreProcess;
 import euhedral.io.resource_monitoring.SystemUtilization.CoreSnapshot;
 import euhedral.io.utils.DrainBuffer;
 import euhedral.io.utils.FlowRecorder.FlowSnapshot;
+import euhedral.io.utils.ObjectSizer;
 import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Supplier;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.reactivestreams.Publisher;
@@ -43,7 +46,6 @@ public class DRRScheduler extends IngestSequencer implements DispatchPreProcess,
     protected Callable<Double> downstreamPressure;
 
     protected volatile CoreSnapshot snapshot;
-    protected volatile double pressure;
     protected volatile long totalBytesCap;
 
     protected UpstreamQueue upstream;
@@ -54,7 +56,7 @@ public class DRRScheduler extends IngestSequencer implements DispatchPreProcess,
 
     public DRRScheduler(@NonNull Config config, @Nullable CoreSnapshot snapshot,
             @NonNull Callable<Double> downstreamPressure) {
-        super(getName(config), config.maxSubQueues);
+        super(getName(config), Runtime.getRuntime().availableProcessors() >>> 1, getChunkSize(config.cloneConfig));
         this.logger = LoggerFactory.getLogger(getName(config));
         this.config = config;
         this.snapshot = snapshot;
@@ -67,8 +69,7 @@ public class DRRScheduler extends IngestSequencer implements DispatchPreProcess,
             this.coreId = -1;
         }
 
-        this.metrics = new Metrics(config.metricPrefix, coreId, capFactor, totalQueuedSizeBytes,
-                () -> pressure, config.registry);
+        this.metrics = new Metrics(config.metricPrefix, coreId, capFactor, totalQueuedSizeBytes, config.registry);
 
     }
 
@@ -77,19 +78,36 @@ public class DRRScheduler extends IngestSequencer implements DispatchPreProcess,
                                             + config.cloneConfig.coreId() : "DRRScheduler";
     }
 
+    private static int getChunkSize(CloneConfig config) {
+        if(config == null) {
+            return 512;
+        }
+
+        int subQueues = getSubQueueCount(Runtime.getRuntime().availableProcessors() >>> 1);
+
+        CpuCacheLayout layout = CpuCacheSizes.getCacheLayout(config.getCpuSet()[0]);
+        long L2 = layout.bytesL2() / layout.sharesL2();
+
+        int chunk = (int) Math.min(L2 / subQueues, Integer.MAX_VALUE);
+        chunk = (int) (chunk * 0.8);
+        chunk = Integer.highestOneBit(chunk);
+        chunk /= ObjectSizer.POINTER_SIZE;
+        return Math.max(chunk, 512);
+    }
+
     @Override
     public void firstTouch() {
         totalCount.set(0);
         totalQueueWeight = 0;
         totalQueuedSizeBytes.set(0);
-
-        int totalInserts = 3 * CHUNK_SIZE;
+        int totalInserts = 3 * chunkSize;
         for (var queue : queueRing) {
             for (int i = 0; i < totalInserts; i++) {
                 queue.enqueue(DummyInitFrame.INSTANCE);
             }
             queue.clear();
         }
+        Arrays.stream(queueStats).forEach(QueueStats::reset);
         fillRecorder.record(1, true);
         fillBytesRecorder.record(1, false);
         drainRecorder.record(1, false);
@@ -114,43 +132,28 @@ public class DRRScheduler extends IngestSequencer implements DispatchPreProcess,
         }
     }
 
-    protected int refillQueueQuota(QueueFrame node) {
-        long quota = Math.max(0, node.getQuota() - node.getDrainCycles() * config.maxSubQueues);
-        node.setQuota(quota);
-
-        if (quota > 0) {
-            return (int) quota;
+    @Override
+    protected void refillQueueQuota(QueueStats stats) {
+        if(drain.get()) {
+            stats.quotaBytes = chunkSize * stats.avgFrameSize.get();
+            return;
         }
+        stats.quotaBytes = Math.max(0, stats.quotaBytes);
 
-        updateQuantum(node);
-        quota = node.getQuota() + node.getWeight();
-        node.setQuota(quota < 0 ? Long.MAX_VALUE : quota);
-
-        long avgSize = Math.max(1, node.getAvgFrameSize().get());
-
-        long recentFrames = Math.max(1, drainRecorder.getRollingSum());
-        long recentBytes = Math.max(1, fillBytesRecorder.getRollingSum());
-
-        long proportionalQuota = (recentFrames * avgSize) + (recentBytes / 2);
-
-        long scaledQuota = Math.max(64, proportionalQuota);
-        scaledQuota = scaledQuota * node.getWeight() / Math.max(1, totalQueueWeight);
-        scaledQuota = Math.max(64, scaledQuota);
-
-        node.setDrainCycles(0);
-        node.setQuota(scaledQuota);
-
-        return drain.get() ? node.getQueueCount() : (int) (scaledQuota / avgSize);
+        updateWeight(stats);
+        stats.quotaBytes += stats.weight;
+        stats.quotaBytes = stats.quotaBytes < 0 ? 1024 * 64 : stats.quotaBytes;
+        stats.drainCycles = 0;
     }
 
-    protected void updateQuantum(QueueFrame node) {
-        long avgSize = node.getAvgFrameSize().get();
+    protected void updateWeight(QueueStats stats) {
+        long avgSize = stats.avgFrameSize.get();
         if (avgSize < 128) {
             avgSize = 128;
         }
 
         long targetQuantum = avgSize << 1;
-        long currentWeight = node.getWeight();
+        long currentWeight = stats.weight;
 
         FlowSnapshot flowSnapshot = fillBytesRecorder.getFlowSnapshot();
         fillBytesRecorder.refreshSnapshot(flowSnapshot, true);
@@ -165,18 +168,36 @@ public class DRRScheduler extends IngestSequencer implements DispatchPreProcess,
         int deadbandShift = (clampedCV > 0.3) ? 2 : 3;
 
         if (delta > (targetQuantum >> deadbandShift)) {
-            node.smoothWeight(targetQuantum, clampedCV);
-            if (this.metrics.nodeWeightVarianceSummary != null) {
-                this.metrics.nodeWeightVarianceSummary.record(node.getWeight());
-            }
+            stats.weight = smoothWeight(targetQuantum, clampedCV, currentWeight);
         }
     }
 
+    public long smoothWeight(long target, double cv, long weight) {
+        double stepPercent = 0.25 - (cv * 0.5);
+        if (stepPercent < 0.05) {
+            stepPercent = 0.05;
+        } else if (stepPercent > 0.25) {
+            stepPercent = 0.25;
+        }
+
+        long maxStep = (long) (weight * stepPercent);
+        long delta = target - weight;
+
+        if (delta > maxStep) {
+            target = weight + maxStep;
+        } else if (delta < -maxStep) {
+            target = weight - maxStep;
+        }
+
+        return (long) (weight * 0.9 + target * 0.1);
+    }
+
     @Override
-    protected void recordDrainMetrics(QueueFrame queue, long drainCount) {
+    protected void recordDrainMetrics(QueueFrame queue, QueueStats stats, long drainCount) {
         if (!queue.isEmpty()) {
-            if (this.metrics.nodeBacklogSummary != null) {
-                this.metrics.nodeBacklogSummary.record(queue.getSizeBytes());
+            if (this.metrics.subQBacklogSummary != null) {
+                this.metrics.subQBacklogSummary.record(queue.getSizeBytes());
+                this.metrics.subQWeightSummary.record(stats.weight);
             }
         }
     }
@@ -283,26 +304,26 @@ public class DRRScheduler extends IngestSequencer implements DispatchPreProcess,
 
         public final MeterRegistry registry;
 
-        public final DistributionSummary nodeBacklogSummary;
-        public final DistributionSummary nodeWeightVarianceSummary;
+        public final DistributionSummary subQBacklogSummary;
+        public final DistributionSummary subQWeightSummary;
 
         private final List<Meter> meters = new ArrayList<>();
 
         public Metrics(String metricPrefix, int coreId, AtomicReference<Double> capFactor,
-                AtomicLong totalQueuedSizeBytes, Supplier<Double> pressure,
-                MeterRegistry registry) {
+                AtomicLong totalQueuedSizeBytes, MeterRegistry registry) {
             this.registry = registry;
             if (registry != null) {
                 String tag = String.valueOf(coreId);
 
-                nodeBacklogSummary = DistributionSummary.builder(
-                                metricPrefix + ".node_backlog_bytes")
+                subQBacklogSummary = DistributionSummary.builder(
+                                metricPrefix + ".drr_sub_queue_backlog_bytes")
+                        .description("Amount of bytes stored in a sub queue")
                         .tag("core", tag)
                         .publishPercentiles(0.5, 0.95, 0.99)
                         .register(registry);
 
-                nodeWeightVarianceSummary = DistributionSummary.builder(
-                                metricPrefix + ".node_size_variance")
+                subQWeightSummary = DistributionSummary.builder(
+                                metricPrefix + ".drr_sub_queue_weight")
                         .tag("core", tag)
                         .publishPercentiles(0.0, 1.0)
                         .register(registry);
@@ -314,19 +335,14 @@ public class DRRScheduler extends IngestSequencer implements DispatchPreProcess,
                                 .tag("core", tag)
                                 .register(registry));
 
-                meters.add(Gauge.builder(metricPrefix + ".queue_kb",
+                meters.add(Gauge.builder(metricPrefix + ".drr_backlog",
                                 () -> totalQueuedSizeBytes.get() / 1024)
-                        .description("Total KiloBytes currently buffered in the DRR ready queue")
+                        .description("Total bytes currently buffered in all sub queues of the DRR")
                         .baseUnit("KB")
                         .register(registry));
-
-                meters.add(Gauge.builder(metricPrefix + ".pressure", pressure)
-                        .description("Combined Hardware + Downstream pressure signal")
-                        .tag("core", tag)
-                        .register(registry));
             } else {
-                nodeBacklogSummary = null;
-                nodeWeightVarianceSummary = null;
+                subQBacklogSummary = null;
+                subQWeightSummary = null;
             }
         }
 
@@ -334,9 +350,9 @@ public class DRRScheduler extends IngestSequencer implements DispatchPreProcess,
         public void close() {
             meters.forEach(Meter::close);
             meters.clear();
-            if (nodeBacklogSummary != null) {
-                nodeBacklogSummary.close();
-                nodeWeightVarianceSummary.close();
+            if (subQBacklogSummary != null) {
+                subQBacklogSummary.close();
+                subQWeightSummary.close();
             }
         }
     }
