@@ -7,7 +7,7 @@ import euhedral.io.resource_monitoring.SystemUtilization.HardwareUtilization;
 import euhedral.io.resource_monitoring.SystemUtilization.SystemSnapshot;
 import euhedral.io.resource_monitoring.providers.OSResourceProviderPicker;
 import euhedral.io.resource_monitoring.providers.ResourceProvider;
-import euhedral.io.utils.pinning.ThreadTimerResolution.Linux;
+import euhedral.io.hardware_utils.ThreadTimerResolution.Linux;
 import java.time.Duration;
 import java.util.BitSet;
 import java.util.concurrent.atomic.AtomicLong;

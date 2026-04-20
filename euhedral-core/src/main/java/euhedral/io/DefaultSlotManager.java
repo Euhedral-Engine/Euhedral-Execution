@@ -11,6 +11,8 @@ import euhedral.io.flow_control.IngestSequencer.WakeHook;
 import euhedral.io.flow_control.LockFreeSink;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.frames.DummyInitFrame;
+import euhedral.io.hardware_utils.CpuCacheSizes;
+import euhedral.io.hardware_utils.CpuCacheSizes.CpuCacheLayout;
 import euhedral.io.interfaces.CloneableObject;
 import euhedral.io.interfaces.SlotManager;
 import euhedral.io.resource_monitoring.NumaMapper;
@@ -21,8 +23,9 @@ import euhedral.io.utils.DemandOptimizer;
 import euhedral.io.utils.DrainBuffer;
 import euhedral.io.utils.FlowRecorder;
 import euhedral.io.utils.FlowRecorder.FlowSnapshot;
-import euhedral.io.utils.pinning.PinnedThreadExecutor;
-import euhedral.io.utils.pinning.ThreadTimerResolution;
+import euhedral.io.hardware_utils.pinning.PinnedThreadExecutor;
+import euhedral.io.hardware_utils.ThreadTimerResolution;
+import euhedral.io.utils.ObjectSizer;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -128,7 +131,14 @@ public class DefaultSlotManager implements SlotManager {
     public DefaultSlotManager(@NonNull Config config) {
         this.config = config;
 
-        int bufferSize = Integer.highestOneBit((config.bufferSize - 1) << 1);
+        int bufferSize = (int) Math.min(Long.highestOneBit((CpuCacheSizes.DEFAULT_L1 - 1) << 1), Integer.MAX_VALUE);
+        if(config.cloneConfig != null) {
+            CpuCacheLayout layout = CpuCacheSizes.getCacheLayout(config.cloneConfig.getCpuSet()[0]);
+            long temp = layout.bytesL1() / layout.sharesL1();
+            temp = (long) (temp * 0.75);
+            bufferSize = (int) Math.min(Long.highestOneBit((temp - 1) << 1), Integer.MAX_VALUE);
+            bufferSize /= ObjectSizer.POINTER_SIZE;
+        }
         bufferSize = Math.max(bufferSize, 64);
 
         this.buffer = new SpscUnboundedUnpaddedArrayQueue<>(bufferSize);
@@ -168,7 +178,7 @@ public class DefaultSlotManager implements SlotManager {
         }
 
         this.metrics = new Metrics(config.meterRegistry, config, () -> inFlight, () -> avgLatency,
-                () -> currentConcurrency, () -> currentRate);
+                () -> currentConcurrency, () -> currentRate, this::getPressure);
 
         outputFlux = new DirectOutputFlux(buffer, frame -> {
             if ((state.dispatches++ & state.updateIntervalMask) == 0) {
@@ -661,14 +671,15 @@ public class DefaultSlotManager implements SlotManager {
 
         public Metrics(MeterRegistry registry, Config config, Supplier<Integer> inFlight,
                 Supplier<Long> latency, Supplier<Long> currentConcurrency,
-                Supplier<Long> currentRate) {
+                Supplier<Long> currentRate, Supplier<Double> pressure) {
             this.registry = registry;
 
             if (registry != null && config.cloneConfig != null) {
                 String coreId = String.valueOf(config.cloneConfig.coreId());
 
                 meters.add(Gauge.builder(config.metricPrefix + ".execution.latency", latency)
-                        .description("Average time of execution of work.").tag("core", coreId)
+                        .description("Average time for execution of work.")
+                        .tag("core", coreId)
                         .baseUnit("nanoseconds").register(registry));
 
                 meters.add(Gauge.builder(config.metricPrefix + ".execution.concurrency.current",
@@ -677,11 +688,18 @@ public class DefaultSlotManager implements SlotManager {
 
                 meters.add(
                         Gauge.builder(config.metricPrefix + ".execution.inflight.count", inFlight)
-                                .description("Number of frames being executed").tag("core", coreId)
+                                .description("Number of frames being executed")
+                                .tag("core", coreId)
                                 .register(registry));
 
                 meters.add(Gauge.builder(config.metricPrefix + ".execution.throughput", currentRate)
-                        .description("Current execution rate (execution/sec)").tag("core", coreId)
+                        .description("Current execution rate (execution/sec)")
+                        .tag("core", coreId)
+                        .register(registry));
+
+                meters.add(Gauge.builder(config.metricPrefix + ".execution.pressure", pressure)
+                        .description("Combined signal of reported hardware and calculated execution pressure")
+                        .tag("core", coreId)
                         .register(registry));
             }
         }
@@ -712,7 +730,7 @@ public class DefaultSlotManager implements SlotManager {
         /// recomputation of limits and execution latency recording. They also reduce sensitivity to
         /// micro jitter.
         public static Config lowLatencyDefault(MeterRegistry meterRegistry, String metricPrefix) {
-            return new Config(null, 4_096, 4_096, 1024, IdleCyclePolicy.LOW_LATENCY, meterRegistry,
+            return new Config(null, 4_096, 256, 1024, IdleCyclePolicy.LOW_LATENCY, meterRegistry,
                     metricPrefix);
         }
 

@@ -33,9 +33,6 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
     protected volatile RoutingState routingState = new RoutingState(new int[0]);
 
     protected long hash;
-    protected int uniqueOrdered = 0;
-    protected long xor1;
-    protected long xor2;
 
     public FluxNode(String name, int downstreamCount) {
         this(name, downstreamCount, RoutingFunction.DEFAULT, false);
