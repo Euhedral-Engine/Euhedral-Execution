@@ -3,9 +3,9 @@ package euhedral.io.interfaces;
 import euhedral.io.control_plane.CloneConfig;
 import java.util.concurrent.Callable;
 
-public interface DispatchPreProcess extends CloneableObject {
+public interface CacheManager extends CloneableObject {
 
     void setDownstreamPressureMonitor(Callable<Double> pressure);
 
-    DispatchPreProcess clone(CloneConfig cloneConfig);
+    CacheManager clone(CloneConfig cloneConfig);
 }

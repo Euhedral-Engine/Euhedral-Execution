@@ -3,7 +3,7 @@ package euhedral.io;
 import euhedral.io.control_plane.CloneConfig;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.interfaces.CloneableObject;
-import euhedral.io.interfaces.DispatchPreProcess;
+import euhedral.io.interfaces.CacheManager;
 import euhedral.io.interfaces.PipelineExecutor;
 import euhedral.io.interfaces.SlotManager;
 import euhedral.io.resource_monitoring.SystemUtilization.CoreSnapshot;
@@ -21,43 +21,43 @@ public abstract class AbstractCloneablePipeline implements
     protected final CloneConfig config;
     protected final String name;
 
-    protected final DispatchPreProcess preProcess;
+    protected final CacheManager cacheManager;
     protected final SlotManager slotManager;
     protected final PipelineExecutor executor;
 
     public AbstractCloneablePipeline(String name, CloneConfig cloneConfig,
-            DispatchPreProcess preProcess,
+            CacheManager cacheManager,
             SlotManager slotManager,
             PipelineExecutor executor) {
         this.logger = LoggerFactory.getLogger(name);
         this.config = cloneConfig;
         this.name = name;
-        this.preProcess = preProcess.clone(cloneConfig);
+        this.cacheManager = cacheManager.clone(cloneConfig);
         this.slotManager = slotManager.clone(cloneConfig);
         this.executor = executor.clone(cloneConfig, slotManager.getPinnedExecutor());
 
-        preProcess.setDownstreamPressureMonitor(slotManager::getPressure);
+        cacheManager.setDownstreamPressureMonitor(slotManager::getPressure);
     }
 
     @Override
     public void start() {
         executor.start();
         slotManager.start();
-        preProcess.start();
+        cacheManager.start();
 
         executor.reportErrorsTo(slotManager);
         executor.ingest(slotManager.output());
-        slotManager.ingest(preProcess.output());
+        slotManager.ingest(cacheManager.output());
     }
 
     @Override
     public boolean isStarted() {
-        return preProcess.isStarted() && slotManager.isStarted() && executor.isStarted();
+        return cacheManager.isStarted() && slotManager.isStarted() && executor.isStarted();
     }
 
     @Override
     public void update(CoreSnapshot snapshot) {
-        preProcess.update(snapshot);
+        cacheManager.update(snapshot);
         slotManager.update(snapshot);
         executor.update(snapshot);
     }
@@ -70,7 +70,7 @@ public abstract class AbstractCloneablePipeline implements
 
     @Override
     public void ingest(Publisher<? extends AbstractFrame> frameFlux) {
-        preProcess.ingest(frameFlux);
+        cacheManager.ingest(frameFlux);
     }
 
     @Override
@@ -85,7 +85,7 @@ public abstract class AbstractCloneablePipeline implements
 
     @Override
     public boolean isDrained() {
-        return preProcess.isDrained() &&
+        return cacheManager.isDrained() &&
                 slotManager.isDrained() &&
                 executor.isDrained();
     }
@@ -95,9 +95,9 @@ public abstract class AbstractCloneablePipeline implements
         if (value) {
             executor.setDrainMode(value);
             slotManager.setDrainMode(value);
-            preProcess.setDrainMode(value);
+            cacheManager.setDrainMode(value);
         } else {
-            preProcess.setDrainMode(value);
+            cacheManager.setDrainMode(value);
             slotManager.setDrainMode(value);
             executor.setDrainMode(value);
         }
@@ -110,7 +110,7 @@ public abstract class AbstractCloneablePipeline implements
 
     @Override
     public void dumpLocks() {
-        preProcess.dumpLocks();
+        cacheManager.dumpLocks();
         slotManager.dumpLocks();
         executor.dumpLocks();
     }
@@ -162,9 +162,9 @@ public abstract class AbstractCloneablePipeline implements
                 logger.error("Failed to close {}", executor.getClass(), e);
             }
             try {
-                preProcess.close();
+                cacheManager.close();
             } catch (Exception e) {
-                logger.error("Failed to close {}", preProcess.getClass(), e);
+                logger.error("Failed to close {}", cacheManager.getClass(), e);
             }
         } catch (Exception e) {
             logger.error("Failed to close pipeline properly", e);
