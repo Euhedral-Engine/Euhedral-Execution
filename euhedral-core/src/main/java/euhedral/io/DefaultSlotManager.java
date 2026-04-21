@@ -4,6 +4,7 @@ import static euhedral.io.utils.MathFunctions.clampDouble;
 import static euhedral.io.utils.MathFunctions.clampLong;
 import static euhedral.io.utils.MathFunctions.log2;
 
+import euhedral.io.SlotManagerSMTBuddy.SMTState;
 import euhedral.io.control_plane.CloneConfig;
 import euhedral.io.flow_control.DirectOutputFlux;
 import euhedral.io.flow_control.IngestSequencer;
@@ -19,7 +20,6 @@ import euhedral.io.resource_monitoring.NumaMapper;
 import euhedral.io.resource_monitoring.NumaMapper.OriginLocation;
 import euhedral.io.resource_monitoring.SystemUtilization.CoreSnapshot;
 import euhedral.io.resource_monitoring.SystemUtilization.CpuSnapshot;
-import euhedral.io.utils.DemandOptimizer;
 import euhedral.io.utils.DrainBuffer;
 import euhedral.io.utils.FlowRecorder;
 import euhedral.io.utils.FlowRecorder.FlowSnapshot;
@@ -111,6 +111,8 @@ public class DefaultSlotManager implements SlotManager {
     protected final DirectOutputFlux outputFlux;
 
     protected final CycleState state;
+    protected final SMTState buddyState;
+    protected final SlotManagerSMTBuddy buddy;
 
     protected volatile long avgLatency;
     protected volatile long currentRate;
@@ -131,11 +133,16 @@ public class DefaultSlotManager implements SlotManager {
     public DefaultSlotManager(@NonNull Config config) {
         this.config = config;
 
-        int bufferSize = (int) Math.min(Long.highestOneBit((CpuCacheSizes.DEFAULT_L1 - 1) << 1), Integer.MAX_VALUE);
-        if(config.cloneConfig != null) {
+        int bufferSize = (int) Math.min(Long.highestOneBit((CpuCacheSizes.DEFAULT_L1 - 1) << 1),
+                Integer.MAX_VALUE);
+        if (config.cloneConfig != null) {
             CpuCacheLayout layout = CpuCacheSizes.getCacheLayout(config.cloneConfig.getCpuSet()[0]);
-            long temp = layout.bytesL1() / layout.sharesL1();
-            temp = (long) (temp * 0.75);
+            long temp = layout.bytesL1();
+            if (config.cloneConfig.getCpuSet().length != layout.sharesL1()) {
+                temp /= layout.sharesL1();
+            }
+
+            temp = (long) (temp * 0.7);
             bufferSize = (int) Math.min(Long.highestOneBit((temp - 1) << 1), Integer.MAX_VALUE);
             bufferSize /= ObjectSizer.POINTER_SIZE;
         }
@@ -143,8 +150,16 @@ public class DefaultSlotManager implements SlotManager {
 
         this.buffer = new SpscUnboundedUnpaddedArrayQueue<>(bufferSize);
         this.bufferSize = bufferSize;
-        this.bufferWrapper = new DrainBuffer(buffer, false);
+        this.bufferWrapper = new DrainBuffer(buffer, bufferSize, false);
+
+        this.executionLatency = new FlowRecorder();
+        this.maxUpdateInterval = Integer.highestOneBit(Math.max(config.maxUpdateInterval, 2));
+
         this.state = new CycleState();
+        this.buddyState = new SMTState(executionLatency, bufferWrapper.arrivalLatencyRecorder,
+                config.idleCyclePolicy.maxParkTime.toNanos());
+
+        this.buddy = new SlotManagerSMTBuddy(bufferWrapper, buddyState);
 
         this.completeSink =
                 new LockFreeSink(new MpscUnboundedXaddArrayQueue<>(bufferSize, 4), frame -> {
@@ -157,9 +172,6 @@ public class DefaultSlotManager implements SlotManager {
         this.currentRate = config.initialConcurrency;
         this.currentConcurrency = Math.max(1, config.initialConcurrency);
         this.effectiveConcurrencyLimit = config.initialConcurrency;
-
-        this.executionLatency = new FlowRecorder();
-        this.maxUpdateInterval = Integer.highestOneBit(Math.max(config.maxUpdateInterval, 2));
 
         if (config.cloneConfig == null) {
             this.cpuId = -1;
@@ -207,6 +219,7 @@ public class DefaultSlotManager implements SlotManager {
                 ingest.removeThread(cycleThread);
                 ingest.close();
             }
+            buddy.close();
             if (cycleThread != null) {
                 try {
                     LockSupport.unpark(cycleThread);
@@ -267,6 +280,12 @@ public class DefaultSlotManager implements SlotManager {
                         logger.info("Pinned to Core {} CPU {}", cloneConfig.coreId(), cpuId);
                     }
                     ThreadTimerResolution.setResolution(1);
+                    if (config.enableSMT && cloneConfig.getCpuSet().length > 1) {
+                        this.buddy.start(cloneConfig.getCpuSet()[1],
+                                config.cloneConfig.shardName() + "-DefaultSlotManager-SMT-"
+                                        + config.cloneConfig.coreId(), Thread.MAX_PRIORITY, false);
+                        state.smtMode = true;
+                    }
                     cycle();
                 });
             } else {
@@ -277,6 +296,7 @@ public class DefaultSlotManager implements SlotManager {
 
     private void cycle() {
         try {
+            long dispatchWaitNs = 0;
             while (running.get() && !Thread.currentThread().isInterrupted()) {
                 state.receivingOrderedWork = false;
                 completeSink.drain();
@@ -285,10 +305,31 @@ public class DefaultSlotManager implements SlotManager {
                     state.completed = 0;
                 }
 
+                state.lastActiveNs = System.nanoTime();
+                long remaining = dispatchWaitNs - state.lastActiveNs;
+                if (remaining > 0) {
+                    if (remaining < 1_000) {
+                        while (System.nanoTime() < dispatchWaitNs) {
+                            Thread.onSpinWait();
+                        }
+                    } else if (remaining < 50_000) {
+                        long spinUntil = dispatchWaitNs - 1_000;
+                        while (System.nanoTime() < spinUntil) {
+                            Thread.onSpinWait();
+                        }
+                        LockSupport.parkNanos(1_000);
+                    } else {
+                        LockSupport.parkNanos(remaining);
+                    }
+
+                    continue;
+                }
+
                 int processed = dispatch();
                 if (processed > 0) {
+                    dispatchWaitNs = calculateDispatchWaitNs(System.nanoTime());
                     state.idleRecorder.record(System.nanoTime(), 0, false);
-                    state.requests >>>= 1;
+                    state.rests >>>= 1;
 
                     if ((processed & 127) == 0) {
                         Thread.onSpinWait();
@@ -300,56 +341,34 @@ public class DefaultSlotManager implements SlotManager {
                     idleSpin(5);
                     continue;
                 }
-                if (state.fillSnapshot == null) {
-                    state.fillSnapshot = ingest.getFillRecorder().getFlowSnapshot();
-                    state.fillBytesSnapshot = ingest.getFillBytesRecorder().getFlowSnapshot();
-                    state.drainSnapshot = ingest.getDrainRecorder().getFlowSnapshot();
-                }
 
                 long ingestCount = ingest.getCount();
 
-                if (state.bufferCount > state.lowWaterMark && ingestCount == 0) {
-                    idleSpin(state.requests);
+                if (buddyState.bufferCount.get() > state.lowWaterMark && ingestCount == 0) {
+                    idleSpin(state.rests);
                     continue;
                 }
-
-                ingest.getFillRecorder().refreshSnapshot(state.fillSnapshot, true);
 
                 long newUpCount = ingest.getUpstreamCount();
                 if (upstreamCount != newUpCount) {
                     state.idleRecorder.reset(false);
-                    state.requests = 0;
+                    state.rests = 0;
                     upstreamCount = newUpCount;
                 }
                 // This is usually hit when there are producers present but nothing is flowing
-                else if (processed == 0 && (state.requests & 15) != 0 && upstreamCount > 0
+                else if (processed == 0 && (state.rests & 15) != 0 && upstreamCount > 0
                         && !state.receivingOrderedWork && ingestCount == 0
-                        && state.lastRequestNs - state.fillSnapshot.lastRecordingTimeNs
-                        > 10 * state.maxParkNs) {
-                    idleSpin(Math.min(15, state.requests));
+                        && state.lastEmptyNs - state.lastActiveNs > 10 * state.maxParkNs) {
+                    idleSpin(Math.min(15, state.rests));
                     continue;
                 }
 
-                ingest.getFillBytesRecorder().refreshSnapshot(state.fillBytesSnapshot, true);
-                ingest.getDrainRecorder().refreshSnapshot(state.drainSnapshot, true);
-                bufferWrapper.arrivalLatencyRecorder.refreshSnapshot(state.arrivalLatencySnapshot,
-                        false);
-
-                long nowNs = System.nanoTime();
-
-                long demand = 0;
-                long maxFill = bufferSize - state.bufferCount;
-                if (state.receivingOrderedWork || nowNs >= state.demandWaitNs) {
-                    demand = calculateDemand(ingestCount);
-                }
-                if (!state.receivingOrderedWork) {
-                    state.demandWaitNs = calculateDemandWaitNs(nowNs, maxFill);
+                state.lastEmptyNs = System.nanoTime();
+                if (!state.smtMode && state.lastEmptyNs > buddyState.demandWaitNs) {
+                    this.buddy.doStuff();
                 }
 
-                state.lastRequestNs = nowNs;
-                int drained = (int) ingest.drain(bufferWrapper, (int) maxFill, demand);
-                state.bufferCount += drained;
-                state.requests++;
+                state.rests++;
             }
         } catch (Throwable e) {
             logger.error("Error", e);
@@ -359,74 +378,24 @@ public class DefaultSlotManager implements SlotManager {
     }
 
     protected int dispatch() {
+        int bufferCount = buddyState.bufferCount.get();
+        if (bufferCount == 0) {
+            return 0;
+        }
+
         long currentConcurrency = this.currentConcurrency;
         long quota = Math.max(0, currentConcurrency - this.inFlight);
-        quota = drainMode ? state.bufferCount : quota;
+        quota = drainMode ? bufferCount : quota;
 
         int processed = 0;
-        if (quota > 0 && state.bufferCount > 0) {
+        if (quota > 0 && bufferCount > 0) {
             processed = outputFlux.drain(quota);
             if (processed > 0) {
-                state.bufferCount -= processed;
+                buddyState.bufferCount.addAndGet(-processed);
                 this.inFlight += processed;
             }
         }
         return processed;
-    }
-
-    protected long calculateDemand(long ingestCount) {
-        double drainRate = state.drainSnapshot.avgRate;
-        double drainRateVar = state.drainSnapshot.rateVariation;
-        double arrivalLatencyNs = state.arrivalLatencySnapshot.avgUnits;
-        double arrivalLatencyVar = state.arrivalLatencySnapshot.unitVariation;
-        double avgFrameSize =
-                state.fillBytesSnapshot.avgUnits + state.fillBytesSnapshot.unitVariation;
-
-        long demand = DemandOptimizer.getDemand(drainRate, arrivalLatencyNs, drainRateVar,
-                arrivalLatencyVar, state.bufferCount + ingestCount, (long) avgFrameSize,
-                ingest.getMaxQueuedBytes());
-
-        long maxFill = bufferSize - state.bufferCount;
-        if (demand < maxFill) {
-            demand += maxFill - state.bufferCount;
-        }
-
-        return demand;
-    }
-
-    protected long calculateDemandWaitNs(long nowNs, long maxFill) {
-        boolean warmedUp = ingest.getFillRecorder().getRollingSum() > bufferSize
-                && state.fillSnapshot.avgInterval > 0 && state.fillSnapshot.avgUnits > 0;
-
-        if (warmedUp) {
-            FlowSnapshot execSnapshot = executionLatency.getFlowSnapshot();
-            executionLatency.refreshSnapshot(execSnapshot, true);
-
-            double fillRate = state.fillSnapshot.avgRate;
-            double execLatency = execSnapshot.avgUnits;
-
-            double execRate = 1.0 / Math.max(execLatency, 1.0);
-
-            if (fillRate < execRate * 0.5) {
-                return nowNs + (long) state.fillSnapshot.avgInterval;
-            } else {
-                double fillInterval =
-                        state.fillSnapshot.avgInterval + state.fillSnapshot.intervalVariation;
-                fillInterval = Math.max(fillInterval, 1_000);
-
-                double avgFill = state.fillSnapshot.avgUnits + state.fillSnapshot.unitVariation;
-                avgFill = Math.max(avgFill, 64);
-
-                double intervalCount = maxFill / avgFill;
-
-                long maxWaitNs = (long) (execLatency * bufferSize / 2);
-                maxWaitNs = Math.min(maxWaitNs, state.maxParkNs);
-
-                long fillWait = (long) (intervalCount * fillInterval);
-                return nowNs + Math.min(maxWaitNs, fillWait);
-            }
-        }
-        return 0;
     }
 
     protected void updateLimits() {
@@ -528,6 +497,33 @@ public class DefaultSlotManager implements SlotManager {
         this.currentConcurrency = clampLong(next, 1, effectiveConcurrencyLimit);
     }
 
+    protected long calculateDispatchWaitNs(long nowNs) {
+        FlowSnapshot exec = executionLatency.getFlowSnapshot();
+
+        double avgLatency = Math.max(exec.avgUnits, 1.0);
+        double avgVariance = exec.unitVariation;
+
+        double queuePressure =
+                executionLatency.getVegasQueueEstimate(exec, exec.avgUnits, currentConcurrency);
+
+        CpuSnapshot cpu = coreSnapshot.cpuSnapshots()[cpuId];
+        double cpuPressure = cpu.pressure();
+        double cpuThrottle = cpuPressure * (cpu.isPCore() ? 0.5 : 0.7);
+
+        long baseIntervalNs = (long) avgLatency;
+
+        double queueFactor = 1.0 + (queuePressure / (double) (Math.max(currentConcurrency, 1)));
+        double variability = 1.0 + Math.min(1.0, avgVariance * 0.5);
+
+        long interval = (long) (baseIntervalNs * queueFactor * variability);
+
+        // CPU backpressure
+        interval = (long) (interval * (1.0 + cpuThrottle));
+        interval = clampLong(interval, 0, state.maxParkNs);
+
+        return nowNs + interval;
+    }
+
     protected void idleSpin(long parks) {
         long now = System.nanoTime();
         state.idleRecorder.record(now, 1, false);
@@ -541,22 +537,27 @@ public class DefaultSlotManager implements SlotManager {
             while (parks-- > 0) {
                 park(state.maxParkNs);
 
-                if (ingest != null) {
+                if (this.buddyState.bufferCount.get() > 0) {
+                    break;
+                }
+
+                if (ingest != null && !state.smtMode) {
                     if (upstreamCount != ingest.getUpstreamCount()) {
                         break;
                     }
 
+                    int bufferCount = buddyState.bufferCount.get();
                     if (upstreamCount == 0) {
-                        long count = ingest.drain(bufferWrapper, bufferSize - state.bufferCount, 0);
+                        long count = ingest.drain(bufferWrapper, bufferSize - bufferCount, 0);
                         if (count > 0) {
-                            state.bufferCount += (int) count;
+                            buddyState.bufferCount.addAndGet((int) count);
                             break;
                         }
                     }
 
                     if (ingest.getCount() >= (bufferSize >> 3)) {
-                        long count = ingest.drain(bufferWrapper, bufferSize - state.bufferCount, 0);
-                        state.bufferCount += (int) count;
+                        long count = ingest.drain(bufferWrapper, bufferSize - bufferCount, 0);
+                        buddyState.bufferCount.addAndGet((int) count);
                         break;
                     }
                 }
@@ -584,6 +585,7 @@ public class DefaultSlotManager implements SlotManager {
     public void ingest(Publisher<? extends AbstractFrame> frameFlux) {
         if (frameFlux instanceof IngestSequencer sequencer && ingest == null) {
             ingest = sequencer;
+            buddy.setIngest(ingest);
             wakeHook = new WakeHook(cycleThread);
             sequencer.setWakeHook(wakeHook);
             LockSupport.unpark(cycleThread);
@@ -678,8 +680,7 @@ public class DefaultSlotManager implements SlotManager {
                 String coreId = String.valueOf(config.cloneConfig.coreId());
 
                 meters.add(Gauge.builder(config.metricPrefix + ".execution.latency", latency)
-                        .description("Average time for execution of work.")
-                        .tag("core", coreId)
+                        .description("Average time for execution of work.").tag("core", coreId)
                         .baseUnit("nanoseconds").register(registry));
 
                 meters.add(Gauge.builder(config.metricPrefix + ".execution.concurrency.current",
@@ -688,19 +689,17 @@ public class DefaultSlotManager implements SlotManager {
 
                 meters.add(
                         Gauge.builder(config.metricPrefix + ".execution.inflight.count", inFlight)
-                                .description("Number of frames being executed")
-                                .tag("core", coreId)
+                                .description("Number of frames being executed").tag("core", coreId)
                                 .register(registry));
 
                 meters.add(Gauge.builder(config.metricPrefix + ".execution.throughput", currentRate)
-                        .description("Current execution rate (execution/sec)")
-                        .tag("core", coreId)
+                        .description("Current execution rate (execution/sec)").tag("core", coreId)
                         .register(registry));
 
                 meters.add(Gauge.builder(config.metricPrefix + ".execution.pressure", pressure)
-                        .description("Combined signal of reported hardware and calculated execution pressure")
-                        .tag("core", coreId)
-                        .register(registry));
+                        .description(
+                                "Combined signal of reported hardware and calculated execution pressure")
+                        .tag("core", coreId).register(registry));
             }
         }
 
@@ -711,18 +710,18 @@ public class DefaultSlotManager implements SlotManager {
         }
     }
 
-    public record Config(CloneConfig cloneConfig, int initialConcurrency, int bufferSize,
-                         int maxUpdateInterval, IdleCyclePolicy idleCyclePolicy,
+    public record Config(CloneConfig cloneConfig, int initialConcurrency, int maxUpdateInterval,
+                         boolean enableSMT, IdleCyclePolicy idleCyclePolicy,
                          MeterRegistry meterRegistry, String metricPrefix)
             implements CloneableObject {
 
         public static Config powerSavingDefault(MeterRegistry meterRegistry, String metricPrefix) {
-            return new Config(null, 1_024, 4_096, 256, IdleCyclePolicy.POWER_SAVING, meterRegistry,
+            return new Config(null, 1_024, 256, false, IdleCyclePolicy.POWER_SAVING, meterRegistry,
                     metricPrefix);
         }
 
         public static Config balancedDefault(MeterRegistry meterRegistry, String metricPrefix) {
-            return new Config(null, 4_096, 4_096, 512, IdleCyclePolicy.DEFAULT, meterRegistry,
+            return new Config(null, 4_096, 512, true, IdleCyclePolicy.DEFAULT, meterRegistry,
                     metricPrefix);
         }
 
@@ -730,7 +729,7 @@ public class DefaultSlotManager implements SlotManager {
         /// recomputation of limits and execution latency recording. They also reduce sensitivity to
         /// micro jitter.
         public static Config lowLatencyDefault(MeterRegistry meterRegistry, String metricPrefix) {
-            return new Config(null, 4_096, 256, 1024, IdleCyclePolicy.LOW_LATENCY, meterRegistry,
+            return new Config(null, 4_096, 1024, false, IdleCyclePolicy.LOW_LATENCY, meterRegistry,
                     metricPrefix);
         }
 
@@ -740,7 +739,7 @@ public class DefaultSlotManager implements SlotManager {
             if (cloneConfig != null) {
                 meterRegistry = cloneConfig.meterRegistry();
             }
-            return new Config(cloneConfig, initialConcurrency, bufferSize, maxUpdateInterval,
+            return new Config(cloneConfig, initialConcurrency, maxUpdateInterval, enableSMT,
                     idleCyclePolicy, meterRegistry, metricPrefix);
         }
 
@@ -751,9 +750,11 @@ public class DefaultSlotManager implements SlotManager {
         /// Defines how the DefaultSlotManager will react when it doesn't process work in a cycle.
         /// Setting the threshold values higher than 1.0 disables them.
         ///
-        /// @param spinThreshold Upper limit defined by idleCyles / totalCycles for using Thread.onSpinWait()
-        /// @param yieldThreshold Upper limit defined by idleCyles / totalCycles for using Thread.yield()
-        /// @param maxParkTime Max duration of each LockSupport.parkNanos()
+        /// @param spinThreshold  Upper limit defined by idleCyles / totalCycles for using
+        /// Thread.onSpinWait()
+        /// @param yieldThreshold Upper limit defined by idleCyles / totalCycles for using
+        /// Thread.yield()
+        /// @param maxParkTime    Max duration of each LockSupport.parkNanos()
         public record IdleCyclePolicy(double spinThreshold, double yieldThreshold,
                                       Duration maxParkTime) {
 
@@ -771,22 +772,16 @@ public class DefaultSlotManager implements SlotManager {
         public final long maxParkNs = config.idleCyclePolicy.maxParkTime.toNanos();
         public final long lowWaterMark = bufferSize >> 2;
 
-        public final FlowSnapshot arrivalLatencySnapshot =
-                bufferWrapper.arrivalLatencyRecorder.getFlowSnapshot();
         public final FlowRecorder idleRecorder = new FlowRecorder();
 
-        public FlowSnapshot fillSnapshot = null;
-        public FlowSnapshot fillBytesSnapshot = null;
-        public FlowSnapshot drainSnapshot = null;
+        public boolean smtMode = false;
 
-        public long requests = 0;
+        public long rests = 0;
         public long dispatches = 0;
         public int completed = 0;
 
-        public long demandWaitNs = 0;
-        public long lastRequestNs = 0;
-
-        public int bufferCount = 0;
+        public long lastActiveNs = 0;
+        public long lastEmptyNs = 0;
 
         public int updateIntervalMask = 1;
         public double concurrencyFactor = 1.0;

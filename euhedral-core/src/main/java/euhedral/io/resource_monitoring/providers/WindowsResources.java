@@ -114,13 +114,10 @@ public class WindowsResources implements ResourceProvider {
 
     private static BitSet toBitSet(long mask) {
         BitSet bs = new BitSet();
-        int idx = 0;
         while (mask != 0) {
-            if ((mask & 1L) != 0) {
-                bs.set(idx);
-            }
-            mask >>>= 1;
-            idx++;
+            int bit = Long.numberOfTrailingZeros(mask);
+            bs.set(bit);
+            mask &= ~(1L << bit);
         }
         return bs;
     }

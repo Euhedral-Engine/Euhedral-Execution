@@ -1,21 +1,25 @@
 package euhedral.io.utils;
 
 import euhedral.io.frames.AbstractFrame;
+import lombok.Getter;
 import org.jctools.queues.MessagePassingQueue;
 
 public class DrainBuffer implements MessagePassingQueue.Consumer<AbstractFrame> {
 
     public final MessagePassingQueue<AbstractFrame> buffer;
     private final boolean threadSafe;
+    @Getter
+    private final int size;
 
     public final FlowRecorder arrivalLatencyRecorder = new FlowRecorder();
 
     public long drainCount = 0;
     public long drainedBytes = 0;
 
-    public DrainBuffer(MessagePassingQueue<AbstractFrame> buffer, boolean threadSafe) {
+    public DrainBuffer(MessagePassingQueue<AbstractFrame> buffer, int size, boolean threadSafe) {
         this.buffer = buffer;
         this.threadSafe = threadSafe;
+        this.size = size;
     }
 
     public void reset() {

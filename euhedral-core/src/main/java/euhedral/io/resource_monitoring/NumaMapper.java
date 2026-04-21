@@ -112,7 +112,7 @@ public class NumaMapper {
         }
 
         for (int i = 0; i < numSockets; i++) {
-            effectiveSocketTopologies.set(i, new SocketTopology(new AtomicInteger(-1),
+            effectiveSocketTopologies.set(i, new SocketTopology(new AtomicInteger(-1), i,
                     new AtomicReference<>(new BitSet(coreToCpus.length)),
                     new AtomicReference<>(new BitSet(cpuInfo.length)),
                     new AtomicReference<>(new BitSet[coreToCpus.length])));
@@ -273,7 +273,7 @@ public class NumaMapper {
 
     }
 
-    public record SocketTopology(AtomicInteger version, AtomicReference<BitSet> effectiveCores,
+    public record SocketTopology(AtomicInteger version, int socketId, AtomicReference<BitSet> effectiveCores,
                                  AtomicReference<BitSet> effectiveCpus,
                                  AtomicReference<BitSet[]> effectiveCoreToCpu) {
 

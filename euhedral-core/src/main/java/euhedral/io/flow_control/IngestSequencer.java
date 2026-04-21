@@ -44,8 +44,8 @@ public abstract class IngestSequencer extends FluxNode implements AutoCloseable 
     @Setter
     protected WakeHook wakeHook;
 
-    public IngestSequencer(String name, int subQueues, int chunkSize) {
-        super(name, getSubQueueCount(subQueues), RoutingFunction.DEFAULT, true);
+    public IngestSequencer(String name, int id, int subQueues, int chunkSize) {
+        super(name, getSubQueueCount(subQueues), RoutingFunction.DEFAULT, id, true);
 
         double dt = 0.1;
         double tau = 2.0; // 2 Seconds

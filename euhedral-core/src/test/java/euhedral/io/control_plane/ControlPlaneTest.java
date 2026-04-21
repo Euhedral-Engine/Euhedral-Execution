@@ -142,7 +142,7 @@ class ControlPlaneTest {
             BitSet cpus = new BitSet(8);
             cores.set(i * 2, i * 2 + 1);
             cpus.set(i * 4, i * 4 + 4);
-            topologies.set(i, new SocketTopology(new AtomicInteger(0), new AtomicReference<>(cores),
+            topologies.set(i, new SocketTopology(new AtomicInteger(0), i, new AtomicReference<>(cores),
                     new AtomicReference<>(cpus), new AtomicReference<>()));
         }
 

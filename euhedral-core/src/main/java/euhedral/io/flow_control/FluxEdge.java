@@ -36,9 +36,6 @@ public class FluxEdge extends UpstreamHandle implements Publisher<AbstractFrame>
     @Setter
     @Contended("sibling")
     protected volatile FluxEdge sibling = null;
-    @Getter
-    @Setter
-    protected volatile int index = 0;
 
     private volatile Collection<UpstreamQueue> upstreamQueues = aggregators.values();
     @Getter
@@ -309,13 +306,5 @@ public class FluxEdge extends UpstreamHandle implements Publisher<AbstractFrame>
     @Override
     public void onComplete() {
         close();
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (o instanceof FluxEdge e) {
-            return e.index == index;
-        }
-        return false;
     }
 }
