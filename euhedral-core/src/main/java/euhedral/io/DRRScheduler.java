@@ -12,7 +12,7 @@ import euhedral.io.frames.QueueFrame;
 import euhedral.io.hardware_utils.CpuCacheSizes;
 import euhedral.io.hardware_utils.CpuCacheSizes.CpuCacheLayout;
 import euhedral.io.interfaces.CloneableObject;
-import euhedral.io.interfaces.DispatchPreProcess;
+import euhedral.io.interfaces.CacheManager;
 import euhedral.io.resource_monitoring.SystemUtilization.CoreSnapshot;
 import euhedral.io.utils.DrainBuffer;
 import euhedral.io.utils.FlowRecorder.FlowSnapshot;
@@ -36,7 +36,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 @SuppressWarnings("ManualMinMaxCalculation")
-public class DRRScheduler extends IngestSequencer implements DispatchPreProcess, CloneableObject {
+public class DRRScheduler extends IngestSequencer implements CacheManager, CloneableObject {
 
     protected final Logger logger;
     protected final Config config;

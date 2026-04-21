@@ -4,25 +4,25 @@ import euhedral.io.AbstractCloneablePipeline;
 import euhedral.io.AbstractExecutor;
 import euhedral.io.control_plane.CloneConfig;
 import euhedral.io.frames.AbstractFrame;
-import euhedral.io.interfaces.DispatchPreProcess;
+import euhedral.io.interfaces.CacheManager;
 import euhedral.io.interfaces.PipelineExecutor;
 import euhedral.io.interfaces.SlotManager;
-import euhedral.io.utils.PinnedThreadExecutor;
+import euhedral.io.hardware_utils.pinning.PinnedThreadExecutor;
 import org.openjdk.jmh.infra.Blackhole;
 
 public class TestPipeline extends AbstractCloneablePipeline {
 
     private final String name;
 
-    public TestPipeline(String name, CloneConfig config, DispatchPreProcess scheduler,
+    public TestPipeline(String name, CloneConfig config, CacheManager cacheManager,
             SlotManager slotManager, PipelineExecutor executor) {
-        super(name, config, scheduler, slotManager, executor);
+        super(name, config, cacheManager, slotManager, executor);
         this.name = name;
     }
 
     @Override
     public TestPipeline hookOnClone(CloneConfig cloneConfig) {
-        return new TestPipeline(name, cloneConfig, this.preProcess, this.slotManager,
+        return new TestPipeline(name, cloneConfig, this.cacheManager, this.slotManager,
                 this.executor);
     }
 
