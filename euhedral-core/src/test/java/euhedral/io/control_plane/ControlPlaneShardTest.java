@@ -81,7 +81,7 @@ class ControlPlaneShardTest {
         core2cpu[0].set(1);
         core2cpu[1].set(2);
         core2cpu[1].set(3);
-        return new SocketTopology(version, effectiveCores, effectiveCpus, effectiveCoreToCpu);
+        return new SocketTopology(version, 0, effectiveCores, effectiveCpus, effectiveCoreToCpu);
     }
 
     private static SocketSnapshot getNodeSnapshot(SocketTopology topology) {
@@ -92,7 +92,7 @@ class ControlPlaneShardTest {
                     null, true);
         }
 
-        return new SocketSnapshot(0, topology.effectiveCores().get(), 0, 0, 0, 0, coreSnapshots, 0);
+        return new SocketSnapshot(0, topology.effectiveCores().get(), null, 0, 0, 0, 0, coreSnapshots, 0);
     }
 
     private static CloneConfig[] getConfigs(SocketSnapshot snapshot, SocketTopology topology,

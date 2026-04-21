@@ -34,6 +34,8 @@ public class PinnedThreadExecutor extends AbstractExecutorService implements Aut
                     daemon);
             PINNED_EXECUTORS.put(cpu, new WeakReference<>(executor));
             return executor;
+        } else if(exec.isShutdown()) {
+            exec.start(name, priority, daemon);
         }
         return exec;
     }

@@ -137,10 +137,6 @@ public class UpstreamQueue {
 
     public static abstract class UpstreamHandle implements Subscription {
 
-        public boolean setFastPath(FluxEdge edge) {
-            return false;
-        }
-
         public abstract void pull(DrainBuffer buffer, long demand);
 
         public abstract boolean isComplete();

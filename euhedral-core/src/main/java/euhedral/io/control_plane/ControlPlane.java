@@ -129,7 +129,7 @@ public class ControlPlane implements AutoCloseable {
         }
 
         FluxNode controller = new FluxNode(name + "-GlobalDistributor",
-                systemTopology.socketTopologies().length(), this::route, false);
+                systemTopology.socketTopologies().length(), this::route, 0, false);
         this.ingestController.set(controller);
     }
 
