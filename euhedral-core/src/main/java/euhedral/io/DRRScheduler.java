@@ -21,12 +21,14 @@ import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.MeterRegistry;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.reactivestreams.Publisher;
@@ -56,7 +58,8 @@ public class DRRScheduler extends IngestSequencer implements DispatchPreProcess,
 
     public DRRScheduler(@NonNull Config config, @Nullable CoreSnapshot snapshot,
             @NonNull Callable<Double> downstreamPressure) {
-        super(getName(config), Runtime.getRuntime().availableProcessors() >>> 1, getChunkSize(config.cloneConfig));
+        super(getName(config), config.cloneConfig != null ? config.cloneConfig.coreId() : 0,
+                Runtime.getRuntime().availableProcessors() >>> 1, getChunkSize(config.cloneConfig));
         this.logger = LoggerFactory.getLogger(getName(config));
         this.config = config;
         this.snapshot = snapshot;
@@ -69,7 +72,8 @@ public class DRRScheduler extends IngestSequencer implements DispatchPreProcess,
             this.coreId = -1;
         }
 
-        this.metrics = new Metrics(config.metricPrefix, coreId, capFactor, totalQueuedSizeBytes, config.registry);
+        this.metrics = new Metrics(config.metricPrefix, coreId, capFactor, totalQueuedSizeBytes,
+                config.registry);
 
     }
 
@@ -79,17 +83,20 @@ public class DRRScheduler extends IngestSequencer implements DispatchPreProcess,
     }
 
     private static int getChunkSize(CloneConfig config) {
-        if(config == null) {
+        if (config == null) {
             return 512;
         }
 
         int subQueues = getSubQueueCount(Runtime.getRuntime().availableProcessors() >>> 1);
 
         CpuCacheLayout layout = CpuCacheSizes.getCacheLayout(config.getCpuSet()[0]);
-        long L2 = layout.bytesL2() / layout.sharesL2();
+        long L2 = layout.bytesL2();
+        if(config.getCpuSet().length != layout.sharesL2()) {
+            L2 /= layout.sharesL2();
+        }
 
         int chunk = (int) Math.min(L2 / subQueues, Integer.MAX_VALUE);
-        chunk = (int) (chunk * 0.8);
+        chunk = (int) (chunk * 0.7);
         chunk = Integer.highestOneBit(chunk);
         chunk /= ObjectSizer.POINTER_SIZE;
         return Math.max(chunk, 512);
@@ -134,7 +141,7 @@ public class DRRScheduler extends IngestSequencer implements DispatchPreProcess,
 
     @Override
     protected void refillQueueQuota(QueueStats stats) {
-        if(drain.get()) {
+        if (drain.get()) {
             stats.quotaBytes = chunkSize * stats.avgFrameSize.get();
             return;
         }
@@ -204,7 +211,7 @@ public class DRRScheduler extends IngestSequencer implements DispatchPreProcess,
 
     @Override
     public long getUpstreamCount() {
-        if(upstream == null) {
+        if (upstream == null) {
             upstream = getThreadUpstreamQueue();
         }
         return upstream.getCachedUpCount();
@@ -315,31 +322,26 @@ public class DRRScheduler extends IngestSequencer implements DispatchPreProcess,
             if (registry != null) {
                 String tag = String.valueOf(coreId);
 
-                subQBacklogSummary = DistributionSummary.builder(
-                                metricPrefix + ".drr_sub_queue_backlog_bytes")
-                        .description("Amount of bytes stored in a sub queue")
-                        .tag("core", tag)
-                        .publishPercentiles(0.5, 0.95, 0.99)
-                        .register(registry);
+                subQBacklogSummary =
+                        DistributionSummary.builder(metricPrefix + ".drr_sub_queue_backlog_bytes")
+                                .description("Amount of bytes stored in a sub queue")
+                                .tag("core", tag).publishPercentiles(0.5, 0.95, 0.99)
+                                .register(registry);
 
-                subQWeightSummary = DistributionSummary.builder(
-                                metricPrefix + ".drr_sub_queue_weight")
-                        .tag("core", tag)
-                        .publishPercentiles(0.0, 1.0)
-                        .register(registry);
+                subQWeightSummary =
+                        DistributionSummary.builder(metricPrefix + ".drr_sub_queue_weight")
+                                .tag("core", tag).publishPercentiles(0.0, 1.0).register(registry);
 
                 meters.add(
                         Gauge.builder(metricPrefix + ".cap_factor", capFactor, AtomicReference::get)
                                 .description(
                                         "Current buffer capacity multiplier. Higher is better. (0.15 to 1.0)")
-                                .tag("core", tag)
-                                .register(registry));
+                                .tag("core", tag).register(registry));
 
                 meters.add(Gauge.builder(metricPrefix + ".drr_backlog",
                                 () -> totalQueuedSizeBytes.get() / 1024)
                         .description("Total bytes currently buffered in all sub queues of the DRR")
-                        .baseUnit("KB")
-                        .register(registry));
+                        .baseUnit("KB").register(registry));
             } else {
                 subQBacklogSummary = null;
                 subQWeightSummary = null;
@@ -365,13 +367,10 @@ public class DRRScheduler extends IngestSequencer implements DispatchPreProcess,
             String metricPrefix = metricPrefix();
             if (cloneConfig != null) {
                 int cpuId = cloneConfig.coreId();
-                metricPrefix =
-                        cloneConfig.metricPrefix() + "-" + cloneConfig.shardName()
-                                + "-DRRScheduler-"
-                                + cpuId;
+                metricPrefix = cloneConfig.metricPrefix() + "-" + cloneConfig.shardName()
+                        + "-DRRScheduler-" + cpuId;
             }
-            return new Config(cloneConfig, maxSubQueues, metricPrefix,
-                    registry);
+            return new Config(cloneConfig, maxSubQueues, metricPrefix, registry);
         }
 
         @Override

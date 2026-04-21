@@ -4,10 +4,14 @@ import static euhedral.io.utils.MathFunctions.unsignedMultiplyHigh;
 
 import euhedral.io.flow_control.UpstreamQueue.UpstreamHandle;
 import euhedral.io.frames.AbstractFrame;
+import euhedral.io.resource_monitoring.providers.OSResourceProviderPicker;
 import euhedral.io.utils.DrainBuffer;
 import java.util.BitSet;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import euhedral.io.utils.PaddedLongAdder;
 import jdk.internal.vm.annotation.Contended;
+import lombok.Getter;
 import org.jctools.queues.MpscArrayQueue;
 import org.jctools.util.PaddedAtomicLong;
 import org.jspecify.annotations.NonNull;
@@ -23,6 +27,7 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
 
     protected final Logger logger;
     protected final String name;
+    protected final int id;
     protected final MpscArrayQueue<AbstractFrame> parallelQueue;
 
     @Contended
@@ -35,15 +40,15 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
     protected long hash;
 
     public FluxNode(String name, int downstreamCount) {
-        this(name, downstreamCount, RoutingFunction.DEFAULT, false);
+        this(name, downstreamCount, RoutingFunction.DEFAULT, 0, false);
     }
 
-    @SuppressWarnings("unchecked")
-    public FluxNode(String name, int downstreamCount, RoutingFunction routingFunction,
+    public FluxNode(String name, int downstreamCount, RoutingFunction routingFunction, int id,
             boolean terminal) {
         super(new AtomicBoolean(false));
         this.terminal = terminal;
         this.logger = LoggerFactory.getLogger(name);
+        this.id = 0;
         this.name = name;
         this.downstreams = new FluxEdge[downstreamCount];
         this.routingFunction = routingFunction;
@@ -77,9 +82,6 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
         int mIdx = 0;
         int[] mappings = new int[active.cardinality()];
         for (int i = 0; i < downstreams.length; i++) {
-            if (i < handles.length && handles[i] != null) {
-                handles[i].index = i;
-            }
             if (active.get(i)) {
                 mappings[mIdx++] = i;
                 handles[i].setParent(this);
@@ -251,8 +253,6 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
         public Subscription upstream;
         public volatile boolean complete = false;
         private long count = 0;
-        private volatile FluxEdge owner = null;
-        private volatile FluxEdge fastPath = null;
 
         @Override
         public void onSubscribe(@NonNull Subscription subscription) {
@@ -323,15 +323,6 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
                 return Long.MAX_VALUE;
             }
             return sum;
-        }
-
-        @Override
-        public boolean setFastPath(FluxEdge edge) {
-            if (fastPath == null) {
-                owner = edge;
-                return true;
-            }
-            return false;
         }
 
         @Override

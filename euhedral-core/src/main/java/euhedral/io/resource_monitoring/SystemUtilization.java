@@ -9,7 +9,7 @@ import org.jspecify.annotations.Nullable;
 
 public interface SystemUtilization {
 
-    record SocketSnapshot(int socketId, BitSet effectiveCores, long globalMemoryLimit,
+    record SocketSnapshot(int socketId, BitSet effectiveCores, BitSet pCores, long globalMemoryLimit,
                           long globalBytesUsed, long nodeMemoryLimit, double nodeMemoryUtilization,
                           CoreSnapshot[] coreSnapshots, long lastUsageNs) {
 
@@ -110,17 +110,19 @@ public interface SystemUtilization {
                 }
             }
 
+            BitSet pCores = new BitSet(effectiveCores.length());
             double perCoreQuota = cpuQuotaPool / Math.max(cores, 1);
 
             long cpus = 0;
             for (int core = effectiveCores.nextSetBit(0); core >= 0;
                     core = effectiveCores.nextSetBit(core + 1)) {
                 coreSnapshots[core] = getCoreSnapshot(core, effectiveCoreToCpu[core], perCoreQuota);
+                pCores.set(core, coreSnapshots[core].isPCore);
                 cpus += coreSnapshots[core].effectiveCpus.cardinality();
             }
             long nodeMemoryUsageBytes = memPerCpuUsageBytes * cpus;
 
-            return new SocketSnapshot(nodeId, effectiveCores, globalMemoryPool,
+            return new SocketSnapshot(nodeId, effectiveCores, pCores, globalMemoryPool,
                     perCpuMemoryPool * cpus, (long) (globalMemoryPool * totalMemoryUtilization),
                     (double) nodeMemoryUsageBytes / globalMemoryPool, coreSnapshots, timestampNs);
         }

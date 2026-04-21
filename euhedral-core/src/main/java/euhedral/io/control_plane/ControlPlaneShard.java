@@ -79,7 +79,7 @@ public class ControlPlaneShard implements AutoCloseable {
         shardExecutor = Executors.newFixedThreadPool(topology.effectiveCores().get().length(),
                 (r) -> new Thread(r, shardName + "+ExecutorService"));
         FluxNode coreDistributor = new FluxNode(shardName + "-CoreDistributor",
-                topology.effectiveCores().get().length(), this::route, false);
+                topology.effectiveCores().get().length(), this::route, topology.socketId(), false);
         this.coreDistributor.set(coreDistributor);
         coreDistributor.onSubscribe(upstream);
         update(snapshot, topology);
