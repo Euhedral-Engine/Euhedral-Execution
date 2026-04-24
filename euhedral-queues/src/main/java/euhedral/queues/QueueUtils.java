@@ -4,6 +4,7 @@ import org.openjdk.jol.vm.VM;
 
 public class QueueUtils {
     public static final long ULONG_MAX = 0xFFFFFFFFFFFFFFFFL;
+    public static final int LONG_PAD = 3;
 
     public static final int POINTER_SIZE = VM.current().classPointerSize();
     public static final int POINTER_PAD_BYTES = (64 / POINTER_SIZE) - 1;
@@ -33,5 +34,11 @@ public class QueueUtils {
         long leftMask = ULONG_MAX << start;
         long rightMask = end >= 64 ? 0L : (ULONG_MAX >>> end) << end;
         return ~(leftMask ^ rightMask);
+    }
+
+    /// Returns the high bits of 128 bit multiplication
+    public static long unsignedMultiplyHigh(long a, long b) {
+        long signedHigh = Math.multiplyHigh(a, b);
+        return signedHigh + ((a >> 63) & b) + ((b >> 63) & a);
     }
 }
