@@ -41,4 +41,8 @@ public class QueueUtils {
         long signedHigh = Math.multiplyHigh(a, b);
         return signedHigh + ((a >> 63) & b) + ((b >> 63) & a);
     }
+
+    public static long unsignedDiff(long head, long tail) {
+        return (tail - head) & ABS_MASK;
+    }
 }
