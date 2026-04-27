@@ -10,6 +10,22 @@ import java.util.Arrays;
 
 import lombok.Getter;
 
+/// A partitioned, padded, array-based queue. This class has two operating modes, bounded and
+/// unbounded.
+///
+/// <b>Bounded Mode:</b>
+///
+/// When a partition is full, offers to that partition will be rejected until space
+/// frees.
+///
+/// <b>Unbounded Mode:<b/>
+///
+/// In unbounded mode, this class is will be managed by another class i.e.
+/// [PartitionedUnboundedMpmcArrayQueue]. When a partition is full and an offer is rejected, this
+/// queue is marked `retired` and all subsequent offers to any partition are rejected. When the
+/// managing class is ready to use the instance again, they will reset the queue to allow offers.
+///
+/// @param <T> Type to store
 public class PartitionedMpmcArrayQueue<T> implements PartitionedQueue<T> {
 
     private static final VarHandle LA_HANDLE = MethodHandles.arrayElementVarHandle(long[].class);
@@ -40,13 +56,14 @@ public class PartitionedMpmcArrayQueue<T> implements PartitionedQueue<T> {
         this.queue = (T[][]) new Object[(partitions + 1) * POINTER_PAD_BYTES + partitions][0];
         this.sequence = new long[(partitions + 1) * LONG_PAD + partitions][0];
 
+        int numSChunks = Math.max(chunkSize >>> 6, 1);
+        this.sequenceMask = numSChunks - 1;
         for (int i = 0; i < partitions; i++) {
             int pIdx = partitionIndex(i);
             this.queue[pIdx] = (T[]) new Object[chunkSize + POINTER_PAD_BYTES * 2];
-            this.sequence[pIdx] = new long[(chunkSize >>> 6) + 2 * LONG_PAD];
+            this.sequence[pIdx] = new long[numSChunks + 2 * LONG_PAD];
         }
 
-        this.sequenceMask = (chunkSize >>> 6) - 1;
         this.heads = new long[(partitions + 1) * LONG_PAD + partitions];
         this.tails = new long[(partitions + 1) * LONG_PAD + partitions];
         if (unbounded) {
@@ -59,34 +76,28 @@ public class PartitionedMpmcArrayQueue<T> implements PartitionedQueue<T> {
     /// Offers an item to a random partition.
     ///
     /// @param randomSeed Random number to assign a partition from
-    /// @param obj Item to add
+    /// @param obj        Item to add
     @Override
     public boolean offer(long randomSeed, T obj) {
         int partition = (int) QueueUtils.unsignedMultiplyHigh(randomSeed, this.partitions);
-        return uncheckedOffer(partitionIndex(partition), obj);
+        return offer(partition, obj);
     }
 
     /// Offers an item to a partition.
     ///
     /// @param partition The logical index of the partition. e.g. 16 partitions = (0-15)
-    /// @param obj Item to add
+    /// @param obj       Item to add
     @Override
     public boolean offer(int partition, T obj) {
         boundsCheck(partition);
         if (obj == null) {
             throw new NullPointerException();
         }
-        return uncheckedOffer(partitionIndex(partition), obj);
-    }
 
-    /// Offers an item to a partition without bounds checking or index shifting.
-    ///
-    /// @param pIdx The physical index of the partition accounting for padding
-    /// @param obj Item to add
-    public boolean uncheckedOffer(int pIdx, T obj) {
         if (unbounded && retired) {
             return false;
         }
+        int pIdx = partitionIndex(partition);
 
         if (unbounded) {
             LA_HANDLE.getAndAdd(inFlight, pIdx, 1);
@@ -122,55 +133,83 @@ public class PartitionedMpmcArrayQueue<T> implements PartitionedQueue<T> {
         return true;
     }
 
-    /// Drains from all partitions sequentially starting from 0 into the buffer.
-    ///
-    /// @param buffer Buffer to drain items into
-    /// @param offset Index of the buffer to start filling from
-    /// @param limit Max number of items to take
     @Override
-    public int drain(T[] buffer, int offset, int limit) {
-        if (!drainCheck(buffer, offset, limit)) {
+    public T peek(int partition) {
+        boundsCheck(partition);
+        int pIdx = partitionIndex(partition);
+        T[] pQueue = queue[pIdx];
+
+        long head = (long) LA_HANDLE.getVolatile(heads, pIdx);
+        long[] sequence = this.sequence[pIdx];
+
+        int sChunkIdx = sequenceChunkIndex(head);
+        long sNum = getSequenceNumber(head);
+
+        long sChunk = (long) LA_HANDLE.getVolatile(sequence, sChunkIdx);
+
+        if ((sNum & sChunk) == 0) {
+            return null;
+        }
+        return pQueue[queueIndex(head)];
+    }
+
+    @Override
+    public T poll(int partition) {
+        boundsCheck(partition);
+        int pIdx = partitionIndex(partition);
+        T[] pQueue = queue[pIdx];
+
+        while (true) {
+            long head = (long) LA_HANDLE.getVolatile(heads, pIdx);
+            long[] sequence = this.sequence[pIdx];
+
+            int sChunkIdx = sequenceChunkIndex(head);
+            long sNum = getSequenceNumber(head);
+
+            long sChunk = (long) LA_HANDLE.getVolatile(sequence, sChunkIdx);
+
+            if ((sNum & sChunk) == 0) {
+                return null;
+            }
+            T obj = pQueue[queueIndex(head)];
+            if (LA_HANDLE.compareAndSet(sequence, sChunkIdx, sChunk, sChunk & ~sNum)) {
+                LA_HANDLE.getAndAdd(heads, pIdx, 1);
+                return obj;
+            }
+        }
+    }
+
+    /// Drains from all partitions sequentially starting from 0 into the consumer.
+    ///
+    /// @param consumer Consumer to drain items into
+    /// @param limit    Max number of items to take
+    @Override
+    public int drain(QueueConsumer<T> consumer, int limit) {
+        if (!drainCheck(consumer, limit)) {
             return 0;
         }
-        limit = Math.min(buffer.length - offset, limit);
 
         int total = 0;
         for (int i = 0; i < partitions && limit > 0; i++) {
-            int count = uncheckedDrain(partitionIndex(i), buffer, offset, limit);
-            offset += count;
+            int count = drain(i, consumer, limit);
             limit -= count;
             total += count;
         }
         return total;
     }
 
-    /// Drains the partition into the buffer
+    /// Drains the partition into the consumer.
     ///
     /// @param partition The logical index of the partition. e.g. 16 partitions = (0-15)
-    /// @param buffer Buffer to drain items into
-    /// @param offset Index of the buffer to start filling from
-    /// @param limit Max number of items to take
+    /// @param consumer  Consumer to drain items into
+    /// @param limit     Max number of items to take
     @Override
-    public int drain(int partition, T[] buffer, int offset, int limit) {
+    public int drain(int partition, QueueConsumer<T> consumer, int limit) {
         boundsCheck(partition);
-        if (!drainCheck(buffer, offset, limit)) {
+        if (!drainCheck(consumer, limit)) {
             return 0;
         }
-        limit = Math.min(buffer.length - offset, limit);
-
-        return uncheckedDrain(partitionIndex(partition), buffer, offset, limit);
-    }
-
-    /// Drains the partition into the buffer without bounds checking or index shifting
-    ///
-    /// @param pIdx The physical index of the partition accounting for padding
-    /// @param buffer Buffer to drain items into
-    /// @param offset Index of the buffer to start filling from
-    /// @param limit Max number of items to take
-    public int uncheckedDrain(int pIdx, T[] buffer, int offset, int limit) {
-        if (limit <= 0) {
-            return 0;
-        }
+        int pIdx = partitionIndex(partition);
 
         long head = (long) LA_HANDLE.getVolatile(heads, pIdx);
         long[] sequence = this.sequence[pIdx];
@@ -200,19 +239,16 @@ public class PartitionedMpmcArrayQueue<T> implements PartitionedQueue<T> {
                 VarHandle.acquireFence();
                 for (int j = 0; j < claim; j++) {
                     int qIdx = queueIndex(slot + j);
-                    buffer[offset + total + j] = pQueue[qIdx];
+                    consumer.consume(pQueue[qIdx]);
                     pQueue[qIdx] = null;
                 }
                 total += claim;
-            } else {
-                break;
             }
         }
 
         if (total > 0) {
             LA_HANDLE.getAndAdd(heads, pIdx, total);
         }
-
         return total;
     }
 
@@ -223,15 +259,8 @@ public class PartitionedMpmcArrayQueue<T> implements PartitionedQueue<T> {
         }
     }
 
-    private boolean drainCheck(T[] buffer, int offset, int limit) {
-        if (buffer == null || buffer.length == 0 || offset >= buffer.length || limit <= 0) {
-            return false;
-        }
-        if (offset < 0) {
-            throw new ArrayIndexOutOfBoundsException(
-                    "Offset " + offset + " out of bounds for length " + buffer.length);
-        }
-        return true;
+    private boolean drainCheck(QueueConsumer<T> consumer, int limit) {
+        return consumer != null && limit > 0;
     }
 
     public int partitionIndex(int idx) {
@@ -242,12 +271,14 @@ public class PartitionedMpmcArrayQueue<T> implements PartitionedQueue<T> {
         return (int) (idx & chunkMask) + POINTER_PAD_BYTES;
     }
 
-    private int sequenceChunkIndex(long qIdx) {
-        return (int) ((qIdx >>> 6) & sequenceMask) + LONG_PAD;
+    private int sequenceChunkIndex(long idx) {
+        return (int) ((idx >>> 6) & sequenceMask) + LONG_PAD;
     }
 
     private long getSequenceNumber(long qIdx) {
         return 1L << (qIdx & 63);
+    private long getSequenceNumber(long idx) {
+        return 1L << (idx & 63);
     }
 
     public boolean isPartitionEmpty(int partition) {
@@ -323,9 +354,13 @@ public class PartitionedMpmcArrayQueue<T> implements PartitionedQueue<T> {
     }
 
     public void reset() {
+        VarHandle.acquireFence();
+
         Arrays.fill(heads, 0);
         Arrays.fill(tails, 0);
-        Arrays.fill(inFlight, 0);
+        if(inFlight != null) {
+            Arrays.fill(inFlight, 0);
+        }
         for (int i = 0; i < partitions; i++) {
             int pIdx = partitionIndex(i);
             Arrays.fill(queue[pIdx], null);

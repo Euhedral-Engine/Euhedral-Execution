@@ -7,6 +7,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.Test;
@@ -25,13 +26,29 @@ class PartitionedMpmcArrayQueueTest {
             }
         }
 
-        Integer[] buf = new Integer[1000];
-        int drained = q.drain(0, buf, 0, 1000);
+        final int[] drained = new int[]{-1};
+        QueueConsumer<Integer> consumer = (val) -> {
+            if(val != ++drained[0] || val >= 128) {
+                fail("Corruption! Last Value: " + drained[0] + " Current: " + val);
+            }
+        };
+        q.drain(consumer, 1000);
 
-        assertEquals(128, drained);
+        assertEquals(127, drained[0]);
+    }
 
-        for (int i = 0; i < drained; i++) {
-            assertEquals(i, buf[i]);
+    @Test
+    void queueCyclesWithoutDeadlocking() {
+        PartitionedMpmcArrayQueue<Integer> q =
+                new PartitionedMpmcArrayQueue<>(1, 4096, false);
+
+        QueueConsumer<Integer> consumer = (val) -> {};
+        for(int i = 0; i < 256; i++) {
+            for(int j = 0; j < 4096; j++) {
+                assertTrue(q.offer(0, ThreadLocalRandom.current().nextInt()));
+            }
+            assertFalse(q.offer(0, ThreadLocalRandom.current().nextInt()));
+            assertEquals(4096, q.drain(0, consumer, 4096));
         }
     }
 
@@ -67,17 +84,16 @@ class PartitionedMpmcArrayQueueTest {
                 });
             }
 
-            Long[] buf = new Long[1024];
+            QueueConsumer<Long> consumer = (val) -> {
+                if(!consumed.add(val)) {
+                    fail("Duplicate: " + val);
+                }
+            };
 
             long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(1);
             while ((latch.getCount() > 0 || consumed.size() < total)
                     && System.nanoTime() < deadline) {
-                int drained = q.drain(buf, 0, buf.length);
-                for (int i = 0; i < drained; i++) {
-                    if (!consumed.add(buf[i])) {
-                        fail("Duplicate: " + buf[i]);
-                    }
-                }
+                q.drain(consumer, perProducer);
             }
 
             exec.shutdownNow();
@@ -117,19 +133,16 @@ class PartitionedMpmcArrayQueueTest {
             }
 
             CountDownLatch consLatch = new CountDownLatch(consumers);
+            QueueConsumer<Long> consumer = (val) -> {
+                if(!consumed.add(val)) {
+                    fail("Duplicate detected: " + val);
+                }
+            };
 
             for (int c = 0; c < consumers; c++) {
                 exec.submit(() -> {
-                    Long[] buf = new Long[256];
-
-                    while (prodLatch.getCount() > 0 || q.getSize(0) > 0) {
-                        int drained = q.drain(buf, 0, buf.length);
-
-                        for (int i = 0; i < drained; i++) {
-                            if (!consumed.add(buf[i])) {
-                                fail("Duplicate detected: " + buf[i]);
-                            }
-                        }
+                    while (prodLatch.getCount() > 0 || consumed.size() < perProducer * producers) {
+                        q.drain(consumer, 256);
                     }
                     consLatch.countDown();
                 });
@@ -159,13 +172,14 @@ class PartitionedMpmcArrayQueueTest {
             inserted++;
         }
 
-        Integer[] buf = new Integer[128];
-
-        int total = 0;
+        final int[] total = new int[1];
+        QueueConsumer<Integer> consumer = (val) -> {
+            total[0]++;
+        };
         while (!q.isDrained()) {
-            total += q.drain(buf, 0, buf.length);
+            q.drain(consumer, inserted);
         }
 
-        assertEquals(inserted, total);
+        assertEquals(inserted, total[0]);
     }
 }

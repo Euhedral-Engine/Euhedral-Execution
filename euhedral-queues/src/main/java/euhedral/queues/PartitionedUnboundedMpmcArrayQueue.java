@@ -50,12 +50,11 @@ public class PartitionedUnboundedMpmcArrayQueue<T> implements PartitionedQueue<T
         }
 
         QueueNode<T> temp = null;
-        int pIdx = partitionIndex(partition);
 
         boolean accepted;
         QueueNode<T> tail = this.tail;
         do {
-            accepted = tail.chunk.uncheckedOffer(pIdx, obj);
+            accepted = tail.chunk.offer(partition, obj);
             if (!accepted && temp == null) {
                 temp = recycler == null ? null : recycler.pop();
                 temp = temp == null ? new QueueNode<>(partitions, chunkSize) : temp;
@@ -76,53 +75,68 @@ public class PartitionedUnboundedMpmcArrayQueue<T> implements PartitionedQueue<T
         return true;
     }
 
+    @Override
+    @SuppressWarnings("unchecked")
+    public T peek(int partition) {
+        boundsCheck(partition);
+        int pIdx = partitionIndex(partition);
+        QueueNode<T> head = (QueueNode<T>) HEADS.getVolatile(heads, pIdx);
+        return head.chunk.peek(partition);
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public T poll(int partition) {
+        boundsCheck(partition);
+
+        int pIdx = partitionIndex(partition);
+        QueueNode<T> head = (QueueNode<T>) HEADS.getVolatile(heads, pIdx);
+        T val = head.chunk.poll(partition);
+
+        QueueNode<T> next = head.next;
+        if (next != null && head.chunk.isDrained(partition) && HEADS.compareAndSet(heads, pIdx, head, next)) {
+            QueueNode.B_ARRAY.setVolatile(head.refs, partition, false);
+
+            if (recycler != null && head.isRetired() && head.reclaimed.compareAndSet(false, true)) {
+                recycler.recycle(head);
+            }
+        }
+        return val;
+    }
+
     /// Drains from all partitions starting from 0
     @Override
-    public int drain(T[] buffer, int offset, int limit) {
-        if (buffer == null || offset >= buffer.length || limit <= 0) {
+    public int drain(QueueConsumer<T> consumer, int limit) {
+        if (consumer == null || limit <= 0) {
             return 0;
-        }
-        if (offset < 0) {
-            throw new ArrayIndexOutOfBoundsException(
-                    "Offset " + offset + " out of bounds for length " + buffer.length);
         }
 
         int total = 0;
         for (int i = 0; i < this.partitions && total < limit; i++) {
-            int count = uncheckedDrain(partitionIndex(i), buffer, offset, limit);
+            int count = drain(i, consumer, limit);
             limit -= count;
-            offset += count;
         }
         return total;
     }
 
     /// Drains from a specific partition
     @Override
-    public int drain(int partition, T[] buffer, int offset, int limit) {
+    @SuppressWarnings("unchecked")
+    public int drain(int partition, QueueConsumer<T> consumer, int limit) {
         boundsCheck(partition);
-        if (buffer == null || offset >= buffer.length || limit <= 0) {
+        if (consumer == null || limit <= 0) {
             return 0;
         }
-        if (offset < 0) {
-            throw new ArrayIndexOutOfBoundsException(
-                    "Offset " + offset + " out of bounds for length " + buffer.length);
-        }
 
-        return uncheckedDrain(partition, buffer, offset, limit);
-    }
-
-    @SuppressWarnings("unchecked")
-    private int uncheckedDrain(int partition, T[] buffer, int offset, int limit) {
         int pIdx = partitionIndex(partition);
         int total = 0;
         QueueNode<T> head = (QueueNode<T>) HEADS.getVolatile(heads, pIdx);
         do {
-            int count = head.chunk.uncheckedDrain(pIdx, buffer, offset, limit);
+            int count = head.chunk.drain(partition, consumer, limit);
 
             QueueNode<T> next;
             if (count > 0) {
                 limit -= count;
-                offset += count;
                 total += count;
             } else if ((next = head.next) != null && head.chunk.isDrained(partition)) {
                 QueueNode<T> prev = head;
