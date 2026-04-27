@@ -24,6 +24,7 @@ public class MpmcNodeRecycler<T> {
             if (stack.compareAndSet(head, next)) {
                 head.next = null;
                 count.decrementAndGet();
+                next.chunk.reset();
                 return head;
             }
         }

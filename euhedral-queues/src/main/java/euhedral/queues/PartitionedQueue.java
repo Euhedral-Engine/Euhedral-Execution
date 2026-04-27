@@ -6,7 +6,11 @@ public interface PartitionedQueue<T> {
 
     boolean offer(int partition, T obj);
 
-    int drain(T[] buffer, int offset, int limit);
+    T peek(int partition);
 
-    int drain(int partition, T[] buffer, int offset, int limit);
+    T poll(int partition);
+
+    int drain(QueueConsumer<T> consumer, int limit);
+
+    int drain(int partition, QueueConsumer<T> consumer, int limit);
 }
