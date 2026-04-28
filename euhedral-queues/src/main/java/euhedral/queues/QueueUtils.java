@@ -29,11 +29,21 @@ public class QueueUtils {
         return Long.numberOfTrailingZeros(candidates);
     }
 
-    /// Returns a mask where bits start-end inclusive are set to 0
+    /// Returns a mask where bits [start, end) are set to 0
     public static long clearMask(int start, int end) {
-        long leftMask = ULONG_MAX << start;
-        long rightMask = end >= 64 ? 0L : (ULONG_MAX >>> end) << end;
-        return ~(leftMask ^ rightMask);
+        if (start >= end) {
+            return -1L;
+        }
+
+        long lower = (start == 0)
+                ? 0L
+                : ((1L << start) - 1);
+
+        long upper = (end >= 64)
+                ? 0L
+                : -(1L << end);
+
+        return upper | lower;
     }
 
     /// Returns the high bits of 128 bit multiplication

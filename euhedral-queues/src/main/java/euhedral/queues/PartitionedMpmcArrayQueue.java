@@ -41,6 +41,7 @@ public class PartitionedMpmcArrayQueue<T> implements PartitionedQueue<T> {
 
     private final long[] heads;
     private final long[] tails;
+    private final long[] headSequence;
     private final long[] inFlight;
 
     @Getter
@@ -60,12 +61,13 @@ public class PartitionedMpmcArrayQueue<T> implements PartitionedQueue<T> {
         this.sequenceMask = numSChunks - 1;
         for (int i = 0; i < partitions; i++) {
             int pIdx = partitionIndex(i);
-            this.queue[pIdx] = (T[]) new Object[chunkSize + POINTER_PAD_BYTES * 2];
+            this.queue[queueIndex(i)] = (T[]) new Object[chunkSize + POINTER_PAD_BYTES * 2];
             this.sequence[pIdx] = new long[numSChunks + 2 * LONG_PAD];
         }
 
         this.heads = new long[(partitions + 1) * LONG_PAD + partitions];
         this.tails = new long[(partitions + 1) * LONG_PAD + partitions];
+        this.headSequence = new long[(partitions + 1) * LONG_PAD + partitions];
         if (unbounded) {
             inFlight = new long[(partitions + 1) * LONG_PAD + partitions];
         } else {
@@ -107,20 +109,21 @@ public class PartitionedMpmcArrayQueue<T> implements PartitionedQueue<T> {
             }
         }
 
-        long head = (long) LA_HANDLE.getOpaque(heads, pIdx);
-        long tail = (long) LA_HANDLE.getAndAdd(tails, pIdx, 1);
-
-        if (QueueUtils.unsignedDiff(head, tail + 1) > chunkSize) {
-            LA_HANDLE.getAndAdd(tails, pIdx, -1);
-            if (unbounded) {
-                retired = true;
-                LA_HANDLE.getAndAdd(inFlight, pIdx, -1);
+        long head;
+        long tail;
+        do {
+            head = (long) LA_HANDLE.getVolatile(heads, pIdx);
+            tail = (long) LA_HANDLE.getVolatile(tails, pIdx);
+            if(QueueUtils.unsignedDiff(head, tail + 1) > chunkSize) {
+                if(unbounded) {
+                    retired = true;
+                }
+                return false;
             }
-            return false;
-        }
+        } while(!LA_HANDLE.compareAndSet(tails, pIdx, tail, tail + 1));
 
-        int qTailIdx = queueIndex(tail);
-        T[] pQueue = queue[pIdx];
+        int qTailIdx = chunkIndex(tail);
+        T[] pQueue = queue[queueIndex(partition)];
         pQueue[qTailIdx] = obj;
 
         VarHandle.releaseFence();
@@ -137,7 +140,7 @@ public class PartitionedMpmcArrayQueue<T> implements PartitionedQueue<T> {
     public T peek(int partition) {
         boundsCheck(partition);
         int pIdx = partitionIndex(partition);
-        T[] pQueue = queue[pIdx];
+        T[] pQueue = queue[queueIndex(partition)];
 
         long head = (long) LA_HANDLE.getVolatile(heads, pIdx);
         long[] sequence = this.sequence[pIdx];
@@ -150,32 +153,37 @@ public class PartitionedMpmcArrayQueue<T> implements PartitionedQueue<T> {
         if ((sNum & sChunk) == 0) {
             return null;
         }
-        return pQueue[queueIndex(head)];
+        return pQueue[chunkIndex(head)];
     }
 
     @Override
     public T poll(int partition) {
         boundsCheck(partition);
         int pIdx = partitionIndex(partition);
-        T[] pQueue = queue[pIdx];
+        T[] pQueue = queue[queueIndex(partition)];
 
         while (true) {
             long head = (long) LA_HANDLE.getVolatile(heads, pIdx);
-            long[] sequence = this.sequence[pIdx];
+            long[] tailSequence = this.sequence[pIdx];
 
             int sChunkIdx = sequenceChunkIndex(head);
             long sNum = getSequenceNumber(head);
 
-            long sChunk = (long) LA_HANDLE.getVolatile(sequence, sChunkIdx);
+            long sChunk = (long) LA_HANDLE.getVolatile(tailSequence, sChunkIdx);
 
             if ((sNum & sChunk) == 0) {
                 return null;
             }
-            T obj = pQueue[queueIndex(head)];
-            if (LA_HANDLE.compareAndSet(sequence, sChunkIdx, sChunk, sChunk & ~sNum)) {
-                LA_HANDLE.getAndAdd(heads, pIdx, 1);
-                return obj;
+
+            long headSequence = (long) LA_HANDLE.getVolatile(this.headSequence, pIdx);
+            if(head != headSequence || !LA_HANDLE.compareAndSet(this.headSequence, pIdx, headSequence, headSequence + 1)) {
+                continue;
             }
+
+            T obj = pQueue[chunkIndex(head)];
+            LA_HANDLE.getAndBitwiseAnd(tailSequence, sChunkIdx, ~sNum);
+            LA_HANDLE.getAndAdd(heads, pIdx, 1);
+            return obj;
         }
     }
 
@@ -210,44 +218,52 @@ public class PartitionedMpmcArrayQueue<T> implements PartitionedQueue<T> {
             return 0;
         }
         int pIdx = partitionIndex(partition);
+        limit = Math.min(chunkSize, limit);
 
-        long head = (long) LA_HANDLE.getVolatile(heads, pIdx);
-        long[] sequence = this.sequence[pIdx];
-        T[] pQueue = queue[pIdx];
-
+        long head;
+        long headSequence;
         int total = 0;
-        while (total < limit) {
-            long slot = head + total;
 
-            int sChunkIdx = sequenceChunkIndex(slot);
-            int bitOffset = (int) (slot & 63);
+        T[] pQueue = queue[queueIndex(partition)];
+        long[] sequence = this.sequence[pIdx];
+        while(total < limit) {
+            int reserved;
+            int sChunkIdx;
+            long clearMask;
+            do {
+                head = (long) LA_HANDLE.getVolatile(heads, pIdx);
+                headSequence = (long) LA_HANDLE.getVolatile(this.headSequence, pIdx);
 
-            long sChunk = (long) LA_HANDLE.getVolatile(sequence, sChunkIdx);
-
-            int nextClearBit = QueueUtils.nextClearBit(sChunk, bitOffset);
-            int upperLimit = (nextClearBit == -1) ? 64 : nextClearBit;
-
-            int available = upperLimit - bitOffset;
-            int claim = Math.min(available, limit - total);
-
-            if (claim <= 0) {
-                break;
-            }
-
-            long claimMask = QueueUtils.clearMask(bitOffset, bitOffset + claim);
-            if (LA_HANDLE.compareAndSet(sequence, sChunkIdx, sChunk, sChunk & claimMask)) {
-                VarHandle.acquireFence();
-                for (int j = 0; j < claim; j++) {
-                    int qIdx = queueIndex(slot + j);
-                    consumer.consume(pQueue[qIdx]);
-                    pQueue[qIdx] = null;
+                if(head != headSequence) {
+                    return total;
                 }
-                total += claim;
-            }
-        }
 
-        if (total > 0) {
-            LA_HANDLE.getAndAdd(heads, pIdx, total);
+                sChunkIdx = sequenceChunkIndex(head);
+                long sChunk = (long) LA_HANDLE.getVolatile(sequence, sChunkIdx);
+                int bitOffset = (int) (head & 63);
+
+                int nextClearBit = QueueUtils.nextClearBit(sChunk, bitOffset);
+                int upperLimit = (nextClearBit == -1) ? 64 : nextClearBit;
+
+                reserved = Math.min(64 - bitOffset, limit - total);
+                reserved = Math.min(reserved, upperLimit - bitOffset);
+                if (reserved == 0) {
+                    return total;
+                }
+                clearMask = QueueUtils.clearMask(bitOffset, bitOffset + reserved);
+            } while(!LA_HANDLE.compareAndSet(this.headSequence, pIdx, headSequence, headSequence + reserved));
+
+            VarHandle.acquireFence();
+            for (int j = 0; j < reserved; j++) {
+                int qIdx = chunkIndex(head + j);
+                consumer.consume(pQueue[qIdx]);
+                pQueue[qIdx] = null;
+            }
+            total += reserved;
+            LA_HANDLE.getAndBitwiseAnd(sequence, sChunkIdx, clearMask);
+
+            VarHandle.releaseFence();
+            LA_HANDLE.getAndAdd(this.heads, pIdx, reserved);
         }
         return total;
     }
@@ -264,10 +280,15 @@ public class PartitionedMpmcArrayQueue<T> implements PartitionedQueue<T> {
     }
 
     public int partitionIndex(int idx) {
-        return (idx * LONG_PAD) + LONG_PAD + idx;
+        return ((idx + 1) * LONG_PAD) + idx;
     }
 
-    private int queueIndex(long idx) {
+    public int queueIndex(long idx) {
+        int logicalIdx = (int) (idx % partitions);
+        return (logicalIdx + 1) * POINTER_PAD_BYTES + logicalIdx;
+    }
+
+    private int chunkIndex(long idx) {
         return (int) (idx & chunkMask) + POINTER_PAD_BYTES;
     }
 
@@ -275,8 +296,6 @@ public class PartitionedMpmcArrayQueue<T> implements PartitionedQueue<T> {
         return (int) ((idx >>> 6) & sequenceMask) + LONG_PAD;
     }
 
-    private long getSequenceNumber(long qIdx) {
-        return 1L << (qIdx & 63);
     private long getSequenceNumber(long idx) {
         return 1L << (idx & 63);
     }
@@ -327,8 +346,8 @@ public class PartitionedMpmcArrayQueue<T> implements PartitionedQueue<T> {
             long tail = (long) LA_HANDLE.getVolatile(tails, pIdx);
             long inFlight = (long) LA_HANDLE.getVolatile(this.inFlight, pIdx);
 
-            int qTailIdx = queueIndex(tail);
-            int qHeadIdx = queueIndex(head);
+            int qTailIdx = chunkIndex(tail);
+            int qHeadIdx = chunkIndex(head);
             return qHeadIdx == qTailIdx && inFlight == 0 && isPartitionEmptyInternal(pIdx);
         }
         return false;
@@ -342,8 +361,8 @@ public class PartitionedMpmcArrayQueue<T> implements PartitionedQueue<T> {
                 long tail = (long) LA_HANDLE.getVolatile(tails, pIdx);
                 long inFlight = (long) LA_HANDLE.getVolatile(this.inFlight, pIdx);
 
-                int qTailIdx = queueIndex(tail);
-                int qHeadIdx = queueIndex(head);
+                int qTailIdx = chunkIndex(tail);
+                int qHeadIdx = chunkIndex(head);
                 if (qHeadIdx != qTailIdx || inFlight > 0 || !isPartitionEmptyInternal(pIdx)) {
                     return false;
                 }
@@ -363,7 +382,7 @@ public class PartitionedMpmcArrayQueue<T> implements PartitionedQueue<T> {
         }
         for (int i = 0; i < partitions; i++) {
             int pIdx = partitionIndex(i);
-            Arrays.fill(queue[pIdx], null);
+            Arrays.fill(queue[queueIndex(i)], null);
             Arrays.fill(sequence[pIdx], 0);
         }
         retired = false;

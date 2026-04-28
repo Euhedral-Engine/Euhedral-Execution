@@ -110,7 +110,7 @@ class PartitionedMpmcArrayQueueTest {
         int perProducer = 50_000;
 
         PartitionedMpmcArrayQueue<Long> q =
-                new PartitionedMpmcArrayQueue<>(4, 512, false);
+                new PartitionedMpmcArrayQueue<>(1, 512, false);
 
         try(ExecutorService exec = Executors.newFixedThreadPool(producers + consumers)) {
 
@@ -124,7 +124,7 @@ class PartitionedMpmcArrayQueueTest {
                     for (int i = 0; i < perProducer; i++) {
                         long val = (((long) id) << 32) | i;
 
-                        while (!q.offer(id % 4, val)) {
+                        while (!q.offer(0, val)) {
                             Thread.yield();
                         }
                     }
@@ -142,7 +142,7 @@ class PartitionedMpmcArrayQueueTest {
             for (int c = 0; c < consumers; c++) {
                 exec.submit(() -> {
                     while (prodLatch.getCount() > 0 || consumed.size() < perProducer * producers) {
-                        q.drain(consumer, 256);
+                        q.drain(consumer, 512);
                     }
                     consLatch.countDown();
                 });
