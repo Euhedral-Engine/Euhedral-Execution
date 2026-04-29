@@ -3,13 +3,17 @@ package euhedral.queues;
 import static euhedral.queues.QueueUtils.LONG_PAD;
 import static euhedral.queues.QueueUtils.POINTER_PAD_BYTES;
 
+import lombok.Getter;
+
 /// A bounded, padded, partitioned, array-based queue.
 ///
 /// This class is not thread-safe for any method.
 public class PartitionedArrayQueue<T> implements PartitionedQueue<T> {
 
     protected final T[][] queue;
+    @Getter
     protected final int partitions;
+    @Getter
     protected final int chunkSize;
     protected final int chunkMask;
 

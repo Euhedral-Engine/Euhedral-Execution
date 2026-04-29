@@ -135,10 +135,11 @@ public class PartitionedMpscArrayQueue<T> extends PartitionedArrayQueue<T> {
         T[] pQueue = queue[queueIndex(partition)];
         long[] sequence = this.sequence[pIdx];
         while(total < limit) {
-            int sChunkIdx = sequenceChunkIndex(head);
+            long slot = head + total;
+            int sChunkIdx = sequenceChunkIndex(slot);
 
             long sChunk = (long) LA_HANDLE.getVolatile(sequence, sChunkIdx);
-            int bitOffset = (int) (head & 63);
+            int bitOffset = (int) (slot & 63);
 
             int nextClearBit = QueueUtils.nextClearBit(sChunk, bitOffset);
             int upperLimit = (nextClearBit == -1) ? 64 : nextClearBit;
@@ -154,7 +155,7 @@ public class PartitionedMpscArrayQueue<T> extends PartitionedArrayQueue<T> {
 
             VarHandle.acquireFence();
             for (int j = 0; j < reserved; j++) {
-                int qIdx = chunkIndex(head + j);
+                int qIdx = chunkIndex(slot + j);
                 consumer.consume(pQueue[qIdx]);
                 pQueue[qIdx] = null;
             }
