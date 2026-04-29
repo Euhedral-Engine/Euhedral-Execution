@@ -202,7 +202,7 @@ class PartitionedMpmcArrayQueueTest {
         QueueConsumer<Integer> consumer = (val) -> {
             total[0]++;
         };
-        while (!q.isDrained()) {
+        while (!q.isEmpty()) {
             q.drain(consumer, inserted);
         }
 
