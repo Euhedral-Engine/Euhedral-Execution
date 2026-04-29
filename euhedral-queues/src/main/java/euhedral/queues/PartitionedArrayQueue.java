@@ -8,16 +8,18 @@ import static euhedral.queues.QueueUtils.POINTER_PAD_BYTES;
 /// This class is not thread-safe for any method.
 public class PartitionedArrayQueue<T> implements PartitionedQueue<T> {
 
-    private final T[][] queue;
-    private final int partitions;
-    private final int chunkSize;
-    private final int chunkMask;
+    protected final T[][] queue;
+    protected final int partitions;
+    protected final int chunkSize;
+    protected final int chunkMask;
 
-    private final long[] heads;
-    private final long[] tails;
+    protected final long[] heads;
+    protected final long[] tails;
+
+    protected final boolean unbounded;
 
     @SuppressWarnings("unchecked")
-    public PartitionedArrayQueue(int partitions, int chunkSize) {
+    public PartitionedArrayQueue(int partitions, int chunkSize, boolean unbounded) {
         chunkSize = Integer.highestOneBit((chunkSize - 1) << 1);
         this.partitions = partitions;
         this.chunkSize = chunkSize;
@@ -25,16 +27,21 @@ public class PartitionedArrayQueue<T> implements PartitionedQueue<T> {
         this.queue = (T[][]) new Object[(partitions + 1) * POINTER_PAD_BYTES + partitions][0];
 
         for (int i = 0; i < partitions; i++) {
-            int pIdx = partitionIndex(i);
-            this.queue[pIdx] = (T[]) new Object[chunkSize + POINTER_PAD_BYTES * 2];
+            this.queue[queueIndex(i)] = (T[]) new Object[chunkSize + POINTER_PAD_BYTES * 2];
         }
         this.heads = new long[(partitions + 1) * LONG_PAD + partitions];
         this.tails = new long[(partitions + 1) * LONG_PAD + partitions];
+        this.unbounded = unbounded;
     }
 
+    /// Offers an item to a random partition.
+    ///
+    /// @param randomSeed Random number to assign a partition from
+    /// @param obj        Item to add
     @Override
     public boolean offer(long randomSeed, T obj) {
-        return false;
+        int partition = (int) QueueUtils.unsignedMultiplyHigh(randomSeed, this.partitions);
+        return offer(partition, obj);
     }
 
     @Override
@@ -49,8 +56,8 @@ public class PartitionedArrayQueue<T> implements PartitionedQueue<T> {
             return false;
         }
 
-        int qIdx = queueIndex(tails[pIdx]++);
-        queue[pIdx][qIdx] = obj;
+        int chunkIdx = chunkIndex(tails[pIdx]++);
+        queue[queueIndex(partition)][chunkIdx] = obj;
         return true;
     }
 
@@ -61,7 +68,7 @@ public class PartitionedArrayQueue<T> implements PartitionedQueue<T> {
         if (heads[pIdx] == tails[pIdx]) {
             return null;
         }
-        return queue[pIdx][queueIndex(heads[pIdx])];
+        return queue[queueIndex(partition)][chunkIndex(heads[pIdx])];
     }
 
     @Override
@@ -71,16 +78,22 @@ public class PartitionedArrayQueue<T> implements PartitionedQueue<T> {
         if (heads[pIdx] == tails[pIdx]) {
             return null;
         }
-        return queue[pIdx][queueIndex(heads[pIdx]++)];
+        return queue[queueIndex(partition)][chunkIndex(heads[pIdx]++)];
     }
 
+    /// Drains from all partitions sequentially starting from 0.
+    ///
+    /// @param consumer Consumer to drain items into
+    /// @param limit    Max number of items to take
     @Override
     public int drain(QueueConsumer<T> consumer, int limit) {
+        if (consumer == null || limit <= 0) {
+            return 0;
+        }
+
         int total = 0;
         for (int i = 0; i < partitions && total < limit; i++) {
-            int count = drain(i, consumer, limit);
-            limit -= count;
-            total += count;
+            total += drain(i, consumer, limit - total);
         }
         return total;
     }
@@ -90,26 +103,49 @@ public class PartitionedArrayQueue<T> implements PartitionedQueue<T> {
         boundsCheck(partition);
         int pIdx = partitionIndex(partition);
         int total = 0;
-        while(total < limit && heads[pIdx] < tails[pIdx]) {
-            int qIdx = queueIndex(heads[pIdx]++);
-            consumer.consume(queue[pIdx][qIdx]);
+        int qIdx = queueIndex(partition);
+        while (total < limit && heads[pIdx] < tails[pIdx]) {
+            int chunkIdx = chunkIndex(heads[pIdx]++);
+            consumer.consume(queue[qIdx][chunkIdx]);
             total++;
         }
         return total;
     }
 
-    private void boundsCheck(int partition) {
+    protected void boundsCheck(int partition) {
         if (partition < 0 || partition >= partitions) {
             throw new IndexOutOfBoundsException(
                     "Index " + partition + " out of bounds for length " + partitions);
         }
     }
 
-    public int partitionIndex(int idx) {
-        return (idx * LONG_PAD) + LONG_PAD + idx;
+    protected int partitionIndex(int idx) {
+        return ((idx + 1) * LONG_PAD) + idx;
     }
 
-    private int queueIndex(long idx) {
+    protected int queueIndex(long idx) {
+        int logicalIdx = (int) (idx % partitions);
+        return (logicalIdx + 1) * POINTER_PAD_BYTES + logicalIdx;
+    }
+
+    protected int chunkIndex(long idx) {
         return (int) (idx & chunkMask) + POINTER_PAD_BYTES;
+    }
+
+    public boolean isEmpty() {
+        for (int i = 0; i < partitions; i++) {
+            if (!isEmpty(i)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public boolean isEmpty(int partition) {
+        int pIdx = partitionIndex(partition);
+        long head = heads[pIdx];
+        long tail = tails[pIdx];
+
+        return head == tail;
     }
 }
