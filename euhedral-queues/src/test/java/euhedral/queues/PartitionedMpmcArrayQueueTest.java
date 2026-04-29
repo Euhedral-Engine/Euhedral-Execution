@@ -9,6 +9,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.LongAdder;
 
 import org.junit.jupiter.api.Test;
 
@@ -38,17 +39,42 @@ class PartitionedMpmcArrayQueueTest {
     }
 
     @Test
-    void queueCyclesWithoutDeadlocking() {
-        PartitionedMpmcArrayQueue<Integer> q =
+    void queueCyclesWithoutDeadlocking() throws Exception {
+        PartitionedMpmcArrayQueue<Long> q =
                 new PartitionedMpmcArrayQueue<>(1, 4096, false);
 
-        QueueConsumer<Integer> consumer = (val) -> {};
-        for(int i = 0; i < 256; i++) {
-            for(int j = 0; j < 4096; j++) {
-                assertTrue(q.offer(0, ThreadLocalRandom.current().nextInt()));
+        QueueConsumer<Long> consumer = (val) -> {};
+        for(int x = 0; x < 50; x++) {
+            CountDownLatch end = new CountDownLatch(1);
+
+            int batch = 100_000;
+            LongAdder drained = new LongAdder();
+            ExecutorService exec = Executors.newFixedThreadPool(16);
+            for (int i = 0; i < 8; i++) {
+                exec.submit(() -> {
+                    for (int j = 0; j < batch; j++) {
+                        long v = ThreadLocalRandom.current().nextLong();
+
+                        while (!q.offer(v, System.nanoTime())) {
+                            Thread.onSpinWait();
+                        }
+                    }
+                });
             }
-            assertFalse(q.offer(0, ThreadLocalRandom.current().nextInt()));
-            assertEquals(4096, q.drain(0, consumer, 4096));
+
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+            for (int i = 0; i < 8; i++) {
+                exec.submit(() -> {
+                    while (drained.sum() < batch * 8 && System.nanoTime() < deadline) {
+                        int count = q.drain(consumer, 4096);
+                        drained.add(count);
+                        Thread.yield();
+                    }
+                    end.countDown();
+                });
+            }
+            end.await();
+            assertEquals(800_000, drained.sum());
         }
     }
 

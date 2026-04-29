@@ -7,6 +7,7 @@ import static euhedral.queues.QueueUtils.LONG_PAD;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.Arrays;
+import java.util.StringJoiner;
 
 import lombok.Getter;
 
@@ -101,12 +102,8 @@ public class PartitionedMpmcArrayQueue<T> implements PartitionedQueue<T> {
         }
         int pIdx = partitionIndex(partition);
 
-        if (unbounded) {
+        if(unbounded) {
             LA_HANDLE.getAndAdd(inFlight, pIdx, 1);
-            if (retired) {
-                LA_HANDLE.getAndAdd(inFlight, pIdx, -1);
-                return false;
-            }
         }
 
         long head;
@@ -117,6 +114,7 @@ public class PartitionedMpmcArrayQueue<T> implements PartitionedQueue<T> {
             if(QueueUtils.unsignedDiff(head, tail + 1) > chunkSize) {
                 if(unbounded) {
                     retired = true;
+                    LA_HANDLE.getAndAdd(inFlight, pIdx, -1);
                 }
                 return false;
             }
@@ -344,11 +342,10 @@ public class PartitionedMpmcArrayQueue<T> implements PartitionedQueue<T> {
             int pIdx = partitionIndex(partition);
             long head = (long) LA_HANDLE.getVolatile(heads, pIdx);
             long tail = (long) LA_HANDLE.getVolatile(tails, pIdx);
+            long headSeq = (long) LA_HANDLE.getVolatile(headSequence, pIdx);
             long inFlight = (long) LA_HANDLE.getVolatile(this.inFlight, pIdx);
 
-            int qTailIdx = chunkIndex(tail);
-            int qHeadIdx = chunkIndex(head);
-            return qHeadIdx == qTailIdx && inFlight == 0 && isPartitionEmptyInternal(pIdx);
+            return head == tail && head == headSeq && inFlight == 0 && isPartitionEmptyInternal(pIdx);
         }
         return false;
     }
@@ -356,14 +353,7 @@ public class PartitionedMpmcArrayQueue<T> implements PartitionedQueue<T> {
     public boolean isDrained() {
         if (unbounded && retired) {
             for (int i = 0; i < partitions; i++) {
-                int pIdx = partitionIndex(i);
-                long head = (long) LA_HANDLE.getVolatile(heads, pIdx);
-                long tail = (long) LA_HANDLE.getVolatile(tails, pIdx);
-                long inFlight = (long) LA_HANDLE.getVolatile(this.inFlight, pIdx);
-
-                int qTailIdx = chunkIndex(tail);
-                int qHeadIdx = chunkIndex(head);
-                if (qHeadIdx != qTailIdx || inFlight > 0 || !isPartitionEmptyInternal(pIdx)) {
+                if (!isDrained(i)) {
                     return false;
                 }
             }
@@ -377,6 +367,7 @@ public class PartitionedMpmcArrayQueue<T> implements PartitionedQueue<T> {
 
         Arrays.fill(heads, 0);
         Arrays.fill(tails, 0);
+        Arrays.fill(headSequence, 0);
         if(inFlight != null) {
             Arrays.fill(inFlight, 0);
         }
@@ -386,6 +377,17 @@ public class PartitionedMpmcArrayQueue<T> implements PartitionedQueue<T> {
             Arrays.fill(sequence[pIdx], 0);
         }
         retired = false;
+    }
+
+    public String getState() {
+        StringJoiner sj = new StringJoiner("\n");
+        sj.add("Heads: " + Arrays.toString(heads));
+        sj.add("Tails: " + Arrays.toString(tails));
+        sj.add("HeadSequence: " + Arrays.toString(headSequence));
+        for(int i = 0; i < partitions; i++) {
+            sj.add("TailSequence-p" + i + ": " + Arrays.toString(sequence[partitionIndex(i)]));
+        }
+        return sj.toString();
     }
 
     public static long estimateFootprint(int partitions, boolean unbounded) {
