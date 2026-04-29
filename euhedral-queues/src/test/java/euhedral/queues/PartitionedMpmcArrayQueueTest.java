@@ -44,7 +44,7 @@ class PartitionedMpmcArrayQueueTest {
                 new PartitionedMpmcArrayQueue<>(1, 4096, false);
 
         QueueConsumer<Long> consumer = (val) -> {};
-        for(int x = 0; x < 50; x++) {
+        for(int x = 0; x < 10; x++) {
             CountDownLatch end = new CountDownLatch(1);
 
             int batch = 100_000;

@@ -99,7 +99,7 @@ public class PartitionedMpmcArrayQueue<T> extends PartitionedArrayQueue<T> {
 
         VarHandle.releaseFence();
 
-        LA_HANDLE.getAndBitwiseOr(sequence[pIdx], sequenceChunkIndex(tail),
+        LA_HANDLE.getAndAdd(sequence[pIdx], sequenceChunkIndex(tail),
                 getSequenceNumber(tail));
         if (unbounded) {
             LA_HANDLE.getAndAdd(inFlight, pIdx, -1);
