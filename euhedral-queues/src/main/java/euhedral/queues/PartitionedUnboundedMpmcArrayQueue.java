@@ -94,7 +94,7 @@ public class PartitionedUnboundedMpmcArrayQueue<T> implements PartitionedQueue<T
         T val = head.chunk.poll(partition);
 
         QueueNode<T> next = head.next;
-        if (next != null && head.chunk.isDrained(partition) && HEADS.compareAndSet(heads, pIdx, head, next)) {
+        if (next != null && head.chunk.isEmpty(partition) && HEADS.compareAndSet(heads, pIdx, head, next)) {
             QueueNode.B_ARRAY.setVolatile(head.refs, partition, false);
 
             if (recycler != null && head.isRetired() && head.reclaimed.compareAndSet(false, true)) {
@@ -138,7 +138,7 @@ public class PartitionedUnboundedMpmcArrayQueue<T> implements PartitionedQueue<T
             if (count > 0) {
                 limit -= count;
                 total += count;
-            } else if ((next = head.next) != null && head.chunk.isDrained(partition)) {
+            } else if ((next = head.next) != null && head.chunk.isEmpty(partition)) {
                 QueueNode<T> prev = head;
                 head = (QueueNode<T>) HEADS.compareAndExchange(heads, pIdx, head, next);
                 QueueNode.B_ARRAY.setVolatile(prev.refs, partition, false);
