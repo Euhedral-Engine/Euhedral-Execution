@@ -44,12 +44,12 @@ class PartitionedMpmcArrayQueueTest {
                 new PartitionedMpmcArrayQueue<>(1, 4096, false);
 
         QueueConsumer<Long> consumer = (val) -> {};
+        ExecutorService exec = Executors.newFixedThreadPool(16);
         for(int x = 0; x < 10; x++) {
             CountDownLatch end = new CountDownLatch(1);
 
             int batch = 100_000;
             LongAdder drained = new LongAdder();
-            ExecutorService exec = Executors.newFixedThreadPool(16);
             for (int i = 0; i < 8; i++) {
                 exec.submit(() -> {
                     for (int j = 0; j < batch; j++) {
@@ -74,7 +74,7 @@ class PartitionedMpmcArrayQueueTest {
                 });
             }
             end.await();
-            assertEquals(800_000, drained.sum());
+            assertEquals(800_000, drained.sum(), "Failure: \n" + q.getState());
         }
     }
 
