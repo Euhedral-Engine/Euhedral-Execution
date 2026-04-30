@@ -9,7 +9,7 @@ import euhedral.io.test_utils.TestFrame;
 import euhedral.io.test_utils.TestPipeline;
 import euhedral.io.test_utils.TestPipeline.TestExecutor;
 import euhedral.io.test_utils.TestPublisher;
-import euhedral.io.utils.PinnedThreadExecutor;
+import euhedral.io.hardware_utils.pinning.PinnedThreadExecutor;
 import com.github.dockerjava.api.async.ResultCallback;
 import com.github.dockerjava.api.command.ExecCreateCmdResponse;
 import com.github.dockerjava.api.model.Capability;
