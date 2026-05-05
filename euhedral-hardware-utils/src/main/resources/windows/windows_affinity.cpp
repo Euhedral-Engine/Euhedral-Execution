@@ -50,12 +50,14 @@ Java_euhedral_hardware_1utils_windows_WindowsAffinity_setThreadAffinity(
     // If pFunc is null, we are on an older OS; fall back to the single-group logic.
   }
 
-  if (result == -1 && active_count > 0) {
+  if (result == -1 && active_count > 0 && active_count < 2) {
     if (SetThreadGroupAffinity(GetCurrentThread(), &affinities[0], NULL)) {
       result = 0;
     } else {
       result = (jint)GetLastError();
     }
+  } else {
+    result = -2;
   }
 
   env->ReleaseLongArrayElements(maskArray, masks, JNI_ABORT);
