@@ -13,6 +13,7 @@ import java.util.BitSet;
 import java.util.StringJoiner;
 import lombok.Getter;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -118,27 +119,6 @@ public class SystemInfo {
         return CPU_CACHE.keySet().toIntArray();
     }
 
-    public static @NonNull CpuCacheLayout getCacheLayout(int cpu) {
-        CpuCacheLayout layout = CPU_CACHE.get(cpu);
-        if (layout == null) {
-            return new CpuCacheLayout(cpu, DEFAULT_L1, DEFAULT_L2, DEFAULT_L3, 1, 1,
-                    Runtime.getRuntime().availableProcessors(), "", "", "", 64);
-        }
-        return layout;
-    }
-
-    public static CpuInfo getCpuInfo(int cpu) {
-        return CPU_INFO.get(cpu);
-    }
-
-    public static CoreInfo getCoreInfo(int core) {
-        return CORE_INFO.get(core);
-    }
-
-    public static SocketInfo getSocketInfo(int socket) {
-        return SOCKET_INFO.get(socket);
-    }
-
     public static @NonNull BitSet fromHexMask(@NonNull String mask) {
         String[] chunks = mask.split(",");
 
@@ -169,10 +149,70 @@ public class SystemInfo {
             int upper = (int) (chunk >>> 32);
             int lower = (int) ((chunk << 32) >>> 32);
 
-            sj.add(Integer.toHexString(upper));
+            if (upper != 0 && i == 0) {
+                sj.add(Integer.toHexString(upper));
+            }
             sj.add(Integer.toHexString(lower));
         }
         return sj.toString();
+    }
+
+    public static String asString() {
+        String bold = "\u001B[1m";
+        String reset = "\u001B[0m";
+        String lineBreak = "-".repeat(80);
+
+        StringJoiner sj = new StringJoiner("\n");
+        sj.add(lineBreak);
+        sj.add(bold + SystemInfo.class.getSimpleName() + reset);
+        sj.add(lineBreak);
+
+        for (int i = 0; i < MAX_SOCKET_ID + 1; i++) {
+            SocketInfo info = getSocketInfo(i);
+            if (info != null) {
+                sj.add(info.toString());
+            }
+        }
+        sj.add(lineBreak);
+        for (int i = 0; i < MAX_CORE_ID + 1; i++) {
+            CoreInfo info = getCoreInfo(i);
+            if (info != null) {
+                sj.add(info.toString());
+            }
+        }
+        sj.add(lineBreak);
+        for (int i = 0; i < CPU_COUNT; i++) {
+            CpuInfo info = getCpuInfo(i);
+            if (info != null) {
+                sj.add(info.toString());
+            }
+        }
+        sj.add(lineBreak);
+        for (int i = 0; i < CPU_COUNT; i++) {
+            CpuCacheLayout layout = getCacheLayout(i);
+            if (layout != null) {
+                sj.add(layout.toString());
+            }
+        }
+        sj.add(lineBreak);
+
+        return sj.toString();
+    }
+
+    public static @Nullable SocketInfo getSocketInfo(int socket) {
+        return SOCKET_INFO.get(socket);
+    }
+
+    public static @Nullable CoreInfo getCoreInfo(int core) {
+        return CORE_INFO.get(core);
+    }
+
+    public static @Nullable CpuInfo getCpuInfo(int cpu) {
+        return CPU_INFO.get(cpu);
+    }
+
+    public static @Nullable CpuCacheLayout getCacheLayout(int cpu) {
+        return CPU_CACHE.get(cpu);
     }
 
     private SystemInfo() {
@@ -181,7 +221,15 @@ public class SystemInfo {
 
     public record CpuInfo(int cpu, int core, int socket) {
 
-
+        @Override
+        public String toString() {
+            String base = CpuInfo.class.getSimpleName() + ": ["
+                    + "cpu = " + cpu + ", "
+                    + "core = " + core + ", "
+                    + "socket = " + socket + "]";
+            CoreInfo pCore = CORE_INFO.get(core);
+            return pCore != null && pCore.pCore ? pCore.color(base) : base;
+        }
     }
 
     public record CoreInfo(String cpuHexMask, boolean pCore, int core, int socket) {
@@ -190,6 +238,19 @@ public class SystemInfo {
             return fromHexMask(cpuHexMask);
         }
 
+        @Override
+        public @NonNull String toString() {
+            String base = CoreInfo.class.getSimpleName() + ": ["
+                    + "cpuHexMask = \"" + cpuHexMask + "\", "
+                    + "pCore = " + pCore + ", "
+                    + "core = " + core + ", "
+                    + "socket = " + socket + "]";
+            return pCore ? color(base) : base;
+        }
+
+        private String color(String base) {
+            return "\u001b[1;48;2;75;76;155m" + base + "\u001b[0m";
+        }
     }
 
     public record SocketInfo(String cpuHexMask, String coreHexMask, int socket) {
@@ -202,6 +263,13 @@ public class SystemInfo {
             return fromHexMask(coreHexMask);
         }
 
+        @Override
+        public @NonNull String toString() {
+            return SocketInfo.class.getSimpleName() + ": ["
+                    + "cpuHexMask = \"" + cpuHexMask + "\", "
+                    + "coreHexMask = \"" + coreHexMask + "\", "
+                    + "socket = " + socket + "]";
+        }
     }
 
     /// Shares of size 1 means only this cpu uses the level of cache.
@@ -219,6 +287,32 @@ public class SystemInfo {
 
         public @NonNull BitSet getL3Mask() {
             return fromHexMask(maskL3);
+        }
+
+        @Override
+        public @NonNull String toString() {
+            String base =  CpuCacheLayout.class.getSimpleName()
+                    + ": [cpu = " + cpu + ", "
+                    + "bytesL1 = " + formatBytes(bytesL1) + ", "
+                    + "bytesL2 = " + formatBytes(bytesL2) + ", "
+                    + "bytesL3 = " + formatBytes(bytesL3) + ", "
+                    + "sharesL1 = " + sharesL1 + ", "
+                    + "sharesL2 = " + sharesL2 + ", "
+                    + "sharesL3 = " + sharesL3 + ", "
+                    + "maskL1 = \"" + maskL1 + "\", "
+                    + "maskL2 = \"" + maskL2 + "\", "
+                    + "maskL3 = \"" + maskL3 + "\", "
+                    + "cacheLineBytes = " + cacheLineBytes + "]";
+            CoreInfo pCore = CORE_INFO.get(CPU_INFO.get(cpu).core);
+            return pCore != null && pCore.pCore ? pCore.color(base) : base;
+        }
+
+        private String formatBytes(long bytes) {
+            bytes /= 1024;
+            if (bytes < 1024) {
+                return bytes + "KB";
+            }
+            return bytes / 1024 + "MB";
         }
     }
 }
