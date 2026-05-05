@@ -45,7 +45,6 @@ public class SystemInfo {
         X86 = !(arch.startsWith("aarch64") || arch.contains("arm64"));
 
         if (OSName.isLinux()) {
-            SNAPSHOTTER = new CgroupV2Resources();
             CPU_CACHE = new Int2ObjectArrayMap<>(LinuxSystemLayout.INSTANCE.getCacheLayout());
             CPU_INFO = new Int2ObjectArrayMap<>(LinuxSystemLayout.INSTANCE.getCpuInfoMap());
             CORE_INFO = new Int2ObjectArrayMap<>(LinuxSystemLayout.INSTANCE.getCoreInfoMap());
@@ -54,8 +53,8 @@ public class SystemInfo {
             CPU_COUNT = CPU_INFO.size();
             CORE_COUNT = CORE_INFO.size();
             SOCKET_COUNT = SOCKET_INFO.size();
+            SNAPSHOTTER = new CgroupV2Resources();
         } else if (OSName.isMacOS()) {
-            SNAPSHOTTER = OSXResources.INSTANCE;
             CPU_CACHE = new Int2ObjectArrayMap<>();
             CPU_INFO = new Int2ObjectArrayMap<>();
             CORE_INFO = new Int2ObjectArrayMap<>();
@@ -64,8 +63,8 @@ public class SystemInfo {
             CPU_COUNT = Runtime.getRuntime().availableProcessors();
             CORE_COUNT = CPU_COUNT;
             SOCKET_COUNT = 1;
+            SNAPSHOTTER = OSXResources.INSTANCE;
         } else if (OSName.isWindows()) {
-            SNAPSHOTTER = WindowsResources.INSTANCE;
             CPU_CACHE = new Int2ObjectArrayMap<>(WindowsSystemLayout.INSTANCE.getCacheLayout());
             CPU_INFO = new Int2ObjectArrayMap<>(WindowsSystemLayout.INSTANCE.getCpuInfoMap());
             CORE_INFO = new Int2ObjectArrayMap<>(WindowsSystemLayout.INSTANCE.getCoreInfoMap());
@@ -74,10 +73,10 @@ public class SystemInfo {
             CPU_COUNT = CPU_INFO.size();
             CORE_COUNT = CORE_INFO.size();
             SOCKET_COUNT = SOCKET_INFO.size();
+            SNAPSHOTTER = WindowsResources.INSTANCE;
         } else {
             LOGGER.error("Unsupported OS. Defaulting to null and empty.");
 
-            SNAPSHOTTER = null;
             CPU_CACHE = new Int2ObjectArrayMap<>();
             CPU_INFO = new Int2ObjectArrayMap<>();
             CORE_INFO = new Int2ObjectArrayMap<>();
@@ -86,6 +85,7 @@ public class SystemInfo {
             CPU_COUNT = Runtime.getRuntime().availableProcessors();
             CORE_COUNT = CPU_COUNT;
             SOCKET_COUNT = 1;
+            SNAPSHOTTER = null;
         }
 
         int maxCore = 0;

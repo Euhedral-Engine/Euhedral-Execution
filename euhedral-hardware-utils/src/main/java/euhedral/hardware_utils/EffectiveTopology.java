@@ -11,17 +11,15 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import lombok.Getter;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class EffectiveTopology {
-
     private static final Logger LOGGER = LoggerFactory.getLogger(EffectiveTopology.class);
 
     private static volatile EffectiveSystemTopology EFFECTIVE_TOPOLOGY;
-    private static final AtomicInteger GLOBAL_VERSION = new AtomicInteger(-1);
+    private static final AtomicInteger GLOBAL_VERSION = new AtomicInteger(0);
 
     static {
         try {
@@ -75,8 +73,11 @@ public class EffectiveTopology {
             EffectiveSystemTopology effectiveTopology = EFFECTIVE_TOPOLOGY;
             for (int cpu = 0; cpu < SystemInfo.CPU_COUNT; cpu++) {
                 CpuInfo info = SystemInfo.getCpuInfo(cpu);
-                EffectiveSocketTopology topology = effectiveTopology.socketTopologies.get(
-                        info.socket());
+                EffectiveSocketTopology topology = null;
+
+                if(info.socket() < effectiveTopology.socketTopologies.size()) {
+                    topology = effectiveTopology.socketTopologies.get(info.socket());
+                }
 
                 if (topology == null) {
                     socketUpdated.set(info.socket());
@@ -108,8 +109,15 @@ public class EffectiveTopology {
                 BitSet effectiveCpus = info.getCpuSet();
                 effectiveCpus.and(globalEffectiveCpus);
 
-                EffectiveSocketTopology socketTopology = effectiveTopology.socketTopologies.get(
-                        socket);
+                EffectiveSocketTopology socketTopology = null;
+                if(socket < effectiveTopology.socketTopologies.size()) {
+                    socketTopology = effectiveTopology.socketTopologies.get(socket);
+                }
+
+                while(socket >= sTopologies.size()) {
+                    sTopologies.add(null);
+                }
+
                 sTopologies.set(socket, new EffectiveSocketTopology(
                         socketTopology == null ? 0 : socketTopology.version + 1, socket,
                         new UnmodifiableBitSet(globalEffectiveCpus),
@@ -137,7 +145,7 @@ public class EffectiveTopology {
 
         for (int i = cpus.nextSetBit(0); i >= 0; i = cpus.nextSetBit(i + 1)) {
             int coreId = SystemInfo.getCpuInfo(i).core();
-            while (cores.size() < coreId) {
+            while (cores.size() <= coreId) {
                 cores.add(null);
             }
             if (cores.get(coreId) == null) {

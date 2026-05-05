@@ -263,7 +263,6 @@ public class CgroupV2Resources implements SystemSnapshotProvider {
         long stallDelta = Math.max(0, currentTotalStall - this.lastTotalStallUsec);
         this.lastTotalStallUsec = currentTotalStall;
 
-
         if (stallDelta == 0) {
             return;
         }
