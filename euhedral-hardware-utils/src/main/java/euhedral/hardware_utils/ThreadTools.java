@@ -9,7 +9,9 @@ import euhedral.hardware_utils.windows.WindowsAffinity;
 import java.util.BitSet;
 
 public class ThreadTools {
+    private static final long[] BASE_AFFINITY;
     private static final ThreadPinner PINNER;
+
 
     static {
         if(OSName.isLinux()) {
@@ -21,6 +23,14 @@ public class ThreadTools {
         } else {
             PINNER = null;
         }
+
+        long[] test = {0};
+        BitSet baseMask = new BitSet(SystemInfo.getCpuCount());
+        while(test[0] < SystemInfo.getCpuCount()) {
+            baseMask.set(0, setAffinity(test));
+        }
+        BASE_AFFINITY = baseMask.toLongArray();
+        releaseAffinity();
     }
 
     /// Gets the cpu of the calling thread.
@@ -30,7 +40,7 @@ public class ThreadTools {
         return PINNER.getCpu();
     }
 
-    /// Gets the CpuInfo for the cpu the calling thread is running on.
+    /// Gets the calling thread's CpuInfo for the cpu it is running on.
     ///
     /// @return cpu, core, socket
     public static CpuInfo getOrigin() {
@@ -80,13 +90,23 @@ public class ThreadTools {
         return setAffinity(cpus.toLongArray());
     }
 
-    /// Sets the calling thread's affinity using the set of masks with set bits corresponding
-    /// to the logical cpu IDs. The mask array must be ordered using little-endian
+    /// Sets the calling thread's affinity using the array of masks whose set bits correspond
+    /// to the logical cpu IDs. The mask array must be little-endian ordered
     ///
     /// @param cpuMasks little-endian ordered masks
     /// @return success
     public static boolean setAffinity(long[] cpuMasks) {
-        return PINNER.setAffinity(cpuMasks);
+        boolean success;
+        try {
+            success = PINNER.setAffinity(cpuMasks);
+        } catch (Throwable ignored) {
+            return false;
+        }
+        return success;
+    }
+
+    public static void releaseAffinity() {
+        setAffinity(BASE_AFFINITY);
     }
 
     /// Sets the resolution of timers for the calling thread. e.g LockSupport.parkNanos(50)
