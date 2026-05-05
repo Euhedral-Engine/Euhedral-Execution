@@ -65,7 +65,7 @@ public class DRRScheduler extends IngestSequencer implements CacheManager, Clone
         this.snapshot = snapshot;
         this.downstreamPressure = downstreamPressure;
         if (snapshot != null) {
-            this.totalBytesCap = snapshot.coreMemoryLimit();
+            this.totalBytesCap = snapshot.memoryLimit();
             this.coreId = snapshot.coreId();
         } else {
             this.totalBytesCap = 256 * 1024 * 1024;
@@ -220,7 +220,7 @@ public class DRRScheduler extends IngestSequencer implements CacheManager, Clone
     @Override
     public long getMaxQueuedBytes() {
         if (snapshot != null) {
-            return (long) (snapshot.coreMemoryLimit() * 0.8);
+            return (long) (snapshot.memoryLimit() * 0.8);
         }
         return (long) (Runtime.getRuntime().maxMemory() * 0.8);
     }
@@ -237,7 +237,7 @@ public class DRRScheduler extends IngestSequencer implements CacheManager, Clone
             return;
         }
         this.snapshot = snapshot;
-        this.totalBytesCap = snapshot.coreMemoryLimit();
+        this.totalBytesCap = snapshot.memoryLimit();
         double currentPressure;
         try {
             currentPressure = clampDouble(this.downstreamPressure.call(), 0.0, 1.0);

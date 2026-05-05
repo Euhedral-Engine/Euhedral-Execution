@@ -19,23 +19,23 @@ public final class SystemUtilization {
     }
 
     public record SocketSnapshot(int socketId, BitSet effectiveCores, long globalMemoryLimit,
-                                 long globalBytesUsed, long socketMemoryLimit,
-                                 double nodeMemoryUtilization,
+                                 long globalBytesUsed, long memoryLimit,
+                                 double memoryUtilization,
                                  CoreSnapshot[] coreSnapshots, long lastUsageNs) {
 
 
     }
 
     public record CoreSnapshot(int coreId, double quotaCpus, long period, long globalCpuCount,
-                               long globalMemoryLimit, long globalBytesUsed, long coreMemoryLimit,
-                               double coreMemoryUtilization, BitSet effectiveCpus,
+                               long globalMemoryLimit, long globalBytesUsed, long memoryLimit,
+                               double memoryUtilization, BitSet effectiveCpus,
                                CpuSnapshot[] cpuSnapshots) {
 
     }
 
     public record CpuSnapshot(int cpuId, double quotaCpus, long period, int globalCpuCount,
-                              long globalMemoryLimit, long globalBytesUsed, long coreMemoryLimit,
-                              double cpuMemoryUtilization, double stallRatio, double throttleRatio,
+                              long globalMemoryLimit, long globalBytesUsed, long memoryLimit,
+                              double memoryUtilization, double stallRatio, double throttleRatio,
                               double pressure, long lastUsageNs) {
 
     }

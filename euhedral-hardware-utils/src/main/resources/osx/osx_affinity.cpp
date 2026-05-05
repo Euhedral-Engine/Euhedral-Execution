@@ -12,37 +12,42 @@
 #include <pthread.h>
 
 #if defined(__x86_64__) || defined(__i386__)
-    #include <cpuid.h>
+#include <cpuid.h>
 #endif
-
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-JNIEXPORT
-    jint JNICALL Java_euhedral_hardware_1utils_osx_OSXAffinity_setThreadAffinity(
-        JNIEnv *env, jclass clazz, jlongArray maskArray) {
+JNIEXPORT jint JNICALL
+Java_euhedral_hardware_1utils_osx_OSXAffinity_setThreadAffinity(JNIEnv *env,
+                                                            jclass clazz,
+                                                            jlongArray maskArray) {
   jsize len = env->GetArrayLength(maskArray);
   if (len == 0)
     return -1;
 
   jlong *masks = env->GetLongArrayElements(maskArray, NULL);
 
-  int affinityTag = -1;
-  for (int i = 0; i < len && affinityTag == -1; i++) {
-    for (int bit = 0; bit < 64; bit++) {
-      if ((masks[i] >> bit) & 1ULL) {
-        affinityTag = (i * 64) + bit;
-        break;
+  int affinityTag = 0;
+  bool found = false;
+
+  for (int i = 0; i < len; i++) {
+    if (masks[i] != 0 && masks[i] != -1L) {
+      for (int bit = 0; bit < 64; bit++) {
+        if ((masks[i] >> bit) & 1ULL) {
+          affinityTag = (i * 64) + bit +
+                        1; // (bit + 1) because Tag 0 means release affinity
+          found = true;
+          break;
+        }
       }
     }
+    if (found)
+      break;
   }
 
   env->ReleaseLongArrayElements(maskArray, masks, JNI_ABORT);
-
-  if (affinityTag == -1)
-    return -1;
 
   thread_affinity_policy_data_t policy = {affinityTag};
   kern_return_t kr = thread_policy_set(
