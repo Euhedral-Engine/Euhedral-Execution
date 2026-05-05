@@ -75,7 +75,7 @@ public class ControlPlane implements AutoCloseable {
     protected final FluxEdge[] shardHandles;
 
     protected volatile int[] activeShardIds = new int[0];
-    protected volatile int currentGlobalVersion = -1;
+    protected volatile int currentGlobalVersion = Integer.MIN_VALUE;
     protected volatile EffectiveSystemTopology effectiveTopology;
 
     protected volatile boolean primed = false;
