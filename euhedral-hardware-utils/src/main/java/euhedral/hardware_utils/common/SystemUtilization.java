@@ -19,7 +19,7 @@ public final class SystemUtilization {
     }
 
     public record SocketSnapshot(int socketId, BitSet effectiveCores, long globalMemoryLimit,
-                                 long globalBytesUsed, long nodeMemoryLimit,
+                                 long globalBytesUsed, long socketMemoryLimit,
                                  double nodeMemoryUtilization,
                                  CoreSnapshot[] coreSnapshots, long lastUsageNs) {
 
@@ -40,7 +40,6 @@ public final class SystemUtilization {
 
     }
 
-    /// pCpus vs. eCpus = Intel P-Core or E-Core | AMD Classic(P) Dense(E)
     public record SystemSnapshot(long timeNs, int totalCpus, double quotaCpus, long period,
                                  long cpuUsage,
                                  long cpuThrottle, UnmodifiableBitSet effectiveCpus,
@@ -100,10 +99,10 @@ public final class SystemUtilization {
         }
 
         /// Get a snapshot of a socket's utilization
-        public SocketSnapshot getSocketSnapshot(int nodeId, List<BitSet> effectiveCoreToCpu,
+        public SocketSnapshot getSocketSnapshot(int socketId, List<BitSet> effectiveCoreToCpu,
                 double cpuQuotaPool) {
-            if (effectiveCoreToCpu == null || effectiveCoreToCpu.isEmpty() || nodeId < 0
-                    || nodeId >= effectiveCoreToCpu.size() || cpuQuotaPool < 0) {
+            if (effectiveCoreToCpu == null || effectiveCoreToCpu.isEmpty() || socketId < 0
+                    || socketId >= effectiveCoreToCpu.size() || cpuQuotaPool < 0) {
                 return null;
             }
 
@@ -128,11 +127,11 @@ public final class SystemUtilization {
                         perCoreQuota);
                 cpus += coreSnapshots[core].effectiveCpus.cardinality();
             }
-            long nodeMemoryUsageBytes = memPerCpuUsageBytes * cpus;
+            long socketMemoryUsageBytes = memPerCpuUsageBytes * cpus;
 
-            return new SocketSnapshot(nodeId, effectiveCores, globalMemoryPool,
+            return new SocketSnapshot(socketId, effectiveCores, globalMemoryPool,
                     perCpuMemoryPool * cpus, (long) (globalMemoryPool * totalMemoryUtilization),
-                    (double) nodeMemoryUsageBytes / globalMemoryPool, coreSnapshots, timestampNs);
+                    (double) socketMemoryUsageBytes / globalMemoryPool, coreSnapshots, timestampNs);
         }
 
         /// Gets a snapshot of a core's utilization

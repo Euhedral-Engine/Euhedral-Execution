@@ -12,22 +12,27 @@
   <artifactId>euhedral-hardware-utils</artifactId>
 
   <properties>
-    <maven.compiler.source>25</maven.compiler.source>
-    <maven.compiler.target>25</maven.compiler.target>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
 
   <dependencies>
+    <!--    Annotations   -->
     <dependency>
       <groupId>org.projectlombok</groupId>
       <artifactId>lombok</artifactId>
     </dependency>
+    <dependency>
+      <groupId>org.jspecify</groupId>
+      <artifactId>jspecify</artifactId>
+    </dependency>
 
+    <!--    Data Structures   -->
     <dependency>
       <groupId>it.unimi.dsi</groupId>
       <artifactId>fastutil</artifactId>
     </dependency>
 
+    <!--    Logging   -->
     <dependency>
       <groupId>org.slf4j</groupId>
       <artifactId>slf4j-api</artifactId>
@@ -41,16 +46,32 @@
       <artifactId>logback-core</artifactId>
     </dependency>
 
-<!--    <dependency>-->
-<!--      <groupId>net.java.dev.jna</groupId>-->
-<!--      <artifactId>jna</artifactId>-->
-<!--    </dependency>-->
-
+    <!--    Testing   -->
     <dependency>
-      <groupId>org.jspecify</groupId>
-      <artifactId>jspecify</artifactId>
+      <groupId>org.assertj</groupId>
+      <artifactId>assertj-core</artifactId>
+      <scope>test</scope>
     </dependency>
-
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.mockito</groupId>
+      <artifactId>mockito-core</artifactId>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <build>
@@ -68,6 +89,97 @@
       </resource>
     </resources>
     <plugins>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>zig-build</id>
+            <phase>initialize</phase>
+            <goals>
+              <goal>exec</goal>
+            </goals>
+            <configuration>
+              <executable>zig</executable>
+              <workingDirectory>${project.basedir}/src/main/resources</workingDirectory>
+              <arguments>
+                <argument>build</argument>
+                <argument>--prefix</argument>
+                <argument>.</argument>
+              </arguments>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <configuration>
+          <archive>
+            <manifestEntries>
+              <Add-Opens>java.base/java.util</Add-Opens>
+            </manifestEntries>
+          </archive>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-assembly-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>make-test-jar</id>
+            <phase>test-compile</phase>
+            <goals>
+              <goal>single</goal>
+            </goals>
+            <configuration>
+              <finalName>test-container</finalName>
+              <appendAssemblyId>false</appendAssemblyId>
+              <attach>false</attach>
+
+              <descriptors>
+                <descriptor>src/test/resources/test-jar.xml</descriptor>
+              </descriptors>
+
+              <archive>
+                <manifest>
+                  <mainClass>euhedral.hardware_utils.test_utils.ContainerMain</mainClass>
+                </manifest>
+                <manifestEntries>
+                  <Add-Opens>java.base/java.util</Add-Opens>
+                </manifestEntries>
+              </archive>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.11.0</version>
+        <executions>
+          <execution>
+            <id>default-compile</id>
+            <goals><goal>compile</goal></goals>
+            <configuration>
+              <source>17</source>
+              <target>17</target>
+            </configuration>
+          </execution>
+          <execution>
+            <id>java21-compile</id>
+            <goals><goal>compile</goal></goals>
+            <configuration>
+              <source>21</source>
+              <target>21</target>
+              <compileSourceRoots>
+                <root>${project.basedir}/src/main/java21</root>
+              </compileSourceRoots>
+              <outputDirectory>${project.build.outputDirectory}/META-INF/versions/21</outputDirectory>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>

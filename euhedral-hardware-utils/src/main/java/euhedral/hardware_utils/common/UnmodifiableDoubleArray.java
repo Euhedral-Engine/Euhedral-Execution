@@ -1,5 +1,6 @@
 package euhedral.hardware_utils.common;
 
+import java.util.Arrays;
 import java.util.function.Consumer;
 
 public class UnmodifiableDoubleArray {
@@ -31,5 +32,10 @@ public class UnmodifiableDoubleArray {
 
     public int length() {
         return this.delegate.length;
+    }
+
+    @Override
+    public String toString() {
+        return Arrays.toString(delegate);
     }
 }
