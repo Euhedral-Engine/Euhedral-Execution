@@ -1,9 +1,9 @@
 package euhedral.io.frames;
 
+import euhedral.hardware_utils.SystemInfo.CpuInfo;
 import euhedral.io.control_plane.RoutingPolicy;
 import euhedral.io.errors.WorkCancelled;
 import euhedral.io.flow_control.LockFreeSink;
-import euhedral.io.resource_monitoring.NumaMapper.OriginLocation;
 import euhedral.io.impl.FrameManager;
 import lombok.Getter;
 import lombok.Setter;
@@ -45,7 +45,7 @@ public abstract class AbstractFrame extends WorkCancelled {
     protected volatile long combinedHash;
     @Getter
     @Setter
-    private OriginLocation origin;
+    private CpuInfo origin;
     @Getter
     @Setter
     private RoutingPolicy routingPolicy;
