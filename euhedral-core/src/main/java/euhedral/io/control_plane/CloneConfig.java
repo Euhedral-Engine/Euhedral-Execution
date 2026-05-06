@@ -1,11 +1,11 @@
 package euhedral.io.control_plane;
 
-import euhedral.io.resource_monitoring.ResourceMonitor;
+import euhedral.io.utils.FluxResourceMonitor;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.BitSet;
 
 public record CloneConfig(String shardName, int coreId, double quotaCpus,
-                          BitSet effectiveCpus, ResourceMonitor resourceMonitor,
+                          BitSet effectiveCpus, FluxResourceMonitor resourceMonitor,
                           MeterRegistry meterRegistry, String metricPrefix) {
     public int[] getCpuSet() {
         int[] cpus = new int[effectiveCpus.cardinality()];

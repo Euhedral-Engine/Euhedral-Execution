@@ -2,6 +2,8 @@ package euhedral.io;
 
 import static euhedral.io.utils.MathFunctions.clampDouble;
 
+import euhedral.hardware_utils.SystemInfo;
+import euhedral.hardware_utils.SystemInfo.CpuCacheLayout;
 import euhedral.io.control_plane.CloneConfig;
 import euhedral.io.flow_control.FluxEdge;
 import euhedral.io.flow_control.IngestSequencer;
@@ -9,11 +11,9 @@ import euhedral.io.flow_control.UpstreamQueue;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.frames.DummyInitFrame;
 import euhedral.io.frames.QueueFrame;
-import euhedral.io.hardware_utils.CpuCacheSizes;
-import euhedral.io.hardware_utils.CpuCacheSizes.CpuCacheLayout;
 import euhedral.io.interfaces.CloneableObject;
 import euhedral.io.interfaces.CacheManager;
-import euhedral.io.resource_monitoring.SystemUtilization.CoreSnapshot;
+import euhedral.hardware_utils.common.SystemUtilization.CoreSnapshot;
 import euhedral.io.utils.DrainBuffer;
 import euhedral.io.utils.FlowRecorder.FlowSnapshot;
 import euhedral.io.utils.ObjectSizer;
@@ -89,7 +89,7 @@ public class DRRScheduler extends IngestSequencer implements CacheManager, Clone
 
         int subQueues = getSubQueueCount(Runtime.getRuntime().availableProcessors() >>> 1);
 
-        CpuCacheLayout layout = CpuCacheSizes.getCacheLayout(config.getCpuSet()[0]);
+        CpuCacheLayout layout = SystemInfo.getCacheLayout(config.getCpuSet()[0]);
         long L2 = layout.bytesL2();
         if(config.getCpuSet().length != layout.sharesL2()) {
             L2 /= layout.sharesL2();

@@ -4,14 +4,11 @@ import static euhedral.io.utils.MathFunctions.unsignedMultiplyHigh;
 
 import euhedral.io.flow_control.UpstreamQueue.UpstreamHandle;
 import euhedral.io.frames.AbstractFrame;
-import euhedral.io.resource_monitoring.providers.OSResourceProviderPicker;
 import euhedral.io.utils.DrainBuffer;
 import java.util.BitSet;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import euhedral.io.utils.PaddedLongAdder;
 import jdk.internal.vm.annotation.Contended;
-import lombok.Getter;
 import org.jctools.queues.MpscArrayQueue;
 import org.jctools.util.PaddedAtomicLong;
 import org.jspecify.annotations.NonNull;

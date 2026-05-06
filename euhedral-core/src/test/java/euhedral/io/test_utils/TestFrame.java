@@ -1,8 +1,8 @@
 package euhedral.io.test_utils;
 
+import euhedral.hardware_utils.ThreadTools;
 import euhedral.io.control_plane.RoutingPolicy;
 import euhedral.io.frames.AbstractFrame;
-import euhedral.io.resource_monitoring.NumaMapper;
 import euhedral.io.utils.KeyHasher;
 import euhedral.io.impl.FrameManager;
 import java.util.concurrent.ThreadLocalRandom;
@@ -22,7 +22,7 @@ public final class TestFrame extends AbstractFrame {
     public TestFrame(long idHash, boolean ordered, FrameManager<Void, TestFrame> recycler) {
         super(idHash, recycler);
         this.ordered = ordered;
-        this.setOrigin(NumaMapper.locateMe());
+        this.setOrigin(ThreadTools.getOrigin());
     }
 
     public static TestFrame[] generateParallel(int count) {

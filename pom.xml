@@ -41,6 +41,7 @@
   <modules>
     <module>euhedral-core</module>
     <module>euhedral-data-structures</module>
+    <module>euhedral-hardware-utils</module>
   </modules>
 
   <dependencyManagement>
@@ -119,15 +120,14 @@
       </dependency>
 
       <dependency>
-        <groupId>jakarta.persistence</groupId>
-        <artifactId>jakarta.persistence-api</artifactId>
-        <version>3.2.0</version>
+        <groupId>net.java.dev.jna</groupId>
+        <artifactId>jna</artifactId>
+        <version>5.18.1</version>
       </dependency>
-
       <dependency>
-        <groupId>org.postgresql</groupId>
-        <artifactId>r2dbc-postgresql</artifactId>
-        <version>1.0.8.RELEASE</version>
+        <groupId>org.jspecify</groupId>
+        <artifactId>jspecify</artifactId>
+        <version>1.0.0</version>
       </dependency>
 
       <dependency>

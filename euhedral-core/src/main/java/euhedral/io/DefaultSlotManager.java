@@ -4,6 +4,10 @@ import static euhedral.io.utils.MathFunctions.clampDouble;
 import static euhedral.io.utils.MathFunctions.clampLong;
 import static euhedral.io.utils.MathFunctions.log2;
 
+import euhedral.hardware_utils.SystemInfo;
+import euhedral.hardware_utils.SystemInfo.CpuCacheLayout;
+import euhedral.hardware_utils.SystemInfo.CpuInfo;
+import euhedral.hardware_utils.ThreadTools;
 import euhedral.io.SlotManagerSMTBuddy.SMTState;
 import euhedral.io.control_plane.CloneConfig;
 import euhedral.io.flow_control.DirectOutputFlux;
@@ -12,19 +16,14 @@ import euhedral.io.flow_control.IngestSequencer.WakeHook;
 import euhedral.io.flow_control.LockFreeSink;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.frames.DummyInitFrame;
-import euhedral.io.hardware_utils.CpuCacheSizes;
-import euhedral.io.hardware_utils.CpuCacheSizes.CpuCacheLayout;
 import euhedral.io.interfaces.CloneableObject;
 import euhedral.io.interfaces.SlotManager;
-import euhedral.io.resource_monitoring.NumaMapper;
-import euhedral.io.resource_monitoring.NumaMapper.OriginLocation;
-import euhedral.io.resource_monitoring.SystemUtilization.CoreSnapshot;
-import euhedral.io.resource_monitoring.SystemUtilization.CpuSnapshot;
+import euhedral.hardware_utils.common.SystemUtilization.CoreSnapshot;
+import euhedral.hardware_utils.common.SystemUtilization.CpuSnapshot;
 import euhedral.io.utils.DrainBuffer;
 import euhedral.io.utils.FlowRecorder;
 import euhedral.io.utils.FlowRecorder.FlowSnapshot;
 import euhedral.io.hardware_utils.pinning.PinnedThreadExecutor;
-import euhedral.io.hardware_utils.ThreadTimerResolution;
 import euhedral.io.utils.ObjectSizer;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Meter;
@@ -93,6 +92,7 @@ public class DefaultSlotManager implements SlotManager {
     protected final Config config;
     protected final Metrics metrics;
     protected final Logger logger;
+    protected final boolean isPCore;
     protected final AtomicBoolean running = new AtomicBoolean(false);
 
     protected final FlowRecorder executionLatency;
@@ -133,10 +133,10 @@ public class DefaultSlotManager implements SlotManager {
     public DefaultSlotManager(@NonNull Config config) {
         this.config = config;
 
-        int bufferSize = (int) Math.min(Long.highestOneBit((CpuCacheSizes.DEFAULT_L1 - 1) << 1),
+        int bufferSize = (int) Math.min(Long.highestOneBit((SystemInfo.DEFAULT_L1 - 1) << 1),
                 Integer.MAX_VALUE);
         if (config.cloneConfig != null) {
-            CpuCacheLayout layout = CpuCacheSizes.getCacheLayout(config.cloneConfig.getCpuSet()[0]);
+            CpuCacheLayout layout = SystemInfo.getCacheLayout(config.cloneConfig.getCpuSet()[0]);
             long temp = layout.bytesL1();
             if (config.cloneConfig.getCpuSet().length != layout.sharesL1()) {
                 temp /= layout.sharesL1();
@@ -145,6 +145,9 @@ public class DefaultSlotManager implements SlotManager {
             temp = (long) (temp * 0.7);
             bufferSize = (int) Math.min(Long.highestOneBit((temp - 1) << 1), Integer.MAX_VALUE);
             bufferSize /= ObjectSizer.POINTER_SIZE;
+            isPCore = SystemInfo.getCoreInfo(SystemInfo.getCpuInfo(layout.cpu()).core()).pCore();
+        } else {
+            isPCore = false;
         }
         bufferSize = Math.max(bufferSize, 64);
 
@@ -272,14 +275,14 @@ public class DefaultSlotManager implements SlotManager {
                 pinnedExecutor.execute(() -> {
                     this.cycleThread = Thread.currentThread();
 
-                    OriginLocation origin = NumaMapper.locateMe();
+                    CpuInfo origin = ThreadTools.getOrigin();
                     if (cloneConfig.coreId() != origin.core()) {
                         logger.warn("Attempted to pin to CPU: {} Core: {} but was assigned: {}",
                                 cpuId, cloneConfig.coreId(), origin);
                     } else {
                         logger.info("Pinned to Core {} CPU {}", cloneConfig.coreId(), cpuId);
                     }
-                    ThreadTimerResolution.setResolution(1);
+                    ThreadTools.setTimerResolution(1);
                     if (config.enableSMT && cloneConfig.getCpuSet().length > 1) {
                         this.buddy.start(cloneConfig.getCpuSet()[1],
                                 config.cloneConfig.shardName() + "-DefaultSlotManager-SMT-"
@@ -431,7 +434,7 @@ public class DefaultSlotManager implements SlotManager {
         long adaptiveCap = ideal << 2;
 
         double pressure = cpuSnapshot.pressure();
-        pressure *= cpuSnapshot.isPCore() ? 0.5 : 0.7;
+        pressure *= isPCore ? 0.5 : 0.7;
         adaptiveCap = (long) (adaptiveCap * (1.0 - pressure));
 
         long cpuCount = cpuSnapshot.globalCpuCount();
@@ -508,7 +511,7 @@ public class DefaultSlotManager implements SlotManager {
 
         CpuSnapshot cpu = coreSnapshot.cpuSnapshots()[cpuId];
         double cpuPressure = cpu.pressure();
-        double cpuThrottle = cpuPressure * (cpu.isPCore() ? 0.5 : 0.7);
+        double cpuThrottle = cpuPressure * (isPCore ? 0.5 : 0.7);
 
         long baseIntervalNs = (long) avgLatency;
 

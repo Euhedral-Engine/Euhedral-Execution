@@ -20,7 +20,6 @@ public class ObjectSizer {
             return 0L;
         }
 
-
         return ClassLayout.parseClass(clazz).instanceSize();
     }
 }
