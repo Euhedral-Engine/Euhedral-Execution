@@ -19,6 +19,12 @@
 
   <dependencies>
     <dependency>
+      <groupId>com.euhedral</groupId>
+      <artifactId>euhedral-hardware-utils</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+
+    <dependency>
       <groupId>org.projectlombok</groupId>
       <artifactId>lombok</artifactId>
     </dependency>
@@ -197,6 +203,7 @@
             -XX:+EnableDynamicAgentLoading
             -XX:-RestrictContended
             --add-opens java.base/java.lang=ALL-UNNAMED
+            --add-opens java.base/java.util=ALL-UNNAMED
             --add-exports java.base/jdk.internal.platform=ALL-UNNAMED
           </argLine>
         </configuration>

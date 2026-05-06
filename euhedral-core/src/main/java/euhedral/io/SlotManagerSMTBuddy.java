@@ -1,11 +1,11 @@
 package euhedral.io;
 
+import euhedral.hardware_utils.ThreadTools;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.LockSupport;
 
 import euhedral.io.flow_control.IngestSequencer;
-import euhedral.io.hardware_utils.ThreadTimerResolution;
 import euhedral.io.hardware_utils.pinning.PinnedThreadExecutor;
 import euhedral.io.utils.DemandOptimizer;
 import euhedral.io.utils.DrainBuffer;
@@ -45,7 +45,7 @@ public class SlotManagerSMTBuddy implements AutoCloseable {
     }
 
     private void cycle() {
-        ThreadTimerResolution.setResolution(1);
+        ThreadTools.setTimerResolution(1);
         while(!Thread.interrupted() && running.get()) {
             if(ingest == null) {
                 LockSupport.parkNanos(20_000);

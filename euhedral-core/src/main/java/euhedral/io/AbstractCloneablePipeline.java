@@ -6,7 +6,7 @@ import euhedral.io.interfaces.CloneableObject;
 import euhedral.io.interfaces.CacheManager;
 import euhedral.io.interfaces.PipelineExecutor;
 import euhedral.io.interfaces.SlotManager;
-import euhedral.io.resource_monitoring.SystemUtilization.CoreSnapshot;
+import euhedral.hardware_utils.common.SystemUtilization.CoreSnapshot;
 import euhedral.io.hardware_utils.pinning.PinnedThreadExecutor;
 
 import java.util.concurrent.Future;
