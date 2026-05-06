@@ -1,0 +1,35 @@
+package euhedral.hardware_utils.common;
+
+import java.util.function.Consumer;
+
+public class UnmodifiableDoubleArray {
+    private final double[] delegate;
+
+    public static UnmodifiableDoubleArray wrap(double[] delegate) {
+        return new UnmodifiableDoubleArray(delegate);
+    }
+
+    public UnmodifiableDoubleArray(double[] delegate) {
+        this.delegate = delegate;
+    }
+
+    public double get(int idx) {
+        return this.delegate[idx];
+    }
+
+    public void copy(double[] buffer, int buffStart, int buffEnd, int idx) {
+        while(buffStart < buffEnd && idx < this.delegate.length) {
+            buffer[buffStart++] = this.delegate[idx++];
+        }
+    }
+
+    public void iterate(int start, int end, Consumer<Double> consumer) {
+        while(start < end) {
+            consumer.accept(this.delegate[start++]);
+        }
+    }
+
+    public int length() {
+        return this.delegate.length;
+    }
+}

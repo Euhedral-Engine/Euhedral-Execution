@@ -2,17 +2,17 @@ package euhedral.io.control_plane;
 
 import static euhedral.io.utils.MathFunctions.unsignedMultiplyHigh;
 
+import euhedral.hardware_utils.SystemInfo;
+import euhedral.hardware_utils.SystemInfo.CpuInfo;
 import euhedral.io.flow_control.FluxEdge;
 import euhedral.io.flow_control.FluxNode;
 import euhedral.io.flow_control.NoOpSubscriber;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.interfaces.CloneableObject;
-import euhedral.io.resource_monitoring.NumaMapper;
-import euhedral.io.resource_monitoring.NumaMapper.OriginLocation;
-import euhedral.io.resource_monitoring.NumaMapper.SocketTopology;
-import euhedral.io.resource_monitoring.ResourceMonitor;
-import euhedral.io.resource_monitoring.SystemUtilization.CoreSnapshot;
-import euhedral.io.resource_monitoring.SystemUtilization.SocketSnapshot;
+import euhedral.hardware_utils.EffectiveTopology.EffectiveSocketTopology;
+import euhedral.io.utils.FluxResourceMonitor;
+import euhedral.hardware_utils.common.SystemUtilization.CoreSnapshot;
+import euhedral.hardware_utils.common.SystemUtilization.SocketSnapshot;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.util.BitSet;
@@ -33,7 +33,7 @@ import org.slf4j.LoggerFactory;
 public class ControlPlaneShard implements AutoCloseable {
 
     protected final Logger logger;
-    protected final ResourceMonitor resourceMonitor;
+    protected final FluxResourceMonitor resourceMonitor;
 
     @Getter
     protected final int shardId;
@@ -59,7 +59,7 @@ public class ControlPlaneShard implements AutoCloseable {
 
     public ControlPlaneShard(int shardId, String shardName,
             CloneableObject obj,
-            ResourceMonitor resourceMonitor,
+            FluxResourceMonitor resourceMonitor,
             MeterRegistry meterRegistry) {
         this.logger = LoggerFactory.getLogger(shardName);
         this.resourceMonitor = resourceMonitor;
@@ -71,15 +71,15 @@ public class ControlPlaneShard implements AutoCloseable {
         this.coreHandles = new FluxEdge[0];
     }
 
-    public void start(SocketSnapshot snapshot, SocketTopology topology, FluxEdge upstream) {
+    public void start(SocketSnapshot snapshot, EffectiveSocketTopology topology, FluxEdge upstream) {
         if (!started.compareAndSet(false, true)) {
             return;
         }
         logger.info("Starting.");
-        shardExecutor = Executors.newFixedThreadPool(topology.effectiveCores().get().length(),
+        shardExecutor = Executors.newFixedThreadPool(topology.effectiveCores().length(),
                 (r) -> new Thread(r, shardName + "+ExecutorService"));
         FluxNode coreDistributor = new FluxNode(shardName + "-CoreDistributor",
-                topology.effectiveCores().get().length(), this::route, topology.socketId(), false);
+                topology.effectiveCores().length(), this::route, topology.socketId(), false);
         this.coreDistributor.set(coreDistributor);
         coreDistributor.onSubscribe(upstream);
         update(snapshot, topology);
@@ -89,7 +89,7 @@ public class ControlPlaneShard implements AutoCloseable {
         RoutingPolicy policy = frame.getRoutingPolicy();
         if(policy != null && policy.level > RoutingPolicy.SOCKET_LOCAL.level) {
             int[] reverseMapping = this.reverseMapping;
-            OriginLocation location = frame.getOrigin();
+            CpuInfo location = frame.getOrigin();
             int node = location != null ? location.core() : -1;
 
             if (node >= 0 && node < reverseMapping.length && (node = reverseMapping[node]) < mapSize && node >= 0) {
@@ -101,7 +101,7 @@ public class ControlPlaneShard implements AutoCloseable {
         return (int) unsignedMultiplyHigh(rotated, mapSize);
     }
 
-    public void update(SocketSnapshot snapshot, SocketTopology topology) {
+    public void update(SocketSnapshot snapshot, EffectiveSocketTopology topology) {
         if (!started.get() || rebalancing.get()) {
             logger.error(
                     "Cannot update if not started or rebalancing. Started: {} Rebalancing: {} CoresToDrain: {}",
@@ -109,7 +109,7 @@ public class ControlPlaneShard implements AutoCloseable {
             return;
         }
 
-        int nextVersion = topology.version().get();
+        int nextVersion = topology.version();
         if (this.currentVersion != nextVersion) {
             if (currentVersion >= 0) {
                 logger.warn(
@@ -128,7 +128,7 @@ public class ControlPlaneShard implements AutoCloseable {
     }
 
     @SuppressWarnings({"resource"})
-    protected void handleTopologyChange(SocketSnapshot snapshot, SocketTopology topology) {
+    protected void handleTopologyChange(SocketSnapshot snapshot, EffectiveSocketTopology topology) {
         if (!rebalancing.compareAndSet(false, true)) {
             return;
         }
@@ -136,16 +136,14 @@ public class ControlPlaneShard implements AutoCloseable {
         FluxNode distributor = coreDistributor.get();
         distributor.setDrain(true);
 
-        BitSet newCores = topology.effectiveCores().get();
+        BitSet newCores = topology.effectiveCores();
         int[] nextCores = new int[newCores.cardinality()];
 
-        CloneableObject[] nextClones = new CloneableObject[topology.effectiveCores()
-                .get().length()];
-        FluxEdge[] nextHandles = new FluxEdge[topology.effectiveCores().get()
-                .length()];
+        CloneableObject[] nextClones = new CloneableObject[topology.effectiveCores().length()];
+        FluxEdge[] nextHandles = new FluxEdge[topology.effectiveCores().length()];
 
         int idx = 0;
-        int[] reverseMapping = new int[NumaMapper.INSTANCE.getCoreCount()];
+        int[] reverseMapping = new int[SystemInfo.MAX_CORE_ID + 1];
         for (int i = newCores.nextSetBit(0); i >= 0; i = newCores.nextSetBit(i + 1)) {
             nextHandles[i] = i >= clones.length ? null : coreHandles[i];
             nextHandles[i] =
