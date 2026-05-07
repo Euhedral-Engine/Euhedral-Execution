@@ -22,6 +22,9 @@ public class PartitionedArrayQueue<T> implements PartitionedQueue<T> {
 
     protected final boolean unbounded;
 
+    @Getter
+    long capacity;
+
     @SuppressWarnings("unchecked")
     public PartitionedArrayQueue(int partitions, int chunkSize, boolean unbounded) {
         chunkSize = Integer.highestOneBit((chunkSize - 1) << 1);
@@ -36,6 +39,7 @@ public class PartitionedArrayQueue<T> implements PartitionedQueue<T> {
         this.heads = new long[(partitions + 1) * LONG_PAD + partitions];
         this.tails = new long[(partitions + 1) * LONG_PAD + partitions];
         this.unbounded = unbounded;
+        this.capacity = (long) chunkSize * partitions;
     }
 
     /// Offers an item to a random partition.
