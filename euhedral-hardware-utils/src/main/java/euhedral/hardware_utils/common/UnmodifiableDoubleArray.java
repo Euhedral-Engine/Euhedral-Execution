@@ -3,7 +3,7 @@ package euhedral.hardware_utils.common;
 import java.util.Arrays;
 import java.util.function.Consumer;
 
-public class UnmodifiableDoubleArray {
+public final class UnmodifiableDoubleArray {
     private final double[] delegate;
 
     public static UnmodifiableDoubleArray wrap(double[] delegate) {
@@ -18,9 +18,9 @@ public class UnmodifiableDoubleArray {
         return this.delegate[idx];
     }
 
-    public void copy(double[] buffer, int buffStart, int buffEnd, int idx) {
-        while(buffStart < buffEnd && idx < this.delegate.length) {
-            buffer[buffStart++] = this.delegate[idx++];
+    public void copy(double[] buffer, int buffStart, int buffEnd, int targetIdx) {
+        while(buffStart < buffEnd && targetIdx < this.delegate.length) {
+            buffer[buffStart++] = this.delegate[targetIdx++];
         }
     }
 

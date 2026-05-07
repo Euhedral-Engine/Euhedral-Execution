@@ -1,12 +1,12 @@
 package euhedral.hardware_utils.macOS;
 
-import euhedral.hardware_utils.common.JNIClassLoader;
+import euhedral.hardware_utils.internal.JNIClassLoader;
 import euhedral.hardware_utils.common.OSName;
-import euhedral.hardware_utils.common.ThreadPinner;
+import euhedral.hardware_utils.internal.ThreadPinner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class OSXAffinity extends ThreadPinner {
+public final class OSXAffinity extends ThreadPinner {
     private static final Logger LOGGER = LoggerFactory.getLogger(OSXAffinity.class);
 
     public static final OSXAffinity INSTANCE;

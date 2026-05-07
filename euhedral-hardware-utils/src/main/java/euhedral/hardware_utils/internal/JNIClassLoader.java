@@ -1,6 +1,7 @@
-package euhedral.hardware_utils.common;
+package euhedral.hardware_utils.internal;
 
 import euhedral.hardware_utils.SystemInfo;
+import euhedral.hardware_utils.common.OSName;
 import java.io.InputStream;
 import java.lang.ref.Cleaner;
 import java.nio.file.Files;

@@ -17,7 +17,7 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class SystemInfo {
+public final class SystemInfo {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(SystemInfo.class);
 
@@ -26,6 +26,8 @@ public class SystemInfo {
     public static final long DEFAULT_L3 = 4L * 1024L * 1024L;
 
     public static final SystemSnapshotProvider SNAPSHOTTER;
+
+    public static final int CACHE_LINE_SIZE_BYTES;
 
     public static final int CPU_COUNT;
     public static final int CORE_COUNT;
@@ -97,6 +99,17 @@ public class SystemInfo {
         }
         MAX_CORE_ID = maxCore;
         MAX_SOCKET_ID = maxSocket;
+
+        LOGGER.debug("\n{}", asString());
+        if(OSName.CURRENT_OS != OSName.UNSUPPORTED) {
+            CACHE_LINE_SIZE_BYTES = CPU_CACHE.get(0).cacheLineBytes;
+        } else {
+            CACHE_LINE_SIZE_BYTES = 64;
+        }
+    }
+
+    public static int getCacheLineBytes() {
+        return CACHE_LINE_SIZE_BYTES;
     }
 
     public static int getCpuCount() {

@@ -45,7 +45,7 @@ public final class SystemUtilization {
                                  long cpuThrottle, UnmodifiableBitSet effectiveCpus,
                                  UnmodifiableDoubleArray pressurePerCpu, long memoryLimit,
                                  long memoryUsage,
-                                 long inactiveFileMemory, long ioBytes) {
+                                 long inactiveFileMemory, long diskIOBytes) {
 
         public static SystemSnapshot create(long timeNs, int totalCpus, double quotaCpus,
                 long period, long cpuUsage, long cpuThrottle, UnmodifiableBitSet effectiveCpus,
@@ -71,7 +71,7 @@ public final class SystemUtilization {
                                       UnmodifiableDoubleArray perQuotaCpuPressure,
                                       long globalMemoryPool, long perCpuMemoryPool,
                                       double totalMemoryUtilization, long memPerCpuUsageBytes,
-                                      double ioBytesPerSecond, double ioPressure,
+                                      double diskIOBytesPerSecond, double diskIOPressure,
                                       SystemSnapshot snapshot) {
 
         public static HardwareUtilization create(long timestampNs, double quotaCpus,
@@ -82,7 +82,7 @@ public final class SystemUtilization {
                 double[] perQuotaCpuPressure,
                 long globalMemoryPool, long perCpuMemoryPool,
                 double totalMemoryUtilization, long memPerCpuUsageBytes,
-                double ioBytesPerSecond, double ioPressure,
+                double diskIOBytesPerSecond, double diskIOPressure,
                 SystemSnapshot snapshot) {
             return new HardwareUtilization(
                     timestampNs,
@@ -94,7 +94,7 @@ public final class SystemUtilization {
                     perCpuMemoryPool,
                     totalMemoryUtilization,
                     memPerCpuUsageBytes,
-                    ioBytesPerSecond, ioPressure,
+                    diskIOBytesPerSecond, diskIOPressure,
                     snapshot);
         }
 
@@ -168,7 +168,7 @@ public final class SystemUtilization {
             double cpuPressure = 1.0 - ((1.0 - stallRatio) * (1.0 - throttleRatio));
 
             double memUtil = (double) memPerCpuUsageBytes / (perCpuMemoryPool * coreCpuCount);
-            double io = ioPressure * 0.8;
+            double io = diskIOPressure * 0.8;
             double combinedPressure = 1.0 - ((1.0 - cpuPressure) * (1.0 - io) * (1.0 - memUtil));
 
             return new CpuSnapshot(cpuId, cpuQuota, period, globalEffectiveCpus.cardinality(),
@@ -181,7 +181,7 @@ public final class SystemUtilization {
         /// Gets the total system pressure
         public double pressure() {
             double cpu = 1.0 - (1.0 - cpuThrottleRatio);
-            double io = ioPressure * 0.8;
+            double io = diskIOPressure * 0.8;
             double pressure = Math.max(Math.max(cpu, totalMemoryUtilization), io);
 
             return Math.min(1.0, Math.max(0.0, pressure));

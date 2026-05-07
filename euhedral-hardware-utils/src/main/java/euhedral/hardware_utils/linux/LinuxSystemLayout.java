@@ -20,11 +20,10 @@ import java.util.BitSet;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class LinuxSystemLayout {
+public final class LinuxSystemLayout {
 
     public static final LinuxSystemLayout INSTANCE;
     private static final Logger LOGGER = LoggerFactory.getLogger(LinuxSystemLayout.class);
@@ -43,9 +42,6 @@ public class LinuxSystemLayout {
     private final Int2ObjectArrayMap<SocketInfo> socketInfo = new Int2ObjectArrayMap<>();
 
     private Int2ObjectArrayMap<Ranking> cpuRankings = new Int2ObjectArrayMap<>();
-
-    @Getter
-    private long maxCpuFrequency = 0;
 
     private LinuxSystemLayout() {
         init();

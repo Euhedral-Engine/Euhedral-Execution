@@ -5,7 +5,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-public class CacheRelationship extends SystemLogicalProcessorInformation {
+public final class CacheRelationship extends SystemLogicalProcessorInformation {
 
     private static final byte RESERVED = 18;
 

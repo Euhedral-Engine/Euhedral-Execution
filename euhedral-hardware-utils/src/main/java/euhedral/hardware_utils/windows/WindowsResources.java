@@ -1,7 +1,7 @@
 package euhedral.hardware_utils.windows;
 
 import euhedral.hardware_utils.SystemInfo;
-import euhedral.hardware_utils.common.JNIClassLoader;
+import euhedral.hardware_utils.internal.JNIClassLoader;
 import euhedral.hardware_utils.common.OSName;
 import euhedral.hardware_utils.common.SystemSnapshotProvider;
 import euhedral.hardware_utils.common.SystemUtilization.SystemSnapshot;
@@ -13,7 +13,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class WindowsResources implements SystemSnapshotProvider {
+public final class WindowsResources implements SystemSnapshotProvider {
 
     public static final WindowsResources INSTANCE;
     private static final Logger LOGGER = LoggerFactory.getLogger(WindowsResources.class);

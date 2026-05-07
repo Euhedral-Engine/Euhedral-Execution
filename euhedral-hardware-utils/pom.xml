@@ -160,7 +160,9 @@
         <executions>
           <execution>
             <id>default-compile</id>
-            <goals><goal>compile</goal></goals>
+            <goals>
+              <goal>compile</goal>
+            </goals>
             <configuration>
               <source>17</source>
               <target>17</target>
@@ -168,14 +170,17 @@
           </execution>
           <execution>
             <id>java21-compile</id>
-            <goals><goal>compile</goal></goals>
+            <goals>
+              <goal>compile</goal>
+            </goals>
             <configuration>
               <source>21</source>
               <target>21</target>
               <compileSourceRoots>
                 <root>${project.basedir}/src/main/java21</root>
               </compileSourceRoots>
-              <outputDirectory>${project.build.outputDirectory}/META-INF/versions/21</outputDirectory>
+              <outputDirectory>${project.build.outputDirectory}/META-INF/versions/21
+              </outputDirectory>
             </configuration>
           </execution>
         </executions>

@@ -15,7 +15,7 @@ import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class EffectiveTopology {
+public final class EffectiveTopology {
     private static final Logger LOGGER = LoggerFactory.getLogger(EffectiveTopology.class);
 
     private static volatile EffectiveSystemTopology EFFECTIVE_TOPOLOGY;

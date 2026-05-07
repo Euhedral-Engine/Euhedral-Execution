@@ -15,7 +15,7 @@ import java.util.concurrent.locks.LockSupport;
 import lombok.Getter;
 import org.jspecify.annotations.NonNull;
 
-public class PinnedThreadExecutor extends AbstractExecutorService implements AutoCloseable {
+public final class PinnedThreadExecutor extends AbstractExecutorService implements AutoCloseable {
 
     private static final Cleaner CLEANER = Cleaner.create();
     private static final ConcurrentHashMap<Long, WeakReference<PinnedThreadExecutor>> PINNED_EXECUTORS = new ConcurrentHashMap<>(

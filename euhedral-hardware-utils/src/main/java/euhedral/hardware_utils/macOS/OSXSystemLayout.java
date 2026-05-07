@@ -1,11 +1,11 @@
 package euhedral.hardware_utils.macOS;
 
-import euhedral.hardware_utils.common.JNIClassLoader;
+import euhedral.hardware_utils.internal.JNIClassLoader;
 import euhedral.hardware_utils.common.OSName;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class OSXSystemLayout {
+public final class OSXSystemLayout {
 
     public static final OSXSystemLayout INSTANCE;
     private static final Logger LOGGER = LoggerFactory.getLogger(OSXSystemLayout.class);
