@@ -22,7 +22,7 @@ public final class TestFrame extends AbstractFrame {
     public TestFrame(long idHash, boolean ordered, FrameManager<Void, TestFrame> recycler) {
         super(idHash, recycler);
         this.ordered = ordered;
-        this.setOrigin(ThreadTools.getOrigin());
+        this.setOrigin(ThreadTools.getCpuInfo());
     }
 
     public static TestFrame[] generateParallel(int count) {

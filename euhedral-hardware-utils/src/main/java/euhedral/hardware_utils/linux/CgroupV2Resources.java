@@ -22,6 +22,9 @@ import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/// Reads from cgroupV2 files to build a SystemSnapshot object.
+///
+/// This class is thread-safe.
 public class CgroupV2Resources implements SystemSnapshotProvider {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(CgroupV2Resources.class);

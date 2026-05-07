@@ -1,12 +1,11 @@
 package euhedral.hardware_utils.common;
 
 import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.stream.IntStream;
 
-public class UnmodifiableBitSet extends BitSet {
+public final class UnmodifiableBitSet extends BitSet {
 
     public static UnmodifiableBitSet wrap(BitSet set) throws Exception {
         return new UnmodifiableBitSet(set);

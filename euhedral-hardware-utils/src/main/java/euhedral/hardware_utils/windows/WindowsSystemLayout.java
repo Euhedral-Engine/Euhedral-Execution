@@ -5,7 +5,7 @@ import euhedral.hardware_utils.SystemInfo.CoreInfo;
 import euhedral.hardware_utils.SystemInfo.CpuCacheLayout;
 import euhedral.hardware_utils.SystemInfo.CpuInfo;
 import euhedral.hardware_utils.SystemInfo.SocketInfo;
-import euhedral.hardware_utils.common.JNIClassLoader;
+import euhedral.hardware_utils.internal.JNIClassLoader;
 import euhedral.hardware_utils.common.OSName;
 import euhedral.hardware_utils.windows.win32.CacheRelationship;
 import euhedral.hardware_utils.windows.win32.CacheRelationship.CacheType;
@@ -23,7 +23,7 @@ import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class WindowsSystemLayout {
+public final class WindowsSystemLayout {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(WindowsSystemLayout.class);
     public static final WindowsSystemLayout INSTANCE;

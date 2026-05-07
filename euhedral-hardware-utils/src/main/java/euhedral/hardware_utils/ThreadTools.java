@@ -2,16 +2,19 @@ package euhedral.hardware_utils;
 
 import euhedral.hardware_utils.SystemInfo.CpuInfo;
 import euhedral.hardware_utils.common.OSName;
-import euhedral.hardware_utils.common.ThreadPinner;
+import euhedral.hardware_utils.internal.ThreadPinner;
 import euhedral.hardware_utils.linux.LinuxAffinity;
 import euhedral.hardware_utils.macOS.OSXAffinity;
 import euhedral.hardware_utils.windows.WindowsAffinity;
 import java.util.BitSet;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-public class ThreadTools {
+public final class ThreadTools {
+    private static final Logger LOGGER = LoggerFactory.getLogger(ThreadTools.class);
+
     private static final long[] BASE_AFFINITY;
     private static final ThreadPinner PINNER;
-
 
     static {
         if(OSName.isLinux()) {
@@ -27,10 +30,13 @@ public class ThreadTools {
         long[] test = {0};
         BitSet baseMask = new BitSet(SystemInfo.getCpuCount());
         while(test[0] < SystemInfo.getCpuCount()) {
-            baseMask.set(0, setAffinity(test));
+            baseMask.set((int) test[0]++, setAffinity(test));
         }
+
         BASE_AFFINITY = baseMask.toLongArray();
         releaseAffinity();
+
+        LOGGER.debug("Base Affinity Mask: {} 0x{}", baseMask, SystemInfo.toHexMask(baseMask));
     }
 
     /// Gets the cpu of the calling thread.
@@ -43,7 +49,7 @@ public class ThreadTools {
     /// Gets the calling thread's CpuInfo for the cpu it is running on.
     ///
     /// @return cpu, core, socket
-    public static CpuInfo getOrigin() {
+    public static CpuInfo getCpuInfo() {
         int cpu = PINNER.getCpu();
         return SystemInfo.getCpuInfo(cpu);
     }

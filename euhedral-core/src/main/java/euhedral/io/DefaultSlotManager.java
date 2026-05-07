@@ -275,7 +275,7 @@ public class DefaultSlotManager implements SlotManager {
                 pinnedExecutor.execute(() -> {
                     this.cycleThread = Thread.currentThread();
 
-                    CpuInfo origin = ThreadTools.getOrigin();
+                    CpuInfo origin = ThreadTools.getCpuInfo();
                     if (cloneConfig.coreId() != origin.core()) {
                         logger.warn("Attempted to pin to CPU: {} Core: {} but was assigned: {}",
                                 cpuId, cloneConfig.coreId(), origin);

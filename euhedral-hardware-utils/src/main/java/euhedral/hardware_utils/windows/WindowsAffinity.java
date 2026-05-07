@@ -1,13 +1,13 @@
 package euhedral.hardware_utils.windows;
 
-import euhedral.hardware_utils.common.JNIClassLoader;
+import euhedral.hardware_utils.internal.JNIClassLoader;
 import euhedral.hardware_utils.common.OSName;
-import euhedral.hardware_utils.common.ThreadPinner;
+import euhedral.hardware_utils.internal.ThreadPinner;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class WindowsAffinity extends ThreadPinner {
+public final class WindowsAffinity extends ThreadPinner {
 
     public static final WindowsAffinity INSTANCE;
     private static final Logger LOGGER = LoggerFactory.getLogger(WindowsAffinity.class);

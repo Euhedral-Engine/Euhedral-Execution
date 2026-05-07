@@ -91,7 +91,7 @@ public class ResourceMonitor implements AutoCloseable {
         this.lastCpuUsageNs = snapshot.cpuUsage();
 
         this.lastThrottleNs = snapshot.cpuThrottle();
-        this.lastDiskIOBytes = snapshot.ioBytes();
+        this.lastDiskIOBytes = snapshot.diskIOBytes();
     }
 
     @Override
@@ -168,7 +168,7 @@ public class ResourceMonitor implements AutoCloseable {
 
             updateCpu(snapshot);
             updateMemory(snapshot);
-            updateIO(snapshot);
+            updateDiskIO(snapshot);
             this.readings.lastWallClockNs = snapshot.timeNs();
 
             long memoryLimit = clampLong(snapshot.memoryLimit(), 0, MEMORY_CLAMP);
@@ -277,14 +277,14 @@ public class ResourceMonitor implements AutoCloseable {
 
     // ----- IO -----
 
-    private void updateIO(SystemSnapshot snapshot) {
+    private void updateDiskIO(SystemSnapshot snapshot) {
         long deltaTimeNs = snapshot.timeNs() - this.readings.lastWallClockNs;
 
         if (deltaTimeNs > 0) {
             double deltaTimeSec = deltaTimeNs * NS_TO_SEC;
 
             // Calculate raw Bytes Per Second
-            long deltaBytes = (lastDiskIOBytes == 0) ? 0 : snapshot.ioBytes() - lastDiskIOBytes;
+            long deltaBytes = (lastDiskIOBytes == 0) ? 0 : snapshot.diskIOBytes() - lastDiskIOBytes;
             double rawBps = deltaBytes / deltaTimeSec;
 
             this.readings.diskIOBytesPerSecond = ewma(this.readings.diskIOBytesPerSecond, rawBps);
@@ -295,7 +295,7 @@ public class ResourceMonitor implements AutoCloseable {
 
             this.readings.peakDiskIoBPS = currentPeak;
             this.readings.diskIOPressure = clampDouble(rawIoRatio, 0.0, 1.0);
-            this.lastDiskIOBytes = snapshot.ioBytes();
+            this.lastDiskIOBytes = snapshot.diskIOBytes();
         }
     }
 

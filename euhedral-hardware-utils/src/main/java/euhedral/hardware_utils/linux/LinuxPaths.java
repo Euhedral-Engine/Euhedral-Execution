@@ -8,7 +8,7 @@ import java.nio.file.StandardOpenOption;
 import java.util.Optional;
 import java.util.stream.Stream;
 
-public class LinuxPaths {
+public final class LinuxPaths {
     // cgroupV2
 
     public static final Path CGROUP_V2_ROOT_PATH = Paths.get("/sys/fs/cgroup/");
