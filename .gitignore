@@ -28,6 +28,7 @@
 /.nb-gradle/
 
 ### Misc
+**/resources/bin/
 **/zig-out/
 **/.zig-cache/
 **/async-profiler*/
