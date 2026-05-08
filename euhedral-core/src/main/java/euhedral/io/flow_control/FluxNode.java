@@ -2,15 +2,16 @@ package euhedral.io.flow_control;
 
 import static euhedral.io.utils.MathFunctions.unsignedMultiplyHigh;
 
+import euhedral.atomics.PaddedAtomicLong;
 import euhedral.io.flow_control.UpstreamQueue.UpstreamHandle;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.utils.DrainBuffer;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import java.util.BitSet;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import jdk.internal.vm.annotation.Contended;
 import org.jctools.queues.MpscArrayQueue;
-import org.jctools.util.PaddedAtomicLong;
 import org.jspecify.annotations.NonNull;
 import org.reactivestreams.Publisher;
 import org.reactivestreams.Subscriber;
@@ -20,6 +21,17 @@ import org.slf4j.LoggerFactory;
 
 public class FluxNode extends FluxEdge implements AutoCloseable {
 
+    private static final VarHandle ROUTING_STATE;
+
+    static {
+        try {
+            ROUTING_STATE = MethodHandles.lookup()
+                    .findVarHandle(FluxNode.class, "routingState", RoutingState.class);
+        } catch (Throwable t) {
+            throw new ExceptionInInitializerError(t);
+        }
+    }
+
     protected final boolean terminal;
 
     protected final Logger logger;
@@ -27,14 +39,11 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
     protected final int id;
     protected final MpscArrayQueue<AbstractFrame> parallelQueue;
 
-    @Contended
     protected final FluxEdge[] downstreams;
     protected final RoutingFunction routingFunction;
     private final PaddedAtomicLong wip;
-    @Contended
-    protected volatile RoutingState routingState = new RoutingState(new int[0]);
 
-    protected long hash;
+    protected RoutingState routingState = new RoutingState(new int[0]);
 
     public FluxNode(String name, int downstreamCount) {
         this(name, downstreamCount, RoutingFunction.DEFAULT, 0, false);
@@ -103,7 +112,7 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
             curr.sibling = first;
         }
 
-        this.routingState = new RoutingState(mappings);
+        ROUTING_STATE.setRelease(this, new RoutingState(mappings));
 
         for (int i = 0; i < downstreams.length; i++) {
             if (!active.get(i) && downstreams[i] != null) {
@@ -150,7 +159,7 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
 
     @Override
     public void onNext(AbstractFrame frame) {
-        RoutingState state = this.routingState;
+        RoutingState state = (RoutingState) ROUTING_STATE.getAcquire(this);
         int mapLen = state.mappings.length;
 
         int logicalIdx = routingFunction.route(frame, mapLen);
@@ -164,7 +173,7 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
             return;
         }
 
-        if(parallelQueue != null && !parallelQueue.isEmpty()) {
+        if (parallelQueue != null && !parallelQueue.isEmpty()) {
             if (wip.compareAndSet(0, 1)) {
                 try {
                     int count = parallelQueue.drain(buffer, (int) demand);
@@ -197,26 +206,13 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
 
     @Override
     public void close() {
+        super.close();
         for (int i = 0; i < downstreams.length; i++) {
             if (downstreams[i] != null) {
                 downstreams[i].close();
                 downstreams[i] = null;
             }
         }
-        parent = null;
-    }
-
-    @Override
-    public long getHash() {
-        return hash;
-    }
-
-    @Override
-    public boolean equals(Object other) {
-        if (other instanceof FluxNode o) {
-            return o.hash == hash;
-        }
-        return false;
     }
 
     @FunctionalInterface
@@ -230,9 +226,9 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
 
     protected static final class RoutingState {
 
-        final int[] mappings;
-        final int mask;
-        final boolean isPow2;
+        public final int[] mappings;
+        public final int mask;
+        public final boolean isPow2;
 
         RoutingState(int[] mappings) {
             this.mappings = mappings;
@@ -241,14 +237,13 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
         }
     }
 
-    @Contended
     public class UpstreamInterceptor extends UpstreamHandle implements Subscriber<AbstractFrame> {
 
         private final PaddedAtomicLong wip = new PaddedAtomicLong(0);
         private final PaddedAtomicLong demand = new PaddedAtomicLong(0);
+        public final AtomicBoolean complete = new AtomicBoolean(false);
 
         public Subscription upstream;
-        public volatile boolean complete = false;
         private long count = 0;
 
         @Override
@@ -281,7 +276,7 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
 
         @Override
         public void request(long num) {
-            if (num <= 0 || drain.get()) {
+            if (num <= 0 || drain.getAcquire() || complete.getAcquire()) {
                 return;
             }
 
@@ -305,14 +300,6 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
             }
         }
 
-        private static long addCap(long num1, long num2) {
-            if (num1 < 0 || num2 < 0) {
-                return Long.MAX_VALUE;
-            }
-            long sum = num1 + num2;
-            return sum < 0 ? Long.MAX_VALUE : sum;
-        }
-
         private long addAndReset(long num) {
             long sum = demand.getAndSet(0);
             sum += num;
@@ -322,28 +309,39 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
             return sum;
         }
 
+        private static long addCap(long num1, long num2) {
+            if (num1 < 0 || num2 < 0) {
+                return Long.MAX_VALUE;
+            }
+            long sum = num1 + num2;
+            return sum < 0 ? Long.MAX_VALUE : sum;
+        }
+
         @Override
         public void onError(Throwable throwable) {
-            logger.error("UpstreamHandle Error", throwable);
-            this.complete = true;
+            if(this.complete.compareAndSet(false, true)) {
+                logger.error("UpstreamHandle Error", throwable);
+            }
         }
 
         @Override
         public void onComplete() {
-            logger.debug("UpstreamHandle Complete");
-            this.complete = true;
+            if (this.complete.compareAndSet(false, true)) {
+                logger.debug("UpstreamHandle Complete");
+            }
         }
 
         @Override
         public void cancel() {
-            logger.debug("UpstreamHandle Cancelled");
-            complete = true;
-            upstream.cancel();
+            if(this.complete.compareAndSet(false, true)) {
+                logger.debug("UpstreamHandle Cancelled");
+                upstream.cancel();
+            }
         }
 
         @Override
         public boolean isComplete() {
-            return complete;
+            return complete.getAcquire();
         }
     }
 }

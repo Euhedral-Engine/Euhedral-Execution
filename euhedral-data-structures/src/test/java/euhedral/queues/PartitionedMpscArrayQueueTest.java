@@ -1,6 +1,9 @@
 package euhedral.queues;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -13,13 +16,14 @@ import java.util.concurrent.atomic.LongAdder;
 import org.junit.jupiter.api.Test;
 
 class PartitionedMpscArrayQueueTest {
+
     @Test
     void singleThreadOfferDrain() {
         PartitionedMpscArrayQueue<Integer> q =
                 new PartitionedMpscArrayQueue<>(4, 128, false);
 
         for (int i = 0; i < 1000; i++) {
-            if(i < 128) {
+            if (i < 128) {
                 assertTrue(q.offer(0, i));
             } else {
                 assertFalse(q.offer(0, i));
@@ -28,7 +32,7 @@ class PartitionedMpscArrayQueueTest {
 
         final int[] drained = new int[]{-1};
         QueueConsumer<Integer> consumer = (val) -> {
-            if(val != ++drained[0] || val >= 128) {
+            if (val != ++drained[0] || val >= 128) {
                 fail("Corruption! Last Value: " + drained[0] + " Current: " + val);
             }
         };
@@ -42,31 +46,31 @@ class PartitionedMpscArrayQueueTest {
         PartitionedMpscArrayQueue<Long> q =
                 new PartitionedMpscArrayQueue<>(1, 4096, false);
 
-        QueueConsumer<Long> consumer = (val) -> {};
-        try(ExecutorService exec = Executors.newFixedThreadPool(16)) {
-            for (int x = 0; x < 10; x++) {
-                int batch = 100_000;
-                LongAdder drained = new LongAdder();
-                for (int i = 0; i < 8; i++) {
-                    exec.submit(() -> {
-                        for (int j = 0; j < batch; j++) {
-                            long v = ThreadLocalRandom.current().nextLong();
+        QueueConsumer<Long> consumer = (val) -> {
+        };
+        ExecutorService exec = Executors.newFixedThreadPool(16);
+        for (int x = 0; x < 10; x++) {
+            int batch = 100_000;
+            LongAdder drained = new LongAdder();
+            for (int i = 0; i < 8; i++) {
+                exec.submit(() -> {
+                    for (int j = 0; j < batch; j++) {
+                        long v = ThreadLocalRandom.current().nextLong();
 
-                            while (!q.offer(v, System.nanoTime())) {
-                                Thread.onSpinWait();
-                            }
+                        while (!q.offer(v, System.nanoTime())) {
+                            Thread.onSpinWait();
                         }
-                    });
-                }
-
-                long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
-                while (drained.sum() < batch * 8 && System.nanoTime() < deadline) {
-                    int count = q.drain(consumer, 4096);
-                    drained.add(count);
-                    Thread.yield();
-                }
-                assertEquals(800_000, drained.sum(), "Failure: \n" + q.getState());
+                    }
+                });
             }
+
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+            while (drained.sum() < batch * 8 && System.nanoTime() < deadline) {
+                int count = q.drain(consumer, 4096);
+                drained.add(count);
+                Thread.yield();
+            }
+            assertEquals(800_000, drained.sum(), "Failure: \n" + q.getState());
         }
     }
 
@@ -79,46 +83,45 @@ class PartitionedMpscArrayQueueTest {
         PartitionedMpscArrayQueue<Long> q =
                 new PartitionedMpscArrayQueue<>(8, 1024, false);
 
-        try(ExecutorService exec = Executors.newFixedThreadPool(producers)) {
+        ExecutorService exec = Executors.newFixedThreadPool(producers);
 
-            Set<Long> produced = ConcurrentHashMap.newKeySet();
-            Set<Long> consumed = ConcurrentHashMap.newKeySet();
+        Set<Long> produced = ConcurrentHashMap.newKeySet();
+        Set<Long> consumed = ConcurrentHashMap.newKeySet();
 
-            CountDownLatch latch = new CountDownLatch(producers);
+        CountDownLatch latch = new CountDownLatch(producers);
 
-            for (int p = 0; p < producers; p++) {
-                final int id = p;
-                exec.submit(() -> {
-                    for (int i = 0; i < perProducer; i++) {
-                        long val = (((long) id) << 32) | i;
+        for (int p = 0; p < producers; p++) {
+            final int id = p;
+            exec.submit(() -> {
+                for (int i = 0; i < perProducer; i++) {
+                    long val = (((long) id) << 32) | i;
 
-                        while (!q.offer(id % 8, val)) {
-                            Thread.yield();
-                        }
-
-                        produced.add(val);
+                    while (!q.offer(id % 8, val)) {
+                        Thread.yield();
                     }
-                    latch.countDown();
-                });
-            }
 
-            QueueConsumer<Long> consumer = (val) -> {
-                if(!consumed.add(val)) {
-                    fail("Duplicate: " + val);
+                    produced.add(val);
                 }
-            };
-
-            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(1);
-            while ((latch.getCount() > 0 || consumed.size() < total)
-                    && System.nanoTime() < deadline) {
-                q.drain(consumer, perProducer);
-            }
-
-            exec.shutdownNow();
-
-            assertEquals(produced.size(), consumed.size());
-            assertEquals(produced, consumed);
+                latch.countDown();
+            });
         }
+
+        QueueConsumer<Long> consumer = (val) -> {
+            if (!consumed.add(val)) {
+                fail("Duplicate: " + val);
+            }
+        };
+
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(1);
+        while ((latch.getCount() > 0 || consumed.size() < total)
+                && System.nanoTime() < deadline) {
+            q.drain(consumer, perProducer);
+        }
+
+        exec.shutdownNow();
+
+        assertEquals(produced.size(), consumed.size());
+        assertEquals(produced, consumed);
     }
 
     @Test

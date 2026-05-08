@@ -1,10 +1,10 @@
 package euhedral.io.flow_control;
 
+import euhedral.atomics.PaddedAtomicLong;
 import euhedral.io.utils.DrainBuffer;
 import lombok.Getter;
 import org.jctools.maps.NonBlockingHashMapLong;
 import org.jctools.queues.MpscUnboundedXaddArrayQueue;
-import org.jctools.util.PaddedAtomicLong;
 import org.reactivestreams.Subscription;
 
 public class UpstreamQueue {

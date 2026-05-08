@@ -259,13 +259,8 @@
           <artifactId>maven-compiler-plugin</artifactId>
           <version>3.11.0</version>
           <configuration>
-            <release combine.self="override"></release>
-            <compilerArgs combine.self="override">
-              <arg>--add-exports</arg>
-              <arg>java.base/jdk.internal.platform=ALL-UNNAMED</arg>
-              <arg>--add-exports</arg>
-              <arg>java.base/jdk.internal.vm.annotation=ALL-UNNAMED</arg>
-            </compilerArgs>
+            <release combine.self="override"/>
+            <compilerArgs combine.self="override"/>
             <annotationProcessorPaths>
               <path>
                 <groupId>org.projectlombok</groupId>

@@ -16,6 +16,13 @@
       <groupId>com.euhedral</groupId>
       <artifactId>euhedral-hardware-utils</artifactId>
       <version>${project.version}</version>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.euhedral</groupId>
+      <artifactId>euhedral-data-structures</artifactId>
+      <version>${project.version}</version>
+      <scope>compile</scope>
     </dependency>
 
     <dependency>
@@ -181,7 +188,6 @@
             -XX:-RestrictContended
             --add-opens java.base/java.lang=ALL-UNNAMED
             --add-opens java.base/java.util=ALL-UNNAMED
-            --add-exports java.base/jdk.internal.platform=ALL-UNNAMED
           </argLine>
         </configuration>
       </plugin>

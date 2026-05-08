@@ -43,10 +43,11 @@ public class MpmcNodeRecycler<T> {
         while (true) {
             node.next = head;
 
-            head = stack.compareAndExchange(head, node);
-            if(head == node) {
+            QueueNode<T> witness = stack.compareAndExchange(head, node);
+            if(head == witness) {
                 return;
             }
+            head = witness;
         }
     }
 
