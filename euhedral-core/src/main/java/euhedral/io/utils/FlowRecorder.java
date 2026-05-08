@@ -5,11 +5,9 @@ import static euhedral.io.utils.MathFunctions.clampLong;
 
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicBoolean;
-import jdk.internal.vm.annotation.Contended;
 import lombok.Getter;
 import org.jspecify.annotations.NonNull;
 
-@Contended
 public class FlowRecorder {
 
     // 10 bits of precision (1024) for smoothing factors

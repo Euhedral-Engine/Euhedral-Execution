@@ -1,67 +1,78 @@
 package euhedral.io.flow_control;
 
+import euhedral.atomics.PaddedAtomicLong;
 import euhedral.io.flow_control.UpstreamQueue.UpstreamHandle;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.utils.DrainBuffer;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.WeakHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.LockSupport;
-import jdk.internal.vm.annotation.Contended;
 import lombok.Getter;
 import lombok.Setter;
 import org.jctools.maps.NonBlockingHashMapLong;
-import org.jctools.util.PaddedAtomicLong;
 import org.reactivestreams.Publisher;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 
-@Contended
+@SuppressWarnings("unchecked")
 public class FluxEdge extends UpstreamHandle implements Publisher<AbstractFrame>,
         Subscriber<AbstractFrame>, AutoCloseable {
 
-    protected final NonBlockingHashMapLong<UpstreamQueue> aggregators = new NonBlockingHashMapLong<>();
+    protected static final VarHandle PARENT;
+    protected static final VarHandle DOWNSTREAM;
 
-    private final AtomicBoolean addingUpstream = new AtomicBoolean(false);
-    private final WeakHashMap<UpstreamHandle, Boolean> upstreamHandles = new WeakHashMap<>();
+    static {
+        try {
+            PARENT = MethodHandles.lookup().findVarHandle(FluxEdge.class, "parent", FluxEdge.class);
+            DOWNSTREAM = MethodHandles.lookup().findVarHandle(FluxEdge.class, "downstream",
+                    Subscriber.class);
+        } catch (Throwable t) {
+            throw new ExceptionInInitializerError(t);
+        }
+    }
 
     protected final AtomicBoolean drain;
+    protected final NonBlockingHashMapLong<UpstreamQueue> aggregators = new NonBlockingHashMapLong<>();
+    private final AtomicBoolean addingUpstream = new AtomicBoolean(false);
+    private final AtomicBoolean closed = new AtomicBoolean();
+
+    private final WeakHashMap<UpstreamHandle, Boolean> upstreamHandles = new WeakHashMap<>();
     private final PaddedAtomicLong upstreamCount = new PaddedAtomicLong(0);
     private final PaddedAtomicLong threadCount = new PaddedAtomicLong(0);
-    public volatile Subscriber<? super AbstractFrame> downstream = null;
-    protected volatile FluxEdge parent = null;
-
     @Getter
     @Setter
-    @Contended("sibling")
     protected volatile FluxEdge sibling = null;
-
     private volatile Collection<UpstreamQueue> upstreamQueues = aggregators.values();
-    @Getter
-    private volatile boolean closed = false;
+
+    protected FluxEdge parent = null;
+    public Subscriber<? super AbstractFrame> downstream = null;
 
     public FluxEdge(AtomicBoolean drain) {
         this.drain = drain;
     }
 
     public UpstreamQueue getThreadUpstreamQueue() {
+        FluxEdge parent = (FluxEdge) PARENT.getAcquire(this);
         if (parent != null) {
             return parent.getThreadUpstreamQueue();
         }
 
         UpstreamQueue queue = UpstreamQueue.UP_QUEUE.get();
 
-        if(queue == null) {
+        if (queue == null) {
             queue = UpstreamQueue.get(aggregators, threadCount);
-            while(!addingUpstream.compareAndSet(false, true)) {
+            while (!addingUpstream.compareAndSet(false, true)) {
                 Thread.onSpinWait();
             }
 
             Iterator<UpstreamHandle> iter = upstreamHandles.keySet().iterator();
-            while(iter.hasNext()) {
+            while (iter.hasNext()) {
                 UpstreamHandle handle = iter.next();
-                if(handle.isComplete()) {
+                if (handle.isComplete()) {
                     iter.remove();
                     continue;
                 }
@@ -78,6 +89,7 @@ public class FluxEdge extends UpstreamHandle implements Publisher<AbstractFrame>
             return;
         }
 
+        FluxEdge parent = (FluxEdge) PARENT.getAcquire(this);
         if (parent != null) {
             parent.removeThread(thread);
             return;
@@ -95,6 +107,7 @@ public class FluxEdge extends UpstreamHandle implements Publisher<AbstractFrame>
     }
 
     public long getUpstreamCount() {
+        FluxEdge parent = (FluxEdge) PARENT.getAcquire(this);
         if (parent != null) {
             return parent.getUpstreamCount();
         }
@@ -120,19 +133,21 @@ public class FluxEdge extends UpstreamHandle implements Publisher<AbstractFrame>
 
     public void setParent(FluxEdge parent) {
         if (parent == null) {
-            this.parent = null;
+            PARENT.setRelease(this, null);
             return;
         }
 
         acquireLock();
-        this.parent = parent;
+        PARENT.setRelease(this, parent);
         transferToParent();
+        parent.transferToParent();
         releaseLock();
-        this.parent.transferToParent();
     }
 
     @Override
     public void onNext(AbstractFrame frame) {
+        Subscriber<? super AbstractFrame> downstream =
+                (Subscriber<? super AbstractFrame>) DOWNSTREAM.getAcquire(this);
         if (downstream != null) {
             downstream.onNext(frame);
         }
@@ -143,11 +158,11 @@ public class FluxEdge extends UpstreamHandle implements Publisher<AbstractFrame>
         if (num < 0) {
             return;
         }
-        if (closed || drain.get()) {
+        if (closed.getAcquire() || drain.getAcquire()) {
             return;
         }
 
-        FluxEdge parent = this.parent;
+        FluxEdge parent = (FluxEdge) PARENT.getAcquire(this);
         if (parent != null) {
             parent.request(num);
             return;
@@ -159,11 +174,11 @@ public class FluxEdge extends UpstreamHandle implements Publisher<AbstractFrame>
 
     @Override
     public void pull(DrainBuffer buffer, long demand) {
-        if(closed || drain.get()) {
+        if (closed.getAcquire() || drain.getAcquire()) {
             return;
         }
 
-        FluxEdge parent = this.parent;
+        FluxEdge parent = (FluxEdge) PARENT.getAcquire(this);
         if (parent != null) {
             parent.pull(buffer, demand);
             return;
@@ -173,6 +188,7 @@ public class FluxEdge extends UpstreamHandle implements Publisher<AbstractFrame>
     }
 
     private void transferToParent() {
+        FluxEdge parent = (FluxEdge) PARENT.getAcquire(this);
         if (parent == null) {
             return;
         }
@@ -196,10 +212,12 @@ public class FluxEdge extends UpstreamHandle implements Publisher<AbstractFrame>
 
     @Override
     public void close() {
-        if (closed) {
+        if(!closed.compareAndSet(false, true)) {
             return;
         }
-        closed = true;
+
+        Subscriber<? super AbstractFrame> downstream =
+                (Subscriber<? super AbstractFrame>) DOWNSTREAM.getAcquire(this);
         if (downstream != null) {
             downstream.onComplete();
         }
@@ -208,22 +226,24 @@ public class FluxEdge extends UpstreamHandle implements Publisher<AbstractFrame>
 
     @Override
     public void subscribe(Subscriber<? super AbstractFrame> subscriber) {
-        if (subscriber instanceof FluxEdge dh) {
-            if (this.downstream == null) {
-                this.downstream = dh;
-                dh.setParent(this);
-            } else if (this.downstream instanceof FluxEdge child) {
-                child.subscribe(subscriber);
+        boolean isEdge = subscriber instanceof FluxEdge;
+
+        Subscriber<? super AbstractFrame> witness = (Subscriber<? super AbstractFrame>)
+                DOWNSTREAM.compareAndExchange(this, null, subscriber);
+
+        if (witness == null) {
+            if (isEdge) {
+                ((FluxEdge) subscriber).setParent(this);
             } else {
-                subscriber.onError(new IllegalAccessException(
-                        "This class cannot have multiple subscribers"));
+                subscriber.onSubscribe(this);
             }
-        } else if (this.downstream == null) {
-            this.downstream = subscriber;
-            subscriber.onSubscribe(this);
+            return;
+        }
+
+        if (witness instanceof FluxEdge existingEdge) {
+            existingEdge.subscribe(subscriber);
         } else {
-            subscriber.onError(new IllegalAccessException(
-                    "This FluxEdge is already subscribed to."));
+            subscriber.onError(new IllegalStateException("Already subscribed by a terminal subscriber"));
         }
     }
 
@@ -232,11 +252,13 @@ public class FluxEdge extends UpstreamHandle implements Publisher<AbstractFrame>
         if (subscription instanceof FluxEdge dh) {
             setParent(dh);
         } else if (subscription instanceof UpstreamHandle upstream) {
-            if (closed) {
+            if (closed.getAcquire()) {
                 subscription.cancel();
                 return;
             }
             acquireLock();
+
+            FluxEdge parent = (FluxEdge) PARENT.getAcquire(this);
             if (parent != null) {
                 releaseLock();
                 parent.onSubscribe(upstream);
@@ -281,7 +303,7 @@ public class FluxEdge extends UpstreamHandle implements Publisher<AbstractFrame>
     private void acquireLock() {
         int cycles = 0;
         while (!addingUpstream.compareAndSet(false, true)) {
-            if(cycles++ < 128) {
+            if (cycles++ < 128) {
                 Thread.onSpinWait();
             } else if (cycles < 512) {
                 Thread.yield();
@@ -296,8 +318,14 @@ public class FluxEdge extends UpstreamHandle implements Publisher<AbstractFrame>
         addingUpstream.set(false);
     }
 
+    public boolean isClosed() {
+        return this.closed.getAcquire();
+    }
+
     @Override
     public void onError(Throwable throwable) {
+        Subscriber<? super AbstractFrame> downstream =
+                (Subscriber<? super AbstractFrame>) DOWNSTREAM.getAcquire(this);
         if (downstream != null) {
             downstream.onError(throwable);
         }

@@ -2,6 +2,7 @@ package euhedral.io.flow_control;
 
 import static euhedral.io.utils.MathFunctions.clampDouble;
 
+import euhedral.atomics.PaddedAtomicReference;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.frames.QueueFrame;
 import euhedral.io.utils.DrainBuffer;
@@ -11,7 +12,6 @@ import java.util.BitSet;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.LockSupport;
 
-import lombok.Getter;
 import lombok.Setter;
 import org.jctools.queues.MpscUnboundedXaddArrayQueue;
 import org.jctools.util.PaddedAtomicLong;
@@ -27,14 +27,10 @@ public abstract class IngestSequencer extends FluxNode implements AutoCloseable 
     protected final QueueStats[] queueStats;
     protected final int mask;
 
-    @Getter
-    protected final FlowRecorder fillRecorder;
-    @Getter
-    protected final FlowRecorder fillBytesRecorder;
-    @Getter
-    protected final FlowRecorder drainRecorder;
-    @Getter
-    protected final FlowRecorder drainBytesRecorder;
+    protected final PaddedAtomicReference<FlowRecorder> fillRecorder;
+    protected final PaddedAtomicReference<FlowRecorder> fillBytesRecorder;
+    protected final PaddedAtomicReference<FlowRecorder> drainRecorder;
+    protected final PaddedAtomicReference<FlowRecorder> drainBytesRecorder;
 
     protected final AtomicLong totalCount = new AtomicLong(0);
     protected final AtomicLong totalQueuedSizeBytes = new AtomicLong(0);
@@ -59,10 +55,10 @@ public abstract class IngestSequencer extends FluxNode implements AutoCloseable 
         int queueCount = getSubQueueCount(subQueues);
 
         this.chunkSize = chunkSize;
-        this.fillRecorder = new FlowRecorder();
-        this.fillBytesRecorder = new FlowRecorder();
-        this.drainRecorder = new FlowRecorder();
-        this.drainBytesRecorder = new FlowRecorder();
+        this.fillRecorder = new PaddedAtomicReference<>(new FlowRecorder());
+        this.fillBytesRecorder = new PaddedAtomicReference<>(new FlowRecorder());
+        this.drainRecorder = new PaddedAtomicReference<>(new FlowRecorder());
+        this.drainBytesRecorder = new PaddedAtomicReference<>(new FlowRecorder());
         this.queueRing = new QueueFrame[queueCount];
         this.queueStats = new QueueStats[queueCount];
         this.mask = queueCount - 1;
@@ -151,8 +147,8 @@ public abstract class IngestSequencer extends FluxNode implements AutoCloseable 
             pull(drainBuffer, maxFill - totalDrain);
         }
         long now = System.nanoTime();
-        drainRecorder.record(now, totalDrain + drainBuffer.drainCount, true);
-        drainBytesRecorder.record(now, totalBytesDrained + drainBuffer.drainedBytes, true);
+        drainRecorder.getAcquire().record(now, totalDrain + drainBuffer.drainCount, true);
+        drainBytesRecorder.getAcquire().record(now, totalBytesDrained + drainBuffer.drainedBytes, true);
         hookOnDrain(demand);
 
         totalDrain += drainBuffer.drainCount;
@@ -178,6 +174,22 @@ public abstract class IngestSequencer extends FluxNode implements AutoCloseable 
 
     public long getCount() {
         return totalCount.get();
+    }
+
+    public FlowRecorder getFillRecorder() {
+        return this.fillRecorder.get();
+    }
+
+    public FlowRecorder getFillBytesRecorder() {
+        return this.fillBytesRecorder.get();
+    }
+
+    public FlowRecorder getDrainRecorder() {
+        return this.drainRecorder.get();
+    }
+
+    public FlowRecorder getDrainBytesRecorder() {
+        return this.drainRecorder.get();
     }
 
     public boolean isEmpty() {
@@ -221,20 +233,23 @@ public abstract class IngestSequencer extends FluxNode implements AutoCloseable 
 
             long size = frame.getSizeBytes();
             long adjustedSize = size <= 0 ? 256 : size;
-            queueStats[idx].avgFrameSize.getAndUpdate(
-                    curr -> (long) ((1 - smoothingFactor) * curr + smoothingFactor * adjustedSize));
+            queueStats[idx].avgFrameSize.getAndAccumulate(adjustedSize, this::ewma);
 
             totalQueuedSizeBytes.addAndGet(adjustedSize);
             long count = totalCount.incrementAndGet();
             if ((count & 63) == 0) {
                 long now = System.nanoTime();
-                fillRecorder.record(now, 64, true);
-                fillBytesRecorder.record(now, adjustedSize, true);
+                fillRecorder.getAcquire().record(now, 64, true);
+                fillBytesRecorder.getAcquire().record(now, adjustedSize, true);
             }
 
             if (wakeHook != null) {
                 wakeHook.wake();
             }
+        }
+
+        private long ewma(long curr, long next) {
+            return (long) ((1 - smoothingFactor) * curr + smoothingFactor * next);
         }
 
         @Override

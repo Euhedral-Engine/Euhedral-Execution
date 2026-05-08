@@ -1,5 +1,6 @@
 package euhedral.io.flow_control;
 
+import euhedral.atomics.PaddedAtomicLong;
 import euhedral.io.frames.AbstractFrame;
 import java.util.Collection;
 import java.util.concurrent.atomic.AtomicLong;
@@ -7,8 +8,6 @@ import lombok.Getter;
 import lombok.Setter;
 import org.jctools.queues.MessagePassingQueue;
 import org.jctools.queues.SpscUnboundedArrayQueue;
-import org.jctools.queues.unpadded.SpscUnboundedUnpaddedArrayQueue;
-import org.jctools.util.PaddedAtomicLong;
 import org.reactivestreams.Publisher;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
