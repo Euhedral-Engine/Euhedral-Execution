@@ -262,7 +262,7 @@ public final class SystemInfo {
         }
 
         private String color(String base) {
-            return "\u001b[1;48;2;75;76;155m" + base + "\u001b[0m";
+            return "\u001b[1;35m" + base + "\u001b[0m";
         }
     }
 

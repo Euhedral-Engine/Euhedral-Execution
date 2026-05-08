@@ -1,5 +1,6 @@
 package euhedral.io.test_utils;
 
+import euhedral.hardware_utils.PinnedThreadExecutor;
 import euhedral.io.AbstractCloneablePipeline;
 import euhedral.io.AbstractExecutor;
 import euhedral.io.control_plane.CloneConfig;
@@ -7,7 +8,6 @@ import euhedral.io.frames.AbstractFrame;
 import euhedral.io.interfaces.CacheManager;
 import euhedral.io.interfaces.PipelineExecutor;
 import euhedral.io.interfaces.SlotManager;
-import euhedral.io.hardware_utils.pinning.PinnedThreadExecutor;
 import org.openjdk.jmh.infra.Blackhole;
 
 public class TestPipeline extends AbstractCloneablePipeline {

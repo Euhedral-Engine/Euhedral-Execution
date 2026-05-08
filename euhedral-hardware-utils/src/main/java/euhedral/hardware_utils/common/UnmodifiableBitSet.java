@@ -4,6 +4,7 @@ import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.stream.IntStream;
+import org.jspecify.annotations.NonNull;
 
 public final class UnmodifiableBitSet extends BitSet {
 
@@ -92,7 +93,7 @@ public final class UnmodifiableBitSet extends BitSet {
     }
 
     @Override
-    public BitSet get(int start, int end) {
+    public @NonNull BitSet get(int start, int end) {
         return delegate.get(start, end);
     }
 
@@ -127,7 +128,7 @@ public final class UnmodifiableBitSet extends BitSet {
     }
 
     @Override
-    public boolean intersects(BitSet set) {
+    public boolean intersects(@NonNull BitSet set) {
         return delegate.intersects(set);
     }
 
@@ -137,22 +138,22 @@ public final class UnmodifiableBitSet extends BitSet {
     }
 
     @Override
-    public void and(BitSet set) {
+    public void and(@NonNull BitSet set) {
         throw new RuntimeException("This is an unmodifiable BitSet");
     }
 
     @Override
-    public void or(BitSet set) {
+    public void or(@NonNull BitSet set) {
         throw new RuntimeException("This is an unmodifiable BitSet");
     }
 
     @Override
-    public void xor(BitSet set) {
+    public void xor(@NonNull BitSet set) {
         throw new RuntimeException("This is an unmodifiable BitSet");
     }
 
     @Override
-    public void andNot(BitSet set) {
+    public void andNot(@NonNull BitSet set) {
         throw new RuntimeException("This is an unmodifiable BitSet");
     }
 

@@ -5,7 +5,7 @@ pub fn build(b: *std.Build) void {
         const result = std.process.run(
             b.allocator,
             b.graph.io,
-            .{ .argv = &.{ "asdf", "which", "java" } },
+            .{ .argv = &.{ "mise", "which", "java" } },
         ) catch {
             break :blk "/usr/lib/jvm/default";
         };
@@ -115,7 +115,7 @@ pub fn build(b: *std.Build) void {
                 const target_str = if (std.mem.eql(u8, os.name, "windows"))
                     b.fmt("{s}-windows-gnu", .{arch.target})
                 else if (std.mem.eql(u8, os.name, "linux"))
-                        b.fmt("{s}-linux-musl", .{arch.target})
+                        b.fmt("{s}-linux-gnu", .{arch.target})
                     else
                         b.fmt("{s}-macos.11.0", .{arch.target});
 

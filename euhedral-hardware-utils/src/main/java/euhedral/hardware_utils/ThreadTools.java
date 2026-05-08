@@ -66,7 +66,10 @@ public final class ThreadTools {
     /// @param cpu logical cpu id
     /// @return success
     public static boolean setAffinity(int cpu) {
-        long[] masks = new long[cpu / 64 + ((cpu & 63) > 0 ? 1 : 0)];
+        int count = cpu / 64 + ((cpu & 63) > 0 ? 1 : 0);
+        count++;
+
+        long[] masks = new long[count];
 
         masks[0] = 1L << (cpu & 63);
         return setAffinity(masks);
