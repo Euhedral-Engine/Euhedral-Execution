@@ -41,7 +41,7 @@ public class FunctionalApi implements AutoCloseable {
             throw new RuntimeException("A ControlPlaneInstance is already in use");
         }
         api = new FunctionalApi(name, recycleCapacityPerStream,
-                new Config(null, 32, name, meterRegistry),
+                new Config(null, name, meterRegistry),
                 DefaultSlotManager.Config.balancedDefault(
                         meterRegistry, name));
         INSTANCE.set(api);

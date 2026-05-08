@@ -1,5 +1,9 @@
 package euhedral.io.benchmarks;
 
+import com.github.dockerjava.api.async.ResultCallback;
+import com.github.dockerjava.api.command.ExecCreateCmdResponse;
+import com.github.dockerjava.api.model.Capability;
+import com.github.dockerjava.api.model.Frame;
 import euhedral.io.DRRScheduler;
 import euhedral.io.DefaultSlotManager;
 import euhedral.io.DefaultSlotManager.Config;
@@ -8,10 +12,6 @@ import euhedral.io.test_utils.TestFrame;
 import euhedral.io.test_utils.TestPipeline;
 import euhedral.io.test_utils.TestPipeline.TestExecutor;
 import euhedral.io.test_utils.TestPublisher;
-import com.github.dockerjava.api.async.ResultCallback;
-import com.github.dockerjava.api.command.ExecCreateCmdResponse;
-import com.github.dockerjava.api.model.Capability;
-import com.github.dockerjava.api.model.Frame;
 import java.io.File;
 import java.util.Collections;
 import java.util.concurrent.CountDownLatch;
@@ -241,7 +241,7 @@ public class EndToEndBenchmark {
 
             @Setup(Level.Trial)
             public void setupExecutor(Blackhole bh) {
-                DRRScheduler.Config drrConfig = new DRRScheduler.Config(null, 32, "SystemTest",
+                DRRScheduler.Config drrConfig = new DRRScheduler.Config(null, "SystemTest",
                         null);
                 DefaultSlotManager.Config dsmConfig = Config.lowLatencyDefault(null, "SystemTest");
 

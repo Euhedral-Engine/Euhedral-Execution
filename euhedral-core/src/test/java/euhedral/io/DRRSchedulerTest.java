@@ -5,7 +5,7 @@ import java.util.concurrent.Callable;
 class DRRSchedulerTest {
 
     private static DRRScheduler.Config getConfig() {
-        return new DRRScheduler.Config(null, 10, "Test", null);
+        return new DRRScheduler.Config(null, "Test", null);
     }
 
     public DRRScheduler createDRRScheduler(DRRScheduler.Config config,
