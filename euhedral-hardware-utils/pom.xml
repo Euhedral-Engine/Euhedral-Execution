@@ -192,10 +192,7 @@
           <argLine>
             @{argLine}
             -XX:+EnableDynamicAgentLoading
-            -XX:-RestrictContended
             --add-opens java.base/java.util=ALL-UNNAMED
-            --add-opens java.base/java.lang=ALL-UNNAMED
-            --add-exports java.base/jdk.internal.platform=ALL-UNNAMED
           </argLine>
         </configuration>
       </plugin>

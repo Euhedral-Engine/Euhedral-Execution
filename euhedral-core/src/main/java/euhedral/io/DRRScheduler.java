@@ -4,6 +4,7 @@ import static euhedral.io.utils.MathFunctions.clampDouble;
 
 import euhedral.hardware_utils.SystemInfo;
 import euhedral.hardware_utils.SystemInfo.CpuCacheLayout;
+import euhedral.hardware_utils.common.SystemUtilization.CoreSnapshot;
 import euhedral.io.control_plane.CloneConfig;
 import euhedral.io.flow_control.FluxEdge;
 import euhedral.io.flow_control.IngestSequencer;
@@ -11,9 +12,8 @@ import euhedral.io.flow_control.UpstreamQueue;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.frames.DummyInitFrame;
 import euhedral.io.frames.QueueFrame;
-import euhedral.io.interfaces.CloneableObject;
 import euhedral.io.interfaces.CacheManager;
-import euhedral.hardware_utils.common.SystemUtilization.CoreSnapshot;
+import euhedral.io.interfaces.CloneableObject;
 import euhedral.io.utils.DrainBuffer;
 import euhedral.io.utils.FlowRecorder.FlowSnapshot;
 import euhedral.io.utils.ObjectSizer;
@@ -21,14 +21,12 @@ import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.MeterRegistry;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
-
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.reactivestreams.Publisher;
@@ -104,9 +102,6 @@ public class DRRScheduler extends IngestSequencer implements CacheManager, Clone
 
     @Override
     public void firstTouch() {
-        totalCount.set(0);
-        totalQueueWeight = 0;
-        totalQueuedSizeBytes.set(0);
         int totalInserts = 3 * chunkSize;
         for (var queue : queueRing) {
             for (int i = 0; i < totalInserts; i++) {
@@ -115,15 +110,19 @@ public class DRRScheduler extends IngestSequencer implements CacheManager, Clone
             queue.clear();
         }
         Arrays.stream(queueStats).forEach(QueueStats::reset);
-        fillRecorder.record(1, true);
-        fillBytesRecorder.record(1, false);
-        drainRecorder.record(1, false);
-        drainBytesRecorder.record(1, false);
+        fillRecorder.getAcquire().record(1, true);
+        fillBytesRecorder.getAcquire().record(1, false);
+        drainRecorder.getAcquire().record(1, false);
+        drainBytesRecorder.getAcquire().record(1, false);
 
-        fillRecorder.reset(false);
-        fillBytesRecorder.reset(false);
-        drainRecorder.reset(false);
-        drainBytesRecorder.reset(false);
+        fillRecorder.getAcquire().reset(false);
+        fillBytesRecorder.getAcquire().reset(false);
+        drainRecorder.getAcquire().reset(false);
+        drainBytesRecorder.getAcquire().reset(false);
+
+        totalCount.set(0);
+        totalQueueWeight = 0;
+        totalQueuedSizeBytes.set(0);
     }
 
     @Override
@@ -162,8 +161,8 @@ public class DRRScheduler extends IngestSequencer implements CacheManager, Clone
         long targetQuantum = avgSize << 1;
         long currentWeight = stats.weight;
 
-        FlowSnapshot flowSnapshot = fillBytesRecorder.getFlowSnapshot();
-        fillBytesRecorder.refreshSnapshot(flowSnapshot, true);
+        FlowSnapshot flowSnapshot = fillBytesRecorder.getAcquire().getFlowSnapshot();
+        fillBytesRecorder.getAcquire().refreshSnapshot(flowSnapshot, true);
         double cv = flowSnapshot.unitCV;
         double clampedCV = (cv > 0.5) ? 0.5 : (cv < 0.0 ? 0.0 : cv);
 

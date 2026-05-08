@@ -1,15 +1,36 @@
 package euhedral.queues;
 
-import org.openjdk.jol.vm.VM;
+import com.sun.management.HotSpotDiagnosticMXBean;
+import java.lang.management.ManagementFactory;
 
 public class QueueUtils {
     public static final long ULONG_MAX = 0xFFFFFFFFFFFFFFFFL;
     public static final int LONG_PAD = 3;
 
-    public static final int POINTER_SIZE = VM.current().classPointerSize();
-    public static final int POINTER_PAD_BYTES = (64 / POINTER_SIZE) - 1;
-
     public static final long ABS_MASK = (1L << 63) - 1;
+
+    public static final int POINTER_SIZE;
+    public static final int POINTER_PAD_BYTES;
+
+    static {
+        String bitness = System.getProperty("sun.arch.data.model");
+
+        int refSize;
+        if(bitness.contains("32")) {
+            refSize = 4;
+        } else {
+            HotSpotDiagnosticMXBean bean = ManagementFactory.getPlatformMXBean(
+                    HotSpotDiagnosticMXBean.class);
+            String useCompressedOops = bean.getVMOption("UseCompressedOops").getValue();
+            if("true".equals(useCompressedOops)) {
+                refSize = 4;
+            } else {
+                refSize = 8;
+            }
+        }
+        POINTER_SIZE = refSize;
+        POINTER_PAD_BYTES = (64 / POINTER_SIZE) - 1;
+    }
 
     /// Finds the next clear bit starting at the offset
     ///
@@ -19,7 +40,7 @@ public class QueueUtils {
             throw new IndexOutOfBoundsException("Offset " + offset + " is out of bounds 0-63");
         }
         long inverse = ~sequence;
-        long mask = -1L << offset;
+        long mask = ULONG_MAX << offset;
 
         long candidates = inverse & mask;
         if(candidates == 0) {
@@ -32,7 +53,7 @@ public class QueueUtils {
     /// Returns a mask where bits [start, end) are set to 0
     public static long clearMask(int start, int end) {
         if (start >= end) {
-            return -1L;
+            return ULONG_MAX;
         }
 
         long lower = (start == 0)
