@@ -42,7 +42,7 @@ class ControlPlaneShardTest {
         AbstractFrame frame = mock(AbstractFrame.class);
 
         doReturn(clone).when(clone).clone(any(CloneConfig.class));
-        when(clone.output()).thenAnswer(_ -> Flux.just(frame));
+        when(clone.output()).thenAnswer(f -> Flux.just(frame));
 
         mockSysInfo.when(SystemInfo::getMaxCoreId).thenReturn(1);
         ControlPlaneShard shard = new ControlPlaneShard(1, "TestShard", clone,
@@ -85,10 +85,10 @@ class ControlPlaneShardTest {
         AbstractFrame frame = mock(AbstractFrame.class);
 
         final int[] idx = new int[]{0};
-        when(baseClone.clone(any(CloneConfig.class))).thenAnswer(_ -> clones[idx[0]++]);
-        when(clones[0].output()).thenAnswer(_ -> Flux.just(frame));
+        when(baseClone.clone(any(CloneConfig.class))).thenAnswer(c -> clones[idx[0]++]);
+        when(clones[0].output()).thenAnswer(f -> Flux.just(frame));
         when(clones[0].isStarted()).thenReturn(true);
-        when(clones[1].output()).thenAnswer(_ -> Flux.just(frame));
+        when(clones[1].output()).thenAnswer(f -> Flux.just(frame));
         when(clones[1].isStarted()).thenReturn(true);
 
         mockSysInfo.when(SystemInfo::getMaxCoreId).thenReturn(1);

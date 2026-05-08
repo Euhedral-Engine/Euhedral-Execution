@@ -1,5 +1,6 @@
 package euhedral.io;
 
+import euhedral.hardware_utils.PinnedThreadExecutor;
 import euhedral.io.control_plane.CloneConfig;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.interfaces.CloneableObject;
@@ -7,7 +8,6 @@ import euhedral.io.interfaces.CacheManager;
 import euhedral.io.interfaces.PipelineExecutor;
 import euhedral.io.interfaces.SlotManager;
 import euhedral.hardware_utils.common.SystemUtilization.CoreSnapshot;
-import euhedral.io.hardware_utils.pinning.PinnedThreadExecutor;
 
 import java.util.concurrent.Future;
 import org.reactivestreams.Publisher;

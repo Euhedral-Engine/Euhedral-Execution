@@ -2,6 +2,7 @@ package euhedral.io.control_plane;
 
 import static euhedral.io.utils.MathFunctions.unsignedMultiplyHigh;
 
+import euhedral.hardware_utils.PinnedThreadExecutor;
 import euhedral.hardware_utils.SystemInfo;
 import euhedral.hardware_utils.SystemInfo.CpuInfo;
 import euhedral.io.flow_control.FluxEdge;
@@ -14,7 +15,6 @@ import euhedral.hardware_utils.EffectiveTopology.EffectiveSystemTopology;
 import euhedral.io.utils.FluxResourceMonitor;
 import euhedral.hardware_utils.common.SystemUtilization.HardwareUtilization;
 import euhedral.hardware_utils.common.SystemUtilization.SocketSnapshot;
-import euhedral.io.hardware_utils.pinning.PinnedThreadExecutor;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.util.Arrays;

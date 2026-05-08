@@ -4,6 +4,7 @@ import static euhedral.io.utils.MathFunctions.clampDouble;
 import static euhedral.io.utils.MathFunctions.clampLong;
 import static euhedral.io.utils.MathFunctions.log2;
 
+import euhedral.hardware_utils.PinnedThreadExecutor;
 import euhedral.hardware_utils.SystemInfo;
 import euhedral.hardware_utils.SystemInfo.CpuCacheLayout;
 import euhedral.hardware_utils.SystemInfo.CpuInfo;
@@ -23,7 +24,6 @@ import euhedral.hardware_utils.common.SystemUtilization.CpuSnapshot;
 import euhedral.io.utils.DrainBuffer;
 import euhedral.io.utils.FlowRecorder;
 import euhedral.io.utils.FlowRecorder.FlowSnapshot;
-import euhedral.io.hardware_utils.pinning.PinnedThreadExecutor;
 import euhedral.io.utils.ObjectSizer;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Meter;

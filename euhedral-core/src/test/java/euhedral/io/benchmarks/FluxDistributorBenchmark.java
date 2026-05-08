@@ -1,6 +1,6 @@
 package euhedral.io.benchmarks;
 
-import euhedral.io.hardware_utils.pinning.PinnedThreadExecutor;
+import euhedral.hardware_utils.PinnedThreadExecutor;
 import euhedral.io.test_utils.TestFrame;
 import java.util.concurrent.TimeUnit;
 import org.openjdk.jmh.annotations.Benchmark;

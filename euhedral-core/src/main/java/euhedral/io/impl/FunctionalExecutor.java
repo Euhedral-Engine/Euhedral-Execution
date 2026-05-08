@@ -1,5 +1,6 @@
 package euhedral.io.impl;
 
+import euhedral.hardware_utils.PinnedThreadExecutor;
 import euhedral.io.AbstractExecutor;
 import euhedral.io.control_plane.CloneConfig;
 import euhedral.io.frames.AbstractFrame;
@@ -7,9 +8,9 @@ import euhedral.io.frames.ConsumerFrame;
 import euhedral.io.frames.FunctionFrame;
 import euhedral.io.frames.RunnableFrame;
 import euhedral.io.frames.SequencedFrame;
-import euhedral.io.hardware_utils.pinning.PinnedThreadExecutor;
 
 public class FunctionalExecutor extends AbstractExecutor {
+
     FunctionalExecutor(PinnedThreadExecutor executorService) {
         super(executorService);
     }
@@ -20,7 +21,7 @@ public class FunctionalExecutor extends AbstractExecutor {
             frame.throwMeAsError();
         }
 
-        if(frame instanceof SequencedFrame s) {
+        if (frame instanceof SequencedFrame s) {
             s.apply();
         } else if (frame instanceof ConsumerFrame c) {
             c.consume();

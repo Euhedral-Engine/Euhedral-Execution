@@ -1,12 +1,12 @@
 package euhedral.io;
 
+import euhedral.hardware_utils.PinnedThreadExecutor;
 import euhedral.hardware_utils.ThreadTools;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.LockSupport;
 
 import euhedral.io.flow_control.IngestSequencer;
-import euhedral.io.hardware_utils.pinning.PinnedThreadExecutor;
 import euhedral.io.utils.DemandOptimizer;
 import euhedral.io.utils.DrainBuffer;
 import euhedral.io.utils.FlowRecorder;
