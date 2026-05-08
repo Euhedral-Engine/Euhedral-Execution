@@ -1,7 +1,9 @@
 package euhedral.io;
 
 import static euhedral.io.utils.MathFunctions.clampDouble;
+import static euhedral.io.utils.MathFunctions.ewma;
 
+import euhedral.atomics.AtomicDouble;
 import euhedral.hardware_utils.SystemInfo;
 import euhedral.hardware_utils.SystemInfo.CpuCacheLayout;
 import euhedral.hardware_utils.common.SystemUtilization.CoreSnapshot;
@@ -26,7 +28,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.reactivestreams.Publisher;
@@ -41,7 +42,7 @@ public class DRRScheduler extends IngestSequencer implements CacheManager, Clone
     protected final Metrics metrics;
     protected final int coreId;
 
-    protected final AtomicReference<Double> capFactor = new AtomicReference<>(1.0);
+    protected final AtomicDouble capFactor = new AtomicDouble(1d);
 
     protected Callable<Double> downstreamPressure;
 
@@ -218,10 +219,11 @@ public class DRRScheduler extends IngestSequencer implements CacheManager, Clone
 
     @Override
     public long getMaxQueuedBytes() {
+        double cap = Math.min(0.8, this.capFactor.getAcquire());
         if (snapshot != null) {
-            return (long) (snapshot.memoryLimit() * 0.8);
+            return (long) (snapshot.memoryLimit() * cap);
         }
-        return (long) (Runtime.getRuntime().maxMemory() * 0.8);
+        return (long) (Runtime.getRuntime().maxMemory() * cap);
     }
 
     @Override
@@ -237,20 +239,19 @@ public class DRRScheduler extends IngestSequencer implements CacheManager, Clone
         }
         this.snapshot = snapshot;
         this.totalBytesCap = snapshot.memoryLimit();
-        double currentPressure;
+        double pressure;
         try {
-            currentPressure = clampDouble(this.downstreamPressure.call(), 0.0, 1.0);
-        } catch (Exception ignored) {
-            currentPressure = 1.0;
+            pressure = clampDouble(this.downstreamPressure.call(), 0.0, 1.0);
+        } catch (Throwable ignored) {
+            pressure = 1.0;
         }
 
-        double target = 1.0 - (0.85 * currentPressure);
+        double target = 1.0 - (0.85 * pressure);
 
-        capFactor.updateAndGet(curr -> {
-            // Fast Drop (0.2), Slow Rise (0.02)
-            double alpha = (target < curr) ? 0.2 : 0.02;
-            return clampDouble((curr * (1.0 - alpha)) + (target * alpha), 0.15, 1.0);
-        });
+        double curr = capFactor.getPlain();
+        double alpha = (target < curr) ? 0.2 : 0.02;
+        double clamped = clampDouble(ewma(curr, target, alpha), 0.15, 1.0);
+        capFactor.setRelease(clamped);
     }
 
     @Override
@@ -315,7 +316,7 @@ public class DRRScheduler extends IngestSequencer implements CacheManager, Clone
 
         private final List<Meter> meters = new ArrayList<>();
 
-        public Metrics(String metricPrefix, int coreId, AtomicReference<Double> capFactor,
+        public Metrics(String metricPrefix, int coreId, AtomicDouble capFactor,
                 AtomicLong totalQueuedSizeBytes, MeterRegistry registry) {
             this.registry = registry;
             if (registry != null) {
@@ -332,7 +333,7 @@ public class DRRScheduler extends IngestSequencer implements CacheManager, Clone
                                 .tag("core", tag).publishPercentiles(0.0, 1.0).register(registry);
 
                 meters.add(
-                        Gauge.builder(metricPrefix + ".cap_factor", capFactor, AtomicReference::get)
+                        Gauge.builder(metricPrefix + ".cap_factor", capFactor, AtomicDouble::get)
                                 .description(
                                         "Current buffer capacity multiplier. Higher is better. (0.15 to 1.0)")
                                 .tag("core", tag).register(registry));
@@ -358,8 +359,8 @@ public class DRRScheduler extends IngestSequencer implements CacheManager, Clone
         }
     }
 
-    public record Config(CloneConfig cloneConfig, int maxSubQueues, String metricPrefix,
-                         MeterRegistry registry) implements CloneableObject {
+    public record Config(@Nullable CloneConfig cloneConfig, String metricPrefix,
+                         @Nullable MeterRegistry registry) implements CloneableObject {
 
         @Override
         public Config clone(CloneConfig cloneConfig) {
@@ -369,7 +370,7 @@ public class DRRScheduler extends IngestSequencer implements CacheManager, Clone
                 metricPrefix = cloneConfig.metricPrefix() + "-" + cloneConfig.shardName()
                         + "-DRRScheduler-" + cpuId;
             }
-            return new Config(cloneConfig, maxSubQueues, metricPrefix, registry);
+            return new Config(cloneConfig, metricPrefix, registry);
         }
 
         @Override
