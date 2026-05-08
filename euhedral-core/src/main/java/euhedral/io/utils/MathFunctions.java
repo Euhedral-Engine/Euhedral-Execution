@@ -25,4 +25,12 @@ public class MathFunctions {
     public static long log2(long num) {
         return 63 - Long.numberOfLeadingZeros(Math.max(num, 1));
     }
+
+    public static double ewma(double curr, double next, double alpha) {
+        return (curr * (1.0 - alpha)) + (next * alpha);
+    }
+
+    public static long ewma(long curr, long next, double alpha) {
+        return (long) ewma((double) curr, (double) next, alpha);
+    }
 }
