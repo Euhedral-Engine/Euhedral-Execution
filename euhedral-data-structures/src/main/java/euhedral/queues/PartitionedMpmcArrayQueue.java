@@ -1,14 +1,13 @@
 package euhedral.queues;
 
 import static euhedral.queues.QueueUtils.ABS_MASK;
-import static euhedral.queues.QueueUtils.POINTER_PAD_BYTES;
 import static euhedral.queues.QueueUtils.LONG_PAD;
+import static euhedral.queues.QueueUtils.POINTER_PAD_BYTES;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.Arrays;
 import java.util.StringJoiner;
-
 import lombok.Getter;
 
 /// A partitioned, padded, array-based queue. This class has two operating modes, bounded and
@@ -99,7 +98,7 @@ public class PartitionedMpmcArrayQueue<T> extends PartitionedArrayQueue<T> {
 
         VarHandle.releaseFence();
 
-        LA_HANDLE.getAndAdd(sequence[pIdx], sequenceChunkIndex(tail),
+        LA_HANDLE.getAndBitwiseOr(sequence[pIdx], sequenceChunkIndex(tail),
                 getSequenceNumber(tail));
         if (unbounded) {
             LA_HANDLE.getAndAdd(inFlight, pIdx, -1);
