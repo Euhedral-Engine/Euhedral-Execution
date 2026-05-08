@@ -2,29 +2,29 @@ package euhedral.atomics;
 
 import euhedral.atomics.helpers.DoubleInterfaces.DoubleBinaryOperator;
 import euhedral.atomics.helpers.DoubleInterfaces.DoubleUnaryOperator;
+import euhedral.atomics.padding.PaddedDouble;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 
-public class AtomicDouble {
-
+public class PaddedAtomicDouble extends PaddedDouble {
     private static final VarHandle HANDLE;
 
     static {
         try {
             HANDLE = MethodHandles.lookup()
-                    .findVarHandle(AtomicDouble.class, "value", double.class);
+                    .findVarHandle(PaddedAtomicDouble.class, "value", double.class);
         } catch (Throwable t) {
             throw new ExceptionInInitializerError(t);
         }
     }
-    
+
     private double value;
 
-    public AtomicDouble() {
+    public PaddedAtomicDouble() {
 
     }
 
-    public AtomicDouble(double value) {
+    public PaddedAtomicDouble(double value) {
         this.value = value;
     }
 
