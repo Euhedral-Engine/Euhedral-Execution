@@ -2,17 +2,10 @@
 #define _WIN32_WINNT 0x0601 // Windows 7+
 #endif
 
-#include <jni.h>
-
 #ifndef _Included_WindowsResources
 #define _Included_WindowsResources
 
-#include <processthreadsapi.h>
-#include <psapi.h>
-#include <stdbool.h>
-#include <stdatomic.h>
-#include <windows.h>
-#include <winternl.h>
+#include "windows_jni.h"
 
 #ifdef __cplusplus
 extern "C" {

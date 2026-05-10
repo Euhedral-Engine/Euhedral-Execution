@@ -1,6 +1,8 @@
 const std = @import("std");
 
 pub fn build(b: *std.Build) void {
+    const optimize = .ReleaseFast;
+
     const java_home = if (b.graph.environ_map.get("JAVA_HOME")) |val| val else blk: {
         const result = std.process.run(
             b.allocator,
@@ -60,7 +62,6 @@ pub fn build(b: *std.Build) void {
 
     const common_flags = [_][]const u8{
         "-O3",
-        "-fno-stack-check",
         "-fno-exceptions",
         "-fno-rtti",
         "-fvisibility=hidden",
@@ -71,96 +72,300 @@ pub fn build(b: *std.Build) void {
     const jni_darwin = b.pathJoin(&.{ jni_include, "darwin" });
     const jni_linux = b.pathJoin(&.{ jni_include, "linux" });
 
-    const arches = [_]struct { target: []const u8, suffix: []const u8 }{
+    const arches = [_]struct {
+        target: []const u8,
+        suffix: []const u8,
+    }{
         .{ .target = "x86_64", .suffix = "x64" },
         .{ .target = "aarch64", .suffix = "arm64" },
     };
 
-    const targets = [_]struct { name: []const u8, dir: []const u8, out_dir: []const u8, ext: []const u8 }{
-        .{ .name = "linux", .dir = "./linux", .out_dir = "bin/linux", .ext = "so" },
-        .{ .name = "osx", .dir = "./osx", .out_dir = "bin/osx", .ext = "dylib" },
-        .{ .name = "windows", .dir = "./windows", .out_dir = "bin/windows", .ext = "dll" },
+    const libc_variants = [_]struct {
+        name: []const u8,
+        abi: []const u8,
+    }{
+        .{ .name = "glibc", .abi = "gnu.2.17" },
+        .{ .name = "musl", .abi = "musl" },
+    };
+
+    const targets = [_]struct {
+        name: []const u8,
+        dir: []const u8,
+        out_dir: []const u8,
+        ext: []const u8,
+    }{
+        .{
+            .name = "linux",
+            .dir = "./linux",
+            .out_dir = "bin/linux",
+            .ext = "so",
+        },
+        .{
+            .name = "osx",
+            .dir = "./osx",
+            .out_dir = "bin/osx",
+            .ext = "dylib",
+        },
+        .{
+            .name = "windows",
+            .dir = "./windows",
+            .out_dir = "bin/windows",
+            .ext = "dll",
+        },
     };
 
     for (targets) |os| {
-        var dir = std.Io.Dir.cwd().openDir(b.graph.io, os.dir, .{ .iterate = true }) catch continue;
+        var cpp_files = std.ArrayList([]const u8){
+            .items = &.{},
+            .capacity = 0,
+        };
+
+        var dir = std.Io.Dir.cwd().openDir(
+            b.graph.io,
+            os.dir,
+            .{ .iterate = true },
+        ) catch continue;
+
         defer dir.close(b.graph.io);
 
-        if (std.Io.Dir.cwd().openDir(b.graph.io, os.out_dir, .{ .iterate = true })) |bin_dir| {
-            defer bin_dir.close(b.graph.io);
-            var bin_it = bin_dir.iterate();
-            while (bin_it.next(b.graph.io) catch null) |bin_entry| {
-                if (bin_entry.kind != .file) continue;
-                const bin_ext = std.fs.path.extension(bin_entry.name);
-                if (!std.mem.eql(u8, bin_ext, b.fmt(".{s}", .{os.ext}))) continue;
-
-                const bin_stem = std.fs.path.stem(bin_entry.name);
-                const suffix_idx = std.mem.lastIndexOfScalar(u8, bin_stem, '_') orelse continue;
-                const original_source_stem = bin_stem[0..suffix_idx];
-                const expected_source_name = b.fmt("{s}.cpp", .{original_source_stem});
-
-                dir.access(b.graph.io, expected_source_name, .{}) catch {
-                    bin_dir.deleteFile(b.graph.io, bin_entry.name) catch {};
-                };
-            }
-        } else |_| {}
-
         var it = dir.iterate();
+
         while (it.next(b.graph.io) catch null) |entry| {
-            if (entry.kind != .file) continue;
-            if (!std.mem.eql(u8, std.fs.path.extension(entry.name), ".cpp")) continue;
-            const file_stem = std.fs.path.stem(entry.name);
-
-            for (arches) |arch| {
-                const target_str = if (std.mem.eql(u8, os.name, "windows"))
-                    b.fmt("{s}-windows-gnu", .{arch.target})
-                else if (std.mem.eql(u8, os.name, "linux"))
-                        b.fmt("{s}-linux-gnu", .{arch.target})
-                    else
-                        b.fmt("{s}-macos.11.0", .{arch.target});
-
-                const target_query = std.Target.Query.parse(.{ .arch_os_abi = target_str }) catch continue;
-
-                const lib = b.addLibrary(.{
-                    .name = b.fmt("{s}_{s}", .{ file_stem, arch.suffix }),
-                    .root_module = b.createModule(.{
-                        .target = b.resolveTargetQuery(target_query),
-                        .optimize = .ReleaseFast,
-                        .link_libc = true,
-                    }),
-                    .linkage = .dynamic,
-                });
-
-                lib.root_module.addCSourceFile(.{
-                    .file = b.path(b.pathJoin(&.{ os.dir, entry.name })),
-                    .flags = &common_flags,
-                });
-
-                lib.root_module.addIncludePath(.{ .cwd_relative = jni_include });
-
-                if (std.mem.eql(u8, os.name, "windows")) {
-                    lib.root_module.addIncludePath(.{ .cwd_relative = jni_win32 });
-                    lib.root_module.linkSystemLibrary("psapi", .{});
-                    lib.root_module.linkSystemLibrary("kernel32", .{});
-                } else if (std.mem.eql(u8, os.name, "linux")) {
-                    lib.root_module.addIncludePath(.{ .cwd_relative = jni_linux });
-                } else if (std.mem.eql(u8, os.name, "osx")) {
-                    lib.root_module.addIncludePath(.{ .cwd_relative = jni_darwin });
-                    const fw_path = b.pathJoin(&.{ macos_sdk, "System/Library/Frameworks" });
-                    lib.root_module.addFrameworkPath(.{ .cwd_relative = fw_path });
-                    lib.root_module.addSystemIncludePath(.{ .cwd_relative = b.pathJoin(&.{ macos_sdk, "usr/include" }) });
-                    lib.root_module.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ macos_sdk, "usr/lib" }) });
-                    lib.root_module.linkFramework("CoreFoundation", .{});
+            if (entry.kind == .file and
+                std.mem.eql(
+                    u8,
+                    std.fs.path.extension(entry.name),
+                    ".cpp",
+                ))
+                {
+                    cpp_files.append(
+                        b.allocator,
+                        b.dupe(
+                            b.pathJoin(&.{ os.dir, entry.name }),
+                        ),
+                    ) catch unreachable;
                 }
+        }
 
-                const out_filename = b.fmt("{s}_{s}.{s}", .{ file_stem, arch.suffix, os.ext });
-                const install = b.addInstallFileWithDir(
-                    lib.getEmittedBin(),
-                    .prefix,
-                    b.pathJoin(&.{ os.out_dir, out_filename }),
+        if (cpp_files.items.len == 0) {
+            continue;
+        }
+
+        for (arches) |arch| {
+            const is_linux = std.mem.eql(u8, os.name, "linux");
+
+            if (is_linux) {
+                for (libc_variants) |libc| {
+                    buildNative(
+                        b,
+                        optimize,
+                        os,
+                        arch,
+                        libc.name,
+                        libc.abi,
+                        cpp_files.items,
+                        common_flags[0..],
+                        jni_include,
+                        jni_linux,
+                        jni_win32,
+                        jni_darwin,
+                        macos_sdk,
+                    );
+                }
+            } else {
+                buildNative(
+                    b,
+                    optimize,
+                    os,
+                    arch,
+                    null,
+                    null,
+                    cpp_files.items,
+                    common_flags[0..],
+                    jni_include,
+                    jni_linux,
+                    jni_win32,
+                    jni_darwin,
+                    macos_sdk,
                 );
-                b.getInstallStep().dependOn(&install.step);
             }
         }
     }
+}
+
+fn buildNative(
+    b: *std.Build,
+    optimize: std.builtin.OptimizeMode,
+    os: anytype,
+    arch: anytype,
+    libc_name: ?[]const u8,
+    libc_abi: ?[]const u8,
+    cpp_files: []const []const u8,
+    common_flags: []const []const u8,
+    jni_include: []const u8,
+    jni_linux: []const u8,
+    jni_win32: []const u8,
+    jni_darwin: []const u8,
+    macos_sdk: []const u8,
+) void {
+    const is_linux = std.mem.eql(u8, os.name, "linux");
+    const is_windows = std.mem.eql(u8, os.name, "windows");
+    const is_osx = std.mem.eql(u8, os.name, "osx");
+
+    const target_str =
+        if (is_windows)
+            b.fmt("{s}-windows-gnu", .{ arch.target })
+        else if (is_linux)
+            b.fmt("{s}-linux-{s}", .{
+                arch.target,
+                libc_abi.?,
+            })
+        else
+            b.fmt("{s}-macos.11.0", .{
+                arch.target,
+            });
+
+    const target_query = std.Target.Query.parse(.{
+        .arch_os_abi = target_str,
+    }) catch return;
+
+    const lib_name =
+        if (libc_name) |libc|
+            b.fmt("{s}_jni_{s}_{s}", .{
+                os.name,
+                arch.suffix,
+                libc,
+            })
+        else
+            b.fmt("{s}_jni_{s}", .{
+                os.name,
+                arch.suffix,
+            });
+
+    const lib = b.addLibrary(.{
+        .name = lib_name,
+        .root_module = b.createModule(.{
+            .target = b.resolveTargetQuery(target_query),
+            .optimize = optimize,
+            .link_libc = true,
+            .link_libcpp = false,
+            .strip = true,
+            .pic = true,
+            .stack_check = false,
+            .stack_protector = false,
+            .unwind_tables = .none,
+            .omit_frame_pointer = true,
+            .error_tracing = false,
+            .sanitize_thread = false,
+            .sanitize_c = .off,
+            .valgrind = false,
+            .code_model = .small,
+            .red_zone = false,
+        }),
+        .linkage = .dynamic,
+        .use_llvm = true,
+    });
+
+    lib.link_z_relro = true;
+    lib.bundle_compiler_rt = true;
+
+    for (cpp_files) |file_path| {
+        lib.root_module.addCSourceFile(.{
+            .file = b.path(file_path),
+            .flags = common_flags,
+            .language = .cpp,
+        });
+    }
+
+    lib.root_module.addIncludePath(.{
+        .cwd_relative = jni_include,
+    });
+
+    if (is_windows) {
+        lib.root_module.addIncludePath(.{
+            .cwd_relative = jni_win32,
+        });
+
+        lib.root_module.linkSystemLibrary("psapi", .{});
+        lib.root_module.linkSystemLibrary("kernel32", .{});
+    } else if (is_linux) {
+        lib.root_module.addIncludePath(.{
+            .cwd_relative = jni_linux,
+        });
+    } else if (is_osx) {
+        lib.root_module.addIncludePath(.{
+            .cwd_relative = jni_darwin,
+        });
+
+        const fw_path = b.pathJoin(&.{
+            macos_sdk,
+            "System/Library/Frameworks",
+        });
+
+        lib.root_module.addFrameworkPath(.{
+            .cwd_relative = fw_path,
+        });
+
+        lib.root_module.addSystemIncludePath(.{
+            .cwd_relative = b.pathJoin(&.{
+                macos_sdk,
+                "usr/include",
+            }),
+        });
+
+        lib.root_module.addLibraryPath(.{
+            .cwd_relative = b.pathJoin(&.{
+                macos_sdk,
+                "usr/lib",
+            }),
+        });
+
+        lib.root_module.linkFramework(
+            "CoreFoundation",
+            .{},
+        );
+
+        lib.headerpad_max_install_names = true;
+    }
+
+    const out_dir =
+        if (is_linux and libc_name != null)
+            b.pathJoin(&.{
+                os.out_dir,
+                libc_name.?,
+            })
+        else
+            os.out_dir;
+
+    const out_filename = b.fmt(
+        "{s}_jni_{s}.{s}",
+        .{
+            os.name,
+            arch.suffix,
+            os.ext,
+        },
+    );
+
+    const install = b.addInstallFileWithDir(
+        lib.getEmittedBin(),
+        .prefix,
+        b.pathJoin(&.{
+            out_dir,
+            out_filename,
+        }),
+    );
+
+    if (is_osx) {
+        const sign_cmd = b.addSystemCommand(&.{
+            "rcodesign",
+            "sign",
+        });
+
+        sign_cmd.addFileArg(lib.getEmittedBin());
+
+        sign_cmd.step.dependOn(&lib.step);
+        install.step.dependOn(&sign_cmd.step);
+    }
+
+    b.getInstallStep().dependOn(&install.step);
 }

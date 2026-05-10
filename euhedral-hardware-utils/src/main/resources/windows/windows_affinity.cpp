@@ -1,17 +1,11 @@
-#include <jni.h>
-
 #ifndef _Included_WindowsAffinity
 #define _Included_WindowsAffinity
 
-#include <processthreadsapi.h>
-#include <windows.h>
+#include "windows_jni.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-typedef BOOL(WINAPI *pSetThreadSelectedCpuSetMasks)(HANDLE, PGROUP_AFFINITY,
-                                                    USHORT);
 
 JNIEXPORT jint JNICALL
 Java_euhedral_hardware_1utils_windows_WindowsAffinity_setThreadAffinity(
@@ -68,10 +62,6 @@ JNIEXPORT jint JNICALL Java_euhedral_hardware_1utils_windows_WindowsAffinity_get
     JNIEnv *env, jclass clazz) {
   return (jint)GetCurrentProcessorNumber();
 }
-
-typedef NTSTATUS(NTAPI *pfnNtSetTimerResolution)(ULONG DesiredResolution,
-                                                 BOOLEAN SetResolution,
-                                                 PULONG CurrentResolution);
 
 JNIEXPORT jint JNICALL
 Java_euhedral_hardware_1utils_windows_WindowsTimerResolution_ntSetTimerResolution(
