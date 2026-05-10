@@ -2,7 +2,7 @@ package euhedral.io;
 
 import euhedral.hardware_utils.PinnedThreadExecutor;
 import euhedral.hashing.HasherApi;
-import euhedral.io.control_plane.CloneConfig;
+import euhedral.io.config.CloneConfig;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.interfaces.CloneableObject;
 import euhedral.io.interfaces.PipelineExecutor;

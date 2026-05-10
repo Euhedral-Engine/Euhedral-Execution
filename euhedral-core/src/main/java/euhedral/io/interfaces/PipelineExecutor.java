@@ -1,7 +1,7 @@
 package euhedral.io.interfaces;
 
 import euhedral.hardware_utils.PinnedThreadExecutor;
-import euhedral.io.control_plane.CloneConfig;
+import euhedral.io.config.CloneConfig;
 import euhedral.io.frames.AbstractFrame;
 
 public interface PipelineExecutor extends CloneableObject {

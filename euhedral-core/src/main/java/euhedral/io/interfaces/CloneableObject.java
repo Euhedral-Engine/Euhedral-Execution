@@ -1,9 +1,9 @@
 package euhedral.io.interfaces;
 
 import euhedral.hardware_utils.PinnedThreadExecutor;
-import euhedral.io.control_plane.CloneConfig;
-import euhedral.io.frames.AbstractFrame;
 import euhedral.hardware_utils.common.SystemUtilization.CoreSnapshot;
+import euhedral.io.config.CloneConfig;
+import euhedral.io.frames.AbstractFrame;
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.Flux;
 

@@ -3,7 +3,7 @@ package euhedral.io.test_utils;
 import euhedral.hardware_utils.PinnedThreadExecutor;
 import euhedral.io.AbstractCloneablePipeline;
 import euhedral.io.AbstractExecutor;
-import euhedral.io.control_plane.CloneConfig;
+import euhedral.io.config.CloneConfig;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.interfaces.CacheManager;
 import euhedral.io.interfaces.PipelineExecutor;

@@ -7,7 +7,8 @@ import com.github.dockerjava.api.model.Frame;
 import euhedral.hardware_utils.PinnedThreadExecutor;
 import euhedral.io.DRRScheduler;
 import euhedral.io.ExecutionManager;
-import euhedral.io.ExecutionManager.Config;
+import euhedral.io.config.DRRConfig;
+import euhedral.io.config.ExecutionManagerConfig;
 import euhedral.io.control_plane.ControlPlane;
 import euhedral.io.impl.FrameManager;
 import euhedral.io.test_utils.TestFrame;
@@ -101,9 +102,9 @@ public class SteadyStateBenchmark {
 
         @Setup(Level.Trial)
         public void setupExecutor(Blackhole bh) {
-            DRRScheduler.Config drrConfig = new DRRScheduler.Config(null, "SystemTest",
+            DRRConfig drrConfig = new DRRConfig(null, "SystemTest",
                     null);
-            ExecutionManager.Config dsmConfig = Config.lowLatencyDefault(null, "SystemTest");
+            ExecutionManagerConfig dsmConfig = ExecutionManagerConfig.balancedDefault(null, "SystemTest");
 
             TestPipeline pipeline = new TestPipeline("SystemTest", null,
                     new DRRScheduler(drrConfig, null),

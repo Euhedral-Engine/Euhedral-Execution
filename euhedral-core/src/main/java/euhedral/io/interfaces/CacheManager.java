@@ -1,7 +1,7 @@
 package euhedral.io.interfaces;
 
 import euhedral.hardware_utils.PinnedThreadExecutor;
-import euhedral.io.control_plane.CloneConfig;
+import euhedral.io.config.CloneConfig;
 import java.util.concurrent.Callable;
 
 public interface CacheManager extends CloneableObject {
