@@ -21,18 +21,13 @@ import euhedral.io.flow_control.LockFreeSink;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.frames.DummyInitFrame;
 import euhedral.io.interfaces.SlotManager;
+import euhedral.io.metrics.ExecutionManagerMetrics;
 import euhedral.io.utils.DrainBuffer;
 import euhedral.io.utils.FlowRecorder;
 import euhedral.io.utils.FlowRecorder.FlowSnapshot;
 import euhedral.io.utils.ObjectSizer;
-import io.micrometer.core.instrument.Gauge;
-import io.micrometer.core.instrument.Meter;
-import io.micrometer.core.instrument.MeterRegistry;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.LockSupport;
-import java.util.function.Supplier;
 import lombok.AccessLevel;
 import lombok.Getter;
 import org.jctools.queues.MpscUnboundedXaddArrayQueue;
@@ -87,7 +82,7 @@ public class ExecutionManager implements SlotManager {
 
     @Getter
     protected final ExecutionManagerConfig config;
-    protected final Metrics metrics;
+    protected final ExecutionManagerMetrics metrics;
     protected final Logger logger;
     protected final boolean isPCore;
     protected final AtomicBoolean running = new AtomicBoolean(false);
@@ -189,8 +184,9 @@ public class ExecutionManager implements SlotManager {
             this.logger = LoggerFactory.getLogger(name);
         }
 
-        this.metrics = new Metrics(config.meterRegistry(), config, () -> inFlight, () -> avgLatency,
-                () -> currentConcurrency, () -> currentRate, this::getPressure);
+        this.metrics = new ExecutionManagerMetrics(config.meterRegistry(), config,
+                () -> inFlight, () -> avgLatency, () -> currentConcurrency, () -> currentRate,
+                this::getPressure);
 
         outputFlux = new DirectOutputFlux(buffer, frame -> {
             if ((state.dispatches++ & state.updateIntervalMask) == 0) {
@@ -664,55 +660,6 @@ public class ExecutionManager implements SlotManager {
     @Override
     public void setDrainMode(boolean value) {
         this.drainMode = value;
-    }
-
-    public static final class Metrics implements AutoCloseable {
-
-        public final MeterRegistry registry;
-        private final List<Meter> meters = new ArrayList<>();
-
-        public Metrics(MeterRegistry registry, ExecutionManagerConfig config, Supplier<Integer> inFlight,
-                Supplier<Long> latency, Supplier<Long> currentConcurrency,
-                Supplier<Long> currentRate, Supplier<Double> pressure) {
-            this.registry = registry;
-            String prefix = config.metricPrefix();
-            if(prefix == null) {
-                prefix = config.cloneConfig().shardName();
-            }
-            prefix = prefix.split("\\.")[0];
-
-            if (registry != null && config.cloneConfig() != null) {
-                String coreId = String.valueOf(config.cloneConfig().coreId());
-
-                meters.add(Gauge.builder(prefix + ".execution.latency", latency)
-                        .description("Average time for execution of work.").tag("core", coreId)
-                        .baseUnit("nanoseconds").register(registry));
-
-                meters.add(Gauge.builder(prefix + ".execution.concurrency.current",
-                                currentConcurrency).description("Current adaptive concurrency limit")
-                        .tag("core", coreId).register(registry));
-
-                meters.add(
-                        Gauge.builder(prefix + ".execution.inflight.count", inFlight)
-                                .description("Number of frames being executed").tag("core", coreId)
-                                .register(registry));
-
-                meters.add(Gauge.builder(prefix + ".execution.throughput", currentRate)
-                        .description("Current execution rate (execution/sec)").tag("core", coreId)
-                        .register(registry));
-
-                meters.add(Gauge.builder(prefix + ".execution.pressure", pressure)
-                        .description(
-                                "Combined signal of reported hardware and calculated execution pressure")
-                        .tag("core", coreId).register(registry));
-            }
-        }
-
-        @Override
-        public void close() {
-            meters.forEach(Meter::close);
-            meters.clear();
-        }
     }
 
     protected class CycleState {
