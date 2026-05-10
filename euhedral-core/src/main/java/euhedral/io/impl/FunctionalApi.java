@@ -1,5 +1,6 @@
 package euhedral.io.impl;
 
+import euhedral.hashing.HasherApi;
 import euhedral.io.DRRScheduler;
 import euhedral.io.DRRScheduler.Config;
 import euhedral.io.DefaultSlotManager;
@@ -8,7 +9,6 @@ import euhedral.io.frames.ConsumerFrame;
 import euhedral.io.frames.FunctionFrame;
 import euhedral.io.frames.RunnableFrame;
 import euhedral.io.frames.SequencedFrame;
-import euhedral.io.utils.KeyHasher;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -88,7 +88,7 @@ public class FunctionalApi implements AutoCloseable {
             throw new RuntimeException("This FunctionalApi instance is closed.");
         }
 
-        final long password = KeyHasher.combine(ThreadLocalRandom.current().nextLong(),
+        final long password = HasherApi.combine(ThreadLocalRandom.current().nextLong(),
                 ThreadLocalRandom.current().nextLong());
 
         FrameSequencer<R> sequencer = new FrameSequencer<>(password);
@@ -103,7 +103,7 @@ public class FunctionalApi implements AutoCloseable {
             throw new RuntimeException("This FunctionalApi instance is closed.");
         }
 
-        final long password = KeyHasher.combine(ThreadLocalRandom.current().nextLong(),
+        final long password = HasherApi.combine(ThreadLocalRandom.current().nextLong(),
                 ThreadLocalRandom.current().nextLong());
 
         final Sinks.One<Void> killSwitch = Sinks.unsafe().one();
@@ -166,11 +166,11 @@ public class FunctionalApi implements AutoCloseable {
             throw new RuntimeException("This FunctionalApi instance is closed.");
         }
 
-        final long password = KeyHasher.combine(ThreadLocalRandom.current().nextLong(),
+        final long password = HasherApi.combine(ThreadLocalRandom.current().nextLong(),
                 ThreadLocalRandom.current().nextLong());
 
-        final long idHash = KeyHasher.mix(ThreadLocalRandom.current().nextLong());
-        final long[] seed = new long[]{KeyHasher.mix(ThreadLocalRandom.current().nextLong())};
+        final long idHash = HasherApi.mix(ThreadLocalRandom.current().nextLong());
+        final long[] seed = new long[]{HasherApi.mix(ThreadLocalRandom.current().nextLong())};
 
         FrameManager<Void, RunnableFrame> recycler = new FrameManager<>(recycleCapacity,
                 password);
@@ -210,7 +210,7 @@ public class FunctionalApi implements AutoCloseable {
 
         final AtomicBoolean dead = new AtomicBoolean(false);
 
-        final long password = KeyHasher.combine(ThreadLocalRandom.current().nextLong(),
+        final long password = HasherApi.combine(ThreadLocalRandom.current().nextLong(),
                 ThreadLocalRandom.current().nextLong());
 
         FrameManager<Object, ConsumerFrame> recycler = new FrameManager<>(recycleCapacity, password);
