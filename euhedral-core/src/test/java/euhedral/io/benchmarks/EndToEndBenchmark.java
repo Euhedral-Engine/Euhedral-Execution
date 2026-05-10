@@ -5,8 +5,8 @@ import com.github.dockerjava.api.command.ExecCreateCmdResponse;
 import com.github.dockerjava.api.model.Capability;
 import com.github.dockerjava.api.model.Frame;
 import euhedral.io.DRRScheduler;
-import euhedral.io.DefaultSlotManager;
-import euhedral.io.DefaultSlotManager.Config;
+import euhedral.io.ExecutionManager;
+import euhedral.io.ExecutionManager.Config;
 import euhedral.io.control_plane.ControlPlane;
 import euhedral.io.test_utils.TestFrame;
 import euhedral.io.test_utils.TestPipeline;
@@ -243,11 +243,11 @@ public class EndToEndBenchmark {
             public void setupExecutor(Blackhole bh) {
                 DRRScheduler.Config drrConfig = new DRRScheduler.Config(null, "SystemTest",
                         null);
-                DefaultSlotManager.Config dsmConfig = Config.lowLatencyDefault(null, "SystemTest");
+                ExecutionManager.Config dsmConfig = Config.lowLatencyDefault(null, "SystemTest");
 
                 TestPipeline pipeline = new TestPipeline("SystemTest", null,
                         new DRRScheduler(drrConfig, null),
-                        new DefaultSlotManager(dsmConfig),
+                        new ExecutionManager(dsmConfig),
                         new TestExecutor(null, bh));
                 controlPlane = ControlPlane.getOrCreate("SystemTest", pipeline,
                         null);

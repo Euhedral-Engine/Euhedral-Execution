@@ -9,6 +9,8 @@ import euhedral.hardware_utils.SystemInfo;
 import euhedral.hardware_utils.SystemInfo.CpuCacheLayout;
 import euhedral.hardware_utils.SystemInfo.CpuInfo;
 import euhedral.hardware_utils.ThreadTools;
+import euhedral.hardware_utils.common.SystemUtilization.CoreSnapshot;
+import euhedral.hardware_utils.common.SystemUtilization.CpuSnapshot;
 import euhedral.io.SlotManagerSMTBuddy.SMTState;
 import euhedral.io.control_plane.CloneConfig;
 import euhedral.io.flow_control.DirectOutputFlux;
@@ -19,8 +21,6 @@ import euhedral.io.frames.AbstractFrame;
 import euhedral.io.frames.DummyInitFrame;
 import euhedral.io.interfaces.CloneableObject;
 import euhedral.io.interfaces.SlotManager;
-import euhedral.hardware_utils.common.SystemUtilization.CoreSnapshot;
-import euhedral.hardware_utils.common.SystemUtilization.CpuSnapshot;
 import euhedral.io.utils.DrainBuffer;
 import euhedral.io.utils.FlowRecorder;
 import euhedral.io.utils.FlowRecorder.FlowSnapshot;
@@ -28,14 +28,12 @@ import euhedral.io.utils.ObjectSizer;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.MeterRegistry;
-
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.Supplier;
-
 import lombok.AccessLevel;
 import lombok.Getter;
 import org.jctools.queues.MpscUnboundedXaddArrayQueue;
@@ -84,7 +82,7 @@ import reactor.core.CoreSubscriber;
  * </p>
  */
 @Getter(AccessLevel.PROTECTED)
-public class DefaultSlotManager implements SlotManager {
+public class ExecutionManager implements SlotManager {
 
     public final int cpuId;
 
@@ -130,7 +128,7 @@ public class DefaultSlotManager implements SlotManager {
     protected WakeHook wakeHook;
     private Thread cycleThread;
 
-    public DefaultSlotManager(@NonNull Config config) {
+    public ExecutionManager(@NonNull Config config) {
         this.config = config;
 
         int bufferSize = (int) Math.min(Long.highestOneBit((SystemInfo.DEFAULT_L1 - 1) << 1),
@@ -179,11 +177,11 @@ public class DefaultSlotManager implements SlotManager {
         if (config.cloneConfig == null) {
             this.cpuId = -1;
             this.pinnedExecutor = null;
-            this.logger = LoggerFactory.getLogger(DefaultSlotManager.class);
+            this.logger = LoggerFactory.getLogger(ExecutionManager.class);
         } else {
             int[] cpus = config.cloneConfig.getCpuSet();
             this.cpuId = cpus[0];
-            String name = config.cloneConfig.shardName() + "-DefaultSlotManager-"
+            String name = config.cloneConfig.shardName() + "-ExecutionManager-"
                     + config.cloneConfig.coreId();
 
             this.pinnedExecutor =
@@ -268,7 +266,7 @@ public class DefaultSlotManager implements SlotManager {
             CloneConfig cloneConfig = config.cloneConfig;
             if (cloneConfig != null) {
                 if (pinnedExecutor.isShutdown()) {
-                    pinnedExecutor.start(config.cloneConfig.shardName() + "-DefaultSlotManager-"
+                    pinnedExecutor.start(config.cloneConfig.shardName() + "-ExecutionManager-"
                             + config.cloneConfig.coreId(), Thread.MAX_PRIORITY, false);
                 }
 
@@ -285,7 +283,7 @@ public class DefaultSlotManager implements SlotManager {
                     ThreadTools.setTimerResolution(1);
                     if (config.enableSMT && cloneConfig.getCpuSet().length > 1) {
                         this.buddy.start(cloneConfig.getCpuSet()[1],
-                                config.cloneConfig.shardName() + "-DefaultSlotManager-SMT-"
+                                config.cloneConfig.shardName() + "-ExecutionManager-SMT-"
                                         + config.cloneConfig.coreId(), Thread.MAX_PRIORITY, false);
                         state.smtMode = true;
                     }
@@ -630,8 +628,8 @@ public class DefaultSlotManager implements SlotManager {
     }
 
     @Override
-    public DefaultSlotManager clone(CloneConfig cloneConfig) {
-        return new DefaultSlotManager(config.clone(cloneConfig));
+    public ExecutionManager clone(CloneConfig cloneConfig) {
+        return new ExecutionManager(config.clone(cloneConfig));
     }
 
     @Override
@@ -750,7 +748,7 @@ public class DefaultSlotManager implements SlotManager {
         public void close() {
         }
 
-        /// Defines how the DefaultSlotManager will react when it doesn't process work in a cycle.
+        /// Defines how the ExecutionManager will react when it doesn't process work in a cycle.
         /// Setting the threshold values higher than 1.0 disables them.
         ///
         /// @param spinThreshold  Upper limit defined by idleCyles / totalCycles for using

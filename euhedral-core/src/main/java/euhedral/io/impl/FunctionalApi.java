@@ -3,7 +3,7 @@ package euhedral.io.impl;
 import euhedral.hashing.HasherApi;
 import euhedral.io.DRRScheduler;
 import euhedral.io.DRRScheduler.Config;
-import euhedral.io.DefaultSlotManager;
+import euhedral.io.ExecutionManager;
 import euhedral.io.control_plane.ControlPlane;
 import euhedral.io.frames.ConsumerFrame;
 import euhedral.io.frames.FunctionFrame;
@@ -42,7 +42,7 @@ public class FunctionalApi implements AutoCloseable {
         }
         api = new FunctionalApi(name, recycleCapacityPerStream,
                 new Config(null, name, meterRegistry),
-                DefaultSlotManager.Config.balancedDefault(
+                ExecutionManager.Config.balancedDefault(
                         meterRegistry, name));
         INSTANCE.set(api);
         return api;
@@ -50,7 +50,7 @@ public class FunctionalApi implements AutoCloseable {
 
     public static FunctionalApi getOrCreate(String name, int recycleCapacityPerStream,
             Config drrConfig,
-            DefaultSlotManager.Config slotManagerConfig) {
+            ExecutionManager.Config slotManagerConfig) {
         FunctionalApi api = INSTANCE.get();
         if (api != null) {
             return api;
@@ -70,11 +70,11 @@ public class FunctionalApi implements AutoCloseable {
     private final AtomicBoolean closed = new AtomicBoolean(false);
 
     protected FunctionalApi(String name, int recycleCapacityPerStream,
-            Config drrConfig, DefaultSlotManager.Config slotManagerConfig) {
+            Config drrConfig, ExecutionManager.Config slotManagerConfig) {
         this.recycleCapacity = recycleCapacityPerStream;
 
         DRRScheduler drr = new DRRScheduler(drrConfig, null);
-        DefaultSlotManager slotManager = new DefaultSlotManager(slotManagerConfig);
+        ExecutionManager slotManager = new ExecutionManager(slotManagerConfig);
 
         FunctionalPipeline pipeline = new FunctionalPipeline(name, null, drr, slotManager,
                 new FunctionalExecutor(null));
