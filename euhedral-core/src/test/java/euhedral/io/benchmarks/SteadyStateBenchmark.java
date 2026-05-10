@@ -118,7 +118,6 @@ public class SteadyStateBenchmark {
         @TearDown(Level.Trial)
         public void tearDownTrial() {
             try {
-                producerPool.close();
                 controlPlane.close();
                 PinnedThreadExecutor.closeAll();
             } catch (Exception e) {

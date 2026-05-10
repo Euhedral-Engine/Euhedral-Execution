@@ -1,11 +1,11 @@
 package euhedral.io.impl;
 
+import euhedral.hashing.HasherApi;
 import euhedral.io.frames.AbstractFrame;
-import euhedral.io.utils.KeyHasher;
 import java.util.concurrent.ThreadLocalRandom;
 
 public class FrameFactory<T, F extends AbstractFrame> {
-    private final long idHash = KeyHasher.mix(ThreadLocalRandom.current().nextLong());
+    private final long idHash = HasherApi.mix(ThreadLocalRandom.current().nextLong());
 
     private final FrameCreate<T, F> frameGenerator;
     private final FrameReplace<T, F> frameReplace;

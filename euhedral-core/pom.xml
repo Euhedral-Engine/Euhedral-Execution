@@ -20,6 +20,12 @@
     </dependency>
     <dependency>
       <groupId>com.euhedral</groupId>
+      <artifactId>euhedral-hashing</artifactId>
+      <version>${project.version}</version>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.euhedral</groupId>
       <artifactId>euhedral-data-structures</artifactId>
       <version>${project.version}</version>
       <scope>compile</scope>
@@ -54,11 +60,6 @@
       <artifactId>micrometer-registry-prometheus</artifactId>
     </dependency>
 
-    <dependency>
-      <groupId>net.openhft</groupId>
-      <artifactId>zero-allocation-hashing</artifactId>
-      <scope>compile</scope>
-    </dependency>
     <dependency>
       <groupId>org.jctools</groupId>
       <artifactId>jctools-core</artifactId>
