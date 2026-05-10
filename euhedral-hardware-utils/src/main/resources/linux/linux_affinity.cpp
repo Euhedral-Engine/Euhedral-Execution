@@ -2,8 +2,6 @@
 #define _GNU_SOURCE
 #endif
 
-#include <jni.h>
-
 #ifndef _Included_LinuxAffinity
 #define _Included_LinuxAffinity
 
@@ -11,48 +9,96 @@
 #define PR_SET_TIMER_SLACK 29
 #endif
 
-#include <errno.h>
-#include <sched.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <sys/prctl.h>
+#include "linux_jni.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 JNIEXPORT jint JNICALL
+Java_euhedral_hardware_1utils_linux_LinuxAffinity_setThreadAffinitySingle(
+    JNIEnv *env, jclass clazz, jint cpu) {
+
+    if (cpu < 0) {
+        return EINVAL;
+    }
+
+    unsigned long mask = 1UL << (cpu % (8 * sizeof(unsigned long)));
+    int word = cpu / (8 * sizeof(unsigned long));
+
+    unsigned long cpuset[CPU_SETSIZE / (8 * sizeof(unsigned long))];
+    for (int i = 0; i < (int)(sizeof(cpuset) / sizeof(cpuset[0])); i++) {
+        cpuset[i] = 0;
+    }
+
+    if (word < (int)(sizeof(cpuset) / sizeof(cpuset[0]))) {
+        cpuset[word] = mask;
+    } else {
+        return EINVAL;
+    }
+
+    long result = syscall(SYS_sched_setaffinity,
+                          0,
+                          sizeof(cpuset),
+                          cpuset);
+
+    return (jint)(result == 0 ? 0 : errno);
+}
+
+JNIEXPORT jint JNICALL
 Java_euhedral_hardware_1utils_linux_LinuxAffinity_setThreadAffinity(
     JNIEnv *env, jclass clazz, jlongArray maskArray) {
-  jsize len = env->GetArrayLength(maskArray);
-  if (len == 0) {
-    return -1;
-  }
 
-  jlong *masks = env->GetLongArrayElements(maskArray, NULL);
-
-  int numCpus = len * 64;
-  cpu_set_t *cpuset = CPU_ALLOC(numCpus);
-  size_t size = CPU_ALLOC_SIZE(numCpus);
-  CPU_ZERO_S(size, cpuset);
-
-  for (int i = 0; i < len; i++) {
-    unsigned long long currentMask = (unsigned long long)masks[i];
-    for (int bit = 0; bit < 64; bit++) {
-      if ((currentMask >> bit) & 1ULL) {
-        CPU_SET_S(i * 64 + bit, size, cpuset);
-      }
+    jsize len = env->GetArrayLength(maskArray);
+    if (len <= 0) {
+        return -1;
     }
-  }
 
-  int result = sched_setaffinity(0, size, cpuset);
+    jlong *masks = env->GetLongArrayElements(maskArray, NULL);
+    if (masks == NULL) {
+        return EINVAL;
+    }
 
-  int err = (result == 0) ? 0 : errno;
+    const int bits_per_word = 8 * (int)sizeof(unsigned long);
+    const int max_cpu = len * 64;
+    const int words = (max_cpu + bits_per_word - 1) / bits_per_word;
 
-  CPU_FREE(cpuset);
-  env->ReleaseLongArrayElements(maskArray, masks, JNI_ABORT);
+    unsigned long *cpuset = (unsigned long *)calloc(words, sizeof(unsigned long));
+    if (!cpuset) {
+        env->ReleaseLongArrayElements(maskArray, masks, JNI_ABORT);
+        return ENOMEM;
+    }
 
-  return (jint)err;
+    for (int i = 0; i < len; i++) {
+        unsigned long long m = (unsigned long long)masks[i];
+
+        if (m == 0) continue;
+
+        int base_cpu = i << 6;
+
+        while (m) {
+            int bit = __builtin_ctzll(m); // find lowest set bit
+            m &= (m - 1);
+
+            int cpu = base_cpu + bit;
+            int idx = cpu / bits_per_word;
+            int off = cpu % bits_per_word;
+
+            cpuset[idx] |= (1UL << off);
+        }
+    }
+
+    long result = syscall(SYS_sched_setaffinity,
+                          0,
+                          words * sizeof(unsigned long),
+                          cpuset);
+
+    int err = (result == 0) ? 0 : errno;
+
+    free(cpuset);
+    env->ReleaseLongArrayElements(maskArray, masks, JNI_ABORT);
+
+    return (jint)err;
 }
 
 JNIEXPORT jint JNICALL Java_euhedral_hardware_1utils_linux_LinuxAffinity_getCpu(

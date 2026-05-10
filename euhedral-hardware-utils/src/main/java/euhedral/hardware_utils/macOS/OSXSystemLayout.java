@@ -1,24 +1,18 @@
 package euhedral.hardware_utils.macOS;
 
-import euhedral.hardware_utils.internal.JNIClassLoader;
 import euhedral.hardware_utils.common.OSName;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import euhedral.hardware_utils.internal.JNIClassLoader;
 
 public final class OSXSystemLayout {
 
     public static final OSXSystemLayout INSTANCE;
-    private static final Logger LOGGER = LoggerFactory.getLogger(OSXSystemLayout.class);
 
     static {
+        JNIClassLoader.load();
+
         OSXSystemLayout layout = null;
         if (OSName.isMacOS()) {
-            try {
-                JNIClassLoader.load(OSXSystemLayout.class);
-                layout = new OSXSystemLayout();
-            } catch (Throwable t) {
-                LOGGER.error("Error loading mac_system_layout", t);
-            }
+            layout = new OSXSystemLayout();
         }
         INSTANCE = layout;
     }
