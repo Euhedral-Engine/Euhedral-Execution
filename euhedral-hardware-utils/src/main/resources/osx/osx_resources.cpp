@@ -1,15 +1,7 @@
-#include <jni.h>
-
 #ifndef _Included_OSXResources
 #define _Included_OSXResources
 
-#include <libproc.h>
-#include <mach/mach.h>
-#include <mach/mach_host.h>
-#include <mach/task_info.h>
-#include <sys/resource.h>
-#include <sys/sysctl.h>
-#include <unistd.h>
+#include "osx_jni.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -17,7 +9,8 @@ extern "C" {
 
 // CPU Times
 JNIEXPORT jlongArray JNICALL
-Java_euhedral_hardware_1utils_osx_OSXResources_getCpuTimes(JNIEnv *env, jclass) {
+Java_euhedral_hardware_1utils_osx_OSXResources_getCpuTimes(JNIEnv *env,
+                                                           jclass) {
 
   struct rusage usage;
   getrusage(RUSAGE_SELF, &usage);
@@ -39,7 +32,8 @@ Java_euhedral_hardware_1utils_osx_OSXResources_getCpuTimes(JNIEnv *env, jclass) 
 
 // CPU Load (system-wide)
 JNIEXPORT jdouble JNICALL
-Java_euhedral_hardware_1utils_osx_OSXResources_getSystemCpuLoad(JNIEnv *, jclass) {
+Java_euhedral_hardware_1utils_osx_OSXResources_getSystemCpuLoad(JNIEnv *,
+                                                                jclass) {
 
   host_cpu_load_info_data_t cpuinfo;
   mach_msg_type_number_t count = HOST_CPU_LOAD_INFO_COUNT;
@@ -62,7 +56,7 @@ Java_euhedral_hardware_1utils_osx_OSXResources_getSystemCpuLoad(JNIEnv *, jclass
 // Memory
 JNIEXPORT jlongArray JNICALL
 Java_euhedral_hardware_1utils_osx_OSXResources_getMemorySnapshot(JNIEnv *env,
-                                                             jclass) {
+                                                                 jclass) {
 
   jlong values[3] = {0, 0, 0};
 
@@ -101,9 +95,8 @@ Java_euhedral_hardware_1utils_osx_OSXResources_getIoBytes(JNIEnv *, jclass) {
 }
 
 JNIEXPORT jobjectArray JNICALL
-Java_euhedral_hardware_1utils_osx_OSXResources_getCoreTypeMask(JNIEnv *env,
-                                                           jobject obj,
-                                                           jboolean getPCores) {
+Java_euhedral_hardware_1utils_osx_OSXResources_getCoreTypeMask(
+    JNIEnv *env, jobject obj, jboolean getPCores) {
   const char *levelKey =
       getPCores ? "hw.perflevel0.logicalcpu" : "hw.perflevel1.logicalcpu";
 

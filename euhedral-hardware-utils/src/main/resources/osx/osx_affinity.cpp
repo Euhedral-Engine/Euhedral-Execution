@@ -3,17 +3,7 @@
 #ifndef _Included_OSXAffinity
 #define _Included_OSXAffinity
 
-#include <mach/mach.h>
-#include <mach/mach_init.h>
-#include <mach/mach_time.h>
-#include <mach/mach_types.h>
-#include <mach/thread_act.h>
-#include <mach/thread_policy.h>
-#include <pthread.h>
-
-#if defined(__x86_64__) || defined(__i386__)
-#include <cpuid.h>
-#endif
+#include "osx_jni.h"
 
 #ifdef __cplusplus
 extern "C" {

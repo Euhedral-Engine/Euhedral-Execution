@@ -1,7 +1,7 @@
 package euhedral.hardware_utils.windows;
 
-import euhedral.hardware_utils.internal.JNIClassLoader;
 import euhedral.hardware_utils.common.OSName;
+import euhedral.hardware_utils.internal.JNIClassLoader;
 import euhedral.hardware_utils.internal.ThreadPinner;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
@@ -15,15 +15,11 @@ public final class WindowsAffinity extends ThreadPinner {
     private static volatile int windowsResolution100ns;
 
     static {
-        WindowsAffinity instance = null;
+        JNIClassLoader.load();
 
+        WindowsAffinity instance = null;
         if (OSName.isWindows()) {
-            try {
-                JNIClassLoader.load(WindowsAffinity.class);
-                instance = new WindowsAffinity();
-            } catch (Throwable t) {
-                LOGGER.error("Failed to load windows_affinity.", t);
-            }
+            instance = new WindowsAffinity();
         }
         INSTANCE = instance;
     }

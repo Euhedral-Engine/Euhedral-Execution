@@ -1,10 +1,10 @@
 package euhedral.hardware_utils.macOS;
 
-import euhedral.hardware_utils.internal.JNIClassLoader;
 import euhedral.hardware_utils.common.OSName;
 import euhedral.hardware_utils.common.SystemSnapshotProvider;
 import euhedral.hardware_utils.common.SystemUtilization.SystemSnapshot;
 import euhedral.hardware_utils.common.UnmodifiableBitSet;
+import euhedral.hardware_utils.internal.JNIClassLoader;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -18,13 +18,14 @@ public final class OSXResources implements SystemSnapshotProvider {
     private static final Logger LOGGER = LoggerFactory.getLogger(OSXResources.class);
 
     static {
+        JNIClassLoader.load();
+
         OSXResources instance = null;
         if (OSName.isMacOS()) {
             try {
-                JNIClassLoader.load(OSXResources.class);
                 instance = new OSXResources();
             } catch (Throwable t) {
-                LOGGER.error("Failed to load the mac_resources library", t);
+                LOGGER.error("Failed to initialize.", t);
             }
         }
 

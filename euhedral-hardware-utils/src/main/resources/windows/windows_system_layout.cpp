@@ -1,9 +1,7 @@
-#include <jni.h>
-
 #ifndef _Included_WindowsSystemLayout
 #define _Included_WindowsSystemLayout
 
-#include <windows.h>
+#include "windows_jni.h"
 
 #ifdef __cplusplus
 extern "C" {

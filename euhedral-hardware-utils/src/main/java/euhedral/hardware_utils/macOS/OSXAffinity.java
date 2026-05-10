@@ -1,7 +1,7 @@
 package euhedral.hardware_utils.macOS;
 
-import euhedral.hardware_utils.internal.JNIClassLoader;
 import euhedral.hardware_utils.common.OSName;
+import euhedral.hardware_utils.internal.JNIClassLoader;
 import euhedral.hardware_utils.internal.ThreadPinner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -12,15 +12,11 @@ public final class OSXAffinity extends ThreadPinner {
     public static final OSXAffinity INSTANCE;
 
     static {
-        OSXAffinity instance = null;
+        JNIClassLoader.load();
 
+        OSXAffinity instance = null;
         if(OSName.isMacOS()) {
-            try {
-                JNIClassLoader.load(OSXAffinity.class);
-                instance = new OSXAffinity();
-            } catch (Throwable t) {
-                LOGGER.error("Failed to load the windows_affinity.cpp library.", t);
-            }
+            instance = new OSXAffinity();
         }
         INSTANCE = instance;
     }

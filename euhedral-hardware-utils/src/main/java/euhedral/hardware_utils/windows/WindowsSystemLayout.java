@@ -5,8 +5,8 @@ import euhedral.hardware_utils.SystemInfo.CoreInfo;
 import euhedral.hardware_utils.SystemInfo.CpuCacheLayout;
 import euhedral.hardware_utils.SystemInfo.CpuInfo;
 import euhedral.hardware_utils.SystemInfo.SocketInfo;
-import euhedral.hardware_utils.internal.JNIClassLoader;
 import euhedral.hardware_utils.common.OSName;
+import euhedral.hardware_utils.internal.JNIClassLoader;
 import euhedral.hardware_utils.windows.win32.CacheRelationship;
 import euhedral.hardware_utils.windows.win32.CacheRelationship.CacheType;
 import euhedral.hardware_utils.windows.win32.GroupAffinity;
@@ -20,28 +20,19 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public final class WindowsSystemLayout {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(WindowsSystemLayout.class);
     public static final WindowsSystemLayout INSTANCE;
 
     static {
-        if (OSName.isWindows()) {
-            WindowsSystemLayout layout = null;
-            try {
-                JNIClassLoader.load(WindowsSystemLayout.class);
-                layout = new WindowsSystemLayout();
-            } catch (Throwable t) {
-                LOGGER.error("Failed to load the windows_system_layout library.", t);
-            }
+        JNIClassLoader.load();
 
-            INSTANCE = layout;
-        } else {
-            INSTANCE = null;
+        WindowsSystemLayout layout = null;
+        if (OSName.isWindows()) {
+            layout = new WindowsSystemLayout();
         }
+        INSTANCE = layout;
     }
 
     private final Int2ObjectArrayMap<CpuCacheLayout> cpuCache = new Int2ObjectArrayMap<>();

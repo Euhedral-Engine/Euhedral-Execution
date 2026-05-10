@@ -1,11 +1,11 @@
 package euhedral.hardware_utils.windows;
 
 import euhedral.hardware_utils.SystemInfo;
-import euhedral.hardware_utils.internal.JNIClassLoader;
 import euhedral.hardware_utils.common.OSName;
 import euhedral.hardware_utils.common.SystemSnapshotProvider;
 import euhedral.hardware_utils.common.SystemUtilization.SystemSnapshot;
 import euhedral.hardware_utils.common.UnmodifiableBitSet;
+import euhedral.hardware_utils.internal.JNIClassLoader;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -19,15 +19,11 @@ public final class WindowsResources implements SystemSnapshotProvider {
     private static final Logger LOGGER = LoggerFactory.getLogger(WindowsResources.class);
 
     static {
+        JNIClassLoader.load();
+
         WindowsResources instance = null;
         if (OSName.isWindows()) {
-            try {
-                JNIClassLoader.load(WindowsResources.class);
-                instance = new WindowsResources();
-
-            } catch (Throwable t) {
-                LOGGER.error("Failed to load windows_resources", t);
-            }
+            instance = new WindowsResources();
         }
         INSTANCE = instance;
     }

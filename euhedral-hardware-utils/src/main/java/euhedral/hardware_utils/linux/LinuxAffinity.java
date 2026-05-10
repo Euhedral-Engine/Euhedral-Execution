@@ -1,7 +1,7 @@
 package euhedral.hardware_utils.linux;
 
-import euhedral.hardware_utils.internal.JNIClassLoader;
 import euhedral.hardware_utils.common.OSName;
+import euhedral.hardware_utils.internal.JNIClassLoader;
 import euhedral.hardware_utils.internal.ThreadPinner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -12,15 +12,11 @@ public final class LinuxAffinity extends ThreadPinner {
     private static final Logger LOGGER = LoggerFactory.getLogger(LinuxAffinity.class);
 
     static {
-        LinuxAffinity instance = null;
+        JNIClassLoader.load();
 
+        LinuxAffinity instance = null;
         if (OSName.isLinux()) {
-            try {
-                JNIClassLoader.load(LinuxAffinity.class);
-                instance = new LinuxAffinity();
-            } catch (Throwable t) {
-                LOGGER.error("Failed to load the linux_affinity library.", t);
-            }
+            instance = new LinuxAffinity();
         }
         INSTANCE = instance;
     }
