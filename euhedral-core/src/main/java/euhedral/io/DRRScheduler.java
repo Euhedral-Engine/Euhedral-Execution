@@ -17,19 +17,13 @@ import euhedral.io.frames.DummyInitFrame;
 import euhedral.io.frames.QueueFrame;
 import euhedral.io.interfaces.CacheManager;
 import euhedral.io.interfaces.CloneableObject;
+import euhedral.io.metrics.DRRMetrics;
 import euhedral.io.utils.DrainBuffer;
 import euhedral.io.utils.FlowRecorder.FlowSnapshot;
 import euhedral.io.utils.MathFunctions;
 import euhedral.io.utils.ObjectSizer;
-import io.micrometer.core.instrument.DistributionSummary;
-import io.micrometer.core.instrument.Gauge;
-import io.micrometer.core.instrument.Meter;
-import io.micrometer.core.instrument.MeterRegistry;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
 import java.util.concurrent.Callable;
-import java.util.concurrent.atomic.AtomicLong;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.reactivestreams.Publisher;
@@ -40,7 +34,7 @@ public class DRRScheduler extends IngestSequencer implements CacheManager, Clone
 
     protected final Logger logger;
     protected final DRRConfig config;
-    protected final Metrics metrics;
+    protected final DRRMetrics metrics;
     protected final int coreId;
 
     protected final AtomicDouble capFactor = new AtomicDouble(1d);
@@ -72,7 +66,7 @@ public class DRRScheduler extends IngestSequencer implements CacheManager, Clone
             this.coreId = -1;
         }
 
-        this.metrics = new Metrics(config.metricPrefix(), coreId, capFactor, totalQueuedSizeBytes,
+        this.metrics = new DRRMetrics(config.metricPrefix(), coreId, capFactor, totalQueuedSizeBytes,
                 config.registry());
 
     }
@@ -306,57 +300,5 @@ public class DRRScheduler extends IngestSequencer implements CacheManager, Clone
     @Override
     public DRRScheduler clone(CloneConfig cloneConfig) {
         return new DRRScheduler(config.clone(cloneConfig), snapshot);
-    }
-
-    public static class Metrics implements AutoCloseable {
-
-        public final MeterRegistry registry;
-
-        public final DistributionSummary subQBacklogSummary;
-        public final DistributionSummary subQWeightSummary;
-
-        private final List<Meter> meters = new ArrayList<>();
-
-        public Metrics(String metricPrefix, int coreId, AtomicDouble capFactor,
-                AtomicLong totalQueuedSizeBytes, MeterRegistry registry) {
-            this.registry = registry;
-            if (registry != null) {
-                String tag = String.valueOf(coreId);
-
-                subQBacklogSummary =
-                        DistributionSummary.builder(metricPrefix + ".drr_sub_queue_backlog_bytes")
-                                .description("Amount of bytes stored in a sub queue")
-                                .tag("core", tag).publishPercentiles(0.5, 0.95, 0.99)
-                                .register(registry);
-
-                subQWeightSummary =
-                        DistributionSummary.builder(metricPrefix + ".drr_sub_queue_weight")
-                                .tag("core", tag).publishPercentiles(0.0, 1.0).register(registry);
-
-                meters.add(
-                        Gauge.builder(metricPrefix + ".cap_factor", capFactor, AtomicDouble::get)
-                                .description(
-                                        "Current buffer capacity multiplier. Higher is better. (0.15 to 1.0)")
-                                .tag("core", tag).register(registry));
-
-                meters.add(Gauge.builder(metricPrefix + ".drr_backlog",
-                                () -> totalQueuedSizeBytes.get() / 1024)
-                        .description("Total bytes currently buffered in all sub queues of the DRR")
-                        .baseUnit("KB").register(registry));
-            } else {
-                subQBacklogSummary = null;
-                subQWeightSummary = null;
-            }
-        }
-
-        @Override
-        public void close() {
-            meters.forEach(Meter::close);
-            meters.clear();
-            if (subQBacklogSummary != null) {
-                subQBacklogSummary.close();
-                subQWeightSummary.close();
-            }
-        }
     }
 }
