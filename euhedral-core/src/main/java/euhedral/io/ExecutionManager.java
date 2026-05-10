@@ -12,14 +12,14 @@ import euhedral.hardware_utils.ThreadTools;
 import euhedral.hardware_utils.common.SystemUtilization.CoreSnapshot;
 import euhedral.hardware_utils.common.SystemUtilization.CpuSnapshot;
 import euhedral.io.SlotManagerSMTBuddy.SMTState;
-import euhedral.io.control_plane.CloneConfig;
+import euhedral.io.config.CloneConfig;
+import euhedral.io.config.ExecutionManagerConfig;
 import euhedral.io.flow_control.DirectOutputFlux;
 import euhedral.io.flow_control.IngestSequencer;
 import euhedral.io.flow_control.IngestSequencer.WakeHook;
 import euhedral.io.flow_control.LockFreeSink;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.frames.DummyInitFrame;
-import euhedral.io.interfaces.CloneableObject;
 import euhedral.io.interfaces.SlotManager;
 import euhedral.io.utils.DrainBuffer;
 import euhedral.io.utils.FlowRecorder;
@@ -28,7 +28,6 @@ import euhedral.io.utils.ObjectSizer;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.MeterRegistry;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -87,7 +86,7 @@ public class ExecutionManager implements SlotManager {
     public final int cpuId;
 
     @Getter
-    protected final Config config;
+    protected final ExecutionManagerConfig config;
     protected final Metrics metrics;
     protected final Logger logger;
     protected final boolean isPCore;
@@ -128,15 +127,15 @@ public class ExecutionManager implements SlotManager {
     protected WakeHook wakeHook;
     private Thread cycleThread;
 
-    public ExecutionManager(@NonNull Config config) {
+    public ExecutionManager(@NonNull ExecutionManagerConfig config) {
         this.config = config;
 
         int bufferSize = (int) Math.min(Long.highestOneBit((SystemInfo.DEFAULT_L1 - 1) << 1),
                 Integer.MAX_VALUE);
-        if (config.cloneConfig != null) {
-            CpuCacheLayout layout = SystemInfo.getCacheLayout(config.cloneConfig.getCpuSet()[0]);
+        if (config.cloneConfig() != null) {
+            CpuCacheLayout layout = SystemInfo.getCacheLayout(config.cloneConfig().getCpuSet()[0]);
             long temp = layout.bytesL1();
-            if (config.cloneConfig.getCpuSet().length != layout.sharesL1()) {
+            if (config.cloneConfig().getCpuSet().length != layout.sharesL1()) {
                 temp /= layout.sharesL1();
             }
 
@@ -154,11 +153,11 @@ public class ExecutionManager implements SlotManager {
         this.bufferWrapper = new DrainBuffer(buffer, bufferSize, false);
 
         this.executionLatency = new FlowRecorder();
-        this.maxUpdateInterval = Integer.highestOneBit(Math.max(config.maxUpdateInterval, 2));
+        this.maxUpdateInterval = Integer.highestOneBit(Math.max(config.maxUpdateInterval(), 2));
 
         this.state = new CycleState();
         this.buddyState = new SMTState(executionLatency, bufferWrapper.arrivalLatencyRecorder,
-                config.idleCyclePolicy.maxParkTime.toNanos());
+                config.idleCyclePolicy().maxParkTime().toNanos());
 
         this.buddy = new SlotManagerSMTBuddy(bufferWrapper, buddyState);
 
@@ -170,19 +169,19 @@ public class ExecutionManager implements SlotManager {
                     frame.doFinally();
                 }, this::recordCompletion);
 
-        this.currentRate = config.initialConcurrency;
-        this.currentConcurrency = Math.max(1, config.initialConcurrency);
-        this.effectiveConcurrencyLimit = config.initialConcurrency;
+        this.currentRate = config.minConcurrency();
+        this.currentConcurrency = Math.max(1, config.minConcurrency());
+        this.effectiveConcurrencyLimit = config.minConcurrency();
 
-        if (config.cloneConfig == null) {
+        if (config.cloneConfig() == null) {
             this.cpuId = -1;
             this.pinnedExecutor = null;
             this.logger = LoggerFactory.getLogger(ExecutionManager.class);
         } else {
-            int[] cpus = config.cloneConfig.getCpuSet();
+            int[] cpus = config.cloneConfig().getCpuSet();
             this.cpuId = cpus[0];
-            String name = config.cloneConfig.shardName() + "-ExecutionManager-"
-                    + config.cloneConfig.coreId();
+            String name = config.cloneConfig().shardName() + "-ExecutionManager-"
+                    + config.cloneConfig().coreId();
 
             this.pinnedExecutor =
                     PinnedThreadExecutor.getOrSetIfAbsent(cpus[0], name, Thread.MAX_PRIORITY,
@@ -190,7 +189,7 @@ public class ExecutionManager implements SlotManager {
             this.logger = LoggerFactory.getLogger(name);
         }
 
-        this.metrics = new Metrics(config.meterRegistry, config, () -> inFlight, () -> avgLatency,
+        this.metrics = new Metrics(config.meterRegistry(), config, () -> inFlight, () -> avgLatency,
                 () -> currentConcurrency, () -> currentRate, this::getPressure);
 
         outputFlux = new DirectOutputFlux(buffer, frame -> {
@@ -263,11 +262,11 @@ public class ExecutionManager implements SlotManager {
 
     public void start() {
         if (running.compareAndSet(false, true)) {
-            CloneConfig cloneConfig = config.cloneConfig;
+            CloneConfig cloneConfig = config.cloneConfig();
             if (cloneConfig != null) {
                 if (pinnedExecutor.isShutdown()) {
-                    pinnedExecutor.start(config.cloneConfig.shardName() + "-ExecutionManager-"
-                            + config.cloneConfig.coreId(), Thread.MAX_PRIORITY, false);
+                    pinnedExecutor.start(config.cloneConfig().shardName() + "-ExecutionManager-"
+                            + config.cloneConfig().coreId(), Thread.MAX_PRIORITY, false);
                 }
 
                 pinnedExecutor.execute(() -> {
@@ -281,10 +280,10 @@ public class ExecutionManager implements SlotManager {
                         logger.info("Pinned to Core {} CPU {}", cloneConfig.coreId(), cpuId);
                     }
                     ThreadTools.setTimerResolution(1);
-                    if (config.enableSMT && cloneConfig.getCpuSet().length > 1) {
+                    if (config.enableSMT() && cloneConfig.getCpuSet().length > 1) {
                         this.buddy.start(cloneConfig.getCpuSet()[1],
-                                config.cloneConfig.shardName() + "-ExecutionManager-SMT-"
-                                        + config.cloneConfig.coreId(), Thread.MAX_PRIORITY, false);
+                                config.cloneConfig().shardName() + "-ExecutionManager-SMT-"
+                                        + config.cloneConfig().coreId(), Thread.MAX_PRIORITY, false);
                         state.smtMode = true;
                     }
                     cycle();
@@ -439,7 +438,7 @@ public class ExecutionManager implements SlotManager {
         long hardwareMax = cpuCount * bufferSize;
 
         this.effectiveConcurrencyLimit =
-                clampLong(adaptiveCap, config.initialConcurrency, hardwareMax);
+                clampLong(adaptiveCap, config.minConcurrency(), hardwareMax);
     }
 
     protected void updateConcurrency(long ideal, double queueEstimate) {
@@ -530,9 +529,9 @@ public class ExecutionManager implements SlotManager {
         state.idleRecorder.record(now, 1, false);
 
         double idleRatio = state.idleRecorder.getRollingAverage(now, false);
-        if (idleRatio <= config.idleCyclePolicy.spinThreshold) {
+        if (idleRatio <= config.idleCyclePolicy().spinThreshold()) {
             Thread.onSpinWait();
-        } else if (idleRatio <= config.idleCyclePolicy.yieldThreshold) {
+        } else if (idleRatio <= config.idleCyclePolicy().yieldThreshold()) {
             Thread.yield();
         } else {
             while (parks-- > 0) {
@@ -672,32 +671,37 @@ public class ExecutionManager implements SlotManager {
         public final MeterRegistry registry;
         private final List<Meter> meters = new ArrayList<>();
 
-        public Metrics(MeterRegistry registry, Config config, Supplier<Integer> inFlight,
+        public Metrics(MeterRegistry registry, ExecutionManagerConfig config, Supplier<Integer> inFlight,
                 Supplier<Long> latency, Supplier<Long> currentConcurrency,
                 Supplier<Long> currentRate, Supplier<Double> pressure) {
             this.registry = registry;
+            String prefix = config.metricPrefix();
+            if(prefix == null) {
+                prefix = config.cloneConfig().shardName();
+            }
+            prefix = prefix.split("\\.")[0];
 
-            if (registry != null && config.cloneConfig != null) {
-                String coreId = String.valueOf(config.cloneConfig.coreId());
+            if (registry != null && config.cloneConfig() != null) {
+                String coreId = String.valueOf(config.cloneConfig().coreId());
 
-                meters.add(Gauge.builder(config.metricPrefix + ".execution.latency", latency)
+                meters.add(Gauge.builder(prefix + ".execution.latency", latency)
                         .description("Average time for execution of work.").tag("core", coreId)
                         .baseUnit("nanoseconds").register(registry));
 
-                meters.add(Gauge.builder(config.metricPrefix + ".execution.concurrency.current",
+                meters.add(Gauge.builder(prefix + ".execution.concurrency.current",
                                 currentConcurrency).description("Current adaptive concurrency limit")
                         .tag("core", coreId).register(registry));
 
                 meters.add(
-                        Gauge.builder(config.metricPrefix + ".execution.inflight.count", inFlight)
+                        Gauge.builder(prefix + ".execution.inflight.count", inFlight)
                                 .description("Number of frames being executed").tag("core", coreId)
                                 .register(registry));
 
-                meters.add(Gauge.builder(config.metricPrefix + ".execution.throughput", currentRate)
+                meters.add(Gauge.builder(prefix + ".execution.throughput", currentRate)
                         .description("Current execution rate (execution/sec)").tag("core", coreId)
                         .register(registry));
 
-                meters.add(Gauge.builder(config.metricPrefix + ".execution.pressure", pressure)
+                meters.add(Gauge.builder(prefix + ".execution.pressure", pressure)
                         .description(
                                 "Combined signal of reported hardware and calculated execution pressure")
                         .tag("core", coreId).register(registry));
@@ -711,66 +715,9 @@ public class ExecutionManager implements SlotManager {
         }
     }
 
-    public record Config(CloneConfig cloneConfig, int initialConcurrency, int maxUpdateInterval,
-                         boolean enableSMT, IdleCyclePolicy idleCyclePolicy,
-                         MeterRegistry meterRegistry, String metricPrefix)
-            implements CloneableObject {
-
-        public static Config powerSavingDefault(MeterRegistry meterRegistry, String metricPrefix) {
-            return new Config(null, 1_024, 256, false, IdleCyclePolicy.POWER_SAVING, meterRegistry,
-                    metricPrefix);
-        }
-
-        public static Config balancedDefault(MeterRegistry meterRegistry, String metricPrefix) {
-            return new Config(null, 4_096, 512, true, IdleCyclePolicy.DEFAULT, meterRegistry,
-                    metricPrefix);
-        }
-
-        /// This default uses a maxUpdateInterval of 1024. Higher intervals reduce unneeded
-        /// recomputation of limits and execution latency recording. They also reduce sensitivity to
-        /// micro jitter.
-        public static Config lowLatencyDefault(MeterRegistry meterRegistry, String metricPrefix) {
-            return new Config(null, 4_096, 1024, false, IdleCyclePolicy.LOW_LATENCY, meterRegistry,
-                    metricPrefix);
-        }
-
-        @Override
-        public Config clone(CloneConfig cloneConfig) {
-            MeterRegistry meterRegistry = null;
-            if (cloneConfig != null) {
-                meterRegistry = cloneConfig.meterRegistry();
-            }
-            return new Config(cloneConfig, initialConcurrency, maxUpdateInterval, enableSMT,
-                    idleCyclePolicy, meterRegistry, metricPrefix);
-        }
-
-        @Override
-        public void close() {
-        }
-
-        /// Defines how the ExecutionManager will react when it doesn't process work in a cycle.
-        /// Setting the threshold values higher than 1.0 disables them.
-        ///
-        /// @param spinThreshold  Upper limit defined by idleCyles / totalCycles for using
-        /// Thread.onSpinWait()
-        /// @param yieldThreshold Upper limit defined by idleCyles / totalCycles for using
-        /// Thread.yield()
-        /// @param maxParkTime    Max duration of each LockSupport.parkNanos()
-        public record IdleCyclePolicy(double spinThreshold, double yieldThreshold,
-                                      Duration maxParkTime) {
-
-            public static IdleCyclePolicy DEFAULT =
-                    new IdleCyclePolicy(0.25, 0.60, Duration.ofMillis(10));
-            public static IdleCyclePolicy LOW_LATENCY =
-                    new IdleCyclePolicy(0.40, 0.80, Duration.ofNanos(20_000));
-            public static IdleCyclePolicy POWER_SAVING =
-                    new IdleCyclePolicy(2.0, 2.0, Duration.ofNanos(100_000));
-        }
-    }
-
     protected class CycleState {
 
-        public final long maxParkNs = config.idleCyclePolicy.maxParkTime.toNanos();
+        public final long maxParkNs = config.idleCyclePolicy().maxParkTime().toNanos();
         public final long lowWaterMark = bufferSize >> 2;
 
         public final FlowRecorder idleRecorder = new FlowRecorder();

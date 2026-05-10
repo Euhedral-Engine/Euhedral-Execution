@@ -1,4 +1,4 @@
-package euhedral.io.control_plane;
+package euhedral.io.config;
 
 import euhedral.io.utils.FluxResourceMonitor;
 import io.micrometer.core.instrument.MeterRegistry;

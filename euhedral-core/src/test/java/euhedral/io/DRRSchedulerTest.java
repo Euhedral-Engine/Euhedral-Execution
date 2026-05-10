@@ -1,14 +1,15 @@
 package euhedral.io;
 
+import euhedral.io.config.DRRConfig;
 import java.util.concurrent.Callable;
 
 class DRRSchedulerTest {
 
-    private static DRRScheduler.Config getConfig() {
-        return new DRRScheduler.Config(null, "Test", null);
+    private static DRRConfig getConfig() {
+        return new DRRConfig(null, "Test", null);
     }
 
-    public DRRScheduler createDRRScheduler(DRRScheduler.Config config,
+    public DRRScheduler createDRRScheduler(DRRConfig config,
             Callable<Double> downstreamPressure) {
         return new DRRScheduler(config, null, downstreamPressure);
     }

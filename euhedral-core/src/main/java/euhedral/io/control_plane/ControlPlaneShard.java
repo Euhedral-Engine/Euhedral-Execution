@@ -7,6 +7,7 @@ import euhedral.hardware_utils.SystemInfo;
 import euhedral.hardware_utils.SystemInfo.CpuInfo;
 import euhedral.hardware_utils.common.SystemUtilization.CoreSnapshot;
 import euhedral.hardware_utils.common.SystemUtilization.SocketSnapshot;
+import euhedral.io.config.CloneConfig;
 import euhedral.io.flow_control.FluxEdge;
 import euhedral.io.flow_control.FluxNode;
 import euhedral.io.flow_control.NoOpSubscriber;

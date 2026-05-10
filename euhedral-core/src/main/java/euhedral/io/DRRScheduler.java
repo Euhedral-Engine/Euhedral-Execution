@@ -7,7 +7,8 @@ import euhedral.atomics.AtomicDouble;
 import euhedral.hardware_utils.SystemInfo;
 import euhedral.hardware_utils.SystemInfo.CpuCacheLayout;
 import euhedral.hardware_utils.common.SystemUtilization.CoreSnapshot;
-import euhedral.io.control_plane.CloneConfig;
+import euhedral.io.config.CloneConfig;
+import euhedral.io.config.DRRConfig;
 import euhedral.io.flow_control.FluxEdge;
 import euhedral.io.flow_control.IngestSequencer;
 import euhedral.io.flow_control.UpstreamQueue;
@@ -18,6 +19,7 @@ import euhedral.io.interfaces.CacheManager;
 import euhedral.io.interfaces.CloneableObject;
 import euhedral.io.utils.DrainBuffer;
 import euhedral.io.utils.FlowRecorder.FlowSnapshot;
+import euhedral.io.utils.MathFunctions;
 import euhedral.io.utils.ObjectSizer;
 import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.Gauge;
@@ -34,11 +36,10 @@ import org.reactivestreams.Publisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-@SuppressWarnings("ManualMinMaxCalculation")
 public class DRRScheduler extends IngestSequencer implements CacheManager, CloneableObject {
 
     protected final Logger logger;
-    protected final Config config;
+    protected final DRRConfig config;
     protected final Metrics metrics;
     protected final int coreId;
 
@@ -51,14 +52,14 @@ public class DRRScheduler extends IngestSequencer implements CacheManager, Clone
 
     protected UpstreamQueue upstream;
 
-    public DRRScheduler(@NonNull Config config, @Nullable CoreSnapshot snapshot) {
+    public DRRScheduler(@NonNull DRRConfig config, @Nullable CoreSnapshot snapshot) {
         this(config, snapshot, () -> 0.0);
     }
 
-    public DRRScheduler(@NonNull Config config, @Nullable CoreSnapshot snapshot,
+    public DRRScheduler(@NonNull DRRConfig config, @Nullable CoreSnapshot snapshot,
             @NonNull Callable<Double> downstreamPressure) {
-        super(getName(config), config.cloneConfig != null ? config.cloneConfig.coreId() : 0,
-                Runtime.getRuntime().availableProcessors() >>> 1, getChunkSize(config.cloneConfig));
+        super(getName(config), config.cloneConfig() != null ? config.cloneConfig().coreId() : 0,
+                Runtime.getRuntime().availableProcessors() >>> 1, getChunkSize(config.cloneConfig()));
         this.logger = LoggerFactory.getLogger(getName(config));
         this.config = config;
         this.snapshot = snapshot;
@@ -71,14 +72,14 @@ public class DRRScheduler extends IngestSequencer implements CacheManager, Clone
             this.coreId = -1;
         }
 
-        this.metrics = new Metrics(config.metricPrefix, coreId, capFactor, totalQueuedSizeBytes,
-                config.registry);
+        this.metrics = new Metrics(config.metricPrefix(), coreId, capFactor, totalQueuedSizeBytes,
+                config.registry());
 
     }
 
-    public static String getName(Config config) {
-        return config.cloneConfig != null ? config.cloneConfig.shardName() + "-DRRScheduler-"
-                                            + config.cloneConfig.coreId() : "DRRScheduler";
+    public static String getName(DRRConfig config) {
+        return config.cloneConfig() != null ? config.cloneConfig().shardName() + "-DRRScheduler-"
+                                            + config.cloneConfig().coreId() : "DRRScheduler";
     }
 
     private static int getChunkSize(CloneConfig config) {
@@ -165,7 +166,7 @@ public class DRRScheduler extends IngestSequencer implements CacheManager, Clone
         FlowSnapshot flowSnapshot = fillBytesRecorder.getAcquire().getFlowSnapshot();
         fillBytesRecorder.getAcquire().refreshSnapshot(flowSnapshot, true);
         double cv = flowSnapshot.unitCV;
-        double clampedCV = (cv > 0.5) ? 0.5 : (cv < 0.0 ? 0.0 : cv);
+        double clampedCV = (cv > 0.5) ? 0.5 : MathFunctions.clampDouble(cv, 0.0, cv);
 
         long delta = targetQuantum - currentWeight;
         if (delta < 0) {
@@ -356,26 +357,6 @@ public class DRRScheduler extends IngestSequencer implements CacheManager, Clone
                 subQBacklogSummary.close();
                 subQWeightSummary.close();
             }
-        }
-    }
-
-    public record Config(@Nullable CloneConfig cloneConfig, String metricPrefix,
-                         @Nullable MeterRegistry registry) implements CloneableObject {
-
-        @Override
-        public Config clone(CloneConfig cloneConfig) {
-            String metricPrefix = metricPrefix();
-            if (cloneConfig != null) {
-                int cpuId = cloneConfig.coreId();
-                metricPrefix = cloneConfig.metricPrefix() + "-" + cloneConfig.shardName()
-                        + "-DRRScheduler-" + cpuId;
-            }
-            return new Config(cloneConfig, metricPrefix, registry);
-        }
-
-        @Override
-        public void close() throws Exception {
-
         }
     }
 }

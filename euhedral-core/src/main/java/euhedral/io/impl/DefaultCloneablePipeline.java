@@ -5,7 +5,9 @@ import euhedral.io.AbstractCloneablePipeline;
 import euhedral.io.AbstractExecutor;
 import euhedral.io.DRRScheduler;
 import euhedral.io.ExecutionManager;
-import euhedral.io.control_plane.CloneConfig;
+import euhedral.io.config.CloneConfig;
+import euhedral.io.config.DRRConfig;
+import euhedral.io.config.ExecutionManagerConfig;
 import euhedral.io.interfaces.CacheManager;
 import euhedral.io.interfaces.PipelineExecutor;
 import euhedral.io.interfaces.SlotManager;
@@ -17,13 +19,13 @@ public class DefaultCloneablePipeline extends AbstractCloneablePipeline {
     public DefaultCloneablePipeline(String name, String metricPrefix,
             @Nullable MeterRegistry meterRegistry, AbstractExecutor executor) {
         this(name,
-                new DRRScheduler.Config(null, metricPrefix, meterRegistry),
-                ExecutionManager.Config.lowLatencyDefault(meterRegistry, metricPrefix),
+                new DRRConfig(null, metricPrefix, meterRegistry),
+                ExecutionManagerConfig.balancedDefault(meterRegistry, metricPrefix),
                 executor);
     }
 
-    public DefaultCloneablePipeline(String name, DRRScheduler.Config drrConfig,
-            ExecutionManager.Config dsmConfig, AbstractExecutor executor) {
+    public DefaultCloneablePipeline(String name, DRRConfig drrConfig,
+            ExecutionManagerConfig dsmConfig, AbstractExecutor executor) {
         super(name, null, getDrrScheduler(drrConfig), getSlotManager(dsmConfig), executor);
     }
 
@@ -32,11 +34,11 @@ public class DefaultCloneablePipeline extends AbstractCloneablePipeline {
         super(name, config, scheduler, slotManager, executor);
     }
 
-    private static DRRScheduler getDrrScheduler(DRRScheduler.Config drrConfig) {
+    private static DRRScheduler getDrrScheduler(DRRConfig drrConfig) {
         return new DRRScheduler(drrConfig, null);
     }
 
-    private static ExecutionManager getSlotManager(ExecutionManager.Config dsmConfig) {
+    private static ExecutionManager getSlotManager(ExecutionManagerConfig dsmConfig) {
         return new ExecutionManager(dsmConfig);
     }
 

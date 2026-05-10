@@ -1,9 +1,8 @@
 package euhedral.io.impl;
 
 import euhedral.hashing.HasherApi;
-import euhedral.io.DRRScheduler;
-import euhedral.io.DRRScheduler.Config;
-import euhedral.io.ExecutionManager;
+import euhedral.io.config.DRRConfig;
+import euhedral.io.config.ExecutionManagerConfig;
 import euhedral.io.control_plane.ControlPlane;
 import euhedral.io.frames.ConsumerFrame;
 import euhedral.io.frames.FunctionFrame;
@@ -41,16 +40,16 @@ public class FunctionalApi implements AutoCloseable {
             throw new RuntimeException("A ControlPlaneInstance is already in use");
         }
         api = new FunctionalApi(name, recycleCapacityPerStream,
-                new Config(null, name, meterRegistry),
-                ExecutionManager.Config.balancedDefault(
+                new DRRConfig(null, name, meterRegistry),
+                ExecutionManagerConfig.balancedDefault(
                         meterRegistry, name));
         INSTANCE.set(api);
         return api;
     }
 
     public static FunctionalApi getOrCreate(String name, int recycleCapacityPerStream,
-            Config drrConfig,
-            ExecutionManager.Config slotManagerConfig) {
+            DRRConfig drrConfig,
+            ExecutionManagerConfig slotManagerConfig) {
         FunctionalApi api = INSTANCE.get();
         if (api != null) {
             return api;
@@ -70,14 +69,10 @@ public class FunctionalApi implements AutoCloseable {
     private final AtomicBoolean closed = new AtomicBoolean(false);
 
     protected FunctionalApi(String name, int recycleCapacityPerStream,
-            Config drrConfig, ExecutionManager.Config slotManagerConfig) {
+            DRRConfig drrConfig, ExecutionManagerConfig slotManagerConfig) {
         this.recycleCapacity = recycleCapacityPerStream;
 
-        DRRScheduler drr = new DRRScheduler(drrConfig, null);
-        ExecutionManager slotManager = new ExecutionManager(slotManagerConfig);
-
-        FunctionalPipeline pipeline = new FunctionalPipeline(name, null, drr, slotManager,
-                new FunctionalExecutor(null));
+        FunctionalPipeline pipeline = new FunctionalPipeline(name, drrConfig, slotManagerConfig);
 
         controlPlane = ControlPlane.getOrCreate(name, pipeline,
                 drrConfig.registry());
