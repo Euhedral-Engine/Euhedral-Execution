@@ -1,4 +1,4 @@
-package euhedral.io.utils;
+package euhedral.hashing;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -8,21 +8,26 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import org.junit.jupiter.api.Test;
 
-class KeyHasherTest {
+class HasherApiTest {
+
+    private static long unsignedMultiplyHigh(long a, long b) {
+        long signedHigh = Math.multiplyHigh(a, b);
+        return signedHigh + ((a >> 63) & b) + ((b >> 63) & a);
+    }
 
     @Test
     void testDeterminism() {
         String input = "shard-routing-key-123";
-        long hash1 = KeyHasher.getHash(input);
-        long hash2 = KeyHasher.getHash(input);
+        long hash1 = HasherApi.getHash(input);
+        long hash2 = HasherApi.getHash(input);
 
         assertEquals(hash1, hash2, "Same input must produce same hash");
     }
 
     @Test
     void testAvalancheEffect() {
-        long h1 = KeyHasher.getHash("user_1000");
-        long h2 = KeyHasher.getHash("user_1001");
+        long h1 = HasherApi.getHash("user_1000");
+        long h2 = HasherApi.getHash("user_1001");
 
         assertNotEquals(h1, h2);
         assertTrue(Long.bitCount(h1 ^ h2) > 20, "Bit flip count should be significant");
@@ -33,9 +38,9 @@ class KeyHasherTest {
         String input = "test-vector";
         byte[] bytes = input.getBytes(StandardCharsets.UTF_16LE);
 
-        assertNotEquals(0, KeyHasher.getHash(input));
-        assertNotEquals(0, KeyHasher.getHash(bytes));
-        assertEquals(KeyHasher.getHash(input), KeyHasher.getHash(bytes));
+        assertNotEquals(0, HasherApi.getHash(input));
+        assertNotEquals(0, HasherApi.getHash(bytes));
+        assertEquals(HasherApi.getHash(input), HasherApi.getHash(bytes));
     }
 
     @Test
@@ -44,8 +49,8 @@ class KeyHasherTest {
         long seed1 = 0x12345L;
         long seed2 = 0x67890L;
 
-        long h1 = KeyHasher.getHash(input, seed1);
-        long h2 = KeyHasher.getHash(input, seed2);
+        long h1 = HasherApi.getHash(input, seed1);
+        long h2 = HasherApi.getHash(input, seed2);
 
         assertNotEquals(h1, h2, "Different seeds must produce different hashes");
     }
@@ -55,8 +60,8 @@ class KeyHasherTest {
         String part1 = "namespace";
         String part2 = "entityId";
 
-        long manualCombine = KeyHasher.getHash(part2, KeyHasher.getHash(part1));
-        long helperCombine = KeyHasher.getHash(part1, part2);
+        long manualCombine = HasherApi.getHash(part2, HasherApi.getHash(part1));
+        long helperCombine = HasherApi.getHash(part1, part2);
 
         assertEquals(manualCombine, helperCombine, "Multi-part hashing should be chainable");
     }
@@ -68,12 +73,11 @@ class KeyHasherTest {
         int iterations = 100_000;
 
         for (int i = 0; i < iterations; i++) {
-            long hash = KeyHasher.getHash("key-" + i);
-            int bucket = (int) Math.unsignedMultiplyHigh(hash, cores);
+            long hash = HasherApi.getHash("key-" + i);
+            int bucket = (int) unsignedMultiplyHigh(hash, cores);
             buckets[bucket]++;
         }
         System.out.println(Arrays.toString(buckets));
-
 
         // Each bucket should have ~6250 hits. Ensure no bucket is empty.
         for (int count : buckets) {
@@ -83,7 +87,7 @@ class KeyHasherTest {
 
     @Test
     void testZeroSafety() {
-        assertNotEquals(0, KeyHasher.mix(0));
-        assertNotEquals(0, KeyHasher.mix(Long.MAX_VALUE));
+        assertNotEquals(0, HasherApi.mixWithZeroCheck(0));
+        assertNotEquals(0, HasherApi.mixWithZeroCheck(Long.MAX_VALUE));
     }
 }

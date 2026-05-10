@@ -18,13 +18,13 @@ import lombok.Setter;
 /// and dispatched again.
 ///
 /// To prevent performance degradation and maintain strict ordering guarantees, use
-/// [`KeyHasher`][euhedral.io.utils] to generate hashes.
+/// [`HasherApi`][euhedral.io.utils] to generate hashes.
 ///
 /// **Ordering:** Reliable sequencing depends on keeping the hash consistent across retries.
 /// ```java
 /// long idHash = frame.getIdHash();
 /// final long seed = 123;
-/// frame.randomizeHash(KeyHasher.combine(idHash, seed));
+/// frame.randomizeHash(HasherApi.combine(idHash, seed));
 /// ```
 ///
 /// **Parallelism:** For even distribution across consumers, each frame's hash must be changed.
@@ -32,7 +32,7 @@ import lombok.Setter;
 /// ```java
 /// long idHash = frame.getIdHash();
 /// long seed = 0;
-/// frame.randomizeHash(KeyHasher.combine(idHash, seed++));
+/// frame.randomizeHash(HasherApi.combine(idHash, seed++));
 /// ```
 @SuppressWarnings("rawtypes")
 public abstract class AbstractFrame extends WorkCancelled {

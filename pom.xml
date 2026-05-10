@@ -41,6 +41,7 @@
     <module>euhedral-core</module>
     <module>euhedral-data-structures</module>
     <module>euhedral-hardware-utils</module>
+    <module>euhedral-hashing</module>
   </modules>
 
   <repositories>

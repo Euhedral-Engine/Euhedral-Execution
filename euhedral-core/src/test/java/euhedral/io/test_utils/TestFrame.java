@@ -1,9 +1,9 @@
 package euhedral.io.test_utils;
 
 import euhedral.hardware_utils.ThreadTools;
+import euhedral.hashing.HasherApi;
 import euhedral.io.control_plane.RoutingPolicy;
 import euhedral.io.frames.AbstractFrame;
-import euhedral.io.utils.KeyHasher;
 import euhedral.io.impl.FrameManager;
 import java.util.concurrent.ThreadLocalRandom;
 import org.jctools.util.PaddedAtomicLong;
@@ -28,11 +28,11 @@ public final class TestFrame extends AbstractFrame {
     public static TestFrame[] generateParallel(int count) {
         FrameManager<Void, TestFrame> recycler = new FrameManager<>(count, PASSWORD);
 
-        final long idHash = KeyHasher.mix(ThreadLocalRandom.current().nextLong());
+        final long idHash = HasherApi.mix(ThreadLocalRandom.current().nextLong());
         TestFrame[] frames = new TestFrame[count];
         for (int i = 0; i < count; i++) {
             frames[i] = new TestFrame(idHash, false, recycler);
-            frames[i].randomizeHash(KeyHasher.getHash("seed-" + i));
+            frames[i].randomizeHash(HasherApi.getHash("seed-" + i));
         }
         return frames;
     }
@@ -40,8 +40,8 @@ public final class TestFrame extends AbstractFrame {
     public static TestFrame[] generateOrdered(int count) {
         FrameManager<Void, TestFrame> recycler = new FrameManager<>(count, PASSWORD);
 
-        final long idHash = KeyHasher.mix(ThreadLocalRandom.current().nextLong());
-        final long orderedSeed = KeyHasher.mix(ThreadLocalRandom.current().nextLong());
+        final long idHash = HasherApi.mix(ThreadLocalRandom.current().nextLong());
+        final long orderedSeed = HasherApi.mix(ThreadLocalRandom.current().nextLong());
 
         TestFrame[] frames = new TestFrame[count];
         for(int i = 0; i < count; i++) {

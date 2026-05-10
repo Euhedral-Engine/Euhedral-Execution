@@ -1,7 +1,7 @@
 package euhedral.io.impl;
 
+import euhedral.hashing.HasherApi;
 import euhedral.io.frames.SequencedFrame;
-import euhedral.io.utils.KeyHasher;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongHeapPriorityQueue;
 import java.util.concurrent.ThreadLocalRandom;
@@ -19,7 +19,7 @@ public class FrameSequencer<R> {
             null, null, null);
 
     private final long ingestPassword;
-    private final long sequencePassword = KeyHasher.combine(ThreadLocalRandom.current().nextLong(),
+    private final long sequencePassword = HasherApi.combine(ThreadLocalRandom.current().nextLong(),
             ThreadLocalRandom.current()
                     .nextLong());
     private final Long2ObjectOpenHashMap<SequencedFrame> frameData = new Long2ObjectOpenHashMap<>(
