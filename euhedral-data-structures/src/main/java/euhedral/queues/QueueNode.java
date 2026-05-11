@@ -44,13 +44,25 @@ public class QueueNode<T> {
         Arrays.fill(refs, true);
     }
 
+    public boolean isEmpty() {
+        return chunk.isEmpty();
+    }
+
     public boolean isRetired() {
-        VarHandle.acquireFence();
         for(int i = 0; i < partitions; i++) {
-            if((boolean) B_ARRAY.getVolatile(refs, i)) {
+            if((boolean) B_ARRAY.getAcquire(refs, i)) {
                 return false;
             }
         }
         return true;
+    }
+
+    public void reset() {
+        chunk.reset();
+        reclaimed.set(false);
+        for(int i = 0; i < partitions; i++) {
+            B_ARRAY.setRelease(refs, i, true);
+        }
+        next = null;
     }
 }

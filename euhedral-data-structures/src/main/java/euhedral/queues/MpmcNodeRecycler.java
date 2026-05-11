@@ -22,9 +22,8 @@ public class MpmcNodeRecycler<T> {
             QueueNode<T> next = head.next;
 
             if (stack.compareAndSet(head, next)) {
-                head.next = null;
+                head.reset();
                 count.decrementAndGet();
-                next.chunk.reset();
                 return head;
             }
         }
@@ -49,17 +48,5 @@ public class MpmcNodeRecycler<T> {
             }
             head = witness;
         }
-    }
-
-    private static long pack(int version, int index) {
-        return ((long) version << 32) | (index & 0xffffffffL);
-    }
-
-    private static int unpackIndex(long v) {
-        return  (int) v;
-    }
-
-    private static int unpackVersion(long v) {
-        return (int) (v >>> 32);
     }
 }
