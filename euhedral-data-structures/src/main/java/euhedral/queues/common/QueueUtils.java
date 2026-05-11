@@ -1,4 +1,4 @@
-package euhedral.queues;
+package euhedral.queues.common;
 
 import com.sun.management.HotSpotDiagnosticMXBean;
 import java.lang.management.ManagementFactory;
