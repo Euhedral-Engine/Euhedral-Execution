@@ -1,8 +1,13 @@
 package euhedral.queues;
 
+import static euhedral.queues.QueueUtils.POINTER_PAD_BYTES;
+
+import euhedral.atomics.PaddedAtomicReference;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
+import java.util.concurrent.atomic.AtomicBoolean;
 
+@SuppressWarnings("unchecked")
 public class PartitionedUnboundedMpmcArrayQueue<T> implements PartitionedQueue<T> {
     private static final VarHandle HEADS = MethodHandles.arrayElementVarHandle(QueueNode[].class);
 
@@ -12,9 +17,9 @@ public class PartitionedUnboundedMpmcArrayQueue<T> implements PartitionedQueue<T
     private final MpmcNodeRecycler<T> recycler;
 
     private final QueueNode<T>[] heads;
-    private volatile QueueNode<T> tail;
+    private final PaddedAtomicReference<QueueNode<T>> tail;
+    private final AtomicBoolean movingTail = new AtomicBoolean(false);
 
-    @SuppressWarnings("unchecked")
     public PartitionedUnboundedMpmcArrayQueue(int partitions, int chunkSize, int maxPooledChunks) {
         if (partitions <= 0 || chunkSize <= 0) {
             throw new IllegalArgumentException(
@@ -26,10 +31,10 @@ public class PartitionedUnboundedMpmcArrayQueue<T> implements PartitionedQueue<T
 
         this.heads = new QueueNode[(partitions + 1) * QueueUtils.POINTER_PAD_BYTES
                 + partitions];
-        this.tail = new QueueNode<>(partitions, chunkSize);
+        this.tail = new PaddedAtomicReference<>(new QueueNode<>(partitions, chunkSize));
 
         for (int i = 0; i < partitions; i++) {
-            heads[partitionIndex(i)] = this.tail;
+            heads[partitionIndex(i)] = this.tail.getPlain();
         }
         recycler = maxPooledChunks <= 0 ? null : new MpmcNodeRecycler<>(maxPooledChunks);
     }
@@ -42,63 +47,61 @@ public class PartitionedUnboundedMpmcArrayQueue<T> implements PartitionedQueue<T
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public boolean offer(int partition, T obj) {
         boundsCheck(partition);
         if (obj == null) {
             throw new NullPointerException();
         }
 
-        QueueNode<T> temp = null;
-
         boolean accepted;
-        QueueNode<T> tail = this.tail;
+        QueueNode<T> tail = this.tail.getAcquire();
         do {
             accepted = tail.chunk.offer(partition, obj);
-            if (!accepted && temp == null) {
-                temp = recycler == null ? null : recycler.pop();
-                temp = temp == null ? new QueueNode<>(partitions, chunkSize) : temp;
-            }
-            if (!accepted) {
-                QueueNode<T> prev = tail;
-                tail = (QueueNode<T>) QueueNode.NEXT.compareAndExchange(tail, null, temp);
-                if (tail == null) {
-                    tail = temp;
 
-                    if (this.tail == prev) {
-                        this.tail = tail;
+            if (!accepted && movingTail.compareAndSet(false, true)) {
+                try {
+                    QueueNode<T> next = this.tail.getAcquire();
+                    if(tail != next) {
+                        tail = next;
+                        continue;
                     }
-                }
-            }
 
+                    next = recycler == null ? null : recycler.pop();
+                    next = next == null ? new QueueNode<>(partitions, chunkSize) : next;
+
+                    tail.next = next;
+                    tail = next;
+                    this.tail.setRelease(tail);
+                } finally {
+                    this.movingTail.set(false);
+                }
+            } else if(!accepted) {
+                tail = this.tail.getAcquire();
+            }
         } while (!accepted);
         return true;
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public T peek(int partition) {
         boundsCheck(partition);
         int pIdx = partitionIndex(partition);
-        QueueNode<T> head = (QueueNode<T>) HEADS.getVolatile(heads, pIdx);
+        QueueNode<T> head = (QueueNode<T>) HEADS.getAcquire(heads, pIdx);
         return head.chunk.peek(partition);
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public T poll(int partition) {
         boundsCheck(partition);
 
         int pIdx = partitionIndex(partition);
-        QueueNode<T> head = (QueueNode<T>) HEADS.getVolatile(heads, pIdx);
+        QueueNode<T> head = (QueueNode<T>) HEADS.getAcquire(heads, pIdx);
         T val = head.chunk.poll(partition);
 
-        QueueNode<T> next = head.next;
-        if (next != null && head.chunk.isEmpty(partition) && HEADS.compareAndSet(heads, pIdx, head, next)) {
-            QueueNode.B_ARRAY.setVolatile(head.refs, partition, false);
-
-            if (recycler != null && head.isRetired() && head.reclaimed.compareAndSet(false, true)) {
-                recycler.recycle(head);
+        if (val == null) {
+            QueueNode<T> next = head.next;
+            if(next != null && head.isEmpty()) {
+                moveHeadsForward(head, next);
             }
         }
         return val;
@@ -114,14 +117,13 @@ public class PartitionedUnboundedMpmcArrayQueue<T> implements PartitionedQueue<T
         int total = 0;
         for (int i = 0; i < this.partitions && total < limit; i++) {
             int count = drain(i, consumer, limit);
-            limit -= count;
+            total += count;
         }
         return total;
     }
 
     /// Drains from a specific partition
     @Override
-    @SuppressWarnings("unchecked")
     public int drain(int partition, QueueConsumer<T> consumer, int limit) {
         boundsCheck(partition);
         if (consumer == null || limit <= 0) {
@@ -130,7 +132,7 @@ public class PartitionedUnboundedMpmcArrayQueue<T> implements PartitionedQueue<T
 
         int pIdx = partitionIndex(partition);
         int total = 0;
-        QueueNode<T> head = (QueueNode<T>) HEADS.getVolatile(heads, pIdx);
+        QueueNode<T> head = (QueueNode<T>) HEADS.getAcquire(heads, pIdx);
         do {
             int count = head.chunk.drain(partition, consumer, limit);
 
@@ -138,19 +140,35 @@ public class PartitionedUnboundedMpmcArrayQueue<T> implements PartitionedQueue<T
             if (count > 0) {
                 limit -= count;
                 total += count;
-            } else if ((next = head.next) != null && head.chunk.isEmpty(partition)) {
-                QueueNode<T> prev = head;
-                head = (QueueNode<T>) HEADS.compareAndExchange(heads, pIdx, head, next);
-                QueueNode.B_ARRAY.setVolatile(prev.refs, partition, false);
-
-                if (recycler != null && prev.isRetired() && prev.reclaimed.compareAndSet(false, true)) {
-                    recycler.recycle(prev);
-                }
+            } else if ((next = head.next) != null && head.isEmpty()) {
+                moveHeadsForward(head, next);
+                head = next;
             } else {
                 break;
             }
         } while (limit > 0);
         return total;
+    }
+
+    private void moveHeadsForward(QueueNode<T> commonHead, QueueNode<T> nextHead) {
+        int count = 0;
+        for(int i = 0; i < this.partitions; i++) {
+            int pIdx = partitionIndex(i);
+
+            if(HEADS.compareAndSet(this.heads, pIdx, commonHead, nextHead)) {
+                QueueNode.B_ARRAY.setRelease(commonHead.refs, i, false);
+                count++;
+            } else if(!((boolean) QueueNode.B_ARRAY.getAcquire(commonHead.refs, i))) {
+                count++;
+            }
+        }
+        if(count != this.partitions) {
+            return;
+        }
+
+        if(recycler != null && commonHead.reclaimed.compareAndSet(false, true)) {
+            recycler.recycle(commonHead);
+        }
     }
 
     private void boundsCheck(int idx) {
@@ -161,6 +179,7 @@ public class PartitionedUnboundedMpmcArrayQueue<T> implements PartitionedQueue<T
     }
 
     private int partitionIndex(int idx) {
-        return (idx << QueueUtils.LONG_PAD) + QueueUtils.LONG_PAD;
+        int logicalIdx = idx % partitions;
+        return (logicalIdx + 1) * POINTER_PAD_BYTES + logicalIdx;
     }
 }
