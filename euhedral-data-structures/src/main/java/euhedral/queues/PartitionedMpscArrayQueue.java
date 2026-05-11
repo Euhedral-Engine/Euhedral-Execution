@@ -1,13 +1,13 @@
 package euhedral.queues;
 
-import static euhedral.queues.QueueUtils.LONG_PAD;
+import static euhedral.queues.common.QueueUtils.LONG_PAD;
 
+import euhedral.queues.common.QueueUtils;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.Arrays;
 import java.util.StringJoiner;
-
-import lombok.Getter;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class PartitionedMpscArrayQueue<T> extends PartitionedArrayQueue<T> {
     private static final VarHandle LA_HANDLE = MethodHandles.arrayElementVarHandle(long[].class);
@@ -17,8 +17,7 @@ public class PartitionedMpscArrayQueue<T> extends PartitionedArrayQueue<T> {
 
     private final long[] inFlight;
 
-    @Getter
-    private volatile boolean retired = false;
+    private final AtomicBoolean retired = new AtomicBoolean(false);
 
     public PartitionedMpscArrayQueue(int partitions, int chunkSize, boolean unbounded) {
         super(partitions, chunkSize, unbounded);
@@ -49,7 +48,7 @@ public class PartitionedMpscArrayQueue<T> extends PartitionedArrayQueue<T> {
             throw new NullPointerException();
         }
 
-        if (unbounded && retired) {
+        if (unbounded && retired.getAcquire()) {
             return false;
         }
         int pIdx = partitionIndex(partition);
@@ -61,11 +60,16 @@ public class PartitionedMpscArrayQueue<T> extends PartitionedArrayQueue<T> {
         long head;
         long tail;
         do {
-            head = (long) LA_HANDLE.getVolatile(heads, pIdx);
-            tail = (long) LA_HANDLE.getVolatile(tails, pIdx);
+            if(unbounded && retired.getAcquire()) {
+                LA_HANDLE.getAndAdd(inFlight, pIdx, -1);
+                return false;
+            }
+
+            head = (long) LA_HANDLE.getAcquire(heads, pIdx);
+            tail = (long) LA_HANDLE.getAcquire(tails, pIdx);
             if(QueueUtils.unsignedDiff(head, tail + 1) > chunkSize) {
                 if(unbounded) {
-                    retired = true;
+                    retired.setRelease(true);
                     LA_HANDLE.getAndAdd(inFlight, pIdx, -1);
                 }
                 return false;
@@ -116,7 +120,7 @@ public class PartitionedMpscArrayQueue<T> extends PartitionedArrayQueue<T> {
 
         T obj = queue[queueIndex(partition)][chunkIndex(head)];
         LA_HANDLE.getAndBitwiseAnd(tailSequence, sChunkIdx, ~sNum);
-        LA_HANDLE.setOpaque(heads, pIdx, head + 1);
+        heads[pIdx]++;
         return obj;
     }
 
@@ -164,7 +168,7 @@ public class PartitionedMpscArrayQueue<T> extends PartitionedArrayQueue<T> {
         }
 
         VarHandle.releaseFence();
-        LA_HANDLE.setOpaque(this.heads, pIdx, head + total);
+        this.heads[pIdx] += total;
         return total;
     }
 
@@ -176,28 +180,26 @@ public class PartitionedMpscArrayQueue<T> extends PartitionedArrayQueue<T> {
         return 1L << (idx & 63);
     }
 
+    public boolean isRetired() {
+        return this.retired.getAcquire();
+    }
+
     public boolean isEmpty() {
-        if (unbounded && retired) {
-            for (int i = 0; i < partitions; i++) {
-                if (!isEmpty(i)) {
-                    return false;
-                }
+        for (int i = 0; i < partitions; i++) {
+            if (!isEmpty(i)) {
+                return false;
             }
-            return true;
         }
-        return false;
+        return true;
     }
 
     public boolean isEmpty(int partition) {
-        if (unbounded && retired) {
-            int pIdx = partitionIndex(partition);
-            long head = (long) LA_HANDLE.getVolatile(heads, pIdx);
-            long tail = (long) LA_HANDLE.getVolatile(tails, pIdx);
-            long inFlight = (long) LA_HANDLE.getVolatile(this.inFlight, pIdx);
+        int pIdx = partitionIndex(partition);
+        long head = (long) LA_HANDLE.getAcquire(heads, pIdx);
+        long tail = (long) LA_HANDLE.getAcquire(tails, pIdx);
+        long inFlight = this.inFlight == null ? 0 : (long) LA_HANDLE.getAcquire(this.inFlight, pIdx);
 
-            return head == tail && inFlight == 0 && isPartitionEmptyInternal(pIdx);
-        }
-        return false;
+        return head == tail && inFlight == 0 && isPartitionEmptyInternal(pIdx);
     }
 
     public boolean isPartitionEmpty(int partition) {
@@ -210,15 +212,16 @@ public class PartitionedMpscArrayQueue<T> extends PartitionedArrayQueue<T> {
         int start = sequenceChunkIndex(0);
         int curr = start;
         do {
-            long chunk = (long) LA_HANDLE.getVolatile(sequence[pIdx], curr);
+            long chunk = (long) LA_HANDLE.getAcquire(sequence[pIdx], curr);
             if (chunk != 0) {
                 return false;
             }
-            curr = sequenceChunkIndex(curr + 64);
+            curr = sequenceChunkIndex(++curr);
         } while (curr != start);
         return true;
     }
 
+    @Override
     public void reset() {
         VarHandle.acquireFence();
 
@@ -232,7 +235,7 @@ public class PartitionedMpscArrayQueue<T> extends PartitionedArrayQueue<T> {
             Arrays.fill(queue[queueIndex(i)], null);
             Arrays.fill(sequence[pIdx], 0);
         }
-        retired = false;
+        retired.setRelease(false);
     }
 
     public String getState() {

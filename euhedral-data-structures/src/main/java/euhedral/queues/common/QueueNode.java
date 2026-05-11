@@ -1,47 +1,35 @@
-package euhedral.queues;
+package euhedral.queues.common;
 
+import euhedral.queues.PartitionedArrayQueue;
+import euhedral.queues.PartitionedMpmcArrayQueue;
+import euhedral.queues.PartitionedMpscArrayQueue;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class QueueNode<T> {
-    private static final AtomicInteger ID = new AtomicInteger(0);
-    private static final Logger LOGGER = LoggerFactory.getLogger(QueueNode.class);
-
-    public static final VarHandle NEXT;
     public static final VarHandle B_ARRAY = MethodHandles.arrayElementVarHandle(boolean[].class);
 
-    static {
-        VarHandle handle = null;
-        try {
-            handle = MethodHandles.lookup().findVarHandle(QueueNode.class, "next", QueueNode.class);
-        } catch (Throwable t) {
-            LOGGER.error("Error initializing VarHandle", t);
-        }
-        NEXT = handle;
-    }
-
-    public final int id;
     public final AtomicBoolean reclaimed = new AtomicBoolean(false);
-    public final PartitionedMpmcArrayQueue<T> chunk;
+    public final PartitionedArrayQueue<T> chunk;
 
     public final int partitions;
     public final boolean[] refs;
 
-    public volatile QueueNode<T> next;
+    public final AtomicReference<QueueNode<T>> next = new AtomicReference<>();
 
-    public QueueNode(int partitions, int chunkSize) {
-        this.id = ID.incrementAndGet();
-
+    public QueueNode(int partitions, int chunkSize, Type type) {
         this.partitions = partitions;
-        chunk = new PartitionedMpmcArrayQueue<>(partitions, chunkSize, true);
         refs = new boolean[partitions];
         Arrays.fill(refs, true);
+
+        chunk = switch (type) {
+            case MPMC -> new PartitionedMpmcArrayQueue<>(partitions, chunkSize, true);
+            case MPSC -> new PartitionedMpscArrayQueue<>(partitions, chunkSize, true);
+            case UNSAFE -> new PartitionedArrayQueue<>(partitions, chunkSize, true);
+        };
     }
 
     public boolean isEmpty() {
@@ -59,10 +47,16 @@ public class QueueNode<T> {
 
     public void reset() {
         chunk.reset();
-        reclaimed.set(false);
+        reclaimed.lazySet(false);
         for(int i = 0; i < partitions; i++) {
             B_ARRAY.setRelease(refs, i, true);
         }
-        next = null;
+        next.setRelease(null);
+    }
+
+    public enum Type {
+        MPMC,
+        MPSC,
+        UNSAFE
     }
 }

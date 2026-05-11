@@ -1,16 +1,21 @@
 package euhedral.queues;
 
-import static euhedral.queues.QueueUtils.LONG_PAD;
-import static euhedral.queues.QueueUtils.POINTER_PAD_BYTES;
+import static euhedral.queues.common.QueueUtils.LONG_PAD;
+import static euhedral.queues.common.QueueUtils.POINTER_PAD_BYTES;
 
+import euhedral.queues.common.PartitionedQueue;
+import euhedral.queues.common.QueueUtils;
+import java.util.Arrays;
 import lombok.Getter;
 
 /// A bounded, padded, partitioned, array-based queue.
 ///
-/// This class is not thread-safe for any method.
+/// This class is not thread-safe for any method. This is meant to be used by a single thread and
+/// there are no visibility guarantees between 2 different threads.
 public class PartitionedArrayQueue<T> implements PartitionedQueue<T> {
 
     protected final T[][] queue;
+
     @Getter
     protected final int partitions;
     @Getter
@@ -155,5 +160,15 @@ public class PartitionedArrayQueue<T> implements PartitionedQueue<T> {
         long tail = tails[pIdx];
 
         return head == tail;
+    }
+
+    public void reset() {
+        Arrays.fill(this.heads, 0);
+        Arrays.fill(this.tails, 0);
+
+        for (int i = 0; i < this.partitions; i++) {
+            int qIdx = queueIndex(i);
+            Arrays.fill(this.queue[qIdx], null);
+        }
     }
 }
