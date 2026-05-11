@@ -1,9 +1,10 @@
 package euhedral.queues;
 
-import static euhedral.queues.QueueUtils.ABS_MASK;
-import static euhedral.queues.QueueUtils.LONG_PAD;
-import static euhedral.queues.QueueUtils.POINTER_PAD_BYTES;
+import static euhedral.queues.common.QueueUtils.ABS_MASK;
+import static euhedral.queues.common.QueueUtils.LONG_PAD;
+import static euhedral.queues.common.QueueUtils.POINTER_PAD_BYTES;
 
+import euhedral.queues.common.QueueUtils;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.Arrays;
@@ -259,7 +260,7 @@ public class PartitionedMpmcArrayQueue<T> extends PartitionedArrayQueue<T> {
         long head = (long) LA_HANDLE.getAcquire(heads, pIdx);
         long tail = (long) LA_HANDLE.getAcquire(tails, pIdx);
         long headSeq = (long) LA_HANDLE.getAcquire(headSequence, pIdx);
-        long inFlight = (long) LA_HANDLE.getAcquire(this.inFlight, pIdx);
+        long inFlight = this.inFlight == null ? 0 : (long) LA_HANDLE.getAcquire(this.inFlight, pIdx);
 
         return head == tail && head == headSeq && inFlight == 0 && isPartitionEmptyInternal(pIdx);
     }
@@ -277,6 +278,7 @@ public class PartitionedMpmcArrayQueue<T> extends PartitionedArrayQueue<T> {
         return true;
     }
 
+    @Override
     public void reset() {
         VarHandle.acquireFence();
 

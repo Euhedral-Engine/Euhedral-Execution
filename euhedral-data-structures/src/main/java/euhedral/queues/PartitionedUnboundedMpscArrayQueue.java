@@ -2,24 +2,20 @@ package euhedral.queues;
 
 import euhedral.queues.common.QueueNode;
 import euhedral.queues.common.QueueNode.Type;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.VarHandle;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/// An unbounded multi-producer-multi-consumer array queue with partitions. This class is
-/// thread-safe for any method. It is derived
+/// An unbounded multi-producer-single-consumer array queue with partitions. This class is
+/// thread-safe for any offer method. It is not thread-safe for peek, poll, or drain. It is derived
 /// from [PartitionedUnboundedArrayQueue] but overrides the logic for head and tail interaction to
-/// /// make it safe for use as an MPMC.
+/// make it safe for use as an MPSC.
 ///
 /// @param <T> Type to store
-@SuppressWarnings("unchecked")
-public class PartitionedUnboundedMpmcArrayQueue<T> extends PartitionedUnboundedArrayQueue<T> {
-    private static final VarHandle HEADS = MethodHandles.arrayElementVarHandle(QueueNode[].class);
+public class PartitionedUnboundedMpscArrayQueue<T> extends PartitionedUnboundedArrayQueue<T> {
 
     protected final AtomicBoolean movingTail = new AtomicBoolean(false);
 
-    public PartitionedUnboundedMpmcArrayQueue(int partitions, int chunkSize, int maxPooledChunks) {
-        super(partitions, chunkSize, maxPooledChunks, Type.MPMC);
+    public PartitionedUnboundedMpscArrayQueue(int partitions, int chunkSize, int maxPooledChunks) {
+        super(partitions, chunkSize, maxPooledChunks, Type.MPSC);
     }
 
     @Override
@@ -30,11 +26,6 @@ public class PartitionedUnboundedMpmcArrayQueue<T> extends PartitionedUnboundedA
     @Override
     protected void releaseTailMovePermission() {
         this.movingTail.setRelease(false);
-    }
-
-    @Override
-    protected QueueNode<T> getHeadNode(int pIdx) {
-        return (QueueNode<T>) HEADS.getAcquire(super.heads, pIdx);
     }
 
     @Override
@@ -59,17 +50,17 @@ public class PartitionedUnboundedMpmcArrayQueue<T> extends PartitionedUnboundedA
 
     @Override
     protected void moveHeadsForward(QueueNode<T> commonHead, QueueNode<T> nextHead) {
-        for(int i = 0; i < super.partitions; i++) {
-            int pIdx = partitionIndex(i);
-
-            if(HEADS.compareAndSet(super.heads, pIdx, commonHead, nextHead)) {
-                QueueNode.B_ARRAY.setRelease(commonHead.refs, i, false);
-            } else if((boolean) QueueNode.B_ARRAY.getAcquire(commonHead.refs, i)) {
+        for (int i = 0; i < super.partitions; i++) {
+            if (super.heads[i] == commonHead) {
+                super.heads[i] = nextHead;
+                commonHead.refs[i] = false;
+            } else if (commonHead.refs[i]) {
                 return;
             }
         }
 
-        if(super.recycler != null && commonHead.reclaimed.compareAndSet(false, true)) {
+        if (super.recycler != null) {
+            commonHead.reclaimed.setRelease(true);
             super.recycler.recycle(commonHead);
         }
     }

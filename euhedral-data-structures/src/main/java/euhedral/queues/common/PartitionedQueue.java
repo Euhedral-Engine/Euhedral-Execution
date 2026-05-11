@@ -1,4 +1,6 @@
-package euhedral.queues;
+package euhedral.queues.common;
+
+import euhedral.queues.QueueConsumer;
 
 public interface PartitionedQueue<T> {
 
