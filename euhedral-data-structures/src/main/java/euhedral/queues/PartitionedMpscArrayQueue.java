@@ -1,250 +1,36 @@
 package euhedral.queues;
 
-import static euhedral.queues.common.QueueUtils.LONG_PAD;
+public final class PartitionedMpscArrayQueue<T> extends ConcurrentPartitionedArrayQueue<T> {
 
-import euhedral.queues.common.QueueUtils;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.VarHandle;
-import java.util.Arrays;
-import java.util.StringJoiner;
-import java.util.concurrent.atomic.AtomicBoolean;
-
-public class PartitionedMpscArrayQueue<T> extends PartitionedArrayQueue<T> {
-    private static final VarHandle LA_HANDLE = MethodHandles.arrayElementVarHandle(long[].class);
-
-    private final long[][] sequence;
-    private final int sequenceMask;
-
-    private final long[] inFlight;
-
-    private final AtomicBoolean retired = new AtomicBoolean(false);
-
-    public PartitionedMpscArrayQueue(int partitions, int chunkSize, boolean unbounded) {
-        super(partitions, chunkSize, unbounded);
-        this.sequence = new long[(partitions + 1) * LONG_PAD + partitions][0];
-
-        int numSChunks = Math.max(chunkSize >>> 6, 1);
-        this.sequenceMask = numSChunks - 1;
-        for (int i = 0; i < partitions; i++) {
-            int pIdx = partitionIndex(i);
-            this.sequence[pIdx] = new long[numSChunks + 2 * LONG_PAD];
-        }
-
-        if (unbounded) {
-            inFlight = new long[(partitions + 1) * LONG_PAD + partitions];
-        } else {
-            inFlight = null;
-        }
+    public PartitionedMpscArrayQueue(int partitions, int chunkSize) {
+        super(partitions, chunkSize, false, false);
     }
 
-    /// Offers an item to a partition.
-    ///
-    /// @param partition The logical index of the partition. e.g. 16 partitions = (0-15)
-    /// @param obj       Item to add
-    @Override
-    public boolean offer(int partition, T obj) {
-        boundsCheck(partition);
-        if (obj == null) {
-            throw new NullPointerException();
-        }
-
-        if (unbounded && retired.getAcquire()) {
-            return false;
-        }
-        int pIdx = partitionIndex(partition);
-
-        if(unbounded) {
-            LA_HANDLE.getAndAdd(inFlight, pIdx, 1);
-        }
-
-        long head;
-        long tail;
-        do {
-            if(unbounded && retired.getAcquire()) {
-                LA_HANDLE.getAndAdd(inFlight, pIdx, -1);
-                return false;
-            }
-
-            head = (long) LA_HANDLE.getAcquire(heads, pIdx);
-            tail = (long) LA_HANDLE.getAcquire(tails, pIdx);
-            if(QueueUtils.unsignedDiff(head, tail + 1) > chunkSize) {
-                if(unbounded) {
-                    retired.setRelease(true);
-                    LA_HANDLE.getAndAdd(inFlight, pIdx, -1);
-                }
-                return false;
-            }
-        } while(!LA_HANDLE.compareAndSet(tails, pIdx, tail, tail + 1));
-
-        int qTailIdx = chunkIndex(tail);
-        T[] pQueue = queue[queueIndex(partition)];
-        pQueue[qTailIdx] = obj;
-
-        VarHandle.releaseFence();
-
-        LA_HANDLE.getAndBitwiseOr(sequence[pIdx], sequenceChunkIndex(tail),
-                getSequenceNumber(tail));
-        if (unbounded) {
-            LA_HANDLE.getAndAdd(inFlight, pIdx, -1);
-        }
-        return true;
+    PartitionedMpscArrayQueue(int partitions, int chunkSize, boolean unbounded) {
+        super(partitions, chunkSize, false, unbounded);
     }
 
     @Override
-    public T peek(int partition) {
-        boundsCheck(partition);
-        int pIdx = partitionIndex(partition);
-        long tail = (long) LA_HANDLE.getVolatile(tails, pIdx);
-        if (heads[pIdx] == tail) {
-            return null;
-        }
-        return queue[queueIndex(partition)][chunkIndex(heads[pIdx])];
+    protected void incrementInFlight(int pIdx) {
+        LA_HANDLE.getAndAdd(this.inFlight, pIdx, 1);
     }
 
     @Override
-    public T poll(int partition) {
-        boundsCheck(partition);
-        int pIdx = partitionIndex(partition);
-
-        long head = heads[pIdx];
-        long[] tailSequence = this.sequence[pIdx];
-
-        int sChunkIdx = sequenceChunkIndex(head);
-        long sNum = getSequenceNumber(head);
-
-        long sChunk = (long) LA_HANDLE.getVolatile(tailSequence, sChunkIdx);
-
-        if ((sNum & sChunk) == 0) {
-            return null;
-        }
-
-        T obj = queue[queueIndex(partition)][chunkIndex(head)];
-        LA_HANDLE.getAndBitwiseAnd(tailSequence, sChunkIdx, ~sNum);
-        heads[pIdx]++;
-        return obj;
+    protected void decrementInFlight(int pIdx) {
+        LA_HANDLE.getAndAdd(this.inFlight, pIdx, -1);
     }
 
     @Override
-    public int drain(int partition, QueueConsumer<T> consumer, int limit) {
-        boundsCheck(partition);
-        if (consumer == null || limit <= 0) {
-            return 0;
-        }
-        int pIdx = partitionIndex(partition);
-        limit = Math.min(chunkSize, limit);
-
-        long head = heads[pIdx];
-        int total = 0;
-
-        T[] pQueue = queue[queueIndex(partition)];
-        long[] sequence = this.sequence[pIdx];
-        while(total < limit) {
-            long slot = head + total;
-            int sChunkIdx = sequenceChunkIndex(slot);
-
-            long sChunk = (long) LA_HANDLE.getVolatile(sequence, sChunkIdx);
-            int bitOffset = (int) (slot & 63);
-
-            int nextClearBit = QueueUtils.nextClearBit(sChunk, bitOffset);
-            int upperLimit = (nextClearBit == -1) ? 64 : nextClearBit;
-
-            int reserved = Math.min(64 - bitOffset, limit - total);
-            reserved = Math.min(reserved, upperLimit - bitOffset);
-
-            if (reserved == 0) {
-                break;
-            }
-
-            long clearMask = QueueUtils.clearMask(bitOffset, bitOffset + reserved);
-
-            VarHandle.acquireFence();
-            for (int j = 0; j < reserved; j++) {
-                int qIdx = chunkIndex(slot + j);
-                consumer.consume(pQueue[qIdx]);
-                pQueue[qIdx] = null;
-            }
-            total += reserved;
-            LA_HANDLE.getAndBitwiseAnd(sequence, sChunkIdx, clearMask);
-        }
-
-        VarHandle.releaseFence();
-        this.heads[pIdx] += total;
-        return total;
+    protected long getTailPointer(int pIdx) {
+        return (long) LA_HANDLE.getAcquire(this.tails, pIdx);
     }
 
-    private int sequenceChunkIndex(long idx) {
-        return (int) ((idx >>> 6) & sequenceMask) + LONG_PAD;
-    }
-
-    private long getSequenceNumber(long idx) {
-        return 1L << (idx & 63);
-    }
-
-    public boolean isRetired() {
-        return this.retired.getAcquire();
-    }
-
-    public boolean isEmpty() {
-        for (int i = 0; i < partitions; i++) {
-            if (!isEmpty(i)) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    public boolean isEmpty(int partition) {
-        int pIdx = partitionIndex(partition);
-        long head = (long) LA_HANDLE.getAcquire(heads, pIdx);
-        long tail = (long) LA_HANDLE.getAcquire(tails, pIdx);
-        long inFlight = this.inFlight == null ? 0 : (long) LA_HANDLE.getAcquire(this.inFlight, pIdx);
-
-        return head == tail && inFlight == 0 && isPartitionEmptyInternal(pIdx);
-    }
-
-    public boolean isPartitionEmpty(int partition) {
-        boundsCheck(partition);
-        int pIdx = partitionIndex(partition);
-        return isPartitionEmptyInternal(pIdx);
-    }
-
-    private boolean isPartitionEmptyInternal(int pIdx) {
-        int start = sequenceChunkIndex(0);
-        int curr = start;
-        do {
-            long chunk = (long) LA_HANDLE.getAcquire(sequence[pIdx], curr);
-            if (chunk != 0) {
-                return false;
-            }
-            curr = sequenceChunkIndex(++curr);
-        } while (curr != start);
-        return true;
+    protected boolean continueTailCAS(int pIdx) {
+        return !super.retired.getAcquire();
     }
 
     @Override
-    public void reset() {
-        VarHandle.acquireFence();
-
-        Arrays.fill(heads, 0);
-        Arrays.fill(tails, 0);
-        if(inFlight != null) {
-            Arrays.fill(inFlight, 0);
-        }
-        for (int i = 0; i < partitions; i++) {
-            int pIdx = partitionIndex(i);
-            Arrays.fill(queue[queueIndex(i)], null);
-            Arrays.fill(sequence[pIdx], 0);
-        }
-        retired.setRelease(false);
-    }
-
-    public String getState() {
-        StringJoiner sj = new StringJoiner("\n");
-        sj.add("Heads: " + Arrays.toString(heads));
-        sj.add("Tails: " + Arrays.toString(tails));
-        for(int i = 0; i < partitions; i++) {
-            sj.add("TailSequence-p" + i + ": " + Arrays.toString(sequence[partitionIndex(i)]));
-        }
-        return sj.toString();
+    protected boolean casTailPointer(int pIdx, long expect, long update) {
+        return LA_HANDLE.compareAndSet(this.tails, pIdx, expect, update);
     }
 }
