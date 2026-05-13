@@ -45,7 +45,7 @@ class PartitionedUnboundedMpscArrayQueueTest {
         QueueConsumer<Long> consumer = (val) -> {
         };
         ExecutorService exec = Executors.newFixedThreadPool(16);
-        for (int x = 0; x < 10; x++) {
+        for (int x = 0; x < 20; x++) {
             LongAdder drained = new LongAdder();
             for (int i = 0; i < 8; i++) {
                 exec.submit(() -> {

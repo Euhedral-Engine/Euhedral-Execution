@@ -1,6 +1,7 @@
 package euhedral.queues.common;
 
-import euhedral.queues.common.QueueNode.Type;
+import euhedral.queues.QueueNode;
+import euhedral.queues.QueueNode.Type;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 

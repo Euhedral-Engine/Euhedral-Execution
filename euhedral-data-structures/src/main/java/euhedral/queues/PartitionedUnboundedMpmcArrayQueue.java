@@ -1,76 +1,15 @@
 package euhedral.queues;
 
-import euhedral.queues.common.QueueNode;
-import euhedral.queues.common.QueueNode.Type;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.VarHandle;
-import java.util.concurrent.atomic.AtomicBoolean;
+import euhedral.queues.QueueNode.Type;
 
 /// An unbounded multi-producer-multi-consumer array queue with partitions. This class is
-/// thread-safe for any method. It is derived
-/// from [PartitionedUnboundedArrayQueue] but overrides the logic for head and tail interaction to
-/// /// make it safe for use as an MPMC.
+/// thread-safe for any method. It is derived from [PartitionedUnboundedArrayQueue] but overrides
+/// the logic for head and tail interaction to make it safe for use as an MPMC.
 ///
 /// @param <T> Type to store
-@SuppressWarnings("unchecked")
-public class PartitionedUnboundedMpmcArrayQueue<T> extends PartitionedUnboundedArrayQueue<T> {
-    private static final VarHandle HEADS = MethodHandles.arrayElementVarHandle(QueueNode[].class);
-
-    protected final AtomicBoolean movingTail = new AtomicBoolean(false);
+public final class PartitionedUnboundedMpmcArrayQueue<T> extends PartitionedUnboundedArrayQueue<T> {
 
     public PartitionedUnboundedMpmcArrayQueue(int partitions, int chunkSize, int maxPooledChunks) {
         super(partitions, chunkSize, maxPooledChunks, Type.MPMC);
-    }
-
-    @Override
-    protected final boolean acquireTailMovePermission() {
-        return this.movingTail.compareAndSet(false, true);
-    }
-
-    @Override
-    protected void releaseTailMovePermission() {
-        this.movingTail.setRelease(false);
-    }
-
-    @Override
-    protected QueueNode<T> getHeadNode(int pIdx) {
-        return (QueueNode<T>) HEADS.getAcquire(super.heads, pIdx);
-    }
-
-    @Override
-    protected final QueueNode<T> getNextHeadNode(QueueNode<T> head) {
-        return head.next.getAcquire();
-    }
-
-    @Override
-    protected final QueueNode<T> getTailNode() {
-        return super.tail.getAcquire();
-    }
-
-    @Override
-    protected final void setTailNode(QueueNode<T> tail) {
-        super.tail.setRelease(tail);
-    }
-
-    @Override
-    protected final void setNextTailNode(QueueNode<T> tail, QueueNode<T> next) {
-        tail.next.setRelease(next);
-    }
-
-    @Override
-    protected void moveHeadsForward(QueueNode<T> commonHead, QueueNode<T> nextHead) {
-        for(int i = 0; i < super.partitions; i++) {
-            int pIdx = partitionIndex(i);
-
-            if(HEADS.compareAndSet(super.heads, pIdx, commonHead, nextHead)) {
-                QueueNode.B_ARRAY.setRelease(commonHead.refs, i, false);
-            } else if((boolean) QueueNode.B_ARRAY.getAcquire(commonHead.refs, i)) {
-                return;
-            }
-        }
-
-        if(super.recycler != null && commonHead.reclaimed.compareAndSet(false, true)) {
-            super.recycler.recycle(commonHead);
-        }
     }
 }

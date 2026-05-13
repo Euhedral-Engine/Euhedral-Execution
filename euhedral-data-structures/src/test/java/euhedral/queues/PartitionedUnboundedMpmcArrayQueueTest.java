@@ -15,6 +15,7 @@ import java.util.concurrent.atomic.LongAdder;
 import org.junit.jupiter.api.Test;
 
 class PartitionedUnboundedMpmcArrayQueueTest {
+
     @Test
     void singleThreadOfferDrain() {
         int chunkSize = 128;
@@ -37,34 +38,48 @@ class PartitionedUnboundedMpmcArrayQueueTest {
     }
 
     @Test
-    void queueCyclesWithoutDeadlocking() throws Exception {
+    void queueCyclesWithoutDeadlockingOnePartition() throws Exception {
+        cycle(1);
+    }
+
+    @Test
+    void queueCyclesWithoutDeadlockingFourPartitions() throws Exception {
+        cycle(4);
+    }
+
+    private static void cycle(int partitions) throws Exception {
         PartitionedUnboundedMpmcArrayQueue<Long> q =
-                new PartitionedUnboundedMpmcArrayQueue<>(1, 4096, 4);
+                new PartitionedUnboundedMpmcArrayQueue<>(partitions, 4096, 4);
         int batch = 100_000;
 
         QueueConsumer<Long> consumer = (val) -> {
         };
         ExecutorService exec = Executors.newFixedThreadPool(16);
-        for (int x = 0; x < 10; x++) {
-            CountDownLatch end = new CountDownLatch(1);
+        for (int x = 0; x < 30; x++) {
+            CountDownLatch end = new CountDownLatch(8);
 
+            LongAdder offered = new LongAdder();
             LongAdder drained = new LongAdder();
             for (int i = 0; i < 8; i++) {
                 exec.submit(() -> {
-                    for (int j = 0; j < batch; j++) {
-                        long v = ThreadLocalRandom.current().nextLong();
+                    try {
+                        for (int j = 0; j < batch; j++) {
+                            long v = ThreadLocalRandom.current().nextLong();
 
-                        while (!q.offer(v, System.nanoTime())) {
-                            Thread.onSpinWait();
+                            while (!q.offer(v, System.nanoTime())) {
+                                Thread.onSpinWait();
+                            }
+                            offered.increment();
                         }
+                    } catch (Throwable t) {
+                        t.printStackTrace();
                     }
                 });
             }
 
-            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
             for (int i = 0; i < 8; i++) {
                 exec.submit(() -> {
-                    while (drained.sum() < batch * 8 && System.nanoTime() < deadline) {
+                    while (drained.sum() < batch * 8) {
                         int count = q.drain(consumer, 4096);
                         drained.add(count);
                         Thread.yield();
@@ -72,8 +87,11 @@ class PartitionedUnboundedMpmcArrayQueueTest {
                     end.countDown();
                 });
             }
-            end.await();
-            assertEquals(800_000, drained.sum(), "Iteration: " + x);
+            end.await(5, TimeUnit.SECONDS);
+
+            assertEquals(800_000, drained.sum(),
+                    String.format("Iteration: %d Consumed: %d Offered: %d\n%s", x, drained.sum(),
+                            offered.sum(), q));
         }
     }
 
