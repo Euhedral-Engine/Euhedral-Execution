@@ -4,14 +4,42 @@ import euhedral.queues.QueueNode.Type;
 
 /// An unbounded multi-producer-single-consumer array queue with partitions. This class is
 /// thread-safe for any offer method. It is not thread-safe for peek, poll, or drain. It is derived
-/// from [PartitionedUnboundedArrayQueue] but overrides the logic for head and tail interaction to
+/// from [ConcurrentPartitionedUnboundedArrayQueue] but overrides the logic for head and tail interaction to
 /// make it safe for use as an MPSC.
 ///
 /// @param <T> Type to store
-public final class PartitionedUnboundedMpscArrayQueue<T> extends PartitionedUnboundedArrayQueue<T> {
+public final class PartitionedUnboundedMpscArrayQueue<T> extends ConcurrentPartitionedUnboundedArrayQueue<T> {
 
     public PartitionedUnboundedMpscArrayQueue(int partitions, int chunkSize, int maxPooledChunks) {
         super(partitions, chunkSize, maxPooledChunks, Type.MPSC);
     }
 
+    // ----- Tail -----
+
+    @Override
+    protected long getTailEpoch() {
+        return super.tailEpoch.getAcquire();
+    }
+
+    @Override
+    protected boolean casTailEpoch(long oldEpoch, long newEpoch) {
+        return super.tailEpoch.compareAndSet(oldEpoch, newEpoch);
+    }
+
+    // ----- Head -----
+
+    @Override
+    protected QueueNode<T> getHeadNode(int partition) {
+        return super.heads.getOpaque(partition);
+    }
+
+    @Override
+    protected QueueNode<T> getNextHeadNode(QueueNode<T> head) {
+        return head.next.getOpaque();
+    }
+
+    @Override
+    protected void setNextHeadNode(int partition, QueueNode<T> next) {
+        this.heads.setOpaque(partition, next);
+    }
 }

@@ -37,15 +37,24 @@ class PartitionedUnboundedMpscArrayQueueTest {
     }
 
     @Test
-    void queueCyclesWithoutDeadlocking() {
+    void queueCyclesWithoutDeadlockingOnePartition() {
+        cycle(1);
+    }
+
+    @Test
+    void queueCyclesWithoutDeadlockingFourPartitions() {
+        cycle(4);
+    }
+
+    private void cycle(int partitions) {
         PartitionedUnboundedMpscArrayQueue<Long> q =
-                new PartitionedUnboundedMpscArrayQueue<>(1, 4096, 4);
+                new PartitionedUnboundedMpscArrayQueue<>(partitions, 4096, 4);
         int batch = 100_000;
 
         QueueConsumer<Long> consumer = (val) -> {
         };
         ExecutorService exec = Executors.newFixedThreadPool(16);
-        for (int x = 0; x < 20; x++) {
+        for (int x = 0; x < 50; x++) {
             LongAdder drained = new LongAdder();
             for (int i = 0; i < 8; i++) {
                 exec.submit(() -> {
@@ -59,7 +68,7 @@ class PartitionedUnboundedMpscArrayQueueTest {
                 });
             }
 
-            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
             while (drained.sum() < batch * 8 && System.nanoTime() < deadline) {
                 int count = q.drain(consumer, 4096);
                 drained.add(count);

@@ -2,22 +2,20 @@ package euhedral.queues;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.Arrays;
+import java.util.StringJoiner;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class QueueNode<T> {
+
     private static final VarHandle LA_ARRAY = MethodHandles.arrayElementVarHandle(long[].class);
 
-    public final AtomicBoolean reclaimed = new AtomicBoolean(false);
-    public final PartitionedArrayQueue<T> chunk;
-
-    public final int partitions;
-    private final long[] headEpoch;
-
-    public final AtomicReference<QueueNode<T>> next = new AtomicReference<>();
     public final Type type;
-
+    public final int partitions;
+    public final AtomicReference<QueueNode<T>> next = new AtomicReference<>();
+    private final PartitionedArrayQueue<T> chunk;
+    private final long[] headEpoch;
     private final AtomicLong tailEpoch;
 
     public QueueNode(int partitions, int chunkSize, Type type) {
@@ -32,13 +30,13 @@ public class QueueNode<T> {
             case MPMC -> new PartitionedMpmcArrayQueue<>(partitions, chunkSize, true);
         };
 
-        if(type == Type.MPSC || type == Type.MPMC) {
+        if (type == Type.MPSC || type == Type.MPMC) {
             this.tailEpoch = new AtomicLong(0);
         } else {
             this.tailEpoch = null;
         }
 
-        if(type == Type.SPMC || type == Type.MPMC) {
+        if (type == Type.SPMC || type == Type.MPMC) {
             this.headEpoch = new long[partitions];
         } else {
             this.headEpoch = null;
@@ -47,6 +45,14 @@ public class QueueNode<T> {
 
     public boolean offer(int partition, T obj) {
         return this.chunk.offer(partition, obj);
+    }
+
+    public T peek(int partition) {
+        return this.chunk.peek(partition);
+    }
+
+    public T poll(int partition) {
+        return this.chunk.poll(partition);
     }
 
     public int drain(int partition, QueueConsumer<T> consumer, int limit) {
@@ -79,19 +85,30 @@ public class QueueNode<T> {
     }
 
     public void setTailEpoch(long epoch) {
-        if(this.tailEpoch != null) {
+        if (this.tailEpoch != null) {
             this.tailEpoch.setRelease(epoch);
         }
     }
 
     public void reset() {
         this.chunk.reset();
-        if(this.type == Type.PLAIN) {
+        if (this.type == Type.PLAIN) {
             this.next.setPlain(null);
         } else {
             this.next.setRelease(null);
-            this.reclaimed.lazySet(false);
         }
+    }
+
+    @Override
+    public String toString() {
+        StringJoiner sj = new StringJoiner("\n");
+        sj.add(String.format("Type: %s Partitions: %d Hash: %d", this.type, this.partitions,
+                hashCode()));
+        sj.add(String.format("Tail Epoch: %d", this.tailEpoch == null ? 0 : this.tailEpoch.get()));
+        sj.add(String.format("Head Epoch: %s",
+                this.headEpoch == null ? "[0]" : Arrays.toString(this.headEpoch)));
+        sj.add("Chunk: " + this.chunk);
+        return sj.toString();
     }
 
     public enum Type {
