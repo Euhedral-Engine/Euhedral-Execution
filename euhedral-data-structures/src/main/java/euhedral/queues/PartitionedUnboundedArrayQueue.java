@@ -1,13 +1,11 @@
 package euhedral.queues;
 
-import static euhedral.queues.common.QueueUtils.POINTER_PAD_BYTES;
-
 import euhedral.atomics.PaddedAtomicLong;
+import euhedral.atomics.PaddedAtomicReferenceArray;
 import euhedral.queues.QueueNode.Type;
 import euhedral.queues.common.NodeRecycler;
 import euhedral.queues.common.PartitionedQueue;
 import euhedral.queues.common.QueueUtils;
-import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.StringJoiner;
 import lombok.Getter;
@@ -24,12 +22,9 @@ import lombok.Getter;
 /// enabled, nodes are put in the [NodeRecycler] and reused later.
 ///
 /// @param <T> Type to store
-@SuppressWarnings("unchecked")
 public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueue<T> permits
         PartitionedUnboundedMpmcArrayQueue, PartitionedUnboundedMpscArrayQueue,
         PartitionedUnboundedSpmcArrayQueue {
-
-    protected static final VarHandle HEADS = MethodHandles.arrayElementVarHandle(QueueNode[].class);
 
     protected final Type type;
     @Getter
@@ -39,7 +34,7 @@ public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueu
     private final NodeRecycler<T> recycler;
 
     private final PaddedAtomicLong headLock;
-    private final QueueNode<T>[] heads;
+    private final PaddedAtomicReferenceArray<QueueNode<T>> heads;
     private final PartitionedArrayQueue<QueueNode<T>> headQueues;
 
     private final PaddedAtomicLong tailEpoch;
@@ -68,18 +63,16 @@ public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueu
             case PLAIN, SPSC, MPSC -> null;
             default -> new PaddedAtomicLong(0);
         };
-        this.headQueues = switch(type) {
+        this.headQueues = switch (type) {
             case PLAIN, SPSC, MPSC -> {
-                this.heads = new QueueNode[(partitions + 1) * QueueUtils.POINTER_PAD_BYTES
-                        + partitions];
-                for (int i = 0; i < partitions; i++) {
-                    this.heads[partitionIndex(i)] = tail;
-                }
+                this.heads = new PaddedAtomicReferenceArray<>(partitions, false, false);
+                this.heads.fill(tail);
                 yield null;
             }
             default -> {
                 this.heads = null;
-                PartitionedMpmcArrayQueue<QueueNode<T>> heads = new PartitionedMpmcArrayQueue<>(partitions, 64);
+                PartitionedMpmcArrayQueue<QueueNode<T>> heads = new PartitionedMpmcArrayQueue<>(
+                        partitions, 64);
                 for (int i = 0; i < partitions; i++) {
                     heads.offer(i, tail);
                 }
@@ -102,10 +95,6 @@ public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueu
             }
         };
         this.tailQueue.offer(0, tail);
-    }
-
-    protected int partitionIndex(int partition) {
-        return (partition + 1) * POINTER_PAD_BYTES + partition;
     }
 
     /// Offers the object to a random partition
@@ -139,10 +128,9 @@ public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueu
     @Override
     public T peek(int partition) {
         boundsCheck(partition);
-        int pIdx = partitionIndex(partition);
         while (true) {
-            QueueNode<T> head = getHeadNode(pIdx);
-            if(head == null) {
+            QueueNode<T> head = getHeadNode(partition);
+            if (head == null) {
                 continue;
             }
 
@@ -171,7 +159,7 @@ public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueu
 
         while (true) {
             QueueNode<T> head = getHeadNode(partition);
-            if(head == null) {
+            if (head == null) {
                 continue;
             }
 
@@ -221,7 +209,7 @@ public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueu
 
         while (limit > 0) {
             QueueNode<T> head = getHeadNode(partition);
-            if(head == null) {
+            if (head == null) {
                 continue;
             }
 
@@ -294,8 +282,8 @@ public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueu
 
     private QueueNode<T> getHeadNode(int partition) {
         return switch (this.type) {
-            case PLAIN -> this.heads[partitionIndex(partition)];
-            case SPSC, MPSC -> (QueueNode<T>) HEADS.getOpaque(this.heads, partitionIndex(partition));
+            case PLAIN -> this.heads.getPlain(partition);
+            case SPSC, MPSC -> this.heads.getOpaque(partition);
             default -> this.headQueues.peek(partition);
         };
     }
@@ -309,29 +297,29 @@ public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueu
     }
 
     private void setNextHeadNode(int partition, QueueNode<T> next) {
-        if(this.type == Type.PLAIN) {
-            this.heads[partitionIndex(partition)] = next;
+        if (this.type == Type.PLAIN) {
+            this.heads.setPlain(partition, next);
             return;
         }
-        if(this.type == Type.SPSC ||  this.type == Type.MPSC) {
-            HEADS.setOpaque(this.heads, partitionIndex(partition), next);
+        if (this.type == Type.SPSC || this.type == Type.MPSC) {
+            this.heads.setOpaque(partition, next);
             return;
         }
         this.headQueues.poll(partition);
-        while(!this.headQueues.offer(partition, next)) {
+        while (!this.headQueues.offer(partition, next)) {
             Thread.onSpinWait();
         }
     }
 
     private boolean acquireHeadLock() {
-        if(this.headLock == null) {
+        if (this.headLock == null) {
             return true;
         }
         return this.headLock.compareAndSet(0, 1);
     }
 
     private void releaseHeadLock() {
-        if(this.headLock == null) {
+        if (this.headLock == null) {
             return;
         }
         this.headLock.set(0);
@@ -352,17 +340,17 @@ public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueu
 
                 QueueNode<T> partHead = getHeadNode(i);
                 if (partHead == commonHead) {
-                    if(commonHead.getHeadEpoch(i) == epoch) {
+                    if (commonHead.getHeadEpoch(i) == epoch) {
                         setNextHeadNode(i, nextHead);
                         commonHead.casHeadEpoch(i, epoch, epoch + 1);
                         flipped++;
                         count++;
                     }
-                } else if(commonHead.getHeadEpoch(i) == epoch + 1) {
+                } else if (commonHead.getHeadEpoch(i) == epoch + 1) {
                     count++;
                 }
             }
-            if(this.recycler == null || count != this.partitions || flipped == 0) {
+            if (this.recycler == null || count != this.partitions || flipped == 0) {
                 return;
             }
 

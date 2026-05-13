@@ -55,7 +55,7 @@ class PartitionedUnboundedMpmcArrayQueueTest {
         QueueConsumer<Long> consumer = (val) -> {
         };
         ExecutorService exec = Executors.newFixedThreadPool(16);
-        for (int x = 0; x < 30; x++) {
+        for (int x = 0; x < 50; x++) {
             CountDownLatch end = new CountDownLatch(8);
 
             LongAdder offered = new LongAdder();

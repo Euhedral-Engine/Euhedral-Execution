@@ -11,26 +11,27 @@ public final class PartitionedMpscArrayQueue<T> extends ConcurrentPartitionedArr
     }
 
     @Override
-    protected void incrementInFlight(int pIdx) {
-        LA_HANDLE.getAndAdd(this.inFlight, pIdx, 1);
+    protected void incrementInFlight(int partition) {
+        super.inFlight.getAndIncrement(partition);
     }
 
     @Override
-    protected void decrementInFlight(int pIdx) {
-        LA_HANDLE.getAndAdd(this.inFlight, pIdx, -1);
+    protected void decrementInFlight(int partition) {
+        super.inFlight.getAndDecrement(partition);
     }
 
     @Override
-    protected long getTailPointer(int pIdx) {
-        return (long) LA_HANDLE.getAcquire(this.tails, pIdx);
+    protected long getTailPointer(int partition) {
+        return super.tails.getAcquire(partition);
     }
 
-    protected boolean continueTailCAS(int pIdx) {
+    @Override
+    protected boolean continueTailCAS() {
         return !super.retired.getAcquire();
     }
 
     @Override
-    protected boolean casTailPointer(int pIdx, long expect, long update) {
-        return LA_HANDLE.compareAndSet(this.tails, pIdx, expect, update);
+    protected boolean casTailPointer(int partition, long expect, long update) {
+        return super.tails.compareAndSet(partition, expect, update);
     }
 }

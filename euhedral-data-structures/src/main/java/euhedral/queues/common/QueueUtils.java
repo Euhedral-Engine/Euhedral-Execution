@@ -1,36 +1,10 @@
 package euhedral.queues.common;
 
-import com.sun.management.HotSpotDiagnosticMXBean;
-import java.lang.management.ManagementFactory;
-
 public class QueueUtils {
     public static final long ULONG_MAX = 0xFFFFFFFFFFFFFFFFL;
-    public static final int LONG_PAD = 3;
+    public static final int LONG_PAD = 15;
 
     public static final long ABS_MASK = (1L << 63) - 1;
-
-    public static final int POINTER_SIZE;
-    public static final int POINTER_PAD_BYTES;
-
-    static {
-        String bitness = System.getProperty("sun.arch.data.model");
-
-        int refSize;
-        if(bitness.contains("32")) {
-            refSize = 4;
-        } else {
-            HotSpotDiagnosticMXBean bean = ManagementFactory.getPlatformMXBean(
-                    HotSpotDiagnosticMXBean.class);
-            String useCompressedOops = bean.getVMOption("UseCompressedOops").getValue();
-            if("true".equals(useCompressedOops)) {
-                refSize = 4;
-            } else {
-                refSize = 8;
-            }
-        }
-        POINTER_SIZE = refSize;
-        POINTER_PAD_BYTES = (64 / POINTER_SIZE) - 1;
-    }
 
     /// Finds the next clear bit starting at the offset
     ///
