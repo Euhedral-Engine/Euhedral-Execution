@@ -77,8 +77,8 @@ class PartitionedMpmcArrayQueueTest {
                     end.countDown();
                 });
             }
-            end.await();
-            assertEquals(800_000, drained.sum(), "Failure: \n" + q.getState());
+            end.await(2, TimeUnit.SECONDS);
+            assertEquals(800_000, drained.sum(), "Failure. Iter: " + x + ": \n" + q.getState());
         }
     }
 

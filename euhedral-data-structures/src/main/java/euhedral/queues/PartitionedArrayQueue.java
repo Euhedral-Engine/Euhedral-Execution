@@ -13,6 +13,7 @@ import lombok.Getter;
 ///
 /// This class is not thread-safe for any method. This is meant to be used by a single thread and
 /// there are no visibility guarantees between 2 different threads.
+@SuppressWarnings("unchecked")
 public class PartitionedArrayQueue<T> implements PartitionedQueue<T> {
 
     protected final T[][] queue;
@@ -32,8 +33,11 @@ public class PartitionedArrayQueue<T> implements PartitionedQueue<T> {
     @Getter
     long capacity;
 
-    @SuppressWarnings("unchecked")
-    public PartitionedArrayQueue(int partitions, int chunkSize, boolean unbounded) {
+    public PartitionedArrayQueue(int partitions, int chunkSize) {
+        this(partitions, chunkSize, false);
+    }
+
+    PartitionedArrayQueue(int partitions, int chunkSize, boolean unbounded) {
         chunkSize = Integer.highestOneBit((chunkSize - 1) << 1);
         this.partitions = partitions;
         this.chunkSize = chunkSize;
