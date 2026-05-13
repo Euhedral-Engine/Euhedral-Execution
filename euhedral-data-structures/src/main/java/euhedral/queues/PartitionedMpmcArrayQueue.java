@@ -27,46 +27,46 @@ public final class PartitionedMpmcArrayQueue<T> extends ConcurrentPartitionedArr
     }
 
     @Override
-    protected void incrementInFlight(int pIdx) {
-        LA_HANDLE.getAndAdd(this.inFlight, pIdx, 1);
+    protected void incrementInFlight(int partition) {
+        super.inFlight.getAndIncrement(partition);
     }
 
     @Override
-    protected void decrementInFlight(int pIdx) {
-        LA_HANDLE.getAndAdd(this.inFlight, pIdx, -1);
+    protected void decrementInFlight(int partition) {
+        super.inFlight.getAndDecrement(partition);
     }
 
     @Override
-    protected long getTailPointer(int pIdx) {
-        return (long) LA_HANDLE.getAcquire(this.tails, pIdx);
+    protected long getTailPointer(int partition) {
+        return super.tails.getAcquire(partition);
     }
 
-    protected boolean continueTailCAS(int pIdx) {
+    protected boolean continueTailCAS() {
         return !super.retired.getAcquire();
     }
 
     @Override
-    protected boolean casTailPointer(int pIdx, long expect, long update) {
-        return LA_HANDLE.compareAndSet(this.tails, pIdx, expect, update);
+    protected boolean casTailPointer(int partition, long expect, long update) {
+        return super.tails.compareAndSet(partition, expect, update);
     }
 
     @Override
-    protected long getHeadPointer(int pIdx) {
-        return (long) LA_HANDLE.getAcquire(this.heads, pIdx);
+    protected long getHeadPointer(int partition) {
+        return super.heads.getAcquire(partition);
     }
 
     @Override
-    protected void moveHeadPointer(int pIdx, long delta) {
-        LA_HANDLE.getAndAdd(this.heads, pIdx, delta);
+    protected void moveHeadPointer(int partition, long delta) {
+        super.heads.getAndAdd(partition, delta);
     }
 
     @Override
-    protected long getHeadSequence(int pIdx) {
-        return (long) LA_HANDLE.getAcquire(heads, pIdx);
+    protected long getHeadSequence(int partition) {
+        return super.headSequence.getAcquire(partition);
     }
 
     @Override
-    protected boolean casHeadSequence(int pIdx, long expect, long update) {
-        return LA_HANDLE.compareAndSet(super.headSequence, pIdx, expect, update);
+    protected boolean casHeadSequence(int partition, long expect, long update) {
+        return super.headSequence.compareAndSet(partition, expect, update);
     }
 }

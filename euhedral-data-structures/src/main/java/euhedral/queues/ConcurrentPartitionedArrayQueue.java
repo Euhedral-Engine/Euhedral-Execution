@@ -3,6 +3,8 @@ package euhedral.queues;
 import static euhedral.queues.common.QueueUtils.ABS_MASK;
 import static euhedral.queues.common.QueueUtils.LONG_PAD;
 
+import euhedral.atomics.PaddedAtomicLongArray;
+import euhedral.atomics.PaddedAtomicReferenceArray;
 import euhedral.queues.common.QueueUtils;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
@@ -12,33 +14,32 @@ import java.util.StringJoiner;
 abstract class ConcurrentPartitionedArrayQueue<T> extends PartitionedArrayQueue<T> {
     protected static final VarHandle LA_HANDLE = MethodHandles.arrayElementVarHandle(long[].class);
 
-    protected final long[][] tailSequence;
     protected final int sequenceMask;
 
-    protected final long[] headSequence;
-    protected final long[] inFlight;
+    protected final PaddedAtomicReferenceArray<long[]> tailSequence;
+    protected final PaddedAtomicLongArray headSequence;
+    protected final PaddedAtomicLongArray inFlight;
 
     public ConcurrentPartitionedArrayQueue(int partitions, int chunkSize, boolean multiConsumer, boolean unbounded) {
         super(partitions, chunkSize, unbounded);
-        this.tailSequence = new long[(partitions + 1) * LONG_PAD + partitions][0];
+        this.tailSequence = new PaddedAtomicReferenceArray<>(partitions);
 
         int numSChunks = Math.max(chunkSize >>> 6, 1);
         this.sequenceMask = numSChunks - 1;
         for (int i = 0; i < partitions; i++) {
-            int pIdx = partitionIndex(i);
-            this.tailSequence[pIdx] = new long[numSChunks + 2 * LONG_PAD];
+            this.tailSequence.setPlain(i, new long[numSChunks + 2 * LONG_PAD]);
         }
 
         if(multiConsumer) {
-            this.headSequence = new long[(partitions + 1) * LONG_PAD + partitions];
+            this.headSequence = new PaddedAtomicLongArray(partitions, false, true);
         } else {
             this.headSequence = null;
         }
 
         if (unbounded) {
-            inFlight = new long[(partitions + 1) * LONG_PAD + partitions];
+            this.inFlight = new PaddedAtomicLongArray(partitions, false, true);
         } else {
-            inFlight = null;
+            this.inFlight = null;
         }
     }
 
@@ -53,45 +54,44 @@ abstract class ConcurrentPartitionedArrayQueue<T> extends PartitionedArrayQueue<
             throw new NullPointerException();
         }
 
-        if (this.unbounded && this.retired.getAcquire()) {
+        if (super.unbounded && super.retired.getAcquire()) {
             return false;
         }
-        int pIdx = partitionIndex(partition);
 
-        if(this.unbounded) {
-            incrementInFlight(pIdx);
+        if(super.unbounded) {
+            incrementInFlight(partition);
         }
 
         try {
             long head;
             long tail;
             do {
-                if (this.unbounded && !continueTailCAS(pIdx)) {
+                if (super.unbounded && !continueTailCAS()) {
                     return false;
                 }
 
-                head = (long) LA_HANDLE.getAcquire(this.heads, pIdx);
-                tail = getTailPointer(pIdx);
-                if (QueueUtils.unsignedDiff(head, tail + 1) > this.chunkSize) {
-                    if (this.unbounded) {
-                        this.retired.setRelease(true);
+                head = super.heads.getAcquire(partition);
+                tail = getTailPointer(partition);
+                if (QueueUtils.unsignedDiff(head, tail + 1) > super.chunkSize) {
+                    if (super.unbounded) {
+                        super.retired.setRelease(true);
                     }
                     return false;
                 }
-            } while (!casTailPointer(pIdx, tail, tail + 1));
+            } while (!casTailPointer(partition, tail, tail + 1));
 
             int qTailIdx = chunkIndex(tail);
-            T[] pQueue = this.queue[queueIndex(partition)];
+            T[] pQueue = super.queue.getPlain(partition);
             pQueue[qTailIdx] = obj;
 
             VarHandle.releaseFence();
 
-            LA_HANDLE.getAndAdd(this.tailSequence[pIdx], sequenceChunkIndex(tail),
+            LA_HANDLE.getAndAdd(this.tailSequence.getPlain(partition), sequenceChunkIndex(tail),
                     getSequenceNumber(tail));
             return true;
         } finally {
-            if(this.unbounded) {
-                decrementInFlight(pIdx);
+            if(super.unbounded) {
+                decrementInFlight(partition);
             }
         }
     }
@@ -99,21 +99,18 @@ abstract class ConcurrentPartitionedArrayQueue<T> extends PartitionedArrayQueue<
     @Override
     public T peek(int partition) {
         boundsCheck(partition);
-        int pIdx = partitionIndex(partition);
-        T[] pQueue = this.queue[queueIndex(partition)];
 
-        long head = getHeadPointer(pIdx);
-        long[] tailSequence = this.tailSequence[pIdx];
+        long head = getHeadPointer(partition);
 
         int sChunkIdx = sequenceChunkIndex(head);
         long sNum = getSequenceNumber(head);
-
-        long sChunk = (long) LA_HANDLE.getAcquire(tailSequence, sChunkIdx);
+        long sChunk = (long) LA_HANDLE.getAcquire(this.tailSequence.getPlain(partition), sChunkIdx);
 
         if ((sNum & sChunk) == 0) {
             return null;
         }
 
+        T[] pQueue = super.queue.getPlain(partition);
         VarHandle.acquireFence();
         return pQueue[chunkIndex(head)];
     }
@@ -121,12 +118,11 @@ abstract class ConcurrentPartitionedArrayQueue<T> extends PartitionedArrayQueue<
     @Override
     public T poll(int partition) {
         boundsCheck(partition);
-        int pIdx = partitionIndex(partition);
-        T[] pQueue = this.queue[queueIndex(partition)];
+        T[] pQueue = super.queue.getPlain(partition);
 
         while (true) {
-            long head = getHeadPointer(pIdx);
-            long[] tailSequence = this.tailSequence[pIdx];
+            long head = getHeadPointer(partition);
+            long[] tailSequence = this.tailSequence.getPlain(partition);
 
             int sChunkIdx = sequenceChunkIndex(head);
             long sNum = getSequenceNumber(head);
@@ -137,8 +133,8 @@ abstract class ConcurrentPartitionedArrayQueue<T> extends PartitionedArrayQueue<
                 return null;
             }
 
-            long headSequence = getHeadSequence(pIdx);
-            if(head != headSequence || !casHeadSequence(pIdx, headSequence, headSequence + 1)) {
+            long headSequence = getHeadSequence(partition);
+            if(head != headSequence || !casHeadSequence(partition, headSequence, headSequence + 1)) {
                 continue;
             }
 
@@ -147,7 +143,7 @@ abstract class ConcurrentPartitionedArrayQueue<T> extends PartitionedArrayQueue<
             LA_HANDLE.getAndBitwiseAnd(tailSequence, sChunkIdx, ~sNum);
 
             VarHandle.releaseFence();
-            moveHeadPointer(pIdx, 1);
+            moveHeadPointer(partition, 1);
             return obj;
         }
     }
@@ -163,22 +159,21 @@ abstract class ConcurrentPartitionedArrayQueue<T> extends PartitionedArrayQueue<
         if (consumer == null || limit <= 0) {
             return 0;
         }
-        int pIdx = partitionIndex(partition);
-        limit = Math.min(this.chunkSize, limit);
+        limit = Math.min(super.chunkSize, limit);
 
         long head;
         long headSequence;
         int total = 0;
 
-        T[] pQueue = this.queue[queueIndex(partition)];
-        long[] tailSequence = this.tailSequence[pIdx];
+        T[] pQueue = super.queue.getPlain(partition);
+        long[] tailSequence = this.tailSequence.getPlain(partition);
         while(total < limit) {
             int reserved;
             int sChunkIdx;
             long clearMask;
             do {
-                head = getHeadPointer(pIdx);
-                headSequence = getHeadSequence(pIdx);
+                head = getHeadPointer(partition);
+                headSequence = getHeadSequence(partition);
 
                 if(head != headSequence) {
                     return total;
@@ -197,7 +192,7 @@ abstract class ConcurrentPartitionedArrayQueue<T> extends PartitionedArrayQueue<
                     return total;
                 }
                 clearMask = QueueUtils.clearMask(bitOffset, bitOffset + reserved);
-            } while(!casHeadSequence(pIdx, headSequence, headSequence + reserved));
+            } while(!casHeadSequence(partition, headSequence, headSequence + reserved));
 
             VarHandle.acquireFence();
             for (int j = 0; j < reserved; j++) {
@@ -209,52 +204,52 @@ abstract class ConcurrentPartitionedArrayQueue<T> extends PartitionedArrayQueue<
             LA_HANDLE.getAndBitwiseAnd(tailSequence, sChunkIdx, clearMask);
 
             VarHandle.releaseFence();
-            moveHeadPointer(pIdx, reserved);
+            moveHeadPointer(partition, reserved);
         }
         return total;
     }
 
     // Tail Movements and Updates
 
-    protected void incrementInFlight(int pIdx) {
-        LA_HANDLE.setRelease(this.inFlight, pIdx, this.inFlight[pIdx] + 1);
+    protected void incrementInFlight(int partition) {
+        this.inFlight.setRelease(partition, this.inFlight.getPlain(partition) + 1);
     }
 
-    protected void decrementInFlight(int pIdx) {
-        LA_HANDLE.setRelease(this.inFlight, pIdx, this.inFlight[pIdx] - 1);
+    protected void decrementInFlight(int partition) {
+        this.inFlight.setRelease(partition, this.inFlight.getPlain(partition) - 1);
     }
 
-    protected long getTailPointer(int pIdx) {
-        return (long) LA_HANDLE.getOpaque(this.tails, pIdx);
+    protected long getTailPointer(int partition) {
+        return this.tails.getOpaque(partition);
     }
 
-    protected boolean continueTailCAS(int pIdx) {
-        return !this.retired.getOpaque();
+    protected boolean continueTailCAS() {
+        return !super.retired.getOpaque();
     }
 
-    protected boolean casTailPointer(int pIdx, long expect, long update) {
-        LA_HANDLE.setOpaque(this.tails, pIdx, update);
+    protected boolean casTailPointer(int partition, long expect, long update) {
+        super.tails.setOpaque(partition, update);
         return true;
     }
 
     // Head Movements and Updates
 
-    protected long getHeadPointer(int pIdx) {
-        return (long) LA_HANDLE.getOpaque(this.heads, pIdx);
+    protected long getHeadPointer(int partition) {
+        return super.heads.getOpaque(partition);
     }
 
     /// Default moves with an opaque set, and a plain read.
-    protected void moveHeadPointer(int pIdx, long delta) {
-        LA_HANDLE.setOpaque(this.heads, pIdx, this.heads[pIdx] + delta);
+    protected void moveHeadPointer(int partition, long delta) {
+        super.heads.setOpaque(partition, super.heads.getPlain(partition) + delta);
     }
 
     /// Default returns the head
-    protected long getHeadSequence(int pIdx) {
-        return (long) LA_HANDLE.getOpaque(heads, pIdx);
+    protected long getHeadSequence(int partition) {
+        return super.heads.getOpaque(partition);
     }
 
     /// Default has no head sequence tracking.
-    protected boolean casHeadSequence(int pIdx, long expect, long update) {
+    protected boolean casHeadSequence(int partition, long expect, long update) {
         return true;
     }
 
@@ -272,20 +267,19 @@ abstract class ConcurrentPartitionedArrayQueue<T> extends PartitionedArrayQueue<
 
     public final int getSize(int partition) {
         boundsCheck(partition);
-        int pIdx = partitionIndex(partition);
 
-        long head = (long) LA_HANDLE.getOpaque(this.heads, pIdx);
-        long tail = (long) LA_HANDLE.getOpaque(this.tails, pIdx);
+        long head = super.heads.getAcquire(partition);
+        long tail = super.tails.getAcquire(partition);
 
         return (int) ((tail - head) & ABS_MASK);
     }
 
     public final boolean isRetired() {
-        return this.retired.getAcquire();
+        return super.retired.getAcquire();
     }
 
     public boolean isEmpty() {
-        for (int i = 0; i < this.partitions; i++) {
+        for (int i = 0; i < super.partitions; i++) {
             if (!isEmpty(i)) {
                 return false;
             }
@@ -294,21 +288,20 @@ abstract class ConcurrentPartitionedArrayQueue<T> extends PartitionedArrayQueue<
     }
 
     public boolean isEmpty(int partition) {
-        int pIdx = partitionIndex(partition);
-        long head = (long) LA_HANDLE.getAcquire(this.heads, pIdx);
-        long tail = (long) LA_HANDLE.getAcquire(this.tails, pIdx);
-        long headSeq = this.headSequence == null ? head : (long) LA_HANDLE.getAcquire(this.headSequence, pIdx);
-        long inFlight = this.inFlight == null ? 0 : (long) LA_HANDLE.getAcquire(this.inFlight, pIdx);
+        long head = super.heads.getAcquire(partition);
+        long tail = super.tails.getAcquire(partition);
+        long headSeq = this.headSequence == null ? head : this.headSequence.getAcquire(partition);
+        long inFlight = this.inFlight == null ? 0 : this.inFlight.getAcquire(partition);
 
-        return head == tail && head == headSeq && inFlight == 0 && isPartitionEmptyInternal(pIdx);
+        return head == tail && head == headSeq && inFlight == 0 && isPartitionEmptyInternal(partition);
     }
 
-    protected final boolean isPartitionEmptyInternal(int pIdx) {
+    protected final boolean isPartitionEmptyInternal(int partition) {
         int logicalIdx = 0;
         int start = sequenceChunkIndex(logicalIdx);
         int curr = start;
         do {
-            long chunk = (long) LA_HANDLE.getAcquire(this.tailSequence[pIdx], curr);
+            long chunk = (long) LA_HANDLE.getAcquire(this.tailSequence.getPlain(partition), curr);
             if (chunk != 0) {
                 return false;
             }
@@ -321,18 +314,18 @@ abstract class ConcurrentPartitionedArrayQueue<T> extends PartitionedArrayQueue<
     public void reset() {
         VarHandle.acquireFence();
 
-        for(int i = 0; i < this.partitions; i++) {
-            int pIdx = partitionIndex(i);
-            LA_HANDLE.setRelease(this.heads, pIdx, 0);
-            LA_HANDLE.setRelease(this.tails, pIdx, 0);
+        for(int i = 0; i < super.partitions; i++) {
+            super.heads.setRelease(i, 0);
+            super.tails.setRelease(i, 0);
             if(this.headSequence != null) {
-                LA_HANDLE.setRelease(this.headSequence, pIdx, 0);
+                this.headSequence.setRelease(i, 0);
             }
             if(this.inFlight != null) {
-                LA_HANDLE.setRelease(this.inFlight, pIdx, 0);
+                this.inFlight.setRelease(i, 0);
             }
-            for(int j = 0; j < this.tailSequence[pIdx].length; j++) {
-                LA_HANDLE.setRelease(this.tailSequence[pIdx], j, 0);
+            var tS = this.tailSequence.getPlain(i);
+            for(int j = 0; j < tS.length; j++) {
+                LA_HANDLE.setRelease(tS, j, 0);
             }
         }
         VarHandle.releaseFence();
@@ -344,17 +337,17 @@ abstract class ConcurrentPartitionedArrayQueue<T> extends PartitionedArrayQueue<
 
         StringJoiner sj = new StringJoiner("\n");
         sj.add(this.getClass().getSimpleName());
-        sj.add("Retired: " + this.retired.getAcquire());
-        sj.add("Heads: " + Arrays.toString(this.heads));
-        sj.add("Tails: " + Arrays.toString(this.tails));
+        sj.add("Retired: " + super.retired.getAcquire());
+        sj.add("Heads: " + super.heads);
+        sj.add("Tails: " + super.tails);
         if(this.inFlight != null) {
-            sj.add("InFlight: " + Arrays.toString(this.inFlight));
+            sj.add("InFlight: " + this.inFlight);
         }
         if(this.headSequence != null) {
-            sj.add("HeadSequence: " + Arrays.toString(this.headSequence));
+            sj.add("HeadSequence: " + this.headSequence);
         }
-        for(int i = 0; i < this.partitions; i++) {
-            sj.add("TailSequence-p" + i + ": " + Arrays.toString(this.tailSequence[partitionIndex(i)]));
+        for(int i = 0; i < super.partitions; i++) {
+            sj.add("TailSequence-p" + i + ": " + Arrays.toString(this.tailSequence.getPlain(i)));
         }
         return sj.toString();
     }
