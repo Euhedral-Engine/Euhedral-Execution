@@ -5,7 +5,7 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.function.Function;
 
-@SuppressWarnings("unchecked")
+@SuppressWarnings({"unchecked","unused"})
 public final class PaddedAtomicReference<T> extends PaddedReference<T> {
 
     private static final VarHandle HANDLE;
@@ -66,7 +66,7 @@ public final class PaddedAtomicReference<T> extends PaddedReference<T> {
     }
 
     public void setPlain(T obj) {
-        HANDLE.set(this, obj);
+        super.ref = obj;
     }
 
     // ----- CAS -----
@@ -76,7 +76,7 @@ public final class PaddedAtomicReference<T> extends PaddedReference<T> {
         do {
             prev = get();
             next = updateFunction.apply(prev);
-        } while (!HANDLE.weakCompareAndSet(this, prev, next));
+        } while (!weakCompareAndSet(prev, next));
         return prev;
     }
 
@@ -85,12 +85,16 @@ public final class PaddedAtomicReference<T> extends PaddedReference<T> {
         do {
             prev = get();
             next = updateFunction.apply(prev);
-        } while (!HANDLE.weakCompareAndSet(this, prev, next));
+        } while (!weakCompareAndSet(prev, next));
         return next;
     }
 
     public boolean compareAndSet(T curr, T next) {
         return HANDLE.compareAndSet(this, curr, next);
+    }
+
+    public boolean weakCompareAndSet(T expect, T update) {
+        return HANDLE.weakCompareAndSet(this, expect, update);
     }
 
     public T compareAndExchange(T curr, T next) {

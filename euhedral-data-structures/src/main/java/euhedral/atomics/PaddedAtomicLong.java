@@ -6,6 +6,7 @@ import java.lang.invoke.VarHandle;
 import java.util.function.LongBinaryOperator;
 import java.util.function.LongUnaryOperator;
 
+@SuppressWarnings("unused")
 public class PaddedAtomicLong extends PaddedLong {
     private static final VarHandle HANDLE;
 
@@ -19,7 +20,7 @@ public class PaddedAtomicLong extends PaddedLong {
     }
 
     public PaddedAtomicLong() {
-
+        super.value = 0L;
     }
 
     public PaddedAtomicLong(long value) {
@@ -69,7 +70,7 @@ public class PaddedAtomicLong extends PaddedLong {
     }
 
     public void setPlain(long val) {
-        HANDLE.set(this, val);
+        super.value = val;
     }
 
     // ----- RMW -----
