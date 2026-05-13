@@ -1,51 +1,36 @@
 package euhedral.queues;
 
-import euhedral.atomics.PaddedAtomicLong;
 import euhedral.atomics.PaddedAtomicReferenceArray;
 import euhedral.queues.QueueNode.Type;
 import euhedral.queues.common.NodeRecycler;
 import euhedral.queues.common.PartitionedQueue;
 import euhedral.queues.common.QueueUtils;
-import java.lang.invoke.VarHandle;
 import java.util.StringJoiner;
 import lombok.Getter;
 
 /// A plain unbounded array queue with partitions. This class is not thread-safe for any method.
-/// This is meant to be used by a single thread, and is not an SPSC queue. There are no visibility
-/// guarantees between 2 different threads.
-///
-/// This class is also used as a base for the other unbounded types. They override specific methods
-/// to make them thread-safe.
+/// There are no visibility guarantees between 2 different threads.
 ///
 /// The underlying queue used by this class is the [PartitionedArrayQueue]. This class wraps
-/// instances of that queue in node objects to create a linked-list of them to grow. If recycling is
-/// enabled, nodes are put in the [NodeRecycler] and reused later.
+/// instances of that queue type in [QueueNode] objects to create a linked-list of them. If
+/// recycling is enabled, nodes are put in the [NodeRecycler] and reused later.
 ///
 /// @param <T> Type to store
 public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueue<T> permits
-        PartitionedUnboundedMpmcArrayQueue, PartitionedUnboundedMpscArrayQueue,
-        PartitionedUnboundedSpmcArrayQueue {
+        ConcurrentPartitionedUnboundedArrayQueue {
 
-    protected final Type type;
     @Getter
-    private final int partitions;
+    protected final int partitions;
     @Getter
-    private final int chunkSize;
-    private final NodeRecycler<T> recycler;
+    protected final int chunkSize;
 
-    private final PaddedAtomicLong headLock;
-    private final PaddedAtomicReferenceArray<QueueNode<T>> heads;
-    private final PartitionedArrayQueue<QueueNode<T>> headQueues;
+    protected final NodeRecycler<T> recycler;
 
-    private final PaddedAtomicLong tailEpoch;
-    private final PartitionedArrayQueue<QueueNode<T>> tailQueue;
+    protected final PaddedAtomicReferenceArray<QueueNode<T>> heads;
+
+    private QueueNode<T> tail;
 
     public PartitionedUnboundedArrayQueue(int partitions, int chunkSize, int maxPooledChunks) {
-        this(partitions, chunkSize, maxPooledChunks, Type.PLAIN);
-    }
-
-    PartitionedUnboundedArrayQueue(int partitions, int chunkSize, int maxPooledChunks,
-            QueueNode.Type type) {
         if (partitions <= 0 || chunkSize <= 0) {
             throw new IllegalArgumentException(
                     "Cannot have 0 partitions or 0 chunkSize: " + partitions + " " + chunkSize);
@@ -54,56 +39,44 @@ public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueu
         chunkSize = Math.max(1, chunkSize);
         this.partitions = partitions;
         this.chunkSize = chunkSize;
-        this.type = type;
-        this.recycler = maxPooledChunks <= 0 ? null : new NodeRecycler<>(type, maxPooledChunks);
+        this.recycler =
+                maxPooledChunks <= 0 ? null : new NodeRecycler<>(Type.PLAIN, maxPooledChunks);
 
-        QueueNode<T> tail = new QueueNode<>(partitions, chunkSize, type);
+        this.tail = new QueueNode<>(partitions, chunkSize, Type.PLAIN);
 
-        this.headLock = switch (type) {
-            case PLAIN, SPSC, MPSC -> null;
-            default -> new PaddedAtomicLong(0);
-        };
-        this.headQueues = switch (type) {
-            case PLAIN, SPSC, MPSC -> {
-                this.heads = new PaddedAtomicReferenceArray<>(partitions, false, false);
-                this.heads.fill(tail);
-                yield null;
-            }
-            default -> {
-                this.heads = null;
-                PartitionedMpmcArrayQueue<QueueNode<T>> heads = new PartitionedMpmcArrayQueue<>(
-                        partitions, 64);
-                for (int i = 0; i < partitions; i++) {
-                    heads.offer(i, tail);
-                }
-                yield heads;
-            }
-        };
-
-        this.tailQueue = switch (type) {
-            case PLAIN -> {
-                this.tailEpoch = null;
-                yield new PartitionedArrayQueue<>(1, 64, false);
-            }
-            case SPSC, SPMC -> {
-                this.tailEpoch = null;
-                yield new PartitionedSpscArrayQueue<>(1, 64, false);
-            }
-            default -> {
-                this.tailEpoch = new PaddedAtomicLong(0);
-                yield new PartitionedSpmcArrayQueue<>(1, 64, false);
-            }
-        };
-        this.tailQueue.offer(0, tail);
+        this.heads = new PaddedAtomicReferenceArray<>(partitions, false, false);
+        this.heads.fill(tail);
     }
 
-    /// Offers the object to a random partition
+    protected PartitionedUnboundedArrayQueue(int partitions, int chunkSize,
+            NodeRecycler<T> recycler, PaddedAtomicReferenceArray<QueueNode<T>> heads) {
+        if (partitions <= 0 || chunkSize <= 0) {
+            throw new IllegalArgumentException(
+                    "Cannot have 0 partitions or 0 chunkSize: " + partitions + " " + chunkSize);
+        }
+        chunkSize = Integer.highestOneBit((chunkSize - 1) << 1);
+        chunkSize = Math.max(1, chunkSize);
+
+        this.partitions = partitions;
+        this.chunkSize = chunkSize;
+        this.recycler = recycler;
+        this.tail = null;
+        this.heads = heads;
+    }
+
+    /// Offers the object to a random partition based on the seed. If the seed does not change, the
+    /// same partition will be picked.
+    ///
+    /// @return success
     @Override
-    public boolean offer(long randomSeed, T obj) {
+    public final boolean offer(long randomSeed, T obj) {
         int partition = (int) QueueUtils.unsignedMultiplyHigh(randomSeed, partitions);
         return offer(partition, obj);
     }
 
+    /// Offers the object to a specific partition
+    ///
+    /// @return success
     @Override
     public boolean offer(int partition, T obj) {
         boundsCheck(partition);
@@ -111,32 +84,20 @@ public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueu
             throw new NullPointerException();
         }
 
-        while (true) {
-            long epoch = getTailEpoch();
-            QueueNode<T> tail = this.tailQueue.peek(0);
-            if (tail == null || tail.getTailEpoch() != epoch) {
-                continue;
-            }
-            if (tail.offer(partition, obj)) {
-                break;
-            }
-            moveTailForward(epoch);
+        while (!this.tail.offer(partition, obj)) {
+            moveTailForward();
         }
         return true;
     }
 
+    /// Gets the object at the top of the partition.
     @Override
     public T peek(int partition) {
         boundsCheck(partition);
         while (true) {
             QueueNode<T> head = getHeadNode(partition);
-            if (head == null) {
-                continue;
-            }
 
-            long epoch = head.getHeadEpoch(partition);
-            T val = head.chunk.peek(partition);
-
+            T val = head.peek(partition);
             if (val == null) {
                 if (!head.isRetired()) {
                     return null;
@@ -144,6 +105,7 @@ public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueu
 
                 QueueNode<T> next = getNextHeadNode(head);
                 if (next != null) {
+                    long epoch = head.getHeadEpoch(partition);
                     moveHeadsForward(epoch, head, next);
                     continue;
                 }
@@ -153,18 +115,14 @@ public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueu
         }
     }
 
+    /// Gets and removes the object at the top of the partition
     @Override
     public T poll(int partition) {
         boundsCheck(partition);
 
         while (true) {
             QueueNode<T> head = getHeadNode(partition);
-            if (head == null) {
-                continue;
-            }
-
-            long epoch = head.getHeadEpoch(partition);
-            T val = head.chunk.poll(partition);
+            T val = head.poll(partition);
 
             if (val == null) {
                 if (!head.isRetired()) {
@@ -173,6 +131,7 @@ public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueu
 
                 QueueNode<T> next = getNextHeadNode(head);
                 if (next != null) {
+                    long epoch = head.getHeadEpoch(partition);
                     moveHeadsForward(epoch, head, next);
                     continue;
                 }
@@ -183,6 +142,8 @@ public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueu
     }
 
     /// Drains from all partitions starting from 0
+    ///
+    /// @return Number of items drained
     @Override
     public int drain(QueueConsumer<T> consumer, int limit) {
         if (consumer == null || limit <= 0) {
@@ -209,11 +170,7 @@ public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueu
 
         while (limit > 0) {
             QueueNode<T> head = getHeadNode(partition);
-            if (head == null) {
-                continue;
-            }
 
-            long epoch = head.getHeadEpoch(partition);
             int count = head.drain(partition, consumer, limit);
 
             if (count > 0) {
@@ -228,6 +185,7 @@ public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueu
 
             QueueNode<T> next = getNextHeadNode(head);
             if (next != null) {
+                long epoch = head.getHeadEpoch(partition);
                 moveHeadsForward(epoch, head, next);
             } else {
                 break;
@@ -238,129 +196,58 @@ public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueu
 
     // ----- Tail -----
 
-    private void setNextTailNode(QueueNode<T> tail, QueueNode<T> next) {
-        if (this.type == Type.PLAIN) {
-            tail.next.setPlain(next);
-        } else {
-            tail.next.setRelease(next);
-        }
-    }
+    protected void moveTailForward() {
+        QueueNode<T> next;
+        next = recycler == null ? null : recycler.pop();
+        next = next == null ? new QueueNode<>(partitions, chunkSize, Type.PLAIN) : next;
 
-    private long getTailEpoch() {
-        return switch (this.type) {
-            case MPSC, MPMC -> this.tailEpoch.getAcquire();
-            default -> 0;
-        };
-    }
+        this.tail.next.setPlain(next);
 
-    private boolean casTailEpoch(long oldEpoch, long newEpoch) {
-        return switch (this.type) {
-            case MPSC, MPMC -> this.tailEpoch.compareAndSet(oldEpoch, newEpoch);
-            default -> true;
-        };
-    }
-
-    private void moveTailForward(long epoch) {
-        if (casTailEpoch(epoch, epoch + 1)) {
-            QueueNode<T> tail = this.tailQueue.poll(0);
-
-            QueueNode<T> next;
-            next = recycler == null ? null : recycler.pop();
-            next = next == null ? new QueueNode<>(partitions, chunkSize, type) : next;
-            next.setTailEpoch(epoch + 1);
-
-            setNextTailNode(tail, next);
-
-            VarHandle.releaseFence();
-            while (!this.tailQueue.offer(0, next)) {
-                Thread.onSpinWait();
-            }
-        }
+        this.tail = next;
     }
 
     // ----- Head -----
 
-    private QueueNode<T> getHeadNode(int partition) {
-        return switch (this.type) {
-            case PLAIN -> this.heads.getPlain(partition);
-            case SPSC, MPSC -> this.heads.getOpaque(partition);
-            default -> this.headQueues.peek(partition);
-        };
+    protected QueueNode<T> getHeadNode(int partition) {
+        return this.heads.getPlain(partition);
     }
 
-    private QueueNode<T> getNextHeadNode(QueueNode<T> head) {
-        return switch (this.type) {
-            case PLAIN -> head.next.getPlain();
-            case SPSC, MPSC -> head.next.getOpaque();
-            default -> head.next.getAcquire();
-        };
+    protected QueueNode<T> getNextHeadNode(QueueNode<T> head) {
+        return head.next.getPlain();
     }
 
-    private void setNextHeadNode(int partition, QueueNode<T> next) {
-        if (this.type == Type.PLAIN) {
-            this.heads.setPlain(partition, next);
-            return;
-        }
-        if (this.type == Type.SPSC || this.type == Type.MPSC) {
-            this.heads.setOpaque(partition, next);
-            return;
-        }
-        this.headQueues.poll(partition);
-        while (!this.headQueues.offer(partition, next)) {
-            Thread.onSpinWait();
-        }
+    protected void setNextHeadNode(int partition, QueueNode<T> next) {
+        this.heads.setPlain(partition, next);
     }
 
-    private boolean acquireHeadLock() {
-        if (this.headLock == null) {
-            return true;
-        }
-        return this.headLock.compareAndSet(0, 1);
-    }
+    protected void moveHeadsForward(long epoch, QueueNode<T> commonHead, QueueNode<T> nextHead) {
+        int flipped = 0;
+        int count = 0;
+        for (int i = 0; i < this.partitions; i++) {
+            if (!commonHead.isEmpty(i)) {
+                continue;
+            }
 
-    private void releaseHeadLock() {
-        if (this.headLock == null) {
-            return;
-        }
-        this.headLock.set(0);
-    }
-
-    private void moveHeadsForward(long epoch, QueueNode<T> commonHead, QueueNode<T> nextHead) {
-        if (!acquireHeadLock()) {
-            return;
-        }
-
-        try {
-            int flipped = 0;
-            int count = 0;
-            for (int i = 0; i < this.partitions; i++) {
-                if (!commonHead.isEmpty(i)) {
-                    continue;
-                }
-
-                QueueNode<T> partHead = getHeadNode(i);
-                if (partHead == commonHead) {
-                    if (commonHead.getHeadEpoch(i) == epoch) {
-                        setNextHeadNode(i, nextHead);
-                        commonHead.casHeadEpoch(i, epoch, epoch + 1);
-                        flipped++;
-                        count++;
-                    }
-                } else if (commonHead.getHeadEpoch(i) == epoch + 1) {
+            QueueNode<T> partHead = getHeadNode(i);
+            if (partHead == commonHead) {
+                if (commonHead.getHeadEpoch(i) == epoch) {
+                    setNextHeadNode(i, nextHead);
+                    commonHead.casHeadEpoch(i, epoch, epoch + 1);
+                    flipped++;
                     count++;
                 }
+            } else if (commonHead.getHeadEpoch(i) == epoch + 1) {
+                count++;
             }
-            if (this.recycler == null || count != this.partitions || flipped == 0) {
-                return;
-            }
-
-            this.recycler.recycle(commonHead);
-        } finally {
-            releaseHeadLock();
         }
+        if (this.recycler == null || count != this.partitions || flipped == 0) {
+            return;
+        }
+
+        this.recycler.recycle(commonHead);
     }
 
-    private void boundsCheck(int idx) {
+    protected final void boundsCheck(int idx) {
         if (idx < 0 || idx >= partitions) {
             throw new IndexOutOfBoundsException(
                     "Index " + idx + " out of bounds for length " + partitions);
@@ -372,11 +259,9 @@ public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueu
         StringJoiner sj = new StringJoiner("\n");
         for (int i = 0; i < this.partitions; i++) {
             QueueNode<T> head = getHeadNode(i);
-            sj.add(String.format("Head: P%d ID: %d\n%s", i, head.hashCode(), head.chunk));
+            sj.add(String.format("Head: %s", head));
         }
-        QueueNode<T> tail = this.tailQueue.peek(0);
-        sj.add("\nTail: ID: " + tail.hashCode());
-        sj.add(tail.chunk.toString());
+        sj.add(String.format("\nTail: %s", this.tail));
         return sj.toString();
     }
 }
