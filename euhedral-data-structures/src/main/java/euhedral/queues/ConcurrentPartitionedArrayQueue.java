@@ -321,18 +321,19 @@ abstract class ConcurrentPartitionedArrayQueue<T> extends PartitionedArrayQueue<
     public void reset() {
         VarHandle.acquireFence();
 
-        Arrays.fill(this.heads, 0);
-        Arrays.fill(this.tails, 0);
-        if(this.headSequence != null) {
-            Arrays.fill(this.headSequence, 0);
-        }
-        if(this.inFlight != null) {
-            Arrays.fill(this.inFlight, 0);
-        }
-        for (int i = 0; i < this.partitions; i++) {
+        for(int i = 0; i < this.partitions; i++) {
             int pIdx = partitionIndex(i);
-            Arrays.fill(this.queue[queueIndex(i)], null);
-            Arrays.fill(this.tailSequence[pIdx], 0);
+            LA_HANDLE.setRelease(this.heads, pIdx, 0);
+            LA_HANDLE.setRelease(this.tails, pIdx, 0);
+            if(this.headSequence != null) {
+                LA_HANDLE.setRelease(this.headSequence, pIdx, 0);
+            }
+            if(this.inFlight != null) {
+                LA_HANDLE.setRelease(this.inFlight, pIdx, 0);
+            }
+            for(int j = 0; j < this.tailSequence[pIdx].length; j++) {
+                LA_HANDLE.setRelease(this.tailSequence[pIdx], j, 0);
+            }
         }
         VarHandle.releaseFence();
         this.retired.lazySet(false);
