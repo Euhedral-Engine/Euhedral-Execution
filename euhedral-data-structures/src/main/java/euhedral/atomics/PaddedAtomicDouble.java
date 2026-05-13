@@ -6,6 +6,7 @@ import euhedral.atomics.padding.PaddedDouble;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 
+@SuppressWarnings("unused")
 public class PaddedAtomicDouble extends PaddedDouble {
     private static final VarHandle HANDLE;
 
@@ -18,14 +19,12 @@ public class PaddedAtomicDouble extends PaddedDouble {
         }
     }
 
-    private double value;
-
     public PaddedAtomicDouble() {
-
+        super.value = 0d;
     }
 
     public PaddedAtomicDouble(double value) {
-        this.value = value;
+        super.value = value;
     }
 
     // ----- Get -----
@@ -44,7 +43,7 @@ public class PaddedAtomicDouble extends PaddedDouble {
     }
 
     public double getPlain() {
-        return this.value;
+        return super.value;
     }
 
     public double getAndSet(double val) {
@@ -107,7 +106,7 @@ public class PaddedAtomicDouble extends PaddedDouble {
         do {
             prev = get();
             next = updateFunction.applyAsDouble(prev);
-        } while (!HANDLE.weakCompareAndSet(this, prev, next));
+        } while (!weakCompareAndSet(prev, next));
         return prev;
     }
 
@@ -116,7 +115,7 @@ public class PaddedAtomicDouble extends PaddedDouble {
         do {
             prev = get();
             next = updateFunction.applyAsDouble(prev);
-        } while (!HANDLE.weakCompareAndSet(this, prev, next));
+        } while (!weakCompareAndSet(prev, next));
         return next;
     }
 
@@ -125,7 +124,7 @@ public class PaddedAtomicDouble extends PaddedDouble {
         do {
             prev = get();
             next = accumulator.applyAsDouble(prev, val);
-        } while (!HANDLE.compareAndSet(this, prev, next));
+        } while (!compareAndSet(prev, next));
         return prev;
     }
 
@@ -134,7 +133,7 @@ public class PaddedAtomicDouble extends PaddedDouble {
         do {
             prev = get();
             next = accumulator.applyAsDouble(prev, val);
-        } while (!HANDLE.compareAndSet(this, prev, next));
+        } while (!compareAndSet(prev, next));
         return next;
     }
 
