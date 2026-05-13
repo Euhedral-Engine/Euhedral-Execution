@@ -5,6 +5,7 @@ import euhedral.atomics.helpers.DoubleInterfaces.DoubleUnaryOperator;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 
+@SuppressWarnings("unused")
 public class AtomicDouble {
 
     private static final VarHandle HANDLE;
@@ -17,11 +18,11 @@ public class AtomicDouble {
             throw new ExceptionInInitializerError(t);
         }
     }
-    
+
     private double value;
 
     public AtomicDouble() {
-
+        this.value = 0d;
     }
 
     public AtomicDouble(double value) {
@@ -107,7 +108,7 @@ public class AtomicDouble {
         do {
             prev = get();
             next = updateFunction.applyAsDouble(prev);
-        } while (!HANDLE.weakCompareAndSet(this, prev, next));
+        } while (!weakCompareAndSet(prev, next));
         return prev;
     }
 
@@ -116,7 +117,7 @@ public class AtomicDouble {
         do {
             prev = get();
             next = updateFunction.applyAsDouble(prev);
-        } while (!HANDLE.weakCompareAndSet(this, prev, next));
+        } while (!weakCompareAndSet(prev, next));
         return next;
     }
 
