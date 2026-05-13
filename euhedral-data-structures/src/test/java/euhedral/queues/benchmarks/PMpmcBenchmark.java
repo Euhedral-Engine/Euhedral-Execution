@@ -2,13 +2,10 @@ package euhedral.queues.benchmarks;
 
 import euhedral.queues.PartitionedMpmcArrayQueue;
 import euhedral.queues.QueueConsumer;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.LongAdder;
 import org.HdrHistogram.ConcurrentHistogram;
 import org.openjdk.jmh.annotations.AuxCounters;
@@ -20,7 +17,6 @@ import org.openjdk.jmh.annotations.GroupThreads;
 import org.openjdk.jmh.annotations.Level;
 import org.openjdk.jmh.annotations.Measurement;
 import org.openjdk.jmh.annotations.Mode;
-import org.openjdk.jmh.annotations.OperationsPerInvocation;
 import org.openjdk.jmh.annotations.OutputTimeUnit;
 import org.openjdk.jmh.annotations.Param;
 import org.openjdk.jmh.annotations.Scope;
@@ -96,7 +92,7 @@ public class PMpmcBenchmark {
 
     @Setup(Level.Trial)
     public void setup(BenchState g) {
-        queue = new PartitionedMpmcArrayQueue<>(partitions, 4096, false);
+        queue = new PartitionedMpmcArrayQueue<>(partitions, 4096);
         g.startTime = System.nanoTime();
         exec = Executors.newFixedThreadPool(16);
     }

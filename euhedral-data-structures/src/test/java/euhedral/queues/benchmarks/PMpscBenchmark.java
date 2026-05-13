@@ -56,7 +56,7 @@ public class PMpscBenchmark {
 
     @Setup(Level.Trial)
     public void setup(BenchState g) {
-        queue = new PartitionedMpscArrayQueue<>(partitions, 4096, false);
+        queue = new PartitionedMpscArrayQueue<>(partitions, 4096);
         g.startTime = System.nanoTime();
     }
 
