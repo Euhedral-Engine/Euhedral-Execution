@@ -6,6 +6,7 @@ import static euhedral.queues.common.QueueUtils.POINTER_PAD_BYTES;
 import euhedral.queues.common.PartitionedQueue;
 import euhedral.queues.common.QueueUtils;
 import java.util.Arrays;
+import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.Getter;
 
 /// A bounded, padded, partitioned, array-based queue.
@@ -26,6 +27,7 @@ public class PartitionedArrayQueue<T> implements PartitionedQueue<T> {
     protected final long[] tails;
 
     protected final boolean unbounded;
+    protected final AtomicBoolean retired = new AtomicBoolean(false);
 
     @Getter
     long capacity;
@@ -66,6 +68,7 @@ public class PartitionedArrayQueue<T> implements PartitionedQueue<T> {
 
         int pIdx = partitionIndex(partition);
         if (QueueUtils.unsignedDiff(heads[pIdx], tails[pIdx] + 1) > chunkSize) {
+            retired.setPlain(true);
             return false;
         }
 
@@ -143,6 +146,10 @@ public class PartitionedArrayQueue<T> implements PartitionedQueue<T> {
 
     protected int chunkIndex(long idx) {
         return (int) (idx & chunkMask) + POINTER_PAD_BYTES;
+    }
+
+    public boolean isRetired() {
+        return retired.getPlain();
     }
 
     public boolean isEmpty() {
