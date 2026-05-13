@@ -17,7 +17,7 @@ public class NodeRecycler<T> {
     }
 
     public QueueNode<T> pop() {
-        if (type == QueueNode.Type.UNSAFE) {
+        if (type == QueueNode.Type.PLAIN) {
             return popPlain();
         }
 
@@ -52,7 +52,7 @@ public class NodeRecycler<T> {
     }
 
     public void recycle(QueueNode<T> node) {
-        if (type == Type.UNSAFE) {
+        if (type == Type.PLAIN) {
             recyclePlain(node);
             return;
         }
@@ -86,7 +86,7 @@ public class NodeRecycler<T> {
     private boolean casIncrement() {
         int count;
         do {
-            count = this.count.get();
+            count = this.count.getAcquire();
             if (count == capacity) {
                 return false;
             }
