@@ -71,6 +71,14 @@ public class QueueNode<T> {
         return chunk.isEmpty(partition);
     }
 
+    public long size() {
+        return chunk.size();
+    }
+
+    public long size(int partition) {
+        return chunk.size(partition);
+    }
+
     public long getHeadEpoch(int partition) {
         return this.headEpoch == null ? 0 : (long) LA_ARRAY.getAcquire(this.headEpoch, partition);
     }
@@ -90,8 +98,8 @@ public class QueueNode<T> {
         }
     }
 
-    public void reset() {
-        this.chunk.reset();
+    public void clear() {
+        this.chunk.clear();
         if (this.type == Type.PLAIN) {
             this.next.setPlain(null);
         } else {

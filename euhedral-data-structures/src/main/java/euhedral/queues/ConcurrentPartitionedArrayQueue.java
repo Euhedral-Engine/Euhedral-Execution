@@ -1,16 +1,14 @@
 package euhedral.queues;
 
-import static euhedral.queues.common.QueueUtils.ABS_MASK;
 import static euhedral.queues.common.QueueUtils.LONG_PAD;
 
+import euhedral.atomics.PaddedAtomicReferenceArray;
+import euhedral.atomics.PaddedLongAdder;
+import euhedral.queues.common.QueueUtils;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.Arrays;
 import java.util.StringJoiner;
-
-import euhedral.atomics.PaddedAtomicLongArray;
-import euhedral.atomics.PaddedAtomicReferenceArray;
-import euhedral.queues.common.QueueUtils;
 
 abstract sealed class ConcurrentPartitionedArrayQueue<T> extends PartitionedArrayQueue<T>
         permits PartitionedSpscArrayQueue, PartitionedSpmcArrayQueue, PartitionedMpscArrayQueue,
@@ -21,8 +19,8 @@ abstract sealed class ConcurrentPartitionedArrayQueue<T> extends PartitionedArra
     protected final int sequenceMask;
 
     protected final PaddedAtomicReferenceArray<long[]> tailSequence;
-    protected final PaddedAtomicLongArray headSequence;
-    protected final PaddedAtomicLongArray inFlight;
+    protected final PaddedLongAdder headSequence;
+    protected final PaddedLongAdder inFlight;
 
     public ConcurrentPartitionedArrayQueue(int partitions, int chunkSize, boolean multiConsumer,
             boolean unbounded) {
@@ -37,13 +35,13 @@ abstract sealed class ConcurrentPartitionedArrayQueue<T> extends PartitionedArra
         }
 
         if (multiConsumer) {
-            this.headSequence = new PaddedAtomicLongArray(partitions, false, true);
+            this.headSequence = new PaddedLongAdder(partitions, false, true);
         } else {
             this.headSequence = null;
         }
 
         if (unbounded) {
-            this.inFlight = new PaddedAtomicLongArray(partitions, false, true);
+            this.inFlight = new PaddedLongAdder(partitions, false, true);
         } else {
             this.inFlight = null;
         }
@@ -94,7 +92,7 @@ abstract sealed class ConcurrentPartitionedArrayQueue<T> extends PartitionedArra
 
             VarHandle.releaseFence();
 
-            LA_HANDLE.getAndAdd(this.tailSequence.getPlain(rIdx), sequenceChunkIndex(tail),
+            LA_HANDLE.getAndBitwiseOr(this.tailSequence.getPlain(rIdx), sequenceChunkIndex(tail),
                     getSequenceNumber(tail));
             return true;
         } finally {
@@ -226,11 +224,11 @@ abstract sealed class ConcurrentPartitionedArrayQueue<T> extends PartitionedArra
     // Tail Movements and Updates
 
     protected void incrementInFlight(int pIdx) {
-        this.inFlight.setRelease(pIdx, this.inFlight.getPlain(pIdx) + 1);
+        this.inFlight.setOpaque(pIdx, this.inFlight.getOpaque(pIdx) + 1);
     }
 
     protected void decrementInFlight(int pIdx) {
-        this.inFlight.setRelease(pIdx, this.inFlight.getPlain(pIdx) - 1);
+        this.inFlight.setOpaque(pIdx, this.inFlight.getOpaque(pIdx) - 1);
     }
 
     protected long getTailPointer(int pIdx) {
@@ -254,7 +252,7 @@ abstract sealed class ConcurrentPartitionedArrayQueue<T> extends PartitionedArra
 
     /// Defaults to moving with a plain read and an opaque set.
     protected void moveHeadPointer(int pIdx, long delta) {
-        super.heads.setOpaque(pIdx, super.heads.getPlain(pIdx) + delta);
+        super.heads.setOpaque(pIdx, super.heads.getOpaque(pIdx) + delta);
     }
 
     /// Default returns the head
@@ -279,36 +277,38 @@ abstract sealed class ConcurrentPartitionedArrayQueue<T> extends PartitionedArra
 
     // State
 
-    public final int getSize(int partition) {
-        boundsCheck(partition);
-
-        int pIdx = super.heads.fromRawIdx(partition);
-        long head = super.heads.getAcquire(pIdx);
-        long tail = super.tails.getAcquire(pIdx);
-
-        return (int) ((tail - head) & ABS_MASK);
-    }
-
     public final boolean isRetired() {
         return super.retired.getAcquire();
     }
 
+    @Override
     public boolean isEmpty() {
         for (int i = 0; i < super.partitions; i++) {
-            if (!isEmpty(i)) {
+            int pIdx = super.heads.fromRawIdx(i);
+            long head = super.heads.getPlain(pIdx);
+            long tail = super.tails.getPlain(pIdx);
+            long headSeq = this.headSequence == null ? head : this.headSequence.getPlain(pIdx);
+            long inFlight = this.inFlight == null ? 0 : this.inFlight.getPlain(pIdx);
+
+            boolean empty = head == tail && head == headSeq && inFlight == 0 && isPartitionEmptyInternal(
+                    i);
+            if (!empty) {
                 return false;
             }
         }
+        VarHandle.acquireFence();
         return true;
     }
 
+    @Override
     public boolean isEmpty(int partition) {
         int pIdx = super.heads.fromRawIdx(partition);
 
-        long head = super.heads.getAcquire(pIdx);
-        long tail = super.tails.getAcquire(pIdx);
-        long headSeq = this.headSequence == null ? head : this.headSequence.getAcquire(pIdx);
-        long inFlight = this.inFlight == null ? 0 : this.inFlight.getAcquire(pIdx);
+        long head = super.heads.getPlain(pIdx);
+        long tail = super.tails.getPlain(pIdx);
+        long headSeq = this.headSequence == null ? head : this.headSequence.getPlain(pIdx);
+        long inFlight = this.inFlight == null ? 0 : this.inFlight.getPlain(pIdx);
+        VarHandle.acquireFence();
 
         return head == tail && head == headSeq && inFlight == 0 && isPartitionEmptyInternal(
                 partition);
@@ -317,45 +317,52 @@ abstract sealed class ConcurrentPartitionedArrayQueue<T> extends PartitionedArra
     protected final boolean isPartitionEmptyInternal(int partition) {
         int rIdx = this.tailSequence.fromRawIdx(partition);
         int logicalIdx = 0;
+
         int start = sequenceChunkIndex(logicalIdx);
         int curr = start;
         do {
-            long chunk = (long) LA_HANDLE.getAcquire(this.tailSequence.getPlain(rIdx), curr);
+            long chunk = this.tailSequence.getPlain(rIdx)[curr];
             if (chunk != 0) {
                 return false;
             }
             curr = sequenceChunkIndex(++logicalIdx);
         } while (curr != start);
+        VarHandle.acquireFence();
         return true;
     }
 
     @Override
-    public void reset() {
-        VarHandle.acquireFence();
+    public long size(int partition) {
+        int pIdx = this.heads.fromRawIdx(partition);
+        long tail = this.tails.getAcquire(pIdx);
+        long head = this.heads.getAcquire(pIdx);
+        return QueueUtils.unsignedDiff(head, tail);
+    }
+
+    @Override
+    public void clear() {
+        VarHandle.releaseFence();
 
         for (int i = 0; i < super.partitions; i++) {
             int pIdx = super.heads.fromRawIdx(i);
 
-            super.heads.setRelease(pIdx, 0);
-            super.tails.setRelease(pIdx, 0);
+            super.heads.setPlain(pIdx, 0);
+            super.tails.setPlain(pIdx, 0);
             if (this.headSequence != null) {
-                this.headSequence.setRelease(pIdx, 0);
+                this.headSequence.setPlain(pIdx, 0);
             }
             if (this.inFlight != null) {
-                this.inFlight.setRelease(pIdx, 0);
+                this.inFlight.setPlain(pIdx, 0);
             }
             int rIdx = this.tailSequence.fromRawIdx(pIdx);
             var tS = this.tailSequence.getPlain(rIdx);
-            for (int j = 0; j < tS.length; j++) {
-                LA_HANDLE.setRelease(tS, j, 0);
-            }
+            Arrays.fill(tS, 0);
         }
-        VarHandle.releaseFence();
+        VarHandle.acquireFence();
         this.retired.lazySet(false);
     }
 
     public String getState() {
-        VarHandle.acquireFence();
 
         StringJoiner sj = new StringJoiner("\n");
         sj.add(this.getClass().getSimpleName());
@@ -372,6 +379,8 @@ abstract sealed class ConcurrentPartitionedArrayQueue<T> extends PartitionedArra
             int rIdx = this.tailSequence.fromRawIdx(i);
             sj.add("TailSequence-p" + i + ": " + Arrays.toString(this.tailSequence.getPlain(rIdx)));
         }
+
+        VarHandle.acquireFence();
         return sj.toString();
     }
 

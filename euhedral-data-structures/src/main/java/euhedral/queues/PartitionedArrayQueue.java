@@ -1,7 +1,7 @@
 package euhedral.queues;
 
-import euhedral.atomics.PaddedAtomicLongArray;
 import euhedral.atomics.PaddedAtomicReferenceArray;
+import euhedral.atomics.PaddedLongAdder;
 import euhedral.queues.common.PartitionedQueue;
 import euhedral.queues.common.QueueUtils;
 import java.util.Arrays;
@@ -23,8 +23,8 @@ public class PartitionedArrayQueue<T> implements PartitionedQueue<T> {
     protected final int chunkSize;
     protected final int chunkMask;
 
-    protected final PaddedAtomicLongArray heads;
-    protected final PaddedAtomicLongArray tails;
+    protected final PaddedLongAdder heads;
+    protected final PaddedLongAdder tails;
 
     protected final boolean unbounded;
     protected final AtomicBoolean retired = new AtomicBoolean(false);
@@ -47,8 +47,8 @@ public class PartitionedArrayQueue<T> implements PartitionedQueue<T> {
             int rIdx = this.queue.fromRawIdx(i);
             this.queue.setPlain(rIdx, (T[]) new Object[chunkSize + PaddedAtomicReferenceArray.PADDING * 2]);
         }
-        this.heads = new PaddedAtomicLongArray(partitions, false, true);
-        this.tails = new PaddedAtomicLongArray(partitions, false, true);
+        this.heads = new PaddedLongAdder(partitions, false, true);
+        this.tails = new PaddedLongAdder(partitions, false, true);
         this.unbounded = unbounded;
         this.capacity = (long) chunkSize * partitions;
     }
@@ -163,15 +163,12 @@ public class PartitionedArrayQueue<T> implements PartitionedQueue<T> {
         return retired.getPlain();
     }
 
+    @Override
     public boolean isEmpty() {
-        for (int i = 0; i < partitions; i++) {
-            if (!isEmpty(i)) {
-                return false;
-            }
-        }
-        return true;
+        return size() == 0;
     }
 
+    @Override
     public boolean isEmpty(int partition) {
         int pIdx = this.heads.fromRawIdx(partition);
         long head = this.heads.getPlain(pIdx);
@@ -180,7 +177,22 @@ public class PartitionedArrayQueue<T> implements PartitionedQueue<T> {
         return head == tail;
     }
 
-    public void reset() {
+    @Override
+    public long size() {
+        long tails = this.tails.sum();
+        long heads = this.heads.sum();
+        return QueueUtils.unsignedDiff(heads, tails);
+    }
+
+    @Override
+    public long size(int partition) {
+        int pIdx = this.heads.fromRawIdx(partition);
+        long tail = this.tails.getPlain(pIdx);
+        long head = this.heads.getPlain(pIdx);
+        return QueueUtils.unsignedDiff(head, tail);
+    }
+
+    public void clear() {
         this.heads.fillPlain(0);
         this.tails.fillPlain(0);
 
