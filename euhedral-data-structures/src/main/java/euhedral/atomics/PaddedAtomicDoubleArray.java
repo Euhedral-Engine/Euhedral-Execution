@@ -3,38 +3,37 @@ package euhedral.atomics;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.Arrays;
-import java.util.function.LongBinaryOperator;
-import java.util.function.LongUnaryOperator;
+import java.util.function.DoubleBinaryOperator;
+import java.util.function.DoubleUnaryOperator;
 
 import org.jspecify.annotations.NonNull;
 
 @SuppressWarnings("unused")
-public final class PaddedAtomicLongArray {
-
-    private static final VarHandle HANDLE = MethodHandles.arrayElementVarHandle(long[].class);
+public final class PaddedAtomicDoubleArray {
+    private static final VarHandle HANDLE = MethodHandles.arrayElementVarHandle(double[].class);
 
     private static final int PADDING = 7;
 
     private final int padding;
-    private final long[] array;
+    private final double[] array;
     private final int length;
     private final boolean boundsCheck;
 
-    public PaddedAtomicLongArray(int length) {
+    public PaddedAtomicDoubleArray(int length) {
         this(length, true, false);
     }
 
-    public PaddedAtomicLongArray(int length, boolean boundsCheck, boolean pad128) {
+    public PaddedAtomicDoubleArray(int length, boolean boundsCheck, boolean pad128) {
         int padding = pad128 ? PADDING * 2 + 2 : PADDING + 1;
 
-        long padded;
+        double padded;
         do {
             padding--;
             padded = (length + 1L) * padding + length;
         } while (padded > Integer.MAX_VALUE);
 
         this.padding = padding;
-        this.array = new long[(int) padded];
+        this.array = new double[(int) padded];
         this.length = length;
         this.boundsCheck = boundsCheck;
     }
@@ -42,76 +41,76 @@ public final class PaddedAtomicLongArray {
     // ----- Get -----
 
     /// Atomic read
-    public long get(int idx) {
-        return (long) HANDLE.getVolatile(this.array, getPhysicalIdx(idx));
+    public double get(int idx) {
+        return (double) HANDLE.getVolatile(this.array, getPhysicalIdx(idx));
     }
 
-    public long getAcquire(int idx) {
-        return (long) HANDLE.getAcquire(this.array, getPhysicalIdx(idx));
+    public double getAcquire(int idx) {
+        return (double) HANDLE.getAcquire(this.array, getPhysicalIdx(idx));
     }
 
-    public long getOpaque(int idx) {
-        return (long) HANDLE.getOpaque(this.array, getPhysicalIdx(idx));
+    public double getOpaque(int idx) {
+        return (double) HANDLE.getOpaque(this.array, getPhysicalIdx(idx));
     }
 
-    public long getPlain(int idx) {
+    public double getPlain(int idx) {
         return this.array[getPhysicalIdx(idx)];
     }
 
-    public long getAndSet(int idx, long val) {
-        return (long) HANDLE.getAndSet(this.array, getPhysicalIdx(idx), val);
+    public double getAndSet(int idx, double val) {
+        return (double) HANDLE.getAndSet(this.array, getPhysicalIdx(idx), val);
     }
 
     // ----- Set -----
 
     /// Atomic set
-    public void set(int idx, long val) {
+    public void set(int idx, double val) {
         HANDLE.setVolatile(this.array, getPhysicalIdx(idx), val);
     }
 
-    public void lazySet(int idx, long val) {
+    public void lazySet(int idx, double val) {
         setRelease(idx, val);
     }
 
-    public void setRelease(int idx, long val) {
+    public void setRelease(int idx, double val) {
         HANDLE.setRelease(this.array, getPhysicalIdx(idx), val);
     }
 
-    public void setOpaque(int idx, long val) {
+    public void setOpaque(int idx, double val) {
         HANDLE.setOpaque(this.array, getPhysicalIdx(idx), val);
     }
 
-    public void setPlain(int idx, long val) {
+    public void setPlain(int idx, double val) {
         this.array[getPhysicalIdx(idx)] = val;
     }
 
     /// Atomic
-    public void fill(long val) {
+    public void fill(double val) {
         for (int i = 0; i < length; i++) {
             int pIdx = ((i + 1) * this.padding) + i;
             HANDLE.setVolatile(this.array, pIdx, val);
         }
     }
 
-    public void lazyFill(long val) {
+    public void lazyFill(double val) {
         fillRelease(val);
     }
 
-    public void fillRelease(long val) {
+    public void fillRelease(double val) {
         for (int i = 0; i < length; i++) {
             int pIdx = ((i + 1) * this.padding) + i;
             HANDLE.setRelease(this.array, pIdx, val);
         }
     }
 
-    public void fillOpaque(long val) {
+    public void fillOpaque(double val) {
         for (int i = 0; i < length; i++) {
             int pIdx = ((i + 1) * this.padding) + i;
             HANDLE.setOpaque(this.array, pIdx, val);
         }
     }
 
-    public void fillPlain(long val) {
+    public void fillPlain(double val) {
         for (int i = 0; i < length; i++) {
             int pIdx = ((i + 1) * this.padding) + i;
             this.array[pIdx] = val;
@@ -120,85 +119,85 @@ public final class PaddedAtomicLongArray {
 
     // ----- RMW -----
 
-    public long getAndIncrement(int idx) {
-        return getAndAdd(idx, 1L);
+    public double getAndIncrement(int idx) {
+        return getAndAdd(idx, 1d);
     }
 
-    public long getAndDecrement(int idx) {
-        return getAndAdd(idx, -1L);
+    public double getAndDecrement(int idx) {
+        return getAndAdd(idx, -1d);
     }
 
-    public long incrementAndGet(int idx) {
-        return addAndGet(idx, 1L);
+    public double incrementAndGet(int idx) {
+        return addAndGet(idx, 1d);
     }
 
-    public long decrementAndGet(int idx) {
-        return addAndGet(idx, -1L);
+    public double decrementAndGet(int idx) {
+        return addAndGet(idx, -1d);
     }
 
-    public long getAndAdd(int idx, long val) {
-        return (long) HANDLE.getAndAdd(this.array, getPhysicalIdx(idx), val);
+    public double getAndAdd(int idx, double val) {
+        return (double) HANDLE.getAndAdd(this.array, getPhysicalIdx(idx), val);
     }
 
-    public long addAndGet(int idx, long val) {
-        return (long) HANDLE.getAndAdd(this.array, getPhysicalIdx(idx), val) + val;
+    public double addAndGet(int idx, double val) {
+        return (double) HANDLE.getAndAdd(this.array, getPhysicalIdx(idx), val) + val;
     }
 
     // ----- CAS -----
 
-    public long getAndUpdate(int idx, @NonNull LongUnaryOperator updateFunction) {
+    public double getAndUpdate(int idx, @NonNull DoubleUnaryOperator updateFunction) {
         int pIdx = getPhysicalIdx(idx);
-        long prev, next;
+        double prev, next;
         do {
-            prev = (long) HANDLE.getAcquire(this.array, pIdx);
-            next = updateFunction.applyAsLong(prev);
+            prev = (double) HANDLE.getAcquire(this.array, pIdx);
+            next = updateFunction.applyAsDouble(prev);
         } while (!HANDLE.weakCompareAndSet(this.array, pIdx, prev, next));
         return prev;
     }
 
-    public long updateAndGet(int idx, @NonNull LongUnaryOperator updateFunction) {
+    public double updateAndGet(int idx, @NonNull DoubleUnaryOperator updateFunction) {
         int pIdx = getPhysicalIdx(idx);
-        long prev, next;
+        double prev, next;
         do {
-            prev = (long) HANDLE.getAcquire(this.array, pIdx);
-            next = updateFunction.applyAsLong(prev);
+            prev = (double) HANDLE.getAcquire(this.array, pIdx);
+            next = updateFunction.applyAsDouble(prev);
         } while (!HANDLE.weakCompareAndSet(this.array, pIdx, prev, next));
         return next;
     }
 
-    public long getAndAccumulate(int idx, long val, @NonNull LongBinaryOperator accumulator) {
+    public double getAndAccumulate(int idx, double val, @NonNull DoubleBinaryOperator accumulator) {
         int pIdx = getPhysicalIdx(idx);
-        long prev, next;
+        double prev, next;
         do {
-            prev = (long) HANDLE.getAcquire(this.array, pIdx);
-            next = accumulator.applyAsLong(prev, val);
+            prev = (double) HANDLE.getAcquire(this.array, pIdx);
+            next = accumulator.applyAsDouble(prev, val);
         } while (!HANDLE.compareAndSet(this.array, pIdx, prev, next));
         return prev;
     }
 
-    public long accumulateAndGet(int idx, long val, @NonNull LongBinaryOperator accumulator) {
+    public double accumulateAndGet(int idx, double val, @NonNull DoubleBinaryOperator accumulator) {
         int pIdx = getPhysicalIdx(idx);
-        long prev, next;
+        double prev, next;
         do {
-            prev = (long) HANDLE.getAcquire(this.array, pIdx);
-            next = accumulator.applyAsLong(prev, val);
+            prev = (double) HANDLE.getAcquire(this.array, pIdx);
+            next = accumulator.applyAsDouble(prev, val);
         } while (!HANDLE.compareAndSet(this.array, pIdx, prev, next));
         return next;
     }
 
-    public boolean compareAndSet(int idx, long expect, long update) {
+    public boolean compareAndSet(int idx, double expect, double update) {
         return HANDLE.compareAndSet(this.array, getPhysicalIdx(idx), expect, update);
     }
 
-    public boolean weakCompareAndSet(int idx, long expect, long update) {
+    public boolean weakCompareAndSet(int idx, double expect, double update) {
         return HANDLE.weakCompareAndSet(this.array, getPhysicalIdx(idx), expect, update);
     }
 
-    public long compareAndExchange(int idx, long expect, long update) {
-        return (long) HANDLE.compareAndExchange(this.array, getPhysicalIdx(idx), expect, update);
+    public double compareAndExchange(int idx, double expect, double update) {
+        return (double) HANDLE.compareAndExchange(this.array, getPhysicalIdx(idx), expect, update);
     }
 
-    public int fromRawIdx(long rawIdx) {
+    public int fromRawIdx(double rawIdx) {
         int logical = (int) (rawIdx % this.length);
         return ((logical + 1) * this.padding) + logical;
     }
