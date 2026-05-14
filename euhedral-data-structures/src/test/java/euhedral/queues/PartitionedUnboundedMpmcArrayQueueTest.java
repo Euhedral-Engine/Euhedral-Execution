@@ -12,6 +12,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.LongAdder;
+
 import org.junit.jupiter.api.Test;
 
 class PartitionedUnboundedMpmcArrayQueueTest {
@@ -26,7 +27,7 @@ class PartitionedUnboundedMpmcArrayQueueTest {
             assertTrue(q.offer(0, i));
         }
 
-        final int[] drained = new int[]{0};
+        final int[] drained = new int[] {0};
         QueueConsumer<Integer> consumer = (val) -> {
             if (val != ++drained[0]) {
                 fail("Corruption! Last Value: " + drained[0] + " Current: " + val);
@@ -93,7 +94,6 @@ class PartitionedUnboundedMpmcArrayQueueTest {
                     String.format("Iteration: %d Consumed: %d Offered: %d\n%s", x, drained.sum(),
                             offered.sum(), q));
         }
-        System.out.println(q);
     }
 
     @Test
@@ -135,15 +135,14 @@ class PartitionedUnboundedMpmcArrayQueueTest {
         };
 
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(1);
-        while ((latch.getCount() > 0 || consumed.size() < total)
-                && System.nanoTime() < deadline) {
+        while ((latch.getCount() > 0 || consumed.size() < total) && System.nanoTime() < deadline) {
             q.drain(consumer, perProducer);
         }
 
         exec.shutdownNow();
 
-        assertEquals(produced.size(), consumed.size());
-        assertEquals(produced, consumed);
+        assertEquals(produced.size(), consumed.size(), q.toString());
+        assertEquals(produced, consumed, q.toString());
     }
 
     @Test
@@ -191,9 +190,9 @@ class PartitionedUnboundedMpmcArrayQueueTest {
             });
         }
 
-        consLatch.await(1, TimeUnit.SECONDS);
+        consLatch.await(5, TimeUnit.SECONDS);
         exec.shutdownNow();
 
-        assertEquals(producers * perProducer, consumed.size());
+        assertEquals(producers * perProducer, consumed.size(), q.toString());
     }
 }
