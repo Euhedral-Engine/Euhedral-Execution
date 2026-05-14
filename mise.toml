@@ -1,7 +1,7 @@
 [tools]
 apple-codesign = "latest"
 java = "corretto-25.0.2.10.1"
-maven = "3.9.15"
+maven = "latest"
 rust = "latest"
 zig = "0.16.0"
 
@@ -9,5 +9,4 @@ zig = "0.16.0"
 apple-codesign = "cargo:apple-codesign"
 
 [env]
-MACOS_SDK = "{{env.HOME}}/.local/share/mise/installs/macos-sdk/MacOSX26.1.sdk"
 SDKROOT   = "{{env.HOME}}/.local/share/mise/installs/macos-sdk"
