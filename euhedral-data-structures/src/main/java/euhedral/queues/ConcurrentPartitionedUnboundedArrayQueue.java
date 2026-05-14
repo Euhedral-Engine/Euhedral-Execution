@@ -1,11 +1,12 @@
 package euhedral.queues;
 
+import java.lang.invoke.VarHandle;
+import java.util.StringJoiner;
+
 import euhedral.atomics.PaddedAtomicLong;
 import euhedral.atomics.PaddedAtomicReferenceArray;
 import euhedral.queues.QueueNode.Type;
 import euhedral.queues.common.NodeRecycler;
-import java.lang.invoke.VarHandle;
-import java.util.StringJoiner;
 
 /// A template of a concurrent unbounded array queue with partitions. This class is overriden by its
 /// subclasses to selectively choose the type of thread safety between producers and consumers.
@@ -15,9 +16,9 @@ import java.util.StringJoiner;
 /// later.
 ///
 /// @param <T> Type to store
-abstract sealed class ConcurrentPartitionedUnboundedArrayQueue<T> extends
-        PartitionedUnboundedArrayQueue<T> permits
-        PartitionedUnboundedSpscArrayQueue, PartitionedUnboundedSpmcArrayQueue,
+abstract sealed class ConcurrentPartitionedUnboundedArrayQueue<T>
+        extends PartitionedUnboundedArrayQueue<T>
+        permits PartitionedUnboundedSpscArrayQueue, PartitionedUnboundedSpmcArrayQueue,
         PartitionedUnboundedMpscArrayQueue, PartitionedUnboundedMpmcArrayQueue {
 
     protected final Type type;
@@ -40,8 +41,7 @@ abstract sealed class ConcurrentPartitionedUnboundedArrayQueue<T> extends
                 switch (type) {
                     case SPSC, MPSC -> new PaddedAtomicReferenceArray<>(partitions, true, false);
                     default -> null;
-                }
-        );
+                });
 
         this.type = type;
 
@@ -56,7 +56,9 @@ abstract sealed class ConcurrentPartitionedUnboundedArrayQueue<T> extends
                 yield new PartitionedSpmcArrayQueue<>(1, 64, false);
             }
         };
-        this.tailQueue.offer(0, tail);
+        while (!this.tailQueue.offer(0, tail)) {
+            Thread.onSpinWait();
+        }
 
         this.headLock = switch (type) {
             case SPSC, MPSC -> null;
@@ -68,8 +70,8 @@ abstract sealed class ConcurrentPartitionedUnboundedArrayQueue<T> extends
                 yield null;
             }
             default -> {
-                PartitionedMpmcArrayQueue<QueueNode<T>> heads = new PartitionedMpmcArrayQueue<>(
-                        partitions, 64);
+                PartitionedMpmcArrayQueue<QueueNode<T>> heads =
+                        new PartitionedMpmcArrayQueue<>(partitions, 64);
                 for (int i = 0; i < partitions; i++) {
                     heads.offer(i, tail);
                 }
@@ -280,10 +282,10 @@ abstract sealed class ConcurrentPartitionedUnboundedArrayQueue<T> extends
     public String toString() {
         StringJoiner sj = new StringJoiner("\n");
 
-
         for (int i = 0; i < super.partitions; i++) {
             QueueNode<T> head = getHeadNode(i);
             sj.add(String.format("Head: %s", head));
+            sj.add("");
         }
         QueueNode<T> tail = this.tailQueue.peek(0);
         sj.add(String.format("\nTail: %s", tail));
