@@ -9,16 +9,18 @@ import java.util.function.LongUnaryOperator;
 import org.jspecify.annotations.NonNull;
 
 @SuppressWarnings("unused")
-public final class PaddedAtomicLongArray {
+public sealed class PaddedAtomicLongArray permits PaddedLongAdder {
 
     private static final VarHandle HANDLE = MethodHandles.arrayElementVarHandle(long[].class);
 
     private static final int PADDING = 7;
 
-    private final int padding;
-    private final long[] array;
+    protected final int padding;
+    protected final long[] array;
     private final int length;
-    private final boolean boundsCheck;
+    protected final boolean pow2;
+
+    protected final boolean boundsCheck;
 
     public PaddedAtomicLongArray(int length) {
         this(length, true, false);
@@ -37,6 +39,7 @@ public final class PaddedAtomicLongArray {
         this.array = new long[(int) padded];
         this.length = length;
         this.boundsCheck = boundsCheck;
+        this.pow2 = Integer.highestOneBit(length) == length;
     }
 
     // ----- Get -----
@@ -199,7 +202,12 @@ public final class PaddedAtomicLongArray {
     }
 
     public int fromRawIdx(long rawIdx) {
-        int logical = (int) (rawIdx % this.length);
+        int logical;
+        if(pow2) {
+            logical = (int) (rawIdx & (length - 1));
+        } else {
+            logical = Math.floorMod((int) rawIdx, this.length);
+        }
         return ((logical + 1) * this.padding) + logical;
     }
 

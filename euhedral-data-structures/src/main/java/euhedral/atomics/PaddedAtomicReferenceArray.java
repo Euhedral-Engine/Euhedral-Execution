@@ -1,13 +1,12 @@
 package euhedral.atomics;
 
 import com.sun.management.HotSpotDiagnosticMXBean;
-import org.jspecify.annotations.NonNull;
-
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.lang.management.ManagementFactory;
 import java.util.Arrays;
 import java.util.function.Function;
+import org.jspecify.annotations.NonNull;
 
 @SuppressWarnings({"unchecked", "unused"})
 public final class PaddedAtomicReferenceArray<T> {
@@ -37,6 +36,7 @@ public final class PaddedAtomicReferenceArray<T> {
     private final T[] array;
     private final int length;
     private final boolean boundsCheck;
+    private final boolean pow2;
 
     public PaddedAtomicReferenceArray(int length) {
         this(length, true, false);
@@ -55,6 +55,7 @@ public final class PaddedAtomicReferenceArray<T> {
         this.array = (T[]) new Object[(int) padded];
         this.length = length;
         this.boundsCheck = boundsCheck;
+        this.pow2 = Integer.highestOneBit(length) == length;
     }
 
     // ----- Get -----
@@ -167,7 +168,12 @@ public final class PaddedAtomicReferenceArray<T> {
     }
 
     public int fromRawIdx(long rawIdx) {
-        int logical = (int) (rawIdx % this.length);
+        int logical;
+        if(pow2) {
+            logical = (int) (rawIdx & (length - 1));
+        } else {
+            logical = Math.floorMod((int) rawIdx, this.length);
+        }
         return ((logical + 1) * this.padding) + logical;
     }
 
