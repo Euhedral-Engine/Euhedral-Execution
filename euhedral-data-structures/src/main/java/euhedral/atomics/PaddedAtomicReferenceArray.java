@@ -1,6 +1,8 @@
 package euhedral.atomics;
 
 import com.sun.management.HotSpotDiagnosticMXBean;
+import org.jspecify.annotations.NonNull;
+
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.lang.management.ManagementFactory;
@@ -8,7 +10,7 @@ import java.util.Arrays;
 import java.util.function.Function;
 
 @SuppressWarnings({"unchecked", "unused"})
-public class PaddedAtomicReferenceArray<T> {
+public final class PaddedAtomicReferenceArray<T> {
 
     public static final int PADDING;
     private static final VarHandle HANDLE = MethodHandles.arrayElementVarHandle(Object[].class);
@@ -132,7 +134,7 @@ public class PaddedAtomicReferenceArray<T> {
 
     // ----- CAS -----
 
-    public T getAndUpdate(int idx, Function<T, T> updateFunction) {
+    public T getAndUpdate(int idx, @NonNull Function<T, T> updateFunction) {
         int pIdx = getPhysicalIdx(idx);
         T prev, next;
         do {
@@ -142,7 +144,7 @@ public class PaddedAtomicReferenceArray<T> {
         return prev;
     }
 
-    public T updateAndGet(int idx, Function<T, T> updateFunction) {
+    public T updateAndGet(int idx, @NonNull Function<T, T> updateFunction) {
         int pIdx = getPhysicalIdx(idx);
         T prev, next;
         do {
