@@ -11,13 +11,13 @@ public final class PartitionedMpscArrayQueue<T> extends ConcurrentPartitionedArr
     }
 
     @Override
-    protected void incrementInFlight(int partition) {
-        super.inFlight.getAndIncrement(partition);
+    protected void incrementInFlight(int pIdx) {
+        super.inFlight.getAndIncrement(pIdx);
     }
 
     @Override
-    protected void decrementInFlight(int partition) {
-        super.inFlight.getAndDecrement(partition);
+    protected void decrementInFlight(int pIdx) {
+        super.inFlight.getAndDecrement(pIdx);
     }
 
     @Override
