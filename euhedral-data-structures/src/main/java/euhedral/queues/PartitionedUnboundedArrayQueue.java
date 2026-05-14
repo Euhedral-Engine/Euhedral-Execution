@@ -5,12 +5,13 @@ import euhedral.queues.QueueNode.Type;
 import euhedral.queues.common.NodeRecycler;
 import euhedral.queues.common.PartitionedQueue;
 import euhedral.queues.common.QueueUtils;
-import java.lang.invoke.VarHandle;
 import java.util.StringJoiner;
 import lombok.Getter;
 
-/// A plain unbounded array queue with partitions. This class is not thread-safe for any method.
-/// There are no visibility guarantees between 2 different threads.
+/// ## A plain unbounded array queue with partitions.
+///
+/// This class is not thread-safe for any method. There are no visibility guarantees between 2
+/// different threads.
 ///
 /// The underlying queue used by this class is the [PartitionedArrayQueue]. This class wraps
 /// instances of that queue type in [QueueNode] objects to create a linked-list of them. If
@@ -91,7 +92,7 @@ public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueu
         return true;
     }
 
-    /// Gets the object at the top of the partition.
+    /// Gets the object at the front of the partition queue.
     @Override
     public T peek(int partition) {
         boundsCheck(partition);
@@ -117,12 +118,12 @@ public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueu
         }
     }
 
-    /// Gets and removes the object at the top of the partition
+    /// Gets and removes the object at the front of the partition queue.
     @Override
     public T poll(int partition) {
         boundsCheck(partition);
 
-        int  hpIdx = this.headPointers.fromRawIdx(partition);
+        int hpIdx = this.headPointers.fromRawIdx(partition);
         while (true) {
             QueueNode<T> head = getHeadNode(hpIdx);
             T val = head.poll(partition);
@@ -161,7 +162,7 @@ public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueu
         return total;
     }
 
-    /// Drains from a specific partition
+    /// Drains from a specific partition.
     @Override
     public int drain(int partition, QueueConsumer<T> consumer, int limit) {
         boundsCheck(partition);
@@ -261,9 +262,9 @@ public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueu
 
     @Override
     public boolean isEmpty() {
-        for(int i = 0; i < this.partitions; i++) {
+        for (int i = 0; i < this.partitions; i++) {
             int pIdx = this.headPointers.fromRawIdx(i);
-            if(!this.headPointers.getPlain(pIdx).isEmpty(i)) {
+            if (!this.headPointers.getPlain(pIdx).isEmpty(i)) {
                 return false;
             }
         }
@@ -279,7 +280,7 @@ public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueu
     @Override
     public long size() {
         long sum = 0;
-        for(int i = 0; i < this.partitions; i++) {
+        for (int i = 0; i < this.partitions; i++) {
             sum += size(i);
         }
         return sum;
@@ -291,11 +292,10 @@ public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueu
         QueueNode<T> head = this.headPointers.getPlain(rIdx);
 
         long sum = 0;
-        while(head != null) {
+        while (head != null) {
             sum += head.size(partition);
             head = head.next.getPlain();
         }
-        VarHandle.acquireFence();
         return sum;
     }
 
