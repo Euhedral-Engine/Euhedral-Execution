@@ -61,12 +61,12 @@ public final class PartitionedMpmcArrayQueue<T> extends ConcurrentPartitionedArr
     }
 
     @Override
-    protected long getHeadSequence(int partition) {
-        return super.headSequence.getAcquire(partition);
+    protected long getHeadSequence(int pIdx) {
+        return super.headSequence.getAcquire(pIdx);
     }
 
     @Override
-    protected boolean casHeadSequence(int partition, long expect, long update) {
-        return super.headSequence.compareAndSet(partition, expect, update);
+    protected boolean casHeadSequence(int pIdx, long expect, long update) {
+        return super.headSequence.compareAndSet(pIdx, expect, update);
     }
 }
