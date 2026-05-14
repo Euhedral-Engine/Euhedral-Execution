@@ -2,7 +2,14 @@ package euhedral.queues;
 
 import euhedral.queues.QueueNode.Type;
 
-public final class PartitionedUnboundedSpscArrayQueue<T> extends ConcurrentPartitionedUnboundedArrayQueue<T>{
+/// ## An unbounded SPSC array queue with partitions.
+///
+/// It is derived from [ConcurrentPartitionedUnboundedArrayQueue] but overrides the logic for head
+/// and tail interaction to ensure visibility of changes to outside observers.
+///
+/// @param <T> Type to store
+public final class PartitionedUnboundedSpscArrayQueue<T> extends
+        ConcurrentPartitionedUnboundedArrayQueue<T> {
 
     public PartitionedUnboundedSpscArrayQueue(int partitions, int chunkSize, int maxPooledChunks) {
         super(partitions, chunkSize, maxPooledChunks, Type.SPSC);

@@ -45,7 +45,8 @@ public class PartitionedArrayQueue<T> implements PartitionedQueue<T> {
 
         for (int i = 0; i < partitions; i++) {
             int rIdx = this.queue.fromRawIdx(i);
-            this.queue.setPlain(rIdx, (T[]) new Object[chunkSize + PaddedAtomicReferenceArray.PADDING * 2]);
+            this.queue.setPlain(rIdx,
+                    (T[]) new Object[chunkSize + PaddedAtomicReferenceArray.PADDING * 2]);
         }
         this.heads = new PaddedLongAdder(partitions, false, true);
         this.tails = new PaddedLongAdder(partitions, false, true);
@@ -53,16 +54,19 @@ public class PartitionedArrayQueue<T> implements PartitionedQueue<T> {
         this.capacity = (long) chunkSize * partitions;
     }
 
-    /// Offers an item to a random partition.
+    /// Offers the object to a random partition based on the seed. If the seed does not change, the
+    /// same partition will be picked.
     ///
-    /// @param randomSeed Random number to assign a partition from
-    /// @param obj        Item to add
+    /// @return success
     @Override
     public boolean offer(long randomSeed, T obj) {
         int partition = (int) QueueUtils.unsignedMultiplyHigh(randomSeed, this.partitions);
         return offer(partition, obj);
     }
 
+    /// Offers the object to a specific partition
+    ///
+    /// @return success
     @Override
     public boolean offer(int partition, T obj) {
         boundsCheck(partition);
@@ -85,6 +89,7 @@ public class PartitionedArrayQueue<T> implements PartitionedQueue<T> {
         return true;
     }
 
+    /// Gets the object at the front of the partition queue.
     @Override
     public T peek(int partition) {
         boundsCheck(partition);
@@ -98,6 +103,7 @@ public class PartitionedArrayQueue<T> implements PartitionedQueue<T> {
         return this.queue.getPlain(rIdx)[chunkIndex(head)];
     }
 
+    /// Gets and removes the object at the front of the partition queue.
     @Override
     public T poll(int partition) {
         boundsCheck(partition);
@@ -113,10 +119,9 @@ public class PartitionedArrayQueue<T> implements PartitionedQueue<T> {
         return this.queue.getPlain(rIdx)[chunkIndex(head)];
     }
 
-    /// Drains from all partitions sequentially starting from 0.
+    /// Drains from all partitions starting from 0
     ///
-    /// @param consumer Consumer to drain items into
-    /// @param limit    Max number of items to take
+    /// @return Number of items drained
     @Override
     public int drain(QueueConsumer<T> consumer, int limit) {
         if (consumer == null || limit <= 0) {
@@ -130,6 +135,7 @@ public class PartitionedArrayQueue<T> implements PartitionedQueue<T> {
         return total;
     }
 
+    /// Drains from a specific partition.
     @Override
     public int drain(int partition, QueueConsumer<T> consumer, int limit) {
         boundsCheck(partition);

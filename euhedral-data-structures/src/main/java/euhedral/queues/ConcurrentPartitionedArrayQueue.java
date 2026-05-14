@@ -10,6 +10,10 @@ import java.lang.invoke.VarHandle;
 import java.util.Arrays;
 import java.util.StringJoiner;
 
+/// A template of a concurrent array queue with partitions. This class is overridden by
+/// its subclasses to selectively choose the type of thread safety between producers and consumers.
+///
+/// @param <T> Type to store
 abstract sealed class ConcurrentPartitionedArrayQueue<T> extends PartitionedArrayQueue<T>
         permits PartitionedSpscArrayQueue, PartitionedSpmcArrayQueue, PartitionedMpscArrayQueue,
         PartitionedMpmcArrayQueue {
@@ -47,10 +51,6 @@ abstract sealed class ConcurrentPartitionedArrayQueue<T> extends PartitionedArra
         }
     }
 
-    /// Offers an item to a partition.
-    ///
-    /// @param partition The logical index of the partition. e.g. 16 partitions = (0-15)
-    /// @param obj       Item to add
     @Override
     public boolean offer(int partition, T obj) {
         boundsCheck(partition);
@@ -157,11 +157,6 @@ abstract sealed class ConcurrentPartitionedArrayQueue<T> extends PartitionedArra
         }
     }
 
-    /// Drains the partition into the consumer.
-    ///
-    /// @param partition The logical index of the partition. e.g. 16 partitions = (0-15)
-    /// @param consumer  Consumer to drain items into
-    /// @param limit     Max number of items to take
     @Override
     public int drain(int partition, QueueConsumer<T> consumer, int limit) {
         boundsCheck(partition);
