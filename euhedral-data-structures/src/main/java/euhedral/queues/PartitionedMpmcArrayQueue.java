@@ -37,8 +37,8 @@ public final class PartitionedMpmcArrayQueue<T> extends ConcurrentPartitionedArr
     }
 
     @Override
-    protected long getTailPointer(int partition) {
-        return super.tails.getAcquire(partition);
+    protected long getTailPointer(int pIdx) {
+        return super.tails.getAcquire(pIdx);
     }
 
     protected boolean continueTailCAS() {
@@ -46,8 +46,8 @@ public final class PartitionedMpmcArrayQueue<T> extends ConcurrentPartitionedArr
     }
 
     @Override
-    protected boolean casTailPointer(int partition, long expect, long update) {
-        return super.tails.compareAndSet(partition, expect, update);
+    protected boolean casTailPointer(int pIdx, long expect, long update) {
+        return super.tails.compareAndSet(pIdx, expect, update);
     }
 
     @Override
