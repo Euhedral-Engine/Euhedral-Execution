@@ -37,7 +37,7 @@ abstract class ConcurrentPartitionedArrayQueue<T> extends PartitionedArrayQueue<
         }
 
         if (unbounded) {
-            this.inFlight = new PaddedAtomicLongArray(partitions, true, true);
+            this.inFlight = new PaddedAtomicLongArray(partitions, false, true);
         } else {
             this.inFlight = null;
         }
@@ -60,7 +60,7 @@ abstract class ConcurrentPartitionedArrayQueue<T> extends PartitionedArrayQueue<
 
         int pIdx = super.heads.fromRawIdx(partition);
         if(super.unbounded) {
-            incrementInFlight(partition);
+            incrementInFlight(pIdx);
         }
 
         try {
@@ -92,7 +92,7 @@ abstract class ConcurrentPartitionedArrayQueue<T> extends PartitionedArrayQueue<
             return true;
         } finally {
             if(super.unbounded) {
-                decrementInFlight(partition);
+                decrementInFlight(pIdx);
             }
         }
     }
@@ -214,12 +214,12 @@ abstract class ConcurrentPartitionedArrayQueue<T> extends PartitionedArrayQueue<
 
     // Tail Movements and Updates
 
-    protected void incrementInFlight(int partition) {
-        this.inFlight.setRelease(partition, this.inFlight.getPlain(partition) + 1);
+    protected void incrementInFlight(int pIdx) {
+        this.inFlight.setRelease(pIdx, this.inFlight.getPlain(pIdx) + 1);
     }
 
-    protected void decrementInFlight(int partition) {
-        this.inFlight.setRelease(partition, this.inFlight.getPlain(partition) - 1);
+    protected void decrementInFlight(int pIdx) {
+        this.inFlight.setRelease(pIdx, this.inFlight.getPlain(pIdx) - 1);
     }
 
     protected long getTailPointer(int pIdx) {
@@ -297,7 +297,7 @@ abstract class ConcurrentPartitionedArrayQueue<T> extends PartitionedArrayQueue<
         long head = super.heads.getAcquire(pIdx);
         long tail = super.tails.getAcquire(pIdx);
         long headSeq = this.headSequence == null ? head : this.headSequence.getAcquire(partition);
-        long inFlight = this.inFlight == null ? 0 : this.inFlight.getAcquire(partition);
+        long inFlight = this.inFlight == null ? 0 : this.inFlight.getAcquire(pIdx);
 
         return head == tail && head == headSeq && inFlight == 0 && isPartitionEmptyInternal(partition);
     }
@@ -329,7 +329,7 @@ abstract class ConcurrentPartitionedArrayQueue<T> extends PartitionedArrayQueue<
                 this.headSequence.setRelease(i, 0);
             }
             if(this.inFlight != null) {
-                this.inFlight.setRelease(i, 0);
+                this.inFlight.setRelease(pIdx, 0);
             }
             var tS = this.tailSequence.getPlain(i);
             for(int j = 0; j < tS.length; j++) {
