@@ -93,12 +93,12 @@ class ControlPlaneTest {
 
         ControlPlane controlPlane = ControlPlane.get();
         assertEquals(effectiveTopology.globalVersion(), controlPlane.currentGlobalVersion);
-        assertTrue(controlPlane.primed);
+        assertTrue(controlPlane.primed.get());
         Awaitility.await().atMost(Duration.ofSeconds(2)).untilFalse(controlPlane.rebalancing);
-        assertArrayEquals(new int[]{0, 1}, ControlPlane.get().activeShardIds);
+        assertArrayEquals(new int[]{0, 1}, ControlPlane.get().activeShardIds.get());
         assertEquals(2, controlPlane.shardHandles.length);
         assertEquals(2, controlPlane.shards.length);
-        assertArrayEquals(new int[]{0, 0, 0, 0, 1, 1, 1, 1}, controlPlane.weightedShardMap);
+        assertArrayEquals(new int[]{0, 0, 0, 0, 1, 1, 1, 1}, controlPlane.weightedShardMap.get());
     }
 
     @Test
@@ -148,10 +148,10 @@ class ControlPlaneTest {
 
         ControlPlane controlPlane = ControlPlane.get();
         assertEquals(updatedTopology.globalVersion(), controlPlane.currentGlobalVersion);
-        assertTrue(controlPlane.primed);
+        assertTrue(controlPlane.primed.get());
         Awaitility.await().atMost(Duration.ofSeconds(2)).untilFalse(controlPlane.rebalancing);
-        assertArrayEquals(new int[]{1}, controlPlane.activeShardIds);
-        assertArrayEquals(new int[]{1, 1, 1, 1}, controlPlane.weightedShardMap);
+        assertArrayEquals(new int[]{1}, controlPlane.activeShardIds.get());
+        assertArrayEquals(new int[]{1, 1, 1, 1}, controlPlane.weightedShardMap.get());
     }
 
     private static EffectiveSystemTopology getSystemTopology() {
