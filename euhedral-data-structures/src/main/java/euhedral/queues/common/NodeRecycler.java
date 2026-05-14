@@ -31,7 +31,7 @@ public class NodeRecycler<T> {
             QueueNode<T> next = head.next.getAcquire();
 
             if (stack.compareAndSet(head, next)) {
-                head.reset();
+                head.clear();
                 count.decrementAndGet();
                 return head;
             }
@@ -48,7 +48,7 @@ public class NodeRecycler<T> {
         stack.setPlain(next);
         count.setPlain(count.getPlain() - 1);
 
-        head.reset();
+        head.clear();
         return head;
     }
 
