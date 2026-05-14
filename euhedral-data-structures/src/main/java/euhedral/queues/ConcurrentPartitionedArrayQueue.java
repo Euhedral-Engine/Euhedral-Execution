@@ -31,7 +31,7 @@ abstract class ConcurrentPartitionedArrayQueue<T> extends PartitionedArrayQueue<
         }
 
         if(multiConsumer) {
-            this.headSequence = new PaddedAtomicLongArray(partitions, true, true);
+            this.headSequence = new PaddedAtomicLongArray(partitions, false, true);
         } else {
             this.headSequence = null;
         }
@@ -135,8 +135,8 @@ abstract class ConcurrentPartitionedArrayQueue<T> extends PartitionedArrayQueue<
                 return null;
             }
 
-            long headSequence = getHeadSequence(partition);
-            if(head != headSequence || !casHeadSequence(partition, headSequence, headSequence + 1)) {
+            long headSequence = getHeadSequence(pIdx);
+            if(head != headSequence || !casHeadSequence(pIdx, headSequence, headSequence + 1)) {
                 continue;
             }
 
@@ -176,7 +176,7 @@ abstract class ConcurrentPartitionedArrayQueue<T> extends PartitionedArrayQueue<
             long clearMask;
             do {
                 head = getHeadPointer(pIdx);
-                headSequence = getHeadSequence(partition);
+                headSequence = getHeadSequence(pIdx);
 
                 if(head != headSequence) {
                     return total;
@@ -195,7 +195,7 @@ abstract class ConcurrentPartitionedArrayQueue<T> extends PartitionedArrayQueue<
                     return total;
                 }
                 clearMask = QueueUtils.clearMask(bitOffset, bitOffset + reserved);
-            } while(!casHeadSequence(partition, headSequence, headSequence + reserved));
+            } while(!casHeadSequence(pIdx, headSequence, headSequence + reserved));
 
             VarHandle.acquireFence();
             for (int j = 0; j < reserved; j++) {
@@ -247,12 +247,12 @@ abstract class ConcurrentPartitionedArrayQueue<T> extends PartitionedArrayQueue<
     }
 
     /// Default returns the head
-    protected long getHeadSequence(int partition) {
-        return super.heads.getOpaque(partition);
+    protected long getHeadSequence(int pIdx) {
+        return super.heads.getOpaque(pIdx);
     }
 
     /// Default has no head sequence tracking.
-    protected boolean casHeadSequence(int partition, long expect, long update) {
+    protected boolean casHeadSequence(int pIdx, long expect, long update) {
         return true;
     }
 
@@ -296,7 +296,7 @@ abstract class ConcurrentPartitionedArrayQueue<T> extends PartitionedArrayQueue<
 
         long head = super.heads.getAcquire(pIdx);
         long tail = super.tails.getAcquire(pIdx);
-        long headSeq = this.headSequence == null ? head : this.headSequence.getAcquire(partition);
+        long headSeq = this.headSequence == null ? head : this.headSequence.getAcquire(pIdx);
         long inFlight = this.inFlight == null ? 0 : this.inFlight.getAcquire(pIdx);
 
         return head == tail && head == headSeq && inFlight == 0 && isPartitionEmptyInternal(partition);
@@ -326,7 +326,7 @@ abstract class ConcurrentPartitionedArrayQueue<T> extends PartitionedArrayQueue<
             super.heads.setRelease(pIdx, 0);
             super.tails.setRelease(pIdx, 0);
             if(this.headSequence != null) {
-                this.headSequence.setRelease(i, 0);
+                this.headSequence.setRelease(pIdx, 0);
             }
             if(this.inFlight != null) {
                 this.inFlight.setRelease(pIdx, 0);
