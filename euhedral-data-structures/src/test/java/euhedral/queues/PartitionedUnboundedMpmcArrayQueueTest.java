@@ -93,6 +93,7 @@ class PartitionedUnboundedMpmcArrayQueueTest {
                     String.format("Iteration: %d Consumed: %d Offered: %d\n%s", x, drained.sum(),
                             offered.sum(), q));
         }
+        System.out.println(q);
     }
 
     @Test

@@ -47,7 +47,7 @@ public class PartitionedArrayQueue<T> implements PartitionedQueue<T> {
             this.queue.setPlain(i, (T[]) new Object[chunkSize + PaddedAtomicReferenceArray.PADDING * 2]);
         }
         this.heads = new PaddedAtomicLongArray(partitions, false, true);
-        this.tails = new PaddedAtomicLongArray(partitions, true, true);
+        this.tails = new PaddedAtomicLongArray(partitions, false, true);
         this.unbounded = unbounded;
         this.capacity = (long) chunkSize * partitions;
     }
@@ -70,12 +70,12 @@ public class PartitionedArrayQueue<T> implements PartitionedQueue<T> {
         }
 
         int pIdx = this.heads.fromRawIdx(partition);
-        long tail = this.tails.getPlain(partition);
+        long tail = this.tails.getPlain(pIdx);
         if (QueueUtils.unsignedDiff(this.heads.getPlain(pIdx), tail + 1) > this.chunkSize) {
             this.retired.setPlain(true);
             return false;
         }
-        this.tails.setPlain(partition, tail + 1);
+        this.tails.setPlain(pIdx, tail + 1);
 
         int chunkIdx = chunkIndex(tail);
         this.queue.getPlain(partition)[chunkIdx] = obj;
@@ -87,7 +87,7 @@ public class PartitionedArrayQueue<T> implements PartitionedQueue<T> {
         boundsCheck(partition);
         int pIdx = this.heads.fromRawIdx(partition);
         long head = this.heads.getPlain(pIdx);
-        if (head == this.tails.getPlain(partition)) {
+        if (head == this.tails.getPlain(pIdx)) {
             return null;
         }
         return this.queue.getPlain(partition)[chunkIndex(head)];
@@ -98,7 +98,7 @@ public class PartitionedArrayQueue<T> implements PartitionedQueue<T> {
         boundsCheck(partition);
         int pIdx = this.heads.fromRawIdx(partition);
         long head = this.heads.getPlain(pIdx);
-        if (head == this.tails.getPlain(partition)) {
+        if (head == this.tails.getPlain(pIdx)) {
             return null;
         }
         this.heads.setPlain(pIdx, head + 1);
@@ -131,7 +131,7 @@ public class PartitionedArrayQueue<T> implements PartitionedQueue<T> {
         int total = 0;
         T[] queue = this.queue.getPlain(partition);
         long head = this.heads.getPlain(pIdx);
-        while (total < limit && head < this.tails.getPlain(partition)) {
+        while (total < limit && head < this.tails.getPlain(pIdx)) {
             int chunkIdx = chunkIndex(head++);
             this.heads.setPlain(pIdx, head);
             consumer.consume(queue[chunkIdx]);
@@ -167,7 +167,7 @@ public class PartitionedArrayQueue<T> implements PartitionedQueue<T> {
     public boolean isEmpty(int partition) {
         int pIdx = this.heads.fromRawIdx(partition);
         long head = this.heads.getPlain(pIdx);
-        long tail = this.tails.getPlain(partition);
+        long tail = this.tails.getPlain(pIdx);
 
         return head == tail;
     }
