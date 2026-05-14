@@ -87,7 +87,7 @@ public final class PaddedAtomicLongArray {
     public void fill(long val) {
         for (int i = 0; i < length; i++) {
             int pIdx = ((i + 1) * this.padding) + i;
-            HANDLE.setVolatile(this.array, getPhysicalIdx(pIdx), val);
+            HANDLE.setVolatile(this.array, pIdx, val);
         }
     }
 
@@ -98,14 +98,14 @@ public final class PaddedAtomicLongArray {
     public void fillRelease(long val) {
         for (int i = 0; i < length; i++) {
             int pIdx = ((i + 1) * this.padding) + i;
-            HANDLE.setRelease(this.array, getPhysicalIdx(pIdx), val);
+            HANDLE.setRelease(this.array, pIdx, val);
         }
     }
 
     public void fillOpaque(long val) {
         for (int i = 0; i < length; i++) {
             int pIdx = ((i + 1) * this.padding) + i;
-            HANDLE.setOpaque(this.array, getPhysicalIdx(pIdx), val);
+            HANDLE.setOpaque(this.array, pIdx, val);
         }
     }
 
@@ -206,7 +206,7 @@ public final class PaddedAtomicLongArray {
             return idx;
         }
         boundsCheck(idx);
-        return fromRawIdx(idx);
+        return ((idx + 1) * this.padding) + idx;
     }
 
     private void boundsCheck(int idx) {

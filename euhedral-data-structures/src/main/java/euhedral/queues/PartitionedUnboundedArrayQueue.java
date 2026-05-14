@@ -26,9 +26,9 @@ public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueu
 
     protected final NodeRecycler<T> recycler;
 
-    protected final PaddedAtomicReferenceArray<QueueNode<T>> heads;
+    protected final PaddedAtomicReferenceArray<QueueNode<T>> headPointers;
 
-    private QueueNode<T> tail;
+    private QueueNode<T> tailPtr;
 
     public PartitionedUnboundedArrayQueue(int partitions, int chunkSize, int maxPooledChunks) {
         if (partitions <= 0 || chunkSize <= 0) {
@@ -42,14 +42,14 @@ public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueu
         this.recycler =
                 maxPooledChunks <= 0 ? null : new NodeRecycler<>(Type.PLAIN, maxPooledChunks);
 
-        this.tail = new QueueNode<>(partitions, chunkSize, Type.PLAIN);
+        this.tailPtr = new QueueNode<>(partitions, chunkSize, Type.PLAIN);
 
-        this.heads = new PaddedAtomicReferenceArray<>(partitions, false, false);
-        this.heads.fill(tail);
+        this.headPointers = new PaddedAtomicReferenceArray<>(partitions, false, false);
+        this.headPointers.fill(tailPtr);
     }
 
     protected PartitionedUnboundedArrayQueue(int partitions, int chunkSize,
-            NodeRecycler<T> recycler, PaddedAtomicReferenceArray<QueueNode<T>> heads) {
+            NodeRecycler<T> recycler, PaddedAtomicReferenceArray<QueueNode<T>> headPointers) {
         if (partitions <= 0 || chunkSize <= 0) {
             throw new IllegalArgumentException(
                     "Cannot have 0 partitions or 0 chunkSize: " + partitions + " " + chunkSize);
@@ -60,8 +60,8 @@ public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueu
         this.partitions = partitions;
         this.chunkSize = chunkSize;
         this.recycler = recycler;
-        this.tail = null;
-        this.heads = heads;
+        this.tailPtr = null;
+        this.headPointers = headPointers;
     }
 
     /// Offers the object to a random partition based on the seed. If the seed does not change, the
@@ -84,7 +84,7 @@ public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueu
             throw new NullPointerException();
         }
 
-        while (!this.tail.offer(partition, obj)) {
+        while (!this.tailPtr.offer(partition, obj)) {
             moveTailForward();
         }
         return true;
@@ -201,15 +201,15 @@ public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueu
         next = recycler == null ? null : recycler.pop();
         next = next == null ? new QueueNode<>(partitions, chunkSize, Type.PLAIN) : next;
 
-        this.tail.next.setPlain(next);
+        this.tailPtr.next.setPlain(next);
 
-        this.tail = next;
+        this.tailPtr = next;
     }
 
     // ----- Head -----
 
     protected QueueNode<T> getHeadNode(int partition) {
-        return this.heads.getPlain(partition);
+        return this.headPointers.getPlain(partition);
     }
 
     protected QueueNode<T> getNextHeadNode(QueueNode<T> head) {
@@ -217,7 +217,7 @@ public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueu
     }
 
     protected void setNextHeadNode(int partition, QueueNode<T> next) {
-        this.heads.setPlain(partition, next);
+        this.headPointers.setPlain(partition, next);
     }
 
     protected void moveHeadsForward(long epoch, QueueNode<T> commonHead, QueueNode<T> nextHead) {
@@ -261,7 +261,7 @@ public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueu
             QueueNode<T> head = getHeadNode(i);
             sj.add(String.format("Head: %s", head));
         }
-        sj.add(String.format("\nTail: %s", this.tail));
+        sj.add(String.format("\nTail: %s", this.tailPtr));
         return sj.toString();
     }
 }
