@@ -11,8 +11,8 @@ public final class PartitionedUnboundedSpmcArrayQueue<T> extends ConcurrentParti
     // ----- Head -----
 
     @Override
-    protected QueueNode<T> getHeadNode(int partition) {
-        return super.headQueues.peek(partition);
+    protected QueueNode<T> getHeadNode(int hpIdx) {
+        return super.headQueues.peek(hpIdx);
     }
 
     @Override
@@ -21,9 +21,9 @@ public final class PartitionedUnboundedSpmcArrayQueue<T> extends ConcurrentParti
     }
 
     @Override
-    protected void setNextHeadNode(int partition, QueueNode<T> next) {
-        super.headQueues.poll(partition);
-        while (!super.headQueues.offer(partition, next)) {
+    protected void setNextHeadNode(int hpIdx, QueueNode<T> next) {
+        super.headQueues.poll(hpIdx);
+        while (!super.headQueues.offer(hpIdx, next)) {
             Thread.onSpinWait();
         }
     }
