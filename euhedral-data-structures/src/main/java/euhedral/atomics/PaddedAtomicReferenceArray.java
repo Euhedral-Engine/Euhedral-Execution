@@ -41,7 +41,7 @@ public class PaddedAtomicReferenceArray<T> {
     }
 
     public PaddedAtomicReferenceArray(int length, boolean boundsCheck, boolean pad128) {
-        int padding = pad128 ? PADDING * 2 + 1 : PADDING;
+        int padding = pad128 ? PADDING * 2 + 2 : PADDING + 1;
 
         long padded;
         do {
@@ -100,7 +100,8 @@ public class PaddedAtomicReferenceArray<T> {
     /// Atomic
     public void fill(T obj) {
         for (int i = 0; i < length; i++) {
-            set(i, obj);
+            int pIdx = ((i + 1) * this.padding) + i;
+            HANDLE.setVolatile(this.array, pIdx, obj);
         }
     }
 
@@ -110,19 +111,22 @@ public class PaddedAtomicReferenceArray<T> {
 
     public void fillRelease(T obj) {
         for (int i = 0; i < length; i++) {
-            setRelease(i, obj);
+            int pIdx = ((i + 1) * this.padding) + i;
+            HANDLE.setRelease(this.array, pIdx, obj);
         }
     }
 
     public void fillOpaque(T obj) {
         for (int i = 0; i < length; i++) {
-            setOpaque(i, obj);
+            int pIdx = ((i + 1) * this.padding) + i;
+            HANDLE.setOpaque(this.array, pIdx, obj);
         }
     }
 
     public void fillPlain(T obj) {
         for (int i = 0; i < length; i++) {
-            setPlain(i, obj);
+            int pIdx = ((i + 1) * this.padding) + i;
+            this.array[pIdx] = obj;
         }
     }
 
@@ -160,10 +164,16 @@ public class PaddedAtomicReferenceArray<T> {
         return HANDLE.weakCompareAndSet(this.array, getPhysicalIdx(idx), expect, update);
     }
 
-    public int getPhysicalIdx(int idx) {
-        if (this.boundsCheck) {
-            boundsCheck(idx);
+    public int fromRawIdx(long rawIdx) {
+        int logical = (int) (rawIdx % this.length);
+        return ((logical + 1) * this.padding) + logical;
+    }
+
+    private int getPhysicalIdx(int idx) {
+        if (!this.boundsCheck) {
+            return idx;
         }
+        boundsCheck(idx);
         return ((idx + 1) * this.padding) + idx;
     }
 

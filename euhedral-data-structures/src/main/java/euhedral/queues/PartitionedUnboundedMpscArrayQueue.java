@@ -30,7 +30,7 @@ public final class PartitionedUnboundedMpscArrayQueue<T> extends ConcurrentParti
 
     @Override
     protected QueueNode<T> getHeadNode(int partition) {
-        return super.heads.getOpaque(partition);
+        return super.headPointers.getOpaque(partition);
     }
 
     @Override
@@ -40,6 +40,6 @@ public final class PartitionedUnboundedMpscArrayQueue<T> extends ConcurrentParti
 
     @Override
     protected void setNextHeadNode(int partition, QueueNode<T> next) {
-        this.heads.setOpaque(partition, next);
+        this.headPointers.setOpaque(partition, next);
     }
 }

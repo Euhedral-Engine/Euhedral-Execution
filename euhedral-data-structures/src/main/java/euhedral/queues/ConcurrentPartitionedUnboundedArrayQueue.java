@@ -38,7 +38,7 @@ abstract sealed class ConcurrentPartitionedUnboundedArrayQueue<T> extends
         super(partitions, chunkSize,
                 maxPooledChunks <= 0 ? null : new NodeRecycler<>(type, maxPooledChunks),
                 switch (type) {
-                    case SPSC, MPSC -> new PaddedAtomicReferenceArray<>(partitions, true, true);
+                    case SPSC, MPSC -> new PaddedAtomicReferenceArray<>(partitions, true, false);
                     default -> null;
                 }
         );
@@ -64,7 +64,7 @@ abstract sealed class ConcurrentPartitionedUnboundedArrayQueue<T> extends
         };
         this.headQueues = switch (type) {
             case SPSC, MPSC -> {
-                super.heads.fill(tail);
+                super.headPointers.fill(tail);
                 yield null;
             }
             default -> {
