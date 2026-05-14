@@ -39,7 +39,7 @@ abstract sealed class ConcurrentPartitionedUnboundedArrayQueue<T>
         super(partitions, chunkSize,
                 maxPooledChunks <= 0 ? null : new NodeRecycler<>(type, maxPooledChunks),
                 switch (type) {
-                    case SPSC, MPSC -> new PaddedAtomicReferenceArray<>(partitions, true, false);
+                    case SPSC, MPSC -> new PaddedAtomicReferenceArray<>(partitions, false, false);
                     default -> null;
                 });
 
@@ -104,9 +104,10 @@ abstract sealed class ConcurrentPartitionedUnboundedArrayQueue<T>
     @Override
     public T peek(int partition) {
         boundsCheck(partition);
+        int hpIdx = super.headPointers == null ? partition : super.headPointers.fromRawIdx(partition);
 
         while (true) {
-            QueueNode<T> head = getHeadNode(partition);
+            QueueNode<T> head = getHeadNode(hpIdx);
             if (head == null) {
                 continue;
             }
@@ -134,8 +135,9 @@ abstract sealed class ConcurrentPartitionedUnboundedArrayQueue<T>
     public T poll(int partition) {
         boundsCheck(partition);
 
+        int hpIdx = super.headPointers == null ? partition : super.headPointers.fromRawIdx(partition);
         while (true) {
-            QueueNode<T> head = getHeadNode(partition);
+            QueueNode<T> head = getHeadNode(hpIdx);
             if (head == null) {
                 continue;
             }
@@ -168,8 +170,9 @@ abstract sealed class ConcurrentPartitionedUnboundedArrayQueue<T>
 
         int total = 0;
 
+        int hpIdx = super.headPointers == null ? partition : super.headPointers.fromRawIdx(partition);
         while (limit > 0) {
-            QueueNode<T> head = getHeadNode(partition);
+            QueueNode<T> head = getHeadNode(hpIdx);
             if (head == null) {
                 continue;
             }
@@ -256,10 +259,11 @@ abstract sealed class ConcurrentPartitionedUnboundedArrayQueue<T>
                     continue;
                 }
 
-                QueueNode<T> partHead = getHeadNode(i);
+                int hpIdx = super.headPointers == null ? i : super.headPointers.fromRawIdx(i);
+                QueueNode<T> partHead = getHeadNode(hpIdx);
                 if (partHead == commonHead) {
                     if (commonHead.getHeadEpoch(i) == epoch) {
-                        setNextHeadNode(i, nextHead);
+                        setNextHeadNode(hpIdx, nextHead);
                         commonHead.casHeadEpoch(i, epoch, epoch + 1);
                         flipped++;
                         count++;
@@ -283,7 +287,8 @@ abstract sealed class ConcurrentPartitionedUnboundedArrayQueue<T>
         StringJoiner sj = new StringJoiner("\n");
 
         for (int i = 0; i < super.partitions; i++) {
-            QueueNode<T> head = getHeadNode(i);
+            int hpIdx = super.headPointers == null ? i : super.headPointers.fromRawIdx(i);
+            QueueNode<T> head = getHeadNode(hpIdx);
             sj.add(String.format("Head: %s", head));
             sj.add("");
         }

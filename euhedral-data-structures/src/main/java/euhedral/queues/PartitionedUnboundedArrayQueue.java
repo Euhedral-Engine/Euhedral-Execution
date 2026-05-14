@@ -94,8 +94,9 @@ public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueu
     @Override
     public T peek(int partition) {
         boundsCheck(partition);
+        int hpIdx = this.headPointers.fromRawIdx(partition);
         while (true) {
-            QueueNode<T> head = getHeadNode(partition);
+            QueueNode<T> head = getHeadNode(hpIdx);
 
             T val = head.peek(partition);
             if (val == null) {
@@ -120,8 +121,9 @@ public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueu
     public T poll(int partition) {
         boundsCheck(partition);
 
+        int  hpIdx = this.headPointers.fromRawIdx(partition);
         while (true) {
-            QueueNode<T> head = getHeadNode(partition);
+            QueueNode<T> head = getHeadNode(hpIdx);
             T val = head.poll(partition);
 
             if (val == null) {
@@ -168,8 +170,9 @@ public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueu
 
         int total = 0;
 
+        int hpIdx = this.headPointers.fromRawIdx(partition);
         while (limit > 0) {
-            QueueNode<T> head = getHeadNode(partition);
+            QueueNode<T> head = getHeadNode(hpIdx);
 
             int count = head.drain(partition, consumer, limit);
 
@@ -208,16 +211,16 @@ public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueu
 
     // ----- Head -----
 
-    protected QueueNode<T> getHeadNode(int partition) {
-        return this.headPointers.getPlain(partition);
+    protected QueueNode<T> getHeadNode(int hpIdx) {
+        return this.headPointers.getPlain(hpIdx);
     }
 
     protected QueueNode<T> getNextHeadNode(QueueNode<T> head) {
         return head.next.getPlain();
     }
 
-    protected void setNextHeadNode(int partition, QueueNode<T> next) {
-        this.headPointers.setPlain(partition, next);
+    protected void setNextHeadNode(int hpIdx, QueueNode<T> next) {
+        this.headPointers.setPlain(hpIdx, next);
     }
 
     protected void moveHeadsForward(long epoch, QueueNode<T> commonHead, QueueNode<T> nextHead) {
@@ -228,10 +231,11 @@ public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueu
                 continue;
             }
 
-            QueueNode<T> partHead = getHeadNode(i);
+            int hpIdx = this.headPointers.fromRawIdx(i);
+            QueueNode<T> partHead = getHeadNode(hpIdx);
             if (partHead == commonHead) {
                 if (commonHead.getHeadEpoch(i) == epoch) {
-                    setNextHeadNode(i, nextHead);
+                    setNextHeadNode(hpIdx, nextHead);
                     commonHead.casHeadEpoch(i, epoch, epoch + 1);
                     flipped++;
                     count++;
@@ -258,7 +262,8 @@ public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueu
     public String toString() {
         StringJoiner sj = new StringJoiner("\n");
         for (int i = 0; i < this.partitions; i++) {
-            QueueNode<T> head = getHeadNode(i);
+            int hpIdx = this.headPointers.fromRawIdx(i);
+            QueueNode<T> head = getHeadNode(hpIdx);
             sj.add(String.format("Head: %s", head));
         }
         sj.add(String.format("\nTail: %s", this.tailPtr));

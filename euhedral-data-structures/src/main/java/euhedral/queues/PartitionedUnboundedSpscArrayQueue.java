@@ -11,8 +11,8 @@ public final class PartitionedUnboundedSpscArrayQueue<T> extends ConcurrentParti
     // ----- Head -----
 
     @Override
-    protected QueueNode<T> getHeadNode(int partition) {
-        return super.headPointers.getOpaque(partition);
+    protected QueueNode<T> getHeadNode(int hpIdx) {
+        return super.headPointers.getOpaque(hpIdx);
     }
 
     @Override
@@ -21,7 +21,7 @@ public final class PartitionedUnboundedSpscArrayQueue<T> extends ConcurrentParti
     }
 
     @Override
-    protected void setNextHeadNode(int partition, QueueNode<T> next) {
-        super.headPointers.setOpaque(partition, next);
+    protected void setNextHeadNode(int hpIdx, QueueNode<T> next) {
+        super.headPointers.setOpaque(hpIdx, next);
     }
 }
