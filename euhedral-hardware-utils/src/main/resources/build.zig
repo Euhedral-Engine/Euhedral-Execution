@@ -27,11 +27,21 @@ pub fn build(b: *std.Build) void {
     };
 
     const macos_sdk = if (b.graph.environ_map.get("MACOS_SDK")) |val| val else blk: {
-        const search_dirs = [_][]const u8{ "/opt", "/usr/local/SDK", "/usr/lib/apple/SDKs" };
+        var search_dirs = std.ArrayList([]const u8){
+            .items = &.{},
+            .capacity = 0,
+        };
+
+        if (b.graph.environ_map.get("SDKROOT")) |sdkroot| {
+            search_dirs.append(b.allocator, sdkroot) catch {};
+        }
+
+        search_dirs.appendSlice(b.allocator, &.{ "/opt", "/usr/local/SDK", "/usr/lib/apple/SDKs" }) catch {};
+
         var highest_ver: u32 = 0;
         var highest_path: ?[]const u8 = null;
 
-        for (search_dirs) |base_dir| {
+        for (search_dirs.items) |base_dir| {
             var dir = std.Io.Dir.cwd().openDir(b.graph.io, base_dir, .{ .iterate = true }) catch continue;
             defer dir.close(b.graph.io);
 
@@ -57,7 +67,7 @@ pub fn build(b: *std.Build) void {
         }
 
         if (highest_path) |path| break :blk path;
-        break :blk b.allocator.dupe(u8, "/opt/MacOSX26.sdk") catch "/opt/MacOSX26.sdk";
+        break :blk b.allocator.dupe(u8, "/opt/MacOSX.sdk") catch "/opt/MacOSX.sdk";
     };
 
     const common_flags = [_][]const u8{
@@ -137,14 +147,14 @@ pub fn build(b: *std.Build) void {
                     std.fs.path.extension(entry.name),
                     ".cpp",
                 ))
-                {
-                    cpp_files.append(
-                        b.allocator,
-                        b.dupe(
-                            b.pathJoin(&.{ os.dir, entry.name }),
-                        ),
-                    ) catch unreachable;
-                }
+            {
+                cpp_files.append(
+                    b.allocator,
+                    b.dupe(
+                        b.pathJoin(&.{ os.dir, entry.name }),
+                    ),
+                ) catch unreachable;
+            }
         }
 
         if (cpp_files.items.len == 0) {
@@ -214,7 +224,7 @@ fn buildNative(
 
     const target_str =
         if (is_windows)
-            b.fmt("{s}-windows-gnu", .{ arch.target })
+            b.fmt("{s}-windows-gnu", .{arch.target})
         else if (is_linux)
             b.fmt("{s}-linux-{s}", .{
                 arch.target,
