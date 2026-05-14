@@ -4,8 +4,6 @@ public class QueueUtils {
     public static final long ULONG_MAX = 0xFFFFFFFFFFFFFFFFL;
     public static final int LONG_PAD = 15;
 
-    public static final long ABS_MASK = (1L << 63) - 1;
-
     /// Finds the next clear bit starting at the offset
     ///
     /// @return 0-63 if a clear bit exists after the offset. -1 if there are none
@@ -48,6 +46,7 @@ public class QueueUtils {
     }
 
     public static long unsignedDiff(long head, long tail) {
-        return (tail - head) & ABS_MASK;
+        long diff = tail - head;
+        return diff < 0 ? 0 : diff;
     }
 }

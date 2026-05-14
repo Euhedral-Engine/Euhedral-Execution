@@ -5,6 +5,7 @@ import euhedral.queues.QueueNode.Type;
 import euhedral.queues.common.NodeRecycler;
 import euhedral.queues.common.PartitionedQueue;
 import euhedral.queues.common.QueueUtils;
+import java.lang.invoke.VarHandle;
 import java.util.StringJoiner;
 import lombok.Getter;
 
@@ -256,6 +257,46 @@ public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueu
             throw new IndexOutOfBoundsException(
                     "Index " + idx + " out of bounds for length " + partitions);
         }
+    }
+
+    @Override
+    public boolean isEmpty() {
+        for(int i = 0; i < this.partitions; i++) {
+            int pIdx = this.headPointers.fromRawIdx(i);
+            if(!this.headPointers.getPlain(pIdx).isEmpty(i)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    @Override
+    public boolean isEmpty(int partition) {
+        int pIdx = this.headPointers.fromRawIdx(partition);
+        return this.headPointers.getPlain(pIdx).isEmpty(partition);
+    }
+
+    @Override
+    public long size() {
+        long sum = 0;
+        for(int i = 0; i < this.partitions; i++) {
+            sum += size(i);
+        }
+        return sum;
+    }
+
+    @Override
+    public long size(int partition) {
+        int rIdx = this.headPointers.fromRawIdx(partition);
+        QueueNode<T> head = this.headPointers.getPlain(rIdx);
+
+        long sum = 0;
+        while(head != null) {
+            sum += head.size(partition);
+            head = head.next.getPlain();
+        }
+        VarHandle.acquireFence();
+        return sum;
     }
 
     @Override

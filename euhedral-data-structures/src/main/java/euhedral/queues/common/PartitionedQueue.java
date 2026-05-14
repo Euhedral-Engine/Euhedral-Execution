@@ -15,4 +15,12 @@ public interface PartitionedQueue<T> {
     int drain(QueueConsumer<T> consumer, int limit);
 
     int drain(int partition, QueueConsumer<T> consumer, int limit);
+
+    boolean isEmpty();
+
+    boolean isEmpty(int partition);
+
+    long size();
+
+    long size(int partition);
 }
