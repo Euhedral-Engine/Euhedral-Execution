@@ -22,12 +22,13 @@ abstract class ConcurrentPartitionedArrayQueue<T> extends PartitionedArrayQueue<
 
     public ConcurrentPartitionedArrayQueue(int partitions, int chunkSize, boolean multiConsumer, boolean unbounded) {
         super(partitions, chunkSize, unbounded);
-        this.tailSequence = new PaddedAtomicReferenceArray<>(partitions);
+        this.tailSequence = new PaddedAtomicReferenceArray<>(partitions, false, true);
 
         int numSChunks = Math.max(chunkSize >>> 6, 1);
         this.sequenceMask = numSChunks - 1;
         for (int i = 0; i < partitions; i++) {
-            this.tailSequence.setPlain(i, new long[numSChunks + 2 * LONG_PAD]);
+            int rIdx = this.tailSequence.fromRawIdx(i);
+            this.tailSequence.setPlain(rIdx, new long[numSChunks + 2 * LONG_PAD]);
         }
 
         if(multiConsumer) {
@@ -59,6 +60,7 @@ abstract class ConcurrentPartitionedArrayQueue<T> extends PartitionedArrayQueue<
         }
 
         int pIdx = super.heads.fromRawIdx(partition);
+        int rIdx = this.tailSequence.fromRawIdx(partition);
         if(super.unbounded) {
             incrementInFlight(pIdx);
         }
@@ -87,7 +89,7 @@ abstract class ConcurrentPartitionedArrayQueue<T> extends PartitionedArrayQueue<
 
             VarHandle.releaseFence();
 
-            LA_HANDLE.getAndAdd(this.tailSequence.getPlain(partition), sequenceChunkIndex(tail),
+            LA_HANDLE.getAndAdd(this.tailSequence.getPlain(rIdx), sequenceChunkIndex(tail),
                     getSequenceNumber(tail));
             return true;
         } finally {
@@ -101,11 +103,12 @@ abstract class ConcurrentPartitionedArrayQueue<T> extends PartitionedArrayQueue<
     public T peek(int partition) {
         boundsCheck(partition);
         int pIdx = super.heads.fromRawIdx(partition);
+        int rIdx = this.tailSequence.fromRawIdx(partition);
         long head = getHeadPointer(pIdx);
 
         int sChunkIdx = sequenceChunkIndex(head);
         long sNum = getSequenceNumber(head);
-        long sChunk = (long) LA_HANDLE.getAcquire(this.tailSequence.getPlain(partition), sChunkIdx);
+        long sChunk = (long) LA_HANDLE.getAcquire(this.tailSequence.getPlain(rIdx), sChunkIdx);
 
         if ((sNum & sChunk) == 0) {
             return null;
@@ -121,10 +124,11 @@ abstract class ConcurrentPartitionedArrayQueue<T> extends PartitionedArrayQueue<
         boundsCheck(partition);
         T[] pQueue = super.queue.getPlain(partition);
         int pIdx = super.heads.fromRawIdx(partition);
+        int rIdx = this.tailSequence.fromRawIdx(partition);
 
         while (true) {
             long head = getHeadPointer(pIdx);
-            long[] tailSequence = this.tailSequence.getPlain(partition);
+            long[] tailSequence = this.tailSequence.getPlain(rIdx);
 
             int sChunkIdx = sequenceChunkIndex(head);
             long sNum = getSequenceNumber(head);
@@ -168,8 +172,10 @@ abstract class ConcurrentPartitionedArrayQueue<T> extends PartitionedArrayQueue<
         int total = 0;
 
         int pIdx = super.heads.fromRawIdx(partition);
+        int rIdx = this.tailSequence.fromRawIdx(partition);
+
         T[] pQueue = super.queue.getPlain(partition);
-        long[] tailSequence = this.tailSequence.getPlain(partition);
+        long[] tailSequence = this.tailSequence.getPlain(rIdx);
         while(total < limit) {
             int reserved;
             int sChunkIdx;
@@ -303,11 +309,12 @@ abstract class ConcurrentPartitionedArrayQueue<T> extends PartitionedArrayQueue<
     }
 
     protected final boolean isPartitionEmptyInternal(int partition) {
+        int rIdx = this.tailSequence.fromRawIdx(partition);
         int logicalIdx = 0;
         int start = sequenceChunkIndex(logicalIdx);
         int curr = start;
         do {
-            long chunk = (long) LA_HANDLE.getAcquire(this.tailSequence.getPlain(partition), curr);
+            long chunk = (long) LA_HANDLE.getAcquire(this.tailSequence.getPlain(rIdx), curr);
             if (chunk != 0) {
                 return false;
             }
@@ -331,7 +338,8 @@ abstract class ConcurrentPartitionedArrayQueue<T> extends PartitionedArrayQueue<
             if(this.inFlight != null) {
                 this.inFlight.setRelease(pIdx, 0);
             }
-            var tS = this.tailSequence.getPlain(i);
+            int rIdx = this.tailSequence.fromRawIdx(pIdx);
+            var tS = this.tailSequence.getPlain(rIdx);
             for(int j = 0; j < tS.length; j++) {
                 LA_HANDLE.setRelease(tS, j, 0);
             }
@@ -355,7 +363,8 @@ abstract class ConcurrentPartitionedArrayQueue<T> extends PartitionedArrayQueue<
             sj.add("HeadSequence: " + this.headSequence);
         }
         for(int i = 0; i < super.partitions; i++) {
-            sj.add("TailSequence-p" + i + ": " + Arrays.toString(this.tailSequence.getPlain(i)));
+            int rIdx = this.tailSequence.fromRawIdx(i);
+            sj.add("TailSequence-p" + i + ": " + Arrays.toString(this.tailSequence.getPlain(rIdx)));
         }
         return sj.toString();
     }
