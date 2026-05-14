@@ -38,7 +38,7 @@ abstract sealed class ConcurrentPartitionedUnboundedArrayQueue<T> extends
         super(partitions, chunkSize,
                 maxPooledChunks <= 0 ? null : new NodeRecycler<>(type, maxPooledChunks),
                 switch (type) {
-                    case SPSC, MPSC -> new PaddedAtomicReferenceArray<>(partitions, false, true);
+                    case SPSC, MPSC -> new PaddedAtomicReferenceArray<>(partitions, true, true);
                     default -> null;
                 }
         );
@@ -102,6 +102,7 @@ abstract sealed class ConcurrentPartitionedUnboundedArrayQueue<T> extends
     @Override
     public T peek(int partition) {
         boundsCheck(partition);
+
         while (true) {
             QueueNode<T> head = getHeadNode(partition);
             if (head == null) {
