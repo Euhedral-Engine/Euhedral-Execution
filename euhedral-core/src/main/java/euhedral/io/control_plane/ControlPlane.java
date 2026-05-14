@@ -69,6 +69,7 @@ public class ControlPlane implements AutoCloseable {
     protected final AtomicBoolean closed = new AtomicBoolean(false);
     protected final Thread shutdownHook;
 
+    protected final AtomicBoolean primed = new AtomicBoolean(false);
     protected final AtomicBoolean rebalancing = new AtomicBoolean(false);
     protected final AtomicReference<FluxNode> ingestController;
 
@@ -76,13 +77,13 @@ public class ControlPlane implements AutoCloseable {
     protected final ControlPlaneShard[] shards;
     protected final FluxEdge[] shardHandles;
 
-    protected volatile int[] activeShardIds = new int[0];
+    protected final AtomicReference<int[]> activeShardIds = new AtomicReference<>(new int[0]);
+    protected final AtomicReference<int[]> weightedShardMap = new AtomicReference<>(new int[0]);
+    protected final AtomicReference<int[]> reverseMapping = new AtomicReference<>(new int[0]);
+
     protected volatile int currentGlobalVersion = Integer.MIN_VALUE;
     protected volatile EffectiveSystemTopology effectiveTopology;
 
-    protected volatile boolean primed = false;
-    protected volatile int[] weightedShardMap = new int[0];
-    protected volatile int[] reverseMapping = new int[0];
 
     protected ControlPlane(String name, CloneableObject cloneableObject,
             MeterRegistry meterRegistry) {
@@ -93,7 +94,7 @@ public class ControlPlane implements AutoCloseable {
             CloneableObject cloneableObject,
             MeterRegistry meterRegistry) {
         this.resourceMonitor = new FluxResourceMonitor(Duration.ofMillis(200));
-        resourceMonitor.start();
+        this.resourceMonitor.start();
 
         this.baseShard = Objects.requireNonNullElseGet(baseShard,
                 () -> new ControlPlaneShard(-1, "BaseShard", cloneableObject,
@@ -107,64 +108,67 @@ public class ControlPlane implements AutoCloseable {
         this.shards = new ControlPlaneShard[SystemInfo.getMaxSocketId() + 1];
         this.shardHandles = new FluxEdge[SystemInfo.getMaxSocketId() + 1];
 
-        this.controlPlaneExecutor = Executors.newFixedThreadPool(shards.length, r -> new Thread(r, name));
+        this.controlPlaneExecutor = Executors.newFixedThreadPool(this.shards.length,
+                r -> new Thread(r, name));
 
         this.shutdownHook = new Thread(this::close);
-        Runtime.getRuntime().addShutdownHook(shutdownHook);
+        Runtime.getRuntime().addShutdownHook(this.shutdownHook);
 
         init();
         try {
-            EffectiveTopology.update(resourceMonitor.getUtilization());
+            EffectiveTopology.update(this.resourceMonitor.getUtilization());
         } catch (Exception e) {
-            logger.error("Failed to update EffectiveTopology", e);
+            this.logger.error("Failed to update EffectiveTopology", e);
         }
         update(resourceMonitor.getUtilization());
-        resourceMonitor.addListener().subscribe(this::update);
+        this.resourceMonitor.addListener().subscribe(this::update);
     }
 
     protected void init() {
-        logger.info("Initializing");
+        this.logger.info("Initializing");
 
         for (int i = 0; i < this.shards.length; i++) {
             this.shards[i] = createShard(i);
         }
 
-        FluxNode controller = new FluxNode(name + "-GlobalDistributor",
-                effectiveTopology.socketTopologies().size(), this::route, 0, false);
+        FluxNode controller = new FluxNode(this.name + "-GlobalDistributor",
+                this.effectiveTopology.socketTopologies().size(), this::route, 0, false);
         this.ingestController.set(controller);
     }
 
     protected ControlPlaneShard createShard(int nodeId) {
-        logger.info("Creating Shards");
+        this.logger.info("Creating Shards");
         String shardName = this.name + "-ControlPlaneShard-" + nodeId;
-        return baseShard.clone(nodeId, shardName);
+        return this.baseShard.clone(nodeId, shardName);
     }
 
     protected int route(AbstractFrame frame, int mapSize) {
         RoutingPolicy policy = frame.getRoutingPolicy();
         if (policy != null && policy.level > RoutingPolicy.ANY.level) {
-            int[] reverseMapping = this.reverseMapping;
+            int[] reverseMapping = this.reverseMapping.getOpaque();
             CpuInfo location = frame.getOrigin();
             int socket = location != null ? location.socket() : -1;
 
-            if (socket >= 0 && socket < reverseMapping.length && (socket = reverseMapping[socket]) < mapSize
+            if (socket >= 0 && socket < reverseMapping.length
+                    && (socket = reverseMapping[socket]) < mapSize
                     && socket >= 0) {
                 return socket;
             }
         }
 
-        int idx = (int) unsignedMultiplyHigh(frame.getCombinedHash(), weightedShardMap.length);
-        return weightedShardMap[idx];
+        int[] map = this.activeShardIds.getOpaque();
+        int idx = (int) unsignedMultiplyHigh(frame.getCombinedHash(), map.length);
+        return map[idx];
     }
 
     protected void update(HardwareUtilization utilization) {
         int nextVersion = EffectiveTopology.getGlobalVersion();
 
         if (this.currentGlobalVersion != nextVersion) {
-            if (!primed) {
-                logger.info("Initializing the ControlPlane for topology V{}", nextVersion);
+            if (!this.primed.getOpaque()) {
+                this.logger.info("Initializing the ControlPlane for topology V{}", nextVersion);
             } else {
-                logger.warn(
+                this.logger.warn(
                         "Detected change in global topology. Initiating global rebalance for topology V{}",
                         nextVersion);
             }
@@ -172,9 +176,10 @@ public class ControlPlane implements AutoCloseable {
         } else {
             double quotaPool = utilization.quotaCpus();
 
-            int[] sockets = this.activeShardIds;
+            int[] sockets = this.activeShardIds.getOpaque();
             for (int socketId : sockets) {
-                EffectiveSocketTopology topology = effectiveTopology.socketTopologies().get(socketId);
+                EffectiveSocketTopology topology = this.effectiveTopology.socketTopologies()
+                        .get(socketId);
                 ControlPlaneShard shard = this.shards[socketId];
 
                 SocketSnapshot snapshot = utilization.getSocketSnapshot(socketId,
@@ -182,18 +187,18 @@ public class ControlPlane implements AutoCloseable {
                         getShardQuota(socketId, quotaPool));
                 CompletableFuture.runAsync(() -> {
                     if (!shard.isStarted()) {
-                        logger.info("Starting shard");
+                        this.logger.info("Starting shard");
                         startShard(socketId, snapshot, topology);
                     } else {
                         shard.update(snapshot, topology);
                     }
-                }, controlPlaneExecutor);
+                }, this.controlPlaneExecutor);
             }
         }
     }
 
     protected void handleSystemTopologyChange(HardwareUtilization utilization) {
-        if (!rebalancing.compareAndSet(false, true)) {
+        if (!this.rebalancing.compareAndSet(false, true)) {
             return;
         }
         this.effectiveTopology = EffectiveTopology.getEffectiveTopology();
@@ -201,25 +206,27 @@ public class ControlPlane implements AutoCloseable {
 
         FluxNode controller = this.ingestController.get();
 
-        BitSet newShards = effectiveTopology.effectiveSockets();
-        for (int socket = newShards.nextSetBit(0); socket >= 0; socket = newShards.nextSetBit(socket + 1)) {
-            if (shardHandles[socket] == null) {
-                shardHandles[socket] = new FluxEdge(controller.getDrainFlag());
+        BitSet newShards = this.effectiveTopology.effectiveSockets();
+        for (int socket = newShards.nextSetBit(0); socket >= 0;
+                socket = newShards.nextSetBit(socket + 1)) {
+            if (this.shardHandles[socket] == null) {
+                this.shardHandles[socket] = new FluxEdge(controller.getDrainFlag());
             }
         }
         remapIngestController();
 
         double quotaPool = utilization.quotaCpus();
-        for (int socket = newShards.nextSetBit(0); socket >= 0; socket = newShards.nextSetBit(socket + 1)) {
-            EffectiveSocketTopology topology = effectiveTopology.socketTopologies().get(socket);
+        for (int socket = newShards.nextSetBit(0); socket >= 0;
+                socket = newShards.nextSetBit(socket + 1)) {
+            EffectiveSocketTopology topology = this.effectiveTopology.socketTopologies().get(socket);
             SocketSnapshot snapshot = utilization.getSocketSnapshot(socket,
                     topology.effectiveCoreToCpu(),
                     getShardQuota(socket, quotaPool));
 
-            if (!shards[socket].isStarted()) {
+            if (!this.shards[socket].isStarted()) {
                 startShard(socket, snapshot, topology);
             } else {
-                shards[socket].update(snapshot, topology);
+                this.shards[socket].update(snapshot, topology);
             }
         }
 
@@ -234,94 +241,96 @@ public class ControlPlane implements AutoCloseable {
         }
 
         AtomicInteger shutDown = new AtomicInteger(0);
-        for(int i : activeShardIds) {
-            if(!newShards.get(i)) {
+        for (int i : this.activeShardIds.getOpaque()) {
+            if (!newShards.get(i)) {
                 shutDown.incrementAndGet();
             }
         }
 
-        this.activeShardIds = nextSockets;
-        this.reverseMapping = reverseMapping;
+        this.activeShardIds.set(nextSockets);
+        this.reverseMapping.set(reverseMapping);
 
-        ingestController.get().setDrain(false);
-        if (!this.primed) {
-            this.primed = true;
-            this.rebalancing.set(false);
+        this.ingestController.get().setDrain(false);
+        if (!this.primed.getOpaque()) {
+            this.primed.lazySet(true);
+            this.rebalancing.lazySet(false);
             return;
         }
 
         CompletableFuture.runAsync(() -> {
-            for (int i = 0; i < shards.length; i++) {
+            for (int i = 0; i < this.shards.length; i++) {
                 if (!newShards.get(i)) {
                     shutDown.decrementAndGet();
-                    shards[i].shutDownShard(shutDown);
+                    this.shards[i].shutDownShard(shutDown);
                 }
             }
             while (shutDown.get() != 0) {
                 LockSupport.parkNanos(1_000);
             }
-            this.rebalancing.set(false);
-        }, controlPlaneExecutor);
+            this.rebalancing.lazySet(false);
+        }, this.controlPlaneExecutor);
     }
 
     protected void remapIngestController() {
-        ingestController.get().setDrain(true);
-        BitSet effectiveSockets = effectiveTopology.effectiveSockets();
-        BitSet effectiveCpus = effectiveTopology.effectiveCpus();
+        this.ingestController.get().setDrain(true);
+        BitSet effectiveSockets = this.effectiveTopology.effectiveSockets();
+        BitSet effectiveCpus = this.effectiveTopology.effectiveCpus();
 
         int idx = 0;
-        int[] weightedShardMap = new int[effectiveTopology.effectiveCpus().cardinality()];
+        int[] weightedShardMap = new int[this.effectiveTopology.effectiveCpus().cardinality()];
         for (int i = effectiveCpus.nextSetBit(0); i >= 0; i = effectiveCpus.nextSetBit(i + 1)) {
             weightedShardMap[idx++] = SystemInfo.getCpuInfo(i).socket();
         }
 
-        FluxNode controller = ingestController.get();
+        FluxNode controller = this.ingestController.get();
         long deadline = System.nanoTime() + Duration.ofSeconds(1).toNanos();
-        while (!controller.setDownstreamMapping(effectiveSockets, shardHandles)) {
+        while (!controller.setDownstreamMapping(effectiveSockets, this.shardHandles)) {
             LockSupport.parkNanos(5_000);
             if (System.nanoTime() > deadline) {
                 break;
             }
         }
-        this.weightedShardMap = weightedShardMap;
+        this.activeShardIds.lazySet(weightedShardMap);
     }
 
-    protected void startShard(int shardId, SocketSnapshot snapshot, EffectiveSocketTopology topology) {
-        if (shards[shardId].isStarted()) {
+    protected void startShard(int shardId, SocketSnapshot snapshot,
+            EffectiveSocketTopology topology) {
+        if (this.shards[shardId].isStarted()) {
             return;
         }
 
-        shards[shardId].start(snapshot, topology, shardHandles[shardId]);
+        this.shards[shardId].start(snapshot, topology, this.shardHandles[shardId]);
     }
 
     protected double getShardQuota(int socketId, double systemQuotaPool) {
-        int totalEffectiveCpus = effectiveTopology.effectiveCpus().cardinality();
-        int socketEffectiveCpus = effectiveTopology.socketTopologies().get(socketId).effectiveCpus().cardinality();
+        int totalEffectiveCpus = this.effectiveTopology.effectiveCpus().cardinality();
+        int socketEffectiveCpus = this.effectiveTopology.socketTopologies().get(socketId).effectiveCpus()
+                .cardinality();
 
         return ((double) socketEffectiveCpus / Math.max(1, totalEffectiveCpus)) * systemQuotaPool;
     }
 
     @Override
     public void close() {
-        if (!closed.compareAndSet(false, true)) {
+        if (!this.closed.compareAndSet(false, true)) {
             return;
         }
-        FluxNode controller = ingestController.getAndSet(null);
+        FluxNode controller = this.ingestController.getAndSet(null);
         controller.setDrain(true);
 
-        resourceMonitor.close();
+        this.resourceMonitor.close();
         PinnedThreadExecutor.closeAll();
 
-        this.activeShardIds = null;
-        for (int i = 0; i < shards.length; i++) {
-            if (shards[i] != null) {
+        this.activeShardIds.set(null);
+        for (int i = 0; i < this.shards.length; i++) {
+            if (this.shards[i] != null) {
                 try {
-                    shardHandles[i] = null;
-                    shards[i].close();
+                    this.shardHandles[i] = null;
+                    this.shards[i].close();
                 } catch (Exception e) {
-                    logger.error("Error closing shard {}", shards[i].getShardName(), e);
+                    this.logger.error("Error closing shard {}", this.shards[i].getShardName(), e);
                 } finally {
-                    shards[i] = null;
+                    this.shards[i] = null;
                 }
             }
         }
@@ -329,26 +338,26 @@ public class ControlPlane implements AutoCloseable {
         try {
             controller.close();
         } catch (Exception e) {
-            logger.error("Error closing ControlPlaneIngestController.", e);
+            this.logger.error("Error closing ControlPlaneIngestController.", e);
         }
 
         INSTANCE.set(null);
 
         try {
-            controlPlaneExecutor.shutdownNow();
-            Runtime.getRuntime().removeShutdownHook(shutdownHook);
+            this.controlPlaneExecutor.shutdownNow();
+            Runtime.getRuntime().removeShutdownHook(this.shutdownHook);
         } catch (Exception ignored) {
 
         }
     }
 
     public boolean isDrained() {
-        FluxNode controller = ingestController.get();
+        FluxNode controller = this.ingestController.get();
         if (controller != null && !controller.isDrained()) {
             return false;
         }
 
-        for (ControlPlaneShard shard : shards) {
+        for (ControlPlaneShard shard : this.shards) {
             if (shard != null && !shard.isDrained()) {
                 return false;
             }
@@ -357,13 +366,13 @@ public class ControlPlane implements AutoCloseable {
     }
 
     public void ingest(Publisher<? extends AbstractFrame> frameFlux) {
-        if (closed.get()) {
-            logger.error(
+        if (this.closed.get()) {
+            this.logger.error(
                     "Could not ingest from an upstream publisher. The ControlPlane is permanently closed.");
             return;
         }
 
-        FluxNode controller = ingestController.get();
+        FluxNode controller = this.ingestController.get();
         controller.ingest(frameFlux);
     }
 }
