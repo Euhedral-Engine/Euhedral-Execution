@@ -65,7 +65,7 @@ public final class SystemUtilization {
 
 
     public record HardwareUtilization(long timestampNs, double quotaCpus, double quotaCpuUsage,
-                                      long period, BitSet globalEffectiveCpus,
+                                      long period, UnmodifiableBitSet globalEffectiveCpus,
                                       double cpuThrottleRatio,
                                       UnmodifiableDoubleArray perQuotaCpuThrottleRatio,
                                       UnmodifiableDoubleArray perQuotaCpuPressure,
@@ -76,7 +76,7 @@ public final class SystemUtilization {
 
         public static HardwareUtilization create(long timestampNs, double quotaCpus,
                 double quotaCpuUsage,
-                long period, BitSet globalEffectiveCpus,
+                long period, UnmodifiableBitSet globalEffectiveCpus,
                 double cpuThrottleRatio,
                 double[] perQuotaCpuThrottleRatio,
                 double[] perQuotaCpuPressure,
