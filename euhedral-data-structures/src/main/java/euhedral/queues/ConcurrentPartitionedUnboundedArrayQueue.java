@@ -7,8 +7,8 @@ import euhedral.queues.common.NodeRecycler;
 import java.lang.invoke.VarHandle;
 import java.util.StringJoiner;
 
-/// A template of a concurrent unbounded array queue with partitions. This class is overriden by its
-/// subclasses to selectively choose the type of thread safety between producers and consumers.
+/// A template of a concurrent unbounded array queue with partitions. This class is overridden by
+/// its subclasses to selectively choose the type of thread safety between producers and consumers.
 ///
 /// This class wraps instances of underlying queue types in [QueueNode] objects to create a
 /// linked-list of them. If recycling is enabled, nodes are put in the [NodeRecycler] and reused
@@ -89,7 +89,7 @@ abstract sealed class ConcurrentPartitionedUnboundedArrayQueue<T>
         while (true) {
             long epoch = getTailEpoch();
             QueueNode<T> tail = this.tailQueue.peek(0);
-            if(tail == null) {
+            if (tail == null) {
                 Thread.onSpinWait();
                 continue;
             }
@@ -107,7 +107,7 @@ abstract sealed class ConcurrentPartitionedUnboundedArrayQueue<T>
     @Override
     public T peek(int partition) {
         boundsCheck(partition);
-        int hpIdx = super.headPointers == null ? partition : super.headPointers.fromRawIdx(partition);
+        int hpIdx = getHpIdx(partition);
 
         while (true) {
             QueueNode<T> head = getHeadNode(hpIdx);
@@ -119,19 +119,20 @@ abstract sealed class ConcurrentPartitionedUnboundedArrayQueue<T>
             long epoch = head.getHeadEpoch(partition);
             T val = head.peek(partition);
 
-            if (val == null) {
-                if (!head.isRetired()) {
-                    return null;
-                }
+            if (val != null) {
+                return val;
+            }
 
-                QueueNode<T> next = getNextHeadNode(head);
-                if (next != null) {
-                    moveHeadsForward(epoch, head, next);
-                    continue;
-                }
+            if (!head.isRetired()) {
                 return null;
             }
-            return val;
+
+            QueueNode<T> next = getNextHeadNode(head);
+            if (next != null) {
+                moveHeadsForward(epoch, head, next);
+                continue;
+            }
+            return null;
         }
     }
 
@@ -139,7 +140,7 @@ abstract sealed class ConcurrentPartitionedUnboundedArrayQueue<T>
     public T poll(int partition) {
         boundsCheck(partition);
 
-        int hpIdx = super.headPointers == null ? partition : super.headPointers.fromRawIdx(partition);
+        int hpIdx = getHpIdx(partition);
         while (true) {
             QueueNode<T> head = getHeadNode(hpIdx);
             while (head == null) {
@@ -150,19 +151,20 @@ abstract sealed class ConcurrentPartitionedUnboundedArrayQueue<T>
             long epoch = head.getHeadEpoch(partition);
             T val = head.poll(partition);
 
-            if (val == null) {
-                if (!head.isRetired()) {
-                    return null;
-                }
+            if (val != null) {
+                return val;
+            }
 
-                QueueNode<T> next = getNextHeadNode(head);
-                if (next != null) {
-                    moveHeadsForward(epoch, head, next);
-                    continue;
-                }
+            if (!head.isRetired()) {
                 return null;
             }
-            return val;
+
+            QueueNode<T> next = getNextHeadNode(head);
+            if (next != null) {
+                moveHeadsForward(epoch, head, next);
+                continue;
+            }
+            return null;
         }
     }
 
@@ -175,7 +177,7 @@ abstract sealed class ConcurrentPartitionedUnboundedArrayQueue<T>
 
         int total = 0;
 
-        int hpIdx = super.headPointers == null ? partition : super.headPointers.fromRawIdx(partition);
+        int hpIdx = getHpIdx(partition);
         while (limit > 0) {
             QueueNode<T> head = getHeadNode(hpIdx);
             while (head == null) {
@@ -236,6 +238,10 @@ abstract sealed class ConcurrentPartitionedUnboundedArrayQueue<T>
 
     // ----- Head -----
 
+    private int getHpIdx(int partition) {
+        return super.headPointers == null ? partition : super.headPointers.fromRawIdx(partition);
+    }
+
     private boolean acquireHeadLock() {
         if (this.headLock == null) {
             return true;
@@ -290,8 +296,8 @@ abstract sealed class ConcurrentPartitionedUnboundedArrayQueue<T>
 
     @Override
     public boolean isEmpty() {
-        for(int i = 0; i < super.partitions; i++) {
-            if(!isEmpty(i)) {
+        for (int i = 0; i < super.partitions; i++) {
+            if (!isEmpty(i)) {
                 return false;
             }
         }
@@ -300,14 +306,14 @@ abstract sealed class ConcurrentPartitionedUnboundedArrayQueue<T>
 
     @Override
     public boolean isEmpty(int partition) {
-        if(super.headPointers != null) {
-            int pIdx =  super.headPointers.fromRawIdx(partition);
-            if(!super.headPointers.getAcquire(pIdx).isEmpty(partition)) {
+        if (super.headPointers != null) {
+            int pIdx = super.headPointers.fromRawIdx(partition);
+            if (!super.headPointers.getAcquire(pIdx).isEmpty(partition)) {
                 return false;
             }
         } else {
-            QueueNode<T> q =  this.headQueues.peek(partition);
-            if(q == null || q.isRetired() || !q.isEmpty(partition)) {
+            QueueNode<T> q = this.headQueues.peek(partition);
+            if (q == null || q.isRetired() || !q.isEmpty(partition)) {
                 return false;
             }
         }
@@ -316,17 +322,26 @@ abstract sealed class ConcurrentPartitionedUnboundedArrayQueue<T>
 
     @Override
     public long size(int partition) {
-        if(super.headPointers != null) {
-            return super.size(partition);
+        if (super.headPointers != null) {
+            int rIdx = this.headPointers.fromRawIdx(partition);
+            QueueNode<T> head = this.headPointers.getPlain(rIdx);
+
+            long sum = 0;
+            while (head != null) {
+                sum += head.size(partition);
+                head = head.next.getPlain();
+            }
+            VarHandle.acquireFence();
+            return sum;
         }
 
         long sum = 0;
         QueueNode<T> head = this.headQueues.peek(partition);
-        while(head == null) {
+        while (head == null) {
             Thread.onSpinWait();
             head = this.headQueues.peek(partition);
         }
-        while(head != null) {
+        while (head != null) {
             sum += head.size(partition);
             head = head.next.getPlain();
         }
