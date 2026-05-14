@@ -2,6 +2,7 @@ package euhedral.hardware_utils;
 
 import euhedral.hardware_utils.common.SystemUtilization.HardwareUtilization;
 import euhedral.hardware_utils.common.SystemUtilization.SystemSnapshot;
+import euhedral.hardware_utils.common.UnmodifiableBitSet;
 import it.unimi.dsi.fastutil.objects.ObjectArraySet;
 import java.time.Duration;
 import java.util.BitSet;
@@ -17,8 +18,8 @@ public class ResourceMonitor implements AutoCloseable {
     private static final long MEMORY_CLAMP = 1_000_000_000_000_000L;
     private static final double NS_TO_SEC = 1.0 / 1_000_000_000.0;
 
-    private static long clampLong(long val, long min, long max) {
-        return Math.min(max, Math.max(min, val));
+    private static long clampMemory(long val) {
+        return Math.min(MEMORY_CLAMP, Math.max(0, val));
     }
 
     private static double clampDouble(double val, double min, double max) {
@@ -171,12 +172,12 @@ public class ResourceMonitor implements AutoCloseable {
             updateDiskIO(snapshot);
             this.readings.lastWallClockNs = snapshot.timeNs();
 
-            long memoryLimit = clampLong(snapshot.memoryLimit(), 0, MEMORY_CLAMP);
+            long memoryLimit = clampMemory(snapshot.memoryLimit());
             hardwareUtilization = HardwareUtilization.create(this.readings.lastWallClockNs,
                     this.readings.quotaCpus,
                     this.readings.cpuUsageRatio,
                     snapshot.period(),
-                    this.globalEffectiveCpus,
+                    UnmodifiableBitSet.wrap(this.globalEffectiveCpus),
                     this.readings.cpuThrottleRatio,
                     this.readings.perCpuThrottleRatio,
                     this.readings.perCpuPressureRatio,

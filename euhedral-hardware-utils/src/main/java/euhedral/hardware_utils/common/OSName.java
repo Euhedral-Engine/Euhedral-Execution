@@ -1,9 +1,10 @@
 package euhedral.hardware_utils.common;
 
 public enum OSName {
-    LINUX, OSX, WINDOWS, UNSUPPORTED;
+    LINUX("Linux"), OSX("MacOS"), WINDOWS("Windows"), UNSUPPORTED("UNSUPPORTED");
 
     public static final OSName CURRENT_OS;
+    public final String name;
 
     static {
         String os = System.getProperty("os.name").toLowerCase();
@@ -28,5 +29,14 @@ public enum OSName {
 
     public static boolean isWindows() {
         return CURRENT_OS == WINDOWS;
+    }
+
+    OSName(String name) {
+        this.name = name;
+    }
+
+    @Override
+    public String toString() {
+        return this.name;
     }
 }
