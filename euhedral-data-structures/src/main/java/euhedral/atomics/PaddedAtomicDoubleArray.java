@@ -18,6 +18,7 @@ public final class PaddedAtomicDoubleArray {
     private final double[] array;
     private final int length;
     private final boolean boundsCheck;
+    private final boolean pow2;
 
     public PaddedAtomicDoubleArray(int length) {
         this(length, true, false);
@@ -36,6 +37,7 @@ public final class PaddedAtomicDoubleArray {
         this.array = new double[(int) padded];
         this.length = length;
         this.boundsCheck = boundsCheck;
+        this.pow2 = Integer.highestOneBit(length) == length;
     }
 
     // ----- Get -----
@@ -197,8 +199,13 @@ public final class PaddedAtomicDoubleArray {
         return (double) HANDLE.compareAndExchange(this.array, getPhysicalIdx(idx), expect, update);
     }
 
-    public int fromRawIdx(double rawIdx) {
-        int logical = (int) (rawIdx % this.length);
+    public int fromRawIdx(long rawIdx) {
+        int logical;
+        if(pow2) {
+            logical = (int) (rawIdx & (length - 1));
+        } else {
+            logical = Math.floorMod((int) rawIdx, this.length);
+        }
         return ((logical + 1) * this.padding) + logical;
     }
 
