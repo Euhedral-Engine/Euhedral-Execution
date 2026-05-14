@@ -72,14 +72,14 @@ abstract class ConcurrentPartitionedArrayQueue<T> extends PartitionedArrayQueue<
                 }
 
                 head = super.heads.getAcquire(pIdx);
-                tail = getTailPointer(partition);
+                tail = getTailPointer(pIdx);
                 if (QueueUtils.unsignedDiff(head, tail + 1) > super.chunkSize) {
                     if (super.unbounded) {
                         super.retired.setRelease(true);
                     }
                     return false;
                 }
-            } while (!casTailPointer(partition, tail, tail + 1));
+            } while (!casTailPointer(pIdx, tail, tail + 1));
 
             int qTailIdx = chunkIndex(tail);
             T[] pQueue = super.queue.getPlain(partition);
@@ -222,16 +222,16 @@ abstract class ConcurrentPartitionedArrayQueue<T> extends PartitionedArrayQueue<
         this.inFlight.setRelease(partition, this.inFlight.getPlain(partition) - 1);
     }
 
-    protected long getTailPointer(int partition) {
-        return this.tails.getOpaque(partition);
+    protected long getTailPointer(int pIdx) {
+        return this.tails.getOpaque(pIdx);
     }
 
     protected boolean continueTailCAS() {
         return !super.retired.getOpaque();
     }
 
-    protected boolean casTailPointer(int partition, long expect, long update) {
-        super.tails.setOpaque(partition, update);
+    protected boolean casTailPointer(int pIdx, long expect, long update) {
+        super.tails.setOpaque(pIdx, update);
         return true;
     }
 
@@ -273,7 +273,7 @@ abstract class ConcurrentPartitionedArrayQueue<T> extends PartitionedArrayQueue<
 
         int pIdx = super.heads.fromRawIdx(partition);
         long head = super.heads.getAcquire(pIdx);
-        long tail = super.tails.getAcquire(partition);
+        long tail = super.tails.getAcquire(pIdx);
 
         return (int) ((tail - head) & ABS_MASK);
     }
@@ -295,7 +295,7 @@ abstract class ConcurrentPartitionedArrayQueue<T> extends PartitionedArrayQueue<
         int pIdx =  super.heads.fromRawIdx(partition);
 
         long head = super.heads.getAcquire(pIdx);
-        long tail = super.tails.getAcquire(partition);
+        long tail = super.tails.getAcquire(pIdx);
         long headSeq = this.headSequence == null ? head : this.headSequence.getAcquire(partition);
         long inFlight = this.inFlight == null ? 0 : this.inFlight.getAcquire(partition);
 
@@ -324,7 +324,7 @@ abstract class ConcurrentPartitionedArrayQueue<T> extends PartitionedArrayQueue<
             int pIdx = super.heads.fromRawIdx(i);
 
             super.heads.setRelease(pIdx, 0);
-            super.tails.setRelease(i, 0);
+            super.tails.setRelease(pIdx, 0);
             if(this.headSequence != null) {
                 this.headSequence.setRelease(i, 0);
             }
