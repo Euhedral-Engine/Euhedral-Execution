@@ -11,13 +11,13 @@ public final class PartitionedSpmcArrayQueue<T> extends ConcurrentPartitionedArr
     }
 
     @Override
-    protected long getHeadPointer(int partition) {
-        return super.heads.getAcquire(partition);
+    protected long getHeadPointer(int pIdx) {
+        return super.heads.getAcquire(pIdx);
     }
 
     @Override
-    protected void moveHeadPointer(int partition, long delta) {
-        super.heads.getAndAdd(partition, delta);
+    protected void moveHeadPointer(int pIdx, long delta) {
+        super.heads.getAndAdd(pIdx, delta);
     }
 
     @Override

@@ -23,7 +23,7 @@ public final class PaddedAtomicLongArray {
     }
 
     public PaddedAtomicLongArray(int length, boolean boundsCheck, boolean pad128) {
-        int padding = pad128 ? PADDING * 2 + 1 : PADDING;
+        int padding = pad128 ? PADDING * 2 + 2 : PADDING + 1;
 
         long padded;
         do {
@@ -80,13 +80,14 @@ public final class PaddedAtomicLongArray {
     }
 
     public void setPlain(int idx, long val) {
-        HANDLE.set(this.array, getPhysicalIdx(idx), val);
+        this.array[getPhysicalIdx(idx)] = val;
     }
 
     /// Atomic
     public void fill(long val) {
         for (int i = 0; i < length; i++) {
-            set(i, val);
+            int pIdx = ((i + 1) * this.padding) + i;
+            HANDLE.setVolatile(this.array, getPhysicalIdx(pIdx), val);
         }
     }
 
@@ -96,19 +97,22 @@ public final class PaddedAtomicLongArray {
 
     public void fillRelease(long val) {
         for (int i = 0; i < length; i++) {
-            setRelease(i, val);
+            int pIdx = ((i + 1) * this.padding) + i;
+            HANDLE.setRelease(this.array, getPhysicalIdx(pIdx), val);
         }
     }
 
     public void fillOpaque(long val) {
         for (int i = 0; i < length; i++) {
-            setOpaque(i, val);
+            int pIdx = ((i + 1) * this.padding) + i;
+            HANDLE.setOpaque(this.array, getPhysicalIdx(pIdx), val);
         }
     }
 
     public void fillPlain(long val) {
         for (int i = 0; i < length; i++) {
-            setPlain(i, val);
+            int pIdx = ((i + 1) * this.padding) + i;
+            this.array[pIdx] = val;
         }
     }
 
@@ -192,11 +196,17 @@ public final class PaddedAtomicLongArray {
         return (long) HANDLE.compareAndExchange(this.array, getPhysicalIdx(idx), expect, update);
     }
 
-    public int getPhysicalIdx(int idx) {
-        if (this.boundsCheck) {
-            boundsCheck(idx);
+    public int fromRawIdx(long rawIdx) {
+        int logical = (int) (rawIdx % this.length);
+        return ((logical + 1) * this.padding) + logical;
+    }
+
+    private int getPhysicalIdx(int idx) {
+        if (!this.boundsCheck) {
+            return idx;
         }
-        return ((idx + 1) * this.padding) + idx;
+        boundsCheck(idx);
+        return fromRawIdx(idx);
     }
 
     private void boundsCheck(int idx) {
