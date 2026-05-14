@@ -84,7 +84,7 @@ abstract class ConcurrentPartitionedArrayQueue<T> extends PartitionedArrayQueue<
             } while (!casTailPointer(pIdx, tail, tail + 1));
 
             int qTailIdx = chunkIndex(tail);
-            T[] pQueue = super.queue.getPlain(partition);
+            T[] pQueue = super.queue.getPlain(rIdx);
             pQueue[qTailIdx] = obj;
 
             VarHandle.releaseFence();
@@ -114,7 +114,7 @@ abstract class ConcurrentPartitionedArrayQueue<T> extends PartitionedArrayQueue<
             return null;
         }
 
-        T[] pQueue = super.queue.getPlain(partition);
+        T[] pQueue = super.queue.getPlain(rIdx);
         VarHandle.acquireFence();
         return pQueue[chunkIndex(head)];
     }
@@ -122,10 +122,10 @@ abstract class ConcurrentPartitionedArrayQueue<T> extends PartitionedArrayQueue<
     @Override
     public T poll(int partition) {
         boundsCheck(partition);
-        T[] pQueue = super.queue.getPlain(partition);
         int pIdx = super.heads.fromRawIdx(partition);
         int rIdx = this.tailSequence.fromRawIdx(partition);
 
+        T[] pQueue = super.queue.getPlain(rIdx);
         while (true) {
             long head = getHeadPointer(pIdx);
             long[] tailSequence = this.tailSequence.getPlain(rIdx);
@@ -174,7 +174,7 @@ abstract class ConcurrentPartitionedArrayQueue<T> extends PartitionedArrayQueue<
         int pIdx = super.heads.fromRawIdx(partition);
         int rIdx = this.tailSequence.fromRawIdx(partition);
 
-        T[] pQueue = super.queue.getPlain(partition);
+        T[] pQueue = super.queue.getPlain(rIdx);
         long[] tailSequence = this.tailSequence.getPlain(rIdx);
         while(total < limit) {
             int reserved;
