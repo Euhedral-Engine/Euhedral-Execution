@@ -136,7 +136,7 @@ public abstract class AbstractCloneablePipeline implements
         try {
             retVal = allocated.get();
         } catch (Throwable t) {
-            throw new RuntimeException("Failed to allocate the AbstractCloneablePipeline implementation.", t);
+            throw new RuntimeException("Failed to construct the AbstractCloneablePipeline implementation.", t);
         }
 
         if(createdExecutor) {

@@ -213,10 +213,12 @@ public class ExecutionManager implements SlotManager {
             this.pinnedExecutor =
                     PinnedThreadExecutor.getOrSetIfAbsent(cpus[0], name, Thread.MAX_PRIORITY,
                             false);
-            smtExec = PinnedThreadExecutor.getOrSetIfAbsent(config.cloneConfig().getCpuSet()[1],
-                    this.config.cloneConfig().shardName() + "-ExecutionManager-SMT-"
-                            + this.config.cloneConfig().coreId(), Thread.MAX_PRIORITY,
-                    false);
+            if(cpus.length > 1) {
+                smtExec = PinnedThreadExecutor.getOrSetIfAbsent(cpus[1],
+                        this.config.cloneConfig().shardName() + "-ExecutionManager-SMT-"
+                                + this.config.cloneConfig().coreId(), Thread.MAX_PRIORITY,
+                        false);
+            }
             this.logger = LoggerFactory.getLogger(name);
         }
 
@@ -434,7 +436,7 @@ public class ExecutionManager implements SlotManager {
         }
 
         long currentConcurrency = this.currentConcurrency;
-        long quota = Math.max(0, currentConcurrency - this.inFlight);
+        int quota = (int) Math.max(0, currentConcurrency - this.inFlight);
         boolean drain = (boolean) DRAIN.getOpaque(this);
         quota = drain ? bufferCount : quota;
 

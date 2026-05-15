@@ -36,7 +36,6 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
 import org.openjdk.jmh.infra.Blackhole;
-import org.openjdk.jmh.profile.AsyncProfiler;
 import org.openjdk.jmh.results.format.ResultFormatType;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.options.Options;
@@ -60,9 +59,6 @@ public class EndToEndBenchmark {
                         .withCapAdd(Capability.SYS_ADMIN)
                         .withSecurityOpts(Collections.singletonList("seccomp=unconfined")));
 
-        container.withFileSystemBind(new File(
-                        "src/test/resources/async-profiler-4.3-linux-x64/lib/libasyncProfiler.so").getAbsolutePath(),
-                "/app/lib/libasyncProfiler.so", BindMode.READ_WRITE);
         container.addFileSystemBind(testJar.getAbsolutePath(), "/app/test.jar", BindMode.READ_ONLY);
 
         container.addFileSystemBind(
@@ -78,6 +74,7 @@ public class EndToEndBenchmark {
                 .withAttachStderr(true)
                 .withCmd("java", "--add-exports", "java.base/jdk.internal.platform=ALL-UNNAMED",
                         "--add-exports", "java.base/jdk.internal.vm.annotation=ALL-UNNAMED",
+                        "--add-opens", "java.base/java.util=ALL-UNNAMED",
                         "-XX:-RestrictContended",
                         "-Dorg.slf4j.simpleLogger.defaultLogLevel=error",
                         "-cp", "/app/test.jar",
@@ -106,17 +103,11 @@ public class EndToEndBenchmark {
                             ControlPlaneBenchmark.class.getSimpleName())
                     .addProfiler("stack")
                     .addProfiler("gc")
-                    .addProfiler(AsyncProfiler.class,
-                            "libPath=/app/lib/libasyncProfiler.so;" +
-                                    "event=itimer;" +
-                                    "interval=100000;" +
-                                    "alloc=64k;" +
-                                    "output=jfr;" +
-                                    "dir=/opt/results/async-profiler")
                     .jvmArgs("-XX:-RestrictContended",
                             "--enable-native-access=ALL-UNNAMED",
                             "--add-exports", "java.base/jdk.internal.platform=ALL-UNNAMED",
                             "--add-exports", "java.base/jdk.internal.vm.annotation=ALL-UNNAMED",
+                            "--add-opens", "java.base/java.util=ALL-UNNAMED",
                             "--enable-native-access=ALL-UNNAMED",
                             "-XX:-RestrictContended",
                             "-Djava.library.path=/app/lib/libasyncProfiler.so",
@@ -128,8 +119,8 @@ public class EndToEndBenchmark {
             new Runner(opt).run();
         }
 
-        @Benchmark
-        @OperationsPerInvocation(8_000_000)
+//        @Benchmark
+//        @OperationsPerInvocation(8_000_000)
         public void benchOneProducerEightMillionOrdered(BenchmarkState state) throws Throwable {
             CountDownLatch start = new CountDownLatch(1);
             CountDownLatch end = new CountDownLatch(1);
@@ -202,8 +193,8 @@ public class EndToEndBenchmark {
             state.barrier8P.reset();
         }
 
-//        @Benchmark
-//        @OperationsPerInvocation(32_000_000)
+        @Benchmark
+        @OperationsPerInvocation(32_000_000)
         public void bench32Producers32MillionParallel(BenchmarkState state) throws Throwable {
             CountDownLatch end = new CountDownLatch(1);
             PaddedAtomicLong countDown = new PaddedAtomicLong(32_000_000);
@@ -222,7 +213,7 @@ public class EndToEndBenchmark {
             }
             state.barrier32P.await();
 
-            if (!end.await(120, TimeUnit.SECONDS)) {
+            if (!end.await(5, TimeUnit.SECONDS)) {
                 throw new RuntimeException("Stall detected. Pending: " + countDown.get());
             }
 
