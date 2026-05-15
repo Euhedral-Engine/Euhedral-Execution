@@ -2,17 +2,29 @@ package euhedral.io.flow_control;
 
 import euhedral.atomics.PaddedAtomicLong;
 import euhedral.io.frames.AbstractFrame;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import java.util.Collection;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
 import org.jctools.queues.MessagePassingQueue;
 import org.jctools.queues.SpscUnboundedArrayQueue;
 import org.reactivestreams.Publisher;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 
-@SuppressWarnings("unused")
+@SuppressWarnings({"unchecked", "unused"})
 public class DirectInputFlux implements Publisher<AbstractFrame>, Subscription {
+
+    protected static final VarHandle DOWNSTREAM;
+
+    static {
+        try {
+            DOWNSTREAM = MethodHandles.lookup()
+                    .findVarHandle(DirectInputFlux.class, "downstream", Subscriber.class);
+        } catch (Exception e) {
+            throw new ExceptionInInitializerError(e);
+        }
+    }
 
     private static long addCap(long num1, long num2) {
         long sum = num1 + num2;
@@ -26,8 +38,7 @@ public class DirectInputFlux implements Publisher<AbstractFrame>, Subscription {
     private final PaddedAtomicLong demand = new PaddedAtomicLong(0);
     private final AtomicLong bufferCount = new AtomicLong(0);
     private final SpscUnboundedArrayQueue<AbstractFrame> buffer;
-    private final AtomicReference<Subscriber<? super AbstractFrame>> downstream = new AtomicReference<>(
-            null);
+    private Subscriber<? super AbstractFrame> downstream = null;
 
     public DirectInputFlux(int chunkSize) {
         int cap = Integer.highestOneBit((chunkSize - 1) << 1);
@@ -44,7 +55,7 @@ public class DirectInputFlux implements Publisher<AbstractFrame>, Subscription {
 
     @Override
     public void subscribe(Subscriber<? super AbstractFrame> subscriber) {
-        if (this.downstream.compareAndSet(null, subscriber)) {
+        if (DOWNSTREAM.compareAndSet(this, null, subscriber)) {
             subscriber.onSubscribe(this);
         } else {
             subscriber.onError(new IllegalStateException("This class can only have 1 subscriber"));
@@ -61,7 +72,8 @@ public class DirectInputFlux implements Publisher<AbstractFrame>, Subscription {
     }
 
     public void drain() {
-        Subscriber<? super AbstractFrame> down = this.downstream.getOpaque();
+        Subscriber<? super AbstractFrame> down = (Subscriber<? super AbstractFrame>) DOWNSTREAM.getOpaque(
+                this);
         if (down != null) {
             drain(this.demand.getAcquire());
         }
@@ -89,7 +101,8 @@ public class DirectInputFlux implements Publisher<AbstractFrame>, Subscription {
     }
 
     private void drain(AbstractFrame frame) {
-        Subscriber<? super AbstractFrame> down = this.downstream.getOpaque();
+        Subscriber<? super AbstractFrame> down = (Subscriber<? super AbstractFrame>) DOWNSTREAM.getOpaque(
+                this);
         if (down != null) {
             down.onNext(frame);
         }
@@ -132,10 +145,11 @@ public class DirectInputFlux implements Publisher<AbstractFrame>, Subscription {
 
     @Override
     public void cancel() {
-        Subscriber<? super AbstractFrame> down = this.downstream.getAcquire();
+        Subscriber<? super AbstractFrame> down = (Subscriber<? super AbstractFrame>) DOWNSTREAM.getAcquire(
+                this);
         if (down != null) {
             down.onComplete();
-            this.downstream.setRelease(null);
+            DOWNSTREAM.setRelease(this, null);
         }
     }
 }
