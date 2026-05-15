@@ -16,6 +16,9 @@ import euhedral.io.test_utils.TestPipeline;
 import euhedral.io.test_utils.TestPipeline.TestExecutor;
 import euhedral.io.test_utils.TestPublisher;
 import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -38,7 +41,6 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
 import org.openjdk.jmh.infra.Blackhole;
-import org.openjdk.jmh.profile.AsyncProfiler;
 import org.openjdk.jmh.results.format.ResultFormatType;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.options.Options;
@@ -50,7 +52,7 @@ public class SteadyStateBenchmark {
 
     private static final String RUNNER = "euhedral.io.benchmarks.SteadyStateBenchmark$BenchmarkRunner";
 
-    @Test
+    @Test // Use this if you want to run on linux or your OS doesn't allow the native calls
     public void benchmark() throws Exception {
 
         File testJar = new File("target/test-jar-with-dependencies.jar");
@@ -58,11 +60,9 @@ public class SteadyStateBenchmark {
         GenericContainer<?> container = new GenericContainer<>("eclipse-temurin:25-jre")
                 .withCreateContainerCmdModifier(cmd -> cmd.getHostConfig()
                         .withCapAdd(Capability.SYS_ADMIN)
+                        .withPrivileged(true)
                         .withSecurityOpts(Collections.singletonList("seccomp=unconfined")));
 
-        container.withFileSystemBind(new File(
-                        "src/test/resources/async-profiler-4.3-linux-x64/lib/libasyncProfiler.so").getAbsolutePath(),
-                "/app/lib/libasyncProfiler.so", BindMode.READ_WRITE);
         container.addFileSystemBind(testJar.getAbsolutePath(), "/app/test.jar", BindMode.READ_ONLY);
 
         container.addFileSystemBind(
@@ -136,25 +136,22 @@ public class SteadyStateBenchmark {
     public static class BenchmarkRunner {
 
         static void main(String[] args) throws Exception {
+            Path path = Paths.get("target/results/steady-state-benchmark-result.json");
+            if (path.getParent() != null) {
+                Files.createDirectories(path.getParent());
+            }
+
             Options optSteadyState = new OptionsBuilder().include(
-                            SteadyStateBenchmark.class.getSimpleName()).addProfiler("stack")
+                            BenchmarkRunner.class.getName())
+                    .addProfiler("stack")
                     .addProfiler("gc")
-                    .addProfiler(AsyncProfiler.class,
-                            "libPath=/app/lib/libasyncProfiler.so;" +
-                                    "event=itimer;" +
-                                    "interval=100000;" +
-                                    "alloc=64k;" +
-                                    "output=jfr;" +
-                                    "dir=/opt/results/async-profiler")
                     .jvmArgs("-XX:-RestrictContended",
                             "--add-exports", "java.base/jdk.internal.platform=ALL-UNNAMED",
                             "--add-exports", "java.base/jdk.internal.vm.annotation=ALL-UNNAMED",
                             "--enable-native-access=ALL-UNNAMED",
-                            "-XX:-RestrictContended",
-                            "-Djava.library.path=/app/lib/libasyncProfiler.so",
                             "-Dorg.slf4j.simpleLogger.defaultLogLevel=error")
                     .resultFormat(ResultFormatType.JSON)
-                    .result("/opt/results/steady-state-benchmark-result.json")
+                    .result("target/results/steady-state-benchmark-result.json")
                     .build();
             new Runner(optSteadyState).run();
         }
@@ -168,7 +165,7 @@ public class SteadyStateBenchmark {
 
             state.producerPool.submit(() -> {
                 TestPublisher subscription = new TestPublisher(state.parallelFramePool);
-                subscription.reset(end, countDown);
+//                subscription.reset(end, countDown);
                 try {
                     start.await();
                 } catch (InterruptedException e) {
@@ -208,5 +205,4 @@ public class SteadyStateBenchmark {
             LockSupport.parkNanos(1_000_000_000);
         }
     }
-
 }

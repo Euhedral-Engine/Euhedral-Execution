@@ -85,7 +85,7 @@ public class DirectOutputFlux implements Publisher<AbstractFrame>, Subscription 
 
     @Override
     public void subscribe(Subscriber<? super AbstractFrame> subscriber) {
-        if (!CANCELLED.compareAndSet(this, true, false) || !SUBSCRIBER.compareAndSet(this, null,
+        if (!CANCELLED.compareAndSet(this, true, false) && !SUBSCRIBER.compareAndSet(this, null,
                 subscriber)) {
             subscriber.onError(new IllegalAccessException("This class already has a subscriber"));
             return;

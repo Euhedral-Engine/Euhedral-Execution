@@ -157,8 +157,8 @@ public abstract class IngestSequencer extends FluxNode implements AutoCloseable 
             pull(drainBuffer, maxFill - totalDrain);
         }
         long now = System.nanoTime();
-        drainRecorder.getAcquire().record(now, totalDrain + drainBuffer.drainCount, true);
-        drainBytesRecorder.getAcquire().record(now, totalBytesDrained + drainBuffer.drainedBytes, true);
+        drainRecorder.getPlain().record(now, totalDrain + drainBuffer.drainCount, true);
+        drainBytesRecorder.getPlain().record(now, totalBytesDrained + drainBuffer.drainedBytes, true);
         hookOnDrain(demand);
 
         totalDrain += drainBuffer.drainCount;
@@ -187,19 +187,19 @@ public abstract class IngestSequencer extends FluxNode implements AutoCloseable 
     }
 
     public FlowRecorder getFillRecorder() {
-        return this.fillRecorder.get();
+        return this.fillRecorder.getPlain();
     }
 
     public FlowRecorder getFillBytesRecorder() {
-        return this.fillBytesRecorder.get();
+        return this.fillBytesRecorder.getPlain();
     }
 
     public FlowRecorder getDrainRecorder() {
-        return this.drainRecorder.get();
+        return this.drainRecorder.getPlain();
     }
 
     public FlowRecorder getDrainBytesRecorder() {
-        return this.drainRecorder.get();
+        return this.drainRecorder.getPlain();
     }
 
     public boolean isEmpty() {
@@ -249,8 +249,8 @@ public abstract class IngestSequencer extends FluxNode implements AutoCloseable 
             long count = (long) TOTAL_COUNT.getAndAdd(IngestSequencer.this, 1) + 1;
             if ((count & 63) == 0) {
                 long now = System.nanoTime();
-                fillRecorder.getAcquire().record(now, 64, true);
-                fillBytesRecorder.getAcquire().record(now, adjustedSize, true);
+                fillRecorder.getPlain().record(now, 64, true);
+                fillBytesRecorder.getPlain().record(now, adjustedSize, true);
             }
 
             if (wakeHook != null) {

@@ -1,9 +1,6 @@
 package euhedral.io.benchmarks;
 
-import com.github.dockerjava.api.async.ResultCallback;
-import com.github.dockerjava.api.command.ExecCreateCmdResponse;
-import com.github.dockerjava.api.model.Capability;
-import com.github.dockerjava.api.model.Frame;
+import euhedral.atomics.PaddedLongAdder;
 import euhedral.io.DRRScheduler;
 import euhedral.io.ExecutionManager;
 import euhedral.io.config.DRRConfig;
@@ -13,14 +10,22 @@ import euhedral.io.test_utils.TestFrame;
 import euhedral.io.test_utils.TestPipeline;
 import euhedral.io.test_utils.TestPipeline.TestExecutor;
 import euhedral.io.test_utils.TestPublisher;
+import com.github.dockerjava.api.async.ResultCallback;
+import com.github.dockerjava.api.command.ExecCreateCmdResponse;
+import com.github.dockerjava.api.model.Frame;
+
 import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import org.jctools.util.PaddedAtomicLong;
+import java.util.concurrent.locks.LockSupport;
+
 import org.junit.jupiter.api.Test;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -38,7 +43,7 @@ import org.openjdk.jmh.annotations.Warmup;
 import org.openjdk.jmh.infra.Blackhole;
 import org.openjdk.jmh.results.format.ResultFormatType;
 import org.openjdk.jmh.runner.Runner;
-import org.openjdk.jmh.runner.options.Options;
+import org.openjdk.jmh.runner.options.ChainedOptionsBuilder;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 import org.testcontainers.containers.BindMode;
 import org.testcontainers.containers.GenericContainer;
@@ -47,17 +52,17 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @Testcontainers
 public class EndToEndBenchmark {
 
-    private static final String RUNNER = "euhedral.io.benchmarks.EndToEndBenchmark$ControlPlaneBenchmark";
+    private static final String RUNNER = "euhedral.io.benchmarks.EndToEndBenchmark$BenchmarkRunner";
 
-    @Test
+    @Test // Use this if you want to run on linux or your OS doesn't allow the native calls
     public void benchmark() throws Exception {
 
         File testJar = new File("target/test-jar-with-dependencies.jar");
 
-        GenericContainer<?> container = new GenericContainer<>("eclipse-temurin:25-jre")
-                .withCreateContainerCmdModifier(cmd -> cmd.getHostConfig()
-                        .withCapAdd(Capability.SYS_ADMIN)
-                        .withSecurityOpts(Collections.singletonList("seccomp=unconfined")));
+        GenericContainer<?> container =
+                new GenericContainer<>("eclipse-temurin:25-jre").withCreateContainerCmdModifier(
+                        cmd -> cmd.getHostConfig().withPrivileged(true)
+                                .withSecurityOpts(Collections.singletonList("seccomp=unconfined")));
 
         container.addFileSystemBind(testJar.getAbsolutePath(), "/app/test.jar", BindMode.READ_ONLY);
 
@@ -67,18 +72,15 @@ public class EndToEndBenchmark {
         container.withCommand("tail", "-f", "/dev/null");
         container.start();
 
-        container.execInContainer("sh", "-c",
-                "apk update && apk add libstdc++ g++ gcompat libc6-compat");
-        ExecCreateCmdResponse execCreateCmdResponse = container.getDockerClient()
-                .execCreateCmd(container.getContainerId()).withAttachStdout(true)
-                .withAttachStderr(true)
-                .withCmd("java", "--add-exports", "java.base/jdk.internal.platform=ALL-UNNAMED",
-                        "--add-exports", "java.base/jdk.internal.vm.annotation=ALL-UNNAMED",
-                        "--add-opens", "java.base/java.util=ALL-UNNAMED",
-                        "-XX:-RestrictContended",
-                        "-Dorg.slf4j.simpleLogger.defaultLogLevel=error",
-                        "-cp", "/app/test.jar",
-                        RUNNER).exec();
+        ExecCreateCmdResponse execCreateCmdResponse =
+                container.getDockerClient().execCreateCmd(container.getContainerId())
+                        .withAttachStdout(true).withAttachStderr(true)
+                        .withCmd("java", "--add-exports",
+                                "java.base/jdk.internal.platform=ALL-UNNAMED", "--add-exports",
+                                "java.base/jdk.internal.vm.annotation=ALL-UNNAMED",
+                                "-XX:-RestrictContended",
+                                "-Dorg.slf4j.simpleLogger.defaultLogLevel=error", "-cp",
+                                "/app/test.jar", RUNNER).exec();
 
         container.getDockerClient().execStartCmd(execCreateCmdResponse.getId())
                 .exec(new ResultCallback.Adapter<Frame>() {
@@ -90,45 +92,48 @@ public class EndToEndBenchmark {
                 }).awaitCompletion();
     }
 
-    @BenchmarkMode({Mode.All})
+    @BenchmarkMode({Mode.SampleTime, Mode.Throughput})
     @OutputTimeUnit(TimeUnit.NANOSECONDS)
     @State(Scope.Benchmark)
-    @Warmup(iterations = 3, time = 5, timeUnit = TimeUnit.SECONDS)
+    @Warmup(iterations = 3, time = 10, timeUnit = TimeUnit.SECONDS)
     @Measurement(iterations = 5, time = 20, timeUnit = TimeUnit.SECONDS)
     @Fork(value = 1)
-    public static class ControlPlaneBenchmark {
+    public static class BenchmarkRunner {
 
-        static void main(String[] args) throws Exception {
-            Options opt = new OptionsBuilder().include(
-                            ControlPlaneBenchmark.class.getSimpleName())
-                    .addProfiler("stack")
-                    .addProfiler("gc")
-                    .jvmArgs("-XX:-RestrictContended",
-                            "--enable-native-access=ALL-UNNAMED",
+        private static final int M8 = 8_000_000;
+        private static final int M32 = 32_000_000;
+
+         static void main(String[] args) throws Exception {
+            ChainedOptionsBuilder opt = new OptionsBuilder().include(
+                            EndToEndBenchmark.class.getSimpleName() + "."
+                                    + BenchmarkRunner.class.getSimpleName())
+//                    .addProfiler("gc")
+//                    .addProfiler("perf", "events=cycles,instructions,cache-misses,L2-loads,L2-load-misses")
+                    .jvmArgs("-XX:+RestrictContended", "-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED",
                             "--add-exports", "java.base/jdk.internal.platform=ALL-UNNAMED",
                             "--add-exports", "java.base/jdk.internal.vm.annotation=ALL-UNNAMED",
                             "--add-opens", "java.base/java.util=ALL-UNNAMED",
-                            "--enable-native-access=ALL-UNNAMED",
-                            "-XX:-RestrictContended",
-                            "-Djava.library.path=/app/lib/libasyncProfiler.so",
-                            "-Dorg.slf4j.simpleLogger.defaultLogLevel=error"
-                    )
-                    .resultFormat(ResultFormatType.JSON)
-                    .result("/opt/results/e2e-benchmark-result.json")
-                    .build();
-            new Runner(opt).run();
+                            "-Dorg.slf4j.simpleLogger.defaultLogLevel=error");
+            if (args.length > 0) {
+                Path output = Paths.get(args[0]);
+                Files.createDirectories(output);
+                opt.resultFormat(ResultFormatType.JSON)
+                        .result(output.resolve("e2e-benchmark-result.json").toAbsolutePath()
+                                .toString());
+            }
+
+            new Runner(opt.build()).run();
         }
 
 //        @Benchmark
-//        @OperationsPerInvocation(8_000_000)
-        public void benchOneProducerEightMillionOrdered(BenchmarkState state) throws Throwable {
+//        @OperationsPerInvocation(M8)
+        public void benchOneProducerEightMillionOrdered(BenchmarkState state) {
+            state.counter.reset();
             CountDownLatch start = new CountDownLatch(1);
-            CountDownLatch end = new CountDownLatch(1);
-            PaddedAtomicLong countDown = new PaddedAtomicLong(8_000_000);
 
             state.producerPool.submit(() -> {
                 TestPublisher subscription = new TestPublisher(state.orderedFramePool);
-//                subscription.reset(end, countDown);
+                subscription.reset(null, state.counter);
                 try {
                     start.await();
                 } catch (InterruptedException e) {
@@ -138,21 +143,22 @@ public class EndToEndBenchmark {
             });
             start.countDown();
 
-            if (!end.await(60, TimeUnit.SECONDS)) {
-                throw new RuntimeException("Stall detected. Pending: " + countDown.get());
+            long deadline = System.nanoTime() + TimeUnit.MINUTES.toNanos(1);
+            long sum = sum(deadline, M8, state.counter);
+            if (sum < M8) {
+                throw new RuntimeException("Stall detected. Pending: " + (M8 - sum));
             }
         }
 
 //        @Benchmark
-//        @OperationsPerInvocation(32_000_000)
+//        @OperationsPerInvocation(M32)
         public void benchOneProducer32MillionParallel(BenchmarkState state) throws Throwable {
+            state.counter.reset();
             CountDownLatch start = new CountDownLatch(1);
-            CountDownLatch end = new CountDownLatch(1);
-            PaddedAtomicLong countDown = new PaddedAtomicLong(32_000_000);
 
             state.producerPool.submit(() -> {
                 TestPublisher subscription = new TestPublisher(state.parallelFramePool);
-//                subscription.reset(end, countDown);
+                subscription.reset(null, state.counter);
                 try {
                     start.await();
                 } catch (InterruptedException e) {
@@ -162,23 +168,25 @@ public class EndToEndBenchmark {
             });
             start.countDown();
 
-            if (!end.await(60, TimeUnit.SECONDS)) {
-                throw new RuntimeException("Stall detected. Pending: " + countDown.get());
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+            long sum = sum(deadline, M32, state.counter);
+            if (sum < M32) {
+                throw new RuntimeException("Stall detected. Pending: " + (M32 - sum));
             }
         }
 
-        //        @Benchmark
-//        @OperationsPerInvocation(8_000_000)
+//        @Benchmark
+//        @OperationsPerInvocation(M8)
         public void benchEightProducersEightMillionParallel(BenchmarkState state) throws Throwable {
+            state.counter.reset();
             CountDownLatch end = new CountDownLatch(1);
-            PaddedAtomicLong countDown = new PaddedAtomicLong(8_000_000);
 
             for (int i = 0; i < 8; i++) {
                 final int id = i;
                 state.producerPool.submit(() -> {
                     try {
                         state.barrier8P.await();
-//                        state.publishers[id].reset(end, countDown);
+                        state.publishers[id].reset(end, state.counter);
                         state.controlPlane.ingest(state.publishers[id]);
                     } catch (Exception e) {
                         e.printStackTrace();
@@ -186,25 +194,25 @@ public class EndToEndBenchmark {
                 });
             }
             state.barrier8P.await();
-
-            if (!end.await(60, TimeUnit.SECONDS)) {
-                throw new RuntimeException("Stall detected. Pending: " + countDown.get());
-            }
             state.barrier8P.reset();
+
+            long deadline = System.nanoTime() + TimeUnit.MINUTES.toNanos(1);
+            long sum = sum(deadline, M8, state.counter);
+            if (sum < M8) {
+                throw new RuntimeException("Stall detected. Pending: " + (M8 - sum));
+            }
         }
 
         @Benchmark
-        @OperationsPerInvocation(32_000_000)
+        @OperationsPerInvocation(M32)
         public void bench32Producers32MillionParallel(BenchmarkState state) throws Throwable {
-            CountDownLatch end = new CountDownLatch(1);
-            PaddedAtomicLong countDown = new PaddedAtomicLong(32_000_000);
-
+            state.counter.reset();
             for (int i = 0; i < 32; i++) {
                 final int id = i;
                 state.producerPool.submit(() -> {
                     try {
                         state.barrier32P.await();
-//                        state.publishers[id].reset(end, countDown);
+                        state.publishers[id].reset(null, state.counter);
                         state.controlPlane.ingest(state.publishers[id]);
                     } catch (Exception e) {
                         e.printStackTrace();
@@ -212,17 +220,36 @@ public class EndToEndBenchmark {
                 });
             }
             state.barrier32P.await();
-
-            if (!end.await(5, TimeUnit.SECONDS)) {
-                throw new RuntimeException("Stall detected. Pending: " + countDown.get());
-            }
-
             state.barrier32P.reset();
+
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+            long sum = sum(deadline, M32, state.counter);
+            if (sum < M32) {
+                throw new RuntimeException("Stall detected. Pending: " + (M32 - sum));
+            }
+        }
+
+        private static long sum(long deadline, int target, PaddedLongAdder counter) {
+            long sum = 0;
+            int spin = 0;
+            while (System.nanoTime() < deadline) {
+                if ((spin++ & 31) == 0) {
+                    sum = counter.sum();
+                    if (sum >= target) {
+                        break;
+                    }
+                } else {
+                    Thread.onSpinWait();
+                }
+            }
+            return sum;
         }
 
         @State(Scope.Benchmark)
         public static class BenchmarkState {
 
+            public PaddedLongAdder counter =
+                    new PaddedLongAdder(32, true, true);
             public TestFrame[] orderedFramePool = TestFrame.generateOrdered(8_000_000);
             public TestFrame[] parallelFramePool = TestFrame.generateParallel(32_000_000);
             public TestPublisher[] publishers = new TestPublisher[32];
@@ -248,6 +275,12 @@ public class EndToEndBenchmark {
                 for (int i = 0; i < publishers.length; i++) {
                     publishers[i] = new TestPublisher(TestFrame.generateParallel(1_000_000));
                 }
+                LockSupport.parkNanos(500_000);
+            }
+
+            @TearDown(Level.Iteration)
+            public void coolDown() throws Exception {
+                Thread.sleep(1000);
             }
 
             @TearDown(Level.Trial)

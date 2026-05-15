@@ -1,19 +1,23 @@
 package euhedral.io.test_utils;
 
+import euhedral.atomics.PaddedLongAdder;
 import euhedral.hardware_utils.ThreadTools;
 import euhedral.hashing.HasherApi;
 import euhedral.io.control_plane.RoutingPolicy;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.impl.FrameManager;
+
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ThreadLocalRandom;
-import org.jctools.util.PaddedAtomicLong;
 
 public final class TestFrame extends AbstractFrame {
     public static final long PASSWORD = 123;
 
-    public long startNs;
-    public PaddedAtomicLong countDown;
+    public CountDownLatch trigger;
+    public PaddedLongAdder counters;
     public boolean ordered;
+
+    public boolean recycle;
 
     public TestFrame(long idHash, FrameManager<Void, TestFrame> recycler) {
         this(idHash, true, recycler);
@@ -79,8 +83,10 @@ public final class TestFrame extends AbstractFrame {
 
     @Override
     public void doFinally() {
-        if(!recycle() && countDown != null) {
-            countDown.decrementAndGet();
-        }
+//        if(!(recycle && recycle()) && countDown != null) {
+//            if(countDown.decrementAndGet() == 0 && trigger != null) {
+//                trigger.countDown();
+//            }
+//        }
     }
 }

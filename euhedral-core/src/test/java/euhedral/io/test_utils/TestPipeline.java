@@ -22,18 +22,17 @@ public class TestPipeline extends AbstractCloneablePipeline {
 
     @Override
     public TestPipeline hookOnClone(CloneConfig cloneConfig) {
-        return new TestPipeline(name, cloneConfig, this.cacheManager, this.slotManager,
-                this.executor);
+        SlotManager manager = this.slotManager.clone(cloneConfig);
+        return new TestPipeline(name, cloneConfig, this.cacheManager.clone(cloneConfig), manager,
+                this.executor.clone(cloneConfig, manager.getPinnedExecutor()));
     }
 
     public static class TestExecutor extends AbstractExecutor {
 
-        private final PinnedThreadExecutor executor;
         private final Blackhole bh;
 
         public TestExecutor(PinnedThreadExecutor executor, Blackhole bh) {
             super(executor);
-            this.executor = executor;
             this.bh = bh;
         }
 
@@ -42,11 +41,12 @@ public class TestPipeline extends AbstractCloneablePipeline {
             if(bh != null) {
                 bh.consume(frame);
             }
+            ((TestFrame) frame).counters.increment(this.executorService.getCpu());
         }
 
         @Override
         public AbstractExecutor clone(CloneConfig cloneConfig) {
-            return new TestExecutor(this.executor, this.bh);
+            return new TestExecutor(this.executorService, this.bh);
         }
 
         @Override
