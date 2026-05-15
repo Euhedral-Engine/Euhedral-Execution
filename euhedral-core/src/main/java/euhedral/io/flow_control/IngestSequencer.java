@@ -7,11 +7,10 @@ import euhedral.io.frames.AbstractFrame;
 import euhedral.io.frames.QueueFrame;
 import euhedral.io.utils.DrainBuffer;
 import euhedral.io.utils.FlowRecorder;
-
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import java.util.BitSet;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.LockSupport;
-
 import lombok.Setter;
 import org.jctools.queues.MpscUnboundedXaddArrayQueue;
 import org.jctools.util.PaddedAtomicLong;
@@ -19,6 +18,17 @@ import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 
 public abstract class IngestSequencer extends FluxNode implements AutoCloseable {
+    protected static final VarHandle TOTAL_COUNT;
+    protected static final VarHandle TOTAL_BYTES;
+
+    static {
+        try {
+            TOTAL_COUNT = MethodHandles.lookup().findVarHandle(IngestSequencer.class, "totalCount", long.class);
+            TOTAL_BYTES = MethodHandles.lookup().findVarHandle(IngestSequencer.class, "totalQueuedSizeBytes", long.class);
+        } catch (Exception e) {
+            throw new ExceptionInInitializerError(e);
+        }
+    }
 
     protected final int chunkSize;
     protected final double smoothingFactor;
@@ -32,8 +42,8 @@ public abstract class IngestSequencer extends FluxNode implements AutoCloseable 
     protected final PaddedAtomicReference<FlowRecorder> drainRecorder;
     protected final PaddedAtomicReference<FlowRecorder> drainBytesRecorder;
 
-    protected final AtomicLong totalCount = new AtomicLong(0);
-    protected final AtomicLong totalQueuedSizeBytes = new AtomicLong(0);
+    protected long totalCount = 0L;
+    protected long totalQueuedSizeBytes = 0L;
     protected long totalQueueWeight = 0;
 
     protected int head = 0;
@@ -105,7 +115,7 @@ public abstract class IngestSequencer extends FluxNode implements AutoCloseable 
         long totalBytesDrained = 0;
         long totalQueueWeight = 0;
 
-        long initialCount = totalCount.get();
+        long initialCount = (long) TOTAL_COUNT.getOpaque(this);
         for (int i = 0; i < maxFill && cycles <= queueRing.length && initialCount > 0;) {
             QueueFrame queue = queueRing[head];
             QueueStats stats = queueStats[head];
@@ -138,8 +148,8 @@ public abstract class IngestSequencer extends FluxNode implements AutoCloseable 
             head = (head + 1) & mask;
         }
         if (totalDrain > 0) {
-            totalCount.getAndAdd(-totalDrain);
-            totalQueuedSizeBytes.getAndAdd(-totalBytesDrained);
+            TOTAL_COUNT.getAndAdd(this, -totalDrain);
+            TOTAL_BYTES.getAndAdd(this, -totalBytesDrained);
             this.totalQueueWeight = totalQueueWeight;
         }
         drainBuffer.reset();
@@ -173,7 +183,7 @@ public abstract class IngestSequencer extends FluxNode implements AutoCloseable 
     }
 
     public long getCount() {
-        return totalCount.get();
+        return (long) TOTAL_COUNT.getOpaque(this);
     }
 
     public FlowRecorder getFillRecorder() {
@@ -193,7 +203,7 @@ public abstract class IngestSequencer extends FluxNode implements AutoCloseable 
     }
 
     public boolean isEmpty() {
-        return totalCount.get() <= 0;
+        return (long) TOTAL_COUNT.getOpaque(this) <= 0;
     }
 
     @Override
@@ -235,8 +245,8 @@ public abstract class IngestSequencer extends FluxNode implements AutoCloseable 
             long adjustedSize = size <= 0 ? 256 : size;
             queueStats[idx].avgFrameSize.getAndAccumulate(adjustedSize, this::ewma);
 
-            totalQueuedSizeBytes.addAndGet(adjustedSize);
-            long count = totalCount.incrementAndGet();
+            TOTAL_BYTES.getAndAdd(IngestSequencer.this, adjustedSize);
+            long count = (long) TOTAL_COUNT.getAndAdd(IngestSequencer.this, 1) + 1;
             if ((count & 63) == 0) {
                 long now = System.nanoTime();
                 fillRecorder.getAcquire().record(now, 64, true);

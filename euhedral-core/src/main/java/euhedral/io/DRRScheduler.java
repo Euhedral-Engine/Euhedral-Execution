@@ -22,10 +22,10 @@ import euhedral.io.utils.DrainBuffer;
 import euhedral.io.utils.FlowRecorder.FlowSnapshot;
 import euhedral.io.utils.MathFunctions;
 import euhedral.io.utils.ObjectSizer;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import java.util.Arrays;
 import java.util.concurrent.Callable;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.reactivestreams.Publisher;
@@ -34,48 +34,21 @@ import org.slf4j.LoggerFactory;
 
 public class DRRScheduler extends IngestSequencer implements CacheManager, CloneableObject {
 
-    protected final Logger logger;
-    protected final DRRConfig config;
-    protected final DRRMetrics metrics;
-    protected final int coreId;
+    protected static final VarHandle BYTE_CAP;
+    protected static final VarHandle SNAPSHOT;
 
-    protected final AtomicDouble capFactor = new AtomicDouble(1d);
-
-    protected Callable<Double> downstreamPressure;
-
-    protected final AtomicReference<CoreSnapshot> snapshot = new AtomicReference<>(null);
-    protected final AtomicLong totalBytesCap = new AtomicLong(0);
-
-    protected UpstreamQueue upstream;
-
-    public DRRScheduler(@NonNull DRRConfig config, @Nullable CoreSnapshot snapshot) {
-        this(config, snapshot, () -> 0.0);
-    }
-
-    public DRRScheduler(@NonNull DRRConfig config, @Nullable CoreSnapshot snapshot,
-            @NonNull Callable<Double> downstreamPressure) {
-        super(getName(config), config.cloneConfig() != null ? config.cloneConfig().coreId() : 0,
-                Runtime.getRuntime().availableProcessors() >>> 1, getChunkSize(config.cloneConfig()));
-        this.logger = LoggerFactory.getLogger(getName(config));
-        this.config = config;
-        this.snapshot.lazySet(snapshot);
-        this.downstreamPressure = downstreamPressure;
-        if (snapshot != null) {
-            this.totalBytesCap.lazySet(snapshot.memoryLimit());
-            this.coreId = snapshot.coreId();
-        } else {
-            this.totalBytesCap.lazySet(256 * 1024 * 1024);
-            this.coreId = -1;
+    static {
+        try {
+            BYTE_CAP = MethodHandles.lookup().findVarHandle(DRRScheduler.class, "totalBytesCap", long.class);
+            SNAPSHOT = MethodHandles.lookup().findVarHandle(DRRScheduler.class, "snapshot", CoreSnapshot.class);
+        } catch (Exception e) {
+            throw new ExceptionInInitializerError(e);
         }
-
-        this.metrics = new DRRMetrics(config.metricPrefix(), coreId, capFactor, totalQueuedSizeBytes,
-                config.registry());
-
     }
 
     public static String getName(DRRConfig config) {
         return config.cloneConfig() != null ? config.cloneConfig().shardName() + "-DRRScheduler-"
-                                            + config.cloneConfig().coreId() : "DRRScheduler";
+                                              + config.cloneConfig().coreId() : "DRRScheduler";
     }
 
     private static int getChunkSize(CloneConfig config) {
@@ -87,7 +60,7 @@ public class DRRScheduler extends IngestSequencer implements CacheManager, Clone
 
         CpuCacheLayout layout = SystemInfo.getCacheLayout(config.getCpuSet()[0]);
         long L2 = layout.bytesL2();
-        if(config.getCpuSet().length != layout.sharesL2()) {
+        if (config.getCpuSet().length != layout.sharesL2()) {
             L2 /= layout.sharesL2();
         }
 
@@ -96,6 +69,45 @@ public class DRRScheduler extends IngestSequencer implements CacheManager, Clone
         chunk = Integer.highestOneBit(chunk);
         chunk /= ObjectSizer.POINTER_SIZE;
         return Math.max(chunk, 512);
+    }
+
+    protected final Logger logger;
+    protected final DRRConfig config;
+    protected final DRRMetrics metrics;
+    protected final int coreId;
+    protected final AtomicDouble capFactor = new AtomicDouble(1d);
+
+    protected Callable<Double> downstreamPressure;
+    protected UpstreamQueue upstream;
+
+    protected CoreSnapshot snapshot;
+    protected long totalBytesCap;
+
+    public DRRScheduler(@NonNull DRRConfig config, @Nullable CoreSnapshot snapshot) {
+        this(config, snapshot, () -> 0.0);
+    }
+
+    public DRRScheduler(@NonNull DRRConfig config, @Nullable CoreSnapshot snapshot,
+            @NonNull Callable<Double> downstreamPressure) {
+        super(getName(config), config.cloneConfig() != null ? config.cloneConfig().coreId() : 0,
+                Runtime.getRuntime().availableProcessors() >>> 1,
+                getChunkSize(config.cloneConfig()));
+        this.logger = LoggerFactory.getLogger(getName(config));
+        this.config = config;
+        this.snapshot = snapshot;
+        this.downstreamPressure = downstreamPressure;
+        if (snapshot != null) {
+            this.totalBytesCap = snapshot.memoryLimit();
+            this.coreId = snapshot.coreId();
+        } else {
+            this.totalBytesCap = 256L * 1024L * 1024L;
+            this.coreId = -1;
+        }
+
+        this.metrics = new DRRMetrics(config.metricPrefix(), coreId, capFactor,
+                () -> (long) TOTAL_BYTES.getOpaque(DRRScheduler.this),
+                config.registry());
+
     }
 
     @Override
@@ -118,9 +130,9 @@ public class DRRScheduler extends IngestSequencer implements CacheManager, Clone
         drainRecorder.getAcquire().reset(false);
         drainBytesRecorder.getAcquire().reset(false);
 
-        totalCount.set(0);
+        TOTAL_COUNT.setOpaque(this, 0);
+        TOTAL_BYTES.setOpaque(this, 0);
         totalQueueWeight = 0;
-        totalQueuedSizeBytes.set(0);
     }
 
     @Override
@@ -217,7 +229,7 @@ public class DRRScheduler extends IngestSequencer implements CacheManager, Clone
     @Override
     public long getMaxQueuedBytes() {
         double cap = Math.min(0.8, this.capFactor.getAcquire());
-        CoreSnapshot snapshot = this.snapshot.getOpaque();
+        CoreSnapshot snapshot = (CoreSnapshot) SNAPSHOT.getOpaque(this);
         if (snapshot != null) {
             return (long) (snapshot.memoryLimit() * cap);
         }
@@ -235,8 +247,9 @@ public class DRRScheduler extends IngestSequencer implements CacheManager, Clone
         if (snapshot == null) {
             return;
         }
-        this.snapshot.lazySet(snapshot);;
-        this.totalBytesCap.lazySet(snapshot.memoryLimit());
+        SNAPSHOT.setRelease(this, snapshot);
+        BYTE_CAP.setRelease(this, snapshot.memoryLimit());
+
         double pressure;
         try {
             pressure = clampDouble(this.downstreamPressure.call(), 0.0, 1.0);
@@ -275,7 +288,7 @@ public class DRRScheduler extends IngestSequencer implements CacheManager, Clone
 
     @Override
     public boolean isDrained() {
-        return totalCount.get() == 0;
+        return super.isEmpty();
     }
 
     @Override
@@ -302,6 +315,6 @@ public class DRRScheduler extends IngestSequencer implements CacheManager, Clone
 
     @Override
     public DRRScheduler clone(CloneConfig cloneConfig) {
-        return new DRRScheduler(config.clone(cloneConfig), snapshot.get());
+        return new DRRScheduler(config.clone(cloneConfig), (CoreSnapshot) SNAPSHOT.getAcquire(this));
     }
 }
