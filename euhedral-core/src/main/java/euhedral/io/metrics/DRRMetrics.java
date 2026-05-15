@@ -7,7 +7,7 @@ import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Supplier;
 
 public class DRRMetrics implements AutoCloseable {
     public final DistributionSummary subQBacklogSummary;
@@ -16,7 +16,7 @@ public class DRRMetrics implements AutoCloseable {
     private final List<Meter> meters = new ArrayList<>();
 
     public DRRMetrics(String metricPrefix, int coreId, AtomicDouble capFactor,
-            AtomicLong totalQueuedSizeBytes, MeterRegistry registry) {
+            Supplier<Long> totalQueuedSizeBytes, MeterRegistry registry) {
         if (registry != null) {
             String tag = String.valueOf(coreId);
 

@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.List;
 import org.awaitility.Awaitility;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedConstruction;
@@ -34,20 +35,13 @@ import reactor.core.publisher.Flux;
 class ControlPlaneTest {
 
     private ControlPlaneShard mockShard;
-    private MockedStatic<EffectiveTopology> mockMapper;
-    private MockedStatic<SystemInfo> mockSysInfo;
-    private MockedConstruction<FluxResourceMonitor> mockResourceMonitor;
-    private HardwareUtilization mockUtilization;
+    private final static MockedStatic<EffectiveTopology> mockMapper = Mockito.mockStatic(EffectiveTopology.class);;
+    private final static MockedStatic<SystemInfo> mockSysInfo = Mockito.mockStatic(SystemInfo.class);;
+    private static MockedConstruction<FluxResourceMonitor> mockResourceMonitor;
+    private static HardwareUtilization mockUtilization;
 
-    @BeforeEach
-    public void setup() {
-        ControlPlane plane = ControlPlane.get();
-        if (plane != null) {
-            plane.close();
-        }
-        mockShard = mock(ControlPlaneShard.class);
-        mockMapper = Mockito.mockStatic(EffectiveTopology.class);
-        mockSysInfo = Mockito.mockStatic(SystemInfo.class);
+    @BeforeAll
+    static void init() {
         mockResourceMonitor = Mockito.mockConstructionWithAnswer(FluxResourceMonitor.class, invocation -> {
             Class<?> clazz = invocation.getMethod().getReturnType();
             if(clazz.equals(Void.TYPE)) {
@@ -61,11 +55,22 @@ class ControlPlaneTest {
             }
             return mock(FluxResourceMonitor.class);
         });
+    }
+
+    @BeforeEach
+    public void setup() {
+        ControlPlane plane = ControlPlane.get();
+        if (plane != null) {
+            plane.close();
+        }
+        mockShard = mock(ControlPlaneShard.class);
         mockUtilization = mock(HardwareUtilization.class);
     }
 
     @Test
     public void testInitialization() throws Exception {
+        mockMapper.reset();
+        mockSysInfo.reset();
         EffectiveSystemTopology effectiveTopology = getSystemTopology();
 
         SocketSnapshot[] snapshots = new SocketSnapshot[effectiveTopology.effectiveSockets()
@@ -103,6 +108,8 @@ class ControlPlaneTest {
 
     @Test
     public void testGlobalRebalance() throws Exception {
+        mockMapper.reset();
+        mockSysInfo.reset();
         EffectiveSystemTopology effectiveTopology = getSystemTopology();
 
         SocketSnapshot[] snapshots = new SocketSnapshot[effectiveTopology.effectiveSockets()

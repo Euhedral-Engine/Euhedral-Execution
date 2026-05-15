@@ -247,8 +247,8 @@ public class ControlPlane implements AutoCloseable {
             }
         }
 
-        this.activeShardIds.set(nextSockets);
-        this.reverseMapping.set(reverseMapping);
+        this.activeShardIds.lazySet(nextSockets);
+        this.reverseMapping.lazySet(reverseMapping);
 
         this.ingestController.get().setDrain(false);
         if (!this.primed.getOpaque()) {
@@ -290,7 +290,7 @@ public class ControlPlane implements AutoCloseable {
                 break;
             }
         }
-        this.activeShardIds.lazySet(weightedShardMap);
+        this.weightedShardMap.lazySet(weightedShardMap);
     }
 
     protected void startShard(int shardId, SocketSnapshot snapshot,
