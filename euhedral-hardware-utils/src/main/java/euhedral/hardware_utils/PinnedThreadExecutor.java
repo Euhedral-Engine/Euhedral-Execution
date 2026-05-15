@@ -14,8 +14,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.LockSupport;
 import lombok.Getter;
 import org.jspecify.annotations.NonNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public final class PinnedThreadExecutor extends AbstractExecutorService implements AutoCloseable {
+    private static final Logger LOGGER = LoggerFactory.getLogger(PinnedThreadExecutor.class);
 
     private static final Cleaner CLEANER = Cleaner.create();
     private static final ConcurrentHashMap<Long, WeakReference<PinnedThreadExecutor>> PINNED_EXECUTORS = new ConcurrentHashMap<>(
@@ -82,8 +85,7 @@ public final class PinnedThreadExecutor extends AbstractExecutorService implemen
 
                     runnable.run();
                 } catch (Throwable e) {
-                    System.out.printf("PinnedThreadExecutor: [%s] encountered an error: %s\n", this.name,
-                            e);
+                    LOGGER.error("PinnedThreadExecutor: [{}] encountered an error.", this.name, e);
                 } finally {
                     ThreadTools.releaseAffinity();
                 }
@@ -108,8 +110,7 @@ public final class PinnedThreadExecutor extends AbstractExecutorService implemen
 
     public void start(String name, int priority, boolean daemon) {
         if(!isShutdown.compareAndSet(true, false)) {
-            System.err.println("This PinnedThreadExecutor is still running.\n" + Arrays.toString(
-                    Thread.currentThread().getStackTrace()));
+            LOGGER.debug("PinnedThreadExecutor: [{}] is already started\n{}.", this.name, Arrays.toString(Thread.currentThread().getStackTrace()));
             return;
         }
         this.name = name;
@@ -254,7 +255,7 @@ public final class PinnedThreadExecutor extends AbstractExecutorService implemen
             executor.shutdownNow();
 
             PINNED_EXECUTORS.remove(cpu);
-            System.out.println("Cleaned up CPU " + cpu);
+            LOGGER.info("Cleaned up PinnedThreadExecutor [{}] CPU [{}]", executor.name, cpu);
         }
     }
 }

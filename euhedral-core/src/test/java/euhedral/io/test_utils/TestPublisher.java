@@ -1,10 +1,11 @@
 package euhedral.io.test_utils;
 
+import euhedral.atomics.PaddedLongAdder;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.impl.FrameManager;
 import java.util.concurrent.CountDownLatch;
+
 import lombok.Getter;
-import org.jctools.util.PaddedAtomicLong;
 import org.reactivestreams.Publisher;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
@@ -14,7 +15,7 @@ public class TestPublisher implements Publisher<AbstractFrame>, Subscription {
     @Getter
     private final TestFrame[] myFrames;
 
-    private PaddedAtomicLong countDown;
+    private PaddedLongAdder counters;
     private CountDownLatch trigger;
     private Subscriber<? super AbstractFrame> subscriber;
     private int internalIter = 0;
@@ -26,8 +27,8 @@ public class TestPublisher implements Publisher<AbstractFrame>, Subscription {
         this.myFrames = frames;
     }
 
-    public void reset(CountDownLatch trigger, PaddedAtomicLong countDown) {
-        this.countDown = countDown;
+    public void reset(CountDownLatch trigger, PaddedLongAdder counters) {
+        this.counters = counters;
         this.trigger = trigger;
         this.internalIter = 0;
         this.complete = false;
@@ -35,7 +36,7 @@ public class TestPublisher implements Publisher<AbstractFrame>, Subscription {
 
     @Override
     public void request(long demand) {
-        if (demand <= 0 || internalIter >= myFrames.length) {
+        if (demand <= 0 || internalIter >= myFrames.length || complete) {
             return;
         }
 
@@ -43,19 +44,19 @@ public class TestPublisher implements Publisher<AbstractFrame>, Subscription {
         long total = 0;
         for (int i = 0; i < demand && internalIter < myFrames.length; i++) {
             TestFrame f = myFrames[internalIter++];
-            f.countDown = countDown;
+            f.trigger = trigger;
+            f.counters = counters;
             subscriber.onNext(f);
             total++;
             recycler = f.getRecycler();
         }
 
-        countDown.addAndGet(-recycler.dump(total, TestFrame.PASSWORD));
+//        countDown.addAndGet(-recycler.dump(total, TestFrame.PASSWORD));
 
         if (internalIter >= myFrames.length) {
             subscriber.onComplete();
             complete = true;
             subscriber = null;
-            trigger.countDown();
         }
     }
 
