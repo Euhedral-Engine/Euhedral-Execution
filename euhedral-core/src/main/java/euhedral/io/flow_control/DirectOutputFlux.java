@@ -1,7 +1,9 @@
 package euhedral.io.flow_control;
 
 import euhedral.io.frames.AbstractFrame;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import org.jctools.queues.MessagePassingQueue;
 import org.jspecify.annotations.NonNull;
@@ -11,14 +13,15 @@ import org.reactivestreams.Subscription;
 
 public class DirectOutputFlux implements Publisher<AbstractFrame>, Subscription {
 
-    private final AtomicLong demand = new AtomicLong(0);
+    protected final AtomicLong demand = new AtomicLong(0);
 
-    private final MessagePassingQueue<AbstractFrame> buffer;
-    private final Consumer<AbstractFrame> applyToEach;
+    protected final MessagePassingQueue<AbstractFrame> buffer;
+    protected final Consumer<AbstractFrame> applyToEach;
 
-    private volatile boolean unlimited = false;
-    private volatile boolean cancelled = false;
-    private Subscriber<? super AbstractFrame> subscriber;
+    protected final AtomicBoolean unlimited = new AtomicBoolean(false);
+    protected final AtomicBoolean cancelled = new AtomicBoolean(false);
+    protected final AtomicReference<Subscriber<? super AbstractFrame>> subscriber = new AtomicReference<>(
+            null);
 
 
     public DirectOutputFlux(@NonNull MessagePassingQueue<AbstractFrame> buffer,
@@ -28,45 +31,51 @@ public class DirectOutputFlux implements Publisher<AbstractFrame>, Subscription 
     }
 
     public int drain(long max) {
-        if (max == 0 || subscriber == null || cancelled) {
+        if (max == 0 || this.subscriber.getOpaque() == null || this.cancelled.getOpaque()) {
             return 0;
         }
 
-        long currentDemand = unlimited ? Long.MAX_VALUE : demand.get();
+        long currentDemand = this.unlimited.getOpaque() ? Long.MAX_VALUE : this.demand.getAcquire();
         if (currentDemand <= 0) {
             return 0;
         }
 
         int limit = (int) Math.min(max, currentDemand);
 
+        int drain = this.buffer.drain(this::drainInternal, limit);
 
-        int drain = buffer.drain(this::drainInternal, limit);
-
-        if (!unlimited) {
+        if (!this.unlimited.getOpaque()) {
             this.demand.addAndGet(-drain);
         }
         return drain;
     }
 
     private void drainInternal(AbstractFrame frame) {
-        if (applyToEach != null) {
-            applyToEach.accept(frame);
+        if (this.applyToEach != null) {
+            this.applyToEach.accept(frame);
         }
-
-        subscriber.onNext(frame);
+        Subscriber<? super AbstractFrame> subscriber = this.subscriber.getOpaque();
+        if (subscriber != null) {
+            subscriber.onNext(frame);
+        }
     }
 
     public boolean isEmpty() {
-        return buffer.isEmpty();
+        return this.buffer.isEmpty();
     }
 
     @Override
     public void subscribe(Subscriber<? super AbstractFrame> subscriber) {
-        if (this.subscriber != null && !cancelled) {
+        if (!this.cancelled.compareAndSet(true, false) || !this.subscriber.compareAndSet(null,
+                subscriber)) {
             subscriber.onError(new IllegalAccessException("This class already has a subscriber"));
+            return;
         }
-        this.subscriber = subscriber;
-        this.cancelled = false;
+        Subscriber<? super AbstractFrame> observed = this.subscriber.get();
+        if (!this.subscriber.compareAndSet(observed, subscriber)) {
+            subscriber.onError(new IllegalAccessException("This class already has a subscriber"));
+            return;
+        }
         subscriber.onSubscribe(this);
     }
 
@@ -75,19 +84,19 @@ public class DirectOutputFlux implements Publisher<AbstractFrame>, Subscription 
         if (num < 0) {
             throw new IllegalArgumentException("Cannot pass a negative request: " + num);
         }
-        if (unlimited) {
+        if (this.unlimited.getOpaque()) {
             return;
         }
 
         long temp = demand.addAndGet(num);
         if (temp < 0) {
-            unlimited = true;
+            this.unlimited.setRelease(true);
         }
     }
 
     @Override
     public void cancel() {
-        cancelled = true;
-        subscriber = null;
+        this.subscriber.set(null);
+        this.cancelled.set(true);
     }
 }
