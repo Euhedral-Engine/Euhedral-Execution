@@ -1,12 +1,14 @@
 package euhedral.io.utils;
 
+import java.util.function.Consumer;
+
 import euhedral.io.frames.AbstractFrame;
+import euhedral.queues.common.PartitionedQueue;
 import lombok.Getter;
-import org.jctools.queues.MessagePassingQueue;
 
-public class DrainBuffer implements MessagePassingQueue.Consumer<AbstractFrame> {
+public class DrainBuffer implements Consumer<AbstractFrame> {
 
-    public final MessagePassingQueue<AbstractFrame> buffer;
+    public final PartitionedQueue<AbstractFrame> buffer;
     private final boolean threadSafe;
     @Getter
     private final int size;
@@ -16,7 +18,7 @@ public class DrainBuffer implements MessagePassingQueue.Consumer<AbstractFrame> 
     public long drainCount = 0;
     public long drainedBytes = 0;
 
-    public DrainBuffer(MessagePassingQueue<AbstractFrame> buffer, int size, boolean threadSafe) {
+    public DrainBuffer(PartitionedQueue<AbstractFrame> buffer, int size, boolean threadSafe) {
         this.buffer = buffer;
         this.threadSafe = threadSafe;
         this.size = size;
@@ -29,7 +31,7 @@ public class DrainBuffer implements MessagePassingQueue.Consumer<AbstractFrame> 
 
     @Override
     public void accept(AbstractFrame frame) {
-        while (!buffer.relaxedOffer(frame)) {
+        while (!buffer.offer(0, frame)) {
             Thread.onSpinWait();
         }
         if(frame.getIngestNs() > 0) {
