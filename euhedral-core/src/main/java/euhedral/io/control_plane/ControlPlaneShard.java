@@ -139,7 +139,6 @@ public class ControlPlaneShard implements AutoCloseable {
             return;
         }
         this.currentVersion.setRelease(topology.version());
-        CloneableObject[] clones = this.clones.getOpaque();
 
         FluxNode distributor = this.coreDistributor.get();
         distributor.setDrain(true);
@@ -149,6 +148,7 @@ public class ControlPlaneShard implements AutoCloseable {
 
         FluxEdge[] currHandles = this.coreHandles.getAcquire();
         FluxEdge[] nextHandles = new FluxEdge[topology.effectiveCores().length()];
+        CloneableObject[] clones = this.clones.getOpaque();
         CloneableObject[] nextClones = new CloneableObject[topology.effectiveCores().length()];
 
         int idx = 0;
@@ -188,7 +188,7 @@ public class ControlPlaneShard implements AutoCloseable {
             this.clones.setRelease(nextClones);
             this.activeCoreIds.setRelease(nextCores);
             this.coreDistributor.get().setDownstreamMapping(newCores, nextHandles);
-            for (var clone : clones) {
+            for (var clone : nextClones) {
                 if (clone != null) {
                     clone.setDrainMode(false);
                 }
