@@ -24,6 +24,8 @@ import euhedral.io.utils.MathFunctions;
 import euhedral.io.utils.ObjectSizer;
 import java.util.Arrays;
 import java.util.concurrent.Callable;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.reactivestreams.Publisher;
@@ -41,8 +43,8 @@ public class DRRScheduler extends IngestSequencer implements CacheManager, Clone
 
     protected Callable<Double> downstreamPressure;
 
-    protected volatile CoreSnapshot snapshot;
-    protected volatile long totalBytesCap;
+    protected final AtomicReference<CoreSnapshot> snapshot = new AtomicReference<>(null);
+    protected final AtomicLong totalBytesCap = new AtomicLong(0);
 
     protected UpstreamQueue upstream;
 
@@ -56,13 +58,13 @@ public class DRRScheduler extends IngestSequencer implements CacheManager, Clone
                 Runtime.getRuntime().availableProcessors() >>> 1, getChunkSize(config.cloneConfig()));
         this.logger = LoggerFactory.getLogger(getName(config));
         this.config = config;
-        this.snapshot = snapshot;
+        this.snapshot.lazySet(snapshot);
         this.downstreamPressure = downstreamPressure;
         if (snapshot != null) {
-            this.totalBytesCap = snapshot.memoryLimit();
+            this.totalBytesCap.lazySet(snapshot.memoryLimit());
             this.coreId = snapshot.coreId();
         } else {
-            this.totalBytesCap = 256 * 1024 * 1024;
+            this.totalBytesCap.lazySet(256 * 1024 * 1024);
             this.coreId = -1;
         }
 
@@ -215,6 +217,7 @@ public class DRRScheduler extends IngestSequencer implements CacheManager, Clone
     @Override
     public long getMaxQueuedBytes() {
         double cap = Math.min(0.8, this.capFactor.getAcquire());
+        CoreSnapshot snapshot = this.snapshot.getOpaque();
         if (snapshot != null) {
             return (long) (snapshot.memoryLimit() * cap);
         }
@@ -232,8 +235,8 @@ public class DRRScheduler extends IngestSequencer implements CacheManager, Clone
         if (snapshot == null) {
             return;
         }
-        this.snapshot = snapshot;
-        this.totalBytesCap = snapshot.memoryLimit();
+        this.snapshot.lazySet(snapshot);;
+        this.totalBytesCap.lazySet(snapshot.memoryLimit());
         double pressure;
         try {
             pressure = clampDouble(this.downstreamPressure.call(), 0.0, 1.0);
@@ -299,6 +302,6 @@ public class DRRScheduler extends IngestSequencer implements CacheManager, Clone
 
     @Override
     public DRRScheduler clone(CloneConfig cloneConfig) {
-        return new DRRScheduler(config.clone(cloneConfig), snapshot);
+        return new DRRScheduler(config.clone(cloneConfig), snapshot.get());
     }
 }

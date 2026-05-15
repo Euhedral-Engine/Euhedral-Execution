@@ -2,42 +2,56 @@ package euhedral.io;
 
 import euhedral.hardware_utils.PinnedThreadExecutor;
 import euhedral.hardware_utils.ThreadTools;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.locks.LockSupport;
-
 import euhedral.io.flow_control.IngestSequencer;
 import euhedral.io.utils.DemandOptimizer;
 import euhedral.io.utils.DrainBuffer;
 import euhedral.io.utils.FlowRecorder;
 import euhedral.io.utils.FlowRecorder.FlowSnapshot;
-
-import lombok.Setter;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.LockSupport;
 
 public class SlotManagerSMTBuddy implements AutoCloseable {
+
+    protected static final VarHandle INGEST;
+
+    static {
+        try {
+            INGEST = MethodHandles.lookup()
+                    .findVarHandle(SlotManagerSMTBuddy.class, "ingest", IngestSequencer.class);
+        } catch (Exception e) {
+            throw new ExceptionInInitializerError(e);
+        }
+    }
+
     protected final SMTState state;
 
+    protected final PinnedThreadExecutor executor;
     protected final AtomicBoolean running = new AtomicBoolean(false);
     protected final DrainBuffer bufferWrapper;
     protected final int bufferSize;
     protected final int lowWaterMark;
 
-    @Setter
-    protected volatile IngestSequencer ingest;
-    protected volatile PinnedThreadExecutor executor;
+    protected IngestSequencer ingest;
     protected volatile Thread cycleThread;
 
-    public SlotManagerSMTBuddy(DrainBuffer buffer, SMTState state) {
+    public SlotManagerSMTBuddy(DrainBuffer buffer, SMTState state, PinnedThreadExecutor executor) {
         this.state = state;
         this.bufferWrapper = buffer;
         this.bufferSize = buffer.getSize();
         this.lowWaterMark = bufferSize >> 2;
+        this.executor = executor;
     }
 
-    public boolean start(int cpu, String name, int priority, boolean daemon) {
-        if(running.compareAndSet(false, true)) {
-            this.executor = PinnedThreadExecutor.getOrSetIfAbsent(cpu, name, priority, daemon);
-            executor.execute(this::cycle);
+    public void setIngest(IngestSequencer ingest) {
+        INGEST.setRelease(this, ingest);
+    }
+
+    public boolean start() {
+        if (this.running.compareAndSet(false, true)) {
+            this.executor.execute(this::cycle);
         } else {
             return false;
         }
@@ -46,47 +60,49 @@ public class SlotManagerSMTBuddy implements AutoCloseable {
 
     private void cycle() {
         ThreadTools.setTimerResolution(1);
-        while(!Thread.interrupted() && running.get()) {
-            if(ingest == null) {
+        while (!Thread.interrupted() && this.running.getOpaque()) {
+            IngestSequencer ingest = (IngestSequencer) INGEST.getOpaque(this);
+            if (ingest == null) {
                 LockSupport.parkNanos(20_000);
                 continue;
             }
 
-            if(doStuffInternal()) {
+            if (doStuffInternal()) {
                 Thread.onSpinWait();
                 continue;
             }
 
-            if(ingest.getCount() == 0) {
+            if (ingest.getCount() == 0) {
                 Thread.yield();
                 continue;
             }
 
-            int bufferCount = state.bufferCount.get();
-            if(bufferCount > lowWaterMark) {
+            int bufferCount = this.state.bufferCount.get();
+            if (bufferCount > this.lowWaterMark) {
                 Thread.onSpinWait();
                 continue;
             }
 
-            long count = ingest.drain(bufferWrapper, bufferSize - state.bufferCount.get(), 0);
-            if(count > 0) {
-                state.bufferCount.addAndGet((int) count);
+            long count = ingest.drain(this.bufferWrapper, this.bufferSize - this.state.bufferCount.get(), 0);
+            if (count > 0) {
+                this.state.bufferCount.addAndGet((int) count);
             }
 
-            LockSupport.parkNanos((long) ((state.demandWaitNs - state.nowNs) * 0.8));
+            LockSupport.parkNanos((long) ((this.state.demandWaitNs - this.state.nowNs) * 0.8));
         }
     }
 
     public boolean doStuff() {
-        if(ingest != null && !running.get()) {
-            if(!doStuffInternal()) {
-                int bufferCount = state.bufferCount.get();
-                if(bufferCount > lowWaterMark) {
+        IngestSequencer ingest = (IngestSequencer)  INGEST.getOpaque(this);
+        if (ingest != null && !this.running.getOpaque()) {
+            if (!doStuffInternal()) {
+                int bufferCount = this.state.bufferCount.get();
+                if (bufferCount > this.lowWaterMark) {
                     return false;
                 }
-                long count = ingest.drain(bufferWrapper, bufferSize - state.bufferCount.get(), 0);
-                if(count > 0) {
-                    state.bufferCount.addAndGet((int) count);
+                long count = ingest.drain(this.bufferWrapper, this.bufferSize - this.state.bufferCount.get(), 0);
+                if (count > 0) {
+                    this.state.bufferCount.addAndGet((int) count);
                     return true;
                 }
                 return false;
@@ -96,45 +112,48 @@ public class SlotManagerSMTBuddy implements AutoCloseable {
     }
 
     private boolean doStuffInternal() {
-        if (state.fillRecorder == null) {
-            state.fillRecorder = ingest.getFillRecorder();
-            state.fillBytesRecorder = ingest.getFillBytesRecorder();
-            state.drainRecorder = ingest.getDrainRecorder();
+        if (this.state.fillRecorder == null) {
+            this.state.fillRecorder = ingest.getFillRecorder();
+            this.state.fillBytesRecorder = ingest.getFillBytesRecorder();
+            this.state.drainRecorder = ingest.getDrainRecorder();
 
-            state.fill = state.fillRecorder.getFlowSnapshot();
-            state.fillBytes = state.fillBytesRecorder.getFlowSnapshot();
-            state.drain = state.drainRecorder.getFlowSnapshot();
+            this.state.fill = this.state.fillRecorder.getFlowSnapshot();
+            this.state.fillBytes = this.state.fillBytesRecorder.getFlowSnapshot();
+            this.state.drain = this.state.drainRecorder.getFlowSnapshot();
         }
 
-        state.nowNs = System.nanoTime();
-        if(state.nowNs < state.demandWaitNs) {
+        this.state.nowNs = System.nanoTime();
+        if (this.state.nowNs < this.state.demandWaitNs) {
             Thread.onSpinWait();
             return false;
         }
-        state.refresh();
-        long demand = calculateDemand(ingest.getCount());
-        int maxFill = bufferSize - state.bufferCount.get();
-        state.bufferCount.addAndGet((int) ingest.drain(bufferWrapper, maxFill, demand));
+        IngestSequencer ingest = (IngestSequencer)  INGEST.getOpaque(this);
 
-        state.refresh();
-        state.demandWaitNs = calculateDemandWaitNs(System.nanoTime(), maxFill);
+        this.state.refresh();
+        long demand = calculateDemand(ingest.getCount());
+        int maxFill = this.bufferSize - this.state.bufferCount.get();
+        this.state.bufferCount.addAndGet((int) ingest.drain(this.bufferWrapper, maxFill, demand));
+
+        this.state.refresh();
+        this.state.demandWaitNs = calculateDemandWaitNs(System.nanoTime(), maxFill);
         return true;
     }
 
     protected long calculateDemand(long ingestCount) {
-        double drainRate = state.drain.avgRate;
-        double drainRateVar = state.drain.rateVariation;
-        double arrivalLatencyNs = state.arrival.avgUnits;
-        double arrivalLatencyVar = state.arrival.unitVariation;
+        double drainRate = this.state.drain.avgRate;
+        double drainRateVar = this.state.drain.rateVariation;
+        double arrivalLatencyNs = this.state.arrival.avgUnits;
+        double arrivalLatencyVar = this.state.arrival.unitVariation;
         double avgFrameSize =
-                state.fillBytes.avgUnits + state.fillBytes.unitVariation;
+                this.state.fillBytes.avgUnits + this.state.fillBytes.unitVariation;
 
-        int bufferCount = state.bufferCount.get();
+        IngestSequencer ingest = (IngestSequencer)  INGEST.getOpaque(this);
+        int bufferCount = this.state.bufferCount.get();
         long demand = DemandOptimizer.getDemand(drainRate, arrivalLatencyNs, drainRateVar,
                 arrivalLatencyVar, bufferCount + ingestCount, (long) avgFrameSize,
                 ingest.getMaxQueuedBytes());
 
-        long maxFill = bufferSize - bufferCount;
+        long maxFill = this.bufferSize - bufferCount;
         if (demand < maxFill) {
             demand += maxFill - bufferCount;
         }
@@ -143,29 +162,31 @@ public class SlotManagerSMTBuddy implements AutoCloseable {
     }
 
     protected long calculateDemandWaitNs(long nowNs, long maxFill) {
-        boolean warmedUp = ingest.getFillRecorder().getRollingSum() > bufferSize
-                && state.fill.avgInterval > 0 && state.fill.avgUnits > 0;
+        IngestSequencer ingest = (IngestSequencer)  INGEST.getOpaque(this);
+        boolean warmedUp = ingest.getFillRecorder().getRollingSum() > this.bufferSize
+                && this.state.fill.avgInterval > 0 && this.state.fill.avgUnits > 0;
 
         if (warmedUp) {
-            double fillRate = state.fill.avgRate;
-            double execLatency = state.exec.avgUnits;
+            FlowRecorder.FlowSnapshot fill = this.state.fill;
+            double fillRate = this.state.fill.avgRate;
+            double execLatency = this.state.exec.avgUnits;
 
             double execRate = 1.0 / Math.max(execLatency, 1.0);
 
             if (fillRate < execRate * 0.5) {
-                return nowNs + (long) state.fill.avgInterval;
+                return nowNs + (long) fill.avgInterval;
             } else {
                 double fillInterval =
-                        state.fill.avgInterval + state.fill.intervalVariation;
+                        fill.avgInterval + fill.intervalVariation;
                 fillInterval = Math.max(fillInterval, 1_000);
 
-                double avgFill = state.fill.avgUnits + state.fill.unitVariation;
+                double avgFill = fill.avgUnits + fill.unitVariation;
                 avgFill = Math.max(avgFill, 64);
 
                 double intervalCount = maxFill / avgFill;
 
-                long maxWaitNs = (long) (execLatency * bufferSize / 2);
-                maxWaitNs = Math.min(maxWaitNs, state.maxParkNs * 4);
+                long maxWaitNs = (long) (execLatency * this.bufferSize / 2);
+                maxWaitNs = Math.min(maxWaitNs, this.state.maxParkNs * 4);
 
                 long fillWait = (long) (intervalCount * fillInterval);
                 return nowNs + Math.min(maxWaitNs, fillWait);
@@ -176,16 +197,16 @@ public class SlotManagerSMTBuddy implements AutoCloseable {
 
     @Override
     public void close() {
-        if(running.compareAndSet(true, false)) {
-            cycleThread.interrupt();
-            LockSupport.unpark(cycleThread);
+        if (this.running.compareAndSet(true, false)) {
+            this.cycleThread.interrupt();
+            LockSupport.unpark(this.cycleThread);
 
             try {
-                cycleThread.join(500);
+                this.cycleThread.join(500);
             } catch (Exception ignored) {
 
             }
-            executor.close();
+            this.executor.close();
         }
     }
 
@@ -212,7 +233,8 @@ public class SlotManagerSMTBuddy implements AutoCloseable {
 
         private long nowNs = 0;
 
-        public SMTState(FlowRecorder executionLatency, FlowRecorder arrivalLatency, long maxParkNs) {
+        public SMTState(FlowRecorder executionLatency, FlowRecorder arrivalLatency,
+                long maxParkNs) {
             this.maxParkNs = maxParkNs;
             this.arrivalLatency = arrivalLatency;
             this.executionLatency = executionLatency;
