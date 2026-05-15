@@ -5,6 +5,7 @@ import euhedral.atomics.PaddedLongAdder;
 import euhedral.queues.common.PartitionedQueue;
 import euhedral.queues.common.QueueUtils;
 import java.util.Arrays;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.Getter;
 
@@ -29,7 +30,6 @@ public class PartitionedArrayQueue<T> implements PartitionedQueue<T> {
     protected final boolean unbounded;
     protected final AtomicBoolean retired = new AtomicBoolean(false);
 
-    @Getter
     long capacity;
 
     public PartitionedArrayQueue(int partitions, int chunkSize) {
@@ -52,6 +52,17 @@ public class PartitionedArrayQueue<T> implements PartitionedQueue<T> {
         this.tails = new PaddedLongAdder(partitions, false, true);
         this.unbounded = unbounded;
         this.capacity = (long) chunkSize * partitions;
+    }
+
+    /// Offers the object to a random partition.
+    ///
+    /// @return success
+    @Override
+    public boolean offer(T obj) {
+        if(this.partitions == 1) {
+            return offer(0, obj);
+        }
+        return offer(ThreadLocalRandom.current().nextLong(), obj);
     }
 
     /// Offers the object to a random partition based on the seed. If the seed does not change, the
@@ -198,6 +209,12 @@ public class PartitionedArrayQueue<T> implements PartitionedQueue<T> {
         return QueueUtils.unsignedDiff(head, tail);
     }
 
+    @Override
+    public long capacity() {
+        return this.capacity;
+    }
+
+    @Override
     public void clear() {
         this.heads.fillPlain(0);
         this.tails.fillPlain(0);
@@ -206,5 +223,6 @@ public class PartitionedArrayQueue<T> implements PartitionedQueue<T> {
             int rIdx = this.queue.fromRawIdx(i);
             Arrays.fill(this.queue.getPlain(rIdx), null);
         }
+        this.retired.setPlain(false);
     }
 }

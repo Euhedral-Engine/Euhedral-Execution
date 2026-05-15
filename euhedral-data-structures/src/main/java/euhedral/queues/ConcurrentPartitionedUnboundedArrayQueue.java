@@ -1,11 +1,12 @@
 package euhedral.queues;
 
+import java.lang.invoke.VarHandle;
+import java.util.StringJoiner;
+
 import euhedral.atomics.PaddedAtomicLong;
 import euhedral.atomics.PaddedAtomicReferenceArray;
 import euhedral.queues.QueueNode.Type;
 import euhedral.queues.common.NodeRecycler;
-import java.lang.invoke.VarHandle;
-import java.util.StringJoiner;
 
 /// A template of a concurrent unbounded array queue with partitions. This class is overridden by
 /// its subclasses to selectively choose the type of thread safety between producers and consumers.
@@ -23,7 +24,7 @@ abstract sealed class ConcurrentPartitionedUnboundedArrayQueue<T>
     protected final Type type;
 
     protected final PaddedAtomicLong tailEpoch;
-    protected final PartitionedArrayQueue<QueueNode<T>> headQueues;
+    protected final PartitionedArrayQueue<QueueNode<T>> headQueue;
     private final PartitionedArrayQueue<QueueNode<T>> tailQueue;
     private final PaddedAtomicLong headLock;
 
@@ -63,7 +64,7 @@ abstract sealed class ConcurrentPartitionedUnboundedArrayQueue<T>
             case SPSC, MPSC -> null;
             default -> new PaddedAtomicLong(0);
         };
-        this.headQueues = switch (type) {
+        this.headQueue = switch (type) {
             case SPSC, MPSC -> {
                 super.headPointers.fill(tail);
                 yield null;
@@ -223,8 +224,9 @@ abstract sealed class ConcurrentPartitionedUnboundedArrayQueue<T>
             QueueNode<T> tail = this.tailQueue.poll(0);
 
             QueueNode<T> next;
-            next = recycler == null ? null : recycler.pop();
-            next = next == null ? new QueueNode<>(partitions, chunkSize, type) : next;
+            next = super.recycler == null ? null : super.recycler.pop();
+            next = next == null ? new QueueNode<>(super.partitions, super.chunkSize, this.type)
+                    : next;
             next.setTailEpoch(epoch + 1);
 
             tail.next.setRelease(next);
@@ -312,7 +314,7 @@ abstract sealed class ConcurrentPartitionedUnboundedArrayQueue<T>
                 return false;
             }
         } else {
-            QueueNode<T> q = this.headQueues.peek(partition);
+            QueueNode<T> q = this.headQueue.peek(partition);
             if (q == null || q.isRetired() || !q.isEmpty(partition)) {
                 return false;
             }
@@ -336,10 +338,10 @@ abstract sealed class ConcurrentPartitionedUnboundedArrayQueue<T>
         }
 
         long sum = 0;
-        QueueNode<T> head = this.headQueues.peek(partition);
+        QueueNode<T> head = this.headQueue.peek(partition);
         while (head == null) {
             Thread.onSpinWait();
-            head = this.headQueues.peek(partition);
+            head = this.headQueue.peek(partition);
         }
         while (head != null) {
             sum += head.size(partition);
@@ -347,6 +349,47 @@ abstract sealed class ConcurrentPartitionedUnboundedArrayQueue<T>
         }
         VarHandle.acquireFence();
         return sum;
+    }
+
+    @Override
+    public void clear() {
+        while (!acquireHeadLock()) {
+            Thread.onSpinWait();
+        }
+        try {
+            if (super.headPointers != null) {
+                super.clear();
+            } else {
+                QueueNode<T> head = this.tailQueue.poll(0);
+                while (head == null) {
+                    head = this.tailQueue.poll(0);
+                    Thread.onSpinWait();
+                }
+                head.clear();
+                this.headQueue.clear();
+                this.tailQueue.clear();
+                for (int i = 0; i < super.partitions; i++) {
+                    while (!this.headQueue.offer(i, head)) {
+                        Thread.onSpinWait();
+                    }
+                    long epoch = head.getHeadEpoch(i);
+                    while (!head.casHeadEpoch(i, epoch, 0)) {
+                        Thread.onSpinWait();
+                        epoch = head.getHeadEpoch(i);
+                    }
+                }
+                head.setTailEpoch(0);
+                this.tailEpoch.set(0);
+                while (!this.tailQueue.offer(0, head)) {
+                    Thread.onSpinWait();
+                }
+                while (super.recycler.pop() != null) {
+                    Thread.onSpinWait();
+                }
+            }
+        } finally {
+            releaseHeadLock();
+        }
     }
 
     @Override

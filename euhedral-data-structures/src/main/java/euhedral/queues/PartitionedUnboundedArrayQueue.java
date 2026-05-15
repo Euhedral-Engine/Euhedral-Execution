@@ -6,6 +6,8 @@ import euhedral.queues.common.NodeRecycler;
 import euhedral.queues.common.PartitionedQueue;
 import euhedral.queues.common.QueueUtils;
 import java.util.StringJoiner;
+import java.util.concurrent.ThreadLocalRandom;
+
 import lombok.Getter;
 
 /// ## A plain unbounded array queue with partitions.
@@ -29,7 +31,6 @@ public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueu
     protected final NodeRecycler<T> recycler;
 
     protected final PaddedAtomicReferenceArray<QueueNode<T>> headPointers;
-
     private QueueNode<T> tailPtr;
 
     public PartitionedUnboundedArrayQueue(int partitions, int chunkSize, int maxPooledChunks) {
@@ -65,6 +66,18 @@ public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueu
         this.tailPtr = null;
         this.headPointers = headPointers;
     }
+
+    /// Offers the object to a random partition.
+    ///
+    /// @return success
+    @Override
+    public boolean offer(T obj) {
+        if (this.partitions == 1) {
+            return offer(0, obj);
+        }
+        return offer(ThreadLocalRandom.current().nextLong(), obj);
+    }
+
 
     /// Offers the object to a random partition based on the seed. If the seed does not change, the
     /// same partition will be picked.
@@ -297,6 +310,28 @@ public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueu
             head = head.next.getPlain();
         }
         return sum;
+    }
+
+    @Override
+    public long capacity() {
+        return -1;
+    }
+
+    @Override
+    public void clear() {
+        for (int i = 0; i < this.partitions; i++) {
+            int rIdx = this.headPointers.fromRawIdx(i);
+            QueueNode<T> head = this.headPointers.getOpaque(rIdx);
+
+            while (head.next.getOpaque() != null) {
+                head = head.next.getOpaque();
+            }
+            head.clear();
+            this.headPointers.setRelease(rIdx, head);
+        }
+        while (this.recycler.pop() != null) {
+            Thread.onSpinWait();
+        }
     }
 
     @Override
