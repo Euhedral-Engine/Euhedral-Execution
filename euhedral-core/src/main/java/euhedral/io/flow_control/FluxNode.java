@@ -6,9 +6,10 @@ import euhedral.atomics.PaddedAtomicLong;
 import euhedral.io.flow_control.UpstreamQueue.UpstreamHandle;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.utils.DrainBuffer;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import java.util.BitSet;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 import org.jctools.queues.MpscArrayQueue;
 import org.jspecify.annotations.NonNull;
 import org.reactivestreams.Publisher;
@@ -19,6 +20,17 @@ import org.slf4j.LoggerFactory;
 
 @SuppressWarnings("unused")
 public class FluxNode extends FluxEdge implements AutoCloseable {
+
+    protected static final VarHandle ROUTING_STATE;
+
+    static {
+        try {
+            ROUTING_STATE = MethodHandles.lookup()
+                    .findVarHandle(FluxNode.class, "routingState", RoutingState.class);
+        } catch (Exception e) {
+            throw new ExceptionInInitializerError(e);
+        }
+    }
 
     protected final boolean terminal;
 
@@ -31,7 +43,7 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
     protected final RoutingFunction routingFunction;
     private final PaddedAtomicLong wip;
 
-    protected AtomicReference<RoutingState> routingState = new AtomicReference<>(new RoutingState(new int[0]));
+    protected RoutingState routingState = new RoutingState(new int[0]);
 
     public FluxNode(String name, int downstreamCount) {
         this(name, downstreamCount, RoutingFunction.DEFAULT, 0, false);
@@ -100,7 +112,7 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
             curr.sibling = first;
         }
 
-        this.routingState.set(new RoutingState(mappings));
+        ROUTING_STATE.setVolatile(this, new RoutingState(mappings));
 
         for (int i = 0; i < this.downstreams.length; i++) {
             if (!active.get(i) && this.downstreams[i] != null) {
@@ -126,7 +138,8 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
             dh.subscribe(this);
             for (var down : this.downstreams) {
                 if (down != null) {
-                    down.setParent(this.parent.getOpaque());
+                    FluxEdge parent = (FluxEdge) PARENT.getOpaque(this);
+                    down.setParent(parent);
                 }
             }
         } else if (subscription instanceof UpstreamInterceptor interceptor) {
@@ -139,7 +152,7 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
 
     @Override
     public void onNext(AbstractFrame frame) {
-        RoutingState state = this.routingState.getOpaque();
+        RoutingState state = (RoutingState) ROUTING_STATE.getOpaque(this);
         int mapLen = state.mappings.length;
 
         int logicalIdx = this.routingFunction.route(frame, mapLen);
@@ -164,7 +177,7 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
             }
         }
 
-        FluxEdge parent = this.parent.getOpaque();
+        FluxEdge parent = (FluxEdge) PARENT.getOpaque(this);
         if (parent != null) {
             parent.pull(buffer, demand);
         }
@@ -193,7 +206,7 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
                 this.downstreams[i] = null;
             }
         }
-        this.routingState.lazySet(null);
+        ROUTING_STATE.setRelease(this, null);
     }
 
     @FunctionalInterface
@@ -220,10 +233,16 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
 
     public class UpstreamInterceptor extends UpstreamHandle implements Subscriber<AbstractFrame> {
 
+        private static long addCap(long num1, long num2) {
+            if (num1 < 0 || num2 < 0) {
+                return Long.MAX_VALUE;
+            }
+            long sum = num1 + num2;
+            return sum < 0 ? Long.MAX_VALUE : sum;
+        }
+        public final AtomicBoolean complete = new AtomicBoolean(false);
         private final PaddedAtomicLong wip = new PaddedAtomicLong(0);
         private final PaddedAtomicLong demand = new PaddedAtomicLong(0);
-        public final AtomicBoolean complete = new AtomicBoolean(false);
-
         public Subscription upstream;
         private long count = 0;
 
@@ -242,7 +261,8 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
             }
 
             if (!frame.isOrdered()) {
-                if (FluxNode.this.parallelQueue != null && FluxNode.this.parallelQueue.relaxedOffer(frame)) {
+                if (FluxNode.this.parallelQueue != null && FluxNode.this.parallelQueue.relaxedOffer(
+                        frame)) {
                     return;
                 }
             }
@@ -290,17 +310,9 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
             return sum;
         }
 
-        private static long addCap(long num1, long num2) {
-            if (num1 < 0 || num2 < 0) {
-                return Long.MAX_VALUE;
-            }
-            long sum = num1 + num2;
-            return sum < 0 ? Long.MAX_VALUE : sum;
-        }
-
         @Override
         public void onError(Throwable throwable) {
-            if(this.complete.compareAndSet(false, true)) {
+            if (this.complete.compareAndSet(false, true)) {
                 logger.error("UpstreamHandle Error", throwable);
             }
         }
@@ -314,7 +326,7 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
 
         @Override
         public void cancel() {
-            if(this.complete.compareAndSet(false, true)) {
+            if (this.complete.compareAndSet(false, true)) {
                 logger.debug("UpstreamHandle Cancelled");
                 this.upstream.cancel();
             }

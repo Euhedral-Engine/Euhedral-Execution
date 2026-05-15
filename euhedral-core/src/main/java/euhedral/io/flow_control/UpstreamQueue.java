@@ -1,7 +1,8 @@
 package euhedral.io.flow_control;
 
-import euhedral.atomics.PaddedAtomicLong;
 import euhedral.io.utils.DrainBuffer;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.Getter;
 import org.jctools.maps.NonBlockingHashMapLong;
@@ -9,11 +10,19 @@ import org.jctools.queues.MpscUnboundedXaddArrayQueue;
 import org.reactivestreams.Subscription;
 
 public class UpstreamQueue {
+    protected static final VarHandle UP_COUNT;
 
+    static {
+        try {
+            UP_COUNT = MethodHandles.lookup().findVarHandle(UpstreamQueue.class, "upstreamCount", long.class);
+        } catch (Exception e) {
+            throw new ExceptionInInitializerError(e);
+        }
+    }
     public static final ThreadLocal<UpstreamQueue> UP_QUEUE = new ThreadLocal<>();
 
     public static UpstreamQueue get(NonBlockingHashMapLong<UpstreamQueue> map,
-            PaddedAtomicLong counter) {
+            AtomicLong counter) {
         UpstreamQueue queue = UP_QUEUE.get();
         if (queue == null) {
             queue = new UpstreamQueue();
@@ -28,13 +37,14 @@ public class UpstreamQueue {
             512);
     private final UpstreamHandle[] drainBuffer = new UpstreamHandle[512];
     private final int[] pullIdx = new int[]{0};
-    private final long[] pullBucket = new long[]{0, 0};
-    private final AtomicLong upstreamCount = new AtomicLong(0);
+    private final long[] pullBucket = new long[]{0L, 0L};
+    private long upstreamCount = 0L;
     @Getter
-    private long cachedUpCount = 0;
+    private long cachedUpCount = 0L;
 
     public long getTrueUpstreamCount() {
-        return (this.cachedUpCount = this.upstreamCount.getAcquire());
+        this.cachedUpCount = (long) UP_COUNT.getOpaque(this);
+        return this.cachedUpCount;
     }
 
     public void pull(long demand) {
@@ -42,7 +52,7 @@ public class UpstreamQueue {
     }
 
     public void pull(DrainBuffer buffer, long demand) {
-        this.cachedUpCount = this.upstreamCount.getAcquire();
+        getTrueUpstreamCount();
         this.pullIdx[0] = 0;
 
         if (demand == 0 || this.cachedUpCount == 0) {
@@ -74,7 +84,7 @@ public class UpstreamQueue {
                 }
             }
         }
-        this.cachedUpCount = this.upstreamCount.addAndGet(-removed);
+        this.cachedUpCount = (long) UP_COUNT.getAndAdd(this, -removed) - removed;
     }
 
     protected static void drain(UpstreamHandle handle, DrainBuffer buffer,
@@ -89,7 +99,8 @@ public class UpstreamQueue {
 
     private void calculatePullBuckets(long demand) {
         int start = 0;
-        int end = Math.max((int) this.upstreamCount.getAcquire(), 1);
+        int end = (int) getTrueUpstreamCount();
+        end = Math.max(end, 1);
         this.pullBucket[0] = end - start;
         this.pullBucket[1] = demand;
 
@@ -133,7 +144,7 @@ public class UpstreamQueue {
         while (!this.upstreams.relaxedOffer(upstream)) {
             Thread.onSpinWait();
         }
-        this.upstreamCount.incrementAndGet();
+        UP_COUNT.getAndAdd(this, 1);
     }
 
     public static abstract class UpstreamHandle implements Subscription {
