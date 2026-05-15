@@ -32,7 +32,7 @@ public final class PartitionedUnboundedMpmcArrayQueue<T> extends
 
     @Override
     protected QueueNode<T> getHeadNode(int hpIdx) {
-        return super.headQueues.peek(hpIdx);
+        return super.headQueue.peek(hpIdx);
     }
 
     @Override
@@ -42,8 +42,8 @@ public final class PartitionedUnboundedMpmcArrayQueue<T> extends
 
     @Override
     protected void setNextHeadNode(int hpIdx, QueueNode<T> next) {
-        super.headQueues.poll(hpIdx);
-        while (!super.headQueues.offer(hpIdx, next)) {
+        super.headQueue.poll(hpIdx);
+        while (!super.headQueue.offer(hpIdx, next)) {
             Thread.onSpinWait();
         }
     }

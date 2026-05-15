@@ -4,6 +4,8 @@ import euhedral.queues.QueueConsumer;
 
 public interface PartitionedQueue<T> {
 
+    boolean offer(T element);
+
     boolean offer(long randomSeed, T obj);
 
     boolean offer(int partition, T obj);
@@ -23,4 +25,8 @@ public interface PartitionedQueue<T> {
     long size();
 
     long size(int partition);
+
+    long capacity();
+
+    void clear();
 }
