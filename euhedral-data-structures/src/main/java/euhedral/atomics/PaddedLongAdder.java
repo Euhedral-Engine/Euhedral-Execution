@@ -39,21 +39,37 @@ public final class PaddedLongAdder extends PaddedAtomicLongArray {
 
     public long sum() {
         long sum = 0;
-        for(int i = 0; i < super.length(); i++) {
-            int pIdx = super.boundsCheck ? i : ((i + 1) * this.padding) + i;
-            sum += super.array[pIdx];
+        if (boundsCheck) {
+            for (int i = 0; i < super.length(); i++) {
+                sum += super.array[((i + 1) * this.padding) + i];
+            }
+            VarHandle.acquireFence();
+        } else {
+            for (long l : super.array) {
+                sum += l;
+            }
+            VarHandle.acquireFence();
         }
-
-        VarHandle.acquireFence();
         return sum;
     }
 
     public long sumAndReset() {
         long sum = 0;
-        for(int i = 0; i < super.length(); i++) {
-            int pIdx = super.boundsCheck ? i : ((i + 1) * this.padding) + i;
-            sum += super.getAndSet(pIdx, 0);
+        if (boundsCheck) {
+            for (int i = 0; i < super.length(); i++) {
+                sum += super.getAndSet(i, 0);
+            }
+        } else {
+            for (int i = 0; i < super.array.length; i++) {
+                sum += super.array[i];
+                super.array[i] = 0;
+            }
+            VarHandle.fullFence();
         }
         return sum;
+    }
+
+    public void reset() {
+        super.fillRelease(0);
     }
 }

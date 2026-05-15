@@ -1,5 +1,8 @@
 package euhedral.io.impl;
 
+import euhedral.hardware_utils.SystemInfo;
+import euhedral.hardware_utils.SystemInfo.CpuInfo;
+import euhedral.hardware_utils.ThreadTools;
 import euhedral.hashing.HasherApi;
 import euhedral.io.frames.AbstractFrame;
 import java.util.concurrent.ThreadLocalRandom;
@@ -9,12 +12,14 @@ public class FrameFactory<T, F extends AbstractFrame> {
 
     private final FrameCreate<T, F> frameGenerator;
     private final FrameReplace<T, F> frameReplace;
+    private final CpuInfo originLocation;
 
     private long seed = ThreadLocalRandom.current().nextLong();
 
     public FrameFactory(FrameCreate<T, F> frameGenerator, FrameReplace<T, F> frameReplace) {
         this.frameGenerator = frameGenerator;
         this.frameReplace = frameReplace;
+        this.originLocation = SystemInfo.getCpuInfo(ThreadTools.getCpu());
     }
 
     public F create(T data) {
@@ -24,6 +29,7 @@ public class FrameFactory<T, F extends AbstractFrame> {
         } else {
             frame.randomizeHash(seed++);
         }
+        frame.setOrigin(originLocation);
         return frame;
     }
 
@@ -36,6 +42,7 @@ public class FrameFactory<T, F extends AbstractFrame> {
         } else {
             frame.randomizeHash(seed++);
         }
+        frame.setOrigin(originLocation);
     }
 
     @FunctionalInterface

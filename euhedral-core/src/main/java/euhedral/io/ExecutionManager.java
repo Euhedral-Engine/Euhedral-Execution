@@ -187,13 +187,6 @@ public class ExecutionManager implements SlotManager {
 
         this.state = new CycleState();
 
-        this.completeSink =
-                new LockFreeSink(new MpscUnboundedXaddArrayQueue<>(bufferSize, 4), frame -> {
-                    IN_FLIGHT.setOpaque(this, this.inFlight - 1);
-                    state.receivingOrderedWork = upstreamCount == 1 && frame.isOrdered();
-                    state.completed++;
-                    frame.doFinally();
-                }, this::recordCompletion);
 
         this.currentRate = config.minConcurrency();
         this.currentConcurrency = Math.max(1, config.minConcurrency());
@@ -234,6 +227,13 @@ public class ExecutionManager implements SlotManager {
                 () -> (long) RATE.getOpaque(this),
                 this::getPressure);
 
+        this.completeSink =
+                new LockFreeSink(new MpscUnboundedXaddArrayQueue<>(bufferSize, 4), frame -> {
+                    IN_FLIGHT.setOpaque(this, this.inFlight - 1);
+                    state.receivingOrderedWork = upstreamCount == 1 && frame.isOrdered();
+                    state.completed++;
+                    frame.doFinally();
+                }, this::recordCompletion);
         this.outputFlux = new DirectOutputFlux(this.buffer, frame -> {
             if ((this.state.dispatches++ & this.state.updateIntervalMask) == 0) {
                 frame.setStartNs(System.nanoTime());
