@@ -2,6 +2,7 @@ package euhedral.io.flow_control;
 
 import euhedral.atomics.PaddedAtomicLong;
 import euhedral.io.utils.DrainBuffer;
+import java.util.concurrent.atomic.AtomicLong;
 import lombok.Getter;
 import org.jctools.maps.NonBlockingHashMapLong;
 import org.jctools.queues.MpscUnboundedXaddArrayQueue;
@@ -28,12 +29,12 @@ public class UpstreamQueue {
     private final UpstreamHandle[] drainBuffer = new UpstreamHandle[512];
     private final int[] pullIdx = new int[]{0};
     private final long[] pullBucket = new long[]{0, 0};
-    private final PaddedAtomicLong upstreamCount = new PaddedAtomicLong(0);
+    private final AtomicLong upstreamCount = new AtomicLong(0);
     @Getter
     private long cachedUpCount = 0;
 
     public long getTrueUpstreamCount() {
-        return (cachedUpCount = upstreamCount.get());
+        return (this.cachedUpCount = this.upstreamCount.getAcquire());
     }
 
     public void pull(long demand) {
@@ -41,10 +42,10 @@ public class UpstreamQueue {
     }
 
     public void pull(DrainBuffer buffer, long demand) {
-        cachedUpCount = upstreamCount.get();
-        pullIdx[0] = 0;
+        this.cachedUpCount = this.upstreamCount.getAcquire();
+        this.pullIdx[0] = 0;
 
-        if (demand == 0 || cachedUpCount == 0) {
+        if (demand == 0 || this.cachedUpCount == 0) {
             return;
         }
 
@@ -56,24 +57,24 @@ public class UpstreamQueue {
         while (workDone && (count = fillUpstreamBuffer()) > 0) {
             workDone = false;
             for (int i = 0; i < count; i++) {
-                UpstreamHandle handle = drainBuffer[i];
+                UpstreamHandle handle = this.drainBuffer[i];
                 if (!handle.isComplete()) {
                     if (demand > 0) {
-                        long requestAmount = Math.min(demand, pullBucket[1]);
+                        long requestAmount = Math.min(demand, this.pullBucket[1]);
                         demand -= requestAmount;
                         workDone = true;
                         drain(handle, buffer, requestAmount);
                     }
-                    while (!upstreams.relaxedOffer(handle)) {
+                    while (!this.upstreams.relaxedOffer(handle)) {
                         Thread.onSpinWait();
                     }
                 } else {
-                    drainBuffer[i] = null;
+                    this.drainBuffer[i] = null;
                     removed++;
                 }
             }
         }
-        cachedUpCount = upstreamCount.addAndGet(-removed);
+        this.cachedUpCount = this.upstreamCount.addAndGet(-removed);
     }
 
     protected static void drain(UpstreamHandle handle, DrainBuffer buffer,
@@ -88,51 +89,51 @@ public class UpstreamQueue {
 
     private void calculatePullBuckets(long demand) {
         int start = 0;
-        int end = Math.max((int) upstreamCount.get(), 1);
-        pullBucket[0] = end - start;
-        pullBucket[1] = demand;
+        int end = Math.max((int) this.upstreamCount.getAcquire(), 1);
+        this.pullBucket[0] = end - start;
+        this.pullBucket[1] = demand;
 
         if (demand <= 1024 || end <= 1) {
-            pullBucket[0] = 1;
+            this.pullBucket[0] = 1;
             return;
         }
 
         if (demand > 32L * end) {
-            pullBucket[1] = demand / end;
+            this.pullBucket[1] = demand / end;
             return;
         }
 
         int mid = (end - start) / 2;
 
         while (mid != 0) {
-            pullBucket[1] = demand / mid;
-            if (pullBucket[1] < 32) {
+            this.pullBucket[1] = demand / mid;
+            if (this.pullBucket[1] < 32) {
                 end = mid;
                 mid = (end - start) / 2;
             } else {
                 mid = (end - mid) / 2;
             }
         }
-        pullBucket[0] = end - start;
-        pullBucket[0] = Math.max(pullBucket[0], 1);
+        this.pullBucket[0] = end - start;
+        this.pullBucket[0] = Math.max(this.pullBucket[0], 1);
     }
 
     private int fillUpstreamBuffer() {
-        if (pullBucket[0] <= 0) {
+        if (this.pullBucket[0] <= 0) {
             return 0;
         }
 
-        pullIdx[0] = 0;
-        return upstreams.drain(
-                sub -> drainBuffer[pullIdx[0]++] = sub,
-                Math.min((int) pullBucket[0], drainBuffer.length));
+        this.pullIdx[0] = 0;
+        return this.upstreams.drain(
+                sub -> this.drainBuffer[this.pullIdx[0]++] = sub,
+                Math.min((int) this.pullBucket[0], this.drainBuffer.length));
     }
 
     public void addUpstream(UpstreamHandle upstream) {
-        while (!upstreams.relaxedOffer(upstream)) {
+        while (!this.upstreams.relaxedOffer(upstream)) {
             Thread.onSpinWait();
         }
-        upstreamCount.incrementAndGet();
+        this.upstreamCount.incrementAndGet();
     }
 
     public static abstract class UpstreamHandle implements Subscription {
