@@ -6,11 +6,9 @@ import euhedral.atomics.PaddedAtomicLong;
 import euhedral.io.flow_control.UpstreamQueue.UpstreamHandle;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.utils.DrainBuffer;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.VarHandle;
 import java.util.BitSet;
 import java.util.concurrent.atomic.AtomicBoolean;
-
+import java.util.concurrent.atomic.AtomicReference;
 import org.jctools.queues.MpscArrayQueue;
 import org.jspecify.annotations.NonNull;
 import org.reactivestreams.Publisher;
@@ -19,18 +17,8 @@ import org.reactivestreams.Subscription;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+@SuppressWarnings("unused")
 public class FluxNode extends FluxEdge implements AutoCloseable {
-
-    private static final VarHandle ROUTING_STATE;
-
-    static {
-        try {
-            ROUTING_STATE = MethodHandles.lookup()
-                    .findVarHandle(FluxNode.class, "routingState", RoutingState.class);
-        } catch (Throwable t) {
-            throw new ExceptionInInitializerError(t);
-        }
-    }
 
     protected final boolean terminal;
 
@@ -43,7 +31,7 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
     protected final RoutingFunction routingFunction;
     private final PaddedAtomicLong wip;
 
-    protected RoutingState routingState = new RoutingState(new int[0]);
+    protected AtomicReference<RoutingState> routingState = new AtomicReference<>(new RoutingState(new int[0]));
 
     public FluxNode(String name, int downstreamCount) {
         this(name, downstreamCount, RoutingFunction.DEFAULT, 0, false);
@@ -73,12 +61,12 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
     }
 
     public AtomicBoolean getDrainFlag() {
-        return drain;
+        return this.drain;
     }
 
     public boolean setDownstreamMapping(BitSet active,
             FluxEdge[] handles) {
-        if (!drain.get()) {
+        if (!this.drain.get()) {
             return false;
         }
 
@@ -87,11 +75,11 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
         FluxEdge curr = null;
         int mIdx = 0;
         int[] mappings = new int[active.cardinality()];
-        for (int i = 0; i < downstreams.length; i++) {
+        for (int i = 0; i < this.downstreams.length; i++) {
             if (active.get(i)) {
                 mappings[mIdx++] = i;
                 handles[i].setParent(this);
-                downstreams[i] = handles[i];
+                this.downstreams[i] = handles[i];
 
                 if (curr == null) {
                     first = handles[i];
@@ -112,12 +100,12 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
             curr.sibling = first;
         }
 
-        ROUTING_STATE.setRelease(this, new RoutingState(mappings));
+        this.routingState.set(new RoutingState(mappings));
 
-        for (int i = 0; i < downstreams.length; i++) {
-            if (!active.get(i) && downstreams[i] != null) {
-                downstreams[i].close();
-                downstreams[i] = null;
+        for (int i = 0; i < this.downstreams.length; i++) {
+            if (!active.get(i) && this.downstreams[i] != null) {
+                this.downstreams[i].close();
+                this.downstreams[i] = null;
             }
         }
         return true;
@@ -128,7 +116,7 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
     }
 
     public boolean isDrained() {
-        return parallelQueue == null || parallelQueue.isEmpty();
+        return this.parallelQueue == null || this.parallelQueue.isEmpty();
     }
 
     @Override
@@ -136,9 +124,9 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
         if (subscription instanceof FluxEdge dh) {
             super.onSubscribe(dh);
             dh.subscribe(this);
-            for (var down : downstreams) {
+            for (var down : this.downstreams) {
                 if (down != null) {
-                    down.setParent(parent);
+                    down.setParent(this.parent.getOpaque());
                 }
             }
         } else if (subscription instanceof UpstreamInterceptor interceptor) {
@@ -150,21 +138,13 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
     }
 
     @Override
-    public int getLayerWidth() {
-        if (parent != null) {
-            return parent.getLayerWidth();
-        }
-        return super.getLayerWidth();
-    }
-
-    @Override
     public void onNext(AbstractFrame frame) {
-        RoutingState state = (RoutingState) ROUTING_STATE.getAcquire(this);
+        RoutingState state = this.routingState.getOpaque();
         int mapLen = state.mappings.length;
 
-        int logicalIdx = routingFunction.route(frame, mapLen);
+        int logicalIdx = this.routingFunction.route(frame, mapLen);
         int id = state.mappings[logicalIdx];
-        downstreams[id].onNext(frame);
+        this.downstreams[id].onNext(frame);
     }
 
     @Override
@@ -173,18 +153,18 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
             return;
         }
 
-        if (parallelQueue != null && !parallelQueue.isEmpty()) {
-            if (wip.compareAndSet(0, 1)) {
+        if (this.parallelQueue != null && !this.parallelQueue.isEmpty()) {
+            if (this.wip.compareAndSet(0, 1)) {
                 try {
-                    int count = parallelQueue.drain(buffer, (int) demand);
+                    int count = this.parallelQueue.drain(buffer, (int) demand);
                     demand -= count;
                 } finally {
-                    wip.set(0);
+                    this.wip.set(0);
                 }
             }
         }
 
-        FluxEdge parent = this.parent;
+        FluxEdge parent = this.parent.getOpaque();
         if (parent != null) {
             parent.pull(buffer, demand);
         }
@@ -192,7 +172,7 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
 
     @Override
     public void onError(Throwable throwable) {
-        for (var down : downstreams) {
+        for (var down : this.downstreams) {
             if (down != null) {
                 down.onError(throwable);
             }
@@ -207,12 +187,13 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
     @Override
     public void close() {
         super.close();
-        for (int i = 0; i < downstreams.length; i++) {
-            if (downstreams[i] != null) {
-                downstreams[i].close();
-                downstreams[i] = null;
+        for (int i = 0; i < this.downstreams.length; i++) {
+            if (this.downstreams[i] != null) {
+                this.downstreams[i].close();
+                this.downstreams[i] = null;
             }
         }
+        this.routingState.lazySet(null);
     }
 
     @FunctionalInterface
@@ -254,14 +235,14 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
 
         @Override
         public void onNext(AbstractFrame frame) {
-            if ((count++ & 63) == 0) {
+            if ((this.count++ & 63) == 0) {
                 frame.setIngestNs(System.nanoTime());
             } else {
                 frame.setIngestNs(0);
             }
 
             if (!frame.isOrdered()) {
-                if (parallelQueue != null && parallelQueue.relaxedOffer(frame)) {
+                if (FluxNode.this.parallelQueue != null && FluxNode.this.parallelQueue.relaxedOffer(frame)) {
                     return;
                 }
             }
@@ -276,32 +257,32 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
 
         @Override
         public void request(long num) {
-            if (num <= 0 || drain.getAcquire() || complete.getAcquire()) {
+            if (num <= 0 || FluxNode.this.drain.getOpaque() || this.complete.getOpaque()) {
                 return;
             }
 
-            if (wip.compareAndSet(0, 1)) {
+            if (this.wip.compareAndSet(0, 1)) {
                 try {
                     long demand = addAndReset(num);
-                    upstream.request(demand);
+                    this.upstream.request(demand);
                 } finally {
-                    wip.set(0);
+                    this.wip.set(0);
                 }
                 return;
             }
-            demand.accumulateAndGet(num, UpstreamInterceptor::addCap);
-            if (wip.compareAndSet(0, 1)) {
+            this.demand.accumulateAndGet(num, UpstreamInterceptor::addCap);
+            if (this.wip.compareAndSet(0, 1)) {
                 try {
                     long d = addAndReset(0);
-                    upstream.request(d);
+                    this.upstream.request(d);
                 } finally {
-                    wip.set(0);
+                    this.wip.set(0);
                 }
             }
         }
 
         private long addAndReset(long num) {
-            long sum = demand.getAndSet(0);
+            long sum = this.demand.getAndSet(0);
             sum += num;
             if (sum < 0) {
                 return Long.MAX_VALUE;
@@ -335,13 +316,13 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
         public void cancel() {
             if(this.complete.compareAndSet(false, true)) {
                 logger.debug("UpstreamHandle Cancelled");
-                upstream.cancel();
+                this.upstream.cancel();
             }
         }
 
         @Override
         public boolean isComplete() {
-            return complete.getAcquire();
+            return this.complete.getOpaque();
         }
     }
 }

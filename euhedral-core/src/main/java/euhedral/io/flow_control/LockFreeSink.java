@@ -4,6 +4,7 @@ import euhedral.io.frames.AbstractFrame;
 import org.jctools.queues.MessagePassingQueue;
 import org.jctools.queues.MessagePassingQueue.Consumer;
 
+@SuppressWarnings("unused")
 public class LockFreeSink {
 
     private final MessagePassingQueue<AbstractFrame> buffer;
@@ -23,21 +24,21 @@ public class LockFreeSink {
     }
 
     public int drain() {
-        return buffer.drain(drainFunc);
+        return this.buffer.drain(this.drainFunc);
     }
 
     public boolean relaxedOffer(AbstractFrame frame) {
-        boolean success = buffer.relaxedOffer(frame);
-        if(success && hookOnOffer != null) {
-            hookOnOffer.accept(frame);
+        boolean success = this.buffer.relaxedOffer(frame);
+        if(success && this.hookOnOffer != null) {
+            this.hookOnOffer.accept(frame);
         }
         return success;
     }
 
     public boolean offer(AbstractFrame frame) {
-        boolean success = buffer.offer(frame);
-        if(success && hookOnOffer != null) {
-            hookOnOffer.accept(frame);
+        boolean success = this.buffer.offer(frame);
+        if(success && this.hookOnOffer != null) {
+            this.hookOnOffer.accept(frame);
         }
         return success;
     }
