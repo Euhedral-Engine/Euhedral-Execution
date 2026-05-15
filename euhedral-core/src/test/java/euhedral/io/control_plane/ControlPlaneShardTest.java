@@ -33,7 +33,7 @@ import reactor.core.publisher.Flux;
 class ControlPlaneShardTest {
 
     private final FluxResourceMonitor mockResourceMonitor = mock(FluxResourceMonitor.class);
-    private final MockedStatic<SystemInfo> mockSysInfo = Mockito.mockStatic(SystemInfo.class);
+    private static final MockedStatic<SystemInfo> mockSysInfo = Mockito.mockStatic(SystemInfo.class);
     private final MeterRegistry mockMeterRegistry = mock(MeterRegistry.class);
 
     @Test
