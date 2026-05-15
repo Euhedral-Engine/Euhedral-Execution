@@ -40,25 +40,25 @@ public abstract class AbstractCloneablePipeline implements
 
     @Override
     public void start() {
-        executor.start();
-        slotManager.start();
-        cacheManager.start();
+        this.executor.start();
+        this.slotManager.start();
+        this.cacheManager.start();
 
-        executor.reportErrorsTo(slotManager);
-        executor.ingest(slotManager.output());
-        slotManager.ingest(cacheManager.output());
+        this.executor.reportErrorsTo(this.slotManager);
+        this.executor.ingest(this.slotManager.output());
+        this.slotManager.ingest(this.cacheManager.output());
     }
 
     @Override
     public boolean isStarted() {
-        return cacheManager.isStarted() && slotManager.isStarted() && executor.isStarted();
+        return this.cacheManager.isStarted() && this.slotManager.isStarted() && this.executor.isStarted();
     }
 
     @Override
     public void update(CoreSnapshot snapshot) {
-        cacheManager.update(snapshot);
-        slotManager.update(snapshot);
-        executor.update(snapshot);
+        this.cacheManager.update(snapshot);
+        this.slotManager.update(snapshot);
+        this.executor.update(snapshot);
     }
 
     @Override
@@ -69,49 +69,49 @@ public abstract class AbstractCloneablePipeline implements
 
     @Override
     public void ingest(Publisher<? extends AbstractFrame> frameFlux) {
-        cacheManager.ingest(frameFlux);
+        this.cacheManager.ingest(frameFlux);
     }
 
     @Override
     public Publisher<? extends AbstractFrame> output() {
-        return executor.output();
+        return this.executor.output();
     }
 
     @Override
     public double getPressure() {
-        return slotManager.getPressure();
+        return this.slotManager.getPressure();
     }
 
     @Override
     public boolean isDrained() {
-        return cacheManager.isDrained() &&
-                slotManager.isDrained() &&
-                executor.isDrained();
+        return this.cacheManager.isDrained() &&
+                this.slotManager.isDrained() &&
+                this.executor.isDrained();
     }
 
     @Override
     public void setDrainMode(boolean value) {
         if (value) {
-            executor.setDrainMode(value);
-            slotManager.setDrainMode(value);
-            cacheManager.setDrainMode(value);
+            this.executor.setDrainMode(value);
+            this.slotManager.setDrainMode(value);
+            this.cacheManager.setDrainMode(value);
         } else {
-            cacheManager.setDrainMode(value);
-            slotManager.setDrainMode(value);
-            executor.setDrainMode(value);
+            this.cacheManager.setDrainMode(value);
+            this.slotManager.setDrainMode(value);
+            this.executor.setDrainMode(value);
         }
     }
 
     @Override
     public int getCore() {
-        return config == null ? -1 : config.coreId();
+        return this.config == null ? -1 : this.config.coreId();
     }
 
     @Override
     public void dumpLocks() {
-        cacheManager.dumpLocks();
-        slotManager.dumpLocks();
-        executor.dumpLocks();
+        this.cacheManager.dumpLocks();
+        this.slotManager.dumpLocks();
+        this.executor.dumpLocks();
     }
 
     @Override
@@ -151,22 +151,22 @@ public abstract class AbstractCloneablePipeline implements
     public void close() throws Exception {
         try {
             try {
-                slotManager.close();
+                this.slotManager.close();
             } catch (Exception e) {
-                logger.error("Failed to close {}", slotManager.getClass(), e);
+                this.logger.error("Failed to close {}", this.slotManager.getClass(), e);
             }
             try {
-                executor.close();
+                this.executor.close();
             } catch (Exception e) {
-                logger.error("Failed to close {}", executor.getClass(), e);
+                this.logger.error("Failed to close {}", this.executor.getClass(), e);
             }
             try {
-                cacheManager.close();
+                this.cacheManager.close();
             } catch (Exception e) {
-                logger.error("Failed to close {}", cacheManager.getClass(), e);
+                this.logger.error("Failed to close {}", this.cacheManager.getClass(), e);
             }
         } catch (Exception e) {
-            logger.error("Failed to close pipeline properly", e);
+            this.logger.error("Failed to close pipeline properly", e);
         }
     }
 }
