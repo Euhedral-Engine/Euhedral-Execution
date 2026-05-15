@@ -169,7 +169,7 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
         if (this.parallelQueue != null && !this.parallelQueue.isEmpty()) {
             if (this.wip.compareAndSet(0, 1)) {
                 try {
-                    int count = this.parallelQueue.drain(buffer, (int) demand);
+                    int count = this.parallelQueue.drain(buffer::accept, (int) demand);
                     demand -= count;
                 } finally {
                     this.wip.set(0);

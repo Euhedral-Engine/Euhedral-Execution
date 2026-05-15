@@ -113,11 +113,11 @@ public class DRRScheduler extends IngestSequencer implements CacheManager, Clone
     @Override
     public void firstTouch() {
         int totalInserts = 3 * chunkSize;
-        for (var queue : queueRing) {
-            for (int i = 0; i < totalInserts; i++) {
-                queue.enqueue(DummyInitFrame.INSTANCE);
+        for (int i = 0; i < super.queueRing.partitions(); i++) {
+            for (int j = 0; j < totalInserts; j++) {
+                super.queueRing.offer(i, DummyInitFrame.INSTANCE);
             }
-            queue.clear();
+            super.queueRing.clear();
         }
         Arrays.stream(queueStats).forEach(QueueStats::reset);
         fillRecorder.getAcquire().record(1, true);
@@ -209,12 +209,10 @@ public class DRRScheduler extends IngestSequencer implements CacheManager, Clone
     }
 
     @Override
-    protected void recordDrainMetrics(QueueFrame queue, QueueStats stats, long drainCount) {
-        if (!queue.isEmpty()) {
-            if (this.metrics.subQBacklogSummary != null) {
-                this.metrics.subQBacklogSummary.record(queue.getSizeBytes());
-                this.metrics.subQWeightSummary.record(stats.weight);
-            }
+    protected void recordDrainMetrics(int partition, QueueStats stats, long drainCount) {
+        if (this.metrics.subQBacklogSummary != null) {
+            this.metrics.subQBacklogSummary.record(super.queueRing.getSizeBytes(partition));
+            this.metrics.subQWeightSummary.record(stats.weight);
         }
     }
 
