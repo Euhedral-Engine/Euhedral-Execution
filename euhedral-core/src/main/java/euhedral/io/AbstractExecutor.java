@@ -26,7 +26,7 @@ public abstract class AbstractExecutor implements PipelineExecutor {
 
     @Override
     public final void reportErrorsTo(CloneableObject clone) {
-        clone.errorChannel(errorReturn.asFlux());
+        clone.errorChannel(this.errorReturn.asFlux());
     }
 
     @Override
@@ -49,7 +49,7 @@ public abstract class AbstractExecutor implements PipelineExecutor {
             frame.setCancelledExecution(true);
             Failure failure = new Failure(frame, e);
             EmitResult result;
-            while (!(result = errorReturn.tryEmitNext(failure)).isSuccess()) {
+            while (!(result = this.errorReturn.tryEmitNext(failure)).isSuccess()) {
                 if (result == EmitResult.FAIL_CANCELLED || result == EmitResult.FAIL_TERMINATED
                         || result == EmitResult.FAIL_ZERO_SUBSCRIBER) {
                     frame.kill();
@@ -71,7 +71,7 @@ public abstract class AbstractExecutor implements PipelineExecutor {
 
     @Override
     public void close() {
-        errorReturn.tryEmitComplete();
+        this.errorReturn.tryEmitComplete();
     }
 
     protected class ExecutionSubscriber implements Subscriber<AbstractFrame> {
