@@ -285,6 +285,9 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
                 try {
                     long demand = addAndReset(num);
                     this.upstream.request(demand);
+                } catch (Throwable t) {
+                    logger.error("Upstream threw an exception during request", t);
+                    cancel();
                 } finally {
                     this.wip.set(0);
                 }
@@ -295,6 +298,9 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
                 try {
                     long d = addAndReset(0);
                     this.upstream.request(d);
+                } catch (Throwable t) {
+                    logger.error("UpstreamHandle threw an exception during request", t);
+                    cancel();
                 } finally {
                     this.wip.set(0);
                 }
@@ -320,14 +326,14 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
         @Override
         public void onComplete() {
             if (this.complete.compareAndSet(false, true)) {
-                logger.debug("UpstreamHandle Complete");
+                logger.trace("UpstreamHandle Complete");
             }
         }
 
         @Override
         public void cancel() {
             if (this.complete.compareAndSet(false, true)) {
-                logger.debug("UpstreamHandle Cancelled");
+                logger.trace("UpstreamHandle Cancelled");
                 this.upstream.cancel();
             }
         }

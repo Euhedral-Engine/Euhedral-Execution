@@ -54,7 +54,7 @@ public final class EffectiveTopology {
         }
 
         try {
-            BitSet globalEffectiveCpus = utilization.globalEffectiveCpus();
+            BitSet globalEffectiveCpus = (BitSet) utilization.globalEffectiveCpus().clone();
             CoreInfo coreInfo = SystemInfo.getCoreInfo(0);
             if (coreInfo != null) {
                 globalEffectiveCpus.andNot(coreInfo.getCpuSet());
@@ -119,8 +119,8 @@ public final class EffectiveTopology {
                 }
 
                 sTopologies.set(socket, new EffectiveSocketTopology(
-                        socketTopology == null ? 0 : socketTopology.version + 1, socket,
-                        new UnmodifiableBitSet(globalEffectiveCpus),
+                        socketTopology == null ? 1 : socketTopology.version + 1, socket,
+                        new UnmodifiableBitSet(effectiveCores),
                         new UnmodifiableBitSet(effectiveCpus),
                         buildCoreToCpus(effectiveCpus)));
             }

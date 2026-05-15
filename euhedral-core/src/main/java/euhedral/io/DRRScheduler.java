@@ -150,7 +150,7 @@ public class DRRScheduler extends IngestSequencer implements CacheManager, Clone
 
     @Override
     protected void refillQueueQuota(QueueStats stats) {
-        if (drain.get()) {
+        if (drain.getOpaque()) {
             stats.quotaBytes = chunkSize * stats.avgFrameSize.get();
             return;
         }
