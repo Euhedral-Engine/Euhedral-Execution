@@ -5,7 +5,8 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
-import org.jctools.queues.MessagePassingQueue;
+
+import euhedral.queues.common.PartitionedQueue;
 import org.jspecify.annotations.NonNull;
 import org.reactivestreams.Publisher;
 import org.reactivestreams.Subscriber;
@@ -33,7 +34,7 @@ public class DirectOutputFlux implements Publisher<AbstractFrame>, Subscription 
 
     protected final AtomicLong demand = new AtomicLong(0);
 
-    protected final MessagePassingQueue<AbstractFrame> buffer;
+    protected final PartitionedQueue<AbstractFrame> buffer;
     protected final Consumer<AbstractFrame> applyToEach;
 
     protected boolean unlimited = false;
@@ -41,7 +42,7 @@ public class DirectOutputFlux implements Publisher<AbstractFrame>, Subscription 
     protected Subscriber<? super AbstractFrame> subscriber = null;
 
 
-    public DirectOutputFlux(@NonNull MessagePassingQueue<AbstractFrame> buffer,
+    public DirectOutputFlux(@NonNull PartitionedQueue<AbstractFrame> buffer,
             Consumer<AbstractFrame> applyToEach) {
         this.buffer = buffer;
         this.applyToEach = applyToEach;

@@ -23,10 +23,6 @@ public class QueueFrame extends AbstractFrame implements AutoCloseable {
         this.queue = queue;
     }
 
-    public boolean isEmpty() {
-        return queue.isEmpty();
-    }
-
     public boolean enqueue(AbstractFrame frame) {
         if (queue.relaxedOffer(frame)) {
             sizeBytes.accumulateAndGet(frame.getSizeBytes(), QueueFrame::addCap);
@@ -46,7 +42,7 @@ public class QueueFrame extends AbstractFrame implements AutoCloseable {
 
         drainBuffer.drainCount = 0;
         drainBuffer.drainedBytes = 0;
-        int count = this.queue.drain(drainBuffer, limit);
+        int count = this.queue.drain(drainBuffer::accept, limit);
 
         if(count > 0) {
             sizeBytes.accumulateAndGet(-drainBuffer.drainedBytes, QueueFrame::addCap);

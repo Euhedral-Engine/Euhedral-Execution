@@ -313,6 +313,11 @@ public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueu
     }
 
     @Override
+    public int partitions() {
+        return this.partitions;
+    }
+
+    @Override
     public long capacity() {
         return -1;
     }

@@ -26,6 +26,8 @@ public interface PartitionedQueue<T> {
 
     long size(int partition);
 
+    int partitions();
+
     long capacity();
 
     void clear();

@@ -30,10 +30,13 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.LockSupport;
+
+import euhedral.queues.PartitionedArrayQueue;
+import euhedral.queues.PartitionedSpscArrayQueue;
+import euhedral.queues.common.PartitionedQueue;
 import lombok.AccessLevel;
 import lombok.Getter;
 import org.jctools.queues.MpscUnboundedXaddArrayQueue;
-import org.jctools.queues.unpadded.SpscUnboundedUnpaddedArrayQueue;
 import org.jspecify.annotations.NonNull;
 import org.reactivestreams.Publisher;
 import org.reactivestreams.Subscription;
@@ -125,7 +128,7 @@ public class ExecutionManager implements SlotManager {
 
     protected final int bufferSize;
     protected final DrainBuffer bufferWrapper;
-    protected final SpscUnboundedUnpaddedArrayQueue<AbstractFrame> buffer;
+    protected final PartitionedQueue<AbstractFrame> buffer;
     protected final LockFreeSink completeSink;
 
     protected final int maxUpdateInterval;
@@ -159,99 +162,118 @@ public class ExecutionManager implements SlotManager {
 
     public ExecutionManager(@NonNull ExecutionManagerConfig config) {
         this.config = config;
+        this.maxUpdateInterval = Integer.highestOneBit(Math.max(config.maxUpdateInterval(), 2));
 
-        int bufferSize = (int) Math.min(Long.highestOneBit((SystemInfo.DEFAULT_L1 - 1) << 1),
-                Integer.MAX_VALUE);
-        if (config.cloneConfig() != null) {
-            CpuCacheLayout layout = SystemInfo.getCacheLayout(config.cloneConfig().getCpuSet()[0]);
+        this.currentRate = config.minConcurrency();
+        this.currentConcurrency = Math.max(1, config.minConcurrency());
+        this.effectiveConcurrencyLimit = config.minConcurrency();
+
+        if (config.cloneConfig() == null) {
+            this.cpuId = -1;
+            this.logger = LoggerFactory.getLogger(ExecutionManager.class);
+            this.executionLatency = null;
+            this.state = null;
+            this.pinnedExecutor = null;
+            this.buffer = null;
+            this.bufferSize = 0;
+            this.bufferWrapper = null;
+            this.buddy = null;
+            this.buddyState = null;
+            this.isPCore = false;
+            this.metrics = null;
+            this.completeSink = null;
+            this.outputFlux = null;
+            this.shutdownHook = null;
+        } else {
+            String name = config.cloneConfig().shardName() + "-ExecutionManager-"
+                    + config.cloneConfig().coreId();
+            this.logger = LoggerFactory.getLogger(name);
+
+            int[] cpus = config.cloneConfig().getCpuSet();
+            this.cpuId = cpus[0];
+
+            this.executionLatency = new FlowRecorder();
+            this.state = new CycleState();
+
+            CpuCacheLayout layout = SystemInfo.getCacheLayout(cpus[0]);
             long temp = layout.bytesL1();
             if (config.cloneConfig().getCpuSet().length != layout.sharesL1()) {
                 temp /= layout.sharesL1();
             }
 
             temp = (long) (temp * 0.7);
-            bufferSize = (int) Math.min(Long.highestOneBit((temp - 1) << 1), Integer.MAX_VALUE);
+            int bufferSize = (int) Math.min(Long.highestOneBit((temp - 1) << 1), Integer.MAX_VALUE);
             bufferSize /= ObjectSizer.POINTER_SIZE;
-            isPCore = SystemInfo.getCoreInfo(SystemInfo.getCpuInfo(layout.cpu()).core()).pCore();
-        } else {
-            isPCore = false;
-        }
-        bufferSize = Math.max(bufferSize, 64);
-
-        this.buffer = new SpscUnboundedUnpaddedArrayQueue<>(bufferSize);
-        this.bufferSize = bufferSize;
-        this.bufferWrapper = new DrainBuffer(buffer, bufferSize, false);
-
-        this.executionLatency = new FlowRecorder();
-        this.maxUpdateInterval = Integer.highestOneBit(Math.max(config.maxUpdateInterval(), 2));
-
-        this.state = new CycleState();
-
-
-        this.currentRate = config.minConcurrency();
-        this.currentConcurrency = Math.max(1, config.minConcurrency());
-        this.effectiveConcurrencyLimit = config.minConcurrency();
-
-        PinnedThreadExecutor smtExec = null;
-        if (config.cloneConfig() == null) {
-            this.cpuId = -1;
-            this.pinnedExecutor = null;
-            this.logger = LoggerFactory.getLogger(ExecutionManager.class);
-        } else {
-            int[] cpus = config.cloneConfig().getCpuSet();
-            this.cpuId = cpus[0];
-            String name = config.cloneConfig().shardName() + "-ExecutionManager-"
-                    + config.cloneConfig().coreId();
+            bufferSize = Math.max(bufferSize, 64);
+            this.bufferSize = bufferSize;
 
             this.pinnedExecutor =
                     PinnedThreadExecutor.getOrSetIfAbsent(cpus[0], name, Thread.MAX_PRIORITY,
                             false);
-            if(cpus.length > 1) {
+
+            PinnedThreadExecutor smtExec = null;
+            if(cpus.length > 1 && config.enableSMT()) {
                 smtExec = PinnedThreadExecutor.getOrSetIfAbsent(cpus[1],
                         this.config.cloneConfig().shardName() + "-ExecutionManager-SMT-"
                                 + this.config.cloneConfig().coreId(), Thread.MAX_PRIORITY,
                         false);
-            }
-            this.logger = LoggerFactory.getLogger(name);
-        }
-
-        this.buddyState = new SMTState(executionLatency, bufferWrapper.arrivalLatencyRecorder,
-                config.idleCyclePolicy().maxParkTime().toNanos());
-
-        this.buddy = new SlotManagerSMTBuddy(bufferWrapper, buddyState, smtExec);
-
-        this.metrics = new ExecutionManagerMetrics(config.meterRegistry(), config,
-                () -> (int) IN_FLIGHT.getOpaque(this),
-                () -> (long) AVG_LATENCY.getOpaque(this),
-                () -> (long) CONCURRENCY.getOpaque(this),
-                () -> (long) RATE.getOpaque(this),
-                this::getPressure);
-
-        this.completeSink =
-                new LockFreeSink(new MpscUnboundedXaddArrayQueue<>(bufferSize, 4), frame -> {
-                    IN_FLIGHT.setOpaque(this, this.inFlight - 1);
-                    state.receivingOrderedWork = upstreamCount == 1 && frame.isOrdered();
-                    state.completed++;
-                    frame.doFinally();
-                }, this::recordCompletion);
-        this.outputFlux = new DirectOutputFlux(this.buffer, frame -> {
-            if ((this.state.dispatches++ & this.state.updateIntervalMask) == 0) {
-                frame.setStartNs(System.nanoTime());
+                this.buffer = new PartitionedSpscArrayQueue<>(1, bufferSize);
             } else {
-                frame.setStartNs(0);
+                this.buffer = new PartitionedArrayQueue<>(1, bufferSize);
             }
-            frame.setCompletionSink(this.completeSink);
-        });
+            this.bufferWrapper = new DrainBuffer(this.buffer, bufferSize, false);
+            this.buddyState = new SMTState(executionLatency, bufferWrapper.arrivalLatencyRecorder,
+                    config.idleCyclePolicy().maxParkTime().toNanos());
+            this.buddy = new SlotManagerSMTBuddy(bufferWrapper, buddyState, smtExec);
+            this.isPCore = SystemInfo.getCoreInfo(SystemInfo.getCpuInfo(layout.cpu()).core()).pCore();
 
-        this.shutdownHook = new Thread(this::close);
-        Runtime.getRuntime().addShutdownHook(this.shutdownHook);
+            this.completeSink =
+                    new LockFreeSink(new MpscUnboundedXaddArrayQueue<>(bufferSize, 4), frame -> {
+                        IN_FLIGHT.setOpaque(this, this.inFlight - 1);
+                        state.receivingOrderedWork = upstreamCount == 1 && frame.isOrdered();
+                        state.completed++;
+                        frame.doFinally();
+                    }, this::recordCompletion);
+            this.outputFlux = new DirectOutputFlux(this.buffer, frame -> {
+                if ((this.state.dispatches++ & this.state.updateIntervalMask) == 0) {
+                    frame.setStartNs(System.nanoTime());
+                } else {
+                    frame.setStartNs(0);
+                }
+                frame.setCompletionSink(this.completeSink);
+            });
+
+            this.metrics = new ExecutionManagerMetrics(config.meterRegistry(), config,
+                    () -> (int) IN_FLIGHT.getOpaque(this),
+                    () -> (long) AVG_LATENCY.getOpaque(this),
+                    () -> (long) CONCURRENCY.getOpaque(this),
+                    () -> (long) RATE.getOpaque(this),
+                    this::getPressure);
+            this.shutdownHook = new Thread(this::close);
+            Runtime.getRuntime().addShutdownHook(this.shutdownHook);
+        }
     }
 
-    protected void recordCompletion(AbstractFrame frame) {
-        if (!frame.isCancelledExecution() && frame.getStartNs() > 0) {
-            long now = System.nanoTime();
-            this.executionLatency.record(now, now - frame.getStartNs(), false);
+    @Override
+    public Publisher<? extends AbstractFrame> process(Publisher<? extends AbstractFrame> flux) {
+        ingest(flux);
+        return output();
+    }
+
+    @Override
+    public void ingest(Publisher<? extends AbstractFrame> frameFlux) {
+        if (frameFlux instanceof IngestSequencer sequencer && INGEST.compareAndSet(this, null,
+                sequencer)) {
+            this.buddy.setIngest(sequencer);
+            this.wakeHook = new WakeHook(this.cycleThread);
+            sequencer.setWakeHook(this.wakeHook);
+            LockSupport.unpark(this.cycleThread);
         }
+    }
+
+    @Override
+    public Publisher<? extends AbstractFrame> output() {
+        return this.outputFlux;
     }
 
     @Override
@@ -274,7 +296,7 @@ public class ExecutionManager implements SlotManager {
             }
             dumpLocks();
             AbstractFrame frame;
-            while ((frame = this.buffer.poll()) != null) {
+            while ((frame = this.buffer.poll(0)) != null) {
                 frame.kill();
             }
             this.buffer.clear();
@@ -297,12 +319,21 @@ public class ExecutionManager implements SlotManager {
 
     @Override
     public void firstTouch() {
+        if(this.buffer == null) {
+            return;
+        }
         for (int i = 0; i < this.bufferSize * 2; i++) {
-            this.buffer.add(DummyInitFrame.INSTANCE);
+            this.buffer.offer(DummyInitFrame.INSTANCE);
         }
         this.buffer.clear();
     }
 
+    @Override
+    public boolean isStarted() {
+        return this.running.getAcquire();
+    }
+
+    @Override
     public void start() {
         if (this.pinnedExecutor == null) {
             throw new IllegalStateException(
@@ -639,31 +670,11 @@ public class ExecutionManager implements SlotManager {
         }
     }
 
-    @Override
-    public Publisher<? extends AbstractFrame> process(Publisher<? extends AbstractFrame> flux) {
-        ingest(flux);
-        return output();
-    }
-
-    @Override
-    public void ingest(Publisher<? extends AbstractFrame> frameFlux) {
-        if (frameFlux instanceof IngestSequencer sequencer && INGEST.compareAndSet(this, null,
-                sequencer)) {
-            this.buddy.setIngest(sequencer);
-            this.wakeHook = new WakeHook(this.cycleThread);
-            sequencer.setWakeHook(this.wakeHook);
-            LockSupport.unpark(this.cycleThread);
+    protected void recordCompletion(AbstractFrame frame) {
+        if (!frame.isCancelledExecution() && frame.getStartNs() > 0) {
+            long now = System.nanoTime();
+            this.executionLatency.record(now, now - frame.getStartNs(), false);
         }
-    }
-
-    @Override
-    public Publisher<? extends AbstractFrame> output() {
-        return this.outputFlux;
-    }
-
-    @Override
-    public boolean isStarted() {
-        return this.running.getAcquire();
     }
 
     @Override

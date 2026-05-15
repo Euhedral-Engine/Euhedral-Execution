@@ -210,6 +210,11 @@ public class PartitionedArrayQueue<T> implements PartitionedQueue<T> {
     }
 
     @Override
+    public int partitions() {
+        return this.partitions;
+    }
+
+    @Override
     public long capacity() {
         return this.capacity;
     }
