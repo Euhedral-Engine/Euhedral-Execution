@@ -1,12 +1,12 @@
 package euhedral.io.impl;
 
 import euhedral.io.frames.AbstractFrame;
+import euhedral.queues.PartitionedMpscArrayQueue;
+import euhedral.queues.PartitionedUnboundedMpscArrayQueue;
+import euhedral.queues.common.PartitionedQueue;
 import java.util.Arrays;
 import lombok.Getter;
 import lombok.Setter;
-import org.jctools.queues.MessagePassingQueue;
-import org.jctools.queues.MpscArrayQueue;
-import org.jctools.queues.MpscUnboundedXaddArrayQueue;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
@@ -24,7 +24,7 @@ import org.jspecify.annotations.Nullable;
 public class FrameManager<DATA, FRAME extends AbstractFrame> implements AutoCloseable {
 
     @Getter
-    private final MessagePassingQueue<AbstractFrame> recycleQueue;
+    private final PartitionedQueue<AbstractFrame> recycleQueue;
     private final long password;
     private final AbstractFrame[] buffer;
 
@@ -40,7 +40,7 @@ public class FrameManager<DATA, FRAME extends AbstractFrame> implements AutoClos
         int actual = Integer.highestOneBit((chunkSize - 1) << 1);
         actual = actual <= 0 ? 1 : actual;
 
-        this.recycleQueue = new MpscUnboundedXaddArrayQueue<>(actual, pooledChunks);
+        this.recycleQueue = new PartitionedUnboundedMpscArrayQueue<>(1, actual, pooledChunks);
         this.password = password;
         this.buffer = new AbstractFrame[Math.max(actual, 256)];
     }
@@ -49,7 +49,7 @@ public class FrameManager<DATA, FRAME extends AbstractFrame> implements AutoClos
         int actual = Integer.highestOneBit((capacity - 1) << 1);
         actual = actual <= 0 ? 1 : actual;
 
-        this.recycleQueue = new MpscArrayQueue<>(actual);
+        this.recycleQueue = new PartitionedMpscArrayQueue<>(1, actual);
         this.password = password;
         this.buffer = new AbstractFrame[Math.max(actual, 256)];
     }
@@ -103,7 +103,7 @@ public class FrameManager<DATA, FRAME extends AbstractFrame> implements AutoClos
     /// @param frame Frame to recycle
     /// @return `true` if frame was enqueued, `false` otherwise
     public boolean recycle(FRAME frame) {
-        return recycleQueue.relaxedOffer(frame);
+        return recycleQueue.offer(frame);
     }
 
     /// Empties the buffer and queue up to the `max` amount.
