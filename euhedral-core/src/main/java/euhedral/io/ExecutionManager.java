@@ -11,12 +11,11 @@ import euhedral.hardware_utils.SystemInfo.CpuInfo;
 import euhedral.hardware_utils.ThreadTools;
 import euhedral.hardware_utils.common.SystemUtilization.CoreSnapshot;
 import euhedral.hardware_utils.common.SystemUtilization.CpuSnapshot;
+import euhedral.io.DRRCacheManager.DownstreamHandle;
 import euhedral.io.SlotManagerSMTBuddy.SMTState;
 import euhedral.io.config.CloneConfig;
 import euhedral.io.config.ExecutionManagerConfig;
 import euhedral.io.flow_control.DirectOutputFlux;
-import euhedral.io.flow_control.IngestSequencer;
-import euhedral.io.flow_control.IngestSequencer.WakeHook;
 import euhedral.io.flow_control.LockFreeSink;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.frames.DummyInitFrame;
@@ -25,7 +24,6 @@ import euhedral.io.metrics.ExecutionManagerMetrics;
 import euhedral.io.utils.DrainBuffer;
 import euhedral.io.utils.FlowRecorder;
 import euhedral.io.utils.FlowRecorder.FlowSnapshot;
-import euhedral.io.utils.ObjectSizer;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -34,6 +32,7 @@ import java.util.concurrent.locks.LockSupport;
 import euhedral.queues.PartitionedArrayQueue;
 import euhedral.queues.PartitionedSpscArrayQueue;
 import euhedral.queues.common.PartitionedQueue;
+import euhedral.queues.common.QueueUtils;
 import lombok.AccessLevel;
 import lombok.Getter;
 import org.jctools.queues.MpscUnboundedXaddArrayQueue;
@@ -102,7 +101,7 @@ public class ExecutionManager implements SlotManager {
             DRAIN = MethodHandles.lookup()
                     .findVarHandle(ExecutionManager.class, "drainMode", boolean.class);
             INGEST = MethodHandles.lookup()
-                    .findVarHandle(ExecutionManager.class, "ingest", IngestSequencer.class);
+                    .findVarHandle(ExecutionManager.class, "ingest", DRRCacheManager.class);
             IN_FLIGHT = MethodHandles.lookup()
                     .findVarHandle(ExecutionManager.class, "inFlight", int.class);
             RATE = MethodHandles.lookup()
@@ -136,6 +135,7 @@ public class ExecutionManager implements SlotManager {
     @Getter
     protected final PinnedThreadExecutor pinnedExecutor;
     protected final Thread shutdownHook;
+    protected final DownstreamHandle handle;
 
     protected final DirectOutputFlux outputFlux;
 
@@ -146,7 +146,7 @@ public class ExecutionManager implements SlotManager {
     protected boolean drainMode = false;
     protected CoreSnapshot coreSnapshot = null;
 
-    protected IngestSequencer ingest = null;
+    protected DRRCacheManager ingest = null;
 
     protected long avgLatency;
     protected long currentConcurrency;
@@ -157,7 +157,7 @@ public class ExecutionManager implements SlotManager {
 
     protected long upstreamCount = 0;
 
-    protected WakeHook wakeHook;
+    protected boolean primed = false;
     private Thread cycleThread;
 
     public ExecutionManager(@NonNull ExecutionManagerConfig config) {
@@ -184,6 +184,7 @@ public class ExecutionManager implements SlotManager {
             this.completeSink = null;
             this.outputFlux = null;
             this.shutdownHook = null;
+            this.handle = null;
         } else {
             String name = config.cloneConfig().shardName() + "-ExecutionManager-"
                     + config.cloneConfig().coreId();
@@ -203,7 +204,7 @@ public class ExecutionManager implements SlotManager {
 
             temp = (long) (temp * 0.7);
             int bufferSize = (int) Math.min(Long.highestOneBit((temp - 1) << 1), Integer.MAX_VALUE);
-            bufferSize /= ObjectSizer.POINTER_SIZE;
+            bufferSize /= QueueUtils.REFERENCE_SIZE;
             bufferSize = Math.max(bufferSize, 64);
             this.bufferSize = bufferSize;
 
@@ -221,10 +222,11 @@ public class ExecutionManager implements SlotManager {
             } else {
                 this.buffer = new PartitionedArrayQueue<>(1, bufferSize);
             }
+            this.handle = new DownstreamHandle(this.cpuId, this::getPressure);
             this.bufferWrapper = new DrainBuffer(this.buffer, bufferSize, false);
             this.buddyState = new SMTState(executionLatency, bufferWrapper.arrivalLatencyRecorder,
                     config.idleCyclePolicy().maxParkTime().toNanos());
-            this.buddy = new SlotManagerSMTBuddy(bufferWrapper, buddyState, smtExec);
+            this.buddy = new SlotManagerSMTBuddy(handle, bufferWrapper, buddyState, smtExec);
             this.isPCore = SystemInfo.getCoreInfo(SystemInfo.getCpuInfo(layout.cpu()).core()).pCore();
 
             this.completeSink =
@@ -232,6 +234,7 @@ public class ExecutionManager implements SlotManager {
                         IN_FLIGHT.setOpaque(this, this.inFlight - 1);
                         state.receivingOrderedWork = upstreamCount == 1 && frame.isOrdered();
                         state.completed++;
+                        frame.reset();
                         frame.doFinally();
                     }, this::recordCompletion);
             this.outputFlux = new DirectOutputFlux(this.buffer, frame -> {
@@ -262,11 +265,11 @@ public class ExecutionManager implements SlotManager {
 
     @Override
     public void ingest(Publisher<? extends AbstractFrame> frameFlux) {
-        if (frameFlux instanceof IngestSequencer sequencer && INGEST.compareAndSet(this, null,
-                sequencer)) {
-            this.buddy.setIngest(sequencer);
-            this.wakeHook = new WakeHook(this.cycleThread);
-            sequencer.setWakeHook(this.wakeHook);
+        if (frameFlux instanceof DRRCacheManager ingest && INGEST.compareAndSet(this, null,
+                ingest)) {
+            this.buddy.setIngest(ingest);
+            INGEST.setRelease(this, ingest);
+            ingest.addHandle(this.handle);
             LockSupport.unpark(this.cycleThread);
         }
     }
@@ -279,9 +282,10 @@ public class ExecutionManager implements SlotManager {
     @Override
     public void close() {
         if (this.running.compareAndSet(true, false)) {
-            IngestSequencer ingest = (IngestSequencer) INGEST.getAcquire(this);
+            DRRCacheManager ingest = (DRRCacheManager) INGEST.getAcquire(this);
             if (ingest != null) {
                 ingest.removeThread(this.cycleThread);
+                ingest.removeHandle(this.cpuId);
                 ingest.close();
             }
             this.buddy.close();
@@ -366,6 +370,16 @@ public class ExecutionManager implements SlotManager {
                         this.buddy.start();
                         this.state.smtMode = true;
                     }
+
+                    while(this.ingest == null && !Thread.currentThread().isInterrupted()) {
+                        this.ingest = (DRRCacheManager) INGEST.getOpaque(this);
+                        this.buddy.setIngest(ingest);
+                        LockSupport.parkNanos(2_000L);
+                    }
+                    if(Thread.currentThread().isInterrupted()) {
+                        return;
+                    }
+                    this.ingest.register();
                     cycle();
                 });
             } else {
@@ -417,29 +431,19 @@ public class ExecutionManager implements SlotManager {
                     continue;
                 }
 
-                IngestSequencer ingest = (IngestSequencer) INGEST.getOpaque(this);
-                if (ingest == null) {
-                    idleSpin(5);
-                    continue;
-                }
-
-                long ingestCount = ingest.getCount();
-
-                if (this.buddyState.bufferCount.get() > this.state.lowWaterMark
-                        && ingestCount == 0) {
-                    idleSpin(this.state.rests);
-                    continue;
-                }
-
-                long newUpCount = ingest.getUpstreamCount();
+                long newUpCount = this.ingest.getUpstreamCount();
                 if (this.upstreamCount != newUpCount) {
                     this.state.idleRecorder.reset(false);
                     this.state.rests = 0;
                     this.upstreamCount = newUpCount;
                 }
+
+                long ingestCount = this.ingest.getTotalCount();
+                int bufferCount = this.buddyState.bufferCount.getAcquire();
                 // This is usually hit when there are producers present but nothing is flowing
-                else if (processed == 0 && (this.state.rests & 15) != 0 && this.upstreamCount > 0
+                if (processed == 0 && (this.state.rests & 15) != 0 && this.upstreamCount > 0
                         && !this.state.receivingOrderedWork && ingestCount == 0
+                        && bufferCount == 0
                         && this.state.lastEmptyNs - this.state.lastActiveNs
                         > 10 * this.state.maxParkNs) {
                     idleSpin(Math.min(15, this.state.rests));
@@ -461,13 +465,14 @@ public class ExecutionManager implements SlotManager {
     }
 
     protected int dispatch() {
-        int bufferCount = this.buddyState.bufferCount.get();
+        int bufferCount = this.buddyState.bufferCount.getAcquire();
         if (bufferCount == 0) {
             return 0;
         }
 
         long currentConcurrency = this.currentConcurrency;
         int quota = (int) Math.max(0, currentConcurrency - this.inFlight);
+
         boolean drain = (boolean) DRAIN.getOpaque(this);
         quota = drain ? bufferCount : quota;
 
@@ -633,26 +638,23 @@ public class ExecutionManager implements SlotManager {
                     break;
                 }
 
-                IngestSequencer ingest = (IngestSequencer) INGEST.getOpaque(this);
-                if (ingest != null && !this.state.smtMode) {
+                DRRCacheManager ingest = (DRRCacheManager) INGEST.getOpaque(this);
+                if (!this.state.smtMode) {
                     if (this.upstreamCount != ingest.getUpstreamCount()) {
                         break;
                     }
 
-                    int bufferCount = this.buddyState.bufferCount.get();
                     if (this.upstreamCount == 0) {
-                        long count = ingest.drain(this.bufferWrapper,
-                                this.bufferSize - bufferCount, 0);
+                        this.buddy.doStuff();
+                        long count = this.buddyState.bufferCount.getOpaque();
                         if (count > 0) {
-                            buddyState.bufferCount.addAndGet((int) count);
                             break;
                         }
+                        continue;
                     }
 
-                    if (ingest.getCount() >= (this.bufferSize >> 3)) {
-                        long count = ingest.drain(this.bufferWrapper,
-                                this.bufferSize - bufferCount, 0);
-                        this.buddyState.bufferCount.addAndGet((int) count);
+                    if (ingest.getTotalCount() >= (this.bufferSize >> 3)) {
+                        this.buddy.doStuff();
                         break;
                     }
                 }
@@ -661,13 +663,7 @@ public class ExecutionManager implements SlotManager {
     }
 
     protected final void park(long parkNs) {
-        if (this.wakeHook != null) {
-            this.wakeHook.parked = true;
-        }
         LockSupport.parkNanos(parkNs);
-        if (this.wakeHook != null) {
-            this.wakeHook.parked = false;
-        }
     }
 
     protected void recordCompletion(AbstractFrame frame) {
