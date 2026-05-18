@@ -173,34 +173,6 @@ public class EndToEndBenchmark {
             }
         }
 
-//        @Benchmark
-//        @OperationsPerInvocation(M8)
-        public void benchEightProducersEightMillionParallel(BenchmarkState state) throws Throwable {
-            state.counter.reset();
-            CountDownLatch end = new CountDownLatch(1);
-
-            for (int i = 0; i < 8; i++) {
-                final int id = i;
-                state.producerPool.submit(() -> {
-                    try {
-                        state.barrier8P.await();
-                        state.publishers[id].reset(end, state.counter);
-                        state.controlPlane.ingest(state.publishers[id]);
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
-                });
-            }
-            state.barrier8P.await();
-            state.barrier8P.reset();
-
-            long deadline = System.nanoTime() + TimeUnit.MINUTES.toNanos(1);
-            long sum = sum(deadline, M8, state.counter);
-            if (sum < M8) {
-                throw new RuntimeException("Stall detected. Pending: " + (M8 - sum));
-            }
-        }
-
         @Benchmark
         @OperationsPerInvocation(M32)
         public void bench32Producers32MillionParallel(BenchmarkState state) throws Throwable {
