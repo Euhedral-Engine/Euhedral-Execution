@@ -2,12 +2,13 @@ package euhedral.io.impl;
 
 import euhedral.hashing.HasherApi;
 import euhedral.io.frames.SequencedFrame;
+import euhedral.queues.PartitionedUnboundedMpscArrayQueue;
+import euhedral.queues.PartitionedUnboundedSpscArrayQueue;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongHeapPriorityQueue;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
-import org.jctools.queues.MpscUnboundedXaddArrayQueue;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Sinks;
 import reactor.core.publisher.Sinks.EmitResult;
@@ -26,10 +27,10 @@ public class FrameSequencer<R> {
             32_768);
     private final LongHeapPriorityQueue sequenceHeap = new LongHeapPriorityQueue(32_768);
     private final Sinks.Many<SequencedFrame> ingest = Sinks.many().unicast()
-            .onBackpressureBuffer(new MpscUnboundedXaddArrayQueue<>(8192));
+            .onBackpressureBuffer(new PartitionedUnboundedMpscArrayQueue<>(8_192));
 
     private final Sinks.Many<R> output = Sinks.unsafe().many().unicast()
-            .onBackpressureBuffer(new MpscUnboundedXaddArrayQueue<>(8192));
+            .onBackpressureBuffer(new PartitionedUnboundedSpscArrayQueue<>(8_192));
 
     public FrameSequencer(long ingestPassword) {
         this.ingestPassword = ingestPassword;

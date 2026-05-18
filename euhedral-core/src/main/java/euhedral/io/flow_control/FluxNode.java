@@ -59,7 +59,7 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
         this.sibling = this;
         if (!terminal) {
             this.wip = new PaddedAtomicLong(0);
-            this.parallelQueue = new PartitionedMpscArrayQueue<>(1, 2_048);
+            this.parallelQueue = new PartitionedMpscArrayQueue<>(2_048);
         } else {
             this.wip = null;
             this.parallelQueue = null;

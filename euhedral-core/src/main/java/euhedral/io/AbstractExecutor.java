@@ -6,8 +6,8 @@ import euhedral.io.config.CloneConfig;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.interfaces.CloneableObject;
 import euhedral.io.interfaces.PipelineExecutor;
+import euhedral.queues.PartitionedUnboundedMpscArrayQueue;
 import java.util.concurrent.ThreadLocalRandom;
-import org.jctools.queues.MpscUnboundedXaddArrayQueue;
 import org.reactivestreams.Publisher;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
@@ -18,7 +18,7 @@ public abstract class AbstractExecutor implements PipelineExecutor {
 
     protected final PinnedThreadExecutor executorService;
     private final Sinks.Many<Failure> errorReturn = Sinks.many().unicast()
-            .onBackpressureBuffer(new MpscUnboundedXaddArrayQueue<>(1024));
+            .onBackpressureBuffer(new PartitionedUnboundedMpscArrayQueue<>(1024));
 
     public AbstractExecutor(PinnedThreadExecutor executorService) {
         this.executorService = executorService;

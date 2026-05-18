@@ -49,7 +49,7 @@ public class FrameManager<DATA, FRAME extends AbstractFrame> implements AutoClos
         int actual = Integer.highestOneBit((capacity - 1) << 1);
         actual = actual <= 0 ? 1 : actual;
 
-        this.recycleQueue = new PartitionedMpscArrayQueue<>(1, actual);
+        this.recycleQueue = new PartitionedMpscArrayQueue<>(actual);
         this.password = password;
         this.buffer = new AbstractFrame[Math.max(actual, 256)];
     }
