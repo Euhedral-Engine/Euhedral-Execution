@@ -2,12 +2,11 @@ package euhedral.io.flow_control;
 
 import euhedral.atomics.PaddedAtomicLong;
 import euhedral.io.frames.AbstractFrame;
+import euhedral.queues.PartitionedUnboundedSpscArrayQueue;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
-import java.util.Collection;
 import java.util.concurrent.atomic.AtomicLong;
 import org.jctools.queues.MessagePassingQueue;
-import org.jctools.queues.SpscUnboundedArrayQueue;
 import org.reactivestreams.Publisher;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
@@ -37,12 +36,11 @@ public class DirectInputFlux implements Publisher<AbstractFrame>, Subscription {
     private final PaddedAtomicLong wip = new PaddedAtomicLong(0);
     private final PaddedAtomicLong demand = new PaddedAtomicLong(0);
     private final AtomicLong bufferCount = new AtomicLong(0);
-    private final SpscUnboundedArrayQueue<AbstractFrame> buffer;
+    private final PartitionedUnboundedSpscArrayQueue<AbstractFrame> buffer;
     private Subscriber<? super AbstractFrame> downstream = null;
 
-    public DirectInputFlux(int chunkSize) {
-        int cap = Integer.highestOneBit((chunkSize - 1) << 1);
-        this.buffer = new SpscUnboundedArrayQueue<>(cap);
+    public DirectInputFlux(int chunkSize, int maxPooledChunks) {
+        this.buffer = new PartitionedUnboundedSpscArrayQueue<>(1, chunkSize, maxPooledChunks);
     }
 
     public long getDemand() {
@@ -122,22 +120,13 @@ public class DirectInputFlux implements Publisher<AbstractFrame>, Subscription {
     }
 
     private void add(AbstractFrame frame) {
-        while (!this.buffer.relaxedOffer(frame)) {
+        while (!this.buffer.offer(frame)) {
             Thread.onSpinWait();
         }
     }
 
-    public long enqueue(Collection<AbstractFrame> frames) {
-        if (frames == null || frames.isEmpty()) {
-            return this.bufferCount.getAcquire();
-        }
-
-        this.buffer.addAll(frames);
-        return this.bufferCount.addAndGet(frames.size());
-    }
-
-    public long enqueue(AbstractFrame frame) {
-        while (!this.buffer.relaxedOffer(frame)) {
+    public long offer(AbstractFrame frame) {
+        while (!this.buffer.offer(frame)) {
             Thread.onSpinWait();
         }
         return this.bufferCount.incrementAndGet();

@@ -1,12 +1,12 @@
 package euhedral.io.flow_control;
 
 import euhedral.io.utils.DrainBuffer;
+import euhedral.queues.PartitionedUnboundedMpscArrayQueue;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.Getter;
 import org.jctools.maps.NonBlockingHashMapLong;
-import org.jctools.queues.MpscUnboundedXaddArrayQueue;
 import org.reactivestreams.Subscription;
 
 public class UpstreamQueue {
@@ -33,8 +33,8 @@ public class UpstreamQueue {
         return queue;
     }
 
-    private final MpscUnboundedXaddArrayQueue<UpstreamHandle> upstreams = new MpscUnboundedXaddArrayQueue<>(
-            512);
+    private final PartitionedUnboundedMpscArrayQueue<UpstreamHandle> upstreams = new PartitionedUnboundedMpscArrayQueue<>(
+            1, 512, 0);
     private final UpstreamHandle[] drainBuffer = new UpstreamHandle[512];
     private final int[] pullIdx = new int[]{0};
     private final long[] pullBucket = new long[]{0L, 0L};
@@ -75,7 +75,7 @@ public class UpstreamQueue {
                         workDone = true;
                         drain(handle, buffer, requestAmount);
                     }
-                    while (!this.upstreams.relaxedOffer(handle)) {
+                    while (!this.upstreams.offer(handle)) {
                         Thread.onSpinWait();
                     }
                 } else {
@@ -141,7 +141,7 @@ public class UpstreamQueue {
     }
 
     public void addUpstream(UpstreamHandle upstream) {
-        while (!this.upstreams.relaxedOffer(upstream)) {
+        while (!this.upstreams.offer(upstream)) {
             Thread.onSpinWait();
         }
         UP_COUNT.getAndAdd(this, 1);
