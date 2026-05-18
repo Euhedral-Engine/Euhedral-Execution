@@ -219,8 +219,15 @@ public class PartitionedArrayQueue<T> implements PartitionedQueue<T> {
         return this.capacity;
     }
 
+    /// Completely resets all partitions to their initial state.
     @Override
     public void clear() {
+        purge();
+    }
+
+    /// Completely resets all partitions to their initial state.
+    @Override
+    public void purge() {
         this.heads.fillPlain(0);
         this.tails.fillPlain(0);
 

@@ -1,8 +1,32 @@
 package euhedral.queues.common;
 
+import java.lang.management.ManagementFactory;
+
+import com.sun.management.HotSpotDiagnosticMXBean;
+
 public class QueueUtils {
     public static final long ULONG_MAX = 0xFFFFFFFFFFFFFFFFL;
     public static final int LONG_PAD = 15;
+
+    public static final int REFERENCE_SIZE;
+
+    static {
+        int ref;
+        if (System.getProperty("sun.arch.data.model").contains("32")) {
+            ref = 4;
+        } else {
+            try {
+                HotSpotDiagnosticMXBean bean = ManagementFactory.getPlatformMXBean(
+                        HotSpotDiagnosticMXBean.class);
+                String useCompressedOops = bean.getVMOption("UseCompressedOops").getValue();
+                ref = "true".equals(useCompressedOops) ? 4 : 8;
+            } catch (Exception e) {
+                ref = 8;
+            }
+        }
+
+        REFERENCE_SIZE = ref;
+    }
 
     /// Finds the next clear bit starting at the offset
     ///

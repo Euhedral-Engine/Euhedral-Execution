@@ -323,7 +323,24 @@ public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueu
     }
 
     @Override
+    public int maxPooledChunks() {
+        return this.recycler.getCapacity();
+    }
+
+    /// Completely resets all partitions to their initial state and removes any recycled chunks.
+    @Override
     public void clear() {
+        purge();
+        if(this.recycler != null) {
+            while (this.recycler.pop() != null) {
+                Thread.onSpinWait();
+            }
+        }
+    }
+
+    /// Resets the queue to its initial state but keeps the recycled chunks.
+    @Override
+    public void purge() {
         for (int i = 0; i < this.partitions; i++) {
             int rIdx = this.headPointers.fromRawIdx(i);
             QueueNode<T> head = this.headPointers.getOpaque(rIdx);
@@ -334,8 +351,12 @@ public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueu
             head.clear();
             this.headPointers.setRelease(rIdx, head);
         }
-        while (this.recycler.pop() != null) {
-            Thread.onSpinWait();
+        if(this.recycler != null) {
+            QueueNode<T> temp = this.recycler.pop();
+            if(temp != null) {
+                temp.clear();
+                this.recycler.recycle(temp);
+            }
         }
     }
 

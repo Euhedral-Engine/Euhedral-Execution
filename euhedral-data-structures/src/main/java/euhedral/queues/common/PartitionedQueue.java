@@ -26,9 +26,15 @@ public interface PartitionedQueue<T> {
 
     long size(int partition);
 
+    default int maxPooledChunks() {
+        return 0;
+    }
+
     int partitions();
 
     long capacity();
 
     void clear();
+
+    void purge();
 }

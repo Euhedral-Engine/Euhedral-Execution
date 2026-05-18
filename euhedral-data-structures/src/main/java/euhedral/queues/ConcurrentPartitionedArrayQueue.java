@@ -90,9 +90,9 @@ abstract sealed class ConcurrentPartitionedArrayQueue<T> extends PartitionedArra
             T[] pQueue = super.queue.getPlain(rIdx);
             pQueue[qTailIdx] = obj;
 
-            VarHandle.releaseFence();
-
-            LA_HANDLE.getAndBitwiseOr(this.tailSequence.getPlain(rIdx), sequenceChunkIndex(tail),
+            LA_HANDLE.getAndBitwiseOrRelease(
+                    this.tailSequence.getPlain(rIdx),
+                    sequenceChunkIndex(tail),
                     getSequenceNumber(tail));
             return true;
         } finally {
@@ -149,9 +149,8 @@ abstract sealed class ConcurrentPartitionedArrayQueue<T> extends PartitionedArra
 
             VarHandle.acquireFence();
             T obj = pQueue[chunkIndex(head)];
-            LA_HANDLE.getAndBitwiseAnd(tailSequence, sChunkIdx, ~sNum);
+            LA_HANDLE.getAndBitwiseAndRelease(tailSequence, sChunkIdx, ~sNum);
 
-            VarHandle.releaseFence();
             moveHeadPointer(pIdx, 1);
             return obj;
         }
@@ -208,9 +207,9 @@ abstract sealed class ConcurrentPartitionedArrayQueue<T> extends PartitionedArra
                 pQueue[qIdx] = null;
             }
             total += reserved;
-            LA_HANDLE.getAndBitwiseAnd(tailSequence, sChunkIdx, clearMask);
 
-            VarHandle.releaseFence();
+            LA_HANDLE.getAndBitwiseAndRelease(tailSequence, sChunkIdx, clearMask);
+
             moveHeadPointer(pIdx, reserved);
         }
         return total;
@@ -245,9 +244,9 @@ abstract sealed class ConcurrentPartitionedArrayQueue<T> extends PartitionedArra
         return super.heads.getOpaque(pIdx);
     }
 
-    /// Defaults to moving with a plain read and an opaque set.
+    /// Defaults to moving with a plain read and a release set.
     protected void moveHeadPointer(int pIdx, long delta) {
-        super.heads.setOpaque(pIdx, super.heads.getOpaque(pIdx) + delta);
+        super.heads.setRelease(pIdx, super.heads.getOpaque(pIdx) + delta);
     }
 
     /// Default returns the head
@@ -335,7 +334,7 @@ abstract sealed class ConcurrentPartitionedArrayQueue<T> extends PartitionedArra
     }
 
     @Override
-    public void clear() {
+    public void purge() {
         VarHandle.releaseFence();
 
         for (int i = 0; i < super.partitions; i++) {
