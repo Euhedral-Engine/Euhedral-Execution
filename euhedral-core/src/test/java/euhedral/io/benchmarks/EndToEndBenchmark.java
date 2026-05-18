@@ -1,7 +1,7 @@
 package euhedral.io.benchmarks;
 
 import euhedral.atomics.PaddedLongAdder;
-import euhedral.io.DRRScheduler;
+import euhedral.io.DRRCacheManager;
 import euhedral.io.ExecutionManager;
 import euhedral.io.config.DRRConfig;
 import euhedral.io.config.ExecutionManagerConfig;
@@ -265,7 +265,7 @@ public class EndToEndBenchmark {
                 ExecutionManagerConfig dsmConfig = ExecutionManagerConfig.balancedDefault(null, "SystemTest");
 
                 TestPipeline pipeline = new TestPipeline("SystemTest", null,
-                        new DRRScheduler(drrConfig, null),
+                        new DRRCacheManager(drrConfig),
                         new ExecutionManager(dsmConfig),
                         new TestExecutor(null, bh));
                 controlPlane = ControlPlane.getOrCreate("SystemTest", pipeline,
