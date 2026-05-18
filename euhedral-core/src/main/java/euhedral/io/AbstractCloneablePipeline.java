@@ -9,6 +9,8 @@ import euhedral.io.interfaces.CloneableObject;
 import euhedral.io.interfaces.PipelineExecutor;
 import euhedral.io.interfaces.SlotManager;
 import java.util.concurrent.Future;
+
+import org.jspecify.annotations.Nullable;
 import org.reactivestreams.Publisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,16 +26,22 @@ public abstract class AbstractCloneablePipeline implements
     protected final SlotManager slotManager;
     protected final PipelineExecutor executor;
 
-    public AbstractCloneablePipeline(String name, CloneConfig cloneConfig,
+    public AbstractCloneablePipeline(String name, @Nullable CloneConfig cloneConfig,
             CacheManager cacheManager,
             SlotManager slotManager,
             PipelineExecutor executor) {
         this.logger = LoggerFactory.getLogger(name);
         this.config = cloneConfig;
         this.name = name;
-        this.cacheManager = cacheManager.clone(cloneConfig);
-        this.slotManager = slotManager.clone(cloneConfig);
-        this.executor = executor.clone(cloneConfig, slotManager.getPinnedExecutor());
+        if(cloneConfig == null) {
+            this.cacheManager = cacheManager;
+            this.slotManager = slotManager;
+            this.executor = executor;
+        } else {
+            this.cacheManager = cacheManager.clone(cloneConfig);
+            this.slotManager = slotManager.clone(cloneConfig);
+            this.executor = executor.clone(cloneConfig, slotManager.getPinnedExecutor());
+        }
 
         cacheManager.setDownstreamPressureMonitor(slotManager::getPressure);
     }

@@ -124,7 +124,6 @@ public abstract class AbstractFrame extends WorkCancelled {
 
     /// Defines what happens when execution is marked complete.
     public void doFinally() {
-        reset();
         recycle();
     }
 
