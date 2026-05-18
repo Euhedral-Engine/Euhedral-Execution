@@ -38,6 +38,7 @@
   </properties>
 
   <modules>
+    <module>benchmarks</module>
     <module>euhedral-core</module>
     <module>euhedral-data-structures</module>
     <module>euhedral-hardware-utils</module>
