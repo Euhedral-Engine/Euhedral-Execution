@@ -5,6 +5,9 @@ import euhedral.queues.QueueNode.Type;
 import euhedral.queues.common.NodeRecycler;
 import euhedral.queues.common.PartitionedQueue;
 import euhedral.queues.common.QueueUtils;
+import java.util.AbstractQueue;
+import java.util.Collection;
+import java.util.Iterator;
 import java.util.StringJoiner;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -20,7 +23,7 @@ import lombok.Getter;
 /// recycling is enabled, nodes are put in the [NodeRecycler] and reused later.
 ///
 /// @param <T> Type to store
-public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueue<T> permits
+public sealed class PartitionedUnboundedArrayQueue<T> extends AbstractQueue<T> implements PartitionedQueue<T> permits
         ConcurrentPartitionedUnboundedArrayQueue {
 
     @Getter
@@ -32,6 +35,14 @@ public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueu
 
     protected final PaddedAtomicReferenceArray<QueueNode<T>> headPointers;
     private QueueNode<T> tailPtr;
+
+    public PartitionedUnboundedArrayQueue(int chunkSize) {
+        this(1, chunkSize, 0);
+    }
+
+    public PartitionedUnboundedArrayQueue(int partitions, int chunkSize) {
+        this(partitions, chunkSize, 0);
+    }
 
     public PartitionedUnboundedArrayQueue(int partitions, int chunkSize, int maxPooledChunks) {
         if (partitions <= 0 || chunkSize <= 0) {
@@ -78,7 +89,6 @@ public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueu
         return offer(ThreadLocalRandom.current().nextLong(), obj);
     }
 
-
     /// Offers the object to a random partition based on the seed. If the seed does not change, the
     /// same partition will be picked.
     ///
@@ -105,7 +115,23 @@ public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueu
         return true;
     }
 
-    /// Gets the object at the front of the partition queue.
+    /// Gets, but does not remove, the head of the first partition that does not return null.
+    ///
+    /// @return The head of a partition. `null` if completely empty
+    @Override
+    public T peek() {
+        for (int i = 0; i < this.partitions; i++) {
+            T top = peek(i);
+            if (top != null) {
+                return top;
+            }
+        }
+        return null;
+    }
+
+    /// Gets, but does not remove, the object at the front of the partition.
+    ///
+    /// @return Object at the front of the partition. `null` if empty
     @Override
     public T peek(int partition) {
         boundsCheck(partition);
@@ -131,7 +157,23 @@ public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueu
         }
     }
 
-    /// Gets and removes the object at the front of the partition queue.
+    /// Gets and removes the head of the first partition that returns a non-null value.
+    ///
+    /// @return the head of a partition. `null` if empty
+    @Override
+    public T poll() {
+        for (int i = 0; i < this.partitions; i++) {
+            T top = poll(i);
+            if (top != null) {
+                return top;
+            }
+        }
+        return null;
+    }
+
+    /// Gets and removes the object at the front of the partition.
+    ///
+    /// @return Object at the front of the partition. `null` if empty
     @Override
     public T poll(int partition) {
         boundsCheck(partition);
@@ -291,7 +333,7 @@ public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueu
     }
 
     @Override
-    public long size() {
+    public long sizeLong() {
         long sum = 0;
         for (int i = 0; i < this.partitions; i++) {
             sum += size(i);
@@ -370,5 +412,43 @@ public sealed class PartitionedUnboundedArrayQueue<T> implements PartitionedQueu
         }
         sj.add(String.format("\nTail: %s", this.tailPtr));
         return sj.toString();
+    }
+
+    // ----- Queue<T> Interface -----
+
+    /// Inserts the specified object into this queue if it is possible to do so
+    /// immediately without violating capacity restrictions, returning
+    /// `true` upon success and throwing an `IllegalStateException`
+    /// if no space is currently available.
+    ///
+    /// @param obj the object to add
+    /// @return `true` (as specified by [Collection#add])
+    /// @throws IllegalStateException if the object cannot be added at this
+    ///         time due to capacity restrictions
+    @Override
+    public boolean add(T obj) {
+        for (int i = 0; i < this.partitions; i++) {
+            if(offer(i, obj)) {
+                return true;
+            }
+        }
+        throw new IllegalStateException("Queue full");
+    }
+
+    /// Not supported
+    ///
+    /// @throws UnsupportedOperationException
+    @Override
+    public Iterator<T> iterator() {
+        throw new UnsupportedOperationException("iterator");
+    }
+
+    @Override
+    public int size() {
+        long size = this.sizeLong();
+        if(size > Integer.MAX_VALUE) {
+            return Integer.MAX_VALUE;
+        }
+        return (int) size;
     }
 }

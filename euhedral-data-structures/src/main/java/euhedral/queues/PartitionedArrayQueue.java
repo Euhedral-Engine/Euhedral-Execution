@@ -4,7 +4,10 @@ import euhedral.atomics.PaddedAtomicReferenceArray;
 import euhedral.atomics.PaddedLongAdder;
 import euhedral.queues.common.PartitionedQueue;
 import euhedral.queues.common.QueueUtils;
+import java.util.AbstractQueue;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.Iterator;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.Getter;
@@ -14,7 +17,7 @@ import lombok.Getter;
 /// This class is not thread-safe for any method. This is meant to be used by a single thread and
 /// there are no visibility guarantees between 2 different threads.
 @SuppressWarnings("unchecked")
-public class PartitionedArrayQueue<T> implements PartitionedQueue<T> {
+public class PartitionedArrayQueue<T> extends AbstractQueue<T> implements PartitionedQueue<T> {
 
     protected final PaddedAtomicReferenceArray<T[]> queue;
 
@@ -31,6 +34,10 @@ public class PartitionedArrayQueue<T> implements PartitionedQueue<T> {
     protected final AtomicBoolean retired = new AtomicBoolean(false);
 
     long capacity;
+
+    public PartitionedArrayQueue(int chunkSize) {
+        this(1, chunkSize, false);
+    }
 
     public PartitionedArrayQueue(int partitions, int chunkSize) {
         this(partitions, chunkSize, false);
@@ -59,7 +66,7 @@ public class PartitionedArrayQueue<T> implements PartitionedQueue<T> {
     /// @return success
     @Override
     public boolean offer(T obj) {
-        if(this.partitions == 1) {
+        if (this.partitions == 1) {
             return offer(0, obj);
         }
         return offer(ThreadLocalRandom.current().nextLong(), obj);
@@ -100,7 +107,23 @@ public class PartitionedArrayQueue<T> implements PartitionedQueue<T> {
         return true;
     }
 
-    /// Gets the object at the front of the partition queue.
+    /// Gets, but does not remove, the head of the first partition that does not return null.
+    ///
+    /// @return The head of a partition. `null` if completely empty
+    @Override
+    public T peek() {
+        for (int i = 0; i < this.partitions; i++) {
+            T top = peek(i);
+            if (top != null) {
+                return top;
+            }
+        }
+        return null;
+    }
+
+    /// Gets, but does not remove, the object at the front of the partition.
+    ///
+    /// @return Object at the front of the partition. `null` if empty
     @Override
     public T peek(int partition) {
         boundsCheck(partition);
@@ -114,7 +137,23 @@ public class PartitionedArrayQueue<T> implements PartitionedQueue<T> {
         return this.queue.getPlain(rIdx)[chunkIndex(head)];
     }
 
-    /// Gets and removes the object at the front of the partition queue.
+    /// Gets and removes the head of the first partition that returns a non-null value.
+    ///
+    /// @return the head of a partition. `null` if empty
+    @Override
+    public T poll() {
+        for (int i = 0; i < this.partitions; i++) {
+            T top = poll(i);
+            if (top != null) {
+                return top;
+            }
+        }
+        return null;
+    }
+
+    /// Gets and removes the object at the front of the partition.
+    ///
+    /// @return Object at the front of the partition. `null` if empty
     @Override
     public T poll(int partition) {
         boundsCheck(partition);
@@ -130,8 +169,10 @@ public class PartitionedArrayQueue<T> implements PartitionedQueue<T> {
         return this.queue.getPlain(rIdx)[chunkIndex(head)];
     }
 
-    /// Drains from all partitions starting from 0
+    /// Drains from all partitions starting from 0 up to the limit
     ///
+    /// @param consumer Consumer to give items to
+    /// @param limit Maximum number of items to pull
     /// @return Number of items drained
     @Override
     public int drain(QueueConsumer<T> consumer, int limit) {
@@ -147,6 +188,8 @@ public class PartitionedArrayQueue<T> implements PartitionedQueue<T> {
     }
 
     /// Drains from a specific partition.
+    ///
+    /// @return Number of items drained
     @Override
     public int drain(int partition, QueueConsumer<T> consumer, int limit) {
         boundsCheck(partition);
@@ -195,7 +238,7 @@ public class PartitionedArrayQueue<T> implements PartitionedQueue<T> {
     }
 
     @Override
-    public long size() {
+    public long sizeLong() {
         long tails = this.tails.sum();
         long heads = this.heads.sum();
         return QueueUtils.unsignedDiff(heads, tails);
@@ -236,5 +279,43 @@ public class PartitionedArrayQueue<T> implements PartitionedQueue<T> {
             Arrays.fill(this.queue.getPlain(rIdx), null);
         }
         this.retired.setPlain(false);
+    }
+
+    // ----- Queue<T> Interface -----
+
+    /// Inserts the specified object into this queue if it is possible to do so
+    /// immediately without violating capacity restrictions, returning
+    /// `true` upon success and throwing an `IllegalStateException`
+    /// if no space is currently available.
+    ///
+    /// @param obj the object to add
+    /// @return `true` (as specified by [Collection#add])
+    /// @throws IllegalStateException if the object cannot be added at this
+    ///         time due to capacity restrictions
+    @Override
+    public boolean add(T obj) {
+        for (int i = 0; i < this.partitions; i++) {
+            if(offer(i, obj)) {
+                return true;
+            }
+        }
+        throw new IllegalStateException("Queue full");
+    }
+
+    /// Not supported
+    ///
+    /// @throws UnsupportedOperationException
+    @Override
+    public Iterator<T> iterator() {
+        throw new UnsupportedOperationException("iterator");
+    }
+
+    @Override
+    public int size() {
+        long size = this.sizeLong();
+        if(size > Integer.MAX_VALUE) {
+            return Integer.MAX_VALUE;
+        }
+        return (int) size;
     }
 }
