@@ -6,11 +6,11 @@ import euhedral.atomics.PaddedAtomicLong;
 import euhedral.io.flow_control.UpstreamQueue.UpstreamHandle;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.utils.DrainBuffer;
+import euhedral.queues.PartitionedMpscArrayQueue;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.BitSet;
 import java.util.concurrent.atomic.AtomicBoolean;
-import org.jctools.queues.MpscArrayQueue;
 import org.jspecify.annotations.NonNull;
 import org.reactivestreams.Publisher;
 import org.reactivestreams.Subscriber;
@@ -36,7 +36,7 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
 
     protected final Logger logger;
     protected final String name;
-    protected final MpscArrayQueue<AbstractFrame> parallelQueue;
+    protected final PartitionedMpscArrayQueue<AbstractFrame> parallelQueue;
 
     protected final FluxEdge[] downstreams;
     protected final RoutingFunction routingFunction;
@@ -59,7 +59,7 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
         this.sibling = this;
         if (!terminal) {
             this.wip = new PaddedAtomicLong(0);
-            this.parallelQueue = new MpscArrayQueue<>(2_048);
+            this.parallelQueue = new PartitionedMpscArrayQueue<>(1, 2_048);
         } else {
             this.wip = null;
             this.parallelQueue = null;
@@ -259,7 +259,7 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
             }
 
             if (!frame.isOrdered()) {
-                if (FluxNode.this.parallelQueue != null && FluxNode.this.parallelQueue.relaxedOffer(
+                if (FluxNode.this.parallelQueue != null && FluxNode.this.parallelQueue.offer(
                         frame)) {
                     return;
                 }

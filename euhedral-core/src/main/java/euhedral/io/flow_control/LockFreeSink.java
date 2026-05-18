@@ -1,36 +1,36 @@
 package euhedral.io.flow_control;
 
 import euhedral.io.frames.AbstractFrame;
-import org.jctools.queues.MessagePassingQueue;
-import org.jctools.queues.MessagePassingQueue.Consumer;
+import euhedral.queues.QueueConsumer;
+import euhedral.queues.common.PartitionedQueue;
 
 @SuppressWarnings("unused")
 public class LockFreeSink {
 
-    private final MessagePassingQueue<AbstractFrame> buffer;
-    private final Consumer<AbstractFrame> drainFunc;
-    private final Consumer<AbstractFrame> hookOnOffer;
+    private final PartitionedQueue<AbstractFrame> buffer;
+    private final QueueConsumer<AbstractFrame> drainFunc;
+    private final QueueConsumer<AbstractFrame> hookOnOffer;
 
-    public LockFreeSink(MessagePassingQueue<AbstractFrame> buffer,
-            Consumer<AbstractFrame> drainFunc) {
+    public LockFreeSink(PartitionedQueue<AbstractFrame> buffer,
+            QueueConsumer<AbstractFrame> drainFunc) {
         this(buffer, drainFunc, null);
     }
 
-    public LockFreeSink(MessagePassingQueue<AbstractFrame> buffer,
-            Consumer<AbstractFrame> drainFunc, Consumer<AbstractFrame> hookOnOffer) {
+    public LockFreeSink(PartitionedQueue<AbstractFrame> buffer,
+            QueueConsumer<AbstractFrame> drainFunc, QueueConsumer<AbstractFrame> hookOnOffer) {
         this.buffer = buffer;
         this.drainFunc = drainFunc;
         this.hookOnOffer = hookOnOffer;
     }
 
     public int drain() {
-        return this.buffer.drain(this.drainFunc);
+        return this.buffer.drain(this.drainFunc, Integer.MAX_VALUE);
     }
 
     public boolean relaxedOffer(AbstractFrame frame) {
-        boolean success = this.buffer.relaxedOffer(frame);
+        boolean success = this.buffer.offer(frame);
         if(success && this.hookOnOffer != null) {
-            this.hookOnOffer.accept(frame);
+            this.hookOnOffer.consume(frame);
         }
         return success;
     }
@@ -38,7 +38,7 @@ public class LockFreeSink {
     public boolean offer(AbstractFrame frame) {
         boolean success = this.buffer.offer(frame);
         if(success && this.hookOnOffer != null) {
-            this.hookOnOffer.accept(frame);
+            this.hookOnOffer.consume(frame);
         }
         return success;
     }
