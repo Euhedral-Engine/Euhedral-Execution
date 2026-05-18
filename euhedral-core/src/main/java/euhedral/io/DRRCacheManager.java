@@ -3,15 +3,8 @@ package euhedral.io;
 import static euhedral.io.utils.MathFunctions.clampDouble;
 import static euhedral.io.utils.MathFunctions.ewma;
 
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.VarHandle;
-import java.util.Arrays;
-import java.util.BitSet;
-import java.util.concurrent.Callable;
-
 import euhedral.atomics.AtomicDouble;
 import euhedral.atomics.PaddedAtomicLong;
-import euhedral.atomics.PaddedAtomicLongArray;
 import euhedral.atomics.PaddedAtomicReference;
 import euhedral.atomics.PaddedLongAdder;
 import euhedral.hardware_utils.SystemInfo;
@@ -34,6 +27,12 @@ import euhedral.io.utils.MathFunctions;
 import euhedral.io.utils.PartitionedQueueWrapper;
 import euhedral.queues.PartitionedUnboundedMpscArrayQueue;
 import euhedral.queues.common.QueueUtils;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
+import java.util.Arrays;
+import java.util.BitSet;
+import java.util.StringJoiner;
+import java.util.concurrent.Callable;
 import org.jctools.maps.NonBlockingHashMapLong;
 import org.jspecify.annotations.NonNull;
 import org.reactivestreams.Publisher;
@@ -66,8 +65,8 @@ public class DRRCacheManager extends FluxNode implements CacheManager {
     }
 
     public static String getName(DRRConfig config) {
-        return config.cloneConfig() != null ? config.cloneConfig().shardName() + "-DRRScheduler-"
-                                              + config.cloneConfig().coreId() : "DRRScheduler";
+        return config.cloneConfig() != null ? config.cloneConfig().shardName() + "-DRRCacheManager-"
+                                              + config.cloneConfig().coreId() : "DRRCacheManager";
     }
 
     protected static int getPartitionCount(CloneConfig config) {
@@ -365,11 +364,6 @@ public class DRRCacheManager extends FluxNode implements CacheManager {
         return upstream.getCachedUpCount();
     }
 
-    @Override
-    public void setDownstreamPressureMonitor(Callable<Double> pressure) {
-
-    }
-
     public FlowRecorder getFillRecorder() {
         return this.fillRecorder.getPlain();
     }
@@ -480,7 +474,12 @@ public class DRRCacheManager extends FluxNode implements CacheManager {
 
         long hash = HasherApi.getHash(layout.maskL2());
         return CACHES.computeIfAbsent(hash, (k) -> {
-            this.logger.debug("Created DRRCacheManager with cpu set {}", layout.maskL2());
+            String[] chunks = layout.maskL2().split(",");
+            StringJoiner sj = new StringJoiner(",");
+            for(var c : chunks) {
+                sj.add("0x" + c);
+            }
+            this.logger.debug("Clone created to use the cpu set {}", sj);
             return new DRRCacheManager(this.config.clone(cloneConfig));
         });
     }

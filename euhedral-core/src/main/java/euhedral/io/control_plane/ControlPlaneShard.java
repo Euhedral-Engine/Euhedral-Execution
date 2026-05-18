@@ -10,7 +10,6 @@ import euhedral.hardware_utils.common.SystemUtilization.SocketSnapshot;
 import euhedral.io.config.CloneConfig;
 import euhedral.io.flow_control.FluxEdge;
 import euhedral.io.flow_control.FluxNode;
-import euhedral.io.flow_control.NoOpSubscriber;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.interfaces.CloneableObject;
 import euhedral.io.utils.FluxResourceMonitor;
@@ -122,7 +121,7 @@ public class ControlPlaneShard implements AutoCloseable {
             handleTopologyChange(snapshot, topology);
         } else if (this.currentVersion.getAcquire() != nextVersion) {
             this.logger.warn(
-                    "Detected change in topology. Initiating shard rebalance for topology V{}",
+                    "Detected change in topology. Initiating rebalance for socket topology V{}",
                     nextVersion);
             handleTopologyChange(snapshot, topology);
         } else {
@@ -222,7 +221,6 @@ public class ControlPlaneShard implements AutoCloseable {
         nextClones[coreId] = clone;
 
         clone.ingest(this.coreHandles.getPlain()[coreId]);
-        clone.output().subscribe(new NoOpSubscriber());
 
         clone.setDrainMode(this.rebalancing.get());
         clone.start();

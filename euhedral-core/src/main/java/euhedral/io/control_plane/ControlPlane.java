@@ -137,6 +137,7 @@ public class ControlPlane implements AutoCloseable {
 
         for (int i = 0; i < this.shards.length; i++) {
             this.shards[i] = createShard(i);
+            this.logger.info("Created ControlPlaneShard on socket: {}", i);
         }
 
         FluxNode controller = new FluxNode(this.name + "-GlobalDistributor",
@@ -144,10 +145,9 @@ public class ControlPlane implements AutoCloseable {
         this.ingestController.set(controller);
     }
 
-    protected ControlPlaneShard createShard(int nodeId) {
-        this.logger.info("Creating Shards");
-        String shardName = this.name + "-ControlPlaneShard-" + nodeId;
-        return this.baseShard.clone(nodeId, shardName);
+    protected ControlPlaneShard createShard(int socketId) {
+        String shardName = this.name + "-ControlPlaneShard-" + socketId;
+        return this.baseShard.clone(socketId, shardName);
     }
 
     protected int route(AbstractFrame frame, int mapSize) {

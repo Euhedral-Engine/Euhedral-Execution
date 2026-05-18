@@ -42,8 +42,6 @@ public abstract class AbstractCloneablePipeline implements
             this.slotManager = slotManager.clone(cloneConfig);
             this.executor = executor.clone(cloneConfig, slotManager.getPinnedExecutor());
         }
-
-        cacheManager.setDownstreamPressureMonitor(slotManager::getPressure);
     }
 
     @Override

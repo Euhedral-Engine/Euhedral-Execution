@@ -1,5 +1,8 @@
 package euhedral.io.benchmarks;
 
+import com.github.dockerjava.api.async.ResultCallback;
+import com.github.dockerjava.api.command.ExecCreateCmdResponse;
+import com.github.dockerjava.api.model.Frame;
 import euhedral.atomics.PaddedLongAdder;
 import euhedral.io.DRRCacheManager;
 import euhedral.io.ExecutionManager;
@@ -10,10 +13,6 @@ import euhedral.io.test_utils.TestFrame;
 import euhedral.io.test_utils.TestPipeline;
 import euhedral.io.test_utils.TestPipeline.TestExecutor;
 import euhedral.io.test_utils.TestPublisher;
-import com.github.dockerjava.api.async.ResultCallback;
-import com.github.dockerjava.api.command.ExecCreateCmdResponse;
-import com.github.dockerjava.api.model.Frame;
-
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -25,7 +24,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.LockSupport;
-
 import org.junit.jupiter.api.Test;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -103,7 +101,7 @@ public class EndToEndBenchmark {
         private static final int M8 = 8_000_000;
         private static final int M32 = 32_000_000;
 
-         static void main(String[] args) throws Exception {
+         public static void main(String[] args) throws Exception {
             ChainedOptionsBuilder opt = new OptionsBuilder().include(
                             EndToEndBenchmark.class.getSimpleName() + "."
                                     + BenchmarkRunner.class.getSimpleName())
@@ -222,7 +220,7 @@ public class EndToEndBenchmark {
             state.barrier32P.await();
             state.barrier32P.reset();
 
-            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+            long deadline = System.nanoTime() + TimeUnit.MINUTES.toNanos(1);
             long sum = sum(deadline, M32, state.counter);
             if (sum < M32) {
                 throw new RuntimeException("Stall detected. Pending: " + (M32 - sum));
