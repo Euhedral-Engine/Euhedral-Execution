@@ -2,6 +2,8 @@ package euhedral.queues.common;
 
 import euhedral.queues.QueueNode;
 import euhedral.queues.QueueNode.Type;
+import lombok.Getter;
+
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -10,6 +12,7 @@ public class NodeRecycler<T> {
     private final AtomicReference<QueueNode<T>> stack = new AtomicReference<>(null);
     private final AtomicInteger count = new AtomicInteger(0);
     private final QueueNode.Type type;
+    @Getter
     private final int capacity;
 
     public NodeRecycler(QueueNode.Type type, int capacity) {
@@ -17,43 +20,53 @@ public class NodeRecycler<T> {
         this.capacity = capacity;
     }
 
+    public int getCount() {
+        if(this.type == Type.PLAIN) {
+            return this.count.getPlain();
+        }
+        return this.count.getAcquire();
+    }
+
     public QueueNode<T> pop() {
-        if (type == QueueNode.Type.PLAIN) {
+        if (this.type == Type.PLAIN) {
             return popPlain();
         }
 
         while (true) {
-            QueueNode<T> head = stack.get();
+            QueueNode<T> head = this.stack.get();
             if (head == null) {
                 return null;
             }
 
             QueueNode<T> next = head.next.getAcquire();
 
-            if (stack.compareAndSet(head, next)) {
+            if (this.stack.compareAndSet(head, next)) {
                 head.clear();
-                count.decrementAndGet();
+                this.count.decrementAndGet();
                 return head;
             }
         }
     }
 
     public QueueNode<T> popPlain() {
-        QueueNode<T> head = stack.getPlain();
+        QueueNode<T> head = this.stack.getPlain();
         if (head == null) {
             return null;
         }
 
         QueueNode<T> next = head.next.getPlain();
-        stack.setPlain(next);
-        count.setPlain(count.getPlain() - 1);
+        this.stack.setPlain(next);
+        this.count.setPlain(this.count.getPlain() - 1);
 
         head.clear();
         return head;
     }
 
     public void recycle(QueueNode<T> node) {
-        if (type == Type.PLAIN) {
+        if(node == null) {
+            return;
+        }
+        if (this.type == Type.PLAIN) {
             recyclePlain(node);
             return;
         }
@@ -62,11 +75,11 @@ public class NodeRecycler<T> {
             return;
         }
 
-        QueueNode<T> head = stack.getAcquire();
+        QueueNode<T> head = this.stack.getAcquire();
         while (true) {
             node.next.setRelease(head);
 
-            QueueNode<T> witness = stack.compareAndExchange(head, node);
+            QueueNode<T> witness = this.stack.compareAndExchange(head, node);
             if (head == witness) {
                 return;
             }
@@ -75,20 +88,20 @@ public class NodeRecycler<T> {
     }
 
     private void recyclePlain(QueueNode<T> node) {
-        if (this.count.getPlain() == capacity) {
+        if (this.count.getPlain() == this.capacity) {
             return;
         }
         this.count.setPlain(this.count.getPlain() + 1);
         QueueNode<T> head = stack.getPlain();
         node.next.setPlain(head);
-        stack.setPlain(node);
+        this.stack.setPlain(node);
     }
 
     private boolean casIncrement() {
         int count;
         do {
             count = this.count.getAcquire();
-            if (count == capacity) {
+            if (count == this.capacity) {
                 return false;
             }
         } while (!this.count.compareAndSet(count, count + 1));
