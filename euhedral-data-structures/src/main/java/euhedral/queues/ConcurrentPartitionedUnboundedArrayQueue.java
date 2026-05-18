@@ -352,7 +352,7 @@ abstract sealed class ConcurrentPartitionedUnboundedArrayQueue<T>
     }
 
     @Override
-    public void clear() {
+    public void purge() {
         while (!acquireHeadLock()) {
             Thread.onSpinWait();
         }
@@ -383,8 +383,15 @@ abstract sealed class ConcurrentPartitionedUnboundedArrayQueue<T>
                 while (!this.tailQueue.offer(0, head)) {
                     Thread.onSpinWait();
                 }
-                while (super.recycler.pop() != null) {
-                    Thread.onSpinWait();
+                if(super.recycler != null) {
+                    int count = super.recycler.getCount();
+                    while (count-- > 0) {
+                        QueueNode<T> temp = super.recycler.pop();
+                        if(temp != null) {
+                            temp.clear();
+                            super.recycler.recycle(temp);
+                        }
+                    }
                 }
             }
         } finally {
