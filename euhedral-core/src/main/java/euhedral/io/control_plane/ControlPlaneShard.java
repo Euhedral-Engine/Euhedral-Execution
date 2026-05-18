@@ -82,7 +82,7 @@ public class ControlPlaneShard implements AutoCloseable {
         this.shardExecutor = Executors.newFixedThreadPool(topology.effectiveCores().length(),
                 (r) -> new Thread(r, this.shardName + "+ExecutorService"));
         FluxNode coreDistributor = new FluxNode(this.shardName + "-CoreDistributor",
-                topology.effectiveCores().length(), this::route, topology.socketId(), false);
+                topology.effectiveCores().length(), this::route, false);
         this.coreDistributor.set(coreDistributor);
         coreDistributor.onSubscribe(upstream);
         update(snapshot, topology);
@@ -118,7 +118,7 @@ public class ControlPlaneShard implements AutoCloseable {
 
         int nextVersion = topology.version();
         if (!this.primed.getOpaque()) {
-            this.logger.info("Initializing clones for topology V{}", nextVersion);
+            this.logger.info("Initializing clones for socket topology V{}", nextVersion);
             handleTopologyChange(snapshot, topology);
         } else if (this.currentVersion.getAcquire() != nextVersion) {
             this.logger.warn(

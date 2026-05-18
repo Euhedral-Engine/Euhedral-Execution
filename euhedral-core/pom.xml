@@ -30,12 +30,6 @@
       <version>${project.version}</version>
       <scope>compile</scope>
     </dependency>
-    <dependency>
-      <groupId>com.euhedral</groupId>
-      <artifactId>euhedral-data-structures</artifactId>
-      <version>${project.version}</version>
-      <scope>compile</scope>
-    </dependency>
 
     <dependency>
       <groupId>org.projectlombok</groupId>

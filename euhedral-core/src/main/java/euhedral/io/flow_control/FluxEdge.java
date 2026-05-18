@@ -65,6 +65,10 @@ public class FluxEdge extends UpstreamHandle implements Publisher<AbstractFrame>
         this.drain = drain;
     }
 
+    public void register() {
+        getThreadUpstreamQueue();
+    }
+
     public UpstreamQueue getThreadUpstreamQueue() {
         FluxEdge parent = (FluxEdge) PARENT.getOpaque(this);
         if (parent != null) {

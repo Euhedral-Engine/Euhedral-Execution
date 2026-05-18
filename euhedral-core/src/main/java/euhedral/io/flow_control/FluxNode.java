@@ -36,7 +36,6 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
 
     protected final Logger logger;
     protected final String name;
-    protected final int id;
     protected final MpscArrayQueue<AbstractFrame> parallelQueue;
 
     protected final FluxEdge[] downstreams;
@@ -46,15 +45,14 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
     protected RoutingState routingState = new RoutingState(new int[0]);
 
     public FluxNode(String name, int downstreamCount) {
-        this(name, downstreamCount, RoutingFunction.DEFAULT, 0, false);
+        this(name, downstreamCount, RoutingFunction.DEFAULT, false);
     }
 
-    public FluxNode(String name, int downstreamCount, RoutingFunction routingFunction, int id,
+    public FluxNode(String name, int downstreamCount, RoutingFunction routingFunction,
             boolean terminal) {
         super(new AtomicBoolean(false));
         this.terminal = terminal;
         this.logger = LoggerFactory.getLogger(name);
-        this.id = 0;
         this.name = name;
         this.downstreams = new FluxEdge[downstreamCount];
         this.routingFunction = routingFunction;

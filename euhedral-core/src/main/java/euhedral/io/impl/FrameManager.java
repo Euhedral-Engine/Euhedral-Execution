@@ -18,9 +18,10 @@ import org.jspecify.annotations.Nullable;
 /// of execution, the frames are returned to this manager for reuse. If none are available, they are
 /// created. Consumption is password protected by the creator.
 ///
-/// @param <F> The frame type to recycle
+/// @param <DATA> The data type to use to replace fields in the frame
+/// @param <FRAME> The frame type to recycle
 @SuppressWarnings("unchecked")
-public class FrameManager<T, F extends AbstractFrame> implements AutoCloseable {
+public class FrameManager<DATA, FRAME extends AbstractFrame> implements AutoCloseable {
 
     @Getter
     private final MessagePassingQueue<AbstractFrame> recycleQueue;
@@ -28,7 +29,7 @@ public class FrameManager<T, F extends AbstractFrame> implements AutoCloseable {
     private final AbstractFrame[] buffer;
 
     @Setter
-    private FrameFactory<T, F> factory;
+    private FrameFactory<DATA, FRAME> factory;
     @Getter
     private long totalRecycled = 0;
 
@@ -53,7 +54,7 @@ public class FrameManager<T, F extends AbstractFrame> implements AutoCloseable {
         this.buffer = new AbstractFrame[Math.max(actual, 256)];
     }
 
-    public @NonNull F generate(T data, long password) {
+    public @NonNull FRAME generate(DATA data, long password) {
         if (password != this.password) {
             throw new RuntimeException("Incorrect password for this FrameFactory.");
         }
@@ -61,7 +62,7 @@ public class FrameManager<T, F extends AbstractFrame> implements AutoCloseable {
             throw new RuntimeException("Cannot generate frames with a null FrameFactory.");
         }
 
-        F frame = get();
+        FRAME frame = get();
         if (frame == null) {
             return factory.create(data);
         }
@@ -73,20 +74,20 @@ public class FrameManager<T, F extends AbstractFrame> implements AutoCloseable {
     ///
     /// @param password Password set during instantiation
     /// @return The next frame or `null` if empty
-    public @Nullable F get(long password) {
+    public @Nullable FRAME get(long password) {
         if(password != this.password) {
             return null;
         }
         return get();
     }
 
-    private @Nullable F get() {
+    private @Nullable FRAME get() {
         if (idx == 0) {
             idx = recycleQueue.drain(this::drain, buffer.length);
             totalRecycled += idx;
         }
         if (idx > 0) {
-            F frame = (F) buffer[--idx];
+            FRAME frame = (FRAME) buffer[--idx];
             buffer[idx + 1] = null;
             return frame;
         }
@@ -101,7 +102,7 @@ public class FrameManager<T, F extends AbstractFrame> implements AutoCloseable {
     ///
     /// @param frame Frame to recycle
     /// @return `true` if frame was enqueued, `false` otherwise
-    public boolean recycle(F frame) {
+    public boolean recycle(FRAME frame) {
         return recycleQueue.relaxedOffer(frame);
     }
 
