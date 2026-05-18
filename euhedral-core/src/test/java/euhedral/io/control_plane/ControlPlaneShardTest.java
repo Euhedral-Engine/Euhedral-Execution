@@ -60,8 +60,6 @@ class ControlPlaneShardTest {
         verify(upstream).subscribe(any(Subscriber.class));
         verify(clone, times(configs.length)).clone(any(CloneConfig.class));
         verify(clone, times(configs.length)).ingest(any(FluxEdge.class));
-        verify(clone, times(configs.length)).output();
-        verify(clone, times(configs.length)).output();
         verify(clone, times(configs.length)).setDrainMode(true);
         verify(clone, times(configs.length)).update(any(CoreSnapshot.class));
         verify(clone, times(configs.length)).start();

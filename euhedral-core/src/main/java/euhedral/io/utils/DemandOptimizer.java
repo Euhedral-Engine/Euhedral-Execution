@@ -2,7 +2,6 @@ package euhedral.io.utils;
 
 public class DemandOptimizer {
 
-    @SuppressWarnings("ManualMinMaxCalculation")
     public static long getDemand(double drainRate, double latency, double drainRateVariance,
             double latencyVariance, long currentCount, long itemByteSize, long maxBytes) {
         long availableBytes = maxBytes - (currentCount * itemByteSize);
@@ -30,6 +29,6 @@ public class DemandOptimizer {
         }
 
         long maxItems = availableBytes / itemByteSize;
-        return (toRequest < maxItems) ? toRequest : maxItems;
+        return Math.min(toRequest, maxItems);
     }
 }

@@ -24,18 +24,17 @@ import euhedral.io.metrics.ExecutionManagerMetrics;
 import euhedral.io.utils.DrainBuffer;
 import euhedral.io.utils.FlowRecorder;
 import euhedral.io.utils.FlowRecorder.FlowSnapshot;
+import euhedral.queues.PartitionedArrayQueue;
+import euhedral.queues.PartitionedSpscArrayQueue;
+import euhedral.queues.PartitionedUnboundedMpscArrayQueue;
+import euhedral.queues.common.PartitionedQueue;
+import euhedral.queues.common.QueueUtils;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.LockSupport;
-
-import euhedral.queues.PartitionedArrayQueue;
-import euhedral.queues.PartitionedSpscArrayQueue;
-import euhedral.queues.common.PartitionedQueue;
-import euhedral.queues.common.QueueUtils;
 import lombok.AccessLevel;
 import lombok.Getter;
-import org.jctools.queues.MpscUnboundedXaddArrayQueue;
 import org.jspecify.annotations.NonNull;
 import org.reactivestreams.Publisher;
 import org.reactivestreams.Subscription;
@@ -213,7 +212,7 @@ public class ExecutionManager implements SlotManager {
                             false);
 
             PinnedThreadExecutor smtExec = null;
-            if(cpus.length > 1 && config.enableSMT()) {
+            if (cpus.length > 1 && config.enableSMT()) {
                 smtExec = PinnedThreadExecutor.getOrSetIfAbsent(cpus[1],
                         this.config.cloneConfig().shardName() + "-ExecutionManager-SMT-"
                                 + this.config.cloneConfig().coreId(), Thread.MAX_PRIORITY,
@@ -227,16 +226,19 @@ public class ExecutionManager implements SlotManager {
             this.buddyState = new SMTState(executionLatency, bufferWrapper.arrivalLatencyRecorder,
                     config.idleCyclePolicy().maxParkTime().toNanos());
             this.buddy = new SlotManagerSMTBuddy(handle, bufferWrapper, buddyState, smtExec);
-            this.isPCore = SystemInfo.getCoreInfo(SystemInfo.getCpuInfo(layout.cpu()).core()).pCore();
+            this.isPCore = SystemInfo.getCoreInfo(SystemInfo.getCpuInfo(layout.cpu()).core())
+                    .pCore();
 
             this.completeSink =
-                    new LockFreeSink(new MpscUnboundedXaddArrayQueue<>(bufferSize, 4), frame -> {
-                        IN_FLIGHT.setOpaque(this, this.inFlight - 1);
-                        state.receivingOrderedWork = upstreamCount == 1 && frame.isOrdered();
-                        state.completed++;
-                        frame.reset();
-                        frame.doFinally();
-                    }, this::recordCompletion);
+                    new LockFreeSink(new PartitionedUnboundedMpscArrayQueue<>(1, bufferSize, 4),
+                            frame -> {
+                                IN_FLIGHT.setOpaque(this, this.inFlight - 1);
+                                state.receivingOrderedWork =
+                                        upstreamCount == 1 && frame.isOrdered();
+                                state.completed++;
+                                frame.reset();
+                                frame.doFinally();
+                            }, this::recordCompletion);
             this.outputFlux = new DirectOutputFlux(this.buffer, frame -> {
                 if ((this.state.dispatches++ & this.state.updateIntervalMask) == 0) {
                     frame.setStartNs(System.nanoTime());
@@ -323,7 +325,7 @@ public class ExecutionManager implements SlotManager {
 
     @Override
     public void firstTouch() {
-        if(this.buffer == null) {
+        if (this.buffer == null) {
             return;
         }
         for (int i = 0; i < this.bufferSize * 2; i++) {
@@ -371,12 +373,12 @@ public class ExecutionManager implements SlotManager {
                         this.state.smtMode = true;
                     }
 
-                    while(this.ingest == null && !Thread.currentThread().isInterrupted()) {
+                    while (this.ingest == null && !Thread.currentThread().isInterrupted()) {
                         this.ingest = (DRRCacheManager) INGEST.getOpaque(this);
                         this.buddy.setIngest(ingest);
                         LockSupport.parkNanos(2_000L);
                     }
-                    if(Thread.currentThread().isInterrupted()) {
+                    if (Thread.currentThread().isInterrupted()) {
                         return;
                     }
                     this.ingest.register();
