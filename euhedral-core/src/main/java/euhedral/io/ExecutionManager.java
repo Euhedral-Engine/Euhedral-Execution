@@ -217,9 +217,9 @@ public class ExecutionManager implements SlotManager {
                         this.config.cloneConfig().shardName() + "-ExecutionManager-SMT-"
                                 + this.config.cloneConfig().coreId(), Thread.MAX_PRIORITY,
                         false);
-                this.buffer = new PartitionedSpscArrayQueue<>(1, bufferSize);
+                this.buffer = new PartitionedSpscArrayQueue<>(bufferSize);
             } else {
-                this.buffer = new PartitionedArrayQueue<>(1, bufferSize);
+                this.buffer = new PartitionedArrayQueue<>(bufferSize);
             }
             this.handle = new DownstreamHandle(this.cpuId, this::getPressure);
             this.bufferWrapper = new DrainBuffer(this.buffer, bufferSize, false);

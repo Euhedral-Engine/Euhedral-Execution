@@ -8,6 +8,7 @@ import euhedral.io.frames.ConsumerFrame;
 import euhedral.io.frames.FunctionFrame;
 import euhedral.io.frames.RunnableFrame;
 import euhedral.io.frames.SequencedFrame;
+import euhedral.queues.PartitionedUnboundedMpscArrayQueue;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -16,12 +17,12 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.Consumer;
 import java.util.function.Function;
-import org.jctools.queues.MpscUnboundedXaddArrayQueue;
 import org.jspecify.annotations.Nullable;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Sinks;
 import reactor.core.publisher.Sinks.EmitResult;
 
+@SuppressWarnings({"unused", "unchecked"})
 public class FunctionalApi implements AutoCloseable {
 
     private static final AtomicReference<FunctionalApi> INSTANCE = new AtomicReference<>();
@@ -92,7 +93,6 @@ public class FunctionalApi implements AutoCloseable {
         return sequencer.output().doOnSubscribe(sub -> controlPlane.ingest(frameFlux));
     }
 
-    @SuppressWarnings("unchecked")
     public <T, R> Flux<R> apply(Flux<T> input, Function<T, R> function, boolean ordered) {
         if (closed.get()) {
             throw new RuntimeException("This FunctionalApi instance is closed.");
@@ -105,7 +105,7 @@ public class FunctionalApi implements AutoCloseable {
         final AtomicBoolean dead = new AtomicBoolean(false);
 
         final Sinks.Many<R> returnSink = Sinks.many().unicast()
-                .onBackpressureBuffer(new MpscUnboundedXaddArrayQueue<>(2048));
+                .onBackpressureBuffer(new PartitionedUnboundedMpscArrayQueue<>(1, 2048, 1));
 
         final Consumer<R> consumer = (obj) -> {
             int cycles = 0;
@@ -117,9 +117,9 @@ public class FunctionalApi implements AutoCloseable {
                     killSwitch.tryEmitEmpty();
                     break;
                 }
-                if(cycles++ < 128) {
+                if (cycles++ < 128) {
                     Thread.onSpinWait();
-                } else if(cycles < 512) {
+                } else if (cycles < 512) {
                     Thread.yield();
                 } else {
                     LockSupport.parkNanos(20_000);
@@ -208,7 +208,8 @@ public class FunctionalApi implements AutoCloseable {
         final long password = HasherApi.combine(ThreadLocalRandom.current().nextLong(),
                 ThreadLocalRandom.current().nextLong());
 
-        FrameManager<Object, ConsumerFrame> recycler = new FrameManager<>(recycleCapacity, password);
+        FrameManager<Object, ConsumerFrame> recycler = new FrameManager<>(recycleCapacity,
+                password);
         recycler.setFactory(new FrameFactory<>((idHash, data) -> {
             ConsumerFrame frame = new ConsumerFrame(idHash, (Consumer<Object>) consumer,
                     dead,
@@ -223,7 +224,8 @@ public class FunctionalApi implements AutoCloseable {
 
         Sinks.One<Void> killSwitch = Sinks.unsafe().one();
 
-        Flux<ConsumerFrame> framed = input.takeUntilOther(killSwitch.asMono()).map(obj -> recycler.generate(obj, password));
+        Flux<ConsumerFrame> framed = input.takeUntilOther(killSwitch.asMono())
+                .map(obj -> recycler.generate(obj, password));
         controlPlane.ingest(framed.doOnCancel(() -> {
             dead.set(true);
             killSwitch.tryEmitEmpty();
