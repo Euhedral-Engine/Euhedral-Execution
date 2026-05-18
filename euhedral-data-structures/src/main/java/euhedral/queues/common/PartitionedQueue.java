@@ -22,7 +22,7 @@ public interface PartitionedQueue<T> {
 
     boolean isEmpty(int partition);
 
-    long size();
+    long sizeLong();
 
     long size(int partition);
 
