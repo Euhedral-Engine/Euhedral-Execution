@@ -7,6 +7,14 @@ import euhedral.io.frames.AbstractFrame;
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.Flux;
 
+/// ## Base interface for everything below the [`ControlPlaneShard`][euhedral.io.control_plane.ControlPlaneShard]
+///
+/// Method Call Sequence if Using [`AbstractCloneablePipeline`][euhedral.io.AbstractCloneablePipeline]:
+/// - clone()
+/// - firstTouch()
+/// - start()
+/// - reportErrorsTo()
+/// - ingest() / output()
 public interface CloneableObject extends AutoCloseable {
 
     default CloneableObject clone(CloneConfig cloneConfig, PinnedThreadExecutor executor) {
@@ -18,7 +26,12 @@ public interface CloneableObject extends AutoCloseable {
     default void start() {
     }
 
-    default void firstTouch() {}
+    /// Used by CloneableObjects that create objects on instantiation. This method will be called
+    /// once before start(). Implementations should fill their queues, touch all their state
+    /// objects, and then reset them. On Linux, this ensures they are allocated on the NUMA node
+    /// closest to the cpu that needs them.
+    default void firstTouch() {
+    }
 
     default boolean isStarted() {
         return true;

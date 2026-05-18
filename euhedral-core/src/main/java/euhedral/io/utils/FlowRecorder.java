@@ -10,7 +10,7 @@ import org.jspecify.annotations.NonNull;
 
 public class FlowRecorder {
 
-    // 10 bits of precision (1024) for smoothing factors
+    // 16 bits of precision
     public static final int SHIFT = 16;
     public static final int SCALE = 1 << SHIFT;
     public static final double SCALE_INV = 1.0 / SCALE;
