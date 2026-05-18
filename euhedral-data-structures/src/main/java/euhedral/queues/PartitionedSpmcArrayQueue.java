@@ -21,6 +21,10 @@ package euhedral.queues;
 /// @param <T> Type to store
 public final class PartitionedSpmcArrayQueue<T> extends ConcurrentPartitionedArrayQueue<T> {
 
+    public PartitionedSpmcArrayQueue(int chunkSize) {
+        super(1, chunkSize, true, false);
+    }
+
     public PartitionedSpmcArrayQueue(int partitions, int chunkSize) {
         super(partitions, chunkSize, true, false);
     }

@@ -12,6 +12,14 @@ import euhedral.queues.QueueNode.Type;
 public final class PartitionedUnboundedMpmcArrayQueue<T> extends
         ConcurrentPartitionedUnboundedArrayQueue<T> {
 
+    public PartitionedUnboundedMpmcArrayQueue(int chunkSize) {
+        this(1, chunkSize, 0);
+    }
+
+    public PartitionedUnboundedMpmcArrayQueue(int partitions, int chunkSize) {
+        this(partitions, chunkSize, 0);
+    }
+
     public PartitionedUnboundedMpmcArrayQueue(int partitions, int chunkSize, int maxPooledChunks) {
         super(partitions, chunkSize, maxPooledChunks, Type.MPMC);
     }
