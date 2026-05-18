@@ -44,6 +44,10 @@ public class PartitionedQueueWrapper {
         return this.queue.partitions();
     }
 
+    public int maxPooledChunks() {
+        return this.queue.maxPooledChunks();
+    }
+
     public boolean isEmpty() {
         return this.queue.isEmpty();
     }
@@ -58,6 +62,10 @@ public class PartitionedQueueWrapper {
 
     public void clear() {
         this.queue.clear();
+    }
+
+    public void purge() {
+        this.queue.purge();
     }
 
     private static long addCap(long num1, long num2) {

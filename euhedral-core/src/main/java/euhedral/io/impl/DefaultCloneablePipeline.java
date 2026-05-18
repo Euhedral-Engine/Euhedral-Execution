@@ -3,7 +3,7 @@ package euhedral.io.impl;
 import euhedral.hardware_utils.PinnedThreadExecutor;
 import euhedral.io.AbstractCloneablePipeline;
 import euhedral.io.AbstractExecutor;
-import euhedral.io.DRRScheduler;
+import euhedral.io.DRRCacheManager;
 import euhedral.io.ExecutionManager;
 import euhedral.io.config.CloneConfig;
 import euhedral.io.config.DRRConfig;
@@ -25,7 +25,7 @@ public class DefaultCloneablePipeline extends AbstractCloneablePipeline {
     }
 
     public DefaultCloneablePipeline(String name, DRRConfig drrConfig,
-            ExecutionManagerConfig dsmConfig, AbstractExecutor executor) {
+            ExecutionManagerConfig dsmConfig, PipelineExecutor executor) {
         super(name, null, getDrrScheduler(drrConfig), getSlotManager(dsmConfig), executor);
     }
 
@@ -34,8 +34,8 @@ public class DefaultCloneablePipeline extends AbstractCloneablePipeline {
         super(name, config, scheduler, slotManager, executor);
     }
 
-    private static DRRScheduler getDrrScheduler(DRRConfig drrConfig) {
-        return new DRRScheduler(drrConfig, null);
+    private static DRRCacheManager getDrrScheduler(DRRConfig drrConfig) {
+        return new DRRCacheManager(drrConfig);
     }
 
     private static ExecutionManager getSlotManager(ExecutionManagerConfig dsmConfig) {

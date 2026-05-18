@@ -15,10 +15,9 @@ public class DRRMetrics implements AutoCloseable {
 
     private final List<Meter> meters = new ArrayList<>();
 
-    public DRRMetrics(String metricPrefix, int coreId, AtomicDouble capFactor,
+    public DRRMetrics(String metricPrefix, String tag, AtomicDouble capFactor,
             Supplier<Long> totalQueuedSizeBytes, MeterRegistry registry) {
         if (registry != null) {
-            String tag = String.valueOf(coreId);
 
             subQBacklogSummary =
                     DistributionSummary.builder(metricPrefix + ".drr_sub_queue_backlog_bytes")
