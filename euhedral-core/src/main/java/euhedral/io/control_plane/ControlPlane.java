@@ -41,18 +41,22 @@ public class ControlPlane implements AutoCloseable {
     }
 
     public static ControlPlane getOrCreate(String name, ControlPlaneShard baseShard) {
-        return INSTANCE.updateAndGet(curr -> {
+        ControlPlane controlPlane = INSTANCE.updateAndGet(curr -> {
             if (curr != null) {
                 return curr;
             }
 
             return new ControlPlane(name, baseShard, null, null);
         });
+        while(controlPlane.rebalancing.get()) {
+            LockSupport.parkNanos(1_000L);
+        }
+        return controlPlane;
     }
 
     public static ControlPlane getOrCreate(String name,
             CloneableObject cloneableObject, MeterRegistry meterRegistry) {
-        return INSTANCE.updateAndGet(curr -> {
+        ControlPlane controlPlane = INSTANCE.updateAndGet(curr -> {
             if (curr != null) {
                 return curr;
             }
@@ -60,6 +64,10 @@ public class ControlPlane implements AutoCloseable {
             return new ControlPlane(name, cloneableObject,
                     meterRegistry);
         });
+        while(controlPlane.rebalancing.get()) {
+            LockSupport.parkNanos(1_000L);
+        }
+        return controlPlane;
     }
 
     protected final String name;
@@ -132,7 +140,7 @@ public class ControlPlane implements AutoCloseable {
         }
 
         FluxNode controller = new FluxNode(this.name + "-GlobalDistributor",
-                this.effectiveTopology.socketTopologies().size(), this::route, 0, false);
+                this.effectiveTopology.socketTopologies().size(), this::route, false);
         this.ingestController.set(controller);
     }
 
@@ -166,7 +174,7 @@ public class ControlPlane implements AutoCloseable {
 
         if (this.currentGlobalVersion != nextVersion) {
             if (!this.primed.getOpaque()) {
-                this.logger.info("Initializing the ControlPlane for topology V{}", nextVersion);
+                this.logger.info("Initializing the ControlPlane for global topology V{}", nextVersion);
             } else {
                 this.logger.warn(
                         "Detected change in global topology. Initiating global rebalance for topology V{}",
