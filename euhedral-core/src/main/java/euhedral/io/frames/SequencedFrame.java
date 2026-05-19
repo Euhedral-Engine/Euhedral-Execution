@@ -1,30 +1,30 @@
 package euhedral.io.frames;
 
-import euhedral.io.impl.FrameSequencer;
 import euhedral.io.impl.FrameManager;
+import euhedral.io.impl.FrameSequencer;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import lombok.Getter;
 import lombok.Setter;
 
-public class SequencedFrame extends AbstractFrame {
+public class SequencedFrame<T, R> extends AbstractFrame {
 
     private final AtomicBoolean killSwitch;
 
-    private final FrameSequencer<Object> sequencer;
+    private final FrameSequencer<T, R> sequencer;
 
     @Getter
-    private final Function<Object, Object> function;
+    private final Function<T, R> function;
 
     @Getter
     private int sequenceNumber;
 
     @Getter
     @Setter
-    private Object payload;
+    private T payload;
 
     @Getter
-    private Object retVal;
+    private R retVal;
 
     @Getter
     @Setter
@@ -34,8 +34,8 @@ public class SequencedFrame extends AbstractFrame {
     private boolean ready = false;
 
     public SequencedFrame(long idHash, int sequenceNumber,
-            Object payload, Function<Object, Object> function, AtomicBoolean killSwitch, FrameSequencer<Object> sequencer,
-            FrameManager<Object, SequencedFrame> recycler) {
+            T payload, Function<T, R> function, AtomicBoolean killSwitch, FrameSequencer<T, R> sequencer,
+            FrameManager<T, SequencedFrame<T, R>> recycler) {
         super(idHash, recycler);
         this.killSwitch = killSwitch;
         this.sequencer = sequencer;
@@ -63,8 +63,7 @@ public class SequencedFrame extends AbstractFrame {
         killSwitch.set(true);
     }
 
-    public void replace(int sequenceNumber, Object payload) {
-        reset();
+    public void replace(int sequenceNumber, T payload) {
         this.sequenceNumber = sequenceNumber;
         this.payload = payload;
         this.retVal = null;

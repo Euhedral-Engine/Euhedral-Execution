@@ -37,10 +37,8 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import org.jspecify.annotations.NonNull;
 import org.reactivestreams.Publisher;
-import org.reactivestreams.Subscription;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import reactor.core.CoreSubscriber;
 
 /**
  * Adaptive concurrency and rate control implementation designed to provide stable, resource-aware

@@ -6,19 +6,19 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import lombok.Setter;
 
-public class FunctionFrame extends AbstractFrame {
+public class FunctionFrame<T, R> extends AbstractFrame {
 
-    final Function<Object, Object> function;
-    final Consumer<Object> callback;
+    final Function<T, R> function;
+    final Consumer<R> callback;
 
     private final AtomicBoolean killSwitch;
 
     @Setter
-    private Object payload;
+    private T payload;
 
 
-    public FunctionFrame(long idHash, Function<Object, Object> function, Consumer<Object> callback, AtomicBoolean killSwitch,
-            FrameManager<Object, FunctionFrame> recycler) {
+    public FunctionFrame(long idHash, Function<T, R> function, Consumer<R> callback, AtomicBoolean killSwitch,
+            FrameManager<T, FunctionFrame<T, R>> recycler) {
         super(idHash, recycler);
         this.function = function;
         this.callback = callback;
@@ -44,7 +44,7 @@ public class FunctionFrame extends AbstractFrame {
         killSwitch.set(true);
     }
 
-    public <T> void replace(T payload) {
+    public void replace(T payload) {
         this.payload = payload;
     }
 }
