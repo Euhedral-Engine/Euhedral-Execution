@@ -33,11 +33,11 @@ final class FunctionalPipeline extends DefaultCloneablePipeline {
                 frame.throwMeAsError();
             }
 
-            if (frame instanceof SequencedFrame s) {
+            if (frame instanceof SequencedFrame<?, ?> s) {
                 s.apply();
-            } else if (frame instanceof ConsumerFrame c) {
+            } else if (frame instanceof ConsumerFrame<?> c) {
                 c.consume();
-            } else if (frame instanceof FunctionFrame f) {
+            } else if (frame instanceof FunctionFrame<?, ?> f) {
                 f.apply();
             } else if (frame instanceof RunnableFrame r) {
                 r.run();

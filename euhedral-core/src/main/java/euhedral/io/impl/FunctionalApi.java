@@ -22,7 +22,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Sinks;
 import reactor.core.publisher.Sinks.EmitResult;
 
-@SuppressWarnings({"unused", "unchecked"})
+@SuppressWarnings("unused")
 public class FunctionalApi implements AutoCloseable {
 
     private static final AtomicReference<FunctionalApi> INSTANCE = new AtomicReference<>();
@@ -87,8 +87,8 @@ public class FunctionalApi implements AutoCloseable {
         final long password = HasherApi.combine(ThreadLocalRandom.current().nextLong(),
                 ThreadLocalRandom.current().nextLong());
 
-        FrameSequencer<R> sequencer = new FrameSequencer<>(password);
-        Flux<SequencedFrame> frameFlux = sequencer.map(input, function);
+        FrameSequencer<T, R> sequencer = new FrameSequencer<>(password);
+        Flux<SequencedFrame<T, R>> frameFlux = sequencer.map(input, function);
 
         return sequencer.output().doOnSubscribe(sub -> controlPlane.ingest(frameFlux));
     }
@@ -128,11 +128,11 @@ public class FunctionalApi implements AutoCloseable {
             }
         };
 
-        FrameManager<Object, FunctionFrame> recycler = new FrameManager<>(recycleCapacity,
+        FrameManager<T, FunctionFrame<T, R>> recycler = new FrameManager<>(recycleCapacity,
                 password);
         recycler.setFactory(new FrameFactory<>((idHash, data) -> {
-            FunctionFrame frame = new FunctionFrame(idHash,
-                    (Function<Object, Object>) function, (Consumer<Object>) consumer, dead,
+            FunctionFrame<T, R> frame = new FunctionFrame<>(idHash,
+                    function, consumer, dead,
                     recycler);
             frame.setPayload(data);
             frame.setOrdered(ordered);
@@ -142,7 +142,7 @@ public class FunctionalApi implements AutoCloseable {
             oldFrame.replace(data);
         }));
 
-        final Flux<FunctionFrame> framed = input.takeUntilOther(killSwitch.asMono())
+        final Flux<FunctionFrame<T, R>> framed = input.takeUntilOther(killSwitch.asMono())
                 .map(obj -> recycler.generate(obj, password));
 
         return returnSink.asFlux().doOnSubscribe(
@@ -197,7 +197,6 @@ public class FunctionalApi implements AutoCloseable {
         }));
     }
 
-    @SuppressWarnings("unchecked")
     public <T> void accept(Flux<T> input, Consumer<T> consumer, boolean ordered) {
         if (closed.get()) {
             throw new RuntimeException("This FunctionalApi instance is closed.");
@@ -208,10 +207,10 @@ public class FunctionalApi implements AutoCloseable {
         final long password = HasherApi.combine(ThreadLocalRandom.current().nextLong(),
                 ThreadLocalRandom.current().nextLong());
 
-        FrameManager<Object, ConsumerFrame> recycler = new FrameManager<>(recycleCapacity,
+        FrameManager<T, ConsumerFrame<T>> recycler = new FrameManager<>(recycleCapacity,
                 password);
         recycler.setFactory(new FrameFactory<>((idHash, data) -> {
-            ConsumerFrame frame = new ConsumerFrame(idHash, (Consumer<Object>) consumer,
+            ConsumerFrame<T> frame = new ConsumerFrame<>(idHash, consumer,
                     dead,
                     recycler);
             frame.setPayload(data);
@@ -224,7 +223,7 @@ public class FunctionalApi implements AutoCloseable {
 
         Sinks.One<Void> killSwitch = Sinks.unsafe().one();
 
-        Flux<ConsumerFrame> framed = input.takeUntilOther(killSwitch.asMono())
+        Flux<ConsumerFrame<T>> framed = input.takeUntilOther(killSwitch.asMono())
                 .map(obj -> recycler.generate(obj, password));
         controlPlane.ingest(framed.doOnCancel(() -> {
             dead.set(true);
