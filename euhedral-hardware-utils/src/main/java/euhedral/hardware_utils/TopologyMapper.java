@@ -11,44 +11,42 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import lombok.Getter;
 import org.jspecify.annotations.NonNull;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
-public final class EffectiveTopology {
-    private static final Logger LOGGER = LoggerFactory.getLogger(EffectiveTopology.class);
+public final class TopologyMapper {
 
-    private static volatile EffectiveSystemTopology EFFECTIVE_TOPOLOGY;
-    private static final AtomicInteger GLOBAL_VERSION = new AtomicInteger(0);
+    private final AtomicInteger globalVersion = new AtomicInteger(0);
+    private final AtomicBoolean wip = new AtomicBoolean(false);
 
-    static {
-        try {
-            EFFECTIVE_TOPOLOGY = new EffectiveSystemTopology(
-                    new UnmodifiableBitSet(new BitSet()),
-                    new UnmodifiableBitSet(new BitSet()),
-                    new UnmodifiableBitSet(new BitSet()),
-                    List.of(),
-                    -1);
-        } catch (Exception e) {
-            LOGGER.error("FATAL: Failed to instantiate the EffectiveTopology.", e);
-        }
+    private final BitSet allowedCpus;
+
+    @Getter
+    private volatile EffectiveSystemTopology effectiveTopology;
+
+    public TopologyMapper() {
+        this(SystemInfo.getCpuSet());
     }
 
-    private static final AtomicBoolean wip = new AtomicBoolean(false);
-
-    public static EffectiveSystemTopology getEffectiveTopology() {
-        return EFFECTIVE_TOPOLOGY;
+    public TopologyMapper(BitSet allowedCpus) {
+        this.allowedCpus = allowedCpus;
+        this.effectiveTopology = new EffectiveSystemTopology(
+                new UnmodifiableBitSet(new BitSet()),
+                new UnmodifiableBitSet(new BitSet()),
+                new UnmodifiableBitSet(new BitSet()),
+                List.of(),
+                -1);
     }
 
-    public static EffectiveSocketTopology getEffectiveSocketTopology(int socketId) {
-        EffectiveSystemTopology topology = EFFECTIVE_TOPOLOGY;
+    public EffectiveSocketTopology getEffectiveSocketTopology(int socketId) {
+        EffectiveSystemTopology topology = effectiveTopology;
         if (socketId < 0 || socketId >= topology.socketTopologies.size()) {
             return null;
         }
         return topology.socketTopologies.get(socketId);
     }
 
-    public static void update(@NonNull HardwareUtilization utilization) throws Exception {
+    public void update(@NonNull HardwareUtilization utilization) {
         if(!wip.compareAndSet(false, true)) {
             return;
         }
@@ -59,6 +57,7 @@ public final class EffectiveTopology {
             if (coreInfo != null) {
                 globalEffectiveCpus.andNot(coreInfo.getCpuSet());
             }
+            globalEffectiveCpus.and(this.allowedCpus);
 
             BitSet globalEffectiveCores = new BitSet(SystemInfo.MAX_CORE_ID);
             for (int cpu = globalEffectiveCpus.nextSetBit(0); cpu >= 0;
@@ -70,7 +69,7 @@ public final class EffectiveTopology {
             BitSet globalEffectiveSockets = new BitSet(SystemInfo.MAX_SOCKET_ID);
             BitSet socketUpdated = new BitSet(SystemInfo.MAX_SOCKET_ID);
 
-            EffectiveSystemTopology effectiveTopology = EFFECTIVE_TOPOLOGY;
+            EffectiveSystemTopology effectiveTopology = this.effectiveTopology;
             for (int cpu = 0; cpu < SystemInfo.CPU_COUNT; cpu++) {
                 CpuInfo info = SystemInfo.getCpuInfo(cpu);
                 EffectiveSocketTopology topology = null;
@@ -126,8 +125,8 @@ public final class EffectiveTopology {
             }
 
             if (globalUpdate) {
-                int version = GLOBAL_VERSION.incrementAndGet();
-                EFFECTIVE_TOPOLOGY = new EffectiveSystemTopology(
+                int version = globalVersion.incrementAndGet();
+                this.effectiveTopology = new EffectiveSystemTopology(
                         new UnmodifiableBitSet(globalEffectiveSockets),
                         new UnmodifiableBitSet(globalEffectiveCores),
                         new UnmodifiableBitSet(globalEffectiveCpus),
@@ -140,7 +139,7 @@ public final class EffectiveTopology {
         }
     }
 
-    private static List<BitSet> buildCoreToCpus(BitSet cpus) throws Exception {
+    private List<BitSet> buildCoreToCpus(BitSet cpus) {
         List<BitSet> cores = new ArrayList<>(SystemInfo.MAX_CORE_ID);
 
         for (int i = cpus.nextSetBit(0); i >= 0; i = cpus.nextSetBit(i + 1)) {
@@ -162,8 +161,8 @@ public final class EffectiveTopology {
         return Collections.unmodifiableList(cores);
     }
 
-    public static int getGlobalVersion() {
-        return GLOBAL_VERSION.get();
+    public int getGlobalVersion() {
+        return globalVersion.get();
     }
 
     public record EffectiveSocketTopology(int version, int socketId, BitSet effectiveCores,

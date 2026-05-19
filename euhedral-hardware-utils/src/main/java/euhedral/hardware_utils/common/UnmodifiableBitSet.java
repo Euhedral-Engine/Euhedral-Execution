@@ -8,28 +8,32 @@ import org.jspecify.annotations.NonNull;
 
 public final class UnmodifiableBitSet extends BitSet {
 
-    public static UnmodifiableBitSet wrap(BitSet set) throws Exception {
+    public static UnmodifiableBitSet wrap(BitSet set) {
         return new UnmodifiableBitSet(set);
     }
 
     private final BitSet delegate;
 
-    public UnmodifiableBitSet(BitSet delegate) throws Exception {
+    public UnmodifiableBitSet(BitSet delegate) {
         this.delegate = delegate;
 
-        Class<?> clazz = BitSet.class;
-        Field words = clazz.getDeclaredField("words");
-        Field wordsInUse = clazz.getDeclaredField("wordsInUse");
-        Field sizeIsSticky = clazz.getDeclaredField("sizeIsSticky");
+        try {
+            Class<?> clazz = BitSet.class;
+            Field words = clazz.getDeclaredField("words");
+            Field wordsInUse = clazz.getDeclaredField("wordsInUse");
+            Field sizeIsSticky = clazz.getDeclaredField("sizeIsSticky");
 
-        words.setAccessible(true);
-        wordsInUse.setAccessible(true);
-        sizeIsSticky.setAccessible(true);
+            words.setAccessible(true);
+            wordsInUse.setAccessible(true);
+            sizeIsSticky.setAccessible(true);
 
-        long[] w = (long[]) words.get(delegate);
-        words.set(this, Arrays.copyOf(w, w.length));
-        wordsInUse.set(this, w.length);
-        sizeIsSticky.set(this, sizeIsSticky.get(delegate));
+            long[] w = (long[]) words.get(delegate);
+            words.set(this, Arrays.copyOf(w, w.length));
+            wordsInUse.set(this, w.length);
+            sizeIsSticky.set(this, sizeIsSticky.get(delegate));
+        } catch (Exception e) {
+            throw new ExceptionInInitializerError(e);
+        }
     }
 
     @Override

@@ -10,11 +10,11 @@ import lombok.Setter;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
-/// A frame manager backed by an MPSC (Multi-Producer Single-Consumer) queue for efficient frame
+/// A frame management class backed by an MPSC (Multi-Producer Single-Consumer) queue for efficient frame
 /// recirculation. This class is thread-safe for multiple producers and a single consumer.
 ///
-/// This class manages a pool of reusable frames to reduce allocation overhead. Instances of this
-/// class are attached to corresponding instances of [`AbstractFrame`][euhedral.io.frames]. At the end
+/// This class manages a pool of reusable frames to reduce allocation overhead. An instance of this
+/// class is attached to corresponding instances of [`AbstractFrame`][euhedral.io.frames]. At the end
 /// of execution, the frames are returned to this manager for reuse. If none are available, they are
 /// created. Consumption is password protected by the creator.
 ///
