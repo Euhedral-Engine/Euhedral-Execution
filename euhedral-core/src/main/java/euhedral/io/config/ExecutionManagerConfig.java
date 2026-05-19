@@ -6,7 +6,7 @@ import java.time.Duration;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
-/// Configuration values for the [`ExecutionManager`][euhedral.io]
+/// ## Configuration values for the [`ExecutionManager`][euhedral.io]
 ///
 /// @param cloneConfig       See [CloneConfig]
 /// @param minConcurrency    Sets the lowest concurrency the [`ExecutionManager`][euhedral.io] will
@@ -65,21 +65,23 @@ public record ExecutionManagerConfig(@Nullable CloneConfig cloneConfig, int minC
     }
 
     /// Defines how the ExecutionManager will react when it doesn't process work in a cycle. Setting
-    /// the threshold values higher than 1.0 disables them. `maxParkTime` is also used to calculate
-    /// demand signaling backoff. Keep the value reasonable even if the spin and yield are
-    /// disabled. Values that are set too low will increase latency and contention.
+    /// the threshold values negative disables them. `maxParkTime` is also used to calculate demand
+    /// signaling backoff. Keep the value reasonable even if the spin and yield are disabled. Values
+    /// that are set too low will increase latency and contention on high core counts.
     ///
     /// @param spinThreshold  Upper limit defined by idleCyles / totalCycles for using
     /// Thread.onSpinWait()
     /// @param yieldThreshold Upper limit defined by idleCyles / totalCycles for using
     /// Thread.yield()
+    /// @param parkThreshold  Upper limit defined by idleCycles / totalCycles for using
+    /// LockSupport.parkNanos()
     /// @param maxParkTime    Max duration of each LockSupport.parkNanos()
-    public record IdleCyclePolicy(double spinThreshold, double yieldThreshold,
+    public record IdleCyclePolicy(double spinThreshold, double yieldThreshold, double parkThreshold,
                                   Duration maxParkTime) {
 
         public static IdleCyclePolicy DEFAULT =
-                new IdleCyclePolicy(0.40, 0.80, Duration.ofNanos(20_000)); // 20 micros
+                new IdleCyclePolicy(0.40, 0.80, 1.0, Duration.ofNanos(20_000)); // 20 micros
         public static IdleCyclePolicy POWER_SAVING =
-                new IdleCyclePolicy(2.0, 2.0, Duration.ofNanos(100_000)); // 100 micros
+                new IdleCyclePolicy(-1.0, -1.0, 1.0, Duration.ofNanos(100_000)); // 100 micros
     }
 }
