@@ -583,6 +583,10 @@ public class ExecutionManager implements SlotManager {
     }
 
     protected long calculateDispatchWaitNs(long nowNs) {
+        if(this.state.maxParkNs <= 0) {
+            return 0;
+        }
+
         FlowSnapshot exec = this.executionLatency.getFlowSnapshot();
 
         double avgLatency = Math.max(exec.avgUnits, 1.0);
@@ -621,7 +625,8 @@ public class ExecutionManager implements SlotManager {
             Thread.onSpinWait();
         } else if (idleRatio <= this.config.idleCyclePolicy().yieldThreshold()) {
             Thread.yield();
-        } else {
+        } else if (idleRatio <= this.config.idleCyclePolicy().parkThreshold()
+                || this.upstreamCount == 0) {
             while (parks-- > 0) {
                 park(this.state.maxParkNs);
 
@@ -699,31 +704,6 @@ public class ExecutionManager implements SlotManager {
     @Override
     public LockFreeSink completeChannel() {
         return this.completeSink;
-    }
-
-    @Override
-    public void errorChannel(Publisher<Failure> errorFlux) {
-        errorFlux.subscribe(new CoreSubscriber<>() {
-            @Override
-            public void onSubscribe(@NonNull Subscription subscription) {
-                subscription.request(Long.MAX_VALUE);
-            }
-
-            @Override
-            public void onNext(Failure failure) {
-                ExecutionManager.this.logger.error("Execution failure", failure.exception());
-            }
-
-            @Override
-            public void onError(Throwable throwable) {
-                ExecutionManager.this.logger.error("Error", throwable);
-            }
-
-            @Override
-            public void onComplete() {
-
-            }
-        });
     }
 
     @Override
