@@ -417,6 +417,10 @@ public class ControlPlane implements AutoCloseable {
         return true;
     }
 
+    public void ingest(IngestSink sink) {
+        ingest(sink.getDelegate());
+    }
+
     public void ingest(Publisher<? extends AbstractFrame> frameFlux) {
         if (this.closed.get()) {
             this.logger.error(
