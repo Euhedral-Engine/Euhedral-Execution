@@ -27,14 +27,6 @@ public class LockFreeSink {
         return this.buffer.drain(this.drainFunc, Integer.MAX_VALUE);
     }
 
-    public boolean relaxedOffer(AbstractFrame frame) {
-        boolean success = this.buffer.offer(frame);
-        if(success && this.hookOnOffer != null) {
-            this.hookOnOffer.consume(frame);
-        }
-        return success;
-    }
-
     public boolean offer(AbstractFrame frame) {
         boolean success = this.buffer.offer(frame);
         if(success && this.hookOnOffer != null) {

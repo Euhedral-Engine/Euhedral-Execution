@@ -3,6 +3,7 @@ package euhedral.io.interfaces;
 import euhedral.hardware_utils.PinnedThreadExecutor;
 import euhedral.hardware_utils.common.SystemUtilization.CoreSnapshot;
 import euhedral.io.config.CloneConfig;
+import euhedral.io.flow_control.LockFreeSink;
 import euhedral.io.frames.AbstractFrame;
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.Flux;
@@ -49,6 +50,10 @@ public interface CloneableObject extends AutoCloseable {
 
     default Publisher<? extends AbstractFrame> output() {
         return Flux.empty();
+    }
+
+    default LockFreeSink completeChannel() {
+        return null;
     }
 
     default void errorChannel(Publisher<Failure> errorFlux) {

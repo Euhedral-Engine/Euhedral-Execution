@@ -148,7 +148,9 @@ abstract sealed class ConcurrentPartitionedArrayQueue<T> extends PartitionedArra
             }
 
             VarHandle.acquireFence();
-            T obj = pQueue[chunkIndex(head)];
+            int cIdx = chunkIndex(head);
+            T obj = pQueue[cIdx];
+            pQueue[cIdx] = null;
             LA_HANDLE.getAndBitwiseAndRelease(tailSequence, sChunkIdx, ~sNum);
 
             moveHeadPointer(pIdx, 1);
