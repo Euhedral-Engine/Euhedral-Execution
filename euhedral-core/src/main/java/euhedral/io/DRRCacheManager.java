@@ -24,7 +24,7 @@ import euhedral.io.utils.DrainBuffer;
 import euhedral.io.utils.FlowRecorder;
 import euhedral.io.utils.FlowRecorder.FlowSnapshot;
 import euhedral.io.utils.MathFunctions;
-import euhedral.io.utils.PartitionedQueueWrapper;
+import euhedral.io.utils.QueuePartitionWrapper;
 import euhedral.queues.PartitionedUnboundedMpscArrayQueue;
 import euhedral.queues.common.QueueUtils;
 import java.lang.invoke.MethodHandles;
@@ -104,7 +104,7 @@ public class DRRCacheManager extends FluxNode implements CacheManager {
     protected final NonBlockingHashMapLong<DownstreamHandle> handles;
     protected final long frameQuota;
 
-    protected final PartitionedQueueWrapper queueRing;
+    protected final QueuePartitionWrapper queueRing;
     protected final int chunkSize;
     protected final int mask;
     protected final int[] heads;
@@ -152,8 +152,8 @@ public class DRRCacheManager extends FluxNode implements CacheManager {
             this.handles = new NonBlockingHashMapLong<>(4);
             this.chunkSize = getChunkSize(config.cloneConfig(), partitions);
             this.frameQuota = (long) this.chunkSize * partitions;
-            this.queueRing = new PartitionedQueueWrapper(
-                    new PartitionedUnboundedMpscArrayQueue<>(partitions, this.chunkSize, 4));
+            this.queueRing = new QueuePartitionWrapper(
+                    new PartitionedUnboundedMpscArrayQueue<>(partitions, this.chunkSize, 1));
             this.mask = partitions - 1;
             this.heads = new int[SystemInfo.getCpuCount()];
             this.partitionLocks = new boolean[partitions];
@@ -446,14 +446,7 @@ public class DRRCacheManager extends FluxNode implements CacheManager {
     }
 
     @Override
-    public Publisher<? extends AbstractFrame> process(
-            Publisher<? extends AbstractFrame> frameFlux) {
-        ingest(frameFlux);
-        return output();
-    }
-
-    @Override
-    public void ingest(Publisher<? extends AbstractFrame> frameFlux) {
+    public void input(Publisher<? extends AbstractFrame> frameFlux) {
         if (frameFlux instanceof FluxEdge dh) {
             onSubscribe(dh);
         } else {

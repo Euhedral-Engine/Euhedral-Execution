@@ -10,6 +10,7 @@ import euhedral.io.interfaces.PipelineExecutor;
 import euhedral.io.interfaces.SlotManager;
 import java.util.concurrent.Future;
 
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.reactivestreams.Publisher;
 import org.slf4j.Logger;
@@ -27,21 +28,15 @@ public abstract class AbstractCloneablePipeline implements
     protected final PipelineExecutor executor;
 
     public AbstractCloneablePipeline(String name, @Nullable CloneConfig cloneConfig,
-            CacheManager cacheManager,
-            SlotManager slotManager,
-            PipelineExecutor executor) {
+            @NonNull CacheManager cacheManager,
+            @NonNull SlotManager slotManager,
+            @NonNull PipelineExecutor executor) {
         this.logger = LoggerFactory.getLogger(name);
         this.config = cloneConfig;
         this.name = name;
-        if(cloneConfig == null) {
-            this.cacheManager = cacheManager;
-            this.slotManager = slotManager;
-            this.executor = executor;
-        } else {
-            this.cacheManager = cacheManager.clone(cloneConfig);
-            this.slotManager = slotManager.clone(cloneConfig);
-            this.executor = executor.clone(cloneConfig, slotManager.getPinnedExecutor());
-        }
+        this.cacheManager = cacheManager;
+        this.slotManager = slotManager;
+        this.executor = executor;
     }
 
     @Override
@@ -51,9 +46,8 @@ public abstract class AbstractCloneablePipeline implements
         this.cacheManager.start();
 
         this.executor.reportCompletionsTo(this.slotManager);
-        this.executor.reportErrorsTo(this.slotManager);
-        this.executor.ingest(this.slotManager.output());
-        this.slotManager.ingest(this.cacheManager.output());
+        this.executor.input(this.slotManager.output());
+        this.slotManager.input(this.cacheManager.output());
     }
 
     @Override
@@ -69,14 +63,8 @@ public abstract class AbstractCloneablePipeline implements
     }
 
     @Override
-    public Publisher<? extends AbstractFrame> process(Publisher<? extends AbstractFrame> frameFlux) {
-        ingest(frameFlux);
-        return output();
-    }
-
-    @Override
-    public void ingest(Publisher<? extends AbstractFrame> frameFlux) {
-        this.cacheManager.ingest(frameFlux);
+    public void input(Publisher<? extends AbstractFrame> frameFlux) {
+        this.cacheManager.input(frameFlux);
     }
 
     @Override

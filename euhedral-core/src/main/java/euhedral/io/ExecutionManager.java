@@ -12,7 +12,7 @@ import euhedral.hardware_utils.ThreadTools;
 import euhedral.hardware_utils.common.SystemUtilization.CoreSnapshot;
 import euhedral.hardware_utils.common.SystemUtilization.CpuSnapshot;
 import euhedral.io.DRRCacheManager.DownstreamHandle;
-import euhedral.io.SlotManagerSMTBuddy.SMTState;
+import euhedral.io.SMTBuddy.SMTState;
 import euhedral.io.config.CloneConfig;
 import euhedral.io.config.ExecutionManagerConfig;
 import euhedral.io.flow_control.DirectOutputFlux;
@@ -140,7 +140,7 @@ public class ExecutionManager implements SlotManager {
 
     protected final CycleState state;
     protected final SMTState buddyState;
-    protected final SlotManagerSMTBuddy buddy;
+    protected final SMTBuddy buddy;
 
     protected boolean drainMode = false;
     protected CoreSnapshot coreSnapshot = null;
@@ -197,10 +197,6 @@ public class ExecutionManager implements SlotManager {
 
             CpuCacheLayout layout = SystemInfo.getCacheLayout(cpus[0]);
             long temp = layout.bytesL1();
-            if (config.cloneConfig().getCpuSet().length != layout.sharesL1()) {
-                temp /= layout.sharesL1();
-            }
-
             temp = (long) (temp * 0.7);
             int bufferSize = (int) Math.min(Long.highestOneBit((temp - 1) << 1), Integer.MAX_VALUE);
             bufferSize /= QueueUtils.REFERENCE_SIZE;
@@ -225,7 +221,7 @@ public class ExecutionManager implements SlotManager {
             this.bufferWrapper = new DrainBuffer(this.buffer, bufferSize, false);
             this.buddyState = new SMTState(executionLatency, bufferWrapper.arrivalLatencyRecorder,
                     config.idleCyclePolicy().maxParkTime().toNanos());
-            this.buddy = new SlotManagerSMTBuddy(handle, bufferWrapper, buddyState, smtExec);
+            this.buddy = new SMTBuddy(handle, bufferWrapper, buddyState, smtExec);
             this.isPCore = SystemInfo.getCoreInfo(SystemInfo.getCpuInfo(layout.cpu()).core())
                     .pCore();
 
@@ -260,13 +256,7 @@ public class ExecutionManager implements SlotManager {
     }
 
     @Override
-    public Publisher<? extends AbstractFrame> process(Publisher<? extends AbstractFrame> flux) {
-        ingest(flux);
-        return output();
-    }
-
-    @Override
-    public void ingest(Publisher<? extends AbstractFrame> frameFlux) {
+    public void input(Publisher<? extends AbstractFrame> frameFlux) {
         if (frameFlux instanceof DRRCacheManager ingest && INGEST.compareAndSet(this, null,
                 ingest)) {
             this.buddy.setIngest(ingest);

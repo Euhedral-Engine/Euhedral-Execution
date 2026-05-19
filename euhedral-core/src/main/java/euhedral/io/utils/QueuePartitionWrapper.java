@@ -3,22 +3,24 @@ package euhedral.io.utils;
 import euhedral.atomics.PaddedLongAdder;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.queues.common.PartitionedQueue;
+import lombok.Getter;
 import org.jspecify.annotations.NonNull;
 
-public class PartitionedQueueWrapper {
+public class QueuePartitionWrapper {
 
+    @Getter
     protected final PartitionedQueue<AbstractFrame> queue;
 
     protected final PaddedLongAdder sizeBytes;
 
-    public PartitionedQueueWrapper(PartitionedQueue<AbstractFrame> queue) {
+    public QueuePartitionWrapper(PartitionedQueue<AbstractFrame> queue) {
         this.queue = queue;
         this.sizeBytes = new PaddedLongAdder(this.queue.partitions(), true, true);
     }
 
     public boolean offer(int partition, AbstractFrame frame) {
         if (this.queue.offer(partition, frame)) {
-            this.sizeBytes.getAndAccumulate(partition, frame.getSizeBytes(), PartitionedQueueWrapper::addCap);
+            this.sizeBytes.getAndAccumulate(partition, frame.getSizeBytes(), QueuePartitionWrapper::addCap);
             return true;
         }
         return false;
@@ -35,7 +37,7 @@ public class PartitionedQueueWrapper {
 
         if (count > 0) {
             this.sizeBytes.getAndAccumulate(partition, -drainBuffer.drainedBytes,
-                    PartitionedQueueWrapper::addCap);
+                    QueuePartitionWrapper::addCap);
         }
         return count;
     }
@@ -44,12 +46,12 @@ public class PartitionedQueueWrapper {
         return this.queue.partitions();
     }
 
-    public int maxPooledChunks() {
-        return this.queue.maxPooledChunks();
-    }
-
     public boolean isEmpty() {
         return this.queue.isEmpty();
+    }
+
+    public boolean isEmpty(int partition) {
+        return this.queue.isEmpty(partition);
     }
 
     public long getSizeBytes() {
@@ -58,10 +60,6 @@ public class PartitionedQueueWrapper {
 
     public long getSizeBytes(int partition) {
         return this.sizeBytes.getAcquire(partition);
-    }
-
-    public void clear() {
-        this.queue.clear();
     }
 
     public void purge() {

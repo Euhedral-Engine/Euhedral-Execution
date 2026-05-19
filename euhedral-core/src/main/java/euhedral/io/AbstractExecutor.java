@@ -4,22 +4,21 @@ import euhedral.hardware_utils.PinnedThreadExecutor;
 import euhedral.io.config.CloneConfig;
 import euhedral.io.flow_control.LockFreeSink;
 import euhedral.io.frames.AbstractFrame;
+import euhedral.io.frames.CancelFrame;
 import euhedral.io.interfaces.CloneableObject;
 import euhedral.io.interfaces.PipelineExecutor;
-import euhedral.queues.PartitionedUnboundedMpscArrayQueue;
 import org.reactivestreams.Publisher;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
-import reactor.core.publisher.Sinks;
-import reactor.core.publisher.Sinks.EmitResult;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public abstract class AbstractExecutor implements PipelineExecutor {
 
-    protected final PinnedThreadExecutor executorService;
-    private final Sinks.Many<Failure> errorReturn = Sinks.many().unicast()
-            .onBackpressureBuffer(new PartitionedUnboundedMpscArrayQueue<>(1024));
+    protected final Logger logger = LoggerFactory.getLogger(this.getClass());
 
-    private LockFreeSink complete;
+    protected final PinnedThreadExecutor executorService;
+    private LockFreeSink completeSink;
 
     public AbstractExecutor(PinnedThreadExecutor executorService) {
         this.executorService = executorService;
@@ -27,41 +26,28 @@ public abstract class AbstractExecutor implements PipelineExecutor {
 
     @Override
     public final void reportCompletionsTo(CloneableObject clone) {
-        this.complete = clone.completeChannel();
+        this.completeSink = clone.completeChannel();
     }
 
     @Override
-    public final void reportErrorsTo(CloneableObject clone) {
-        clone.errorChannel(this.errorReturn.asFlux());
-    }
-
-    @Override
-    public void ingest(Publisher<? extends AbstractFrame> flux) {
+    public void input(Publisher<? extends AbstractFrame> flux) {
         flux.subscribe(new ExecutionSubscriber());
     }
 
     private void executeInternal(AbstractFrame frame) {
         try {
-            if(!frame.isAlive()) {
+            if (!frame.isAlive()) {
                 frame.throwMeAsError();
             }
             execute(frame);
         } catch (Exception e) {
             frame.setCancelledExecution(true);
-            Failure failure = new Failure(frame, e);
-            EmitResult result;
-            while (!(result = this.errorReturn.tryEmitNext(failure)).isSuccess()) {
-                if (result == EmitResult.FAIL_CANCELLED || result == EmitResult.FAIL_TERMINATED
-                        || result == EmitResult.FAIL_ZERO_SUBSCRIBER) {
-                    frame.kill();
-                    throw new IllegalStateException(
-                            "CRITICAL: No upstream connection to signal cancellation.");
-                }
-                Thread.onSpinWait();
+            if(!(e instanceof CancelFrame)) {
+                logger.error("Uncaught exception while executing frame. {}", frame, e);
             }
         }
 
-        while (!this.complete.offer(frame)) {
+        while (!this.completeSink.offer(frame)) {
             Thread.onSpinWait();
         }
     }
@@ -74,7 +60,6 @@ public abstract class AbstractExecutor implements PipelineExecutor {
 
     @Override
     public void close() {
-        this.errorReturn.tryEmitComplete();
     }
 
     protected class ExecutionSubscriber implements Subscriber<AbstractFrame> {
@@ -90,7 +75,7 @@ public abstract class AbstractExecutor implements PipelineExecutor {
 
         @Override
         public void onNext(AbstractFrame frame) {
-            if(frame.isUseVThread()) {
+            if (frame.isUseVThread()) {
                 executorService.vThread(() -> executeInternal(frame));
             } else {
                 executeInternal(frame);

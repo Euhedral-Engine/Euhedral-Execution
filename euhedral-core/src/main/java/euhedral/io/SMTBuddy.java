@@ -13,14 +13,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.LockSupport;
 
-public class SlotManagerSMTBuddy implements AutoCloseable {
+public class SMTBuddy implements AutoCloseable {
 
     protected static final VarHandle INGEST;
 
     static {
         try {
             INGEST = MethodHandles.lookup()
-                    .findVarHandle(SlotManagerSMTBuddy.class, "ingest", DRRCacheManager.class);
+                    .findVarHandle(SMTBuddy.class, "ingest", DRRCacheManager.class);
         } catch (Exception e) {
             throw new ExceptionInInitializerError(e);
         }
@@ -38,7 +38,7 @@ public class SlotManagerSMTBuddy implements AutoCloseable {
     protected DRRCacheManager ingest;
     protected volatile Thread cycleThread;
 
-    public SlotManagerSMTBuddy(DownstreamHandle handle, DrainBuffer buffer, SMTState state, PinnedThreadExecutor executor) {
+    public SMTBuddy(DownstreamHandle handle, DrainBuffer buffer, SMTState state, PinnedThreadExecutor executor) {
         this.state = state;
         this.handle = handle;
         this.bufferWrapper = buffer;

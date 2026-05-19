@@ -52,9 +52,10 @@ public class DefaultCloneablePipeline extends AbstractCloneablePipeline {
 
     @Override
     public final AbstractCloneablePipeline hookOnClone(CloneConfig cloneConfig) {
+        CacheManager cManager = super.cacheManager.clone(cloneConfig);
+        SlotManager sManager = super.slotManager.clone(cloneConfig);
         return new DefaultCloneablePipeline(super.name, cloneConfig,
-                super.cacheManager.clone(cloneConfig),
-                super.slotManager.clone(cloneConfig),
-                super.executor.clone(cloneConfig));
+                cManager, sManager,
+                super.executor.clone(cloneConfig, sManager.getPinnedExecutor()));
     }
 }
