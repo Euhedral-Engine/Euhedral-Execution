@@ -224,7 +224,7 @@ public class ControlPlaneShard implements AutoCloseable {
         CloneableObject clone = this.cloneableObject.clone(config);
         nextClones[coreId] = clone;
 
-        clone.ingest(this.coreHandles.getPlain()[coreId]);
+        clone.input(this.coreHandles.getPlain()[coreId]);
 
         clone.setDrainMode(this.rebalancing.get());
         this.logger.info("Starting clone on core {}", snapshot.coreId());

@@ -41,11 +41,7 @@ public interface CloneableObject extends AutoCloseable {
     default void update(CoreSnapshot coreSnapshot) {
     }
 
-    default void ingest(Publisher<? extends AbstractFrame> flux) {
-    }
-
-    default Publisher<? extends AbstractFrame> process(Publisher<? extends AbstractFrame> flux) {
-        return flux;
+    default void input(Publisher<? extends AbstractFrame> flux) {
     }
 
     default Publisher<? extends AbstractFrame> output() {
@@ -54,10 +50,6 @@ public interface CloneableObject extends AutoCloseable {
 
     default LockFreeSink completeChannel() {
         return null;
-    }
-
-    default void errorChannel(Publisher<Failure> errorFlux) {
-
     }
 
     default double getPressure() {
@@ -78,9 +70,5 @@ public interface CloneableObject extends AutoCloseable {
 
     default int getCore() {
         return -1;
-    }
-
-    record Failure(AbstractFrame frame, Exception exception) {
-
     }
 }
