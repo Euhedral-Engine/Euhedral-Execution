@@ -2,8 +2,8 @@ package euhedral.hardware_utils;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import euhedral.hardware_utils.common.SystemUtilization.HardwareUtilization;
 import com.github.dockerjava.api.command.ExecCreateCmdResponse;
+import euhedral.hardware_utils.common.SystemUtilization.HardwareUtilization;
 import java.io.File;
 import java.time.Duration;
 import org.junit.jupiter.api.BeforeAll;
@@ -16,6 +16,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 @Testcontainers
 class ResourceMonitorTest {
+
     private static GenericContainer<?> container;
 
     @BeforeAll
@@ -30,7 +31,8 @@ class ResourceMonitorTest {
                         .withMemory(512 * 1024 * 1024L) // 512MB
                         .withCpusetCpus("0,1") // Pin to physical IDs 0 and 1
                 );
-        container.addFileSystemBind(testJar.getAbsolutePath(), "/app/test-container.jar", BindMode.READ_ONLY);
+        container.addFileSystemBind(testJar.getAbsolutePath(), "/app/test-container.jar",
+                BindMode.READ_ONLY);
         container.withCommand("sleep", "3600");
         container.start();
     }
@@ -89,7 +91,7 @@ class ResourceMonitorTest {
 
         public static void main(String[] args) {
             try {
-                ResourceMonitor monitor = new ResourceMonitor(
+                ResourceMonitor monitor = new ResourceMonitor(new TopologyMapper(),
                         Duration.ofMillis(50));
                 monitor.start();
 

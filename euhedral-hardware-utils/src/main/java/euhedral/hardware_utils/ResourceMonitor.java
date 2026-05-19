@@ -27,6 +27,7 @@ public class ResourceMonitor implements AutoCloseable {
     }
 
     private final Logger logger = LoggerFactory.getLogger(this.getClass());
+    private final TopologyMapper topology;
 
     private final long sampleRateNs;
     private final double smoothingFactor;
@@ -45,11 +46,12 @@ public class ResourceMonitor implements AutoCloseable {
     private volatile long lastDiskIOBytes;
     private volatile Thread pollingThread;
 
-    public ResourceMonitor() {
-        this(Duration.ofMillis(200));
+    public ResourceMonitor(TopologyMapper mapper) {
+        this(mapper, Duration.ofMillis(200));
     }
 
-    public ResourceMonitor(Duration sampleRate) {
+    public ResourceMonitor(TopologyMapper mapper, Duration sampleRate) {
+        this.topology = mapper;
         this.sampleRateNs = sampleRate.toNanos();
 
         double dt = Math.max(1, sampleRate.toMillis()) / 1000d;
@@ -188,7 +190,7 @@ public class ResourceMonitor implements AutoCloseable {
                     this.readings.diskIOBytesPerSecond, this.readings.diskIOPressure,
                     snapshot
             );
-            EffectiveTopology.update(this.hardwareUtilization);
+            this.topology.update(this.hardwareUtilization);
         } catch (Exception e) {
             logger.error("Failed to update utilization", e);
         }

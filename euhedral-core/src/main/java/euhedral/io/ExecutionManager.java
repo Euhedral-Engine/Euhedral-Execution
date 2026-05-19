@@ -255,6 +255,7 @@ public class ExecutionManager implements SlotManager {
                     this::getPressure);
             this.shutdownHook = new Thread(this::close);
             Runtime.getRuntime().addShutdownHook(this.shutdownHook);
+            this.logger.debug("CPU: {} P-Core: {} SMTMode: {} BufferCapacity: {}", this.cpuId, this.isPCore, cpus.length > 1 && config.enableSMT(), bufferSize);
         }
     }
 
@@ -271,7 +272,6 @@ public class ExecutionManager implements SlotManager {
             this.buddy.setIngest(ingest);
             INGEST.setRelease(this, ingest);
             ingest.addHandle(this.handle);
-            LockSupport.unpark(this.cycleThread);
         }
     }
 
@@ -439,6 +439,11 @@ public class ExecutionManager implements SlotManager {
                     this.upstreamCount = newUpCount;
                 }
 
+                this.state.lastEmptyNs = System.nanoTime();
+                if (!this.state.smtMode && this.state.lastEmptyNs > buddyState.demandWaitNs) {
+                    this.buddy.doStuff();
+                }
+
                 long ingestCount = this.ingest.getTotalCount();
                 int bufferCount = this.buddyState.bufferCount.getAcquire();
                 // This is usually hit when there are producers present but nothing is flowing
@@ -451,12 +456,9 @@ public class ExecutionManager implements SlotManager {
                     continue;
                 }
 
-                this.state.lastEmptyNs = System.nanoTime();
-                if (!this.state.smtMode && this.state.lastEmptyNs > buddyState.demandWaitNs) {
-                    this.buddy.doStuff();
+                if(processed == 0 && bufferCount == 0) {
+                    this.state.rests++;
                 }
-
-                this.state.rests++;
             }
         } catch (Throwable e) {
             this.logger.error("[CRITICAL]", e);

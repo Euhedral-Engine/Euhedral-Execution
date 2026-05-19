@@ -176,6 +176,14 @@ public class DRRCacheManager extends FluxNode implements CacheManager {
             setDrain(true);
             super.setDownstreamMapping(mappings, queueHandles);
             setDrain(false);
+
+            String[] chunks = layout.maskL2().split(",");
+            StringJoiner sj = new StringJoiner(",");
+            for(var c : chunks) {
+                sj.add("0x" + c);
+            }
+            this.logger.debug("Initialized to serve cpus (little-endian): {}", sj);
+            this.logger.debug("Partitions: {} PartitionChunkSize: {} CapacityPerQueueNode: {}", partitions, this.chunkSize, partitions * this.chunkSize);
         }
     }
 
@@ -269,14 +277,14 @@ public class DRRCacheManager extends FluxNode implements CacheManager {
 
         updateWeight(stats);
         stats.quotaBytes += stats.weight;
-        stats.quotaBytes = stats.quotaBytes < 0 ? 1024 * 64 : stats.quotaBytes;
+        stats.quotaBytes = stats.quotaBytes < 0 ? 1024 * 16 : stats.quotaBytes;
         stats.drainCycles = 0;
     }
 
     protected void updateWeight(PartitionStats stats) {
-        long avgSize = stats.avgFrameSize.get();
-        if (avgSize < 128) {
-            avgSize = 128;
+        long avgSize = stats.avgFrameSize.getAcquire();
+        if (avgSize < 64) {
+            avgSize = 64;
         }
 
         long targetQuantum = avgSize << 1;
@@ -473,15 +481,7 @@ public class DRRCacheManager extends FluxNode implements CacheManager {
         CpuCacheLayout layout = SystemInfo.getCacheLayout(cloneConfig.getCpuSet()[0]);
 
         long hash = HasherApi.getHash(layout.maskL2());
-        return CACHES.computeIfAbsent(hash, (k) -> {
-            String[] chunks = layout.maskL2().split(",");
-            StringJoiner sj = new StringJoiner(",");
-            for(var c : chunks) {
-                sj.add("0x" + c);
-            }
-            this.logger.debug("Clone created to use the cpu set {}", sj);
-            return new DRRCacheManager(this.config.clone(cloneConfig));
-        });
+        return CACHES.computeIfAbsent(hash, (k) -> new DRRCacheManager(this.config.clone(cloneConfig)));
     }
 
     @Override
