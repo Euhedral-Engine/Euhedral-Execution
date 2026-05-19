@@ -2,18 +2,19 @@ package euhedral.io.control_plane;
 
 import static euhedral.io.utils.MathFunctions.unsignedMultiplyHigh;
 
-import euhedral.hardware_utils.EffectiveTopology;
-import euhedral.hardware_utils.EffectiveTopology.EffectiveSocketTopology;
-import euhedral.hardware_utils.EffectiveTopology.EffectiveSystemTopology;
 import euhedral.hardware_utils.PinnedThreadExecutor;
 import euhedral.hardware_utils.SystemInfo;
 import euhedral.hardware_utils.SystemInfo.CpuInfo;
+import euhedral.hardware_utils.TopologyMapper;
+import euhedral.hardware_utils.TopologyMapper.EffectiveSocketTopology;
+import euhedral.hardware_utils.TopologyMapper.EffectiveSystemTopology;
 import euhedral.hardware_utils.common.SystemUtilization.HardwareUtilization;
 import euhedral.hardware_utils.common.SystemUtilization.SocketSnapshot;
 import euhedral.io.flow_control.FluxEdge;
 import euhedral.io.flow_control.FluxNode;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.interfaces.CloneableObject;
+import euhedral.io.interfaces.IngestSink;
 import euhedral.io.utils.FluxResourceMonitor;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
@@ -46,9 +47,10 @@ public class ControlPlane implements AutoCloseable {
                 return curr;
             }
 
-            return new ControlPlane(name, baseShard, null, null);
+            return new ControlPlane(name, baseShard, null,
+                    SystemInfo.getCpuSet(), null);
         });
-        while(controlPlane.rebalancing.get() || !controlPlane.ready()) {
+        while (controlPlane.rebalancing.get() || !controlPlane.ready()) {
             LockSupport.parkNanos(1_000L);
         }
         return controlPlane;
@@ -62,15 +64,33 @@ public class ControlPlane implements AutoCloseable {
             }
 
             return new ControlPlane(name, cloneableObject,
+                    SystemInfo.getCpuSet(),
                     meterRegistry);
         });
-        while(controlPlane.rebalancing.get() || !controlPlane.ready()) {
+        while (controlPlane.rebalancing.get() || !controlPlane.ready()) {
+            LockSupport.parkNanos(1_000L);
+        }
+        return controlPlane;
+    }
+
+    public static ControlPlane getOrCreate(String name, BitSet allowedCpus,
+            CloneableObject cloneableObject, MeterRegistry meterRegistry) {
+        ControlPlane controlPlane = INSTANCE.updateAndGet(curr -> {
+            if (curr != null) {
+                return curr;
+            }
+
+            return new ControlPlane(name, cloneableObject, allowedCpus,
+                    meterRegistry);
+        });
+        while (controlPlane.rebalancing.get() || !controlPlane.ready()) {
             LockSupport.parkNanos(1_000L);
         }
         return controlPlane;
     }
 
     protected final String name;
+    protected final TopologyMapper topology;
     protected final FluxResourceMonitor resourceMonitor;
     protected final Logger logger;
     protected final ExecutorService controlPlaneExecutor;
@@ -85,6 +105,7 @@ public class ControlPlane implements AutoCloseable {
     protected final ControlPlaneShard[] shards;
     protected final FluxEdge[] shardHandles;
 
+    protected final BitSet allowedCores;
     protected final AtomicReference<int[]> activeShardIds = new AtomicReference<>(new int[0]);
     protected final AtomicReference<int[]> weightedShardMap = new AtomicReference<>(new int[0]);
     protected final AtomicReference<int[]> reverseMapping = new AtomicReference<>(new int[0]);
@@ -93,15 +114,16 @@ public class ControlPlane implements AutoCloseable {
     protected volatile EffectiveSystemTopology effectiveTopology;
 
 
-    protected ControlPlane(String name, CloneableObject cloneableObject,
+    protected ControlPlane(String name, CloneableObject cloneableObject, BitSet allowedCpus,
             MeterRegistry meterRegistry) {
-        this(name, null, cloneableObject, meterRegistry);
+        this(name, null, cloneableObject, allowedCpus, meterRegistry);
     }
 
     protected ControlPlane(String name, ControlPlaneShard baseShard,
-            CloneableObject cloneableObject,
+            CloneableObject cloneableObject, BitSet allowedCpus,
             MeterRegistry meterRegistry) {
-        this.resourceMonitor = new FluxResourceMonitor(Duration.ofMillis(200));
+        this.topology = new TopologyMapper(allowedCpus);
+        this.resourceMonitor = new FluxResourceMonitor(this.topology, Duration.ofMillis(200));
         this.resourceMonitor.start();
 
         this.baseShard = Objects.requireNonNullElseGet(baseShard,
@@ -111,11 +133,12 @@ public class ControlPlane implements AutoCloseable {
 
         this.name = name;
         this.logger = LoggerFactory.getLogger(name);
-        this.effectiveTopology = EffectiveTopology.getEffectiveTopology();
+        this.effectiveTopology = this.topology.getEffectiveTopology();
         this.ingestController = new AtomicReference<>();
         this.shards = new ControlPlaneShard[SystemInfo.getMaxSocketId() + 1];
         this.shardHandles = new FluxEdge[SystemInfo.getMaxSocketId() + 1];
 
+        this.allowedCores = allowedCpus;
         this.controlPlaneExecutor = Executors.newFixedThreadPool(this.shards.length,
                 r -> new Thread(r, name));
 
@@ -123,11 +146,8 @@ public class ControlPlane implements AutoCloseable {
         Runtime.getRuntime().addShutdownHook(this.shutdownHook);
 
         init();
-        try {
-            EffectiveTopology.update(this.resourceMonitor.getUtilization());
-        } catch (Exception e) {
-            this.logger.error("Failed to update EffectiveTopology", e);
-        }
+        this.topology.update(this.resourceMonitor.getUtilization());
+
         update(resourceMonitor.getUtilization());
         this.resourceMonitor.addListener().subscribe(this::update);
     }
@@ -170,17 +190,21 @@ public class ControlPlane implements AutoCloseable {
     }
 
     protected void update(HardwareUtilization utilization) {
-        int nextVersion = EffectiveTopology.getGlobalVersion();
+        int nextVersion = this.topology.getGlobalVersion();
 
         if (this.currentGlobalVersion != nextVersion) {
             if (!this.primed.getOpaque()) {
-                this.logger.info("Initializing the ControlPlane for global topology V{}", nextVersion);
+                this.logger.info("Initializing the ControlPlane for global topology V{}",
+                        nextVersion);
             } else {
                 this.logger.warn(
                         "Detected change in global topology. Initiating global rebalance for topology V{}",
                         nextVersion);
             }
             handleSystemTopologyChange(utilization);
+            if(this.effectiveTopology.effectiveCpus().cardinality() == 0) {
+                logger.error("There are no usable cpus for this ControlPlane.");
+            }
         } else {
             double quotaPool = utilization.quotaCpus();
 
@@ -209,8 +233,8 @@ public class ControlPlane implements AutoCloseable {
         if (!this.rebalancing.compareAndSet(false, true)) {
             return;
         }
-        this.effectiveTopology = EffectiveTopology.getEffectiveTopology();
-        this.currentGlobalVersion = EffectiveTopology.getGlobalVersion();
+        this.effectiveTopology = this.topology.getEffectiveTopology();
+        this.currentGlobalVersion = this.topology.getGlobalVersion();
 
         FluxNode controller = this.ingestController.get();
 
@@ -226,7 +250,8 @@ public class ControlPlane implements AutoCloseable {
         double quotaPool = utilization.quotaCpus();
         for (int socket = newShards.nextSetBit(0); socket >= 0;
                 socket = newShards.nextSetBit(socket + 1)) {
-            EffectiveSocketTopology topology = this.effectiveTopology.socketTopologies().get(socket);
+            EffectiveSocketTopology topology = this.effectiveTopology.socketTopologies()
+                    .get(socket);
             SocketSnapshot snapshot = utilization.getSocketSnapshot(socket,
                     topology.effectiveCoreToCpu(),
                     getShardQuota(socket, quotaPool));
@@ -312,16 +337,17 @@ public class ControlPlane implements AutoCloseable {
 
     protected double getShardQuota(int socketId, double systemQuotaPool) {
         int totalEffectiveCpus = this.effectiveTopology.effectiveCpus().cardinality();
-        int socketEffectiveCpus = this.effectiveTopology.socketTopologies().get(socketId).effectiveCpus()
+        int socketEffectiveCpus = this.effectiveTopology.socketTopologies().get(socketId)
+                .effectiveCpus()
                 .cardinality();
 
         return ((double) socketEffectiveCpus / Math.max(1, totalEffectiveCpus)) * systemQuotaPool;
     }
 
     public boolean ready() {
-        while(true) {
+        while (true) {
             int count = this.ingestController.getOpaque().getThreadCount();
-            if(count >= getActiveWorkers()) {
+            if (count >= getActiveWorkers()) {
                 return true;
             }
             LockSupport.parkNanos(1_000);
@@ -330,7 +356,7 @@ public class ControlPlane implements AutoCloseable {
 
     public int getActiveWorkers() {
         int count = 0;
-        for(ControlPlaneShard shard : this.shards) {
+        for (ControlPlaneShard shard : this.shards) {
             count += shard.getActiveCores();
         }
         return count;

@@ -2,9 +2,9 @@ package euhedral.io.control_plane;
 
 import static euhedral.io.utils.MathFunctions.unsignedMultiplyHigh;
 
-import euhedral.hardware_utils.EffectiveTopology.EffectiveSocketTopology;
 import euhedral.hardware_utils.SystemInfo;
 import euhedral.hardware_utils.SystemInfo.CpuInfo;
+import euhedral.hardware_utils.TopologyMapper.EffectiveSocketTopology;
 import euhedral.hardware_utils.common.SystemUtilization.CoreSnapshot;
 import euhedral.hardware_utils.common.SystemUtilization.SocketSnapshot;
 import euhedral.io.config.CloneConfig;
@@ -208,7 +208,7 @@ public class ControlPlaneShard implements AutoCloseable {
         }
 
         if (!clone.isStarted()) {
-            this.logger.info("Starting clone {}", snapshot.coreId());
+            this.logger.info("Starting clone on core {}", snapshot.coreId());
             clone.start();
         }
         clone.update(snapshot);
@@ -227,6 +227,7 @@ public class ControlPlaneShard implements AutoCloseable {
         clone.ingest(this.coreHandles.getPlain()[coreId]);
 
         clone.setDrainMode(this.rebalancing.get());
+        this.logger.info("Starting clone on core {}", snapshot.coreId());
         clone.start();
         clone.update(snapshot);
         return clone;

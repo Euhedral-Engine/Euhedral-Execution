@@ -1,6 +1,7 @@
 package euhedral.io.utils;
 
 import euhedral.hardware_utils.ResourceMonitor;
+import euhedral.hardware_utils.TopologyMapper;
 import euhedral.hardware_utils.common.SystemUtilization.HardwareUtilization;
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -20,13 +21,13 @@ public final class FluxResourceMonitor implements Disposable, AutoCloseable {
     private final Sinks.Many<HardwareUtilization> listeners = Sinks.unsafe().many().multicast()
             .onBackpressureBuffer(1);
 
-    public FluxResourceMonitor() {
-        this(Duration.ofMillis(200));
+    public FluxResourceMonitor(TopologyMapper mapper) {
+        this(mapper, Duration.ofMillis(200));
     }
 
-    public FluxResourceMonitor(Duration sampleRate) {
+    public FluxResourceMonitor(TopologyMapper mapper, Duration sampleRate) {
         this.scheduler = Schedulers.boundedElastic();
-        this.resourceMonitor = new ResourceMonitor(sampleRate);
+        this.resourceMonitor = new ResourceMonitor(mapper, sampleRate);
         this.resourceMonitor.addListener(utilization -> {
             EmitResult result;
             do {

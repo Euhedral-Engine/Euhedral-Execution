@@ -11,11 +11,11 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import euhedral.hardware_utils.EffectiveTopology;
-import euhedral.hardware_utils.EffectiveTopology.EffectiveSocketTopology;
-import euhedral.hardware_utils.EffectiveTopology.EffectiveSystemTopology;
 import euhedral.hardware_utils.SystemInfo;
 import euhedral.hardware_utils.SystemInfo.CpuInfo;
+import euhedral.hardware_utils.TopologyMapper;
+import euhedral.hardware_utils.TopologyMapper.EffectiveSocketTopology;
+import euhedral.hardware_utils.TopologyMapper.EffectiveSystemTopology;
 import euhedral.hardware_utils.common.SystemUtilization.HardwareUtilization;
 import euhedral.hardware_utils.common.SystemUtilization.SocketSnapshot;
 import euhedral.io.utils.FluxResourceMonitor;
@@ -35,13 +35,19 @@ import reactor.core.publisher.Flux;
 class ControlPlaneTest {
 
     private ControlPlaneShard mockShard;
-    private final static MockedStatic<EffectiveTopology> mockMapper = Mockito.mockStatic(EffectiveTopology.class);;
-    private final static MockedStatic<SystemInfo> mockSysInfo = Mockito.mockStatic(SystemInfo.class);;
+    private final static MockedStatic<SystemInfo> mockSysInfo = Mockito.mockStatic(SystemInfo.class);
+    private static MockedConstruction<TopologyMapper> mockMapper;
     private static MockedConstruction<FluxResourceMonitor> mockResourceMonitor;
+    private static EffectiveSystemTopology mockTopology;
     private static HardwareUtilization mockUtilization;
 
     @BeforeAll
     static void init() {
+        mockMapper = Mockito.mockConstructionWithAnswer(TopologyMapper.class, invocation -> {
+            Class<?> clazz = invocation.getMethod().getReturnType();
+
+            return mock(EffectiveSystemTopology.class);
+        });
         mockResourceMonitor = Mockito.mockConstructionWithAnswer(FluxResourceMonitor.class, invocation -> {
             Class<?> clazz = invocation.getMethod().getReturnType();
             if(clazz.equals(Void.TYPE)) {
@@ -69,7 +75,7 @@ class ControlPlaneTest {
 
     @Test
     public void testInitialization() throws Exception {
-        mockMapper.reset();
+//        mockMapper.reset();
         mockSysInfo.reset();
         EffectiveSystemTopology effectiveTopology = getSystemTopology();
 
@@ -78,7 +84,7 @@ class ControlPlaneTest {
 
         createControlPlaneWithMocks(effectiveTopology, snapshots);
 
-        mockMapper.verify(EffectiveTopology::getEffectiveTopology, times(2));
+//        mockMapper.verify(TopologyMapper::getEffectiveTopology, times(2));
 
         verify(mockShard, times(1)).clone(eq(0), any());
         verify(mockShard, times(1)).clone(eq(1), any());
@@ -108,7 +114,7 @@ class ControlPlaneTest {
 
     @Test
     public void testGlobalRebalance() throws Exception {
-        mockMapper.reset();
+//        mockMapper.reset();
         mockSysInfo.reset();
         EffectiveSystemTopology effectiveTopology = getSystemTopology();
 
@@ -125,8 +131,8 @@ class ControlPlaneTest {
                 effectiveTopology.effectiveSockets(), effectiveTopology.effectiveCores(),
                 effectiveTopology.effectiveCpus(), effectiveTopology.socketTopologies(), 3);
 
-        mockMapper.when(EffectiveTopology::getEffectiveTopology).thenReturn(updatedTopology);
-        mockMapper.when(EffectiveTopology::getGlobalVersion).thenReturn(3);
+//        mockMapper.when(TopologyMapper::getEffectiveTopology).thenReturn(updatedTopology);
+//        mockMapper.when(TopologyMapper::getGlobalVersion).thenReturn(3);
 
         when(mockShard.isStarted()).thenReturn(true);
 
@@ -203,7 +209,7 @@ class ControlPlaneTest {
         }
         mockSysInfo.when(SystemInfo::getMaxSocketId).thenReturn(1);
 
-        mockMapper.when(EffectiveTopology::getEffectiveTopology).thenReturn(effectiveTopology);
+//        mockMapper.when(TopologyMapper::getEffectiveTopology).thenReturn(effectiveTopology);
         when(mockShard.isStarted()).thenReturn(false);
 
         ControlPlane.getOrCreate("TestControlPlane", mockShard);

@@ -3,6 +3,7 @@ package euhedral.hardware_utils;
 import euhedral.hardware_utils.common.OSName;
 import euhedral.hardware_utils.common.SystemSnapshotProvider;
 import euhedral.hardware_utils.common.SystemUtilization.SystemSnapshot;
+import euhedral.hardware_utils.common.UnmodifiableBitSet;
 import euhedral.hardware_utils.linux.CgroupV2Resources;
 import euhedral.hardware_utils.linux.LinuxSystemLayout;
 import euhedral.hardware_utils.macOS.OSXResources;
@@ -34,6 +35,12 @@ public final class SystemInfo {
     public static final int SOCKET_COUNT;
     public static final int MAX_CORE_ID;
     public static final int MAX_SOCKET_ID;
+
+    private static final UnmodifiableBitSet CPU_SET;
+    private static final UnmodifiableBitSet P_CORE_SET;
+    private static final UnmodifiableBitSet E_CORE_SET;
+    private static final UnmodifiableBitSet P_CPU_SET;
+    private static final UnmodifiableBitSet E_CPU_SET;
 
     private static final Int2ObjectArrayMap<CpuCacheLayout> CPU_CACHE;
     private static final Int2ObjectArrayMap<CpuInfo> CPU_INFO;
@@ -100,12 +107,32 @@ public final class SystemInfo {
         MAX_CORE_ID = maxCore;
         MAX_SOCKET_ID = maxSocket;
 
-        LOGGER.debug("\n{}", asString());
+        BitSet cpus = new BitSet(CPU_INFO.size());
+        BitSet pCores = new BitSet(MAX_CORE_ID);
+        BitSet eCores = new BitSet(MAX_CORE_ID);
+        BitSet pCpus = new BitSet(CPU_INFO.size());
+        BitSet eCpus = new BitSet(CPU_INFO.size());
         if(OSName.CURRENT_OS != OSName.UNSUPPORTED) {
             CACHE_LINE_SIZE_BYTES = CPU_CACHE.get(0).cacheLineBytes;
+            for(int c : CPU_INFO.keySet()) {
+                cpus.set(c);
+                int core = CPU_INFO.get(c).core;
+                CoreInfo coreInfo = CORE_INFO.get(core);
+                pCores.set(core, coreInfo.pCore);
+                pCpus.set(c, coreInfo.pCore);
+                eCores.set(core, !coreInfo.pCore);
+                eCpus.set(c, !coreInfo.pCore);
+            }
         } else {
             CACHE_LINE_SIZE_BYTES = 64;
+            cpus.set(0, Runtime.getRuntime().availableProcessors());
         }
+        CPU_SET = UnmodifiableBitSet.wrap(cpus);
+        P_CORE_SET = UnmodifiableBitSet.wrap(pCores);
+        E_CORE_SET = UnmodifiableBitSet.wrap(eCores);
+        P_CPU_SET = UnmodifiableBitSet.wrap(pCpus);
+        E_CPU_SET = UnmodifiableBitSet.wrap(eCpus);
+        LOGGER.debug("\n{}", asString());
     }
 
     public static int getCacheLineBytes() {
@@ -226,6 +253,26 @@ public final class SystemInfo {
 
     public static @Nullable CpuCacheLayout getCacheLayout(int cpu) {
         return CPU_CACHE.get(cpu);
+    }
+
+    public static @NonNull UnmodifiableBitSet getCpuSet() {
+        return CPU_SET;
+    }
+
+    public static @NonNull UnmodifiableBitSet get_P_CoreSet() {
+        return P_CORE_SET;
+    }
+
+    public static @NonNull UnmodifiableBitSet get_E_CoreSet() {
+        return E_CORE_SET;
+    }
+
+    public static @NonNull UnmodifiableBitSet get_P_CpuSet() {
+        return P_CPU_SET;
+    }
+
+    public static @NonNull UnmodifiableBitSet get_E_CpuSet() {
+        return E_CPU_SET;
     }
 
     private SystemInfo() {
