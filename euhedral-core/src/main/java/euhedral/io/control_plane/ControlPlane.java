@@ -48,7 +48,7 @@ public class ControlPlane implements AutoCloseable {
 
             return new ControlPlane(name, baseShard, null, null);
         });
-        while(controlPlane.rebalancing.get()) {
+        while(controlPlane.rebalancing.get() || !controlPlane.ready()) {
             LockSupport.parkNanos(1_000L);
         }
         return controlPlane;
@@ -64,7 +64,7 @@ public class ControlPlane implements AutoCloseable {
             return new ControlPlane(name, cloneableObject,
                     meterRegistry);
         });
-        while(controlPlane.rebalancing.get()) {
+        while(controlPlane.rebalancing.get() || !controlPlane.ready()) {
             LockSupport.parkNanos(1_000L);
         }
         return controlPlane;
@@ -316,6 +316,24 @@ public class ControlPlane implements AutoCloseable {
                 .cardinality();
 
         return ((double) socketEffectiveCpus / Math.max(1, totalEffectiveCpus)) * systemQuotaPool;
+    }
+
+    public boolean ready() {
+        while(true) {
+            int count = this.ingestController.getOpaque().getThreadCount();
+            if(count >= getActiveWorkers()) {
+                return true;
+            }
+            LockSupport.parkNanos(1_000);
+        }
+    }
+
+    public int getActiveWorkers() {
+        int count = 0;
+        for(ControlPlaneShard shard : this.shards) {
+            count += shard.getActiveCores();
+        }
+        return count;
     }
 
     @Override

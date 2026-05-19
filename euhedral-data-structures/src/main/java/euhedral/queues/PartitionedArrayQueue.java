@@ -165,8 +165,10 @@ public class PartitionedArrayQueue<T> extends AbstractQueue<T> implements Partit
             return null;
         }
         this.heads.setPlain(pIdx, head + 1);
-
-        return this.queue.getPlain(rIdx)[chunkIndex(head)];
+        int cIdx = chunkIndex(head);
+        T obj = this.queue.getPlain(rIdx)[cIdx];
+        this.queue.getPlain(rIdx)[cIdx] = null;
+        return obj;
     }
 
     /// Drains from all partitions starting from 0 up to the limit
@@ -203,6 +205,7 @@ public class PartitionedArrayQueue<T> extends AbstractQueue<T> implements Partit
             int chunkIdx = chunkIndex(head++);
             this.heads.setPlain(pIdx, head);
             consumer.consume(queue[chunkIdx]);
+            queue[chunkIdx] = null;
             total++;
         }
         return total;

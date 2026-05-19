@@ -129,6 +129,10 @@ public class FluxEdge extends UpstreamHandle implements Publisher<AbstractFrame>
         return this.upstreamCount.getOpaque();
     }
 
+    public int getThreadCount() {
+        return this.threadCount.intValue();
+    }
+
     public int getLayerWidth() {
         if (this.sibling == null) {
             return 1;

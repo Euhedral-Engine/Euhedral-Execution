@@ -72,6 +72,10 @@ public class ControlPlaneShard implements AutoCloseable {
         this.cloneableObject = obj;
     }
 
+    public int getActiveCores() {
+        return this.activeCoreIds.getAcquire().length;
+    }
+
     public void start(SocketSnapshot snapshot, EffectiveSocketTopology topology,
             FluxEdge upstream) {
         if (!this.started.compareAndSet(false, true)) {

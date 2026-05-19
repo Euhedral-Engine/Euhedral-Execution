@@ -37,6 +37,9 @@ class PartitionedMpmcArrayQueueTest {
             }
         };
         q.drain(consumer, 1000);
+        while(q.drain(consumer, 1000) > 0) {
+            Thread.onSpinWait();
+        }
 
         assertEquals(127, drained[0]);
     }
