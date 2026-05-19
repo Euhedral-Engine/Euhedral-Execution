@@ -245,7 +245,6 @@ public class ExecutionManager implements SlotManager {
                 } else {
                     frame.setStartNs(0);
                 }
-                frame.setCompletionSink(this.completeSink);
             });
 
             this.metrics = new ExecutionManagerMetrics(config.meterRegistry(), config,
@@ -708,6 +707,11 @@ public class ExecutionManager implements SlotManager {
     }
 
     @Override
+    public LockFreeSink completeChannel() {
+        return this.completeSink;
+    }
+
+    @Override
     public void errorChannel(Publisher<Failure> errorFlux) {
         errorFlux.subscribe(new CoreSubscriber<>() {
             @Override
@@ -745,7 +749,6 @@ public class ExecutionManager implements SlotManager {
     protected class CycleState {
 
         public final long maxParkNs = config.idleCyclePolicy().maxParkTime().toNanos();
-        public final long lowWaterMark = bufferSize >> 2;
 
         public final FlowRecorder idleRecorder = new FlowRecorder();
 

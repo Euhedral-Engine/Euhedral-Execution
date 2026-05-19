@@ -5,6 +5,8 @@ import euhedral.io.config.CloneConfig;
 import euhedral.io.frames.AbstractFrame;
 
 public interface PipelineExecutor extends CloneableObject {
+    void reportCompletionsTo(CloneableObject clone);
+
     void reportErrorsTo(CloneableObject clone);
 
     void execute(AbstractFrame frame);

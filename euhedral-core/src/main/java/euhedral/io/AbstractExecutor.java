@@ -1,13 +1,12 @@
 package euhedral.io;
 
 import euhedral.hardware_utils.PinnedThreadExecutor;
-import euhedral.hashing.HasherApi;
 import euhedral.io.config.CloneConfig;
+import euhedral.io.flow_control.LockFreeSink;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.interfaces.CloneableObject;
 import euhedral.io.interfaces.PipelineExecutor;
 import euhedral.queues.PartitionedUnboundedMpscArrayQueue;
-import java.util.concurrent.ThreadLocalRandom;
 import org.reactivestreams.Publisher;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
@@ -20,8 +19,15 @@ public abstract class AbstractExecutor implements PipelineExecutor {
     private final Sinks.Many<Failure> errorReturn = Sinks.many().unicast()
             .onBackpressureBuffer(new PartitionedUnboundedMpscArrayQueue<>(1024));
 
+    private LockFreeSink complete;
+
     public AbstractExecutor(PinnedThreadExecutor executorService) {
         this.executorService = executorService;
+    }
+
+    @Override
+    public final void reportCompletionsTo(CloneableObject clone) {
+        this.complete = clone.completeChannel();
     }
 
     @Override
@@ -31,15 +37,10 @@ public abstract class AbstractExecutor implements PipelineExecutor {
 
     @Override
     public void ingest(Publisher<? extends AbstractFrame> flux) {
-        final long password = HasherApi.combine(ThreadLocalRandom.current().nextLong(),
-                ThreadLocalRandom.current().nextLong());
-
-        flux.subscribe(new ExecutionSubscriber(password));
+        flux.subscribe(new ExecutionSubscriber());
     }
 
-    protected final void execute(AbstractFrame frame, long password) {
-        frame.setNotifyCompletePassword(password);
-
+    private void executeInternal(AbstractFrame frame) {
         try {
             if(!frame.isAlive()) {
                 frame.throwMeAsError();
@@ -60,7 +61,9 @@ public abstract class AbstractExecutor implements PipelineExecutor {
             }
         }
 
-        frame.notifyComplete(password);
+        while (!this.complete.offer(frame)) {
+            Thread.onSpinWait();
+        }
     }
 
     @Override
@@ -75,10 +78,9 @@ public abstract class AbstractExecutor implements PipelineExecutor {
     }
 
     protected class ExecutionSubscriber implements Subscriber<AbstractFrame> {
-        protected final long password;
 
-        public ExecutionSubscriber(long password) {
-            this.password = password;
+        public ExecutionSubscriber() {
+
         }
 
         @Override
@@ -89,9 +91,9 @@ public abstract class AbstractExecutor implements PipelineExecutor {
         @Override
         public void onNext(AbstractFrame frame) {
             if(frame.isUseVThread()) {
-                executorService.vThread(() -> execute(frame, password));
+                executorService.vThread(() -> executeInternal(frame));
             } else {
-                execute(frame, password);
+                executeInternal(frame);
             }
         }
 

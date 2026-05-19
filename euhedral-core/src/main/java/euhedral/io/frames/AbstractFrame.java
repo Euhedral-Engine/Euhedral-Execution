@@ -3,7 +3,6 @@ package euhedral.io.frames;
 import euhedral.hardware_utils.SystemInfo.CpuInfo;
 import euhedral.io.control_plane.RoutingPolicy;
 import euhedral.io.errors.WorkCancelled;
-import euhedral.io.flow_control.LockFreeSink;
 import euhedral.io.impl.FrameManager;
 import lombok.Getter;
 import lombok.Setter;
@@ -57,9 +56,6 @@ public abstract class AbstractFrame extends WorkCancelled {
     @Setter
     private long ingestNs;
 
-    private LockFreeSink completionSink;
-    private long notifyCompletePassword;
-
     @Getter
     @Setter
     private boolean isOrdered;
@@ -90,35 +86,6 @@ public abstract class AbstractFrame extends WorkCancelled {
 
     public abstract boolean isAlive();
 
-    /// Sets the completionSink for recording work completion.
-    ///
-    /// @param completionSink Sink to return the frame to.
-    public final void setCompletionSink(LockFreeSink completionSink) {
-        this.completionSink = completionSink;
-    }
-
-    /// Sets a password for notifying the completion of an execution.
-    ///
-    /// @param password notifyCompletePassword
-    public final void setNotifyCompletePassword(long password) {
-        if (notifyCompletePassword == 0) {
-            this.notifyCompletePassword = password;
-        }
-    }
-
-    /// Notifies the upstream caller to record the execution. The caller must pass the password they
-    /// generated at the start of execution.
-    ///
-    /// @param password notifyCompletePassword password
-    public final void notifyComplete(long password) {
-        if (notifyCompletePassword == password) {
-            while (!completionSink.relaxedOffer(this)) {
-                Thread.onSpinWait();
-            }
-            notifyCompletePassword = 0;
-        }
-    }
-
     /// Kills the frame. This is for stopping the execution of this and all related frames.
     public abstract void kill();
 
@@ -132,8 +99,6 @@ public abstract class AbstractFrame extends WorkCancelled {
         combinedHash = idHash;
         startNs = 0;
         ingestNs = 0;
-        completionSink = null;
-        notifyCompletePassword = 0;
         cancelledExecution = false;
     }
 

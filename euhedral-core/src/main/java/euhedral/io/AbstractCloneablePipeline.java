@@ -50,6 +50,7 @@ public abstract class AbstractCloneablePipeline implements
         this.slotManager.start();
         this.cacheManager.start();
 
+        this.executor.reportCompletionsTo(this.slotManager);
         this.executor.reportErrorsTo(this.slotManager);
         this.executor.ingest(this.slotManager.output());
         this.slotManager.ingest(this.cacheManager.output());

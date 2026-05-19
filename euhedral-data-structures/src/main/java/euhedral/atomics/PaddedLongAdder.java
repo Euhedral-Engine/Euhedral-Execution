@@ -6,6 +6,14 @@ import java.util.concurrent.ThreadLocalRandom;
 @SuppressWarnings("unused")
 public final class PaddedLongAdder extends PaddedAtomicLongArray {
 
+    public PaddedLongAdder() {
+        super(Runtime.getRuntime().availableProcessors(), true, false);
+    }
+
+    public PaddedLongAdder(int length) {
+        super(length, true, false);
+    }
+
     public PaddedLongAdder(int length, boolean boundsCheck, boolean pad128) {
         super(length, boundsCheck, pad128);
     }
