@@ -5,15 +5,15 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import lombok.Setter;
 
-public class ConsumerFrame extends AbstractFrame {
+public class ConsumerFrame<T> extends AbstractFrame {
 
-    private final Consumer<Object> consumer;
+    private final Consumer<T> consumer;
     private final AtomicBoolean killSwitch;
     @Setter
-    private Object payload;
+    private T payload;
 
-    public ConsumerFrame(long idHash, Consumer<Object> consumer, AtomicBoolean killSwitch,
-            FrameManager<Object, ConsumerFrame> recycler) {
+    public ConsumerFrame(long idHash, Consumer<T> consumer, AtomicBoolean killSwitch,
+            FrameManager<T, ConsumerFrame<T>> recycler) {
         super(idHash, recycler);
         this.consumer = consumer;
         this.killSwitch = killSwitch;
@@ -38,7 +38,7 @@ public class ConsumerFrame extends AbstractFrame {
         killSwitch.set(true);
     }
 
-    public void replace(Object object) {
+    public void replace(T object) {
         this.payload = object;
     }
 }

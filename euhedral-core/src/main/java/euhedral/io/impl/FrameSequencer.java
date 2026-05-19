@@ -14,7 +14,7 @@ import reactor.core.publisher.Sinks;
 import reactor.core.publisher.Sinks.EmitResult;
 import reactor.core.scheduler.Schedulers;
 
-public class FrameSequencer<R> {
+public class FrameSequencer<T, R> {
 
     private static final SequencedFrame SIGNAL_FRAME = new SequencedFrame(-1, -1, null, null,
             null, null, null);
@@ -23,10 +23,10 @@ public class FrameSequencer<R> {
     private final long sequencePassword = HasherApi.combine(ThreadLocalRandom.current().nextLong(),
             ThreadLocalRandom.current()
                     .nextLong());
-    private final Long2ObjectOpenHashMap<SequencedFrame> frameData = new Long2ObjectOpenHashMap<>(
+    private final Long2ObjectOpenHashMap<SequencedFrame<T, R>> frameData = new Long2ObjectOpenHashMap<>(
             32_768);
     private final LongHeapPriorityQueue sequenceHeap = new LongHeapPriorityQueue(32_768);
-    private final Sinks.Many<SequencedFrame> ingest = Sinks.many().unicast()
+    private final Sinks.Many<SequencedFrame<T, R>> ingest = Sinks.many().unicast()
             .onBackpressureBuffer(new PartitionedUnboundedMpscArrayQueue<>(8_192));
 
     private final Sinks.Many<R> output = Sinks.unsafe().many().unicast()
@@ -45,11 +45,10 @@ public class FrameSequencer<R> {
                 });
     }
 
-    @SuppressWarnings("unchecked")
     private void drainInternal() {
         while (!sequenceHeap.isEmpty()) {
             long minSequence = sequenceHeap.firstLong();
-            SequencedFrame frame = frameData.get(minSequence);
+            SequencedFrame<T, R> frame = frameData.get(minSequence);
             if (frame == null) {
                 sequenceHeap.dequeueLong();
             } else if (frame.isReady()) {
@@ -57,7 +56,7 @@ public class FrameSequencer<R> {
                 frameData.remove(minSequence);
 
                 EmitResult result;
-                while (!(result = output.tryEmitNext((R) frame.getRetVal())).isSuccess()) {
+                while (!(result = output.tryEmitNext(frame.getRetVal())).isSuccess()) {
                     if (result == EmitResult.FAIL_CANCELLED || result == EmitResult.FAIL_TERMINATED
                             || result == EmitResult.FAIL_ZERO_SUBSCRIBER) {
                         frame.kill();
@@ -75,17 +74,16 @@ public class FrameSequencer<R> {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    public <T> Flux<SequencedFrame> map(Flux<T> flux, Function<T, R> function) {
+    public Flux<SequencedFrame<T, R>> map(Flux<T> flux, Function<T, R> function) {
         final AtomicBoolean killSwitch = new AtomicBoolean(false);
 
         final int[] idx = new int[]{0};
 
-        FrameManager<Object, SequencedFrame> recycler = new FrameManager<>(32_768, ingestPassword);
+        FrameManager<T, SequencedFrame<T, R>> recycler = new FrameManager<>(32_768, ingestPassword);
         recycler.setFactory(new FrameFactory<>((idHash, data) -> {
-            SequencedFrame frame = new SequencedFrame(idHash, idx[0]++, data,
-                    (Function<Object, Object>) function,
-                    killSwitch, (FrameSequencer<Object>) this, recycler);
+            SequencedFrame<T, R> frame = new SequencedFrame<>(idHash, idx[0]++, data,
+                    function,
+                    killSwitch, this, recycler);
             frame.setOrdered(false);
             registerFrame(frame);
             return frame;
@@ -106,7 +104,7 @@ public class FrameSequencer<R> {
                 });
     }
 
-    private void registerFrame(SequencedFrame frame) {
+    private void registerFrame(SequencedFrame<T, R> frame) {
         frame.setSequencerPassword(sequencePassword);
         ingest.tryEmitNext(frame);
     }

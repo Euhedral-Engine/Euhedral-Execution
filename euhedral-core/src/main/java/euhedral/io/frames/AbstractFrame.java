@@ -2,7 +2,6 @@ package euhedral.io.frames;
 
 import euhedral.hardware_utils.SystemInfo.CpuInfo;
 import euhedral.io.control_plane.RoutingPolicy;
-import euhedral.io.errors.WorkCancelled;
 import euhedral.io.impl.FrameManager;
 import lombok.Getter;
 import lombok.Setter;
@@ -34,9 +33,11 @@ import lombok.Setter;
 /// frame.randomizeHash(HasherApi.combine(idHash, seed++));
 /// ```
 @SuppressWarnings("rawtypes")
-public abstract class AbstractFrame extends WorkCancelled {
+public abstract class AbstractFrame {
 
     protected final FrameManager recycler;
+    public final CancelFrame cancel;
+
     @Getter
     private final long idHash;
     @Getter
@@ -69,6 +70,7 @@ public abstract class AbstractFrame extends WorkCancelled {
     private boolean useVThread = false;
 
     public AbstractFrame(long idHash, FrameManager recycler) {
+        this.cancel = new CancelFrame(this);
         this.idHash = idHash;
         this.recycler = recycler;
         this.combinedHash = idHash;
@@ -111,9 +113,9 @@ public abstract class AbstractFrame extends WorkCancelled {
         return false;
     }
 
-    /// Throws this class as an error. This is used as a cancellation signal and an immediate way to stop execution of this frame.
-    /// [`AbstractExecutor`][euhedral.common.io.dispatch] handles this by default.
+    /// Throws this class's error frame. This is used as an immediate way to stop execution of this frame.
+    /// The [`AbstractExecutor`][euhedral.io.AbstractExecutor] and [`ExecutionManager`][euhedral.io.ExecutionManager] handles this by default.
     public final void throwMeAsError() {
-        throw this;
+        throw this.cancel;
     }
 }
