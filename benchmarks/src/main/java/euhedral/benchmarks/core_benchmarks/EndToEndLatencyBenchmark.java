@@ -17,6 +17,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
+import org.openjdk.jmh.annotations.Fork;
 import org.openjdk.jmh.annotations.Level;
 import org.openjdk.jmh.annotations.Measurement;
 import org.openjdk.jmh.annotations.Mode;
@@ -29,9 +30,8 @@ import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
 import org.openjdk.jmh.infra.Blackhole;
 
-@OutputTimeUnit(TimeUnit.NANOSECONDS)
 @State(Scope.Benchmark)
-public class LatencyBenchmark {
+public class EndToEndLatencyBenchmark {
 
     private static final int BATCH_SIZE = 100_000;
 
@@ -68,8 +68,9 @@ public class LatencyBenchmark {
     @State(Scope.Benchmark)
     @BenchmarkMode({Mode.SampleTime})
     @OutputTimeUnit(TimeUnit.NANOSECONDS)
-    @Warmup(iterations = 3, time = 10, timeUnit = TimeUnit.SECONDS)
-    @Measurement(iterations = 5, time = 30, timeUnit = TimeUnit.SECONDS)
+    @Warmup(iterations = 3, time = 5, timeUnit = TimeUnit.SECONDS)
+    @Measurement(iterations = 5, time = 10, timeUnit = TimeUnit.SECONDS)
+    @Fork(3)
     public static class PCore {
 
         final NoOpFrame[] frames = new NoOpFrame[BATCH_SIZE];
@@ -80,9 +81,9 @@ public class LatencyBenchmark {
 
         @Setup(Level.Trial)
         public void setup(Blackhole blackhole) {
-            DRRConfig drrConfig = DRRConfig.defaultConfig("LatencyBenchmark", null);
+            DRRConfig drrConfig = DRRConfig.defaultConfig("EndToEndLatencyBenchmark", null);
             ExecutionManagerConfig emConfig = ExecutionManagerConfig.balancedDefault(null,
-                    "LatencyBenchmark");
+                    "EndToEndLatencyBenchmark");
 
             BitSet cores = (BitSet) SystemInfo.get_P_CoreSet().clone();
             int i = cores.nextSetBit(1);
@@ -93,8 +94,8 @@ public class LatencyBenchmark {
             cpus.or(SystemInfo.getCoreInfo(i).getCpuSet());
 
             System.out.println("Benchmark is using P cpus " + cpus);
-            this.controlPlane = ControlPlane.getOrCreate("LatencyBenchmark", cpus,
-                    new NoOpPipeline("LatencyBenchmark", drrConfig, emConfig, blackhole), null);
+            this.controlPlane = ControlPlane.getOrCreate("EndToEndLatencyBenchmark", cpus,
+                    new NoOpPipeline("EndToEndLatencyBenchmark", drrConfig, emConfig, blackhole), null);
             this.controlPlane.start();
         }
 
@@ -135,8 +136,9 @@ public class LatencyBenchmark {
     @State(Scope.Benchmark)
     @BenchmarkMode({Mode.SampleTime})
     @OutputTimeUnit(TimeUnit.NANOSECONDS)
-    @Warmup(iterations = 3, time = 10, timeUnit = TimeUnit.SECONDS)
-    @Measurement(iterations = 5, time = 30, timeUnit = TimeUnit.SECONDS)
+    @Warmup(iterations = 3, time = 5, timeUnit = TimeUnit.SECONDS)
+    @Measurement(iterations = 5, time = 10, timeUnit = TimeUnit.SECONDS)
+    @Fork(3)
     public static class ECore {
 
         final NoOpFrame[] frames = new NoOpFrame[BATCH_SIZE];
@@ -147,9 +149,9 @@ public class LatencyBenchmark {
 
         @Setup(Level.Trial)
         public void setup(Blackhole blackhole) {
-            DRRConfig drrConfig = DRRConfig.defaultConfig("LatencyBenchmark", null);
+            DRRConfig drrConfig = DRRConfig.defaultConfig("EndToEndLatencyBenchmark", null);
             ExecutionManagerConfig emConfig = ExecutionManagerConfig.balancedDefault(null,
-                    "LatencyBenchmark");
+                    "EndToEndLatencyBenchmark");
 
             BitSet eCpus = (BitSet) SystemInfo.get_E_CpuSet().clone();
             BitSet cpus = eCpus;
@@ -171,8 +173,8 @@ public class LatencyBenchmark {
             }
 
             System.out.println("Benchmark is using E cpus " + cpus);
-            this.controlPlane = ControlPlane.getOrCreate("LatencyBenchmark", cpus,
-                    new NoOpPipeline("LatencyBenchmark", drrConfig, emConfig, blackhole), null);
+            this.controlPlane = ControlPlane.getOrCreate("EndToEndLatencyBenchmark", cpus,
+                    new NoOpPipeline("EndToEndLatencyBenchmark", drrConfig, emConfig, blackhole), null);
             this.controlPlane.start();
         }
 
