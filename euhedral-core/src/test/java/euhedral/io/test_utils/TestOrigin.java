@@ -1,29 +1,26 @@
 package euhedral.io.test_utils;
 
 import euhedral.atomics.PaddedLongAdder;
-import euhedral.io.frames.AbstractFrame;
-import euhedral.io.impl.FrameManager;
+import euhedral.io.interfaces.ScaffoldingOrigin;
+import euhedral.io.interfaces.ScaffoldingTerminal;
 import java.util.concurrent.CountDownLatch;
 
 import lombok.Getter;
-import org.reactivestreams.Publisher;
-import org.reactivestreams.Subscriber;
-import org.reactivestreams.Subscription;
 
-public class TestPublisher implements Publisher<AbstractFrame>, Subscription {
+public class TestOrigin implements ScaffoldingOrigin {
 
     @Getter
     private final TestFrame[] myFrames;
 
     private PaddedLongAdder counters;
     private CountDownLatch trigger;
-    private Subscriber<? super AbstractFrame> subscriber;
+    private ScaffoldingTerminal terminal;
     private int internalIter = 0;
 
     @Getter
     private volatile boolean complete = false;
 
-    public TestPublisher(TestFrame[] frames) {
+    public TestOrigin(TestFrame[] frames) {
         this.myFrames = frames;
     }
 
@@ -40,23 +37,19 @@ public class TestPublisher implements Publisher<AbstractFrame>, Subscription {
             return;
         }
 
-        FrameManager<Void, TestFrame> recycler = null;
-        long total = 0;
         for (int i = 0; i < demand && internalIter < myFrames.length; i++) {
             TestFrame f = myFrames[internalIter++];
             f.trigger = trigger;
             f.counters = counters;
-            subscriber.onNext(f);
-            total++;
-            recycler = f.getRecycler();
+            terminal.onNext(f);
         }
 
 //        countDown.addAndGet(-recycler.dump(total, TestFrame.PASSWORD));
 
         if (internalIter >= myFrames.length) {
-            subscriber.onComplete();
+            terminal.onComplete();
             complete = true;
-            subscriber = null;
+            terminal = null;
         }
     }
 
@@ -65,8 +58,8 @@ public class TestPublisher implements Publisher<AbstractFrame>, Subscription {
     }
 
     @Override
-    public void subscribe(Subscriber<? super AbstractFrame> subscriber) {
-        this.subscriber = subscriber;
-        subscriber.onSubscribe(this);
+    public void addDownstream(ScaffoldingTerminal terminal) {
+        this.terminal = terminal;
+        this.terminal.addUpstream(this);
     }
 }

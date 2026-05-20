@@ -10,9 +10,9 @@ import euhedral.io.config.DRRConfig;
 import euhedral.io.config.ExecutionManagerConfig;
 import euhedral.io.control_plane.ControlPlane;
 import euhedral.io.test_utils.TestFrame;
+import euhedral.io.test_utils.TestOrigin;
 import euhedral.io.test_utils.TestPipeline;
 import euhedral.io.test_utils.TestPipeline.TestExecutor;
-import euhedral.io.test_utils.TestPublisher;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -130,14 +130,14 @@ public class EndToEndBenchmark {
             CountDownLatch start = new CountDownLatch(1);
 
             state.producerPool.submit(() -> {
-                TestPublisher subscription = new TestPublisher(state.orderedFramePool);
-                subscription.reset(null, state.counter);
+                TestOrigin origin = new TestOrigin(state.orderedFramePool);
+                origin.reset(null, state.counter);
                 try {
                     start.await();
                 } catch (InterruptedException e) {
                     throw new RuntimeException(e);
                 }
-                state.controlPlane.ingest(subscription);
+                state.controlPlane.ingest(origin);
             });
             start.countDown();
 
@@ -155,14 +155,14 @@ public class EndToEndBenchmark {
             CountDownLatch start = new CountDownLatch(1);
 
             state.producerPool.submit(() -> {
-                TestPublisher subscription = new TestPublisher(state.parallelFramePool);
-                subscription.reset(null, state.counter);
+                TestOrigin origin = new TestOrigin(state.parallelFramePool);
+                origin.reset(null, state.counter);
                 try {
                     start.await();
                 } catch (InterruptedException e) {
                     throw new RuntimeException(e);
                 }
-                state.controlPlane.ingest(subscription);
+                state.controlPlane.ingest(origin);
             });
             start.countDown();
 
@@ -222,7 +222,7 @@ public class EndToEndBenchmark {
                     new PaddedLongAdder(32, true, true);
             public TestFrame[] orderedFramePool = TestFrame.generateOrdered(8_000_000);
             public TestFrame[] parallelFramePool = TestFrame.generateParallel(32_000_000);
-            public TestPublisher[] publishers = new TestPublisher[32];
+            public TestOrigin[] publishers = new TestOrigin[32];
             public ExecutorService producerPool;
             public CyclicBarrier barrier8P = new CyclicBarrier(8 + 1);
             public CyclicBarrier barrier32P = new CyclicBarrier(32 + 1);
@@ -243,7 +243,7 @@ public class EndToEndBenchmark {
 
                 producerPool = Executors.newFixedThreadPool(32);
                 for (int i = 0; i < publishers.length; i++) {
-                    publishers[i] = new TestPublisher(TestFrame.generateParallel(1_000_000));
+                    publishers[i] = new TestOrigin(TestFrame.generateParallel(1_000_000));
                 }
                 LockSupport.parkNanos(500_000);
             }

@@ -1,5 +1,8 @@
 package euhedral.io.flow_control;
 
+import euhedral.io.interfaces.RecursiveScaffolding;
+import euhedral.io.interfaces.ScaffoldingOrigin;
+import euhedral.io.interfaces.ScaffoldingTerminal;
 import euhedral.io.utils.DrainBuffer;
 import euhedral.queues.PartitionedUnboundedMpscArrayQueue;
 import java.lang.invoke.MethodHandles;
@@ -7,7 +10,6 @@ import java.lang.invoke.VarHandle;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.Getter;
 import org.jctools.maps.NonBlockingHashMapLong;
-import org.reactivestreams.Subscription;
 
 public class UpstreamQueue {
     protected static final VarHandle UP_COUNT;
@@ -147,10 +149,18 @@ public class UpstreamQueue {
         UP_COUNT.getAndAdd(this, 1);
     }
 
-    public static abstract class UpstreamHandle implements Subscription {
+    public static abstract class UpstreamHandle implements RecursiveScaffolding {
 
         public abstract void pull(DrainBuffer buffer, long demand);
 
         public abstract boolean isComplete();
+
+        public void addUpstream(ScaffoldingOrigin upstream) {
+            upstream.cancel();
+        }
+
+        public void addDownstream(ScaffoldingTerminal terminal) {
+            terminal.onError(new IllegalStateException("Not supported"));
+        }
     }
 }

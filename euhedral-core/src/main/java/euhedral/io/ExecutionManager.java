@@ -15,10 +15,11 @@ import euhedral.io.DRRCacheManager.DownstreamHandle;
 import euhedral.io.SMTBuddy.SMTState;
 import euhedral.io.config.CloneConfig;
 import euhedral.io.config.ExecutionManagerConfig;
-import euhedral.io.flow_control.DirectOutputFlux;
+import euhedral.io.flow_control.DirectOutputStream;
 import euhedral.io.flow_control.LockFreeSink;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.frames.DummyInitFrame;
+import euhedral.io.interfaces.ScaffoldingOrigin;
 import euhedral.io.interfaces.SlotManager;
 import euhedral.io.metrics.ExecutionManagerMetrics;
 import euhedral.io.utils.DrainBuffer;
@@ -36,7 +37,6 @@ import java.util.concurrent.locks.LockSupport;
 import lombok.AccessLevel;
 import lombok.Getter;
 import org.jspecify.annotations.NonNull;
-import org.reactivestreams.Publisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -134,7 +134,7 @@ public class ExecutionManager implements SlotManager {
     protected final Thread shutdownHook;
     protected final DownstreamHandle handle;
 
-    protected final DirectOutputFlux outputFlux;
+    protected final DirectOutputStream outputStream;
 
     protected final CycleState state;
     protected final SMTState buddyState;
@@ -179,7 +179,7 @@ public class ExecutionManager implements SlotManager {
             this.isPCore = false;
             this.metrics = null;
             this.completeSink = null;
-            this.outputFlux = null;
+            this.outputStream = null;
             this.shutdownHook = null;
             this.handle = null;
         } else {
@@ -233,7 +233,7 @@ public class ExecutionManager implements SlotManager {
                                 frame.reset();
                                 frame.doFinally();
                             }, this::recordCompletion);
-            this.outputFlux = new DirectOutputFlux(this.buffer, frame -> {
+            this.outputStream = new DirectOutputStream(this.buffer, frame -> {
                 if ((this.state.dispatches++ & this.state.updateIntervalMask) == 0) {
                     frame.setStartNs(System.nanoTime());
                 } else {
@@ -254,18 +254,18 @@ public class ExecutionManager implements SlotManager {
     }
 
     @Override
-    public void input(Publisher<? extends AbstractFrame> frameFlux) {
-        if (frameFlux instanceof DRRCacheManager ingest && INGEST.compareAndSet(this, null,
-                ingest)) {
-            this.buddy.setIngest(ingest);
-            INGEST.setRelease(this, ingest);
-            ingest.addHandle(this.handle);
+    public void input(ScaffoldingOrigin stream) {
+        if (stream instanceof DRRCacheManager iStream && INGEST.compareAndSet(this, null,
+                iStream)) {
+            this.buddy.setIngest(iStream);
+            INGEST.setRelease(this, iStream);
+            iStream.addHandle(this.handle);
         }
     }
 
     @Override
-    public Publisher<? extends AbstractFrame> output() {
-        return this.outputFlux;
+    public ScaffoldingOrigin output() {
+        return this.outputStream;
     }
 
     @Override
@@ -470,7 +470,7 @@ public class ExecutionManager implements SlotManager {
         int processed = 0;
         if (quota > 0 && bufferCount > 0) {
             IN_FLIGHT.setOpaque(this, this.inFlight + quota);
-            processed = this.outputFlux.drain(quota);
+            processed = this.outputStream.push(quota);
             if (processed > 0) {
                 this.buddyState.bufferCount.addAndGet(-processed);
                 IN_FLIGHT.setOpaque(this, this.inFlight + (processed - quota));

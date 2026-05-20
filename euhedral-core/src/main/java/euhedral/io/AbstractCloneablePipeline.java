@@ -3,16 +3,15 @@ package euhedral.io;
 import euhedral.hardware_utils.PinnedThreadExecutor;
 import euhedral.hardware_utils.common.SystemUtilization.CoreSnapshot;
 import euhedral.io.config.CloneConfig;
-import euhedral.io.frames.AbstractFrame;
 import euhedral.io.interfaces.CacheManager;
 import euhedral.io.interfaces.CloneableObject;
 import euhedral.io.interfaces.PipelineExecutor;
+import euhedral.io.interfaces.ScaffoldingOrigin;
 import euhedral.io.interfaces.SlotManager;
 import java.util.concurrent.Future;
 
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
-import org.reactivestreams.Publisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -63,12 +62,12 @@ public abstract class AbstractCloneablePipeline implements
     }
 
     @Override
-    public void input(Publisher<? extends AbstractFrame> frameFlux) {
-        this.cacheManager.input(frameFlux);
+    public void input(ScaffoldingOrigin stream) {
+        this.cacheManager.input(stream);
     }
 
     @Override
-    public Publisher<? extends AbstractFrame> output() {
+    public ScaffoldingOrigin output() {
         return this.executor.output();
     }
 

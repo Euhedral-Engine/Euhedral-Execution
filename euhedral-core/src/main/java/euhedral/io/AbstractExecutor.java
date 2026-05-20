@@ -7,9 +7,8 @@ import euhedral.io.frames.AbstractFrame;
 import euhedral.io.frames.CancelFrame;
 import euhedral.io.interfaces.CloneableObject;
 import euhedral.io.interfaces.PipelineExecutor;
-import org.reactivestreams.Publisher;
-import org.reactivestreams.Subscriber;
-import org.reactivestreams.Subscription;
+import euhedral.io.interfaces.ScaffoldingOrigin;
+import euhedral.io.interfaces.ScaffoldingTerminal;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,8 +29,8 @@ public abstract class AbstractExecutor implements PipelineExecutor {
     }
 
     @Override
-    public void input(Publisher<? extends AbstractFrame> flux) {
-        flux.subscribe(new ExecutionSubscriber());
+    public void input(ScaffoldingOrigin stream) {
+        stream.addDownstream(new ExecutionTerminal());
     }
 
     private void executeInternal(AbstractFrame frame) {
@@ -62,15 +61,15 @@ public abstract class AbstractExecutor implements PipelineExecutor {
     public void close() {
     }
 
-    protected class ExecutionSubscriber implements Subscriber<AbstractFrame> {
+    protected class ExecutionTerminal implements ScaffoldingTerminal {
 
-        public ExecutionSubscriber() {
+        public ExecutionTerminal() {
 
         }
 
         @Override
-        public void onSubscribe(Subscription subscription) {
-            subscription.request(Long.MAX_VALUE);
+        public void addUpstream(ScaffoldingOrigin stream) {
+            stream.request(Long.MAX_VALUE);
         }
 
         @Override
