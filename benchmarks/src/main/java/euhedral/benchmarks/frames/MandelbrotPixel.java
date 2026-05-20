@@ -1,9 +1,18 @@
 package euhedral.benchmarks.frames;
 
 import euhedral.atomics.PaddedLongAdder;
+import euhedral.io.frames.AbstractFrame;
 import euhedral.io.impl.FrameManager;
 
-public class MandelbrotPixel extends FractalFrame {
+public class MandelbrotPixel extends AbstractFrame {
+
+    protected final int width;
+    protected final int height;
+    protected final int iterationCap;
+    protected final double[] magnitudes;
+    protected final int[] escapes;
+
+    public final PaddedLongAdder counters;
 
     private final double bailoutRadiusSq;
     private final int degree;
@@ -15,12 +24,19 @@ public class MandelbrotPixel extends FractalFrame {
     private final double pixelWidthStep;
     private final double pixelHeightStep;
 
-    public MandelbrotPixel(long idHash, FrameManager<Void, FractalFrame> recycler,
+    public MandelbrotPixel(long idHash, FrameManager<Void, AbstractFrame> recycler,
             int taskIndex, int degree, double cr, double ci,
             double pixelWidthStep, double pixelHeightStep,
             int width, int height, int iterationCap,
             double bailoutRadiusSq, double[] magnitudes, int[] escapes, PaddedLongAdder counters) {
-        super(idHash, recycler, width, height, iterationCap, magnitudes, escapes, counters);
+        super(idHash, recycler);
+        this.width = width;
+        this.height = height;
+        this.iterationCap = iterationCap;
+        this.magnitudes = magnitudes;
+        this.escapes = escapes;
+        this.counters = counters;
+
         this.bailoutRadiusSq = bailoutRadiusSq;
         this.degree = degree;
 
@@ -121,8 +137,8 @@ public class MandelbrotPixel extends FractalFrame {
                     break;
             }
 
-            super.magnitudes[baseArrayOffset + sample] = zr * zr + zi * zi;
-            super.escapes[baseArrayOffset + sample] = count;
+            this.magnitudes[baseArrayOffset + sample] = zr * zr + zi * zi;
+            this.escapes[baseArrayOffset + sample] = count;
             totalEscapeAccumulator += count;
         }
 
@@ -130,7 +146,7 @@ public class MandelbrotPixel extends FractalFrame {
     }
 
     private boolean iterate(double zr, double zi, int count) {
-        return (zr * zr + zi * zi) < bailoutRadiusSq && count < super.iterationCap;
+        return (zr * zr + zi * zi) < bailoutRadiusSq && count < this.iterationCap;
     }
 
     @Override
