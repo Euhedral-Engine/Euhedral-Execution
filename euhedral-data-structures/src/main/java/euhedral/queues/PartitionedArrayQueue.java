@@ -8,7 +8,6 @@ import java.util.AbstractQueue;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Iterator;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.Getter;
 
@@ -69,7 +68,12 @@ public class PartitionedArrayQueue<T> extends AbstractQueue<T> implements Partit
         if (this.partitions == 1) {
             return offer(0, obj);
         }
-        return offer(ThreadLocalRandom.current().nextLong(), obj);
+        for(int i = 0; i < this.partitions; i++) {
+            if(offer(i, obj)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /// Offers the object to a random partition based on the seed. If the seed does not change, the

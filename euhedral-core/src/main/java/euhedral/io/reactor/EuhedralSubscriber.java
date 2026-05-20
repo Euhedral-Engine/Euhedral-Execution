@@ -52,9 +52,12 @@ public final class EuhedralSubscriber implements Subscriber<AbstractFrame>, Scaf
 
     @Override
     public void onComplete() {
-        ScaffoldingTerminal terminal = (ScaffoldingTerminal) TERMINAL.getOpaque(this);
-        if(terminal != null) {
-            terminal.onComplete();
+        if(COMPLETE.compareAndSet(this, false, true)) {
+            SUBSCRIBER.set(this, null);
+            ScaffoldingTerminal terminal = (ScaffoldingTerminal) TERMINAL.getOpaque(this);
+            if(terminal != null) {
+                terminal.onComplete();
+            }
         }
     }
 

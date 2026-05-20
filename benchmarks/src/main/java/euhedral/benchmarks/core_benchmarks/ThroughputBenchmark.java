@@ -18,6 +18,7 @@ import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Level;
 import org.openjdk.jmh.annotations.Measurement;
 import org.openjdk.jmh.annotations.Mode;
+import org.openjdk.jmh.annotations.OperationsPerInvocation;
 import org.openjdk.jmh.annotations.OutputTimeUnit;
 import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
@@ -32,12 +33,14 @@ import org.openjdk.jmh.infra.Blackhole;
 @Warmup(iterations = 3, time = 10, timeUnit = TimeUnit.SECONDS)
 @Measurement(iterations = 5, time = 30, timeUnit = TimeUnit.SECONDS)
 public class ThroughputBenchmark {
-    private final PaddedLongAdder counters = new PaddedLongAdder(Runtime.getRuntime().availableProcessors(), true, true);
-    private FramePublisher[] publishers = new FramePublisher[32];
 
+    private static final int BATCH = 32_000_000;
+
+    private final PaddedLongAdder counters = new PaddedLongAdder(
+            Runtime.getRuntime().availableProcessors(), true, true);
     public ExecutorService threadPool;
     public CyclicBarrier barrier = new CyclicBarrier(32 + 1);
-
+    private FramePublisher[] publishers = new FramePublisher[32];
     private ControlPlane controlPlane;
 
     @Setup(Level.Trial)
@@ -45,14 +48,17 @@ public class ThroughputBenchmark {
         long hash = ThreadLocalRandom.current().nextLong();
         hash = HasherApi.mix(hash);
 
-        for(int i = 0; i < this.publishers.length; i++) {
-            this.publishers[i] = new FramePublisher(NoOpFrame.generate(hash, 1_000_000, this.counters), 0, 1_000_000);
+        for (int i = 0; i < this.publishers.length; i++) {
+            this.publishers[i] = new FramePublisher(
+                    NoOpFrame.generate(hash, 1_000_000, this.counters), 0, 1_000_000);
         }
         this.threadPool = Executors.newFixedThreadPool(this.publishers.length);
 
         DRRConfig drrConfig = DRRConfig.defaultConfig("ThroughputBenchmark", null);
-        ExecutionManagerConfig emConfig = ExecutionManagerConfig.balancedDefault(null, "ThroughputBenchmark");
-        this.controlPlane = ControlPlane.getOrCreate("ThroughputBenchmark", new NoOpPipeline("ThroughputBenchmark", drrConfig, emConfig, blackhole), null);
+        ExecutionManagerConfig emConfig = ExecutionManagerConfig.balancedDefault(null,
+                "ThroughputBenchmark");
+        this.controlPlane = ControlPlane.getOrCreate("ThroughputBenchmark",
+                new NoOpPipeline("ThroughputBenchmark", drrConfig, emConfig, blackhole), null);
         this.controlPlane.start();
     }
 
@@ -76,10 +82,11 @@ public class ThroughputBenchmark {
     }
 
     @Benchmark
+    @OperationsPerInvocation(BATCH)
     public void bench32Sources32MillionParallel() throws Exception {
         this.barrier.await();
 
-        long sum;
+        long sum = 0;
         int spin = 0;
         long log = System.nanoTime();
         long deadline = System.nanoTime() + TimeUnit.MINUTES.toNanos(1);
@@ -92,7 +99,6 @@ public class ThroughputBenchmark {
                     break;
                 }
                 if (now - log >= TimeUnit.SECONDS.toNanos(3)) {
-                    System.out.println("Progress: " + sum);
                     log = now;
                 }
             }
@@ -101,6 +107,9 @@ public class ThroughputBenchmark {
             } else {
                 Thread.onSpinWait();
             }
+        }
+        if(now >= deadline) {
+            System.out.println("Timeout! Total Completed: " + sum);
         }
     }
 
