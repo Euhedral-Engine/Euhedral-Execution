@@ -32,13 +32,24 @@ public class BenchRunner {
                 benchmark = MandelbrotBenchmark.class;
                 String degree = System.getProperty("degree", "2");
                 flags.add("-Ddegree=" + degree);
-                flags.add("-DoutputDir=" + System.getProperty("outputDir", "results"));
 
-                String fileName = System.getProperty("outputFile", "mandelbrot-D" + degree);
-                if (!fileName.endsWith(".png")) {
-                    fileName += ".png";
+                String dir = System.getProperty("outputDir");
+                String fileName = System.getProperty("outputFile");
+                if(dir != null && !dir.isBlank()) {
+                    flags.add("-DoutputDir=" + System.getProperty("outputDir"));
+                    if(fileName == null || fileName.isBlank()) {
+                        fileName = "mandelbrot-D" + degree + ".png";
+                    } else if (fileName.endsWith(".png")) {
+                        fileName += ".png";
+                    }
+                    flags.add("-DoutputFile=" + fileName);
+                } else if (fileName != null && !fileName.isBlank()) {
+
+                    if (!fileName.endsWith(".png")) {
+                        fileName += ".png";
+                    }
+                    flags.add("-DoutputFile=" + fileName);
                 }
-                flags.add("-DoutputFile=" + fileName);
             }
             case "core-throughput" -> benchmark = ThroughputBenchmark.class;
             case "core-latency" -> benchmark = LatencyBenchmark.class;

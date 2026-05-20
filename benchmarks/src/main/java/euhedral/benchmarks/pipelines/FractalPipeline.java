@@ -30,7 +30,7 @@ public class FractalPipeline extends DefaultCloneablePipeline {
                 int escape = fractal.compute();
                 blackhole.consume(escape);
                 blackhole.consume(fractal);
-                fractal.counters.getAndAdd(this.executorService.getCpu(), 4);
+                fractal.cpu = this.executorService.getCpu();
             } else {
                 frame.throwMeAsError();
             }
