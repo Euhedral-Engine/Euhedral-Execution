@@ -1,29 +1,27 @@
 package euhedral.benchmarks.core_benchmarks;
 
-import java.awt.image.BufferedImage;
-import java.awt.image.DataBufferInt;
-import java.io.IOException;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.Random;
-import java.util.concurrent.CyclicBarrier;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.TimeUnit;
-import javax.imageio.ImageIO;
-
 import euhedral.atomics.PaddedLongAdder;
 import euhedral.benchmarks.core_benchmarks.utils.MandelbrotCanvas;
 import euhedral.benchmarks.frames.MandelbrotPixel;
 import euhedral.benchmarks.pipelines.FractalPipeline;
-import euhedral.benchmarks.pipelines.FractalPublisher;
+import euhedral.benchmarks.pipelines.FramePublisher;
 import euhedral.hashing.HasherApi;
 import euhedral.io.config.DRRConfig;
 import euhedral.io.config.ExecutionManagerConfig;
 import euhedral.io.config.ExecutionManagerConfig.IdleCyclePolicy;
 import euhedral.io.control_plane.ControlPlane;
 import euhedral.io.utils.MathFunctions;
+import java.awt.image.BufferedImage;
+import java.awt.image.DataBufferInt;
+import java.io.IOException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
+import javax.imageio.ImageIO;
 import org.HdrHistogram.Histogram;
 import org.HdrHistogram.SingleWriterRecorder;
 import org.openjdk.jmh.annotations.Benchmark;
@@ -66,8 +64,8 @@ public class MandelbrotBenchmark {
     public final MandelbrotPixel[] pixels = new MandelbrotPixel[CANVAS];
 
 
-    private final FractalPublisher[] publishers =
-            new FractalPublisher[Runtime.getRuntime().availableProcessors()];
+    private final FramePublisher[] publishers =
+            new FramePublisher[Runtime.getRuntime().availableProcessors()];
     private final PaddedLongAdder counters =
             new PaddedLongAdder(Runtime.getRuntime().availableProcessors(), true, true);
 
@@ -95,7 +93,7 @@ public class MandelbrotBenchmark {
         this.outputDir = System.getProperty("outputDir");
         this.outputFileName = System.getProperty("outputFile");
 
-        DRRConfig drrConfig = new DRRConfig(null, "mandelbrot", null);
+        DRRConfig drrConfig = DRRConfig.defaultConfig("mandelbrot", null);
 //        ExecutionManagerConfig emConfig = ExecutionManagerConfig.balancedDefault(null, "mandelbrot");
         ExecutionManagerConfig emConfig = new ExecutionManagerConfig(null, 4_096, 1024, false,
                 IdleCyclePolicy.DEFAULT, null,
@@ -103,13 +101,14 @@ public class MandelbrotBenchmark {
         FractalPipeline pipeline =
                 new FractalPipeline("MandelbrotBenchmark", drrConfig, emConfig, blackhole);
         this.controlPlane = ControlPlane.getOrCreate("MandelbrotBenchmark", pipeline, null);
+        this.controlPlane.start();
         this.producerPool = Executors.newFixedThreadPool(32);
 
         int share = CANVAS / this.publishers.length;
         for (int i = 0; i < this.publishers.length; i++) {
             int start = i * share;
             int end = i == this.publishers.length - 1 ? CANVAS : start + share;
-            this.publishers[i] = new FractalPublisher(pixels, start, end);
+            this.publishers[i] = new FramePublisher(pixels, start, end);
         }
 
         MandelbrotCanvas.generate(WIDTH, HEIGHT, CENTER_X, CENTER_Y, H_DIAMETER,

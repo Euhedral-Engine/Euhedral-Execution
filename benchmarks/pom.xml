@@ -70,35 +70,52 @@
     <plugins>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-assembly-plugin</artifactId>
+        <artifactId>maven-jar-plugin</artifactId>
         <configuration>
           <finalName>euhedral-benchmark</finalName>
-          <appendAssemblyId>false</appendAssemblyId>
-          <attach>false</attach>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-shade-plugin</artifactId>
+        <configuration>
+          <shadedArtifactAttached>false</shadedArtifactAttached>
+          <createDependencyReducedPom>false</createDependencyReducedPom>
+          <outputFile>${project.build.directory}/euhedral-benchmark.jar</outputFile>
 
-          <descriptors>
-            <descriptor>src/main/resources/benchmark-jar-with-dependencies.xml</descriptor>
-          </descriptors>
-
-          <archive>
-            <manifest>
-              <mainClass>euhedral.benchmarks.BenchRunner</mainClass>
-            </manifest>
-            <manifestEntries>
-              <Add-Opens>java.base/java.util</Add-Opens>
-            </manifestEntries>
-          </archive>
-          <descriptorRefs>
-            <descriptorRef>jar-with-dependencies</descriptorRef>
-          </descriptorRefs>
+          <filters>
+            <filter>
+              <artifact>*:*</artifact>
+              <excludes>
+                <exclude>META-INF/*.SF</exclude>
+                <exclude>META-INF/*.DSA</exclude>
+                <exclude>META-INF/*.RSA</exclude>
+              </excludes>
+            </filter>
+          </filters>
         </configuration>
         <executions>
           <execution>
-            <id>make-assembly</id>
+            <id>package-benchmarks</id>
             <phase>package</phase>
             <goals>
-              <goal>single</goal>
+              <goal>shade</goal>
             </goals>
+            <configuration>
+
+              <transformers>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                  <mainClass>euhedral.benchmarks.BenchRunner</mainClass>
+                  <manifestEntries>
+                    <entry>
+                      <key>Add-Opens</key>
+                      <value>java.base/java.util</value>
+                    </entry>
+                  </manifestEntries>
+                </transformer>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+              </transformers>
+            </configuration>
           </execution>
         </executions>
       </plugin>
