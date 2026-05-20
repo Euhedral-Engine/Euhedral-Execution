@@ -31,7 +31,7 @@ abstract sealed class ConcurrentPartitionedArrayQueue<T> extends PartitionedArra
         super(partitions, chunkSize, unbounded);
         this.tailSequence = new PaddedAtomicReferenceArray<>(partitions, false, true);
 
-        int numSChunks = Math.max(chunkSize >>> 6, 1);
+        int numSChunks = Math.max(super.chunkSize >>> 6, 1);
         this.sequenceMask = numSChunks - 1;
         for (int i = 0; i < partitions; i++) {
             int rIdx = this.tailSequence.fromRawIdx(i);

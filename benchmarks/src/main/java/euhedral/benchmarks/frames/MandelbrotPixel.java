@@ -24,6 +24,8 @@ public class MandelbrotPixel extends AbstractFrame {
     private final double pixelWidthStep;
     private final double pixelHeightStep;
 
+    public int cpu;
+
     public MandelbrotPixel(long idHash, FrameManager<Void, AbstractFrame> recycler,
             int taskIndex, int degree, double cr, double ci,
             double pixelWidthStep, double pixelHeightStep,
@@ -162,5 +164,10 @@ public class MandelbrotPixel extends AbstractFrame {
     @Override
     public void kill() {
 
+    }
+
+    @Override
+    public void doFinally() {
+        this.counters.getAndAdd(this.cpu, 4);
     }
 }
