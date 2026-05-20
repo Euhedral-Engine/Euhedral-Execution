@@ -1,6 +1,6 @@
 package euhedral.io.interfaces;
 
-public interface ScaffoldingOrigin {
+public interface ScaffoldingSource {
     void addDownstream(ScaffoldingTerminal downstream);
 
     void request(long demand);

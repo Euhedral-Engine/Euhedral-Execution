@@ -5,18 +5,18 @@ import euhedral.queues.QueueConsumer;
 import euhedral.queues.common.PartitionedQueue;
 
 @SuppressWarnings("unused")
-public class LockFreeSink {
+public class BufferedBridge {
 
     private final PartitionedQueue<AbstractFrame> buffer;
     private final QueueConsumer<AbstractFrame> drainFunc;
     private final QueueConsumer<AbstractFrame> hookOnOffer;
 
-    public LockFreeSink(PartitionedQueue<AbstractFrame> buffer,
+    public BufferedBridge(PartitionedQueue<AbstractFrame> buffer,
             QueueConsumer<AbstractFrame> drainFunc) {
         this(buffer, drainFunc, null);
     }
 
-    public LockFreeSink(PartitionedQueue<AbstractFrame> buffer,
+    public BufferedBridge(PartitionedQueue<AbstractFrame> buffer,
             QueueConsumer<AbstractFrame> drainFunc, QueueConsumer<AbstractFrame> hookOnOffer) {
         this.buffer = buffer;
         this.drainFunc = drainFunc;

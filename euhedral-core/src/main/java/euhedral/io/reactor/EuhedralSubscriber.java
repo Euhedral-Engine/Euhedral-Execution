@@ -1,14 +1,14 @@
 package euhedral.io.reactor;
 
 import euhedral.io.frames.AbstractFrame;
-import euhedral.io.interfaces.ScaffoldingOrigin;
+import euhedral.io.interfaces.ScaffoldingSource;
 import euhedral.io.interfaces.ScaffoldingTerminal;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 
-public final class EuhedralSubscriber implements Subscriber<AbstractFrame>, ScaffoldingOrigin {
+public final class EuhedralSubscriber implements Subscriber<AbstractFrame>, ScaffoldingSource {
     private static final VarHandle COMPLETE;
     private static final VarHandle SUBSCRIBER;
     private static final VarHandle TERMINAL;

@@ -6,7 +6,7 @@ import euhedral.atomics.PaddedAtomicLong;
 import euhedral.io.flow_control.UpstreamQueue.UpstreamHandle;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.interfaces.RecursiveScaffolding;
-import euhedral.io.interfaces.ScaffoldingOrigin;
+import euhedral.io.interfaces.ScaffoldingSource;
 import euhedral.io.utils.DrainBuffer;
 import euhedral.queues.PartitionedMpscArrayQueue;
 import java.lang.invoke.MethodHandles;
@@ -65,7 +65,7 @@ public class ScaffoldingNode extends ScaffoldingEdge implements AutoCloseable {
         }
     }
 
-    public void ingest(ScaffoldingOrigin stream) {
+    public void ingest(ScaffoldingSource stream) {
         UpstreamInterceptor interceptor = new UpstreamInterceptor();
         stream.addDownstream(interceptor);
     }
@@ -233,11 +233,11 @@ public class ScaffoldingNode extends ScaffoldingEdge implements AutoCloseable {
         public final AtomicBoolean complete = new AtomicBoolean(false);
         private final PaddedAtomicLong wip = new PaddedAtomicLong(0);
         private final PaddedAtomicLong demand = new PaddedAtomicLong(0);
-        public ScaffoldingOrigin upstream;
+        public ScaffoldingSource upstream;
         private long count = 0;
 
         @Override
-        public void addUpstream(@NonNull ScaffoldingOrigin upstream) {
+        public void addUpstream(@NonNull ScaffoldingSource upstream) {
             this.upstream = upstream;
             ScaffoldingNode.this.addUpstream(this);
         }
