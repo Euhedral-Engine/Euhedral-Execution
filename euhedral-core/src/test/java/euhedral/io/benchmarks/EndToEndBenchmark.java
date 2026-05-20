@@ -230,8 +230,7 @@ public class EndToEndBenchmark {
 
             @Setup(Level.Trial)
             public void setupExecutor(Blackhole bh) {
-                DRRConfig drrConfig = new DRRConfig(null, "SystemTest",
-                        null);
+                DRRConfig drrConfig = DRRConfig.defaultConfig("SystemTest", null);
                 ExecutionManagerConfig dsmConfig = ExecutionManagerConfig.balancedDefault(null, "SystemTest");
 
                 TestPipeline pipeline = new TestPipeline("SystemTest", null,
