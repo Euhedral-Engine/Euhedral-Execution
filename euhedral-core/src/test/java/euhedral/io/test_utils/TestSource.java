@@ -1,13 +1,13 @@
 package euhedral.io.test_utils;
 
 import euhedral.atomics.PaddedLongAdder;
-import euhedral.io.interfaces.ScaffoldingOrigin;
+import euhedral.io.interfaces.ScaffoldingSource;
 import euhedral.io.interfaces.ScaffoldingTerminal;
 import java.util.concurrent.CountDownLatch;
 
 import lombok.Getter;
 
-public class TestOrigin implements ScaffoldingOrigin {
+public class TestSource implements ScaffoldingSource {
 
     @Getter
     private final TestFrame[] myFrames;
@@ -20,7 +20,7 @@ public class TestOrigin implements ScaffoldingOrigin {
     @Getter
     private volatile boolean complete = false;
 
-    public TestOrigin(TestFrame[] frames) {
+    public TestSource(TestFrame[] frames) {
         this.myFrames = frames;
     }
 

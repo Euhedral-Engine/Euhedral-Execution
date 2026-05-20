@@ -3,7 +3,7 @@ package euhedral.io.interfaces;
 import euhedral.io.frames.AbstractFrame;
 
 public interface ScaffoldingTerminal {
-    void addUpstream(ScaffoldingOrigin upstream);
+    void addUpstream(ScaffoldingSource upstream);
 
     void onNext(AbstractFrame frame);
 

@@ -15,11 +15,11 @@ import euhedral.io.DRRCacheManager.DownstreamHandle;
 import euhedral.io.SMTBuddy.SMTState;
 import euhedral.io.config.CloneConfig;
 import euhedral.io.config.ExecutionManagerConfig;
+import euhedral.io.flow_control.BufferedBridge;
 import euhedral.io.flow_control.DirectOutputStream;
-import euhedral.io.flow_control.LockFreeSink;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.frames.DummyInitFrame;
-import euhedral.io.interfaces.ScaffoldingOrigin;
+import euhedral.io.interfaces.ScaffoldingSource;
 import euhedral.io.interfaces.SlotManager;
 import euhedral.io.metrics.ExecutionManagerMetrics;
 import euhedral.io.utils.DrainBuffer;
@@ -125,7 +125,7 @@ public class ExecutionManager implements SlotManager {
     protected final int bufferSize;
     protected final DrainBuffer bufferWrapper;
     protected final PartitionedQueue<AbstractFrame> buffer;
-    protected final LockFreeSink completeSink;
+    protected final BufferedBridge completeSink;
 
     protected final int maxUpdateInterval;
 
@@ -224,7 +224,7 @@ public class ExecutionManager implements SlotManager {
                     .pCore();
 
             this.completeSink =
-                    new LockFreeSink(new PartitionedUnboundedMpscArrayQueue<>(1, bufferSize, 4),
+                    new BufferedBridge(new PartitionedUnboundedMpscArrayQueue<>(1, bufferSize, 4),
                             frame -> {
                                 IN_FLIGHT.setOpaque(this, this.inFlight - 1);
                                 state.receivingOrderedWork =
@@ -254,7 +254,7 @@ public class ExecutionManager implements SlotManager {
     }
 
     @Override
-    public void input(ScaffoldingOrigin stream) {
+    public void input(ScaffoldingSource stream) {
         if (stream instanceof DRRCacheManager iStream && INGEST.compareAndSet(this, null,
                 iStream)) {
             this.buddy.setIngest(iStream);
@@ -264,7 +264,7 @@ public class ExecutionManager implements SlotManager {
     }
 
     @Override
-    public ScaffoldingOrigin output() {
+    public ScaffoldingSource output() {
         return this.outputStream;
     }
 
@@ -702,7 +702,7 @@ public class ExecutionManager implements SlotManager {
     }
 
     @Override
-    public LockFreeSink completeChannel() {
+    public BufferedBridge completeChannel() {
         return this.completeSink;
     }
 

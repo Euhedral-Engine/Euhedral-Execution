@@ -6,7 +6,7 @@ import euhedral.io.config.CloneConfig;
 import euhedral.io.interfaces.CacheManager;
 import euhedral.io.interfaces.CloneableObject;
 import euhedral.io.interfaces.PipelineExecutor;
-import euhedral.io.interfaces.ScaffoldingOrigin;
+import euhedral.io.interfaces.ScaffoldingSource;
 import euhedral.io.interfaces.SlotManager;
 import java.util.concurrent.Future;
 
@@ -62,12 +62,12 @@ public abstract class AbstractCloneablePipeline implements
     }
 
     @Override
-    public void input(ScaffoldingOrigin stream) {
+    public void input(ScaffoldingSource stream) {
         this.cacheManager.input(stream);
     }
 
     @Override
-    public ScaffoldingOrigin output() {
+    public ScaffoldingSource output() {
         return this.executor.output();
     }
 

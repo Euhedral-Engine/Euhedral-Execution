@@ -2,12 +2,12 @@ package euhedral.io;
 
 import euhedral.hardware_utils.PinnedThreadExecutor;
 import euhedral.io.config.CloneConfig;
-import euhedral.io.flow_control.LockFreeSink;
+import euhedral.io.flow_control.BufferedBridge;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.frames.CancelFrame;
 import euhedral.io.interfaces.CloneableObject;
 import euhedral.io.interfaces.PipelineExecutor;
-import euhedral.io.interfaces.ScaffoldingOrigin;
+import euhedral.io.interfaces.ScaffoldingSource;
 import euhedral.io.interfaces.ScaffoldingTerminal;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,7 +17,7 @@ public abstract class AbstractExecutor implements PipelineExecutor {
     protected final Logger logger = LoggerFactory.getLogger(this.getClass());
 
     protected final PinnedThreadExecutor executorService;
-    private LockFreeSink completeSink;
+    private BufferedBridge completeSink;
 
     public AbstractExecutor(PinnedThreadExecutor executorService) {
         this.executorService = executorService;
@@ -29,7 +29,7 @@ public abstract class AbstractExecutor implements PipelineExecutor {
     }
 
     @Override
-    public void input(ScaffoldingOrigin stream) {
+    public void input(ScaffoldingSource stream) {
         stream.addDownstream(new ExecutionTerminal());
     }
 
@@ -68,7 +68,7 @@ public abstract class AbstractExecutor implements PipelineExecutor {
         }
 
         @Override
-        public void addUpstream(ScaffoldingOrigin stream) {
+        public void addUpstream(ScaffoldingSource stream) {
             stream.request(Long.MAX_VALUE);
         }
 

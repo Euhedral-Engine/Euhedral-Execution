@@ -1,7 +1,7 @@
 package euhedral.io.flow_control;
 
 import euhedral.io.interfaces.RecursiveScaffolding;
-import euhedral.io.interfaces.ScaffoldingOrigin;
+import euhedral.io.interfaces.ScaffoldingSource;
 import euhedral.io.interfaces.ScaffoldingTerminal;
 import euhedral.io.utils.DrainBuffer;
 import euhedral.queues.PartitionedUnboundedMpscArrayQueue;
@@ -155,7 +155,7 @@ public class UpstreamQueue {
 
         public abstract boolean isComplete();
 
-        public void addUpstream(ScaffoldingOrigin upstream) {
+        public void addUpstream(ScaffoldingSource upstream) {
             upstream.cancel();
         }
 

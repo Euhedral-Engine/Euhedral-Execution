@@ -1,6 +1,6 @@
 package euhedral.io.interfaces;
 
-public interface RecursiveScaffolding extends ScaffoldingOrigin, ScaffoldingTerminal {
+public interface RecursiveScaffolding extends ScaffoldingSource, ScaffoldingTerminal {
 
     default void addUpstream(RecursiveScaffolding upstream) {
 
