@@ -11,6 +11,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import euhedral.hardware_utils.ResourceMonitor;
 import euhedral.hardware_utils.SystemInfo;
 import euhedral.hardware_utils.SystemInfo.CpuInfo;
 import euhedral.hardware_utils.TopologyMapper;
@@ -18,7 +19,6 @@ import euhedral.hardware_utils.TopologyMapper.EffectiveSocketTopology;
 import euhedral.hardware_utils.TopologyMapper.EffectiveSystemTopology;
 import euhedral.hardware_utils.common.SystemUtilization.HardwareUtilization;
 import euhedral.hardware_utils.common.SystemUtilization.SocketSnapshot;
-import euhedral.io.utils.FluxResourceMonitor;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.BitSet;
@@ -30,14 +30,13 @@ import org.junit.jupiter.api.Test;
 import org.mockito.MockedConstruction;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
-import reactor.core.publisher.Flux;
 
 class ControlPlaneTest {
 
     private ControlPlaneShard mockShard;
     private final static MockedStatic<SystemInfo> mockSysInfo = Mockito.mockStatic(SystemInfo.class);
     private static MockedConstruction<TopologyMapper> mockMapper;
-    private static MockedConstruction<FluxResourceMonitor> mockResourceMonitor;
+    private static MockedConstruction<ResourceMonitor> mockResourceMonitor;
     private static EffectiveSystemTopology mockTopology;
     private static HardwareUtilization mockUtilization;
 
@@ -48,7 +47,7 @@ class ControlPlaneTest {
 
             return mock(EffectiveSystemTopology.class);
         });
-        mockResourceMonitor = Mockito.mockConstructionWithAnswer(FluxResourceMonitor.class, invocation -> {
+        mockResourceMonitor = Mockito.mockConstructionWithAnswer(ResourceMonitor.class, invocation -> {
             Class<?> clazz = invocation.getMethod().getReturnType();
             if(clazz.equals(Void.TYPE)) {
                 return null;
@@ -56,10 +55,7 @@ class ControlPlaneTest {
             if(clazz.equals(HardwareUtilization.class)) {
                 return mockUtilization;
             }
-            if(clazz.equals(Flux.class)) {
-                return Flux.empty();
-            }
-            return mock(FluxResourceMonitor.class);
+            return mock(ResourceMonitor.class);
         });
     }
 
@@ -82,7 +78,7 @@ class ControlPlaneTest {
         SocketSnapshot[] snapshots = new SocketSnapshot[effectiveTopology.effectiveSockets()
                 .cardinality()];
 
-        createControlPlaneWithMocks(effectiveTopology, snapshots);
+        ControlPlane controlPlane = createControlPlaneWithMocks(effectiveTopology, snapshots);
 
 //        mockMapper.verify(TopologyMapper::getEffectiveTopology, times(2));
 
@@ -96,13 +92,12 @@ class ControlPlaneTest {
                 eq(effectiveTopology.socketTopologies().get(1)),
                 any());
 
-        FluxResourceMonitor mockedRM = mockResourceMonitor.constructed().get(0);
-        verify(mockedRM, times(1)).addListener();
+        ResourceMonitor mockedRM = mockResourceMonitor.constructed().get(0);
+        verify(mockedRM, times(1)).addListener(any());
         verify(mockedRM, times(2)).getUtilization();
         verify(mockUtilization, times(1)).getSocketSnapshot(eq(0), any(), anyDouble());
         verify(mockUtilization, times(1)).getSocketSnapshot(eq(1), any(), anyDouble());
 
-        ControlPlane controlPlane = ControlPlane.get();
         assertEquals(effectiveTopology.globalVersion(), controlPlane.currentGlobalVersion);
         assertTrue(controlPlane.primed.get());
         Awaitility.await().atMost(Duration.ofSeconds(2)).untilFalse(controlPlane.rebalancing);
@@ -190,7 +185,7 @@ class ControlPlaneTest {
                 topologies, 0);
     }
 
-    private void createControlPlaneWithMocks(EffectiveSystemTopology effectiveTopology,
+    private ControlPlane createControlPlaneWithMocks(EffectiveSystemTopology effectiveTopology,
             SocketSnapshot[] snapshots) {
         for (int i = 0; i < snapshots.length; i++) {
             snapshots[i] = mock(SocketSnapshot.class);
@@ -212,7 +207,7 @@ class ControlPlaneTest {
 //        mockMapper.when(TopologyMapper::getEffectiveTopology).thenReturn(effectiveTopology);
         when(mockShard.isStarted()).thenReturn(false);
 
-        ControlPlane.getOrCreate("TestControlPlane", mockShard);
+        return ControlPlane.getOrCreate("TestControlPlane", mockShard);
     }
 
 }

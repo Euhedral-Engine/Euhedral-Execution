@@ -3,6 +3,7 @@ package euhedral.io.control_plane;
 import static euhedral.io.utils.MathFunctions.unsignedMultiplyHigh;
 
 import euhedral.hardware_utils.PinnedThreadExecutor;
+import euhedral.hardware_utils.ResourceMonitor;
 import euhedral.hardware_utils.SystemInfo;
 import euhedral.hardware_utils.SystemInfo.CpuInfo;
 import euhedral.hardware_utils.TopologyMapper;
@@ -16,7 +17,6 @@ import euhedral.io.frames.AbstractFrame;
 import euhedral.io.interfaces.CloneableObject;
 import euhedral.io.interfaces.IngestSink;
 import euhedral.io.interfaces.ScaffoldingSource;
-import euhedral.io.utils.FluxResourceMonitor;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.util.Arrays;
@@ -29,6 +29,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.LockSupport;
+import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -79,7 +80,7 @@ public class ControlPlane implements AutoCloseable {
 
     protected final String name;
     protected final TopologyMapper topology;
-    protected final FluxResourceMonitor resourceMonitor;
+    protected final ResourceMonitor resourceMonitor;
     protected final Logger logger;
     protected final ExecutorService controlPlaneExecutor;
     protected final AtomicBoolean closed = new AtomicBoolean(false);
@@ -112,11 +113,10 @@ public class ControlPlane implements AutoCloseable {
             CloneableObject cloneableObject, BitSet allowedCpus,
             MeterRegistry meterRegistry) {
         this.topology = new TopologyMapper(allowedCpus);
-        this.resourceMonitor = new FluxResourceMonitor(this.topology, Duration.ofMillis(200));
+        this.resourceMonitor = new ResourceMonitor(this.topology, Duration.ofMillis(200));
 
         this.baseShard = Objects.requireNonNullElseGet(baseShard,
                 () -> new ControlPlaneShard(-1, "BaseShard", cloneableObject,
-                        resourceMonitor,
                         meterRegistry));
 
         this.name = name;
@@ -142,7 +142,7 @@ public class ControlPlane implements AutoCloseable {
             this.topology.update(this.resourceMonitor.getUtilization());
 
             update(resourceMonitor.getUtilization());
-            this.resourceMonitor.addListener().subscribe(this::update);
+            this.resourceMonitor.addListener(this::update);
             while (this.rebalancing.get() || !this.ready()) {
                 LockSupport.parkNanos(1_000L);
             }
@@ -332,6 +332,25 @@ public class ControlPlane implements AutoCloseable {
         this.shards[shardId].start(snapshot, topology, this.shardHandles[shardId]);
     }
 
+    public void ingest(@NonNull IngestSink sink) {
+        ingest(sink.getDelegate());
+    }
+
+    public void ingest(@NonNull ScaffoldingSource stream) {
+        if (this.closed.getOpaque()) {
+            throw new RuntimeException("Could not ingest from an upstream publisher. The ControlPlane is permanently closed.");
+        }
+        if(!this.started.getOpaque()) {
+            throw new RuntimeException("Could not ingest from an upstream publisher. The ControlPlane is not started.");
+        }
+        if(stream == null) {
+            throw new NullPointerException("The ingestSink is null");
+        }
+
+        ScaffoldingNode controller = this.ingestController.get();
+        controller.ingest(stream);
+    }
+
     protected double getShardQuota(int socketId, double systemQuotaPool) {
         int totalEffectiveCpus = this.effectiveTopology.effectiveCpus().cardinality();
         int socketEffectiveCpus = this.effectiveTopology.socketTopologies().get(socketId)
@@ -412,21 +431,5 @@ public class ControlPlane implements AutoCloseable {
             }
         }
         return true;
-    }
-
-    public void ingest(IngestSink sink) {
-        ingest(sink.getDelegate());
-    }
-
-    public void ingest(ScaffoldingSource stream) {
-        if (this.closed.getOpaque()) {
-            throw new RuntimeException("Could not ingest from an upstream publisher. The ControlPlane is permanently closed.");
-        }
-        if(!this.started.getOpaque()) {
-            throw new RuntimeException("Could not ingest from an upstream publisher. The ControlPlane is not started.");
-        }
-
-        ScaffoldingNode controller = this.ingestController.get();
-        controller.ingest(stream);
     }
 }
