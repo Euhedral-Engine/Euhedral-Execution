@@ -8,6 +8,7 @@ import euhedral.io.frames.ConsumerFrame;
 import euhedral.io.frames.FunctionFrame;
 import euhedral.io.frames.RunnableFrame;
 import euhedral.io.frames.SequencedFrame;
+import euhedral.io.reactor.EuhedralSubscriber;
 import euhedral.queues.PartitionedUnboundedMpscArrayQueue;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.concurrent.ThreadLocalRandom;
@@ -90,7 +91,9 @@ public class FunctionalApi implements AutoCloseable {
         FrameSequencer<T, R> sequencer = new FrameSequencer<>(password);
         Flux<SequencedFrame<T, R>> frameFlux = sequencer.map(input, function);
 
-        return sequencer.output().doOnSubscribe(sub -> controlPlane.ingest(frameFlux));
+        EuhedralSubscriber subscriber = new EuhedralSubscriber();
+        frameFlux.subscribe(subscriber);
+        return sequencer.output().doOnSubscribe(sub -> controlPlane.ingest(subscriber));
     }
 
     public <T, R> Flux<R> apply(Flux<T> input, Function<T, R> function, boolean ordered) {
@@ -145,8 +148,11 @@ public class FunctionalApi implements AutoCloseable {
         final Flux<FunctionFrame<T, R>> framed = input.takeUntilOther(killSwitch.asMono())
                 .map(obj -> recycler.generate(obj, password));
 
+        EuhedralSubscriber subscriber = new EuhedralSubscriber();
+        framed.subscribe(subscriber);
+
         return returnSink.asFlux().doOnSubscribe(
-                        sub -> controlPlane.ingest(framed))
+                        sub -> controlPlane.ingest(subscriber))
                 .doFinally(sig -> {
                     dead.set(true);
                     killSwitch.tryEmitEmpty();
@@ -191,10 +197,12 @@ public class FunctionalApi implements AutoCloseable {
             return state;
         });
 
-        controlPlane.ingest(framed.takeUntilOther(killSwitch.asMono()).doFinally(sig -> {
+        EuhedralSubscriber subscriber = new EuhedralSubscriber();
+        framed.takeUntilOther(killSwitch.asMono()).doFinally(sig -> {
             dead.set(true);
             killSwitch.tryEmitEmpty();
-        }));
+        }).subscribe(subscriber);
+        controlPlane.ingest(subscriber);
     }
 
     public <T> void accept(Flux<T> input, Consumer<T> consumer, boolean ordered) {
@@ -223,12 +231,14 @@ public class FunctionalApi implements AutoCloseable {
 
         Sinks.One<Void> killSwitch = Sinks.unsafe().one();
 
-        Flux<ConsumerFrame<T>> framed = input.takeUntilOther(killSwitch.asMono())
-                .map(obj -> recycler.generate(obj, password));
-        controlPlane.ingest(framed.doOnCancel(() -> {
-            dead.set(true);
-            killSwitch.tryEmitEmpty();
-        }));
+        EuhedralSubscriber subscriber = new EuhedralSubscriber();
+        input.takeUntilOther(killSwitch.asMono())
+                .map(obj -> recycler.generate(obj, password))
+                .doOnCancel(() -> {
+                    dead.set(true);
+                    killSwitch.tryEmitEmpty();
+                }).subscribe(subscriber);
+        controlPlane.ingest(subscriber);
     }
 
     @Override

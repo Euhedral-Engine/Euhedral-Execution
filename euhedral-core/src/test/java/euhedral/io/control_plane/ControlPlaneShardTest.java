@@ -13,9 +13,10 @@ import euhedral.hardware_utils.TopologyMapper.EffectiveSocketTopology;
 import euhedral.hardware_utils.common.SystemUtilization.CoreSnapshot;
 import euhedral.hardware_utils.common.SystemUtilization.SocketSnapshot;
 import euhedral.io.config.CloneConfig;
-import euhedral.io.flow_control.FluxEdge;
+import euhedral.io.flow_control.ScaffoldingEdge;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.interfaces.CloneableObject;
+import euhedral.io.interfaces.ScaffoldingTerminal;
 import euhedral.io.utils.FluxResourceMonitor;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.ArrayList;
@@ -27,7 +28,6 @@ import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
-import org.reactivestreams.Subscriber;
 import reactor.core.publisher.Flux;
 
 class ControlPlaneShardTest {
@@ -39,7 +39,7 @@ class ControlPlaneShardTest {
     @Test
     public void testInitialization() {
         TestClone clone = mock(TestClone.class);
-        FluxEdge upstream = Mockito.spy(new FluxEdge(new AtomicBoolean()));
+        ScaffoldingEdge upstream = Mockito.spy(new ScaffoldingEdge(new AtomicBoolean()));
         AbstractFrame frame = mock(AbstractFrame.class);
 
         doReturn(clone).when(clone).clone(any(CloneConfig.class));
@@ -57,9 +57,9 @@ class ControlPlaneShardTest {
 
         shard.start(snapshot, topology, upstream);
 
-        verify(upstream).subscribe(any(Subscriber.class));
+        verify(upstream).addDownstream(any(ScaffoldingTerminal.class));
         verify(clone, times(configs.length)).clone(any(CloneConfig.class));
-        verify(clone, times(configs.length)).input(any(FluxEdge.class));
+        verify(clone, times(configs.length)).input(any(ScaffoldingEdge.class));
         verify(clone, times(configs.length)).setDrainMode(true);
         verify(clone, times(configs.length)).update(any(CoreSnapshot.class));
         verify(clone, times(configs.length)).start();
@@ -74,7 +74,7 @@ class ControlPlaneShardTest {
 
     @Test
     public void testRebalanceOnTopologyChange() throws Exception {
-        FluxEdge upstream = Mockito.spy(new FluxEdge(new AtomicBoolean()));
+        ScaffoldingEdge upstream = Mockito.spy(new ScaffoldingEdge(new AtomicBoolean()));
         TestClone baseClone = mock(TestClone.class);
 
         TestClone[] clones = new TestClone[2];
