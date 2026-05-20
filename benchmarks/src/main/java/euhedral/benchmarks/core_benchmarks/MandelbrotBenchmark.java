@@ -245,13 +245,15 @@ public class MandelbrotBenchmark {
 
         @Benchmark
         @OperationsPerInvocation(CANVAS * 4)
-        public void render() {
+        public void render(Blackhole blackhole) {
             System.out.println("Total Tasks: " + CANVAS * 4);
 
             Flux.fromArray(this.pixels).subscribe(subscriber);
             this.controlPlane.ingest(this.subscriber);
 
             waitOnRender(this.counters);
+            blackhole.consume(this.escapes);
+            blackhole.consume(this.magnitudes);
         }
 
         @TearDown(Level.Trial)
