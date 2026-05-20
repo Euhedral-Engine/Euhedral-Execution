@@ -68,27 +68,32 @@ public class DRRCacheManager extends ScaffoldingNode implements CacheManager {
                                               + config.cloneConfig().coreId() : "DRRCacheManager";
     }
 
-    protected static int getPartitionCount(CloneConfig config) {
-        if (config != null) {
-            CpuCacheLayout layout = SystemInfo.getCacheLayout(config.getCpuSet()[0]);
-            if (layout.sharesL2() <= 2) {
-                return 8;
-            }
-            return 4 * Integer.highestOneBit(layout.sharesL2());
+    protected static int getPartitionCount(DRRConfig config) {
+        CloneConfig cloneConfig = config.cloneConfig();
+        if (cloneConfig != null) {
+            CpuCacheLayout layout = SystemInfo.getCacheLayout(cloneConfig.getCpuSet()[0]);
+            return config.partitionsPerCpu() * Integer.highestOneBit(layout.sharesL2());
         }
         return 0;
     }
 
-    private static int getChunkSize(CloneConfig config, int partitions) {
-        if (config == null) {
+    protected static int getChunkSize(DRRConfig config, int partitions) {
+        CloneConfig cloneConfig = config.cloneConfig();
+        if (cloneConfig == null) {
             return 512;
         }
 
-        CpuCacheLayout layout = SystemInfo.getCacheLayout(config.getCpuSet()[0]);
+        CpuCacheLayout layout = SystemInfo.getCacheLayout(cloneConfig.getCpuSet()[0]);
         long L2 = layout.bytesL2();
 
+        double budget = config.L2MemoryBudget();
+        budget = clampDouble(budget, 0, 1.0);
+        if(budget == 0) {
+            budget = 0.7;
+        }
+
         int chunk = (int) Math.min(L2 / partitions, Integer.MAX_VALUE);
-        chunk = (int) (chunk * 0.7);
+        chunk = (int) (chunk * budget);
         chunk = Integer.highestOneBit(chunk);
         chunk /= QueueUtils.REFERENCE_SIZE;
         return Math.max(chunk, 512);
@@ -119,11 +124,11 @@ public class DRRCacheManager extends ScaffoldingNode implements CacheManager {
     protected long totalQueuedSizeBytes = 0L;
 
     public DRRCacheManager(@NonNull DRRConfig config) {
-        super(getName(config), getPartitionCount(config.cloneConfig()), RoutingFunction.DEFAULT,
+        super(getName(config), getPartitionCount(config), RoutingFunction.DEFAULT,
                 true);
         this.config = config;
 
-        int partitions = getPartitionCount(config.cloneConfig());
+        int partitions = getPartitionCount(config);
         if (partitions <= 0) {
             this.metrics = null;
             this.memoryLimit = null;
@@ -149,10 +154,10 @@ public class DRRCacheManager extends ScaffoldingNode implements CacheManager {
             this.memoryLimit = new PaddedAtomicLong(0);
             this.avgFrameSize = new PaddedLongAdder(partitions, true, true);
             this.handles = new NonBlockingHashMapLong<>(4);
-            this.chunkSize = getChunkSize(config.cloneConfig(), partitions);
+            this.chunkSize = getChunkSize(config, partitions);
             this.frameQuota = (long) this.chunkSize * partitions;
             this.queueRing = new QueuePartitionWrapper(
-                    new PartitionedUnboundedMpscArrayQueue<>(partitions, this.chunkSize, 1));
+                    new PartitionedUnboundedMpscArrayQueue<>(partitions, this.chunkSize, config.maxPooledChunks()));
             this.mask = partitions - 1;
             this.heads = new int[SystemInfo.getCpuCount()];
             this.partitionLocks = new boolean[partitions];
@@ -198,8 +203,6 @@ public class DRRCacheManager extends ScaffoldingNode implements CacheManager {
         long totalDrain = 0;
         long totalBytesDrained = 0;
 
-        int resetThreshold = 4;
-
         long initialCount = (long) TOTAL_COUNT.getOpaque(this);
         for (int i = 0;
                 i < maxFill && cycles <= this.queueRing.partitions() && initialCount > 0; ) {
@@ -231,7 +234,7 @@ public class DRRCacheManager extends ScaffoldingNode implements CacheManager {
                     stats.lastBytesDrained = drainedBytes;
 
                     recordDrainMetrics(lock, stats, drainCount);
-                    if(drainCount > resetThreshold) {
+                    if(drainCount > config.ringWalkResetThreshold()) {
                         cycles = 0;
                     }
                 }
@@ -423,7 +426,7 @@ public class DRRCacheManager extends ScaffoldingNode implements CacheManager {
     }
 
     public long getMaxQueuedBytes() {
-        double cap = Math.min(0.8, this.capFactor.getAcquire());
+        double cap = Math.min(this.config.queueCapFactor(), this.capFactor.getAcquire());
         long byteQuota = this.frameQuota * (this.avgFrameSize.sum() / this.queueRing.partitions());
         long hardwareMax = this.memoryLimit.getOpaque();
         if (hardwareMax > byteQuota) {

@@ -19,7 +19,7 @@ public class DefaultCloneablePipeline extends AbstractCloneablePipeline {
     public DefaultCloneablePipeline(String name, String metricPrefix,
             @Nullable MeterRegistry meterRegistry, AbstractExecutor executor) {
         this(name,
-                new DRRConfig(null, metricPrefix, meterRegistry),
+                DRRConfig.defaultConfig(metricPrefix, meterRegistry),
                 ExecutionManagerConfig.balancedDefault(meterRegistry, metricPrefix),
                 executor);
     }
