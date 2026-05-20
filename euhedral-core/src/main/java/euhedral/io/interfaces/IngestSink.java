@@ -2,7 +2,7 @@ package euhedral.io.interfaces;
 
 public interface IngestSink extends AutoCloseable {
 
-    ScaffoldingOrigin getDelegate();
+    ScaffoldingSource getDelegate();
 
-    interface Delegate extends ScaffoldingOrigin, AutoCloseable {}
+    interface Delegate extends ScaffoldingSource, AutoCloseable {}
 }

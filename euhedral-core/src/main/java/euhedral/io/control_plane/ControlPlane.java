@@ -15,7 +15,7 @@ import euhedral.io.flow_control.ScaffoldingNode;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.interfaces.CloneableObject;
 import euhedral.io.interfaces.IngestSink;
-import euhedral.io.interfaces.ScaffoldingOrigin;
+import euhedral.io.interfaces.ScaffoldingSource;
 import euhedral.io.utils.FluxResourceMonitor;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
@@ -418,7 +418,7 @@ public class ControlPlane implements AutoCloseable {
         ingest(sink.getDelegate());
     }
 
-    public void ingest(ScaffoldingOrigin stream) {
+    public void ingest(ScaffoldingSource stream) {
         if (this.closed.getOpaque()) {
             throw new RuntimeException("Could not ingest from an upstream publisher. The ControlPlane is permanently closed.");
         }

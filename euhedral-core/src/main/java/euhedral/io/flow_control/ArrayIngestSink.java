@@ -3,7 +3,7 @@ package euhedral.io.flow_control;
 import euhedral.atomics.PaddedAtomicLong;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.interfaces.IngestSink;
-import euhedral.io.interfaces.ScaffoldingOrigin;
+import euhedral.io.interfaces.ScaffoldingSource;
 import euhedral.io.interfaces.ScaffoldingTerminal;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
@@ -17,7 +17,7 @@ public class ArrayIngestSink implements IngestSink {
         this.delegate = new Delegate(frames);
     }
 
-    public ScaffoldingOrigin getDelegate() {
+    public ScaffoldingSource getDelegate() {
         return this.delegate;
     }
 

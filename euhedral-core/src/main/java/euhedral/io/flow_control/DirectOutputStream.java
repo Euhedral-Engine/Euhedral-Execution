@@ -1,7 +1,7 @@
 package euhedral.io.flow_control;
 
 import euhedral.io.frames.AbstractFrame;
-import euhedral.io.interfaces.ScaffoldingOrigin;
+import euhedral.io.interfaces.ScaffoldingSource;
 import euhedral.io.interfaces.ScaffoldingTerminal;
 import euhedral.queues.common.PartitionedQueue;
 import java.lang.invoke.MethodHandles;
@@ -10,7 +10,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import org.jspecify.annotations.NonNull;
 
-public class DirectOutputStream implements ScaffoldingOrigin {
+public class DirectOutputStream implements ScaffoldingSource {
 
     protected static final VarHandle CANCELLED;
     protected static final VarHandle TERMINAL;

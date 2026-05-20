@@ -19,7 +19,7 @@ import euhedral.io.flow_control.UpstreamQueue;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.frames.DummyInitFrame;
 import euhedral.io.interfaces.CacheManager;
-import euhedral.io.interfaces.ScaffoldingOrigin;
+import euhedral.io.interfaces.ScaffoldingSource;
 import euhedral.io.interfaces.ScaffoldingTerminal;
 import euhedral.io.metrics.DRRMetrics;
 import euhedral.io.utils.DrainBuffer;
@@ -448,7 +448,7 @@ public class DRRCacheManager extends ScaffoldingNode implements CacheManager {
     }
 
     @Override
-    public void input(ScaffoldingOrigin stream) {
+    public void input(ScaffoldingSource stream) {
         if (stream instanceof ScaffoldingEdge dh) {
             addUpstream(dh);
         } else {
@@ -572,7 +572,7 @@ public class DRRCacheManager extends ScaffoldingNode implements CacheManager {
         }
 
         @Override
-        public void addUpstream(ScaffoldingOrigin subscription) {
+        public void addUpstream(ScaffoldingSource subscription) {
 
         }
 

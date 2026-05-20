@@ -3,7 +3,7 @@ package euhedral.io.interfaces;
 import euhedral.hardware_utils.PinnedThreadExecutor;
 import euhedral.hardware_utils.common.SystemUtilization.CoreSnapshot;
 import euhedral.io.config.CloneConfig;
-import euhedral.io.flow_control.LockFreeSink;
+import euhedral.io.flow_control.BufferedBridge;
 
 /// ## Base interface for everything below the [`ControlPlaneShard`][euhedral.io.control_plane.ControlPlaneShard]
 ///
@@ -38,14 +38,14 @@ public interface CloneableObject extends AutoCloseable {
     default void update(CoreSnapshot coreSnapshot) {
     }
 
-    default void input(ScaffoldingOrigin stream) {
+    default void input(ScaffoldingSource stream) {
     }
 
-    default ScaffoldingOrigin output() {
+    default ScaffoldingSource output() {
         return null;
     }
 
-    default LockFreeSink completeChannel() {
+    default BufferedBridge completeChannel() {
         return null;
     }
 
