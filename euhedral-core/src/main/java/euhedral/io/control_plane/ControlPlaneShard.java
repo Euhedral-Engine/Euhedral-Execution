@@ -12,7 +12,6 @@ import euhedral.io.flow_control.ScaffoldingEdge;
 import euhedral.io.flow_control.ScaffoldingNode;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.interfaces.CloneableObject;
-import euhedral.io.utils.FluxResourceMonitor;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.util.BitSet;
@@ -34,7 +33,6 @@ import org.slf4j.LoggerFactory;
 public class ControlPlaneShard implements AutoCloseable {
 
     protected final Logger logger;
-    protected final FluxResourceMonitor resourceMonitor;
 
     @Getter
     protected final int shardId;
@@ -62,10 +60,8 @@ public class ControlPlaneShard implements AutoCloseable {
 
     public ControlPlaneShard(int shardId, String shardName,
             CloneableObject obj,
-            FluxResourceMonitor resourceMonitor,
             MeterRegistry meterRegistry) {
         this.logger = LoggerFactory.getLogger(shardName);
-        this.resourceMonitor = resourceMonitor;
         this.shardId = shardId;
         this.shardName = shardName;
         this.meterRegistry = meterRegistry;
@@ -218,7 +214,6 @@ public class ControlPlaneShard implements AutoCloseable {
             CloneableObject[] nextClones) {
         CloneConfig config = new CloneConfig(this.shardName, coreId, snapshot.quotaCpus(),
                 snapshot.effectiveCpus(),
-                this.resourceMonitor,
                 this.meterRegistry, this.shardName);
 
         CloneableObject clone = this.cloneableObject.clone(config);
@@ -471,6 +466,6 @@ public class ControlPlaneShard implements AutoCloseable {
 
     public ControlPlaneShard clone(int shardId, String shardName) {
         return new ControlPlaneShard(shardId, shardName, this.cloneableObject,
-                this.resourceMonitor, this.meterRegistry);
+                this.meterRegistry);
     }
 }

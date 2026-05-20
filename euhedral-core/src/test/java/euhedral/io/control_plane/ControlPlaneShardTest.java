@@ -17,7 +17,6 @@ import euhedral.io.flow_control.ScaffoldingEdge;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.interfaces.CloneableObject;
 import euhedral.io.interfaces.ScaffoldingTerminal;
-import euhedral.io.utils.FluxResourceMonitor;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.ArrayList;
 import java.util.BitSet;
@@ -32,7 +31,6 @@ import reactor.core.publisher.Flux;
 
 class ControlPlaneShardTest {
 
-    private final FluxResourceMonitor mockResourceMonitor = mock(FluxResourceMonitor.class);
     private static final MockedStatic<SystemInfo> mockSysInfo = Mockito.mockStatic(SystemInfo.class);
     private final MeterRegistry mockMeterRegistry = mock(MeterRegistry.class);
 
@@ -47,12 +45,11 @@ class ControlPlaneShardTest {
 
         mockSysInfo.when(SystemInfo::getMaxCoreId).thenReturn(1);
         ControlPlaneShard shard = new ControlPlaneShard(1, "TestShard", clone,
-                mockResourceMonitor,
                 mockMeterRegistry);
 
         EffectiveSocketTopology topology = getTopology();
         SocketSnapshot snapshot = getSocketSnapshot(topology);
-        CloneConfig[] configs = getConfigs(snapshot, topology, mockResourceMonitor,
+        CloneConfig[] configs = getConfigs(snapshot, topology,
                 mockMeterRegistry);
 
         shard.start(snapshot, topology, upstream);
@@ -92,7 +89,6 @@ class ControlPlaneShardTest {
 
         mockSysInfo.when(SystemInfo::getMaxCoreId).thenReturn(1);
         ControlPlaneShard shard = new ControlPlaneShard(1, "TestShard", baseClone,
-                mockResourceMonitor,
                 mockMeterRegistry);
 
         EffectiveSocketTopology topo1 = getTopology(); // Version 0, Core 0 and 1 active
@@ -157,13 +153,11 @@ class ControlPlaneShardTest {
     }
 
     private static CloneConfig[] getConfigs(SocketSnapshot snapshot,
-            EffectiveSocketTopology topology,
-            FluxResourceMonitor resourceMonitor, MeterRegistry meterRegistry) {
+            EffectiveSocketTopology topology, MeterRegistry meterRegistry) {
         CloneConfig[] configs = new CloneConfig[topology.effectiveCores().cardinality()];
         for (int i = 0; i < configs.length; i++) {
             configs[i] = new CloneConfig("TestShard", i, snapshot.coreSnapshots()[i].quotaCpus(),
                     snapshot.coreSnapshots()[i].effectiveCpus(),
-                    resourceMonitor,
                     meterRegistry, "TestShard");
         }
         return configs;
