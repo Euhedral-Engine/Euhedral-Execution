@@ -8,8 +8,8 @@ import euhedral.hardware_utils.TopologyMapper.EffectiveSocketTopology;
 import euhedral.hardware_utils.common.SystemUtilization.CoreSnapshot;
 import euhedral.hardware_utils.common.SystemUtilization.SocketSnapshot;
 import euhedral.io.config.CloneConfig;
-import euhedral.io.flow_control.FluxEdge;
-import euhedral.io.flow_control.FluxNode;
+import euhedral.io.flow_control.ScaffoldingEdge;
+import euhedral.io.flow_control.ScaffoldingNode;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.interfaces.CloneableObject;
 import euhedral.io.utils.FluxResourceMonitor;
@@ -48,15 +48,15 @@ public class ControlPlaneShard implements AutoCloseable {
     protected final AtomicBoolean rebalancing = new AtomicBoolean(false);
     protected final AtomicInteger coresToDrain = new AtomicInteger(0);
 
-    protected final AtomicReference<FluxNode> coreDistributor = new AtomicReference<>();
+    protected final AtomicReference<ScaffoldingNode> coreDistributor = new AtomicReference<>();
 
     protected final MeterRegistry meterRegistry;
     protected final CloneableObject cloneableObject;
     protected final AtomicReference<int[]> activeCoreIds = new AtomicReference<>(new int[0]);
     protected final AtomicReference<CloneableObject[]> clones = new AtomicReference<>(
             new CloneableObject[0]);
-    protected final AtomicReference<FluxEdge[]> coreHandles = new AtomicReference<>(
-            new FluxEdge[0]);
+    protected final AtomicReference<ScaffoldingEdge[]> coreHandles = new AtomicReference<>(
+            new ScaffoldingEdge[0]);
     protected final AtomicReference<int[]> reverseMapping = new AtomicReference<>(new int[0]);
     protected volatile ExecutorService shardExecutor;
 
@@ -77,17 +77,17 @@ public class ControlPlaneShard implements AutoCloseable {
     }
 
     public void start(SocketSnapshot snapshot, EffectiveSocketTopology topology,
-            FluxEdge upstream) {
+            ScaffoldingEdge upstream) {
         if (!this.started.compareAndSet(false, true)) {
             return;
         }
         this.logger.info("Starting.");
         this.shardExecutor = Executors.newFixedThreadPool(topology.effectiveCores().length(),
                 (r) -> new Thread(r, this.shardName + "+ExecutorService"));
-        FluxNode coreDistributor = new FluxNode(this.shardName + "-CoreDistributor",
+        ScaffoldingNode coreDistributor = new ScaffoldingNode(this.shardName + "-CoreDistributor",
                 topology.effectiveCores().length(), this::route, false);
         this.coreDistributor.set(coreDistributor);
-        coreDistributor.onSubscribe(upstream);
+        coreDistributor.addUpstream(upstream);
         update(snapshot, topology);
     }
 
@@ -143,14 +143,14 @@ public class ControlPlaneShard implements AutoCloseable {
         }
         this.currentVersion.setRelease(topology.version());
 
-        FluxNode distributor = this.coreDistributor.get();
+        ScaffoldingNode distributor = this.coreDistributor.get();
         distributor.setDrain(true);
 
         BitSet newCores = topology.effectiveCores();
         int[] nextCores = new int[newCores.cardinality()];
 
-        FluxEdge[] currHandles = this.coreHandles.getAcquire();
-        FluxEdge[] nextHandles = new FluxEdge[topology.effectiveCores().length()];
+        ScaffoldingEdge[] currHandles = this.coreHandles.getAcquire();
+        ScaffoldingEdge[] nextHandles = new ScaffoldingEdge[topology.effectiveCores().length()];
         CloneableObject[] clones = this.clones.getOpaque();
         CloneableObject[] nextClones = new CloneableObject[topology.effectiveCores().length()];
 
@@ -159,7 +159,7 @@ public class ControlPlaneShard implements AutoCloseable {
         for (int i = newCores.nextSetBit(0); i >= 0; i = newCores.nextSetBit(i + 1)) {
             nextHandles[i] = i >= clones.length ? null : currHandles[i];
             nextHandles[i] =
-                    nextHandles[i] == null ? new FluxEdge(distributor.getDrainFlag())
+                    nextHandles[i] == null ? new ScaffoldingEdge(distributor.getDrainFlag())
                             : nextHandles[i];
             reverseMapping[i] = idx++;
         }
@@ -337,14 +337,14 @@ public class ControlPlaneShard implements AutoCloseable {
                 try {
                     distributor.close();
                 } catch (Exception e) {
-                    this.logger.error("CRITICAL: Failed to close the FluxNode.", e);
+                    this.logger.error("CRITICAL: Failed to close the ScaffoldingNode.", e);
                 }
             }
             return null;
         });
 
         this.logger.info("Closing cores.");
-        FluxEdge[] handles = this.coreHandles.getAcquire();
+        ScaffoldingEdge[] handles = this.coreHandles.getAcquire();
         for (int i = 0; i < handles.length; i++) {
             if (handles[i] != null) {
                 handles[i].onComplete();
@@ -396,7 +396,7 @@ public class ControlPlaneShard implements AutoCloseable {
         }
         this.activeCoreIds.setRelease(new int[0]);
         this.clones.setRelease(new CloneableObject[0]);
-        this.coreHandles.setRelease(new FluxEdge[0]);
+        this.coreHandles.setRelease(new ScaffoldingEdge[0]);
         this.shardExecutor.shutdown();
         this.shardExecutor = null;
         this.primed.set(false);
@@ -453,7 +453,7 @@ public class ControlPlaneShard implements AutoCloseable {
             return false;
         }
 
-        FluxNode coreDistributor = this.coreDistributor.get();
+        ScaffoldingNode coreDistributor = this.coreDistributor.get();
         if (coreDistributor != null && !coreDistributor.isDrained()) {
             return false;
         }

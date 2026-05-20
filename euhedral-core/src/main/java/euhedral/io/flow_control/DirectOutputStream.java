@@ -1,32 +1,29 @@
 package euhedral.io.flow_control;
 
 import euhedral.io.frames.AbstractFrame;
+import euhedral.io.interfaces.ScaffoldingOrigin;
+import euhedral.io.interfaces.ScaffoldingTerminal;
+import euhedral.queues.common.PartitionedQueue;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
-
-import euhedral.queues.common.PartitionedQueue;
 import org.jspecify.annotations.NonNull;
-import org.reactivestreams.Publisher;
-import org.reactivestreams.Subscriber;
-import org.reactivestreams.Subscription;
 
-@SuppressWarnings("unchecked")
-public class DirectOutputFlux implements Publisher<AbstractFrame>, Subscription {
+public class DirectOutputStream implements ScaffoldingOrigin {
 
     protected static final VarHandle CANCELLED;
-    protected static final VarHandle SUBSCRIBER;
+    protected static final VarHandle TERMINAL;
     protected static final VarHandle UNLIMITED;
 
     static {
         try {
             CANCELLED = MethodHandles.lookup()
-                    .findVarHandle(DirectOutputFlux.class, "cancelled", boolean.class);
-            SUBSCRIBER = MethodHandles.lookup()
-                    .findVarHandle(DirectOutputFlux.class, "subscriber", Subscriber.class);
+                    .findVarHandle(DirectOutputStream.class, "cancelled", boolean.class);
+            TERMINAL = MethodHandles.lookup()
+                    .findVarHandle(DirectOutputStream.class, "terminal", ScaffoldingTerminal.class);
             UNLIMITED = MethodHandles.lookup()
-                    .findVarHandle(DirectOutputFlux.class, "unlimited", boolean.class);
+                    .findVarHandle(DirectOutputStream.class, "unlimited", boolean.class);
         } catch (Exception e) {
             throw new ExceptionInInitializerError(e);
         }
@@ -39,17 +36,17 @@ public class DirectOutputFlux implements Publisher<AbstractFrame>, Subscription 
 
     protected boolean unlimited = false;
     protected boolean cancelled = false;
-    protected Subscriber<? super AbstractFrame> subscriber = null;
+    protected ScaffoldingTerminal terminal = null;
 
 
-    public DirectOutputFlux(@NonNull PartitionedQueue<AbstractFrame> buffer,
+    public DirectOutputStream(@NonNull PartitionedQueue<AbstractFrame> buffer,
             Consumer<AbstractFrame> applyToEach) {
         this.buffer = buffer;
         this.applyToEach = applyToEach;
     }
 
-    public int drain(long max) {
-        if (max == 0 || SUBSCRIBER.getOpaque(this) == null || (boolean) CANCELLED.getOpaque(this)) {
+    public int push(long max) {
+        if (max == 0 || TERMINAL.getOpaque(this) == null || (boolean) CANCELLED.getOpaque(this)) {
             return 0;
         }
 
@@ -61,7 +58,7 @@ public class DirectOutputFlux implements Publisher<AbstractFrame>, Subscription 
 
         int limit = (int) Math.min(max, currentDemand);
 
-        int drain = this.buffer.drain(this::drainInternal, limit);
+        int drain = this.buffer.drain(this::pushInternal, limit);
 
         if (!unlimited) {
             this.demand.addAndGet(-drain);
@@ -69,12 +66,11 @@ public class DirectOutputFlux implements Publisher<AbstractFrame>, Subscription 
         return drain;
     }
 
-    private void drainInternal(AbstractFrame frame) {
+    private void pushInternal(AbstractFrame frame) {
         if (this.applyToEach != null) {
             this.applyToEach.accept(frame);
         }
-        Subscriber<? super AbstractFrame> subscriber = (Subscriber<? super AbstractFrame>) SUBSCRIBER.getOpaque(
-                this);
+        ScaffoldingTerminal subscriber = (ScaffoldingTerminal) TERMINAL.getOpaque(this);
         if (subscriber != null) {
             subscriber.onNext(frame);
         }
@@ -85,19 +81,18 @@ public class DirectOutputFlux implements Publisher<AbstractFrame>, Subscription 
     }
 
     @Override
-    public void subscribe(Subscriber<? super AbstractFrame> subscriber) {
-        if (!CANCELLED.compareAndSet(this, true, false) && !SUBSCRIBER.compareAndSet(this, null,
-                subscriber)) {
-            subscriber.onError(new IllegalAccessException("This class already has a subscriber"));
+    public void addDownstream(ScaffoldingTerminal terminal) {
+        if (!CANCELLED.compareAndSet(this, true, false) && !TERMINAL.compareAndSet(this, null,
+                terminal)) {
+            terminal.onError(new IllegalAccessException("This class already has a terminal"));
             return;
         }
-        Subscriber<? super AbstractFrame> observed = (Subscriber<? super AbstractFrame>) SUBSCRIBER.getOpaque(
-                this);
-        if (!SUBSCRIBER.compareAndSet(this, observed, subscriber)) {
-            subscriber.onError(new IllegalAccessException("This class already has a subscriber"));
+        ScaffoldingTerminal observed = (ScaffoldingTerminal) TERMINAL.getOpaque(this);
+        if (!TERMINAL.compareAndSet(this, observed, terminal)) {
+            terminal.onError(new IllegalAccessException("This class already has a terminal"));
             return;
         }
-        subscriber.onSubscribe(this);
+        terminal.addUpstream(this);
     }
 
     @Override
@@ -118,6 +113,6 @@ public class DirectOutputFlux implements Publisher<AbstractFrame>, Subscription 
     @Override
     public void cancel() {
         CANCELLED.setVolatile(this, true);
-        SUBSCRIBER.setVolatile(this, null);
+        TERMINAL.setVolatile(this, null);
     }
 }

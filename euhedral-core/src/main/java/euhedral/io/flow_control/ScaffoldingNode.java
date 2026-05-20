@@ -5,6 +5,8 @@ import static euhedral.io.utils.MathFunctions.unsignedMultiplyHigh;
 import euhedral.atomics.PaddedAtomicLong;
 import euhedral.io.flow_control.UpstreamQueue.UpstreamHandle;
 import euhedral.io.frames.AbstractFrame;
+import euhedral.io.interfaces.RecursiveScaffolding;
+import euhedral.io.interfaces.ScaffoldingOrigin;
 import euhedral.io.utils.DrainBuffer;
 import euhedral.queues.PartitionedMpscArrayQueue;
 import java.lang.invoke.MethodHandles;
@@ -12,21 +14,18 @@ import java.lang.invoke.VarHandle;
 import java.util.BitSet;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.jspecify.annotations.NonNull;
-import org.reactivestreams.Publisher;
-import org.reactivestreams.Subscriber;
-import org.reactivestreams.Subscription;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 @SuppressWarnings("unused")
-public class FluxNode extends FluxEdge implements AutoCloseable {
+public class ScaffoldingNode extends ScaffoldingEdge implements AutoCloseable {
 
     protected static final VarHandle ROUTING_STATE;
 
     static {
         try {
             ROUTING_STATE = MethodHandles.lookup()
-                    .findVarHandle(FluxNode.class, "routingState", RoutingState.class);
+                    .findVarHandle(ScaffoldingNode.class, "routingState", RoutingState.class);
         } catch (Exception e) {
             throw new ExceptionInInitializerError(e);
         }
@@ -38,23 +37,23 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
     protected final String name;
     protected final PartitionedMpscArrayQueue<AbstractFrame> parallelQueue;
 
-    protected final FluxEdge[] downstreams;
+    protected final ScaffoldingEdge[] downstreams;
     protected final RoutingFunction routingFunction;
     private final PaddedAtomicLong wip;
 
     protected RoutingState routingState = new RoutingState(new int[0]);
 
-    public FluxNode(String name, int downstreamCount) {
+    public ScaffoldingNode(String name, int downstreamCount) {
         this(name, downstreamCount, RoutingFunction.DEFAULT, false);
     }
 
-    public FluxNode(String name, int downstreamCount, RoutingFunction routingFunction,
+    public ScaffoldingNode(String name, int downstreamCount, RoutingFunction routingFunction,
             boolean terminal) {
         super(new AtomicBoolean(false));
         this.terminal = terminal;
         this.logger = LoggerFactory.getLogger(name);
         this.name = name;
-        this.downstreams = new FluxEdge[downstreamCount];
+        this.downstreams = new ScaffoldingEdge[downstreamCount];
         this.routingFunction = routingFunction;
         this.sibling = this;
         if (!terminal) {
@@ -66,8 +65,9 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
         }
     }
 
-    public void ingest(Publisher<? extends AbstractFrame> flux) {
-        flux.subscribe(new UpstreamInterceptor());
+    public void ingest(ScaffoldingOrigin stream) {
+        UpstreamInterceptor interceptor = new UpstreamInterceptor();
+        stream.addDownstream(interceptor);
     }
 
     public AtomicBoolean getDrainFlag() {
@@ -75,14 +75,14 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
     }
 
     public boolean setDownstreamMapping(BitSet active,
-            FluxEdge[] handles) {
+            ScaffoldingEdge[] handles) {
         if (!this.drain.get()) {
             return false;
         }
 
-        FluxEdge first = null;
-        FluxEdge prev = null;
-        FluxEdge curr = null;
+        ScaffoldingEdge first = null;
+        ScaffoldingEdge prev = null;
+        ScaffoldingEdge curr = null;
         int mIdx = 0;
         int[] mappings = new int[active.cardinality()];
         for (int i = 0; i < this.downstreams.length; i++) {
@@ -130,21 +130,18 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
     }
 
     @Override
-    public void onSubscribe(Subscription subscription) {
-        if (subscription instanceof FluxEdge dh) {
-            super.onSubscribe(dh);
-            dh.subscribe(this);
+    public void addUpstream(RecursiveScaffolding scaffolding) {
+        if (scaffolding instanceof ScaffoldingEdge dh) {
+            super.addUpstream(dh);
+            dh.addDownstream(this);
             for (var down : this.downstreams) {
                 if (down != null) {
-                    FluxEdge parent = (FluxEdge) PARENT.getOpaque(this);
+                    ScaffoldingEdge parent = (ScaffoldingEdge) PARENT.getOpaque(this);
                     down.setParent(parent);
                 }
             }
-        } else if (subscription instanceof UpstreamInterceptor interceptor) {
-            super.onSubscribe(interceptor);
-        } else {
-            UpstreamInterceptor interceptor = new UpstreamInterceptor();
-            interceptor.onSubscribe(subscription);
+        } else if (scaffolding instanceof UpstreamHandle interceptor) {
+            super.addUpstream(interceptor);
         }
     }
 
@@ -175,7 +172,7 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
             }
         }
 
-        FluxEdge parent = (FluxEdge) PARENT.getOpaque(this);
+        ScaffoldingEdge parent = (ScaffoldingEdge) PARENT.getOpaque(this);
         if (parent != null) {
             parent.pull(buffer, demand);
         }
@@ -188,11 +185,6 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
                 down.onError(throwable);
             }
         }
-    }
-
-    @Override
-    public void onComplete() {
-
     }
 
     @Override
@@ -229,7 +221,7 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
         }
     }
 
-    public class UpstreamInterceptor extends UpstreamHandle implements Subscriber<AbstractFrame> {
+    public class UpstreamInterceptor extends UpstreamHandle {
 
         private static long addCap(long num1, long num2) {
             if (num1 < 0 || num2 < 0) {
@@ -241,13 +233,13 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
         public final AtomicBoolean complete = new AtomicBoolean(false);
         private final PaddedAtomicLong wip = new PaddedAtomicLong(0);
         private final PaddedAtomicLong demand = new PaddedAtomicLong(0);
-        public Subscription upstream;
+        public ScaffoldingOrigin upstream;
         private long count = 0;
 
         @Override
-        public void onSubscribe(@NonNull Subscription subscription) {
-            this.upstream = subscription;
-            FluxNode.this.onSubscribe(this);
+        public void addUpstream(@NonNull ScaffoldingOrigin upstream) {
+            this.upstream = upstream;
+            ScaffoldingNode.this.addUpstream(this);
         }
 
         @Override
@@ -259,23 +251,23 @@ public class FluxNode extends FluxEdge implements AutoCloseable {
             }
 
             if (!frame.isOrdered()) {
-                if (FluxNode.this.parallelQueue != null && FluxNode.this.parallelQueue.offer(
+                if (ScaffoldingNode.this.parallelQueue != null && ScaffoldingNode.this.parallelQueue.offer(
                         frame)) {
                     return;
                 }
             }
 
-            FluxNode.this.onNext(frame);
+            ScaffoldingNode.this.onNext(frame);
         }
 
         @Override
         public void pull(DrainBuffer buffer, long demand) {
-            FluxNode.this.pull(buffer, demand);
+            ScaffoldingNode.this.pull(buffer, demand);
         }
 
         @Override
         public void request(long num) {
-            if (num <= 0 || FluxNode.this.drain.getOpaque() || this.complete.getOpaque()) {
+            if (num <= 0 || ScaffoldingNode.this.drain.getOpaque() || this.complete.getOpaque()) {
                 return;
             }
 

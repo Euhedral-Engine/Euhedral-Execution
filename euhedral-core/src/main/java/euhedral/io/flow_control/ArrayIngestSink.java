@@ -3,12 +3,12 @@ package euhedral.io.flow_control;
 import euhedral.atomics.PaddedAtomicLong;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.interfaces.IngestSink;
+import euhedral.io.interfaces.ScaffoldingOrigin;
+import euhedral.io.interfaces.ScaffoldingTerminal;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
-import org.reactivestreams.Publisher;
-import org.reactivestreams.Subscriber;
 
-@SuppressWarnings({"unchecked", "unused"})
+@SuppressWarnings("unused")
 public class ArrayIngestSink implements IngestSink {
 
     private final Delegate delegate;
@@ -17,7 +17,7 @@ public class ArrayIngestSink implements IngestSink {
         this.delegate = new Delegate(frames);
     }
 
-    public Publisher<AbstractFrame> getDelegate() {
+    public ScaffoldingOrigin getDelegate() {
         return this.delegate;
     }
 
@@ -35,12 +35,12 @@ public class ArrayIngestSink implements IngestSink {
 
     private static class Delegate implements IngestSink.Delegate {
 
-        private static final VarHandle SUBSCRIBER;
+        private static final VarHandle TERMINAL;
 
         static {
             try {
-                SUBSCRIBER = MethodHandles.lookup()
-                        .findVarHandle(Delegate.class, "subscriber", Subscriber.class);
+                TERMINAL = MethodHandles.lookup()
+                        .findVarHandle(Delegate.class, "terminal", ScaffoldingTerminal.class);
             } catch (Throwable t) {
                 throw new ExceptionInInitializerError(t);
             }
@@ -56,7 +56,7 @@ public class ArrayIngestSink implements IngestSink {
         private final PaddedAtomicLong demand = new PaddedAtomicLong(0);
         private final AbstractFrame[] array;
         int start;
-        private Subscriber<? super AbstractFrame> subscriber;
+        private ScaffoldingTerminal terminal;
 
         public Delegate(AbstractFrame[] array) {
             this.array = array;
@@ -64,15 +64,15 @@ public class ArrayIngestSink implements IngestSink {
 
         @Override
         public void request(long demand) {
-            var sub = (Subscriber<? super AbstractFrame>) SUBSCRIBER.getOpaque(this);
-            if (sub == null || demand <= 0 || start >= array.length) {
+            var terminal = (ScaffoldingTerminal) TERMINAL.getOpaque(this);
+            if (terminal == null || demand <= 0 || start >= array.length) {
                 return;
             }
             demand = this.demand.accumulateAndGet(demand, Delegate::accumulate);
             int batch = (int) Math.min(demand, Integer.MAX_VALUE);
 
             while (start < batch && start < array.length) {
-                sub.onNext(array[start++]);
+                terminal.onNext(array[start++]);
             }
             VarHandle.releaseFence();
             if (start >= array.length) {
@@ -86,20 +86,19 @@ public class ArrayIngestSink implements IngestSink {
         }
 
         @Override
-        public void subscribe(Subscriber<? super AbstractFrame> s) {
-            if (SUBSCRIBER.compareAndSet(this, null, s)) {
-                s.onSubscribe(this);
-            } else {
-                s.onError(new IllegalStateException("Already Subscribed"));
+        public void addDownstream(ScaffoldingTerminal terminal) {
+            if (!TERMINAL.compareAndSet(this, null, terminal)) {
+                terminal.onError(new IllegalStateException("Already Subscribed"));
             }
+            terminal.addUpstream(this);
         }
 
         @Override
         public void close() {
-            var sub = (Subscriber<? super AbstractFrame>) SUBSCRIBER.getAndSet(this, null);
+            var t = (ScaffoldingTerminal) TERMINAL.getAndSet(this, null);
             this.demand.lazySet(0);
-            if (sub != null) {
-                sub.onComplete();
+            if (t != null) {
+                t.onComplete();
             }
         }
     }

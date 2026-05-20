@@ -3,6 +3,8 @@ package euhedral.io.flow_control;
 import euhedral.atomics.PaddedAtomicLong;
 import euhedral.io.flow_control.UpstreamQueue.UpstreamHandle;
 import euhedral.io.frames.AbstractFrame;
+import euhedral.io.interfaces.RecursiveScaffolding;
+import euhedral.io.interfaces.ScaffoldingTerminal;
 import euhedral.io.utils.DrainBuffer;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
@@ -15,13 +17,9 @@ import java.util.concurrent.locks.LockSupport;
 import lombok.Getter;
 import lombok.Setter;
 import org.jctools.maps.NonBlockingHashMapLong;
-import org.reactivestreams.Publisher;
-import org.reactivestreams.Subscriber;
-import org.reactivestreams.Subscription;
 
-@SuppressWarnings({"unchecked", "unused"})
-public class FluxEdge extends UpstreamHandle implements Publisher<AbstractFrame>,
-        Subscriber<AbstractFrame>, AutoCloseable {
+@SuppressWarnings("unused")
+public class ScaffoldingEdge extends UpstreamHandle implements AutoCloseable {
 
     protected static final VarHandle ADDING_UPSTREAM;
     protected static final VarHandle CLOSED;
@@ -32,13 +30,15 @@ public class FluxEdge extends UpstreamHandle implements Publisher<AbstractFrame>
     static {
         try {
             ADDING_UPSTREAM = MethodHandles.lookup()
-                    .findVarHandle(FluxEdge.class, "addingUpstream", boolean.class);
-            CLOSED = MethodHandles.lookup().findVarHandle(FluxEdge.class, "closed", boolean.class);
+                    .findVarHandle(ScaffoldingEdge.class, "addingUpstream", boolean.class);
+            CLOSED = MethodHandles.lookup()
+                    .findVarHandle(ScaffoldingEdge.class, "closed", boolean.class);
             DOWNSTREAM = MethodHandles.lookup()
-                    .findVarHandle(FluxEdge.class, "downstream", Subscriber.class);
-            PARENT = MethodHandles.lookup().findVarHandle(FluxEdge.class, "parent", FluxEdge.class);
+                    .findVarHandle(ScaffoldingEdge.class, "downstream", ScaffoldingTerminal.class);
+            PARENT = MethodHandles.lookup()
+                    .findVarHandle(ScaffoldingEdge.class, "parent", ScaffoldingEdge.class);
             UP_QUEUES = MethodHandles.lookup()
-                    .findVarHandle(FluxEdge.class, "upstreamQueues", Collection.class);
+                    .findVarHandle(ScaffoldingEdge.class, "upstreamQueues", Collection.class);
         } catch (Exception e) {
             throw new ExceptionInInitializerError(e);
         }
@@ -51,17 +51,17 @@ public class FluxEdge extends UpstreamHandle implements Publisher<AbstractFrame>
     private final WeakHashMap<UpstreamHandle, Boolean> upstreamHandles = new WeakHashMap<>();
     private final PaddedAtomicLong upstreamCount = new PaddedAtomicLong(0);
     private final AtomicLong threadCount = new AtomicLong(0);
-    public Subscriber<? super AbstractFrame> downstream = null;
-    protected FluxEdge parent = null;
+    public ScaffoldingTerminal downstream = null;
+    protected ScaffoldingEdge parent = null;
     @Getter
     @Setter
-    protected volatile FluxEdge sibling = null;
+    protected volatile ScaffoldingEdge sibling = null;
 
     private Collection<UpstreamQueue> upstreamQueues = aggregators.values();
     private boolean addingUpstream = false;
     private boolean closed = false;
 
-    public FluxEdge(AtomicBoolean drain) {
+    public ScaffoldingEdge(AtomicBoolean drain) {
         this.drain = drain;
     }
 
@@ -70,7 +70,7 @@ public class FluxEdge extends UpstreamHandle implements Publisher<AbstractFrame>
     }
 
     public UpstreamQueue getThreadUpstreamQueue() {
-        FluxEdge parent = (FluxEdge) PARENT.getOpaque(this);
+        ScaffoldingEdge parent = (ScaffoldingEdge) PARENT.getOpaque(this);
         if (parent != null) {
             return parent.getThreadUpstreamQueue();
         }
@@ -103,7 +103,7 @@ public class FluxEdge extends UpstreamHandle implements Publisher<AbstractFrame>
             return;
         }
 
-        FluxEdge parent = (FluxEdge) PARENT.getOpaque(this);
+        ScaffoldingEdge parent = (ScaffoldingEdge) PARENT.getOpaque(this);
         if (parent != null) {
             parent.removeThread(thread);
             return;
@@ -122,7 +122,7 @@ public class FluxEdge extends UpstreamHandle implements Publisher<AbstractFrame>
     }
 
     public long getUpstreamCount() {
-        FluxEdge parent = (FluxEdge) PARENT.getOpaque(this);
+        ScaffoldingEdge parent = (ScaffoldingEdge) PARENT.getOpaque(this);
         if (parent != null) {
             return parent.getUpstreamCount();
         }
@@ -138,7 +138,7 @@ public class FluxEdge extends UpstreamHandle implements Publisher<AbstractFrame>
             return 1;
         }
         int count = 1;
-        FluxEdge sib = this.sibling;
+        ScaffoldingEdge sib = this.sibling;
         while (sib != this) {
             count++;
             sib = sib.sibling;
@@ -146,7 +146,7 @@ public class FluxEdge extends UpstreamHandle implements Publisher<AbstractFrame>
         return count;
     }
 
-    public void setParent(FluxEdge parent) {
+    public void setParent(ScaffoldingEdge parent) {
         if (parent == null) {
             PARENT.setRelease(this, null);
             return;
@@ -154,6 +154,10 @@ public class FluxEdge extends UpstreamHandle implements Publisher<AbstractFrame>
 
         acquireLock();
         PARENT.setRelease(this, parent);
+        ScaffoldingTerminal down = (ScaffoldingTerminal) DOWNSTREAM.getOpaque(this);
+        if (down instanceof ScaffoldingEdge rs) {
+            rs.setParent(parent);
+        }
         transferToParent();
         parent.transferToParent();
         releaseLock();
@@ -161,7 +165,7 @@ public class FluxEdge extends UpstreamHandle implements Publisher<AbstractFrame>
 
     @Override
     public void onNext(AbstractFrame frame) {
-        var downstream = (Subscriber<? super AbstractFrame>) DOWNSTREAM.getOpaque(this);
+        var downstream = (ScaffoldingTerminal) DOWNSTREAM.getOpaque(this);
         if (downstream != null) {
             downstream.onNext(frame);
         }
@@ -176,7 +180,7 @@ public class FluxEdge extends UpstreamHandle implements Publisher<AbstractFrame>
             return;
         }
 
-        FluxEdge parent = (FluxEdge) PARENT.getOpaque(this);
+        ScaffoldingEdge parent = (ScaffoldingEdge) PARENT.getOpaque(this);
         if (parent != null) {
             parent.request(num);
             return;
@@ -192,7 +196,7 @@ public class FluxEdge extends UpstreamHandle implements Publisher<AbstractFrame>
             return;
         }
 
-        FluxEdge parent = (FluxEdge) PARENT.getOpaque(this);
+        ScaffoldingEdge parent = (ScaffoldingEdge) PARENT.getOpaque(this);
         if (parent != null) {
             parent.pull(buffer, demand);
             return;
@@ -201,8 +205,8 @@ public class FluxEdge extends UpstreamHandle implements Publisher<AbstractFrame>
         queue.pull(buffer, demand);
     }
 
-    private void transferToParent() {
-        FluxEdge parent = (FluxEdge) PARENT.getOpaque(this);
+    protected void transferToParent() {
+        ScaffoldingEdge parent = (ScaffoldingEdge) PARENT.getOpaque(this);
         if (parent == null) {
             return;
         }
@@ -220,17 +224,12 @@ public class FluxEdge extends UpstreamHandle implements Publisher<AbstractFrame>
     }
 
     @Override
-    public void cancel() {
-        close();
-    }
-
-    @Override
     public void close() {
         if (!CLOSED.compareAndSet(this, false, true)) {
             return;
         }
 
-        var downstream = (Subscriber<? super AbstractFrame>) DOWNSTREAM.getAcquire(this);
+        var downstream = (ScaffoldingTerminal) DOWNSTREAM.getAcquire(this);
         if (downstream != null) {
             downstream.onComplete();
             DOWNSTREAM.setRelease(this, null);
@@ -242,50 +241,16 @@ public class FluxEdge extends UpstreamHandle implements Publisher<AbstractFrame>
     }
 
     @Override
-    public void subscribe(Subscriber<? super AbstractFrame> subscriber) {
-        boolean isEdge = subscriber instanceof FluxEdge;
-
-        var witness =
-                (Subscriber<? super AbstractFrame>) DOWNSTREAM.compareAndExchange(this, null,
-                        subscriber);
-
-        if (witness == null) {
-            if (isEdge) {
-                ((FluxEdge) subscriber).setParent(this);
-            } else {
-                subscriber.onSubscribe(this);
-            }
-            return;
-        }
-
-        if (witness instanceof FluxEdge existingEdge) {
-            existingEdge.subscribe(subscriber);
-        } else {
-            subscriber.onError(
-                    new IllegalStateException("Already subscribed by a terminal subscriber"));
-        }
-    }
-
-    @Override
-    public void onSubscribe(Subscription subscription) {
-        if (subscription instanceof FluxEdge dh) {
+    public void addUpstream(RecursiveScaffolding up) {
+        if (up instanceof ScaffoldingEdge dh) {
             setParent(dh);
-        } else if (subscription instanceof UpstreamHandle upstream) {
-            if ((boolean) CLOSED.getOpaque(this)) {
-                subscription.cancel();
-                return;
-            }
+        } else if (up instanceof UpstreamHandle upstream) {
             acquireLock();
 
-            FluxEdge parent = (FluxEdge) PARENT.getOpaque(this);
+            ScaffoldingEdge parent = (ScaffoldingEdge) PARENT.getOpaque(this);
             if (parent != null) {
                 releaseLock();
-                parent.onSubscribe(upstream);
-                return;
-            }
-            if (this.threadCount.get() <= 0) {
-                releaseLock();
-                subscription.cancel();
+                parent.addUpstream(upstream);
                 return;
             }
 
@@ -318,9 +283,46 @@ public class FluxEdge extends UpstreamHandle implements Publisher<AbstractFrame>
             } finally {
                 releaseLock();
             }
-        } else {
-            subscription.cancel();
         }
+    }
+
+    @Override
+    public void addDownstream(RecursiveScaffolding downstream) {
+        boolean isEdge = downstream instanceof ScaffoldingEdge;
+
+        var witness =
+                (ScaffoldingTerminal) DOWNSTREAM.compareAndExchange(this, null,
+                        downstream);
+
+        if (witness == null) {
+            if (isEdge) {
+                ((ScaffoldingEdge) downstream).setParent(this);
+            } else {
+                downstream.addUpstream(this);
+            }
+            return;
+        }
+
+        if (witness instanceof ScaffoldingEdge existingEdge) {
+            existingEdge.addDownstream(downstream);
+        } else {
+            downstream.onError(
+                    new IllegalStateException(
+                            "Already added as an upstream by a terminal downstream"));
+        }
+    }
+
+    public void addDownstream(ScaffoldingTerminal terminal) {
+        ScaffoldingTerminal down = (ScaffoldingTerminal) DOWNSTREAM.compareAndExchange(this, null,
+                terminal);
+        if (down == null) {
+            return;
+        }
+        if (down instanceof RecursiveScaffolding rs) {
+            rs.addDownstream(terminal);
+        }
+        terminal.onError(
+                new IllegalStateException("Already added as an upstream by a terminal downstream"));
     }
 
     private void acquireLock() {
@@ -341,21 +343,11 @@ public class FluxEdge extends UpstreamHandle implements Publisher<AbstractFrame>
         ADDING_UPSTREAM.setRelease(this, false);
     }
 
-    public boolean isClosed() {
-        return (boolean) CLOSED.getAcquire(this);
-    }
-
     @Override
     public void onError(Throwable throwable) {
-        Subscriber<? super AbstractFrame> downstream =
-                (Subscriber<? super AbstractFrame>) DOWNSTREAM.getAcquire(this);
+        ScaffoldingTerminal downstream = (ScaffoldingTerminal) DOWNSTREAM.getAcquire(this);
         if (downstream != null) {
             downstream.onError(throwable);
         }
-    }
-
-    @Override
-    public void onComplete() {
-        close();
     }
 }

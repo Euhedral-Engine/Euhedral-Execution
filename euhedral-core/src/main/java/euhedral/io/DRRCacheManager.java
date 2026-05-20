@@ -13,12 +13,14 @@ import euhedral.hardware_utils.common.SystemUtilization.CoreSnapshot;
 import euhedral.hashing.HasherApi;
 import euhedral.io.config.CloneConfig;
 import euhedral.io.config.DRRConfig;
-import euhedral.io.flow_control.FluxEdge;
-import euhedral.io.flow_control.FluxNode;
+import euhedral.io.flow_control.ScaffoldingEdge;
+import euhedral.io.flow_control.ScaffoldingNode;
 import euhedral.io.flow_control.UpstreamQueue;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.frames.DummyInitFrame;
 import euhedral.io.interfaces.CacheManager;
+import euhedral.io.interfaces.ScaffoldingOrigin;
+import euhedral.io.interfaces.ScaffoldingTerminal;
 import euhedral.io.metrics.DRRMetrics;
 import euhedral.io.utils.DrainBuffer;
 import euhedral.io.utils.FlowRecorder;
@@ -35,11 +37,8 @@ import java.util.StringJoiner;
 import java.util.concurrent.Callable;
 import org.jctools.maps.NonBlockingHashMapLong;
 import org.jspecify.annotations.NonNull;
-import org.reactivestreams.Publisher;
-import org.reactivestreams.Subscriber;
-import org.reactivestreams.Subscription;
 
-public class DRRCacheManager extends FluxNode implements CacheManager {
+public class DRRCacheManager extends ScaffoldingNode implements CacheManager {
 
     protected static final VarHandle PARTITION_LOCK =
             MethodHandles.arrayElementVarHandle(boolean[].class);
@@ -167,11 +166,11 @@ public class DRRCacheManager extends FluxNode implements CacheManager {
 
             BitSet mappings = new BitSet(partitions);
             mappings.set(0, partitions);
-            FluxEdge[] queueHandles = new FluxEdge[partitions];
+            ScaffoldingEdge[] queueHandles = new ScaffoldingEdge[partitions];
 
             for (int i = 0; i < partitions; i++) {
-                queueHandles[i] = new FluxEdge(super.drain);
-                queueHandles[i].subscribe(new PartitionSubscriber(i));
+                queueHandles[i] = new ScaffoldingEdge(super.drain);
+                queueHandles[i].addDownstream(new PartitionSubscriber(i));
             }
             setDrain(true);
             super.setDownstreamMapping(mappings, queueHandles);
@@ -199,6 +198,8 @@ public class DRRCacheManager extends FluxNode implements CacheManager {
         long totalDrain = 0;
         long totalBytesDrained = 0;
 
+        int resetThreshold = 4;
+
         long initialCount = (long) TOTAL_COUNT.getOpaque(this);
         for (int i = 0;
                 i < maxFill && cycles <= this.queueRing.partitions() && initialCount > 0; ) {
@@ -220,6 +221,7 @@ public class DRRCacheManager extends FluxNode implements CacheManager {
                 int drainCount = this.queueRing.drain(lock, drainBuffer, quota);
                 long drainedBytes = drainBuffer.drainedBytes;
 
+                cycles++;
                 if (drainCount > 0) {
                     i += drainCount;
                     totalBytesDrained += drainedBytes;
@@ -229,9 +231,9 @@ public class DRRCacheManager extends FluxNode implements CacheManager {
                     stats.lastBytesDrained = drainedBytes;
 
                     recordDrainMetrics(lock, stats, drainCount);
-                    cycles = 0;
-                } else {
-                    cycles++;
+                    if(drainCount > resetThreshold) {
+                        cycles = 0;
+                    }
                 }
 
                 this.heads[handle.cpu] = (lock + 1) & mask;
@@ -441,16 +443,16 @@ public class DRRCacheManager extends FluxNode implements CacheManager {
     }
 
     @Override
-    public boolean setDownstreamMapping(BitSet active, FluxEdge[] edges) {
+    public boolean setDownstreamMapping(BitSet active, ScaffoldingEdge[] edges) {
         return false;
     }
 
     @Override
-    public void input(Publisher<? extends AbstractFrame> frameFlux) {
-        if (frameFlux instanceof FluxEdge dh) {
-            onSubscribe(dh);
+    public void input(ScaffoldingOrigin stream) {
+        if (stream instanceof ScaffoldingEdge dh) {
+            addUpstream(dh);
         } else {
-            frameFlux.subscribe(this);
+            stream.addDownstream(this);
         }
     }
 
@@ -528,7 +530,7 @@ public class DRRCacheManager extends FluxNode implements CacheManager {
         }
     }
 
-    protected class PartitionSubscriber implements Subscriber<AbstractFrame> {
+    protected class PartitionSubscriber implements ScaffoldingTerminal {
 
         private final int idx;
         private final double smoothingFactor;
@@ -570,7 +572,7 @@ public class DRRCacheManager extends FluxNode implements CacheManager {
         }
 
         @Override
-        public void onSubscribe(Subscription subscription) {
+        public void addUpstream(ScaffoldingOrigin subscription) {
 
         }
 
