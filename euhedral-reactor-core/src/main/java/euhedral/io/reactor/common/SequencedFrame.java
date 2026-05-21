@@ -1,7 +1,7 @@
-package euhedral.io.frames;
+package euhedral.io.reactor.common;
 
+import euhedral.io.frames.AbstractFrame;
 import euhedral.io.impl.FrameManager;
-import euhedral.io.impl.FrameSequencer;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import lombok.Getter;
@@ -17,9 +17,6 @@ public class SequencedFrame<T, R> extends AbstractFrame {
     private final Function<T, R> function;
 
     @Getter
-    private int sequenceNumber;
-
-    @Getter
     @Setter
     private T payload;
 
@@ -33,13 +30,12 @@ public class SequencedFrame<T, R> extends AbstractFrame {
     @Getter
     private boolean ready = false;
 
-    public SequencedFrame(long idHash, int sequenceNumber,
+    public SequencedFrame(long idHash,
             T payload, Function<T, R> function, AtomicBoolean killSwitch, FrameSequencer<T, R> sequencer,
             FrameManager<T, SequencedFrame<T, R>> recycler) {
         super(idHash, recycler);
         this.killSwitch = killSwitch;
         this.sequencer = sequencer;
-        this.sequenceNumber = sequenceNumber;
         this.function = function;
         this.payload = payload;
     }
@@ -64,8 +60,7 @@ public class SequencedFrame<T, R> extends AbstractFrame {
         killSwitch.set(true);
     }
 
-    public void replace(int sequenceNumber, T payload) {
-        this.sequenceNumber = sequenceNumber;
+    public void replace(T payload) {
         this.payload = payload;
         this.retVal = null;
         this.ready = false;
@@ -74,6 +69,6 @@ public class SequencedFrame<T, R> extends AbstractFrame {
     @Override
     public void doFinally() {
         this.ready = true;
-        sequencer.notifyComplete(sequencerPassword);
+        sequencer.drain(sequencerPassword);
     }
 }

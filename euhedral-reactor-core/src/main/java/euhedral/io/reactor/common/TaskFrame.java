@@ -6,13 +6,12 @@ import euhedral.io.reactor.EuhedralWorker;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.LockSupport;
 import lombok.Getter;
 import reactor.core.Disposable;
 
-public class TaskFrame extends AbstractFrame implements Disposable {
+public final class TaskFrame extends AbstractFrame implements Disposable {
 
     private static final VarHandle DISPOSED;
 
@@ -25,7 +24,7 @@ public class TaskFrame extends AbstractFrame implements Disposable {
         }
     }
 
-    public static TaskFrame build(long idHash, Runnable task, EuhedralWorker sink, long delay, long period, TimeUnit unit) {
+    public static TaskFrame create(long idHash, Runnable task, EuhedralWorker sink, long delay, long period, TimeUnit unit) {
         return new TaskFrame(idHash, task, sink, delay, period, unit);
     }
 
@@ -35,13 +34,14 @@ public class TaskFrame extends AbstractFrame implements Disposable {
 
     private boolean disposed;
     private Thread thread;
-    private long seed = HasherApi.mix(ThreadLocalRandom.current().nextLong());
+    private long seed;
 
-    public TaskFrame(long idHash, Runnable task, EuhedralWorker sink, long delay, long period, TimeUnit unit) {
+    private TaskFrame(long idHash, Runnable task, EuhedralWorker sink, long delay, long period, TimeUnit unit) {
         super(idHash, null);
 
         this.task = task;
         this.periodNs = unit.toNanos(period);
+        this.seed = HasherApi.mix(idHash + 25); // What's funnier than 24?
 
         randomizeHash(this.seed++);
 

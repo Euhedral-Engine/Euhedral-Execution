@@ -95,6 +95,10 @@ public class PaddedAtomicLong extends PaddedLong {
         return (long) HANDLE.getAndAdd(this, val);
     }
 
+    public long getAndAddRelease(long val) {
+        return (long) HANDLE.getAndAddRelease(this, val);
+    }
+
     public long addAndGet(long val) {
         return (long) HANDLE.getAndAdd(this, val) + val;
     }
