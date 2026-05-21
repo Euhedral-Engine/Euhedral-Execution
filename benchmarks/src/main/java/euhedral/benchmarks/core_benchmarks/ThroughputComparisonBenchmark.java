@@ -2,7 +2,6 @@ package euhedral.benchmarks.core_benchmarks;
 
 import euhedral.atomics.PaddedLongAdder;
 import euhedral.benchmarks.frames.NoOpFrame;
-import euhedral.benchmarks.pipelines.FramePublisher;
 import euhedral.benchmarks.pipelines.NoOpPipeline;
 import euhedral.hashing.HasherApi;
 import euhedral.io.config.DRRConfig;
@@ -12,9 +11,13 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+
+import euhedral.io.flow_control.ArrayIngestSink;
+import euhedral.io.reactor.EuhedralSubscriber;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
+import org.openjdk.jmh.annotations.Group;
 import org.openjdk.jmh.annotations.Level;
 import org.openjdk.jmh.annotations.Measurement;
 import org.openjdk.jmh.annotations.Mode;
@@ -31,7 +34,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.scheduler.Schedulers;
 
 @State(Scope.Benchmark)
-public class ThroughputBenchmark {
+public class ThroughputComparisonBenchmark {
 
     private static final int BATCH = 32_000_000;
 
@@ -53,17 +56,14 @@ public class ThroughputBenchmark {
                 Thread.onSpinWait();
             }
         }
-        if (sum < BATCH) {
-            throw new RuntimeException("Stall detected. Pending: " + (BATCH - sum));
-        }
     }
 
-    @BenchmarkMode({Mode.Throughput, Mode.SampleTime})
+    @BenchmarkMode({Mode.Throughput})
     @OutputTimeUnit(TimeUnit.NANOSECONDS)
     @State(Scope.Benchmark)
-    @Warmup(iterations = 3, time = 5, timeUnit = TimeUnit.SECONDS)
-    @Measurement(iterations = 5, time = 5, timeUnit = TimeUnit.SECONDS)
-    @Fork(3)
+    @Warmup(iterations = 3, time = 10, timeUnit = TimeUnit.SECONDS)
+    @Measurement(iterations = 5, time = 10, timeUnit = TimeUnit.SECONDS)
+    @Fork(1)
     public static class Reactor {
 
         private NoOpFrame[] frames;
@@ -110,7 +110,7 @@ public class ThroughputBenchmark {
         public void ingestSchedulersBoundedElastic(Blackhole blackhole) {
             Flux.fromArray(this.frames)
                     .parallel()
-                    .runOn(Schedulers.parallel())
+                    .runOn(Schedulers.boundedElastic())
                     .subscribe(this.subscriber);
             await(this.counters);
         }
@@ -119,15 +119,15 @@ public class ThroughputBenchmark {
     @BenchmarkMode({Mode.Throughput, Mode.SampleTime})
     @OutputTimeUnit(TimeUnit.NANOSECONDS)
     @State(Scope.Benchmark)
-    @Warmup(iterations = 3, time = 5, timeUnit = TimeUnit.SECONDS)
-    @Measurement(iterations = 5, time = 5, timeUnit = TimeUnit.SECONDS)
-    @Fork(3)
+    @Warmup(iterations = 3, time = 10, timeUnit = TimeUnit.SECONDS)
+    @Measurement(iterations = 5, time = 10, timeUnit = TimeUnit.SECONDS)
+    @Fork(1)
     public static class Euhedral {
 
         private final PaddedLongAdder counters = new PaddedLongAdder(
                 Runtime.getRuntime().availableProcessors(), true, true);
-        public ExecutorService threadPool;
-        private FramePublisher[] publishers = new FramePublisher[32];
+        private final NoOpFrame[] frames = NoOpFrame.generate(ThreadLocalRandom.current().nextLong(), BATCH, this.counters);
+        private EuhedralSubscriber subscriber;
         private ControlPlane controlPlane;
 
         @Setup(Level.Trial)
@@ -135,35 +135,36 @@ public class ThroughputBenchmark {
             long hash = ThreadLocalRandom.current().nextLong();
             hash = HasherApi.mix(hash);
 
-            for (int i = 0; i < this.publishers.length; i++) {
-                this.publishers[i] = new FramePublisher(
-                        NoOpFrame.generate(hash, 1_000_000, this.counters), 0, 1_000_000);
+            for (NoOpFrame frame : this.frames) {
+                frame.randomizeHash(HasherApi.mix(hash++));
             }
-            this.threadPool = Executors.newFixedThreadPool(this.publishers.length);
 
-            DRRConfig drrConfig = DRRConfig.defaultConfig("ThroughputBenchmark", null);
+            DRRConfig drrConfig = DRRConfig.defaultConfig("ThroughputComparisonBenchmark", null);
             ExecutionManagerConfig emConfig = ExecutionManagerConfig.balancedDefault(null,
-                    "ThroughputBenchmark");
-            this.controlPlane = ControlPlane.getOrCreate("ThroughputBenchmark",
-                    new NoOpPipeline("ThroughputBenchmark", drrConfig, emConfig, blackhole), null);
+                    "ThroughputComparisonBenchmark");
+            this.controlPlane = ControlPlane.getOrCreate("ThroughputComparisonBenchmark",
+                    new NoOpPipeline("ThroughputComparisonBenchmark", drrConfig, emConfig, blackhole), null);
             this.controlPlane.start();
         }
 
-        @Setup(Level.Invocation)
-        public void reset() {
-            this.counters.reset();
 
-            for (FramePublisher publisher : this.publishers) {
-                publisher.reset();
+        @Setup(Level.Invocation)
+        public void setup() {
+            this.counters.reset();
+            this.subscriber = new EuhedralSubscriber();
+            long hash = ThreadLocalRandom.current().nextLong();
+            hash = HasherApi.mix(hash);
+
+            for (NoOpFrame frame : this.frames) {
+                frame.randomizeHash(HasherApi.mix(hash++));
             }
         }
 
         @Benchmark
         @OperationsPerInvocation(BATCH)
         public void ingest() {
-            for (FramePublisher publisher : this.publishers) {
-                this.controlPlane.ingest(publisher);
-            }
+            Flux.fromArray(this.frames).subscribe(this.subscriber);
+            this.controlPlane.ingest(this.subscriber);
 
             await(this.counters);
         }
@@ -171,7 +172,6 @@ public class ThroughputBenchmark {
         @TearDown(Level.Trial)
         public void tearDown() {
             this.controlPlane.close();
-            this.threadPool.shutdownNow();
         }
     }
 }

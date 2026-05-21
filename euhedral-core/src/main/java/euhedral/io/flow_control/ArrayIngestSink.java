@@ -21,6 +21,10 @@ public class ArrayIngestSink implements IngestSink {
         return this.delegate;
     }
 
+    public void reset() {
+        this.delegate.reset();
+    }
+
     @Override
     public void close() {
         delegate.close();
@@ -100,6 +104,13 @@ public class ArrayIngestSink implements IngestSink {
             if (t != null) {
                 t.onComplete();
             }
+        }
+
+        public void reset() {
+            TERMINAL.setRelease(this, null);
+            this.demand.setPlain(0);
+            this.start = 0;
+            VarHandle.releaseFence();
         }
     }
 }
