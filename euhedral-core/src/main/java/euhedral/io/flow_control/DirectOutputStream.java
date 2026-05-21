@@ -1,8 +1,8 @@
 package euhedral.io.flow_control;
 
 import euhedral.io.frames.AbstractFrame;
-import euhedral.io.interfaces.ScaffoldingSource;
-import euhedral.io.interfaces.ScaffoldingTerminal;
+import euhedral.io.generics.ScaffoldingSource;
+import euhedral.io.generics.ScaffoldingTerminal;
 import euhedral.queues.common.PartitionedQueue;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;

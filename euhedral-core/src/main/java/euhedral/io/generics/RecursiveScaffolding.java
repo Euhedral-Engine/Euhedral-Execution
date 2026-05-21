@@ -1,4 +1,4 @@
-package euhedral.io.interfaces;
+package euhedral.io.generics;
 
 public interface RecursiveScaffolding extends ScaffoldingSource, ScaffoldingTerminal {
 

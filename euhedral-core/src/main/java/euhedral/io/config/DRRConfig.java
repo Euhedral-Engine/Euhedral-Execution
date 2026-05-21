@@ -1,6 +1,6 @@
 package euhedral.io.config;
 
-import euhedral.io.interfaces.CloneableObject;
+import euhedral.io.generics.CloneableObject;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.jspecify.annotations.Nullable;
 

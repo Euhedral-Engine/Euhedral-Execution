@@ -1,16 +1,16 @@
 package euhedral.io.impl;
 
 import euhedral.hardware_utils.PinnedThreadExecutor;
-import euhedral.io.AbstractCloneablePipeline;
-import euhedral.io.AbstractExecutor;
+import euhedral.io.generics.AbstractCloneablePipeline;
+import euhedral.io.generics.AbstractExecutor;
 import euhedral.io.DRRCacheManager;
 import euhedral.io.ExecutionManager;
 import euhedral.io.config.CloneConfig;
 import euhedral.io.config.DRRConfig;
 import euhedral.io.config.ExecutionManagerConfig;
-import euhedral.io.interfaces.CacheManager;
-import euhedral.io.interfaces.PipelineExecutor;
-import euhedral.io.interfaces.SlotManager;
+import euhedral.io.generics.CacheManager;
+import euhedral.io.generics.PipelineExecutor;
+import euhedral.io.generics.SlotManager;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.jspecify.annotations.Nullable;
 

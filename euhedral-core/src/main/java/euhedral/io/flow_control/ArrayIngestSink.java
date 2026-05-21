@@ -2,9 +2,9 @@ package euhedral.io.flow_control;
 
 import euhedral.atomics.PaddedAtomicLong;
 import euhedral.io.frames.AbstractFrame;
-import euhedral.io.interfaces.IngestSink;
-import euhedral.io.interfaces.ScaffoldingSource;
-import euhedral.io.interfaces.ScaffoldingTerminal;
+import euhedral.io.generics.IngestSink;
+import euhedral.io.generics.ScaffoldingSource;
+import euhedral.io.generics.ScaffoldingTerminal;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 

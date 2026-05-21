@@ -12,9 +12,9 @@ import euhedral.hashing.HasherApi;
 import euhedral.io.frames.RunnableFrame;
 import euhedral.io.impl.FrameFactory;
 import euhedral.io.impl.FrameManager;
-import euhedral.io.interfaces.IngestSink;
-import euhedral.io.interfaces.ScaffoldingSource;
-import euhedral.io.interfaces.ScaffoldingTerminal;
+import euhedral.io.generics.IngestSink;
+import euhedral.io.generics.ScaffoldingSource;
+import euhedral.io.generics.ScaffoldingTerminal;
 import euhedral.queues.PartitionedUnboundedMpscArrayQueue;
 import reactor.core.Disposable;
 
