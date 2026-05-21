@@ -98,7 +98,6 @@ public abstract class AbstractFrame {
 
     /// Resets the frame to its initial state.
     public final void reset() {
-        combinedHash = idHash;
         startNs = 0;
         ingestNs = 0;
         cancelledExecution = false;

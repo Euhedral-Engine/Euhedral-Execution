@@ -113,6 +113,31 @@
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-resources-plugin</artifactId>
+        <version>3.3.1</version>
+        <executions>
+          <execution>
+            <id>merge-test-classes</id>
+            <phase>prepare-package</phase>
+            <goals>
+              <goal>copy-resources</goal>
+            </goals>
+            <configuration>
+              <outputDirectory>${project.build.outputDirectory}</outputDirectory>
+              <resources>
+                <resource>
+                  <directory>${project.build.testOutputDirectory}</directory>
+                  <includes>
+                    <include>**/*.class</include>
+                  </includes>
+                </resource>
+              </resources>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-jar-plugin</artifactId>
         <configuration>
           <archive>
@@ -124,31 +149,43 @@
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-assembly-plugin</artifactId>
+        <artifactId>maven-shade-plugin</artifactId>
+        <configuration>
+          <shadedArtifactAttached>false</shadedArtifactAttached>
+          <createDependencyReducedPom>false</createDependencyReducedPom>
+          <outputFile>${project.build.directory}/test-container.jar</outputFile>
+
+          <filters>
+            <filter>
+              <artifact>*:*</artifact>
+              <excludes>
+                <exclude>META-INF/*.SF</exclude>
+                <exclude>META-INF/*.DSA</exclude>
+                <exclude>META-INF/*.RSA</exclude>
+              </excludes>
+            </filter>
+          </filters>
+        </configuration>
         <executions>
           <execution>
-            <id>make-test-jar</id>
-            <phase>test-compile</phase>
+            <id>package-hardware-utils</id>
+            <phase>package</phase>
             <goals>
-              <goal>single</goal>
+              <goal>shade</goal>
             </goals>
             <configuration>
-              <finalName>test-container</finalName>
-              <appendAssemblyId>false</appendAssemblyId>
-              <attach>false</attach>
-
-              <descriptors>
-                <descriptor>src/test/resources/test-jar.xml</descriptor>
-              </descriptors>
-
-              <archive>
-                <manifest>
+              <transformers>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                   <mainClass>euhedral.hardware_utils.test_utils.ContainerMain</mainClass>
-                </manifest>
-                <manifestEntries>
-                  <Add-Opens>java.base/java.util</Add-Opens>
-                </manifestEntries>
-              </archive>
+                  <manifestEntries>
+                    <entry>
+                      <key>Add-Opens</key>
+                      <value>java.base/java.util</value>
+                    </entry>
+                  </manifestEntries>
+                </transformer>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+              </transformers>
             </configuration>
           </execution>
         </executions>
