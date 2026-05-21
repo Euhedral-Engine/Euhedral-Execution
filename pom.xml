@@ -43,6 +43,7 @@
     <module>euhedral-data-structures</module>
     <module>euhedral-hardware-utils</module>
     <module>euhedral-hashing</module>
+    <module>euhedral-reactor-core</module>
   </modules>
 
   <repositories>
