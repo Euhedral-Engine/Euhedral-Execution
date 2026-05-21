@@ -39,7 +39,7 @@ public class EuhedralWorker implements IngestSink, Worker {
     @Override
     public @NonNull Disposable schedule(@NonNull Runnable task) {
         Objects.requireNonNull(task);
-        return TaskFrame.build(this.idHash, task, this, 0, 0, TimeUnit.NANOSECONDS);
+        return TaskFrame.create(this.idHash, task, this, 0, 0, TimeUnit.NANOSECONDS);
     }
 
     @Override
@@ -53,7 +53,7 @@ public class EuhedralWorker implements IngestSink, Worker {
     public @NonNull Disposable schedulePeriodically(@NonNull Runnable task, long delay, long period, @NonNull TimeUnit unit) {
         Objects.requireNonNull(task);
         Objects.requireNonNull(unit);
-        return TaskFrame.build(this.idHash, task, this, delay, period, unit);
+        return TaskFrame.create(this.idHash, task, this, delay, period, unit);
     }
 
     @Override

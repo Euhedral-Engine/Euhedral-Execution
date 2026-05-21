@@ -1,9 +1,12 @@
 package euhedral.io.reactor;
 
+import euhedral.atomics.PaddedAtomicLong;
 import euhedral.io.control_plane.ControlPlane;
 import euhedral.io.impl.DefaultCloneablePipeline;
+import euhedral.io.reactor.common.EuhedralSubscriber;
 import euhedral.io.utils.MathFunctions;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.util.Objects;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -14,11 +17,13 @@ import reactor.core.Disposable;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Scheduler;
 
-@SuppressWarnings("resource")
+@SuppressWarnings({"resource", "unused"})
 public class EuhedralScheduler implements Scheduler {
 
     private static final AtomicReference<EuhedralScheduler> INSTANCE = new AtomicReference<>();
     private static final AtomicBoolean CONSTRUCTING = new AtomicBoolean(false);
+    private static final PaddedAtomicLong SEED = new PaddedAtomicLong(ThreadLocalRandom.current()
+            .nextLong());
 
     public static @Nullable EuhedralScheduler get() {
         return INSTANCE.getOpaque();
@@ -54,13 +59,35 @@ public class EuhedralScheduler implements Scheduler {
     private final ControlPlane controlPlane;
     private final EuhedralWorker[] sinks;
 
-    public EuhedralScheduler(ControlPlane controlPlane) {
+    private EuhedralScheduler(ControlPlane controlPlane) {
         this.controlPlane = controlPlane;
         this.sinks = new EuhedralWorker[Runtime.getRuntime().availableProcessors()];
         for (int i = 0; i < this.sinks.length; i++) {
             this.sinks[i] = EuhedralWorker.spawn(8_096, 2);
             controlPlane.ingest(this.sinks[i]);
         }
+    }
+
+    /// This method injects a Subscriber handle into the Euhedral ControlPlane. The subscriber must
+    /// have a subscription before this method is called. This is equivalent to calling
+    /// `.publishOn()`
+    ///
+    /// This is the most efficient way to use this scheduler. [EuhedralOperator] automatically
+    /// invokes this for you.
+    ///
+    /// Example Usage:
+    /// ```java
+    /// EuhedralSubscriber subscriber = new EuhedralSubscriber();
+    /// flux.subscribe(subscriber);
+    /// scheduler.ingest(subscriber);
+    /// ```
+    public void ingest(@NonNull EuhedralSubscriber subscriber) {
+        Objects.requireNonNull(subscriber);
+        if (subscriber.hasSubscription()) {
+            this.controlPlane.ingest(subscriber);
+        }
+        throw new IllegalStateException(
+                "The subscriber must have a subscription before calling ingest");
     }
 
     @Override
@@ -118,7 +145,7 @@ public class EuhedralScheduler implements Scheduler {
     }
 
     private EuhedralWorker getSink() {
-        long rand = ThreadLocalRandom.current().nextLong();
+        long rand = SEED.getAndAddRelease(1);
         int idx = (int) MathFunctions.unsignedMultiplyHigh(rand, this.sinks.length);
         return this.sinks[idx];
     }

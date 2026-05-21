@@ -6,8 +6,6 @@ import euhedral.queues.PartitionedMpscArrayQueue;
 import euhedral.queues.PartitionedUnboundedMpscArrayQueue;
 import euhedral.queues.common.PartitionedQueue;
 import java.util.Arrays;
-import java.util.concurrent.ThreadLocalRandom;
-
 import lombok.Getter;
 import lombok.Setter;
 import org.jspecify.annotations.NonNull;
@@ -36,7 +34,7 @@ public class FrameManager<DATA, FRAME extends AbstractFrame> implements AutoClos
     @Getter
     private long totalRecycled = 0;
 
-    private long seed = HasherApi.mix(ThreadLocalRandom.current().nextLong());
+    private long seed;
     private int idx = 0;
 
     public FrameManager(int chunkSize, int pooledChunks,
@@ -55,6 +53,7 @@ public class FrameManager<DATA, FRAME extends AbstractFrame> implements AutoClos
 
         this.recycleQueue = new PartitionedMpscArrayQueue<>(actual);
         this.password = password;
+        this.seed = HasherApi.combine(this.password, this.password + HasherApi.BASE_SEED);
         this.buffer = new AbstractFrame[Math.max(actual, 256)];
     }
 

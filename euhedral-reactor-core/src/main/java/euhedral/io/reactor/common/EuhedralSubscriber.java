@@ -27,6 +27,10 @@ public final class EuhedralSubscriber implements Subscriber<AbstractFrame>, Scaf
     private Subscription subscription;
     private ScaffoldingTerminal terminal;
 
+    public boolean hasSubscription() {
+        return SUBSCRIBER.getOpaque(this) != null;
+    }
+
     @Override
     public void onSubscribe(Subscription s) {
         if(!SUBSCRIBER.compareAndSet(this, null, s)) {
