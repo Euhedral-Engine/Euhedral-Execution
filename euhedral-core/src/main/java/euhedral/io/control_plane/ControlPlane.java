@@ -87,6 +87,7 @@ public class ControlPlane implements AutoCloseable {
     protected final Thread shutdownHook;
 
     protected final AtomicBoolean started = new AtomicBoolean(false);
+    protected final AtomicBoolean ready = new AtomicBoolean(false);
     protected final AtomicBoolean primed = new AtomicBoolean(false);
     protected final AtomicBoolean rebalancing = new AtomicBoolean(false);
     protected final AtomicReference<ScaffoldingNode> ingestController;
@@ -146,6 +147,7 @@ public class ControlPlane implements AutoCloseable {
             while (this.rebalancing.get() || !this.ready()) {
                 LockSupport.parkNanos(1_000L);
             }
+            this.ready.setRelease(true);
         }
     }
 
@@ -337,14 +339,15 @@ public class ControlPlane implements AutoCloseable {
     }
 
     public void ingest(@NonNull ScaffoldingSource stream) {
+        Objects.requireNonNull(stream);
         if (this.closed.getOpaque()) {
             throw new RuntimeException("Could not ingest from an upstream publisher. The ControlPlane is permanently closed.");
         }
         if(!this.started.getOpaque()) {
-            throw new RuntimeException("Could not ingest from an upstream publisher. The ControlPlane is not started.");
+            start();
         }
-        if(stream == null) {
-            throw new NullPointerException("The ingestSink is null");
+        while(!this.ready.getOpaque()) {
+            LockSupport.parkNanos(1_000);
         }
 
         ScaffoldingNode controller = this.ingestController.get();
