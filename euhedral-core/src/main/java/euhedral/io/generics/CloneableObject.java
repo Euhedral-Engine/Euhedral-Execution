@@ -1,4 +1,4 @@
-package euhedral.io.interfaces;
+package euhedral.io.generics;
 
 import euhedral.hardware_utils.PinnedThreadExecutor;
 import euhedral.hardware_utils.common.SystemUtilization.CoreSnapshot;
@@ -7,7 +7,7 @@ import euhedral.io.flow_control.BufferedBridge;
 
 /// ## Base interface for everything below the [`ControlPlaneShard`][euhedral.io.control_plane.ControlPlaneShard]
 ///
-/// Method Call Sequence if Using [`AbstractCloneablePipeline`][euhedral.io.AbstractCloneablePipeline]:
+/// Method Call Sequence if Using [`AbstractCloneablePipeline`][AbstractCloneablePipeline]:
 /// - clone()
 /// - firstTouch()
 /// - start()

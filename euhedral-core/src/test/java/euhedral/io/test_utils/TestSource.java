@@ -1,8 +1,8 @@
 package euhedral.io.test_utils;
 
 import euhedral.atomics.PaddedLongAdder;
-import euhedral.io.interfaces.ScaffoldingSource;
-import euhedral.io.interfaces.ScaffoldingTerminal;
+import euhedral.io.generics.ScaffoldingSource;
+import euhedral.io.generics.ScaffoldingTerminal;
 import java.util.concurrent.CountDownLatch;
 
 import lombok.Getter;

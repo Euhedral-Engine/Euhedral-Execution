@@ -1,14 +1,10 @@
-package euhedral.io;
+package euhedral.io.generics;
 
 import euhedral.hardware_utils.PinnedThreadExecutor;
 import euhedral.io.config.CloneConfig;
 import euhedral.io.flow_control.BufferedBridge;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.frames.CancelFrame;
-import euhedral.io.interfaces.CloneableObject;
-import euhedral.io.interfaces.PipelineExecutor;
-import euhedral.io.interfaces.ScaffoldingSource;
-import euhedral.io.interfaces.ScaffoldingTerminal;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

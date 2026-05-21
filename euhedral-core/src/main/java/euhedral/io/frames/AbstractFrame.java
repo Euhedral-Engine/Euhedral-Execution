@@ -2,6 +2,7 @@ package euhedral.io.frames;
 
 import euhedral.hardware_utils.SystemInfo.CpuInfo;
 import euhedral.io.control_plane.RoutingPolicy;
+import euhedral.io.generics.AbstractExecutor;
 import euhedral.io.impl.FrameManager;
 import lombok.Getter;
 import lombok.Setter;
@@ -115,7 +116,7 @@ public abstract class AbstractFrame {
     }
 
     /// Throws this class's error frame. This is used as an immediate way to stop execution of this frame.
-    /// The [`AbstractExecutor`][euhedral.io.AbstractExecutor] and [`ExecutionManager`][euhedral.io.ExecutionManager] handles this by default.
+    /// The [`AbstractExecutor`][AbstractExecutor] and [`ExecutionManager`][euhedral.io.ExecutionManager] handles this by default.
     public final void throwMeAsError() {
         throw this.cancel;
     }

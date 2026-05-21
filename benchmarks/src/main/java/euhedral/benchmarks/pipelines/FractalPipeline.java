@@ -2,7 +2,7 @@ package euhedral.benchmarks.pipelines;
 
 import euhedral.benchmarks.frames.MandelbrotPixel;
 import euhedral.hardware_utils.PinnedThreadExecutor;
-import euhedral.io.AbstractExecutor;
+import euhedral.io.generics.AbstractExecutor;
 import euhedral.io.config.CloneConfig;
 import euhedral.io.config.DRRConfig;
 import euhedral.io.config.ExecutionManagerConfig;

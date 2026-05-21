@@ -1,13 +1,13 @@
 package euhedral.io.test_utils;
 
 import euhedral.hardware_utils.PinnedThreadExecutor;
-import euhedral.io.AbstractCloneablePipeline;
-import euhedral.io.AbstractExecutor;
+import euhedral.io.generics.AbstractCloneablePipeline;
+import euhedral.io.generics.AbstractExecutor;
 import euhedral.io.config.CloneConfig;
 import euhedral.io.frames.AbstractFrame;
-import euhedral.io.interfaces.CacheManager;
-import euhedral.io.interfaces.PipelineExecutor;
-import euhedral.io.interfaces.SlotManager;
+import euhedral.io.generics.CacheManager;
+import euhedral.io.generics.PipelineExecutor;
+import euhedral.io.generics.SlotManager;
 import org.openjdk.jmh.infra.Blackhole;
 
 public class TestPipeline extends AbstractCloneablePipeline {

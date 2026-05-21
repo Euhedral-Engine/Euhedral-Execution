@@ -1,4 +1,4 @@
-package euhedral.io.interfaces;
+package euhedral.io.generics;
 
 public interface ScaffoldingSource {
     void addDownstream(ScaffoldingTerminal downstream);

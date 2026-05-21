@@ -1,8 +1,8 @@
 package euhedral.io.flow_control;
 
-import euhedral.io.interfaces.RecursiveScaffolding;
-import euhedral.io.interfaces.ScaffoldingSource;
-import euhedral.io.interfaces.ScaffoldingTerminal;
+import euhedral.io.generics.RecursiveScaffolding;
+import euhedral.io.generics.ScaffoldingSource;
+import euhedral.io.generics.ScaffoldingTerminal;
 import euhedral.io.utils.DrainBuffer;
 import euhedral.queues.PartitionedUnboundedMpscArrayQueue;
 import java.lang.invoke.MethodHandles;

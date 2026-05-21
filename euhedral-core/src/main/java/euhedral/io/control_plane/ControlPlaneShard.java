@@ -11,7 +11,7 @@ import euhedral.io.config.CloneConfig;
 import euhedral.io.flow_control.ScaffoldingEdge;
 import euhedral.io.flow_control.ScaffoldingNode;
 import euhedral.io.frames.AbstractFrame;
-import euhedral.io.interfaces.CloneableObject;
+import euhedral.io.generics.CloneableObject;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.util.BitSet;
