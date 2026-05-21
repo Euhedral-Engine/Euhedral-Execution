@@ -1,9 +1,10 @@
 package euhedral.benchmarks;
 
 import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.TreeSet;
 
 import euhedral.benchmarks.core_benchmarks.EndToEndLatencyBenchmark;
 import euhedral.benchmarks.core_benchmarks.MandelbrotBenchmark;
@@ -25,13 +26,13 @@ public class BenchRunner {
 
     public static void main(String[] args) throws Exception {
         Set<String> benchmarks =
-                Set.of("all, core-e2e-latency", "core-throughput", "core-throughput-comp", "mandelbrot");
+                new TreeSet<>(Set.of("all", "core-latency", "core-throughput", "core-throughput-comp", "mandelbrot"));
         if (args.length == 0) {
             System.out.println("Please specify a benchmark to run. Options: " + benchmarks);
             return;
         }
 
-        Set<String> tasks = new HashSet<>();
+        Set<String> tasks = new LinkedHashSet<>();
         for (String a : args) {
             String name = a.trim().toLowerCase();
             if (!benchmarks.contains(name)) {
@@ -82,7 +83,7 @@ public class BenchRunner {
                 }
                 case "core-throughput" -> benchmark = TrueThroughputBenchmark.class;
                 case "core-throughput-comp" -> benchmark = ThroughputComparisonBenchmark.class;
-                case "core-e2e-latency" -> benchmark = EndToEndLatencyBenchmark.class;
+                case "core-latency" -> benchmark = EndToEndLatencyBenchmark.class;
                 default -> throw new IllegalArgumentException("Unknown benchmark: " + task);
             }
 
