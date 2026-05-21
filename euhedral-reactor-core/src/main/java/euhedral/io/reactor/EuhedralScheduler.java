@@ -1,41 +1,84 @@
 package euhedral.io.reactor;
 
+import euhedral.io.control_plane.ControlPlane;
+import euhedral.io.impl.DefaultCloneablePipeline;
+import euhedral.io.utils.MathFunctions;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-
-import euhedral.io.reactor.common.TaskIngestSink;
-import euhedral.io.utils.MathFunctions;
+import java.util.concurrent.atomic.AtomicReference;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import reactor.core.Disposable;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Scheduler;
 
 @SuppressWarnings("resource")
 public class EuhedralScheduler implements Scheduler {
-    private final AtomicBoolean disposed = new AtomicBoolean(false);
-    private final TaskIngestSink[] sinks;
 
-    public EuhedralScheduler() {
-        this.sinks = new TaskIngestSink[Runtime.getRuntime().availableProcessors()];
+    private static final AtomicReference<EuhedralScheduler> INSTANCE = new AtomicReference<>();
+    private static final AtomicBoolean CONSTRUCTING = new AtomicBoolean(false);
+
+    public static @Nullable EuhedralScheduler get() {
+        return INSTANCE.getOpaque();
+    }
+
+    public static @NonNull EuhedralScheduler getOrCreate() {
+        return getOrCreate("EuhedralScheduler", null, null);
+    }
+
+    public static @NonNull EuhedralScheduler getOrCreate(String name, @Nullable String metricPrefix,
+            @Nullable MeterRegistry meterRegistry) {
+        EuhedralScheduler instance = INSTANCE.getOpaque();
+        if (instance != null) {
+            return instance;
+        }
+
+        if (CONSTRUCTING.compareAndSet(false, true)) {
+            ControlPlane controlPlane = ControlPlane.getOrCreate(name,
+                    new DefaultCloneablePipeline(name + "Pipeline", metricPrefix, meterRegistry),
+                    meterRegistry);
+            instance = new EuhedralScheduler(controlPlane);
+            INSTANCE.set(instance);
+            return instance;
+        }
+
+        while ((instance = INSTANCE.getOpaque()) == null) {
+            Thread.onSpinWait();
+        }
+        return instance;
+    }
+
+    private final AtomicBoolean disposed = new AtomicBoolean(false);
+    private final ControlPlane controlPlane;
+    private final EuhedralWorker[] sinks;
+
+    public EuhedralScheduler(ControlPlane controlPlane) {
+        this.controlPlane = controlPlane;
+        this.sinks = new EuhedralWorker[Runtime.getRuntime().availableProcessors()];
         for (int i = 0; i < this.sinks.length; i++) {
-            this.sinks[i] = new TaskIngestSink(4096, 2);
+            this.sinks[i] = EuhedralWorker.spawn(8_096, 2);
+            controlPlane.ingest(this.sinks[i]);
         }
     }
 
     @Override
-    public Disposable schedule(Runnable task) {
-        return null;
+    public @NonNull Disposable schedule(@NonNull Runnable task) {
+        return getSink().schedule(task);
     }
 
     @Override
-    public Disposable schedule(Runnable task, long delay, TimeUnit unit) {
-        return getSink().submit(task, delay, 0, unit);
+    public @NonNull Disposable schedule(@NonNull Runnable task, long delay,
+            @NonNull TimeUnit unit) {
+        return getSink().schedule(task, delay, unit);
     }
 
     @Override
-    public Disposable schedulePeriodically(Runnable task, long initialDelay, long period,
-            TimeUnit unit) {
-        return getSink().submit(task, initialDelay, period, unit);
+    public @NonNull Disposable schedulePeriodically(@NonNull Runnable task,
+            long initialDelay, long period,
+            @NonNull TimeUnit unit) {
+        return getSink().schedulePeriodically(task, initialDelay, period, unit);
     }
 
     @Override
@@ -44,14 +87,16 @@ public class EuhedralScheduler implements Scheduler {
     }
 
     @Override
-    public Worker createWorker() {
-        return new EuhedralWorker(getSink());
+    public @NonNull Worker createWorker() {
+        EuhedralWorker worker = EuhedralWorker.spawn(8_096, 2);
+        this.controlPlane.ingest(worker);
+        return worker;
     }
 
     @Override
     public void dispose() {
         if (this.disposed.compareAndSet(false, true)) {
-            for(TaskIngestSink sink : sinks) {
+            for (EuhedralWorker sink : sinks) {
                 sink.close();
             }
         }
@@ -63,11 +108,8 @@ public class EuhedralScheduler implements Scheduler {
     }
 
     @Override
-    public Mono<Void> disposeGracefully() {
-        if(this.disposed.compareAndSet(false, true)) {
-            return Mono.fromRunnable(this::dispose);
-        }
-        return Mono.empty();
+    public @NonNull Mono<Void> disposeGracefully() {
+        return Mono.fromRunnable(this::dispose);
     }
 
     @Override
@@ -75,7 +117,7 @@ public class EuhedralScheduler implements Scheduler {
         Scheduler.super.init();
     }
 
-    private TaskIngestSink getSink() {
+    private EuhedralWorker getSink() {
         long rand = ThreadLocalRandom.current().nextLong();
         int idx = (int) MathFunctions.unsignedMultiplyHigh(rand, this.sinks.length);
         return this.sinks[idx];

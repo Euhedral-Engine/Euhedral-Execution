@@ -7,17 +7,13 @@ import euhedral.hashing.HasherApi;
 import euhedral.io.config.DRRConfig;
 import euhedral.io.config.ExecutionManagerConfig;
 import euhedral.io.control_plane.ControlPlane;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import euhedral.io.reactor.common.EuhedralSubscriber;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 
-import euhedral.io.flow_control.ArrayIngestSink;
-import euhedral.io.reactor.EuhedralSubscriber;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
-import org.openjdk.jmh.annotations.Group;
 import org.openjdk.jmh.annotations.Level;
 import org.openjdk.jmh.annotations.Measurement;
 import org.openjdk.jmh.annotations.Mode;

@@ -8,7 +8,7 @@ import euhedral.hashing.HasherApi;
 import euhedral.io.config.DRRConfig;
 import euhedral.io.config.ExecutionManagerConfig;
 import euhedral.io.control_plane.ControlPlane;
-import euhedral.io.reactor.EuhedralSubscriber;
+import euhedral.io.reactor.common.EuhedralSubscriber;
 import euhedral.io.utils.MathFunctions;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferInt;
