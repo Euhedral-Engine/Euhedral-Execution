@@ -19,7 +19,8 @@ public class ConsumerFrame<T> extends AbstractFrame {
         this.killSwitch = killSwitch;
     }
 
-    public void consume() {
+    @Override
+    public void execute() {
         consumer.accept(payload);
     }
 

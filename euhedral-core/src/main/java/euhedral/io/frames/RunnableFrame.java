@@ -15,22 +15,28 @@ public class RunnableFrame extends AbstractFrame {
         this.killSwitch = killSwitch;
     }
 
-    public void run() {
+    @Override
+    public void execute() {
         runnable.run();
     }
 
     @Override
     public long getSizeBytes() {
-        return 256;
+        return 64;
     }
 
     @Override
     public boolean isAlive() {
-        return !killSwitch.get();
+        if(killSwitch != null) {
+            return killSwitch.getOpaque();
+        }
+        return true;
     }
 
     @Override
     public void kill() {
-        killSwitch.set(true);
+        if(killSwitch != null) {
+            killSwitch.set(true);
+        }
     }
 }
