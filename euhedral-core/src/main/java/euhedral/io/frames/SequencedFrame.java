@@ -44,7 +44,8 @@ public class SequencedFrame<T, R> extends AbstractFrame {
         this.payload = payload;
     }
 
-    public void apply() {
+    @Override
+    public void execute() {
         retVal = function.apply(payload);
     }
 

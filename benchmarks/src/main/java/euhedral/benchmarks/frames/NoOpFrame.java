@@ -25,6 +25,9 @@ public class NoOpFrame extends AbstractFrame {
     }
 
     @Override
+    public void execute() {}
+
+    @Override
     public long getSizeBytes() {
         return 64;
     }

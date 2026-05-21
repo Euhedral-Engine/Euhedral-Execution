@@ -78,6 +78,8 @@ public abstract class AbstractFrame {
 
     public abstract long getSizeBytes();
 
+    public abstract void execute();
+
     /// Mixes the combined hash with the seed.
     ///
     /// @param seed Hash seed

@@ -25,7 +25,8 @@ public class FunctionFrame<T, R> extends AbstractFrame {
         this.killSwitch = killSwitch;
     }
 
-    public void apply() {
+    @Override
+    public void execute() {
         callback.accept(function.apply(payload));
     }
 

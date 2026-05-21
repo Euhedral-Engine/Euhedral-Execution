@@ -147,6 +147,11 @@ public class MandelbrotPixel extends AbstractFrame {
         return totalEscapeAccumulator / 4;
     }
 
+    @Override
+    public void execute() {
+
+    }
+
     private boolean iterate(double zr, double zi, int count) {
         return (zr * zr + zi * zi) < bailoutRadiusSq && count < this.iterationCap;
     }

@@ -1,10 +1,13 @@
 package euhedral.io.impl;
 
+import euhedral.hashing.HasherApi;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.queues.PartitionedMpscArrayQueue;
 import euhedral.queues.PartitionedUnboundedMpscArrayQueue;
 import euhedral.queues.common.PartitionedQueue;
 import java.util.Arrays;
+import java.util.concurrent.ThreadLocalRandom;
+
 import lombok.Getter;
 import lombok.Setter;
 import org.jspecify.annotations.NonNull;
@@ -33,6 +36,7 @@ public class FrameManager<DATA, FRAME extends AbstractFrame> implements AutoClos
     @Getter
     private long totalRecycled = 0;
 
+    private long seed = HasherApi.mix(ThreadLocalRandom.current().nextLong());
     private int idx = 0;
 
     public FrameManager(int chunkSize, int pooledChunks,
@@ -67,6 +71,9 @@ public class FrameManager<DATA, FRAME extends AbstractFrame> implements AutoClos
             return factory.create(data);
         }
         factory.replace(data, frame);
+        if(!frame.isOrdered()) {
+            frame.randomizeHash(HasherApi.mix(seed++));
+        }
         return frame;
     }
 

@@ -6,6 +6,12 @@ public final class DummyInitFrame extends AbstractFrame {
     private DummyInitFrame() {
         super(0, null);
     }
+
+    @Override
+    public void execute() {
+
+    }
+
     @Override
     public long getSizeBytes() {
         return 1024;
