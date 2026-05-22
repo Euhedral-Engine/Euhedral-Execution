@@ -18,9 +18,7 @@ import reactor.core.publisher.Sinks.EmitResult;
 public class FrameSequencer<T, R> {
 
     private final long ingestPassword;
-    private final long sequencePassword = HasherApi.combine(ThreadLocalRandom.current().nextLong(),
-            ThreadLocalRandom.current()
-                    .nextLong());
+    private final long sequencePassword;
 
     private final PaddedAtomicLong wip = new PaddedAtomicLong(0);
     private final PartitionedUnboundedSpscArrayQueue<SequencedFrame<T, R>> sequence = new PartitionedUnboundedSpscArrayQueue<>(
@@ -31,6 +29,7 @@ public class FrameSequencer<T, R> {
 
     public FrameSequencer(long ingestPassword) {
         this.ingestPassword = ingestPassword;
+        this.sequencePassword = HasherApi.combine(ingestPassword, ingestPassword + HasherApi.BASE_SEED);
     }
 
     public void drain(long password) {

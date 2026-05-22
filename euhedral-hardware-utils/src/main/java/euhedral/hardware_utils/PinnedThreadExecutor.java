@@ -153,18 +153,6 @@ public final class PinnedThreadExecutor extends AbstractExecutorService implemen
         thread.start();
     }
 
-    /// The actual vThread implementation is under src/main/java21
-    ///
-    /// @param runnable
-    /// @return
-    public Thread vThread(@NonNull Runnable runnable) {
-        return new Thread(runnable, name + "-fakeVThread");
-    }
-
-    public ThreadFactory vThreadFactory() {
-        return r -> new Thread(r, name + "-fakeVThread");
-    }
-
     @Override
     public void shutdown() {
         if (!isShutdown.compareAndSet(false, true)) {

@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
@@ -12,7 +11,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 
 import euhedral.hardware_utils.PinnedThreadExecutor;
 import euhedral.io.config.CloneConfig;
@@ -57,7 +55,9 @@ class DefaultExecutorTest {
     void shouldCloneWithNewExecutorService() {
         PinnedThreadExecutor newExec = mock(PinnedThreadExecutor.class);
 
-        DefaultExecutor cloned = (DefaultExecutor) executor.clone(new CloneConfig("", 0, 0, null, null, null), newExec);
+        DefaultExecutor cloned =
+                (DefaultExecutor) executor.clone(new CloneConfig("", 0, 0, null, null, null),
+                        newExec);
 
         assertNotNull(cloned);
         assertNotSame(executor, cloned);
@@ -135,32 +135,6 @@ class DefaultExecutorTest {
         executor.input(new TestSource(frame));
 
         assertTrue(calls.get() >= 3);
-    }
-
-    @Test
-    void shouldRouteToVThreadExecutor() {
-        executor.reportCompletionsTo(cloneable);
-
-        TestFrame frame = spy(new TestFrame("a"));
-        when(frame.isUseVThread()).thenReturn(true);
-        when(frame.isAlive()).thenReturn(true);
-
-        AtomicReference<Runnable> captured = new AtomicReference<>();
-
-        doAnswer(inv -> {
-            captured.set(inv.getArgument(0));
-            return null;
-        }).when(executorService).vThread(any());
-
-        when(sink.offer(any())).thenReturn(true);
-
-        executor.input(new TestSource(frame));
-
-        assertNotNull(captured.get());
-
-        captured.get().run();
-
-        verify(frame).execute();
     }
 
     static class TestSource implements ScaffoldingSource {

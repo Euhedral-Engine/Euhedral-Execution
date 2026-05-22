@@ -12,12 +12,12 @@ import lombok.Setter;
 /// This class encapsulates the state, routing hashes, and lifecycle logic required for execution by
 /// an [`AbstractExecutor`][euhedral.io].
 ///
-/// To maximize performance and minimize GC pressure, instances are designed for reuse via an
-/// [FrameManager]. After execution completes, the frame is returned to its creator to be reset
-/// and dispatched again.
+/// To maximize performance and minimize GC pressure, instances are designed for reuse via a
+/// [FrameManager]. After execution completes, the frame is returned to its creator to be reset and
+/// dispatched again.
 ///
 /// To prevent performance degradation and maintain strict ordering guarantees, use
-/// [`HasherApi`][euhedral.io.utils] to generate hashes.
+/// [`HasherApi`][euhedral.io.utils] to generate or mix hashes.
 ///
 /// **Ordering:** Reliable sequencing depends on keeping the hash consistent across retries.
 /// ```java
@@ -26,14 +26,15 @@ import lombok.Setter;
 /// frame.randomizeHash(HasherApi.combine(idHash, seed));
 /// ```
 ///
-/// **Parallelism:** For even distribution across consumers, each frame's hash must be changed.
+/// **Parallelism:** For even distribution across consumers, each frame's hash must be changed. The
+/// seed only needs to be incremented by one to ensure this happens.
 ///
 /// ```java
 /// long idHash = frame.getIdHash();
-/// long seed = 0;
+/// long seed = 123;
 /// frame.randomizeHash(HasherApi.combine(idHash, seed++));
 /// ```
-@SuppressWarnings("rawtypes")
+@SuppressWarnings({"rawtypes", "unchecked", "unused"})
 public abstract class AbstractFrame {
 
     protected final FrameManager recycler;
@@ -65,10 +66,6 @@ public abstract class AbstractFrame {
     @Getter
     @Setter
     private boolean cancelledExecution = false;
-
-    @Getter
-    @Setter
-    private boolean useVThread = false;
 
     public AbstractFrame(long idHash, FrameManager recycler) {
         this.cancel = new CancelFrame(this);
@@ -107,7 +104,6 @@ public abstract class AbstractFrame {
     }
 
     /// Sends the frame back to the creator for reuse.
-    @SuppressWarnings("unchecked")
     public final boolean recycle() {
         if (recycler != null) {
             return recycler.recycle(this);
@@ -115,8 +111,9 @@ public abstract class AbstractFrame {
         return false;
     }
 
-    /// Throws this class's error frame. This is used as an immediate way to stop execution of this frame.
-    /// The [`AbstractExecutor`][AbstractExecutor] and [`ExecutionManager`][euhedral.io.ExecutionManager] handles this by default.
+    /// Throws this class's error frame. This is used as an immediate way to stop execution of this
+    /// frame. The [`AbstractExecutor`][AbstractExecutor] and
+    /// [`ExecutionManager`][euhedral.io.ExecutionManager] handles this by default.
     public final void throwMeAsError() {
         throw this.cancel;
     }
