@@ -36,6 +36,8 @@ Architecture diagram coming soon.
       * [Topology Mapping](#topology-mapping)
       * [Hardware Monitoring](#hardware-monitoring)
     * [euhedral-hashing](#euhedral-hashing)
+    * [euhedral-reactor-core](#euhedral-reactor-core)
+  * [TODO](#todo)
 <!-- TOC -->
 
 ## Benchmarks
@@ -45,6 +47,9 @@ These were performed on a desktop with an **Intel i9-14900K** and **64GB DDR5** 
 settings and no overclocking. All work
 items were pre-allocated to test the allocation and memory efficiency of the scheduler itself. JMH
 was used as the test suite
+
+Euhedral Core has a system for recycling task wrappers. It is meant to reduce or eliminate
+allocations during steady state. Benchmarks with that feature in-use are coming soon.
 
 #### VM Flags
 
@@ -291,3 +296,15 @@ A Java-only implementation of the xxHash64 algorithm. This is used for routing w
 the pinned workers. It provides high-speed deterministic hashing with high avalanche properties
 which evenly distributes load. Because it is deterministic, ordered work can be guaranteed to hit
 the same socket, queue, and core.
+
+### euhedral-reactor-core
+
+An API layer for compatibility with Reactor. This module contains a wrapper that makes euhedral-core
+usable as a standard Reactor scheduler. It also contains an operator wrapper to use it in
+`.transform()` chains with logic for `.flatMap()`, `.flatMapSequential()`, and `.map()`.
+
+## TODO
+
+- Add more unit tests. The end-to-end tests are not enough.
+- Add more comments and documentation.
+- Cleanup dependencies.
