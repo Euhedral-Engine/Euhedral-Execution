@@ -37,7 +37,7 @@ public class ArrayIngestSink implements IngestSink {
         AbstractFrame[] array;
     }
 
-    private static class Delegate implements IngestSink.Delegate {
+    protected static final class Delegate implements IngestSink.Delegate {
 
         private static final VarHandle TERMINAL;
 
