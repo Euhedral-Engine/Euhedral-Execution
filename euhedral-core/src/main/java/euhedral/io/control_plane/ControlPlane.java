@@ -151,6 +151,26 @@ public class ControlPlane implements AutoCloseable {
         }
     }
 
+    public void ingest(@NonNull IngestSink sink) {
+        ingest(sink.getDelegate());
+    }
+
+    public void ingest(@NonNull ScaffoldingSource stream) {
+        Objects.requireNonNull(stream);
+        if (this.closed.getOpaque()) {
+            throw new RuntimeException("Could not ingest from an upstream publisher. The ControlPlane is permanently closed.");
+        }
+        if(!this.started.getOpaque()) {
+            start();
+        }
+        while(!this.ready.getOpaque()) {
+            LockSupport.parkNanos(1_000);
+        }
+
+        ScaffoldingNode controller = this.ingestController.get();
+        controller.ingest(stream);
+    }
+
     protected void init() {
         this.logger.info("Initializing");
 
@@ -332,26 +352,6 @@ public class ControlPlane implements AutoCloseable {
         }
 
         this.shards[shardId].start(snapshot, topology, this.shardHandles[shardId]);
-    }
-
-    public void ingest(@NonNull IngestSink sink) {
-        ingest(sink.getDelegate());
-    }
-
-    public void ingest(@NonNull ScaffoldingSource stream) {
-        Objects.requireNonNull(stream);
-        if (this.closed.getOpaque()) {
-            throw new RuntimeException("Could not ingest from an upstream publisher. The ControlPlane is permanently closed.");
-        }
-        if(!this.started.getOpaque()) {
-            start();
-        }
-        while(!this.ready.getOpaque()) {
-            LockSupport.parkNanos(1_000);
-        }
-
-        ScaffoldingNode controller = this.ingestController.get();
-        controller.ingest(stream);
     }
 
     protected double getShardQuota(int socketId, double systemQuotaPool) {
