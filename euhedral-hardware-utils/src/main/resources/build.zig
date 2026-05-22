@@ -26,14 +26,28 @@ pub fn build(b: *std.Build) void {
         break :blk "/usr/lib/jvm/default";
     };
 
-    const macos_sdk = if (b.graph.environ_map.get("MACOS_SDK")) |val| val else blk: {
+    const macos_sdk = blk: {
+        if (b.graph.environ_map.get("MACOS_SDK")) |macos_sdk_env| {
+            if (macos_sdk_env.len > 0) break :blk macos_sdk_env;
+        }
+
+        if (b.graph.environ_map.get("SDKROOT")) |sdkroot| {
+            if (sdkroot.len > 0) {
+                var check_dir = std.Io.Dir.cwd().openDir(b.graph.io, b.pathJoin(&.{ sdkroot, "usr", "include" }), .{}) catch null;
+                if (check_dir) |*cd| {
+                    cd.close(b.graph.io);
+                    break :blk sdkroot;
+                }
+            }
+        }
+
         var search_dirs = std.ArrayList([]const u8){
             .items = &.{},
             .capacity = 0,
         };
 
         if (b.graph.environ_map.get("SDKROOT")) |sdkroot| {
-            search_dirs.append(b.allocator, sdkroot) catch {};
+            if (sdkroot.len > 0) search_dirs.append(b.allocator, sdkroot) catch {};
         }
 
         search_dirs.appendSlice(b.allocator, &.{ "/opt", "/usr/local/SDK", "/usr/lib/apple/SDKs" }) catch {};
@@ -69,6 +83,7 @@ pub fn build(b: *std.Build) void {
         if (highest_path) |path| break :blk path;
         break :blk b.allocator.dupe(u8, "/opt/MacOSX.sdk") catch "/opt/MacOSX.sdk";
     };
+
 
     const common_flags = [_][]const u8{
         "-O3",
@@ -147,14 +162,14 @@ pub fn build(b: *std.Build) void {
                     std.fs.path.extension(entry.name),
                     ".cpp",
                 ))
-            {
-                cpp_files.append(
-                    b.allocator,
-                    b.dupe(
-                        b.pathJoin(&.{ os.dir, entry.name }),
-                    ),
-                ) catch unreachable;
-            }
+                {
+                    cpp_files.append(
+                        b.allocator,
+                        b.dupe(
+                            b.pathJoin(&.{ os.dir, entry.name }),
+                        ),
+                    ) catch unreachable;
+                }
         }
 
         if (cpp_files.items.len == 0) {
