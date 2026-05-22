@@ -358,7 +358,7 @@ abstract sealed class ConcurrentPartitionedUnboundedArrayQueue<T>
         }
         try {
             if (super.headPointers != null) {
-                super.clear();
+                super.purge();
             } else {
                 QueueNode<T> head = this.tailQueue.poll(0);
                 while (head == null) {
