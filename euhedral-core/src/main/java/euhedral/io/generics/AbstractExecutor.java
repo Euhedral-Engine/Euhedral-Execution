@@ -75,11 +75,7 @@ public abstract class AbstractExecutor implements PipelineExecutor {
 
         @Override
         public void onNext(AbstractFrame frame) {
-            if (frame.isUseVThread()) {
-                executorService.vThread(() -> executeInternal(frame));
-            } else {
-                executeInternal(frame);
-            }
+            executeInternal(frame);
         }
 
         @Override

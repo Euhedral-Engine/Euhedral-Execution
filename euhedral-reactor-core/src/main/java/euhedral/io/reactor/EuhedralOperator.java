@@ -99,8 +99,9 @@ public class EuhedralOperator {
             while (!(result = returnSink.tryEmitNext(obj)).isSuccess()) {
                 if (result == EmitResult.FAIL_CANCELLED || result == EmitResult.FAIL_TERMINATED
                         || result == EmitResult.FAIL_ZERO_SUBSCRIBER) {
-                    dead.set(true);
-                    killSwitch.tryEmitEmpty();
+                    if(dead.compareAndSet(false, true)) {
+                        killSwitch.tryEmitEmpty();
+                    }
                     break;
                 }
                 if (cycles++ < 128) {
@@ -138,8 +139,9 @@ public class EuhedralOperator {
         return returnSink.asFlux().doOnSubscribe(
                         sub -> this.scheduler.ingest(subscriber))
                 .doFinally(sig -> {
-                    dead.set(true);
-                    killSwitch.tryEmitEmpty();
+                    if(dead.compareAndSet(false, true)) {
+                        killSwitch.tryEmitEmpty();
+                    }
                     recycler.close();
                 });
     }
