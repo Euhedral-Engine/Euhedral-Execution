@@ -11,10 +11,6 @@
 
   <artifactId>euhedral-hardware-utils</artifactId>
 
-  <properties>
-    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-  </properties>
-
   <dependencies>
     <!--    Annotations   -->
     <dependency>
@@ -107,38 +103,6 @@
                 <argument>--prefix</argument>
                 <argument>.</argument>
               </arguments>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-compiler-plugin</artifactId>
-        <version>3.11.0</version>
-        <executions>
-          <execution>
-            <id>default-compile</id>
-            <goals>
-              <goal>compile</goal>
-            </goals>
-            <configuration>
-              <source>17</source>
-              <target>17</target>
-            </configuration>
-          </execution>
-          <execution>
-            <id>java21-compile</id>
-            <goals>
-              <goal>compile</goal>
-            </goals>
-            <configuration>
-              <source>21</source>
-              <target>21</target>
-              <compileSourceRoots>
-                <root>${project.basedir}/src/main/java21</root>
-              </compileSourceRoots>
-              <outputDirectory>${project.build.outputDirectory}/META-INF/versions/21
-              </outputDirectory>
             </configuration>
           </execution>
         </executions>
