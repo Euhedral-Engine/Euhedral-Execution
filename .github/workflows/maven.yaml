@@ -22,17 +22,6 @@ jobs:
           path: ~/.local/share/mise/installs/macos-sdk
           key: macos-sdk-26.1-v1
 
-      - name: Cache mise tools
-        id: cache-mise
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.local/share/mise
-            ~/.cache/mise
-          key: ${{ runner.os }}-mise-${{ hashFiles('**/mise.toml', '**/.tool-versions') }}
-          restore-keys: |
-            ${{ runner.os }}-mise-
-
       - name: Cache Maven dependencies
         uses: actions/cache@v4
         with:
@@ -47,12 +36,6 @@ jobs:
           sudo apt-get update && sudo apt-get install -y xz-utils
           mkdir -p ~/.local/share/mise/installs/macos-sdk
           curl -f -L -s https://github.com/joseluisq/macosx-sdks/releases/download/26.1/MacOSX26.1.sdk.tar.xz | tar -xJ --strip-components=1 -C ~/.local/share/mise/installs/macos-sdk/
-
-      - name: Set up OpenJDK 25
-        uses: actions/setup-java@v4
-        with:
-          java-version: '25'
-          distribution: 'oracle'
 
       - name: Install mise tools
         uses: jdx/mise-action@v2
