@@ -117,10 +117,6 @@ public class ScaffoldingEdge extends UpstreamHandle implements AutoCloseable {
         }
     }
 
-    public long getHash() {
-        return 0;
-    }
-
     public long getUpstreamCount() {
         ScaffoldingEdge parent = (ScaffoldingEdge) PARENT.getOpaque(this);
         if (parent != null) {
