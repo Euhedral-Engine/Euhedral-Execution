@@ -16,7 +16,7 @@ public class UpstreamQueue {
 
     static {
         try {
-            UP_COUNT = MethodHandles.lookup().findVarHandle(UpstreamQueue.class, "upstreamCount", long.class);
+            UP_COUNT = MethodHandles.lookup().findVarHandle(UpstreamQueue.class, "cachedUpCount", long.class);
         } catch (Exception e) {
             throw new ExceptionInInitializerError(e);
         }
@@ -39,14 +39,20 @@ public class UpstreamQueue {
             1, 512, 0);
     private final UpstreamHandle[] drainBuffer = new UpstreamHandle[512];
     private final int[] pullIdx = new int[]{0};
-    private final long[] pullBucket = new long[]{0L, 0L};
-    private long upstreamCount = 0L;
+    final long[] pullBucket = new long[]{0L, 0L};
     @Getter
-    private long cachedUpCount = 0L;
+    long cachedUpCount = 0L;
 
     public long getTrueUpstreamCount() {
         this.cachedUpCount = (long) UP_COUNT.getOpaque(this);
         return this.cachedUpCount;
+    }
+
+    public void addUpstream(UpstreamHandle upstream) {
+        while (!this.upstreams.offer(upstream)) {
+            Thread.onSpinWait();
+        }
+        UP_COUNT.getAndAdd(this, 1);
     }
 
     public void pull(long demand) {
@@ -92,16 +98,16 @@ public class UpstreamQueue {
     protected static void drain(UpstreamHandle handle, DrainBuffer buffer,
             long demand) {
         if (buffer != null) {
-            long limit = buffer.buffer.capacity() < 0 ? demand
-                    : Math.min(buffer.buffer.capacity(), demand);
+            long limit = Math.min(buffer.getSize(), demand);
             handle.pull(buffer, limit);
+        } else {
+            handle.request(demand);
         }
-        handle.request(demand);
     }
 
-    private void calculatePullBuckets(long demand) {
+    protected void calculatePullBuckets(long demand) {
         int start = 0;
-        int end = (int) getTrueUpstreamCount();
+        int end = (int) this.cachedUpCount;
         end = Math.max(end, 1);
         this.pullBucket[0] = end - start;
         this.pullBucket[1] = demand;
@@ -131,7 +137,7 @@ public class UpstreamQueue {
         this.pullBucket[0] = Math.max(this.pullBucket[0], 1);
     }
 
-    private int fillUpstreamBuffer() {
+    protected int fillUpstreamBuffer() {
         if (this.pullBucket[0] <= 0) {
             return 0;
         }
@@ -140,13 +146,6 @@ public class UpstreamQueue {
         return this.upstreams.drain(
                 sub -> this.drainBuffer[this.pullIdx[0]++] = sub,
                 Math.min((int) this.pullBucket[0], this.drainBuffer.length));
-    }
-
-    public void addUpstream(UpstreamHandle upstream) {
-        while (!this.upstreams.offer(upstream)) {
-            Thread.onSpinWait();
-        }
-        UP_COUNT.getAndAdd(this, 1);
     }
 
     public static abstract class UpstreamHandle implements RecursiveScaffolding {
