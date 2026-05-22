@@ -1,6 +1,6 @@
 [tools]
 apple-codesign = "latest"
-java = "corretto-25.0.2.10.1"
+java = "25"
 maven = "latest"
 rust = "latest"
 zig = "0.16.0"
