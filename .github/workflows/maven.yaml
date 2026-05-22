@@ -1,4 +1,4 @@
-name: Java CI with Maven (Linux-Only Cross-Compile)
+name: Euhedral Execution Compile
 
 on:
   push:
@@ -13,12 +13,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Cache macOS SDK Headers
+        id: cache-macos-sdk
+        uses: actions/cache@v4
+        with:
+          path: $HOME/.local/share/mise/installs/macos-sdk
+          key: macos-sdk-13.3-v1
+
       - name: Download macOS SDK headers for Zig
+        if: ${{ !env.ACT }}
         run: |
+          sudo apt-get update && sudo apt-get install -y xz-utils
           mkdir -p $HOME/.local/share/mise/installs/macos-sdk
-          curl -L https://github.com \
-          
-            | tar -xJ --strip-components=1 -C $HOME/.local/share/mise/installs/macos-sdk/
+          curl -f -L -s https://github.com/joseluisq/macosx-sdks/releases/download/26.1/MacOSX26.1.sdk.tar.xz | tar -xJ --strip-components=1 -C $HOME/.local/share/mise/installs/macos-sdk/
 
       - name: Set up OpenJDK 25
         uses: actions/setup-java@v4
@@ -33,6 +40,7 @@ jobs:
           install: true
 
       - name: Fetch and Merge Multi-OS JNI Headers
+        if: ${{ !env.ACT }}
         run: |
           MISE_JDK_PATH=$(mise where java)
           INCLUDE_DIR="$MISE_JDK_PATH/include"
@@ -40,21 +48,14 @@ jobs:
           
           echo "Target include directory located at: $INCLUDE_DIR"
           
-          curl -L -s https://github.com | tar -xzf - \
-            --strip-components=5 -C "$INCLUDE_DIR" \
-            "jdk-jdk-25-ga/src/java.base/macosx/native/include/bridge" \
-            "jdk-jdk-25-ga/src/java.base/unix/native/include/jni_md.h"
+          echo "Processing macOS (darwin) native parameters..."
           mkdir -p "$INCLUDE_DIR/darwin"
-          mv "$INCLUDE_DIR/jni_md.h" "$INCLUDE_DIR/darwin/jni_md.h"
+          curl -f -L -s https://githubusercontent.com -o "$INCLUDE_DIR/darwin/jni_md.h"
           
-          # Fetch and unpack Windows-specific JNI headers (win32/)
-          curl -L -s https://github.com | tar -xzf - \
-            --strip-components=5 -C "$INCLUDE_DIR" \
-            "jdk-jdk-25-ga/src/java.base/windows/native/include/jni_md.h"
+          echo "Processing Windows (win32) native parameters..."
           mkdir -p "$INCLUDE_DIR/win32"
-          mv "$INCLUDE_DIR/jni_md.h" "$INCLUDE_DIR/win32/jni_md.h"
+          curl -f -L -s https://githubusercontent.com -o "$INCLUDE_DIR/win32/jni_md.h"
           
-          # Output the structural layout to your Action logs for instant validation
           echo "Final JNI Include Directory Layout:"
           ls -R "$INCLUDE_DIR"
 
