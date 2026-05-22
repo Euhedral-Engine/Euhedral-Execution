@@ -16,7 +16,6 @@ import euhedral.io.config.CloneConfig;
 import euhedral.io.flow_control.ScaffoldingEdge;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.CloneableObject;
-import euhedral.io.generics.ScaffoldingTerminal;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.ArrayList;
 import java.util.BitSet;
@@ -24,15 +23,26 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.awaitility.Awaitility;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
-import reactor.core.publisher.Flux;
 
 class ControlPlaneShardTest {
 
-    private static final MockedStatic<SystemInfo> mockSysInfo = Mockito.mockStatic(SystemInfo.class);
     private final MeterRegistry mockMeterRegistry = mock(MeterRegistry.class);
+    private MockedStatic<SystemInfo> mockSysInfo;
+
+    @BeforeEach
+    void setUp() {
+        mockSysInfo = Mockito.mockStatic(SystemInfo.class);
+    }
+
+    @AfterEach
+    void tearDown() {
+        mockSysInfo.close();
+    }
 
     @Test
     public void testInitialization() {
@@ -41,7 +51,6 @@ class ControlPlaneShardTest {
         AbstractFrame frame = mock(AbstractFrame.class);
 
         doReturn(clone).when(clone).clone(any(CloneConfig.class));
-        when(clone.output()).thenAnswer(f -> Flux.just(frame));
 
         mockSysInfo.when(SystemInfo::getMaxCoreId).thenReturn(1);
         ControlPlaneShard shard = new ControlPlaneShard(1, "TestShard", clone,
@@ -54,7 +63,6 @@ class ControlPlaneShardTest {
 
         shard.start(snapshot, topology, upstream);
 
-        verify(upstream).addDownstream(any(ScaffoldingTerminal.class));
         verify(clone, times(configs.length)).clone(any(CloneConfig.class));
         verify(clone, times(configs.length)).input(any(ScaffoldingEdge.class));
         verify(clone, times(configs.length)).setDrainMode(true);
@@ -78,13 +86,9 @@ class ControlPlaneShardTest {
         clones[0] = mock(TestClone.class);
         clones[1] = mock(TestClone.class);
 
-        AbstractFrame frame = mock(AbstractFrame.class);
-
         final int[] idx = new int[]{0};
         when(baseClone.clone(any(CloneConfig.class))).thenAnswer(c -> clones[idx[0]++]);
-        when(clones[0].output()).thenAnswer(f -> Flux.just(frame));
         when(clones[0].isStarted()).thenReturn(true);
-        when(clones[1].output()).thenAnswer(f -> Flux.just(frame));
         when(clones[1].isStarted()).thenReturn(true);
 
         mockSysInfo.when(SystemInfo::getMaxCoreId).thenReturn(1);

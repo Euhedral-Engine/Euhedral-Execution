@@ -113,6 +113,38 @@
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.11.0</version>
+        <executions>
+          <execution>
+            <id>default-compile</id>
+            <goals>
+              <goal>compile</goal>
+            </goals>
+            <configuration>
+              <source>17</source>
+              <target>17</target>
+            </configuration>
+          </execution>
+          <execution>
+            <id>java21-compile</id>
+            <goals>
+              <goal>compile</goal>
+            </goals>
+            <configuration>
+              <source>21</source>
+              <target>21</target>
+              <compileSourceRoots>
+                <root>${project.basedir}/src/main/java21</root>
+              </compileSourceRoots>
+              <outputDirectory>${project.build.outputDirectory}/META-INF/versions/21
+              </outputDirectory>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-resources-plugin</artifactId>
         <version>3.3.1</version>
         <executions>
@@ -135,17 +167,6 @@
             </configuration>
           </execution>
         </executions>
-      </plugin>
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-jar-plugin</artifactId>
-        <configuration>
-          <archive>
-            <manifestEntries>
-              <Add-Opens>java.base/java.util</Add-Opens>
-            </manifestEntries>
-          </archive>
-        </configuration>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
@@ -192,32 +213,27 @@
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-compiler-plugin</artifactId>
-        <version>3.11.0</version>
+        <artifactId>maven-jar-plugin</artifactId>
+        <configuration>
+          <archive>
+            <manifestEntries>
+              <Add-Opens>java.base/java.util</Add-Opens>
+            </manifestEntries>
+          </archive>
+        </configuration>
         <executions>
           <execution>
-            <id>default-compile</id>
+            <id>default-jar</id>
+            <phase>package</phase>
             <goals>
-              <goal>compile</goal>
+              <goal>jar</goal>
             </goals>
             <configuration>
-              <source>17</source>
-              <target>17</target>
-            </configuration>
-          </execution>
-          <execution>
-            <id>java21-compile</id>
-            <goals>
-              <goal>compile</goal>
-            </goals>
-            <configuration>
-              <source>21</source>
-              <target>21</target>
-              <compileSourceRoots>
-                <root>${project.basedir}/src/main/java21</root>
-              </compileSourceRoots>
-              <outputDirectory>${project.build.outputDirectory}/META-INF/versions/21
-              </outputDirectory>
+              <archive>
+                <manifestEntries>
+                  <Add-Opens>java.base/java.util</Add-Opens>
+                </manifestEntries>
+              </archive>
             </configuration>
           </execution>
         </executions>
@@ -227,11 +243,21 @@
         <artifactId>maven-surefire-plugin</artifactId>
         <configuration>
           <argLine>
-            @{argLine}
+            -javaagent:${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar
             -XX:+EnableDynamicAgentLoading
-            --add-opens java.base/java.util=ALL-UNNAMED
+            --add-opens java.base/java.util=euhedral.hardware_utils
+            -Xshare:off
           </argLine>
         </configuration>
+        <executions>
+          <execution>
+            <id>default-test</id>
+            <phase>integration-test</phase>
+            <goals>
+              <goal>test</goal>
+            </goals>
+          </execution>
+        </executions>
       </plugin>
     </plugins>
   </build>

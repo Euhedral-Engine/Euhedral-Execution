@@ -24,7 +24,7 @@ import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.List;
 import org.awaitility.Awaitility;
-import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedConstruction;
@@ -34,17 +34,27 @@ import org.mockito.Mockito;
 class ControlPlaneTest {
 
     private ControlPlaneShard mockShard;
-    private final static MockedStatic<SystemInfo> mockSysInfo = Mockito.mockStatic(SystemInfo.class);
-    private static MockedConstruction<TopologyMapper> mockMapper;
-    private static MockedConstruction<ResourceMonitor> mockResourceMonitor;
-    private static EffectiveSystemTopology mockTopology;
-    private static HardwareUtilization mockUtilization;
+    private MockedStatic<SystemInfo> mockSysInfo;
+    private MockedConstruction<TopologyMapper> mockTopologyMapper;
+    private MockedConstruction<ResourceMonitor> mockResourceMonitor;
+    private HardwareUtilization mockUtilization;
+    private EffectiveSystemTopology effectiveSystemTopology;
+    private int version = 0;
 
-    @BeforeAll
-    static void init() {
-        mockMapper = Mockito.mockConstructionWithAnswer(TopologyMapper.class, invocation -> {
+    @BeforeEach
+    public void setup() {
+        mockSysInfo = Mockito.mockStatic(SystemInfo.class);
+        mockTopologyMapper = Mockito.mockConstructionWithAnswer(TopologyMapper.class, invocation -> {
             Class<?> clazz = invocation.getMethod().getReturnType();
-
+            if(clazz.equals(int.class)) {
+                return version;
+            }
+            if (clazz.equals(void.class)) {
+                return null;
+            }
+            if(clazz.equals(EffectiveSystemTopology.class)) {
+                return effectiveSystemTopology;
+            }
             return mock(EffectiveSystemTopology.class);
         });
         mockResourceMonitor = Mockito.mockConstructionWithAnswer(ResourceMonitor.class, invocation -> {
@@ -57,39 +67,39 @@ class ControlPlaneTest {
             }
             return mock(ResourceMonitor.class);
         });
-    }
-
-    @BeforeEach
-    public void setup() {
         ControlPlane plane = ControlPlane.get();
         if (plane != null) {
             plane.close();
         }
         mockShard = mock(ControlPlaneShard.class);
         mockUtilization = mock(HardwareUtilization.class);
+        effectiveSystemTopology = getSystemTopology();
+    }
+
+    @AfterEach
+    public void tearDown() {
+        mockSysInfo.close();
+        mockTopologyMapper.close();
+        mockResourceMonitor.close();
+        version = 0;
     }
 
     @Test
-    public void testInitialization() throws Exception {
-//        mockMapper.reset();
-        mockSysInfo.reset();
-        EffectiveSystemTopology effectiveTopology = getSystemTopology();
-
-        SocketSnapshot[] snapshots = new SocketSnapshot[effectiveTopology.effectiveSockets()
+    public void testInitialization() {
+        SocketSnapshot[] snapshots = new SocketSnapshot[effectiveSystemTopology.effectiveSockets()
                 .cardinality()];
 
-        ControlPlane controlPlane = createControlPlaneWithMocks(effectiveTopology, snapshots);
-
-//        mockMapper.verify(TopologyMapper::getEffectiveTopology, times(2));
+        ControlPlane controlPlane = createControlPlaneWithMocks(snapshots);
+        controlPlane.start();
 
         verify(mockShard, times(1)).clone(eq(0), any());
         verify(mockShard, times(1)).clone(eq(1), any());
         verify(mockShard, times(4)).isStarted();
         verify(mockShard, times(1)).start(eq(snapshots[0]),
-                eq(effectiveTopology.socketTopologies().get(0)),
+                eq(effectiveSystemTopology.socketTopologies().get(0)),
                 any());
         verify(mockShard, times(1)).start(eq(snapshots[1]),
-                eq(effectiveTopology.socketTopologies().get(1)),
+                eq(effectiveSystemTopology.socketTopologies().get(1)),
                 any());
 
         ResourceMonitor mockedRM = mockResourceMonitor.constructed().get(0);
@@ -98,7 +108,7 @@ class ControlPlaneTest {
         verify(mockUtilization, times(1)).getSocketSnapshot(eq(0), any(), anyDouble());
         verify(mockUtilization, times(1)).getSocketSnapshot(eq(1), any(), anyDouble());
 
-        assertEquals(effectiveTopology.globalVersion(), controlPlane.currentGlobalVersion);
+        assertEquals(effectiveSystemTopology.globalVersion(), controlPlane.currentGlobalVersion);
         assertTrue(controlPlane.primed.get());
         Awaitility.await().atMost(Duration.ofSeconds(2)).untilFalse(controlPlane.rebalancing);
         assertArrayEquals(new int[]{0, 1}, ControlPlane.get().activeShardIds.get());
@@ -109,25 +119,20 @@ class ControlPlaneTest {
 
     @Test
     public void testGlobalRebalance() throws Exception {
-//        mockMapper.reset();
-        mockSysInfo.reset();
-        EffectiveSystemTopology effectiveTopology = getSystemTopology();
-
-        SocketSnapshot[] snapshots = new SocketSnapshot[effectiveTopology.effectiveSockets()
+        SocketSnapshot[] snapshots = new SocketSnapshot[effectiveSystemTopology.effectiveSockets()
                 .cardinality()];
 
-        createControlPlaneWithMocks(effectiveTopology, snapshots);
+        ControlPlane controlPlane = createControlPlaneWithMocks(snapshots);
+        controlPlane.start();
 
-        effectiveTopology.effectiveSockets().clear(0);
-        effectiveTopology.effectiveCores().clear(0, 2);
-        effectiveTopology.effectiveCpus().clear(0, 4);
+        effectiveSystemTopology.effectiveSockets().clear(0);
+        effectiveSystemTopology.effectiveCores().clear(0, 2);
+        effectiveSystemTopology.effectiveCpus().clear(0, 4);
 
-        EffectiveSystemTopology updatedTopology = new EffectiveSystemTopology(
-                effectiveTopology.effectiveSockets(), effectiveTopology.effectiveCores(),
-                effectiveTopology.effectiveCpus(), effectiveTopology.socketTopologies(), 3);
-
-//        mockMapper.when(TopologyMapper::getEffectiveTopology).thenReturn(updatedTopology);
-//        mockMapper.when(TopologyMapper::getGlobalVersion).thenReturn(3);
+        version = 3;
+        effectiveSystemTopology = new EffectiveSystemTopology(
+                effectiveSystemTopology.effectiveSockets(), effectiveSystemTopology.effectiveCores(),
+                effectiveSystemTopology.effectiveCpus(), effectiveSystemTopology.socketTopologies(), version);
 
         when(mockShard.isStarted()).thenReturn(true);
 
@@ -138,24 +143,23 @@ class ControlPlaneTest {
         verify(mockShard, times(1)).clone(eq(0), any());
         verify(mockShard, times(1)).clone(eq(1), any());
         verify(mockShard, times(1)).start(eq(snapshots[0]),
-                eq(updatedTopology.socketTopologies().get(0)),
+                eq(effectiveSystemTopology.socketTopologies().get(0)),
                 any());
         verify(mockShard, times(1)).start(eq(snapshots[1]),
-                eq(updatedTopology.socketTopologies().get(1)),
+                eq(effectiveSystemTopology.socketTopologies().get(1)),
                 any());
 
         verify(mockShard, times(0)).update(snapshots[0],
-                updatedTopology.socketTopologies().get(0));
+                effectiveSystemTopology.socketTopologies().get(0));
         verify(mockShard, times(0)).close();
         verify(mockShard, times(1)).shutDownShard(any());
         verify(mockShard, times(1)).update(snapshots[1],
-                updatedTopology.socketTopologies().get(1));
+                effectiveSystemTopology.socketTopologies().get(1));
 
         verify(mockUtilization, times(1)).getSocketSnapshot(eq(0), any(), anyDouble());
         verify(mockUtilization, times(2)).getSocketSnapshot(eq(1), any(), anyDouble());
 
-        ControlPlane controlPlane = ControlPlane.get();
-        assertEquals(updatedTopology.globalVersion(), controlPlane.currentGlobalVersion);
+        assertEquals(effectiveSystemTopology.globalVersion(), controlPlane.currentGlobalVersion);
         assertTrue(controlPlane.primed.get());
         Awaitility.await().atMost(Duration.ofSeconds(2)).untilFalse(controlPlane.rebalancing);
         assertArrayEquals(new int[]{1}, controlPlane.activeShardIds.get());
@@ -185,8 +189,7 @@ class ControlPlaneTest {
                 topologies, 0);
     }
 
-    private ControlPlane createControlPlaneWithMocks(EffectiveSystemTopology effectiveTopology,
-            SocketSnapshot[] snapshots) {
+    private ControlPlane createControlPlaneWithMocks(SocketSnapshot[] snapshots) {
         for (int i = 0; i < snapshots.length; i++) {
             snapshots[i] = mock(SocketSnapshot.class);
             when(mockUtilization.getSocketSnapshot(eq(i), any(), anyDouble())).thenReturn(
@@ -204,7 +207,6 @@ class ControlPlaneTest {
         }
         mockSysInfo.when(SystemInfo::getMaxSocketId).thenReturn(1);
 
-//        mockMapper.when(TopologyMapper::getEffectiveTopology).thenReturn(effectiveTopology);
         when(mockShard.isStarted()).thenReturn(false);
 
         return ControlPlane.getOrCreate("TestControlPlane", mockShard);
