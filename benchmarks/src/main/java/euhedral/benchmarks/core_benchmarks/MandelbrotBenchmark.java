@@ -35,6 +35,7 @@ import org.openjdk.jmh.annotations.Warmup;
 import org.openjdk.jmh.infra.Blackhole;
 import reactor.core.publisher.BaseSubscriber;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
 @BenchmarkMode({Mode.AverageTime})
@@ -146,15 +147,18 @@ public class MandelbrotBenchmark {
             makeSub(blackhole);
         }
 
-        @Benchmark
-        @OperationsPerInvocation(CANVAS * 4)
+//        @Benchmark
+//        @OperationsPerInvocation(CANVAS * 4)
         public void renderSchedulersParallel(Blackhole blackhole) {
             System.out.println("Total Tasks: " + CANVAS * 4);
 
             Flux.fromArray(this.pixels)
-                    .parallel()
-                    .runOn(Schedulers.parallel())
-                    .subscribe(subscriber);
+                    .flatMap(pixel -> Mono.fromCallable(() -> {
+                        subscriber.onNext(pixel);
+                        return Mono.empty();
+                    })
+                    .subscribeOn(Schedulers.parallel()), Runtime.getRuntime().availableProcessors())
+                    .subscribe();
 
             waitOnRender(this.counters);
             blackhole.consume(this.escapes);
@@ -167,9 +171,12 @@ public class MandelbrotBenchmark {
             System.out.println("Total Tasks: " + CANVAS * 4);
 
             Flux.fromArray(this.pixels)
-                    .parallel()
-                    .runOn(Schedulers.boundedElastic())
-                    .subscribe(subscriber);
+                    .flatMap(pixel -> Mono.fromCallable(() -> {
+                                subscriber.onNext(pixel);
+                                return Mono.empty();
+                            })
+                            .subscribeOn(Schedulers.boundedElastic()), Runtime.getRuntime().availableProcessors())
+                    .subscribe();
 
             waitOnRender(this.counters);
             blackhole.consume(this.escapes);
@@ -243,8 +250,8 @@ public class MandelbrotBenchmark {
             makeSub();
         }
 
-        @Benchmark
-        @OperationsPerInvocation(CANVAS * 4)
+//        @Benchmark
+//        @OperationsPerInvocation(CANVAS * 4)
         public void render(Blackhole blackhole) {
             System.out.println("Total Tasks: " + CANVAS * 4);
 

@@ -2,9 +2,11 @@
 
 Welcome to Euhedral. A NUMA-aware, lock-free, self-tuning execution framework for Java.
 
-At the center of the project is euhedral-core: a pull-based execution engine that treats CPUs like a
-distributed system. Threads are pinned to hardware. Work is routed by deterministic hashing. Queues
-are sized around cache topology. Scheduling adapts continuously based on observed runtime pressure.
+At the center of the project is euhedral-core:
+
+A pull-based execution engine that treats CPUs like a distributed system. Threads are pinned to
+hardware. Work is routed by deterministic hashing. Queues are sized around cache topology.
+Scheduling adapts continuously based on observed runtime pressure.
 
 Think:
 
@@ -55,9 +57,10 @@ AbstractFrame.execute()
 ```
 
 Everything below the ControlPlane is replicated according to hardware topology.
+
 - Sockets become shards
 - L2-sharing CPUs cooperate through localized queues (DRRCacheManager)
-- CPUS become pinned execution loops (ExecutionManager)
+- CPUs become pinned execution loops (ExecutionManager)
 
 The system behaves more like a micro distributed system than a traditional executor service
 
@@ -89,9 +92,11 @@ using runtime feedback.
 - Topology changes
 - Effective CPU availability
 
-**The goal is simple**:
+**Goals**:
 
-Keep the machine busy without making it angry.
+- Keep the machine busy without making it angry.
+- Abstract complexity away from the user.
+- Make it easy to use and compatible with what exists.
 
 ---
 
@@ -293,6 +298,7 @@ Includes:
 | <span style="white-space: nowrap">ThreadTools</span>          | CPU affinity and timer utilities |
 
 Supports:
+
 - Linux
 - Windows
 - macOS (WIP)
@@ -315,22 +321,22 @@ Used for:
 Reactor integration layer.
 
 Provides:
+
 - Reactor Scheduler support
 - .transform() integration
 - flatMap / map compatibility
 - Euhedral-backed execution pipeline
+
+---
 
 ## Project Status
 
 The core runtime is operational and benchmarked, but documenation and API refinement are ongoing.
 
 Current focus areas:
+
 - More stress testing
 - Additional architecture docs
 - More integration examples
 - Dependency cleanup
 - Reactor integration improvements
-
-## Philosophy
-
-Make it easy to use and abstract complexity away from the user.
