@@ -49,13 +49,8 @@ public abstract class AbstractExecutor implements PipelineExecutor {
             }
         }
 
-        int cycles = 0;
         while (!this.completeSink.offer(frame)) {
-            if ((cycles++ & 127) == 0) {
-                Thread.onSpinWait();
-            } else if (cycles >= 512) {
-                Thread.yield();
-            }
+            Thread.onSpinWait();
         }
     }
 
