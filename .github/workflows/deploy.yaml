@@ -1,24 +1,48 @@
 name: Euhedral Execution Deploy
 
 on:
-  workflow_dispatch:
-    inputs:
-      run_id:
-        description: 'The Run ID from the main build workflow'
-        required: true
+  push:
+    branches: [ "main" ]
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       packages: write
 
     steps:
       - uses: actions/checkout@v4
         with:
-          sparse-checkout: |
-            .github
+          token: ${{ secrets.AUTOMATION_PAT }}
+          persist-credentials: true
+          fetch-depth: 0
+
+      - name: Configure Git User
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      - name: Cache macOS SDK
+        id: cache-macos-sdk
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/mise/installs/macos-sdk
+          key: macos-sdk-26.1-v1
+
+      - name: Cache Maven dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      - name: Download macOS SDK headers for Zig
+        if: ${{ !env.ACT && steps.cache-macos-sdk.outputs.cache-hit != 'true' }}
+        run: |
+          sudo apt-get update && sudo apt-get install -y xz-utils
+          mkdir -p ~/.local/share/mise/installs/macos-sdk
+          curl -f -L -s https://github.com/joseluisq/macosx-sdks/releases/download/26.1/MacOSX26.1.sdk.tar.xz | tar -xJ --strip-components=1 -C ~/.local/share/mise/installs/macos-sdk/
 
       - name: Install mise tools
         uses: jdx/mise-action@v2
@@ -26,38 +50,87 @@ jobs:
           install: true
           cache: true
 
-      - name: Cache Maven dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.m2/repository
-          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+      - name: Fetch and Merge Multi-OS JNI Headers
+        if: ${{ !env.ACT }}
+        run: |
+          MISE_JDK_PATH=$(mise where java)
+          INCLUDE_DIR="$MISE_JDK_PATH/include"
+          mkdir -p "$INCLUDE_DIR/darwin" "$INCLUDE_DIR/win32"
 
-      - name: Download Build Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: maven-build-artifacts
-          run-id: ${{ inputs.run_id }}
-          github-token: ${{ github.token }}
+          cp "$INCLUDE_DIR/linux/jni_md.h" "$INCLUDE_DIR/darwin/jni_md.h"
+          cp "$INCLUDE_DIR/linux/jni_md.h" "$INCLUDE_DIR/win32/jni_md.h"
 
-      - name: Extract POM Version
-        id: get_version
+          echo "Final JNI Include Directory Layout:"
+          ls -R "$INCLUDE_DIR"
+
+      - name: Resolve Dependencies
+        run: |
+          mise exec -- mvn dependency:go-offline -B --file pom.xml
+
+      - name: Install GPG Private Key
+        uses: crazy-max/ghaction-import-gpg@v6
+        with:
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.GPG_PASSPHRASE }}
+
+      - name: Parse POM Version
+        id: check_version
         run: |
           POM_VERSION=$(mise exec -- mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
-          echo "version=v$POM_VERSION" >> $GITHUB_OUTPUT
-          echo "Detected multi-module version: v$POM_VERSION"
-
-      - name: Validate New Version
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TARGET_TAG: ${{ steps.get_version.outputs.version }}
-        run: |
-          if gh release view "$TARGET_TAG" >/dev/null 2>&1 || git rev-parse "$TARGET_TAG" >/dev/null 2>&1; then
-            echo "::error::Version $TARGET_TAG already exists. Aborting."
-            exit 1
+          echo "TARGET_TAG=v$POM_VERSION" >> $GITHUB_OUTPUT
+          
+          if [[ "$POM_VERSION" == *"-SNAPSHOT"* ]]; then
+            echo "is_snapshot=true" >> $GITHUB_OUTPUT
+            echo "Detected SNAPSHOT version: $POM_VERSION. Will compile and verify, but SKIP deployment."
+          else
+            echo "is_snapshot=false" >> $GITHUB_OUTPUT
+            echo "Detected RELEASE version: $POM_VERSION. Validating deployment targets."
           fi
 
-      - name: Publish to GitHub Packages Apache Maven
-        run: |
-          mise exec -- mvn deploy -DskipTests -s $GITHUB_WORKSPACE/settings.xml
+      - name: Check Existing Releases
+        if: ${{ steps.check_version.outputs.is_snapshot == 'false' }}
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_TAG: ${{ steps.check_version.outputs.TARGET_TAG }}
+        run: |
+          if gh release view "$TARGET_TAG" >/dev/null 2>&1 || git rev-parse "$TARGET_TAG" >/dev/null 2>&1; then
+            echo "::error::Deployment aborted. A release or tag named $TARGET_TAG already exists."
+            exit 1
+          else
+            echo "Version $TARGET_TAG is unique. Proceeding."
+          fi
+
+      - name: Build and Verify
+        if: ${{ steps.check_version.output.is_snapshot == 'true' }}
+        run: |
+          mise exec -- mvn -B verify --file pom.xml
+
+      - name: Build and Deploy to Apache Maven Central
+        if: ${{ steps.check_version.outputs.is_snapshot == 'false' }}
+        run: |
+          mise exec -- mvn -B clean deploy org.sonatype.central:central-publishing-maven-plugin:0.7.0:publish -DskiTests -s settings.xml
+        env:
+          CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
+          CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+
+      - name: Create Git Tag and GitHub Release
+        if: ${{ steps.check_version.outputs.is_snapshot == 'false' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_TAG: ${{ steps.check_version.outputs.TARGET_TAG }}
+        run: |
+          git tag -a "$TARGET_TAG" -m "Release $TARGET_TAG"
+          git push origin "$TARGET_TAG"
+          gh release create "$TARGET_TAG" --generate-notes
+
+      - name: Roll to Next Development Snapshot
+        run: |
+          mise exec -- mvn versions:set -DnextSnapshot=true -DgenerateBackupPoms=false
+          
+          NEW_SNAPSHOT=$(mise exec -- mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          
+          git add **/pom.xml pom.xml
+          git commit -m "chore: Bump version to $NEW_SNAPSHOT [skip ci]"
+          git push origin main
