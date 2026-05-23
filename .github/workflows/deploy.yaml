@@ -1,0 +1,63 @@
+name: Euhedral Execution Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'The Run ID from the main build workflow'
+        required: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            .github
+
+      - name: Install mise tools
+        uses: jdx/mise-action@v2
+        with:
+          install: true
+          cache: true
+
+      - name: Cache Maven dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+
+      - name: Download Build Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: maven-build-artifacts
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Extract POM Version
+        id: get_version
+        run: |
+          POM_VERSION=$(mise exec -- mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          echo "version=v$POM_VERSION" >> $GITHUB_OUTPUT
+          echo "Detected multi-module version: v$POM_VERSION"
+
+      - name: Validate New Version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_TAG: ${{ steps.get_version.outputs.version }}
+        run: |
+          if gh release view "$TARGET_TAG" >/dev/null 2>&1 || git rev-parse "$TARGET_TAG" >/dev/null 2>&1; then
+            echo "::error::Version $TARGET_TAG already exists. Aborting."
+            exit 1
+          fi
+
+      - name: Publish to GitHub Packages Apache Maven
+        run: |
+          mise exec -- mvn deploy -DskipTests -s $GITHUB_WORKSPACE/settings.xml
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
