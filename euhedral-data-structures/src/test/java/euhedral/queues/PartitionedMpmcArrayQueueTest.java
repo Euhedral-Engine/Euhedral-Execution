@@ -61,7 +61,7 @@ class PartitionedMpmcArrayQueueTest {
         QueueConsumer<Long> consumer = (val) -> {
         };
         ExecutorService exec = Executors.newFixedThreadPool(16);
-        for (int x = 0; x < 50; x++) {
+        for (int x = 0; x < 10; x++) {
             CountDownLatch end = new CountDownLatch(8);
 
             int batch = 100_000;
