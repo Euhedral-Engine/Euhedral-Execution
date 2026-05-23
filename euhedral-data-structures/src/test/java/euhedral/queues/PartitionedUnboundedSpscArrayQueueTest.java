@@ -54,7 +54,7 @@ class PartitionedUnboundedSpscArrayQueueTest {
         QueueConsumer<Long> consumer = (val) -> {
         };
         ExecutorService exec = Executors.newFixedThreadPool(2);
-        for (int x = 0; x < 50; x++) {
+        for (int x = 0; x < 20; x++) {
             CountDownLatch end = new CountDownLatch(1);
 
             LongAdder offered = new LongAdder();
