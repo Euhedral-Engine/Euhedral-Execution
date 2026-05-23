@@ -132,7 +132,7 @@ class UpstreamQueueTest {
         queue.pull(buffer, 64);
 
         assertEquals(64, upstream.requested);
-        assertEquals(32, upstream.pulled);
+        assertEquals(64, upstream.pulled);
     }
 
     @Test
@@ -230,7 +230,7 @@ class UpstreamQueueTest {
         UpstreamQueue.drain(upstream, buffer, 64);
 
         assertEquals(64, upstream.requested);
-        assertEquals(16, upstream.pulled);
+        assertEquals(64, upstream.pulled);
     }
 
     @Test

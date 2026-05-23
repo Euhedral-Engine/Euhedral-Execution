@@ -33,8 +33,7 @@ public class UpstreamQueue {
 
     static {
         try {
-            UP_COUNT = MethodHandles.lookup()
-                    .findVarHandle(UpstreamQueue.class, "cachedUpCount", long.class);
+            UP_COUNT = MethodHandles.lookup().findVarHandle(UpstreamQueue.class, "upstreamCount", long.class);
         } catch (Exception e) {
             throw new ExceptionInInitializerError(e);
         }
@@ -59,6 +58,7 @@ public class UpstreamQueue {
     private final UpstreamHandle[] drainBuffer = new UpstreamHandle[512];
     private final int[] pullIdx = new int[] {0};
     final long[] pullBucket = new long[] {0L, 0L};
+    private long upstreamCount = 0L;
     @Getter
     long cachedUpCount = 0L;
 
@@ -117,7 +117,8 @@ public class UpstreamQueue {
 
     protected static void drain(UpstreamHandle handle, DrainBuffer buffer, long demand) {
         if (buffer != null) {
-            long limit = Math.min(buffer.getSize(), demand);
+            long limit = buffer.buffer.capacity() < 0 ? demand
+                    : Math.min(buffer.buffer.capacity(), demand);
             handle.pull(buffer, limit);
         }
         handle.request(demand);
