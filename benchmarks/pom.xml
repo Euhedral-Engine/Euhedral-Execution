@@ -5,11 +5,12 @@
   <modelVersion>4.0.0</modelVersion>
 
   <parent>
-    <groupId>com.euhedral</groupId>
+    <groupId>io.euhedral-execution</groupId>
     <artifactId>euhedral-execution</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
+    <version>0.0.1</version>
   </parent>
 
+  <name>Euhedral Benchmarks</name>
   <artifactId>benchmarks</artifactId>
 
   <properties>
@@ -20,31 +21,31 @@
 
   <dependencies>
     <dependency>
-      <groupId>com.euhedral</groupId>
+      <groupId>io.euhedral-execution</groupId>
       <artifactId>euhedral-core</artifactId>
       <version>${project.version}</version>
       <scope>compile</scope>
     </dependency>
     <dependency>
-      <groupId>com.euhedral</groupId>
+      <groupId>io.euhedral-execution</groupId>
       <artifactId>euhedral-data-structures</artifactId>
       <version>${project.version}</version>
       <scope>compile</scope>
     </dependency>
     <dependency>
-      <groupId>com.euhedral</groupId>
+      <groupId>io.euhedral-execution</groupId>
       <artifactId>euhedral-hardware-utils</artifactId>
       <version>${project.version}</version>
       <scope>compile</scope>
     </dependency>
     <dependency>
-      <groupId>com.euhedral</groupId>
+      <groupId>io.euhedral-execution</groupId>
       <artifactId>euhedral-hashing</artifactId>
       <version>${project.version}</version>
       <scope>compile</scope>
     </dependency>
     <dependency>
-      <groupId>com.euhedral</groupId>
+      <groupId>io.euhedral-execution</groupId>
       <artifactId>euhedral-reactor-core</artifactId>
       <version>${project.version}</version>
       <scope>compile</scope>
