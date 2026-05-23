@@ -4,28 +4,29 @@
   xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
   <parent>
-    <groupId>com.euhedral</groupId>
+    <groupId>io.euhedral-execution</groupId>
     <artifactId>euhedral-execution</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
+    <version>0.0.1</version>
   </parent>
 
+  <name>Euhedral Core</name>
   <artifactId>euhedral-core</artifactId>
 
   <dependencies>
     <dependency>
-      <groupId>com.euhedral</groupId>
+      <groupId>io.euhedral-execution</groupId>
       <artifactId>euhedral-data-structures</artifactId>
       <version>${project.version}</version>
       <scope>compile</scope>
     </dependency>
     <dependency>
-      <groupId>com.euhedral</groupId>
+      <groupId>io.euhedral-execution</groupId>
       <artifactId>euhedral-hardware-utils</artifactId>
       <version>${project.version}</version>
       <scope>compile</scope>
     </dependency>
     <dependency>
-      <groupId>com.euhedral</groupId>
+      <groupId>io.euhedral-execution</groupId>
       <artifactId>euhedral-hashing</artifactId>
       <version>${project.version}</version>
       <scope>compile</scope>
