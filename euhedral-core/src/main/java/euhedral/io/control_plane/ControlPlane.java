@@ -2,6 +2,18 @@ package euhedral.io.control_plane;
 
 import static euhedral.io.utils.MathFunctions.unsignedMultiplyHigh;
 
+import java.time.Duration;
+import java.util.Arrays;
+import java.util.BitSet;
+import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.LockSupport;
+
 import euhedral.hardware_utils.PinnedThreadExecutor;
 import euhedral.hardware_utils.ResourceMonitor;
 import euhedral.hardware_utils.SystemInfo;
@@ -18,21 +30,69 @@ import euhedral.io.generics.CloneableObject;
 import euhedral.io.generics.IngestSink;
 import euhedral.io.generics.ScaffoldingSource;
 import io.micrometer.core.instrument.MeterRegistry;
-import java.time.Duration;
-import java.util.Arrays;
-import java.util.BitSet;
-import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.concurrent.locks.LockSupport;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/// ## The control surface of Euhedral Core
+///
+/// `ControlPlane` is the top-level orchestration layer for the entire system.
+///
+/// It owns system topology, shard placement, and runtime rebalancing. It decides how work is
+/// distributed across CPUs and keeps the execution layer aligned with the current hardware state.
+///
+/// **What it coordinates:**
+///
+///   - System topology discovery and updates
+///   - Shard lifecycle (create -> start -> rebalance -> shutdown)
+///   - CPU/socket-aware routing
+///   - Ingest distribution across shards
+///   - Global rebalancing under hardware change
+///
+/// At runtime, it continuously reacts to hardware utilization and topology shifts, adjusting
+/// execution layout to match available resources.
+///
+/// ---
+///
+/// ### Mental model
+///
+/// Think of it as the “traffic controller” above everything else.
+///
+/// Frames don’t see it. Shards don’t argue with it. It just keeps the system aligned with reality.
+///
+/// ---
+///
+/// ### Routing
+///
+/// Work is routed based on frame hash and current shard mapping:
+///
+/// ```java
+/// int idx = (int) unsignedMultiplyHigh(frame.getCombinedHash(), map.length);
+/// return activeShardIds[idx];
+/// ```
+///
+/// When routing policy is strict, origin-aware routing can override hashing:
+///
+/// ```java
+/// if (policy.level > RoutingPolicy.ANY.level) {
+///     return reverseMapping[frame.getOrigin().socket()];
+/// }
+/// ```
+///
+/// ---
+///
+/// ### Behavior
+///
+/// - Starts lazily on first ingest
+/// - Rebalances automatically when topology changes
+/// - Spawns and manages per-socket shards
+/// - Stays out of the way unless hardware forces a change
+///
+/// It is the boss that doesn't know what the workers do. It just sends work their way.
+///
+/// ---
+///
+/// **This is the thing above the thing above the things.** Everything starts from here.
 @SuppressWarnings("unused")
 public class ControlPlane implements AutoCloseable {
 
@@ -48,21 +108,18 @@ public class ControlPlane implements AutoCloseable {
                 return curr;
             }
 
-            return new ControlPlane(name, baseShard, null,
-                    SystemInfo.getCpuSet(), null);
+            return new ControlPlane(name, baseShard, null, SystemInfo.getCpuSet(), null);
         });
     }
 
-    public static ControlPlane getOrCreate(String name,
-            CloneableObject cloneableObject, MeterRegistry meterRegistry) {
+    public static ControlPlane getOrCreate(String name, CloneableObject cloneableObject,
+            MeterRegistry meterRegistry) {
         return INSTANCE.updateAndGet(curr -> {
             if (curr != null) {
                 return curr;
             }
 
-            return new ControlPlane(name, cloneableObject,
-                    SystemInfo.getCpuSet(),
-                    meterRegistry);
+            return new ControlPlane(name, cloneableObject, SystemInfo.getCpuSet(), meterRegistry);
         });
     }
 
@@ -73,8 +130,7 @@ public class ControlPlane implements AutoCloseable {
                 return curr;
             }
 
-            return new ControlPlane(name, cloneableObject, allowedCpus,
-                    meterRegistry);
+            return new ControlPlane(name, cloneableObject, allowedCpus, meterRegistry);
         });
     }
 
@@ -111,14 +167,12 @@ public class ControlPlane implements AutoCloseable {
     }
 
     protected ControlPlane(String name, ControlPlaneShard baseShard,
-            CloneableObject cloneableObject, BitSet allowedCpus,
-            MeterRegistry meterRegistry) {
+            CloneableObject cloneableObject, BitSet allowedCpus, MeterRegistry meterRegistry) {
         this.topology = new TopologyMapper(allowedCpus);
         this.resourceMonitor = new ResourceMonitor(this.topology, Duration.ofMillis(200));
 
         this.baseShard = Objects.requireNonNullElseGet(baseShard,
-                () -> new ControlPlaneShard(-1, "BaseShard", cloneableObject,
-                        meterRegistry));
+                () -> new ControlPlaneShard(-1, "BaseShard", cloneableObject, meterRegistry));
 
         this.name = name;
         this.logger = LoggerFactory.getLogger(name);
@@ -128,8 +182,8 @@ public class ControlPlane implements AutoCloseable {
         this.shardHandles = new ScaffoldingEdge[SystemInfo.getMaxSocketId() + 1];
 
         this.allowedCores = allowedCpus;
-        this.controlPlaneExecutor = Executors.newFixedThreadPool(this.shards.length,
-                r -> new Thread(r, name));
+        this.controlPlaneExecutor =
+                Executors.newFixedThreadPool(this.shards.length, r -> new Thread(r, name));
 
         this.shutdownHook = new Thread(this::close);
         Runtime.getRuntime().addShutdownHook(this.shutdownHook);
@@ -158,12 +212,13 @@ public class ControlPlane implements AutoCloseable {
     public void ingest(@NonNull ScaffoldingSource stream) {
         Objects.requireNonNull(stream);
         if (this.closed.getOpaque()) {
-            throw new RuntimeException("Could not ingest from an upstream publisher. The ControlPlane is permanently closed.");
+            throw new RuntimeException(
+                    "Could not ingest from an upstream publisher. The ControlPlane is permanently closed.");
         }
-        if(!this.started.getOpaque()) {
+        if (!this.started.getOpaque()) {
             start();
         }
-        while(!this.ready.getOpaque()) {
+        while (!this.ready.getOpaque()) {
             LockSupport.parkNanos(1_000);
         }
 
@@ -197,8 +252,7 @@ public class ControlPlane implements AutoCloseable {
             int socket = location != null ? location.socket() : -1;
 
             if (socket >= 0 && socket < reverseMapping.length
-                    && (socket = reverseMapping[socket]) < mapSize
-                    && socket >= 0) {
+                    && (socket = reverseMapping[socket]) < mapSize && socket >= 0) {
                 return socket;
             }
         }
@@ -229,13 +283,13 @@ public class ControlPlane implements AutoCloseable {
 
             int[] sockets = this.activeShardIds.getOpaque();
             for (int socketId : sockets) {
-                EffectiveSocketTopology topology = this.effectiveTopology.socketTopologies()
-                        .get(socketId);
+                EffectiveSocketTopology topology =
+                        this.effectiveTopology.socketTopologies().get(socketId);
                 ControlPlaneShard shard = this.shards[socketId];
 
-                SocketSnapshot snapshot = utilization.getSocketSnapshot(socketId,
-                        topology.effectiveCoreToCpu(),
-                        getShardQuota(socketId, quotaPool));
+                SocketSnapshot snapshot =
+                        utilization.getSocketSnapshot(socketId, topology.effectiveCoreToCpu(),
+                                getShardQuota(socketId, quotaPool));
                 CompletableFuture.runAsync(() -> {
                     if (!shard.isStarted()) {
                         this.logger.info("Starting shard");
@@ -269,11 +323,11 @@ public class ControlPlane implements AutoCloseable {
         double quotaPool = utilization.quotaCpus();
         for (int socket = newShards.nextSetBit(0); socket >= 0;
                 socket = newShards.nextSetBit(socket + 1)) {
-            EffectiveSocketTopology topology = this.effectiveTopology.socketTopologies()
-                    .get(socket);
-            SocketSnapshot snapshot = utilization.getSocketSnapshot(socket,
-                    topology.effectiveCoreToCpu(),
-                    getShardQuota(socket, quotaPool));
+            EffectiveSocketTopology topology =
+                    this.effectiveTopology.socketTopologies().get(socket);
+            SocketSnapshot snapshot =
+                    utilization.getSocketSnapshot(socket, topology.effectiveCoreToCpu(),
+                            getShardQuota(socket, quotaPool));
 
             if (!this.shards[socket].isStarted()) {
                 startShard(socket, snapshot, topology);
@@ -356,9 +410,9 @@ public class ControlPlane implements AutoCloseable {
 
     protected double getShardQuota(int socketId, double systemQuotaPool) {
         int totalEffectiveCpus = this.effectiveTopology.effectiveCpus().cardinality();
-        int socketEffectiveCpus = this.effectiveTopology.socketTopologies().get(socketId)
-                .effectiveCpus()
-                .cardinality();
+        int socketEffectiveCpus =
+                this.effectiveTopology.socketTopologies().get(socketId).effectiveCpus()
+                        .cardinality();
 
         return ((double) socketEffectiveCpus / Math.max(1, totalEffectiveCpus)) * systemQuotaPool;
     }

@@ -7,33 +7,66 @@ import euhedral.io.impl.FrameManager;
 import lombok.Getter;
 import lombok.Setter;
 
-/// Base unit of work within the Clio Execution Engine.
+/// ## Base unit of work within Euhedral Core
 ///
-/// This class encapsulates the state, routing hashes, and lifecycle logic required for execution by
-/// an [`AbstractExecutor`][euhedral.io].
+/// A frame is the smallest unit of execution in the system.
 ///
-/// To maximize performance and minimize GC pressure, instances are designed for reuse via a
-/// [FrameManager]. After execution completes, the frame is returned to its creator to be reset and
-/// dispatched again.
+/// It carries execution state, routing hashes, and lifecycle hooks required by an
+/// [`AbstractExecutor`][euhedral.io].
 ///
-/// To prevent performance degradation and maintain strict ordering guarantees, use
-/// [`HasherApi`][euhedral.io.utils] to generate or mix hashes.
+/// Frames are designed to be *hot-path reusable*. They are not created and discarded like typical
+/// tasks. Instead, they are recycled through a [FrameManager] to avoid GC churn and keep allocation
+/// pressure near zero.
 ///
-/// **Ordering:** Reliable sequencing depends on keeping the hash consistent across retries.
+/// Once execution completes, the frame is returned to its origin, reset, and potentially dispatched
+/// again.
+///
+/// ---
+///
+/// ### Hashing & Routing
+///
+/// Frames are routed based on a `combinedHash`. This is what determines how work spreads across
+/// parallel paths.
+///
+/// For stable ordering, keep the hash consistent across retries:
+///
 /// ```java
 /// long idHash = frame.getIdHash();
 /// final long seed = 123;
 /// frame.randomizeHash(HasherApi.combine(idHash, seed));
 /// ```
 ///
-/// **Parallelism:** For even distribution across consumers, each frame's hash must be changed. The
-/// seed only needs to be incremented by one to ensure this happens.
+/// For parallel distribution, vary the seed so frames naturally spread out:
 ///
 /// ```java
 /// long idHash = frame.getIdHash();
 /// long seed = 123;
 /// frame.randomizeHash(HasherApi.combine(idHash, seed++));
 /// ```
+///
+/// ---
+///
+/// ### Lifecycle Notes
+///
+/// - `execute()` -> does the work
+/// - `kill()` -> hard stop (this and related work)
+/// - `isAlive()` -> soft liveness check (engine may cancel if false)
+/// - `doFinally()` -> post-execution hook (safe mutation point)
+///
+/// ---
+///
+/// ### Mental model
+///
+/// Think of a frame as a tiny packet of work that keeps getting reshaped and forwarded until the
+/// system is done with it.
+///
+/// It’s lightweight on purpose.
+///
+/// It doesn’t want to be expensive.
+///
+/// It just wants to move.
+///
+/// (And then get reused.)
 @SuppressWarnings({"rawtypes", "unchecked", "unused"})
 public abstract class AbstractFrame {
 
@@ -42,29 +75,22 @@ public abstract class AbstractFrame {
 
     @Getter
     private final long idHash;
-    @Getter
-    @Setter
+    @Getter @Setter
     protected volatile long combinedHash;
-    @Getter
-    @Setter
+    @Getter @Setter
     private CpuInfo origin;
-    @Getter
-    @Setter
+    @Getter @Setter
     private RoutingPolicy routingPolicy;
-    @Getter
-    @Setter
+    @Getter @Setter
     private long startNs;
 
-    @Getter
-    @Setter
+    @Getter @Setter
     private long ingestNs;
 
-    @Getter
-    @Setter
+    @Getter @Setter
     private boolean isOrdered;
 
-    @Getter
-    @Setter
+    @Getter @Setter
     private boolean cancelledExecution = false;
 
     public AbstractFrame(long idHash, FrameManager recycler) {
@@ -74,36 +100,38 @@ public abstract class AbstractFrame {
         this.combinedHash = idHash;
     }
 
-    public abstract long getSizeBytes();
-
+    /// Does the thing.
     public abstract void execute();
 
     /// Mixes the combined hash with the seed.
-    ///
-    /// @param seed Hash seed
     public void randomizeHash(long seed) {
         long newHash = this.combinedHash;
         this.combinedHash = newHash ^ seed;
     }
 
+    /// Liveness check.
+    ///
+    /// If this returns `false`, the engine is allowed to cancel execution.
     public abstract boolean isAlive();
 
-    /// Kills the frame. This is for stopping the execution of this and all related frames.
+    /// Hard stop for this frame (and related execution).
     public abstract void kill();
 
-    /// Defines what happens when execution is marked complete.
+    /// Post-execution hook.
+    ///
+    /// Called after execution completes. At this point it is safe to mutate frame state.
     public void doFinally() {
         recycle();
     }
 
-    /// Resets the frame to its initial state.
+    /// Resets execution state so the frame can be reused.
     public final void reset() {
         startNs = 0;
         ingestNs = 0;
         cancelledExecution = false;
     }
 
-    /// Sends the frame back to the creator for reuse.
+    /// Returns the frame to the recycler for reuse.
     public final boolean recycle() {
         if (recycler != null) {
             return recycler.recycle(this);
@@ -111,10 +139,13 @@ public abstract class AbstractFrame {
         return false;
     }
 
-    /// Throws this class's error frame. This is used as an immediate way to stop execution of this
-    /// frame. The [`AbstractExecutor`][AbstractExecutor] and
-    /// [`ExecutionManager`][euhedral.io.ExecutionManager] handles this by default.
+    /// Throws the internal cancellation error used to stop execution immediately.
+    ///
+    /// Handled by [`AbstractExecutor`][AbstractExecutor] and
+    /// [`ExecutionManager`][euhedral.io.ExecutionManager].
     public final void throwMeAsError() {
         throw this.cancel;
     }
+
+    public abstract long getSizeBytes();
 }

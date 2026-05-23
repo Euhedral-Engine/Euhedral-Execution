@@ -4,6 +4,11 @@ import static euhedral.io.utils.MathFunctions.clampDouble;
 import static euhedral.io.utils.MathFunctions.clampLong;
 import static euhedral.io.utils.MathFunctions.log2;
 
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.LockSupport;
+
 import euhedral.hardware_utils.PinnedThreadExecutor;
 import euhedral.hardware_utils.SystemInfo;
 import euhedral.hardware_utils.SystemInfo.CpuCacheLayout;
@@ -30,52 +35,44 @@ import euhedral.queues.PartitionedSpscArrayQueue;
 import euhedral.queues.PartitionedUnboundedMpscArrayQueue;
 import euhedral.queues.common.PartitionedQueue;
 import euhedral.queues.common.QueueUtils;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.VarHandle;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.locks.LockSupport;
 import lombok.AccessLevel;
 import lombok.Getter;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- * Adaptive concurrency and rate control implementation designed to provide stable, resource-aware
- * ingress governance.
- *
- * <p>This class regulates request dispatch using layered feedback mechanisms:
- *
- * <ul>
- *     <li>Latency-based adaptive concurrency (Vegas-style estimation)</li>
- *     <li>Resource-aware concurrency envelope (CPU and memory pressure)</li>
- *     <li>Dynamic waiter queue capping</li>
- *     <li>Configurable overload handling (reject, delay, or drop)</li>
- *     <li>Integrated rate limiting and circuit breaking</li>
- * </ul>
- *
- * <h2>Control Model</h2>
- *
- * <ul>
- *     <li><b>Effective maximum</b> - resource-adjusted concurrency envelope.</li>
- *     <li><b>Current concurrency</b> - latency-driven adaptive value bounded by effective maximum.</li>
- *     <li><b>Waiters</b> - how many processes are waiting for slots </li>
- * </ul>
- * <p>
- * The effective maximum is derived from CPU and memory utilization and
- * updated smoothly to prevent oscillation. The adaptive concurrency logic
- * adjusts within this envelope based on observed latency and queueing.
- *
- * <h2>Threading</h2>
- * <p>
- * This class is non-blocking and designed for use with reactive pipelines
- * and virtual threads. Coordination relies on atomic primitives and
- * lock-free data structures.
- *
- * <p> Intended for use as a global ingress governor or per-service adaptive
- * dispatcher.</p>
- * </p>
- */
+/// ## The core of Euhedral Core
+///
+/// `ExecutionManager` is the control loop that sits between ingress and execution. It continuously
+/// tunes concurrency, dispatch rate, and idle behavior based on what the system is actually doing.
+///
+/// **It coordinates:**
+///
+///   - Concurrency (how many frames are in flight)
+///   - Dispatch pacing (how fast work is pulled)
+///   - Idle behavior (spin -> yield -> park)
+///   - SMT buddy coordination
+///   - Backpressure and drain control
+///
+/// It uses a TCP Vegas-style latency model combined with Little’s Law and hardware pressure signals
+/// to estimate how much work a core can sustain while keeping latency stable.
+///
+/// **Goals:**
+///
+///   - Keep the core busy without overwhelming it
+///   - Keep queues short
+///   - Avoid latency blowups
+///   - Don't thrash the cache
+///
+/// #### Designed for pinned execution, reactive pipelines, and lock-free queues
+///
+/// Under load, it pushes harder. Under pressure, it backs off. When idle, it gradually transitions
+/// from spinning -> yielding -> parking.
+///
+/// Frames are the unit of execution: small, composable stages that behave like ultra-lightweight
+/// tasks. A pipeline of frames naturally executes in parallel across stages as work flows through.
+///
+/// **This is the control surface of the system. Everything else is just plumbing.**
 @Getter(AccessLevel.PROTECTED)
 public class ExecutionManager implements SlotManager {
 
@@ -183,8 +180,9 @@ public class ExecutionManager implements SlotManager {
             this.shutdownHook = null;
             this.handle = null;
         } else {
-            String name = config.cloneConfig().shardName() + "-ExecutionManager-"
-                    + config.cloneConfig().coreId();
+            String name =
+                    config.cloneConfig().shardName() + "-ExecutionManager-" + config.cloneConfig()
+                            .coreId();
             this.logger = LoggerFactory.getLogger(name);
 
             int[] cpus = config.cloneConfig().getCpuSet();
@@ -209,8 +207,7 @@ public class ExecutionManager implements SlotManager {
             if (cpus.length > 1 && config.enableSMT()) {
                 smtExec = PinnedThreadExecutor.getOrSetIfAbsent(cpus[1],
                         this.config.cloneConfig().shardName() + "-ExecutionManager-SMT-"
-                                + this.config.cloneConfig().coreId(), Thread.MAX_PRIORITY,
-                        false);
+                                + this.config.cloneConfig().coreId(), Thread.MAX_PRIORITY, false);
                 this.buffer = new PartitionedSpscArrayQueue<>(bufferSize);
             } else {
                 this.buffer = new PartitionedArrayQueue<>(bufferSize);
@@ -220,8 +217,8 @@ public class ExecutionManager implements SlotManager {
             this.buddyState = new SMTState(executionLatency, bufferWrapper.arrivalLatencyRecorder,
                     config.idleCyclePolicy().maxParkTime().toNanos());
             this.buddy = new SMTBuddy(handle, bufferWrapper, buddyState, smtExec);
-            this.isPCore = SystemInfo.getCoreInfo(SystemInfo.getCpuInfo(layout.cpu()).core())
-                    .pCore();
+            this.isPCore =
+                    SystemInfo.getCoreInfo(SystemInfo.getCpuInfo(layout.cpu()).core()).pCore();
 
             this.completeSink =
                     new BufferedBridge(new PartitionedUnboundedMpscArrayQueue<>(1, bufferSize, 4),
@@ -249,7 +246,8 @@ public class ExecutionManager implements SlotManager {
                     this::getPressure);
             this.shutdownHook = new Thread(this::close);
             Runtime.getRuntime().addShutdownHook(this.shutdownHook);
-            this.logger.debug("CPU: {} P-Core: {} SMTMode: {} BufferCapacity: {}", this.cpuId, this.isPCore, cpus.length > 1 && config.enableSMT(), bufferSize);
+            this.logger.debug("CPU: {} P-Core: {} SMTMode: {} BufferCapacity: {}", this.cpuId,
+                    this.isPCore, cpus.length > 1 && config.enableSMT(), bufferSize);
         }
     }
 
@@ -312,6 +310,9 @@ public class ExecutionManager implements SlotManager {
 
     @Override
     public void firstTouch() {
+        if (this.running.getAcquire()) {
+            return;
+        }
         if (this.buffer == null) {
             return;
         }
@@ -377,7 +378,7 @@ public class ExecutionManager implements SlotManager {
         }
     }
 
-    private void cycle() {
+    protected void cycle() {
         try {
             long dispatchWaitNs = 0;
             while (this.running.get() && !Thread.currentThread().isInterrupted()) {
@@ -436,15 +437,14 @@ public class ExecutionManager implements SlotManager {
                 int bufferCount = this.buddyState.bufferCount.getAcquire();
                 // This is usually hit when there are producers present but nothing is flowing
                 if (processed == 0 && (this.state.rests & 15) != 0 && this.upstreamCount > 0
-                        && !this.state.receivingOrderedWork && ingestCount == 0
-                        && bufferCount == 0
+                        && !this.state.receivingOrderedWork && ingestCount == 0 && bufferCount == 0
                         && this.state.lastEmptyNs - this.state.lastActiveNs
                         > 10 * this.state.maxParkNs) {
                     idleSpin(Math.min(15, this.state.rests));
                     continue;
                 }
 
-                if(processed == 0 && bufferCount == 0) {
+                if (processed == 0 && bufferCount == 0) {
                     this.state.rests++;
                 }
             }
@@ -583,7 +583,7 @@ public class ExecutionManager implements SlotManager {
     }
 
     protected long calculateDispatchWaitNs(long nowNs) {
-        if(this.state.maxParkNs <= 0) {
+        if (this.state.maxParkNs <= 0) {
             return 0;
         }
 
@@ -592,9 +592,8 @@ public class ExecutionManager implements SlotManager {
         double avgLatency = Math.max(exec.avgUnits, 1.0);
         double avgVariance = exec.unitVariation;
 
-        double queuePressure =
-                this.executionLatency.getVegasQueueEstimate(exec, exec.avgUnits,
-                        this.currentConcurrency);
+        double queuePressure = this.executionLatency.getVegasQueueEstimate(exec, exec.avgUnits,
+                this.currentConcurrency);
 
         CoreSnapshot core = (CoreSnapshot) SNAPSHOT.getOpaque(this);
         CpuSnapshot cpu = core.cpuSnapshots()[this.cpuId];
@@ -688,9 +687,10 @@ public class ExecutionManager implements SlotManager {
         double vegasPressure = queueEstimate / beta;
 
         CoreSnapshot core = (CoreSnapshot) SNAPSHOT.getOpaque(this);
-        double hardwarePressure =
-                core != null ? core.cpuSnapshots()[this.cpuId].pressure()
-                        : 0.0;
+        double hardwarePressure = 0.0;
+        if(core != null) {
+            hardwarePressure = core.cpuSnapshots()[this.cpuId].pressure();
+        }
 
         double base = Math.max(vegasPressure, hardwarePressure);
         return clampDouble(base, 0.0, 1.0);

@@ -2,6 +2,11 @@ package euhedral.io.flow_control;
 
 import static euhedral.io.utils.MathFunctions.unsignedMultiplyHigh;
 
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
+import java.util.BitSet;
+import java.util.concurrent.atomic.AtomicBoolean;
+
 import euhedral.atomics.PaddedAtomicLong;
 import euhedral.io.flow_control.UpstreamQueue.UpstreamHandle;
 import euhedral.io.frames.AbstractFrame;
@@ -9,14 +14,24 @@ import euhedral.io.generics.RecursiveScaffolding;
 import euhedral.io.generics.ScaffoldingSource;
 import euhedral.io.utils.DrainBuffer;
 import euhedral.queues.PartitionedMpscArrayQueue;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.VarHandle;
-import java.util.BitSet;
-import java.util.concurrent.atomic.AtomicBoolean;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/// ## The main routing logic of Euhedral Core
+///
+/// This class behaves similarly to [ScaffoldingEdge], but extends it with explicit fan-out routing
+/// across multiple downstream branches. It is responsible for distributing work deterministically
+/// across a fixed topology.
+///
+/// #### Routing is hash-based and intentionally lightweight
+///
+/// ```java
+/// int idx = (int) unsignedMultiplyHigh(frame.getCombinedHash(), mapSize);
+/// this.downstreams[idx].onNext(frame);
+/// ```
+///
+/// **Each frame is routed to exactly one downstream, ensuring stable partitioning under load.**
 @SuppressWarnings("unused")
 public class ScaffoldingNode extends ScaffoldingEdge implements AutoCloseable {
 
@@ -74,8 +89,7 @@ public class ScaffoldingNode extends ScaffoldingEdge implements AutoCloseable {
         return this.drain;
     }
 
-    public boolean setDownstreamMapping(BitSet active,
-            ScaffoldingEdge[] handles) {
+    public boolean setDownstreamMapping(BitSet active, ScaffoldingEdge[] handles) {
         if (!this.drain.get()) {
             return false;
         }
@@ -202,8 +216,8 @@ public class ScaffoldingNode extends ScaffoldingEdge implements AutoCloseable {
     @FunctionalInterface
     public interface RoutingFunction {
 
-        RoutingFunction DEFAULT = (frame, mapSize) -> (int) unsignedMultiplyHigh(
-                frame.getCombinedHash(), mapSize);
+        RoutingFunction DEFAULT =
+                (frame, mapSize) -> (int) unsignedMultiplyHigh(frame.getCombinedHash(), mapSize);
 
         int route(AbstractFrame frame, int mapSize);
     }
@@ -230,6 +244,7 @@ public class ScaffoldingNode extends ScaffoldingEdge implements AutoCloseable {
             long sum = num1 + num2;
             return sum < 0 ? Long.MAX_VALUE : sum;
         }
+
         public final AtomicBoolean complete = new AtomicBoolean(false);
         private final PaddedAtomicLong wip = new PaddedAtomicLong(0);
         private final PaddedAtomicLong demand = new PaddedAtomicLong(0);
@@ -250,11 +265,14 @@ public class ScaffoldingNode extends ScaffoldingEdge implements AutoCloseable {
                 frame.setIngestNs(0);
             }
 
-            if (!frame.isOrdered()) {
-                if (ScaffoldingNode.this.parallelQueue != null && ScaffoldingNode.this.parallelQueue.offer(
-                        frame)) {
-                    return;
-                }
+            if (frame.isOrdered()) {
+                ScaffoldingNode.this.onNext(frame);
+                return;
+            }
+
+            boolean hasQueue = ScaffoldingNode.this.parallelQueue != null;
+            if (hasQueue && ScaffoldingNode.this.parallelQueue.offer(frame)) {
+                return;
             }
 
             ScaffoldingNode.this.onNext(frame);

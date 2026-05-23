@@ -1,11 +1,5 @@
 package euhedral.io.flow_control;
 
-import euhedral.atomics.PaddedAtomicLong;
-import euhedral.io.flow_control.UpstreamQueue.UpstreamHandle;
-import euhedral.io.frames.AbstractFrame;
-import euhedral.io.generics.RecursiveScaffolding;
-import euhedral.io.generics.ScaffoldingTerminal;
-import euhedral.io.utils.DrainBuffer;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.Collection;
@@ -14,10 +8,31 @@ import java.util.WeakHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.LockSupport;
+
+import euhedral.atomics.PaddedAtomicLong;
+import euhedral.io.flow_control.UpstreamQueue.UpstreamHandle;
+import euhedral.io.frames.AbstractFrame;
+import euhedral.io.generics.RecursiveScaffolding;
+import euhedral.io.generics.ScaffoldingTerminal;
+import euhedral.io.utils.DrainBuffer;
 import lombok.Getter;
 import lombok.Setter;
 import org.jctools.maps.NonBlockingHashMapLong;
 
+/// ## The main infrastructure class of Euhedral Core
+///
+/// This is the structural backbone of the entire system. A `ScaffoldingEdge` forms a dynamic
+/// execution graph by recursively linking to other edges whenever it is attached upstream or
+/// downstream.
+///
+/// When another `ScaffoldingEdge` is connected, it becomes part of the same chain, effectively
+/// extending the execution topology. When an `UpstreamHandle` is added, it is propagated upward
+/// through the graph. When a `ScaffoldingTerminal` is attached, it becomes the execution boundary
+/// (the “floor”) of that branch.
+///
+/// Work flows downward through the graph toward terminals, while demand and backpressure flow
+/// upward toward upstream sources. The structure is designed to continuously reconcile both
+/// directions under concurrent mutation without centralized coordination.
 @SuppressWarnings("unused")
 public class ScaffoldingEdge extends UpstreamHandle implements AutoCloseable {
 
@@ -47,7 +62,8 @@ public class ScaffoldingEdge extends UpstreamHandle implements AutoCloseable {
 
     protected final AtomicBoolean drain;
 
-    protected final NonBlockingHashMapLong<UpstreamQueue> aggregators = new NonBlockingHashMapLong<>();
+    protected final NonBlockingHashMapLong<UpstreamQueue> aggregators =
+            new NonBlockingHashMapLong<>();
     private final WeakHashMap<UpstreamHandle, Boolean> upstreamHandles = new WeakHashMap<>();
     private final PaddedAtomicLong upstreamCount = new PaddedAtomicLong(0);
     private final AtomicLong threadCount = new AtomicLong(0);
@@ -286,9 +302,7 @@ public class ScaffoldingEdge extends UpstreamHandle implements AutoCloseable {
     public void addDownstream(RecursiveScaffolding downstream) {
         boolean isEdge = downstream instanceof ScaffoldingEdge;
 
-        var witness =
-                (ScaffoldingTerminal) DOWNSTREAM.compareAndExchange(this, null,
-                        downstream);
+        var witness = (ScaffoldingTerminal) DOWNSTREAM.compareAndExchange(this, null, downstream);
 
         if (witness == null) {
             if (isEdge) {
@@ -302,15 +316,14 @@ public class ScaffoldingEdge extends UpstreamHandle implements AutoCloseable {
         if (witness instanceof ScaffoldingEdge existingEdge) {
             existingEdge.addDownstream(downstream);
         } else {
-            downstream.onError(
-                    new IllegalStateException(
-                            "Already added as an upstream by a terminal downstream"));
+            downstream.onError(new IllegalStateException(
+                    "Already added as an upstream by a terminal downstream"));
         }
     }
 
     public void addDownstream(ScaffoldingTerminal terminal) {
-        ScaffoldingTerminal down = (ScaffoldingTerminal) DOWNSTREAM.compareAndExchange(this, null,
-                terminal);
+        ScaffoldingTerminal down =
+                (ScaffoldingTerminal) DOWNSTREAM.compareAndExchange(this, null, terminal);
         if (down == null) {
             return;
         }

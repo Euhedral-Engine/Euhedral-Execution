@@ -8,6 +8,13 @@ import euhedral.io.frames.CancelFrame;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/// ## The terminal execution sink of Euhedral Core
+///
+/// `AbstractExecutor` is the final execution boundary for frames. It receives scheduled work,
+/// executes it, and forwards completed frames to the completion channel.
+///
+/// Execution is intentionally minimal and without side effects. Completed frames are always pushed
+/// into the completion sink, which decouples execution from downstream acknowledgment.
 public abstract class AbstractExecutor implements PipelineExecutor {
 
     protected final Logger logger = LoggerFactory.getLogger(this.getClass());
@@ -37,16 +44,16 @@ public abstract class AbstractExecutor implements PipelineExecutor {
             execute(frame);
         } catch (Exception e) {
             frame.setCancelledExecution(true);
-            if(!(e instanceof CancelFrame)) {
+            if (!(e instanceof CancelFrame)) {
                 logger.error("Uncaught exception while executing frame. {}", frame, e);
             }
         }
 
         int cycles = 0;
         while (!this.completeSink.offer(frame)) {
-            if((cycles++ & 127) == 0) {
+            if ((cycles++ & 127) == 0) {
                 Thread.onSpinWait();
-            } else if(cycles >= 512) {
+            } else if (cycles >= 512) {
                 Thread.yield();
             }
         }
