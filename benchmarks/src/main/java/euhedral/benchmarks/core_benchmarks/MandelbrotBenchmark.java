@@ -147,8 +147,8 @@ public class MandelbrotBenchmark {
             makeSub(blackhole);
         }
 
-//        @Benchmark
-//        @OperationsPerInvocation(CANVAS * 4)
+        @Benchmark
+        @OperationsPerInvocation(CANVAS * 4)
         public void renderSchedulersParallel(Blackhole blackhole) {
             System.out.println("Total Tasks: " + CANVAS * 4);
 
@@ -250,8 +250,8 @@ public class MandelbrotBenchmark {
             makeSub();
         }
 
-//        @Benchmark
-//        @OperationsPerInvocation(CANVAS * 4)
+        @Benchmark
+        @OperationsPerInvocation(CANVAS * 4)
         public void render(Blackhole blackhole) {
             System.out.println("Total Tasks: " + CANVAS * 4);
 

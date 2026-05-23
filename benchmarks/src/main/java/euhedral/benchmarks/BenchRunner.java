@@ -1,15 +1,14 @@
 package euhedral.benchmarks;
 
+import euhedral.benchmarks.core_benchmarks.EndToEndLatencyBenchmark;
+import euhedral.benchmarks.core_benchmarks.MandelbrotBenchmark;
+import euhedral.benchmarks.core_benchmarks.ThroughputComparisonBenchmark;
+import euhedral.benchmarks.core_benchmarks.TrueThroughputBenchmark;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
-
-import euhedral.benchmarks.core_benchmarks.EndToEndLatencyBenchmark;
-import euhedral.benchmarks.core_benchmarks.MandelbrotBenchmark;
-import euhedral.benchmarks.core_benchmarks.ThroughputComparisonBenchmark;
-import euhedral.benchmarks.core_benchmarks.TrueThroughputBenchmark;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.options.ChainedOptionsBuilder;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
@@ -26,7 +25,9 @@ public class BenchRunner {
 
     public static void main(String[] args) throws Exception {
         Set<String> benchmarks =
-                new TreeSet<>(Set.of("all", "core-latency", "core-throughput", "core-throughput-comp", "mandelbrot"));
+                new TreeSet<>(
+                        Set.of("all", "core-latency", "core-throughput", "core-throughput-comp",
+                                "mandelbrot"));
         if (args.length == 0) {
             System.out.println("Please specify a benchmark to run. Options: " + benchmarks);
             return;
@@ -37,10 +38,11 @@ public class BenchRunner {
             String name = a.trim().toLowerCase();
             if (!benchmarks.contains(name)) {
                 System.out.println("Unknown benchmark: " + name);
-                System.out.println("Please specify a benchmark to run. Options: " + benchmarks);
+                System.out.println(
+                        "Please specify a valid benchmark to run. Options: " + benchmarks);
                 return;
             }
-            if(name.equals("all")) {
+            if (name.equals("all")) {
                 System.out.println("Warning! Running all benchmarks. This could take a while...");
                 Thread.sleep(1000);
                 tasks = benchmarks;
@@ -52,7 +54,7 @@ public class BenchRunner {
         boolean gc = "true".equalsIgnoreCase(System.getProperty("gc", "false").trim());
         boolean perf = "true".equalsIgnoreCase(System.getProperty("perf", "false").trim());
         for (String task : tasks) {
-            if(task.equals("all")) {
+            if (task.equals("all")) {
                 continue;
             }
             Class<?> benchmark;
@@ -66,12 +68,12 @@ public class BenchRunner {
                     String dir = System.getProperty("outputDir");
                     String fileName = System.getProperty("outputFile");
                     if (dir != null && !dir.isBlank()) {
-                        flags.add("-DoutputDir=" + System.getProperty("outputDir"));
                         if (fileName == null || fileName.isBlank()) {
-                            fileName = "mandelbrot-D" + degree + ".png";
+                            continue;
                         } else if (fileName.endsWith(".png")) {
                             fileName += ".png";
                         }
+                        flags.add("-DoutputDir=" + dir);
                         flags.add("-DoutputFile=" + fileName);
                     } else if (fileName != null && !fileName.isBlank()) {
 
@@ -89,7 +91,7 @@ public class BenchRunner {
 
             ChainedOptionsBuilder opt = new OptionsBuilder().include(benchmark.getSimpleName())
                     .jvmArgsAppend(flags.toArray(new String[0]));
-            if(gc) {
+            if (gc) {
                 opt.addProfiler("gc");
             }
             if (perf) {
