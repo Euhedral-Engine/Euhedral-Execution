@@ -119,9 +119,8 @@ public class UpstreamQueue {
         if (buffer != null) {
             long limit = Math.min(buffer.getSize(), demand);
             handle.pull(buffer, limit);
-        } else {
-            handle.request(demand);
         }
+        handle.request(demand);
     }
 
     /// Performs a binary search to calculate even buckets of 32 items or more per [UpstreamHandle]
