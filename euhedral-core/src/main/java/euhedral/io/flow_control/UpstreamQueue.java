@@ -1,30 +1,48 @@
 package euhedral.io.flow_control;
 
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
+import java.util.concurrent.atomic.AtomicLong;
+
 import euhedral.io.generics.RecursiveScaffolding;
 import euhedral.io.generics.ScaffoldingSource;
 import euhedral.io.generics.ScaffoldingTerminal;
 import euhedral.io.utils.DrainBuffer;
 import euhedral.queues.PartitionedUnboundedMpscArrayQueue;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.VarHandle;
-import java.util.concurrent.atomic.AtomicLong;
 import lombok.Getter;
 import org.jctools.maps.NonBlockingHashMapLong;
 
+/// ## The upstream aggregation and scheduling layer
+///
+/// `UpstreamQueue` is a thread-local coordination point for upstream sources feeding a
+/// [ScaffoldingEdge] graph.
+///
+/// Each thread owns a single queue instance which aggregates upstream handles and participates in
+/// global demand distribution.
+///
+/// **Core behavior:**
+/// - Collect upstream handles per thread
+/// - Track active upstream count
+/// - Distribute pull demand across all active handles
+///
+///
+/// This avoids global contention by keeping scheduling localized per thread.
 public class UpstreamQueue {
+
     protected static final VarHandle UP_COUNT;
 
     static {
         try {
-            UP_COUNT = MethodHandles.lookup().findVarHandle(UpstreamQueue.class, "cachedUpCount", long.class);
+            UP_COUNT = MethodHandles.lookup()
+                    .findVarHandle(UpstreamQueue.class, "cachedUpCount", long.class);
         } catch (Exception e) {
             throw new ExceptionInInitializerError(e);
         }
     }
+
     public static final ThreadLocal<UpstreamQueue> UP_QUEUE = new ThreadLocal<>();
 
-    public static UpstreamQueue get(NonBlockingHashMapLong<UpstreamQueue> map,
-            AtomicLong counter) {
+    public static UpstreamQueue get(NonBlockingHashMapLong<UpstreamQueue> map, AtomicLong counter) {
         UpstreamQueue queue = UP_QUEUE.get();
         if (queue == null) {
             queue = new UpstreamQueue();
@@ -35,11 +53,12 @@ public class UpstreamQueue {
         return queue;
     }
 
-    private final PartitionedUnboundedMpscArrayQueue<UpstreamHandle> upstreams = new PartitionedUnboundedMpscArrayQueue<>(
-            1, 512, 0);
+    private final PartitionedUnboundedMpscArrayQueue<UpstreamHandle> upstreams =
+            new PartitionedUnboundedMpscArrayQueue<>(1, 512, 0);
+
     private final UpstreamHandle[] drainBuffer = new UpstreamHandle[512];
-    private final int[] pullIdx = new int[]{0};
-    final long[] pullBucket = new long[]{0L, 0L};
+    private final int[] pullIdx = new int[] {0};
+    final long[] pullBucket = new long[] {0L, 0L};
     @Getter
     long cachedUpCount = 0L;
 
@@ -72,6 +91,7 @@ public class UpstreamQueue {
         calculatePullBuckets(demand);
 
         boolean workDone = true;
+        // Cycle through the queue round-robin style.
         while (workDone && (count = fillUpstreamBuffer()) > 0) {
             workDone = false;
             for (int i = 0; i < count; i++) {
@@ -95,8 +115,7 @@ public class UpstreamQueue {
         this.cachedUpCount = (long) UP_COUNT.getAndAdd(this, -removed) - removed;
     }
 
-    protected static void drain(UpstreamHandle handle, DrainBuffer buffer,
-            long demand) {
+    protected static void drain(UpstreamHandle handle, DrainBuffer buffer, long demand) {
         if (buffer != null) {
             long limit = Math.min(buffer.getSize(), demand);
             handle.pull(buffer, limit);
@@ -105,6 +124,11 @@ public class UpstreamQueue {
         }
     }
 
+    /// Performs a binary search to calculate even buckets of 32 items or more per [UpstreamHandle]
+    /// ```
+    /// pullBucket[0] = Number of buckets
+    /// pullBucket[1] = Size of each bucket
+    /// ```
     protected void calculatePullBuckets(long demand) {
         int start = 0;
         int end = (int) this.cachedUpCount;
@@ -143,8 +167,7 @@ public class UpstreamQueue {
         }
 
         this.pullIdx[0] = 0;
-        return this.upstreams.drain(
-                sub -> this.drainBuffer[this.pullIdx[0]++] = sub,
+        return this.upstreams.drain(sub -> this.drainBuffer[this.pullIdx[0]++] = sub,
                 Math.min((int) this.pullBucket[0], this.drainBuffer.length));
     }
 

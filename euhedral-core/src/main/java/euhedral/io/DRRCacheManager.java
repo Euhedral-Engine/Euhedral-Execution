@@ -38,6 +38,23 @@ import java.util.concurrent.Callable;
 import org.jctools.maps.NonBlockingHashMapLong;
 import org.jspecify.annotations.NonNull;
 
+/// ## Partitioned deficit round-robin (DRR) cache layer
+///
+/// `DRRCacheManager` is a partitioned queueing and backpressure system that sits between ingestion
+/// and execution. It implements a weighted DRR-like model to balance fairness, memory pressure,
+/// and throughput.
+///
+/// #### Each CPU-facing partition maintains independent quotas
+///
+/// ```java
+/// int drainCount = queueRing.drain(partition, buffer, quota);
+/// stats.quotaBytes -= drainBuffer.drainedBytes;
+/// ```
+///
+/// The system continuously adjusts per-partition weights based on observed frame size and flow
+/// variance, preventing hot partitions from starving others.
+///
+/// **This layer is the primary memory-aware rate limiter in Euhedral Core.**
 public class DRRCacheManager extends ScaffoldingNode implements CacheManager {
 
     protected static final VarHandle PARTITION_LOCK =

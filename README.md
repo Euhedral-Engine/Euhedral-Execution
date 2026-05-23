@@ -304,7 +304,6 @@ usable as a standard Reactor scheduler. It also contains an operator wrapper to 
 `.transform()` chains with logic for `.flatMap()`, `.flatMapSequential()`, and `.map()`.
 
 ## TODO
-
-- Add more unit tests. The end-to-end tests are not enough.
+- More testing
 - Add more comments and documentation.
 - Cleanup dependencies.

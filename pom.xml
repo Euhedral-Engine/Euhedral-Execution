@@ -17,7 +17,7 @@
   <packaging>pom</packaging>
 
   <name>euhedral-execution</name>
-  <description>Backend sources for the Clio Engine project</description>
+  <description>Backend sources for the Euhedral Execution project</description>
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
