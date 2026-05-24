@@ -96,7 +96,8 @@ public class BenchRunner {
             }
             if (perf) {
                 opt.addProfiler("perf",
-                        "events=cycles,instructions,cache-misses,L2-loads,L2-load-misses");
+                        "events=cycles,instructions,cache-misses,L1-dcache-loads,L1-dcache-load-misses,L1-icache-loads,L1-icache-load-misses,dTLB-loads,dTLB-load-misses,branch-loads,branch-misses");
+
             }
             new Runner(opt.build()).run();
         }

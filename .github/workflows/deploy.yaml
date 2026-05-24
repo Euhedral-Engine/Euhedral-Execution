@@ -101,7 +101,7 @@ jobs:
           fi
 
       - name: Build and Verify
-        if: ${{ steps.check_version.output.is_snapshot == 'true' }}
+        if: ${{ steps.check_version.outputs.is_snapshot == 'true' }}
         run: |
           mise exec -- mvn -B verify --file pom.xml
 

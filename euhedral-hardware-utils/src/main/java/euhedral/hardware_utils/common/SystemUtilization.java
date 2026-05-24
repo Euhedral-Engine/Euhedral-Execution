@@ -101,8 +101,7 @@ public final class SystemUtilization {
         /// Get a snapshot of a socket's utilization
         public SocketSnapshot getSocketSnapshot(int socketId, List<BitSet> effectiveCoreToCpu,
                 double cpuQuotaPool) {
-            if (effectiveCoreToCpu == null || effectiveCoreToCpu.isEmpty() || socketId < 0
-                    || socketId >= effectiveCoreToCpu.size() || cpuQuotaPool < 0) {
+            if (effectiveCoreToCpu == null || effectiveCoreToCpu.isEmpty() || cpuQuotaPool < 0) {
                 return null;
             }
 
