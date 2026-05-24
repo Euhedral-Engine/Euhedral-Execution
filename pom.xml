@@ -247,7 +247,10 @@
             </argLine>
           </configuration>
         </plugin>
-        <plugin>
+      </plugins>
+    </pluginManagement>
+		<plugins>
+			<plugin>
           <groupId>org.sonatype.central</groupId>
           <artifactId>central-publishing-maven-plugin</artifactId>
           <version>0.7.0</version>
@@ -261,6 +264,9 @@
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-deploy-plugin</artifactId>
           <version>3.1.4</version>
+					<configuration>
+						<skip>true</skip>
+					</configuration>
         </plugin>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
@@ -299,7 +305,6 @@
             <doclint>none</doclint>
           </configuration>
         </plugin>
-      </plugins>
-    </pluginManagement>
+		</plugins>
   </build>
 </project>
