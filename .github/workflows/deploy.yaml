@@ -126,6 +126,7 @@ jobs:
           gh release create "$TARGET_TAG" --generate-notes
 
       - name: Roll to Next Development Snapshot
+        if: ${{ steps.check_version.outputs.is_snapshot == 'false' }}
         run: |
           mise exec -- mvn versions:set -DnextSnapshot=true -DgenerateBackupPoms=false
           
