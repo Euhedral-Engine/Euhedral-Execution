@@ -325,6 +325,10 @@ public class ControlPlane implements AutoCloseable {
         double quotaPool = utilization.quotaCpus();
         for (int socket = newShards.nextSetBit(0); socket >= 0;
                 socket = newShards.nextSetBit(socket + 1)) {
+            if(this.shards[socket] == null) {
+                continue;
+            }
+
             EffectiveSocketTopology topology =
                     this.effectiveTopology.socketTopologies().get(socket);
             SocketSnapshot snapshot =
