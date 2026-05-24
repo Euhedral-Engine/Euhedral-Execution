@@ -36,6 +36,14 @@ Architecture documentation:
 
 Architecture diagrams coming soon.
 
+## Amazon EC2 Benchmarks
+
+These benchmarks test performance in a cloud environment on server hardware.
+
+[Amazon Graviton4](AMAZON_GRAVITON_4_BENCHMARKS.md)
+
+The benchmarks in the sections below were performed on a consumer desktop.
+
 ---
 
 ## Quick Mental Model
@@ -172,7 +180,7 @@ Benchmarks were performed on:
 - Stock BIOS settings
 - No overclocking
 
-All work items wer preallocated to isolate scheduler and routing overhead.
+All work items were pre-allocated to isolate scheduler and routing overhead.
 
 JMH was used for all benchmarking.
 
