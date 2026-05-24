@@ -2,22 +2,11 @@ package euhedral.io.control_plane;
 
 import static euhedral.io.utils.MathFunctions.unsignedMultiplyHigh;
 
-import java.time.Duration;
-import java.util.Arrays;
-import java.util.BitSet;
-import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.concurrent.locks.LockSupport;
-
 import euhedral.hardware_utils.PinnedThreadExecutor;
 import euhedral.hardware_utils.ResourceMonitor;
 import euhedral.hardware_utils.SystemInfo;
 import euhedral.hardware_utils.SystemInfo.CpuInfo;
+import euhedral.hardware_utils.SystemInfo.SocketInfo;
 import euhedral.hardware_utils.TopologyMapper;
 import euhedral.hardware_utils.TopologyMapper.EffectiveSocketTopology;
 import euhedral.hardware_utils.TopologyMapper.EffectiveSystemTopology;
@@ -30,6 +19,17 @@ import euhedral.io.generics.CloneableObject;
 import euhedral.io.generics.IngestSink;
 import euhedral.io.generics.ScaffoldingSource;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.time.Duration;
+import java.util.Arrays;
+import java.util.BitSet;
+import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.LockSupport;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -230,6 +230,10 @@ public class ControlPlane implements AutoCloseable {
         this.logger.info("Initializing");
 
         for (int i = 0; i < this.shards.length; i++) {
+            SocketInfo info = SystemInfo.getSocketInfo(i);
+            if(info == null) {
+                continue;
+            }
             this.shards[i] = createShard(i);
             this.logger.info("Created ControlPlaneShard on socket: {}", i);
         }
@@ -257,9 +261,7 @@ public class ControlPlane implements AutoCloseable {
             }
         }
 
-        int[] map = this.activeShardIds.getOpaque();
-        int idx = (int) unsignedMultiplyHigh(frame.getCombinedHash(), map.length);
-        return map[idx];
+        return (int) unsignedMultiplyHigh(frame.getCombinedHash(), mapSize);
     }
 
     protected void update(HardwareUtilization utilization) {
@@ -430,7 +432,9 @@ public class ControlPlane implements AutoCloseable {
     public int getActiveWorkers() {
         int count = 0;
         for (ControlPlaneShard shard : this.shards) {
-            count += shard.getActiveCores();
+            if(shard != null) {
+                count += shard.getActiveCores();
+            }
         }
         return count;
     }

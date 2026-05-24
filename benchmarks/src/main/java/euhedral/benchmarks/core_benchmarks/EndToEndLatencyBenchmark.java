@@ -78,6 +78,7 @@ public class EndToEndLatencyBenchmark {
                 Runtime.getRuntime().availableProcessors());
         ArrayIngestSink ingestSink;
         private ControlPlane controlPlane;
+        private boolean skip = false;
 
         @Setup(Level.Trial)
         public void setup(Blackhole blackhole) {
@@ -86,6 +87,11 @@ public class EndToEndLatencyBenchmark {
                     "EndToEndLatencyBenchmark");
 
             BitSet cores = (BitSet) SystemInfo.get_P_CoreSet().clone();
+            if (cores.cardinality() == 0) {
+                skip = true;
+                return;
+            }
+
             int i = cores.nextSetBit(1);
             CoreInfo info = SystemInfo.getCoreInfo(i);
             BitSet cpus = info.getCpuSet();
@@ -95,12 +101,16 @@ public class EndToEndLatencyBenchmark {
 
             System.out.println("Benchmark is using P cpus " + cpus);
             this.controlPlane = ControlPlane.getOrCreate("EndToEndLatencyBenchmark", cpus,
-                    new NoOpPipeline("EndToEndLatencyBenchmark", drrConfig, emConfig, blackhole), null);
+                    new NoOpPipeline("EndToEndLatencyBenchmark", drrConfig, emConfig, blackhole),
+                    null);
             this.controlPlane.start();
         }
 
         @Setup(Level.Iteration)
         public void iterSetup() {
+            if (skip) {
+                return;
+            }
             long idHash = ThreadLocalRandom.current().nextLong();
             idHash = HasherApi.mix(idHash);
             for (int i = 0; i < frames.length; i++) {
@@ -111,11 +121,17 @@ public class EndToEndLatencyBenchmark {
         @Benchmark
         @OperationsPerInvocation(BATCH_SIZE)
         public long endToEnd(Blackhole bh) {
+            if (skip) {
+                return 0;
+            }
             return run(controlPlane, counters, ingestSink, bh);
         }
 
         @Setup(Level.Invocation)
         public void reset() {
+            if (skip) {
+                return;
+            }
             counters.reset();
 
             long seed = ThreadLocalRandom.current().nextLong();
@@ -129,6 +145,9 @@ public class EndToEndLatencyBenchmark {
 
         @TearDown(Level.Trial)
         public void tearDown() {
+            if (skip) {
+                return;
+            }
             this.controlPlane.close();
         }
     }
@@ -146,6 +165,7 @@ public class EndToEndLatencyBenchmark {
                 Runtime.getRuntime().availableProcessors());
         ArrayIngestSink ingestSink;
         private ControlPlane controlPlane;
+        private boolean skip = false;
 
         @Setup(Level.Trial)
         public void setup(Blackhole blackhole) {
@@ -155,7 +175,10 @@ public class EndToEndLatencyBenchmark {
 
             BitSet eCpus = (BitSet) SystemInfo.get_E_CpuSet().clone();
             BitSet cpus = eCpus;
-
+            if (cpus.cardinality() == 0) {
+                skip = true;
+                return;
+            }
             for (int i = eCpus.nextSetBit(0); i >= 0; i = eCpus.nextSetBit(i + 1)) {
                 CpuCacheLayout layout = SystemInfo.getCacheLayout(i);
                 BitSet l2 = layout.getL2Mask();
@@ -174,12 +197,17 @@ public class EndToEndLatencyBenchmark {
 
             System.out.println("Benchmark is using E cpus " + cpus);
             this.controlPlane = ControlPlane.getOrCreate("EndToEndLatencyBenchmark", cpus,
-                    new NoOpPipeline("EndToEndLatencyBenchmark", drrConfig, emConfig, blackhole), null);
+                    new NoOpPipeline("EndToEndLatencyBenchmark", drrConfig, emConfig, blackhole),
+                    null);
             this.controlPlane.start();
         }
 
         @Setup(Level.Iteration)
         public void iterSetup() {
+            if (skip) {
+                return;
+            }
+
             long idHash = ThreadLocalRandom.current().nextLong();
             idHash = HasherApi.mix(idHash);
             for (int i = 0; i < frames.length; i++) {
@@ -190,11 +218,17 @@ public class EndToEndLatencyBenchmark {
         @Benchmark
         @OperationsPerInvocation(BATCH_SIZE)
         public long endToEnd(Blackhole bh) {
+            if (skip) {
+                return 0;
+            }
             return run(controlPlane, counters, ingestSink, bh);
         }
 
         @Setup(Level.Invocation)
         public void reset() {
+            if (skip) {
+                return;
+            }
             counters.reset();
 
             long seed = ThreadLocalRandom.current().nextLong();
@@ -208,6 +242,9 @@ public class EndToEndLatencyBenchmark {
 
         @TearDown(Level.Trial)
         public void tearDown() {
+            if (skip) {
+                return;
+            }
             this.controlPlane.close();
         }
     }
