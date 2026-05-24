@@ -14,6 +14,7 @@ import static org.mockito.Mockito.when;
 import euhedral.hardware_utils.ResourceMonitor;
 import euhedral.hardware_utils.SystemInfo;
 import euhedral.hardware_utils.SystemInfo.CpuInfo;
+import euhedral.hardware_utils.SystemInfo.SocketInfo;
 import euhedral.hardware_utils.TopologyMapper;
 import euhedral.hardware_utils.TopologyMapper.EffectiveSocketTopology;
 import euhedral.hardware_utils.TopologyMapper.EffectiveSystemTopology;
@@ -192,6 +193,9 @@ class ControlPlaneTest {
     private ControlPlane createControlPlaneWithMocks(SocketSnapshot[] snapshots) {
         for (int i = 0; i < snapshots.length; i++) {
             snapshots[i] = mock(SocketSnapshot.class);
+            int id = i;
+            SocketInfo socketInfo = mock(SocketInfo.class);
+            mockSysInfo.when(() -> SystemInfo.getSocketInfo(id)).thenReturn(socketInfo);
             when(mockUtilization.getSocketSnapshot(eq(i), any(), anyDouble())).thenReturn(
                     snapshots[i]);
             when(mockShard.clone(eq(i), any())).thenReturn(mockShard);

@@ -74,6 +74,11 @@ public final class TopologyMapper {
                 CpuInfo info = SystemInfo.getCpuInfo(cpu);
                 EffectiveSocketTopology topology = null;
 
+                if(SystemInfo.getSocketInfo(info.socket()) == null) {
+                    globalEffectiveSockets.clear(info.socket());
+                    continue;
+                }
+
                 if(info.socket() < effectiveTopology.socketTopologies.size()) {
                     topology = effectiveTopology.socketTopologies.get(info.socket());
                 }
