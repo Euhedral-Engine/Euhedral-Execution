@@ -1,12 +1,13 @@
 package euhedral.benchmarks.pipelines;
 
+import euhedral.benchmarks.frames.ArrayFrame;
 import euhedral.benchmarks.frames.MandelbrotPixel;
 import euhedral.hardware_utils.PinnedThreadExecutor;
-import euhedral.io.generics.AbstractExecutor;
 import euhedral.io.config.CloneConfig;
 import euhedral.io.config.DRRConfig;
 import euhedral.io.config.ExecutionManagerConfig;
 import euhedral.io.frames.AbstractFrame;
+import euhedral.io.generics.AbstractExecutor;
 import euhedral.io.impl.DefaultCloneablePipeline;
 import org.openjdk.jmh.infra.Blackhole;
 
@@ -31,6 +32,10 @@ public class FractalPipeline extends DefaultCloneablePipeline {
                 blackhole.consume(escape);
                 blackhole.consume(fractal);
                 fractal.cpu = this.executorService.getCpu();
+            } else if (frame instanceof ArrayFrame array) {
+                array.execute();
+                array.cpu = this.executorService.getCpu();
+                blackhole.consume(array);
             } else {
                 frame.throwMeAsError();
             }

@@ -1,5 +1,6 @@
 package euhedral.benchmarks;
 
+import euhedral.benchmarks.core_benchmarks.BatchedMandelbrotBenchmark;
 import euhedral.benchmarks.core_benchmarks.EndToEndLatencyBenchmark;
 import euhedral.benchmarks.core_benchmarks.MandelbrotBenchmark;
 import euhedral.benchmarks.core_benchmarks.ThroughputComparisonBenchmark;
@@ -27,7 +28,7 @@ public class BenchRunner {
         Set<String> benchmarks =
                 new TreeSet<>(
                         Set.of("all", "core-latency", "core-throughput", "core-throughput-comp",
-                                "mandelbrot"));
+                                "batched-mandelbrot", "mandelbrot"));
         if (args.length == 0) {
             System.out.println("Please specify a benchmark to run. Options: " + benchmarks);
             return;
@@ -60,6 +61,11 @@ public class BenchRunner {
             Class<?> benchmark;
             List<String> flags = new ArrayList<>(FLAGS);
             switch (task) {
+                case "batched-mandelbrot" -> {
+                    benchmark = BatchedMandelbrotBenchmark.class;
+                    String degree = System.getProperty("degree", "2");
+                    flags.add("-Ddegree=" + degree);
+                }
                 case "mandelbrot" -> {
                     benchmark = MandelbrotBenchmark.class;
                     String degree = System.getProperty("degree", "2");
