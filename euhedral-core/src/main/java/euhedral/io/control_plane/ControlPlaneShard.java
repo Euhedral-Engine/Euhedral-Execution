@@ -94,9 +94,11 @@ public class ControlPlaneShard implements AutoCloseable {
             CpuInfo location = frame.getOrigin();
             int node = location != null ? location.core() : -1;
 
-            if (node >= 0 && node < reverseMapping.length && (node = reverseMapping[node]) < mapSize
-                    && node >= 0) {
-                return node;
+            if (node >= 0 && node < reverseMapping.length) {
+                node = reverseMapping[node];
+                if(node < mapSize) {
+                    return node;
+                }
             }
         }
 

@@ -70,8 +70,6 @@ Everything below the ControlPlane is replicated according to hardware topology.
 - L2-sharing CPUs cooperate through localized queues (DRRCacheManager)
 - CPUs become pinned execution loops (ExecutionManager)
 
-The system behaves more like a micro distributed system than a traditional executor service
-
 ---
 
 ## Why Euhedral Exists
@@ -343,6 +341,7 @@ The core runtime is operational and benchmarked, but documenation and API refine
 
 Current focus areas:
 
+- Benchmark on EC2 bare-metal with 192 cpus on arm64 and x64
 - More stress testing
 - Additional architecture docs
 - More integration examples
