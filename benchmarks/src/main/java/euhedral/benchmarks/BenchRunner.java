@@ -95,7 +95,7 @@ public class BenchRunner {
                 default -> throw new IllegalArgumentException("Unknown benchmark: " + task);
             }
 
-            ChainedOptionsBuilder opt = new OptionsBuilder().include(benchmark.getSimpleName())
+            ChainedOptionsBuilder opt = new OptionsBuilder().include(benchmark.getName())
                     .jvmArgsAppend(flags.toArray(new String[0]));
             if (gc) {
                 opt.addProfiler("gc");

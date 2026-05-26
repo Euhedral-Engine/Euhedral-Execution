@@ -30,12 +30,13 @@ import org.openjdk.jmh.annotations.Warmup;
 import org.openjdk.jmh.infra.Blackhole;
 import reactor.core.publisher.BaseSubscriber;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
 @BenchmarkMode({Mode.AverageTime})
 public class BatchedMandelbrotBenchmark {
 
-    private static final long SEED = 0x9e3779b97f4a7c15L;
+    private static final long SEED = HasherApi.BASE_SEED;
 
     // 8K Resolution 2X SSAA (7680 * 4320 * 4 = 132,710,400 distinct tasks)
     public static final int WIDTH = 7680;
@@ -102,12 +103,11 @@ public class BatchedMandelbrotBenchmark {
 
         private final double[] magnitudes = new double[CANVAS * 4];
         private final int[] escapes = new int[CANVAS * 4];
-
-        private ArrayFrame[] frames;
-        private BaseSubscriber<ArrayFrame> subscriber;
-
         private final PaddedLongAdder counters =
                 new PaddedLongAdder(Runtime.getRuntime().availableProcessors(), false, true);
+        private ArrayFrame[] frames;
+        private Mono<ArrayFrame>[] monos;
+        private BaseSubscriber<ArrayFrame> subscriber;
 
         private void makeSub(Blackhole blackhole) {
             this.subscriber = new BaseSubscriber<>() {
@@ -130,13 +130,16 @@ public class BatchedMandelbrotBenchmark {
 
             MandelbrotPixel[] pixels = new MandelbrotPixel[CANVAS];
             MandelbrotCanvas.generate(WIDTH, HEIGHT, CENTER_X, CENTER_Y, H_DIAMETER,
-                    ITERATION_CAP, BAILOUT_RADIUS_SQ, Integer.parseInt(degree), this.magnitudes, this.escapes,
+                    ITERATION_CAP, BAILOUT_RADIUS_SQ, Integer.parseInt(degree), this.magnitudes,
+                    this.escapes,
                     this.counters,
                     pixels);
             shuffle(pixels);
 
-            MandelbrotPixel[][] pixelArray = new MandelbrotPixel[CANVAS / BATCH + (CANVAS % BATCH > 0 ? 1 : 0)][];
+            MandelbrotPixel[][] pixelArray = new MandelbrotPixel[CANVAS / BATCH + (
+                    CANVAS % BATCH > 0 ? 1 : 0)][];
             this.frames = new ArrayFrame[pixelArray.length];
+            this.monos = new Mono[pixelArray.length];
 
             int idx = 0;
             int total = CANVAS;
@@ -144,6 +147,7 @@ public class BatchedMandelbrotBenchmark {
                 AbstractFrame[] set = new AbstractFrame[Math.min(BATCH, total)];
                 System.arraycopy(pixels, idx * BATCH, set, 0, set.length);
                 this.frames[idx] = new ArrayFrame(pixels[0].getIdHash(), set, this.counters);
+                this.monos[idx] = Mono.just(this.frames[idx]);
                 total -= Math.min(BATCH, total);
                 idx++;
             }
@@ -159,9 +163,9 @@ public class BatchedMandelbrotBenchmark {
         @Benchmark
         @OperationsPerInvocation(CANVAS * 4)
         public void renderSchedulersParallel(Blackhole blackhole) {
-            Flux.fromArray(this.frames)
-                    .parallel()
-                    .runOn(Schedulers.parallel())
+            Flux.fromArray(this.monos)
+                    .flatMap(m -> m.subscribeOn(Schedulers.parallel()),
+                            Runtime.getRuntime().availableProcessors())
                     .subscribe(this.subscriber);
 
             waitOnRender(this.counters);
@@ -172,9 +176,9 @@ public class BatchedMandelbrotBenchmark {
         @Benchmark
         @OperationsPerInvocation(CANVAS * 4)
         public void renderSchedulersBoundedElastic(Blackhole blackhole) {
-            Flux.fromArray(this.frames)
-                    .parallel()
-                    .runOn(Schedulers.boundedElastic())
+            Flux.fromArray(this.monos)
+                    .flatMap(m -> m.subscribeOn(Schedulers.boundedElastic()),
+                            Runtime.getRuntime().availableProcessors())
                     .subscribe(this.subscriber);
 
             waitOnRender(this.counters);
@@ -222,12 +226,14 @@ public class BatchedMandelbrotBenchmark {
 
             MandelbrotPixel[] pixels = new MandelbrotPixel[CANVAS];
             MandelbrotCanvas.generate(WIDTH, HEIGHT, CENTER_X, CENTER_Y, H_DIAMETER,
-                    ITERATION_CAP, BAILOUT_RADIUS_SQ, Integer.parseInt(degree), this.magnitudes, this.escapes,
+                    ITERATION_CAP, BAILOUT_RADIUS_SQ, Integer.parseInt(degree), this.magnitudes,
+                    this.escapes,
                     this.counters,
                     pixels);
             shuffle(pixels);
 
-            MandelbrotPixel[][] pixelArray = new MandelbrotPixel[CANVAS / BATCH + (CANVAS % BATCH > 0 ? 1 : 0)][];
+            MandelbrotPixel[][] pixelArray = new MandelbrotPixel[CANVAS / BATCH + (
+                    CANVAS % BATCH > 0 ? 1 : 0)][];
             this.frames = new ArrayFrame[pixelArray.length];
 
             int idx = 0;
