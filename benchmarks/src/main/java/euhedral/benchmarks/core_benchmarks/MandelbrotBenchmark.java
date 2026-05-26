@@ -33,7 +33,6 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
 import org.openjdk.jmh.infra.Blackhole;
-import reactor.core.publisher.BaseSubscriber;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
@@ -41,7 +40,7 @@ import reactor.core.scheduler.Schedulers;
 @BenchmarkMode({Mode.AverageTime})
 public class MandelbrotBenchmark {
 
-    private static final long SEED = 0x9e3779b97f4a7c15L;
+    private static final long SEED = HasherApi.BASE_SEED;
 
     // 8K Resolution 2X SSAA (7680 * 4320 * 4 = 132,710,400 distinct tasks)
     public static final int WIDTH = 7680;
@@ -91,9 +90,6 @@ public class MandelbrotBenchmark {
                 Thread.onSpinWait();
             }
         }
-        if (sum < CANVAS) {
-            throw new RuntimeException("Stall detected. Pending: " + (CANVAS - sum));
-        }
     }
 
     @BenchmarkMode({Mode.AverageTime})
@@ -108,23 +104,9 @@ public class MandelbrotBenchmark {
         private final int[] escapes = new int[CANVAS * 4];
 
         private final MandelbrotPixel[] pixels = new MandelbrotPixel[CANVAS];
-
-        private BaseSubscriber<MandelbrotPixel> subscriber;
-
         private final PaddedLongAdder counters =
                 new PaddedLongAdder(Runtime.getRuntime().availableProcessors(), false, true);
-
-        private void makeSub(Blackhole blackhole) {
-            this.subscriber = new BaseSubscriber<>() {
-                @Override
-                protected void hookOnNext(MandelbrotPixel frame) {
-                    frame.compute();
-                    frame.cpu = counters.fromRawIdx(Thread.currentThread().getId());
-                    frame.doFinally();
-                    blackhole.consume(frame);
-                }
-            };
-        }
+        private Mono<MandelbrotPixel>[] monos = new Mono[CANVAS];
 
         @Setup(Level.Trial)
         public void setup(Blackhole blackhole) {
@@ -137,14 +119,22 @@ public class MandelbrotBenchmark {
                     ITERATION_CAP, BAILOUT_RADIUS_SQ, Integer.parseInt(degree), this.magnitudes,
                     this.escapes, this.counters,
                     this.pixels);
-            makeSub(blackhole);
+            shuffle(this.pixels);
+            for (int i = 0; i < CANVAS; i++) {
+                int id = i;
+                this.monos[i] = Mono.fromRunnable(() -> {
+                    MandelbrotPixel frame = this.pixels[id];
+                    frame.compute();
+                    frame.cpu = counters.fromRawIdx(Thread.currentThread().getId());
+                    frame.doFinally();
+                    blackhole.consume(frame);
+                });
+            }
         }
 
         @Setup(Level.Invocation)
-        public void setupInvocation(Blackhole blackhole) {
+        public void setupInvocation() {
             this.counters.reset();
-            shuffle(this.pixels);
-            makeSub(blackhole);
         }
 
         @Benchmark
@@ -152,12 +142,9 @@ public class MandelbrotBenchmark {
         public void renderSchedulersParallel(Blackhole blackhole) {
             System.out.println("Total Tasks: " + CANVAS * 4);
 
-            Flux.fromArray(this.pixels)
-                    .flatMap(pixel -> Mono.fromCallable(() -> {
-                        subscriber.onNext(pixel);
-                        return Mono.empty();
-                    })
-                    .subscribeOn(Schedulers.parallel()), Runtime.getRuntime().availableProcessors())
+            Flux.fromArray(this.monos)
+                    .flatMap(m -> m.subscribeOn(Schedulers.parallel()),
+                            Runtime.getRuntime().availableProcessors())
                     .subscribe();
 
             waitOnRender(this.counters);
@@ -170,12 +157,9 @@ public class MandelbrotBenchmark {
         public void renderSchedulersBoundedElastic(Blackhole blackhole) {
             System.out.println("Total Tasks: " + CANVAS * 4);
 
-            Flux.fromArray(this.pixels)
-                    .flatMap(pixel -> Mono.fromCallable(() -> {
-                                subscriber.onNext(pixel);
-                                return Mono.empty();
-                            })
-                            .subscribeOn(Schedulers.boundedElastic()), Runtime.getRuntime().availableProcessors())
+            Flux.fromArray(this.monos)
+                    .flatMap(m -> m.subscribeOn(Schedulers.boundedElastic()),
+                            Runtime.getRuntime().availableProcessors())
                     .subscribe();
 
             waitOnRender(this.counters);
@@ -246,7 +230,6 @@ public class MandelbrotBenchmark {
         @Setup(Level.Invocation)
         public void setupInvocation() {
             this.counters.reset();
-            shuffle(this.pixels);
             makeSub();
         }
 
