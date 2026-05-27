@@ -4,11 +4,6 @@ import static euhedral.io.utils.MathFunctions.clampDouble;
 import static euhedral.io.utils.MathFunctions.clampLong;
 import static euhedral.io.utils.MathFunctions.log2;
 
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.VarHandle;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.locks.LockSupport;
-
 import euhedral.hardware_utils.PinnedThreadExecutor;
 import euhedral.hardware_utils.SystemInfo;
 import euhedral.hardware_utils.SystemInfo.CpuCacheLayout;
@@ -35,6 +30,10 @@ import euhedral.queues.PartitionedSpscArrayQueue;
 import euhedral.queues.PartitionedUnboundedMpscArrayQueue;
 import euhedral.queues.common.PartitionedQueue;
 import euhedral.queues.common.QueueUtils;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.LockSupport;
 import lombok.AccessLevel;
 import lombok.Getter;
 import org.jspecify.annotations.NonNull;
@@ -299,7 +298,7 @@ public class ExecutionManager implements SlotManager {
 
             }
         }
-        this.logger.info("Closed");
+        this.logger.debug("Closed");
     }
 
     public void dumpLocks() {
@@ -352,7 +351,7 @@ public class ExecutionManager implements SlotManager {
                                 "Attempted to pin to CPU: {} Core: {} but was assigned: {}",
                                 this.cpuId, cloneConfig.coreId(), origin);
                     } else {
-                        this.logger.info("Pinned to Core {} CPU {}", cloneConfig.coreId(),
+                        this.logger.debug("Pinned to Core {} CPU {}", cloneConfig.coreId(),
                                 this.cpuId);
                     }
                     ThreadTools.setTimerResolution(1);

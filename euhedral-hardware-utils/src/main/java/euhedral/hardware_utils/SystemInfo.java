@@ -181,18 +181,32 @@ public final class SystemInfo {
     }
 
     public static @NonNull String toHexMask(@NonNull BitSet set) {
-        StringJoiner sj = new StringJoiner(",");
+        if (set.isEmpty()) {
+            return "0";
+        }
 
+        StringJoiner sj = new StringJoiner(",");
         long[] bits = set.toLongArray();
+        boolean headWritten = false;
+
         for (int i = bits.length - 1; i >= 0; i--) {
             long chunk = bits[i];
             int upper = (int) (chunk >>> 32);
-            int lower = (int) ((chunk << 32) >>> 32);
+            int lower = (int) chunk;
 
-            if (upper != 0 && i == 0) {
+            if (headWritten) {
+                sj.add(String.format("%08x", upper));
+            } else if (upper != 0) {
                 sj.add(Integer.toHexString(upper));
+                headWritten = true;
             }
-            sj.add(Integer.toHexString(lower));
+
+            if (headWritten) {
+                sj.add(String.format("%08x", lower));
+            } else if (lower != 0 || i == 0) {
+                sj.add(Integer.toHexString(lower));
+                headWritten = true;
+            }
         }
         return sj.toString();
     }
