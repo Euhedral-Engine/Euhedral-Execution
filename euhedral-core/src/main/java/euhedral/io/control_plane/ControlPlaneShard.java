@@ -206,7 +206,7 @@ public class ControlPlaneShard implements AutoCloseable {
         }
 
         if (!clone.isStarted()) {
-            this.logger.info("Starting clone on core {}", snapshot.coreId());
+            this.logger.trace("Starting clone on core {}", snapshot.coreId());
             clone.start();
         }
         clone.update(snapshot);
@@ -224,7 +224,7 @@ public class ControlPlaneShard implements AutoCloseable {
         clone.input(this.coreHandles.getPlain()[coreId]);
 
         clone.setDrainMode(this.rebalancing.get());
-        this.logger.info("Starting clone on core {}", snapshot.coreId());
+        this.logger.trace("Starting clone on core {}", snapshot.coreId());
         clone.start();
         clone.update(snapshot);
         return clone;

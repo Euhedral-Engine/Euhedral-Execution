@@ -19,10 +19,6 @@ extern "C" {
 // linux_affinity.cpp
 
 JNIEXPORT jint JNICALL
-Java_euhedral_hardware_1utils_linux_LinuxAffinity_setThreadAffinitySingle(
-    JNIEnv *env, jclass clazz, jint cpu);
-
-JNIEXPORT jint JNICALL
 Java_euhedral_hardware_1utils_linux_LinuxAffinity_setThreadAffinity(
     JNIEnv *env, jclass clazz, jlongArray maskArray);
 
