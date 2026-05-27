@@ -243,7 +243,7 @@ public final class PinnedThreadExecutor extends AbstractExecutorService implemen
             executor.shutdownNow();
 
             PINNED_EXECUTORS.remove(cpu);
-            LOGGER.info("Cleaned up PinnedThreadExecutor [{}] CPU [{}]", executor.name, cpu);
+            LOGGER.trace("Cleaned up PinnedThreadExecutor [{}] CPU [{}]", executor.name, cpu);
         }
     }
 }

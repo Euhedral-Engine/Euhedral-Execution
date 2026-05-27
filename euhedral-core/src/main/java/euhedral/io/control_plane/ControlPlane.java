@@ -294,7 +294,7 @@ public class ControlPlane implements AutoCloseable {
                                 getShardQuota(socketId, quotaPool));
                 CompletableFuture.runAsync(() -> {
                     if (!shard.isStarted()) {
-                        this.logger.info("Starting shard");
+                        this.logger.trace("Starting shard");
                         startShard(socketId, snapshot, topology);
                     } else {
                         shard.update(snapshot, topology);

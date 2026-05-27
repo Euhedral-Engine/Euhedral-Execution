@@ -66,13 +66,15 @@ public final class ThreadTools {
     /// @param cpu logical cpu id
     /// @return success
     public static boolean setAffinity(int cpu) {
-        int count = cpu / 64 + ((cpu & 63) > 0 ? 1 : 0);
-        count++;
+        if (cpu < 0) {
+            return false;
+        }
+        int index = cpu >>> 6;
+        long[] masks = new long[index + 1];
 
-        long[] masks = new long[count];
+        masks[index] = 1L << (cpu & 63);
 
-        masks[0] = 1L << (cpu & 63);
-        return setAffinity(masks);
+        return PINNER.setAffinity(masks);
     }
 
     /// Sets the calling thread's affinity to the specified list of cpus.
