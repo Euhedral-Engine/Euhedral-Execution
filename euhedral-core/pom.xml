@@ -6,7 +6,7 @@
   <parent>
     <groupId>io.euhedral-execution</groupId>
     <artifactId>euhedral-execution</artifactId>
-    <version>0.0.2-SNAPSHOT</version>
+    <version>0.0.2</version>
   </parent>
 
   <name>Euhedral Core</name>
