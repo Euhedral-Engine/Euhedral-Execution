@@ -139,7 +139,7 @@
         <configuration>
           <shadedArtifactAttached>false</shadedArtifactAttached>
           <createDependencyReducedPom>false</createDependencyReducedPom>
-          <outputFile>${project.build.directory}/test-container.jar</outputFile>
+          <outputFile>${project.build.directory}/testing/test-container.jar</outputFile>
 
           <filters>
             <filter>
