@@ -83,7 +83,7 @@ class PartitionedMpmcArrayQueueTest {
             for (int i = 0; i < 8; i++) {
                 exec.submit(() -> {
                     while (drained.sum() < batch * 8) {
-                        int count = q.drain(consumer, 4096);
+                        long count = q.drain(consumer, 4096);
                         drained.add(count);
                         Thread.yield();
                     }

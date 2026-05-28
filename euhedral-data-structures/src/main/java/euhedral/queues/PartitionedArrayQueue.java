@@ -60,7 +60,7 @@ public class PartitionedArrayQueue<T> extends AbstractQueue<T> implements Partit
         this.capacity = (long) chunkSize * partitions;
     }
 
-    /// Offers the object to a random partition.
+    /// Offers the object to each partition starting from 0 until it succeeds.
     ///
     /// @return success
     @Override
@@ -181,12 +181,12 @@ public class PartitionedArrayQueue<T> extends AbstractQueue<T> implements Partit
     /// @param limit Maximum number of items to pull
     /// @return Number of items drained
     @Override
-    public int drain(QueueConsumer<T> consumer, int limit) {
+    public long drain(QueueConsumer<T> consumer, long limit) {
         if (consumer == null || limit <= 0) {
             return 0;
         }
 
-        int total = 0;
+        long total = 0;
         for (int i = 0; i < this.partitions && total < limit; i++) {
             total += drain(i, consumer, limit - total);
         }
@@ -197,7 +197,7 @@ public class PartitionedArrayQueue<T> extends AbstractQueue<T> implements Partit
     ///
     /// @return Number of items drained
     @Override
-    public int drain(int partition, QueueConsumer<T> consumer, int limit) {
+    public long drain(int partition, QueueConsumer<T> consumer, long limit) {
         boundsCheck(partition);
         int pIdx = this.heads.fromRawIdx(partition);
         int rIdx = this.queue.fromRawIdx(partition);

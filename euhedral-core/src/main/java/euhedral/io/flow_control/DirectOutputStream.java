@@ -1,14 +1,13 @@
 package euhedral.io.flow_control;
 
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.VarHandle;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Consumer;
-
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.ScaffoldingSource;
 import euhedral.io.generics.ScaffoldingTerminal;
 import euhedral.queues.common.PartitionedQueue;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 import org.jspecify.annotations.NonNull;
 
 /// Used for pushing frames from one stage to the next. Assumes that only one thread will call push
@@ -52,7 +51,7 @@ public class DirectOutputStream implements ScaffoldingSource {
     /// at a time.
     ///
     /// @param max Maximum number of frames to push
-    public int push(long max) {
+    public long push(long max) {
         if (max == 0 || TERMINAL.getOpaque(this) == null || (boolean) CANCELLED.getOpaque(this)) {
             return 0;
         }
@@ -63,9 +62,9 @@ public class DirectOutputStream implements ScaffoldingSource {
             return 0;
         }
 
-        int limit = (int) Math.min(max, currentDemand);
+        long limit = Math.min(max, currentDemand);
 
-        int drain = this.buffer.drain(this::pushInternal, limit);
+        long drain = this.buffer.drain(this::pushInternal, limit);
 
         if (!unlimited) {
             this.demand.addAndGet(-drain);

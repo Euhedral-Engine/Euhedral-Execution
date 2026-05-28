@@ -1,12 +1,12 @@
 package euhedral.queues;
 
-import java.lang.invoke.VarHandle;
-import java.util.StringJoiner;
-
 import euhedral.atomics.PaddedAtomicLong;
 import euhedral.atomics.PaddedAtomicReferenceArray;
 import euhedral.queues.QueueNode.Type;
+import euhedral.queues.common.ConcurrentPartitionedQueue;
 import euhedral.queues.common.NodeRecycler;
+import java.lang.invoke.VarHandle;
+import java.util.StringJoiner;
 
 /// A template of a concurrent unbounded array queue with partitions. This class is overridden by
 /// its subclasses to selectively choose the type of thread safety between producers and consumers.
@@ -17,7 +17,7 @@ import euhedral.queues.common.NodeRecycler;
 ///
 /// @param <T> Type to store
 abstract sealed class ConcurrentPartitionedUnboundedArrayQueue<T>
-        extends PartitionedUnboundedArrayQueue<T>
+        extends PartitionedUnboundedArrayQueue<T> implements ConcurrentPartitionedQueue<T>
         permits PartitionedUnboundedSpscArrayQueue, PartitionedUnboundedSpmcArrayQueue,
         PartitionedUnboundedMpscArrayQueue, PartitionedUnboundedMpmcArrayQueue {
 
@@ -170,13 +170,13 @@ abstract sealed class ConcurrentPartitionedUnboundedArrayQueue<T>
     }
 
     @Override
-    public int drain(int partition, QueueConsumer<T> consumer, int limit) {
+    public long drain(int partition, QueueConsumer<T> consumer, long limit) {
         boundsCheck(partition);
         if (consumer == null || limit <= 0) {
             return 0;
         }
 
-        int total = 0;
+        long total = 0;
 
         int hpIdx = getHpIdx(partition);
         while (limit > 0) {
@@ -187,7 +187,7 @@ abstract sealed class ConcurrentPartitionedUnboundedArrayQueue<T>
             }
 
             long epoch = head.getHeadEpoch(partition);
-            int count = head.drain(partition, consumer, limit);
+            long count = head.drain(partition, consumer, limit);
 
             if (count > 0) {
                 limit -= count;

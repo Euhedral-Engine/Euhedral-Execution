@@ -204,14 +204,14 @@ public sealed class PartitionedUnboundedArrayQueue<T> extends AbstractQueue<T> i
     ///
     /// @return Number of items drained
     @Override
-    public int drain(QueueConsumer<T> consumer, int limit) {
+    public long drain(QueueConsumer<T> consumer, long limit) {
         if (consumer == null || limit <= 0) {
             return 0;
         }
 
-        int total = 0;
+        long total = 0;
         for (int i = 0; i < this.partitions && total < limit; i++) {
-            int count = drain(i, consumer, limit);
+            long count = drain(i, consumer, limit);
             total += count;
         }
         return total;
@@ -219,19 +219,19 @@ public sealed class PartitionedUnboundedArrayQueue<T> extends AbstractQueue<T> i
 
     /// Drains from a specific partition.
     @Override
-    public int drain(int partition, QueueConsumer<T> consumer, int limit) {
+    public long drain(int partition, QueueConsumer<T> consumer, long limit) {
         boundsCheck(partition);
         if (consumer == null || limit <= 0) {
             return 0;
         }
 
-        int total = 0;
+        long total = 0;
 
         int hpIdx = this.headPointers.fromRawIdx(partition);
         while (limit > 0) {
             QueueNode<T> head = getHeadNode(hpIdx);
 
-            int count = head.drain(partition, consumer, limit);
+            long count = head.drain(partition, consumer, limit);
 
             if (count > 0) {
                 limit -= count;
