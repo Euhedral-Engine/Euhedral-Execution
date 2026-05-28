@@ -114,7 +114,7 @@ Flux.fromArray(this.monos)
 | Reactor Bounded Elastic (32 threads) | 2.13 |
 
 
-### Theory/Explanation of Performanc Euhedral SMT Disabled vs Enabled
+### Theory/Explanation of Performance for Euhedral SMT Disabled vs Enabled
 
 SMT caused an increase in allocations in both tests. For the batched test, SMT improved performance. 
 For the 1-by-1, it hurt it.
@@ -130,7 +130,7 @@ idling behavior and execution time to naturally slow down its pull rate. But the
 job is to pull. Even though it has the same backoff logic for pull timing, it is always ready to 
 pull when the time allows it.
 
-I believe the extra allocations come from the increase rate of the unbounded queues expanding to 
+I believe the extra allocations come from the increased rate of the unbounded queues expanding to 
 absorb the increased flow.
 
 In the batched test, the 33.2 million pixel objects are batched in bundles of 1024. This dramatically

@@ -56,7 +56,9 @@ Using:
 - Randomized pixel ordering
 
 Total pixels: 192,080,000
+
 Operations per Invocation: 768,320,000
+
 Max Mandelbrot iterations per pixel : 24,000
 
 ---

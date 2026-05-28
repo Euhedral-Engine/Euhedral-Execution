@@ -40,9 +40,9 @@ Architecture diagrams coming soon.
 
 These benchmarks test performance in a cloud environment on server hardware.
 
-[Amazon EC2 32 vCPU Graviton4](AMAZON_GRAVITON_4_BENCHMARKS.md)
-[Amazon EC2 32 vCPU Intel Xeon 6](AMAZON_XEON_6_BENCHMARKS.md)
-[Amazon EC2 192 vCPU Graviton4](AMAZON_GRAVITON_4_192_CORES_BENCHMARKS.md)
+- [Amazon EC2 32 vCPU Graviton4](AMAZON_GRAVITON_4_BENCHMARKS.md)
+- [Amazon EC2 32 vCPU Intel Xeon 6](AMAZON_XEON_6_BENCHMARKS.md)
+- [Amazon EC2 192 vCPU Graviton4](AMAZON_GRAVITON_4_192_CORES_BENCHMARKS.md)
 
 The benchmarks in the sections below were performed on a consumer desktop.
 
