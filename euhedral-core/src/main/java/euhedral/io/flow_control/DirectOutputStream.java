@@ -14,14 +14,14 @@ import org.jspecify.annotations.NonNull;
 /// at a time. This class can only have one downstream.
 public class DirectOutputStream implements ScaffoldingSource {
 
-    protected static final VarHandle CANCELLED;
+    protected static final VarHandle COMPLETE;
     protected static final VarHandle TERMINAL;
     protected static final VarHandle UNLIMITED;
 
     static {
         try {
-            CANCELLED = MethodHandles.lookup()
-                    .findVarHandle(DirectOutputStream.class, "cancelled", boolean.class);
+            COMPLETE = MethodHandles.lookup()
+                    .findVarHandle(DirectOutputStream.class, "complete", boolean.class);
             TERMINAL = MethodHandles.lookup()
                     .findVarHandle(DirectOutputStream.class, "terminal", ScaffoldingTerminal.class);
             UNLIMITED = MethodHandles.lookup()
@@ -37,7 +37,7 @@ public class DirectOutputStream implements ScaffoldingSource {
     protected final Consumer<AbstractFrame> applyToEach;
 
     protected boolean unlimited = false;
-    protected boolean cancelled = false;
+    protected boolean complete = false;
     protected ScaffoldingTerminal terminal = null;
 
 
@@ -52,7 +52,7 @@ public class DirectOutputStream implements ScaffoldingSource {
     ///
     /// @param max Maximum number of frames to push
     public long push(long max) {
-        if (max == 0 || TERMINAL.getOpaque(this) == null || (boolean) CANCELLED.getOpaque(this)) {
+        if (max == 0 || TERMINAL.getOpaque(this) == null || (boolean) COMPLETE.getOpaque(this)) {
             return 0;
         }
 
@@ -88,7 +88,7 @@ public class DirectOutputStream implements ScaffoldingSource {
 
     @Override
     public void addDownstream(ScaffoldingTerminal terminal) {
-        if (!CANCELLED.compareAndSet(this, true, false) && !TERMINAL.compareAndSet(this, null,
+        if (!COMPLETE.compareAndSet(this, true, false) && !TERMINAL.compareAndSet(this, null,
                 terminal)) {
             terminal.onError(new IllegalAccessException("This class already has a terminal"));
             return;
@@ -117,8 +117,8 @@ public class DirectOutputStream implements ScaffoldingSource {
     }
 
     @Override
-    public void cancel() {
-        CANCELLED.setVolatile(this, true);
+    public void complete() {
+        COMPLETE.setVolatile(this, true);
         TERMINAL.setVolatile(this, null);
     }
 }

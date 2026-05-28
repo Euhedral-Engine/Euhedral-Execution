@@ -7,7 +7,7 @@ import euhedral.hashing.HasherApi;
 import euhedral.io.config.DRRConfig;
 import euhedral.io.config.ExecutionManagerConfig;
 import euhedral.io.control_plane.ControlPlane;
-import euhedral.io.flow_control.ArrayIngestSink;
+import euhedral.io.ingest.ArrayIngestSink;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import org.openjdk.jmh.annotations.Benchmark;

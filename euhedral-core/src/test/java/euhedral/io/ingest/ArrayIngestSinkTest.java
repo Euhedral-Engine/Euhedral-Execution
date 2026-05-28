@@ -1,4 +1,4 @@
-package euhedral.io.flow_control;
+package euhedral.io.ingest;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -91,7 +91,7 @@ class ArrayIngestSinkTest {
     void shouldCancelAndComplete() {
         delegate.addDownstream(terminal);
 
-        delegate.cancel();
+        delegate.complete();
 
         assertTrue(terminal.completed);
     }

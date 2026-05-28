@@ -314,7 +314,7 @@ public class ScaffoldingNode extends ScaffoldingEdge implements AutoCloseable {
                     this.upstream.request(demand);
                 } catch (Throwable t) {
                     logger.error("Upstream threw an exception during request", t);
-                    cancel();
+                    this.complete();
                 } finally {
                     this.wip.set(0);
                 }
@@ -327,7 +327,7 @@ public class ScaffoldingNode extends ScaffoldingEdge implements AutoCloseable {
                     this.upstream.request(d);
                 } catch (Throwable t) {
                     logger.error("UpstreamHandle threw an exception during request", t);
-                    cancel();
+                    this.complete();
                 } finally {
                     this.wip.set(0);
                 }
@@ -358,10 +358,10 @@ public class ScaffoldingNode extends ScaffoldingEdge implements AutoCloseable {
         }
 
         @Override
-        public void cancel() {
+        public void complete() {
             if (this.complete.compareAndSet(false, true)) {
-                logger.trace("UpstreamHandle Cancelled");
-                this.upstream.cancel();
+                logger.trace("Closing UpstreamHandle");
+                this.upstream.complete();
             }
         }
 

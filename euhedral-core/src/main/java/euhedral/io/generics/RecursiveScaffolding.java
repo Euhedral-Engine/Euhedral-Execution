@@ -12,5 +12,5 @@ public interface RecursiveScaffolding extends ScaffoldingSource, ScaffoldingTerm
 
     default void onComplete() {}
 
-    default void cancel() {}
+    default void complete() {}
 }

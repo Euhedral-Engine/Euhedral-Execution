@@ -179,7 +179,7 @@ public class UpstreamQueue {
         public abstract boolean isComplete();
 
         public void addUpstream(ScaffoldingSource upstream) {
-            upstream.cancel();
+            upstream.complete();
         }
 
         public void addDownstream(ScaffoldingTerminal terminal) {

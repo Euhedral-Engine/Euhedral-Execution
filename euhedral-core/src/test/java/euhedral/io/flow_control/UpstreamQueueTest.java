@@ -242,7 +242,7 @@ class UpstreamQueueTest {
 
         handle.addUpstream(source);
 
-        verify(source).cancel();
+        verify(source).complete();
     }
 
     @Test
@@ -288,10 +288,6 @@ class UpstreamQueueTest {
         }
 
         @Override
-        public void cancel() {
-        }
-
-        @Override
         public void onNext(AbstractFrame frame) {
         }
 
@@ -299,8 +295,5 @@ class UpstreamQueueTest {
         public void onError(Throwable throwable) {
         }
 
-        @Override
-        public void onComplete() {
-        }
     }
 }
