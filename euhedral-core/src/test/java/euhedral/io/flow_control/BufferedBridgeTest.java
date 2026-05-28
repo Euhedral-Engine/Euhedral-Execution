@@ -36,9 +36,9 @@ class BufferedBridgeTest {
 
     @Test
     void shouldDrainUsingMaxIntegerLimit() {
-        when(queue.drain(drainConsumer, Integer.MAX_VALUE)).thenReturn(5);
+        when(queue.drain(drainConsumer, Integer.MAX_VALUE)).thenReturn(5L);
 
-        int drained = bridge.drain();
+        long drained = bridge.drain();
 
         assertEquals(5, drained);
 
@@ -101,9 +101,9 @@ class BufferedBridgeTest {
 
     @Test
     void shouldDrainZeroElements() {
-        when(queue.drain(drainConsumer, Integer.MAX_VALUE)).thenReturn(0);
+        when(queue.drain(drainConsumer, Integer.MAX_VALUE)).thenReturn(0L);
 
-        int drained = bridge.drain();
+        long drained = bridge.drain();
 
         assertEquals(0, drained);
 

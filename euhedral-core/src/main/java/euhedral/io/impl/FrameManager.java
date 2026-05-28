@@ -1,12 +1,11 @@
 package euhedral.io.impl;
 
-import java.util.Arrays;
-
 import euhedral.hashing.HasherApi;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.queues.PartitionedMpscArrayQueue;
 import euhedral.queues.PartitionedUnboundedMpscArrayQueue;
 import euhedral.queues.common.PartitionedQueue;
+import java.util.Arrays;
 import lombok.Getter;
 import lombok.Setter;
 import org.jspecify.annotations.NonNull;
@@ -90,7 +89,7 @@ public class FrameManager<DATA, FRAME extends AbstractFrame> implements AutoClos
 
     private @Nullable FRAME get() {
         if (idx == 0) {
-            idx = recycleQueue.drain(this::drain, buffer.length);
+            idx = (int) recycleQueue.drain(this::drain, buffer.length);
             totalRecycled += idx;
         }
         if (idx > 0) {
@@ -137,7 +136,7 @@ public class FrameManager<DATA, FRAME extends AbstractFrame> implements AutoClos
 
         while (max > 0) {
             drain[0] = (int) Math.min(max, Integer.MAX_VALUE);
-            int count = recycleQueue.drain(f -> drain[0]--, drain[0]);
+            int count = (int) recycleQueue.drain(f -> drain[0]--, drain[0]);
 
             if (count == 0) {
                 break;

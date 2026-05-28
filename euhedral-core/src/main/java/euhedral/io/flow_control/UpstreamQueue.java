@@ -1,14 +1,13 @@
 package euhedral.io.flow_control;
 
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.VarHandle;
-import java.util.concurrent.atomic.AtomicLong;
-
 import euhedral.io.generics.RecursiveScaffolding;
 import euhedral.io.generics.ScaffoldingSource;
 import euhedral.io.generics.ScaffoldingTerminal;
 import euhedral.io.utils.DrainBuffer;
 import euhedral.queues.PartitionedUnboundedMpscArrayQueue;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
+import java.util.concurrent.atomic.AtomicLong;
 import lombok.Getter;
 import org.jctools.maps.NonBlockingHashMapLong;
 
@@ -29,6 +28,7 @@ import org.jctools.maps.NonBlockingHashMapLong;
 /// This avoids global contention by keeping scheduling localized per thread.
 public class UpstreamQueue {
 
+    public static final ThreadLocal<UpstreamQueue> UP_QUEUE = new ThreadLocal<>();
     protected static final VarHandle UP_COUNT;
 
     static {
@@ -39,8 +39,6 @@ public class UpstreamQueue {
             throw new ExceptionInInitializerError(e);
         }
     }
-
-    public static final ThreadLocal<UpstreamQueue> UP_QUEUE = new ThreadLocal<>();
 
     public static UpstreamQueue get(NonBlockingHashMapLong<UpstreamQueue> map, AtomicLong counter) {
         UpstreamQueue queue = UP_QUEUE.get();
@@ -53,15 +51,22 @@ public class UpstreamQueue {
         return queue;
     }
 
+    protected static void drain(UpstreamHandle handle, DrainBuffer buffer, long demand) {
+        if (buffer != null) {
+            long limit = buffer.buffer.capacity() < 0 ? demand
+                    : Math.min(buffer.buffer.capacity(), demand);
+            handle.pull(buffer, limit);
+        }
+        handle.request(demand);
+    }
+    final long[] pullBucket = new long[]{0L, 0L};
     private final PartitionedUnboundedMpscArrayQueue<UpstreamHandle> upstreams =
             new PartitionedUnboundedMpscArrayQueue<>(1, 512, 0);
-
     private final UpstreamHandle[] drainBuffer = new UpstreamHandle[512];
-    private final int[] pullIdx = new int[] {0};
-    final long[] pullBucket = new long[] {0L, 0L};
-    private long upstreamCount = 0L;
+    private final int[] pullIdx = new int[]{0};
     @Getter
     long cachedUpCount = 0L;
+    private long upstreamCount = 0L;
 
     public long getTrueUpstreamCount() {
         this.cachedUpCount = (long) UP_COUNT.getOpaque(this);
@@ -118,15 +123,6 @@ public class UpstreamQueue {
         this.cachedUpCount = (long) UP_COUNT.getAndAdd(this, -removed) - removed;
     }
 
-    protected static void drain(UpstreamHandle handle, DrainBuffer buffer, long demand) {
-        if (buffer != null) {
-            long limit = buffer.buffer.capacity() < 0 ? demand
-                    : Math.min(buffer.buffer.capacity(), demand);
-            handle.pull(buffer, limit);
-        }
-        handle.request(demand);
-    }
-
     /// Performs a binary search to calculate even buckets of 32 items or more per [UpstreamHandle]
     /// ```
     /// pullBucket[0] = Number of buckets
@@ -171,7 +167,7 @@ public class UpstreamQueue {
         }
 
         this.pullIdx[0] = 0;
-        return this.upstreams.drain(sub -> this.drainBuffer[this.pullIdx[0]++] = sub,
+        return (int) this.upstreams.drain(sub -> this.drainBuffer[this.pullIdx[0]++] = sub,
                 Math.min((int) this.pullBucket[0], this.drainBuffer.length));
     }
 

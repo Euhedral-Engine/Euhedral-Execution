@@ -2,11 +2,6 @@ package euhedral.io.flow_control;
 
 import static euhedral.io.utils.MathFunctions.unsignedMultiplyHigh;
 
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.VarHandle;
-import java.util.BitSet;
-import java.util.concurrent.atomic.AtomicBoolean;
-
 import euhedral.atomics.PaddedAtomicLong;
 import euhedral.io.flow_control.UpstreamQueue.UpstreamHandle;
 import euhedral.io.frames.AbstractFrame;
@@ -14,6 +9,10 @@ import euhedral.io.generics.RecursiveScaffolding;
 import euhedral.io.generics.ScaffoldingSource;
 import euhedral.io.utils.DrainBuffer;
 import euhedral.queues.PartitionedMpscArrayQueue;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
+import java.util.BitSet;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,6 +49,10 @@ public class ScaffoldingNode extends ScaffoldingEdge implements AutoCloseable {
 
     protected final Logger logger;
     protected final String name;
+
+    /// This queue acts like a capacitor for contention. When the number of upstreams is very low,
+    /// downstream demand hits the same upstreams repeatedly. This little queue gives them another
+    /// squirrel to chase.
     protected final PartitionedMpscArrayQueue<AbstractFrame> parallelQueue;
 
     protected final ScaffoldingEdge[] downstreams;
@@ -188,7 +191,7 @@ public class ScaffoldingNode extends ScaffoldingEdge implements AutoCloseable {
         if (this.parallelQueue != null && !this.parallelQueue.isEmpty()) {
             if (this.wip.compareAndSet(0, 1)) {
                 try {
-                    int count = this.parallelQueue.drain(buffer::accept, (int) demand);
+                    long count = this.parallelQueue.drain(buffer::accept, (int) demand);
                     demand -= count;
                 } finally {
                     this.wip.set(0);
