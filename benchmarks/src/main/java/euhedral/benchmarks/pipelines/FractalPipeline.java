@@ -2,6 +2,7 @@ package euhedral.benchmarks.pipelines;
 
 import euhedral.benchmarks.frames.ArrayFrame;
 import euhedral.benchmarks.frames.MandelbrotPixel;
+import euhedral.benchmarks.frames.MandelbulbFrame;
 import euhedral.hardware_utils.PinnedThreadExecutor;
 import euhedral.io.config.CloneConfig;
 import euhedral.io.config.DRRConfig;
@@ -27,17 +28,23 @@ public class FractalPipeline extends DefaultCloneablePipeline {
 
         @Override
         public void execute(AbstractFrame frame) {
-            if(frame instanceof MandelbrotPixel fractal) {
-                int escape = fractal.compute();
-                blackhole.consume(escape);
-                blackhole.consume(fractal);
-                fractal.cpu = this.executorService.getCpu();
-            } else if (frame instanceof ArrayFrame array) {
-                array.execute();
-                array.cpu = this.executorService.getCpu();
-                blackhole.consume(array);
-            } else {
-                frame.throwMeAsError();
+            switch (frame) {
+                case MandelbrotPixel fractal -> {
+                    int escape = fractal.compute();
+                    blackhole.consume(escape);
+                    blackhole.consume(fractal);
+                    fractal.cpu = this.executorService.getCpu();
+                }
+                case MandelbulbFrame fractal -> {
+                    fractal.cpu = this.executorService.getCpu();
+                    fractal.execute();
+                }
+                case ArrayFrame array -> {
+                    array.execute();
+                    array.cpu = this.executorService.getCpu();
+                    blackhole.consume(array);
+                }
+                default -> frame.throwMeAsError();
             }
         }
 

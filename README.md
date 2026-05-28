@@ -40,8 +40,9 @@ Architecture diagrams coming soon.
 
 These benchmarks test performance in a cloud environment on server hardware.
 
-[Amazon EC2 Graviton4](AMAZON_GRAVITON_4_BENCHMARKS.md)
-[Amazon EC2 Intel Xeon 6](AMAZON_XEON_6_BENCHMARKS.md)
+[Amazon EC2 32 vCPU Graviton4](AMAZON_GRAVITON_4_BENCHMARKS.md)
+[Amazon EC2 32 vCPU Intel Xeon 6](AMAZON_XEON_6_BENCHMARKS.md)
+[Amazon EC2 192 vCPU Graviton4](AMAZON_GRAVITON_4_192_CORES_BENCHMARKS.md)
 
 The benchmarks in the sections below were performed on a consumer desktop.
 
@@ -50,19 +51,20 @@ The benchmarks in the sections below were performed on a consumer desktop.
 ## Quick Mental Model
 
 ```
-    Ingress
-       ↓
-  ControlPlane
-       ↓
-ControlPlaneShard
-       ↓
- DRRCacheManager
-       ↓
- ExecutionManager
-       ↓
- AbstractExecutor
-       ↓
-AbstractFrame.execute()
+    SYSTEM VIEW                               IMPLEMENTATION VIEW
+--------------------------------------------------------------------------------
+
+Ingress / Control Plane        ->        Edge Load Balancer (Global L7 Router)
+↓
+ControlPlane Shard             ->        Shard Load Balancer (Partition Router)
+↓
+DRRCacheManager                ->        Ingress Gateway / Stateful Cache Layer
+↓
+ExecutionManager               ->        Task Scheduler
+↓
+AbstractExecutor               ->        Worker Runtime
+↓
+AbstractFrame.execute()        ->        Compute Kernel
 ```
 
 Everything below the ControlPlane is replicated according to hardware topology.
@@ -75,7 +77,7 @@ Everything below the ControlPlane is replicated according to hardware topology.
 
 ## Why Euhedral Exists
 
-Most schedulers optimize for general use.
+General use schedulers do not fully take advantage of the hardware they run on.
 
 **Euhedral optimizes for**:
 
@@ -86,15 +88,15 @@ Most schedulers optimize for general use.
 - Minimal coordination overhead
 - Sustained throughput under pressure
 
-Instead of pushing work blindly into shared queues, Euhedral continuously adapts execution behavior
-using runtime feedback.
+Euhedral continuously adapts execution behavior using runtime feedback and scales to match the
+physical reality of the system.
 
-**The scheduler reacts to**:
+**Euhedral reacts to**:
 
 - Queue residency
 - CPU pressure
-- Backpressure
 - Memory pressure
+- Backpressure
 - Drain rates
 - Topology changes
 - Effective CPU availability
@@ -179,7 +181,7 @@ Benchmarks were performed on:
 - Stock BIOS settings
 - No overclocking
 
-All work items were pre-allocated to isolate scheduler and routing overhead.
+All work items were pre-allocated to measure scheduler and routing overhead.
 
 JMH was used for all benchmarking.
 
