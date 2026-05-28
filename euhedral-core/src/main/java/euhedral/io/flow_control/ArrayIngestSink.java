@@ -1,13 +1,16 @@
 package euhedral.io.flow_control;
 
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
+
 import euhedral.atomics.PaddedAtomicLong;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.IngestSink;
 import euhedral.io.generics.ScaffoldingSource;
 import euhedral.io.generics.ScaffoldingTerminal;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.VarHandle;
 
+/// Wraps an array to allow it to be ingested by the
+/// [ControlPlane][euhedral.io.control_plane.ControlPlane]
 @SuppressWarnings("unused")
 public class ArrayIngestSink implements IngestSink {
 
@@ -17,10 +20,13 @@ public class ArrayIngestSink implements IngestSink {
         this.delegate = new Delegate(frames);
     }
 
+    /// Returns the delegate the ControlPlane will use to ingest the array.
     public ScaffoldingSource getDelegate() {
         return this.delegate;
     }
 
+    /// Resets the sink to allow it to be ingested again. The sink must be passed back into the
+    /// ControlPlane's ingest again.
     public void reset() {
         this.delegate.reset();
     }

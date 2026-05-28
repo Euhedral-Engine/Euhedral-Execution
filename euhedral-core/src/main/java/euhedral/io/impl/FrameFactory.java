@@ -7,22 +7,26 @@ import euhedral.hashing.HasherApi;
 import euhedral.io.frames.AbstractFrame;
 import java.util.concurrent.ThreadLocalRandom;
 
-public class FrameFactory<T, F extends AbstractFrame> {
+/// A class for automatically creating or updating frames using the passed in functions.
+///
+/// Typically used in tandem with a [FrameManager]
+public class FrameFactory<DATA, F extends AbstractFrame> {
     private final long idHash = HasherApi.mix(ThreadLocalRandom.current().nextLong());
 
-    private final FrameCreate<T, F> frameGenerator;
-    private final FrameReplace<T, F> frameReplace;
+    private final FrameCreate<DATA, F> frameGenerator;
+    private final FrameReplace<DATA, F> frameReplace;
     private final CpuInfo originLocation;
 
     private long seed = ThreadLocalRandom.current().nextLong();
 
-    public FrameFactory(FrameCreate<T, F> frameGenerator, FrameReplace<T, F> frameReplace) {
+    public FrameFactory(FrameCreate<DATA, F> frameGenerator, FrameReplace<DATA, F> frameReplace) {
         this.frameGenerator = frameGenerator;
         this.frameReplace = frameReplace;
         this.originLocation = SystemInfo.getCpuInfo(ThreadTools.getCpu());
     }
 
-    public F create(T data) {
+    /// Creates a frame with the data.
+    public F create(DATA data) {
         F frame = frameGenerator.create(idHash, data);
         if(frame.isOrdered()) {
             frame.randomizeHash(idHash);
@@ -33,7 +37,10 @@ public class FrameFactory<T, F extends AbstractFrame> {
         return frame;
     }
 
-    public void replace(T data, F frame) {
+    /// Replaces the data in the frame.
+    ///
+    /// @param data Data to give to the frame
+    public void replace(DATA data, F frame) {
         frame.reset();
 
         frameReplace.replace(data, frame);
@@ -46,12 +53,12 @@ public class FrameFactory<T, F extends AbstractFrame> {
     }
 
     @FunctionalInterface
-    public interface FrameCreate<T, F extends AbstractFrame> {
-        F create(long idHash, T data);
+    public interface FrameCreate<DATA, F extends AbstractFrame> {
+        F create(long idHash, DATA data);
     }
 
     @FunctionalInterface
-    public interface FrameReplace<T, F extends AbstractFrame> {
-        void replace(T data, F oldFrame);
+    public interface FrameReplace<DATA, F extends AbstractFrame> {
+        void replace(DATA data, F oldFrame);
     }
 }

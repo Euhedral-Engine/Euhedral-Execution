@@ -95,6 +95,15 @@ public class SMTBuddy implements AutoCloseable {
         }
     }
 
+    /// Pulls work from the ingest queue into the local execution buffer.
+    ///
+    /// Demand is calculated dynamically from observed flow rates, latency, queue pressure, and current
+    /// buffer occupancy. Pull frequency is also rate-limited to avoid over-requesting work under load.
+    ///
+    /// The local buffer acts as a small execution window that smooths ingest jitter while keeping queue
+    /// residency low.
+    ///
+    /// Returns `true` when a pull cycle was executed.
     private boolean pull() {
         if (this.state.fillRecorder == null) {
             this.state.fillRecorder = ingest.getFillRecorder();
@@ -149,6 +158,15 @@ public class SMTBuddy implements AutoCloseable {
         return demand;
     }
 
+    /// Calculates when the next ingest pull should occur.
+    ///
+    /// Pull timing adapts to observed ingest cadence, execution latency, and buffer utilization.
+    ///
+    /// Under light traffic, the executor waits longer to avoid pointless polling. Under sustained
+    /// load, pulls happen more aggressively to keep execution pipelines full without flooding local
+    /// buffers.
+    ///
+    /// The result is a soft pacing mechanism that reduces queue churn while maintaining steady flow.
     protected long calculateDemandWaitNs(long nowNs, long maxFill) {
         DRRCacheManager ingest = (DRRCacheManager)  INGEST.getOpaque(this);
         boolean warmedUp = ingest.getFillRecorder().getRollingSum() > this.bufferSize

@@ -4,6 +4,7 @@ import euhedral.io.frames.AbstractFrame;
 import euhedral.queues.QueueConsumer;
 import euhedral.queues.common.PartitionedQueue;
 
+/// An intermediary buffer used for communication between pipeline stages.
 @SuppressWarnings("unused")
 public class BufferedBridge {
 

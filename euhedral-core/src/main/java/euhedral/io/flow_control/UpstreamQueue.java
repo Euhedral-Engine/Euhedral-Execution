@@ -33,7 +33,8 @@ public class UpstreamQueue {
 
     static {
         try {
-            UP_COUNT = MethodHandles.lookup().findVarHandle(UpstreamQueue.class, "upstreamCount", long.class);
+            UP_COUNT = MethodHandles.lookup()
+                    .findVarHandle(UpstreamQueue.class, "upstreamCount", long.class);
         } catch (Exception e) {
             throw new ExceptionInInitializerError(e);
         }
@@ -74,10 +75,12 @@ public class UpstreamQueue {
         UP_COUNT.getAndAdd(this, 1);
     }
 
-    public void pull(long demand) {
+    public void request(long demand) {
         pull(null, demand);
     }
 
+    /// Pulls work without requesting from the [UpstreamHandles][UpstreamHandle]. If the buffer is
+    /// `null`, it will **request** the work.
     public void pull(DrainBuffer buffer, long demand) {
         getTrueUpstreamCount();
         this.pullIdx[0] = 0;
@@ -91,7 +94,7 @@ public class UpstreamQueue {
         calculatePullBuckets(demand);
 
         boolean workDone = true;
-        // Cycle through the queue round-robin style.
+        // Cycle through the queue and pull round-robin style.
         while (workDone && (count = fillUpstreamBuffer()) > 0) {
             workDone = false;
             for (int i = 0; i < count; i++) {
@@ -161,6 +164,7 @@ public class UpstreamQueue {
         this.pullBucket[0] = Math.max(this.pullBucket[0], 1);
     }
 
+    /// Transfers [UpstreamHandle] objects into the class's drainBuffer.
     protected int fillUpstreamBuffer() {
         if (this.pullBucket[0] <= 0) {
             return 0;
@@ -171,6 +175,7 @@ public class UpstreamQueue {
                 Math.min((int) this.pullBucket[0], this.drainBuffer.length));
     }
 
+    /// A wrapper for an upstream source.
     public static abstract class UpstreamHandle implements RecursiveScaffolding {
 
         public abstract void pull(DrainBuffer buffer, long demand);

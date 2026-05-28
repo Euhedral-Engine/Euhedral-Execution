@@ -1,25 +1,26 @@
 package euhedral.io.impl;
 
+import java.util.Arrays;
+
 import euhedral.hashing.HasherApi;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.queues.PartitionedMpscArrayQueue;
 import euhedral.queues.PartitionedUnboundedMpscArrayQueue;
 import euhedral.queues.common.PartitionedQueue;
-import java.util.Arrays;
 import lombok.Getter;
 import lombok.Setter;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
-/// A frame management class backed by an MPSC (Multi-Producer Single-Consumer) queue for efficient frame
-/// recirculation. This class is thread-safe for multiple producers and a single consumer.
+/// A frame management class backed by an MPSC (Multi-Producer Single-Consumer) queue for efficient
+/// frame recirculation. This class is thread-safe for multiple producers and a single consumer.
 ///
 /// This class manages a pool of reusable frames to reduce allocation overhead. An instance of this
-/// class is attached to corresponding instances of [`AbstractFrame`][euhedral.io.frames]. At the end
-/// of execution, the frames are returned to this manager for reuse. If none are available, they are
-/// created. Consumption is password protected by the creator.
+/// class can be attached to corresponding instances of [`AbstractFrame`][euhedral.io.frames]. At
+/// the end of execution, the frames are returned to this manager for reuse. If none are available,
+/// they are created. Consumption is password protected by the creator.
 ///
-/// @param <DATA> The data type to use to replace fields in the frame
+/// @param <DATA>  The data type to use to replace fields in the frame
 /// @param <FRAME> The frame type to recycle
 @SuppressWarnings("unchecked")
 public class FrameManager<DATA, FRAME extends AbstractFrame> implements AutoCloseable {
@@ -37,8 +38,7 @@ public class FrameManager<DATA, FRAME extends AbstractFrame> implements AutoClos
     private long seed;
     private int idx = 0;
 
-    public FrameManager(int chunkSize, int pooledChunks,
-            long password) {
+    public FrameManager(int chunkSize, int pooledChunks, long password) {
         int actual = Integer.highestOneBit((chunkSize - 1) << 1);
         actual = actual <= 0 ? 1 : actual;
 
@@ -57,11 +57,12 @@ public class FrameManager<DATA, FRAME extends AbstractFrame> implements AutoClos
         this.buffer = new AbstractFrame[Math.max(actual, 256)];
     }
 
-    public @NonNull FRAME generate(DATA data, long password) {
+    /// Attempts to reuse an old frame if available. Creates one if not using the passed in data.
+    public @NonNull FRAME getOrCreate(DATA data, long password) {
         if (password != this.password) {
             throw new RuntimeException("Incorrect password for this FrameFactory.");
         }
-        if(factory == null) {
+        if (factory == null) {
             throw new RuntimeException("Cannot generate frames with a null FrameFactory.");
         }
 
@@ -70,7 +71,7 @@ public class FrameManager<DATA, FRAME extends AbstractFrame> implements AutoClos
             return factory.create(data);
         }
         factory.replace(data, frame);
-        if(!frame.isOrdered()) {
+        if (!frame.isOrdered()) {
             frame.randomizeHash(HasherApi.mix(seed++));
         }
         return frame;
@@ -81,7 +82,7 @@ public class FrameManager<DATA, FRAME extends AbstractFrame> implements AutoClos
     /// @param password Password set during instantiation
     /// @return The next frame or `null` if empty
     public @Nullable FRAME get(long password) {
-        if(password != this.password) {
+        if (password != this.password) {
             return null;
         }
         return get();
@@ -123,7 +124,7 @@ public class FrameManager<DATA, FRAME extends AbstractFrame> implements AutoClos
         }
 
         long total = 0;
-        final int[] drain = new int[]{(int) Math.max(0, Math.min(idx, max))};
+        final int[] drain = new int[] {(int) Math.max(0, Math.min(idx, max))};
 
         if (drain[0] > 0 && idx < max) {
             Arrays.fill(buffer, null);

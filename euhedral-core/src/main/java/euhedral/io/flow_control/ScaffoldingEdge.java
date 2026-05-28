@@ -81,10 +81,16 @@ public class ScaffoldingEdge extends UpstreamHandle implements AutoCloseable {
         this.drain = drain;
     }
 
+    /// Creates a thread-local [UpstreamQueue] object for the calling thread. This queue contains
+    /// all [UpstreamHandles][UpstreamHandle] associated with the ScaffoldingEdge.
+    ///
+    /// This does not need to be called to avoid errors. It is a micro-optimization.
     public void register() {
         getThreadUpstreamQueue();
     }
 
+    /// Gets the thread-local [UpstreamQueue] object for the calling thread. This queue contains all
+    /// [UpstreamHandles][UpstreamHandle] associated with the ScaffoldingEdge.
     public UpstreamQueue getThreadUpstreamQueue() {
         ScaffoldingEdge parent = (ScaffoldingEdge) PARENT.getOpaque(this);
         if (parent != null) {
@@ -114,6 +120,7 @@ public class ScaffoldingEdge extends UpstreamHandle implements AutoCloseable {
         return queue;
     }
 
+    /// Removes a thread and its [UpstreamQueue] from the mapping.
     public void removeThread(Thread thread) {
         if (thread == null) {
             return;
@@ -133,6 +140,7 @@ public class ScaffoldingEdge extends UpstreamHandle implements AutoCloseable {
         }
     }
 
+    /// Returns the number of [UpstreamHandles][UpstreamHandle]
     public long getUpstreamCount() {
         ScaffoldingEdge parent = (ScaffoldingEdge) PARENT.getOpaque(this);
         if (parent != null) {
@@ -141,10 +149,12 @@ public class ScaffoldingEdge extends UpstreamHandle implements AutoCloseable {
         return this.upstreamCount.getOpaque();
     }
 
+    /// Returns the number of threads registered with this ScaffoldingEdge.
     public int getThreadCount() {
         return this.threadCount.intValue();
     }
 
+    /// Returns the number of ScaffoldingEdge horizontally-linked at this edge's layer.
     public int getLayerWidth() {
         if (this.sibling == null) {
             return 1;
@@ -158,6 +168,8 @@ public class ScaffoldingEdge extends UpstreamHandle implements AutoCloseable {
         return count;
     }
 
+    /// Sets the parent ScaffoldingEdge and transfers all [UpstreamHandles][UpstreamHandle] and
+    /// [UpstreamQueues][UpstreamQueue] to it.
     public void setParent(ScaffoldingEdge parent) {
         if (parent == null) {
             PARENT.setRelease(this, null);
@@ -175,6 +187,7 @@ public class ScaffoldingEdge extends UpstreamHandle implements AutoCloseable {
         releaseLock();
     }
 
+    /// Sends work downstream.
     @Override
     public void onNext(AbstractFrame frame) {
         var downstream = (ScaffoldingTerminal) DOWNSTREAM.getOpaque(this);
@@ -183,6 +196,7 @@ public class ScaffoldingEdge extends UpstreamHandle implements AutoCloseable {
         }
     }
 
+    /// Requests work from the [UpstreamHandles][UpstreamHandle]
     @Override
     public void request(long num) {
         if (num < 0) {
@@ -199,9 +213,11 @@ public class ScaffoldingEdge extends UpstreamHandle implements AutoCloseable {
         }
 
         UpstreamQueue queue = UpstreamQueue.get(this.aggregators, this.threadCount);
-        queue.pull(num);
+        queue.request(num);
     }
 
+    /// Pulls available work from the [UpstreamHandles][UpstreamHandle] without requesting more
+    /// work.
     @Override
     public void pull(DrainBuffer buffer, long demand) {
         if ((boolean) CLOSED.getOpaque(this) || this.drain.getOpaque()) {
@@ -217,6 +233,7 @@ public class ScaffoldingEdge extends UpstreamHandle implements AutoCloseable {
         queue.pull(buffer, demand);
     }
 
+    /// Transfers this edge's state to its parent.
     protected void transferToParent() {
         ScaffoldingEdge parent = (ScaffoldingEdge) PARENT.getOpaque(this);
         if (parent == null) {
@@ -235,6 +252,7 @@ public class ScaffoldingEdge extends UpstreamHandle implements AutoCloseable {
         return false;
     }
 
+    /// Clears the state and permanently closes.
     @Override
     public void close() {
         if (!CLOSED.compareAndSet(this, false, true)) {
@@ -252,6 +270,9 @@ public class ScaffoldingEdge extends UpstreamHandle implements AutoCloseable {
         this.upstreamHandles.clear();
     }
 
+    /// If the parameter is a ScaffoldingEdge, it sets it as its parent or bubbles it up the chain.
+    /// If it is an [UpstreamHandle][UpstreamHandle], it adds it to all
+    /// [UpstreamQueues][UpstreamQueue]
     @Override
     public void addUpstream(RecursiveScaffolding up) {
         if (up instanceof ScaffoldingEdge dh) {
@@ -298,6 +319,8 @@ public class ScaffoldingEdge extends UpstreamHandle implements AutoCloseable {
         }
     }
 
+    /// If the parameter is a ScaffoldingEdge, it attempts to recursively send it down the chain. If
+    /// it is not, it becomes the floor of the chain.
     @Override
     public void addDownstream(RecursiveScaffolding downstream) {
         boolean isEdge = downstream instanceof ScaffoldingEdge;
@@ -321,6 +344,8 @@ public class ScaffoldingEdge extends UpstreamHandle implements AutoCloseable {
         }
     }
 
+    /// Sets the terminal as the floor of the chain if it hasn't been set. Sends it down the chain
+    /// if the downstream is another ScaffoldingEdge.
     public void addDownstream(ScaffoldingTerminal terminal) {
         ScaffoldingTerminal down =
                 (ScaffoldingTerminal) DOWNSTREAM.compareAndExchange(this, null, terminal);

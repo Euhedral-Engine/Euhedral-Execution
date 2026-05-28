@@ -5,7 +5,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import lombok.Setter;
 
-public class ConsumerFrame<T> extends AbstractFrame {
+/// A generic frame that consumes its payload when executed.
+public final class ConsumerFrame<T> extends AbstractFrame {
 
     private final Consumer<T> consumer;
     private final AtomicBoolean killSwitch;

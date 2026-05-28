@@ -35,11 +35,19 @@ public record ExecutionManagerConfig(@Nullable CloneConfig cloneConfig, int minC
                                      @Nullable String metricPrefix)
         implements CloneableObject {
 
+    public static ExecutionManagerConfig powerSavingDefault() {
+        return powerSavingDefault(null, null);
+    }
+
     public static ExecutionManagerConfig powerSavingDefault(MeterRegistry meterRegistry,
             String metricPrefix) {
         return new ExecutionManagerConfig(null, 1_024, 256, false,
                 IdleCyclePolicy.POWER_SAVING, meterRegistry,
                 metricPrefix);
+    }
+
+    public static ExecutionManagerConfig balancedDefault() {
+        return balancedDefault(null, null);
     }
 
     public static ExecutionManagerConfig balancedDefault(MeterRegistry meterRegistry,

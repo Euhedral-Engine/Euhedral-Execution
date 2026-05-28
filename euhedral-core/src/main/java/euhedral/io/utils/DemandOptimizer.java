@@ -2,17 +2,24 @@ package euhedral.io.utils;
 
 public class DemandOptimizer {
 
-    public static long getDemand(double drainRate, double latency, double drainRateVariance,
+    /// Estimates how many additional items should be requested based on observed drain rate,
+    /// arrival latency, variance, and remaining memory budget.
+    ///
+    /// Uses Little’s Law (`drainRate * latency`) as the baseline demand estimate and adds a
+    /// variance-derived safety buffer to reduce the risk of underrun during bursty workloads.
+    ///
+    /// The final request count is capped by the remaining byte budget.
+    public static long getDemand(double drainRate, double arrivalLatency, double drainRateVariance,
             double latencyVariance, long currentCount, long itemByteSize, long maxBytes) {
         long availableBytes = maxBytes - (currentCount * itemByteSize);
         if (availableBytes <= 0 || itemByteSize <= 0) {
             return 0;
         }
 
-        double baseDemand = drainRate * latency;
+        double baseDemand = drainRate * arrivalLatency;
 
         // Total Variance
-        double term1 = latency * (latency * drainRateVariance);
+        double term1 = arrivalLatency * (arrivalLatency * drainRateVariance);
         double term2 = drainRate * (drainRate * latencyVariance);
         double totalVariance = term1 + term2;
 

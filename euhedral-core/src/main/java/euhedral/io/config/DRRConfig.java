@@ -9,6 +9,10 @@ public record DRRConfig(@Nullable CloneConfig cloneConfig, double L2MemoryBudget
                         int ringWalkResetThreshold, double queueCapFactor, String metricPrefix,
                         @Nullable MeterRegistry registry) implements CloneableObject {
 
+    public static DRRConfig defaultConfig() {
+        return defaultConfig(null, null);
+    }
+
     public static DRRConfig defaultConfig(String metricPrefix, MeterRegistry registry) {
         return new DRRConfig(null, 0.7, 4, 1, 4, 0.8, metricPrefix, registry);
     }

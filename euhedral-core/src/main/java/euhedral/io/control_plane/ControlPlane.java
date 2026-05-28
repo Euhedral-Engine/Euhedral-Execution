@@ -2,6 +2,18 @@ package euhedral.io.control_plane;
 
 import static euhedral.io.utils.MathFunctions.unsignedMultiplyHigh;
 
+import java.time.Duration;
+import java.util.Arrays;
+import java.util.BitSet;
+import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.LockSupport;
+
 import euhedral.hardware_utils.PinnedThreadExecutor;
 import euhedral.hardware_utils.ResourceMonitor;
 import euhedral.hardware_utils.SystemInfo;
@@ -19,17 +31,6 @@ import euhedral.io.generics.CloneableObject;
 import euhedral.io.generics.IngestSink;
 import euhedral.io.generics.ScaffoldingSource;
 import io.micrometer.core.instrument.MeterRegistry;
-import java.time.Duration;
-import java.util.Arrays;
-import java.util.BitSet;
-import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.concurrent.locks.LockSupport;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -205,10 +206,12 @@ public class ControlPlane implements AutoCloseable {
         }
     }
 
+    /// Takes an [IngestSink] and adds it as a global input source.
     public void ingest(@NonNull IngestSink sink) {
         ingest(sink.getDelegate());
     }
 
+    /// Takes a [ScaffoldingSource] and adds it as a global input source.
     public void ingest(@NonNull ScaffoldingSource stream) {
         Objects.requireNonNull(stream);
         if (this.closed.getOpaque()) {
@@ -226,12 +229,13 @@ public class ControlPlane implements AutoCloseable {
         controller.ingest(stream);
     }
 
+    /// Constructs the [ControlPlaneShards] and the ingest controller.
     protected void init() {
         this.logger.info("Initializing");
 
         for (int i = 0; i < this.shards.length; i++) {
             SocketInfo info = SystemInfo.getSocketInfo(i);
-            if(info == null) {
+            if (info == null) {
                 continue;
             }
             this.shards[i] = createShard(i);
@@ -248,22 +252,26 @@ public class ControlPlane implements AutoCloseable {
         return this.baseShard.clone(socketId, shardName);
     }
 
+    /// Routes work based on their policy level or uses default global routing.
     protected int route(AbstractFrame frame, int mapSize) {
         RoutingPolicy policy = frame.getRoutingPolicy();
         if (policy != null && policy.level > RoutingPolicy.ANY.level) {
             int[] reverseMapping = this.reverseMapping.getOpaque();
             CpuInfo location = frame.getOrigin();
-            int socket = location != null ? location.socket() : -1;
 
+            int socket = location != null ? location.socket() : -1;
             if (socket >= 0 && socket < reverseMapping.length
                     && (socket = reverseMapping[socket]) < mapSize && socket >= 0) {
                 return socket;
             }
         }
 
+        // Default routing
         return (int) unsignedMultiplyHigh(frame.getCombinedHash(), mapSize);
     }
 
+    /// Hands out the shard-specific hardware utilization reports or initiates a rebalance on
+    /// topology change.
     protected void update(HardwareUtilization utilization) {
         int nextVersion = this.topology.getGlobalVersion();
 
@@ -304,6 +312,8 @@ public class ControlPlane implements AutoCloseable {
         }
     }
 
+    /// Spawns new shards if a socket becomes available. Shuts down shards if the socket is removed.
+    /// Updates existing shards with their new utilization reports.
     protected void handleSystemTopologyChange(HardwareUtilization utilization) {
         if (!this.rebalancing.compareAndSet(false, true)) {
             return;
@@ -322,10 +332,11 @@ public class ControlPlane implements AutoCloseable {
         }
         remapIngestController();
 
+        // Divide the quota proportionally based on cpu count
         double quotaPool = utilization.quotaCpus();
         for (int socket = newShards.nextSetBit(0); socket >= 0;
                 socket = newShards.nextSetBit(socket + 1)) {
-            if(this.shards[socket] == null) {
+            if (this.shards[socket] == null) {
                 continue;
             }
 
@@ -347,6 +358,7 @@ public class ControlPlane implements AutoCloseable {
         int[] reverseMapping = new int[SystemInfo.getMaxSocketId() + 1];
         Arrays.fill(reverseMapping, -1);
 
+        // Build the reverse mapping for fast lookups on socket-local policies
         for (int i = newShards.nextSetBit(0); i >= 0; i = newShards.nextSetBit(i + 1)) {
             reverseMapping[i] = idx;
             nextSockets[idx++] = i;
@@ -369,6 +381,7 @@ public class ControlPlane implements AutoCloseable {
             return;
         }
 
+        // Shutdown decommissioned shards and restart ingest on complete.
         CompletableFuture.runAsync(() -> {
             for (int i = 0; i < this.shards.length; i++) {
                 if (!newShards.get(i)) {
@@ -383,6 +396,8 @@ public class ControlPlane implements AutoCloseable {
         }, this.controlPlaneExecutor);
     }
 
+    /// Cuts ingest by setting the ingest controller to drain mode and changes the mappings to the
+    /// next shards. Does not reactivate ingest in here.
     protected void remapIngestController() {
         this.ingestController.get().setDrain(true);
         BitSet effectiveSockets = this.effectiveTopology.effectiveSockets();
@@ -414,6 +429,7 @@ public class ControlPlane implements AutoCloseable {
         this.shards[shardId].start(snapshot, topology, this.shardHandles[shardId]);
     }
 
+    /// Calculates the proportional quota for a shard based on their CPU count.
     protected double getShardQuota(int socketId, double systemQuotaPool) {
         int totalEffectiveCpus = this.effectiveTopology.effectiveCpus().cardinality();
         int socketEffectiveCpus =
@@ -436,13 +452,14 @@ public class ControlPlane implements AutoCloseable {
     public int getActiveWorkers() {
         int count = 0;
         for (ControlPlaneShard shard : this.shards) {
-            if(shard != null) {
+            if (shard != null) {
                 count += shard.getActiveCores();
             }
         }
         return count;
     }
 
+    /// Permanently shuts down the ControlPlane.
     @Override
     public void close() {
         if (!this.closed.compareAndSet(false, true)) {
@@ -484,6 +501,8 @@ public class ControlPlane implements AutoCloseable {
         }
     }
 
+    /// Whether all queues are empty and all in-progress work is completed for all CPUs managed by
+    /// this ControlPlane.
     public boolean isDrained() {
         ScaffoldingNode controller = this.ingestController.get();
         if (controller != null && !controller.isDrained()) {
