@@ -255,7 +255,7 @@ public class DRRCacheManager extends ScaffoldingNode implements CacheManager {
                 }
                 quota = (int) Math.min(quota, maxFill - totalDrain);
 
-                int drainCount = this.queueRing.drain(lock, drainBuffer, quota);
+                int drainCount = (int) this.queueRing.drain(lock, drainBuffer, quota);
                 long drainedBytes = drainBuffer.drainedBytes;
 
                 cycles++;

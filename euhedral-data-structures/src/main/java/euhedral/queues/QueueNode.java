@@ -55,7 +55,7 @@ public class QueueNode<T> {
         return this.chunk.poll(partition);
     }
 
-    public int drain(int partition, QueueConsumer<T> consumer, int limit) {
+    public long drain(int partition, QueueConsumer<T> consumer, long limit) {
         return this.chunk.drain(partition, consumer, limit);
     }
 

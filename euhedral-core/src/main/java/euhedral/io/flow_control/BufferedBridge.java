@@ -24,7 +24,7 @@ public class BufferedBridge {
         this.hookOnOffer = hookOnOffer;
     }
 
-    public int drain() {
+    public long drain() {
         return this.buffer.drain(this.drainFunc, Integer.MAX_VALUE);
     }
 

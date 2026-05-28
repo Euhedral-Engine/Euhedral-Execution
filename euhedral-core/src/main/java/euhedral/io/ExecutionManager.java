@@ -4,11 +4,6 @@ import static euhedral.io.utils.MathFunctions.clampDouble;
 import static euhedral.io.utils.MathFunctions.clampLong;
 import static euhedral.io.utils.MathFunctions.log2;
 
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.VarHandle;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.locks.LockSupport;
-
 import euhedral.hardware_utils.PinnedThreadExecutor;
 import euhedral.hardware_utils.SystemInfo;
 import euhedral.hardware_utils.SystemInfo.CpuCacheLayout;
@@ -35,6 +30,10 @@ import euhedral.queues.PartitionedSpscArrayQueue;
 import euhedral.queues.PartitionedUnboundedMpscArrayQueue;
 import euhedral.queues.common.PartitionedQueue;
 import euhedral.queues.common.QueueUtils;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.LockSupport;
 import lombok.AccessLevel;
 import lombok.Getter;
 import org.jspecify.annotations.NonNull;
@@ -468,7 +467,7 @@ public class ExecutionManager implements SlotManager {
         int processed = 0;
         if (quota > 0 && bufferCount > 0) {
             IN_FLIGHT.setOpaque(this, this.inFlight + quota);
-            processed = this.outputStream.push(quota);
+            processed = (int) this.outputStream.push(quota);
             if (processed > 0) {
                 this.buddyState.bufferCount.addAndGet(-processed);
                 IN_FLIGHT.setOpaque(this, this.inFlight + (processed - quota));

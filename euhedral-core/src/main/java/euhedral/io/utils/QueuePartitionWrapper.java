@@ -26,14 +26,14 @@ public class QueuePartitionWrapper {
         return false;
     }
 
-    public int drain(int partition, @NonNull DrainBuffer drainBuffer, int limit) {
+    public long drain(int partition, @NonNull DrainBuffer drainBuffer, int limit) {
         if (limit <= 0) {
             return 0;
         }
 
         drainBuffer.drainCount = 0;
         drainBuffer.drainedBytes = 0;
-        int count = this.queue.drain(partition, drainBuffer::accept, limit);
+        long count = this.queue.drain(partition, drainBuffer::accept, limit);
 
         if (count > 0) {
             this.sizeBytes.getAndAccumulate(partition, -drainBuffer.drainedBytes,

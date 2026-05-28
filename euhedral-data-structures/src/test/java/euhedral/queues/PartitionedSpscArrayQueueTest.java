@@ -76,7 +76,7 @@ class PartitionedSpscArrayQueueTest {
 
             exec.submit(() -> {
                 while (drained.sum() < batch) {
-                    int count = q.drain(consumer, 4096);
+                    long count = q.drain(consumer, 4096);
                     drained.add(count);
                     Thread.yield();
                 }

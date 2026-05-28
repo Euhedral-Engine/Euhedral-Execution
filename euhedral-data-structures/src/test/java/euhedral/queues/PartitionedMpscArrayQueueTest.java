@@ -66,7 +66,7 @@ class PartitionedMpscArrayQueueTest {
 
             long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
             while (drained.sum() < batch * 8 && System.nanoTime() < deadline) {
-                int count = q.drain(consumer, 4096);
+                long count = q.drain(consumer, 4096);
                 drained.add(count);
                 Thread.yield();
             }
