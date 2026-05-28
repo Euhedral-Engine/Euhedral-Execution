@@ -123,7 +123,7 @@ jobs:
         run: |
           git tag -a "$TARGET_TAG" -m "Release $TARGET_TAG"
           git push origin "$TARGET_TAG"
-          gh release create "$TARGET_TAG" --generate-notes
+          gh release create "$TARGET_TAG" --generate-notes target/*.jar
 
       - name: Roll to Next Development Snapshot
         if: ${{ steps.check_version.outputs.is_snapshot == 'false' }}

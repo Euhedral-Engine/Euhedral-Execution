@@ -22,7 +22,7 @@ class ResourceMonitorTest {
     @BeforeAll
     public static void buildContainer() {
 
-        File testJar = new File("target/test-container.jar");
+        File testJar = new File("target/testing/test-container.jar");
 
         container = new GenericContainer<>("eclipse-temurin:21-jre-alpine")
                 .withCreateContainerCmdModifier(cmd -> cmd.getHostConfig()
