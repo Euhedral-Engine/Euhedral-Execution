@@ -259,8 +259,8 @@ execution behavior.
 
 # End-to-End Latency
 
-Each invocation executes **100K** pre-allocated no-op frames. This testing end-to-end latency using 
-only one core.
+Each invocation executes **100K** pre-allocated no-op frames. This tests end-to-end latency using 
+only one core. Includes routing, scheduling, queue residency, and execution.
 
 ---
 
