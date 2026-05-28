@@ -124,7 +124,7 @@ public class EuhedralScheduler implements Scheduler {
     public void dispose() {
         if (this.disposed.compareAndSet(false, true)) {
             for (EuhedralWorker sink : sinks) {
-                sink.close();
+                sink.complete();
             }
         }
     }

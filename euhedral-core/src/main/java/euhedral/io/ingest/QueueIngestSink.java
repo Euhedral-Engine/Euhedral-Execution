@@ -1,0 +1,75 @@
+package euhedral.io.ingest;
+
+import euhedral.io.frames.AbstractFrame;
+import euhedral.io.generics.IngestSink;
+import euhedral.io.generics.ScaffoldingSource;
+import euhedral.io.generics.ScaffoldingTerminal;
+import euhedral.queues.common.ConcurrentPartitionedQueue;
+
+/// Wraps a partitioned queue to allow it to be fed into the
+/// [ControlPlane][euhedral.io.control_plane.ControlPlane]
+@SuppressWarnings("unused")
+public class QueueIngestSink extends IngestSink {
+
+    private final Delegate delegate;
+
+    public QueueIngestSink(ConcurrentPartitionedQueue<AbstractFrame> queue) {
+        this.delegate = new Delegate(queue);
+    }
+
+    @Override
+    public ScaffoldingSource getDelegate() {
+        return null;
+    }
+
+    /// Offers the object to each partition starting from 0 until it succeeds.
+    ///
+    /// @return success
+    public boolean offer(AbstractFrame frame) {
+        return this.delegate.queue.offer(frame);
+    }
+
+    /// Offers the object to a random partition based on the seed. If the seed does not change, the
+    /// same partition will be picked.
+    ///
+    /// @return success
+    public boolean offer(long randomSeed, AbstractFrame frame) {
+        return this.delegate.queue.offer(randomSeed, frame);
+    }
+
+    /// Offers the object to a specific partition
+    ///
+    /// @return success
+    public boolean offer(int partition, AbstractFrame frame) {
+        return this.delegate.queue.offer(partition, frame);
+    }
+
+    /// Clears the queue.
+    public void clear() {
+        this.delegate.queue.clear();
+    }
+
+    /// Disconnects from the [ControlPlane][euhedral.io.control_plane.ControlPlane]. Does not clear
+    /// the queue.
+    @Override
+    public void complete() {
+        this.delegate.complete();
+    }
+
+    protected static final class Delegate extends IngestSink.Delegate {
+
+        final ConcurrentPartitionedQueue<AbstractFrame> queue;
+
+        protected Delegate(ConcurrentPartitionedQueue<AbstractFrame> queue) {
+            this.queue = queue;
+        }
+
+        @Override
+        public void hookOnRequest(ScaffoldingTerminal terminal, long demand) {
+            long count = this.queue.drain(terminal::onNext, demand);
+            if (count > 0) {
+                addAndGetDemand(-count);
+            }
+        }
+    }
+}

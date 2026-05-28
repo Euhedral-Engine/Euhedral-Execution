@@ -371,9 +371,9 @@ class ScaffoldingNodeTest {
 
         interceptor.upstream = upstream;
 
-        interceptor.cancel();
+        interceptor.complete();
 
-        verify(upstream).cancel();
+        verify(upstream).complete();
 
         assertTrue(interceptor.complete.get());
     }
