@@ -236,12 +236,15 @@ public class BatchedMandelbrotBenchmark {
                     CANVAS % BATCH > 0 ? 1 : 0)][];
             this.frames = new ArrayFrame[pixelArray.length];
 
+            long seed = SEED;
+
             int idx = 0;
             int total = CANVAS;
             while (total > 0) {
                 AbstractFrame[] set = new AbstractFrame[Math.min(BATCH, total)];
                 System.arraycopy(pixels, idx * BATCH, set, 0, set.length);
                 this.frames[idx] = new ArrayFrame(pixels[0].getIdHash(), set, this.counters);
+                this.frames[idx].randomizeHash(HasherApi.mix(seed++));
                 total -= Math.min(BATCH, total);
                 idx++;
             }
