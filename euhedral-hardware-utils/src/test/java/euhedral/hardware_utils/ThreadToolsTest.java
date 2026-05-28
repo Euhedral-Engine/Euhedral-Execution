@@ -16,7 +16,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 class ThreadToolsTest {
     @Test
     public void testPinningToAll() throws Exception {
-        File testJar = new File("target/test-container.jar");
+        File testJar = new File("target/testing/test-container.jar");
 
         GenericContainer<?> container = new GenericContainer<>("eclipse-temurin:21-jre-alpine")
                 .withCreateContainerCmdModifier(cmd -> cmd.getHostConfig()
