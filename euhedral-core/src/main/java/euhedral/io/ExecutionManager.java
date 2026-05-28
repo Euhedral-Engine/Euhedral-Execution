@@ -4,6 +4,11 @@ import static euhedral.io.utils.MathFunctions.clampDouble;
 import static euhedral.io.utils.MathFunctions.clampLong;
 import static euhedral.io.utils.MathFunctions.log2;
 
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.LockSupport;
+
 import euhedral.hardware_utils.PinnedThreadExecutor;
 import euhedral.hardware_utils.SystemInfo;
 import euhedral.hardware_utils.SystemInfo.CpuCacheLayout;
@@ -30,10 +35,6 @@ import euhedral.queues.PartitionedSpscArrayQueue;
 import euhedral.queues.PartitionedUnboundedMpscArrayQueue;
 import euhedral.queues.common.PartitionedQueue;
 import euhedral.queues.common.QueueUtils;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.VarHandle;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.locks.LockSupport;
 import lombok.AccessLevel;
 import lombok.Getter;
 import org.jspecify.annotations.NonNull;
@@ -238,10 +239,8 @@ public class ExecutionManager implements SlotManager {
             });
 
             this.metrics = new ExecutionManagerMetrics(config.meterRegistry(), config,
-                    () -> (int) IN_FLIGHT.getOpaque(this),
-                    () -> (long) AVG_LATENCY.getOpaque(this),
-                    () -> (long) CONCURRENCY.getOpaque(this),
-                    () -> (long) RATE.getOpaque(this),
+                    () -> (int) IN_FLIGHT.getOpaque(this), () -> (long) AVG_LATENCY.getOpaque(this),
+                    () -> (long) CONCURRENCY.getOpaque(this), () -> (long) RATE.getOpaque(this),
                     this::getPressure);
             this.shutdownHook = new Thread(this::close);
             Runtime.getRuntime().addShutdownHook(this.shutdownHook);
@@ -486,6 +485,7 @@ public class ExecutionManager implements SlotManager {
         int updateInterval = this.state.updateIntervalMask + 1;
         double scaledVariance = avgVariance * updateInterval;
 
+        // Decrease the sampling rate if the variance is larger than the window.
         if (scaledVariance >= updateInterval) {
             this.state.updateIntervalMask =
                     Math.min(updateInterval << 1, this.maxUpdateInterval) - 1;
@@ -505,6 +505,14 @@ public class ExecutionManager implements SlotManager {
         updateConcurrency(ideal, queueEstimate);
     }
 
+    /// Updates the maximum allowed in-flight work for this executor.
+    ///
+    /// The limit scales with observed throughput and current concurrency, then backs off under CPU
+    /// pressure to avoid oversaturating the core.
+    ///
+    /// P-cores are allowed to push harder than E-cores before throttling begins.
+    ///
+    /// Final limits are clamped against configured minimums and a hardware-derived ceiling.
     protected void updateEffectiveConcurrencyLimit(long ideal) {
         CoreSnapshot coreSnapshot = (CoreSnapshot) SNAPSHOT.getOpaque(this);
         CpuSnapshot cpuSnapshot = coreSnapshot.cpuSnapshots()[this.cpuId];
@@ -524,6 +532,27 @@ public class ExecutionManager implements SlotManager {
                 clampLong(adaptiveCap, this.config.minConcurrency(), hardwareMax);
     }
 
+    /// Adjusts execution concurrency using a blend of TCP Vegas-style queue estimation and Little’s
+    /// Law demand modeling.
+    ///
+    /// Vegas behavior is used to detect queue pressure:
+    ///
+    ///   - Low queue residency -> increase concurrency
+    ///   - High queue residency -> reduce concurrency
+    ///   - Stable queues -> hold steady
+    ///
+    /// Little’s Law provides a secondary correction based on observed throughput and latency.
+    ///
+    /// Variability in execution rate and latency expands the ideal target window to avoid
+    /// overreacting to bursty workloads.
+    ///
+    /// Concurrency changes are intentionally conservative:
+    ///
+    ///   - Small adjustments are ignored
+    ///   - Direction changes reset stability tracking
+    ///   - Multiple consistent signals are required before tuning
+    ///
+    /// This prevents oscillation while still allowing the system to react quickly under load.
     protected void updateConcurrency(long ideal, double queueEstimate) {
         boolean drain = (boolean) DRAIN.getOpaque(this);
         if (drain) {
@@ -581,6 +610,21 @@ public class ExecutionManager implements SlotManager {
         CONCURRENCY.setOpaque(this, clampLong(next, 1, this.effectiveConcurrencyLimit));
     }
 
+    /// Calculates how long dispatch should back off before pulling more work.
+    ///
+    /// The wait interval expands and contracts dynamically based on:
+    ///
+    ///   - Observed execution latency
+    ///   - Queue pressure (Vegas estimate)
+    ///   - Workload variability
+    ///   - CPU pressure / throttling
+    ///
+    /// Under stable low-pressure conditions, dispatch remains aggressive.
+    ///
+    /// As queue residency, execution variance, or CPU pressure rise, the scheduler increases the
+    /// pause interval to reduce contention and avoid runaway queue growth.
+    ///
+    /// This acts as a lightweight adaptive pacing mechanism for demand signaling.
     protected long calculateDispatchWaitNs(long nowNs) {
         if (this.state.maxParkNs <= 0) {
             return 0;
@@ -614,6 +658,19 @@ public class ExecutionManager implements SlotManager {
         return nowNs + interval;
     }
 
+    /// Adaptive idle strategy for pinned executors.
+    ///
+    /// The executor progressively de-escalates idle behavior based on observed inactivity:
+    ///
+    /// ```text
+    /// spin -> yield -> park
+    /// ```
+    ///
+    /// Short idle periods stay in active spin to minimize wake latency. As idle time increases, the
+    /// executor yields or parks to reduce CPU waste and SMT contention.
+    ///
+    /// While parked, sibling SMT workers may temporarily steal coordination work to help keep
+    /// shared queues moving and reduce cold-start latency when traffic resumes.
     protected void idleSpin(long parks) {
         long now = System.nanoTime();
         this.state.idleRecorder.record(now, 1, false);
@@ -687,7 +744,7 @@ public class ExecutionManager implements SlotManager {
 
         CoreSnapshot core = (CoreSnapshot) SNAPSHOT.getOpaque(this);
         double hardwarePressure = 0.0;
-        if(core != null) {
+        if (core != null) {
             hardwarePressure = core.cpuSnapshots()[this.cpuId].pressure();
         }
 

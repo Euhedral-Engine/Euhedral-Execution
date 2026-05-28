@@ -12,6 +12,7 @@ import euhedral.io.generics.PipelineExecutor;
 import euhedral.io.generics.SlotManager;
 import io.micrometer.core.instrument.MeterRegistry;
 
+/// The minimal implementation of an [AbstractCloneablePipeline]
 public class DefaultCloneablePipeline extends AbstractCloneablePipeline {
 
     private static DRRCacheManager getDrrScheduler(DRRConfig drrConfig) {

@@ -5,6 +5,9 @@ import euhedral.io.config.CloneConfig;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.AbstractExecutor;
 
+/// The minimal implementation of an [AbstractExecutor]
+///
+/// Simply hits `execute()` on a frame.
 public class DefaultExecutor extends AbstractExecutor {
 
     public DefaultExecutor(PinnedThreadExecutor executorService) {

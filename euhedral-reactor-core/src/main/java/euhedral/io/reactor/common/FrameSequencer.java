@@ -7,7 +7,7 @@ import euhedral.io.impl.FrameFactory.FrameCreate;
 import euhedral.io.impl.FrameFactory.FrameReplace;
 import euhedral.io.impl.FrameManager;
 import euhedral.queues.PartitionedUnboundedSpscArrayQueue;
-import java.util.concurrent.ThreadLocalRandom;
+
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import org.reactivestreams.Publisher;
@@ -65,7 +65,7 @@ public class FrameSequencer<T, R> {
         };
         recycler.setFactory(new FrameFactory<>(frameCreate, frameReplace));
 
-        return flux.map(obj -> recycler.generate(obj, ingestPassword))
+        return flux.map(obj -> recycler.getOrCreate(obj, ingestPassword))
                 .doFinally(sig -> {
                     killSwitch.set(true);
                     sequence.clear();

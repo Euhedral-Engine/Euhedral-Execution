@@ -208,6 +208,23 @@ public class DRRCacheManager extends ScaffoldingNode implements CacheManager {
         }
     }
 
+    /// Drains work from the cache-local DRR partitions into the execution buffer.
+    ///
+    /// Each partition maintains an adaptive byte quota that behaves similarly to deficit
+    /// round-robin scheduling. Partitions that consistently drain work accumulate credit,
+    /// while idle partitions naturally fall behind.
+    ///
+    /// Work is drained opportunistically:
+    ///
+    ///   - Try the current partition
+    ///   - Walk partitions if contention or emptiness is encountered
+    ///   - Refill quota when depleted
+    ///   - Reset the ring walk when a productive partition is found
+    ///
+    /// The drain process is intentionally byte-oriented instead of item-oriented to better
+    /// handle highly irregular frame sizes.
+    ///
+    /// Remaining capacity is filled directly from upstream if local queues underflow.
     public long drain(DownstreamHandle handle, DrainBuffer drainBuffer, int maxFill, long demand) {
         drainBuffer.reset();
         if (maxFill <= 0) {
@@ -284,7 +301,7 @@ public class DRRCacheManager extends ScaffoldingNode implements CacheManager {
         }
 
         if (getUpstreamCount() > 0) {
-            UPSTREAM.get().pull(demand);
+            UPSTREAM.get().request(demand);
         } else {
             super.request(demand);
         }
@@ -303,6 +320,19 @@ public class DRRCacheManager extends ScaffoldingNode implements CacheManager {
         stats.drainCycles = 0;
     }
 
+    /// Dynamically adjusts the DRR weight for a partition based on observed frame sizes and
+    /// workload variability.
+    ///
+    /// The target quantum tracks roughly `2x` the moving average frame size so larger frames
+    /// naturally receive more drain budget.
+    ///
+    /// Variability is measured using the coefficient of variation (CV) from recent enqueue
+    /// traffic:
+    ///
+    ///   - Stable traffic -> smaller deadband -> faster adaptation
+    ///   - Chaotic traffic -> larger deadband -> smoother behavior
+    ///
+    /// Small changes are ignored to avoid oscillation and unnecessary weight churn.
     protected void updateWeight(PartitionStats stats) {
         long avgSize = stats.avgFrameSize.getAcquire();
         if (avgSize < 64) {
