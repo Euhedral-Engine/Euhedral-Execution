@@ -2,6 +2,7 @@ package euhedral.benchmarks;
 
 import euhedral.benchmarks.core_benchmarks.BatchedMandelbrotBenchmark;
 import euhedral.benchmarks.core_benchmarks.EndToEndLatencyBenchmark;
+import euhedral.benchmarks.core_benchmarks.HighScaleBenchmark;
 import euhedral.benchmarks.core_benchmarks.MandelbrotBenchmark;
 import euhedral.benchmarks.core_benchmarks.ThroughputComparisonBenchmark;
 import euhedral.benchmarks.core_benchmarks.TrueThroughputBenchmark;
@@ -27,7 +28,7 @@ public class BenchRunner {
     public static void main(String[] args) throws Exception {
         Set<String> benchmarks =
                 new TreeSet<>(
-                        Set.of("all", "core-latency", "core-throughput", "core-throughput-comp",
+                        Set.of("all", "core-high-scale", "core-latency", "core-throughput", "core-throughput-comp",
                                 "batched-mandelbrot", "mandelbrot"));
         if (args.length == 0) {
             System.out.println("Please specify a benchmark to run. Options: " + benchmarks);
@@ -88,6 +89,11 @@ public class BenchRunner {
                         }
                         flags.add("-DoutputFile=" + fileName);
                     }
+                }
+                case "core-high-scale" -> {
+                    benchmark = HighScaleBenchmark.class;
+                    flags.add("-DXms100g");
+                    flags.add("-DXmx100g");
                 }
                 case "core-throughput" -> benchmark = TrueThroughputBenchmark.class;
                 case "core-throughput-comp" -> benchmark = ThroughputComparisonBenchmark.class;
