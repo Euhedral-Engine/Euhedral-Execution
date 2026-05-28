@@ -23,6 +23,8 @@ Work items were pre-allocated for all benchmarks to only measure scheduling over
 
 JMH was used for all benchmarking.
 
+---
+
 # Mandelbrot
 
 These tests are missing perf counters due to the limitations of the EC2 virtualized environment.
@@ -56,6 +58,7 @@ Flux.fromArray(this.pixels)
 Flux.fromArray(this.pixels).subscribe(this.subscriber);
 this.controlPlane.ingest(this.subscriber);
 ```
+
 Using `.parallel()` lead to higher allocations, significantly lower throughput, and latencies
 exceeding 2 microseconds per operation.
 
@@ -75,6 +78,10 @@ Flux.fromArray(this.monos)
 
 ## Batched Mandelbrot
 
+---
+
+### Results
+
 | Scheduler                           | ns/op | Alloc mb/sec | bytes/op | GC Counts | GC Time |
 |:------------------------------------|------:|-------------:|---------:|----------:|--------:|
 | Euhedral Core (SMT disabled)        | 1.382 |        0.228 |    0.001 |         0 |       0 |
@@ -93,7 +100,13 @@ Flux.fromArray(this.monos)
 | Reactor Parallel (32 threads)        | 0.50 |
 | Reactor Bounded Elastic (32 threads) | 0.50 |
 
+---
+
 ## Mandelbrot (1-by-1)
+
+---
+
+### Results
 
 | Scheduler                           |    ns/op | Alloc mb/sec | bytes/op | GC Counts | GC Time |
 |:------------------------------------|---------:|-------------:|---------:|----------:|--------:|
@@ -113,32 +126,35 @@ Flux.fromArray(this.monos)
 | Reactor Parallel (32 threads)        | 2.35 |
 | Reactor Bounded Elastic (32 threads) | 2.13 |
 
+---
 
 ### Theory/Explanation of Performance for Euhedral SMT Disabled vs Enabled
 
-SMT caused an increase in allocations in both tests. For the batched test, SMT improved performance. 
+SMT caused an increase in allocations in both tests. For the batched test, SMT improved performance.
 For the 1-by-1, it hurt it.
 
 The SMTBuddy class contains the work pulling logic.
 
 When SMT is disabled, the SMTBuddy class is used by the ExecutionManager manually. When it is
-enabled, it automatically runs the logic in the background. ExecutionManager does the executing, 
+enabled, it automatically runs the logic in the background. ExecutionManager does the executing,
 SMTBuddy does the pulling. They do not swap roles.
 
-The ExecutionManager has other things to do besides pulling that take time to execute. It has its 
-idling behavior and execution time to naturally slow down its pull rate. But the SMTBuddy class's only 
-job is to pull. Even though it has the same backoff logic for pull timing, it is always ready to 
+The ExecutionManager has other things to do besides pulling that take time to execute. It has its
+idling behavior and execution time to naturally slow down its pull rate. But the SMTBuddy class's
+only
+job is to pull. Even though it has the same backoff logic for pull timing, it is always ready to
 pull when the time allows it.
 
-I believe the extra allocations come from the increased rate of the unbounded queues expanding to 
+I believe the extra allocations come from the increased rate of the unbounded queues expanding to
 absorb the increased flow.
 
-In the batched test, the 33.2 million pixel objects are batched in bundles of 1024. This dramatically
-reduces the queue depth which stops them from expanding as often. Even though the number of 
+In the batched test, the 33.2 million pixel objects are batched in bundles of 1024. This
+dramatically
+reduces the queue depth which stops them from expanding as often. Even though the number of
 tasks/operations is the same.
 
-I have not fully optimized the small control loop in SMTBuddy. It was initially created to separate 
-the pull logic from the ExecutionManager class. That cycle loop was essentially thrown together and 
+I have not fully optimized the small control loop in SMTBuddy. It was initially created to separate
+the pull logic from the ExecutionManager class. That cycle loop was essentially thrown together and
 needs better heuristics for backing off.
 
 # Raw Data
