@@ -10,8 +10,6 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.util.concurrent.atomic.AtomicInteger;
-
 import euhedral.hardware_utils.PinnedThreadExecutor;
 import euhedral.io.config.CloneConfig;
 import euhedral.io.flow_control.BufferedBridge;
@@ -19,6 +17,7 @@ import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.CloneableObject;
 import euhedral.io.generics.ScaffoldingSource;
 import euhedral.io.generics.ScaffoldingTerminal;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import test_utils.TestFrame;
@@ -156,7 +155,7 @@ class DefaultExecutorTest {
         }
 
         @Override
-        public void cancel() {
+        public void complete() {
         }
     }
 

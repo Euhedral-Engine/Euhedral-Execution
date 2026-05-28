@@ -86,7 +86,7 @@ public final class EuhedralSubscriber implements Subscriber<AbstractFrame>, Scaf
     }
 
     @Override
-    public void cancel() {
+    public void complete() {
         COMPLETE.setRelease(this, true);
         Subscription sub = (Subscription) SUBSCRIBER.getAndSet(this, null);
         if(sub != null) {

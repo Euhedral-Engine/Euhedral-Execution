@@ -1,6 +1,5 @@
 package euhedral.io.reactor;
 
-import euhedral.atomics.PaddedAtomicLong;
 import euhedral.hashing.HasherApi;
 import euhedral.io.generics.IngestSink;
 import euhedral.io.generics.ScaffoldingSource;
@@ -16,7 +15,8 @@ import org.jspecify.annotations.NonNull;
 import reactor.core.Disposable;
 import reactor.core.scheduler.Scheduler.Worker;
 
-public class EuhedralWorker implements IngestSink, Worker {
+@SuppressWarnings("unused")
+public class EuhedralWorker extends IngestSink implements Worker {
 
     static EuhedralWorker spawn(int chunkSize, int maxPooledChunks) {
         return new EuhedralWorker(chunkSize, maxPooledChunks);
@@ -63,67 +63,49 @@ public class EuhedralWorker implements IngestSink, Worker {
 
     @Override
     public void dispose() {
-        close();
+        complete();
     }
 
     @Override
     public boolean isDisposed() {
-        return this.delegate.isClosed();
+        return this.delegate.isComplete();
     }
 
     @Override
-    public void close() {
-        this.delegate.close();
+    public void complete() {
+        this.delegate.complete();
     }
 
-    private static class Delegate implements IngestSink.Delegate {
+    private static class Delegate extends IngestSink.Delegate {
 
-        private static final VarHandle CLOSED;
-        private static final VarHandle TERMINAL;
+        private static final VarHandle COMPLETE;
 
         static {
             try {
-                CLOSED = MethodHandles.lookup()
-                        .findVarHandle(Delegate.class, "closed", boolean.class);
-                TERMINAL = MethodHandles.lookup()
-                        .findVarHandle(Delegate.class, "terminal", ScaffoldingTerminal.class);
+                COMPLETE = MethodHandles.lookup()
+                        .findVarHandle(Delegate.class, "complete", boolean.class);
             } catch (Throwable t) {
                 throw new ExceptionInInitializerError(t);
             }
         }
 
-        private static long accumulate(long curr, long next) {
-            if (curr + next < 0) {
-                return Long.MAX_VALUE;
-            }
-            return curr + next;
-        }
-
         private final PartitionedUnboundedMpscArrayQueue<TaskFrame> queue;
-        private final PaddedAtomicLong demand = new PaddedAtomicLong(0);
 
-        private ScaffoldingTerminal terminal;
-        private boolean closed;
+        private boolean complete;
 
         Delegate(int chunkSize, int maxPooledChunks) {
             this.queue = new PartitionedUnboundedMpscArrayQueue<>(1, chunkSize, maxPooledChunks);
         }
 
         @Override
-        public void request(long demand) {
-            boolean closed = (boolean) CLOSED.getOpaque(this);
-            var terminal = (ScaffoldingTerminal) TERMINAL.getOpaque(this);
-
-            if (closed || terminal == null || demand <= 0) {
+        public void hookOnRequest(ScaffoldingTerminal terminal, long demand) {
+            if (complete) {
                 return;
             }
 
-            demand = this.demand.accumulateAndGet(demand, Delegate::accumulate);
-            int batch = (int) Math.min(demand, Integer.MAX_VALUE);
-
-            int count = this.queue.drain(0, this::drain, batch);
+            long count = this.queue.drain(0, this::drain, demand);
             if (count > 0) {
-                this.demand.getAndAdd(-count);
+                addAndGetDemand(-count);
             }
         }
 
@@ -140,11 +122,6 @@ public class EuhedralWorker implements IngestSink, Worker {
         }
 
         @Override
-        public void cancel() {
-            close();
-        }
-
-        @Override
         public void addDownstream(ScaffoldingTerminal downstream) {
             if (!TERMINAL.compareAndSet(this, null, terminal)) {
                 terminal.onError(new IllegalStateException("Already Subscribed"));
@@ -152,13 +129,13 @@ public class EuhedralWorker implements IngestSink, Worker {
             terminal.addUpstream(this);
         }
 
-        public boolean isClosed() {
-            return (boolean) CLOSED.getOpaque(this);
+        public boolean isComplete() {
+            return (boolean) COMPLETE.getOpaque(this);
         }
 
         @Override
-        public void close() {
-            if (CLOSED.compareAndSet(this, false, true)) {
+        public void complete() {
+            if (COMPLETE.compareAndSet(this, false, true)) {
                 var t = (ScaffoldingTerminal) TERMINAL.getAndSet(this, null);
                 this.demand.lazySet(0);
                 if (t != null) {

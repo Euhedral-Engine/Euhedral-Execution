@@ -5,5 +5,5 @@ public interface ScaffoldingSource {
 
     void request(long demand);
 
-    void cancel();
+    void complete();
 }
