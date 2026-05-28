@@ -87,6 +87,7 @@ public class ControlPlaneShard implements AutoCloseable {
         update(snapshot, topology);
     }
 
+    /// Routes work based on their policy level or uses default global routing.
     protected int route(AbstractFrame frame, int mapSize) {
         RoutingPolicy policy = frame.getRoutingPolicy();
         if (policy != null && policy.level > RoutingPolicy.SOCKET_LOCAL.level) {
@@ -102,10 +103,13 @@ public class ControlPlaneShard implements AutoCloseable {
             }
         }
 
+        // Default routing
         long rotated = Long.rotateLeft(frame.getCombinedHash(), 31);
         return (int) unsignedMultiplyHigh(rotated, mapSize);
     }
 
+    /// Hands out the core-specific hardware utilization reports or initiates a rebalance on
+    /// topology change.
     public void update(SocketSnapshot snapshot, EffectiveSocketTopology topology) {
         if (!this.started.get()) {
             this.logger.error("Cannot update if not started.");
@@ -135,12 +139,15 @@ public class ControlPlaneShard implements AutoCloseable {
         }
     }
 
+    /// Spawns new clones if a cores become available. Shuts down clones if the cores are removed.
+    /// Updates existing clones with their new utilization reports.
     protected void handleTopologyChange(SocketSnapshot snapshot, EffectiveSocketTopology topology) {
         if (!this.rebalancing.compareAndSet(false, true)) {
             return;
         }
         this.currentVersion.setRelease(topology.version());
 
+        // Cut ingest
         ScaffoldingNode distributor = this.coreDistributor.get();
         distributor.setDrain(true);
 
@@ -152,6 +159,7 @@ public class ControlPlaneShard implements AutoCloseable {
         CloneableObject[] clones = this.clones.getOpaque();
         CloneableObject[] nextClones = new CloneableObject[topology.effectiveCores().length()];
 
+        // Build reverse mapping for fast core-local routing
         int idx = 0;
         int[] reverseMapping = new int[SystemInfo.getMaxCoreId() + 1];
         for (int i = newCores.nextSetBit(0); i >= 0; i = newCores.nextSetBit(i + 1)) {
@@ -181,11 +189,7 @@ public class ControlPlaneShard implements AutoCloseable {
             nextCores[idx++] = i;
         }
 
-        if (this.primed.getOpaque()) {
-            drainAndPruneClones(newCores, snapshot, nextClones);
-            this.clones.setRelease(nextClones);
-            this.activeCoreIds.setRelease(nextCores);
-        } else {
+        if(!this.primed.getOpaque()) {
             this.clones.setRelease(nextClones);
             this.activeCoreIds.setRelease(nextCores);
             this.coreDistributor.get().setDownstreamMapping(newCores, nextHandles);
@@ -197,6 +201,10 @@ public class ControlPlaneShard implements AutoCloseable {
             this.coreDistributor.get().setDrain(false);
             this.primed.set(true);
             this.rebalancing.set(false);
+        } else {
+            drainAndPruneClones(newCores, snapshot, nextClones);
+            this.clones.setRelease(nextClones);
+            this.activeCoreIds.setRelease(nextCores);
         }
     }
 
@@ -212,6 +220,7 @@ public class ControlPlaneShard implements AutoCloseable {
         clone.update(snapshot);
     }
 
+    /// Creates a clone on the core, links it to the core distributor, starts it, and updates it.
     private CloneableObject spawnClone(int coreId, CoreSnapshot snapshot,
             CloneableObject[] nextClones) {
         CloneConfig config = new CloneConfig(this.shardName, coreId, snapshot.quotaCpus(),
@@ -230,6 +239,7 @@ public class ControlPlaneShard implements AutoCloseable {
         return clone;
     }
 
+    /// Drains all active clones and removes clones that are not in the next active set.
     private void drainAndPruneClones(BitSet active, SocketSnapshot snapshot,
             CloneableObject[] nextClones) {
         this.logger.info("Draining and pruning clones.");
@@ -302,6 +312,7 @@ public class ControlPlaneShard implements AutoCloseable {
         }, this.shardExecutor));
     }
 
+    /// Restarts ingest if all cores are drained.
     protected void tryRestartIngest(BitSet active) {
         if (this.coresToDrain.get() == 0) {
             this.logger.info("Restarting ingest.");
@@ -325,6 +336,114 @@ public class ControlPlaneShard implements AutoCloseable {
         }
     }
 
+    /// Shuts down all cores under the shard's control.
+    public void shutDownShard(AtomicInteger shutDownCounter) {
+        if (!this.started.compareAndSet(true, false)) {
+            return;
+        }
+
+        this.logger.info("Shutting down.");
+
+        int[] active = this.activeCoreIds.getAcquire();
+        CloneableObject[] clones = this.clones.getAcquire();
+
+        AtomicInteger drainCounter = new AtomicInteger(active.length);
+        for (int i = 0; i < clones.length; i++) {
+            if (clones[i] == null) {
+                continue;
+            }
+
+            CloneableObject clone = clones[i];
+            clones[i] = null;
+
+            shutdownCore(i, clone, drainCounter, shutDownCounter);
+        }
+        this.activeCoreIds.setRelease(new int[0]);
+        this.clones.setRelease(new CloneableObject[0]);
+        this.coreHandles.setRelease(new ScaffoldingEdge[0]);
+        this.shardExecutor.shutdown();
+        this.shardExecutor = null;
+        this.primed.set(false);
+    }
+
+    /// Attempts to gracefully shut down a core. Forcefully shuts them down if they time out.
+    private void shutdownCore(int coreId, CloneableObject oldClone,
+            AtomicInteger drainSignal, AtomicInteger shutDownCounter) {
+        this.logger.info("Shutting down clone on core {}", coreId);
+        oldClone.setDrainMode(true);
+
+        CompletableFuture.runAsync(() -> {
+            Thread.currentThread().setName(this.shardName + "-" + coreId);
+            long deadline = System.nanoTime() + Duration.ofMinutes(1).toNanos();
+            try {
+                while (!oldClone.isDrained()) {
+                    LockSupport.parkNanos(5_000);
+                    if (System.nanoTime() >= deadline) {
+                        this.logger.error("Clone on core {} timed out. Forcing shutdown.", coreId);
+                        oldClone.close();
+                        break;
+                    }
+                }
+            } catch (Exception e) {
+                this.logger.error("Shutdown cleanup failed for Core {}", coreId, e);
+            } finally {
+                try {
+                    oldClone.close();
+                } catch (Exception e) {
+                    this.logger.error("CRITICAL: Worker on core {} failed to close.", coreId, e);
+                    oldClone.dumpLocks();
+                } finally {
+                    drainSignal.decrementAndGet();
+                    if (drainSignal.get() == 0) {
+                        shutDownCounter.decrementAndGet();
+                    }
+                }
+            }
+        }, this.shardExecutor);
+    }
+
+    public boolean isStarted() {
+        return this.started.get();
+    }
+
+    /// Whether the shard is rebalancing. Rebalancing shards do not accept incoming work.
+    public boolean isRebalancing() {
+        return this.rebalancing.get();
+    }
+
+    /// Whether all queues are empty and all in-progress work is completed for all CPUs managed by
+    /// this ControlPlane.
+    public boolean isDrained() {
+        if (!this.started.get()) {
+            return true;
+        }
+        if (this.rebalancing.get()) {
+            return false;
+        }
+
+        ScaffoldingNode coreDistributor = this.coreDistributor.get();
+        if (coreDistributor != null && !coreDistributor.isDrained()) {
+            return false;
+        }
+
+        boolean drained = true;
+        CloneableObject[] clones = this.clones.getAcquire();
+        for (int i = 0; i < clones.length && drained; i++) {
+            CloneableObject clone = clones[i];
+            if (clone != null) {
+                drained &= clone.isDrained();
+            }
+        }
+        return drained;
+    }
+
+    /// Creates a shallow copy of the shard.
+    public ControlPlaneShard clone(int shardId, String shardName) {
+        return new ControlPlaneShard(shardId, shardName, this.cloneableObject,
+                this.meterRegistry);
+    }
+
+    /// Forcefully shuts down all cores.
     @Override
     public void close() throws Exception {
         this.started.set(false);
@@ -368,106 +487,5 @@ public class ControlPlaneShard implements AutoCloseable {
             this.shardExecutor.shutdownNow();
         }
         this.logger.info("Closed.");
-    }
-
-    public void shutDownShard(AtomicInteger shutDownCounter) {
-        if (!this.started.compareAndSet(true, false)) {
-            return;
-        }
-
-        this.logger.info("Shutting down.");
-
-        int[] active = this.activeCoreIds.getAcquire();
-        CloneableObject[] clones = this.clones.getAcquire();
-
-        AtomicInteger drainCounter = new AtomicInteger(active.length);
-        for (int i = 0; i < clones.length; i++) {
-            if (clones[i] == null) {
-                continue;
-            }
-
-            CloneableObject clone = clones[i];
-            clones[i] = null;
-
-            shutdownCore(i, clone, drainCounter, shutDownCounter);
-        }
-        this.activeCoreIds.setRelease(new int[0]);
-        this.clones.setRelease(new CloneableObject[0]);
-        this.coreHandles.setRelease(new ScaffoldingEdge[0]);
-        this.shardExecutor.shutdown();
-        this.shardExecutor = null;
-        this.primed.set(false);
-    }
-
-    private void shutdownCore(int coreId, CloneableObject oldClone,
-            AtomicInteger drainSignal, AtomicInteger shutDownCounter) {
-        this.logger.info("Shutting down clone on core {}", coreId);
-        oldClone.setDrainMode(true);
-
-        CompletableFuture.runAsync(() -> {
-            Thread.currentThread().setName(this.shardName + "-" + coreId);
-            long deadline = System.nanoTime() + Duration.ofMinutes(1).toNanos();
-            try {
-                while (!oldClone.isDrained()) {
-                    LockSupport.parkNanos(5_000);
-                    if (System.nanoTime() >= deadline) {
-                        this.logger.error("Clone on core {} timed out. Forcing shutdown.", coreId);
-                        oldClone.close();
-                        break;
-                    }
-                }
-            } catch (Exception e) {
-                this.logger.error("Shutdown cleanup failed for Core {}", coreId, e);
-            } finally {
-                try {
-                    oldClone.close();
-                } catch (Exception e) {
-                    this.logger.error("CRITICAL: Worker on core {} failed to close.", coreId, e);
-                    oldClone.dumpLocks();
-                } finally {
-                    drainSignal.decrementAndGet();
-                    if (drainSignal.get() == 0) {
-                        shutDownCounter.decrementAndGet();
-                    }
-                }
-            }
-        }, this.shardExecutor);
-    }
-
-    public boolean isStarted() {
-        return this.started.get();
-    }
-
-    public boolean isRebalancing() {
-        return this.rebalancing.get();
-    }
-
-    public boolean isDrained() {
-        if (!this.started.get()) {
-            return true;
-        }
-        if (this.rebalancing.get()) {
-            return false;
-        }
-
-        ScaffoldingNode coreDistributor = this.coreDistributor.get();
-        if (coreDistributor != null && !coreDistributor.isDrained()) {
-            return false;
-        }
-
-        boolean drained = true;
-        CloneableObject[] clones = this.clones.getAcquire();
-        for (int i = 0; i < clones.length && drained; i++) {
-            CloneableObject clone = clones[i];
-            if (clone != null) {
-                drained &= clone.isDrained();
-            }
-        }
-        return drained;
-    }
-
-    public ControlPlaneShard clone(int shardId, String shardName) {
-        return new ControlPlaneShard(shardId, shardName, this.cloneableObject,
-                this.meterRegistry);
     }
 }

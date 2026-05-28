@@ -131,7 +131,7 @@ public class EuhedralOperator {
         recycler.setFactory(new FrameFactory<>(frameCreate, frameReplace));
 
         final Flux<FunctionFrame<T, R>> framed = flux.takeUntilOther(killSwitch.asMono())
-                .map(obj -> recycler.generate(obj, password));
+                .map(obj -> recycler.getOrCreate(obj, password));
 
         EuhedralSubscriber subscriber = new EuhedralSubscriber();
         framed.subscribe(subscriber);

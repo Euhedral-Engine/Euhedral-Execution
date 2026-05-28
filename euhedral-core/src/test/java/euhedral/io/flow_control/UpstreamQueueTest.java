@@ -81,7 +81,7 @@ class UpstreamQueueTest {
         queue.addUpstream(first);
         queue.addUpstream(second);
 
-        queue.pull(1024);
+        queue.request(1024);
 
         assertEquals(1024, first.requested);
         assertEquals(0, second.requested);
@@ -95,7 +95,7 @@ class UpstreamQueueTest {
         queue.addUpstream(first);
         queue.addUpstream(second);
 
-        queue.pull(2048);
+        queue.request(2048);
 
         assertEquals(1024, first.requested);
         assertEquals(1024, second.requested);
@@ -141,7 +141,7 @@ class UpstreamQueueTest {
 
         queue.addUpstream(upstream);
 
-        queue.pull(0);
+        queue.request(0);
 
         assertEquals(0, upstream.requested);
         assertEquals(0, upstream.pulled);
@@ -155,7 +155,7 @@ class UpstreamQueueTest {
 
         queue.addUpstream(upstream);
 
-        queue.pull(10);
+        queue.request(10);
 
         assertEquals(0, queue.getTrueUpstreamCount());
     }

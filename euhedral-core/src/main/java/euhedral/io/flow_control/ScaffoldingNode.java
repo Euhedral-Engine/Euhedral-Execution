@@ -80,6 +80,7 @@ public class ScaffoldingNode extends ScaffoldingEdge implements AutoCloseable {
         }
     }
 
+    /// Links the stream as an upstream source.
     public void ingest(ScaffoldingSource stream) {
         UpstreamInterceptor interceptor = new UpstreamInterceptor();
         stream.addDownstream(interceptor);
@@ -89,6 +90,9 @@ public class ScaffoldingNode extends ScaffoldingEdge implements AutoCloseable {
         return this.drain;
     }
 
+    /// Rebuilds the routing table and sets the new downstreams. Must be in drain mode to succeed.
+    ///
+    /// @return Whether the mapping was changed
     public boolean setDownstreamMapping(BitSet active, ScaffoldingEdge[] handles) {
         if (!this.drain.get()) {
             return false;
@@ -143,6 +147,9 @@ public class ScaffoldingNode extends ScaffoldingEdge implements AutoCloseable {
         return this.parallelQueue == null || this.parallelQueue.isEmpty();
     }
 
+    /// Adds the scaffolding to the upstream. If it is a [ScaffoldingEdge], it bubbles it up and
+    /// sets its downstream links' parents to the edge. If it is an
+    /// [UpstreamHandle][UpstreamHandle], it defaults to the logic in ScaffoldingEdge.
     @Override
     public void addUpstream(RecursiveScaffolding scaffolding) {
         if (scaffolding instanceof ScaffoldingEdge dh) {
@@ -159,6 +166,7 @@ public class ScaffoldingNode extends ScaffoldingEdge implements AutoCloseable {
         }
     }
 
+    /// Picks a downstream link and sends work down.
     @Override
     public void onNext(AbstractFrame frame) {
         RoutingState state = (RoutingState) ROUTING_STATE.getOpaque(this);
@@ -169,6 +177,8 @@ public class ScaffoldingNode extends ScaffoldingEdge implements AutoCloseable {
         this.downstreams[id].onNext(frame);
     }
 
+    /// Pulls available work from the `parallelQueue` if it is not null. Recursively climbs the
+    /// graph and does the same.
     @Override
     public void pull(DrainBuffer buffer, long demand) {
         if (demand <= 0 || buffer == null) {
@@ -201,6 +211,7 @@ public class ScaffoldingNode extends ScaffoldingEdge implements AutoCloseable {
         }
     }
 
+    /// Closes and removes all downstreams.
     @Override
     public void close() {
         super.close();
@@ -213,12 +224,15 @@ public class ScaffoldingNode extends ScaffoldingEdge implements AutoCloseable {
         ROUTING_STATE.setRelease(this, null);
     }
 
+    /// Defines how the [ScaffoldingNode] will pick which downstream to send work to.
     @FunctionalInterface
     public interface RoutingFunction {
 
         RoutingFunction DEFAULT =
                 (frame, mapSize) -> (int) unsignedMultiplyHigh(frame.getCombinedHash(), mapSize);
 
+        /// @param frame   Frame to route
+        /// @param mapSize Length of the map array.
         int route(AbstractFrame frame, int mapSize);
     }
 
@@ -235,6 +249,8 @@ public class ScaffoldingNode extends ScaffoldingEdge implements AutoCloseable {
         }
     }
 
+    /// Wraps the [ScaffoldingSource] in an object that contains the state of the stream. Requests
+    /// and pulls are guaranteed to be made by 1 thread at a time.
     public class UpstreamInterceptor extends UpstreamHandle {
 
         private static long addCap(long num1, long num2) {
