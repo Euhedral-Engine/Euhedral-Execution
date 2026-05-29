@@ -56,8 +56,8 @@ public class BatchedMandelbrotBenchmark {
         for (int i = CANVAS - 1; i > 0; i--) {
             int j = (int) MathFunctions.unsignedMultiplyHigh(HasherApi.mix(seed++), i + 1);
             MandelbrotPixel temp = pixels[i];
-            temp.randomizeHash(HasherApi.mix(seed));
-            pixels[j].randomizeHash(HasherApi.mix(seed++));
+            temp.randomizeHash(seed);
+            pixels[j].randomizeHash(seed++);
 
             pixels[i] = pixels[j];
             pixels[j] = temp;
@@ -244,7 +244,7 @@ public class BatchedMandelbrotBenchmark {
                 AbstractFrame[] set = new AbstractFrame[Math.min(BATCH, total)];
                 System.arraycopy(pixels, idx * BATCH, set, 0, set.length);
                 this.frames[idx] = new ArrayFrame(pixels[0].getIdHash(), set, this.counters);
-                this.frames[idx].randomizeHash(HasherApi.mix(seed++));
+                this.frames[idx].randomizeHash(seed++);
                 total -= Math.min(BATCH, total);
                 idx++;
             }

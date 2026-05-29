@@ -58,8 +58,8 @@ public class MandelbrotBenchmark {
         for (int i = CANVAS - 1; i > 0; i--) {
             int j = (int) MathFunctions.unsignedMultiplyHigh(HasherApi.mix(seed++), i + 1);
             MandelbrotPixel temp = pixels[i];
-            temp.randomizeHash(HasherApi.mix(seed));
-            pixels[j].randomizeHash(HasherApi.mix(seed++));
+            temp.randomizeHash(seed);
+            pixels[j].randomizeHash(seed++);
 
             pixels[i] = pixels[j];
             pixels[j] = temp;

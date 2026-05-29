@@ -137,7 +137,7 @@ public class EndToEndLatencyBenchmark {
             long seed = ThreadLocalRandom.current().nextLong();
             seed = HasherApi.mix(seed);
             for (var frame : frames) {
-                frame.randomizeHash(HasherApi.mix(seed++));
+                frame.randomizeHash(seed++);
             }
             ingestSink = new ArrayIngestSink(frames);
             VarHandle.fullFence();
@@ -234,7 +234,7 @@ public class EndToEndLatencyBenchmark {
             long seed = ThreadLocalRandom.current().nextLong();
             seed = HasherApi.mix(seed);
             for (var frame : frames) {
-                frame.randomizeHash(HasherApi.mix(seed++));
+                frame.randomizeHash(seed++);
             }
             ingestSink = new ArrayIngestSink(frames);
             VarHandle.fullFence();

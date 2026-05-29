@@ -57,8 +57,8 @@ public class HighScaleBenchmark {
         for (int i = pixels.length - 1; i > 0; i--) {
             int j = (int) MathFunctions.unsignedMultiplyHigh(HasherApi.mix(seed++), i + 1);
             MandelbulbFrame temp = pixels[i];
-            temp.randomizeHash(HasherApi.mix(seed));
-            pixels[j].randomizeHash(HasherApi.mix(seed++));
+            temp.randomizeHash(seed);
+            pixels[j].randomizeHash(seed++);
 
             pixels[i] = pixels[j];
             pixels[j] = temp;
@@ -163,7 +163,7 @@ public class HighScaleBenchmark {
                         chunkArray[iter++] = new ArrayFrame(pixels[0][0][0].getIdHash(), set,
                                 this.counters);
 
-                        chunkArray[iter - 1].randomizeHash(HasherApi.mix(seed++));
+                        chunkArray[iter - 1].randomizeHash(seed++);
                         total -= Math.min(1024, total);
                     }
 
@@ -252,7 +252,7 @@ public class HighScaleBenchmark {
                         chunkArray[iter++] = new ArrayFrame(pixels[0][0][0].getIdHash(), set,
                                 this.counters);
 
-                        chunkArray[iter - 1].randomizeHash(HasherApi.mix(seed++));
+                        chunkArray[iter - 1].randomizeHash(seed++);
                         total -= Math.min(1024, total);
                     }
 

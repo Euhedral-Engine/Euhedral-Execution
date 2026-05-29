@@ -2,18 +2,6 @@ package euhedral.io.control_plane;
 
 import static euhedral.io.utils.MathFunctions.unsignedMultiplyHigh;
 
-import java.time.Duration;
-import java.util.Arrays;
-import java.util.BitSet;
-import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.concurrent.locks.LockSupport;
-
 import euhedral.hardware_utils.PinnedThreadExecutor;
 import euhedral.hardware_utils.ResourceMonitor;
 import euhedral.hardware_utils.SystemInfo;
@@ -31,6 +19,17 @@ import euhedral.io.generics.CloneableObject;
 import euhedral.io.generics.IngestSink;
 import euhedral.io.generics.ScaffoldingSource;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.time.Duration;
+import java.util.Arrays;
+import java.util.BitSet;
+import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.LockSupport;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -111,6 +110,10 @@ public class ControlPlane implements AutoCloseable {
 
             return new ControlPlane(name, baseShard, null, SystemInfo.getCpuSet(), null);
         });
+    }
+
+    public static ControlPlane getOrCreate(String name, CloneableObject cloneableObject) {
+        return getOrCreate(name, cloneableObject, null);
     }
 
     public static ControlPlane getOrCreate(String name, CloneableObject cloneableObject,
@@ -267,7 +270,7 @@ public class ControlPlane implements AutoCloseable {
         }
 
         // Default routing
-        return (int) unsignedMultiplyHigh(frame.getCombinedHash(), mapSize);
+        return (int) unsignedMultiplyHigh(frame.getRoutingHash(), mapSize);
     }
 
     /// Hands out the shard-specific hardware utilization reports or initiates a rebalance on

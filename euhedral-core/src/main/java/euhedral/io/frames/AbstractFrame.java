@@ -1,6 +1,7 @@
 package euhedral.io.frames;
 
 import euhedral.hardware_utils.SystemInfo.CpuInfo;
+import euhedral.hashing.HasherApi;
 import euhedral.io.control_plane.RoutingPolicy;
 import euhedral.io.generics.AbstractExecutor;
 import euhedral.io.impl.FrameManager;
@@ -76,7 +77,7 @@ public abstract class AbstractFrame {
     @Getter
     private final long idHash;
     @Getter @Setter
-    protected volatile long combinedHash;
+    protected volatile long routingHash;
     @Getter @Setter
     private CpuInfo origin;
     @Getter @Setter
@@ -88,16 +89,13 @@ public abstract class AbstractFrame {
     private long ingestNs;
 
     @Getter @Setter
-    private boolean isOrdered;
-
-    @Getter @Setter
     private boolean cancelledExecution = false;
 
     public AbstractFrame(long idHash, FrameManager recycler) {
         this.cancel = new CancelFrame(this);
         this.idHash = idHash;
         this.recycler = recycler;
-        this.combinedHash = idHash;
+        this.routingHash = idHash;
     }
 
     /// Does the thing.
@@ -105,8 +103,9 @@ public abstract class AbstractFrame {
 
     /// Mixes the combined hash with the seed.
     public void randomizeHash(long seed) {
-        long newHash = this.combinedHash;
-        this.combinedHash = newHash ^ seed;
+        seed = HasherApi.mix(seed);
+        long newHash = this.routingHash;
+        this.routingHash = newHash ^ seed;
     }
 
     /// Liveness check.
@@ -126,15 +125,15 @@ public abstract class AbstractFrame {
 
     /// Resets execution state so the frame can be reused.
     public final void reset() {
-        startNs = 0;
-        ingestNs = 0;
-        cancelledExecution = false;
+        this.startNs = 0;
+        this.ingestNs = 0;
+        this.cancelledExecution = false;
     }
 
     /// Returns the frame to the recycler for reuse.
     public final boolean recycle() {
-        if (recycler != null) {
-            return recycler.recycle(this);
+        if (this.recycler != null) {
+            return this.recycler.recycle(this);
         }
         return false;
     }
@@ -145,6 +144,10 @@ public abstract class AbstractFrame {
     /// [`ExecutionManager`][euhedral.io.ExecutionManager].
     public final void throwMeAsError() {
         throw this.cancel;
+    }
+
+    public final boolean isOrdered() {
+        return this.idHash == this.routingHash;
     }
 
     public abstract long getSizeBytes();
