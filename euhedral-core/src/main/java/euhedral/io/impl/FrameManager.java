@@ -1,6 +1,5 @@
 package euhedral.io.impl;
 
-import euhedral.hashing.HasherApi;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.queues.PartitionedMpscArrayQueue;
 import euhedral.queues.PartitionedUnboundedMpscArrayQueue;
@@ -21,7 +20,7 @@ import org.jspecify.annotations.Nullable;
 ///
 /// @param <DATA>  The data type to use to replace fields in the frame
 /// @param <FRAME> The frame type to recycle
-@SuppressWarnings("unchecked")
+@SuppressWarnings({"unchecked", "unused"})
 public class FrameManager<DATA, FRAME extends AbstractFrame> implements AutoCloseable {
 
     @Getter
@@ -34,9 +33,14 @@ public class FrameManager<DATA, FRAME extends AbstractFrame> implements AutoClos
     @Getter
     private long totalRecycled = 0;
 
-    private long seed;
     private int idx = 0;
 
+    /// Creates a FrameManager with a bounded recycler.
+    public FrameManager(long password) {
+        this(16_384, password);
+    }
+
+    /// Creates a FrameManager with an unbounded recycler.
     public FrameManager(int chunkSize, int pooledChunks, long password) {
         int actual = Integer.highestOneBit((chunkSize - 1) << 1);
         actual = actual <= 0 ? 1 : actual;
@@ -46,13 +50,13 @@ public class FrameManager<DATA, FRAME extends AbstractFrame> implements AutoClos
         this.buffer = new AbstractFrame[Math.max(actual, 256)];
     }
 
+    /// Creates a FrameManager with a bounded recycler.
     public FrameManager(int capacity, long password) {
         int actual = Integer.highestOneBit((capacity - 1) << 1);
         actual = actual <= 0 ? 1 : actual;
 
         this.recycleQueue = new PartitionedMpscArrayQueue<>(actual);
         this.password = password;
-        this.seed = HasherApi.combine(this.password, this.password + HasherApi.BASE_SEED);
         this.buffer = new AbstractFrame[Math.max(actual, 256)];
     }
 
@@ -70,9 +74,6 @@ public class FrameManager<DATA, FRAME extends AbstractFrame> implements AutoClos
             return factory.create(data);
         }
         factory.replace(data, frame);
-        if (!frame.isOrdered()) {
-            frame.randomizeHash(HasherApi.mix(seed++));
-        }
         return frame;
     }
 
@@ -123,7 +124,7 @@ public class FrameManager<DATA, FRAME extends AbstractFrame> implements AutoClos
         }
 
         long total = 0;
-        final int[] drain = new int[] {(int) Math.max(0, Math.min(idx, max))};
+        final int[] drain = new int[]{(int) Math.max(0, Math.min(idx, max))};
 
         if (drain[0] > 0 && idx < max) {
             Arrays.fill(buffer, null);

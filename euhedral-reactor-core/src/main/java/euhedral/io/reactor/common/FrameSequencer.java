@@ -8,6 +8,7 @@ import euhedral.io.impl.FrameFactory.FrameReplace;
 import euhedral.io.impl.FrameManager;
 import euhedral.queues.PartitionedUnboundedSpscArrayQueue;
 
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import org.reactivestreams.Publisher;
@@ -29,7 +30,8 @@ public class FrameSequencer<T, R> {
 
     public FrameSequencer(long ingestPassword) {
         this.ingestPassword = ingestPassword;
-        this.sequencePassword = HasherApi.combine(ingestPassword, ingestPassword + HasherApi.BASE_SEED);
+        this.sequencePassword = HasherApi.combine(ingestPassword,
+                ingestPassword + HasherApi.BASE_SEED);
     }
 
     public void drain(long password) {
@@ -38,29 +40,30 @@ public class FrameSequencer<T, R> {
         }
     }
 
-    public Function<Flux<T>, Publisher<SequencedFrame<T, R>>> mapTransformer(
+    public Function<Flux<T>, Publisher<SequencedFrame<T, R>>> flatMapSequentialTransformer(
             Function<T, R> function,
             int recycleCapacity) {
-        return flux -> map(flux, function, recycleCapacity);
+        return flux -> flatMapSequential(flux, function, recycleCapacity);
     }
 
-    public Flux<SequencedFrame<T, R>> map(Flux<T> flux, Function<T, R> function,
+    public Flux<SequencedFrame<T, R>> flatMapSequential(Flux<T> flux, Function<T, R> function,
             int recycleCapacity) {
         final AtomicBoolean killSwitch = new AtomicBoolean(false);
 
+        long[] seed = {ThreadLocalRandom.current().nextLong()};
         FrameManager<T, SequencedFrame<T, R>> recycler = new FrameManager<>(recycleCapacity,
                 ingestPassword);
         FrameCreate<T, SequencedFrame<T, R>> frameCreate = (idHash, data) -> {
             SequencedFrame<T, R> frame = new SequencedFrame<>(idHash, data,
                     function,
                     killSwitch, this, recycler);
-            frame.setOrdered(false);
+            frame.randomizeHash(seed[0]++);
             registerFrame(frame);
             return frame;
         };
         FrameReplace<T, SequencedFrame<T, R>> frameReplace = (data, oldFrame) -> {
             oldFrame.replace(data);
-            oldFrame.setOrdered(false);
+            oldFrame.randomizeHash(seed[0]++);
             registerFrame(oldFrame);
         };
         recycler.setFactory(new FrameFactory<>(frameCreate, frameReplace));
@@ -96,17 +99,14 @@ public class FrameSequencer<T, R> {
                                 break;
                             }
 
-                            EmitResult result;
-                            while (!(result = output.tryEmitNext(frame.getRetVal())).isSuccess()) {
-                                if (result == EmitResult.FAIL_CANCELLED
-                                        || result == EmitResult.FAIL_TERMINATED
-                                        || result == EmitResult.FAIL_ZERO_SUBSCRIBER) {
-                                    frame.kill();
-                                    this.sequence.clear();
-                                    this.output.tryEmitComplete();
-                                    return;
-                                }
-                                Thread.yield();
+                            EmitResult result = BackpressureHandler.push(frame.getRetVal(), output);
+                            if (result == EmitResult.FAIL_CANCELLED
+                                    || result == EmitResult.FAIL_TERMINATED
+                                    || result == EmitResult.FAIL_ZERO_SUBSCRIBER) {
+                                frame.kill();
+                                this.sequence.clear();
+                                this.output.tryEmitComplete();
+                                return;
                             }
                         } else {
                             break;

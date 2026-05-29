@@ -66,7 +66,7 @@ public class TrueThroughputBenchmark {
         for(int i = 0; i < frames.length; i++) {
             this.frames[i] = NoOpFrame.generate(hash, 1_000_000, this.counters);
             for (NoOpFrame frame : this.frames[i]) {
-                frame.randomizeHash(HasherApi.mix(hash++));
+                frame.randomizeHash(hash++);
             }
             this.sinks[i] = new ArrayIngestSink(this.frames[i]);
         }

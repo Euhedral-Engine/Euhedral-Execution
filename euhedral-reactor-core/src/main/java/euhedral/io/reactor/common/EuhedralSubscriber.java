@@ -8,6 +8,19 @@ import java.lang.invoke.VarHandle;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 
+/// ### This class is a Reactor Subscriber compatible with Euhedral
+///
+/// It does not signal demand by itself and can only be used in a `subscribe()` call once.
+///
+/// Otherwise, it is used similarly to a normal Subscriber.
+/// ```java
+/// EuhedralSubscriber subscriber = new EuhedralSubscriber();
+/// framedFlux.subscribe(subscriber);
+///
+/// EuhedralScheduler.ingest(subscriber);
+/// // Or
+/// controlPlane.ingest(subscriber);
+/// ```
 public final class EuhedralSubscriber implements Subscriber<AbstractFrame>, ScaffoldingSource {
     private static final VarHandle COMPLETE;
     private static final VarHandle SUBSCRIBER;

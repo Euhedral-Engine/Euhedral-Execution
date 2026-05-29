@@ -17,6 +17,14 @@ import reactor.core.Disposable;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Scheduler;
 
+/// ### The interface for interacting with Euhedral
+///
+/// This class is capable of time-based scheduling and single task execution.
+///
+/// While it can be used as a normal Reactor Scheduler in `subscribeOn()` and `publishOn`, it is
+/// highly recommended that you use [EuhedralOperator] with it instead. EuhedralOperator is built
+/// and optimized to take advantage of Euhedral Core's parallelism and memory efficiency while
+/// handling backpressure for you.
 @SuppressWarnings({"resource", "unused"})
 public class EuhedralScheduler implements Scheduler {
 

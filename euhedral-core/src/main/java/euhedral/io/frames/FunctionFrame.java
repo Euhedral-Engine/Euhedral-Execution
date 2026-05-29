@@ -1,13 +1,13 @@
 package euhedral.io.frames;
 
+import euhedral.io.impl.FrameManager;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Function;
-
-import euhedral.io.impl.FrameManager;
 import lombok.Setter;
 
 /// A generic frame that applies its function to the payload and passes the result to its consumer.
+@SuppressWarnings("unused")
 public final class FunctionFrame<PAYLOAD, RET_VAL> extends AbstractFrame {
 
     final Function<PAYLOAD, RET_VAL> function;
@@ -18,6 +18,10 @@ public final class FunctionFrame<PAYLOAD, RET_VAL> extends AbstractFrame {
     @Setter
     private PAYLOAD payload;
 
+    public FunctionFrame(long idHash, Function<PAYLOAD, RET_VAL> function,
+            Consumer<RET_VAL> callback) {
+        this(idHash, function, callback, null, null);
+    }
 
     public FunctionFrame(long idHash, Function<PAYLOAD, RET_VAL> function,
             Consumer<RET_VAL> callback, AtomicBoolean killSwitch,
@@ -40,12 +44,17 @@ public final class FunctionFrame<PAYLOAD, RET_VAL> extends AbstractFrame {
 
     @Override
     public boolean isAlive() {
-        return !killSwitch.get();
+        if(killSwitch != null) {
+            return !killSwitch.getOpaque();
+        }
+        return true;
     }
 
     @Override
     public void kill() {
-        killSwitch.set(true);
+        if(killSwitch != null) {
+            killSwitch.setRelease(true);
+        }
     }
 
     public void replace(PAYLOAD payload) {

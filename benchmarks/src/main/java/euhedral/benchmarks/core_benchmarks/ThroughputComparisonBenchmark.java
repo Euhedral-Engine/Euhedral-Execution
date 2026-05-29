@@ -132,7 +132,7 @@ public class ThroughputComparisonBenchmark {
             hash = HasherApi.mix(hash);
 
             for (NoOpFrame frame : this.frames) {
-                frame.randomizeHash(HasherApi.mix(hash++));
+                frame.randomizeHash(hash++);
             }
 
             DRRConfig drrConfig = DRRConfig.defaultConfig("ThroughputComparisonBenchmark", null);
@@ -152,7 +152,7 @@ public class ThroughputComparisonBenchmark {
             hash = HasherApi.mix(hash);
 
             for (NoOpFrame frame : this.frames) {
-                frame.randomizeHash(HasherApi.mix(hash++));
+                frame.randomizeHash(hash++);
             }
         }
 

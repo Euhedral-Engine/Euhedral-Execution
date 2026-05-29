@@ -104,7 +104,7 @@ public class ControlPlaneShard implements AutoCloseable {
         }
 
         // Default routing
-        long rotated = Long.rotateLeft(frame.getCombinedHash(), 31);
+        long rotated = Long.rotateLeft(frame.getRoutingHash(), 31);
         return (int) unsignedMultiplyHigh(rotated, mapSize);
     }
 
