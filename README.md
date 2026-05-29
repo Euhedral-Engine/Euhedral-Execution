@@ -28,6 +28,10 @@ under chaotic workloads.
 
 ---
 
+## [Quick Start](./QUICK_START.md)
+
+---
+
 ## Architecture
 
 Architecture documentation:
