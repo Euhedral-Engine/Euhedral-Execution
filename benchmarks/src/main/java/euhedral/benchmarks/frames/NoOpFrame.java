@@ -21,7 +21,6 @@ public class NoOpFrame extends AbstractFrame {
     public NoOpFrame(long idHash, PaddedLongAdder counters) {
         super(idHash, null);
         this.counters = counters;
-        setOrdered(false);
     }
 
     @Override

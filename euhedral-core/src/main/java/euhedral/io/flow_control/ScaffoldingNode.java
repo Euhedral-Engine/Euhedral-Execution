@@ -232,7 +232,7 @@ public class ScaffoldingNode extends ScaffoldingEdge implements AutoCloseable {
     public interface RoutingFunction {
 
         RoutingFunction DEFAULT =
-                (frame, mapSize) -> (int) unsignedMultiplyHigh(frame.getCombinedHash(), mapSize);
+                (frame, mapSize) -> (int) unsignedMultiplyHigh(frame.getRoutingHash(), mapSize);
 
         /// @param frame   Frame to route
         /// @param mapSize Length of the map array.

@@ -185,7 +185,7 @@ class ScaffoldingNodeTest {
 
         TestFrame frame = spy(new TestFrame("frame"));
 
-        doReturn(0L).when(frame).getCombinedHash();
+        doReturn(0L).when(frame).getRoutingHash();
 
         node.onNext(frame);
 
@@ -324,7 +324,7 @@ class ScaffoldingNodeTest {
         TestFrame frame = spy(new TestFrame("ordered"));
 
         doReturn(true).when(frame).isOrdered();
-        doReturn(0L).when(frame).getCombinedHash();
+        doReturn(0L).when(frame).getRoutingHash();
 
         ScaffoldingNode.UpstreamInterceptor interceptor =
                 node.new UpstreamInterceptor();

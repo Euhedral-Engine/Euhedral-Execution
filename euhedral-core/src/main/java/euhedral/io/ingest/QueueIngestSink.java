@@ -4,6 +4,7 @@ import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.IngestSink;
 import euhedral.io.generics.ScaffoldingSource;
 import euhedral.io.generics.ScaffoldingTerminal;
+import euhedral.queues.PartitionedUnboundedMpmcArrayQueue;
 import euhedral.queues.common.ConcurrentPartitionedQueue;
 
 /// Wraps a partitioned queue to allow it to be fed into the
@@ -12,6 +13,10 @@ import euhedral.queues.common.ConcurrentPartitionedQueue;
 public class QueueIngestSink extends IngestSink {
 
     private final Delegate delegate;
+
+    public QueueIngestSink() {
+        this(new PartitionedUnboundedMpmcArrayQueue<>(16_384));
+    }
 
     public QueueIngestSink(ConcurrentPartitionedQueue<AbstractFrame> queue) {
         this.delegate = new Delegate(queue);
