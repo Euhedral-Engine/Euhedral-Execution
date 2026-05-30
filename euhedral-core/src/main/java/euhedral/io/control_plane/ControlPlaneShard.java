@@ -12,7 +12,6 @@ import euhedral.io.flow_control.LatticeEdge;
 import euhedral.io.flow_control.LatticeVertex;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.CloneableObject;
-import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.util.BitSet;
 import java.util.HashSet;
@@ -48,7 +47,6 @@ public class ControlPlaneShard implements AutoCloseable {
 
     protected final AtomicReference<LatticeVertex> coreDistributor = new AtomicReference<>();
 
-    protected final MeterRegistry meterRegistry;
     protected final CloneableObject cloneableObject;
     protected final AtomicReference<int[]> activeCoreIds = new AtomicReference<>(new int[0]);
     protected final AtomicReference<CloneableObject[]> clones = new AtomicReference<>(
@@ -59,12 +57,10 @@ public class ControlPlaneShard implements AutoCloseable {
     protected volatile ExecutorService shardExecutor;
 
     public ControlPlaneShard(int shardId, String shardName,
-            CloneableObject obj,
-            MeterRegistry meterRegistry) {
+            CloneableObject obj) {
         this.logger = LoggerFactory.getLogger(shardName);
         this.shardId = shardId;
         this.shardName = shardName;
-        this.meterRegistry = meterRegistry;
         this.cloneableObject = obj;
     }
 
@@ -224,8 +220,7 @@ public class ControlPlaneShard implements AutoCloseable {
     private CloneableObject spawnClone(int coreId, CoreSnapshot snapshot,
             CloneableObject[] nextClones) {
         CloneConfig config = new CloneConfig(this.shardName, coreId, snapshot.quotaCpus(),
-                snapshot.effectiveCpus(),
-                this.meterRegistry, this.shardName);
+                snapshot.effectiveCpus());
 
         CloneableObject clone = this.cloneableObject.clone(config);
         nextClones[coreId] = clone;
@@ -439,8 +434,7 @@ public class ControlPlaneShard implements AutoCloseable {
 
     /// Creates a shallow copy of the shard.
     public ControlPlaneShard clone(int shardId, String shardName) {
-        return new ControlPlaneShard(shardId, shardName, this.cloneableObject,
-                this.meterRegistry);
+        return new ControlPlaneShard(shardId, shardName, this.cloneableObject);
     }
 
     /// Forcefully shuts down all cores.

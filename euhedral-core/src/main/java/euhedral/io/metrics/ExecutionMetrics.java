@@ -16,8 +16,8 @@ public class ExecutionMetrics implements AutoCloseable {
             Supplier<Long> latency, Supplier<Long> currentConcurrency,
             Supplier<Long> currentRate, Supplier<Double> pressure) {
         String prefix = config.metricPrefix();
-        if (prefix == null) {
-            prefix = config.cloneConfig().shardName();
+        if (prefix == null ||  prefix.isBlank()) {
+            prefix = "euhedral";
         }
         prefix = prefix.split("\\.")[0];
 

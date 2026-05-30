@@ -5,6 +5,7 @@ import euhedral.benchmarks.core_benchmarks.utils.MandelbrotCanvas;
 import euhedral.benchmarks.frames.MandelbrotPixel;
 import euhedral.benchmarks.pipelines.FractalPipeline;
 import euhedral.hashing.HasherApi;
+import euhedral.io.config.ControlPlaneConfig;
 import euhedral.io.config.DRRConfig;
 import euhedral.io.config.SchedulingConfig;
 import euhedral.io.control_plane.ControlPlane;
@@ -40,15 +41,13 @@ import reactor.core.scheduler.Schedulers;
 @BenchmarkMode({Mode.AverageTime})
 public class MandelbrotBenchmark {
 
-    private static final long SEED = HasherApi.BASE_SEED;
-
     // 8K Resolution 2X SSAA (7680 * 4320 * 4 = 132,710,400 distinct tasks)
     public static final int WIDTH = 7680;
     public static final int HEIGHT = 4320;
     public static final int CANVAS = WIDTH * HEIGHT;
-
     public static final int ITERATION_CAP = 5_000;
     public static final double BAILOUT_RADIUS_SQ = 1_000_000.0;
+    private static final long SEED = HasherApi.BASE_SEED;
     private static final double CENTER_X = -0.743_644_786_0;
     private static final double CENTER_Y = 0.131_825_253_6;
     private static final double H_DIAMETER = 0.000_002_936;
@@ -210,12 +209,13 @@ public class MandelbrotBenchmark {
             this.outputDir = System.getProperty("outputDir");
             this.outputFileName = System.getProperty("outputFile");
 
-            DRRConfig drrConfig = DRRConfig.defaultConfig("mandelbrot", null);
-            SchedulingConfig emConfig = SchedulingConfig.balancedDefault(null,
-                    "mandelbrot");
+            DRRConfig drrConfig = DRRConfig.defaultConfig();
+            SchedulingConfig emConfig = SchedulingConfig.balancedDefault();
             FractalPipeline pipeline =
                     new FractalPipeline(drrConfig, emConfig, blackhole);
-            this.controlPlane = ControlPlane.getOrCreate("MandelbrotBenchmark", pipeline, null);
+            ControlPlaneConfig config = new ControlPlaneConfig("MandelbrotBenchmark", null, null,
+                    pipeline, null, null);
+            this.controlPlane = ControlPlane.getOrCreate(config);
             this.controlPlane.start();
 
             MandelbrotCanvas.generate(WIDTH, HEIGHT, CENTER_X, CENTER_Y, H_DIAMETER,

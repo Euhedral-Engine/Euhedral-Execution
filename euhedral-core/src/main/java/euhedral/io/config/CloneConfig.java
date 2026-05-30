@@ -1,11 +1,10 @@
 package euhedral.io.config;
 
-import io.micrometer.core.instrument.MeterRegistry;
 import java.util.BitSet;
 
 public record CloneConfig(String shardName, int coreId, double quotaCpus,
-                          BitSet effectiveCpus,
-                          MeterRegistry meterRegistry, String metricPrefix) {
+                          BitSet effectiveCpus) {
+
     public int[] getCpuSet() {
         int[] cpus = new int[effectiveCpus.cardinality()];
         int idx = 0;

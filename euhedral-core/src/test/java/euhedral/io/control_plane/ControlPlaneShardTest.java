@@ -16,7 +16,6 @@ import euhedral.io.config.CloneConfig;
 import euhedral.io.flow_control.LatticeEdge;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.CloneableObject;
-import io.micrometer.core.instrument.MeterRegistry;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.List;
@@ -31,7 +30,6 @@ import org.mockito.Mockito;
 
 class ControlPlaneShardTest {
 
-    private final MeterRegistry mockMeterRegistry = mock(MeterRegistry.class);
     private MockedStatic<SystemInfo> mockSysInfo;
 
     @BeforeEach
@@ -53,13 +51,11 @@ class ControlPlaneShardTest {
         doReturn(clone).when(clone).clone(any(CloneConfig.class));
 
         mockSysInfo.when(SystemInfo::getMaxCoreId).thenReturn(1);
-        ControlPlaneShard shard = new ControlPlaneShard(1, "TestShard", clone,
-                mockMeterRegistry);
+        ControlPlaneShard shard = new ControlPlaneShard(1, "TestShard", clone);
 
         EffectiveSocketTopology topology = getTopology();
         SocketSnapshot snapshot = getSocketSnapshot(topology);
-        CloneConfig[] configs = getConfigs(snapshot, topology,
-                mockMeterRegistry);
+        CloneConfig[] configs = getConfigs(snapshot, topology);
 
         shard.start(snapshot, topology, upstream);
 
@@ -92,8 +88,7 @@ class ControlPlaneShardTest {
         when(clones[1].isStarted()).thenReturn(true);
 
         mockSysInfo.when(SystemInfo::getMaxCoreId).thenReturn(1);
-        ControlPlaneShard shard = new ControlPlaneShard(1, "TestShard", baseClone,
-                mockMeterRegistry);
+        ControlPlaneShard shard = new ControlPlaneShard(1, "TestShard", baseClone);
 
         EffectiveSocketTopology topo1 = getTopology(); // Version 0, Core 0 and 1 active
         shard.start(getSocketSnapshot(topo1), topo1, upstream);
@@ -157,12 +152,11 @@ class ControlPlaneShardTest {
     }
 
     private static CloneConfig[] getConfigs(SocketSnapshot snapshot,
-            EffectiveSocketTopology topology, MeterRegistry meterRegistry) {
+            EffectiveSocketTopology topology) {
         CloneConfig[] configs = new CloneConfig[topology.effectiveCores().cardinality()];
         for (int i = 0; i < configs.length; i++) {
             configs[i] = new CloneConfig("TestShard", i, snapshot.coreSnapshots()[i].quotaCpus(),
-                    snapshot.coreSnapshots()[i].effectiveCpus(),
-                    meterRegistry, "TestShard");
+                    snapshot.coreSnapshots()[i].effectiveCpus());
         }
         return configs;
     }

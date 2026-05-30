@@ -8,23 +8,31 @@ overhead.
 
 ---
 
-## Make the ControlPlane
+## Level 0 (Make the ControlPlane)
 
-Each ControlPlane manages multiple workers; frames are distributed based on their routingHash and
-are processed independently per worker.
+The ControlPlane manages multiple workers; frames are distributed based on their routingHash and
+are processed independently by workers. Currently, only one ControlPlane instance may be active per
+JVM process.
 
-Create the default pipeline
-
-```java
-DefaultCloneablePipeline pipeline = new DefaultCloneablePipeline();
-```
-
-Create the ControlPlane
+Creating the ControlPlane
 
 ```java
-ControlPlane controlPlane = ControlPlane.getOrCreate("Lots of Things Doer 9000", pipeline);
+ControlPlane controlPlane = ControlPlane.getOrCreate("Lots of Things Doer 9000");
 controlPlane.start();
 ```
+
+If you want to collect the per-CPU metrics
+
+```java
+String metricPrefix = "euhedral.metrics";
+MeterRegistry registry; // Any implementation of io.micrometer.core.instrument.MeterRegistry
+
+ControlPlaneConfig config = ControlPlaneConfig.defaultConfig("Lots of Things Doer 9000", metricPrefix, registry);
+ControlPlane controlPlane = ControlPlane.getOrCreate(config);
+controlPlane.start();
+```
+
+metricPrefix defaults to "euhedral" if you give it a registry but pass a blank or null prefix.
 
 ---
 
@@ -87,7 +95,8 @@ sink.complete();
 Using the same constructs in Level 1, only a slight modification is needed to make frames execute in
 parallel. You change the hash they use for routing.
 
-`randomizeHash(seed)` mixes your idHash with the seed to generate the routingHash. This changes where
+`randomizeHash(seed)` mixes your idHash with the seed to generate the routingHash. This changes
+where
 each frame will be executed. It can only be safely done before ingestion.
 
 The seed only needs to be changed slightly for each frame.
@@ -108,10 +117,10 @@ some to run in parallel, randomize the hash after making them.
 
 **Performance Note:**
 
-Euhedral performs parallel execution best when hashes are well mixed and evenly distributed. It 
-relies on hash distribution to fan out work across workers. randomizeHash() uses HasherApi 
-internally to mix what you pass it. Using HasherApi.mix() on a random number is recommended for 
-creating ids and seeds because it uses a fast, high-quality hash function (xxHash64), but any 
+Euhedral performs parallel execution best when hashes are well mixed and evenly distributed. It
+relies on hash distribution to fan out work across workers. randomizeHash() uses HasherApi
+internally to mix what you pass it. Using HasherApi.mix() on a random number is recommended for
+creating ids and seeds because it uses a fast, high-quality hash function (xxHash64), but any
 equivalent hash function will work.
 
 ---
@@ -156,7 +165,8 @@ for(int i = 0; i < 1_000_000; i++) {
 sink.complete();
 ```
 
-**IMPORTANT NOTE: Frames are reset after execution whether you use the recycler or not. This sets their routingHash back to their idHash. If you
+**IMPORTANT NOTE: Frames are reset after execution whether you use the recycler or not. This sets
+their routingHash back to their idHash. If you
 want them to keep executing in parallel, randomize the routing hash again in replace().**
 
 ---
