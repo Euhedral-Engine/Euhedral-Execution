@@ -4,8 +4,8 @@ import euhedral.hardware_utils.PinnedThreadExecutor;
 import euhedral.io.config.CacheConfig;
 import euhedral.io.config.CloneConfig;
 import euhedral.io.config.SchedulingConfig;
+import euhedral.io.control_plane.ControlPlaneCache;
 import euhedral.io.control_plane.ControlPlaneFragment;
-import euhedral.io.control_plane.ControlplaneCache;
 import euhedral.io.generics.AbstractCloneablePipeline;
 import euhedral.io.generics.CacheManager;
 import euhedral.io.generics.PipelineExecutor;
@@ -15,8 +15,8 @@ import io.micrometer.core.instrument.MeterRegistry;
 /// The minimal implementation of an [AbstractCloneablePipeline]
 public class DefaultCloneablePipeline extends AbstractCloneablePipeline {
 
-    private static ControlplaneCache getCache(CacheConfig cacheConfig) {
-        return new ControlplaneCache(cacheConfig);
+    private static ControlPlaneCache getCache(CacheConfig cacheConfig) {
+        return new ControlPlaneCache(cacheConfig);
     }
 
     private static ControlPlaneFragment getFragment(SchedulingConfig dsmConfig) {
