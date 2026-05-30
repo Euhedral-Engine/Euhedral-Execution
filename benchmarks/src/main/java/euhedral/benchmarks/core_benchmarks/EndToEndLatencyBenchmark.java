@@ -7,6 +7,7 @@ import euhedral.hardware_utils.SystemInfo;
 import euhedral.hardware_utils.SystemInfo.CoreInfo;
 import euhedral.hardware_utils.SystemInfo.CpuCacheLayout;
 import euhedral.hashing.HasherApi;
+import euhedral.io.config.ControlPlaneConfig;
 import euhedral.io.config.DRRConfig;
 import euhedral.io.config.SchedulingConfig;
 import euhedral.io.control_plane.ControlPlane;
@@ -82,10 +83,6 @@ public class EndToEndLatencyBenchmark {
 
         @Setup(Level.Trial)
         public void setup(Blackhole blackhole) {
-            DRRConfig drrConfig = DRRConfig.defaultConfig("EndToEndLatencyBenchmark", null);
-            SchedulingConfig emConfig = SchedulingConfig.balancedDefault(null,
-                    "EndToEndLatencyBenchmark");
-
             BitSet cores = (BitSet) SystemInfo.get_P_CoreSet().clone();
             if (cores.cardinality() == 0) {
                 skip = true;
@@ -100,9 +97,13 @@ public class EndToEndLatencyBenchmark {
             cpus.or(SystemInfo.getCoreInfo(i).getCpuSet());
 
             System.out.println("Benchmark is using P cpus " + cpus);
-            this.controlPlane = ControlPlane.getOrCreate("EndToEndLatencyBenchmark", cpus,
-                    new NoOpPipeline(drrConfig, emConfig, blackhole),
-                    null);
+            DRRConfig drrConfig = DRRConfig.defaultConfig();
+            SchedulingConfig schedConfig = SchedulingConfig.balancedDefault();
+            NoOpPipeline pipeline = new NoOpPipeline(drrConfig, schedConfig, blackhole);
+            ControlPlaneConfig config = new ControlPlaneConfig("EndToEndLatencyBenchmark", cpus,
+                    null,
+                    pipeline, null, null);
+            this.controlPlane = ControlPlane.getOrCreate(config);
             this.controlPlane.start();
         }
 
@@ -169,10 +170,6 @@ public class EndToEndLatencyBenchmark {
 
         @Setup(Level.Trial)
         public void setup(Blackhole blackhole) {
-            DRRConfig drrConfig = DRRConfig.defaultConfig("EndToEndLatencyBenchmark", null);
-            SchedulingConfig emConfig = SchedulingConfig.balancedDefault(null,
-                    "EndToEndLatencyBenchmark");
-
             BitSet eCpus = (BitSet) SystemInfo.get_E_CpuSet().clone();
             BitSet cpus = eCpus;
             if (cpus.cardinality() == 0) {
@@ -196,9 +193,13 @@ public class EndToEndLatencyBenchmark {
             }
 
             System.out.println("Benchmark is using E cpus " + cpus);
-            this.controlPlane = ControlPlane.getOrCreate("EndToEndLatencyBenchmark", cpus,
-                    new NoOpPipeline(drrConfig, emConfig, blackhole),
-                    null);
+            DRRConfig drrConfig = DRRConfig.defaultConfig();
+            SchedulingConfig schedConfig = SchedulingConfig.balancedDefault();
+            NoOpPipeline pipeline = new NoOpPipeline(drrConfig, schedConfig, blackhole);
+            ControlPlaneConfig config = new ControlPlaneConfig("EndToEndLatencyBenchmark", cpus,
+                    null,
+                    pipeline, null, null);
+            this.controlPlane = ControlPlane.getOrCreate(config);
             this.controlPlane.start();
         }
 

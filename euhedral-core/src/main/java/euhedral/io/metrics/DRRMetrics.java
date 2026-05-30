@@ -17,6 +17,11 @@ public class DRRMetrics implements AutoCloseable {
 
     public DRRMetrics(String metricPrefix, String tag, AtomicDouble capFactor,
             Supplier<Long> totalQueuedSizeBytes, MeterRegistry registry) {
+        if (metricPrefix == null || metricPrefix.isBlank()) {
+            metricPrefix = "euhedral";
+        }
+        metricPrefix = metricPrefix.split("\\.")[0];
+
         if (registry != null) {
 
             subQBacklogSummary =

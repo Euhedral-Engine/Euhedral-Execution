@@ -4,6 +4,7 @@ import euhedral.atomics.PaddedLongAdder;
 import euhedral.benchmarks.frames.NoOpFrame;
 import euhedral.benchmarks.pipelines.NoOpPipeline;
 import euhedral.hashing.HasherApi;
+import euhedral.io.config.ControlPlaneConfig;
 import euhedral.io.config.DRRConfig;
 import euhedral.io.config.SchedulingConfig;
 import euhedral.io.control_plane.ControlPlane;
@@ -62,11 +63,10 @@ public class ThroughputComparisonBenchmark {
     @Fork(1)
     public static class Reactor {
 
-        private NoOpFrame[] frames;
-        private BaseSubscriber<NoOpFrame> subscriber;
-
         private final PaddedLongAdder counters =
                 new PaddedLongAdder(Runtime.getRuntime().availableProcessors(), false, true);
+        private NoOpFrame[] frames;
+        private BaseSubscriber<NoOpFrame> subscriber;
 
         private void makeSub(Blackhole blackhole) {
             this.subscriber = new BaseSubscriber<>() {
@@ -122,7 +122,8 @@ public class ThroughputComparisonBenchmark {
 
         private final PaddedLongAdder counters = new PaddedLongAdder(
                 Runtime.getRuntime().availableProcessors(), true, true);
-        private final NoOpFrame[] frames = NoOpFrame.generate(ThreadLocalRandom.current().nextLong(), BATCH, this.counters);
+        private final NoOpFrame[] frames = NoOpFrame.generate(
+                ThreadLocalRandom.current().nextLong(), BATCH, this.counters);
         private EuhedralSubscriber subscriber;
         private ControlPlane controlPlane;
 
@@ -135,11 +136,12 @@ public class ThroughputComparisonBenchmark {
                 frame.randomizeHash(hash++);
             }
 
-            DRRConfig drrConfig = DRRConfig.defaultConfig("ThroughputComparisonBenchmark", null);
-            SchedulingConfig emConfig = SchedulingConfig.balancedDefault(null,
-                    "ThroughputComparisonBenchmark");
-            this.controlPlane = ControlPlane.getOrCreate("ThroughputComparisonBenchmark",
-                    new NoOpPipeline(drrConfig, emConfig, blackhole), null);
+            DRRConfig drrConfig = DRRConfig.defaultConfig();
+            SchedulingConfig emConfig = SchedulingConfig.balancedDefault();
+            NoOpPipeline pipeline = new NoOpPipeline(drrConfig, emConfig, blackhole);
+            ControlPlaneConfig config = new ControlPlaneConfig("MandelbrotBenchmark", null, null,
+                    pipeline, null, null);
+            this.controlPlane = ControlPlane.getOrCreate(config);
             this.controlPlane.start();
         }
 

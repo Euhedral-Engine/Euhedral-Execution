@@ -1,8 +1,8 @@
 package euhedral.io.reactor;
 
 import euhedral.atomics.PaddedAtomicLong;
+import euhedral.io.config.ControlPlaneConfig;
 import euhedral.io.control_plane.ControlPlane;
-import euhedral.io.impl.DefaultCloneablePipeline;
 import euhedral.io.reactor.common.EuhedralSubscriber;
 import euhedral.io.utils.MathFunctions;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -41,17 +41,23 @@ public class EuhedralScheduler implements Scheduler {
         return getOrCreate("EuhedralScheduler", null, null);
     }
 
+    public static @NonNull EuhedralScheduler getOrCreate(String name) {
+        return getOrCreate(name, null, null);
+    }
+
     public static @NonNull EuhedralScheduler getOrCreate(String name, @Nullable String metricPrefix,
             @Nullable MeterRegistry meterRegistry) {
+        return getOrCreate(ControlPlaneConfig.defaultConfig(name, metricPrefix, meterRegistry));
+    }
+
+    public static @NonNull EuhedralScheduler getOrCreate(ControlPlaneConfig config) {
         EuhedralScheduler instance = INSTANCE.getOpaque();
         if (instance != null) {
             return instance;
         }
 
         if (CONSTRUCTING.compareAndSet(false, true)) {
-            ControlPlane controlPlane = ControlPlane.getOrCreate(name,
-                    new DefaultCloneablePipeline(metricPrefix, meterRegistry),
-                    meterRegistry);
+            ControlPlane controlPlane = ControlPlane.getOrCreate(config);
             instance = new EuhedralScheduler(controlPlane);
             INSTANCE.set(instance);
             return instance;
