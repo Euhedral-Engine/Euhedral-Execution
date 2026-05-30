@@ -12,13 +12,14 @@ import euhedral.hardware_utils.TopologyMapper.EffectiveSocketTopology;
 import euhedral.hardware_utils.TopologyMapper.EffectiveSystemTopology;
 import euhedral.hardware_utils.common.SystemUtilization.HardwareUtilization;
 import euhedral.hardware_utils.common.SystemUtilization.SocketSnapshot;
+import euhedral.io.config.ControlPlaneConfig;
 import euhedral.io.flow_control.LatticeEdge;
 import euhedral.io.flow_control.LatticeVertex;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.CloneableObject;
 import euhedral.io.generics.LaticeSource;
+import euhedral.io.impl.DefaultCloneablePipeline;
 import euhedral.io.ingest.IngestSink;
-import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.BitSet;
@@ -102,39 +103,31 @@ public class ControlPlane implements AutoCloseable {
         return INSTANCE.get();
     }
 
-    public static ControlPlane getOrCreate(String name, ControlPlaneShard baseShard) {
+    public static ControlPlane getOrCreate(String name) {
         return INSTANCE.updateAndGet(curr -> {
             if (curr != null) {
                 return curr;
             }
 
-            return new ControlPlane(name, baseShard, null, SystemInfo.getCpuSet(), null);
+            return new ControlPlane(name, null, new DefaultCloneablePipeline(), SystemInfo.getCpuSet());
         });
     }
 
-    public static ControlPlane getOrCreate(String name, CloneableObject cloneableObject) {
-        return getOrCreate(name, cloneableObject, null);
-    }
-
-    public static ControlPlane getOrCreate(String name, CloneableObject cloneableObject,
-            MeterRegistry meterRegistry) {
+    public static ControlPlane getOrCreate(@NonNull ControlPlaneConfig config) {
+        Objects.requireNonNull(config);
         return INSTANCE.updateAndGet(curr -> {
             if (curr != null) {
                 return curr;
             }
-
-            return new ControlPlane(name, cloneableObject, SystemInfo.getCpuSet(), meterRegistry);
-        });
-    }
-
-    public static ControlPlane getOrCreate(String name, BitSet allowedCpus,
-            CloneableObject cloneableObject, MeterRegistry meterRegistry) {
-        return INSTANCE.updateAndGet(curr -> {
-            if (curr != null) {
-                return curr;
+            BitSet allowedCpus = config.allowedCpus();
+            CloneableObject cloneable = config.cloneableObject();
+            if(allowedCpus == null) {
+                allowedCpus = SystemInfo.getCpuSet();
             }
-
-            return new ControlPlane(name, cloneableObject, allowedCpus, meterRegistry);
+            if(cloneable == null) {
+                cloneable = new DefaultCloneablePipeline(config.metricPrefix(), config.meterRegistry());
+            }
+            return new ControlPlane(config.name(), config.baseShard(), cloneable, allowedCpus);
         });
     }
 
@@ -164,21 +157,15 @@ public class ControlPlane implements AutoCloseable {
     protected volatile int currentGlobalVersion = Integer.MIN_VALUE;
     protected volatile EffectiveSystemTopology effectiveTopology;
 
-
-    protected ControlPlane(String name, CloneableObject cloneableObject, BitSet allowedCpus,
-            MeterRegistry meterRegistry) {
-        this(name, null, cloneableObject, allowedCpus, meterRegistry);
-    }
-
     protected ControlPlane(String name, ControlPlaneShard baseShard,
-            CloneableObject cloneableObject, BitSet allowedCpus, MeterRegistry meterRegistry) {
+            CloneableObject cloneableObject, BitSet allowedCpus) {
         this.topology = new TopologyMapper(allowedCpus);
         this.resourceMonitor = new ResourceMonitor(this.topology, Duration.ofMillis(200));
 
         this.baseShard = Objects.requireNonNullElseGet(baseShard,
-                () -> new ControlPlaneShard(-1, "BaseShard", cloneableObject, meterRegistry));
+                () -> new ControlPlaneShard(-1, "BaseShard", cloneableObject));
 
-        this.name = name;
+        this.name = name == null || name.isBlank() ? this.getClass().getSimpleName() : name;
         this.logger = LoggerFactory.getLogger(name);
         this.effectiveTopology = this.topology.getEffectiveTopology();
         this.ingestController = new AtomicReference<>();
@@ -187,7 +174,7 @@ public class ControlPlane implements AutoCloseable {
 
         this.allowedCores = allowedCpus;
         this.controlPlaneExecutor =
-                Executors.newFixedThreadPool(this.shards.length, r -> new Thread(r, name));
+                Executors.newFixedThreadPool(this.shards.length, r -> new Thread(r, this.name));
 
         this.shutdownHook = new Thread(this::close);
         Runtime.getRuntime().addShutdownHook(this.shutdownHook);

@@ -4,6 +4,7 @@ import euhedral.atomics.PaddedLongAdder;
 import euhedral.benchmarks.frames.NoOpFrame;
 import euhedral.benchmarks.pipelines.NoOpPipeline;
 import euhedral.hashing.HasherApi;
+import euhedral.io.config.ControlPlaneConfig;
 import euhedral.io.config.DRRConfig;
 import euhedral.io.config.SchedulingConfig;
 import euhedral.io.control_plane.ControlPlane;
@@ -32,13 +33,8 @@ import org.openjdk.jmh.infra.Blackhole;
 @Measurement(iterations = 5, time = 10, timeUnit = TimeUnit.SECONDS)
 @Fork(1)
 public class TrueThroughputBenchmark {
-    private static final int BATCH = 32_000_000;
 
-    private final PaddedLongAdder counters = new PaddedLongAdder(
-            Runtime.getRuntime().availableProcessors(), true, true);
-    private final NoOpFrame[][] frames = new NoOpFrame[32][];
-    private final ArrayIngestSink[] sinks = new ArrayIngestSink[32];
-    private ControlPlane controlPlane;
+    private static final int BATCH = 32_000_000;
 
     private static void await(PaddedLongAdder counters) {
         int spin = 0;
@@ -57,13 +53,18 @@ public class TrueThroughputBenchmark {
             }
         }
     }
+    private final PaddedLongAdder counters = new PaddedLongAdder(
+            Runtime.getRuntime().availableProcessors(), true, true);
+    private final NoOpFrame[][] frames = new NoOpFrame[32][];
+    private final ArrayIngestSink[] sinks = new ArrayIngestSink[32];
+    private ControlPlane controlPlane;
 
     @Setup(Level.Trial)
     public void setup(Blackhole blackhole) {
         long hash = ThreadLocalRandom.current().nextLong();
         hash = HasherApi.mix(hash);
 
-        for(int i = 0; i < frames.length; i++) {
+        for (int i = 0; i < frames.length; i++) {
             this.frames[i] = NoOpFrame.generate(hash, 1_000_000, this.counters);
             for (NoOpFrame frame : this.frames[i]) {
                 frame.randomizeHash(hash++);
@@ -71,18 +72,20 @@ public class TrueThroughputBenchmark {
             this.sinks[i] = new ArrayIngestSink(this.frames[i]);
         }
 
-        DRRConfig drrConfig = DRRConfig.defaultConfig("ThroughputComparisonBenchmark", null);
-        SchedulingConfig emConfig = SchedulingConfig.balancedDefault(null,
-                "ThroughputComparisonBenchmark");
-        this.controlPlane = ControlPlane.getOrCreate("ThroughputComparisonBenchmark",
-                new NoOpPipeline(drrConfig, emConfig, blackhole), null);
+        DRRConfig drrConfig = DRRConfig.defaultConfig();
+        SchedulingConfig emConfig = SchedulingConfig.balancedDefault();
+        NoOpPipeline pipeline = new NoOpPipeline(drrConfig, emConfig, blackhole);
+        ControlPlaneConfig config = new ControlPlaneConfig("ThroughputComparisonBenchmark", null,
+                null,
+                pipeline, null, null);
+        this.controlPlane = ControlPlane.getOrCreate(config);
         this.controlPlane.start();
     }
 
     @Setup(Level.Invocation)
     public void setup() {
         this.counters.reset();
-        for(var sink : this.sinks) {
+        for (var sink : this.sinks) {
             sink.reset();
         }
     }
@@ -90,7 +93,7 @@ public class TrueThroughputBenchmark {
     @Benchmark
     @OperationsPerInvocation(BATCH)
     public void ingest32million32sources() {
-        for(var sink : this.sinks) {
+        for (var sink : this.sinks) {
             this.controlPlane.ingest(sink);
         }
 

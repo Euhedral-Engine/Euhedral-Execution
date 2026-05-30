@@ -59,10 +59,6 @@ public record SchedulingConfig(@Nullable CloneConfig cloneConfig, int minConcurr
 
     @Override
     public SchedulingConfig clone(CloneConfig cloneConfig) {
-        MeterRegistry meterRegistry = null;
-        if (cloneConfig != null) {
-            meterRegistry = cloneConfig.meterRegistry();
-        }
         return new SchedulingConfig(cloneConfig, minConcurrency, maxUpdateInterval,
                 enableSMT,
                 idleCyclePolicy, meterRegistry, metricPrefix);

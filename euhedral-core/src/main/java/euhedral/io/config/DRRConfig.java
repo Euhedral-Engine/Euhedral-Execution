@@ -19,15 +19,10 @@ public record DRRConfig(@Nullable CloneConfig cloneConfig, double L2MemoryBudget
 
     @Override
     public DRRConfig clone(CloneConfig cloneConfig) {
-        MeterRegistry meterRegistry = null;
-        if (cloneConfig != null) {
-            meterRegistry = cloneConfig.meterRegistry();
-        }
         return new DRRConfig(cloneConfig, L2MemoryBudget, partitionsPerCpu, maxPooledChunks,
                 ringWalkResetThreshold,
                 queueCapFactor,
-                metricPrefix,
-                meterRegistry);
+                metricPrefix, registry);
     }
 
     @Override
