@@ -8,8 +8,8 @@ import euhedral.hardware_utils.PinnedThreadExecutor;
 import euhedral.hardware_utils.SystemInfo;
 import euhedral.hardware_utils.SystemInfo.SocketInfo;
 import euhedral.hashing.HasherApi;
+import euhedral.io.config.CacheConfig;
 import euhedral.io.config.ControlPlaneConfig;
-import euhedral.io.config.DRRConfig;
 import euhedral.io.config.SchedulingConfig;
 import euhedral.io.control_plane.ControlPlaneLattice;
 import euhedral.io.control_plane.RoutingPolicy;
@@ -176,10 +176,10 @@ public class HighScaleBenchmark {
                 }
             }
 
-            DRRConfig drrConfig = DRRConfig.defaultConfig();
+            CacheConfig cacheConfig = CacheConfig.defaultConfig();
             SchedulingConfig schedConfig = SchedulingConfig.balancedDefault();
             FractalPipeline pipeline =
-                    new FractalPipeline(drrConfig, schedConfig, blackhole);
+                    new FractalPipeline(cacheConfig, schedConfig, blackhole);
             ControlPlaneConfig config = new ControlPlaneConfig("HighScaleBenchmark", null, null,
                     pipeline, null, null);
             this.controlPlane = ControlPlaneLattice.getOrCreate(config);
@@ -266,10 +266,10 @@ public class HighScaleBenchmark {
                 }
             }
 
-            DRRConfig drrConfig = DRRConfig.defaultConfig();
+            CacheConfig cacheConfig = CacheConfig.defaultConfig();
             SchedulingConfig schedConfig = SchedulingConfig.balancedDefault();
             FractalPipeline pipeline =
-                    new FractalPipeline(drrConfig, schedConfig, blackhole);
+                    new FractalPipeline(cacheConfig, schedConfig, blackhole);
             ControlPlaneConfig config = new ControlPlaneConfig("HighScaleBenchmark", null, null,
                     pipeline, null, null);
             this.controlPlane = ControlPlaneLattice.getOrCreate(config);
@@ -334,10 +334,10 @@ public class HighScaleBenchmark {
                 }
             }
 
-            DRRConfig drrConfig = DRRConfig.defaultConfig();
+            CacheConfig cacheConfig = CacheConfig.defaultConfig();
             SchedulingConfig schedConfig = SchedulingConfig.balancedDefault();
             FractalPipeline pipeline =
-                    new FractalPipeline(drrConfig, schedConfig, blackhole);
+                    new FractalPipeline(cacheConfig, schedConfig, blackhole);
             ControlPlaneConfig config = new ControlPlaneConfig("HighScaleBenchmark", null, null,
                     pipeline, null, null);
             this.controlPlane = ControlPlaneLattice.getOrCreate(config);
@@ -403,10 +403,10 @@ public class HighScaleBenchmark {
                 }
             }
 
-            DRRConfig drrConfig = DRRConfig.defaultConfig();
+            CacheConfig cacheConfig = CacheConfig.defaultConfig();
             SchedulingConfig schedConfig = SchedulingConfig.balancedDefault();
             FractalPipeline pipeline =
-                    new FractalPipeline(drrConfig, schedConfig, blackhole);
+                    new FractalPipeline(cacheConfig, schedConfig, blackhole);
             ControlPlaneConfig config = new ControlPlaneConfig("HighScaleBenchmark", null, null,
                     pipeline, null, null);
             this.controlPlane = ControlPlaneLattice.getOrCreate(config);

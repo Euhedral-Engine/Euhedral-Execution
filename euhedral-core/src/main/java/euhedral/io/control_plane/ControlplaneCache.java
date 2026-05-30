@@ -11,8 +11,8 @@ import euhedral.hardware_utils.SystemInfo;
 import euhedral.hardware_utils.SystemInfo.CpuCacheLayout;
 import euhedral.hardware_utils.common.SystemUtilization.CoreSnapshot;
 import euhedral.hashing.HasherApi;
+import euhedral.io.config.CacheConfig;
 import euhedral.io.config.CloneConfig;
-import euhedral.io.config.DRRConfig;
 import euhedral.io.flow_control.LatticeEdge;
 import euhedral.io.flow_control.LatticeVertex;
 import euhedral.io.flow_control.UpstreamQueue;
@@ -21,7 +21,7 @@ import euhedral.io.frames.DummyInitFrame;
 import euhedral.io.generics.CacheManager;
 import euhedral.io.generics.LaticeSource;
 import euhedral.io.generics.LatticeReceiver;
-import euhedral.io.metrics.DRRMetrics;
+import euhedral.io.metrics.CacheMetrics;
 import euhedral.io.utils.DrainBuffer;
 import euhedral.io.utils.FlowRecorder;
 import euhedral.io.utils.FlowRecorder.FlowSnapshot;
@@ -40,9 +40,8 @@ import org.jspecify.annotations.NonNull;
 
 /// ## Partitioned deficit round-robin (DRR) cache layer
 ///
-/// `DRRCacheManager` is a partitioned queueing and backpressure system that sits between ingestion
-/// and execution. It implements a weighted DRR-like model to balance fairness, memory pressure,
-/// and throughput.
+/// `ControlplaneCache` is a partitioned queueing system that sits between ingestion and execution.
+/// It implements a weighted DRR-like model to balance fairness, memory pressure, and throughput.
 ///
 /// #### Each CPU-facing partition maintains independent quotas
 ///
@@ -55,7 +54,7 @@ import org.jspecify.annotations.NonNull;
 /// variance, preventing hot partitions from starving others.
 ///
 /// **This layer is the primary memory-aware rate limiter in Euhedral Core.**
-public class DRRCacheManager extends LatticeVertex implements CacheManager {
+public class ControlplaneCache extends LatticeVertex implements CacheManager {
 
     protected static final VarHandle PARTITION_LOCK =
             MethodHandles.arrayElementVarHandle(boolean[].class);
@@ -64,28 +63,29 @@ public class DRRCacheManager extends LatticeVertex implements CacheManager {
     protected static final VarHandle TOTAL_COUNT;
 
     protected static final ThreadLocal<UpstreamQueue> UPSTREAM = new ThreadLocal<>();
-    protected static final NonBlockingHashMapLong<DRRCacheManager> CACHES =
+    protected static final NonBlockingHashMapLong<ControlplaneCache> CACHES =
             new NonBlockingHashMapLong<>();
 
     static {
         try {
             PRIMED = MethodHandles.lookup()
-                    .findVarHandle(DRRCacheManager.class, "primed", boolean.class);
+                    .findVarHandle(ControlplaneCache.class, "primed", boolean.class);
             TOTAL_BYTES = MethodHandles.lookup()
-                    .findVarHandle(DRRCacheManager.class, "totalQueuedSizeBytes", long.class);
+                    .findVarHandle(ControlplaneCache.class, "totalQueuedSizeBytes", long.class);
             TOTAL_COUNT = MethodHandles.lookup()
-                    .findVarHandle(DRRCacheManager.class, "totalCount", long.class);
+                    .findVarHandle(ControlplaneCache.class, "totalCount", long.class);
         } catch (Exception e) {
             throw new ExceptionInInitializerError(e);
         }
     }
 
-    public static String getName(DRRConfig config) {
-        return config.cloneConfig() != null ? config.cloneConfig().shardName() + "-DRRCacheManager-"
-                                              + config.cloneConfig().coreId() : "DRRCacheManager";
+    public static String getName(CacheConfig config) {
+        return config.cloneConfig() != null ? config.cloneConfig().shardName()
+                                              + "-ControlplaneCache-"
+                                              + config.cloneConfig().coreId() : "ControlplaneCache";
     }
 
-    protected static int getPartitionCount(DRRConfig config) {
+    protected static int getPartitionCount(CacheConfig config) {
         CloneConfig cloneConfig = config.cloneConfig();
         if (cloneConfig != null) {
             CpuCacheLayout layout = SystemInfo.getCacheLayout(cloneConfig.getCpuSet()[0]);
@@ -94,7 +94,7 @@ public class DRRCacheManager extends LatticeVertex implements CacheManager {
         return 0;
     }
 
-    protected static int getChunkSize(DRRConfig config, int partitions) {
+    protected static int getChunkSize(CacheConfig config, int partitions) {
         CloneConfig cloneConfig = config.cloneConfig();
         if (cloneConfig == null) {
             return 512;
@@ -105,7 +105,7 @@ public class DRRCacheManager extends LatticeVertex implements CacheManager {
 
         double budget = config.L2MemoryBudget();
         budget = clampDouble(budget, 0, 1.0);
-        if(budget == 0) {
+        if (budget == 0) {
             budget = 0.7;
         }
 
@@ -116,8 +116,8 @@ public class DRRCacheManager extends LatticeVertex implements CacheManager {
         return Math.max(chunk, 512);
     }
 
-    protected final DRRConfig config;
-    protected final DRRMetrics metrics;
+    protected final CacheConfig config;
+    protected final CacheMetrics metrics;
 
     protected final AtomicDouble capFactor = new AtomicDouble(1d);
     protected final PaddedAtomicLong memoryLimit;
@@ -140,7 +140,7 @@ public class DRRCacheManager extends LatticeVertex implements CacheManager {
     protected long totalCount = 0L;
     protected long totalQueuedSizeBytes = 0L;
 
-    public DRRCacheManager(@NonNull DRRConfig config) {
+    public ControlplaneCache(@NonNull CacheConfig config) {
         super(getName(config), getPartitionCount(config), RoutingFunction.DEFAULT,
                 true);
         this.config = config;
@@ -163,7 +163,7 @@ public class DRRCacheManager extends LatticeVertex implements CacheManager {
         } else {
             CpuCacheLayout layout = SystemInfo.getCacheLayout(config.cloneConfig().getCpuSet()[0]);
             if (config.registry() != null) {
-                this.metrics = new DRRMetrics(config.metricPrefix(), layout.maskL2(), capFactor,
+                this.metrics = new CacheMetrics(config.metricPrefix(), layout.maskL2(), capFactor,
                         () -> (long) TOTAL_BYTES.getOpaque(this), config.registry());
             } else {
                 this.metrics = null;
@@ -174,7 +174,8 @@ public class DRRCacheManager extends LatticeVertex implements CacheManager {
             this.chunkSize = getChunkSize(config, partitions);
             this.frameQuota = (long) this.chunkSize * partitions;
             this.queueRing = new QueuePartitionWrapper(
-                    new PartitionedUnboundedMpscArrayQueue<>(partitions, this.chunkSize, config.maxPooledChunks()));
+                    new PartitionedUnboundedMpscArrayQueue<>(partitions, this.chunkSize,
+                            config.maxPooledChunks()));
             this.mask = partitions - 1;
             this.heads = new int[SystemInfo.getCpuCount()];
             this.partitionLocks = new boolean[partitions];
@@ -182,7 +183,7 @@ public class DRRCacheManager extends LatticeVertex implements CacheManager {
             this.fillBytesRecorder = new PaddedAtomicReference<>(new FlowRecorder());
 
             this.partitionStats = new PartitionStats[partitions];
-            for(int i = 0; i < partitions; i++) {
+            for (int i = 0; i < partitions; i++) {
                 this.partitionStats[i] = new PartitionStats();
             }
 
@@ -200,19 +201,20 @@ public class DRRCacheManager extends LatticeVertex implements CacheManager {
 
             String[] chunks = layout.maskL2().split(",");
             StringJoiner sj = new StringJoiner(",");
-            for(var c : chunks) {
+            for (var c : chunks) {
                 sj.add("0x" + c);
             }
             this.logger.debug("Initialized to serve cpus (little-endian): {}", sj);
-            this.logger.debug("Partitions: {} PartitionChunkSize: {} CapacityPerQueueNode: {}", partitions, this.chunkSize, partitions * this.chunkSize);
+            this.logger.debug("Partitions: {} PartitionChunkSize: {} CapacityPerQueueNode: {}",
+                    partitions, this.chunkSize, partitions * this.chunkSize);
         }
     }
 
     /// Drains work from the cache-local DRR partitions into the execution buffer.
     ///
     /// Each partition maintains an adaptive byte quota that behaves similarly to deficit
-    /// round-robin scheduling. Partitions that consistently drain work accumulate credit,
-    /// while idle partitions naturally fall behind.
+    /// round-robin scheduling. Partitions that consistently drain work accumulate credit, while
+    /// idle partitions naturally fall behind.
     ///
     /// Work is drained opportunistically:
     ///
@@ -221,8 +223,8 @@ public class DRRCacheManager extends LatticeVertex implements CacheManager {
     ///   - Refill quota when depleted
     ///   - Reset the ring walk when a productive partition is found
     ///
-    /// The drain process is intentionally byte-oriented instead of item-oriented to better
-    /// handle highly irregular frame sizes.
+    /// The drain process is intentionally byte-oriented instead of item-oriented to better handle
+    /// highly irregular frame sizes.
     ///
     /// Remaining capacity is filled directly from upstream if local queues underflow.
     public long drain(DownstreamHandle handle, DrainBuffer drainBuffer, int maxFill, long demand) {
@@ -268,7 +270,7 @@ public class DRRCacheManager extends LatticeVertex implements CacheManager {
                     stats.lastBytesDrained = drainedBytes;
 
                     recordDrainMetrics(lock, stats, drainCount);
-                    if(drainCount > config.ringWalkResetThreshold()) {
+                    if (drainCount > config.ringWalkResetThreshold()) {
                         cycles = 0;
                     }
                 }
@@ -473,7 +475,7 @@ public class DRRCacheManager extends LatticeVertex implements CacheManager {
     }
 
     public long getMaxQueuedBytes() {
-        double cap = Math.min(this.config.queueCapFactor(), this.capFactor.getAcquire());
+        double cap = this.capFactor.getAcquire();
         long byteQuota = this.frameQuota * (this.avgFrameSize.sum() / this.queueRing.partitions());
         long hardwareMax = this.memoryLimit.getOpaque();
         if (hardwareMax > byteQuota) {
@@ -507,7 +509,7 @@ public class DRRCacheManager extends LatticeVertex implements CacheManager {
     }
 
     @Override
-    public DRRCacheManager output() {
+    public ControlplaneCache output() {
         return this;
     }
 
@@ -526,7 +528,8 @@ public class DRRCacheManager extends LatticeVertex implements CacheManager {
         CpuCacheLayout layout = SystemInfo.getCacheLayout(cloneConfig.getCpuSet()[0]);
 
         long hash = HasherApi.getHash(layout.maskL2());
-        return CACHES.computeIfAbsent(hash, (k) -> new DRRCacheManager(this.config.clone(cloneConfig)));
+        return CACHES.computeIfAbsent(hash,
+                (k) -> new ControlplaneCache(this.config.clone(cloneConfig)));
     }
 
     @Override
@@ -544,9 +547,9 @@ public class DRRCacheManager extends LatticeVertex implements CacheManager {
     public static class DownstreamHandle {
 
         public final int cpu;
+        public final Callable<Double> downstreamPressure;
         public FlowRecorder drainRecorder;
         public FlowRecorder drainBytesRecorder;
-        public final Callable<Double> downstreamPressure;
 
         public DownstreamHandle(int cpu, Callable<Double> downstreamPressure) {
             this.cpu = cpu;
@@ -600,20 +603,21 @@ public class DRRCacheManager extends LatticeVertex implements CacheManager {
 
         @Override
         public void onNext(AbstractFrame frame) {
-            while (!DRRCacheManager.this.queueRing.offer(this.idx, frame)) {
+            while (!ControlplaneCache.this.queueRing.offer(this.idx, frame)) {
                 Thread.onSpinWait();
             }
 
             long size = frame.getSizeBytes();
             long adjustedSize = size <= 0 ? 256 : size;
-            DRRCacheManager.this.avgFrameSize.getAndAccumulate(this.idx, adjustedSize, this::ewma);
+            ControlplaneCache.this.avgFrameSize.getAndAccumulate(this.idx, adjustedSize,
+                    this::ewma);
 
-            TOTAL_BYTES.getAndAdd(DRRCacheManager.this, adjustedSize);
-            long count = (long) TOTAL_COUNT.getAndAdd(DRRCacheManager.this, 1) + 1;
+            TOTAL_BYTES.getAndAdd(ControlplaneCache.this, adjustedSize);
+            long count = (long) TOTAL_COUNT.getAndAdd(ControlplaneCache.this, 1) + 1;
             if ((count & 63) == 0) {
                 long now = System.nanoTime();
-                DRRCacheManager.this.fillRecorder.getPlain().record(now, 64, true);
-                DRRCacheManager.this.fillBytesRecorder.getPlain().record(now, adjustedSize, true);
+                ControlplaneCache.this.fillRecorder.getPlain().record(now, 64, true);
+                ControlplaneCache.this.fillBytesRecorder.getPlain().record(now, adjustedSize, true);
             }
         }
 

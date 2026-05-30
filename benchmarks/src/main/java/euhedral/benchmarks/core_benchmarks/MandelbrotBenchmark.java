@@ -5,8 +5,8 @@ import euhedral.benchmarks.core_benchmarks.utils.MandelbrotCanvas;
 import euhedral.benchmarks.frames.MandelbrotPixel;
 import euhedral.benchmarks.pipelines.FractalPipeline;
 import euhedral.hashing.HasherApi;
+import euhedral.io.config.CacheConfig;
 import euhedral.io.config.ControlPlaneConfig;
-import euhedral.io.config.DRRConfig;
 import euhedral.io.config.SchedulingConfig;
 import euhedral.io.control_plane.ControlPlaneLattice;
 import euhedral.io.reactor.common.EuhedralSubscriber;
@@ -209,10 +209,10 @@ public class MandelbrotBenchmark {
             this.outputDir = System.getProperty("outputDir");
             this.outputFileName = System.getProperty("outputFile");
 
-            DRRConfig drrConfig = DRRConfig.defaultConfig();
+            CacheConfig cacheConfig = CacheConfig.defaultConfig();
             SchedulingConfig emConfig = SchedulingConfig.balancedDefault();
             FractalPipeline pipeline =
-                    new FractalPipeline(drrConfig, emConfig, blackhole);
+                    new FractalPipeline(cacheConfig, emConfig, blackhole);
             ControlPlaneConfig config = new ControlPlaneConfig("MandelbrotBenchmark", null, null,
                     pipeline, null, null);
             this.controlPlane = ControlPlaneLattice.getOrCreate(config);

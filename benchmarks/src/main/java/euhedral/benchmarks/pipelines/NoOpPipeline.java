@@ -2,8 +2,8 @@ package euhedral.benchmarks.pipelines;
 
 import euhedral.benchmarks.frames.NoOpFrame;
 import euhedral.hardware_utils.PinnedThreadExecutor;
+import euhedral.io.config.CacheConfig;
 import euhedral.io.config.CloneConfig;
-import euhedral.io.config.DRRConfig;
 import euhedral.io.config.SchedulingConfig;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.AbstractExecutor;
@@ -12,8 +12,8 @@ import org.openjdk.jmh.infra.Blackhole;
 
 public class NoOpPipeline extends DefaultCloneablePipeline {
 
-    public NoOpPipeline(DRRConfig drrConfig, SchedulingConfig emConfig, Blackhole blackhole) {
-        super(drrConfig, emConfig, new NoOpExecutor(null, blackhole));
+    public NoOpPipeline(CacheConfig cacheConfig, SchedulingConfig emConfig, Blackhole blackhole) {
+        super(cacheConfig, emConfig, new NoOpExecutor(null, blackhole));
     }
 
     private static class NoOpExecutor extends AbstractExecutor {
