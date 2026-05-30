@@ -1,4 +1,4 @@
-package euhedral.io;
+package euhedral.io.control_plane;
 
 import static euhedral.io.utils.MathFunctions.clampDouble;
 import static euhedral.io.utils.MathFunctions.clampLong;
@@ -11,17 +11,17 @@ import euhedral.hardware_utils.SystemInfo.CpuInfo;
 import euhedral.hardware_utils.ThreadTools;
 import euhedral.hardware_utils.common.SystemUtilization.CoreSnapshot;
 import euhedral.hardware_utils.common.SystemUtilization.CpuSnapshot;
-import euhedral.io.DRRCacheManager.DownstreamHandle;
-import euhedral.io.SMTBuddy.SMTState;
 import euhedral.io.config.CloneConfig;
-import euhedral.io.config.ExecutionManagerConfig;
+import euhedral.io.config.SchedulingConfig;
+import euhedral.io.control_plane.DRRCacheManager.DownstreamHandle;
+import euhedral.io.control_plane.SMTBuddy.SMTState;
 import euhedral.io.flow_control.BufferedBridge;
 import euhedral.io.flow_control.DirectOutputStream;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.frames.DummyInitFrame;
 import euhedral.io.generics.LaticeSource;
 import euhedral.io.generics.SlotManager;
-import euhedral.io.metrics.ExecutionManagerMetrics;
+import euhedral.io.metrics.ExecutionMetrics;
 import euhedral.io.utils.DrainBuffer;
 import euhedral.io.utils.FlowRecorder;
 import euhedral.io.utils.FlowRecorder.FlowSnapshot;
@@ -42,7 +42,7 @@ import org.slf4j.LoggerFactory;
 
 /// ## The core of Euhedral Core
 ///
-/// `ExecutionManager` is the control loop that sits between ingress and execution. It continuously
+/// `ControlPlaneFragment` is the control loop that sits between ingress and execution. It continuously
 /// tunes concurrency, dispatch rate, and idle behavior based on what the system is actually doing.
 ///
 /// **It coordinates:**
@@ -71,9 +71,9 @@ import org.slf4j.LoggerFactory;
 /// Frames are the unit of execution: small, composable stages that behave like ultra-lightweight
 /// tasks. A pipeline of frames naturally executes in parallel across stages as work flows through.
 ///
-/// **This is the control surface of the system. Everything else is just plumbing.**
+/// **This is the distributed control surface of the system. Everything else is just plumbing.**
 @Getter(AccessLevel.PROTECTED)
-public class ExecutionManager implements SlotManager {
+public class ControlPlaneFragment implements SlotManager {
 
     protected static final long RATE_NS_TO_SEC = 1_000_000_000L;
 
@@ -88,19 +88,19 @@ public class ExecutionManager implements SlotManager {
     static {
         try {
             AVG_LATENCY = MethodHandles.lookup()
-                    .findVarHandle(ExecutionManager.class, "avgLatency", long.class);
+                    .findVarHandle(ControlPlaneFragment.class, "avgLatency", long.class);
             CONCURRENCY = MethodHandles.lookup()
-                    .findVarHandle(ExecutionManager.class, "currentConcurrency", long.class);
+                    .findVarHandle(ControlPlaneFragment.class, "currentConcurrency", long.class);
             DRAIN = MethodHandles.lookup()
-                    .findVarHandle(ExecutionManager.class, "drainMode", boolean.class);
+                    .findVarHandle(ControlPlaneFragment.class, "drainMode", boolean.class);
             INGEST = MethodHandles.lookup()
-                    .findVarHandle(ExecutionManager.class, "ingest", DRRCacheManager.class);
+                    .findVarHandle(ControlPlaneFragment.class, "ingest", DRRCacheManager.class);
             IN_FLIGHT = MethodHandles.lookup()
-                    .findVarHandle(ExecutionManager.class, "inFlight", int.class);
+                    .findVarHandle(ControlPlaneFragment.class, "inFlight", int.class);
             RATE = MethodHandles.lookup()
-                    .findVarHandle(ExecutionManager.class, "currentRate", long.class);
+                    .findVarHandle(ControlPlaneFragment.class, "currentRate", long.class);
             SNAPSHOT = MethodHandles.lookup()
-                    .findVarHandle(ExecutionManager.class, "coreSnapshot", CoreSnapshot.class);
+                    .findVarHandle(ControlPlaneFragment.class, "coreSnapshot", CoreSnapshot.class);
         } catch (Exception e) {
             throw new ExceptionInInitializerError(e);
         }
@@ -110,8 +110,8 @@ public class ExecutionManager implements SlotManager {
     public final int cpuId;
 
     @Getter
-    protected final ExecutionManagerConfig config;
-    protected final ExecutionManagerMetrics metrics;
+    protected final SchedulingConfig config;
+    protected final ExecutionMetrics metrics;
     protected final Logger logger;
     protected final boolean isPCore;
     protected final AtomicBoolean running = new AtomicBoolean(false);
@@ -153,7 +153,7 @@ public class ExecutionManager implements SlotManager {
     protected boolean primed = false;
     private Thread cycleThread;
 
-    public ExecutionManager(@NonNull ExecutionManagerConfig config) {
+    public ControlPlaneFragment(@NonNull SchedulingConfig config) {
         this.config = config;
         this.maxUpdateInterval = Integer.highestOneBit(Math.max(config.maxUpdateInterval(), 2));
 
@@ -163,7 +163,7 @@ public class ExecutionManager implements SlotManager {
 
         if (config.cloneConfig() == null) {
             this.cpuId = -1;
-            this.logger = LoggerFactory.getLogger(ExecutionManager.class);
+            this.logger = LoggerFactory.getLogger(ControlPlaneFragment.class);
             this.executionLatency = null;
             this.state = null;
             this.pinnedExecutor = null;
@@ -180,7 +180,7 @@ public class ExecutionManager implements SlotManager {
             this.handle = null;
         } else {
             String name =
-                    config.cloneConfig().shardName() + "-ExecutionManager-" + config.cloneConfig()
+                    config.cloneConfig().shardName() + "-ControlPlaneFragment-" + config.cloneConfig()
                             .coreId();
             this.logger = LoggerFactory.getLogger(name);
 
@@ -205,7 +205,7 @@ public class ExecutionManager implements SlotManager {
             PinnedThreadExecutor smtExec = null;
             if (cpus.length > 1 && config.enableSMT()) {
                 smtExec = PinnedThreadExecutor.getOrSetIfAbsent(cpus[1],
-                        this.config.cloneConfig().shardName() + "-ExecutionManager-SMT-"
+                        this.config.cloneConfig().shardName() + "-ControlPlaneFragment-SMT-"
                                 + this.config.cloneConfig().coreId(), Thread.MAX_PRIORITY, false);
                 this.buffer = new PartitionedSpscArrayQueue<>(bufferSize);
             } else {
@@ -237,7 +237,7 @@ public class ExecutionManager implements SlotManager {
                 }
             });
 
-            this.metrics = new ExecutionManagerMetrics(config.meterRegistry(), config,
+            this.metrics = new ExecutionMetrics(config.meterRegistry(), config,
                     () -> (int) IN_FLIGHT.getOpaque(this), () -> (long) AVG_LATENCY.getOpaque(this),
                     () -> (long) CONCURRENCY.getOpaque(this), () -> (long) RATE.getOpaque(this),
                     this::getPressure);
@@ -335,7 +335,7 @@ public class ExecutionManager implements SlotManager {
             if (cloneConfig != null) {
                 if (this.pinnedExecutor.isShutdown()) {
                     this.pinnedExecutor.start(
-                            this.config.cloneConfig().shardName() + "-ExecutionManager-"
+                            this.config.cloneConfig().shardName() + "-ControlPlaneFragment-"
                                     + this.config.cloneConfig().coreId(), Thread.MAX_PRIORITY,
                             false);
                 }
@@ -752,8 +752,8 @@ public class ExecutionManager implements SlotManager {
     }
 
     @Override
-    public ExecutionManager clone(CloneConfig cloneConfig) {
-        return new ExecutionManager(this.config.clone(cloneConfig));
+    public ControlPlaneFragment clone(CloneConfig cloneConfig) {
+        return new ControlPlaneFragment(this.config.clone(cloneConfig));
     }
 
     @Override

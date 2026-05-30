@@ -1,7 +1,7 @@
 package euhedral.io.frames;
 
 /// This class is thrown as a cancellation signal. This signal is automatically handled by the
-/// [ExecutionManager][euhedral.io.ExecutionManager] and
+/// [ControlPlaneFragment][euhedral.io.control_plane.ControlPlaneFragment] and
 /// [AbstractExecutor][euhedral.io.generics.AbstractExecutor].
 public class CancelFrame extends RuntimeException {
 

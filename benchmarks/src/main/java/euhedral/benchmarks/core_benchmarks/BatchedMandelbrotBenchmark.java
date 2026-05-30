@@ -7,7 +7,7 @@ import euhedral.benchmarks.frames.MandelbrotPixel;
 import euhedral.benchmarks.pipelines.FractalPipeline;
 import euhedral.hashing.HasherApi;
 import euhedral.io.config.DRRConfig;
-import euhedral.io.config.ExecutionManagerConfig;
+import euhedral.io.config.SchedulingConfig;
 import euhedral.io.control_plane.ControlPlane;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.reactor.common.EuhedralSubscriber;
@@ -217,7 +217,7 @@ public class BatchedMandelbrotBenchmark {
             }
 
             DRRConfig drrConfig = DRRConfig.defaultConfig("mandelbrot", null);
-            ExecutionManagerConfig emConfig = ExecutionManagerConfig.balancedDefault(null,
+            SchedulingConfig emConfig = SchedulingConfig.balancedDefault(null,
                     "mandelbrot");
             FractalPipeline pipeline =
                     new FractalPipeline("MandelbrotBenchmark", drrConfig, emConfig, blackhole);

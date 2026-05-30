@@ -8,7 +8,7 @@ import euhedral.hardware_utils.SystemInfo.CoreInfo;
 import euhedral.hardware_utils.SystemInfo.CpuCacheLayout;
 import euhedral.hashing.HasherApi;
 import euhedral.io.config.DRRConfig;
-import euhedral.io.config.ExecutionManagerConfig;
+import euhedral.io.config.SchedulingConfig;
 import euhedral.io.control_plane.ControlPlane;
 import euhedral.io.ingest.ArrayIngestSink;
 import java.lang.invoke.VarHandle;
@@ -83,7 +83,7 @@ public class EndToEndLatencyBenchmark {
         @Setup(Level.Trial)
         public void setup(Blackhole blackhole) {
             DRRConfig drrConfig = DRRConfig.defaultConfig("EndToEndLatencyBenchmark", null);
-            ExecutionManagerConfig emConfig = ExecutionManagerConfig.balancedDefault(null,
+            SchedulingConfig emConfig = SchedulingConfig.balancedDefault(null,
                     "EndToEndLatencyBenchmark");
 
             BitSet cores = (BitSet) SystemInfo.get_P_CoreSet().clone();
@@ -170,7 +170,7 @@ public class EndToEndLatencyBenchmark {
         @Setup(Level.Trial)
         public void setup(Blackhole blackhole) {
             DRRConfig drrConfig = DRRConfig.defaultConfig("EndToEndLatencyBenchmark", null);
-            ExecutionManagerConfig emConfig = ExecutionManagerConfig.balancedDefault(null,
+            SchedulingConfig emConfig = SchedulingConfig.balancedDefault(null,
                     "EndToEndLatencyBenchmark");
 
             BitSet eCpus = (BitSet) SystemInfo.get_E_CpuSet().clone();

@@ -1,4 +1,4 @@
-package euhedral.io;
+package euhedral.io.control_plane;
 
 import static euhedral.io.utils.MathFunctions.clampDouble;
 import static euhedral.io.utils.MathFunctions.ewma;
