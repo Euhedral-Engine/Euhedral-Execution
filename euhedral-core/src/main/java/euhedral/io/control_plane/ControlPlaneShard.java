@@ -407,7 +407,7 @@ public class ControlPlaneShard implements AutoCloseable {
     }
 
     /// Whether all queues are empty and all in-progress work is completed for all CPUs managed by
-    /// this ControlPlane.
+    /// this ControlPlaneLattice.
     public boolean isDrained() {
         if (!this.started.get()) {
             return true;

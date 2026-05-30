@@ -7,7 +7,7 @@ import euhedral.hashing.HasherApi;
 import euhedral.io.config.ControlPlaneConfig;
 import euhedral.io.config.DRRConfig;
 import euhedral.io.config.SchedulingConfig;
-import euhedral.io.control_plane.ControlPlane;
+import euhedral.io.control_plane.ControlPlaneLattice;
 import euhedral.io.ingest.ArrayIngestSink;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
@@ -57,7 +57,7 @@ public class TrueThroughputBenchmark {
             Runtime.getRuntime().availableProcessors(), true, true);
     private final NoOpFrame[][] frames = new NoOpFrame[32][];
     private final ArrayIngestSink[] sinks = new ArrayIngestSink[32];
-    private ControlPlane controlPlane;
+    private ControlPlaneLattice controlPlane;
 
     @Setup(Level.Trial)
     public void setup(Blackhole blackhole) {
@@ -78,7 +78,7 @@ public class TrueThroughputBenchmark {
         ControlPlaneConfig config = new ControlPlaneConfig("ThroughputComparisonBenchmark", null,
                 null,
                 pipeline, null, null);
-        this.controlPlane = ControlPlane.getOrCreate(config);
+        this.controlPlane = ControlPlaneLattice.getOrCreate(config);
         this.controlPlane.start();
     }
 

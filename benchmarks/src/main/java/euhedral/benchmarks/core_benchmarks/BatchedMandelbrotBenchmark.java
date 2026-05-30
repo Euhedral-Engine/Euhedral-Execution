@@ -9,7 +9,7 @@ import euhedral.hashing.HasherApi;
 import euhedral.io.config.ControlPlaneConfig;
 import euhedral.io.config.DRRConfig;
 import euhedral.io.config.SchedulingConfig;
-import euhedral.io.control_plane.ControlPlane;
+import euhedral.io.control_plane.ControlPlaneLattice;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.reactor.common.EuhedralSubscriber;
 import euhedral.io.utils.MathFunctions;
@@ -199,7 +199,7 @@ public class BatchedMandelbrotBenchmark {
         private final PaddedLongAdder counters =
                 new PaddedLongAdder(Runtime.getRuntime().availableProcessors(), true, true);
 
-        private ControlPlane controlPlane;
+        private ControlPlaneLattice controlPlane;
         private ArrayFrame[] frames;
         private EuhedralSubscriber subscriber;
 
@@ -220,7 +220,7 @@ public class BatchedMandelbrotBenchmark {
                     new FractalPipeline(drrConfig, schedConfig, blackhole);
             ControlPlaneConfig config = new ControlPlaneConfig("MandelbrotBenchmark", null, null,
                     pipeline, null, null);
-            this.controlPlane = ControlPlane.getOrCreate(config);
+            this.controlPlane = ControlPlaneLattice.getOrCreate(config);
             this.controlPlane.start();
 
             MandelbrotPixel[] pixels = new MandelbrotPixel[CANVAS];
