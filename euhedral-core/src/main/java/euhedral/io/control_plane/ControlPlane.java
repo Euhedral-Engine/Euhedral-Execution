@@ -12,12 +12,12 @@ import euhedral.hardware_utils.TopologyMapper.EffectiveSocketTopology;
 import euhedral.hardware_utils.TopologyMapper.EffectiveSystemTopology;
 import euhedral.hardware_utils.common.SystemUtilization.HardwareUtilization;
 import euhedral.hardware_utils.common.SystemUtilization.SocketSnapshot;
-import euhedral.io.flow_control.ScaffoldingEdge;
-import euhedral.io.flow_control.ScaffoldingNode;
+import euhedral.io.flow_control.LatticeEdge;
+import euhedral.io.flow_control.LatticeVertex;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.CloneableObject;
 import euhedral.io.generics.IngestSink;
-import euhedral.io.generics.ScaffoldingSource;
+import euhedral.io.generics.LaticeSource;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.util.Arrays;
@@ -150,11 +150,11 @@ public class ControlPlane implements AutoCloseable {
     protected final AtomicBoolean ready = new AtomicBoolean(false);
     protected final AtomicBoolean primed = new AtomicBoolean(false);
     protected final AtomicBoolean rebalancing = new AtomicBoolean(false);
-    protected final AtomicReference<ScaffoldingNode> ingestController;
+    protected final AtomicReference<LatticeVertex> ingestController;
 
     protected final ControlPlaneShard baseShard;
     protected final ControlPlaneShard[] shards;
-    protected final ScaffoldingEdge[] shardHandles;
+    protected final LatticeEdge[] shardHandles;
 
     protected final BitSet allowedCores;
     protected final AtomicReference<int[]> activeShardIds = new AtomicReference<>(new int[0]);
@@ -183,7 +183,7 @@ public class ControlPlane implements AutoCloseable {
         this.effectiveTopology = this.topology.getEffectiveTopology();
         this.ingestController = new AtomicReference<>();
         this.shards = new ControlPlaneShard[SystemInfo.getMaxSocketId() + 1];
-        this.shardHandles = new ScaffoldingEdge[SystemInfo.getMaxSocketId() + 1];
+        this.shardHandles = new LatticeEdge[SystemInfo.getMaxSocketId() + 1];
 
         this.allowedCores = allowedCpus;
         this.controlPlaneExecutor =
@@ -214,8 +214,8 @@ public class ControlPlane implements AutoCloseable {
         ingest(sink.getDelegate());
     }
 
-    /// Takes a [ScaffoldingSource] and adds it as a global input source.
-    public void ingest(@NonNull ScaffoldingSource stream) {
+    /// Takes a [LaticeSource] and adds it as a global input source.
+    public void ingest(@NonNull LaticeSource stream) {
         Objects.requireNonNull(stream);
         if (this.closed.getOpaque()) {
             throw new RuntimeException(
@@ -228,7 +228,7 @@ public class ControlPlane implements AutoCloseable {
             LockSupport.parkNanos(1_000);
         }
 
-        ScaffoldingNode controller = this.ingestController.get();
+        LatticeVertex controller = this.ingestController.get();
         controller.ingest(stream);
     }
 
@@ -245,7 +245,7 @@ public class ControlPlane implements AutoCloseable {
             this.logger.info("Created ControlPlaneShard on socket: {}", i);
         }
 
-        ScaffoldingNode controller = new ScaffoldingNode(this.name + "-GlobalDistributor",
+        LatticeVertex controller = new LatticeVertex(this.name + "-GlobalDistributor",
                 this.effectiveTopology.socketTopologies().size(), this::route, false);
         this.ingestController.set(controller);
     }
@@ -324,13 +324,13 @@ public class ControlPlane implements AutoCloseable {
         this.effectiveTopology = this.topology.getEffectiveTopology();
         this.currentGlobalVersion = this.topology.getGlobalVersion();
 
-        ScaffoldingNode controller = this.ingestController.get();
+        LatticeVertex controller = this.ingestController.get();
 
         BitSet newShards = this.effectiveTopology.effectiveSockets();
         for (int socket = newShards.nextSetBit(0); socket >= 0;
                 socket = newShards.nextSetBit(socket + 1)) {
             if (this.shardHandles[socket] == null) {
-                this.shardHandles[socket] = new ScaffoldingEdge(controller.getDrainFlag());
+                this.shardHandles[socket] = new LatticeEdge(controller.getDrainFlag());
             }
         }
         remapIngestController();
@@ -412,7 +412,7 @@ public class ControlPlane implements AutoCloseable {
             weightedShardMap[idx++] = SystemInfo.getCpuInfo(i).socket();
         }
 
-        ScaffoldingNode controller = this.ingestController.get();
+        LatticeVertex controller = this.ingestController.get();
         long deadline = System.nanoTime() + Duration.ofSeconds(1).toNanos();
         while (!controller.setDownstreamMapping(effectiveSockets, this.shardHandles)) {
             LockSupport.parkNanos(5_000);
@@ -468,7 +468,7 @@ public class ControlPlane implements AutoCloseable {
         if (!this.closed.compareAndSet(false, true)) {
             return;
         }
-        ScaffoldingNode controller = this.ingestController.getAndSet(null);
+        LatticeVertex controller = this.ingestController.getAndSet(null);
         controller.setDrain(true);
 
         this.resourceMonitor.close();
@@ -507,7 +507,7 @@ public class ControlPlane implements AutoCloseable {
     /// Whether all queues are empty and all in-progress work is completed for all CPUs managed by
     /// this ControlPlane.
     public boolean isDrained() {
-        ScaffoldingNode controller = this.ingestController.get();
+        LatticeVertex controller = this.ingestController.get();
         if (controller != null && !controller.isDrained()) {
             return false;
         }

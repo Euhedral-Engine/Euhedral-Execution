@@ -1,8 +1,8 @@
 package euhedral.io.flow_control;
 
-import euhedral.io.generics.RecursiveScaffolding;
-import euhedral.io.generics.ScaffoldingSource;
-import euhedral.io.generics.ScaffoldingTerminal;
+import euhedral.io.generics.LaticeSource;
+import euhedral.io.generics.LatticeInterceptor;
+import euhedral.io.generics.LatticeReceiver;
 import euhedral.io.utils.DrainBuffer;
 import euhedral.queues.PartitionedUnboundedMpscArrayQueue;
 import java.lang.invoke.MethodHandles;
@@ -14,7 +14,7 @@ import org.jctools.maps.NonBlockingHashMapLong;
 /// ## The upstream aggregation and scheduling layer
 ///
 /// `UpstreamQueue` is a thread-local coordination point for upstream sources feeding a
-/// [ScaffoldingEdge] graph.
+/// [LatticeEdge] graph.
 ///
 /// Each thread owns a single queue instance which aggregates upstream handles and participates in
 /// global demand distribution.
@@ -172,17 +172,17 @@ public class UpstreamQueue {
     }
 
     /// A wrapper for an upstream source.
-    public static abstract class UpstreamHandle implements RecursiveScaffolding {
+    public static abstract class UpstreamHandle implements LatticeInterceptor {
 
         public abstract void pull(DrainBuffer buffer, long demand);
 
         public abstract boolean isComplete();
 
-        public void addUpstream(ScaffoldingSource upstream) {
+        public void addUpstream(LaticeSource upstream) {
             upstream.complete();
         }
 
-        public void addDownstream(ScaffoldingTerminal terminal) {
+        public void addDownstream(LatticeReceiver terminal) {
             terminal.onError(new IllegalStateException("Not supported"));
         }
     }

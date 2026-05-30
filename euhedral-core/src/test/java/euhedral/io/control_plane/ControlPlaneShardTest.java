@@ -13,7 +13,7 @@ import euhedral.hardware_utils.TopologyMapper.EffectiveSocketTopology;
 import euhedral.hardware_utils.common.SystemUtilization.CoreSnapshot;
 import euhedral.hardware_utils.common.SystemUtilization.SocketSnapshot;
 import euhedral.io.config.CloneConfig;
-import euhedral.io.flow_control.ScaffoldingEdge;
+import euhedral.io.flow_control.LatticeEdge;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.CloneableObject;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -47,7 +47,7 @@ class ControlPlaneShardTest {
     @Test
     public void testInitialization() {
         TestClone clone = mock(TestClone.class);
-        ScaffoldingEdge upstream = Mockito.spy(new ScaffoldingEdge(new AtomicBoolean()));
+        LatticeEdge upstream = Mockito.spy(new LatticeEdge(new AtomicBoolean()));
         AbstractFrame frame = mock(AbstractFrame.class);
 
         doReturn(clone).when(clone).clone(any(CloneConfig.class));
@@ -64,7 +64,7 @@ class ControlPlaneShardTest {
         shard.start(snapshot, topology, upstream);
 
         verify(clone, times(configs.length)).clone(any(CloneConfig.class));
-        verify(clone, times(configs.length)).input(any(ScaffoldingEdge.class));
+        verify(clone, times(configs.length)).input(any(LatticeEdge.class));
         verify(clone, times(configs.length)).setDrainMode(true);
         verify(clone, times(configs.length)).update(any(CoreSnapshot.class));
         verify(clone, times(configs.length)).start();
@@ -79,7 +79,7 @@ class ControlPlaneShardTest {
 
     @Test
     public void testRebalanceOnTopologyChange() throws Exception {
-        ScaffoldingEdge upstream = Mockito.spy(new ScaffoldingEdge(new AtomicBoolean()));
+        LatticeEdge upstream = Mockito.spy(new LatticeEdge(new AtomicBoolean()));
         TestClone baseClone = mock(TestClone.class);
 
         TestClone[] clones = new TestClone[2];

@@ -19,7 +19,7 @@ import euhedral.io.flow_control.BufferedBridge;
 import euhedral.io.flow_control.DirectOutputStream;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.frames.DummyInitFrame;
-import euhedral.io.generics.ScaffoldingSource;
+import euhedral.io.generics.LaticeSource;
 import euhedral.io.generics.SlotManager;
 import euhedral.io.metrics.ExecutionManagerMetrics;
 import euhedral.io.utils.DrainBuffer;
@@ -249,7 +249,7 @@ public class ExecutionManager implements SlotManager {
     }
 
     @Override
-    public void input(ScaffoldingSource stream) {
+    public void input(LaticeSource stream) {
         if (stream instanceof DRRCacheManager iStream && INGEST.compareAndSet(this, null,
                 iStream)) {
             this.buddy.setIngest(iStream);
@@ -259,7 +259,7 @@ public class ExecutionManager implements SlotManager {
     }
 
     @Override
-    public ScaffoldingSource output() {
+    public LaticeSource output() {
         return this.outputStream;
     }
 

@@ -15,8 +15,8 @@ import euhedral.io.config.CloneConfig;
 import euhedral.io.flow_control.BufferedBridge;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.CloneableObject;
-import euhedral.io.generics.ScaffoldingSource;
-import euhedral.io.generics.ScaffoldingTerminal;
+import euhedral.io.generics.LaticeSource;
+import euhedral.io.generics.LatticeReceiver;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -136,7 +136,7 @@ class DefaultExecutorTest {
         assertTrue(calls.get() >= 3);
     }
 
-    static class TestSource implements ScaffoldingSource {
+    static class TestSource implements LaticeSource {
 
         private final AbstractFrame frame;
 
@@ -145,7 +145,7 @@ class DefaultExecutorTest {
         }
 
         @Override
-        public void addDownstream(ScaffoldingTerminal terminal) {
+        public void addDownstream(LatticeReceiver terminal) {
             terminal.addUpstream(this);
             terminal.onNext(frame);
         }

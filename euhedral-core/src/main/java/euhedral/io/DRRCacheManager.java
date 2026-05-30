@@ -13,14 +13,14 @@ import euhedral.hardware_utils.common.SystemUtilization.CoreSnapshot;
 import euhedral.hashing.HasherApi;
 import euhedral.io.config.CloneConfig;
 import euhedral.io.config.DRRConfig;
-import euhedral.io.flow_control.ScaffoldingEdge;
-import euhedral.io.flow_control.ScaffoldingNode;
+import euhedral.io.flow_control.LatticeEdge;
+import euhedral.io.flow_control.LatticeVertex;
 import euhedral.io.flow_control.UpstreamQueue;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.frames.DummyInitFrame;
 import euhedral.io.generics.CacheManager;
-import euhedral.io.generics.ScaffoldingSource;
-import euhedral.io.generics.ScaffoldingTerminal;
+import euhedral.io.generics.LaticeSource;
+import euhedral.io.generics.LatticeReceiver;
 import euhedral.io.metrics.DRRMetrics;
 import euhedral.io.utils.DrainBuffer;
 import euhedral.io.utils.FlowRecorder;
@@ -55,7 +55,7 @@ import org.jspecify.annotations.NonNull;
 /// variance, preventing hot partitions from starving others.
 ///
 /// **This layer is the primary memory-aware rate limiter in Euhedral Core.**
-public class DRRCacheManager extends ScaffoldingNode implements CacheManager {
+public class DRRCacheManager extends LatticeVertex implements CacheManager {
 
     protected static final VarHandle PARTITION_LOCK =
             MethodHandles.arrayElementVarHandle(boolean[].class);
@@ -188,10 +188,10 @@ public class DRRCacheManager extends ScaffoldingNode implements CacheManager {
 
             BitSet mappings = new BitSet(partitions);
             mappings.set(0, partitions);
-            ScaffoldingEdge[] queueHandles = new ScaffoldingEdge[partitions];
+            LatticeEdge[] queueHandles = new LatticeEdge[partitions];
 
             for (int i = 0; i < partitions; i++) {
-                queueHandles[i] = new ScaffoldingEdge(super.drain);
+                queueHandles[i] = new LatticeEdge(super.drain);
                 queueHandles[i].addDownstream(new PartitionSubscriber(i));
             }
             setDrain(true);
@@ -493,13 +493,13 @@ public class DRRCacheManager extends ScaffoldingNode implements CacheManager {
     }
 
     @Override
-    public boolean setDownstreamMapping(BitSet active, ScaffoldingEdge[] edges) {
+    public boolean setDownstreamMapping(BitSet active, LatticeEdge[] edges) {
         return false;
     }
 
     @Override
-    public void input(ScaffoldingSource stream) {
-        if (stream instanceof ScaffoldingEdge dh) {
+    public void input(LaticeSource stream) {
+        if (stream instanceof LatticeEdge dh) {
             addUpstream(dh);
         } else {
             stream.addDownstream(this);
@@ -580,7 +580,7 @@ public class DRRCacheManager extends ScaffoldingNode implements CacheManager {
         }
     }
 
-    protected class PartitionSubscriber implements ScaffoldingTerminal {
+    protected class PartitionSubscriber implements LatticeReceiver {
 
         private final int idx;
         private final double smoothingFactor;
@@ -622,7 +622,7 @@ public class DRRCacheManager extends ScaffoldingNode implements CacheManager {
         }
 
         @Override
-        public void addUpstream(ScaffoldingSource subscription) {
+        public void addUpstream(LaticeSource subscription) {
 
         }
 
