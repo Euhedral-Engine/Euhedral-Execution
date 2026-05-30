@@ -40,7 +40,7 @@ import org.jspecify.annotations.NonNull;
 
 /// ## Partitioned deficit round-robin (DRR) cache layer
 ///
-/// `ControlplaneCache` is a partitioned queueing system that sits between ingestion and execution.
+/// `ControlPlaneCache` is a partitioned queueing system that sits between ingestion and execution.
 /// It implements a weighted DRR-like model to balance fairness, memory pressure, and throughput.
 ///
 /// #### Each CPU-facing partition maintains independent quotas
@@ -54,7 +54,7 @@ import org.jspecify.annotations.NonNull;
 /// variance, preventing hot partitions from starving others.
 ///
 /// **This layer is the primary memory-aware rate limiter in Euhedral Core.**
-public class ControlplaneCache extends LatticeVertex implements CacheManager {
+public class ControlPlaneCache extends LatticeVertex implements CacheManager {
 
     protected static final VarHandle PARTITION_LOCK =
             MethodHandles.arrayElementVarHandle(boolean[].class);
@@ -63,17 +63,17 @@ public class ControlplaneCache extends LatticeVertex implements CacheManager {
     protected static final VarHandle TOTAL_COUNT;
 
     protected static final ThreadLocal<UpstreamQueue> UPSTREAM = new ThreadLocal<>();
-    protected static final NonBlockingHashMapLong<ControlplaneCache> CACHES =
+    protected static final NonBlockingHashMapLong<ControlPlaneCache> CACHES =
             new NonBlockingHashMapLong<>();
 
     static {
         try {
             PRIMED = MethodHandles.lookup()
-                    .findVarHandle(ControlplaneCache.class, "primed", boolean.class);
+                    .findVarHandle(ControlPlaneCache.class, "primed", boolean.class);
             TOTAL_BYTES = MethodHandles.lookup()
-                    .findVarHandle(ControlplaneCache.class, "totalQueuedSizeBytes", long.class);
+                    .findVarHandle(ControlPlaneCache.class, "totalQueuedSizeBytes", long.class);
             TOTAL_COUNT = MethodHandles.lookup()
-                    .findVarHandle(ControlplaneCache.class, "totalCount", long.class);
+                    .findVarHandle(ControlPlaneCache.class, "totalCount", long.class);
         } catch (Exception e) {
             throw new ExceptionInInitializerError(e);
         }
@@ -81,8 +81,8 @@ public class ControlplaneCache extends LatticeVertex implements CacheManager {
 
     public static String getName(CacheConfig config) {
         return config.cloneConfig() != null ? config.cloneConfig().shardName()
-                                              + "-ControlplaneCache-"
-                                              + config.cloneConfig().coreId() : "ControlplaneCache";
+                                              + "-ControlPlaneCache-"
+                                              + config.cloneConfig().coreId() : "ControlPlaneCache";
     }
 
     protected static int getPartitionCount(CacheConfig config) {
@@ -140,7 +140,7 @@ public class ControlplaneCache extends LatticeVertex implements CacheManager {
     protected long totalCount = 0L;
     protected long totalQueuedSizeBytes = 0L;
 
-    public ControlplaneCache(@NonNull CacheConfig config) {
+    public ControlPlaneCache(@NonNull CacheConfig config) {
         super(getName(config), getPartitionCount(config), RoutingFunction.DEFAULT,
                 true);
         this.config = config;
@@ -509,7 +509,7 @@ public class ControlplaneCache extends LatticeVertex implements CacheManager {
     }
 
     @Override
-    public ControlplaneCache output() {
+    public ControlPlaneCache output() {
         return this;
     }
 
@@ -529,7 +529,7 @@ public class ControlplaneCache extends LatticeVertex implements CacheManager {
 
         long hash = HasherApi.getHash(layout.maskL2());
         return CACHES.computeIfAbsent(hash,
-                (k) -> new ControlplaneCache(this.config.clone(cloneConfig)));
+                (k) -> new ControlPlaneCache(this.config.clone(cloneConfig)));
     }
 
     @Override
@@ -603,21 +603,21 @@ public class ControlplaneCache extends LatticeVertex implements CacheManager {
 
         @Override
         public void onNext(AbstractFrame frame) {
-            while (!ControlplaneCache.this.queueRing.offer(this.idx, frame)) {
+            while (!ControlPlaneCache.this.queueRing.offer(this.idx, frame)) {
                 Thread.onSpinWait();
             }
 
             long size = frame.getSizeBytes();
             long adjustedSize = size <= 0 ? 256 : size;
-            ControlplaneCache.this.avgFrameSize.getAndAccumulate(this.idx, adjustedSize,
+            ControlPlaneCache.this.avgFrameSize.getAndAccumulate(this.idx, adjustedSize,
                     this::ewma);
 
-            TOTAL_BYTES.getAndAdd(ControlplaneCache.this, adjustedSize);
-            long count = (long) TOTAL_COUNT.getAndAdd(ControlplaneCache.this, 1) + 1;
+            TOTAL_BYTES.getAndAdd(ControlPlaneCache.this, adjustedSize);
+            long count = (long) TOTAL_COUNT.getAndAdd(ControlPlaneCache.this, 1) + 1;
             if ((count & 63) == 0) {
                 long now = System.nanoTime();
-                ControlplaneCache.this.fillRecorder.getPlain().record(now, 64, true);
-                ControlplaneCache.this.fillBytesRecorder.getPlain().record(now, adjustedSize, true);
+                ControlPlaneCache.this.fillRecorder.getPlain().record(now, 64, true);
+                ControlPlaneCache.this.fillBytesRecorder.getPlain().record(now, adjustedSize, true);
             }
         }
 

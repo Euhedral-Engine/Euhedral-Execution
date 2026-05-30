@@ -14,6 +14,11 @@
     * [ControlPlaneShard](#controlplaneshard)
         * [Per-socket execution and coordination layer](#per-socket-execution-and-coordination-layer)
         * [Responsibilities](#responsibilities-1)
+    * [ControlPlaneCache](#controlplanecache)
+        * [Role Within Euhedral](#role-within-euhedral)
+        * [Partitioned Scheduling](#partitioned-scheduling)
+        * [Adaptive Weighting](#adaptive-weighting)
+        * [Memory-Aware Rate Limiting](#memory-aware-rate-limiting)
     * [ControlPlaneFragment](#controlplanefragment)
         * [Core Execution Control Loop](#core-execution-control-loop)
         * [Responsibilities](#responsibilities-2)
@@ -21,16 +26,16 @@
         * [Design goals](#design-goals)
         * [Scheduling behavior](#scheduling-behavior)
     * [AbstractFrame](#abstractframe)
-    * [Base unit of execution](#base-unit-of-execution)
+        * [Base unit of execution](#base-unit-of-execution)
         * [Identity and routing](#identity-and-routing)
             * [Ordering and parallelism](#ordering-and-parallelism)
         * [Lifecycle](#lifecycle)
         * [Error handling](#error-handling)
     * [LatticeEdge](#latticeedge)
+        * [Role in the system](#role-in-the-system)
         * [Structural data flow backbone](#structural-data-flow-backbone)
         * [Behavior](#behavior-1)
-        * [Role in the system](#role-in-the-system)
-    * [LatticeVertex (LatticeEdge extension)](#latticevertex-latticeedge-extension)
+    * [LatticeVertex](#latticevertex-latticeedge-extension)
         * [Structural multi-branch routing implementation](#structural-multi-branch-routing-implementation)
         * [Routing model](#routing-model)
         * [Behavior](#behavior-2)
@@ -118,6 +123,91 @@ It mirrors the responsibilities and behaviors of the lattice, but is scoped to i
 
 ---
 
+## [ControlPlaneCache](../euhedral-core/src/main/java/euhedral/io/control_plane/ControlPlaneCache.java)
+
+The Partitioned Deficit Round-Robin (DRR) Cache Layer
+
+`ControlPlaneCache` is the memory-aware scheduling layer that sits between ingestion and execution.
+It is responsible for buffering work, enforcing fairness, and regulating the rate at which execution
+fragments receive frames.
+
+Internally, the cache is composed of multiple queue partitions. Each partition maintains independent
+scheduling state and is drained using a weighted deficit round-robin (DRR) model. This allows the
+system to distribute execution opportunities fairly while remaining efficient under bursty or highly
+variable workloads.
+
+The cache does not run on its own dedicated thread. It is accessed manually by the
+ControlPlaneFragments.
+
+### Role Within Euhedral
+
+ControlPlaneCache serves as the primary coordination point between ingestion and execution.
+
+Its responsibilities include:
+
+- Buffering incoming frames
+- Fairly distributing execution opportunities
+- Preventing partition starvation
+- Regulating memory consumption
+- Smoothing bursty traffic
+- Providing execution fragments with work-ready buffers
+
+This layer is the primary memory-aware rate limiter within Euhedral Core and is a major contributor
+to the system's ability to maintain high throughput while preserving predictable latency under load.
+
+### Partitioned Scheduling
+
+Each partition tracks its own quota measured in bytes rather than frame count.
+
+```java
+int drainCount = queueRing.drain(partition, buffer, quota);
+stats.quotaBytes -= drainBuffer.drainedBytes;
+```
+
+Using byte-based quotas prevents partitions containing large frames from monopolizing execution time
+while still allowing small frames to flow efficiently.
+
+ControlPlaneFragments continuously walk partitions, consuming available quota and refilling it as
+needed. Work is therefore drained incrementally across many partitions rather than completely
+emptying one partition before moving to the next.
+
+### Adaptive Weighting
+
+The cache continuously adjusts partition weights based on observed workload characteristics.
+
+For each partition, ControlPlaneCache tracks:
+
+- Average frame size
+- Frame size variance
+- Recent enqueue behavior
+- Historical drain behavior
+
+These measurements are used to dynamically adjust the partition's scheduling weight. Stable traffic
+adapts quickly, while highly variable traffic is smoothed to avoid oscillation and quota thrashing.
+
+This adaptive weighting allows hot partitions to receive additional service while preventing them
+from starving less active partitions.
+
+### Memory-Aware Rate Limiting
+
+Unlike traditional rate limiters that operate on request counts or time intervals, ControlPlaneCache
+helps regulate execution using memory pressure and observed workload characteristics.
+
+The cache tracks:
+
+- Total queued frame count
+- Total queued bytes
+- Per-partition occupancy
+- Per-partition drain rates
+
+Execution fragments use these measurements to determine how aggressively they should request
+additional work from upstream layers.
+
+As a result, the cache naturally absorbs bursts while letting the fragments apply backpressure when
+memory pressure exceeds healthy operating thresholds.
+
+---
+
 ## [ControlPlaneFragment](../euhedral-core/src/main/java/euhedral/io/control_plane/ControlPlaneFragment.java)
 
 ### Core Execution Control Loop
@@ -165,7 +255,7 @@ are processed in a streaming fashion through the execution pipeline.
 
 ## [AbstractFrame](../euhedral-core/src/main/java/euhedral/io/frames/AbstractFrame.java)
 
-## Base unit of execution
+### Base unit of execution
 
 `AbstractFrame` represents the fundamental unit of work in Euhedral Core. It encapsulates execution
 state, routing metadata, and lifecycle management.
@@ -227,6 +317,11 @@ This is handled by the execution layer as a structured cancellation signal.
 
 ## [LatticeEdge](../euhedral-core/src/main/java/euhedral/io/flow_control/LatticeEdge.java)
 
+### Role in the system
+
+LatticeEdge forms the structural layer between ingestion and execution. It defines how
+components are connected without dictating execution semantics.
+
 ### Structural data flow backbone
 
 LatticeEdge is responsible for building and maintaining the execution graph. It recursively
@@ -241,10 +336,6 @@ as they are connected.
 - Demand signals flow upward toward upstream producers
 - Work flows downward through the structure
 
-### Role in the system
-
-LatticeEdge forms the structural layer between ingestion and execution. It defines how
-components are connected without dictating execution semantics.
 
 ---
 

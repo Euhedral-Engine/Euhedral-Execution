@@ -24,7 +24,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 @SuppressWarnings("resource")
-class ControlplaneCacheTest {
+class ControlPlaneCacheTest {
     private CloneConfig cloneConfig() {
         CloneConfig clone = mock(CloneConfig.class);
 
@@ -47,28 +47,28 @@ class ControlplaneCacheTest {
         );
     }
 
-    private ControlplaneCache manager() {
-        return new ControlplaneCache(config());
+    private ControlPlaneCache manager() {
+        return new ControlPlaneCache(config());
     }
 
     @AfterEach
     void cleanup() {
-        ControlplaneCache.CACHES.clear();
-        ControlplaneCache.UPSTREAM.remove();
+        ControlPlaneCache.CACHES.clear();
+        ControlPlaneCache.UPSTREAM.remove();
         UpstreamQueue.UP_QUEUE.remove();
     }
 
     // ----- Construction -----
     @Test
     void shouldConstructManager() {
-        ControlplaneCache manager = manager();
+        ControlPlaneCache manager = manager();
 
         assertNotNull(manager);
     }
 
     @Test
     void shouldInitializeFields() {
-        ControlplaneCache manager = manager();
+        ControlPlaneCache manager = manager();
 
         assertNotNull(manager.handles);
         assertNotNull(manager.getFillRecorder());
@@ -82,7 +82,7 @@ class ControlplaneCacheTest {
 
     @Test
     void shouldPrimeQueues() {
-        ControlplaneCache manager = manager();
+        ControlPlaneCache manager = manager();
 
         manager.firstTouch();
 
@@ -91,7 +91,7 @@ class ControlplaneCacheTest {
 
     @Test
     void shouldAllowRepeatedFirstTouch() {
-        ControlplaneCache manager = manager();
+        ControlPlaneCache manager = manager();
 
         assertDoesNotThrow(() -> {
             manager.firstTouch();
@@ -103,10 +103,10 @@ class ControlplaneCacheTest {
 
     @Test
     void shouldAddHandle() {
-        ControlplaneCache manager = manager();
+        ControlPlaneCache manager = manager();
 
-        ControlplaneCache.DownstreamHandle handle =
-                new ControlplaneCache.DownstreamHandle(1, () -> 0.0);
+        ControlPlaneCache.DownstreamHandle handle =
+                new ControlPlaneCache.DownstreamHandle(1, () -> 0.0);
 
         manager.addHandle(handle);
 
@@ -116,10 +116,10 @@ class ControlplaneCacheTest {
 
     @Test
     void shouldRemoveHandle() {
-        ControlplaneCache manager = manager();
+        ControlPlaneCache manager = manager();
 
-        ControlplaneCache.DownstreamHandle handle =
-                new ControlplaneCache.DownstreamHandle(1, () -> 0.0);
+        ControlPlaneCache.DownstreamHandle handle =
+                new ControlPlaneCache.DownstreamHandle(1, () -> 0.0);
 
         manager.addHandle(handle);
 
@@ -133,35 +133,35 @@ class ControlplaneCacheTest {
 
     @Test
     void shouldBeInitiallyEmpty() {
-        ControlplaneCache manager = manager();
+        ControlPlaneCache manager = manager();
 
         assertTrue(manager.isEmpty());
     }
 
     @Test
     void shouldBeInitiallyDrained() {
-        ControlplaneCache manager = manager();
+        ControlPlaneCache manager = manager();
 
         assertTrue(manager.isDrained());
     }
 
     @Test
     void shouldBeDrainedAfterFirstTouch() {
-        ControlplaneCache manager = manager();
+        ControlPlaneCache manager = manager();
         manager.firstTouch();
         assertTrue(manager.isDrained());
     }
 
     @Test
     void shouldReturnZeroTotalCountInitially() {
-        ControlplaneCache manager = manager();
+        ControlPlaneCache manager = manager();
 
         assertEquals(0, manager.getTotalCount());
     }
 
     @Test
     void shouldSetDrainMode() {
-        ControlplaneCache manager = manager();
+        ControlPlaneCache manager = manager();
 
         manager.setDrainMode(true);
 
@@ -172,7 +172,7 @@ class ControlplaneCacheTest {
 
     @Test
     void shouldAcquireAndReleasePartitionLock() {
-        ControlplaneCache manager = manager();
+        ControlPlaneCache manager = manager();
 
         boolean acquired = manager.acquireLock(0);
 
@@ -185,7 +185,7 @@ class ControlplaneCacheTest {
 
     @Test
     void shouldFailAcquireWhenAlreadyLocked() {
-        ControlplaneCache manager = manager();
+        ControlPlaneCache manager = manager();
 
         assertTrue(manager.acquireLock(0));
         assertFalse(manager.acquireLock(0));
@@ -195,7 +195,7 @@ class ControlplaneCacheTest {
 
     @Test
     void shouldCalculateMaxQueuedBytes() {
-        ControlplaneCache manager = manager();
+        ControlPlaneCache manager = manager();
 
         long max = manager.getMaxQueuedBytes();
 
@@ -204,7 +204,7 @@ class ControlplaneCacheTest {
 
     @Test
     void shouldCalculateProportionalMaxQueuedBytes() {
-        ControlplaneCache manager = manager();
+        ControlPlaneCache manager = manager();
 
         long max = manager.getProportionalMaxQueuedBytes();
 
@@ -213,17 +213,17 @@ class ControlplaneCacheTest {
 
     @Test
     void shouldIgnoreNullSnapshot() {
-        ControlplaneCache manager = manager();
+        ControlPlaneCache manager = manager();
 
         assertDoesNotThrow(() -> manager.update(null));
     }
 
     @Test
     void shouldUpdateCapFactorFromSnapshot() throws Exception {
-        ControlplaneCache manager = manager();
+        ControlPlaneCache manager = manager();
 
-        ControlplaneCache.DownstreamHandle handle =
-                new ControlplaneCache.DownstreamHandle(0, () -> 0.5);
+        ControlPlaneCache.DownstreamHandle handle =
+                new ControlPlaneCache.DownstreamHandle(0, () -> 0.5);
 
         manager.addHandle(handle);
 
@@ -242,7 +242,7 @@ class ControlplaneCacheTest {
 
     @Test
     void shouldCloneManager() {
-        ControlplaneCache manager = manager();
+        ControlPlaneCache manager = manager();
 
         CacheManager cloned = manager.clone(cloneConfig());
 
@@ -251,7 +251,7 @@ class ControlplaneCacheTest {
 
     @Test
     void shouldReuseCacheForSameHash() {
-        ControlplaneCache manager = manager();
+        ControlPlaneCache manager = manager();
 
         CacheManager one = manager.clone(cloneConfig());
         CacheManager two = manager.clone(cloneConfig());
@@ -265,8 +265,8 @@ class ControlplaneCacheTest {
     void shouldCreateDownstreamHandle() throws Exception {
         Callable<Double> pressure = () -> 0.25;
 
-        ControlplaneCache.DownstreamHandle handle =
-                new ControlplaneCache.DownstreamHandle(2, pressure);
+        ControlPlaneCache.DownstreamHandle handle =
+                new ControlPlaneCache.DownstreamHandle(2, pressure);
 
         assertEquals(2, handle.cpu);
         assertEquals(0.25, handle.downstreamPressure.call());
@@ -274,8 +274,8 @@ class ControlplaneCacheTest {
 
     @Test
     void shouldRecordDrainMetrics() {
-        ControlplaneCache.DownstreamHandle handle =
-                new ControlplaneCache.DownstreamHandle(0, () -> 0.0);
+        ControlPlaneCache.DownstreamHandle handle =
+                new ControlPlaneCache.DownstreamHandle(0, () -> 0.0);
 
         PartitionedQueue<AbstractFrame> queue =
                 new PartitionedArrayQueue<>(64);
@@ -291,8 +291,8 @@ class ControlplaneCacheTest {
 
     @Test
     void shouldResetPartitionStats() {
-        ControlplaneCache.PartitionStats stats =
-                new ControlplaneCache.PartitionStats();
+        ControlPlaneCache.PartitionStats stats =
+                new ControlPlaneCache.PartitionStats();
 
         stats.weight = 999;
         stats.quotaBytes = 555;
@@ -307,7 +307,7 @@ class ControlplaneCacheTest {
 
     @Test
     void shouldCloseSafely() {
-        ControlplaneCache manager = manager();
+        ControlPlaneCache manager = manager();
 
         assertDoesNotThrow(manager::close);
     }
