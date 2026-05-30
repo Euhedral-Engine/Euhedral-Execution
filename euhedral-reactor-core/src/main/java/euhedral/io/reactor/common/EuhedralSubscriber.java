@@ -1,8 +1,8 @@
 package euhedral.io.reactor.common;
 
 import euhedral.io.frames.AbstractFrame;
-import euhedral.io.generics.ScaffoldingSource;
-import euhedral.io.generics.ScaffoldingTerminal;
+import euhedral.io.generics.LaticeSource;
+import euhedral.io.generics.LatticeReceiver;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import org.reactivestreams.Subscriber;
@@ -21,7 +21,7 @@ import org.reactivestreams.Subscription;
 /// // Or
 /// controlPlane.ingest(subscriber);
 /// ```
-public final class EuhedralSubscriber implements Subscriber<AbstractFrame>, ScaffoldingSource {
+public final class EuhedralSubscriber implements Subscriber<AbstractFrame>, LaticeSource {
     private static final VarHandle COMPLETE;
     private static final VarHandle SUBSCRIBER;
     private static final VarHandle TERMINAL;
@@ -30,7 +30,7 @@ public final class EuhedralSubscriber implements Subscriber<AbstractFrame>, Scaf
         try {
             COMPLETE = MethodHandles.lookup().findVarHandle(EuhedralSubscriber.class, "complete", boolean.class);
             SUBSCRIBER = MethodHandles.lookup().findVarHandle(EuhedralSubscriber.class, "subscription", Subscription.class);
-            TERMINAL = MethodHandles.lookup().findVarHandle(EuhedralSubscriber.class, "terminal", ScaffoldingTerminal.class);
+            TERMINAL = MethodHandles.lookup().findVarHandle(EuhedralSubscriber.class, "terminal", LatticeReceiver.class);
         } catch (Exception e) {
             throw new ExceptionInInitializerError(e);
         }
@@ -38,7 +38,7 @@ public final class EuhedralSubscriber implements Subscriber<AbstractFrame>, Scaf
 
     private boolean complete;
     private Subscription subscription;
-    private ScaffoldingTerminal terminal;
+    private LatticeReceiver terminal;
 
     public boolean hasSubscription() {
         return SUBSCRIBER.getOpaque(this) != null;
@@ -53,7 +53,7 @@ public final class EuhedralSubscriber implements Subscriber<AbstractFrame>, Scaf
 
     @Override
     public void onNext(AbstractFrame frame) {
-        ScaffoldingTerminal terminal = (ScaffoldingTerminal) TERMINAL.getOpaque(this);
+        LatticeReceiver terminal = (LatticeReceiver) TERMINAL.getOpaque(this);
         if(terminal != null) {
             terminal.onNext(frame);
         }
@@ -61,7 +61,7 @@ public final class EuhedralSubscriber implements Subscriber<AbstractFrame>, Scaf
 
     @Override
     public void onError(Throwable t) {
-        ScaffoldingTerminal terminal = (ScaffoldingTerminal) TERMINAL.getOpaque(this);
+        LatticeReceiver terminal = (LatticeReceiver) TERMINAL.getOpaque(this);
         if(terminal != null) {
             terminal.onError(t);
         }
@@ -71,7 +71,7 @@ public final class EuhedralSubscriber implements Subscriber<AbstractFrame>, Scaf
     public void onComplete() {
         if(COMPLETE.compareAndSet(this, false, true)) {
             SUBSCRIBER.set(this, null);
-            ScaffoldingTerminal terminal = (ScaffoldingTerminal) TERMINAL.getOpaque(this);
+            LatticeReceiver terminal = (LatticeReceiver) TERMINAL.getOpaque(this);
             if(terminal != null) {
                 terminal.onComplete();
             }
@@ -79,7 +79,7 @@ public final class EuhedralSubscriber implements Subscriber<AbstractFrame>, Scaf
     }
 
     @Override
-    public void addDownstream(ScaffoldingTerminal downstream) {
+    public void addDownstream(LatticeReceiver downstream) {
         if(!TERMINAL.compareAndSet(this, null, downstream)) {
             downstream.onError(new IllegalStateException("Already has a downstream."));
         }

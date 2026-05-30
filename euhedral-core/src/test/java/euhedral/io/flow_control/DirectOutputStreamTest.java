@@ -22,14 +22,14 @@ import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import test_utils.TestFrame;
-import test_utils.TestTerminal;
+import test_utils.TestReceiver;
 
 class DirectOutputStreamTest {
 
     private PartitionedQueue<AbstractFrame> queue;
     private Consumer<AbstractFrame> applyToEach;
     private DirectOutputStream stream;
-    private TestTerminal terminal;
+    private TestReceiver terminal;
 
     @BeforeEach
     @SuppressWarnings("unchecked")
@@ -39,7 +39,7 @@ class DirectOutputStreamTest {
 
         stream = new DirectOutputStream(queue, applyToEach);
 
-        terminal = new TestTerminal();
+        terminal = new TestReceiver();
     }
 
     @Test
@@ -52,7 +52,7 @@ class DirectOutputStreamTest {
 
     @Test
     void shouldRejectSecondSubscriber() {
-        TestTerminal second = new TestTerminal();
+        TestReceiver second = new TestReceiver();
 
         stream.addDownstream(terminal);
         stream.addDownstream(second);

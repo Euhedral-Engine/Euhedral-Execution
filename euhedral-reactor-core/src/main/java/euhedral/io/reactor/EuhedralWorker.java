@@ -1,9 +1,9 @@
 package euhedral.io.reactor;
 
 import euhedral.hashing.HasherApi;
-import euhedral.io.generics.IngestSink;
-import euhedral.io.generics.ScaffoldingSource;
-import euhedral.io.generics.ScaffoldingTerminal;
+import euhedral.io.generics.LaticeSource;
+import euhedral.io.generics.LatticeReceiver;
+import euhedral.io.ingest.IngestSink;
 import euhedral.io.reactor.common.TaskFrame;
 import euhedral.queues.PartitionedUnboundedMpscArrayQueue;
 import java.lang.invoke.MethodHandles;
@@ -57,7 +57,7 @@ public class EuhedralWorker extends IngestSink implements Worker {
     }
 
     @Override
-    public ScaffoldingSource getDelegate() {
+    public LaticeSource getDelegate() {
         return this.delegate;
     }
 
@@ -98,7 +98,7 @@ public class EuhedralWorker extends IngestSink implements Worker {
         }
 
         @Override
-        public void hookOnRequest(ScaffoldingTerminal terminal, long demand) {
+        public void hookOnRequest(LatticeReceiver terminal, long demand) {
             if (complete) {
                 return;
             }
@@ -110,9 +110,9 @@ public class EuhedralWorker extends IngestSink implements Worker {
         }
 
         private void drain(TaskFrame frame) {
-            ScaffoldingTerminal terminal = this.terminal;
+            LatticeReceiver terminal = this.terminal;
             if (terminal == null) {
-                terminal = (ScaffoldingTerminal) TERMINAL.getOpaque(this);
+                terminal = (LatticeReceiver) TERMINAL.getOpaque(this);
             }
 
             if (terminal == null) {
@@ -122,7 +122,7 @@ public class EuhedralWorker extends IngestSink implements Worker {
         }
 
         @Override
-        public void addDownstream(ScaffoldingTerminal downstream) {
+        public void addDownstream(LatticeReceiver downstream) {
             if (!TERMINAL.compareAndSet(this, null, terminal)) {
                 terminal.onError(new IllegalStateException("Already Subscribed"));
             }
@@ -136,7 +136,7 @@ public class EuhedralWorker extends IngestSink implements Worker {
         @Override
         public void complete() {
             if (COMPLETE.compareAndSet(this, false, true)) {
-                var t = (ScaffoldingTerminal) TERMINAL.getAndSet(this, null);
+                var t = (LatticeReceiver) TERMINAL.getAndSet(this, null);
                 this.demand.lazySet(0);
                 if (t != null) {
                     t.onComplete();

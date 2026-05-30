@@ -20,19 +20,19 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import test_utils.TestFrame;
-import test_utils.TestTerminal;
+import test_utils.TestReceiver;
 
-class ScaffoldingEdgeTest {
+class LatticeEdgeTest {
 
     private AtomicBoolean drain;
-    private ScaffoldingEdge edge;
+    private LatticeEdge edge;
 
     @BeforeEach
     void setup() {
         UpstreamQueue.UP_QUEUE.remove();
 
         drain = new AtomicBoolean(false);
-        edge = new ScaffoldingEdge(drain);
+        edge = new LatticeEdge(drain);
     }
 
     @AfterEach
@@ -63,8 +63,8 @@ class ScaffoldingEdgeTest {
 
     @Test
     void shouldCalculateLayerWidthAcrossSiblings() {
-        ScaffoldingEdge second = new ScaffoldingEdge(new AtomicBoolean());
-        ScaffoldingEdge third = new ScaffoldingEdge(new AtomicBoolean());
+        LatticeEdge second = new LatticeEdge(new AtomicBoolean());
+        LatticeEdge third = new LatticeEdge(new AtomicBoolean());
 
         edge.setSibling(second);
         second.setSibling(third);
@@ -77,7 +77,7 @@ class ScaffoldingEdgeTest {
 
     @Test
     void shouldForwardOnNextToDownstream() {
-        TestTerminal terminal = new TestTerminal();
+        TestReceiver terminal = new TestReceiver();
 
         edge.addDownstream(terminal);
 
@@ -91,7 +91,7 @@ class ScaffoldingEdgeTest {
 
     @Test
     void shouldForwardErrorsToDownstream() {
-        TestTerminal terminal = new TestTerminal();
+        TestReceiver terminal = new TestReceiver();
 
         edge.addDownstream(terminal);
 
@@ -104,7 +104,7 @@ class ScaffoldingEdgeTest {
 
     @Test
     void shouldCloseAndCompleteDownstream() {
-        TestTerminal terminal = new TestTerminal();
+        TestReceiver terminal = new TestReceiver();
 
         edge.addDownstream(terminal);
 
@@ -116,7 +116,7 @@ class ScaffoldingEdgeTest {
 
     @Test
     void shouldOnlyCloseOnce() {
-        TestTerminal terminal = new TestTerminal();
+        TestReceiver terminal = new TestReceiver();
 
         edge.addDownstream(terminal);
 
@@ -153,27 +153,27 @@ class ScaffoldingEdgeTest {
 
     @Test
     void shouldSetParent() {
-        ScaffoldingEdge parent = new ScaffoldingEdge(new AtomicBoolean());
+        LatticeEdge parent = new LatticeEdge(new AtomicBoolean());
 
         edge.setParent(parent);
 
-        assertEquals(parent, ScaffoldingEdge.PARENT.getOpaque(edge));
+        assertEquals(parent, LatticeEdge.PARENT.getOpaque(edge));
     }
 
     @Test
     void shouldClearParentWhenNullPassed() {
-        ScaffoldingEdge parent = new ScaffoldingEdge(new AtomicBoolean());
+        LatticeEdge parent = new LatticeEdge(new AtomicBoolean());
 
         edge.setParent(parent);
 
         edge.setParent(null);
 
-        assertNull(ScaffoldingEdge.PARENT.getOpaque(edge));
+        assertNull(LatticeEdge.PARENT.getOpaque(edge));
     }
 
     @Test
     void shouldDelegateRequestToParent() {
-        ScaffoldingEdge parent = spy(new ScaffoldingEdge(new AtomicBoolean()));
+        LatticeEdge parent = spy(new LatticeEdge(new AtomicBoolean()));
 
         edge.setParent(parent);
 
@@ -184,7 +184,7 @@ class ScaffoldingEdgeTest {
 
     @Test
     void shouldDelegatePullToParent() {
-        ScaffoldingEdge parent = spy(new ScaffoldingEdge(new AtomicBoolean()));
+        LatticeEdge parent = spy(new LatticeEdge(new AtomicBoolean()));
 
         edge.setParent(parent);
 
@@ -197,7 +197,7 @@ class ScaffoldingEdgeTest {
 
     @Test
     void shouldAddTerminalDownstream() {
-        TestTerminal terminal = new TestTerminal();
+        TestReceiver terminal = new TestReceiver();
 
         edge.addDownstream(terminal);
 
@@ -206,8 +206,8 @@ class ScaffoldingEdgeTest {
 
     @Test
     void shouldRejectSecondTerminalDownstream() {
-        TestTerminal first = new TestTerminal();
-        TestTerminal second = new TestTerminal();
+        TestReceiver first = new TestReceiver();
+        TestReceiver second = new TestReceiver();
 
         edge.addDownstream(first);
         edge.addDownstream(second);
@@ -222,7 +222,7 @@ class ScaffoldingEdgeTest {
 
     @Test
     void shouldChainRecursiveDownstreamEdges() {
-        ScaffoldingEdge downstream = spy(new ScaffoldingEdge(new AtomicBoolean()));
+        LatticeEdge downstream = spy(new LatticeEdge(new AtomicBoolean()));
 
         edge.addDownstream(downstream);
 
@@ -231,8 +231,8 @@ class ScaffoldingEdgeTest {
 
     @Test
     void shouldForwardDownstreamToExistingRecursiveEdge() {
-        ScaffoldingEdge existing = spy(new ScaffoldingEdge(new AtomicBoolean()));
-        ScaffoldingEdge next = mock(ScaffoldingEdge.class);
+        LatticeEdge existing = spy(new LatticeEdge(new AtomicBoolean()));
+        LatticeEdge next = mock(LatticeEdge.class);
 
         edge.addDownstream(existing);
         edge.addDownstream(next);
@@ -274,7 +274,7 @@ class ScaffoldingEdgeTest {
 
         edge.register();
 
-        ScaffoldingEdge parent = new ScaffoldingEdge(new AtomicBoolean());
+        LatticeEdge parent = new LatticeEdge(new AtomicBoolean());
 
         edge.setParent(parent);
 
@@ -300,7 +300,7 @@ class ScaffoldingEdgeTest {
 
     @Test
     void shouldDelegateThreadRemovalToParent() {
-        ScaffoldingEdge parent = spy(new ScaffoldingEdge(new AtomicBoolean()));
+        LatticeEdge parent = spy(new LatticeEdge(new AtomicBoolean()));
 
         edge.setParent(parent);
 

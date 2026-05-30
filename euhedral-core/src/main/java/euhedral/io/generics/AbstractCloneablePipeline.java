@@ -1,10 +1,9 @@
 package euhedral.io.generics;
 
-import java.util.concurrent.Future;
-
 import euhedral.hardware_utils.PinnedThreadExecutor;
 import euhedral.hardware_utils.common.SystemUtilization.CoreSnapshot;
 import euhedral.io.config.CloneConfig;
+import java.util.concurrent.Future;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -71,12 +70,12 @@ public abstract class AbstractCloneablePipeline implements CloneableObject {
     }
 
     @Override
-    public void input(ScaffoldingSource stream) {
+    public void input(LaticeSource stream) {
         this.cacheManager.input(stream);
     }
 
     @Override
-    public ScaffoldingSource output() {
+    public LaticeSource output() {
         return this.executor.output();
     }
 

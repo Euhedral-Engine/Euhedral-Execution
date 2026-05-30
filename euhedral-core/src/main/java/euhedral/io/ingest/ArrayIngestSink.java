@@ -2,8 +2,8 @@ package euhedral.io.ingest;
 
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.IngestSink;
-import euhedral.io.generics.ScaffoldingSource;
-import euhedral.io.generics.ScaffoldingTerminal;
+import euhedral.io.generics.LaticeSource;
+import euhedral.io.generics.LatticeReceiver;
 import java.lang.invoke.VarHandle;
 
 /// Wraps an array to allow it to be ingested by the
@@ -18,7 +18,7 @@ public class ArrayIngestSink extends IngestSink {
     }
 
     /// Returns the delegate the ControlPlane will use to ingest the array.
-    public ScaffoldingSource getDelegate() {
+    public LaticeSource getDelegate() {
         return this.delegate;
     }
 
@@ -43,7 +43,7 @@ public class ArrayIngestSink extends IngestSink {
         }
 
         @Override
-        public void hookOnRequest(ScaffoldingTerminal terminal, long demand) {
+        public void hookOnRequest(LatticeReceiver terminal, long demand) {
             if(start >= array.length) {
                 complete();
                 return;

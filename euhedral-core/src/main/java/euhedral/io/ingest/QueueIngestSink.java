@@ -2,8 +2,8 @@ package euhedral.io.ingest;
 
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.IngestSink;
-import euhedral.io.generics.ScaffoldingSource;
-import euhedral.io.generics.ScaffoldingTerminal;
+import euhedral.io.generics.LaticeSource;
+import euhedral.io.generics.LatticeReceiver;
 import euhedral.queues.PartitionedUnboundedMpmcArrayQueue;
 import euhedral.queues.common.ConcurrentPartitionedQueue;
 
@@ -23,7 +23,7 @@ public class QueueIngestSink extends IngestSink {
     }
 
     @Override
-    public ScaffoldingSource getDelegate() {
+    public LaticeSource getDelegate() {
         return null;
     }
 
@@ -70,7 +70,7 @@ public class QueueIngestSink extends IngestSink {
         }
 
         @Override
-        public void hookOnRequest(ScaffoldingTerminal terminal, long demand) {
+        public void hookOnRequest(LatticeReceiver terminal, long demand) {
             long count = this.queue.drain(terminal::onNext, demand);
             if (count > 0) {
                 addAndGetDemand(-count);

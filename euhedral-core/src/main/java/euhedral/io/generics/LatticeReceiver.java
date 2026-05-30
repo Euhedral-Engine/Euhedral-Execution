@@ -2,8 +2,8 @@ package euhedral.io.generics;
 
 import euhedral.io.frames.AbstractFrame;
 
-public interface ScaffoldingTerminal {
-    void addUpstream(ScaffoldingSource upstream);
+public interface LatticeReceiver {
+    void addUpstream(LaticeSource upstream);
 
     void onNext(AbstractFrame frame);
 

@@ -7,20 +7,20 @@ import java.lang.invoke.VarHandle;
 public abstract class IngestSink {
 
     /// Used by the [ControlPlane][euhedral.io.control_plane.ControlPlane] to connect to this sink.
-    public abstract ScaffoldingSource getDelegate();
+    public abstract LaticeSource getDelegate();
 
     /// Marks the sink as complete and disconnects it from the
     /// [ControlPlane][euhedral.io.control_plane.ControlPlane].
     public abstract void complete();
 
-    protected static abstract class Delegate implements ScaffoldingSource {
+    protected static abstract class Delegate implements LaticeSource {
 
         protected static final VarHandle TERMINAL;
 
         static {
             try {
                 TERMINAL = MethodHandles.lookup()
-                        .findVarHandle(Delegate.class, "terminal", ScaffoldingTerminal.class);
+                        .findVarHandle(Delegate.class, "terminal", LatticeReceiver.class);
             } catch (Throwable t) {
                 throw new ExceptionInInitializerError(t);
             }
@@ -34,18 +34,18 @@ public abstract class IngestSink {
         }
 
         protected final PaddedAtomicLong demand = new PaddedAtomicLong(0);
-        protected ScaffoldingTerminal terminal;
+        protected LatticeReceiver terminal;
 
         @Override
-        public void addDownstream(ScaffoldingTerminal terminal) {
+        public void addDownstream(LatticeReceiver terminal) {
             if (!TERMINAL.compareAndSet(this, null, terminal)) {
                 terminal.onError(new IllegalStateException("Already Subscribed"));
             }
             terminal.addUpstream(this);
         }
 
-        protected ScaffoldingTerminal getTerminal() {
-            return (ScaffoldingTerminal) TERMINAL.getOpaque(this);
+        protected LatticeReceiver getTerminal() {
+            return (LatticeReceiver) TERMINAL.getOpaque(this);
         }
 
         protected long addAndGetDemand(long demand) {
@@ -66,11 +66,11 @@ public abstract class IngestSink {
             hookOnRequest(terminal, addAndGetDemand(demand));
         }
 
-        public abstract void hookOnRequest(ScaffoldingTerminal terminal, long demand);
+        public abstract void hookOnRequest(LatticeReceiver terminal, long demand);
 
         @Override
         public void complete() {
-            var t = (ScaffoldingTerminal) TERMINAL.getAndSet(this, null);
+            var t = (LatticeReceiver) TERMINAL.getAndSet(this, null);
             this.demand.lazySet(0);
             if (t != null) {
                 t.onComplete();

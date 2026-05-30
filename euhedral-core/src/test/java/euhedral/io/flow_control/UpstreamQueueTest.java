@@ -9,7 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import euhedral.io.frames.AbstractFrame;
-import euhedral.io.generics.ScaffoldingSource;
+import euhedral.io.generics.LaticeSource;
 import euhedral.io.utils.DrainBuffer;
 import euhedral.queues.common.PartitionedQueue;
 import java.util.concurrent.atomic.AtomicLong;
@@ -17,7 +17,7 @@ import org.jctools.maps.NonBlockingHashMapLong;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import test_utils.TestTerminal;
+import test_utils.TestReceiver;
 
 @SuppressWarnings("unchecked")
 class UpstreamQueueTest {
@@ -238,7 +238,7 @@ class UpstreamQueueTest {
         UpstreamQueue.UpstreamHandle handle =
                 new TestUpstreamHandle();
 
-        ScaffoldingSource source = mock(ScaffoldingSource.class);
+        LaticeSource source = mock(LaticeSource.class);
 
         handle.addUpstream(source);
 
@@ -250,7 +250,7 @@ class UpstreamQueueTest {
         UpstreamQueue.UpstreamHandle handle =
                 new TestUpstreamHandle();
 
-        TestTerminal terminal = new TestTerminal();
+        TestReceiver terminal = new TestReceiver();
 
         handle.addDownstream(terminal);
 
