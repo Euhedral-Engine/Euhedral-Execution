@@ -17,18 +17,20 @@ public abstract class AbstractCloneablePipeline implements CloneableObject {
 
     protected final Logger logger;
     protected final CloneConfig config;
-    protected final String name;
 
     protected final CacheManager cacheManager;
     protected final SlotManager slotManager;
     protected final PipelineExecutor executor;
 
-    public AbstractCloneablePipeline(String name, @Nullable CloneConfig cloneConfig,
+    public AbstractCloneablePipeline(@Nullable CloneConfig cloneConfig,
             @NonNull CacheManager cacheManager, @NonNull SlotManager slotManager,
             @NonNull PipelineExecutor executor) {
-        this.logger = LoggerFactory.getLogger(name);
+        if(cloneConfig != null) {
+            this.logger = LoggerFactory.getLogger(cloneConfig.shardName() + "-pipeline-" + cloneConfig.coreId());
+        } else {
+            this.logger = LoggerFactory.getLogger(this.getClass().getSimpleName());
+        }
         this.config = cloneConfig;
-        this.name = name;
         this.cacheManager = cacheManager;
         this.slotManager = slotManager;
         this.executor = executor;

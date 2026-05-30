@@ -23,46 +23,46 @@ public class DefaultCloneablePipeline extends AbstractCloneablePipeline {
         return new ControlPlaneFragment(dsmConfig);
     }
 
-    public DefaultCloneablePipeline(String name) {
-        this(name, DRRConfig.defaultConfig(null, null),
+    public DefaultCloneablePipeline() {
+        this(DRRConfig.defaultConfig(null, null),
                 SchedulingConfig.balancedDefault(null, null), new DefaultExecutor(null));
     }
 
-    public DefaultCloneablePipeline(String name, String metricPrefix,
+    public DefaultCloneablePipeline(String metricPrefix,
             MeterRegistry meterRegistry) {
-        this(name, DRRConfig.defaultConfig(metricPrefix, meterRegistry),
+        this(DRRConfig.defaultConfig(metricPrefix, meterRegistry),
                 SchedulingConfig.balancedDefault(meterRegistry, metricPrefix),
                 new DefaultExecutor(null));
     }
 
-    public DefaultCloneablePipeline(String name, String metricPrefix,
+    public DefaultCloneablePipeline(String metricPrefix,
             MeterRegistry meterRegistry, PipelineExecutor executor) {
-        this(name,
+        this(
                 DRRConfig.defaultConfig(metricPrefix, meterRegistry),
                 SchedulingConfig.balancedDefault(meterRegistry, metricPrefix),
                 executor);
     }
 
-    public DefaultCloneablePipeline(String name, DRRConfig drrConfig,
-            SchedulingConfig dsmConfig) {
-        super(name, null, getDrrScheduler(drrConfig), getSlotManager(dsmConfig),
+    public DefaultCloneablePipeline(DRRConfig drrConfig,
+            SchedulingConfig schedulingConfig) {
+        super(null, getDrrScheduler(drrConfig), getSlotManager(schedulingConfig),
                 new DefaultExecutor(null));
     }
 
-    public DefaultCloneablePipeline(String name, DRRConfig drrConfig,
-            SchedulingConfig dsmConfig, PipelineExecutor executor) {
-        super(name, null, getDrrScheduler(drrConfig), getSlotManager(dsmConfig), executor);
+    public DefaultCloneablePipeline(DRRConfig drrConfig,
+            SchedulingConfig schedulingConfig, PipelineExecutor executor) {
+        super(null, getDrrScheduler(drrConfig), getSlotManager(schedulingConfig), executor);
     }
 
-    private DefaultCloneablePipeline(String name, CloneConfig config, CacheManager scheduler,
+    private DefaultCloneablePipeline(CloneConfig config, CacheManager cacheManager,
             SlotManager slotManager, PipelineExecutor executor) {
-        super(name, config, scheduler, slotManager, executor);
+        super(config, cacheManager, slotManager, executor);
     }
 
     @Override
     public final DefaultCloneablePipeline clone(CloneConfig cloneConfig,
             PinnedThreadExecutor executor) {
-        return new DefaultCloneablePipeline(super.name, cloneConfig,
+        return new DefaultCloneablePipeline(cloneConfig,
                 super.cacheManager.clone(cloneConfig, executor),
                 super.slotManager.clone(cloneConfig, executor),
                 super.executor.clone(cloneConfig, executor));
@@ -72,8 +72,7 @@ public class DefaultCloneablePipeline extends AbstractCloneablePipeline {
     public final AbstractCloneablePipeline hookOnClone(CloneConfig cloneConfig) {
         CacheManager cManager = super.cacheManager.clone(cloneConfig);
         SlotManager sManager = super.slotManager.clone(cloneConfig);
-        return new DefaultCloneablePipeline(super.name, cloneConfig,
-                cManager, sManager,
+        return new DefaultCloneablePipeline(cloneConfig, cManager, sManager,
                 super.executor.clone(cloneConfig, sManager.getPinnedExecutor()));
     }
 }
