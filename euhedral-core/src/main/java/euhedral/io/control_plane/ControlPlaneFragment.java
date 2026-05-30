@@ -13,7 +13,7 @@ import euhedral.hardware_utils.common.SystemUtilization.CoreSnapshot;
 import euhedral.hardware_utils.common.SystemUtilization.CpuSnapshot;
 import euhedral.io.config.CloneConfig;
 import euhedral.io.config.SchedulingConfig;
-import euhedral.io.control_plane.DRRCacheManager.DownstreamHandle;
+import euhedral.io.control_plane.ControlplaneCache.DownstreamHandle;
 import euhedral.io.control_plane.SMTBuddy.SMTState;
 import euhedral.io.flow_control.BufferedBridge;
 import euhedral.io.flow_control.DirectOutputStream;
@@ -94,7 +94,7 @@ public class ControlPlaneFragment implements SlotManager {
             DRAIN = MethodHandles.lookup()
                     .findVarHandle(ControlPlaneFragment.class, "drainMode", boolean.class);
             INGEST = MethodHandles.lookup()
-                    .findVarHandle(ControlPlaneFragment.class, "ingest", DRRCacheManager.class);
+                    .findVarHandle(ControlPlaneFragment.class, "ingest", ControlplaneCache.class);
             IN_FLIGHT = MethodHandles.lookup()
                     .findVarHandle(ControlPlaneFragment.class, "inFlight", int.class);
             RATE = MethodHandles.lookup()
@@ -139,7 +139,7 @@ public class ControlPlaneFragment implements SlotManager {
     protected boolean drainMode = false;
     protected CoreSnapshot coreSnapshot = null;
 
-    protected DRRCacheManager ingest = null;
+    protected ControlplaneCache ingest = null;
 
     protected long avgLatency;
     protected long currentConcurrency;
@@ -250,7 +250,7 @@ public class ControlPlaneFragment implements SlotManager {
 
     @Override
     public void input(LaticeSource stream) {
-        if (stream instanceof DRRCacheManager iStream && INGEST.compareAndSet(this, null,
+        if (stream instanceof ControlplaneCache iStream && INGEST.compareAndSet(this, null,
                 iStream)) {
             this.buddy.setIngest(iStream);
             INGEST.setRelease(this, iStream);
@@ -266,7 +266,7 @@ public class ControlPlaneFragment implements SlotManager {
     @Override
     public void close() {
         if (this.running.compareAndSet(true, false)) {
-            DRRCacheManager ingest = (DRRCacheManager) INGEST.getAcquire(this);
+            ControlplaneCache ingest = (ControlplaneCache) INGEST.getAcquire(this);
             if (ingest != null) {
                 ingest.removeThread(this.cycleThread);
                 ingest.removeHandle(this.cpuId);
@@ -359,7 +359,7 @@ public class ControlPlaneFragment implements SlotManager {
                     }
 
                     while (this.ingest == null && !Thread.currentThread().isInterrupted()) {
-                        this.ingest = (DRRCacheManager) INGEST.getOpaque(this);
+                        this.ingest = (ControlplaneCache) INGEST.getOpaque(this);
                         this.buddy.setIngest(ingest);
                         LockSupport.parkNanos(2_000L);
                     }
@@ -688,7 +688,7 @@ public class ControlPlaneFragment implements SlotManager {
                     break;
                 }
 
-                DRRCacheManager ingest = (DRRCacheManager) INGEST.getOpaque(this);
+                ControlplaneCache ingest = (ControlplaneCache) INGEST.getOpaque(this);
                 if (!this.state.smtMode) {
                     if (this.upstreamCount != ingest.getUpstreamCount()) {
                         break;

@@ -1,11 +1,11 @@
 package euhedral.io.impl;
 
 import euhedral.hardware_utils.PinnedThreadExecutor;
+import euhedral.io.config.CacheConfig;
 import euhedral.io.config.CloneConfig;
-import euhedral.io.config.DRRConfig;
 import euhedral.io.config.SchedulingConfig;
 import euhedral.io.control_plane.ControlPlaneFragment;
-import euhedral.io.control_plane.DRRCacheManager;
+import euhedral.io.control_plane.ControlplaneCache;
 import euhedral.io.generics.AbstractCloneablePipeline;
 import euhedral.io.generics.CacheManager;
 import euhedral.io.generics.PipelineExecutor;
@@ -15,22 +15,22 @@ import io.micrometer.core.instrument.MeterRegistry;
 /// The minimal implementation of an [AbstractCloneablePipeline]
 public class DefaultCloneablePipeline extends AbstractCloneablePipeline {
 
-    private static DRRCacheManager getDrrScheduler(DRRConfig drrConfig) {
-        return new DRRCacheManager(drrConfig);
+    private static ControlplaneCache getCache(CacheConfig cacheConfig) {
+        return new ControlplaneCache(cacheConfig);
     }
 
-    private static ControlPlaneFragment getSlotManager(SchedulingConfig dsmConfig) {
+    private static ControlPlaneFragment getFragment(SchedulingConfig dsmConfig) {
         return new ControlPlaneFragment(dsmConfig);
     }
 
     public DefaultCloneablePipeline() {
-        this(DRRConfig.defaultConfig(null, null),
+        this(CacheConfig.defaultConfig(null, null),
                 SchedulingConfig.balancedDefault(null, null), new DefaultExecutor(null));
     }
 
     public DefaultCloneablePipeline(String metricPrefix,
             MeterRegistry meterRegistry) {
-        this(DRRConfig.defaultConfig(metricPrefix, meterRegistry),
+        this(CacheConfig.defaultConfig(metricPrefix, meterRegistry),
                 SchedulingConfig.balancedDefault(meterRegistry, metricPrefix),
                 new DefaultExecutor(null));
     }
@@ -38,20 +38,20 @@ public class DefaultCloneablePipeline extends AbstractCloneablePipeline {
     public DefaultCloneablePipeline(String metricPrefix,
             MeterRegistry meterRegistry, PipelineExecutor executor) {
         this(
-                DRRConfig.defaultConfig(metricPrefix, meterRegistry),
+                CacheConfig.defaultConfig(metricPrefix, meterRegistry),
                 SchedulingConfig.balancedDefault(meterRegistry, metricPrefix),
                 executor);
     }
 
-    public DefaultCloneablePipeline(DRRConfig drrConfig,
+    public DefaultCloneablePipeline(CacheConfig cacheConfig,
             SchedulingConfig schedulingConfig) {
-        super(null, getDrrScheduler(drrConfig), getSlotManager(schedulingConfig),
+        super(null, getCache(cacheConfig), getFragment(schedulingConfig),
                 new DefaultExecutor(null));
     }
 
-    public DefaultCloneablePipeline(DRRConfig drrConfig,
+    public DefaultCloneablePipeline(CacheConfig cacheConfig,
             SchedulingConfig schedulingConfig, PipelineExecutor executor) {
-        super(null, getDrrScheduler(drrConfig), getSlotManager(schedulingConfig), executor);
+        super(null, getCache(cacheConfig), getFragment(schedulingConfig), executor);
     }
 
     private DefaultCloneablePipeline(CloneConfig config, CacheManager cacheManager,

@@ -11,8 +11,8 @@ import static org.mockito.Mockito.when;
 
 import euhedral.hardware_utils.common.SystemUtilization.CoreSnapshot;
 import euhedral.hardware_utils.common.SystemUtilization.CpuSnapshot;
+import euhedral.io.config.CacheConfig;
 import euhedral.io.config.CloneConfig;
-import euhedral.io.config.DRRConfig;
 import euhedral.io.flow_control.UpstreamQueue;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.CacheManager;
@@ -24,7 +24,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 @SuppressWarnings("resource")
-class DRRCacheManagerTest {
+class ControlplaneCacheTest {
     private CloneConfig cloneConfig() {
         CloneConfig clone = mock(CloneConfig.class);
 
@@ -35,41 +35,40 @@ class DRRCacheManagerTest {
         return clone;
     }
 
-    private DRRConfig config() {
-        return new DRRConfig(
+    private CacheConfig config() {
+        return new CacheConfig(
                 cloneConfig(),
                 0.7,
                 1,
                 4,
                 64,
-                2.0,
                 null,
                 null
         );
     }
 
-    private DRRCacheManager manager() {
-        return new DRRCacheManager(config());
+    private ControlplaneCache manager() {
+        return new ControlplaneCache(config());
     }
 
     @AfterEach
     void cleanup() {
-        DRRCacheManager.CACHES.clear();
-        DRRCacheManager.UPSTREAM.remove();
+        ControlplaneCache.CACHES.clear();
+        ControlplaneCache.UPSTREAM.remove();
         UpstreamQueue.UP_QUEUE.remove();
     }
 
     // ----- Construction -----
     @Test
     void shouldConstructManager() {
-        DRRCacheManager manager = manager();
+        ControlplaneCache manager = manager();
 
         assertNotNull(manager);
     }
 
     @Test
     void shouldInitializeFields() {
-        DRRCacheManager manager = manager();
+        ControlplaneCache manager = manager();
 
         assertNotNull(manager.handles);
         assertNotNull(manager.getFillRecorder());
@@ -83,7 +82,7 @@ class DRRCacheManagerTest {
 
     @Test
     void shouldPrimeQueues() {
-        DRRCacheManager manager = manager();
+        ControlplaneCache manager = manager();
 
         manager.firstTouch();
 
@@ -92,7 +91,7 @@ class DRRCacheManagerTest {
 
     @Test
     void shouldAllowRepeatedFirstTouch() {
-        DRRCacheManager manager = manager();
+        ControlplaneCache manager = manager();
 
         assertDoesNotThrow(() -> {
             manager.firstTouch();
@@ -104,10 +103,10 @@ class DRRCacheManagerTest {
 
     @Test
     void shouldAddHandle() {
-        DRRCacheManager manager = manager();
+        ControlplaneCache manager = manager();
 
-        DRRCacheManager.DownstreamHandle handle =
-                new DRRCacheManager.DownstreamHandle(1, () -> 0.0);
+        ControlplaneCache.DownstreamHandle handle =
+                new ControlplaneCache.DownstreamHandle(1, () -> 0.0);
 
         manager.addHandle(handle);
 
@@ -117,10 +116,10 @@ class DRRCacheManagerTest {
 
     @Test
     void shouldRemoveHandle() {
-        DRRCacheManager manager = manager();
+        ControlplaneCache manager = manager();
 
-        DRRCacheManager.DownstreamHandle handle =
-                new DRRCacheManager.DownstreamHandle(1, () -> 0.0);
+        ControlplaneCache.DownstreamHandle handle =
+                new ControlplaneCache.DownstreamHandle(1, () -> 0.0);
 
         manager.addHandle(handle);
 
@@ -134,35 +133,35 @@ class DRRCacheManagerTest {
 
     @Test
     void shouldBeInitiallyEmpty() {
-        DRRCacheManager manager = manager();
+        ControlplaneCache manager = manager();
 
         assertTrue(manager.isEmpty());
     }
 
     @Test
     void shouldBeInitiallyDrained() {
-        DRRCacheManager manager = manager();
+        ControlplaneCache manager = manager();
 
         assertTrue(manager.isDrained());
     }
 
     @Test
     void shouldBeDrainedAfterFirstTouch() {
-        DRRCacheManager manager = manager();
+        ControlplaneCache manager = manager();
         manager.firstTouch();
         assertTrue(manager.isDrained());
     }
 
     @Test
     void shouldReturnZeroTotalCountInitially() {
-        DRRCacheManager manager = manager();
+        ControlplaneCache manager = manager();
 
         assertEquals(0, manager.getTotalCount());
     }
 
     @Test
     void shouldSetDrainMode() {
-        DRRCacheManager manager = manager();
+        ControlplaneCache manager = manager();
 
         manager.setDrainMode(true);
 
@@ -173,7 +172,7 @@ class DRRCacheManagerTest {
 
     @Test
     void shouldAcquireAndReleasePartitionLock() {
-        DRRCacheManager manager = manager();
+        ControlplaneCache manager = manager();
 
         boolean acquired = manager.acquireLock(0);
 
@@ -186,7 +185,7 @@ class DRRCacheManagerTest {
 
     @Test
     void shouldFailAcquireWhenAlreadyLocked() {
-        DRRCacheManager manager = manager();
+        ControlplaneCache manager = manager();
 
         assertTrue(manager.acquireLock(0));
         assertFalse(manager.acquireLock(0));
@@ -196,7 +195,7 @@ class DRRCacheManagerTest {
 
     @Test
     void shouldCalculateMaxQueuedBytes() {
-        DRRCacheManager manager = manager();
+        ControlplaneCache manager = manager();
 
         long max = manager.getMaxQueuedBytes();
 
@@ -205,7 +204,7 @@ class DRRCacheManagerTest {
 
     @Test
     void shouldCalculateProportionalMaxQueuedBytes() {
-        DRRCacheManager manager = manager();
+        ControlplaneCache manager = manager();
 
         long max = manager.getProportionalMaxQueuedBytes();
 
@@ -214,17 +213,17 @@ class DRRCacheManagerTest {
 
     @Test
     void shouldIgnoreNullSnapshot() {
-        DRRCacheManager manager = manager();
+        ControlplaneCache manager = manager();
 
         assertDoesNotThrow(() -> manager.update(null));
     }
 
     @Test
     void shouldUpdateCapFactorFromSnapshot() throws Exception {
-        DRRCacheManager manager = manager();
+        ControlplaneCache manager = manager();
 
-        DRRCacheManager.DownstreamHandle handle =
-                new DRRCacheManager.DownstreamHandle(0, () -> 0.5);
+        ControlplaneCache.DownstreamHandle handle =
+                new ControlplaneCache.DownstreamHandle(0, () -> 0.5);
 
         manager.addHandle(handle);
 
@@ -243,7 +242,7 @@ class DRRCacheManagerTest {
 
     @Test
     void shouldCloneManager() {
-        DRRCacheManager manager = manager();
+        ControlplaneCache manager = manager();
 
         CacheManager cloned = manager.clone(cloneConfig());
 
@@ -252,7 +251,7 @@ class DRRCacheManagerTest {
 
     @Test
     void shouldReuseCacheForSameHash() {
-        DRRCacheManager manager = manager();
+        ControlplaneCache manager = manager();
 
         CacheManager one = manager.clone(cloneConfig());
         CacheManager two = manager.clone(cloneConfig());
@@ -266,8 +265,8 @@ class DRRCacheManagerTest {
     void shouldCreateDownstreamHandle() throws Exception {
         Callable<Double> pressure = () -> 0.25;
 
-        DRRCacheManager.DownstreamHandle handle =
-                new DRRCacheManager.DownstreamHandle(2, pressure);
+        ControlplaneCache.DownstreamHandle handle =
+                new ControlplaneCache.DownstreamHandle(2, pressure);
 
         assertEquals(2, handle.cpu);
         assertEquals(0.25, handle.downstreamPressure.call());
@@ -275,8 +274,8 @@ class DRRCacheManagerTest {
 
     @Test
     void shouldRecordDrainMetrics() {
-        DRRCacheManager.DownstreamHandle handle =
-                new DRRCacheManager.DownstreamHandle(0, () -> 0.0);
+        ControlplaneCache.DownstreamHandle handle =
+                new ControlplaneCache.DownstreamHandle(0, () -> 0.0);
 
         PartitionedQueue<AbstractFrame> queue =
                 new PartitionedArrayQueue<>(64);
@@ -292,8 +291,8 @@ class DRRCacheManagerTest {
 
     @Test
     void shouldResetPartitionStats() {
-        DRRCacheManager.PartitionStats stats =
-                new DRRCacheManager.PartitionStats();
+        ControlplaneCache.PartitionStats stats =
+                new ControlplaneCache.PartitionStats();
 
         stats.weight = 999;
         stats.quotaBytes = 555;
@@ -308,7 +307,7 @@ class DRRCacheManagerTest {
 
     @Test
     void shouldCloseSafely() {
-        DRRCacheManager manager = manager();
+        ControlplaneCache manager = manager();
 
         assertDoesNotThrow(manager::close);
     }

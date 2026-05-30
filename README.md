@@ -63,7 +63,7 @@ ControlPlaneLattice            ->        Edge Load Balancer (Global L7 Router)
 ↓
 ControlPlaneShard              ->        Shard Load Balancer (Partition Router)
 ↓
-DRRCacheManager                ->        Ingress Gateway / Stateful Cache Layer
+ControlPlaneCache              ->        Ingress Gateway / Stateful Cache Layer
 ↓
 ControlPlaneFragment           ->        Task Scheduler
 ↓
@@ -75,7 +75,7 @@ AbstractFrame.execute()        ->        Compute Kernel
 Everything below the ControlPlaneLattice is replicated according to hardware topology.
 
 - Sockets become shards
-- L2-sharing CPUs cooperate through localized queues (DRRCacheManager)
+- L2-sharing CPUs cooperate through localized queues (ControlPlaneCache)
 - CPUs become pinned execution scheduling loops (ControlPlaneFragment)
 
 ---
@@ -169,7 +169,7 @@ Using:
 
 ### Queues are topology-aware
 
-DRRCacheManager creates deficit round-robin queues sized around L2 cache topology.
+ControlPlaneCache creates deficit round-robin queues sized around L2 cache topology.
 
 Only CPUs sharing L2 consume from the same queue.
 
@@ -280,7 +280,7 @@ The execution engine.
 |:--------------------------------------------------------------|:-----------------------------------------------|
 | <span style="white-space: nowrap">ControlPlaneLattice</span>  | Global orchestration and topology management   |
 | <span style="white-space: nowrap">ControlPlaneShard</span>    | Per-socket orchestration and worker management |
-| <span style="white-space: nowrap">DRRCacheManager</span>      | Cache-local deficit round-robin queue          |
+| <span style="white-space: nowrap">ControlPlaneCache</span>    | Cache-local deficit round-robin queue          |
 | <span style="white-space: nowrap">ControlPlaneFragment</span> | Adaptive pinned execution scheduling loop      |
 | <span style="white-space: nowrap">AbstractExecutors</span>    | Thin execution wrapper                         |
 | <span style="white-space: nowrap">AbstractFrame</span>        | Base unit of work                              |
