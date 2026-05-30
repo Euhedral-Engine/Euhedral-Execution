@@ -4,8 +4,8 @@ import euhedral.atomics.PaddedLongAdder;
 import euhedral.benchmarks.frames.NoOpFrame;
 import euhedral.benchmarks.pipelines.NoOpPipeline;
 import euhedral.hashing.HasherApi;
+import euhedral.io.config.CacheConfig;
 import euhedral.io.config.ControlPlaneConfig;
-import euhedral.io.config.DRRConfig;
 import euhedral.io.config.SchedulingConfig;
 import euhedral.io.control_plane.ControlPlaneLattice;
 import euhedral.io.ingest.ArrayIngestSink;
@@ -72,9 +72,9 @@ public class TrueThroughputBenchmark {
             this.sinks[i] = new ArrayIngestSink(this.frames[i]);
         }
 
-        DRRConfig drrConfig = DRRConfig.defaultConfig();
+        CacheConfig cacheConfig = CacheConfig.defaultConfig();
         SchedulingConfig emConfig = SchedulingConfig.balancedDefault();
-        NoOpPipeline pipeline = new NoOpPipeline(drrConfig, emConfig, blackhole);
+        NoOpPipeline pipeline = new NoOpPipeline(cacheConfig, emConfig, blackhole);
         ControlPlaneConfig config = new ControlPlaneConfig("ThroughputComparisonBenchmark", null,
                 null,
                 pipeline, null, null);

@@ -4,8 +4,8 @@ import euhedral.benchmarks.frames.ArrayFrame;
 import euhedral.benchmarks.frames.MandelbrotPixel;
 import euhedral.benchmarks.frames.MandelbulbFrame;
 import euhedral.hardware_utils.PinnedThreadExecutor;
+import euhedral.io.config.CacheConfig;
 import euhedral.io.config.CloneConfig;
-import euhedral.io.config.DRRConfig;
 import euhedral.io.config.SchedulingConfig;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.AbstractExecutor;
@@ -14,8 +14,8 @@ import org.openjdk.jmh.infra.Blackhole;
 
 public class FractalPipeline extends DefaultCloneablePipeline {
 
-    public FractalPipeline(DRRConfig drrConfig, SchedulingConfig emConfig, Blackhole blackhole) {
-        super(drrConfig, emConfig, new FractalExecutor(null, blackhole));
+    public FractalPipeline(CacheConfig cacheConfig, SchedulingConfig emConfig, Blackhole blackhole) {
+        super(cacheConfig, emConfig, new FractalExecutor(null, blackhole));
     }
 
     private static class FractalExecutor extends AbstractExecutor {

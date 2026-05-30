@@ -4,14 +4,13 @@ import euhedral.atomics.PaddedLongAdder;
 import euhedral.benchmarks.frames.NoOpFrame;
 import euhedral.benchmarks.pipelines.NoOpPipeline;
 import euhedral.hashing.HasherApi;
+import euhedral.io.config.CacheConfig;
 import euhedral.io.config.ControlPlaneConfig;
-import euhedral.io.config.DRRConfig;
 import euhedral.io.config.SchedulingConfig;
 import euhedral.io.control_plane.ControlPlaneLattice;
 import euhedral.io.reactor.common.EuhedralSubscriber;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
-
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -136,9 +135,9 @@ public class ThroughputComparisonBenchmark {
                 frame.randomizeHash(hash++);
             }
 
-            DRRConfig drrConfig = DRRConfig.defaultConfig();
+            CacheConfig cacheConfig = CacheConfig.defaultConfig();
             SchedulingConfig emConfig = SchedulingConfig.balancedDefault();
-            NoOpPipeline pipeline = new NoOpPipeline(drrConfig, emConfig, blackhole);
+            NoOpPipeline pipeline = new NoOpPipeline(cacheConfig, emConfig, blackhole);
             ControlPlaneConfig config = new ControlPlaneConfig("MandelbrotBenchmark", null, null,
                     pipeline, null, null);
             this.controlPlane = ControlPlaneLattice.getOrCreate(config);

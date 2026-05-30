@@ -6,8 +6,8 @@ import euhedral.benchmarks.frames.ArrayFrame;
 import euhedral.benchmarks.frames.MandelbrotPixel;
 import euhedral.benchmarks.pipelines.FractalPipeline;
 import euhedral.hashing.HasherApi;
+import euhedral.io.config.CacheConfig;
 import euhedral.io.config.ControlPlaneConfig;
-import euhedral.io.config.DRRConfig;
 import euhedral.io.config.SchedulingConfig;
 import euhedral.io.control_plane.ControlPlaneLattice;
 import euhedral.io.frames.AbstractFrame;
@@ -214,10 +214,10 @@ public class BatchedMandelbrotBenchmark {
                 throw new RuntimeException("degree is not set. Please run with -Ddegree=N");
             }
 
-            DRRConfig drrConfig = DRRConfig.defaultConfig();
+            CacheConfig cacheConfig = CacheConfig.defaultConfig();
             SchedulingConfig schedConfig = SchedulingConfig.balancedDefault();
             FractalPipeline pipeline =
-                    new FractalPipeline(drrConfig, schedConfig, blackhole);
+                    new FractalPipeline(cacheConfig, schedConfig, blackhole);
             ControlPlaneConfig config = new ControlPlaneConfig("MandelbrotBenchmark", null, null,
                     pipeline, null, null);
             this.controlPlane = ControlPlaneLattice.getOrCreate(config);

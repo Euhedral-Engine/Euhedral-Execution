@@ -2,7 +2,7 @@ package euhedral.io.control_plane;
 
 import euhedral.hardware_utils.PinnedThreadExecutor;
 import euhedral.hardware_utils.ThreadTools;
-import euhedral.io.control_plane.DRRCacheManager.DownstreamHandle;
+import euhedral.io.control_plane.ControlplaneCache.DownstreamHandle;
 import euhedral.io.utils.DemandOptimizer;
 import euhedral.io.utils.DrainBuffer;
 import euhedral.io.utils.FlowRecorder;
@@ -20,7 +20,7 @@ public class SMTBuddy implements AutoCloseable {
     static {
         try {
             INGEST = MethodHandles.lookup()
-                    .findVarHandle(SMTBuddy.class, "ingest", DRRCacheManager.class);
+                    .findVarHandle(SMTBuddy.class, "ingest", ControlplaneCache.class);
         } catch (Exception e) {
             throw new ExceptionInInitializerError(e);
         }
@@ -35,7 +35,7 @@ public class SMTBuddy implements AutoCloseable {
     protected final int bufferSize;
     protected final int lowWaterMark;
 
-    protected DRRCacheManager ingest;
+    protected ControlplaneCache ingest;
     protected volatile Thread cycleThread;
 
     public SMTBuddy(DownstreamHandle handle, DrainBuffer buffer, SMTState state, PinnedThreadExecutor executor) {
@@ -47,7 +47,7 @@ public class SMTBuddy implements AutoCloseable {
         this.executor = executor;
     }
 
-    public void setIngest(DRRCacheManager ingest) {
+    public void setIngest(ControlplaneCache ingest) {
         INGEST.setRelease(this, ingest);
     }
 
@@ -63,7 +63,7 @@ public class SMTBuddy implements AutoCloseable {
     private void cycle() {
         ThreadTools.setTimerResolution(1);
         while (!Thread.interrupted() && this.running.getOpaque()) {
-            DRRCacheManager ingest = (DRRCacheManager) INGEST.getOpaque(this);
+            ControlplaneCache ingest = (ControlplaneCache) INGEST.getOpaque(this);
             if (ingest == null) {
                 LockSupport.parkNanos(20_000);
                 continue;
@@ -85,7 +85,7 @@ public class SMTBuddy implements AutoCloseable {
     }
 
     public void doStuff() {
-        DRRCacheManager ingest = (DRRCacheManager)  INGEST.getOpaque(this);
+        ControlplaneCache ingest = (ControlplaneCache)  INGEST.getOpaque(this);
         if (ingest != null && !this.running.getOpaque()) {
             int bufferCount = this.state.bufferCount.getPlain();
             if (bufferCount > this.lowWaterMark) {
@@ -120,7 +120,7 @@ public class SMTBuddy implements AutoCloseable {
             Thread.onSpinWait();
             return false;
         }
-        DRRCacheManager ingest = (DRRCacheManager)  INGEST.getOpaque(this);
+        ControlplaneCache ingest = (ControlplaneCache)  INGEST.getOpaque(this);
 
         this.state.refresh();
         long demand = calculateDemand(ingest.getTotalCount());
@@ -144,7 +144,7 @@ public class SMTBuddy implements AutoCloseable {
         double avgFrameSize =
                 this.state.fillBytes.avgUnits + this.state.fillBytes.unitVariation;
 
-        DRRCacheManager ingest = (DRRCacheManager)  INGEST.getOpaque(this);
+        ControlplaneCache ingest = (ControlplaneCache)  INGEST.getOpaque(this);
         int bufferCount = this.state.bufferCount.getAcquire();
         long demand = DemandOptimizer.getDemand(drainRate, arrivalLatencyNs, drainRateVar,
                 arrivalLatencyVar, bufferCount + ingestCount, (long) avgFrameSize,
@@ -168,7 +168,7 @@ public class SMTBuddy implements AutoCloseable {
     ///
     /// The result is a soft pacing mechanism that reduces queue churn while maintaining steady flow.
     protected long calculateDemandWaitNs(long nowNs, long maxFill) {
-        DRRCacheManager ingest = (DRRCacheManager)  INGEST.getOpaque(this);
+        ControlplaneCache ingest = (ControlplaneCache)  INGEST.getOpaque(this);
         boolean warmedUp = ingest.getFillRecorder().getRollingSum() > this.bufferSize
                 && this.state.fill.avgInterval > 0 && this.state.fill.avgUnits > 0;
 
