@@ -8,16 +8,18 @@ overhead.
 
 ---
 
-## Level 0 (Make the ControlPlane)
+## Level 0 (Make the ControlPlaneLattice)
 
-The ControlPlane manages multiple workers; frames are distributed based on their routingHash and
-are processed independently by workers. Currently, only one ControlPlane instance may be active per
+The ControlPlaneLattice manages multiple workers; frames are distributed based on their routingHash
+and
+are processed independently by workers. Currently, only one ControlPlaneLattice instance may be
+active per
 JVM process.
 
-Creating the ControlPlane
+Creating the ControlPlaneLattice
 
 ```java
-ControlPlane controlPlane = ControlPlane.getOrCreate("Lots of Things Doer 9000");
+ControlPlaneLattice controlPlane = ControlPlaneLattice.getOrCreate("Lots of Things Doer 9000");
 controlPlane.start();
 ```
 
@@ -28,7 +30,7 @@ String metricPrefix = "euhedral.metrics";
 MeterRegistry registry; // Any implementation of io.micrometer.core.instrument.MeterRegistry
 
 ControlPlaneConfig config = ControlPlaneConfig.defaultConfig("Lots of Things Doer 9000", metricPrefix, registry);
-ControlPlane controlPlane = ControlPlane.getOrCreate(config);
+ControlPlaneLattice controlPlane = ControlPlaneLattice.getOrCreate(config);
 controlPlane.start();
 ```
 
@@ -67,7 +69,8 @@ sink.offer(thing1);
 sink.offer(thing2);
 ```
 
-Give it to the ControlPlane. Euhedral is asynchronous and non-blocking. Frames will be executed in
+Give it to the ControlPlaneLattice. Euhedral is asynchronous and non-blocking. Frames will be
+executed in
 the background.
 
 ```java
@@ -79,8 +82,9 @@ controlPlane.ingest(sink);
 --------------
 ```
 
-Close the sink when you're done with it. This notifies the ControlPlane that no more frames will
-come through it. It will then be disconnected from the ControlPlane.
+Close the sink when you're done with it. This notifies the ControlPlaneLattice that no more frames
+will
+come through it. It will then be disconnected from it.
 
 ```java
 sink.complete();
@@ -130,7 +134,7 @@ equivalent hash function will work.
 Recycling frames reduces allocations and GC events. They are most useful for high-frequency or
 long-running workloads.
 
-_Assumes an active ControlPlane_
+_Assumes an active ControlPlaneLattice_
 
 ```java
 long password = 1234;
@@ -166,8 +170,8 @@ sink.complete();
 ```
 
 **IMPORTANT NOTE: Frames are reset after execution whether you use the recycler or not. This sets
-their routingHash back to their idHash. If you
-want them to keep executing in parallel, randomize the routing hash again in replace().**
+their routingHash back to their idHash. If you want them to keep executing in parallel, randomize
+the routing hash again in replace().**
 
 ---
 

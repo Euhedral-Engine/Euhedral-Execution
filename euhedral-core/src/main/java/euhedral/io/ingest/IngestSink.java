@@ -1,6 +1,7 @@
 package euhedral.io.ingest;
 
 import euhedral.atomics.PaddedAtomicLong;
+import euhedral.io.control_plane.ControlPlaneLattice;
 import euhedral.io.generics.LaticeSource;
 import euhedral.io.generics.LatticeReceiver;
 import java.lang.invoke.MethodHandles;
@@ -8,11 +9,11 @@ import java.lang.invoke.VarHandle;
 
 public abstract class IngestSink {
 
-    /// Used by the [ControlPlane][euhedral.io.control_plane.ControlPlane] to connect to this sink.
+    /// Used by the [ControlPlaneLattice][ControlPlaneLattice] to connect to this sink.
     public abstract LaticeSource getDelegate();
 
     /// Marks the sink as complete and disconnects it from the
-    /// [ControlPlane][euhedral.io.control_plane.ControlPlane].
+    /// [ControlPlaneLattice][ControlPlaneLattice].
     public abstract void complete();
 
     protected static abstract class Delegate implements LaticeSource {

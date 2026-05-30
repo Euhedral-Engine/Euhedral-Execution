@@ -4,35 +4,34 @@
 
 <!-- TOC -->
 
-* [Euhedral Core Architecture](#euhedral-core-architecture)
 * [Overview](#overview)
+    * [Structure of Responsibility](#structure-of-responsibility)
 * [Core Components](#core-components)
-    * [ControlPlane](#controlplane)
+    * [ControlPlaneLattice](#controlplanelattice)
         * [System-wide orchestration layer](#system-wide-orchestration-layer)
         * [Responsibilities](#responsibilities)
         * [Behavior](#behavior)
     * [ControlPlaneShard](#controlplaneshard)
         * [Per-socket execution and coordination layer](#per-socket-execution-and-coordination-layer)
         * [Responsibilities](#responsibilities-1)
-        * [Relationship to ControlPlane](#relationship-to-controlplane)
     * [ControlPlaneFragment](#controlplanefragment)
         * [Core Execution Control Loop](#core-execution-control-loop)
         * [Responsibilities](#responsibilities-2)
         * [Control model](#control-model)
         * [Design goals](#design-goals)
-        * [Execution behavior](#execution-behavior)
+        * [Scheduling behavior](#scheduling-behavior)
     * [AbstractFrame](#abstractframe)
     * [Base unit of execution](#base-unit-of-execution)
         * [Identity and routing](#identity-and-routing)
-        * [Ordering and parallelism](#ordering-and-parallelism)
+            * [Ordering and parallelism](#ordering-and-parallelism)
         * [Lifecycle](#lifecycle)
         * [Error handling](#error-handling)
-    * [LatticeEdge](#laticeedge)
-        * [Structural routing and execution backbone](#structural-routing-and-execution-backbone)
+    * [LatticeEdge](#latticeedge)
+        * [Structural data flow backbone](#structural-data-flow-backbone)
         * [Behavior](#behavior-1)
         * [Role in the system](#role-in-the-system)
-    * [LatticeVertex (LatticeEdge extension)](#laticevertex-laticeedge-extension)
-        * [Multi-branch routing implementation](#multi-branch-routing-implementation)
+    * [LatticeVertex (LatticeEdge extension)](#latticevertex-latticeedge-extension)
+        * [Structural multi-branch routing implementation](#structural-multi-branch-routing-implementation)
         * [Routing model](#routing-model)
         * [Behavior](#behavior-2)
 * [Summary](#summary)
@@ -41,7 +40,7 @@
 
 # Overview
 
-Euhedral Core is a low-level execution framework built around **frames, adaptive scheduling, and
+Euhedral Core is an execution framework built around **frames, adaptive scheduling, and
 topology-aware control**.
 
 It is designed to:
@@ -51,20 +50,28 @@ It is designed to:
 - Prevent queue buildup and latency instability
 - Maintain low overhead control loops
 
-The system is composed of a small number of core components that each manage a specific layer of
-execution responsibility. Together, they form a hierarchical control structure spanning from
-system-wide orchestration down to per-core execution.
+### Structure of Responsibility
+
+Euhedral forms a hierarchical control structure:
+
+- ControlPlaneLattice → manages the life cycles of shards
+- ControlPlaneShard → manages the life cycles of fragments
+- ControlPlaneFragment → manages scheduling on one core
+
+This separation allows the system to scale across NUMA domains while keeping coordination overhead
+localized.
 
 ---
 
 # Core Components
 
-## [ControlPlane](../euhedral-core/src/main/java/euhedral/io/control_plane/ControlPlane.java)
+## [ControlPlaneLattice](../euhedral-core/src/main/java/euhedral/io/control_plane/ControlPlaneLattice.java)
 
 ### System-wide orchestration layer
 
-`ControlPlane` is the global coordination layer for Euhedral Core. It manages system topology, shard
-placement, and cross-socket workload distribution.
+`ControlPlaneLattice` is the global coordination layer for Euhedral Core. It manages system
+topology, shard placement, and cross-socket workload distribution. It is where work enters the
+system.
 
 It is responsible for keeping the execution system aligned with the current hardware configuration.
 
@@ -83,9 +90,9 @@ It is responsible for keeping the execution system aligned with the current hard
 
 ### Behavior
 
-The ControlPlane operates continuously in the background and reacts to changes in system utilization
-and topology. When hardware conditions change, it performs a coordinated rebalance across all
-affected shards.
+The ControlPlaneLattice operates continuously in the background and reacts to changes in system
+utilization and topology. When hardware conditions change, it performs a coordinated rebalance
+across all affected shards.
 
 At runtime, it remains minimally intrusive, delegating execution details to lower layers unless
 structural changes require intervention.
@@ -96,10 +103,10 @@ structural changes require intervention.
 
 ### Per-socket execution and coordination layer
 
-ControlPlaneShard is the per-socket counterpart to the ControlPlane. Each shard is responsible for
-managing system topology under a single CPU socket.
+ControlPlaneShard is the per-socket counterpart to the ControlPlaneLattice. Each shard is
+responsible for managing the topology of a single CPU socket.
 
-It mirrors the responsibilities of the ControlPlane, but is scoped to its subset of cores.
+It mirrors the responsibilities and behaviors of the lattice, but is scoped to its subset of cores.
 
 ### Responsibilities
 
@@ -109,26 +116,15 @@ It mirrors the responsibilities of the ControlPlane, but is scoped to its subset
 - Enforcing user routing policies
 - Distributing core-level resource and utilization reports
 
-### Relationship to ControlPlane
-
-- The ControlPlane manages the entire system
-- Each ControlPlaneShard manages one socket
-- Together they form a hierarchical control structure:
-    - ControlPlane → system-wide decisions
-    - ControlPlaneShard → socket-local enforcement
-    - ControlPlaneFragment → per-core execution scheduling
-
-This separation allows the system to scale across NUMA domains while keeping coordination overhead
-localized.
-
 ---
 
 ## [ControlPlaneFragment](../euhedral-core/src/main/java/euhedral/io/control_plane/ControlPlaneFragment.java)
 
 ### Core Execution Control Loop
 
-`ControlPlaneFragment` is responsible for scheduling execution on a single core. It sits directly between
-ingress and execution and continuously adjusts runtime behavior based on observed system conditions.
+`ControlPlaneFragment` is responsible for scheduling execution on a single core. It sits directly
+between ingress and execution and continuously adjusts runtime behavior based on observed system
+conditions.
 
 ### Responsibilities
 
@@ -210,6 +206,7 @@ Frames follow a simple lifecycle:
 - isAlive() → determines whether execution should continue
 - kill() → forcefully terminates execution
 - execute() → main execution logic
+- throwMeAsError() → cancels in-progress execution
 - reset() → prepares frame for reuse
 - doFinally() → post-execution hook
 - recycle() → returns frame to allocator
@@ -279,8 +276,8 @@ this.downstreams[idx].onNext(frame);
 
 The system is organized into a hierarchical control structure:
 
-- ControlPlane → system-wide orchestration and topology management
-- ControlPlaneShard → per-socket execution domain management
+- ControlPlaneLattice → system-wide orchestration and topology management
+- ControlPlaneShard → per-socket orchestration and topology management
 - ControlPlaneFragment → per-core execution scheduling loop
 - LatticeEdge → structural graph construction
 - LatticeVertex → data routing and structural graph construction

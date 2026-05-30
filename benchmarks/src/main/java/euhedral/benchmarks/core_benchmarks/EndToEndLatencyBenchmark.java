@@ -10,7 +10,7 @@ import euhedral.hashing.HasherApi;
 import euhedral.io.config.ControlPlaneConfig;
 import euhedral.io.config.DRRConfig;
 import euhedral.io.config.SchedulingConfig;
-import euhedral.io.control_plane.ControlPlane;
+import euhedral.io.control_plane.ControlPlaneLattice;
 import euhedral.io.ingest.ArrayIngestSink;
 import java.lang.invoke.VarHandle;
 import java.util.BitSet;
@@ -36,7 +36,7 @@ public class EndToEndLatencyBenchmark {
 
     private static final int BATCH_SIZE = 100_000;
 
-    private static long run(ControlPlane controlPlane, PaddedLongAdder counters,
+    private static long run(ControlPlaneLattice controlPlane, PaddedLongAdder counters,
             ArrayIngestSink ingestSink, Blackhole bh) {
         controlPlane.ingest(ingestSink);
 
@@ -78,7 +78,7 @@ public class EndToEndLatencyBenchmark {
         final PaddedLongAdder counters = new PaddedLongAdder(
                 Runtime.getRuntime().availableProcessors());
         ArrayIngestSink ingestSink;
-        private ControlPlane controlPlane;
+        private ControlPlaneLattice controlPlane;
         private boolean skip = false;
 
         @Setup(Level.Trial)
@@ -103,7 +103,7 @@ public class EndToEndLatencyBenchmark {
             ControlPlaneConfig config = new ControlPlaneConfig("EndToEndLatencyBenchmark", cpus,
                     null,
                     pipeline, null, null);
-            this.controlPlane = ControlPlane.getOrCreate(config);
+            this.controlPlane = ControlPlaneLattice.getOrCreate(config);
             this.controlPlane.start();
         }
 
@@ -165,7 +165,7 @@ public class EndToEndLatencyBenchmark {
         final PaddedLongAdder counters = new PaddedLongAdder(
                 Runtime.getRuntime().availableProcessors());
         ArrayIngestSink ingestSink;
-        private ControlPlane controlPlane;
+        private ControlPlaneLattice controlPlane;
         private boolean skip = false;
 
         @Setup(Level.Trial)
@@ -199,7 +199,7 @@ public class EndToEndLatencyBenchmark {
             ControlPlaneConfig config = new ControlPlaneConfig("EndToEndLatencyBenchmark", cpus,
                     null,
                     pipeline, null, null);
-            this.controlPlane = ControlPlane.getOrCreate(config);
+            this.controlPlane = ControlPlaneLattice.getOrCreate(config);
             this.controlPlane.start();
         }
 

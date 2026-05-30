@@ -1,12 +1,13 @@
 package euhedral.io.ingest;
 
+import euhedral.io.control_plane.ControlPlaneLattice;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.LaticeSource;
 import euhedral.io.generics.LatticeReceiver;
 import java.lang.invoke.VarHandle;
 
 /// Wraps an array to allow it to be ingested by the
-/// [ControlPlane][euhedral.io.control_plane.ControlPlane]
+/// [ControlPlaneLattice][ControlPlaneLattice]
 @SuppressWarnings("unused")
 public class ArrayIngestSink extends IngestSink {
 
@@ -16,13 +17,13 @@ public class ArrayIngestSink extends IngestSink {
         this.delegate = new Delegate(frames);
     }
 
-    /// Returns the delegate the ControlPlane will use to ingest the array.
+    /// Returns the delegate the ControlPlaneLattice will use to ingest the array.
     public LaticeSource getDelegate() {
         return this.delegate;
     }
 
     /// Resets the sink to allow it to be ingested again. The sink must be passed back into the
-    /// ControlPlane's ingest again.
+    /// ControlPlaneLattice's ingest again.
     public void reset() {
         this.delegate.reset();
     }

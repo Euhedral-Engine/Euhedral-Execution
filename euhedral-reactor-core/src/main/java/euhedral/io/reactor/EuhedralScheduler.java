@@ -2,7 +2,7 @@ package euhedral.io.reactor;
 
 import euhedral.atomics.PaddedAtomicLong;
 import euhedral.io.config.ControlPlaneConfig;
-import euhedral.io.control_plane.ControlPlane;
+import euhedral.io.control_plane.ControlPlaneLattice;
 import euhedral.io.reactor.common.EuhedralSubscriber;
 import euhedral.io.utils.MathFunctions;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -57,7 +57,7 @@ public class EuhedralScheduler implements Scheduler {
         }
 
         if (CONSTRUCTING.compareAndSet(false, true)) {
-            ControlPlane controlPlane = ControlPlane.getOrCreate(config);
+            ControlPlaneLattice controlPlane = ControlPlaneLattice.getOrCreate(config);
             instance = new EuhedralScheduler(controlPlane);
             INSTANCE.set(instance);
             return instance;
@@ -70,10 +70,10 @@ public class EuhedralScheduler implements Scheduler {
     }
 
     private final AtomicBoolean disposed = new AtomicBoolean(false);
-    private final ControlPlane controlPlane;
+    private final ControlPlaneLattice controlPlane;
     private final EuhedralWorker[] sinks;
 
-    private EuhedralScheduler(ControlPlane controlPlane) {
+    private EuhedralScheduler(ControlPlaneLattice controlPlane) {
         this.controlPlane = controlPlane;
         this.sinks = new EuhedralWorker[Runtime.getRuntime().availableProcessors()];
         for (int i = 0; i < this.sinks.length; i++) {
@@ -82,7 +82,7 @@ public class EuhedralScheduler implements Scheduler {
         }
     }
 
-    /// This method injects a Subscriber handle into the Euhedral ControlPlane. The subscriber must
+    /// This method injects a Subscriber handle into the Euhedral ControlPlaneLattice. The subscriber must
     /// have a subscription before this method is called. This is equivalent to calling
     /// `.publishOn()`
     ///

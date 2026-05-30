@@ -11,7 +11,7 @@ import euhedral.hashing.HasherApi;
 import euhedral.io.config.ControlPlaneConfig;
 import euhedral.io.config.DRRConfig;
 import euhedral.io.config.SchedulingConfig;
-import euhedral.io.control_plane.ControlPlane;
+import euhedral.io.control_plane.ControlPlaneLattice;
 import euhedral.io.control_plane.RoutingPolicy;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.ingest.ArrayIngestSink;
@@ -139,7 +139,7 @@ public class HighScaleBenchmark {
         private final PaddedLongAdder counters =
                 new PaddedLongAdder(Runtime.getRuntime().availableProcessors(), true, true);
         private final ArrayIngestSink[] sinks = new ArrayIngestSink[64 * SystemInfo.SOCKET_COUNT];
-        private ControlPlane controlPlane;
+        private ControlPlaneLattice controlPlane;
 
         @Setup(Level.Trial)
         public void setup(Blackhole blackhole) throws Exception {
@@ -182,7 +182,7 @@ public class HighScaleBenchmark {
                     new FractalPipeline(drrConfig, schedConfig, blackhole);
             ControlPlaneConfig config = new ControlPlaneConfig("HighScaleBenchmark", null, null,
                     pipeline, null, null);
-            this.controlPlane = ControlPlane.getOrCreate(config);
+            this.controlPlane = ControlPlaneLattice.getOrCreate(config);
             this.controlPlane.start();
         }
 
@@ -229,7 +229,7 @@ public class HighScaleBenchmark {
         private final PaddedLongAdder counters =
                 new PaddedLongAdder(Runtime.getRuntime().availableProcessors(), true, true);
         private final ArrayIngestSink[] sinks = new ArrayIngestSink[64 * SystemInfo.SOCKET_COUNT];
-        private ControlPlane controlPlane;
+        private ControlPlaneLattice controlPlane;
 
         @Setup(Level.Trial)
         public void setup(Blackhole blackhole) throws Exception {
@@ -272,7 +272,7 @@ public class HighScaleBenchmark {
                     new FractalPipeline(drrConfig, schedConfig, blackhole);
             ControlPlaneConfig config = new ControlPlaneConfig("HighScaleBenchmark", null, null,
                     pipeline, null, null);
-            this.controlPlane = ControlPlane.getOrCreate(config);
+            this.controlPlane = ControlPlaneLattice.getOrCreate(config);
             this.controlPlane.start();
         }
 
@@ -319,7 +319,7 @@ public class HighScaleBenchmark {
         private final PaddedLongAdder counters =
                 new PaddedLongAdder(Runtime.getRuntime().availableProcessors(), true, true);
         private final ArrayIngestSink[] sinks = new ArrayIngestSink[64 * SystemInfo.SOCKET_COUNT];
-        private ControlPlane controlPlane;
+        private ControlPlaneLattice controlPlane;
 
         @Setup(Level.Trial)
         public void setup(Blackhole blackhole) throws Exception {
@@ -340,7 +340,7 @@ public class HighScaleBenchmark {
                     new FractalPipeline(drrConfig, schedConfig, blackhole);
             ControlPlaneConfig config = new ControlPlaneConfig("HighScaleBenchmark", null, null,
                     pipeline, null, null);
-            this.controlPlane = ControlPlane.getOrCreate(config);
+            this.controlPlane = ControlPlaneLattice.getOrCreate(config);
             this.controlPlane.start();
         }
 
@@ -388,7 +388,7 @@ public class HighScaleBenchmark {
         private final PaddedLongAdder counters =
                 new PaddedLongAdder(Runtime.getRuntime().availableProcessors(), true, true);
         private final ArrayIngestSink[] sinks = new ArrayIngestSink[64 * SystemInfo.SOCKET_COUNT];
-        private ControlPlane controlPlane;
+        private ControlPlaneLattice controlPlane;
 
         @Setup(Level.Trial)
         public void setup(Blackhole blackhole) throws Exception {
@@ -409,7 +409,7 @@ public class HighScaleBenchmark {
                     new FractalPipeline(drrConfig, schedConfig, blackhole);
             ControlPlaneConfig config = new ControlPlaneConfig("HighScaleBenchmark", null, null,
                     pipeline, null, null);
-            this.controlPlane = ControlPlane.getOrCreate(config);
+            this.controlPlane = ControlPlaneLattice.getOrCreate(config);
             this.controlPlane.start();
         }
 

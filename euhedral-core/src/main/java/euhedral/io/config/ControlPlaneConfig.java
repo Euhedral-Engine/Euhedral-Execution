@@ -1,15 +1,16 @@
 package euhedral.io.config;
 
+import euhedral.io.control_plane.ControlPlaneLattice;
 import euhedral.io.control_plane.ControlPlaneShard;
 import euhedral.io.generics.CloneableObject;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.BitSet;
 import org.jspecify.annotations.Nullable;
 
-/// ### Configuration for the [ControlPlane][euhedral.io.control_plane.ControlPlane]
+/// ### Configuration for the [ControlPlaneLattice][ControlPlaneLattice]
 ///
 /// @param name            Used in logging and thread naming
-/// @param allowedCpus     Which CPUs the `ControlPlane` can bind to. A null value will allow it to
+/// @param allowedCpus     Which CPUs the `ControlPlaneLattice` can bind to. A null value will allow it to
 /// use all that are available.
 /// @param baseShard       Allows you to use any overridden version of a
 /// [ControlPlaneShard][euhedral.io.control_plane.ControlPlaneShard]. A null value will make it
