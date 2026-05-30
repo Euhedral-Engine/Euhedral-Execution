@@ -176,7 +176,7 @@ public class HighScaleBenchmark {
             SchedulingConfig emConfig = SchedulingConfig.balancedDefault(null,
                     "hsb");
             FractalPipeline pipeline =
-                    new FractalPipeline("HighScaleBenchmark", drrConfig, emConfig, blackhole);
+                    new FractalPipeline(drrConfig, emConfig, blackhole);
             this.controlPlane = ControlPlane.getOrCreate("HighScaleBenchmark", pipeline, null);
             this.controlPlane.start();
         }
@@ -265,7 +265,7 @@ public class HighScaleBenchmark {
             SchedulingConfig emConfig = SchedulingConfig.balancedDefault(null,
                     "hsb");
             FractalPipeline pipeline =
-                    new FractalPipeline("HighScaleBenchmark", drrConfig, emConfig, blackhole);
+                    new FractalPipeline(drrConfig, emConfig, blackhole);
             this.controlPlane = ControlPlane.getOrCreate("HighScaleBenchmark", pipeline, null);
             this.controlPlane.start();
         }
@@ -332,7 +332,7 @@ public class HighScaleBenchmark {
             SchedulingConfig emConfig = SchedulingConfig.balancedDefault(null,
                     "hsb");
             FractalPipeline pipeline =
-                    new FractalPipeline("HighScaleBenchmark", drrConfig, emConfig, blackhole);
+                    new FractalPipeline(drrConfig, emConfig, blackhole);
             this.controlPlane = ControlPlane.getOrCreate("HighScaleBenchmark", pipeline, null);
             this.controlPlane.start();
         }
@@ -400,7 +400,7 @@ public class HighScaleBenchmark {
             SchedulingConfig emConfig = SchedulingConfig.balancedDefault(null,
                     "hsb");
             FractalPipeline pipeline =
-                    new FractalPipeline("HighScaleBenchmark", drrConfig, emConfig, blackhole);
+                    new FractalPipeline(drrConfig, emConfig, blackhole);
             this.controlPlane = ControlPlane.getOrCreate("HighScaleBenchmark", pipeline, null);
             this.controlPlane.start();
         }

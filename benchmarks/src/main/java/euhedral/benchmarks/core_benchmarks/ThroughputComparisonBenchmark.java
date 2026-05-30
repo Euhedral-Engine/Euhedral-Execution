@@ -139,7 +139,7 @@ public class ThroughputComparisonBenchmark {
             SchedulingConfig emConfig = SchedulingConfig.balancedDefault(null,
                     "ThroughputComparisonBenchmark");
             this.controlPlane = ControlPlane.getOrCreate("ThroughputComparisonBenchmark",
-                    new NoOpPipeline("ThroughputComparisonBenchmark", drrConfig, emConfig, blackhole), null);
+                    new NoOpPipeline(drrConfig, emConfig, blackhole), null);
             this.controlPlane.start();
         }
 

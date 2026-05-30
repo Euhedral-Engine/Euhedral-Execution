@@ -101,7 +101,7 @@ public class EndToEndLatencyBenchmark {
 
             System.out.println("Benchmark is using P cpus " + cpus);
             this.controlPlane = ControlPlane.getOrCreate("EndToEndLatencyBenchmark", cpus,
-                    new NoOpPipeline("EndToEndLatencyBenchmark", drrConfig, emConfig, blackhole),
+                    new NoOpPipeline(drrConfig, emConfig, blackhole),
                     null);
             this.controlPlane.start();
         }
@@ -197,7 +197,7 @@ public class EndToEndLatencyBenchmark {
 
             System.out.println("Benchmark is using E cpus " + cpus);
             this.controlPlane = ControlPlane.getOrCreate("EndToEndLatencyBenchmark", cpus,
-                    new NoOpPipeline("EndToEndLatencyBenchmark", drrConfig, emConfig, blackhole),
+                    new NoOpPipeline(drrConfig, emConfig, blackhole),
                     null);
             this.controlPlane.start();
         }

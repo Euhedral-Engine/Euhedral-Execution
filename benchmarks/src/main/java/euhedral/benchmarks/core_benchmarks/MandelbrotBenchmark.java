@@ -214,7 +214,7 @@ public class MandelbrotBenchmark {
             SchedulingConfig emConfig = SchedulingConfig.balancedDefault(null,
                     "mandelbrot");
             FractalPipeline pipeline =
-                    new FractalPipeline("MandelbrotBenchmark", drrConfig, emConfig, blackhole);
+                    new FractalPipeline(drrConfig, emConfig, blackhole);
             this.controlPlane = ControlPlane.getOrCreate("MandelbrotBenchmark", pipeline, null);
             this.controlPlane.start();
 

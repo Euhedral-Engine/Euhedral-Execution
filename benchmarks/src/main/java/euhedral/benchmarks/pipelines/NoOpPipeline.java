@@ -12,8 +12,8 @@ import org.openjdk.jmh.infra.Blackhole;
 
 public class NoOpPipeline extends DefaultCloneablePipeline {
 
-    public NoOpPipeline(String name, DRRConfig drrConfig, SchedulingConfig emConfig, Blackhole blackhole) {
-        super(name, drrConfig, emConfig, new NoOpExecutor(null, blackhole));
+    public NoOpPipeline(DRRConfig drrConfig, SchedulingConfig emConfig, Blackhole blackhole) {
+        super(drrConfig, emConfig, new NoOpExecutor(null, blackhole));
     }
 
     private static class NoOpExecutor extends AbstractExecutor {
