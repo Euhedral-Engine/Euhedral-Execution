@@ -8,7 +8,7 @@ import euhedral.hashing.HasherApi;
 import euhedral.io.config.ControlPlaneConfig;
 import euhedral.io.config.DRRConfig;
 import euhedral.io.config.SchedulingConfig;
-import euhedral.io.control_plane.ControlPlane;
+import euhedral.io.control_plane.ControlPlaneLattice;
 import euhedral.io.reactor.common.EuhedralSubscriber;
 import euhedral.io.utils.MathFunctions;
 import java.awt.image.BufferedImage;
@@ -189,7 +189,7 @@ public class MandelbrotBenchmark {
         private String outputDir;
         private String outputFileName;
 
-        private ControlPlane controlPlane;
+        private ControlPlaneLattice controlPlane;
         private EuhedralSubscriber subscriber;
 
         private void makeSub() {
@@ -215,7 +215,7 @@ public class MandelbrotBenchmark {
                     new FractalPipeline(drrConfig, emConfig, blackhole);
             ControlPlaneConfig config = new ControlPlaneConfig("MandelbrotBenchmark", null, null,
                     pipeline, null, null);
-            this.controlPlane = ControlPlane.getOrCreate(config);
+            this.controlPlane = ControlPlaneLattice.getOrCreate(config);
             this.controlPlane.start();
 
             MandelbrotCanvas.generate(WIDTH, HEIGHT, CENTER_X, CENTER_Y, H_DIAMETER,

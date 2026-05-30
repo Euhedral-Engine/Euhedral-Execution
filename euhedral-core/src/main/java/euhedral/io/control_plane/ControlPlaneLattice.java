@@ -35,44 +35,41 @@ import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/// ## The control surface of Euhedral Core
+/// ## Control surface of Euhedral Core
 ///
-/// `ControlPlane` is the top-level orchestration layer for the entire system.
+/// #### This is where work enters.
 ///
-/// It owns system topology, shard placement, and runtime rebalancing. It decides how work is
-/// distributed across CPUs and keeps the execution layer aligned with the current hardware state.
+/// ---
+///
+/// **Role:**
+///
+///`ControlPlaneLattice` is the top-level orchestration and organization layer for the distributed
+/// scheduling system.
+///
+/// It owns system topology, shard placement, and runtime rebalancing. It distributes work across
+/// shards and keeps the execution layer aligned with the current hardware state.
 ///
 /// **What it coordinates:**
 ///
 ///   - System topology discovery and updates
+///   - HardwareUtilization report distribution
 ///   - Shard lifecycle (create -> start -> rebalance -> shutdown)
 ///   - CPU/socket-aware routing
 ///   - Ingest distribution across shards
 ///   - Global rebalancing under hardware change
 ///
-/// At runtime, it continuously reacts to hardware utilization and topology shifts, adjusting
-/// execution layout to match available resources.
-///
-/// ---
-///
-/// ### Mental model
-///
-/// Think of it as the “traffic controller” above everything else.
-///
-/// Frames don’t see it. Shards don’t argue with it. It just keeps the system aligned with reality.
-///
 /// ---
 ///
 /// ### Routing
 ///
-/// Work is routed based on frame hash and current shard mapping:
+/// Work is routed based on the frame's routingHash and current shard mapping:
 ///
 /// ```java
-/// int idx = (int) unsignedMultiplyHigh(frame.getCombinedHash(), map.length);
+/// int idx = (int) unsignedMultiplyHigh(frame.getRoutingHash(), map.length);
 /// return activeShardIds[idx];
 /// ```
 ///
-/// When routing policy is strict, origin-aware routing can override hashing:
+/// When a routing policy is set, it can override hash-based routing:
 ///
 /// ```java
 /// if (policy.level > RoutingPolicy.ANY.level) {
@@ -89,31 +86,30 @@ import org.slf4j.LoggerFactory;
 /// - Spawns and manages per-socket shards
 /// - Stays out of the way unless hardware forces a change
 ///
-/// It is the boss that doesn't know what the workers do. It just sends work their way.
-///
 /// ---
 ///
 /// **This is the thing above the thing above the things.** Everything starts from here.
 @SuppressWarnings("unused")
-public class ControlPlane implements AutoCloseable {
+public class ControlPlaneLattice implements AutoCloseable {
 
-    private static final AtomicReference<ControlPlane> INSTANCE = new AtomicReference<>();
+    private static final AtomicReference<ControlPlaneLattice> INSTANCE = new AtomicReference<>();
 
-    public static ControlPlane get() {
+    public static ControlPlaneLattice get() {
         return INSTANCE.get();
     }
 
-    public static ControlPlane getOrCreate(String name) {
+    public static ControlPlaneLattice getOrCreate(String name) {
         return INSTANCE.updateAndGet(curr -> {
             if (curr != null) {
                 return curr;
             }
 
-            return new ControlPlane(name, null, new DefaultCloneablePipeline(), SystemInfo.getCpuSet());
+            return new ControlPlaneLattice(name, null, new DefaultCloneablePipeline(),
+                    SystemInfo.getCpuSet());
         });
     }
 
-    public static ControlPlane getOrCreate(@NonNull ControlPlaneConfig config) {
+    public static ControlPlaneLattice getOrCreate(@NonNull ControlPlaneConfig config) {
         Objects.requireNonNull(config);
         return INSTANCE.updateAndGet(curr -> {
             if (curr != null) {
@@ -121,13 +117,15 @@ public class ControlPlane implements AutoCloseable {
             }
             BitSet allowedCpus = config.allowedCpus();
             CloneableObject cloneable = config.cloneableObject();
-            if(allowedCpus == null) {
+            if (allowedCpus == null) {
                 allowedCpus = SystemInfo.getCpuSet();
             }
-            if(cloneable == null) {
-                cloneable = new DefaultCloneablePipeline(config.metricPrefix(), config.meterRegistry());
+            if (cloneable == null) {
+                cloneable = new DefaultCloneablePipeline(config.metricPrefix(),
+                        config.meterRegistry());
             }
-            return new ControlPlane(config.name(), config.baseShard(), cloneable, allowedCpus);
+            return new ControlPlaneLattice(config.name(), config.baseShard(), cloneable,
+                    allowedCpus);
         });
     }
 
@@ -157,7 +155,7 @@ public class ControlPlane implements AutoCloseable {
     protected volatile int currentGlobalVersion = Integer.MIN_VALUE;
     protected volatile EffectiveSystemTopology effectiveTopology;
 
-    protected ControlPlane(String name, ControlPlaneShard baseShard,
+    protected ControlPlaneLattice(String name, ControlPlaneShard baseShard,
             CloneableObject cloneableObject, BitSet allowedCpus) {
         this.topology = new TopologyMapper(allowedCpus);
         this.resourceMonitor = new ResourceMonitor(this.topology, Duration.ofMillis(200));
@@ -206,7 +204,7 @@ public class ControlPlane implements AutoCloseable {
         Objects.requireNonNull(stream);
         if (this.closed.getOpaque()) {
             throw new RuntimeException(
-                    "Could not ingest from an upstream publisher. The ControlPlane is permanently closed.");
+                    "Could not ingest from an upstream publisher. The ControlPlaneLattice is permanently closed.");
         }
         if (!this.started.getOpaque()) {
             start();
@@ -267,7 +265,7 @@ public class ControlPlane implements AutoCloseable {
 
         if (this.currentGlobalVersion != nextVersion) {
             if (!this.primed.getOpaque()) {
-                this.logger.info("Initializing the ControlPlane for global topology V{}",
+                this.logger.info("Initializing the ControlPlaneLattice for global topology V{}",
                         nextVersion);
             } else {
                 this.logger.warn(
@@ -276,7 +274,7 @@ public class ControlPlane implements AutoCloseable {
             }
             handleSystemTopologyChange(utilization);
             if (this.effectiveTopology.effectiveCpus().cardinality() == 0) {
-                logger.error("There are no usable cpus for this ControlPlane.");
+                logger.error("There are no usable cpus for this ControlPlaneLattice.");
             }
         } else {
             double quotaPool = utilization.quotaCpus();
@@ -449,7 +447,7 @@ public class ControlPlane implements AutoCloseable {
         return count;
     }
 
-    /// Permanently shuts down the ControlPlane.
+    /// Permanently shuts down the ControlPlaneLattice.
     @Override
     public void close() {
         if (!this.closed.compareAndSet(false, true)) {
@@ -492,7 +490,7 @@ public class ControlPlane implements AutoCloseable {
     }
 
     /// Whether all queues are empty and all in-progress work is completed for all CPUs managed by
-    /// this ControlPlane.
+    /// this ControlPlaneLattice.
     public boolean isDrained() {
         LatticeVertex controller = this.ingestController.get();
         if (controller != null && !controller.isDrained()) {

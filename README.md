@@ -42,7 +42,8 @@ Architecture diagrams coming soon.
 
 ## Amazon EC2 Benchmarks
 
-These benchmarks test performance in a cloud environment on server hardware.
+These benchmarks test performance in a cloud environment on server hardware. They feature
+comparisons with the standard Reactor schedulers.
 
 - [Amazon EC2 32 vCPU Graviton4](./benchmarks/AMAZON_GRAVITON_4_BENCHMARKS.md)
 - [Amazon EC2 32 vCPU Intel Xeon 6](./benchmarks/AMAZON_XEON_6_BENCHMARKS.md)
@@ -58,9 +59,9 @@ The benchmarks in the sections below were performed on a consumer desktop.
     SYSTEM VIEW                               IMPLEMENTATION VIEW
 --------------------------------------------------------------------------------
 
-Ingress / Control Plane        ->        Edge Load Balancer (Global L7 Router)
+ControlPlaneLattice            ->        Edge Load Balancer (Global L7 Router)
 ↓
-ControlPlane Shard             ->        Shard Load Balancer (Partition Router)
+ControlPlaneShard              ->        Shard Load Balancer (Partition Router)
 ↓
 DRRCacheManager                ->        Ingress Gateway / Stateful Cache Layer
 ↓
@@ -71,7 +72,7 @@ AbstractExecutor               ->        Worker Runtime
 AbstractFrame.execute()        ->        Compute Kernel
 ```
 
-Everything below the ControlPlane is replicated according to hardware topology.
+Everything below the ControlPlaneLattice is replicated according to hardware topology.
 
 - Sockets become shards
 - L2-sharing CPUs cooperate through localized queues (DRRCacheManager)
@@ -92,7 +93,7 @@ General use schedulers do not fully take advantage of the hardware they run on.
 - Minimal coordination overhead
 - Sustained throughput under pressure
 
-Euhedral continuously adapts execution behavior using runtime feedback and scales to match the
+It continuously adapts execution behavior using runtime feedback and scales to match the
 physical reality of the system.
 
 **Euhedral reacts to**:
@@ -277,7 +278,7 @@ The execution engine.
 
 | Component                                                     | Description                                    |
 |:--------------------------------------------------------------|:-----------------------------------------------|
-| <span style="white-space: nowrap">ControlPlane</span>         | Global orchestration and topology management   |
+| <span style="white-space: nowrap">ControlPlaneLattice</span>  | Global orchestration and topology management   |
 | <span style="white-space: nowrap">ControlPlaneShard</span>    | Per-socket orchestration and worker management |
 | <span style="white-space: nowrap">DRRCacheManager</span>      | Cache-local deficit round-robin queue          |
 | <span style="white-space: nowrap">ControlPlaneFragment</span> | Adaptive pinned execution scheduling loop      |

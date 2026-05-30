@@ -1,5 +1,6 @@
 package euhedral.io.ingest;
 
+import euhedral.io.control_plane.ControlPlaneLattice;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.LaticeSource;
 import euhedral.io.generics.LatticeReceiver;
@@ -7,7 +8,7 @@ import euhedral.queues.PartitionedUnboundedMpmcArrayQueue;
 import euhedral.queues.common.ConcurrentPartitionedQueue;
 
 /// Wraps a partitioned queue to allow it to be fed into the
-/// [ControlPlane][euhedral.io.control_plane.ControlPlane]
+/// [ControlPlaneLattice][ControlPlaneLattice]
 @SuppressWarnings("unused")
 public class QueueIngestSink extends IngestSink {
 
@@ -53,7 +54,7 @@ public class QueueIngestSink extends IngestSink {
         this.delegate.queue.clear();
     }
 
-    /// Disconnects from the [ControlPlane][euhedral.io.control_plane.ControlPlane]. Does not clear
+    /// Disconnects from the [ControlPlaneLattice][ControlPlaneLattice]. Does not clear
     /// the queue.
     @Override
     public void complete() {
