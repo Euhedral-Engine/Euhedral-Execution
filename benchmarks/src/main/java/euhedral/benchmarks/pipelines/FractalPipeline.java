@@ -14,8 +14,8 @@ import org.openjdk.jmh.infra.Blackhole;
 
 public class FractalPipeline extends DefaultCloneablePipeline {
 
-    public FractalPipeline(String name, DRRConfig drrConfig, SchedulingConfig emConfig, Blackhole blackhole) {
-        super(name, drrConfig, emConfig, new FractalExecutor(null, blackhole));
+    public FractalPipeline(DRRConfig drrConfig, SchedulingConfig emConfig, Blackhole blackhole) {
+        super(drrConfig, emConfig, new FractalExecutor(null, blackhole));
     }
 
     private static class FractalExecutor extends AbstractExecutor {

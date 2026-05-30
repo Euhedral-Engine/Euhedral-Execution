@@ -50,7 +50,7 @@ public class EuhedralScheduler implements Scheduler {
 
         if (CONSTRUCTING.compareAndSet(false, true)) {
             ControlPlane controlPlane = ControlPlane.getOrCreate(name,
-                    new DefaultCloneablePipeline(name + "Pipeline", metricPrefix, meterRegistry),
+                    new DefaultCloneablePipeline(metricPrefix, meterRegistry),
                     meterRegistry);
             instance = new EuhedralScheduler(controlPlane);
             INSTANCE.set(instance);

@@ -16,13 +16,13 @@ are processed independently per worker.
 Create the default pipeline
 
 ```java
-DefaultCloneablePipeline pipeline = new DefaultCloneablePipeline("Cloneable Thing Doer 9000");
+DefaultCloneablePipeline pipeline = new DefaultCloneablePipeline();
 ```
 
 Create the ControlPlane
 
 ```java
-ControlPlane controlPlane = ControlPlane.getOrCreate("Lots of Things Doer", pipeline);
+ControlPlane controlPlane = ControlPlane.getOrCreate("Lots of Things Doer 9000", pipeline);
 controlPlane.start();
 ```
 
