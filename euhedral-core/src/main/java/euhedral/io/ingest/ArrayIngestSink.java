@@ -1,7 +1,6 @@
 package euhedral.io.ingest;
 
 import euhedral.io.frames.AbstractFrame;
-import euhedral.io.generics.IngestSink;
 import euhedral.io.generics.LaticeSource;
 import euhedral.io.generics.LatticeReceiver;
 import java.lang.invoke.VarHandle;

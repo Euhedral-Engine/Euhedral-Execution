@@ -2,6 +2,7 @@ package euhedral.io.frames;
 
 import euhedral.hardware_utils.SystemInfo.CpuInfo;
 import euhedral.hashing.HasherApi;
+import euhedral.io.control_plane.ControlPlaneFragment;
 import euhedral.io.control_plane.RoutingPolicy;
 import euhedral.io.generics.AbstractExecutor;
 import euhedral.io.impl.FrameManager;
@@ -141,7 +142,7 @@ public abstract class AbstractFrame {
     /// Throws the internal cancellation error used to stop execution immediately.
     ///
     /// Handled by [`AbstractExecutor`][AbstractExecutor] and
-    /// [`ExecutionManager`][euhedral.io.ExecutionManager].
+    /// [`ControlPlaneFragment`][ControlPlaneFragment].
     public final void throwMeAsError() {
         throw this.cancel;
     }

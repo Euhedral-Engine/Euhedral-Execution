@@ -15,7 +15,7 @@
         * [Per-socket execution and coordination layer](#per-socket-execution-and-coordination-layer)
         * [Responsibilities](#responsibilities-1)
         * [Relationship to ControlPlane](#relationship-to-controlplane)
-    * [ExecutionManager](#executionmanager)
+    * [ControlPlaneFragment](#controlplanefragment)
         * [Core Execution Control Loop](#core-execution-control-loop)
         * [Responsibilities](#responsibilities-2)
         * [Control model](#control-model)
@@ -76,10 +76,10 @@ It is responsible for keeping the execution system aligned with the current hard
     - startup
     - rebalance
     - shutdown
-- CPU and socket-aware routing decisions
+- Enforcing user routing policies
 - Ingress distribution across shards
 - Global rebalancing in response to hardware changes
-- Global resource utilization reports
+- Distributing socket-level resource utilization reports
 
 ### Behavior
 
@@ -97,17 +97,17 @@ structural changes require intervention.
 ### Per-socket execution and coordination layer
 
 ControlPlaneShard is the per-socket counterpart to the ControlPlane. Each shard is responsible for
-managing execution resources associated with a single CPU socket.
+managing system topology under a single CPU socket.
 
-It mirrors the responsibilities of the ControlPlane, but scoped to its subset of cores.
+It mirrors the responsibilities of the ControlPlane, but is scoped to its subset of cores.
 
 ### Responsibilities
 
-- Managing execution within a single socket domain
-- Coordinating ExecutionManagers assigned to cores on their socket
-- Distributing socket-level resource and utilization reports
+- Coordinating ControlPlaneFragments assigned to cores on their socket
 - Participating in system-wide rebalancing operations
-- Maintaining local routing and execution consistency
+- Ingress distribution across fragments
+- Enforcing user routing policies
+- Distributing core-level resource and utilization reports
 
 ### Relationship to ControlPlane
 
@@ -116,18 +116,18 @@ It mirrors the responsibilities of the ControlPlane, but scoped to its subset of
 - Together they form a hierarchical control structure:
     - ControlPlane → system-wide decisions
     - ControlPlaneShard → socket-local enforcement
-    - ExecutionManager → per-core execution control
+    - ControlPlaneFragment → per-core execution scheduling
 
 This separation allows the system to scale across NUMA domains while keeping coordination overhead
 localized.
 
 ---
 
-## [ExecutionManager](../euhedral-core/src/main/java/euhedral/io/ExecutionManager.java)
+## [ControlPlaneFragment](../euhedral-core/src/main/java/euhedral/io/control_plane/ControlPlaneFragment.java)
 
 ### Core Execution Control Loop
 
-`ExecutionManager` is responsible for managing execution on a single core. It sits directly between
+`ControlPlaneFragment` is responsible for scheduling execution on a single core. It sits directly between
 ingress and execution and continuously adjusts runtime behavior based on observed system conditions.
 
 ### Responsibilities
@@ -156,7 +156,7 @@ characteristics.
 - Prevent latency amplification under load
 - Avoid unnecessary cache contention and migration
 
-### Execution behavior
+### Scheduling behavior
 
 Under load, the system increases throughput aggressively. Under contention, it reduces concurrency
 and dispatch rate. When idle, it transitions progressively through:
@@ -182,7 +182,7 @@ overhead through recycling.
 Each frame maintains:
 
 - a stable identity hash (`idHash`)
-- a mutable routing hash (`combinedHash`)
+- a mutable routing hash (`routingHash`)
 
 The routing hash determines placement across execution units.
 
@@ -200,8 +200,7 @@ frame.randomizeHash(HasherApi.combine(idHash, seed));
 
 ```java
 long seed = 123;
-long idHash = frame.getIdHash();
-frame.randomizeHash(HasherApi.combine(idHash, seed++));
+frame.randomizeHash(seed++);
 ```
 
 ### Lifecycle
@@ -282,7 +281,7 @@ The system is organized into a hierarchical control structure:
 
 - ControlPlane → system-wide orchestration and topology management
 - ControlPlaneShard → per-socket execution domain management
-- ExecutionManager → per-core execution control loop
+- ControlPlaneFragment → per-core execution scheduling loop
 - LatticeEdge → structural graph construction
 - LatticeVertex → data routing and structural graph construction
 - AbstractFrame → unit of work and execution state

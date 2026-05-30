@@ -1,6 +1,8 @@
-package euhedral.io.generics;
+package euhedral.io.ingest;
 
 import euhedral.atomics.PaddedAtomicLong;
+import euhedral.io.generics.LaticeSource;
+import euhedral.io.generics.LatticeReceiver;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 
