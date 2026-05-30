@@ -3,38 +3,40 @@
 ## TOC
 
 <!-- TOC -->
+
 * [Euhedral Core Architecture](#euhedral-core-architecture)
 * [Overview](#overview)
 * [Core Components](#core-components)
-  * [ControlPlane](#controlplane)
-    * [System-wide orchestration layer](#system-wide-orchestration-layer)
-    * [Responsibilities](#responsibilities)
-    * [Behavior](#behavior)
-  * [ControlPlaneShard](#controlplaneshard)
-    * [Per-socket execution and coordination layer](#per-socket-execution-and-coordination-layer)
-    * [Responsibilities](#responsibilities-1)
-    * [Relationship to ControlPlane](#relationship-to-controlplane)
-  * [ExecutionManager](#executionmanager)
-    * [Core Execution Control Loop](#core-execution-control-loop)
-    * [Responsibilities](#responsibilities-2)
-    * [Control model](#control-model)
-    * [Design goals](#design-goals)
-    * [Execution behavior](#execution-behavior)
-  * [AbstractFrame](#abstractframe)
-  * [Base unit of execution](#base-unit-of-execution)
-    * [Identity and routing](#identity-and-routing)
-    * [Ordering and parallelism](#ordering-and-parallelism)
-    * [Lifecycle](#lifecycle)
-    * [Error handling](#error-handling)
-  * [ScaffoldingEdge](#scaffoldingedge)
-    * [Structural routing and execution backbone](#structural-routing-and-execution-backbone)
-    * [Behavior](#behavior-1)
-    * [Role in the system](#role-in-the-system)
-  * [ScaffoldingNode (ScaffoldingEdge variant)](#scaffoldingnode-scaffoldingedge-variant)
-    * [Multi-branch routing implementation](#multi-branch-routing-implementation)
-    * [Routing model](#routing-model)
-    * [Behavior](#behavior-2)
+    * [ControlPlane](#controlplane)
+        * [System-wide orchestration layer](#system-wide-orchestration-layer)
+        * [Responsibilities](#responsibilities)
+        * [Behavior](#behavior)
+    * [ControlPlaneShard](#controlplaneshard)
+        * [Per-socket execution and coordination layer](#per-socket-execution-and-coordination-layer)
+        * [Responsibilities](#responsibilities-1)
+        * [Relationship to ControlPlane](#relationship-to-controlplane)
+    * [ExecutionManager](#executionmanager)
+        * [Core Execution Control Loop](#core-execution-control-loop)
+        * [Responsibilities](#responsibilities-2)
+        * [Control model](#control-model)
+        * [Design goals](#design-goals)
+        * [Execution behavior](#execution-behavior)
+    * [AbstractFrame](#abstractframe)
+    * [Base unit of execution](#base-unit-of-execution)
+        * [Identity and routing](#identity-and-routing)
+        * [Ordering and parallelism](#ordering-and-parallelism)
+        * [Lifecycle](#lifecycle)
+        * [Error handling](#error-handling)
+    * [LatticeEdge](#laticeedge)
+        * [Structural routing and execution backbone](#structural-routing-and-execution-backbone)
+        * [Behavior](#behavior-1)
+        * [Role in the system](#role-in-the-system)
+    * [LatticeVertex (LatticeEdge extension)](#laticevertex-laticeedge-extension)
+        * [Multi-branch routing implementation](#multi-branch-routing-implementation)
+        * [Routing model](#routing-model)
+        * [Behavior](#behavior-2)
 * [Summary](#summary)
+
 <!-- TOC -->
 
 # Overview
@@ -227,41 +229,42 @@ This is handled by the execution layer as a structured cancellation signal.
 
 ---
 
-## [ScaffoldingEdge](../euhedral-core/src/main/java/euhedral/io/flow_control/ScaffoldingEdge.java)
+## [LatticeEdge](../euhedral-core/src/main/java/euhedral/io/flow_control/LatticeEdge.java)
 
-### Structural routing and execution backbone
+### Structural data flow backbone
 
-ScaffoldingEdge is responsible for building and maintaining the execution graph. It dynamically
-constructs a chain of routing and execution nodes as components are connected.
+LatticeEdge is responsible for building and maintaining the execution graph. It recursively
+constructs a singular chain
+of [LatticeInterceptors](../euhedral-core/src/main/java/euhedral/io/generics/LatticeInterceptor.java)
+as they are connected.
 
 ### Behavior
 
 - Upstream handles propagate up through the chain
-- Terminal nodes define execution boundaries
+- Terminal nodes define the bottom boundary
 - Demand signals flow upward toward upstream producers
 - Work flows downward through the structure
 
 ### Role in the system
 
-ScaffoldingEdge forms the structural layer between ingestion and execution. It defines how
+LatticeEdge forms the structural layer between ingestion and execution. It defines how
 components are connected without dictating execution semantics.
-
-It acts as the foundational routing infrastructure for the system.
 
 ---
 
-## [ScaffoldingNode](../euhedral-core/src/main/java/euhedral/io/flow_control/ScaffoldingNode.java) (ScaffoldingEdge variant)
+## [LatticeVertex](../euhedral-core/src/main/java/euhedral/io/flow_control/LatticeVertex.java) (LatticeEdge extension)
 
-### Multi-branch routing implementation
+### Structural multi-branch routing implementation
 
-This variant of ScaffoldingEdge supports fan-out routing across multiple downstream consumers.
+LatticeVertex is a point where LatticeEdges meet. It is an extension of LatticeEdge and supports
+fan-out routing across multiple downstream consumers.
 
 ### Routing model
 
-Work is distributed deterministically using frame hash:
+Work is distributed deterministically using the frame's routing hash:
 
 ```java
-int idx = (int) unsignedMultiplyHigh(frame.getCombinedHash(), mapSize);
+int idx = (int) unsignedMultiplyHigh(frame.getRoutingHash(), mapSize);
 this.downstreams[idx].onNext(frame);
 ```
 
@@ -269,7 +272,7 @@ this.downstreams[idx].onNext(frame);
 
 - Enables parallel fan-out across downstream branches
 - Maintains deterministic routing via hashing
-- Used for load distribution across consumers
+- Used for load distribution across receivers
 
 ---
 
@@ -280,8 +283,9 @@ The system is organized into a hierarchical control structure:
 - ControlPlane → system-wide orchestration and topology management
 - ControlPlaneShard → per-socket execution domain management
 - ExecutionManager → per-core execution control loop
-- ScaffoldingEdge → structural routing and graph construction
+- LatticeEdge → structural graph construction
+- LatticeVertex → data routing and structural graph construction
 - AbstractFrame → unit of work and execution state
 
-Each layer is intentionally narrow in responsibility, allowing the system to scale while keeping
-local reasoning simple.
+Each layer is intentionally narrow in responsibility, allowing the system to scale by keeping
+local reasoning simple and state ownership private.
