@@ -5,7 +5,7 @@ import euhedral.benchmarks.frames.NoOpFrame;
 import euhedral.benchmarks.pipelines.NoOpPipeline;
 import euhedral.hashing.HasherApi;
 import euhedral.io.config.DRRConfig;
-import euhedral.io.config.ExecutionManagerConfig;
+import euhedral.io.config.SchedulingConfig;
 import euhedral.io.control_plane.ControlPlane;
 import euhedral.io.ingest.ArrayIngestSink;
 import java.util.concurrent.ThreadLocalRandom;
@@ -72,7 +72,7 @@ public class TrueThroughputBenchmark {
         }
 
         DRRConfig drrConfig = DRRConfig.defaultConfig("ThroughputComparisonBenchmark", null);
-        ExecutionManagerConfig emConfig = ExecutionManagerConfig.balancedDefault(null,
+        SchedulingConfig emConfig = SchedulingConfig.balancedDefault(null,
                 "ThroughputComparisonBenchmark");
         this.controlPlane = ControlPlane.getOrCreate("ThroughputComparisonBenchmark",
                 new NoOpPipeline("ThroughputComparisonBenchmark", drrConfig, emConfig, blackhole), null);

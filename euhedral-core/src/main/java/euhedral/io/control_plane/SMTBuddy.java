@@ -1,8 +1,8 @@
-package euhedral.io;
+package euhedral.io.control_plane;
 
 import euhedral.hardware_utils.PinnedThreadExecutor;
 import euhedral.hardware_utils.ThreadTools;
-import euhedral.io.DRRCacheManager.DownstreamHandle;
+import euhedral.io.control_plane.DRRCacheManager.DownstreamHandle;
 import euhedral.io.utils.DemandOptimizer;
 import euhedral.io.utils.DrainBuffer;
 import euhedral.io.utils.FlowRecorder;

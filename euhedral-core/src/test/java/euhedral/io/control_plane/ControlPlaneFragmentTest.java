@@ -1,16 +1,21 @@
-package euhedral.io;
+package euhedral.io.control_plane;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import java.time.Duration;
-
 import euhedral.io.config.CloneConfig;
-import euhedral.io.config.ExecutionManagerConfig;
+import euhedral.io.config.SchedulingConfig;
+import java.time.Duration;
 import org.junit.jupiter.api.Test;
 
-class ExecutionManagerTest {
+class ControlPlaneFragmentTest {
     private CloneConfig cloneConfig() {
         CloneConfig clone = mock(CloneConfig.class);
 
@@ -21,13 +26,13 @@ class ExecutionManagerTest {
         return clone;
     }
 
-    private ExecutionManagerConfig config() {
-        return new ExecutionManagerConfig(
+    private SchedulingConfig config() {
+        return new SchedulingConfig(
                 cloneConfig(),
                 64,
                 128,
                 false,
-                new ExecutionManagerConfig.IdleCyclePolicy(
+                new SchedulingConfig.IdleCyclePolicy(
                         0.4,
                         0.8,
                         1.0,
@@ -40,7 +45,7 @@ class ExecutionManagerTest {
 
     @Test
     void shouldConstructWithoutCloneConfig() {
-        ExecutionManager manager = new ExecutionManager(config());
+        ControlPlaneFragment manager = new ControlPlaneFragment(config());
 
         assertNotNull(manager);
         assertFalse(manager.isStarted());
@@ -48,7 +53,7 @@ class ExecutionManagerTest {
 
     @Test
     void shouldInitializeMinimumConcurrency() {
-        ExecutionManager manager = new ExecutionManager(config());
+        ControlPlaneFragment manager = new ControlPlaneFragment(config());
 
         assertEquals(64, manager.currentConcurrency);
         assertEquals(64, manager.currentRate);
@@ -57,7 +62,7 @@ class ExecutionManagerTest {
 
     @Test
     void shouldCreateRequiredInfrastructure() {
-        ExecutionManager manager = new ExecutionManager(config());
+        ControlPlaneFragment manager = new ControlPlaneFragment(config());
 
         assertNotNull(manager.output());
         assertNotNull(manager.completeChannel());
@@ -69,7 +74,7 @@ class ExecutionManagerTest {
 
     @Test
     void shouldEnableDrainMode() {
-        ExecutionManager manager = new ExecutionManager(config());
+        ControlPlaneFragment manager = new ControlPlaneFragment(config());
 
         manager.setDrainMode(true);
 
@@ -78,18 +83,18 @@ class ExecutionManagerTest {
 
     @Test
     void shouldFirstTouchWithoutFailure() {
-        ExecutionManager manager = new ExecutionManager(config());
+        ControlPlaneFragment manager = new ControlPlaneFragment(config());
 
         assertDoesNotThrow(manager::firstTouch);
     }
 
     @Test
     void shouldCloneManager() {
-        ExecutionManager manager = new ExecutionManager(config());
+        ControlPlaneFragment manager = new ControlPlaneFragment(config());
 
         CloneConfig cloneConfig = cloneConfig();
 
-        ExecutionManager cloned = manager.clone(cloneConfig);
+        ControlPlaneFragment cloned = manager.clone(cloneConfig);
 
         assertNotNull(cloned);
         assertNotSame(manager, cloned);
@@ -99,9 +104,9 @@ class ExecutionManagerTest {
     void shouldPropagateCloneConfig() {
         CloneConfig cloneConfig = cloneConfig();
 
-        ExecutionManagerConfig config = config();
+        SchedulingConfig config = config();
 
-        ExecutionManagerConfig cloned =
+        SchedulingConfig cloned =
                 config.clone(cloneConfig);
 
         assertSame(cloneConfig, cloned.cloneConfig());
@@ -119,7 +124,7 @@ class ExecutionManagerTest {
 
     @Test
     void shouldReturnPressureWithinBounds() {
-        ExecutionManager manager = new ExecutionManager(config());
+        ControlPlaneFragment manager = new ControlPlaneFragment(config());
 
         double pressure = manager.getPressure();
 
@@ -129,14 +134,14 @@ class ExecutionManagerTest {
 
     @Test
     void shouldBeInitiallyDrained() {
-        ExecutionManager manager = new ExecutionManager(config());
+        ControlPlaneFragment manager = new ControlPlaneFragment(config());
 
         assertTrue(manager.isDrained());
     }
 
     @Test
     void shouldCloseSafely() {
-        ExecutionManager manager = new ExecutionManager(config());
+        ControlPlaneFragment manager = new ControlPlaneFragment(config());
 
         assertDoesNotThrow(manager::close);
     }

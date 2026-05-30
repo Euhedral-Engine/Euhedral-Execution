@@ -64,7 +64,7 @@ ControlPlane Shard             ->        Shard Load Balancer (Partition Router)
 ↓
 DRRCacheManager                ->        Ingress Gateway / Stateful Cache Layer
 ↓
-ExecutionManager               ->        Task Scheduler
+ControlPlaneFragment           ->        Task Scheduler
 ↓
 AbstractExecutor               ->        Worker Runtime
 ↓
@@ -75,7 +75,7 @@ Everything below the ControlPlane is replicated according to hardware topology.
 
 - Sockets become shards
 - L2-sharing CPUs cooperate through localized queues (DRRCacheManager)
-- CPUs become pinned execution loops (ExecutionManager)
+- CPUs become pinned execution scheduling loops (ControlPlaneFragment)
 
 ---
 
@@ -149,7 +149,7 @@ frame.randomizeHash(HasherApi.combine(idHash, seed++));
 
 ### Scheduling is adaptive
 
-The ExecutionManager continuously tunes execution behavior based on observed conditions.
+The ControlPlaneFragment continuously tunes execution behavior based on observed conditions.
 
 It adjusts:
 
@@ -275,14 +275,14 @@ The execution engine.
 
 #### Major Components
 
-| Component                                                  | Description                                    |
-|:-----------------------------------------------------------|:-----------------------------------------------|
-| <span style="white-space: nowrap">ControlPlane</span>      | Global orchestration and topology management   |
-| <span style="white-space: nowrap">ControlPlaneShard</span> | Per-socket orchestration and worker management |
-| <span style="white-space: nowrap">DRRCacheManager</span>   | Cache-local deficit round-robin queue          |
-| <span style="white-space: nowrap">ExecutionManager</span>  | Adaptive pinned execution control loop         |
-| <span style="white-space: nowrap">AbstractExecutors</span> | Thin execution wrapper                         |
-| <span style="white-space: nowrap">AbstractFrame</span>     | Base unit of work                              |
+| Component                                                     | Description                                    |
+|:--------------------------------------------------------------|:-----------------------------------------------|
+| <span style="white-space: nowrap">ControlPlane</span>         | Global orchestration and topology management   |
+| <span style="white-space: nowrap">ControlPlaneShard</span>    | Per-socket orchestration and worker management |
+| <span style="white-space: nowrap">DRRCacheManager</span>      | Cache-local deficit round-robin queue          |
+| <span style="white-space: nowrap">ControlPlaneFragment</span> | Adaptive pinned execution scheduling loop      |
+| <span style="white-space: nowrap">AbstractExecutors</span>    | Thin execution wrapper                         |
+| <span style="white-space: nowrap">AbstractFrame</span>        | Base unit of work                              |
 
 ### euhedral-data-structures
 

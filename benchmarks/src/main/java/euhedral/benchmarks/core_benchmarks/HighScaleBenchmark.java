@@ -9,7 +9,7 @@ import euhedral.hardware_utils.SystemInfo;
 import euhedral.hardware_utils.SystemInfo.SocketInfo;
 import euhedral.hashing.HasherApi;
 import euhedral.io.config.DRRConfig;
-import euhedral.io.config.ExecutionManagerConfig;
+import euhedral.io.config.SchedulingConfig;
 import euhedral.io.control_plane.ControlPlane;
 import euhedral.io.control_plane.RoutingPolicy;
 import euhedral.io.frames.AbstractFrame;
@@ -173,7 +173,7 @@ public class HighScaleBenchmark {
             }
 
             DRRConfig drrConfig = DRRConfig.defaultConfig("hsb", null);
-            ExecutionManagerConfig emConfig = ExecutionManagerConfig.balancedDefault(null,
+            SchedulingConfig emConfig = SchedulingConfig.balancedDefault(null,
                     "hsb");
             FractalPipeline pipeline =
                     new FractalPipeline("HighScaleBenchmark", drrConfig, emConfig, blackhole);
@@ -262,7 +262,7 @@ public class HighScaleBenchmark {
             }
 
             DRRConfig drrConfig = DRRConfig.defaultConfig("hsb", null);
-            ExecutionManagerConfig emConfig = ExecutionManagerConfig.balancedDefault(null,
+            SchedulingConfig emConfig = SchedulingConfig.balancedDefault(null,
                     "hsb");
             FractalPipeline pipeline =
                     new FractalPipeline("HighScaleBenchmark", drrConfig, emConfig, blackhole);
@@ -329,7 +329,7 @@ public class HighScaleBenchmark {
             }
 
             DRRConfig drrConfig = DRRConfig.defaultConfig("hsb", null);
-            ExecutionManagerConfig emConfig = ExecutionManagerConfig.balancedDefault(null,
+            SchedulingConfig emConfig = SchedulingConfig.balancedDefault(null,
                     "hsb");
             FractalPipeline pipeline =
                     new FractalPipeline("HighScaleBenchmark", drrConfig, emConfig, blackhole);
@@ -397,7 +397,7 @@ public class HighScaleBenchmark {
             }
 
             DRRConfig drrConfig = DRRConfig.defaultConfig("hsb", null);
-            ExecutionManagerConfig emConfig = ExecutionManagerConfig.balancedDefault(null,
+            SchedulingConfig emConfig = SchedulingConfig.balancedDefault(null,
                     "hsb");
             FractalPipeline pipeline =
                     new FractalPipeline("HighScaleBenchmark", drrConfig, emConfig, blackhole);
