@@ -12,6 +12,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.LongAdder;
+import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 
 class PartitionedUnboundedMpscArrayQueueTest {
@@ -26,7 +27,7 @@ class PartitionedUnboundedMpscArrayQueueTest {
         }
 
         final int[] drained = new int[]{0};
-        QueueConsumer<Integer> consumer = (val) -> {
+        Consumer<Integer> consumer = (val) -> {
             if (val != ++drained[0]) {
                 fail("Corruption! Last Value: " + drained[0] + " Current: " + val);
             }
@@ -51,7 +52,7 @@ class PartitionedUnboundedMpscArrayQueueTest {
                 new PartitionedUnboundedMpscArrayQueue<>(partitions, 4096, 4);
         int batch = 100_000;
 
-        QueueConsumer<Long> consumer = (val) -> {
+        Consumer<Long> consumer = (val) -> {
         };
         ExecutorService exec = Executors.newFixedThreadPool(16);
         for (int x = 0; x < 20; x++) {
@@ -110,7 +111,7 @@ class PartitionedUnboundedMpscArrayQueueTest {
             });
         }
 
-        QueueConsumer<Long> consumer = (val) -> {
+        Consumer<Long> consumer = (val) -> {
             if (!consumed.add(val)) {
                 fail("Duplicate: " + val);
             }

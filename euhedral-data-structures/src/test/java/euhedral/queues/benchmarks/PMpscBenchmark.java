@@ -1,10 +1,10 @@
 package euhedral.queues.benchmarks;
 
 import euhedral.queues.PartitionedMpscArrayQueue;
-import euhedral.queues.QueueConsumer;
 import euhedral.queues.benchmarks.PMpmcBenchmark.BenchState;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import org.HdrHistogram.ConcurrentHistogram;
 import org.openjdk.jmh.annotations.AuxCounters;
 import org.openjdk.jmh.annotations.Benchmark;
@@ -45,7 +45,7 @@ public class PMpscBenchmark {
         new Runner(opt).run();
     }
 
-    private final QueueConsumer<Long> consumer = (val) -> {
+    private final Consumer<Long> consumer = (val) -> {
         histogram.recordValue(System.nanoTime() - val);
     };
 

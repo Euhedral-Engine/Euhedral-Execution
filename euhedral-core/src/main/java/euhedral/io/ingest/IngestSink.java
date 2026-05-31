@@ -2,21 +2,23 @@ package euhedral.io.ingest;
 
 import euhedral.atomics.PaddedAtomicLong;
 import euhedral.io.control_plane.ControlPlaneLattice;
-import euhedral.io.generics.LaticeSource;
+import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.LatticeReceiver;
+import euhedral.io.generics.LatticeSource;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
+import java.util.function.Consumer;
 
 public abstract class IngestSink {
 
     /// Used by the [ControlPlaneLattice][ControlPlaneLattice] to connect to this sink.
-    public abstract LaticeSource getDelegate();
+    public abstract LatticeSource getDelegate();
 
     /// Marks the sink as complete and disconnects it from the
     /// [ControlPlaneLattice][ControlPlaneLattice].
     public abstract void complete();
 
-    protected static abstract class Delegate implements LaticeSource {
+    protected static abstract class Delegate implements LatticeSource {
 
         protected static final VarHandle TERMINAL;
 
@@ -59,6 +61,17 @@ public abstract class IngestSink {
             TERMINAL.setRelease(this, null);
             this.demand.setPlain(0);
         }
+
+        @Override
+        public final void pull(Consumer<AbstractFrame> consumer, long demand) {
+            var terminal = getTerminal();
+            if (terminal == null || demand <= 0) {
+                return;
+            }
+            hookOnPull(consumer, demand);
+        }
+
+        public abstract void hookOnPull(Consumer<AbstractFrame> consumer, long demand);
 
         @Override
         public final void request(long demand) {

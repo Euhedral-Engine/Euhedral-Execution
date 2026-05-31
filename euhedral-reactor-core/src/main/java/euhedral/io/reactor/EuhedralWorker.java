@@ -1,8 +1,9 @@
 package euhedral.io.reactor;
 
 import euhedral.hashing.HasherApi;
-import euhedral.io.generics.LaticeSource;
+import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.LatticeReceiver;
+import euhedral.io.generics.LatticeSource;
 import euhedral.io.ingest.IngestSink;
 import euhedral.io.reactor.common.TaskFrame;
 import euhedral.queues.PartitionedUnboundedMpscArrayQueue;
@@ -11,6 +12,7 @@ import java.lang.invoke.VarHandle;
 import java.util.Objects;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import org.jspecify.annotations.NonNull;
 import reactor.core.Disposable;
 import reactor.core.scheduler.Scheduler.Worker;
@@ -57,7 +59,7 @@ public class EuhedralWorker extends IngestSink implements Worker {
     }
 
     @Override
-    public LaticeSource getDelegate() {
+    public LatticeSource getDelegate() {
         return this.delegate;
     }
 
@@ -98,6 +100,11 @@ public class EuhedralWorker extends IngestSink implements Worker {
         }
 
         @Override
+        public void hookOnPull(Consumer<AbstractFrame> consumer, long demand) {
+
+        }
+
+        @Override
         public void hookOnRequest(LatticeReceiver terminal, long demand) {
             if (complete) {
                 return;
@@ -118,7 +125,7 @@ public class EuhedralWorker extends IngestSink implements Worker {
             if (terminal == null) {
                 return;
             }
-            terminal.onNext(frame);
+            terminal.push(frame);
         }
 
         @Override

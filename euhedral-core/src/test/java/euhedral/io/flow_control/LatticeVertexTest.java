@@ -15,7 +15,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 
-import euhedral.io.generics.LaticeSource;
+import euhedral.io.generics.LatticeSource;
 import euhedral.io.utils.DrainBuffer;
 import java.util.BitSet;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -187,7 +187,7 @@ class LatticeVertexTest {
 
         doReturn(0L).when(frame).getRoutingHash();
 
-        node.onNext(frame);
+        node.push(frame);
 
         assertEquals(1, first.received.size());
         assertEquals(0, second.received.size());
@@ -251,7 +251,7 @@ class LatticeVertexTest {
         LatticeVertex.UpstreamInterceptor interceptor =
                 node.new UpstreamInterceptor();
 
-        LaticeSource source = mock(LaticeSource.class);
+        LatticeSource source = mock(LatticeSource.class);
 
         interceptor.addUpstream(source);
 
@@ -260,7 +260,7 @@ class LatticeVertexTest {
 
     @Test
     void shouldIngestSource() {
-        LaticeSource source = mock(LaticeSource.class);
+        LatticeSource source = mock(LatticeSource.class);
 
         node.ingest(source);
 
@@ -298,7 +298,7 @@ class LatticeVertexTest {
         LatticeVertex.UpstreamInterceptor interceptor =
                 node.new UpstreamInterceptor();
 
-        interceptor.onNext(frame);
+        interceptor.push(frame);
 
         assertFalse(node.parallelQueue.isEmpty());
     }
@@ -329,7 +329,7 @@ class LatticeVertexTest {
         LatticeVertex.UpstreamInterceptor interceptor =
                 node.new UpstreamInterceptor();
 
-        interceptor.onNext(frame);
+        interceptor.push(frame);
 
         assertEquals(1, terminal.received.size());
     }
@@ -339,7 +339,7 @@ class LatticeVertexTest {
         LatticeVertex.UpstreamInterceptor interceptor =
                 node.new UpstreamInterceptor();
 
-        LaticeSource upstream = mock(LaticeSource.class);
+        LatticeSource upstream = mock(LatticeSource.class);
 
         interceptor.upstream = upstream;
 
@@ -353,7 +353,7 @@ class LatticeVertexTest {
         LatticeVertex.UpstreamInterceptor interceptor =
                 node.new UpstreamInterceptor();
 
-        LaticeSource upstream = mock(LaticeSource.class);
+        LatticeSource upstream = mock(LatticeSource.class);
 
         interceptor.upstream = upstream;
 
@@ -367,7 +367,7 @@ class LatticeVertexTest {
         LatticeVertex.UpstreamInterceptor interceptor =
                 node.new UpstreamInterceptor();
 
-        LaticeSource upstream = mock(LaticeSource.class);
+        LatticeSource upstream = mock(LatticeSource.class);
 
         interceptor.upstream = upstream;
 

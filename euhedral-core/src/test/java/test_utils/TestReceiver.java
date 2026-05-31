@@ -1,8 +1,8 @@
 package test_utils;
 
 import euhedral.io.frames.AbstractFrame;
-import euhedral.io.generics.LaticeSource;
 import euhedral.io.generics.LatticeReceiver;
+import euhedral.io.generics.LatticeSource;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -12,10 +12,10 @@ public class TestReceiver implements LatticeReceiver {
 
     public Throwable error;
     public boolean completed;
-    public LaticeSource upstream;
+    public LatticeSource upstream;
 
     @Override
-    public void onNext(AbstractFrame frame) {
+    public void push(AbstractFrame frame) {
         received.add((TestFrame) frame);
     }
 
@@ -30,7 +30,7 @@ public class TestReceiver implements LatticeReceiver {
     }
 
     @Override
-    public void addUpstream(LaticeSource upstream) {
+    public void addUpstream(LatticeSource upstream) {
         this.upstream = upstream;
     }
 }

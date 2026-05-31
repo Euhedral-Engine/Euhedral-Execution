@@ -16,7 +16,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import euhedral.io.frames.AbstractFrame;
-import euhedral.queues.QueueConsumer;
 import euhedral.queues.common.PartitionedQueue;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
@@ -89,10 +88,10 @@ class DirectOutputStreamTest {
 
         when(queue.drain(any(), eq(2L)))
                 .thenAnswer(invocation -> {
-                    QueueConsumer<AbstractFrame> consumer = invocation.getArgument(0);
+                    Consumer<AbstractFrame> consumer = invocation.getArgument(0);
 
-                    consumer.consume(frame1);
-                    consumer.consume(frame2);
+                    consumer.accept(frame1);
+                    consumer.accept(frame2);
 
                     return 2L;
                 });

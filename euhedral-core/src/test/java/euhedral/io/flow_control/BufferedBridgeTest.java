@@ -10,8 +10,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import euhedral.io.frames.AbstractFrame;
-import euhedral.queues.QueueConsumer;
 import euhedral.queues.common.PartitionedQueue;
+import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import test_utils.TestFrame;
@@ -19,8 +19,8 @@ import test_utils.TestFrame;
 class BufferedBridgeTest {
 
     private PartitionedQueue<AbstractFrame> queue;
-    private QueueConsumer<AbstractFrame> drainConsumer;
-    private QueueConsumer<AbstractFrame> hookConsumer;
+    private Consumer<AbstractFrame> drainConsumer;
+    private Consumer<AbstractFrame> hookConsumer;
 
     private BufferedBridge bridge;
 
@@ -28,8 +28,8 @@ class BufferedBridgeTest {
     @SuppressWarnings("unchecked")
     void setup() {
         queue = mock(PartitionedQueue.class);
-        drainConsumer = mock(QueueConsumer.class);
-        hookConsumer = mock(QueueConsumer.class);
+        drainConsumer = mock(Consumer.class);
+        hookConsumer = mock(Consumer.class);
 
         bridge = new BufferedBridge(queue, drainConsumer, hookConsumer);
     }
@@ -68,7 +68,7 @@ class BufferedBridgeTest {
 
         assertTrue(result);
 
-        verify(hookConsumer).consume(frame);
+        verify(hookConsumer).accept(frame);
     }
 
     @Test
@@ -81,7 +81,7 @@ class BufferedBridgeTest {
 
         assertFalse(result);
 
-        verify(hookConsumer, never()).consume(any());
+        verify(hookConsumer, never()).accept(any());
     }
 
     @Test
@@ -123,7 +123,7 @@ class BufferedBridgeTest {
         verify(queue).offer(frame1);
         verify(queue).offer(frame2);
 
-        verify(hookConsumer).consume(frame1);
-        verify(hookConsumer).consume(frame2);
+        verify(hookConsumer).accept(frame1);
+        verify(hookConsumer).accept(frame2);
     }
 }

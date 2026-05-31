@@ -32,7 +32,7 @@ public abstract class AbstractExecutor implements PipelineExecutor {
     }
 
     @Override
-    public void input(LaticeSource stream) {
+    public void input(LatticeSource stream) {
         stream.addDownstream(new ExecutionTerminal());
     }
 
@@ -71,12 +71,12 @@ public abstract class AbstractExecutor implements PipelineExecutor {
         }
 
         @Override
-        public void addUpstream(LaticeSource stream) {
+        public void addUpstream(LatticeSource stream) {
             stream.request(Long.MAX_VALUE);
         }
 
         @Override
-        public void onNext(AbstractFrame frame) {
+        public void push(AbstractFrame frame) {
             executeInternal(frame);
         }
 

@@ -14,6 +14,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.LongAdder;
 
+import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 
 class PartitionedMpmcArrayQueueTest {
@@ -31,7 +32,7 @@ class PartitionedMpmcArrayQueueTest {
         }
 
         final int[] drained = new int[] {-1};
-        QueueConsumer<Integer> consumer = (val) -> {
+        Consumer<Integer> consumer = (val) -> {
             if (val != ++drained[0] || val >= 128) {
                 fail("Corruption! Last Value: " + drained[0] + " Current: " + val);
             }
@@ -58,7 +59,7 @@ class PartitionedMpmcArrayQueueTest {
         PartitionedMpmcArrayQueue<Long> q =
                 new PartitionedMpmcArrayQueue<>(partitions, 4096, false);
 
-        QueueConsumer<Long> consumer = (val) -> {
+        Consumer<Long> consumer = (val) -> {
         };
         ExecutorService exec = Executors.newFixedThreadPool(16);
         for (int x = 0; x < 10; x++) {
@@ -129,7 +130,7 @@ class PartitionedMpmcArrayQueueTest {
             });
         }
 
-        QueueConsumer<Long> consumer = (val) -> {
+        Consumer<Long> consumer = (val) -> {
             if (!consumed.add(val)) {
                 fail("Duplicate: " + val);
             }
@@ -175,7 +176,7 @@ class PartitionedMpmcArrayQueueTest {
         }
 
         CountDownLatch consLatch = new CountDownLatch(consumers);
-        QueueConsumer<Long> consumer = (val) -> {
+        Consumer<Long> consumer = (val) -> {
             if (!consumed.add(val)) {
                 fail("Duplicate detected: " + val);
             }
@@ -214,7 +215,7 @@ class PartitionedMpmcArrayQueueTest {
         }
 
         final int[] total = new int[1];
-        QueueConsumer<Integer> consumer = (val) -> {
+        Consumer<Integer> consumer = (val) -> {
             total[0]++;
         };
         while (!q.isEmpty()) {
