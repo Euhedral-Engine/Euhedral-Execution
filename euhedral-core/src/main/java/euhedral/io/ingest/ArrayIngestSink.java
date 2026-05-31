@@ -10,7 +10,7 @@ import java.util.function.Consumer;
 /// Wraps an array to allow it to be ingested by the
 /// [ControlPlaneLattice][ControlPlaneLattice]
 @SuppressWarnings("unused")
-public class ArrayIngestSink extends IngestSink {
+public class ArrayIngestSink extends AbstractIngestSink {
 
     private final Delegate delegate;
 
@@ -34,7 +34,7 @@ public class ArrayIngestSink extends IngestSink {
         delegate.complete();
     }
 
-    protected static final class Delegate extends IngestSink.Delegate {
+    protected static final class Delegate extends AbstractIngestSink.Delegate {
 
         private final AbstractFrame[] array;
         int start;

@@ -6,12 +6,14 @@ import euhedral.io.generics.LatticeReceiver;
 import euhedral.io.generics.LatticeSource;
 import euhedral.queues.PartitionedUnboundedMpmcArrayQueue;
 import euhedral.queues.common.ConcurrentPartitionedQueue;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import java.util.function.Consumer;
 
 /// Wraps a partitioned queue to allow it to be fed into the
 /// [ControlPlaneLattice][ControlPlaneLattice]
 @SuppressWarnings("unused")
-public class QueueIngestSink extends IngestSink {
+public final class QueueIngestSink extends AbstractIngestSink {
 
     private final Delegate delegate;
 
@@ -55,16 +57,32 @@ public class QueueIngestSink extends IngestSink {
         this.delegate.queue.clear();
     }
 
-    /// Disconnects from the [ControlPlaneLattice][ControlPlaneLattice]. Does not clear
+    /// Disconnects from the [ControlPlaneLattice] immediately. Does not clear
     /// the queue.
     @Override
     public void complete() {
         this.delegate.complete();
     }
 
-    protected static final class Delegate extends IngestSink.Delegate {
+    /// Disconnects from the [ControlPlaneLattice] when the queue is finished being drained.
+    public void gracefulComplete() {
+        this.delegate.gracefulComplete();
+    }
+
+    protected static final class Delegate extends AbstractIngestSink.Delegate {
+        static final VarHandle FINISH;
+
+        static {
+            try {
+                FINISH = MethodHandles.lookup().findVarHandle(Delegate.class, "finish", boolean.class);
+            } catch (Throwable t) {
+                throw new ExceptionInInitializerError(t);
+            }
+        }
 
         final ConcurrentPartitionedQueue<AbstractFrame> queue;
+
+        boolean finish = false;
 
         protected Delegate(ConcurrentPartitionedQueue<AbstractFrame> queue) {
             this.queue = queue;
@@ -72,7 +90,10 @@ public class QueueIngestSink extends IngestSink {
 
         @Override
         public void hookOnPull(Consumer<AbstractFrame> consumer, long demand) {
-            this.queue.drain(consumer, demand);
+            long count = this.queue.drain(consumer, demand);
+            if(count == 0 && (boolean) FINISH.getOpaque(this)) {
+                complete();
+            }
         }
 
         @Override
@@ -80,7 +101,13 @@ public class QueueIngestSink extends IngestSink {
             long count = this.queue.drain(terminal::push, demand);
             if (count > 0) {
                 addAndGetDemand(-count);
+            } else if((boolean) FINISH.getOpaque(this)) {
+                complete();
             }
+        }
+
+        public void gracefulComplete() {
+            FINISH.setRelease(this, true);
         }
     }
 }
