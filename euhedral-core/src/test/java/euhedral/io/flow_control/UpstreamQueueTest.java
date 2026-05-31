@@ -9,10 +9,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import euhedral.io.frames.AbstractFrame;
-import euhedral.io.generics.LaticeSource;
+import euhedral.io.generics.LatticeSource;
 import euhedral.io.utils.DrainBuffer;
 import euhedral.queues.common.PartitionedQueue;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 import org.jctools.maps.NonBlockingHashMapLong;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -131,7 +132,7 @@ class UpstreamQueueTest {
 
         queue.pull(buffer, 64);
 
-        assertEquals(64, upstream.requested);
+        assertEquals(0, upstream.requested);
         assertEquals(64, upstream.pulled);
     }
 
@@ -229,7 +230,7 @@ class UpstreamQueueTest {
 
         UpstreamQueue.drain(upstream, buffer, 64);
 
-        assertEquals(64, upstream.requested);
+        assertEquals(0, upstream.requested);
         assertEquals(64, upstream.pulled);
     }
 
@@ -238,7 +239,7 @@ class UpstreamQueueTest {
         UpstreamQueue.UpstreamHandle handle =
                 new TestUpstreamHandle();
 
-        LaticeSource source = mock(LaticeSource.class);
+        LatticeSource source = mock(LatticeSource.class);
 
         handle.addUpstream(source);
 
@@ -273,7 +274,7 @@ class UpstreamQueueTest {
         boolean complete;
 
         @Override
-        public void pull(DrainBuffer buffer, long demand) {
+        public void pull(Consumer<AbstractFrame> consumer, long demand) {
             this.pulled += demand;
         }
 
@@ -288,7 +289,7 @@ class UpstreamQueueTest {
         }
 
         @Override
-        public void onNext(AbstractFrame frame) {
+        public void push(AbstractFrame frame) {
         }
 
         @Override

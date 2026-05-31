@@ -2,10 +2,11 @@ package euhedral.io.generics;
 
 import euhedral.io.frames.AbstractFrame;
 
+/// An interface for defining where data flows to
 public interface LatticeReceiver {
-    void addUpstream(LaticeSource upstream);
+    void addUpstream(LatticeSource upstream);
 
-    void onNext(AbstractFrame frame);
+    void push(AbstractFrame frame);
 
     void onComplete();
 

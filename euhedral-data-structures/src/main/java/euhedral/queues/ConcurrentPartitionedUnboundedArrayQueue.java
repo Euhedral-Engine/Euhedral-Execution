@@ -7,6 +7,7 @@ import euhedral.queues.common.ConcurrentPartitionedQueue;
 import euhedral.queues.common.NodeRecycler;
 import java.lang.invoke.VarHandle;
 import java.util.StringJoiner;
+import java.util.function.Consumer;
 
 /// A template of a concurrent unbounded array queue with partitions. This class is overridden by
 /// its subclasses to selectively choose the type of thread safety between producers and consumers.
@@ -170,7 +171,7 @@ abstract sealed class ConcurrentPartitionedUnboundedArrayQueue<T>
     }
 
     @Override
-    public long drain(int partition, QueueConsumer<T> consumer, long limit) {
+    public long drain(int partition, Consumer<T> consumer, long limit) {
         boundsCheck(partition);
         if (consumer == null || limit <= 0) {
             return 0;

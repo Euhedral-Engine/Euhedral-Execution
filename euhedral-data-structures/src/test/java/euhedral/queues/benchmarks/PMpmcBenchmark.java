@@ -1,12 +1,12 @@
 package euhedral.queues.benchmarks;
 
 import euhedral.queues.PartitionedMpmcArrayQueue;
-import euhedral.queues.QueueConsumer;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.LongAdder;
+import java.util.function.Consumer;
 import org.HdrHistogram.ConcurrentHistogram;
 import org.openjdk.jmh.annotations.AuxCounters;
 import org.openjdk.jmh.annotations.Benchmark;
@@ -74,10 +74,10 @@ public class PMpmcBenchmark {
         System.out.println();
     }
 
-    private final QueueConsumer<Long> contentionConsumer = (val) -> {
+    private final Consumer<Long> contentionConsumer = (val) -> {
         contentionHistogram.recordValue(System.nanoTime() - val);
     };
-    private final QueueConsumer<Long> residencyConsumer = (val) -> {
+    private final Consumer<Long> residencyConsumer = (val) -> {
         residencyHistogram.recordValue(System.nanoTime() - val);
     };
 

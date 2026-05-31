@@ -2,10 +2,11 @@ package euhedral.io.ingest;
 
 import euhedral.io.control_plane.ControlPlaneLattice;
 import euhedral.io.frames.AbstractFrame;
-import euhedral.io.generics.LaticeSource;
 import euhedral.io.generics.LatticeReceiver;
+import euhedral.io.generics.LatticeSource;
 import euhedral.queues.PartitionedUnboundedMpmcArrayQueue;
 import euhedral.queues.common.ConcurrentPartitionedQueue;
+import java.util.function.Consumer;
 
 /// Wraps a partitioned queue to allow it to be fed into the
 /// [ControlPlaneLattice][ControlPlaneLattice]
@@ -23,7 +24,7 @@ public class QueueIngestSink extends IngestSink {
     }
 
     @Override
-    public LaticeSource getDelegate() {
+    public LatticeSource getDelegate() {
         return null;
     }
 
@@ -70,8 +71,13 @@ public class QueueIngestSink extends IngestSink {
         }
 
         @Override
+        public void hookOnPull(Consumer<AbstractFrame> consumer, long demand) {
+            this.queue.drain(consumer, demand);
+        }
+
+        @Override
         public void hookOnRequest(LatticeReceiver terminal, long demand) {
-            long count = this.queue.drain(terminal::onNext, demand);
+            long count = this.queue.drain(terminal::push, demand);
             if (count > 0) {
                 addAndGetDemand(-count);
             }

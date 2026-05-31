@@ -38,10 +38,10 @@ public interface CloneableObject extends AutoCloseable {
     default void update(CoreSnapshot coreSnapshot) {
     }
 
-    default void input(LaticeSource stream) {
+    default void input(LatticeSource stream) {
     }
 
-    default LaticeSource output() {
+    default LatticeSource output() {
         return null;
     }
 

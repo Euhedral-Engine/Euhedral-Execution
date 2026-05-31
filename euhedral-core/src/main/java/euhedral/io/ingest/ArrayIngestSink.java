@@ -2,9 +2,10 @@ package euhedral.io.ingest;
 
 import euhedral.io.control_plane.ControlPlaneLattice;
 import euhedral.io.frames.AbstractFrame;
-import euhedral.io.generics.LaticeSource;
 import euhedral.io.generics.LatticeReceiver;
+import euhedral.io.generics.LatticeSource;
 import java.lang.invoke.VarHandle;
+import java.util.function.Consumer;
 
 /// Wraps an array to allow it to be ingested by the
 /// [ControlPlaneLattice][ControlPlaneLattice]
@@ -18,7 +19,7 @@ public class ArrayIngestSink extends IngestSink {
     }
 
     /// Returns the delegate the ControlPlaneLattice will use to ingest the array.
-    public LaticeSource getDelegate() {
+    public LatticeSource getDelegate() {
         return this.delegate;
     }
 
@@ -43,17 +44,35 @@ public class ArrayIngestSink extends IngestSink {
         }
 
         @Override
+        public void hookOnPull(Consumer<AbstractFrame> consumer, long demand) {
+            if(start >= array.length) {
+                complete();
+                return;
+            }
+
+            long end = start + demand;
+
+            while (start < end && start < array.length) {
+                consumer.accept(array[start++]);
+            }
+            VarHandle.releaseFence();
+            if (start >= array.length) {
+                complete();
+            }
+        }
+
+        @Override
         public void hookOnRequest(LatticeReceiver terminal, long demand) {
             if(start >= array.length) {
                 complete();
                 return;
             }
 
-            int batch = (int) Math.min(demand, Integer.MAX_VALUE);
+            long end = start + demand;
 
             int count = 0;
-            while (start < batch && start < array.length) {
-                terminal.onNext(array[start++]);
+            while (start < end && start < array.length) {
+                terminal.push(array[start++]);
                 count++;
             }
             addAndGetDemand(-count);

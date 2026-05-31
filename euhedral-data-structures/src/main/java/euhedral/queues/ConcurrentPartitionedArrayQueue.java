@@ -10,6 +10,7 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.Arrays;
 import java.util.StringJoiner;
+import java.util.function.Consumer;
 
 /// A template of a concurrent array queue with partitions. This class is overridden by its
 /// subclasses to selectively choose the type of thread safety between producers and consumers.
@@ -161,7 +162,7 @@ abstract sealed class ConcurrentPartitionedArrayQueue<T> extends PartitionedArra
     }
 
     @Override
-    public long drain(int partition, QueueConsumer<T> consumer, long limit) {
+    public long drain(int partition, Consumer<T> consumer, long limit) {
         boundsCheck(partition);
         if (consumer == null || limit <= 0) {
             return 0;
@@ -207,7 +208,7 @@ abstract sealed class ConcurrentPartitionedArrayQueue<T> extends PartitionedArra
             VarHandle.acquireFence();
             for (int j = 0; j < reserved; j++) {
                 int qIdx = chunkIndex(head + j);
-                consumer.consume(pQueue[qIdx]);
+                consumer.accept(pQueue[qIdx]);
                 pQueue[qIdx] = null;
             }
             total += reserved;
