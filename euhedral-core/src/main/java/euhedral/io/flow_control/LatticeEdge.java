@@ -5,7 +5,6 @@ import euhedral.io.flow_control.UpstreamQueue.UpstreamHandle;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.LatticeInterceptor;
 import euhedral.io.generics.LatticeReceiver;
-import euhedral.io.utils.DrainBuffer;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.Collection;
@@ -14,20 +13,20 @@ import java.util.WeakHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.LockSupport;
+import java.util.function.Consumer;
 import lombok.Getter;
 import lombok.Setter;
 import org.jctools.maps.NonBlockingHashMapLong;
 
 /// ## The main infrastructure class of Euhedral Core
 ///
-/// This is the structural backbone of the entire system. A `LatticeEdge` forms a dynamic
-/// execution graph by recursively linking to other edges whenever it is attached upstream or
-/// downstream.
+/// This is the structural backbone of the entire system. A `LatticeEdge` forms a dynamic execution
+/// graph by recursively linking to other edges whenever it is attached upstream or downstream.
 ///
 /// When another `LatticeEdge` is connected, it becomes part of the same chain, effectively
 /// extending the execution topology. When an `UpstreamHandle` is added, it is propagated upward
-/// through the graph. When a `LatticeReceiver` is attached, it becomes the execution boundary
-/// (the “floor”) of that branch.
+/// through the graph. When a `LatticeReceiver` is attached, it becomes the execution boundary (the
+/// “floor”) of that branch.
 ///
 /// Work flows downward through the graph toward receivers, while demand and backpressure flow
 /// upward toward upstream sources. The structure is designed to continuously reconcile both
@@ -188,10 +187,10 @@ public class LatticeEdge extends UpstreamHandle implements AutoCloseable {
 
     /// Sends work downstream.
     @Override
-    public void onNext(AbstractFrame frame) {
+    public void push(AbstractFrame frame) {
         var downstream = (LatticeReceiver) DOWNSTREAM.getOpaque(this);
         if (downstream != null) {
-            downstream.onNext(frame);
+            downstream.push(frame);
         }
     }
 
@@ -218,18 +217,18 @@ public class LatticeEdge extends UpstreamHandle implements AutoCloseable {
     /// Pulls available work from the [UpstreamHandles][UpstreamHandle] without requesting more
     /// work.
     @Override
-    public void pull(DrainBuffer buffer, long demand) {
+    public void pull(Consumer<AbstractFrame> consumer, long demand) {
         if ((boolean) CLOSED.getOpaque(this) || this.drain.getOpaque()) {
             return;
         }
 
         LatticeEdge parent = (LatticeEdge) PARENT.getOpaque(this);
         if (parent != null) {
-            parent.pull(buffer, demand);
+            parent.pull(consumer, demand);
             return;
         }
         UpstreamQueue queue = UpstreamQueue.get(this.aggregators, this.threadCount);
-        queue.pull(buffer, demand);
+        queue.pull(consumer, demand);
     }
 
     /// Transfers this edge's state to its parent.
@@ -269,8 +268,8 @@ public class LatticeEdge extends UpstreamHandle implements AutoCloseable {
         this.upstreamHandles.clear();
     }
 
-    /// If the parameter is a LatticeEdge, it sets it as its parent or bubbles it up the chain.
-    /// If it is an [UpstreamHandle][UpstreamHandle], it adds it to all
+    /// If the parameter is a LatticeEdge, it sets it as its parent or bubbles it up the chain. If
+    /// it is an [UpstreamHandle][UpstreamHandle], it adds it to all
     /// [UpstreamQueues][UpstreamQueue]
     @Override
     public void addUpstream(LatticeInterceptor up) {
@@ -318,8 +317,8 @@ public class LatticeEdge extends UpstreamHandle implements AutoCloseable {
         }
     }
 
-    /// If the parameter is a LatticeEdge, it attempts to recursively send it down the chain. If
-    /// it is not, it becomes the floor of the chain.
+    /// If the parameter is a LatticeEdge, it attempts to recursively send it down the chain. If it
+    /// is not, it becomes the floor of the chain.
     @Override
     public void addDownstream(LatticeInterceptor downstream) {
         boolean isEdge = downstream instanceof LatticeEdge;

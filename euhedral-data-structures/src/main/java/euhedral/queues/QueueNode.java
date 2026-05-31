@@ -6,6 +6,7 @@ import java.util.Arrays;
 import java.util.StringJoiner;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 
 public class QueueNode<T> {
 
@@ -55,7 +56,7 @@ public class QueueNode<T> {
         return this.chunk.poll(partition);
     }
 
-    public long drain(int partition, QueueConsumer<T> consumer, long limit) {
+    public long drain(int partition, Consumer<T> consumer, long limit) {
         return this.chunk.drain(partition, consumer, limit);
     }
 

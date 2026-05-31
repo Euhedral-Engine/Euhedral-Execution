@@ -1,13 +1,14 @@
 package euhedral.io.flow_control;
 
-import euhedral.io.generics.LaticeSource;
+import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.LatticeInterceptor;
 import euhedral.io.generics.LatticeReceiver;
-import euhedral.io.utils.DrainBuffer;
+import euhedral.io.generics.LatticeSource;
 import euhedral.queues.PartitionedUnboundedMpscArrayQueue;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 import lombok.Getter;
 import org.jctools.maps.NonBlockingHashMapLong;
 
@@ -51,14 +52,15 @@ public class UpstreamQueue {
         return queue;
     }
 
-    protected static void drain(UpstreamHandle handle, DrainBuffer buffer, long demand) {
+    protected static void drain(UpstreamHandle handle, Consumer<AbstractFrame> buffer,
+            long demand) {
         if (buffer != null) {
-            long limit = buffer.buffer.capacity() < 0 ? demand
-                    : Math.min(buffer.buffer.capacity(), demand);
-            handle.pull(buffer, limit);
+            handle.pull(buffer, demand);
+            return;
         }
         handle.request(demand);
     }
+
     final long[] pullBucket = new long[]{0L, 0L};
     private final PartitionedUnboundedMpscArrayQueue<UpstreamHandle> upstreams =
             new PartitionedUnboundedMpscArrayQueue<>(1, 512, 0);
@@ -84,9 +86,9 @@ public class UpstreamQueue {
         pull(null, demand);
     }
 
-    /// Pulls work without requesting from the [UpstreamHandles][UpstreamHandle]. If the buffer is
+    /// Pulls work without requesting from the [UpstreamHandles][UpstreamHandle]. If the consumer is
     /// `null`, it will **request** the work.
-    public void pull(DrainBuffer buffer, long demand) {
+    public void pull(Consumer<AbstractFrame> consumer, long demand) {
         getTrueUpstreamCount();
         this.pullIdx[0] = 0;
 
@@ -109,7 +111,7 @@ public class UpstreamQueue {
                         long requestAmount = Math.min(demand, this.pullBucket[1]);
                         demand -= requestAmount;
                         workDone = true;
-                        drain(handle, buffer, requestAmount);
+                        drain(handle, consumer, requestAmount);
                     }
                     while (!this.upstreams.offer(handle)) {
                         Thread.onSpinWait();
@@ -174,11 +176,11 @@ public class UpstreamQueue {
     /// A wrapper for an upstream source.
     public static abstract class UpstreamHandle implements LatticeInterceptor {
 
-        public abstract void pull(DrainBuffer buffer, long demand);
+        public abstract void pull(Consumer<AbstractFrame> consumer, long demand);
 
         public abstract boolean isComplete();
 
-        public void addUpstream(LaticeSource upstream) {
+        public void addUpstream(LatticeSource upstream) {
             upstream.complete();
         }
 

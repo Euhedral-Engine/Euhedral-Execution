@@ -1,6 +1,6 @@
 package euhedral.io.generics;
 
-public interface LatticeInterceptor extends LaticeSource, LatticeReceiver {
+public interface LatticeInterceptor extends LatticeSource, LatticeReceiver {
 
     default void addUpstream(LatticeInterceptor upstream) {
 

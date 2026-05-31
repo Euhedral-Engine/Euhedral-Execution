@@ -1,10 +1,11 @@
 package euhedral.io.reactor.common;
 
 import euhedral.io.frames.AbstractFrame;
-import euhedral.io.generics.LaticeSource;
 import euhedral.io.generics.LatticeReceiver;
+import euhedral.io.generics.LatticeSource;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
+import java.util.function.Consumer;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 
@@ -21,7 +22,7 @@ import org.reactivestreams.Subscription;
 /// // Or
 /// controlPlane.ingest(subscriber);
 /// ```
-public final class EuhedralSubscriber implements Subscriber<AbstractFrame>, LaticeSource {
+public final class EuhedralSubscriber implements Subscriber<AbstractFrame>, LatticeSource {
     private static final VarHandle COMPLETE;
     private static final VarHandle SUBSCRIBER;
     private static final VarHandle TERMINAL;
@@ -55,7 +56,7 @@ public final class EuhedralSubscriber implements Subscriber<AbstractFrame>, Lati
     public void onNext(AbstractFrame frame) {
         LatticeReceiver terminal = (LatticeReceiver) TERMINAL.getOpaque(this);
         if(terminal != null) {
-            terminal.onNext(frame);
+            terminal.push(frame);
         }
     }
 
@@ -84,6 +85,11 @@ public final class EuhedralSubscriber implements Subscriber<AbstractFrame>, Lati
             downstream.onError(new IllegalStateException("Already has a downstream."));
         }
         downstream.addUpstream(this);
+    }
+
+    @Override
+    public void pull(Consumer<AbstractFrame> consumer, long demand) {
+
     }
 
     @Override

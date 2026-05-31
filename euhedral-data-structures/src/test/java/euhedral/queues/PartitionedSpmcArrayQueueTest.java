@@ -14,6 +14,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.LongAdder;
 
+import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 
 class PartitionedSpmcArrayQueueTest {
@@ -31,7 +32,7 @@ class PartitionedSpmcArrayQueueTest {
         }
 
         final int[] drained = new int[] {-1};
-        QueueConsumer<Integer> consumer = (val) -> {
+        Consumer<Integer> consumer = (val) -> {
             if (val != ++drained[0] || val >= 128) {
                 fail("Corruption! Last Value: " + drained[0] + " Current: " + val);
             }
@@ -55,7 +56,7 @@ class PartitionedSpmcArrayQueueTest {
         PartitionedSpmcArrayQueue<Long> q =
                 new PartitionedSpmcArrayQueue<>(partitions, 4096, false);
 
-        QueueConsumer<Long> consumer = (val) -> {
+        Consumer<Long> consumer = (val) -> {
         };
         ExecutorService exec = Executors.newFixedThreadPool(9);
         for (int x = 0; x < 10; x++) {
@@ -113,7 +114,7 @@ class PartitionedSpmcArrayQueueTest {
         });
 
         CountDownLatch consLatch = new CountDownLatch(consumers);
-        QueueConsumer<Integer> consumer = consumed::add;
+        Consumer<Integer> consumer = consumed::add;
 
         for (int c = 0; c < consumers; c++) {
             exec.submit(() -> {
@@ -148,7 +149,7 @@ class PartitionedSpmcArrayQueueTest {
         }
 
         final int[] total = new int[1];
-        QueueConsumer<Integer> consumer = (val) -> {
+        Consumer<Integer> consumer = (val) -> {
             total[0]++;
         };
         while (!q.isEmpty()) {

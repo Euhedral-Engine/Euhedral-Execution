@@ -19,7 +19,7 @@ import euhedral.io.flow_control.BufferedBridge;
 import euhedral.io.flow_control.DirectOutputStream;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.frames.DummyInitFrame;
-import euhedral.io.generics.LaticeSource;
+import euhedral.io.generics.LatticeSource;
 import euhedral.io.generics.SlotManager;
 import euhedral.io.metrics.ExecutionMetrics;
 import euhedral.io.utils.DrainBuffer;
@@ -249,7 +249,7 @@ public class ControlPlaneFragment implements SlotManager {
     }
 
     @Override
-    public void input(LaticeSource stream) {
+    public void input(LatticeSource stream) {
         if (stream instanceof ControlPlaneCache iStream && INGEST.compareAndSet(this, null,
                 iStream)) {
             this.buddy.setIngest(iStream);
@@ -259,7 +259,7 @@ public class ControlPlaneFragment implements SlotManager {
     }
 
     @Override
-    public LaticeSource output() {
+    public LatticeSource output() {
         return this.outputStream;
     }
 

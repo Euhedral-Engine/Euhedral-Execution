@@ -72,12 +72,12 @@ public abstract class AbstractCloneablePipeline implements CloneableObject {
     }
 
     @Override
-    public void input(LaticeSource stream) {
+    public void input(LatticeSource stream) {
         this.cacheManager.input(stream);
     }
 
     @Override
-    public LaticeSource output() {
+    public LatticeSource output() {
         return this.executor.output();
     }
 

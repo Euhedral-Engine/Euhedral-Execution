@@ -76,14 +76,14 @@ class LatticeEdgeTest {
     }
 
     @Test
-    void shouldForwardOnNextToDownstream() {
+    void shouldForwardPushToDownstream() {
         TestReceiver terminal = new TestReceiver();
 
         edge.addDownstream(terminal);
 
         TestFrame frame = new TestFrame("hello");
 
-        edge.onNext(frame);
+        edge.push(frame);
 
         assertEquals(1, terminal.received.size());
         assertSame(frame, terminal.received.get(0));

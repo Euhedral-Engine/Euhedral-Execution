@@ -19,8 +19,8 @@ import euhedral.io.flow_control.UpstreamQueue;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.frames.DummyInitFrame;
 import euhedral.io.generics.CacheManager;
-import euhedral.io.generics.LaticeSource;
 import euhedral.io.generics.LatticeReceiver;
+import euhedral.io.generics.LatticeSource;
 import euhedral.io.metrics.CacheMetrics;
 import euhedral.io.utils.DrainBuffer;
 import euhedral.io.utils.FlowRecorder;
@@ -500,7 +500,7 @@ public class ControlPlaneCache extends LatticeVertex implements CacheManager {
     }
 
     @Override
-    public void input(LaticeSource stream) {
+    public void input(LatticeSource stream) {
         if (stream instanceof LatticeEdge dh) {
             addUpstream(dh);
         } else {
@@ -602,7 +602,7 @@ public class ControlPlaneCache extends LatticeVertex implements CacheManager {
         }
 
         @Override
-        public void onNext(AbstractFrame frame) {
+        public void push(AbstractFrame frame) {
             while (!ControlPlaneCache.this.queueRing.offer(this.idx, frame)) {
                 Thread.onSpinWait();
             }
@@ -626,7 +626,7 @@ public class ControlPlaneCache extends LatticeVertex implements CacheManager {
         }
 
         @Override
-        public void addUpstream(LaticeSource subscription) {
+        public void addUpstream(LatticeSource subscription) {
 
         }
 

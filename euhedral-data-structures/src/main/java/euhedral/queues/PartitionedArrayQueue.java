@@ -9,6 +9,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 import lombok.Getter;
 
 /// A bounded, padded, partitioned, array-based queue.
@@ -181,7 +182,7 @@ public class PartitionedArrayQueue<T> extends AbstractQueue<T> implements Partit
     /// @param limit Maximum number of items to pull
     /// @return Number of items drained
     @Override
-    public long drain(QueueConsumer<T> consumer, long limit) {
+    public long drain(Consumer<T> consumer, long limit) {
         if (consumer == null || limit <= 0) {
             return 0;
         }
@@ -197,7 +198,7 @@ public class PartitionedArrayQueue<T> extends AbstractQueue<T> implements Partit
     ///
     /// @return Number of items drained
     @Override
-    public long drain(int partition, QueueConsumer<T> consumer, long limit) {
+    public long drain(int partition, Consumer<T> consumer, long limit) {
         boundsCheck(partition);
         int pIdx = this.heads.fromRawIdx(partition);
         int rIdx = this.queue.fromRawIdx(partition);
@@ -208,7 +209,7 @@ public class PartitionedArrayQueue<T> extends AbstractQueue<T> implements Partit
         while (total < limit && head < this.tails.getPlain(pIdx)) {
             int chunkIdx = chunkIndex(head++);
             this.heads.setPlain(pIdx, head);
-            consumer.consume(queue[chunkIdx]);
+            consumer.accept(queue[chunkIdx]);
             queue[chunkIdx] = null;
             total++;
         }

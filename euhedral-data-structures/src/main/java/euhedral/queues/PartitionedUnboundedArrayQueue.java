@@ -11,6 +11,7 @@ import java.util.Iterator;
 import java.util.StringJoiner;
 import java.util.concurrent.ThreadLocalRandom;
 
+import java.util.function.Consumer;
 import lombok.Getter;
 
 /// ## A plain unbounded array queue with partitions.
@@ -204,7 +205,7 @@ public sealed class PartitionedUnboundedArrayQueue<T> extends AbstractQueue<T> i
     ///
     /// @return Number of items drained
     @Override
-    public long drain(QueueConsumer<T> consumer, long limit) {
+    public long drain(Consumer<T> consumer, long limit) {
         if (consumer == null || limit <= 0) {
             return 0;
         }
@@ -219,7 +220,7 @@ public sealed class PartitionedUnboundedArrayQueue<T> extends AbstractQueue<T> i
 
     /// Drains from a specific partition.
     @Override
-    public long drain(int partition, QueueConsumer<T> consumer, long limit) {
+    public long drain(int partition, Consumer<T> consumer, long limit) {
         boundsCheck(partition);
         if (consumer == null || limit <= 0) {
             return 0;

@@ -17,7 +17,7 @@ import euhedral.io.flow_control.LatticeEdge;
 import euhedral.io.flow_control.LatticeVertex;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.CloneableObject;
-import euhedral.io.generics.LaticeSource;
+import euhedral.io.generics.LatticeSource;
 import euhedral.io.impl.DefaultCloneablePipeline;
 import euhedral.io.ingest.IngestSink;
 import java.time.Duration;
@@ -199,8 +199,8 @@ public class ControlPlaneLattice implements AutoCloseable {
         ingest(sink.getDelegate());
     }
 
-    /// Takes a [LaticeSource] and adds it as a global input source.
-    public void ingest(@NonNull LaticeSource stream) {
+    /// Takes a [LatticeSource] and adds it as a global input source.
+    public void ingest(@NonNull LatticeSource stream) {
         Objects.requireNonNull(stream);
         if (this.closed.getOpaque()) {
             throw new RuntimeException(

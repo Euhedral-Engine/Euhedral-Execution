@@ -1,7 +1,7 @@
 package euhedral.queues.common;
 
-import euhedral.queues.QueueConsumer;
 import java.util.Queue;
+import java.util.function.Consumer;
 
 public interface PartitionedQueue<T> extends Queue<T> {
 
@@ -25,9 +25,9 @@ public interface PartitionedQueue<T> extends Queue<T> {
 
     T poll(int partition);
 
-    long drain(QueueConsumer<T> consumer, long limit);
+    long drain(Consumer<T> consumer, long limit);
 
-    long drain(int partition, QueueConsumer<T> consumer, long limit);
+    long drain(int partition, Consumer<T> consumer, long limit);
 
     boolean isEmpty();
 

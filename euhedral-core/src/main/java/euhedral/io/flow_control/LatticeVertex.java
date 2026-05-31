@@ -5,14 +5,14 @@ import static euhedral.io.utils.MathFunctions.unsignedMultiplyHigh;
 import euhedral.atomics.PaddedAtomicLong;
 import euhedral.io.flow_control.UpstreamQueue.UpstreamHandle;
 import euhedral.io.frames.AbstractFrame;
-import euhedral.io.generics.LaticeSource;
 import euhedral.io.generics.LatticeInterceptor;
-import euhedral.io.utils.DrainBuffer;
+import euhedral.io.generics.LatticeSource;
 import euhedral.queues.PartitionedMpscArrayQueue;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.BitSet;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -84,7 +84,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
     }
 
     /// Links the stream as an upstream source.
-    public void ingest(LaticeSource stream) {
+    public void ingest(LatticeSource stream) {
         UpstreamInterceptor interceptor = new UpstreamInterceptor();
         stream.addDownstream(interceptor);
     }
@@ -150,9 +150,9 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
         return this.parallelQueue == null || this.parallelQueue.isEmpty();
     }
 
-    /// Adds the interceptor to the upstream. If it is a [LatticeEdge], it bubbles it up and
-    /// sets its downstream links' parents to the edge. If it is an
-    /// [UpstreamHandle][UpstreamHandle], it defaults to the logic in LatticeEdge.
+    /// Adds the interceptor to the upstream. If it is a [LatticeEdge], it bubbles it up and sets
+    /// its downstream links' parents to the edge. If it is an [UpstreamHandle][UpstreamHandle], it
+    /// defaults to the logic in LatticeEdge.
     @Override
     public void addUpstream(LatticeInterceptor interceptor) {
         if (interceptor instanceof LatticeEdge edge) {
@@ -171,27 +171,27 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
 
     /// Picks a downstream link and sends work down.
     @Override
-    public void onNext(AbstractFrame frame) {
+    public void push(AbstractFrame frame) {
         RoutingState state = (RoutingState) ROUTING_STATE.getOpaque(this);
         int mapLen = state.mappings.length;
 
         int logicalIdx = this.routingFunction.route(frame, mapLen);
         int id = state.mappings[logicalIdx];
-        this.downstreams[id].onNext(frame);
+        this.downstreams[id].push(frame);
     }
 
     /// Pulls available work from the `parallelQueue` if it is not null. Recursively climbs the
     /// graph and does the same.
     @Override
-    public void pull(DrainBuffer buffer, long demand) {
-        if (demand <= 0 || buffer == null) {
+    public void pull(Consumer<AbstractFrame> consumer, long demand) {
+        if (demand <= 0 || consumer == null) {
             return;
         }
 
         if (this.parallelQueue != null && !this.parallelQueue.isEmpty()) {
             if (this.wip.compareAndSet(0, 1)) {
                 try {
-                    long count = this.parallelQueue.drain(buffer::accept, (int) demand);
+                    long count = this.parallelQueue.drain(consumer::accept, (int) demand);
                     demand -= count;
                 } finally {
                     this.wip.set(0);
@@ -201,7 +201,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
 
         LatticeEdge parent = (LatticeEdge) PARENT.getOpaque(this);
         if (parent != null) {
-            parent.pull(buffer, demand);
+            parent.pull(consumer, demand);
         }
     }
 
@@ -252,8 +252,8 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
         }
     }
 
-    /// Wraps the [LaticeSource] in an object that contains the state of the stream. Requests
-    /// and pulls are guaranteed to be made by 1 thread at a time.
+    /// Wraps the [LatticeSource] in an object that contains the state of the stream. Requests and
+    /// pulls are guaranteed to be made by 1 thread at a time.
     public class UpstreamInterceptor extends UpstreamHandle {
 
         private static long addCap(long num1, long num2) {
@@ -267,17 +267,17 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
         public final AtomicBoolean complete = new AtomicBoolean(false);
         private final PaddedAtomicLong wip = new PaddedAtomicLong(0);
         private final PaddedAtomicLong demand = new PaddedAtomicLong(0);
-        public LaticeSource upstream;
+        public LatticeSource upstream;
         private long count = 0;
 
         @Override
-        public void addUpstream(@NonNull LaticeSource upstream) {
+        public void addUpstream(@NonNull LatticeSource upstream) {
             this.upstream = upstream;
             LatticeVertex.this.addUpstream(this);
         }
 
         @Override
-        public void onNext(AbstractFrame frame) {
+        public void push(AbstractFrame frame) {
             if ((this.count++ & 63) == 0) {
                 frame.setIngestNs(System.nanoTime());
             } else {
@@ -285,7 +285,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
             }
 
             if (frame.isOrdered()) {
-                LatticeVertex.this.onNext(frame);
+                LatticeVertex.this.push(frame);
                 return;
             }
 
@@ -294,12 +294,12 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
                 return;
             }
 
-            LatticeVertex.this.onNext(frame);
+            LatticeVertex.this.push(frame);
         }
 
         @Override
-        public void pull(DrainBuffer buffer, long demand) {
-            LatticeVertex.this.pull(buffer, demand);
+        public void pull(Consumer<AbstractFrame> consumer, long demand) {
+            LatticeVertex.this.pull(consumer, demand);
         }
 
         @Override

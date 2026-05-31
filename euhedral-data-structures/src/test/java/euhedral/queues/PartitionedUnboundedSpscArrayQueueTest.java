@@ -11,6 +11,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.LongAdder;
 
+import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 
 class PartitionedUnboundedSpscArrayQueueTest {
@@ -26,7 +27,7 @@ class PartitionedUnboundedSpscArrayQueueTest {
         }
 
         final int[] drained = new int[] {0};
-        QueueConsumer<Integer> consumer = (val) -> {
+        Consumer<Integer> consumer = (val) -> {
             if (val != ++drained[0]) {
                 fail("Corruption! Last Value: " + drained[0] + " Current: " + val);
             }
@@ -51,7 +52,7 @@ class PartitionedUnboundedSpscArrayQueueTest {
                 new PartitionedUnboundedSpscArrayQueue<>(partitions, 4096, 4);
         int batch = 800_000;
 
-        QueueConsumer<Long> consumer = (val) -> {
+        Consumer<Long> consumer = (val) -> {
         };
         ExecutorService exec = Executors.newFixedThreadPool(2);
         for (int x = 0; x < 20; x++) {
@@ -109,7 +110,7 @@ class PartitionedUnboundedSpscArrayQueueTest {
         });
 
         CountDownLatch consLatch = new CountDownLatch(1);
-        QueueConsumer<Long> consumer = (val) -> consumed.increment();
+        Consumer<Long> consumer = (val) -> consumed.increment();
 
         exec.submit(() -> {
             while (consumed.sum() < batch) {

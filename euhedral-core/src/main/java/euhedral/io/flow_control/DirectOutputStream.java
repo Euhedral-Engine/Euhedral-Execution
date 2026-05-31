@@ -1,8 +1,8 @@
 package euhedral.io.flow_control;
 
 import euhedral.io.frames.AbstractFrame;
-import euhedral.io.generics.LaticeSource;
 import euhedral.io.generics.LatticeReceiver;
+import euhedral.io.generics.LatticeSource;
 import euhedral.queues.common.PartitionedQueue;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
@@ -12,7 +12,7 @@ import org.jspecify.annotations.NonNull;
 
 /// Used for pushing frames from one stage to the next. Assumes that only one thread will call push
 /// at a time. This class can only have one downstream.
-public class DirectOutputStream implements LaticeSource {
+public class DirectOutputStream implements LatticeSource {
 
     protected static final VarHandle COMPLETE;
     protected static final VarHandle TERMINAL;
@@ -47,6 +47,11 @@ public class DirectOutputStream implements LaticeSource {
         this.applyToEach = applyToEach;
     }
 
+    @Override
+    public void pull(Consumer<AbstractFrame> consumer, long demand) {
+        this.buffer.drain(consumer, demand);
+    }
+
     /// Pushes the indicated number of frames to the next stage. Only safe to be called by one thread
     /// at a time.
     ///
@@ -78,7 +83,7 @@ public class DirectOutputStream implements LaticeSource {
         }
         LatticeReceiver subscriber = (LatticeReceiver) TERMINAL.getOpaque(this);
         if (subscriber != null) {
-            subscriber.onNext(frame);
+            subscriber.push(frame);
         }
     }
 
