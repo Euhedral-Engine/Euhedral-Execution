@@ -4,7 +4,7 @@ import euhedral.hashing.HasherApi;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.LatticeReceiver;
 import euhedral.io.generics.LatticeSource;
-import euhedral.io.ingest.IngestSink;
+import euhedral.io.ingest.AbstractIngestSink;
 import euhedral.io.reactor.common.TaskFrame;
 import euhedral.queues.PartitionedUnboundedMpscArrayQueue;
 import java.lang.invoke.MethodHandles;
@@ -18,7 +18,7 @@ import reactor.core.Disposable;
 import reactor.core.scheduler.Scheduler.Worker;
 
 @SuppressWarnings("unused")
-public class EuhedralWorker extends IngestSink implements Worker {
+public class EuhedralWorker extends AbstractIngestSink implements Worker {
 
     static EuhedralWorker spawn(int chunkSize, int maxPooledChunks) {
         return new EuhedralWorker(chunkSize, maxPooledChunks);
@@ -78,7 +78,7 @@ public class EuhedralWorker extends IngestSink implements Worker {
         this.delegate.complete();
     }
 
-    private static class Delegate extends IngestSink.Delegate {
+    private static class Delegate extends AbstractIngestSink.Delegate {
 
         private static final VarHandle COMPLETE;
 
