@@ -78,7 +78,7 @@ public class EuhedralScheduler implements Scheduler {
         this.sinks = new EuhedralWorker[Runtime.getRuntime().availableProcessors()];
         for (int i = 0; i < this.sinks.length; i++) {
             this.sinks[i] = EuhedralWorker.spawn(8_096, 2);
-            controlPlane.ingest(this.sinks[i]);
+            controlPlane.addUpstream(this.sinks[i]);
         }
     }
 
@@ -98,7 +98,7 @@ public class EuhedralScheduler implements Scheduler {
     public void ingest(@NonNull EuhedralSubscriber subscriber) {
         Objects.requireNonNull(subscriber);
         if (subscriber.hasSubscription()) {
-            this.controlPlane.ingest(subscriber);
+            subscriber.startUFlowWith(this.controlPlane);
         }
         throw new IllegalStateException(
                 "The subscriber must have a subscription before calling ingest");
@@ -130,7 +130,7 @@ public class EuhedralScheduler implements Scheduler {
     @Override
     public @NonNull Worker createWorker() {
         EuhedralWorker worker = EuhedralWorker.spawn(8_096, 2);
-        this.controlPlane.ingest(worker);
+        this.controlPlane.addUpstream(worker);
         return worker;
     }
 

@@ -6,6 +6,8 @@ import euhedral.io.control_plane.ControlPlaneFragment;
 import euhedral.io.control_plane.RoutingPolicy;
 import euhedral.io.generics.AbstractExecutor;
 import euhedral.io.impl.FrameManager;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -27,7 +29,7 @@ import lombok.Setter;
 ///
 /// ### Hashing & Routing
 ///
-/// Frames are routed based on a `combinedHash`. This is what determines how work spreads across
+/// Frames are routed based on a `routingHash`. This is what determines how work spreads across
 /// parallel paths.
 ///
 /// For stable ordering, keep the hash consistent across retries:
@@ -72,13 +74,23 @@ import lombok.Setter;
 @SuppressWarnings({"rawtypes", "unchecked", "unused"})
 public abstract class AbstractFrame {
 
+    protected static final VarHandle ROUTING_HASH;
+
+    static {
+        try {
+            ROUTING_HASH = MethodHandles.lookup().findVarHandle(AbstractFrame.class, "routingHash", long.class);
+        } catch (Throwable t) {
+            throw new ExceptionInInitializerError(t);
+        }
+    }
+
     protected final FrameManager recycler;
     public final CancelFrame cancel;
 
     @Getter
     private final long idHash;
-    @Getter @Setter
-    protected volatile long routingHash;
+    @Getter
+    private long routingHash;
     @Getter @Setter
     private CpuInfo origin;
     @Getter @Setter
@@ -103,10 +115,10 @@ public abstract class AbstractFrame {
     public abstract void execute();
 
     /// Mixes the combined hash with the seed.
-    public void randomizeHash(long seed) {
+    public final void randomizeHash(long seed) {
         seed = HasherApi.mix(seed);
         long newHash = this.routingHash;
-        this.routingHash = newHash ^ seed;
+        ROUTING_HASH.setRelease(this, newHash ^ seed);
     }
 
     /// Liveness check.
@@ -129,6 +141,7 @@ public abstract class AbstractFrame {
         this.startNs = 0;
         this.ingestNs = 0;
         this.cancelledExecution = false;
+        ROUTING_HASH.setRelease(this, this.idHash);
     }
 
     /// Returns the frame to the recycler for reuse.
