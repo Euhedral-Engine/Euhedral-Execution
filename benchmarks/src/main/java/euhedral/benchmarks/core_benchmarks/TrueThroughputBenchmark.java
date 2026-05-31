@@ -94,7 +94,7 @@ public class TrueThroughputBenchmark {
     @OperationsPerInvocation(BATCH)
     public void ingest32million32sources() {
         for (var sink : this.sinks) {
-            this.controlPlane.ingest(sink);
+            this.controlPlane.addUpstream(sink);
         }
 
         await(this.counters);

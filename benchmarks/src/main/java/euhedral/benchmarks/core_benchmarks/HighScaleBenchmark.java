@@ -120,7 +120,7 @@ public class HighScaleBenchmark {
                             CENTER_X, CENTER_Y, 0.0, MAX_RAY_STEPS, ITERATION_CAP,
                             BAILOUT_RADIUS_SQ,
                             blackhole, counters,
-                            socketLocal ? RoutingPolicy.SOCKET_LOCAL : RoutingPolicy.ANY);
+                            socketLocal ? RoutingPolicy.SOCKET_LOCAL : RoutingPolicy.ANYWHERE);
                 }).get();
                 executor.shutdownNow();
             }
@@ -198,7 +198,7 @@ public class HighScaleBenchmark {
         @Benchmark
         public void render(OpCounter opCounter) {
             for (ArrayIngestSink sink : this.sinks) {
-                this.controlPlane.ingest(sink);
+                this.controlPlane.addUpstream(sink);
             }
 
             waitOnRender(this.counters);
@@ -288,7 +288,7 @@ public class HighScaleBenchmark {
         @Benchmark
         public void render(OpCounter opCounter) {
             for (ArrayIngestSink sink : this.sinks) {
-                this.controlPlane.ingest(sink);
+                this.controlPlane.addUpstream(sink);
             }
 
             waitOnRender(this.counters);
@@ -356,7 +356,7 @@ public class HighScaleBenchmark {
         @Benchmark
         public void render(OpCounter opCounter) {
             for (ArrayIngestSink sink : this.sinks) {
-                this.controlPlane.ingest(sink);
+                this.controlPlane.addUpstream(sink);
             }
 
             waitOnRender(this.counters);
@@ -425,7 +425,7 @@ public class HighScaleBenchmark {
         @Benchmark
         public void render(OpCounter opCounter) {
             for (ArrayIngestSink sink : this.sinks) {
-                this.controlPlane.ingest(sink);
+                this.controlPlane.addUpstream(sink);
             }
 
             waitOnRender(this.counters);

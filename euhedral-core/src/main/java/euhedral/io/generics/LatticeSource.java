@@ -6,6 +6,10 @@ import java.util.function.Consumer;
 /// An interface for defining where data comes from
 public interface LatticeSource {
 
+    default void startUFlowWith(LatticeTerminal terminal) {
+        terminal.addUpstream(this);
+    }
+
     void addDownstream(LatticeReceiver downstream);
 
     /// A synchronous method called by downstreams to collect work without triggering a `push()`.

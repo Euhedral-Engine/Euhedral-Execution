@@ -191,7 +191,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
         if (this.parallelQueue != null && !this.parallelQueue.isEmpty()) {
             if (this.wip.compareAndSet(0, 1)) {
                 try {
-                    long count = this.parallelQueue.drain(consumer::accept, (int) demand);
+                    long count = this.parallelQueue.drain(consumer, demand);
                     demand -= count;
                 } finally {
                     this.wip.set(0);

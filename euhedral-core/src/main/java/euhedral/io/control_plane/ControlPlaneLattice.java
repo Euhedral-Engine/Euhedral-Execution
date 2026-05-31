@@ -18,6 +18,7 @@ import euhedral.io.flow_control.LatticeVertex;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.CloneableObject;
 import euhedral.io.generics.LatticeSource;
+import euhedral.io.generics.LatticeTerminal;
 import euhedral.io.impl.DefaultCloneablePipeline;
 import euhedral.io.ingest.IngestSink;
 import java.time.Duration;
@@ -87,10 +88,8 @@ import org.slf4j.LoggerFactory;
 /// - Stays out of the way unless hardware forces a change
 ///
 /// ---
-///
-/// **This is the thing above the thing above the things.** Everything starts from here.
 @SuppressWarnings("unused")
-public class ControlPlaneLattice implements AutoCloseable {
+public class ControlPlaneLattice implements LatticeTerminal, AutoCloseable {
 
     private static final AtomicReference<ControlPlaneLattice> INSTANCE = new AtomicReference<>();
 
@@ -195,12 +194,12 @@ public class ControlPlaneLattice implements AutoCloseable {
     }
 
     /// Takes an [IngestSink] and adds it as a global input source.
-    public void ingest(@NonNull IngestSink sink) {
-        ingest(sink.getDelegate());
+    public void addUpstream(@NonNull IngestSink sink) {
+        addUpstream(sink.getDelegate());
     }
 
     /// Takes a [LatticeSource] and adds it as a global input source.
-    public void ingest(@NonNull LatticeSource stream) {
+    public void addUpstream(@NonNull LatticeSource stream) {
         Objects.requireNonNull(stream);
         if (this.closed.getOpaque()) {
             throw new RuntimeException(
@@ -243,7 +242,7 @@ public class ControlPlaneLattice implements AutoCloseable {
     /// Routes work based on their policy level or uses default global routing.
     protected int route(AbstractFrame frame, int mapSize) {
         RoutingPolicy policy = frame.getRoutingPolicy();
-        if (policy != null && policy.level > RoutingPolicy.ANY.level) {
+        if (policy != null && policy.level > RoutingPolicy.ANYWHERE.level) {
             int[] reverseMapping = this.reverseMapping.getOpaque();
             CpuInfo location = frame.getOrigin();
 

@@ -260,7 +260,7 @@ public class BatchedMandelbrotBenchmark {
         @OperationsPerInvocation(CANVAS * 4)
         public void render(Blackhole blackhole) {
             Flux.fromArray(this.frames).subscribe(subscriber);
-            this.controlPlane.ingest(this.subscriber);
+            this.controlPlane.addUpstream(this.subscriber);
 
             waitOnRender(this.counters);
             blackhole.consume(this.escapes);

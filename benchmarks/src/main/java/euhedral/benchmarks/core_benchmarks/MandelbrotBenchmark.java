@@ -239,7 +239,7 @@ public class MandelbrotBenchmark {
             System.out.println("Total Tasks: " + CANVAS * 4);
 
             Flux.fromArray(this.pixels).subscribe(subscriber);
-            this.controlPlane.ingest(this.subscriber);
+            this.controlPlane.addUpstream(this.subscriber);
 
             waitOnRender(this.counters);
             blackhole.consume(this.escapes);
