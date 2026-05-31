@@ -52,10 +52,10 @@ public class UpstreamQueue {
         return queue;
     }
 
-    protected static void drain(UpstreamHandle handle, Consumer<AbstractFrame> buffer,
+    protected static void drain(UpstreamHandle handle, Consumer<AbstractFrame> consumer,
             long demand) {
-        if (buffer != null) {
-            handle.pull(buffer, demand);
+        if (consumer != null) {
+            handle.pull(consumer, demand);
             return;
         }
         handle.request(demand);

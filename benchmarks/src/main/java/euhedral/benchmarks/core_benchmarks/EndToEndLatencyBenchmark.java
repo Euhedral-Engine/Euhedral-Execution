@@ -38,7 +38,7 @@ public class EndToEndLatencyBenchmark {
 
     private static long run(ControlPlaneLattice controlPlane, PaddedLongAdder counters,
             ArrayIngestSink ingestSink, Blackhole bh) {
-        controlPlane.ingest(ingestSink);
+        controlPlane.addUpstream(ingestSink);
 
         int spin = 0;
         long sum;

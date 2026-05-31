@@ -161,7 +161,7 @@ public class ThroughputComparisonBenchmark {
         @OperationsPerInvocation(BATCH)
         public void ingest() {
             Flux.fromArray(this.frames).subscribe(this.subscriber);
-            this.controlPlane.ingest(this.subscriber);
+            this.controlPlane.addUpstream(this.subscriber);
 
             await(this.counters);
         }

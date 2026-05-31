@@ -74,7 +74,7 @@ executed in
 the background.
 
 ```java
-controlPlane.ingest(sink);
+controlPlane.addUpstream(sink);
 
 --- Output ---
 4
@@ -160,7 +160,7 @@ FrameReplace<Integer, FunctionFrame<Integer, Integer>> replace = (data, oldFrame
 manager.setFactory(new FrameFactory<>(generate, replace));
 
 QueueIngestSink sink = new QueueIngestSink();
-controlPlane.ingest(sink);
+controlPlane.addUpstream(sink);
 
 for(int i = 0; i < 1_000_000; i++) {
     sink.offer(manager.getOrCreate(i, password));

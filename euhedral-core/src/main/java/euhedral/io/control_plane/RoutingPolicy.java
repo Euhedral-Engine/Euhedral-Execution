@@ -1,9 +1,9 @@
 package euhedral.io.control_plane;
 
 public enum RoutingPolicy {
-    ANY(0),
+    ANYWHERE(0),
     SOCKET_LOCAL(1),
-    CORE_LOCAL(2);
+    CACHE_LOCAL(2);
 
     public final int level;
 
