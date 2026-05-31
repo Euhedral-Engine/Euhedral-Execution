@@ -9,7 +9,7 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.function.Consumer;
 
-public abstract class IngestSink {
+public abstract class AbstractIngestSink {
 
     /// Used by the [ControlPlaneLattice][ControlPlaneLattice] to connect to this sink.
     public abstract LatticeSource getDelegate();

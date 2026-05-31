@@ -20,7 +20,7 @@ import euhedral.io.generics.CloneableObject;
 import euhedral.io.generics.LatticeSource;
 import euhedral.io.generics.LatticeTerminal;
 import euhedral.io.impl.DefaultCloneablePipeline;
-import euhedral.io.ingest.IngestSink;
+import euhedral.io.ingest.AbstractIngestSink;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.BitSet;
@@ -193,8 +193,8 @@ public class ControlPlaneLattice implements LatticeTerminal, AutoCloseable {
         }
     }
 
-    /// Takes an [IngestSink] and adds it as a global input source.
-    public void addUpstream(@NonNull IngestSink sink) {
+    /// Takes an [AbstractIngestSink] and adds it as a global input source.
+    public void addUpstream(@NonNull AbstractIngestSink sink) {
         addUpstream(sink.getDelegate());
     }
 
