@@ -137,7 +137,7 @@ Close the sink when you're done with it. This notifies the ControlPlaneLattice t
 will come through it so it gets disconnected.
 
 ```java
-sink.gracefullyComplete();
+sink.completeGracefully();
 ```
 
 ---
@@ -146,7 +146,7 @@ sink.gracefullyComplete();
 
 **Remember: The routingHash defaults to the idHash provided at construction.**
 
-Using the same constructs in Level 1, only a slight modification is needed to make frames execute in
+Using the same constructs in Level 2, only a slight modification is needed to make frames execute in
 parallel. You change the hash they use for routing.
 
 `randomizeHash(seed)` mixes your idHash with the seed to generate the routingHash. This changes
@@ -271,7 +271,7 @@ for(int i = 0; i < 1_000_000; i++) {
     sink.offer(manager.getOrCreate(i, password));
 }
 
-sink.gracefullyComplete();
+sink.completeGracefully();
 ```
 
 **IMPORTANT NOTE: Frames are reset after execution whether you use the recycler or not. This sets
