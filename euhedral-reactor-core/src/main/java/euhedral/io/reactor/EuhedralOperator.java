@@ -140,9 +140,8 @@ public final class EuhedralOperator {
 
         FrameCreate<T, FunctionFrame<T, R>> frameCreate = (idHash, data) -> {
             FunctionFrame<T, R> frame = new FunctionFrame<>(idHash,
-                    mapper, consumer, dead,
+                    mapper, consumer, data, dead,
                     recycler);
-            frame.setPayload(data);
             if (!ordered) {
                 frame.randomizeHash(seed[0]++);
             }

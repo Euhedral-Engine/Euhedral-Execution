@@ -8,6 +8,15 @@ overhead.
 
 ---
 
+## VM Flags
+
+These are required to run your program with Euhedral.
+
+```
+-XX:+UseThreadPriorities
+--add-opens java.base/java.util=ALL-UNNAMED
+```
+
 ## Level 0 (Make the ControlPlaneLattice)
 
 The ControlPlaneLattice manages multiple workers; frames are distributed based on their routingHash
@@ -38,7 +47,50 @@ metricPrefix defaults to "euhedral" if you give it a registry but pass a blank o
 
 ---
 
-## Level 1 (Make frames and send them in)
+## Level 1 (Executing work)
+
+The most straight-forward way to use Euhedral is with one of the default sinks.
+
+The following sinks will run your functions asynchronously when you give them data. You can give
+them data before or after you give the sink to the ControlPlaneLattice.
+
+Default Sinks:
+
+- FunctionIngestSink
+- ConsumerIngestSink
+
+_Assumes a running ControlPlaneLattice_
+
+```java
+Function<Integer, Integer> square = x -> x * x;
+Consumer<Integer> print = x -> System.out.println(x);
+
+// `false` = execute in order
+// `true` = execute in parallel
+FunctionIngestSink<Integer, Integer> sink = new FunctionIngestSink<>(square, print, false);
+
+controlPlane.addUpstream(sink);
+
+int x = 2;
+List<Integer> nums = List.of(4, 8, 16);
+
+sink.push(x);
+sink.push(nums);
+
+--- Output ---
+4
+16
+64
+256
+```
+
+Remember to complete the sink when you're done and it will disconnect from the ControlPlaneLattice.
+
+```java
+sink.completeGracefully();
+```
+
+## Level 2 (Manually make frames and send them in)
 
 The routingHash defaults to the idHash provided at construction. Frames sharing a routingHash are
 routed to the same execution lane in order. Ordering is only guaranteed per input stream (sink), not
@@ -70,8 +122,7 @@ sink.offer(thing2);
 ```
 
 Give it to the ControlPlaneLattice. Euhedral is asynchronous and non-blocking. Frames will be
-executed in
-the background.
+executed in the background.
 
 ```java
 controlPlane.addUpstream(sink);
@@ -83,16 +134,15 @@ controlPlane.addUpstream(sink);
 ```
 
 Close the sink when you're done with it. This notifies the ControlPlaneLattice that no more frames
-will
-come through it. It will then be disconnected from it.
+will come through it so it gets disconnected.
 
 ```java
-sink.complete();
+sink.gracefullyComplete();
 ```
 
 ---
 
-## Level 2 (Make frames run in parallel)
+## Level 3 (Make frames run in parallel)
 
 **Remember: The routingHash defaults to the idHash provided at construction.**
 
@@ -100,8 +150,7 @@ Using the same constructs in Level 1, only a slight modification is needed to ma
 parallel. You change the hash they use for routing.
 
 `randomizeHash(seed)` mixes your idHash with the seed to generate the routingHash. This changes
-where
-each frame will be executed. It can only be safely done before ingestion.
+where each frame will be executed. It can only be safely done before ingestion.
 
 The seed only needs to be changed slightly for each frame.
 
@@ -129,52 +178,6 @@ equivalent hash function will work.
 
 ---
 
-## Level 3 (Using the frame recycler)
-
-Recycling frames reduces allocations and GC events. They are most useful for high-frequency or
-long-running workloads.
-
-_Assumes an active ControlPlaneLattice_
-
-```java
-long password = 1234;
-
-FrameManager<Integer, FunctionFrame<Integer, Integer>> manager = new FrameManager<>(password);
-
-final long[] seed = {1234};
-AtomicBoolean killSwitch = new AtomicBoolean(false);
-Function<Integer, Integer> square = x -> x * x;
-Consumer<Integer> print = x -> { System.out.println(x); };
-
-// Randomized hash for parallel execution
-FrameCreate<Integer, FunctionFrame<Integer, Integer>> generate = (idHash, data) -> {
-    FunctionFrame<Integer, Integer> frame = new FunctionFrame<>(idHash, square, print, data, killSwitch, manager);
-    frame.randomizeHash(seed[0]++);
-    return frame;
-};
-FrameReplace<Integer, FunctionFrame<Integer, Integer>> replace = (data, oldFrame) -> {
-    oldFrame.replace(data);
-    oldFrame.randomizeHash(seed[0]++);
-};
-
-manager.setFactory(new FrameFactory<>(generate, replace));
-
-QueueIngestSink sink = new QueueIngestSink();
-controlPlane.addUpstream(sink);
-
-for(int i = 0; i < 1_000_000; i++) {
-    sink.offer(manager.getOrCreate(i, password));
-}
-
-sink.complete();
-```
-
-**IMPORTANT NOTE: Frames are reset after execution whether you use the recycler or not. This sets
-their routingHash back to their idHash. If you want them to keep executing in parallel, randomize
-the routing hash again in replace().**
-
----
-
 ## Level 4 (Creating your own frames)
 
 Make a class that extends AbstractFrame.
@@ -185,21 +188,24 @@ Make a class that extends AbstractFrame.
 | execute()        | What it does.                                                                                                               |
 | isAlive()        | Checked by Euhedral. It will not execute it if it's false.                                                                  |
 | kill()           | Marks the frame as inactive and prevents the frame from being executed if it has not started yet.                           |
-| doFinally()      | What Euhedral does with your frame after executing. Defaults to sending it to the recycler if you set one.                  |
+| doFinally()      | What Euhedral does with your frame after executing. Defaults to sending it to the recycler if you've set one.               |
 | throwMeAsError() | If you want to cancel a frame after it starts executing, call this and Euhedral will stop it.                               |
 
 ```java
-public class MyFrame extends AbstractFrame {
+public class MyCustomFrame extends AbstractFrame {
 
-    private AtomicBoolean killSwitch = new AtomicBoolean(false);
+    private final AtomicBoolean killSwitch;
+    private MyDataType payload;
     
-    public MyFrame(long idHash, FrameManager<Void, MyFrame> manager) {
+    public MyFrame(long idHash, MyDataType payload, AtomicBoolean killSwitch, FrameManager<Void, MyFrame> manager) {
         super(idHash, manager);
+        this.killSwitch = killSwitch;
+        this.payload = payload;
     }
     
     @Override
     public void execute() {
-        System.out.println("Hello, world!");
+        System.out.println(payload);
     }
     
     @Override
@@ -221,5 +227,53 @@ public class MyFrame extends AbstractFrame {
     public void doFinally() {
         super.doFinally();
     }
+    
+    public void replace(MyDataType payload) {
+        this.payload = payload;
+    }
 }
 ```
+
+---
+
+## Level 5 (Using the frame recycler)
+
+Recycling frames reduces allocations and GC events. They are most useful for high-volume or
+long-running workloads.
+
+_Assumes an active ControlPlaneLattice_
+
+```java
+long password = 1234;
+
+FrameManager<MyDataType, MyCustomFrame> manager = new FrameManager<>(password);
+
+final long[] seed = {1234};
+AtomicBoolean killSwitch = new AtomicBoolean(false);
+
+// Randomized hash for parallel execution
+FrameCreate<MyDataType, MyCustomFrame> generate = (idHash, data) -> {
+    MyCustomFrame frame = new MyCustomFrame(idHash, data, killSwitch, manager);
+    frame.randomizeHash(seed[0]++);
+    return frame;
+};
+FrameReplace<MyDataType, MyCustomFrame> replace = (data, oldFrame) -> {
+    oldFrame.replace(data);
+    oldFrame.randomizeHash(seed[0]++);
+};
+
+manager.setFactory(new FrameFactory<>(generate, replace));
+
+QueueIngestSink sink = new QueueIngestSink();
+controlPlane.addUpstream(sink);
+
+for(int i = 0; i < 1_000_000; i++) {
+    sink.offer(manager.getOrCreate(i, password));
+}
+
+sink.gracefullyComplete();
+```
+
+**IMPORTANT NOTE: Frames are reset after execution whether you use the recycler or not. This sets
+their routingHash back to their idHash. If you want them to continue executing in parallel,
+randomize the routing hash again in replace().**
