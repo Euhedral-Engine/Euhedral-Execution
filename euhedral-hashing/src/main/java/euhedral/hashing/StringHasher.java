@@ -1,6 +1,6 @@
 package euhedral.hashing;
 
-public class StringHasher extends AbstractHasher {
+public final class StringHasher extends AbstractHasher {
 
     public static long getHash(String s1, String s2) {
         return StringHasher.getHash(s2, getHash(s1));
