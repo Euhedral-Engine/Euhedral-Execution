@@ -5,9 +5,14 @@ import static euhedral.io.utils.MathFunctions.clampLong;
 
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicBoolean;
+
 import lombok.Getter;
 import org.jspecify.annotations.NonNull;
 
+/// This class calculates rates, units, intervals, and variances of each for any type of unit using
+/// fixed-point arithmetic.
+///
+/// It has a built-in dynamic sizing and sliding window that responds to jitter.
 public class FlowRecorder {
 
     // 16 bits of precision
@@ -35,7 +40,8 @@ public class FlowRecorder {
     private long averageInterval, intervalVariation = 0L;
     @Getter
     private long rollingSum = 0;
-    private long rateRemainder, varRateRemainder, unitRemainder, varUnitRemainder, intervalRemainder, varIntervRemainder;
+    private long rateRemainder, varRateRemainder, unitRemainder, varUnitRemainder,
+            intervalRemainder, varIntervRemainder;
 
     public FlowRecorder() {
         this(Duration.ofNanos(10_000), Duration.ofMillis(1));
@@ -224,9 +230,9 @@ public class FlowRecorder {
                     EwmaRemainder.VAR_RATE);
             unitVariation = ewma(unitVariation, Math.abs(currentUnits - averageUnits) / 2, alpha,
                     EwmaRemainder.VAR_UNIT);
-            intervalVariation = ewma(intervalVariation,
-                    Math.abs(currentInterval - averageInterval) / 2,
-                    alpha, EwmaRemainder.VAR_INTERVAL);
+            intervalVariation =
+                    ewma(intervalVariation, Math.abs(currentInterval - averageInterval) / 2, alpha,
+                            EwmaRemainder.VAR_INTERVAL);
         }
 
     }

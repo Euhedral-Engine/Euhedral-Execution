@@ -1,8 +1,8 @@
 package euhedral.io.reactor;
 
 import euhedral.atomics.PaddedAtomicLong;
-import euhedral.io.control_plane.ControlPlane;
-import euhedral.io.impl.DefaultCloneablePipeline;
+import euhedral.io.config.ControlPlaneConfig;
+import euhedral.io.control_plane.ControlPlaneLattice;
 import euhedral.io.reactor.common.EuhedralSubscriber;
 import euhedral.io.utils.MathFunctions;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -17,6 +17,14 @@ import reactor.core.Disposable;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Scheduler;
 
+/// ### The interface for interacting with Euhedral
+///
+/// This class is capable of time-based scheduling and single task execution.
+///
+/// While it can be used as a normal Reactor Scheduler in `subscribeOn()` and `publishOn`, it is
+/// highly recommended that you use [EuhedralOperator] with it instead. EuhedralOperator is built
+/// and optimized to take advantage of Euhedral Core's parallelism and memory efficiency while
+/// handling backpressure for you.
 @SuppressWarnings({"resource", "unused"})
 public class EuhedralScheduler implements Scheduler {
 
@@ -33,17 +41,23 @@ public class EuhedralScheduler implements Scheduler {
         return getOrCreate("EuhedralScheduler", null, null);
     }
 
+    public static @NonNull EuhedralScheduler getOrCreate(String name) {
+        return getOrCreate(name, null, null);
+    }
+
     public static @NonNull EuhedralScheduler getOrCreate(String name, @Nullable String metricPrefix,
             @Nullable MeterRegistry meterRegistry) {
+        return getOrCreate(ControlPlaneConfig.defaultConfig(name, metricPrefix, meterRegistry));
+    }
+
+    public static @NonNull EuhedralScheduler getOrCreate(ControlPlaneConfig config) {
         EuhedralScheduler instance = INSTANCE.getOpaque();
         if (instance != null) {
             return instance;
         }
 
         if (CONSTRUCTING.compareAndSet(false, true)) {
-            ControlPlane controlPlane = ControlPlane.getOrCreate(name,
-                    new DefaultCloneablePipeline(name + "Pipeline", metricPrefix, meterRegistry),
-                    meterRegistry);
+            ControlPlaneLattice controlPlane = ControlPlaneLattice.getOrCreate(config);
             instance = new EuhedralScheduler(controlPlane);
             INSTANCE.set(instance);
             return instance;
@@ -56,19 +70,19 @@ public class EuhedralScheduler implements Scheduler {
     }
 
     private final AtomicBoolean disposed = new AtomicBoolean(false);
-    private final ControlPlane controlPlane;
+    private final ControlPlaneLattice controlPlane;
     private final EuhedralWorker[] sinks;
 
-    private EuhedralScheduler(ControlPlane controlPlane) {
+    private EuhedralScheduler(ControlPlaneLattice controlPlane) {
         this.controlPlane = controlPlane;
         this.sinks = new EuhedralWorker[Runtime.getRuntime().availableProcessors()];
         for (int i = 0; i < this.sinks.length; i++) {
             this.sinks[i] = EuhedralWorker.spawn(8_096, 2);
-            controlPlane.ingest(this.sinks[i]);
+            controlPlane.addUpstream(this.sinks[i]);
         }
     }
 
-    /// This method injects a Subscriber handle into the Euhedral ControlPlane. The subscriber must
+    /// This method injects a Subscriber handle into the Euhedral ControlPlaneLattice. The subscriber must
     /// have a subscription before this method is called. This is equivalent to calling
     /// `.publishOn()`
     ///
@@ -84,7 +98,7 @@ public class EuhedralScheduler implements Scheduler {
     public void ingest(@NonNull EuhedralSubscriber subscriber) {
         Objects.requireNonNull(subscriber);
         if (subscriber.hasSubscription()) {
-            this.controlPlane.ingest(subscriber);
+            subscriber.startUFlowWith(this.controlPlane);
         }
         throw new IllegalStateException(
                 "The subscriber must have a subscription before calling ingest");
@@ -116,7 +130,7 @@ public class EuhedralScheduler implements Scheduler {
     @Override
     public @NonNull Worker createWorker() {
         EuhedralWorker worker = EuhedralWorker.spawn(8_096, 2);
-        this.controlPlane.ingest(worker);
+        this.controlPlane.addUpstream(worker);
         return worker;
     }
 
@@ -124,7 +138,7 @@ public class EuhedralScheduler implements Scheduler {
     public void dispose() {
         if (this.disposed.compareAndSet(false, true)) {
             for (EuhedralWorker sink : sinks) {
-                sink.close();
+                sink.complete();
             }
         }
     }

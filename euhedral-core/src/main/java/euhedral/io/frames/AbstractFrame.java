@@ -1,9 +1,13 @@
 package euhedral.io.frames;
 
 import euhedral.hardware_utils.SystemInfo.CpuInfo;
+import euhedral.hashing.HasherApi;
+import euhedral.io.control_plane.ControlPlaneFragment;
 import euhedral.io.control_plane.RoutingPolicy;
 import euhedral.io.generics.AbstractExecutor;
 import euhedral.io.impl.FrameManager;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -25,7 +29,7 @@ import lombok.Setter;
 ///
 /// ### Hashing & Routing
 ///
-/// Frames are routed based on a `combinedHash`. This is what determines how work spreads across
+/// Frames are routed based on a `routingHash`. This is what determines how work spreads across
 /// parallel paths.
 ///
 /// For stable ordering, keep the hash consistent across retries:
@@ -70,13 +74,23 @@ import lombok.Setter;
 @SuppressWarnings({"rawtypes", "unchecked", "unused"})
 public abstract class AbstractFrame {
 
+    protected static final VarHandle ROUTING_HASH;
+
+    static {
+        try {
+            ROUTING_HASH = MethodHandles.lookup().findVarHandle(AbstractFrame.class, "routingHash", long.class);
+        } catch (Throwable t) {
+            throw new ExceptionInInitializerError(t);
+        }
+    }
+
     protected final FrameManager recycler;
     public final CancelFrame cancel;
 
     @Getter
     private final long idHash;
-    @Getter @Setter
-    protected volatile long combinedHash;
+    @Getter
+    private long routingHash;
     @Getter @Setter
     private CpuInfo origin;
     @Getter @Setter
@@ -88,25 +102,23 @@ public abstract class AbstractFrame {
     private long ingestNs;
 
     @Getter @Setter
-    private boolean isOrdered;
-
-    @Getter @Setter
     private boolean cancelledExecution = false;
 
     public AbstractFrame(long idHash, FrameManager recycler) {
         this.cancel = new CancelFrame(this);
         this.idHash = idHash;
         this.recycler = recycler;
-        this.combinedHash = idHash;
+        this.routingHash = idHash;
     }
 
     /// Does the thing.
     public abstract void execute();
 
     /// Mixes the combined hash with the seed.
-    public void randomizeHash(long seed) {
-        long newHash = this.combinedHash;
-        this.combinedHash = newHash ^ seed;
+    public final void randomizeHash(long seed) {
+        seed = HasherApi.mix(seed);
+        long newHash = this.routingHash;
+        ROUTING_HASH.setRelease(this, newHash ^ seed);
     }
 
     /// Liveness check.
@@ -126,15 +138,16 @@ public abstract class AbstractFrame {
 
     /// Resets execution state so the frame can be reused.
     public final void reset() {
-        startNs = 0;
-        ingestNs = 0;
-        cancelledExecution = false;
+        this.startNs = 0;
+        this.ingestNs = 0;
+        this.cancelledExecution = false;
+        ROUTING_HASH.setRelease(this, this.idHash);
     }
 
     /// Returns the frame to the recycler for reuse.
     public final boolean recycle() {
-        if (recycler != null) {
-            return recycler.recycle(this);
+        if (this.recycler != null) {
+            return this.recycler.recycle(this);
         }
         return false;
     }
@@ -142,9 +155,13 @@ public abstract class AbstractFrame {
     /// Throws the internal cancellation error used to stop execution immediately.
     ///
     /// Handled by [`AbstractExecutor`][AbstractExecutor] and
-    /// [`ExecutionManager`][euhedral.io.ExecutionManager].
+    /// [`ControlPlaneFragment`][ControlPlaneFragment].
     public final void throwMeAsError() {
         throw this.cancel;
+    }
+
+    public final boolean isOrdered() {
+        return this.idHash == this.routingHash;
     }
 
     public abstract long getSizeBytes();

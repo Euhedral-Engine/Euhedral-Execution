@@ -6,12 +6,12 @@
   <parent>
     <groupId>io.euhedral-execution</groupId>
     <artifactId>euhedral-execution</artifactId>
-    <version>0.0.3-SNAPSHOT</version>
+    <version>0.0.3</version>
   </parent>
 
   <name>Euhedral Hashing</name>
   <artifactId>euhedral-hashing</artifactId>
-  <version>0.0.1</version>
+  <version>0.0.3</version>
 
   <properties>
     <maven.compiler.release>17</maven.compiler.release>

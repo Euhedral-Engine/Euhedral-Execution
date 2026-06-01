@@ -4,17 +4,20 @@ import static euhedral.queues.common.QueueUtils.LONG_PAD;
 
 import euhedral.atomics.PaddedAtomicReferenceArray;
 import euhedral.atomics.PaddedLongAdder;
+import euhedral.queues.common.ConcurrentPartitionedQueue;
 import euhedral.queues.common.QueueUtils;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.Arrays;
 import java.util.StringJoiner;
+import java.util.function.Consumer;
 
-/// A template of a concurrent array queue with partitions. This class is overridden by
-/// its subclasses to selectively choose the type of thread safety between producers and consumers.
+/// A template of a concurrent array queue with partitions. This class is overridden by its
+/// subclasses to selectively choose the type of thread safety between producers and consumers.
 ///
 /// @param <T> Type to store
 abstract sealed class ConcurrentPartitionedArrayQueue<T> extends PartitionedArrayQueue<T>
+        implements ConcurrentPartitionedQueue<T>
         permits PartitionedSpscArrayQueue, PartitionedSpmcArrayQueue, PartitionedMpscArrayQueue,
         PartitionedMpmcArrayQueue {
 
@@ -159,7 +162,7 @@ abstract sealed class ConcurrentPartitionedArrayQueue<T> extends PartitionedArra
     }
 
     @Override
-    public int drain(int partition, QueueConsumer<T> consumer, int limit) {
+    public long drain(int partition, Consumer<T> consumer, long limit) {
         boundsCheck(partition);
         if (consumer == null || limit <= 0) {
             return 0;
@@ -168,7 +171,7 @@ abstract sealed class ConcurrentPartitionedArrayQueue<T> extends PartitionedArra
 
         long head;
         long headSequence;
-        int total = 0;
+        long total = 0;
 
         int pIdx = super.heads.fromRawIdx(partition);
         int rIdx = this.tailSequence.fromRawIdx(partition);
@@ -194,7 +197,7 @@ abstract sealed class ConcurrentPartitionedArrayQueue<T> extends PartitionedArra
                 int nextClearBit = QueueUtils.nextClearBit(sChunk, bitOffset);
                 int upperLimit = (nextClearBit == -1) ? 64 : nextClearBit;
 
-                reserved = Math.min(64 - bitOffset, limit - total);
+                reserved = (int) Math.min(64 - bitOffset, limit - total);
                 reserved = Math.min(reserved, upperLimit - bitOffset);
                 if (reserved == 0) {
                     return total;
@@ -205,7 +208,7 @@ abstract sealed class ConcurrentPartitionedArrayQueue<T> extends PartitionedArra
             VarHandle.acquireFence();
             for (int j = 0; j < reserved; j++) {
                 int qIdx = chunkIndex(head + j);
-                consumer.consume(pQueue[qIdx]);
+                consumer.accept(pQueue[qIdx]);
                 pQueue[qIdx] = null;
             }
             total += reserved;
@@ -286,8 +289,9 @@ abstract sealed class ConcurrentPartitionedArrayQueue<T> extends PartitionedArra
             long headSeq = this.headSequence == null ? head : this.headSequence.getPlain(pIdx);
             long inFlight = this.inFlight == null ? 0 : this.inFlight.getPlain(pIdx);
 
-            boolean empty = head == tail && head == headSeq && inFlight == 0 && isPartitionEmptyInternal(
-                    i);
+            boolean empty =
+                    head == tail && head == headSeq && inFlight == 0 && isPartitionEmptyInternal(
+                            i);
             if (!empty) {
                 return false;
             }

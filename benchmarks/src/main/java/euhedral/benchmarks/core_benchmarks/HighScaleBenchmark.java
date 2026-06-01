@@ -8,12 +8,13 @@ import euhedral.hardware_utils.PinnedThreadExecutor;
 import euhedral.hardware_utils.SystemInfo;
 import euhedral.hardware_utils.SystemInfo.SocketInfo;
 import euhedral.hashing.HasherApi;
-import euhedral.io.config.DRRConfig;
-import euhedral.io.config.ExecutionManagerConfig;
-import euhedral.io.control_plane.ControlPlane;
+import euhedral.io.config.CacheConfig;
+import euhedral.io.config.ControlPlaneConfig;
+import euhedral.io.config.SchedulingConfig;
+import euhedral.io.control_plane.ControlPlaneLattice;
 import euhedral.io.control_plane.RoutingPolicy;
-import euhedral.io.flow_control.ArrayIngestSink;
 import euhedral.io.frames.AbstractFrame;
+import euhedral.io.ingest.ArrayIngestSink;
 import euhedral.io.utils.MathFunctions;
 import java.util.concurrent.TimeUnit;
 import org.openjdk.jmh.annotations.AuxCounters;
@@ -57,8 +58,8 @@ public class HighScaleBenchmark {
         for (int i = pixels.length - 1; i > 0; i--) {
             int j = (int) MathFunctions.unsignedMultiplyHigh(HasherApi.mix(seed++), i + 1);
             MandelbulbFrame temp = pixels[i];
-            temp.randomizeHash(HasherApi.mix(seed));
-            pixels[j].randomizeHash(HasherApi.mix(seed++));
+            temp.randomizeHash(seed);
+            pixels[j].randomizeHash(seed++);
 
             pixels[i] = pixels[j];
             pixels[j] = temp;
@@ -91,11 +92,13 @@ public class HighScaleBenchmark {
         }
     }
 
-    private static MandelbulbFrame[][][] generate(Blackhole blackhole, PaddedLongAdder counters) throws Exception {
+    private static MandelbulbFrame[][][] generate(Blackhole blackhole, PaddedLongAdder counters)
+            throws Exception {
         return generate(blackhole, counters, false);
     }
 
-    private static MandelbulbFrame[][][] generate(Blackhole blackhole, PaddedLongAdder counters, boolean socketLocal)
+    private static MandelbulbFrame[][][] generate(Blackhole blackhole, PaddedLongAdder counters,
+            boolean socketLocal)
             throws Exception {
         int sockets = SystemInfo.SOCKET_COUNT;
 
@@ -116,7 +119,8 @@ public class HighScaleBenchmark {
                             9800,
                             CENTER_X, CENTER_Y, 0.0, MAX_RAY_STEPS, ITERATION_CAP,
                             BAILOUT_RADIUS_SQ,
-                            blackhole, counters, socketLocal ? RoutingPolicy.SOCKET_LOCAL : RoutingPolicy.ANY);
+                            blackhole, counters,
+                            socketLocal ? RoutingPolicy.SOCKET_LOCAL : RoutingPolicy.ANYWHERE);
                 }).get();
                 executor.shutdownNow();
             }
@@ -135,7 +139,7 @@ public class HighScaleBenchmark {
         private final PaddedLongAdder counters =
                 new PaddedLongAdder(Runtime.getRuntime().availableProcessors(), true, true);
         private final ArrayIngestSink[] sinks = new ArrayIngestSink[64 * SystemInfo.SOCKET_COUNT];
-        private ControlPlane controlPlane;
+        private ControlPlaneLattice controlPlane;
 
         @Setup(Level.Trial)
         public void setup(Blackhole blackhole) throws Exception {
@@ -163,7 +167,7 @@ public class HighScaleBenchmark {
                         chunkArray[iter++] = new ArrayFrame(pixels[0][0][0].getIdHash(), set,
                                 this.counters);
 
-                        chunkArray[iter - 1].randomizeHash(HasherApi.mix(seed++));
+                        chunkArray[iter - 1].randomizeHash(seed++);
                         total -= Math.min(1024, total);
                     }
 
@@ -172,12 +176,13 @@ public class HighScaleBenchmark {
                 }
             }
 
-            DRRConfig drrConfig = DRRConfig.defaultConfig("hsb", null);
-            ExecutionManagerConfig emConfig = ExecutionManagerConfig.balancedDefault(null,
-                    "hsb");
+            CacheConfig cacheConfig = CacheConfig.defaultConfig();
+            SchedulingConfig schedConfig = SchedulingConfig.balancedDefault();
             FractalPipeline pipeline =
-                    new FractalPipeline("HighScaleBenchmark", drrConfig, emConfig, blackhole);
-            this.controlPlane = ControlPlane.getOrCreate("HighScaleBenchmark", pipeline, null);
+                    new FractalPipeline(cacheConfig, schedConfig, blackhole);
+            ControlPlaneConfig config = new ControlPlaneConfig("HighScaleBenchmark", null, null,
+                    pipeline, null, null);
+            this.controlPlane = ControlPlaneLattice.getOrCreate(config);
             this.controlPlane.start();
         }
 
@@ -193,7 +198,7 @@ public class HighScaleBenchmark {
         @Benchmark
         public void render(OpCounter opCounter) {
             for (ArrayIngestSink sink : this.sinks) {
-                this.controlPlane.ingest(sink);
+                this.controlPlane.addUpstream(sink);
             }
 
             waitOnRender(this.counters);
@@ -224,7 +229,7 @@ public class HighScaleBenchmark {
         private final PaddedLongAdder counters =
                 new PaddedLongAdder(Runtime.getRuntime().availableProcessors(), true, true);
         private final ArrayIngestSink[] sinks = new ArrayIngestSink[64 * SystemInfo.SOCKET_COUNT];
-        private ControlPlane controlPlane;
+        private ControlPlaneLattice controlPlane;
 
         @Setup(Level.Trial)
         public void setup(Blackhole blackhole) throws Exception {
@@ -252,7 +257,7 @@ public class HighScaleBenchmark {
                         chunkArray[iter++] = new ArrayFrame(pixels[0][0][0].getIdHash(), set,
                                 this.counters);
 
-                        chunkArray[iter - 1].randomizeHash(HasherApi.mix(seed++));
+                        chunkArray[iter - 1].randomizeHash(seed++);
                         total -= Math.min(1024, total);
                     }
 
@@ -261,12 +266,13 @@ public class HighScaleBenchmark {
                 }
             }
 
-            DRRConfig drrConfig = DRRConfig.defaultConfig("hsb", null);
-            ExecutionManagerConfig emConfig = ExecutionManagerConfig.balancedDefault(null,
-                    "hsb");
+            CacheConfig cacheConfig = CacheConfig.defaultConfig();
+            SchedulingConfig schedConfig = SchedulingConfig.balancedDefault();
             FractalPipeline pipeline =
-                    new FractalPipeline("HighScaleBenchmark", drrConfig, emConfig, blackhole);
-            this.controlPlane = ControlPlane.getOrCreate("HighScaleBenchmark", pipeline, null);
+                    new FractalPipeline(cacheConfig, schedConfig, blackhole);
+            ControlPlaneConfig config = new ControlPlaneConfig("HighScaleBenchmark", null, null,
+                    pipeline, null, null);
+            this.controlPlane = ControlPlaneLattice.getOrCreate(config);
             this.controlPlane.start();
         }
 
@@ -282,7 +288,7 @@ public class HighScaleBenchmark {
         @Benchmark
         public void render(OpCounter opCounter) {
             for (ArrayIngestSink sink : this.sinks) {
-                this.controlPlane.ingest(sink);
+                this.controlPlane.addUpstream(sink);
             }
 
             waitOnRender(this.counters);
@@ -313,7 +319,7 @@ public class HighScaleBenchmark {
         private final PaddedLongAdder counters =
                 new PaddedLongAdder(Runtime.getRuntime().availableProcessors(), true, true);
         private final ArrayIngestSink[] sinks = new ArrayIngestSink[64 * SystemInfo.SOCKET_COUNT];
-        private ControlPlane controlPlane;
+        private ControlPlaneLattice controlPlane;
 
         @Setup(Level.Trial)
         public void setup(Blackhole blackhole) throws Exception {
@@ -328,12 +334,13 @@ public class HighScaleBenchmark {
                 }
             }
 
-            DRRConfig drrConfig = DRRConfig.defaultConfig("hsb", null);
-            ExecutionManagerConfig emConfig = ExecutionManagerConfig.balancedDefault(null,
-                    "hsb");
+            CacheConfig cacheConfig = CacheConfig.defaultConfig();
+            SchedulingConfig schedConfig = SchedulingConfig.balancedDefault();
             FractalPipeline pipeline =
-                    new FractalPipeline("HighScaleBenchmark", drrConfig, emConfig, blackhole);
-            this.controlPlane = ControlPlane.getOrCreate("HighScaleBenchmark", pipeline, null);
+                    new FractalPipeline(cacheConfig, schedConfig, blackhole);
+            ControlPlaneConfig config = new ControlPlaneConfig("HighScaleBenchmark", null, null,
+                    pipeline, null, null);
+            this.controlPlane = ControlPlaneLattice.getOrCreate(config);
             this.controlPlane.start();
         }
 
@@ -349,7 +356,7 @@ public class HighScaleBenchmark {
         @Benchmark
         public void render(OpCounter opCounter) {
             for (ArrayIngestSink sink : this.sinks) {
-                this.controlPlane.ingest(sink);
+                this.controlPlane.addUpstream(sink);
             }
 
             waitOnRender(this.counters);
@@ -381,7 +388,7 @@ public class HighScaleBenchmark {
         private final PaddedLongAdder counters =
                 new PaddedLongAdder(Runtime.getRuntime().availableProcessors(), true, true);
         private final ArrayIngestSink[] sinks = new ArrayIngestSink[64 * SystemInfo.SOCKET_COUNT];
-        private ControlPlane controlPlane;
+        private ControlPlaneLattice controlPlane;
 
         @Setup(Level.Trial)
         public void setup(Blackhole blackhole) throws Exception {
@@ -396,12 +403,13 @@ public class HighScaleBenchmark {
                 }
             }
 
-            DRRConfig drrConfig = DRRConfig.defaultConfig("hsb", null);
-            ExecutionManagerConfig emConfig = ExecutionManagerConfig.balancedDefault(null,
-                    "hsb");
+            CacheConfig cacheConfig = CacheConfig.defaultConfig();
+            SchedulingConfig schedConfig = SchedulingConfig.balancedDefault();
             FractalPipeline pipeline =
-                    new FractalPipeline("HighScaleBenchmark", drrConfig, emConfig, blackhole);
-            this.controlPlane = ControlPlane.getOrCreate("HighScaleBenchmark", pipeline, null);
+                    new FractalPipeline(cacheConfig, schedConfig, blackhole);
+            ControlPlaneConfig config = new ControlPlaneConfig("HighScaleBenchmark", null, null,
+                    pipeline, null, null);
+            this.controlPlane = ControlPlaneLattice.getOrCreate(config);
             this.controlPlane.start();
         }
 
@@ -417,7 +425,7 @@ public class HighScaleBenchmark {
         @Benchmark
         public void render(OpCounter opCounter) {
             for (ArrayIngestSink sink : this.sinks) {
-                this.controlPlane.ingest(sink);
+                this.controlPlane.addUpstream(sink);
             }
 
             waitOnRender(this.counters);

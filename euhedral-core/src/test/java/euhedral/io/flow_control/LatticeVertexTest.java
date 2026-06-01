@@ -15,7 +15,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 
-import euhedral.io.generics.ScaffoldingSource;
+import euhedral.io.generics.LatticeSource;
 import euhedral.io.utils.DrainBuffer;
 import java.util.BitSet;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -23,17 +23,17 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import test_utils.TestFrame;
-import test_utils.TestTerminal;
+import test_utils.TestReceiver;
 
-class ScaffoldingNodeTest {
+class LatticeVertexTest {
 
-    private ScaffoldingNode node;
+    private LatticeVertex node;
 
     @BeforeEach
     void setup() {
         UpstreamQueue.UP_QUEUE.remove();
 
-        node = new ScaffoldingNode("test-node", 4);
+        node = new LatticeVertex("test-node", 4);
     }
 
     @AfterEach
@@ -52,10 +52,10 @@ class ScaffoldingNodeTest {
 
     @Test
     void shouldInitializeTerminalNode() {
-        ScaffoldingNode terminal = new ScaffoldingNode(
+        LatticeVertex terminal = new LatticeVertex(
                 "terminal",
                 2,
-                ScaffoldingNode.RoutingFunction.DEFAULT,
+                LatticeVertex.RoutingFunction.DEFAULT,
                 true
         );
 
@@ -87,10 +87,10 @@ class ScaffoldingNodeTest {
         active.set(0);
         active.set(2);
 
-        ScaffoldingEdge edge1 = spy(new ScaffoldingEdge(new AtomicBoolean()));
-        ScaffoldingEdge edge2 = spy(new ScaffoldingEdge(new AtomicBoolean()));
+        LatticeEdge edge1 = spy(new LatticeEdge(new AtomicBoolean()));
+        LatticeEdge edge2 = spy(new LatticeEdge(new AtomicBoolean()));
 
-        ScaffoldingEdge[] handles = new ScaffoldingEdge[4];
+        LatticeEdge[] handles = new LatticeEdge[4];
         handles[0] = edge1;
         handles[2] = edge2;
 
@@ -111,7 +111,7 @@ class ScaffoldingNodeTest {
 
         BitSet active = new BitSet();
 
-        boolean result = node.setDownstreamMapping(active, new ScaffoldingEdge[4]);
+        boolean result = node.setDownstreamMapping(active, new LatticeEdge[4]);
 
         assertFalse(result);
     }
@@ -120,13 +120,13 @@ class ScaffoldingNodeTest {
     void shouldCloseInactiveDownstreamsDuringRemap() {
         node.setDrain(true);
 
-        ScaffoldingEdge existing = spy(new ScaffoldingEdge(new AtomicBoolean()));
+        LatticeEdge existing = spy(new LatticeEdge(new AtomicBoolean()));
 
         node.downstreams[1] = existing;
 
         BitSet active = new BitSet();
 
-        node.setDownstreamMapping(active, new ScaffoldingEdge[4]);
+        node.setDownstreamMapping(active, new LatticeEdge[4]);
 
         verify(existing).close();
 
@@ -142,11 +142,11 @@ class ScaffoldingNodeTest {
         active.set(1);
         active.set(2);
 
-        ScaffoldingEdge a = new ScaffoldingEdge(new AtomicBoolean());
-        ScaffoldingEdge b = new ScaffoldingEdge(new AtomicBoolean());
-        ScaffoldingEdge c = new ScaffoldingEdge(new AtomicBoolean());
+        LatticeEdge a = new LatticeEdge(new AtomicBoolean());
+        LatticeEdge b = new LatticeEdge(new AtomicBoolean());
+        LatticeEdge c = new LatticeEdge(new AtomicBoolean());
 
-        ScaffoldingEdge[] handles = new ScaffoldingEdge[4];
+        LatticeEdge[] handles = new LatticeEdge[4];
         handles[0] = a;
         handles[1] = b;
         handles[2] = c;
@@ -164,11 +164,11 @@ class ScaffoldingNodeTest {
     void shouldRouteFramesToCorrectDownstream() {
         node.setDrain(true);
 
-        TestTerminal first = new TestTerminal();
-        TestTerminal second = new TestTerminal();
+        TestReceiver first = new TestReceiver();
+        TestReceiver second = new TestReceiver();
 
-        ScaffoldingEdge edge1 = new ScaffoldingEdge(new AtomicBoolean());
-        ScaffoldingEdge edge2 = new ScaffoldingEdge(new AtomicBoolean());
+        LatticeEdge edge1 = new LatticeEdge(new AtomicBoolean());
+        LatticeEdge edge2 = new LatticeEdge(new AtomicBoolean());
 
         edge1.addDownstream(first);
         edge2.addDownstream(second);
@@ -177,7 +177,7 @@ class ScaffoldingNodeTest {
         active.set(0);
         active.set(1);
 
-        ScaffoldingEdge[] handles = new ScaffoldingEdge[2];
+        LatticeEdge[] handles = new LatticeEdge[2];
         handles[0] = edge1;
         handles[1] = edge2;
 
@@ -185,9 +185,9 @@ class ScaffoldingNodeTest {
 
         TestFrame frame = spy(new TestFrame("frame"));
 
-        doReturn(0L).when(frame).getCombinedHash();
+        doReturn(0L).when(frame).getRoutingHash();
 
-        node.onNext(frame);
+        node.push(frame);
 
         assertEquals(1, first.received.size());
         assertEquals(0, second.received.size());
@@ -197,14 +197,14 @@ class ScaffoldingNodeTest {
     void shouldForwardErrorsToAllDownstreams() {
         node.setDrain(true);
 
-        ScaffoldingEdge edge1 = spy(new ScaffoldingEdge(new AtomicBoolean()));
-        ScaffoldingEdge edge2 = spy(new ScaffoldingEdge(new AtomicBoolean()));
+        LatticeEdge edge1 = spy(new LatticeEdge(new AtomicBoolean()));
+        LatticeEdge edge2 = spy(new LatticeEdge(new AtomicBoolean()));
 
         BitSet active = new BitSet();
         active.set(0);
         active.set(1);
 
-        ScaffoldingEdge[] handles = new ScaffoldingEdge[2];
+        LatticeEdge[] handles = new LatticeEdge[2];
         handles[0] = edge1;
         handles[1] = edge2;
 
@@ -222,8 +222,8 @@ class ScaffoldingNodeTest {
     void shouldCloseAllDownstreams() {
         node.setDrain(true);
 
-        ScaffoldingEdge edge1 = spy(new ScaffoldingEdge(new AtomicBoolean()));
-        ScaffoldingEdge edge2 = spy(new ScaffoldingEdge(new AtomicBoolean()));
+        LatticeEdge edge1 = spy(new LatticeEdge(new AtomicBoolean()));
+        LatticeEdge edge2 = spy(new LatticeEdge(new AtomicBoolean()));
 
         node.downstreams[0] = edge1;
         node.downstreams[1] = edge2;
@@ -239,7 +239,7 @@ class ScaffoldingNodeTest {
 
     @Test
     void shouldAddEdgeUpstream() {
-        ScaffoldingEdge upstream = spy(new ScaffoldingEdge(new AtomicBoolean()));
+        LatticeEdge upstream = spy(new LatticeEdge(new AtomicBoolean()));
 
         node.addUpstream(upstream);
 
@@ -248,10 +248,10 @@ class ScaffoldingNodeTest {
 
     @Test
     void shouldAddInterceptorUpstream() {
-        ScaffoldingNode.UpstreamInterceptor interceptor =
+        LatticeVertex.UpstreamInterceptor interceptor =
                 node.new UpstreamInterceptor();
 
-        ScaffoldingSource source = mock(ScaffoldingSource.class);
+        LatticeSource source = mock(LatticeSource.class);
 
         interceptor.addUpstream(source);
 
@@ -260,11 +260,11 @@ class ScaffoldingNodeTest {
 
     @Test
     void shouldIngestSource() {
-        ScaffoldingSource source = mock(ScaffoldingSource.class);
+        LatticeSource source = mock(LatticeSource.class);
 
         node.ingest(source);
 
-        verify(source).addDownstream(any(ScaffoldingNode.UpstreamInterceptor.class));
+        verify(source).addDownstream(any(LatticeVertex.UpstreamInterceptor.class));
     }
 
     @Test
@@ -278,7 +278,7 @@ class ScaffoldingNodeTest {
 
     @Test
     void shouldDelegatePullToParent() {
-        ScaffoldingEdge parent = spy(new ScaffoldingEdge(new AtomicBoolean()));
+        LatticeEdge parent = spy(new LatticeEdge(new AtomicBoolean()));
 
         node.setParent(parent);
 
@@ -295,10 +295,10 @@ class ScaffoldingNodeTest {
 
         doReturn(false).when(frame).isOrdered();
 
-        ScaffoldingNode.UpstreamInterceptor interceptor =
+        LatticeVertex.UpstreamInterceptor interceptor =
                 node.new UpstreamInterceptor();
 
-        interceptor.onNext(frame);
+        interceptor.push(frame);
 
         assertFalse(node.parallelQueue.isEmpty());
     }
@@ -307,16 +307,16 @@ class ScaffoldingNodeTest {
     void shouldDirectlyRouteOrderedFrames() {
         node.setDrain(true);
 
-        TestTerminal terminal = new TestTerminal();
+        TestReceiver terminal = new TestReceiver();
 
-        ScaffoldingEdge edge = new ScaffoldingEdge(new AtomicBoolean());
+        LatticeEdge edge = new LatticeEdge(new AtomicBoolean());
 
         edge.addDownstream(terminal);
 
         BitSet active = new BitSet();
         active.set(0);
 
-        ScaffoldingEdge[] handles = new ScaffoldingEdge[1];
+        LatticeEdge[] handles = new LatticeEdge[1];
         handles[0] = edge;
 
         node.setDownstreamMapping(active, handles);
@@ -324,22 +324,22 @@ class ScaffoldingNodeTest {
         TestFrame frame = spy(new TestFrame("ordered"));
 
         doReturn(true).when(frame).isOrdered();
-        doReturn(0L).when(frame).getCombinedHash();
+        doReturn(0L).when(frame).getRoutingHash();
 
-        ScaffoldingNode.UpstreamInterceptor interceptor =
+        LatticeVertex.UpstreamInterceptor interceptor =
                 node.new UpstreamInterceptor();
 
-        interceptor.onNext(frame);
+        interceptor.push(frame);
 
         assertEquals(1, terminal.received.size());
     }
 
     @Test
     void shouldRequestFromUpstream() {
-        ScaffoldingNode.UpstreamInterceptor interceptor =
+        LatticeVertex.UpstreamInterceptor interceptor =
                 node.new UpstreamInterceptor();
 
-        ScaffoldingSource upstream = mock(ScaffoldingSource.class);
+        LatticeSource upstream = mock(LatticeSource.class);
 
         interceptor.upstream = upstream;
 
@@ -350,10 +350,10 @@ class ScaffoldingNodeTest {
 
     @Test
     void shouldIgnoreInvalidRequest() {
-        ScaffoldingNode.UpstreamInterceptor interceptor =
+        LatticeVertex.UpstreamInterceptor interceptor =
                 node.new UpstreamInterceptor();
 
-        ScaffoldingSource upstream = mock(ScaffoldingSource.class);
+        LatticeSource upstream = mock(LatticeSource.class);
 
         interceptor.upstream = upstream;
 
@@ -364,23 +364,23 @@ class ScaffoldingNodeTest {
 
     @Test
     void shouldCancelUpstream() {
-        ScaffoldingNode.UpstreamInterceptor interceptor =
+        LatticeVertex.UpstreamInterceptor interceptor =
                 node.new UpstreamInterceptor();
 
-        ScaffoldingSource upstream = mock(ScaffoldingSource.class);
+        LatticeSource upstream = mock(LatticeSource.class);
 
         interceptor.upstream = upstream;
 
-        interceptor.cancel();
+        interceptor.complete();
 
-        verify(upstream).cancel();
+        verify(upstream).complete();
 
         assertTrue(interceptor.complete.get());
     }
 
     @Test
     void shouldMarkCompleteOnCompletion() {
-        ScaffoldingNode.UpstreamInterceptor interceptor =
+        LatticeVertex.UpstreamInterceptor interceptor =
                 node.new UpstreamInterceptor();
 
         interceptor.onComplete();
@@ -390,7 +390,7 @@ class ScaffoldingNodeTest {
 
     @Test
     void shouldMarkCompleteOnError() {
-        ScaffoldingNode.UpstreamInterceptor interceptor =
+        LatticeVertex.UpstreamInterceptor interceptor =
                 node.new UpstreamInterceptor();
 
         interceptor.onError(new RuntimeException("boom"));
@@ -400,7 +400,7 @@ class ScaffoldingNodeTest {
 
     @Test
     void shouldReportInterceptorCompletionState() {
-        ScaffoldingNode.UpstreamInterceptor interceptor =
+        LatticeVertex.UpstreamInterceptor interceptor =
                 node.new UpstreamInterceptor();
 
         assertFalse(interceptor.isComplete());

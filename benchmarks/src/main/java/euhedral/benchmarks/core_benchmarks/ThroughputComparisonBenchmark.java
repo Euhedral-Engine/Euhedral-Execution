@@ -4,13 +4,13 @@ import euhedral.atomics.PaddedLongAdder;
 import euhedral.benchmarks.frames.NoOpFrame;
 import euhedral.benchmarks.pipelines.NoOpPipeline;
 import euhedral.hashing.HasherApi;
-import euhedral.io.config.DRRConfig;
-import euhedral.io.config.ExecutionManagerConfig;
-import euhedral.io.control_plane.ControlPlane;
+import euhedral.io.config.CacheConfig;
+import euhedral.io.config.ControlPlaneConfig;
+import euhedral.io.config.SchedulingConfig;
+import euhedral.io.control_plane.ControlPlaneLattice;
 import euhedral.io.reactor.common.EuhedralSubscriber;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
-
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -62,11 +62,10 @@ public class ThroughputComparisonBenchmark {
     @Fork(1)
     public static class Reactor {
 
-        private NoOpFrame[] frames;
-        private BaseSubscriber<NoOpFrame> subscriber;
-
         private final PaddedLongAdder counters =
                 new PaddedLongAdder(Runtime.getRuntime().availableProcessors(), false, true);
+        private NoOpFrame[] frames;
+        private BaseSubscriber<NoOpFrame> subscriber;
 
         private void makeSub(Blackhole blackhole) {
             this.subscriber = new BaseSubscriber<>() {
@@ -122,9 +121,10 @@ public class ThroughputComparisonBenchmark {
 
         private final PaddedLongAdder counters = new PaddedLongAdder(
                 Runtime.getRuntime().availableProcessors(), true, true);
-        private final NoOpFrame[] frames = NoOpFrame.generate(ThreadLocalRandom.current().nextLong(), BATCH, this.counters);
+        private final NoOpFrame[] frames = NoOpFrame.generate(
+                ThreadLocalRandom.current().nextLong(), BATCH, this.counters);
         private EuhedralSubscriber subscriber;
-        private ControlPlane controlPlane;
+        private ControlPlaneLattice controlPlane;
 
         @Setup(Level.Trial)
         public void setup(Blackhole blackhole) {
@@ -132,14 +132,15 @@ public class ThroughputComparisonBenchmark {
             hash = HasherApi.mix(hash);
 
             for (NoOpFrame frame : this.frames) {
-                frame.randomizeHash(HasherApi.mix(hash++));
+                frame.randomizeHash(hash++);
             }
 
-            DRRConfig drrConfig = DRRConfig.defaultConfig("ThroughputComparisonBenchmark", null);
-            ExecutionManagerConfig emConfig = ExecutionManagerConfig.balancedDefault(null,
-                    "ThroughputComparisonBenchmark");
-            this.controlPlane = ControlPlane.getOrCreate("ThroughputComparisonBenchmark",
-                    new NoOpPipeline("ThroughputComparisonBenchmark", drrConfig, emConfig, blackhole), null);
+            CacheConfig cacheConfig = CacheConfig.defaultConfig();
+            SchedulingConfig emConfig = SchedulingConfig.balancedDefault();
+            NoOpPipeline pipeline = new NoOpPipeline(cacheConfig, emConfig, blackhole);
+            ControlPlaneConfig config = new ControlPlaneConfig("MandelbrotBenchmark", null, null,
+                    pipeline, null, null);
+            this.controlPlane = ControlPlaneLattice.getOrCreate(config);
             this.controlPlane.start();
         }
 
@@ -152,7 +153,7 @@ public class ThroughputComparisonBenchmark {
             hash = HasherApi.mix(hash);
 
             for (NoOpFrame frame : this.frames) {
-                frame.randomizeHash(HasherApi.mix(hash++));
+                frame.randomizeHash(hash++);
             }
         }
 
@@ -160,7 +161,7 @@ public class ThroughputComparisonBenchmark {
         @OperationsPerInvocation(BATCH)
         public void ingest() {
             Flux.fromArray(this.frames).subscribe(this.subscriber);
-            this.controlPlane.ingest(this.subscriber);
+            this.controlPlane.addUpstream(this.subscriber);
 
             await(this.counters);
         }

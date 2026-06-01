@@ -1,33 +1,42 @@
 package euhedral.io.frames;
 
 import euhedral.io.impl.FrameManager;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Function;
-import lombok.Setter;
 
-public class FunctionFrame<T, R> extends AbstractFrame {
+/// A generic frame that applies its function to the payload and passes the result to its consumer.
+@SuppressWarnings("unused")
+public final class FunctionFrame<PAYLOAD, RET_VAL> extends AbstractFrame {
 
-    final Function<T, R> function;
-    final Consumer<R> callback;
+    final Function<PAYLOAD, RET_VAL> function;
+    final Consumer<RET_VAL> consumer;
 
     private final AtomicBoolean killSwitch;
 
-    @Setter
-    private T payload;
+    private PAYLOAD payload;
 
+    public FunctionFrame(long idHash, Function<PAYLOAD, RET_VAL> function,
+            Consumer<RET_VAL> consumer, PAYLOAD payload) {
+        this(idHash, function, consumer, payload, null, null);
+    }
 
-    public FunctionFrame(long idHash, Function<T, R> function, Consumer<R> callback, AtomicBoolean killSwitch,
-            FrameManager<T, FunctionFrame<T, R>> recycler) {
+    public FunctionFrame(long idHash, Function<PAYLOAD, RET_VAL> function,
+            Consumer<RET_VAL> consumer, PAYLOAD payload, AtomicBoolean killSwitch,
+            FrameManager<PAYLOAD, FunctionFrame<PAYLOAD, RET_VAL>> recycler) {
         super(idHash, recycler);
+        Objects.requireNonNull(function);
+        Objects.requireNonNull(consumer);
         this.function = function;
-        this.callback = callback;
+        this.consumer = consumer;
         this.killSwitch = killSwitch;
+        this.payload = payload;
     }
 
     @Override
     public void execute() {
-        callback.accept(function.apply(payload));
+        this.consumer.accept(this.function.apply(this.payload));
     }
 
     @Override
@@ -37,15 +46,20 @@ public class FunctionFrame<T, R> extends AbstractFrame {
 
     @Override
     public boolean isAlive() {
-        return !killSwitch.get();
+        if(this.killSwitch != null) {
+            return !this.killSwitch.getOpaque();
+        }
+        return true;
     }
 
     @Override
     public void kill() {
-        killSwitch.set(true);
+        if(this.killSwitch != null) {
+            this.killSwitch.setRelease(true);
+        }
     }
 
-    public void replace(T payload) {
+    public void replace(PAYLOAD payload) {
         this.payload = payload;
     }
 }

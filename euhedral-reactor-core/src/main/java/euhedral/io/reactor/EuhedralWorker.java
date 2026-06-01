@@ -1,10 +1,10 @@
 package euhedral.io.reactor;
 
-import euhedral.atomics.PaddedAtomicLong;
 import euhedral.hashing.HasherApi;
-import euhedral.io.generics.IngestSink;
-import euhedral.io.generics.ScaffoldingSource;
-import euhedral.io.generics.ScaffoldingTerminal;
+import euhedral.io.frames.AbstractFrame;
+import euhedral.io.generics.LatticeReceiver;
+import euhedral.io.generics.LatticeSource;
+import euhedral.io.ingest.AbstractIngestSink;
 import euhedral.io.reactor.common.TaskFrame;
 import euhedral.queues.PartitionedUnboundedMpscArrayQueue;
 import java.lang.invoke.MethodHandles;
@@ -12,11 +12,13 @@ import java.lang.invoke.VarHandle;
 import java.util.Objects;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import org.jspecify.annotations.NonNull;
 import reactor.core.Disposable;
 import reactor.core.scheduler.Scheduler.Worker;
 
-public class EuhedralWorker implements IngestSink, Worker {
+@SuppressWarnings("unused")
+public class EuhedralWorker extends AbstractIngestSink implements Worker {
 
     static EuhedralWorker spawn(int chunkSize, int maxPooledChunks) {
         return new EuhedralWorker(chunkSize, maxPooledChunks);
@@ -57,109 +59,91 @@ public class EuhedralWorker implements IngestSink, Worker {
     }
 
     @Override
-    public ScaffoldingSource getDelegate() {
+    public LatticeSource getDelegate() {
         return this.delegate;
     }
 
     @Override
     public void dispose() {
-        close();
+        complete();
     }
 
     @Override
     public boolean isDisposed() {
-        return this.delegate.isClosed();
+        return this.delegate.isComplete();
     }
 
     @Override
-    public void close() {
-        this.delegate.close();
+    public void complete() {
+        this.delegate.complete();
     }
 
-    private static class Delegate implements IngestSink.Delegate {
+    private static class Delegate extends AbstractIngestSink.Delegate {
 
-        private static final VarHandle CLOSED;
-        private static final VarHandle TERMINAL;
+        private static final VarHandle COMPLETE;
 
         static {
             try {
-                CLOSED = MethodHandles.lookup()
-                        .findVarHandle(Delegate.class, "closed", boolean.class);
-                TERMINAL = MethodHandles.lookup()
-                        .findVarHandle(Delegate.class, "terminal", ScaffoldingTerminal.class);
+                COMPLETE = MethodHandles.lookup()
+                        .findVarHandle(Delegate.class, "complete", boolean.class);
             } catch (Throwable t) {
                 throw new ExceptionInInitializerError(t);
             }
         }
 
-        private static long accumulate(long curr, long next) {
-            if (curr + next < 0) {
-                return Long.MAX_VALUE;
-            }
-            return curr + next;
-        }
-
         private final PartitionedUnboundedMpscArrayQueue<TaskFrame> queue;
-        private final PaddedAtomicLong demand = new PaddedAtomicLong(0);
 
-        private ScaffoldingTerminal terminal;
-        private boolean closed;
+        private boolean complete;
 
         Delegate(int chunkSize, int maxPooledChunks) {
             this.queue = new PartitionedUnboundedMpscArrayQueue<>(1, chunkSize, maxPooledChunks);
         }
 
         @Override
-        public void request(long demand) {
-            boolean closed = (boolean) CLOSED.getOpaque(this);
-            var terminal = (ScaffoldingTerminal) TERMINAL.getOpaque(this);
+        public void hookOnPull(Consumer<AbstractFrame> consumer, long demand) {
 
-            if (closed || terminal == null || demand <= 0) {
+        }
+
+        @Override
+        public void hookOnRequest(LatticeReceiver terminal, long demand) {
+            if (complete) {
                 return;
             }
 
-            demand = this.demand.accumulateAndGet(demand, Delegate::accumulate);
-            int batch = (int) Math.min(demand, Integer.MAX_VALUE);
-
-            int count = this.queue.drain(0, this::drain, batch);
+            long count = this.queue.drain(0, this::drain, demand);
             if (count > 0) {
-                this.demand.getAndAdd(-count);
+                addAndGetDemand(-count);
             }
         }
 
         private void drain(TaskFrame frame) {
-            ScaffoldingTerminal terminal = this.terminal;
+            LatticeReceiver terminal = this.terminal;
             if (terminal == null) {
-                terminal = (ScaffoldingTerminal) TERMINAL.getOpaque(this);
+                terminal = (LatticeReceiver) TERMINAL.getOpaque(this);
             }
 
             if (terminal == null) {
                 return;
             }
-            terminal.onNext(frame);
+            terminal.push(frame);
         }
 
         @Override
-        public void cancel() {
-            close();
-        }
-
-        @Override
-        public void addDownstream(ScaffoldingTerminal downstream) {
+        public void addDownstream(LatticeReceiver downstream) {
             if (!TERMINAL.compareAndSet(this, null, terminal)) {
                 terminal.onError(new IllegalStateException("Already Subscribed"));
             }
             terminal.addUpstream(this);
         }
 
-        public boolean isClosed() {
-            return (boolean) CLOSED.getOpaque(this);
+        public boolean isComplete() {
+            return (boolean) COMPLETE.getOpaque(this);
         }
 
         @Override
-        public void close() {
-            if (CLOSED.compareAndSet(this, false, true)) {
-                var t = (ScaffoldingTerminal) TERMINAL.getAndSet(this, null);
+        public void complete() {
+            if (COMPLETE.compareAndSet(this, false, true)) {
+                var t = (LatticeReceiver) TERMINAL.getAndSet(this, null);
                 this.demand.lazySet(0);
                 if (t != null) {
                     t.onComplete();

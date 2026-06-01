@@ -20,6 +20,7 @@ import euhedral.hardware_utils.TopologyMapper.EffectiveSocketTopology;
 import euhedral.hardware_utils.TopologyMapper.EffectiveSystemTopology;
 import euhedral.hardware_utils.common.SystemUtilization.HardwareUtilization;
 import euhedral.hardware_utils.common.SystemUtilization.SocketSnapshot;
+import euhedral.io.config.ControlPlaneConfig;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.BitSet;
@@ -32,8 +33,30 @@ import org.mockito.MockedConstruction;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 
-class ControlPlaneTest {
+class ControlPlaneLatticeTest {
 
+    private static EffectiveSystemTopology getSystemTopology() {
+        BitSet effectiveSockets = new BitSet(2);
+        BitSet effectiveCores = new BitSet(4);
+        BitSet effectiveCpus = new BitSet(8);
+
+        effectiveSockets.set(0, 2);
+        effectiveCores.set(0, 4);
+        effectiveCpus.set(0, 8);
+
+        List<EffectiveSocketTopology> topologies = new ArrayList<>(2);
+        for (int i = 0; i < 2; i++) {
+            BitSet cores = new BitSet(4);
+            BitSet cpus = new BitSet(8);
+            cores.set(i * 2, i * 2 + 1);
+            cpus.set(i * 4, i * 4 + 4);
+            topologies.add(new EffectiveSocketTopology(0, i, cores, cpus, null));
+        }
+
+        return new EffectiveSystemTopology(effectiveSockets,
+                effectiveCores, effectiveCpus,
+                topologies, 0);
+    }
     private ControlPlaneShard mockShard;
     private MockedStatic<SystemInfo> mockSysInfo;
     private MockedConstruction<TopologyMapper> mockTopologyMapper;
@@ -45,30 +68,32 @@ class ControlPlaneTest {
     @BeforeEach
     public void setup() {
         mockSysInfo = Mockito.mockStatic(SystemInfo.class);
-        mockTopologyMapper = Mockito.mockConstructionWithAnswer(TopologyMapper.class, invocation -> {
-            Class<?> clazz = invocation.getMethod().getReturnType();
-            if(clazz.equals(int.class)) {
-                return version;
-            }
-            if (clazz.equals(void.class)) {
-                return null;
-            }
-            if(clazz.equals(EffectiveSystemTopology.class)) {
-                return effectiveSystemTopology;
-            }
-            return mock(EffectiveSystemTopology.class);
-        });
-        mockResourceMonitor = Mockito.mockConstructionWithAnswer(ResourceMonitor.class, invocation -> {
-            Class<?> clazz = invocation.getMethod().getReturnType();
-            if(clazz.equals(Void.TYPE)) {
-                return null;
-            }
-            if(clazz.equals(HardwareUtilization.class)) {
-                return mockUtilization;
-            }
-            return mock(ResourceMonitor.class);
-        });
-        ControlPlane plane = ControlPlane.get();
+        mockTopologyMapper = Mockito.mockConstructionWithAnswer(TopologyMapper.class,
+                invocation -> {
+                    Class<?> clazz = invocation.getMethod().getReturnType();
+                    if (clazz.equals(int.class)) {
+                        return version;
+                    }
+                    if (clazz.equals(void.class)) {
+                        return null;
+                    }
+                    if (clazz.equals(EffectiveSystemTopology.class)) {
+                        return effectiveSystemTopology;
+                    }
+                    return mock(EffectiveSystemTopology.class);
+                });
+        mockResourceMonitor = Mockito.mockConstructionWithAnswer(ResourceMonitor.class,
+                invocation -> {
+                    Class<?> clazz = invocation.getMethod().getReturnType();
+                    if (clazz.equals(Void.TYPE)) {
+                        return null;
+                    }
+                    if (clazz.equals(HardwareUtilization.class)) {
+                        return mockUtilization;
+                    }
+                    return mock(ResourceMonitor.class);
+                });
+        ControlPlaneLattice plane = ControlPlaneLattice.get();
         if (plane != null) {
             plane.close();
         }
@@ -90,7 +115,7 @@ class ControlPlaneTest {
         SocketSnapshot[] snapshots = new SocketSnapshot[effectiveSystemTopology.effectiveSockets()
                 .cardinality()];
 
-        ControlPlane controlPlane = createControlPlaneWithMocks(snapshots);
+        ControlPlaneLattice controlPlane = createControlPlaneWithMocks(snapshots);
         controlPlane.start();
 
         verify(mockShard, times(1)).clone(eq(0), any());
@@ -112,7 +137,7 @@ class ControlPlaneTest {
         assertEquals(effectiveSystemTopology.globalVersion(), controlPlane.currentGlobalVersion);
         assertTrue(controlPlane.primed.get());
         Awaitility.await().atMost(Duration.ofSeconds(2)).untilFalse(controlPlane.rebalancing);
-        assertArrayEquals(new int[]{0, 1}, ControlPlane.get().activeShardIds.get());
+        assertArrayEquals(new int[]{0, 1}, ControlPlaneLattice.get().activeShardIds.get());
         assertEquals(2, controlPlane.shardHandles.length);
         assertEquals(2, controlPlane.shards.length);
         assertArrayEquals(new int[]{0, 0, 0, 0, 1, 1, 1, 1}, controlPlane.weightedShardMap.get());
@@ -123,7 +148,7 @@ class ControlPlaneTest {
         SocketSnapshot[] snapshots = new SocketSnapshot[effectiveSystemTopology.effectiveSockets()
                 .cardinality()];
 
-        ControlPlane controlPlane = createControlPlaneWithMocks(snapshots);
+        ControlPlaneLattice controlPlane = createControlPlaneWithMocks(snapshots);
         controlPlane.start();
 
         effectiveSystemTopology.effectiveSockets().clear(0);
@@ -132,12 +157,14 @@ class ControlPlaneTest {
 
         version = 3;
         effectiveSystemTopology = new EffectiveSystemTopology(
-                effectiveSystemTopology.effectiveSockets(), effectiveSystemTopology.effectiveCores(),
-                effectiveSystemTopology.effectiveCpus(), effectiveSystemTopology.socketTopologies(), version);
+                effectiveSystemTopology.effectiveSockets(),
+                effectiveSystemTopology.effectiveCores(),
+                effectiveSystemTopology.effectiveCpus(), effectiveSystemTopology.socketTopologies(),
+                version);
 
         when(mockShard.isStarted()).thenReturn(true);
 
-        ControlPlane.get().update(mockUtilization);
+        ControlPlaneLattice.get().update(mockUtilization);
 
         Thread.sleep(100);
 
@@ -167,30 +194,7 @@ class ControlPlaneTest {
         assertArrayEquals(new int[]{1, 1, 1, 1}, controlPlane.weightedShardMap.get());
     }
 
-    private static EffectiveSystemTopology getSystemTopology() {
-        BitSet effectiveSockets = new BitSet(2);
-        BitSet effectiveCores = new BitSet(4);
-        BitSet effectiveCpus = new BitSet(8);
-
-        effectiveSockets.set(0, 2);
-        effectiveCores.set(0, 4);
-        effectiveCpus.set(0, 8);
-
-        List<EffectiveSocketTopology> topologies = new ArrayList<>(2);
-        for (int i = 0; i < 2; i++) {
-            BitSet cores = new BitSet(4);
-            BitSet cpus = new BitSet(8);
-            cores.set(i * 2, i * 2 + 1);
-            cpus.set(i * 4, i * 4 + 4);
-            topologies.add(new EffectiveSocketTopology(0, i, cores, cpus, null));
-        }
-
-        return new EffectiveSystemTopology(effectiveSockets,
-                effectiveCores, effectiveCpus,
-                topologies, 0);
-    }
-
-    private ControlPlane createControlPlaneWithMocks(SocketSnapshot[] snapshots) {
+    private ControlPlaneLattice createControlPlaneWithMocks(SocketSnapshot[] snapshots) {
         for (int i = 0; i < snapshots.length; i++) {
             snapshots[i] = mock(SocketSnapshot.class);
             int id = i;
@@ -201,7 +205,7 @@ class ControlPlaneTest {
             when(mockShard.clone(eq(i), any())).thenReturn(mockShard);
         }
 
-        for(int i = 0; i < 8; i += 2) {
+        for (int i = 0; i < 8; i += 2) {
             CpuInfo fake1 = new CpuInfo(i, i * 2, i >> 2);
             CpuInfo fake2 = new CpuInfo(i + 1, i * 2, i >> 2);
 
@@ -213,7 +217,9 @@ class ControlPlaneTest {
 
         when(mockShard.isStarted()).thenReturn(false);
 
-        return ControlPlane.getOrCreate("TestControlPlane", mockShard);
+        ControlPlaneConfig config = new ControlPlaneConfig("TestControlPlane", null, mockShard,
+                null, null, null);
+        return ControlPlaneLattice.getOrCreate(config);
     }
 
 }

@@ -1,4 +1,4 @@
-package euhedral.io;
+package euhedral.io.control_plane;
 
 import static euhedral.io.utils.MathFunctions.clampDouble;
 import static euhedral.io.utils.MathFunctions.clampLong;
@@ -11,17 +11,17 @@ import euhedral.hardware_utils.SystemInfo.CpuInfo;
 import euhedral.hardware_utils.ThreadTools;
 import euhedral.hardware_utils.common.SystemUtilization.CoreSnapshot;
 import euhedral.hardware_utils.common.SystemUtilization.CpuSnapshot;
-import euhedral.io.DRRCacheManager.DownstreamHandle;
-import euhedral.io.SMTBuddy.SMTState;
 import euhedral.io.config.CloneConfig;
-import euhedral.io.config.ExecutionManagerConfig;
+import euhedral.io.config.SchedulingConfig;
+import euhedral.io.control_plane.ControlPlaneCache.DownstreamHandle;
+import euhedral.io.control_plane.SMTBuddy.SMTState;
 import euhedral.io.flow_control.BufferedBridge;
 import euhedral.io.flow_control.DirectOutputStream;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.frames.DummyInitFrame;
-import euhedral.io.generics.ScaffoldingSource;
+import euhedral.io.generics.LatticeSource;
 import euhedral.io.generics.SlotManager;
-import euhedral.io.metrics.ExecutionManagerMetrics;
+import euhedral.io.metrics.ExecutionMetrics;
 import euhedral.io.utils.DrainBuffer;
 import euhedral.io.utils.FlowRecorder;
 import euhedral.io.utils.FlowRecorder.FlowSnapshot;
@@ -42,7 +42,7 @@ import org.slf4j.LoggerFactory;
 
 /// ## The core of Euhedral Core
 ///
-/// `ExecutionManager` is the control loop that sits between ingress and execution. It continuously
+/// `ControlPlaneFragment` is the control loop that sits between ingress and execution. It continuously
 /// tunes concurrency, dispatch rate, and idle behavior based on what the system is actually doing.
 ///
 /// **It coordinates:**
@@ -71,9 +71,9 @@ import org.slf4j.LoggerFactory;
 /// Frames are the unit of execution: small, composable stages that behave like ultra-lightweight
 /// tasks. A pipeline of frames naturally executes in parallel across stages as work flows through.
 ///
-/// **This is the control surface of the system. Everything else is just plumbing.**
+/// **This is the distributed control surface of the system. Everything else is just plumbing.**
 @Getter(AccessLevel.PROTECTED)
-public class ExecutionManager implements SlotManager {
+public class ControlPlaneFragment implements SlotManager {
 
     protected static final long RATE_NS_TO_SEC = 1_000_000_000L;
 
@@ -88,19 +88,19 @@ public class ExecutionManager implements SlotManager {
     static {
         try {
             AVG_LATENCY = MethodHandles.lookup()
-                    .findVarHandle(ExecutionManager.class, "avgLatency", long.class);
+                    .findVarHandle(ControlPlaneFragment.class, "avgLatency", long.class);
             CONCURRENCY = MethodHandles.lookup()
-                    .findVarHandle(ExecutionManager.class, "currentConcurrency", long.class);
+                    .findVarHandle(ControlPlaneFragment.class, "currentConcurrency", long.class);
             DRAIN = MethodHandles.lookup()
-                    .findVarHandle(ExecutionManager.class, "drainMode", boolean.class);
+                    .findVarHandle(ControlPlaneFragment.class, "drainMode", boolean.class);
             INGEST = MethodHandles.lookup()
-                    .findVarHandle(ExecutionManager.class, "ingest", DRRCacheManager.class);
+                    .findVarHandle(ControlPlaneFragment.class, "ingest", ControlPlaneCache.class);
             IN_FLIGHT = MethodHandles.lookup()
-                    .findVarHandle(ExecutionManager.class, "inFlight", int.class);
+                    .findVarHandle(ControlPlaneFragment.class, "inFlight", int.class);
             RATE = MethodHandles.lookup()
-                    .findVarHandle(ExecutionManager.class, "currentRate", long.class);
+                    .findVarHandle(ControlPlaneFragment.class, "currentRate", long.class);
             SNAPSHOT = MethodHandles.lookup()
-                    .findVarHandle(ExecutionManager.class, "coreSnapshot", CoreSnapshot.class);
+                    .findVarHandle(ControlPlaneFragment.class, "coreSnapshot", CoreSnapshot.class);
         } catch (Exception e) {
             throw new ExceptionInInitializerError(e);
         }
@@ -110,8 +110,8 @@ public class ExecutionManager implements SlotManager {
     public final int cpuId;
 
     @Getter
-    protected final ExecutionManagerConfig config;
-    protected final ExecutionManagerMetrics metrics;
+    protected final SchedulingConfig config;
+    protected final ExecutionMetrics metrics;
     protected final Logger logger;
     protected final boolean isPCore;
     protected final AtomicBoolean running = new AtomicBoolean(false);
@@ -139,7 +139,7 @@ public class ExecutionManager implements SlotManager {
     protected boolean drainMode = false;
     protected CoreSnapshot coreSnapshot = null;
 
-    protected DRRCacheManager ingest = null;
+    protected ControlPlaneCache ingest = null;
 
     protected long avgLatency;
     protected long currentConcurrency;
@@ -153,7 +153,7 @@ public class ExecutionManager implements SlotManager {
     protected boolean primed = false;
     private Thread cycleThread;
 
-    public ExecutionManager(@NonNull ExecutionManagerConfig config) {
+    public ControlPlaneFragment(@NonNull SchedulingConfig config) {
         this.config = config;
         this.maxUpdateInterval = Integer.highestOneBit(Math.max(config.maxUpdateInterval(), 2));
 
@@ -163,7 +163,7 @@ public class ExecutionManager implements SlotManager {
 
         if (config.cloneConfig() == null) {
             this.cpuId = -1;
-            this.logger = LoggerFactory.getLogger(ExecutionManager.class);
+            this.logger = LoggerFactory.getLogger(ControlPlaneFragment.class);
             this.executionLatency = null;
             this.state = null;
             this.pinnedExecutor = null;
@@ -180,7 +180,7 @@ public class ExecutionManager implements SlotManager {
             this.handle = null;
         } else {
             String name =
-                    config.cloneConfig().shardName() + "-ExecutionManager-" + config.cloneConfig()
+                    config.cloneConfig().shardName() + "-ControlPlaneFragment-" + config.cloneConfig()
                             .coreId();
             this.logger = LoggerFactory.getLogger(name);
 
@@ -205,7 +205,7 @@ public class ExecutionManager implements SlotManager {
             PinnedThreadExecutor smtExec = null;
             if (cpus.length > 1 && config.enableSMT()) {
                 smtExec = PinnedThreadExecutor.getOrSetIfAbsent(cpus[1],
-                        this.config.cloneConfig().shardName() + "-ExecutionManager-SMT-"
+                        this.config.cloneConfig().shardName() + "-ControlPlaneFragment-SMT-"
                                 + this.config.cloneConfig().coreId(), Thread.MAX_PRIORITY, false);
                 this.buffer = new PartitionedSpscArrayQueue<>(bufferSize);
             } else {
@@ -237,11 +237,9 @@ public class ExecutionManager implements SlotManager {
                 }
             });
 
-            this.metrics = new ExecutionManagerMetrics(config.meterRegistry(), config,
-                    () -> (int) IN_FLIGHT.getOpaque(this),
-                    () -> (long) AVG_LATENCY.getOpaque(this),
-                    () -> (long) CONCURRENCY.getOpaque(this),
-                    () -> (long) RATE.getOpaque(this),
+            this.metrics = new ExecutionMetrics(config.meterRegistry(), config,
+                    () -> (int) IN_FLIGHT.getOpaque(this), () -> (long) AVG_LATENCY.getOpaque(this),
+                    () -> (long) CONCURRENCY.getOpaque(this), () -> (long) RATE.getOpaque(this),
                     this::getPressure);
             this.shutdownHook = new Thread(this::close);
             Runtime.getRuntime().addShutdownHook(this.shutdownHook);
@@ -251,8 +249,8 @@ public class ExecutionManager implements SlotManager {
     }
 
     @Override
-    public void input(ScaffoldingSource stream) {
-        if (stream instanceof DRRCacheManager iStream && INGEST.compareAndSet(this, null,
+    public void input(LatticeSource stream) {
+        if (stream instanceof ControlPlaneCache iStream && INGEST.compareAndSet(this, null,
                 iStream)) {
             this.buddy.setIngest(iStream);
             INGEST.setRelease(this, iStream);
@@ -261,14 +259,14 @@ public class ExecutionManager implements SlotManager {
     }
 
     @Override
-    public ScaffoldingSource output() {
+    public LatticeSource output() {
         return this.outputStream;
     }
 
     @Override
     public void close() {
         if (this.running.compareAndSet(true, false)) {
-            DRRCacheManager ingest = (DRRCacheManager) INGEST.getAcquire(this);
+            ControlPlaneCache ingest = (ControlPlaneCache) INGEST.getAcquire(this);
             if (ingest != null) {
                 ingest.removeThread(this.cycleThread);
                 ingest.removeHandle(this.cpuId);
@@ -337,7 +335,7 @@ public class ExecutionManager implements SlotManager {
             if (cloneConfig != null) {
                 if (this.pinnedExecutor.isShutdown()) {
                     this.pinnedExecutor.start(
-                            this.config.cloneConfig().shardName() + "-ExecutionManager-"
+                            this.config.cloneConfig().shardName() + "-ControlPlaneFragment-"
                                     + this.config.cloneConfig().coreId(), Thread.MAX_PRIORITY,
                             false);
                 }
@@ -361,7 +359,7 @@ public class ExecutionManager implements SlotManager {
                     }
 
                     while (this.ingest == null && !Thread.currentThread().isInterrupted()) {
-                        this.ingest = (DRRCacheManager) INGEST.getOpaque(this);
+                        this.ingest = (ControlPlaneCache) INGEST.getOpaque(this);
                         this.buddy.setIngest(ingest);
                         LockSupport.parkNanos(2_000L);
                     }
@@ -469,7 +467,7 @@ public class ExecutionManager implements SlotManager {
         int processed = 0;
         if (quota > 0 && bufferCount > 0) {
             IN_FLIGHT.setOpaque(this, this.inFlight + quota);
-            processed = this.outputStream.push(quota);
+            processed = (int) this.outputStream.push(quota);
             if (processed > 0) {
                 this.buddyState.bufferCount.addAndGet(-processed);
                 IN_FLIGHT.setOpaque(this, this.inFlight + (processed - quota));
@@ -486,6 +484,7 @@ public class ExecutionManager implements SlotManager {
         int updateInterval = this.state.updateIntervalMask + 1;
         double scaledVariance = avgVariance * updateInterval;
 
+        // Decrease the sampling rate if the variance is larger than the window.
         if (scaledVariance >= updateInterval) {
             this.state.updateIntervalMask =
                     Math.min(updateInterval << 1, this.maxUpdateInterval) - 1;
@@ -505,6 +504,14 @@ public class ExecutionManager implements SlotManager {
         updateConcurrency(ideal, queueEstimate);
     }
 
+    /// Updates the maximum allowed in-flight work for this executor.
+    ///
+    /// The limit scales with observed throughput and current concurrency, then backs off under CPU
+    /// pressure to avoid oversaturating the core.
+    ///
+    /// P-cores are allowed to push harder than E-cores before throttling begins.
+    ///
+    /// Final limits are clamped against configured minimums and a hardware-derived ceiling.
     protected void updateEffectiveConcurrencyLimit(long ideal) {
         CoreSnapshot coreSnapshot = (CoreSnapshot) SNAPSHOT.getOpaque(this);
         CpuSnapshot cpuSnapshot = coreSnapshot.cpuSnapshots()[this.cpuId];
@@ -524,6 +531,27 @@ public class ExecutionManager implements SlotManager {
                 clampLong(adaptiveCap, this.config.minConcurrency(), hardwareMax);
     }
 
+    /// Adjusts execution concurrency using a blend of TCP Vegas-style queue estimation and Little’s
+    /// Law demand modeling.
+    ///
+    /// Vegas behavior is used to detect queue pressure:
+    ///
+    ///   - Low queue residency -> increase concurrency
+    ///   - High queue residency -> reduce concurrency
+    ///   - Stable queues -> hold steady
+    ///
+    /// Little’s Law provides a secondary correction based on observed throughput and latency.
+    ///
+    /// Variability in execution rate and latency expands the ideal target window to avoid
+    /// overreacting to bursty workloads.
+    ///
+    /// Concurrency changes are intentionally conservative:
+    ///
+    ///   - Small adjustments are ignored
+    ///   - Direction changes reset stability tracking
+    ///   - Multiple consistent signals are required before tuning
+    ///
+    /// This prevents oscillation while still allowing the system to react quickly under load.
     protected void updateConcurrency(long ideal, double queueEstimate) {
         boolean drain = (boolean) DRAIN.getOpaque(this);
         if (drain) {
@@ -581,6 +609,21 @@ public class ExecutionManager implements SlotManager {
         CONCURRENCY.setOpaque(this, clampLong(next, 1, this.effectiveConcurrencyLimit));
     }
 
+    /// Calculates how long dispatch should back off before pulling more work.
+    ///
+    /// The wait interval expands and contracts dynamically based on:
+    ///
+    ///   - Observed execution latency
+    ///   - Queue pressure (Vegas estimate)
+    ///   - Workload variability
+    ///   - CPU pressure / throttling
+    ///
+    /// Under stable low-pressure conditions, dispatch remains aggressive.
+    ///
+    /// As queue residency, execution variance, or CPU pressure rise, the scheduler increases the
+    /// pause interval to reduce contention and avoid runaway queue growth.
+    ///
+    /// This acts as a lightweight adaptive pacing mechanism for demand signaling.
     protected long calculateDispatchWaitNs(long nowNs) {
         if (this.state.maxParkNs <= 0) {
             return 0;
@@ -614,6 +657,19 @@ public class ExecutionManager implements SlotManager {
         return nowNs + interval;
     }
 
+    /// Adaptive idle strategy for pinned executors.
+    ///
+    /// The executor progressively de-escalates idle behavior based on observed inactivity:
+    ///
+    /// ```text
+    /// spin -> yield -> park
+    /// ```
+    ///
+    /// Short idle periods stay in active spin to minimize wake latency. As idle time increases, the
+    /// executor yields or parks to reduce CPU waste and SMT contention.
+    ///
+    /// While parked, sibling SMT workers may temporarily steal coordination work to help keep
+    /// shared queues moving and reduce cold-start latency when traffic resumes.
     protected void idleSpin(long parks) {
         long now = System.nanoTime();
         this.state.idleRecorder.record(now, 1, false);
@@ -632,7 +688,7 @@ public class ExecutionManager implements SlotManager {
                     break;
                 }
 
-                DRRCacheManager ingest = (DRRCacheManager) INGEST.getOpaque(this);
+                ControlPlaneCache ingest = (ControlPlaneCache) INGEST.getOpaque(this);
                 if (!this.state.smtMode) {
                     if (this.upstreamCount != ingest.getUpstreamCount()) {
                         break;
@@ -687,7 +743,7 @@ public class ExecutionManager implements SlotManager {
 
         CoreSnapshot core = (CoreSnapshot) SNAPSHOT.getOpaque(this);
         double hardwarePressure = 0.0;
-        if(core != null) {
+        if (core != null) {
             hardwarePressure = core.cpuSnapshots()[this.cpuId].pressure();
         }
 
@@ -696,8 +752,8 @@ public class ExecutionManager implements SlotManager {
     }
 
     @Override
-    public ExecutionManager clone(CloneConfig cloneConfig) {
-        return new ExecutionManager(this.config.clone(cloneConfig));
+    public ControlPlaneFragment clone(CloneConfig cloneConfig) {
+        return new ControlPlaneFragment(this.config.clone(cloneConfig));
     }
 
     @Override

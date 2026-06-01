@@ -4,10 +4,11 @@ import euhedral.atomics.PaddedLongAdder;
 import euhedral.benchmarks.frames.NoOpFrame;
 import euhedral.benchmarks.pipelines.NoOpPipeline;
 import euhedral.hashing.HasherApi;
-import euhedral.io.config.DRRConfig;
-import euhedral.io.config.ExecutionManagerConfig;
-import euhedral.io.control_plane.ControlPlane;
-import euhedral.io.flow_control.ArrayIngestSink;
+import euhedral.io.config.CacheConfig;
+import euhedral.io.config.ControlPlaneConfig;
+import euhedral.io.config.SchedulingConfig;
+import euhedral.io.control_plane.ControlPlaneLattice;
+import euhedral.io.ingest.ArrayIngestSink;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import org.openjdk.jmh.annotations.Benchmark;
@@ -32,13 +33,8 @@ import org.openjdk.jmh.infra.Blackhole;
 @Measurement(iterations = 5, time = 10, timeUnit = TimeUnit.SECONDS)
 @Fork(1)
 public class TrueThroughputBenchmark {
-    private static final int BATCH = 32_000_000;
 
-    private final PaddedLongAdder counters = new PaddedLongAdder(
-            Runtime.getRuntime().availableProcessors(), true, true);
-    private final NoOpFrame[][] frames = new NoOpFrame[32][];
-    private final ArrayIngestSink[] sinks = new ArrayIngestSink[32];
-    private ControlPlane controlPlane;
+    private static final int BATCH = 32_000_000;
 
     private static void await(PaddedLongAdder counters) {
         int spin = 0;
@@ -57,32 +53,39 @@ public class TrueThroughputBenchmark {
             }
         }
     }
+    private final PaddedLongAdder counters = new PaddedLongAdder(
+            Runtime.getRuntime().availableProcessors(), true, true);
+    private final NoOpFrame[][] frames = new NoOpFrame[32][];
+    private final ArrayIngestSink[] sinks = new ArrayIngestSink[32];
+    private ControlPlaneLattice controlPlane;
 
     @Setup(Level.Trial)
     public void setup(Blackhole blackhole) {
         long hash = ThreadLocalRandom.current().nextLong();
         hash = HasherApi.mix(hash);
 
-        for(int i = 0; i < frames.length; i++) {
+        for (int i = 0; i < frames.length; i++) {
             this.frames[i] = NoOpFrame.generate(hash, 1_000_000, this.counters);
             for (NoOpFrame frame : this.frames[i]) {
-                frame.randomizeHash(HasherApi.mix(hash++));
+                frame.randomizeHash(hash++);
             }
             this.sinks[i] = new ArrayIngestSink(this.frames[i]);
         }
 
-        DRRConfig drrConfig = DRRConfig.defaultConfig("ThroughputComparisonBenchmark", null);
-        ExecutionManagerConfig emConfig = ExecutionManagerConfig.balancedDefault(null,
-                "ThroughputComparisonBenchmark");
-        this.controlPlane = ControlPlane.getOrCreate("ThroughputComparisonBenchmark",
-                new NoOpPipeline("ThroughputComparisonBenchmark", drrConfig, emConfig, blackhole), null);
+        CacheConfig cacheConfig = CacheConfig.defaultConfig();
+        SchedulingConfig emConfig = SchedulingConfig.balancedDefault();
+        NoOpPipeline pipeline = new NoOpPipeline(cacheConfig, emConfig, blackhole);
+        ControlPlaneConfig config = new ControlPlaneConfig("ThroughputComparisonBenchmark", null,
+                null,
+                pipeline, null, null);
+        this.controlPlane = ControlPlaneLattice.getOrCreate(config);
         this.controlPlane.start();
     }
 
     @Setup(Level.Invocation)
     public void setup() {
         this.counters.reset();
-        for(var sink : this.sinks) {
+        for (var sink : this.sinks) {
             sink.reset();
         }
     }
@@ -90,8 +93,8 @@ public class TrueThroughputBenchmark {
     @Benchmark
     @OperationsPerInvocation(BATCH)
     public void ingest32million32sources() {
-        for(var sink : this.sinks) {
-            this.controlPlane.ingest(sink);
+        for (var sink : this.sinks) {
+            this.controlPlane.addUpstream(sink);
         }
 
         await(this.counters);

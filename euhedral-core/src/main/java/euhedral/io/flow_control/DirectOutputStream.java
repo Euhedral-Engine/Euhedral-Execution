@@ -1,8 +1,8 @@
 package euhedral.io.flow_control;
 
 import euhedral.io.frames.AbstractFrame;
-import euhedral.io.generics.ScaffoldingSource;
-import euhedral.io.generics.ScaffoldingTerminal;
+import euhedral.io.generics.LatticeReceiver;
+import euhedral.io.generics.LatticeSource;
 import euhedral.queues.common.PartitionedQueue;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
@@ -10,18 +10,20 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import org.jspecify.annotations.NonNull;
 
-public class DirectOutputStream implements ScaffoldingSource {
+/// Used for pushing frames from one stage to the next. Assumes that only one thread will call push
+/// at a time. This class can only have one downstream.
+public class DirectOutputStream implements LatticeSource {
 
-    protected static final VarHandle CANCELLED;
+    protected static final VarHandle COMPLETE;
     protected static final VarHandle TERMINAL;
     protected static final VarHandle UNLIMITED;
 
     static {
         try {
-            CANCELLED = MethodHandles.lookup()
-                    .findVarHandle(DirectOutputStream.class, "cancelled", boolean.class);
+            COMPLETE = MethodHandles.lookup()
+                    .findVarHandle(DirectOutputStream.class, "complete", boolean.class);
             TERMINAL = MethodHandles.lookup()
-                    .findVarHandle(DirectOutputStream.class, "terminal", ScaffoldingTerminal.class);
+                    .findVarHandle(DirectOutputStream.class, "terminal", LatticeReceiver.class);
             UNLIMITED = MethodHandles.lookup()
                     .findVarHandle(DirectOutputStream.class, "unlimited", boolean.class);
         } catch (Exception e) {
@@ -35,8 +37,8 @@ public class DirectOutputStream implements ScaffoldingSource {
     protected final Consumer<AbstractFrame> applyToEach;
 
     protected boolean unlimited = false;
-    protected boolean cancelled = false;
-    protected ScaffoldingTerminal terminal = null;
+    protected boolean complete = false;
+    protected LatticeReceiver terminal = null;
 
 
     public DirectOutputStream(@NonNull PartitionedQueue<AbstractFrame> buffer,
@@ -45,8 +47,17 @@ public class DirectOutputStream implements ScaffoldingSource {
         this.applyToEach = applyToEach;
     }
 
-    public int push(long max) {
-        if (max == 0 || TERMINAL.getOpaque(this) == null || (boolean) CANCELLED.getOpaque(this)) {
+    @Override
+    public void pull(Consumer<AbstractFrame> consumer, long demand) {
+        this.buffer.drain(consumer, demand);
+    }
+
+    /// Pushes the indicated number of frames to the next stage. Only safe to be called by one thread
+    /// at a time.
+    ///
+    /// @param max Maximum number of frames to push
+    public long push(long max) {
+        if (max == 0 || TERMINAL.getOpaque(this) == null || (boolean) COMPLETE.getOpaque(this)) {
             return 0;
         }
 
@@ -56,9 +67,9 @@ public class DirectOutputStream implements ScaffoldingSource {
             return 0;
         }
 
-        int limit = (int) Math.min(max, currentDemand);
+        long limit = Math.min(max, currentDemand);
 
-        int drain = this.buffer.drain(this::pushInternal, limit);
+        long drain = this.buffer.drain(this::pushInternal, limit);
 
         if (!unlimited) {
             this.demand.addAndGet(-drain);
@@ -70,9 +81,9 @@ public class DirectOutputStream implements ScaffoldingSource {
         if (this.applyToEach != null) {
             this.applyToEach.accept(frame);
         }
-        ScaffoldingTerminal subscriber = (ScaffoldingTerminal) TERMINAL.getOpaque(this);
+        LatticeReceiver subscriber = (LatticeReceiver) TERMINAL.getOpaque(this);
         if (subscriber != null) {
-            subscriber.onNext(frame);
+            subscriber.push(frame);
         }
     }
 
@@ -81,13 +92,13 @@ public class DirectOutputStream implements ScaffoldingSource {
     }
 
     @Override
-    public void addDownstream(ScaffoldingTerminal terminal) {
-        if (!CANCELLED.compareAndSet(this, true, false) && !TERMINAL.compareAndSet(this, null,
+    public void addDownstream(LatticeReceiver terminal) {
+        if (!COMPLETE.compareAndSet(this, true, false) && !TERMINAL.compareAndSet(this, null,
                 terminal)) {
             terminal.onError(new IllegalAccessException("This class already has a terminal"));
             return;
         }
-        ScaffoldingTerminal observed = (ScaffoldingTerminal) TERMINAL.getOpaque(this);
+        LatticeReceiver observed = (LatticeReceiver) TERMINAL.getOpaque(this);
         if (!TERMINAL.compareAndSet(this, observed, terminal)) {
             terminal.onError(new IllegalAccessException("This class already has a terminal"));
             return;
@@ -111,8 +122,8 @@ public class DirectOutputStream implements ScaffoldingSource {
     }
 
     @Override
-    public void cancel() {
-        CANCELLED.setVolatile(this, true);
+    public void complete() {
+        COMPLETE.setVolatile(this, true);
         TERMINAL.setVolatile(this, null);
     }
 }

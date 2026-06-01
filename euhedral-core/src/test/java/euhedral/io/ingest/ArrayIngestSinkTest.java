@@ -1,4 +1,4 @@
-package euhedral.io.flow_control;
+package euhedral.io.ingest;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -9,14 +9,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import test_utils.TestFrame;
-import test_utils.TestTerminal;
+import test_utils.TestReceiver;
 
 class ArrayIngestSinkTest {
 
     private TestFrame[] frames;
     private ArrayIngestSink sink;
     private ArrayIngestSink.Delegate delegate;
-    private TestTerminal terminal;
+    private TestReceiver terminal;
 
     @BeforeEach
     void setup() {
@@ -29,7 +29,7 @@ class ArrayIngestSinkTest {
         sink = new ArrayIngestSink(frames);
         delegate = (ArrayIngestSink.Delegate) sink.getDelegate();
 
-        terminal = new TestTerminal();
+        terminal = new TestReceiver();
     }
 
     @Test
@@ -77,7 +77,7 @@ class ArrayIngestSinkTest {
 
     @Test
     void shouldOnlyAllowSingleSubscriber() {
-        TestTerminal second = new TestTerminal();
+        TestReceiver second = new TestReceiver();
 
         delegate.addDownstream(terminal);
         delegate.addDownstream(second);
@@ -91,7 +91,7 @@ class ArrayIngestSinkTest {
     void shouldCancelAndComplete() {
         delegate.addDownstream(terminal);
 
-        delegate.cancel();
+        delegate.complete();
 
         assertTrue(terminal.completed);
     }
@@ -104,7 +104,7 @@ class ArrayIngestSinkTest {
 
         sink.reset();
 
-        TestTerminal second = new TestTerminal();
+        TestReceiver second = new TestReceiver();
 
         delegate.addDownstream(second);
         delegate.request(10);

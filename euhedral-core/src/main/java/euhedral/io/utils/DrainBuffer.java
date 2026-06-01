@@ -6,6 +6,8 @@ import euhedral.io.frames.AbstractFrame;
 import euhedral.queues.common.PartitionedQueue;
 import lombok.Getter;
 
+/// Used for draining from queues. Automatically tracks the number of frames and bytes drained as
+/// well as their arrival latency.
 public class DrainBuffer implements Consumer<AbstractFrame> {
 
     public final PartitionedQueue<AbstractFrame> buffer;
@@ -34,7 +36,7 @@ public class DrainBuffer implements Consumer<AbstractFrame> {
         while (!buffer.offer(0, frame)) {
             Thread.onSpinWait();
         }
-        if(frame.getIngestNs() > 0) {
+        if (frame.getIngestNs() > 0) {
             long now = System.nanoTime();
             arrivalLatencyRecorder.record(now, now - frame.getIngestNs(), threadSafe);
         }

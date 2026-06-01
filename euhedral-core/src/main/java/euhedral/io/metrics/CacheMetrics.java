@@ -9,24 +9,29 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Supplier;
 
-public class DRRMetrics implements AutoCloseable {
+public class CacheMetrics implements AutoCloseable {
     public final DistributionSummary subQBacklogSummary;
     public final DistributionSummary subQWeightSummary;
 
     private final List<Meter> meters = new ArrayList<>();
 
-    public DRRMetrics(String metricPrefix, String tag, AtomicDouble capFactor,
+    public CacheMetrics(String metricPrefix, String tag, AtomicDouble capFactor,
             Supplier<Long> totalQueuedSizeBytes, MeterRegistry registry) {
+        if (metricPrefix == null || metricPrefix.isBlank()) {
+            metricPrefix = "euhedral";
+        }
+        metricPrefix = metricPrefix.split("\\.")[0];
+
         if (registry != null) {
 
             subQBacklogSummary =
-                    DistributionSummary.builder(metricPrefix + ".drr_sub_queue_backlog_bytes")
+                    DistributionSummary.builder(metricPrefix + ".cache_sub_queue_backlog_bytes")
                             .description("Amount of bytes stored in a sub queue")
                             .tag("core", tag).publishPercentiles(0.5, 0.95, 0.99)
                             .register(registry);
 
             subQWeightSummary =
-                    DistributionSummary.builder(metricPrefix + ".drr_sub_queue_weight")
+                    DistributionSummary.builder(metricPrefix + ".cache_sub_queue_weight")
                             .tag("core", tag).publishPercentiles(0.0, 1.0).register(registry);
 
             meters.add(
@@ -35,9 +40,9 @@ public class DRRMetrics implements AutoCloseable {
                                     "Current buffer capacity multiplier. Higher is better. (0.15 to 1.0)")
                             .tag("core", tag).register(registry));
 
-            meters.add(Gauge.builder(metricPrefix + ".drr_backlog",
+            meters.add(Gauge.builder(metricPrefix + ".cache_backlog",
                             () -> totalQueuedSizeBytes.get() / 1024)
-                    .description("Total bytes currently buffered in all sub queues of the DRR")
+                    .description("Total bytes buffered in all sub queues of the ControlPlaneCache")
                     .baseUnit("KB").register(registry));
         } else {
             subQBacklogSummary = null;

@@ -5,9 +5,10 @@ import euhedral.benchmarks.core_benchmarks.utils.MandelbrotCanvas;
 import euhedral.benchmarks.frames.MandelbrotPixel;
 import euhedral.benchmarks.pipelines.FractalPipeline;
 import euhedral.hashing.HasherApi;
-import euhedral.io.config.DRRConfig;
-import euhedral.io.config.ExecutionManagerConfig;
-import euhedral.io.control_plane.ControlPlane;
+import euhedral.io.config.CacheConfig;
+import euhedral.io.config.ControlPlaneConfig;
+import euhedral.io.config.SchedulingConfig;
+import euhedral.io.control_plane.ControlPlaneLattice;
 import euhedral.io.reactor.common.EuhedralSubscriber;
 import euhedral.io.utils.MathFunctions;
 import java.awt.image.BufferedImage;
@@ -40,15 +41,13 @@ import reactor.core.scheduler.Schedulers;
 @BenchmarkMode({Mode.AverageTime})
 public class MandelbrotBenchmark {
 
-    private static final long SEED = HasherApi.BASE_SEED;
-
     // 8K Resolution 2X SSAA (7680 * 4320 * 4 = 132,710,400 distinct tasks)
     public static final int WIDTH = 7680;
     public static final int HEIGHT = 4320;
     public static final int CANVAS = WIDTH * HEIGHT;
-
     public static final int ITERATION_CAP = 5_000;
     public static final double BAILOUT_RADIUS_SQ = 1_000_000.0;
+    private static final long SEED = HasherApi.BASE_SEED;
     private static final double CENTER_X = -0.743_644_786_0;
     private static final double CENTER_Y = 0.131_825_253_6;
     private static final double H_DIAMETER = 0.000_002_936;
@@ -58,8 +57,8 @@ public class MandelbrotBenchmark {
         for (int i = CANVAS - 1; i > 0; i--) {
             int j = (int) MathFunctions.unsignedMultiplyHigh(HasherApi.mix(seed++), i + 1);
             MandelbrotPixel temp = pixels[i];
-            temp.randomizeHash(HasherApi.mix(seed));
-            pixels[j].randomizeHash(HasherApi.mix(seed++));
+            temp.randomizeHash(seed);
+            pixels[j].randomizeHash(seed++);
 
             pixels[i] = pixels[j];
             pixels[j] = temp;
@@ -190,7 +189,7 @@ public class MandelbrotBenchmark {
         private String outputDir;
         private String outputFileName;
 
-        private ControlPlane controlPlane;
+        private ControlPlaneLattice controlPlane;
         private EuhedralSubscriber subscriber;
 
         private void makeSub() {
@@ -210,12 +209,13 @@ public class MandelbrotBenchmark {
             this.outputDir = System.getProperty("outputDir");
             this.outputFileName = System.getProperty("outputFile");
 
-            DRRConfig drrConfig = DRRConfig.defaultConfig("mandelbrot", null);
-            ExecutionManagerConfig emConfig = ExecutionManagerConfig.balancedDefault(null,
-                    "mandelbrot");
+            CacheConfig cacheConfig = CacheConfig.defaultConfig();
+            SchedulingConfig emConfig = SchedulingConfig.balancedDefault();
             FractalPipeline pipeline =
-                    new FractalPipeline("MandelbrotBenchmark", drrConfig, emConfig, blackhole);
-            this.controlPlane = ControlPlane.getOrCreate("MandelbrotBenchmark", pipeline, null);
+                    new FractalPipeline(cacheConfig, emConfig, blackhole);
+            ControlPlaneConfig config = new ControlPlaneConfig("MandelbrotBenchmark", null, null,
+                    pipeline, null, null);
+            this.controlPlane = ControlPlaneLattice.getOrCreate(config);
             this.controlPlane.start();
 
             MandelbrotCanvas.generate(WIDTH, HEIGHT, CENTER_X, CENTER_Y, H_DIAMETER,
@@ -239,7 +239,7 @@ public class MandelbrotBenchmark {
             System.out.println("Total Tasks: " + CANVAS * 4);
 
             Flux.fromArray(this.pixels).subscribe(subscriber);
-            this.controlPlane.ingest(this.subscriber);
+            this.controlPlane.addUpstream(this.subscriber);
 
             waitOnRender(this.counters);
             blackhole.consume(this.escapes);

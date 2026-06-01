@@ -10,15 +10,15 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.util.concurrent.atomic.AtomicInteger;
-
 import euhedral.hardware_utils.PinnedThreadExecutor;
 import euhedral.io.config.CloneConfig;
 import euhedral.io.flow_control.BufferedBridge;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.CloneableObject;
-import euhedral.io.generics.ScaffoldingSource;
-import euhedral.io.generics.ScaffoldingTerminal;
+import euhedral.io.generics.LatticeReceiver;
+import euhedral.io.generics.LatticeSource;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import test_utils.TestFrame;
@@ -45,7 +45,7 @@ class DefaultExecutorTest {
     @Test
     void shouldCloneExecutor() {
         DefaultExecutor cloned =
-                (DefaultExecutor) executor.clone(new CloneConfig("", 0, 0, null, null, null));
+                (DefaultExecutor) executor.clone(new CloneConfig("", 0, 0, null));
 
         assertNotNull(cloned);
         assertNotSame(executor, cloned);
@@ -56,7 +56,7 @@ class DefaultExecutorTest {
         PinnedThreadExecutor newExec = mock(PinnedThreadExecutor.class);
 
         DefaultExecutor cloned =
-                (DefaultExecutor) executor.clone(new CloneConfig("", 0, 0, null, null, null),
+                (DefaultExecutor) executor.clone(new CloneConfig("", 0, 0, null),
                         newExec);
 
         assertNotNull(cloned);
@@ -137,7 +137,7 @@ class DefaultExecutorTest {
         assertTrue(calls.get() >= 3);
     }
 
-    static class TestSource implements ScaffoldingSource {
+    static class TestSource implements LatticeSource {
 
         private final AbstractFrame frame;
 
@@ -146,9 +146,14 @@ class DefaultExecutorTest {
         }
 
         @Override
-        public void addDownstream(ScaffoldingTerminal terminal) {
+        public void addDownstream(LatticeReceiver terminal) {
             terminal.addUpstream(this);
-            terminal.onNext(frame);
+            terminal.push(frame);
+        }
+
+        @Override
+        public void pull(Consumer<AbstractFrame> consumer, long demand) {
+
         }
 
         @Override
@@ -156,7 +161,7 @@ class DefaultExecutorTest {
         }
 
         @Override
-        public void cancel() {
+        public void complete() {
         }
     }
 

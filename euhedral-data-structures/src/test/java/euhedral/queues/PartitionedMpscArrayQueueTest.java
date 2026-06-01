@@ -13,6 +13,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.LongAdder;
+import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 
 class PartitionedMpscArrayQueueTest {
@@ -31,7 +32,7 @@ class PartitionedMpscArrayQueueTest {
         }
 
         final int[] drained = new int[]{-1};
-        QueueConsumer<Integer> consumer = (val) -> {
+        Consumer<Integer> consumer = (val) -> {
             if (val != ++drained[0] || val >= 128) {
                 fail("Corruption! Last Value: " + drained[0] + " Current: " + val);
             }
@@ -46,7 +47,7 @@ class PartitionedMpscArrayQueueTest {
         PartitionedMpscArrayQueue<Long> q =
                 new PartitionedMpscArrayQueue<>(1, 4096, false);
 
-        QueueConsumer<Long> consumer = (val) -> {
+        Consumer<Long> consumer = (val) -> {
         };
         ExecutorService exec = Executors.newFixedThreadPool(16);
         for (int x = 0; x < 10; x++) {
@@ -66,7 +67,7 @@ class PartitionedMpscArrayQueueTest {
 
             long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
             while (drained.sum() < batch * 8 && System.nanoTime() < deadline) {
-                int count = q.drain(consumer, 4096);
+                long count = q.drain(consumer, 4096);
                 drained.add(count);
                 Thread.yield();
             }
@@ -106,7 +107,7 @@ class PartitionedMpscArrayQueueTest {
             });
         }
 
-        QueueConsumer<Long> consumer = (val) -> {
+        Consumer<Long> consumer = (val) -> {
             if (!consumed.add(val)) {
                 fail("Duplicate: " + val);
             }
@@ -142,7 +143,7 @@ class PartitionedMpscArrayQueueTest {
         }
 
         final int[] total = new int[1];
-        QueueConsumer<Integer> consumer = (val) -> {
+        Consumer<Integer> consumer = (val) -> {
             total[0]++;
         };
         while (!q.isEmpty()) {

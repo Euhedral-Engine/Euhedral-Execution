@@ -1,6 +1,5 @@
 package euhedral.io.impl;
 
-import euhedral.hashing.HasherApi;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.queues.PartitionedMpscArrayQueue;
 import euhedral.queues.PartitionedUnboundedMpscArrayQueue;
@@ -11,17 +10,17 @@ import lombok.Setter;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
-/// A frame management class backed by an MPSC (Multi-Producer Single-Consumer) queue for efficient frame
-/// recirculation. This class is thread-safe for multiple producers and a single consumer.
+/// A frame management class backed by an MPSC (Multi-Producer Single-Consumer) queue for efficient
+/// frame recirculation. This class is thread-safe for multiple producers and a single consumer.
 ///
 /// This class manages a pool of reusable frames to reduce allocation overhead. An instance of this
-/// class is attached to corresponding instances of [`AbstractFrame`][euhedral.io.frames]. At the end
-/// of execution, the frames are returned to this manager for reuse. If none are available, they are
-/// created. Consumption is password protected by the creator.
+/// class can be attached to corresponding instances of [`AbstractFrame`][euhedral.io.frames]. At
+/// the end of execution, the frames are returned to this manager for reuse. If none are available,
+/// they are created. Consumption is password protected by the creator.
 ///
-/// @param <DATA> The data type to use to replace fields in the frame
+/// @param <DATA>  The data type to use to replace fields in the frame
 /// @param <FRAME> The frame type to recycle
-@SuppressWarnings("unchecked")
+@SuppressWarnings({"unchecked", "unused"})
 public class FrameManager<DATA, FRAME extends AbstractFrame> implements AutoCloseable {
 
     @Getter
@@ -34,11 +33,15 @@ public class FrameManager<DATA, FRAME extends AbstractFrame> implements AutoClos
     @Getter
     private long totalRecycled = 0;
 
-    private long seed;
     private int idx = 0;
 
-    public FrameManager(int chunkSize, int pooledChunks,
-            long password) {
+    /// Creates a FrameManager with a bounded recycler.
+    public FrameManager(long password) {
+        this(16_384, password);
+    }
+
+    /// Creates a FrameManager with an unbounded recycler.
+    public FrameManager(int chunkSize, int pooledChunks, long password) {
         int actual = Integer.highestOneBit((chunkSize - 1) << 1);
         actual = actual <= 0 ? 1 : actual;
 
@@ -47,21 +50,22 @@ public class FrameManager<DATA, FRAME extends AbstractFrame> implements AutoClos
         this.buffer = new AbstractFrame[Math.max(actual, 256)];
     }
 
+    /// Creates a FrameManager with a bounded recycler.
     public FrameManager(int capacity, long password) {
         int actual = Integer.highestOneBit((capacity - 1) << 1);
         actual = actual <= 0 ? 1 : actual;
 
         this.recycleQueue = new PartitionedMpscArrayQueue<>(actual);
         this.password = password;
-        this.seed = HasherApi.combine(this.password, this.password + HasherApi.BASE_SEED);
         this.buffer = new AbstractFrame[Math.max(actual, 256)];
     }
 
-    public @NonNull FRAME generate(DATA data, long password) {
+    /// Attempts to reuse an old frame if available. Creates one if not using the passed in data.
+    public @NonNull FRAME getOrCreate(DATA data, long password) {
         if (password != this.password) {
             throw new RuntimeException("Incorrect password for this FrameFactory.");
         }
-        if(factory == null) {
+        if (factory == null) {
             throw new RuntimeException("Cannot generate frames with a null FrameFactory.");
         }
 
@@ -70,9 +74,6 @@ public class FrameManager<DATA, FRAME extends AbstractFrame> implements AutoClos
             return factory.create(data);
         }
         factory.replace(data, frame);
-        if(!frame.isOrdered()) {
-            frame.randomizeHash(HasherApi.mix(seed++));
-        }
         return frame;
     }
 
@@ -81,7 +82,7 @@ public class FrameManager<DATA, FRAME extends AbstractFrame> implements AutoClos
     /// @param password Password set during instantiation
     /// @return The next frame or `null` if empty
     public @Nullable FRAME get(long password) {
-        if(password != this.password) {
+        if (password != this.password) {
             return null;
         }
         return get();
@@ -89,7 +90,7 @@ public class FrameManager<DATA, FRAME extends AbstractFrame> implements AutoClos
 
     private @Nullable FRAME get() {
         if (idx == 0) {
-            idx = recycleQueue.drain(this::drain, buffer.length);
+            idx = (int) recycleQueue.drain(this::drain, buffer.length);
             totalRecycled += idx;
         }
         if (idx > 0) {
@@ -136,7 +137,7 @@ public class FrameManager<DATA, FRAME extends AbstractFrame> implements AutoClos
 
         while (max > 0) {
             drain[0] = (int) Math.min(max, Integer.MAX_VALUE);
-            int count = recycleQueue.drain(f -> drain[0]--, drain[0]);
+            int count = (int) recycleQueue.drain(f -> drain[0]--, drain[0]);
 
             if (count == 0) {
                 break;

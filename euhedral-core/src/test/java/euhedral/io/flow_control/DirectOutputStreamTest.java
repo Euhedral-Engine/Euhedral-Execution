@@ -16,20 +16,19 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import euhedral.io.frames.AbstractFrame;
-import euhedral.queues.QueueConsumer;
 import euhedral.queues.common.PartitionedQueue;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import test_utils.TestFrame;
-import test_utils.TestTerminal;
+import test_utils.TestReceiver;
 
 class DirectOutputStreamTest {
 
     private PartitionedQueue<AbstractFrame> queue;
     private Consumer<AbstractFrame> applyToEach;
     private DirectOutputStream stream;
-    private TestTerminal terminal;
+    private TestReceiver terminal;
 
     @BeforeEach
     @SuppressWarnings("unchecked")
@@ -39,7 +38,7 @@ class DirectOutputStreamTest {
 
         stream = new DirectOutputStream(queue, applyToEach);
 
-        terminal = new TestTerminal();
+        terminal = new TestReceiver();
     }
 
     @Test
@@ -52,7 +51,7 @@ class DirectOutputStreamTest {
 
     @Test
     void shouldRejectSecondSubscriber() {
-        TestTerminal second = new TestTerminal();
+        TestReceiver second = new TestReceiver();
 
         stream.addDownstream(terminal);
         stream.addDownstream(second);
@@ -87,17 +86,17 @@ class DirectOutputStreamTest {
         stream.addDownstream(terminal);
         stream.request(2);
 
-        when(queue.drain(any(), eq(2)))
+        when(queue.drain(any(), eq(2L)))
                 .thenAnswer(invocation -> {
-                    QueueConsumer<AbstractFrame> consumer = invocation.getArgument(0);
+                    Consumer<AbstractFrame> consumer = invocation.getArgument(0);
 
-                    consumer.consume(frame1);
-                    consumer.consume(frame2);
+                    consumer.accept(frame1);
+                    consumer.accept(frame2);
 
-                    return 2;
+                    return 2L;
                 });
 
-        int drained = stream.push(10);
+        long drained = stream.push(10);
 
         assertEquals(2, drained);
 
@@ -114,20 +113,20 @@ class DirectOutputStreamTest {
         stream.addDownstream(terminal);
         stream.request(100);
 
-        when(queue.drain(any(), eq(3))).thenReturn(3);
+        when(queue.drain(any(), eq(3L))).thenReturn(3L);
 
-        int drained = stream.push(3);
+        long drained = stream.push(3);
 
         assertEquals(3, drained);
 
-        verify(queue).drain(any(), eq(3));
+        verify(queue).drain(any(), eq(3L));
     }
 
     @Test
     void shouldNotPushWithoutDemand() {
         stream.addDownstream(terminal);
 
-        int drained = stream.push(10);
+        long drained = stream.push(10);
 
         assertEquals(0, drained);
 
@@ -138,7 +137,7 @@ class DirectOutputStreamTest {
     void shouldNotPushWithoutSubscriber() {
         stream.request(10);
 
-        int drained = stream.push(10);
+        long drained = stream.push(10);
 
         assertEquals(0, drained);
 
@@ -150,9 +149,9 @@ class DirectOutputStreamTest {
         stream.addDownstream(terminal);
         stream.request(10);
 
-        stream.cancel();
+        stream.complete();
 
-        int drained = stream.push(10);
+        long drained = stream.push(10);
 
         assertEquals(0, drained);
 
@@ -160,12 +159,12 @@ class DirectOutputStreamTest {
     }
 
     @Test
-    void shouldCancelStream() {
+    void shouldCompleteStream() {
         stream.addDownstream(terminal);
 
-        stream.cancel();
+        stream.complete();
 
-        assertTrue(stream.cancelled);
+        assertTrue(stream.complete);
         assertNull(stream.terminal);
     }
 
@@ -193,7 +192,7 @@ class DirectOutputStreamTest {
         stream.request(Long.MAX_VALUE);
         stream.request(Long.MAX_VALUE);
 
-        when(queue.drain(any(), anyInt())).thenReturn(5);
+        when(queue.drain(any(), anyInt())).thenReturn(5L);
 
         long before = stream.demand.get();
 
@@ -210,7 +209,7 @@ class DirectOutputStreamTest {
 
         stream.request(10);
 
-        when(queue.drain(any(), eq(5))).thenReturn(5);
+        when(queue.drain(any(), eq(5L))).thenReturn(5L);
 
         stream.push(5);
 

@@ -28,6 +28,10 @@ under chaotic workloads.
 
 ---
 
+## [Quick Start](./QUICK_START.md)
+
+---
+
 ## Architecture
 
 Architecture documentation:
@@ -38,11 +42,12 @@ Architecture diagrams coming soon.
 
 ## Amazon EC2 Benchmarks
 
-These benchmarks test performance in a cloud environment on server hardware.
+These benchmarks test performance in a cloud environment on server hardware. They feature
+comparisons with the standard Reactor schedulers.
 
-- [Amazon EC2 32 vCPU Graviton4](AMAZON_GRAVITON_4_BENCHMARKS.md)
-- [Amazon EC2 32 vCPU Intel Xeon 6](AMAZON_XEON_6_BENCHMARKS.md)
-- [Amazon EC2 192 vCPU Graviton4](AMAZON_GRAVITON_4_192_CORES_BENCHMARKS.md)
+- [Amazon EC2 32 vCPU Graviton4](./benchmarks/AMAZON_GRAVITON_4_BENCHMARKS.md)
+- [Amazon EC2 32 vCPU Intel Xeon 6](./benchmarks/AMAZON_XEON_6_BENCHMARKS.md)
+- [Amazon EC2 192 vCPU Graviton4](./benchmarks/AMAZON_GRAVITON_4_192_CORES_BENCHMARKS.md)
 
 The benchmarks in the sections below were performed on a consumer desktop.
 
@@ -54,24 +59,24 @@ The benchmarks in the sections below were performed on a consumer desktop.
     SYSTEM VIEW                               IMPLEMENTATION VIEW
 --------------------------------------------------------------------------------
 
-Ingress / Control Plane        ->        Edge Load Balancer (Global L7 Router)
+ControlPlaneLattice            ->        Edge Load Balancer (Global L7 Router)
 ↓
-ControlPlane Shard             ->        Shard Load Balancer (Partition Router)
+ControlPlaneShard              ->        Shard Load Balancer (Partition Router)
 ↓
-DRRCacheManager                ->        Ingress Gateway / Stateful Cache Layer
+ControlPlaneCache              ->        Ingress Gateway / Stateful Cache Layer
 ↓
-ExecutionManager               ->        Task Scheduler
+ControlPlaneFragment           ->        Task Scheduler
 ↓
 AbstractExecutor               ->        Worker Runtime
 ↓
 AbstractFrame.execute()        ->        Compute Kernel
 ```
 
-Everything below the ControlPlane is replicated according to hardware topology.
+Everything below the ControlPlaneLattice is replicated according to hardware topology.
 
 - Sockets become shards
-- L2-sharing CPUs cooperate through localized queues (DRRCacheManager)
-- CPUs become pinned execution loops (ExecutionManager)
+- L2-sharing CPUs cooperate through localized queues (ControlPlaneCache)
+- CPUs become pinned execution scheduling loops (ControlPlaneFragment)
 
 ---
 
@@ -88,7 +93,7 @@ General use schedulers do not fully take advantage of the hardware they run on.
 - Minimal coordination overhead
 - Sustained throughput under pressure
 
-Euhedral continuously adapts execution behavior using runtime feedback and scales to match the
+It continuously adapts execution behavior using runtime feedback and scales to match the
 physical reality of the system.
 
 **Euhedral reacts to**:
@@ -145,7 +150,7 @@ frame.randomizeHash(HasherApi.combine(idHash, seed++));
 
 ### Scheduling is adaptive
 
-The ExecutionManager continuously tunes execution behavior based on observed conditions.
+The ControlPlaneFragment continuously tunes execution behavior based on observed conditions.
 
 It adjusts:
 
@@ -164,7 +169,7 @@ Using:
 
 ### Queues are topology-aware
 
-DRRCacheManager creates deficit round-robin queues sized around L2 cache topology.
+ControlPlaneCache creates deficit round-robin queues sized around L2 cache topology.
 
 Only CPUs sharing L2 consume from the same queue.
 
@@ -271,14 +276,14 @@ The execution engine.
 
 #### Major Components
 
-| Component                                                  | Description                                    |
-|:-----------------------------------------------------------|:-----------------------------------------------|
-| <span style="white-space: nowrap">ControlPlane</span>      | Global orchestration and topology management   |
-| <span style="white-space: nowrap">ControlPlaneShard</span> | Per-socket orchestration and worker management |
-| <span style="white-space: nowrap">DRRCacheManager</span>   | Cache-local deficit round-robin queue          |
-| <span style="white-space: nowrap">ExecutionManager</span>  | Adaptive pinned execution control loop         |
-| <span style="white-space: nowrap">AbstractExecutors</span> | Thin execution wrapper                         |
-| <span style="white-space: nowrap">AbstractFrame</span>     | Base unit of work                              |
+| Component                                                     | Description                                    |
+|:--------------------------------------------------------------|:-----------------------------------------------|
+| <span style="white-space: nowrap">ControlPlaneLattice</span>  | Global orchestration and topology management   |
+| <span style="white-space: nowrap">ControlPlaneShard</span>    | Per-socket orchestration and worker management |
+| <span style="white-space: nowrap">ControlPlaneCache</span>    | Cache-local deficit round-robin queue          |
+| <span style="white-space: nowrap">ControlPlaneFragment</span> | Adaptive pinned execution scheduling loop      |
+| <span style="white-space: nowrap">AbstractExecutors</span>    | Thin execution wrapper                         |
+| <span style="white-space: nowrap">AbstractFrame</span>        | Base unit of work                              |
 
 ### euhedral-data-structures
 

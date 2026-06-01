@@ -9,6 +9,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 import lombok.Getter;
 
 /// A bounded, padded, partitioned, array-based queue.
@@ -60,7 +61,7 @@ public class PartitionedArrayQueue<T> extends AbstractQueue<T> implements Partit
         this.capacity = (long) chunkSize * partitions;
     }
 
-    /// Offers the object to a random partition.
+    /// Offers the object to each partition starting from 0 until it succeeds.
     ///
     /// @return success
     @Override
@@ -181,12 +182,12 @@ public class PartitionedArrayQueue<T> extends AbstractQueue<T> implements Partit
     /// @param limit Maximum number of items to pull
     /// @return Number of items drained
     @Override
-    public int drain(QueueConsumer<T> consumer, int limit) {
+    public long drain(Consumer<T> consumer, long limit) {
         if (consumer == null || limit <= 0) {
             return 0;
         }
 
-        int total = 0;
+        long total = 0;
         for (int i = 0; i < this.partitions && total < limit; i++) {
             total += drain(i, consumer, limit - total);
         }
@@ -197,7 +198,7 @@ public class PartitionedArrayQueue<T> extends AbstractQueue<T> implements Partit
     ///
     /// @return Number of items drained
     @Override
-    public int drain(int partition, QueueConsumer<T> consumer, int limit) {
+    public long drain(int partition, Consumer<T> consumer, long limit) {
         boundsCheck(partition);
         int pIdx = this.heads.fromRawIdx(partition);
         int rIdx = this.queue.fromRawIdx(partition);
@@ -208,7 +209,7 @@ public class PartitionedArrayQueue<T> extends AbstractQueue<T> implements Partit
         while (total < limit && head < this.tails.getPlain(pIdx)) {
             int chunkIdx = chunkIndex(head++);
             this.heads.setPlain(pIdx, head);
-            consumer.consume(queue[chunkIdx]);
+            consumer.accept(queue[chunkIdx]);
             queue[chunkIdx] = null;
             total++;
         }

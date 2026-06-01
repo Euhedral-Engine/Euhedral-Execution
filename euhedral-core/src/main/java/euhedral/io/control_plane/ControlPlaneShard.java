@@ -8,11 +8,10 @@ import euhedral.hardware_utils.TopologyMapper.EffectiveSocketTopology;
 import euhedral.hardware_utils.common.SystemUtilization.CoreSnapshot;
 import euhedral.hardware_utils.common.SystemUtilization.SocketSnapshot;
 import euhedral.io.config.CloneConfig;
-import euhedral.io.flow_control.ScaffoldingEdge;
-import euhedral.io.flow_control.ScaffoldingNode;
+import euhedral.io.flow_control.LatticeEdge;
+import euhedral.io.flow_control.LatticeVertex;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.CloneableObject;
-import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.util.BitSet;
 import java.util.HashSet;
@@ -46,25 +45,22 @@ public class ControlPlaneShard implements AutoCloseable {
     protected final AtomicBoolean rebalancing = new AtomicBoolean(false);
     protected final AtomicInteger coresToDrain = new AtomicInteger(0);
 
-    protected final AtomicReference<ScaffoldingNode> coreDistributor = new AtomicReference<>();
+    protected final AtomicReference<LatticeVertex> coreDistributor = new AtomicReference<>();
 
-    protected final MeterRegistry meterRegistry;
     protected final CloneableObject cloneableObject;
     protected final AtomicReference<int[]> activeCoreIds = new AtomicReference<>(new int[0]);
     protected final AtomicReference<CloneableObject[]> clones = new AtomicReference<>(
             new CloneableObject[0]);
-    protected final AtomicReference<ScaffoldingEdge[]> coreHandles = new AtomicReference<>(
-            new ScaffoldingEdge[0]);
+    protected final AtomicReference<LatticeEdge[]> coreHandles = new AtomicReference<>(
+            new LatticeEdge[0]);
     protected final AtomicReference<int[]> reverseMapping = new AtomicReference<>(new int[0]);
     protected volatile ExecutorService shardExecutor;
 
     public ControlPlaneShard(int shardId, String shardName,
-            CloneableObject obj,
-            MeterRegistry meterRegistry) {
+            CloneableObject obj) {
         this.logger = LoggerFactory.getLogger(shardName);
         this.shardId = shardId;
         this.shardName = shardName;
-        this.meterRegistry = meterRegistry;
         this.cloneableObject = obj;
     }
 
@@ -73,20 +69,21 @@ public class ControlPlaneShard implements AutoCloseable {
     }
 
     public void start(SocketSnapshot snapshot, EffectiveSocketTopology topology,
-            ScaffoldingEdge upstream) {
+            LatticeEdge upstream) {
         if (!this.started.compareAndSet(false, true)) {
             return;
         }
         this.logger.info("Starting.");
         this.shardExecutor = Executors.newFixedThreadPool(topology.effectiveCores().length(),
                 (r) -> new Thread(r, this.shardName + "+ExecutorService"));
-        ScaffoldingNode coreDistributor = new ScaffoldingNode(this.shardName + "-CoreDistributor",
+        LatticeVertex coreDistributor = new LatticeVertex(this.shardName + "-CoreDistributor",
                 topology.effectiveCores().length(), this::route, false);
         this.coreDistributor.set(coreDistributor);
         coreDistributor.addUpstream(upstream);
         update(snapshot, topology);
     }
 
+    /// Routes work based on their policy level or uses default global routing.
     protected int route(AbstractFrame frame, int mapSize) {
         RoutingPolicy policy = frame.getRoutingPolicy();
         if (policy != null && policy.level > RoutingPolicy.SOCKET_LOCAL.level) {
@@ -102,10 +99,13 @@ public class ControlPlaneShard implements AutoCloseable {
             }
         }
 
-        long rotated = Long.rotateLeft(frame.getCombinedHash(), 31);
+        // Default routing
+        long rotated = Long.rotateLeft(frame.getRoutingHash(), 31);
         return (int) unsignedMultiplyHigh(rotated, mapSize);
     }
 
+    /// Hands out the core-specific hardware utilization reports or initiates a rebalance on
+    /// topology change.
     public void update(SocketSnapshot snapshot, EffectiveSocketTopology topology) {
         if (!this.started.get()) {
             this.logger.error("Cannot update if not started.");
@@ -135,29 +135,33 @@ public class ControlPlaneShard implements AutoCloseable {
         }
     }
 
+    /// Spawns new clones if a cores become available. Shuts down clones if the cores are removed.
+    /// Updates existing clones with their new utilization reports.
     protected void handleTopologyChange(SocketSnapshot snapshot, EffectiveSocketTopology topology) {
         if (!this.rebalancing.compareAndSet(false, true)) {
             return;
         }
         this.currentVersion.setRelease(topology.version());
 
-        ScaffoldingNode distributor = this.coreDistributor.get();
+        // Cut ingest
+        LatticeVertex distributor = this.coreDistributor.get();
         distributor.setDrain(true);
 
         BitSet newCores = topology.effectiveCores();
         int[] nextCores = new int[newCores.cardinality()];
 
-        ScaffoldingEdge[] currHandles = this.coreHandles.getAcquire();
-        ScaffoldingEdge[] nextHandles = new ScaffoldingEdge[topology.effectiveCores().length()];
+        LatticeEdge[] currHandles = this.coreHandles.getAcquire();
+        LatticeEdge[] nextHandles = new LatticeEdge[topology.effectiveCores().length()];
         CloneableObject[] clones = this.clones.getOpaque();
         CloneableObject[] nextClones = new CloneableObject[topology.effectiveCores().length()];
 
+        // Build reverse mapping for fast core-local routing
         int idx = 0;
         int[] reverseMapping = new int[SystemInfo.getMaxCoreId() + 1];
         for (int i = newCores.nextSetBit(0); i >= 0; i = newCores.nextSetBit(i + 1)) {
             nextHandles[i] = i >= clones.length ? null : currHandles[i];
             nextHandles[i] =
-                    nextHandles[i] == null ? new ScaffoldingEdge(distributor.getDrainFlag())
+                    nextHandles[i] == null ? new LatticeEdge(distributor.getDrainFlag())
                             : nextHandles[i];
             reverseMapping[i] = idx++;
         }
@@ -181,11 +185,7 @@ public class ControlPlaneShard implements AutoCloseable {
             nextCores[idx++] = i;
         }
 
-        if (this.primed.getOpaque()) {
-            drainAndPruneClones(newCores, snapshot, nextClones);
-            this.clones.setRelease(nextClones);
-            this.activeCoreIds.setRelease(nextCores);
-        } else {
+        if(!this.primed.getOpaque()) {
             this.clones.setRelease(nextClones);
             this.activeCoreIds.setRelease(nextCores);
             this.coreDistributor.get().setDownstreamMapping(newCores, nextHandles);
@@ -197,6 +197,10 @@ public class ControlPlaneShard implements AutoCloseable {
             this.coreDistributor.get().setDrain(false);
             this.primed.set(true);
             this.rebalancing.set(false);
+        } else {
+            drainAndPruneClones(newCores, snapshot, nextClones);
+            this.clones.setRelease(nextClones);
+            this.activeCoreIds.setRelease(nextCores);
         }
     }
 
@@ -212,11 +216,11 @@ public class ControlPlaneShard implements AutoCloseable {
         clone.update(snapshot);
     }
 
+    /// Creates a clone on the core, links it to the core distributor, starts it, and updates it.
     private CloneableObject spawnClone(int coreId, CoreSnapshot snapshot,
             CloneableObject[] nextClones) {
         CloneConfig config = new CloneConfig(this.shardName, coreId, snapshot.quotaCpus(),
-                snapshot.effectiveCpus(),
-                this.meterRegistry, this.shardName);
+                snapshot.effectiveCpus());
 
         CloneableObject clone = this.cloneableObject.clone(config);
         nextClones[coreId] = clone;
@@ -230,6 +234,7 @@ public class ControlPlaneShard implements AutoCloseable {
         return clone;
     }
 
+    /// Drains all active clones and removes clones that are not in the next active set.
     private void drainAndPruneClones(BitSet active, SocketSnapshot snapshot,
             CloneableObject[] nextClones) {
         this.logger.info("Draining and pruning clones.");
@@ -302,6 +307,7 @@ public class ControlPlaneShard implements AutoCloseable {
         }, this.shardExecutor));
     }
 
+    /// Restarts ingest if all cores are drained.
     protected void tryRestartIngest(BitSet active) {
         if (this.coresToDrain.get() == 0) {
             this.logger.info("Restarting ingest.");
@@ -325,51 +331,7 @@ public class ControlPlaneShard implements AutoCloseable {
         }
     }
 
-    @Override
-    public void close() throws Exception {
-        this.started.set(false);
-        this.logger.info("Closing.");
-        this.coreDistributor.getAndUpdate(distributor -> {
-            if (distributor != null) {
-                try {
-                    distributor.close();
-                } catch (Exception e) {
-                    this.logger.error("CRITICAL: Failed to close the ScaffoldingNode.", e);
-                }
-            }
-            return null;
-        });
-
-        this.logger.info("Closing cores.");
-        ScaffoldingEdge[] handles = this.coreHandles.getAcquire();
-        for (int i = 0; i < handles.length; i++) {
-            if (handles[i] != null) {
-                handles[i].onComplete();
-                handles[i] = null;
-            }
-        }
-
-        this.logger.info("Closing clones.");
-        CloneableObject[] clones = this.clones.getAcquire();
-        for (int i = 0; i < clones.length; i++) {
-            CloneableObject clone = clones[i];
-            if (clone != null) {
-                try {
-                    clone.close();
-                } catch (Exception e) {
-                    this.logger.error("Failed to close the clone.", e);
-                }
-                clone.dumpLocks();
-                clones[i] = null;
-            }
-        }
-
-        if (this.shardExecutor != null) {
-            this.shardExecutor.shutdownNow();
-        }
-        this.logger.info("Closed.");
-    }
-
+    /// Shuts down all cores under the shard's control.
     public void shutDownShard(AtomicInteger shutDownCounter) {
         if (!this.started.compareAndSet(true, false)) {
             return;
@@ -393,12 +355,13 @@ public class ControlPlaneShard implements AutoCloseable {
         }
         this.activeCoreIds.setRelease(new int[0]);
         this.clones.setRelease(new CloneableObject[0]);
-        this.coreHandles.setRelease(new ScaffoldingEdge[0]);
+        this.coreHandles.setRelease(new LatticeEdge[0]);
         this.shardExecutor.shutdown();
         this.shardExecutor = null;
         this.primed.set(false);
     }
 
+    /// Attempts to gracefully shut down a core. Forcefully shuts them down if they time out.
     private void shutdownCore(int coreId, CloneableObject oldClone,
             AtomicInteger drainSignal, AtomicInteger shutDownCounter) {
         this.logger.info("Shutting down clone on core {}", coreId);
@@ -438,10 +401,13 @@ public class ControlPlaneShard implements AutoCloseable {
         return this.started.get();
     }
 
+    /// Whether the shard is rebalancing. Rebalancing shards do not accept incoming work.
     public boolean isRebalancing() {
         return this.rebalancing.get();
     }
 
+    /// Whether all queues are empty and all in-progress work is completed for all CPUs managed by
+    /// this ControlPlaneLattice.
     public boolean isDrained() {
         if (!this.started.get()) {
             return true;
@@ -450,7 +416,7 @@ public class ControlPlaneShard implements AutoCloseable {
             return false;
         }
 
-        ScaffoldingNode coreDistributor = this.coreDistributor.get();
+        LatticeVertex coreDistributor = this.coreDistributor.get();
         if (coreDistributor != null && !coreDistributor.isDrained()) {
             return false;
         }
@@ -466,8 +432,54 @@ public class ControlPlaneShard implements AutoCloseable {
         return drained;
     }
 
+    /// Creates a shallow copy of the shard.
     public ControlPlaneShard clone(int shardId, String shardName) {
-        return new ControlPlaneShard(shardId, shardName, this.cloneableObject,
-                this.meterRegistry);
+        return new ControlPlaneShard(shardId, shardName, this.cloneableObject);
+    }
+
+    /// Forcefully shuts down all cores.
+    @Override
+    public void close() throws Exception {
+        this.started.set(false);
+        this.logger.info("Closing.");
+        this.coreDistributor.getAndUpdate(distributor -> {
+            if (distributor != null) {
+                try {
+                    distributor.close();
+                } catch (Exception e) {
+                    this.logger.error("CRITICAL: Failed to close the LatticeVertex.", e);
+                }
+            }
+            return null;
+        });
+
+        this.logger.info("Closing cores.");
+        LatticeEdge[] handles = this.coreHandles.getAcquire();
+        for (int i = 0; i < handles.length; i++) {
+            if (handles[i] != null) {
+                handles[i].onComplete();
+                handles[i] = null;
+            }
+        }
+
+        this.logger.info("Closing clones.");
+        CloneableObject[] clones = this.clones.getAcquire();
+        for (int i = 0; i < clones.length; i++) {
+            CloneableObject clone = clones[i];
+            if (clone != null) {
+                try {
+                    clone.close();
+                } catch (Exception e) {
+                    this.logger.error("Failed to close the clone.", e);
+                }
+                clone.dumpLocks();
+                clones[i] = null;
+            }
+        }
+
+        if (this.shardExecutor != null) {
+            this.shardExecutor.shutdownNow();
+        }
+        this.logger.info("Closed.");
     }
 }

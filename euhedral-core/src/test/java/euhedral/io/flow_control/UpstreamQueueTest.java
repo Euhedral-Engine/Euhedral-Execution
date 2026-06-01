@@ -9,15 +9,16 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import euhedral.io.frames.AbstractFrame;
-import euhedral.io.generics.ScaffoldingSource;
+import euhedral.io.generics.LatticeSource;
 import euhedral.io.utils.DrainBuffer;
 import euhedral.queues.common.PartitionedQueue;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 import org.jctools.maps.NonBlockingHashMapLong;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import test_utils.TestTerminal;
+import test_utils.TestReceiver;
 
 @SuppressWarnings("unchecked")
 class UpstreamQueueTest {
@@ -81,7 +82,7 @@ class UpstreamQueueTest {
         queue.addUpstream(first);
         queue.addUpstream(second);
 
-        queue.pull(1024);
+        queue.request(1024);
 
         assertEquals(1024, first.requested);
         assertEquals(0, second.requested);
@@ -95,7 +96,7 @@ class UpstreamQueueTest {
         queue.addUpstream(first);
         queue.addUpstream(second);
 
-        queue.pull(2048);
+        queue.request(2048);
 
         assertEquals(1024, first.requested);
         assertEquals(1024, second.requested);
@@ -131,7 +132,7 @@ class UpstreamQueueTest {
 
         queue.pull(buffer, 64);
 
-        assertEquals(64, upstream.requested);
+        assertEquals(0, upstream.requested);
         assertEquals(64, upstream.pulled);
     }
 
@@ -141,7 +142,7 @@ class UpstreamQueueTest {
 
         queue.addUpstream(upstream);
 
-        queue.pull(0);
+        queue.request(0);
 
         assertEquals(0, upstream.requested);
         assertEquals(0, upstream.pulled);
@@ -155,7 +156,7 @@ class UpstreamQueueTest {
 
         queue.addUpstream(upstream);
 
-        queue.pull(10);
+        queue.request(10);
 
         assertEquals(0, queue.getTrueUpstreamCount());
     }
@@ -229,7 +230,7 @@ class UpstreamQueueTest {
 
         UpstreamQueue.drain(upstream, buffer, 64);
 
-        assertEquals(64, upstream.requested);
+        assertEquals(0, upstream.requested);
         assertEquals(64, upstream.pulled);
     }
 
@@ -238,11 +239,11 @@ class UpstreamQueueTest {
         UpstreamQueue.UpstreamHandle handle =
                 new TestUpstreamHandle();
 
-        ScaffoldingSource source = mock(ScaffoldingSource.class);
+        LatticeSource source = mock(LatticeSource.class);
 
         handle.addUpstream(source);
 
-        verify(source).cancel();
+        verify(source).complete();
     }
 
     @Test
@@ -250,7 +251,7 @@ class UpstreamQueueTest {
         UpstreamQueue.UpstreamHandle handle =
                 new TestUpstreamHandle();
 
-        TestTerminal terminal = new TestTerminal();
+        TestReceiver terminal = new TestReceiver();
 
         handle.addDownstream(terminal);
 
@@ -273,7 +274,7 @@ class UpstreamQueueTest {
         boolean complete;
 
         @Override
-        public void pull(DrainBuffer buffer, long demand) {
+        public void pull(Consumer<AbstractFrame> consumer, long demand) {
             this.pulled += demand;
         }
 
@@ -288,19 +289,12 @@ class UpstreamQueueTest {
         }
 
         @Override
-        public void cancel() {
-        }
-
-        @Override
-        public void onNext(AbstractFrame frame) {
+        public void push(AbstractFrame frame) {
         }
 
         @Override
         public void onError(Throwable throwable) {
         }
 
-        @Override
-        public void onComplete() {
-        }
     }
 }

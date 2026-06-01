@@ -1,5 +1,10 @@
 package euhedral.io.flow_control;
 
+import euhedral.atomics.PaddedAtomicLong;
+import euhedral.io.flow_control.UpstreamQueue.UpstreamHandle;
+import euhedral.io.frames.AbstractFrame;
+import euhedral.io.generics.LatticeInterceptor;
+import euhedral.io.generics.LatticeReceiver;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.Collection;
@@ -8,33 +13,26 @@ import java.util.WeakHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.LockSupport;
-
-import euhedral.atomics.PaddedAtomicLong;
-import euhedral.io.flow_control.UpstreamQueue.UpstreamHandle;
-import euhedral.io.frames.AbstractFrame;
-import euhedral.io.generics.RecursiveScaffolding;
-import euhedral.io.generics.ScaffoldingTerminal;
-import euhedral.io.utils.DrainBuffer;
+import java.util.function.Consumer;
 import lombok.Getter;
 import lombok.Setter;
 import org.jctools.maps.NonBlockingHashMapLong;
 
 /// ## The main infrastructure class of Euhedral Core
 ///
-/// This is the structural backbone of the entire system. A `ScaffoldingEdge` forms a dynamic
-/// execution graph by recursively linking to other edges whenever it is attached upstream or
-/// downstream.
+/// This is the structural backbone of the entire system. A `LatticeEdge` forms a dynamic execution
+/// graph by recursively linking to other edges whenever it is attached upstream or downstream.
 ///
-/// When another `ScaffoldingEdge` is connected, it becomes part of the same chain, effectively
+/// When another `LatticeEdge` is connected, it becomes part of the same chain, effectively
 /// extending the execution topology. When an `UpstreamHandle` is added, it is propagated upward
-/// through the graph. When a `ScaffoldingTerminal` is attached, it becomes the execution boundary
-/// (the “floor”) of that branch.
+/// through the graph. When a `LatticeReceiver` is attached, it becomes the execution boundary (the
+/// “floor”) of that branch.
 ///
-/// Work flows downward through the graph toward terminals, while demand and backpressure flow
+/// Work flows downward through the graph toward receivers, while demand and backpressure flow
 /// upward toward upstream sources. The structure is designed to continuously reconcile both
-/// directions under concurrent mutation without centralized coordination.
+/// directions under concurrent mutation.
 @SuppressWarnings("unused")
-public class ScaffoldingEdge extends UpstreamHandle implements AutoCloseable {
+public class LatticeEdge extends UpstreamHandle implements AutoCloseable {
 
     protected static final VarHandle ADDING_UPSTREAM;
     protected static final VarHandle CLOSED;
@@ -45,15 +43,15 @@ public class ScaffoldingEdge extends UpstreamHandle implements AutoCloseable {
     static {
         try {
             ADDING_UPSTREAM = MethodHandles.lookup()
-                    .findVarHandle(ScaffoldingEdge.class, "addingUpstream", boolean.class);
+                    .findVarHandle(LatticeEdge.class, "addingUpstream", boolean.class);
             CLOSED = MethodHandles.lookup()
-                    .findVarHandle(ScaffoldingEdge.class, "closed", boolean.class);
+                    .findVarHandle(LatticeEdge.class, "closed", boolean.class);
             DOWNSTREAM = MethodHandles.lookup()
-                    .findVarHandle(ScaffoldingEdge.class, "downstream", ScaffoldingTerminal.class);
+                    .findVarHandle(LatticeEdge.class, "downstream", LatticeReceiver.class);
             PARENT = MethodHandles.lookup()
-                    .findVarHandle(ScaffoldingEdge.class, "parent", ScaffoldingEdge.class);
+                    .findVarHandle(LatticeEdge.class, "parent", LatticeEdge.class);
             UP_QUEUES = MethodHandles.lookup()
-                    .findVarHandle(ScaffoldingEdge.class, "upstreamQueues", Collection.class);
+                    .findVarHandle(LatticeEdge.class, "upstreamQueues", Collection.class);
         } catch (Exception e) {
             throw new ExceptionInInitializerError(e);
         }
@@ -67,26 +65,32 @@ public class ScaffoldingEdge extends UpstreamHandle implements AutoCloseable {
     private final WeakHashMap<UpstreamHandle, Boolean> upstreamHandles = new WeakHashMap<>();
     private final PaddedAtomicLong upstreamCount = new PaddedAtomicLong(0);
     private final AtomicLong threadCount = new AtomicLong(0);
-    public ScaffoldingTerminal downstream = null;
-    protected ScaffoldingEdge parent = null;
+    public LatticeReceiver downstream = null;
+    protected LatticeEdge parent = null;
     @Getter
     @Setter
-    protected volatile ScaffoldingEdge sibling = null;
+    protected volatile LatticeEdge sibling = null;
 
     private Collection<UpstreamQueue> upstreamQueues = aggregators.values();
     private boolean addingUpstream = false;
     private boolean closed = false;
 
-    public ScaffoldingEdge(AtomicBoolean drain) {
+    public LatticeEdge(AtomicBoolean drain) {
         this.drain = drain;
     }
 
+    /// Creates a thread-local [UpstreamQueue] object for the calling thread. This queue contains
+    /// all [UpstreamHandles][UpstreamHandle] associated with the LatticeEdge.
+    ///
+    /// This does not need to be called to avoid errors. It is a micro-optimization.
     public void register() {
         getThreadUpstreamQueue();
     }
 
+    /// Gets the thread-local [UpstreamQueue] object for the calling thread. This queue contains all
+    /// [UpstreamHandles][UpstreamHandle] associated with the LatticeEdge.
     public UpstreamQueue getThreadUpstreamQueue() {
-        ScaffoldingEdge parent = (ScaffoldingEdge) PARENT.getOpaque(this);
+        LatticeEdge parent = (LatticeEdge) PARENT.getOpaque(this);
         if (parent != null) {
             return parent.getThreadUpstreamQueue();
         }
@@ -114,12 +118,13 @@ public class ScaffoldingEdge extends UpstreamHandle implements AutoCloseable {
         return queue;
     }
 
+    /// Removes a thread and its [UpstreamQueue] from the mapping.
     public void removeThread(Thread thread) {
         if (thread == null) {
             return;
         }
 
-        ScaffoldingEdge parent = (ScaffoldingEdge) PARENT.getOpaque(this);
+        LatticeEdge parent = (LatticeEdge) PARENT.getOpaque(this);
         if (parent != null) {
             parent.removeThread(thread);
             return;
@@ -133,24 +138,27 @@ public class ScaffoldingEdge extends UpstreamHandle implements AutoCloseable {
         }
     }
 
+    /// Returns the number of [UpstreamHandles][UpstreamHandle]
     public long getUpstreamCount() {
-        ScaffoldingEdge parent = (ScaffoldingEdge) PARENT.getOpaque(this);
+        LatticeEdge parent = (LatticeEdge) PARENT.getOpaque(this);
         if (parent != null) {
             return parent.getUpstreamCount();
         }
         return this.upstreamCount.getOpaque();
     }
 
+    /// Returns the number of threads registered with this LatticeEdge.
     public int getThreadCount() {
         return this.threadCount.intValue();
     }
 
+    /// Returns the number of LatticeEdge horizontally-linked at this edge's layer.
     public int getLayerWidth() {
         if (this.sibling == null) {
             return 1;
         }
         int count = 1;
-        ScaffoldingEdge sib = this.sibling;
+        LatticeEdge sib = this.sibling;
         while (sib != this) {
             count++;
             sib = sib.sibling;
@@ -158,7 +166,9 @@ public class ScaffoldingEdge extends UpstreamHandle implements AutoCloseable {
         return count;
     }
 
-    public void setParent(ScaffoldingEdge parent) {
+    /// Sets the parent LatticeEdge and transfers all [UpstreamHandles][UpstreamHandle] and
+    /// [UpstreamQueues][UpstreamQueue] to it.
+    public void setParent(LatticeEdge parent) {
         if (parent == null) {
             PARENT.setRelease(this, null);
             return;
@@ -166,8 +176,8 @@ public class ScaffoldingEdge extends UpstreamHandle implements AutoCloseable {
 
         acquireLock();
         PARENT.setRelease(this, parent);
-        ScaffoldingTerminal down = (ScaffoldingTerminal) DOWNSTREAM.getOpaque(this);
-        if (down instanceof ScaffoldingEdge rs) {
+        LatticeReceiver down = (LatticeReceiver) DOWNSTREAM.getOpaque(this);
+        if (down instanceof LatticeEdge rs) {
             rs.setParent(parent);
         }
         transferToParent();
@@ -175,14 +185,16 @@ public class ScaffoldingEdge extends UpstreamHandle implements AutoCloseable {
         releaseLock();
     }
 
+    /// Sends work downstream.
     @Override
-    public void onNext(AbstractFrame frame) {
-        var downstream = (ScaffoldingTerminal) DOWNSTREAM.getOpaque(this);
+    public void push(AbstractFrame frame) {
+        var downstream = (LatticeReceiver) DOWNSTREAM.getOpaque(this);
         if (downstream != null) {
-            downstream.onNext(frame);
+            downstream.push(frame);
         }
     }
 
+    /// Requests work from the [UpstreamHandles][UpstreamHandle]
     @Override
     public void request(long num) {
         if (num < 0) {
@@ -192,33 +204,36 @@ public class ScaffoldingEdge extends UpstreamHandle implements AutoCloseable {
             return;
         }
 
-        ScaffoldingEdge parent = (ScaffoldingEdge) PARENT.getOpaque(this);
+        LatticeEdge parent = (LatticeEdge) PARENT.getOpaque(this);
         if (parent != null) {
             parent.request(num);
             return;
         }
 
         UpstreamQueue queue = UpstreamQueue.get(this.aggregators, this.threadCount);
-        queue.pull(num);
+        queue.request(num);
     }
 
+    /// Pulls available work from the [UpstreamHandles][UpstreamHandle] without requesting more
+    /// work.
     @Override
-    public void pull(DrainBuffer buffer, long demand) {
+    public void pull(Consumer<AbstractFrame> consumer, long demand) {
         if ((boolean) CLOSED.getOpaque(this) || this.drain.getOpaque()) {
             return;
         }
 
-        ScaffoldingEdge parent = (ScaffoldingEdge) PARENT.getOpaque(this);
+        LatticeEdge parent = (LatticeEdge) PARENT.getOpaque(this);
         if (parent != null) {
-            parent.pull(buffer, demand);
+            parent.pull(consumer, demand);
             return;
         }
         UpstreamQueue queue = UpstreamQueue.get(this.aggregators, this.threadCount);
-        queue.pull(buffer, demand);
+        queue.pull(consumer, demand);
     }
 
+    /// Transfers this edge's state to its parent.
     protected void transferToParent() {
-        ScaffoldingEdge parent = (ScaffoldingEdge) PARENT.getOpaque(this);
+        LatticeEdge parent = (LatticeEdge) PARENT.getOpaque(this);
         if (parent == null) {
             return;
         }
@@ -235,13 +250,14 @@ public class ScaffoldingEdge extends UpstreamHandle implements AutoCloseable {
         return false;
     }
 
+    /// Clears the state and permanently closes.
     @Override
     public void close() {
         if (!CLOSED.compareAndSet(this, false, true)) {
             return;
         }
 
-        var downstream = (ScaffoldingTerminal) DOWNSTREAM.getAcquire(this);
+        var downstream = (LatticeReceiver) DOWNSTREAM.getAcquire(this);
         if (downstream != null) {
             downstream.onComplete();
             DOWNSTREAM.setRelease(this, null);
@@ -252,14 +268,17 @@ public class ScaffoldingEdge extends UpstreamHandle implements AutoCloseable {
         this.upstreamHandles.clear();
     }
 
+    /// If the parameter is a LatticeEdge, it sets it as its parent or bubbles it up the chain. If
+    /// it is an [UpstreamHandle][UpstreamHandle], it adds it to all
+    /// [UpstreamQueues][UpstreamQueue]
     @Override
-    public void addUpstream(RecursiveScaffolding up) {
-        if (up instanceof ScaffoldingEdge dh) {
+    public void addUpstream(LatticeInterceptor up) {
+        if (up instanceof LatticeEdge dh) {
             setParent(dh);
         } else if (up instanceof UpstreamHandle upstream) {
             acquireLock();
 
-            ScaffoldingEdge parent = (ScaffoldingEdge) PARENT.getOpaque(this);
+            LatticeEdge parent = (LatticeEdge) PARENT.getOpaque(this);
             if (parent != null) {
                 releaseLock();
                 parent.addUpstream(upstream);
@@ -298,22 +317,24 @@ public class ScaffoldingEdge extends UpstreamHandle implements AutoCloseable {
         }
     }
 
+    /// If the parameter is a LatticeEdge, it attempts to recursively send it down the chain. If it
+    /// is not, it becomes the floor of the chain.
     @Override
-    public void addDownstream(RecursiveScaffolding downstream) {
-        boolean isEdge = downstream instanceof ScaffoldingEdge;
+    public void addDownstream(LatticeInterceptor downstream) {
+        boolean isEdge = downstream instanceof LatticeEdge;
 
-        var witness = (ScaffoldingTerminal) DOWNSTREAM.compareAndExchange(this, null, downstream);
+        var witness = (LatticeReceiver) DOWNSTREAM.compareAndExchange(this, null, downstream);
 
         if (witness == null) {
             if (isEdge) {
-                ((ScaffoldingEdge) downstream).setParent(this);
+                ((LatticeEdge) downstream).setParent(this);
             } else {
                 downstream.addUpstream(this);
             }
             return;
         }
 
-        if (witness instanceof ScaffoldingEdge existingEdge) {
+        if (witness instanceof LatticeEdge existingEdge) {
             existingEdge.addDownstream(downstream);
         } else {
             downstream.onError(new IllegalStateException(
@@ -321,13 +342,15 @@ public class ScaffoldingEdge extends UpstreamHandle implements AutoCloseable {
         }
     }
 
-    public void addDownstream(ScaffoldingTerminal terminal) {
-        ScaffoldingTerminal down =
-                (ScaffoldingTerminal) DOWNSTREAM.compareAndExchange(this, null, terminal);
+    /// Sets the terminal as the floor of the chain if it hasn't been set. Sends it down the chain
+    /// if the downstream is another LatticeEdge.
+    public void addDownstream(LatticeReceiver terminal) {
+        LatticeReceiver down =
+                (LatticeReceiver) DOWNSTREAM.compareAndExchange(this, null, terminal);
         if (down == null) {
             return;
         }
-        if (down instanceof RecursiveScaffolding rs) {
+        if (down instanceof LatticeInterceptor rs) {
             rs.addDownstream(terminal);
         }
         terminal.onError(
@@ -354,7 +377,7 @@ public class ScaffoldingEdge extends UpstreamHandle implements AutoCloseable {
 
     @Override
     public void onError(Throwable throwable) {
-        ScaffoldingTerminal downstream = (ScaffoldingTerminal) DOWNSTREAM.getAcquire(this);
+        LatticeReceiver downstream = (LatticeReceiver) DOWNSTREAM.getAcquire(this);
         if (downstream != null) {
             downstream.onError(throwable);
         }

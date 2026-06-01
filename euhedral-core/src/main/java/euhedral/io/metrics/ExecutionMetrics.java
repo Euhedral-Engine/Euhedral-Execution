@@ -1,6 +1,6 @@
 package euhedral.io.metrics;
 
-import euhedral.io.config.ExecutionManagerConfig;
+import euhedral.io.config.SchedulingConfig;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -8,16 +8,16 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Supplier;
 
-public class ExecutionManagerMetrics implements AutoCloseable {
+public class ExecutionMetrics implements AutoCloseable {
     private final List<Meter> meters = new ArrayList<>();
 
-    public ExecutionManagerMetrics(MeterRegistry registry, ExecutionManagerConfig config,
+    public ExecutionMetrics(MeterRegistry registry, SchedulingConfig config,
             Supplier<Integer> inFlight,
             Supplier<Long> latency, Supplier<Long> currentConcurrency,
             Supplier<Long> currentRate, Supplier<Double> pressure) {
         String prefix = config.metricPrefix();
-        if (prefix == null) {
-            prefix = config.cloneConfig().shardName();
+        if (prefix == null ||  prefix.isBlank()) {
+            prefix = "euhedral";
         }
         prefix = prefix.split("\\.")[0];
 

@@ -1,21 +1,21 @@
 package test_utils;
 
 import euhedral.io.frames.AbstractFrame;
-import euhedral.io.generics.ScaffoldingSource;
-import euhedral.io.generics.ScaffoldingTerminal;
+import euhedral.io.generics.LatticeReceiver;
+import euhedral.io.generics.LatticeSource;
 import java.util.ArrayList;
 import java.util.List;
 
-public class TestTerminal implements ScaffoldingTerminal {
+public class TestReceiver implements LatticeReceiver {
 
     public final List<TestFrame> received = new ArrayList<>();
 
     public Throwable error;
     public boolean completed;
-    public ScaffoldingSource upstream;
+    public LatticeSource upstream;
 
     @Override
-    public void onNext(AbstractFrame frame) {
+    public void push(AbstractFrame frame) {
         received.add((TestFrame) frame);
     }
 
@@ -30,7 +30,7 @@ public class TestTerminal implements ScaffoldingTerminal {
     }
 
     @Override
-    public void addUpstream(ScaffoldingSource upstream) {
+    public void addUpstream(LatticeSource upstream) {
         this.upstream = upstream;
     }
 }

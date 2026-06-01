@@ -6,9 +6,10 @@ import euhedral.benchmarks.frames.ArrayFrame;
 import euhedral.benchmarks.frames.MandelbrotPixel;
 import euhedral.benchmarks.pipelines.FractalPipeline;
 import euhedral.hashing.HasherApi;
-import euhedral.io.config.DRRConfig;
-import euhedral.io.config.ExecutionManagerConfig;
-import euhedral.io.control_plane.ControlPlane;
+import euhedral.io.config.CacheConfig;
+import euhedral.io.config.ControlPlaneConfig;
+import euhedral.io.config.SchedulingConfig;
+import euhedral.io.control_plane.ControlPlaneLattice;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.reactor.common.EuhedralSubscriber;
 import euhedral.io.utils.MathFunctions;
@@ -36,17 +37,14 @@ import reactor.core.scheduler.Schedulers;
 @BenchmarkMode({Mode.AverageTime})
 public class BatchedMandelbrotBenchmark {
 
-    private static final long SEED = HasherApi.BASE_SEED;
-
     // 8K Resolution 2X SSAA (7680 * 4320 * 4 = 132,710,400 distinct tasks)
     public static final int WIDTH = 7680;
     public static final int HEIGHT = 4320;
     public static final int CANVAS = WIDTH * HEIGHT;
-
     public static final int BATCH = 1024;
-
     public static final int ITERATION_CAP = 5_000;
     public static final double BAILOUT_RADIUS_SQ = 1_000_000.0;
+    private static final long SEED = HasherApi.BASE_SEED;
     private static final double CENTER_X = -0.743_644_786_0;
     private static final double CENTER_Y = 0.131_825_253_6;
     private static final double H_DIAMETER = 0.000_002_936;
@@ -56,8 +54,8 @@ public class BatchedMandelbrotBenchmark {
         for (int i = CANVAS - 1; i > 0; i--) {
             int j = (int) MathFunctions.unsignedMultiplyHigh(HasherApi.mix(seed++), i + 1);
             MandelbrotPixel temp = pixels[i];
-            temp.randomizeHash(HasherApi.mix(seed));
-            pixels[j].randomizeHash(HasherApi.mix(seed++));
+            temp.randomizeHash(seed);
+            pixels[j].randomizeHash(seed++);
 
             pixels[i] = pixels[j];
             pixels[j] = temp;
@@ -201,7 +199,7 @@ public class BatchedMandelbrotBenchmark {
         private final PaddedLongAdder counters =
                 new PaddedLongAdder(Runtime.getRuntime().availableProcessors(), true, true);
 
-        private ControlPlane controlPlane;
+        private ControlPlaneLattice controlPlane;
         private ArrayFrame[] frames;
         private EuhedralSubscriber subscriber;
 
@@ -216,12 +214,13 @@ public class BatchedMandelbrotBenchmark {
                 throw new RuntimeException("degree is not set. Please run with -Ddegree=N");
             }
 
-            DRRConfig drrConfig = DRRConfig.defaultConfig("mandelbrot", null);
-            ExecutionManagerConfig emConfig = ExecutionManagerConfig.balancedDefault(null,
-                    "mandelbrot");
+            CacheConfig cacheConfig = CacheConfig.defaultConfig();
+            SchedulingConfig schedConfig = SchedulingConfig.balancedDefault();
             FractalPipeline pipeline =
-                    new FractalPipeline("MandelbrotBenchmark", drrConfig, emConfig, blackhole);
-            this.controlPlane = ControlPlane.getOrCreate("MandelbrotBenchmark", pipeline, null);
+                    new FractalPipeline(cacheConfig, schedConfig, blackhole);
+            ControlPlaneConfig config = new ControlPlaneConfig("MandelbrotBenchmark", null, null,
+                    pipeline, null, null);
+            this.controlPlane = ControlPlaneLattice.getOrCreate(config);
             this.controlPlane.start();
 
             MandelbrotPixel[] pixels = new MandelbrotPixel[CANVAS];
@@ -244,7 +243,7 @@ public class BatchedMandelbrotBenchmark {
                 AbstractFrame[] set = new AbstractFrame[Math.min(BATCH, total)];
                 System.arraycopy(pixels, idx * BATCH, set, 0, set.length);
                 this.frames[idx] = new ArrayFrame(pixels[0].getIdHash(), set, this.counters);
-                this.frames[idx].randomizeHash(HasherApi.mix(seed++));
+                this.frames[idx].randomizeHash(seed++);
                 total -= Math.min(BATCH, total);
                 idx++;
             }
@@ -261,7 +260,7 @@ public class BatchedMandelbrotBenchmark {
         @OperationsPerInvocation(CANVAS * 4)
         public void render(Blackhole blackhole) {
             Flux.fromArray(this.frames).subscribe(subscriber);
-            this.controlPlane.ingest(this.subscriber);
+            this.controlPlane.addUpstream(this.subscriber);
 
             waitOnRender(this.counters);
             blackhole.consume(this.escapes);

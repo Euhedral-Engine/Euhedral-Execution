@@ -2,25 +2,24 @@ package euhedral.io.flow_control;
 
 import static euhedral.io.utils.MathFunctions.unsignedMultiplyHigh;
 
+import euhedral.atomics.PaddedAtomicLong;
+import euhedral.io.flow_control.UpstreamQueue.UpstreamHandle;
+import euhedral.io.frames.AbstractFrame;
+import euhedral.io.generics.LatticeInterceptor;
+import euhedral.io.generics.LatticeSource;
+import euhedral.queues.PartitionedMpscArrayQueue;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.BitSet;
 import java.util.concurrent.atomic.AtomicBoolean;
-
-import euhedral.atomics.PaddedAtomicLong;
-import euhedral.io.flow_control.UpstreamQueue.UpstreamHandle;
-import euhedral.io.frames.AbstractFrame;
-import euhedral.io.generics.RecursiveScaffolding;
-import euhedral.io.generics.ScaffoldingSource;
-import euhedral.io.utils.DrainBuffer;
-import euhedral.queues.PartitionedMpscArrayQueue;
+import java.util.function.Consumer;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /// ## The main routing logic of Euhedral Core
 ///
-/// This class behaves similarly to [ScaffoldingEdge], but extends it with explicit fan-out routing
+/// This class behaves similarly to [LatticeEdge], but extends it with explicit fan-out routing
 /// across multiple downstream branches. It is responsible for distributing work deterministically
 /// across a fixed topology.
 ///
@@ -33,14 +32,14 @@ import org.slf4j.LoggerFactory;
 ///
 /// **Each frame is routed to exactly one downstream, ensuring stable partitioning under load.**
 @SuppressWarnings("unused")
-public class ScaffoldingNode extends ScaffoldingEdge implements AutoCloseable {
+public class LatticeVertex extends LatticeEdge implements AutoCloseable {
 
     protected static final VarHandle ROUTING_STATE;
 
     static {
         try {
             ROUTING_STATE = MethodHandles.lookup()
-                    .findVarHandle(ScaffoldingNode.class, "routingState", RoutingState.class);
+                    .findVarHandle(LatticeVertex.class, "routingState", RoutingState.class);
         } catch (Exception e) {
             throw new ExceptionInInitializerError(e);
         }
@@ -50,25 +49,29 @@ public class ScaffoldingNode extends ScaffoldingEdge implements AutoCloseable {
 
     protected final Logger logger;
     protected final String name;
+
+    /// This queue acts like a capacitor for contention. When the number of upstreams is very low,
+    /// downstream demand hits the same upstreams repeatedly. This small queue gives them another
+    /// squirrel to chase.
     protected final PartitionedMpscArrayQueue<AbstractFrame> parallelQueue;
 
-    protected final ScaffoldingEdge[] downstreams;
+    protected final LatticeEdge[] downstreams;
     protected final RoutingFunction routingFunction;
     private final PaddedAtomicLong wip;
 
     protected RoutingState routingState = new RoutingState(new int[0]);
 
-    public ScaffoldingNode(String name, int downstreamCount) {
+    public LatticeVertex(String name, int downstreamCount) {
         this(name, downstreamCount, RoutingFunction.DEFAULT, false);
     }
 
-    public ScaffoldingNode(String name, int downstreamCount, RoutingFunction routingFunction,
+    public LatticeVertex(String name, int downstreamCount, RoutingFunction routingFunction,
             boolean terminal) {
         super(new AtomicBoolean(false));
         this.terminal = terminal;
         this.logger = LoggerFactory.getLogger(name);
         this.name = name;
-        this.downstreams = new ScaffoldingEdge[downstreamCount];
+        this.downstreams = new LatticeEdge[downstreamCount];
         this.routingFunction = routingFunction;
         this.sibling = this;
         if (!terminal) {
@@ -80,7 +83,8 @@ public class ScaffoldingNode extends ScaffoldingEdge implements AutoCloseable {
         }
     }
 
-    public void ingest(ScaffoldingSource stream) {
+    /// Links the stream as an upstream source.
+    public void ingest(LatticeSource stream) {
         UpstreamInterceptor interceptor = new UpstreamInterceptor();
         stream.addDownstream(interceptor);
     }
@@ -89,14 +93,17 @@ public class ScaffoldingNode extends ScaffoldingEdge implements AutoCloseable {
         return this.drain;
     }
 
-    public boolean setDownstreamMapping(BitSet active, ScaffoldingEdge[] handles) {
+    /// Rebuilds the routing table and sets the new downstreams. Must be in drain mode to succeed.
+    ///
+    /// @return Whether the mapping was changed
+    public boolean setDownstreamMapping(BitSet active, LatticeEdge[] handles) {
         if (!this.drain.get()) {
             return false;
         }
 
-        ScaffoldingEdge first = null;
-        ScaffoldingEdge prev = null;
-        ScaffoldingEdge curr = null;
+        LatticeEdge first = null;
+        LatticeEdge prev = null;
+        LatticeEdge curr = null;
         int mIdx = 0;
         int[] mappings = new int[active.cardinality()];
         for (int i = 0; i < this.downstreams.length; i++) {
@@ -143,42 +150,48 @@ public class ScaffoldingNode extends ScaffoldingEdge implements AutoCloseable {
         return this.parallelQueue == null || this.parallelQueue.isEmpty();
     }
 
+    /// Adds the interceptor to the upstream. If it is a [LatticeEdge], it bubbles it up and sets
+    /// its downstream links' parents to the edge. If it is an [UpstreamHandle][UpstreamHandle], it
+    /// defaults to the logic in LatticeEdge.
     @Override
-    public void addUpstream(RecursiveScaffolding scaffolding) {
-        if (scaffolding instanceof ScaffoldingEdge dh) {
-            super.addUpstream(dh);
-            dh.addDownstream(this);
+    public void addUpstream(LatticeInterceptor interceptor) {
+        if (interceptor instanceof LatticeEdge edge) {
+            super.addUpstream(edge);
+            edge.addDownstream(this);
             for (var down : this.downstreams) {
                 if (down != null) {
-                    ScaffoldingEdge parent = (ScaffoldingEdge) PARENT.getOpaque(this);
+                    LatticeEdge parent = (LatticeEdge) PARENT.getOpaque(this);
                     down.setParent(parent);
                 }
             }
-        } else if (scaffolding instanceof UpstreamHandle interceptor) {
+        } else if (interceptor instanceof UpstreamHandle) {
             super.addUpstream(interceptor);
         }
     }
 
+    /// Picks a downstream link and sends work down.
     @Override
-    public void onNext(AbstractFrame frame) {
+    public void push(AbstractFrame frame) {
         RoutingState state = (RoutingState) ROUTING_STATE.getOpaque(this);
         int mapLen = state.mappings.length;
 
         int logicalIdx = this.routingFunction.route(frame, mapLen);
         int id = state.mappings[logicalIdx];
-        this.downstreams[id].onNext(frame);
+        this.downstreams[id].push(frame);
     }
 
+    /// Pulls available work from the `parallelQueue` if it is not null. Recursively climbs the
+    /// graph and does the same.
     @Override
-    public void pull(DrainBuffer buffer, long demand) {
-        if (demand <= 0 || buffer == null) {
+    public void pull(Consumer<AbstractFrame> consumer, long demand) {
+        if (demand <= 0 || consumer == null) {
             return;
         }
 
         if (this.parallelQueue != null && !this.parallelQueue.isEmpty()) {
             if (this.wip.compareAndSet(0, 1)) {
                 try {
-                    int count = this.parallelQueue.drain(buffer::accept, (int) demand);
+                    long count = this.parallelQueue.drain(consumer, demand);
                     demand -= count;
                 } finally {
                     this.wip.set(0);
@@ -186,9 +199,9 @@ public class ScaffoldingNode extends ScaffoldingEdge implements AutoCloseable {
             }
         }
 
-        ScaffoldingEdge parent = (ScaffoldingEdge) PARENT.getOpaque(this);
+        LatticeEdge parent = (LatticeEdge) PARENT.getOpaque(this);
         if (parent != null) {
-            parent.pull(buffer, demand);
+            parent.pull(consumer, demand);
         }
     }
 
@@ -201,6 +214,7 @@ public class ScaffoldingNode extends ScaffoldingEdge implements AutoCloseable {
         }
     }
 
+    /// Closes and removes all downstreams.
     @Override
     public void close() {
         super.close();
@@ -213,12 +227,15 @@ public class ScaffoldingNode extends ScaffoldingEdge implements AutoCloseable {
         ROUTING_STATE.setRelease(this, null);
     }
 
+    /// Defines how the [LatticeVertex] will pick which downstream to send work to.
     @FunctionalInterface
     public interface RoutingFunction {
 
         RoutingFunction DEFAULT =
-                (frame, mapSize) -> (int) unsignedMultiplyHigh(frame.getCombinedHash(), mapSize);
+                (frame, mapSize) -> (int) unsignedMultiplyHigh(frame.getRoutingHash(), mapSize);
 
+        /// @param frame   Frame to route
+        /// @param mapSize Length of the map array.
         int route(AbstractFrame frame, int mapSize);
     }
 
@@ -235,6 +252,8 @@ public class ScaffoldingNode extends ScaffoldingEdge implements AutoCloseable {
         }
     }
 
+    /// Wraps the [LatticeSource] in an object that contains the state of the stream. Requests and
+    /// pulls are guaranteed to be made by 1 thread at a time.
     public class UpstreamInterceptor extends UpstreamHandle {
 
         private static long addCap(long num1, long num2) {
@@ -248,17 +267,17 @@ public class ScaffoldingNode extends ScaffoldingEdge implements AutoCloseable {
         public final AtomicBoolean complete = new AtomicBoolean(false);
         private final PaddedAtomicLong wip = new PaddedAtomicLong(0);
         private final PaddedAtomicLong demand = new PaddedAtomicLong(0);
-        public ScaffoldingSource upstream;
+        public LatticeSource upstream;
         private long count = 0;
 
         @Override
-        public void addUpstream(@NonNull ScaffoldingSource upstream) {
+        public void addUpstream(@NonNull LatticeSource upstream) {
             this.upstream = upstream;
-            ScaffoldingNode.this.addUpstream(this);
+            LatticeVertex.this.addUpstream(this);
         }
 
         @Override
-        public void onNext(AbstractFrame frame) {
+        public void push(AbstractFrame frame) {
             if ((this.count++ & 63) == 0) {
                 frame.setIngestNs(System.nanoTime());
             } else {
@@ -266,26 +285,26 @@ public class ScaffoldingNode extends ScaffoldingEdge implements AutoCloseable {
             }
 
             if (frame.isOrdered()) {
-                ScaffoldingNode.this.onNext(frame);
+                LatticeVertex.this.push(frame);
                 return;
             }
 
-            boolean hasQueue = ScaffoldingNode.this.parallelQueue != null;
-            if (hasQueue && ScaffoldingNode.this.parallelQueue.offer(frame)) {
+            boolean hasQueue = LatticeVertex.this.parallelQueue != null;
+            if (hasQueue && LatticeVertex.this.parallelQueue.offer(frame)) {
                 return;
             }
 
-            ScaffoldingNode.this.onNext(frame);
+            LatticeVertex.this.push(frame);
         }
 
         @Override
-        public void pull(DrainBuffer buffer, long demand) {
-            ScaffoldingNode.this.pull(buffer, demand);
+        public void pull(Consumer<AbstractFrame> consumer, long demand) {
+            LatticeVertex.this.pull(consumer, demand);
         }
 
         @Override
         public void request(long num) {
-            if (num <= 0 || ScaffoldingNode.this.drain.getOpaque() || this.complete.getOpaque()) {
+            if (num <= 0 || LatticeVertex.this.drain.getOpaque() || this.complete.getOpaque()) {
                 return;
             }
 
@@ -295,7 +314,7 @@ public class ScaffoldingNode extends ScaffoldingEdge implements AutoCloseable {
                     this.upstream.request(demand);
                 } catch (Throwable t) {
                     logger.error("Upstream threw an exception during request", t);
-                    cancel();
+                    this.complete();
                 } finally {
                     this.wip.set(0);
                 }
@@ -308,7 +327,7 @@ public class ScaffoldingNode extends ScaffoldingEdge implements AutoCloseable {
                     this.upstream.request(d);
                 } catch (Throwable t) {
                     logger.error("UpstreamHandle threw an exception during request", t);
-                    cancel();
+                    this.complete();
                 } finally {
                     this.wip.set(0);
                 }
@@ -339,10 +358,10 @@ public class ScaffoldingNode extends ScaffoldingEdge implements AutoCloseable {
         }
 
         @Override
-        public void cancel() {
+        public void complete() {
             if (this.complete.compareAndSet(false, true)) {
-                logger.trace("UpstreamHandle Cancelled");
-                this.upstream.cancel();
+                logger.trace("Closing UpstreamHandle");
+                this.upstream.complete();
             }
         }
 

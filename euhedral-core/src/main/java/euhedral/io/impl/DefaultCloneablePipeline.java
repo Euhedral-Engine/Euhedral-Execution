@@ -1,67 +1,68 @@
 package euhedral.io.impl;
 
 import euhedral.hardware_utils.PinnedThreadExecutor;
-import euhedral.io.DRRCacheManager;
-import euhedral.io.ExecutionManager;
+import euhedral.io.config.CacheConfig;
 import euhedral.io.config.CloneConfig;
-import euhedral.io.config.DRRConfig;
-import euhedral.io.config.ExecutionManagerConfig;
+import euhedral.io.config.SchedulingConfig;
+import euhedral.io.control_plane.ControlPlaneCache;
+import euhedral.io.control_plane.ControlPlaneFragment;
 import euhedral.io.generics.AbstractCloneablePipeline;
 import euhedral.io.generics.CacheManager;
 import euhedral.io.generics.PipelineExecutor;
 import euhedral.io.generics.SlotManager;
 import io.micrometer.core.instrument.MeterRegistry;
 
+/// The minimal implementation of an [AbstractCloneablePipeline]
 public class DefaultCloneablePipeline extends AbstractCloneablePipeline {
 
-    private static DRRCacheManager getDrrScheduler(DRRConfig drrConfig) {
-        return new DRRCacheManager(drrConfig);
+    private static ControlPlaneCache getCache(CacheConfig cacheConfig) {
+        return new ControlPlaneCache(cacheConfig);
     }
 
-    private static ExecutionManager getSlotManager(ExecutionManagerConfig dsmConfig) {
-        return new ExecutionManager(dsmConfig);
+    private static ControlPlaneFragment getFragment(SchedulingConfig dsmConfig) {
+        return new ControlPlaneFragment(dsmConfig);
     }
 
-    public DefaultCloneablePipeline(String name) {
-        this(name, DRRConfig.defaultConfig(null, null),
-                ExecutionManagerConfig.balancedDefault(null, null), new DefaultExecutor(null));
+    public DefaultCloneablePipeline() {
+        this(CacheConfig.defaultConfig(null, null),
+                SchedulingConfig.balancedDefault(null, null), new DefaultExecutor(null));
     }
 
-    public DefaultCloneablePipeline(String name, String metricPrefix,
+    public DefaultCloneablePipeline(String metricPrefix,
             MeterRegistry meterRegistry) {
-        this(name, DRRConfig.defaultConfig(metricPrefix, meterRegistry),
-                ExecutionManagerConfig.balancedDefault(meterRegistry, metricPrefix),
+        this(CacheConfig.defaultConfig(metricPrefix, meterRegistry),
+                SchedulingConfig.balancedDefault(meterRegistry, metricPrefix),
                 new DefaultExecutor(null));
     }
 
-    public DefaultCloneablePipeline(String name, String metricPrefix,
+    public DefaultCloneablePipeline(String metricPrefix,
             MeterRegistry meterRegistry, PipelineExecutor executor) {
-        this(name,
-                DRRConfig.defaultConfig(metricPrefix, meterRegistry),
-                ExecutionManagerConfig.balancedDefault(meterRegistry, metricPrefix),
+        this(
+                CacheConfig.defaultConfig(metricPrefix, meterRegistry),
+                SchedulingConfig.balancedDefault(meterRegistry, metricPrefix),
                 executor);
     }
 
-    public DefaultCloneablePipeline(String name, DRRConfig drrConfig,
-            ExecutionManagerConfig dsmConfig) {
-        super(name, null, getDrrScheduler(drrConfig), getSlotManager(dsmConfig),
+    public DefaultCloneablePipeline(CacheConfig cacheConfig,
+            SchedulingConfig schedulingConfig) {
+        super(null, getCache(cacheConfig), getFragment(schedulingConfig),
                 new DefaultExecutor(null));
     }
 
-    public DefaultCloneablePipeline(String name, DRRConfig drrConfig,
-            ExecutionManagerConfig dsmConfig, PipelineExecutor executor) {
-        super(name, null, getDrrScheduler(drrConfig), getSlotManager(dsmConfig), executor);
+    public DefaultCloneablePipeline(CacheConfig cacheConfig,
+            SchedulingConfig schedulingConfig, PipelineExecutor executor) {
+        super(null, getCache(cacheConfig), getFragment(schedulingConfig), executor);
     }
 
-    private DefaultCloneablePipeline(String name, CloneConfig config, CacheManager scheduler,
+    private DefaultCloneablePipeline(CloneConfig config, CacheManager cacheManager,
             SlotManager slotManager, PipelineExecutor executor) {
-        super(name, config, scheduler, slotManager, executor);
+        super(config, cacheManager, slotManager, executor);
     }
 
     @Override
     public final DefaultCloneablePipeline clone(CloneConfig cloneConfig,
             PinnedThreadExecutor executor) {
-        return new DefaultCloneablePipeline(super.name, cloneConfig,
+        return new DefaultCloneablePipeline(cloneConfig,
                 super.cacheManager.clone(cloneConfig, executor),
                 super.slotManager.clone(cloneConfig, executor),
                 super.executor.clone(cloneConfig, executor));
@@ -71,8 +72,7 @@ public class DefaultCloneablePipeline extends AbstractCloneablePipeline {
     public final AbstractCloneablePipeline hookOnClone(CloneConfig cloneConfig) {
         CacheManager cManager = super.cacheManager.clone(cloneConfig);
         SlotManager sManager = super.slotManager.clone(cloneConfig);
-        return new DefaultCloneablePipeline(super.name, cloneConfig,
-                cManager, sManager,
+        return new DefaultCloneablePipeline(cloneConfig, cManager, sManager,
                 super.executor.clone(cloneConfig, sManager.getPinnedExecutor()));
     }
 }

@@ -3,7 +3,9 @@ package euhedral.io.frames;
 import euhedral.io.impl.FrameManager;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-public class RunnableFrame extends AbstractFrame {
+/// A generic frame that runs a function.
+@SuppressWarnings("unused")
+public final class RunnableFrame extends AbstractFrame {
 
     private final Runnable runnable;
     private final AtomicBoolean killSwitch;
@@ -36,7 +38,7 @@ public class RunnableFrame extends AbstractFrame {
     @Override
     public void kill() {
         if(killSwitch != null) {
-            killSwitch.set(true);
+            killSwitch.setRelease(true);
         }
     }
 }
