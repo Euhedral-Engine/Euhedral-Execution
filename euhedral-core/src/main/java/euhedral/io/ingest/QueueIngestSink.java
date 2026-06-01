@@ -8,7 +8,9 @@ import euhedral.queues.PartitionedUnboundedMpmcArrayQueue;
 import euhedral.queues.common.ConcurrentPartitionedQueue;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
+import java.util.Objects;
 import java.util.function.Consumer;
+import org.jspecify.annotations.NonNull;
 
 /// Wraps a partitioned queue to allow it to be fed into the
 /// [ControlPlaneLattice][ControlPlaneLattice]
@@ -21,13 +23,14 @@ public final class QueueIngestSink extends AbstractIngestSink {
         this(new PartitionedUnboundedMpmcArrayQueue<>(16_384));
     }
 
-    public QueueIngestSink(ConcurrentPartitionedQueue<AbstractFrame> queue) {
+    public QueueIngestSink(@NonNull ConcurrentPartitionedQueue<AbstractFrame> queue) {
+        Objects.requireNonNull(queue);
         this.delegate = new Delegate(queue);
     }
 
     @Override
     public LatticeSource getDelegate() {
-        return null;
+        return this.delegate;
     }
 
     /// Offers the object to each partition starting from 0 until it succeeds.
@@ -65,7 +68,7 @@ public final class QueueIngestSink extends AbstractIngestSink {
     }
 
     /// Disconnects from the [ControlPlaneLattice] when the queue is finished being drained.
-    public void gracefulComplete() {
+    public void completeGracefully() {
         this.delegate.gracefulComplete();
     }
 

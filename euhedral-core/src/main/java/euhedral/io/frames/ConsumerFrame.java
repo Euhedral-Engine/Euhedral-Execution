@@ -1,28 +1,35 @@
 package euhedral.io.frames;
 
 import euhedral.io.impl.FrameManager;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
-import lombok.Setter;
 
 /// A generic frame that consumes its payload when executed.
 public final class ConsumerFrame<T> extends AbstractFrame {
 
     private final Consumer<T> consumer;
     private final AtomicBoolean killSwitch;
-    @Setter
+
     private T payload;
 
-    public ConsumerFrame(long idHash, Consumer<T> consumer, AtomicBoolean killSwitch,
+    public ConsumerFrame(long idHash, Consumer<T> consumer, T payload) {
+        this(idHash, consumer, payload, null, null);
+    }
+
+    public ConsumerFrame(long idHash, Consumer<T> consumer, T payload, AtomicBoolean killSwitch,
             FrameManager<T, ConsumerFrame<T>> recycler) {
         super(idHash, recycler);
+        Objects.requireNonNull(consumer);
+        Objects.requireNonNull(payload);
         this.consumer = consumer;
         this.killSwitch = killSwitch;
+        this.payload = payload;
     }
 
     @Override
     public void execute() {
-        consumer.accept(payload);
+        this.consumer.accept(this.payload);
     }
 
     @Override
@@ -32,12 +39,17 @@ public final class ConsumerFrame<T> extends AbstractFrame {
 
     @Override
     public boolean isAlive() {
-        return !killSwitch.get();
+        if(this.killSwitch != null) {
+            return !killSwitch.getOpaque();
+        }
+        return true;
     }
 
     @Override
     public void kill() {
-        killSwitch.set(true);
+        if(this.killSwitch != null) {
+            killSwitch.setRelease(true);
+        }
     }
 
     public void replace(T object) {

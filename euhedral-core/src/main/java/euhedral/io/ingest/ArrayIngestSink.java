@@ -5,16 +5,19 @@ import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.LatticeReceiver;
 import euhedral.io.generics.LatticeSource;
 import java.lang.invoke.VarHandle;
+import java.util.Objects;
 import java.util.function.Consumer;
+import org.jspecify.annotations.NonNull;
 
 /// Wraps an array to allow it to be ingested by the
 /// [ControlPlaneLattice][ControlPlaneLattice]
 @SuppressWarnings("unused")
-public class ArrayIngestSink extends AbstractIngestSink {
+public final class ArrayIngestSink extends AbstractIngestSink {
 
     private final Delegate delegate;
 
-    public ArrayIngestSink(AbstractFrame[] frames) {
+    public ArrayIngestSink(@NonNull AbstractFrame[] frames) {
+        Objects.requireNonNull(frames);
         this.delegate = new Delegate(frames);
     }
 
@@ -29,6 +32,7 @@ public class ArrayIngestSink extends AbstractIngestSink {
         this.delegate.reset();
     }
 
+    /// Disconnects from the [ControlPlaneLattice] immediately.
     @Override
     public void complete() {
         delegate.complete();
