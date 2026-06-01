@@ -1,6 +1,6 @@
 package euhedral.hashing;
 
-public class ByteHasher extends AbstractHasher {
+public final class ByteHasher extends AbstractHasher {
 
     public static long getHash(byte[] data) {
         return getHash(data, BASE_SEED);

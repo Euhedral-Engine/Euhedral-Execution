@@ -5,11 +5,11 @@ public class AbstractHasher {
     public static final long BASE_SEED = 0x9e3779b97f4a7c15L;
 
     // xxHash64 Primes
-    protected static final long P1 = 0x9E3779B97F4A7C15L;   // 11400714819323198485
-    protected static final long P2 = 0x9E3779B185EBCA8FL;   // 11400714785074694799
-    protected static final long P3 = 0xC291F4F83810098FL;   // 14020256461910706575
-    protected static final long P4 = 0x53EF6F2651046A29L;   // 6048175034940549673
-    protected static final long P5 = 0x27D4EB2F165667C5L;   // 2870177450012600261
+    protected static final long P1 = 0x9E3779B185EBCA87L;
+    protected static final long P2 = 0xC2B2AE3D27D4EB4FL;
+    protected static final long P3 = 0x165667B19E3779F9L;
+    protected static final long P4 = 0x85EBCA77C2B2AE63L;
+    protected static final long P5 = 0x27D4EB2F165667C5L;
 
     protected static long merge(long v1, long v2, long v3, long v4) {
         long h64;
