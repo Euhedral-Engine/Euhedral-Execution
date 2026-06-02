@@ -254,6 +254,10 @@ public class BatchedMandelbrotBenchmark {
         public void setupInvocation() {
             this.counters.reset();
             makeSub();
+            long seed = SEED;
+            for(var f : this.frames) {
+                f.randomizeHash(seed++);
+            }
         }
 
         @Benchmark

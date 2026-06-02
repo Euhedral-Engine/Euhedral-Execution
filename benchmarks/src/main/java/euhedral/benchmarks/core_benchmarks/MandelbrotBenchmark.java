@@ -231,6 +231,10 @@ public class MandelbrotBenchmark {
         public void setupInvocation() {
             this.counters.reset();
             makeSub();
+            long seed = SEED;
+            for(var pixel : this.pixels) {
+                pixel.randomizeHash(seed++);
+            }
         }
 
         @Benchmark
