@@ -6,6 +6,9 @@ import euhedral.benchmarks.core_benchmarks.HighScaleBenchmark;
 import euhedral.benchmarks.core_benchmarks.MandelbrotBenchmark;
 import euhedral.benchmarks.core_benchmarks.ThroughputComparisonBenchmark;
 import euhedral.benchmarks.core_benchmarks.TrueThroughputBenchmark;
+import euhedral.benchmarks.queue_benchmarks.MPMCBenchmarks;
+import euhedral.benchmarks.queue_benchmarks.MPSCBenchmarks;
+import euhedral.benchmarks.queue_benchmarks.SPSCBenchmarks;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -29,7 +32,7 @@ public class BenchRunner {
         Set<String> benchmarks =
                 new TreeSet<>(
                         Set.of("all", "core-high-scale", "core-latency", "core-throughput", "core-throughput-comp",
-                                "batched-mandelbrot", "mandelbrot"));
+                                "batched-mandelbrot", "mandelbrot", "queues-spsc", "queues-mpsc", "queues-mpmc"));
         if (args.length == 0) {
             System.out.println("Please specify a benchmark to run. Options: " + benchmarks);
             return;
@@ -98,6 +101,9 @@ public class BenchRunner {
                 case "core-throughput" -> benchmark = TrueThroughputBenchmark.class;
                 case "core-throughput-comp" -> benchmark = ThroughputComparisonBenchmark.class;
                 case "core-latency" -> benchmark = EndToEndLatencyBenchmark.class;
+                case "queues-spsc" -> benchmark = SPSCBenchmarks.class;
+                case "queues-mpmc" -> benchmark = MPMCBenchmarks.class;
+                case "queues-mpsc" -> benchmark = MPSCBenchmarks.class;
                 default -> throw new IllegalArgumentException("Unknown benchmark: " + task);
             }
 
