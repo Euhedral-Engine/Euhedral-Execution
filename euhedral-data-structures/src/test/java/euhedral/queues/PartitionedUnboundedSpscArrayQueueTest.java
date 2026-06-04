@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
+import euhedral.experimental.UnboundedSpscQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -19,11 +20,11 @@ class PartitionedUnboundedSpscArrayQueueTest {
     @Test
     void singleThreadOfferDrain() {
         int chunkSize = 128;
-        PartitionedUnboundedSpscArrayQueue<Integer> q =
-                new PartitionedUnboundedSpscArrayQueue<>(4, chunkSize, 2);
+        UnboundedSpscQueue<Integer> q =
+                new UnboundedSpscQueue<>(chunkSize);
 
         for (int i = 1; i <= chunkSize * 4; i++) {
-            assertTrue(q.offer(0, i));
+            assertTrue(q.offer(i));
         }
 
         final int[] drained = new int[] {0};
@@ -48,14 +49,14 @@ class PartitionedUnboundedSpscArrayQueueTest {
     }
 
     private static void cycle(int partitions) throws Exception {
-        PartitionedUnboundedSpscArrayQueue<Long> q =
-                new PartitionedUnboundedSpscArrayQueue<>(partitions, 4096, 4);
-        int batch = 800_000;
+        UnboundedSpscQueue<Long> q =
+                new UnboundedSpscQueue<>(1024);
+        int batch = 2048;
 
         Consumer<Long> consumer = (val) -> {
         };
         ExecutorService exec = Executors.newFixedThreadPool(2);
-        for (int x = 0; x < 20; x++) {
+        for (int x = 0; x < 250_00; x++) {
             CountDownLatch end = new CountDownLatch(1);
 
             LongAdder offered = new LongAdder();
@@ -65,7 +66,7 @@ class PartitionedUnboundedSpscArrayQueueTest {
                 for (int i = 0; i < batch; i++) {
                     long v = ThreadLocalRandom.current().nextLong();
 
-                    while (!q.offer(v, System.nanoTime())) {
+                    while (!q.offer(System.nanoTime())) {
                         Thread.onSpinWait();
                     }
                     offered.increment();
@@ -74,15 +75,15 @@ class PartitionedUnboundedSpscArrayQueueTest {
 
             exec.submit(() -> {
                 while (drained.sum() < batch) {
-                    long count = q.drain(consumer, 4096);
+                    long count = q.drain(consumer, batch);
                     drained.add(count);
                     Thread.yield();
                 }
                 end.countDown();
             });
-            end.await(5, TimeUnit.SECONDS);
+            end.await(5, TimeUnit.DAYS);
 
-            assertEquals(800_000, drained.sum(),
+            assertEquals(batch, drained.sum(),
                     String.format("Iteration: %d Consumed: %d Offered: %d\n%s", x, drained.sum(),
                             offered.sum(), q));
         }

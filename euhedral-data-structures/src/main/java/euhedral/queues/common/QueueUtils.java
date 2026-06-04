@@ -1,11 +1,23 @@
 package euhedral.queues.common;
 
-import java.lang.management.ManagementFactory;
-
 import com.sun.management.HotSpotDiagnosticMXBean;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
+import java.lang.management.ManagementFactory;
+import java.util.function.Consumer;
 
 public class QueueUtils {
-    public static final long ULONG_MAX = 0xFFFFFFFFFFFFFFFFL;
+    static final VarHandle QUEUE = MethodHandles.arrayElementVarHandle(Object[].class);
+    public static final long ULONG_MAX = -1L;
+
+    public static final int SHIFT = 32;
+    public static final long UPPER_MASK = ULONG_MAX << SHIFT;
+    public static final long LOWER_MASK = ~UPPER_MASK;
+    public static final long INCREMENT = 1L << SHIFT;
+
+    public static final Object SENTINEL = new Object();
+    public static final Consumer<Object> NO_OP = o -> {};
+
     public static final int LONG_PAD = 15;
 
     public static final int REFERENCE_SIZE;
@@ -72,5 +84,45 @@ public class QueueUtils {
     public static long unsignedDiff(long head, long tail) {
         long diff = tail - head;
         return diff < 0 ? 0 : diff;
+    }
+
+    public static <T> Object loadAcquire(T[] queue, int cIdx) {
+        return QUEUE.getAcquire(queue, cIdx);
+    }
+
+    public static <T> void storeRelease(T[] queue, int cIdx, Object obj) {
+        QUEUE.setRelease(queue, cIdx, obj);
+    }
+
+    public static <T> void storeVolatile(T[] queue, int cIdx, Object obj) {
+        QUEUE.setVolatile(queue, cIdx, obj);
+    }
+
+    public static <T> Object compareAndExchange(T[] queue, int cIdx, Object curr, Object next) {
+        return QUEUE.compareAndExchange(queue, cIdx, curr, next);
+    }
+
+    public static long scaleAndAdd(long raw, int increment) {
+        long sum = (long) increment * INCREMENT;
+        return raw + sum;
+    }
+
+    public static int chunkIndex(long raw, long mask) {
+        raw >>>= SHIFT;
+        return (int) (raw & mask);
+    }
+
+    public static long packEpoch(long version, long epoch, long increment) {
+        version &= LOWER_MASK;
+        return packEpoch(epoch, increment) | version;
+    }
+
+    public static long packEpoch(long epoch, long increment) {
+        long packed = increment;
+        packed <<= SHIFT;
+        packed |= LOWER_MASK;
+
+        packed = epoch + packed;
+        return packed & UPPER_MASK;
     }
 }
