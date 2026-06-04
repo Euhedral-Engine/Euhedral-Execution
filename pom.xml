@@ -126,8 +126,8 @@
       </dependency>
       <dependency>
         <groupId>org.jctools</groupId>
-        <artifactId>jctools-core</artifactId>
-        <version>4.0.5</version>
+        <artifactId>jctools-core-jdk11</artifactId>
+        <version>4.0.6</version>
       </dependency>
       <dependency>
         <groupId>it.unimi.dsi</groupId>
