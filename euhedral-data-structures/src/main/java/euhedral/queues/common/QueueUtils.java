@@ -10,11 +10,6 @@ public class QueueUtils {
     static final VarHandle QUEUE = MethodHandles.arrayElementVarHandle(Object[].class);
     public static final long ULONG_MAX = -1L;
 
-    public static final int SHIFT = 32;
-    public static final long UPPER_MASK = ULONG_MAX << SHIFT;
-    public static final long LOWER_MASK = ~UPPER_MASK;
-    public static final long INCREMENT = 1L << SHIFT;
-
     public static final Object SENTINEL = new Object();
     public static final Consumer<Object> NO_OP = o -> {};
 
@@ -81,8 +76,8 @@ public class QueueUtils {
         return signedHigh + ((a >> 63) & b) + ((b >> 63) & a);
     }
 
-    public static long unsignedDiff(long head, long tail) {
-        long diff = tail - head;
+    public static long unsignedDiff(long back, long front) {
+        long diff = front - back;
         return diff < 0 ? 0 : diff;
     }
 
@@ -104,19 +99,5 @@ public class QueueUtils {
 
     public static int chunkIndex(long raw, long mask) {
         return (int) (raw & mask);
-    }
-
-    public static long packEpoch(long version, long epoch, long increment) {
-        version &= LOWER_MASK;
-        return packEpoch(epoch, increment) | version;
-    }
-
-    public static long packEpoch(long epoch, long increment) {
-        long packed = increment;
-        packed <<= SHIFT;
-        packed |= LOWER_MASK;
-
-        packed = epoch + packed;
-        return packed & UPPER_MASK;
     }
 }

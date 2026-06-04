@@ -8,39 +8,29 @@ import java.util.function.Consumer;
 @SuppressWarnings({"unused"})
 final class ScHeadState extends HeadState {
 
-    private final State state;
-    private final int chunkSize;
-    private final int mask;
+    private final int linkIndex;
+    private final long mask;
 
-    ScHeadState(Object[] queue, int mask) {
-        this.state = new State(queue);
-        this.chunkSize = mask + 1;
+    ScHeadState(Object[] queue, long mask) {
+        super(queue);
+        this.linkIndex = queue.length - 1;
         this.mask = mask;
     }
 
-    @Override
-    long getHeadAcquire() {
-        return (long) HEAD.getAcquire(this.state);
-    }
-
-    private void setHeadRelease(long head) {
-        HEAD.setRelease(this.state, head);
-    }
-
     public Object scPoll() {
-        long head = this.state.head;
+        long head = getHeadPlain();
         int cIdx = QueueUtils.chunkIndex(head, this.mask);
         Object obj = this.scPeekInternal(cIdx);
 
         if (obj != null) {
-            QueueUtils.storeRelease(state.queue, cIdx, null);
-            setHeadRelease(head + QueueUtils.INCREMENT);
+            clearHeadQueueSlotPlain(cIdx);
+            setHeadRelease(head + 1);
         }
         return obj;
     }
 
     public Object scPeek() {
-        long head = this.state.head;
+        long head = getHeadPlain();
         int cIdx = QueueUtils.chunkIndex(head, this.mask);
         return scPeekInternal(cIdx);
     }
@@ -51,16 +41,16 @@ final class ScHeadState extends HeadState {
             return 0;
         }
 
-        final long headSnapshot = this.state.head;
+        final long headSnapshot = getHeadPlain();
         long head = headSnapshot;
 
         // Acquire before touching the queue.
         VarHandle.acquireFence();
 
-        Object[] queue = this.state.queue;
+        Object[] queue = getHeadQueuePlain();
 
         long diff = 0;
-        while (diff < limit && diff < QueueUtils.LOWER_MASK) {
+        while (diff < limit) {
             int cIdx = QueueUtils.chunkIndex(head, this.mask);
             Object obj = queue[cIdx];
 
@@ -69,13 +59,13 @@ final class ScHeadState extends HeadState {
             }
 
             if (obj == QueueUtils.SENTINEL) {
-                Object[] temp = (Object[]) queue[this.chunkSize];
+                Object[] temp = (Object[]) queue[this.linkIndex];
                 if (temp == null) {
                     break;
                 }
-                queue[this.chunkSize] = null;
+                queue[this.linkIndex] = null;
                 queue = temp;
-                this.state.queue = queue;
+                setHeadQueuePlain(queue);
                 continue;
             }
 
@@ -94,20 +84,20 @@ final class ScHeadState extends HeadState {
     }
 
     private Object scPeekInternal(int cIdx) {
-        Object[] queue = this.state.queue;
+        Object[] queue = getHeadQueuePlain();
 
-        Object obj = QueueUtils.loadAcquire(this.state.queue, cIdx);
+        Object obj = QueueUtils.loadAcquire(queue, cIdx);
 
         if (obj == null) {
             return null;
         }
 
         if (obj == QueueUtils.SENTINEL) {
-            Object[] temp = (Object[]) QueueUtils.loadAcquire(queue, this.chunkSize);
-            this.state.queue = temp;
+            Object[] temp = (Object[]) QueueUtils.loadAcquire(queue, this.linkIndex);
+            setHeadQueuePlain(temp);
 
             obj = QueueUtils.loadAcquire(temp, cIdx);
-            QueueUtils.storeVolatile(queue, this.chunkSize, null);
+            QueueUtils.storeVolatile(queue, this.linkIndex, null);
         }
 
         return obj;
