@@ -17,22 +17,22 @@ abstract sealed class HeadState permits ScHeadState {
 
     abstract long getHeadAcquire();
 
-    protected static class PaddedHolder<T> extends HeadPad {
+    protected static class PaddedHolder extends HeadPad {
 
         long head;
 
     }
 
-    protected static class State<T> extends TailPad<T> {
+    protected static class State extends TailPad {
 
-        T[] queue;
-        State(T[] queue) {
+        Object[] queue;
+        State(Object[] queue) {
             this.queue = queue;
         }
 
     }
 
-    protected static class TailPad<T> extends PaddedHolder<T> {
+    protected static class TailPad extends PaddedHolder {
 
         private byte b000, b001, b002, b003, b004, b005, b006, b007;
         private byte b008, b009, b010, b011, b012, b013, b014, b015;

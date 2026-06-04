@@ -5,15 +5,15 @@ import java.lang.invoke.VarHandle;
 import java.util.Objects;
 import java.util.function.Consumer;
 
-@SuppressWarnings({"unchecked", "unused"})
-final class ScHeadState<T> extends HeadState {
+@SuppressWarnings({"unused"})
+final class ScHeadState extends HeadState {
 
-    private final State<T> state;
+    private final State state;
     private final int chunkSize;
     private final int mask;
 
-    ScHeadState(T[] queue, int mask) {
-        this.state = new State<>(queue);
+    ScHeadState(Object[] queue, int mask) {
+        this.state = new State(queue);
         this.chunkSize = mask + 1;
         this.mask = mask;
     }
@@ -27,10 +27,10 @@ final class ScHeadState<T> extends HeadState {
         HEAD.setRelease(this.state, head);
     }
 
-    public T scPoll() {
+    public Object scPoll() {
         long head = this.state.head;
         int cIdx = QueueUtils.chunkIndex(head, this.mask);
-        T obj = this.scPeekInternal(cIdx);
+        Object obj = this.scPeekInternal(cIdx);
 
         if (obj != null) {
             QueueUtils.storeRelease(state.queue, cIdx, null);
@@ -39,13 +39,13 @@ final class ScHeadState<T> extends HeadState {
         return obj;
     }
 
-    public T scPeek() {
+    public Object scPeek() {
         long head = this.state.head;
         int cIdx = QueueUtils.chunkIndex(head, this.mask);
         return scPeekInternal(cIdx);
     }
 
-    public long scDrain(Consumer<T> consumer, long limit) {
+    public long scDrain(Consumer<Object> consumer, long limit) {
         Objects.requireNonNull(consumer);
         if (limit <= 0) {
             return 0;
@@ -57,19 +57,19 @@ final class ScHeadState<T> extends HeadState {
         // Acquire before touching the queue.
         VarHandle.acquireFence();
 
-        T[] queue = this.state.queue;
+        Object[] queue = this.state.queue;
 
         long diff = 0;
         while (diff < limit && diff < QueueUtils.LOWER_MASK) {
             int cIdx = QueueUtils.chunkIndex(head, this.mask);
-            T obj = queue[cIdx];
+            Object obj = queue[cIdx];
 
             if (obj == null) {
                 break;
             }
 
             if (obj == QueueUtils.SENTINEL) {
-                T[] temp = (T[]) queue[this.chunkSize];
+                Object[] temp = (Object[]) queue[this.chunkSize];
                 if (temp == null) {
                     break;
                 }
@@ -81,7 +81,7 @@ final class ScHeadState<T> extends HeadState {
 
             consumer.accept(obj);
             queue[cIdx] = null;
-            head += QueueUtils.INCREMENT;
+            head++;
             diff = head - headSnapshot;
         }
 
@@ -93,20 +93,20 @@ final class ScHeadState<T> extends HeadState {
         return total;
     }
 
-    private T scPeekInternal(int cIdx) {
-        T[] queue = this.state.queue;
+    private Object scPeekInternal(int cIdx) {
+        Object[] queue = this.state.queue;
 
-        T obj = (T) QueueUtils.loadAcquire(this.state.queue, cIdx);
+        Object obj = QueueUtils.loadAcquire(this.state.queue, cIdx);
 
         if (obj == null) {
             return null;
         }
 
         if (obj == QueueUtils.SENTINEL) {
-            T[] temp = (T[]) QueueUtils.loadAcquire(queue, this.chunkSize);
+            Object[] temp = (Object[]) QueueUtils.loadAcquire(queue, this.chunkSize);
             this.state.queue = temp;
 
-            obj = (T) QueueUtils.loadAcquire(temp, cIdx);
+            obj = QueueUtils.loadAcquire(temp, cIdx);
             QueueUtils.storeVolatile(queue, this.chunkSize, null);
         }
 
