@@ -274,7 +274,7 @@ abstract sealed class ConcurrentPartitionedArrayQueue<T> extends PartitionedArra
         return 1L << (idx & 63);
     }
 
-    // State
+    // BaseHeadState
 
     public final boolean isRetired() {
         return super.retired.getAcquire();

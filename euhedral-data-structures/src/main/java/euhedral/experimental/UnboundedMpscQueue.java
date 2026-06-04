@@ -5,15 +5,15 @@ import java.util.function.Consumer;
 import lombok.Getter;
 
 @SuppressWarnings({"unchecked", "unused"})
-public class UnboundedSpscQueue<T> {
+public class UnboundedMpscQueue<T> {
 
     private final ScHeadState headState;
-    private final SpTailState tailState;
+    private final MpTailState tailState;
 
     @Getter
     private final int chunkSize;
 
-    public UnboundedSpscQueue(int chunkSize) {
+    public UnboundedMpscQueue(int chunkSize) {
         if (chunkSize <= 0) {
             throw new IllegalArgumentException("chunkSize must be positive");
         }
@@ -21,15 +21,15 @@ public class UnboundedSpscQueue<T> {
         chunkSize = Integer.highestOneBit((chunkSize - 1) << 1);
         this.chunkSize = chunkSize;
 
-        T[] queue = (T[]) new Object[chunkSize + 1];
+        Object[] queue = new Object[chunkSize + 1];
 
         int chunkMask = chunkSize - 1;
         this.headState = new ScHeadState(queue, chunkMask);
-        this.tailState = new SpTailState(this.headState, queue, chunkMask);
+        this.tailState = new MpTailState(this.headState, queue, chunkMask);
     }
 
     public boolean offer(T obj) {
-        this.tailState.scOffer(obj);
+        this.tailState.offer(obj);
         return true;
     }
 
