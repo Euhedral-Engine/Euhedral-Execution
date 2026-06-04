@@ -102,13 +102,7 @@ public class QueueUtils {
         return QUEUE.compareAndExchange(queue, cIdx, curr, next);
     }
 
-    public static long scaleAndAdd(long raw, int increment) {
-        long sum = (long) increment * INCREMENT;
-        return raw + sum;
-    }
-
     public static int chunkIndex(long raw, long mask) {
-        raw >>>= SHIFT;
         return (int) (raw & mask);
     }
 
