@@ -10,6 +10,10 @@ public class QueueUtils {
     static final VarHandle QUEUE = MethodHandles.arrayElementVarHandle(Object[].class);
     public static final long ULONG_MAX = -1L;
 
+    public static final int SHIFT = 1;
+    public static final int INCREMENT = 2;
+    public static final int HALF_INCREMENT = 1;
+
     public static final Object SENTINEL = new Object();
     public static final Consumer<Object> NO_OP = o -> {};
 
@@ -98,6 +102,6 @@ public class QueueUtils {
     }
 
     public static int chunkIndex(long raw, long mask) {
-        return (int) (raw & mask);
+        return (int) ((raw & mask) >>> SHIFT) + SHIFT;
     }
 }

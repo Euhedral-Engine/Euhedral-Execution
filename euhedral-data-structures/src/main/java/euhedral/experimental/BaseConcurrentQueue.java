@@ -1,5 +1,9 @@
 package euhedral.experimental;
 
+import static euhedral.queues.common.QueueUtils.HALF_INCREMENT;
+import static euhedral.queues.common.QueueUtils.INCREMENT;
+import static euhedral.queues.common.QueueUtils.SHIFT;
+
 import euhedral.queues.common.QueueUtils;
 import java.lang.invoke.VarHandle;
 import java.util.Objects;
@@ -7,6 +11,7 @@ import java.util.function.Consumer;
 
 @SuppressWarnings("unused")
 abstract class TailPad extends AbstractConcurrentQueue {
+
     private long p00, p01, p02, p03, p04, p05, p06, p07;
     private long p08, p09, p10, p11, p12, p13, p14, p15;
 
@@ -17,136 +22,6 @@ abstract class TailPad extends AbstractConcurrentQueue {
 
 @SuppressWarnings("unused")
 public abstract class BaseConcurrentQueue extends TailPad {
-    protected final long slots;
-    protected final long chunkMask;
-    protected final long shiftedMask;
-    protected final int linkIndex;
-
-    protected BaseConcurrentQueue(Object[] queue, long mask) {
-        super(queue);
-        this.slots = mask + 1;
-        this.chunkMask = mask;
-        this.shiftedMask = mask << 1;
-        this.linkIndex = queue.length - 1;
-    }
-
-    // ----- Single Producer -----
-    protected void spFill(Object[] objs) {
-        for(Object obj : objs) {
-            spOffer(obj);
-        }
-    }
-
-    protected void spFill(Iterable<Object> objs) {
-        for(Object obj : objs) {
-            spOffer(obj);
-        }
-    }
-
-    protected final void spOffer(Object obj) {
-        Objects.requireNonNull(obj);
-
-        long tail = getTailPlain(this);
-        long tailEpoch = getTailEpochPlain(this);
-
-        if (tail < tailEpoch) {
-            storeInTailQueuePlain(this, QueueUtils.chunkIndex(tail, this.chunkMask), obj);
-            setTailRelease(this, tail + 1);
-            return;
-        }
-
-        spSlowStore(obj, tail);
-    }
-
-    private void spSlowStore(Object obj, long tail) {
-        int cIdx = QueueUtils.chunkIndex(tail, this.chunkMask);
-
-        long head = getHeadAcquire(this);
-
-        long diff = QueueUtils.unsignedDiff(head, tail);
-        if (diff < this.chunkMask) {
-            addTailEpochPlain(this, this.chunkMask - diff);
-            storeInTailQueuePlain(this, cIdx, obj);
-            setTailRelease(this, tail + 1);
-            return;
-        }
-
-        Object[] nextQueue = linkChunk(getTailQueuePlain(this), cIdx);
-        setTailQueuePlain(this, nextQueue);
-
-        addTailEpochPlain(this, this.chunkMask);
-
-        nextQueue[cIdx] = obj;
-        setTailRelease(this, tail + 1);
-    }
-
-    // ----- Multi Producer -----
-
-    protected final void mpFill(Object[] objs) {
-        for(Object obj : objs) {
-            mpOffer(obj);
-        }
-    }
-
-    protected final void mpFill(Iterable<Object> objs) {
-        for(Object obj : objs) {
-            mpOffer(obj);
-        }
-    }
-
-    protected final void mpOffer(Object obj) {
-        Objects.requireNonNull(obj);
-
-        int cIdx;
-        Object[] queue;
-        while(true) {
-            long tail = getTailAcquire(this);
-
-            if((tail & 1) == 1) {
-                continue;
-            }
-
-            queue = getTailQueueAcquire(this);
-            long epoch = getTailEpochAcquire(this);
-            // Fastest
-            if((epoch - tail) > 0) {
-                if(!casTail(this, tail, tail + 2)) {
-                    continue;
-                }
-                cIdx = QueueUtils.chunkIndex(tail, this.shiftedMask) >>> 1;
-                break;
-            }
-            // Slower
-            if(updateTailEpoch(tail, epoch)) {
-                continue;
-            }
-
-            // Slowest
-            if (casTail(this, tail, tail + 1)) {
-                cIdx = QueueUtils.chunkIndex(tail, this.shiftedMask) >>> 1;
-                queue = linkChunk(queue, cIdx);
-                setTailQueuePlain(this, queue);
-                setTailEpochPlain(this, tail + this.shiftedMask - 1);
-                getAndAddTail(this, 1);
-                break;
-            }
-        }
-        QueueUtils.storeRelease(queue, cIdx, obj);
-    }
-
-    private boolean updateTailEpoch(long tail, long epoch) {
-        long head = getHeadAcquire(this);
-        tail >>>= 1;
-
-        long distance = tail - head;
-        long diff = this.slots - distance - 1;
-        if(diff > 0) {
-            long update = diff << 1;
-            casTailEpoch(this, epoch, epoch + update);
-            return true;
-        }
-        return false;
-    }
 
     private static Object[] linkChunk(Object[] oldQueue, int cIdx) {
         Object[] nextQueue = new Object[oldQueue.length];
@@ -157,6 +32,139 @@ public abstract class BaseConcurrentQueue extends TailPad {
         QueueUtils.storeVolatile(oldQueue, cIdx, QueueUtils.SENTINEL);
         return nextQueue;
     }
+    protected final long slots;
+    protected final long chunkMask;
+    protected final int linkIndex;
+
+    protected BaseConcurrentQueue(int chunkSize) {
+        super(new Object[(int) roundChunkSize(chunkSize) + 2]);
+        this.slots = this.headQueue.length - (SHIFT * 2 + 1);
+        this.chunkMask = this.slots << SHIFT;
+        this.linkIndex = this.headQueue.length - 1;
+    }
+
+    // ----- Single Producer -----
+    protected final void spFill(Object[] objs) {
+        Objects.requireNonNull(objs);
+        for (Object obj : objs) {
+            spOffer(obj);
+        }
+    }
+
+    protected final void spFill(Iterable<Object> objs) {
+        Objects.requireNonNull(objs);
+        for (Object obj : objs) {
+            spOffer(obj);
+        }
+    }
+
+    protected final void spOffer(Object obj) {
+        Objects.requireNonNull(obj);
+
+        long tail = getTailPlain(this);
+        long tailEpoch = getTailEpochPlain(this);
+
+        if ((tailEpoch - tail) > 0) {
+            storeInTailQueuePlain(this, QueueUtils.chunkIndex(tail, this.chunkMask), obj);
+            setTailRelease(this, tail + INCREMENT);
+            return;
+        }
+
+        spSlowStore(obj, tail);
+    }
+
+    // ----- Multi Producer -----
+
+    private void spSlowStore(Object obj, long tail) {
+        int cIdx = QueueUtils.chunkIndex(tail, this.chunkMask);
+
+        long head = getHeadAcquire(this);
+
+        long distance = tail - head;
+        long diff = this.slots - distance;
+        if (diff >= 0) {
+            addTailEpochPlain(this, diff << SHIFT);
+            storeInTailQueuePlain(this, cIdx, obj);
+            setTailRelease(this, tail + INCREMENT);
+            return;
+        }
+
+        Object[] nextQueue = linkChunk(getTailQueuePlain(this), cIdx);
+        setTailQueuePlain(this, nextQueue);
+
+        addTailEpochPlain(this, this.slots << SHIFT);
+
+        nextQueue[cIdx] = obj;
+        setTailRelease(this, tail + INCREMENT);
+    }
+
+    protected final void mpFill(Object[] objs) {
+        for (Object obj : objs) {
+            mpOffer(obj);
+        }
+    }
+
+    protected final void mpFill(Iterable<Object> objs) {
+        for (Object obj : objs) {
+            mpOffer(obj);
+        }
+    }
+
+    protected final void mpOffer(Object obj) {
+        Objects.requireNonNull(obj);
+
+        int cIdx;
+        Object[] queue;
+        while (true) {
+            long tail = getTailAcquire(this);
+
+            // If odd, resizing.
+            if ((tail & HALF_INCREMENT) == 1) {
+                continue;
+            }
+
+            // Get the current chunk before trying to claim a slot
+            queue = getTailQueueAcquire(this);
+
+            long epoch = getTailEpochAcquire(this);
+            // Fastest
+            if ((epoch - tail) > 0) {
+                if (!casTail(this, tail, tail + INCREMENT)) {
+                    continue;
+                }
+                cIdx = QueueUtils.chunkIndex(tail, this.chunkMask);
+                break;
+            }
+            // Slower
+            if (updateTailEpoch(tail, epoch)) {
+                continue;
+            }
+
+            // Slowest
+            if (casTail(this, tail, tail + HALF_INCREMENT)) {
+                cIdx = QueueUtils.chunkIndex(tail, this.chunkMask);
+                queue = linkChunk(queue, cIdx);
+                setTailQueuePlain(this, queue);
+                setTailEpochPlain(this, tail + this.slots);
+                getAndAddTail(this, HALF_INCREMENT);
+                break;
+            }
+        }
+        QueueUtils.storeRelease(queue, cIdx, obj);
+    }
+
+    private boolean updateTailEpoch(long tail, long epoch) {
+        long head = getHeadAcquire(this);
+
+        long distance = tail - head;
+        long diff = this.slots - distance;
+        if (diff >= 0) {
+            long update = diff << SHIFT;
+            casTailEpoch(this, epoch, epoch + update);
+            return true;
+        }
+        return false;
+    }
 
     // ----- Single Consumer -----
 
@@ -166,8 +174,8 @@ public abstract class BaseConcurrentQueue extends TailPad {
         Object obj = this.scPeekInternal(cIdx);
 
         if (obj != null) {
-            clearHeadQueueSlotPlain(this, cIdx);
-            setHeadRelease(this, head + 1);
+            setHeadQueueSlotPlain(this, cIdx, null);
+            setHeadRelease(this, head + INCREMENT);
         }
         return obj;
     }
@@ -178,16 +186,15 @@ public abstract class BaseConcurrentQueue extends TailPad {
             return 0;
         }
 
-        final long headSnapshot = getHeadPlain(this);
-        long head = headSnapshot;
+        long head = getHeadPlain(this);
 
         // Acquire before touching the queue.
         VarHandle.acquireFence();
 
         Object[] queue = getHeadQueuePlain(this);
 
-        long diff = 0;
-        while (diff < limit) {
+        long total = 0;
+        while (total < limit) {
             int cIdx = QueueUtils.chunkIndex(head, this.chunkMask);
             Object obj = queue[cIdx];
 
@@ -206,13 +213,12 @@ public abstract class BaseConcurrentQueue extends TailPad {
                 continue;
             }
 
+            setHeadQueueSlotPlain(this, cIdx, null);
             consumer.accept(obj);
-            queue[cIdx] = null;
-            head++;
-            diff = head - headSnapshot;
+            head += INCREMENT;
+            total++;
         }
 
-        long total = head - headSnapshot;
         VarHandle.releaseFence();
 
         setHeadRelease(this, head);

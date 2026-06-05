@@ -4,10 +4,10 @@ import euhedral.queues.common.QueueUtils;
 import java.util.function.Consumer;
 
 @SuppressWarnings({"unchecked", "unused"})
-public class UnboundedMpscQueue<T> extends BaseConcurrentQueue {
+public final class UnboundedMpscQueue<T> extends BaseConcurrentQueue {
 
     public UnboundedMpscQueue(int chunkSize) {
-        super(new Object[(int) roundChunkSize(chunkSize) + 1], roundChunkSize(chunkSize) - 1);
+        super(chunkSize);
     }
 
     public boolean offer(T obj) {
