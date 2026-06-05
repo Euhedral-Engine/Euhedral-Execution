@@ -4,10 +4,10 @@ import euhedral.queues.common.QueueUtils;
 import java.util.function.Consumer;
 
 @SuppressWarnings({"unchecked", "unused"})
-public class UnboundedSpscQueue<T> extends BaseConcurrentQueue {
+public final class UnboundedSpscQueue<T> extends BaseConcurrentQueue {
 
     public UnboundedSpscQueue(int chunkSize) {
-        super(new Object[(int) roundChunkSize(chunkSize) + 1], roundChunkSize(chunkSize) - 1);
+        super(chunkSize);
     }
 
     public boolean offer(T obj) {
