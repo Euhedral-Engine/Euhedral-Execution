@@ -131,10 +131,11 @@ public abstract class BaseConcurrentQueue extends TailPad {
                 continue;
             }
 
-            // Get the current chunk before trying to claim a slot
-            queue = getTailQueueAcquire(this);
-
             long epoch = getTailEpochAcquire(this);
+
+            // Get the current chunk before trying to claim a slot
+            queue = getTailQueuePlain(this);
+
             // Fastest
             if ((epoch - tail) > 0) {
                 if (!casTail(this, tail, tail + INCREMENT)) {
@@ -145,6 +146,10 @@ public abstract class BaseConcurrentQueue extends TailPad {
             }
             // Slower
             if (updateTailEpoch(tail, epoch)) {
+                if(casTail(this, tail, tail + INCREMENT)) {
+                    cIdx = QueueUtils.chunkIndex(tail, this.chunkMask);
+                    break;
+                }
                 continue;
             }
 
