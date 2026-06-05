@@ -21,7 +21,7 @@ class PartitionedUnboundedSpscArrayQueueTest {
     void singleThreadOfferDrain() {
         int chunkSize = 128;
         UnboundedSpscQueue<Integer> q =
-                new UnboundedSpscQueue<>(chunkSize);
+                new UnboundedSpscQueue<>(chunkSize, 2);
 
         for (int i = 1; i <= chunkSize * 4; i++) {
             assertTrue(q.offer(i));
@@ -50,7 +50,7 @@ class PartitionedUnboundedSpscArrayQueueTest {
 
     private static void cycle(int partitions) throws Exception {
         UnboundedSpscQueue<Long> q =
-                new UnboundedSpscQueue<>(1024);
+                new UnboundedSpscQueue<>(1024, 4);
         int batch = 2048;
 
         Consumer<Long> consumer = (val) -> {

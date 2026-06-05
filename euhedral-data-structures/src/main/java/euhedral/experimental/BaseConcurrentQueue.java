@@ -23,15 +23,13 @@ abstract class TailPad extends AbstractConcurrentQueue {
 @SuppressWarnings("unused")
 public abstract class BaseConcurrentQueue extends TailPad {
 
-    private static Object[] linkChunk(Object[] oldQueue, int cIdx) {
-        Object[] nextQueue = new Object[oldQueue.length];
-
+    private static void linkChunk(Object[] oldQueue, Object[] nextQueue, int cIdx) {
         oldQueue[oldQueue.length - 1] = nextQueue;
 
         // Publish must happen after link.
         QueueUtils.storeVolatile(oldQueue, cIdx, QueueUtils.SENTINEL);
-        return nextQueue;
     }
+
     protected final long slots;
     protected final long chunkMask;
     protected final int linkIndex;
@@ -41,6 +39,13 @@ public abstract class BaseConcurrentQueue extends TailPad {
         this.slots = this.headQueue.length - (SHIFT * 2 + 1);
         this.chunkMask = this.slots << SHIFT;
         this.linkIndex = this.headQueue.length - 1;
+    }
+
+    protected Object[] allocateChunk(int chunkSize) {
+        return new Object[chunkSize];
+    }
+
+    protected void freeChunk(Object[] chunk) {
     }
 
     // ----- Single Producer -----
@@ -73,8 +78,6 @@ public abstract class BaseConcurrentQueue extends TailPad {
         spSlowStore(obj, tail);
     }
 
-    // ----- Multi Producer -----
-
     private void spSlowStore(Object obj, long tail) {
         int cIdx = QueueUtils.chunkIndex(tail, this.chunkMask);
 
@@ -89,7 +92,10 @@ public abstract class BaseConcurrentQueue extends TailPad {
             return;
         }
 
-        Object[] nextQueue = linkChunk(getTailQueuePlain(this), cIdx);
+        Object[] oldQueue = getTailQueuePlain(this);
+        Object[] nextQueue = allocateChunk(oldQueue.length);
+        linkChunk(oldQueue, nextQueue, cIdx);
+
         setTailQueuePlain(this, nextQueue);
 
         addTailEpochPlain(this, this.slots << SHIFT);
@@ -97,6 +103,8 @@ public abstract class BaseConcurrentQueue extends TailPad {
         nextQueue[cIdx] = obj;
         setTailRelease(this, tail + INCREMENT);
     }
+
+    // ----- Multi Producer -----
 
     protected final void mpFill(Object[] objs) {
         for (Object obj : objs) {
@@ -143,7 +151,11 @@ public abstract class BaseConcurrentQueue extends TailPad {
             // Slowest
             if (casTail(this, tail, tail + HALF_INCREMENT)) {
                 cIdx = QueueUtils.chunkIndex(tail, this.chunkMask);
-                queue = linkChunk(queue, cIdx);
+
+                Object[] nextQueue = allocateChunk(queue.length);
+                linkChunk(queue, nextQueue, cIdx);
+
+                queue = nextQueue;
                 setTailQueuePlain(this, queue);
                 setTailEpochPlain(this, tail + this.slots);
                 getAndAddTail(this, HALF_INCREMENT);
@@ -204,10 +216,8 @@ public abstract class BaseConcurrentQueue extends TailPad {
 
             if (obj == QueueUtils.SENTINEL) {
                 Object[] temp = (Object[]) queue[this.linkIndex];
-                if (temp == null) {
-                    break;
-                }
-                queue[this.linkIndex] = null;
+                queue[cIdx] = null;
+                freeChunk(queue);
                 queue = temp;
                 setHeadQueuePlain(this, queue);
                 continue;
@@ -243,6 +253,8 @@ public abstract class BaseConcurrentQueue extends TailPad {
 
         if (obj == QueueUtils.SENTINEL) {
             Object[] temp = (Object[]) QueueUtils.loadAcquire(queue, this.linkIndex);
+            queue[cIdx] = null;
+            freeChunk(queue);
             setHeadQueuePlain(this, temp);
 
             obj = QueueUtils.loadAcquire(temp, cIdx);
@@ -250,5 +262,15 @@ public abstract class BaseConcurrentQueue extends TailPad {
         }
 
         return obj;
+    }
+
+    public final long sizeLong() {
+        long head = getHeadAcquire(this);
+        long tail = getTailAcquire(this);
+        return tail - head;
+    }
+
+    public final int size() {
+        return (int) Math.min(sizeLong(), Integer.MAX_VALUE);
     }
 }
