@@ -94,8 +94,8 @@ public abstract class AbstractConcurrentQueue extends TailState {
         impl.headQueue = queue;
     }
 
-    protected static void clearHeadQueueSlotPlain(AbstractConcurrentQueue impl, int cIdx) {
-        impl.headQueue[cIdx] = null;
+    protected static void setHeadQueueSlotPlain(AbstractConcurrentQueue impl, int cIdx, Object obj) {
+        impl.headQueue[cIdx] = obj;
     }
 
     // ----- TAIL -----
