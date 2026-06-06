@@ -85,14 +85,6 @@ public abstract class AbstractConcurrentQueue extends StartPad {
         super(queue);
     }
 
-    protected static long roundChunkSize(long chunkSize) {
-        if (chunkSize <= 0) {
-            throw new IllegalArgumentException("chunkSize must be positive");
-        }
-
-        return Long.highestOneBit((chunkSize - 1) << 1);
-    }
-
     // ----- HEAD -----
 
     protected static long getHeadPlain(AbstractConcurrentQueue impl) {
