@@ -9,14 +9,13 @@ public final class UnboundedSpscQueue<T> extends BaseConcurrentQueue {
     private final ChunkAllocator allocator;
 
     public UnboundedSpscQueue(int chunkSize) {
-        super(chunkSize);
-        this.allocator = null;
+        this(chunkSize, 0);
     }
 
     public UnboundedSpscQueue(int chunkSize, int maxPooledChunks) {
         super(chunkSize);
 
-        if(maxPooledChunks > 0) {
+        if (maxPooledChunks > 0) {
             this.allocator = new ChunkAllocator(maxPooledChunks, maxPooledChunks);
         } else {
             this.allocator = null;
@@ -56,16 +55,16 @@ public final class UnboundedSpscQueue<T> extends BaseConcurrentQueue {
 
     @Override
     protected Object[] allocateChunk(int chunkSize) {
-        if(allocator == null) {
+        if (this.allocator == null) {
             return new Object[chunkSize];
         }
-        return allocator.allocate(chunkSize);
+        return this.allocator.allocate(chunkSize);
     }
 
     @Override
     protected void freeChunk(Object[] chunk) {
-        if(allocator != null) {
-            allocator.free(chunk);
+        if (this.allocator != null) {
+            this.allocator.free(chunk);
         }
     }
 }
