@@ -21,7 +21,7 @@ class PartitionedUnboundedMpscArrayQueueTest {
     void singleThreadOfferDrain() {
         int chunkSize = 128;
         UnboundedMpscQueue<Integer> q =
-                new UnboundedMpscQueue<>(chunkSize);
+                new UnboundedMpscQueue<>(chunkSize, 2);
 
         for (int i = 1; i <= chunkSize * 4; i++) {
             assertTrue(q.offer(i));
@@ -50,7 +50,7 @@ class PartitionedUnboundedMpscArrayQueueTest {
 
     private void cycle(int partitions) {
         UnboundedMpscQueue<Long> q =
-                new UnboundedMpscQueue<>(4096);
+                new UnboundedMpscQueue<>(4096, 2);
         int batch = 100_000;
 
         Consumer<Long> consumer = (val) -> {
