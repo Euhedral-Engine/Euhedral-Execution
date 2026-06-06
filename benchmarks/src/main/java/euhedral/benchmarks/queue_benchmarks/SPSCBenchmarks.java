@@ -46,7 +46,7 @@ public class SPSCBenchmarks {
 
         private final SpscUnboundedVarHandleArrayQueue<Integer> jcTools = new SpscUnboundedVarHandleArrayQueue<>(1024);
         private final UnboundedSpscQueue<Integer> euhedral = new UnboundedSpscQueue<>(
-                1024);
+                1024, 2);
         private final CyclicBarrier barrier = new CyclicBarrier(3);
         private final PinnedThreadExecutor[] pool = new PinnedThreadExecutor[2];
         private QueueConsumer consumer;
