@@ -4,45 +4,67 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 
 @SuppressWarnings("unused")
-abstract class HeadPad {
+abstract class TailPad {
     private long p00, p01, p02, p03, p04, p05, p06, p07;
     private long p08, p09, p10, p11, p12, p13, p14, p15;
 }
 
-abstract class HeadState extends HeadPad {
+abstract class TailState extends TailPad {
+
+    protected long tail;
+
+}
+
+@SuppressWarnings("unused")
+abstract class MidPad1 extends TailState {
+    private long p00, p01, p02, p03, p04, p05, p06, p07;
+    private long p08, p09, p10, p11, p12, p13, p14, p15;
+}
+
+abstract class HeadState extends MidPad1 {
     protected long head;
     protected Object[] headQueue;
 
     HeadState(Object[] queue) {
         this.headQueue = queue;
     }
+
 }
 
 @SuppressWarnings("unused")
-abstract class MidPad extends HeadState {
+abstract class MidPad2 extends HeadState {
 
     private long p00, p01, p02, p03, p04, p05, p06, p07;
-    private long p08, p09, p10, p11, p12, p13, p14, p15;
+    private long p08, p09, p10, p11, p12, p13, p14;
 
-    MidPad(Object[] queue) {
+    MidPad2(Object[] queue) {
         super(queue);
     }
+
 }
 
-abstract class TailState extends MidPad {
-
-    protected long tail;
+abstract class TailState2 extends MidPad2 {
     protected long tailEpoch;
     protected Object[] tailQueue;
 
-    TailState(Object[] queue) {
+    TailState2(Object[] queue) {
         super(queue);
         this.tailQueue = queue;
     }
 }
 
 @SuppressWarnings("unused")
-public abstract class AbstractConcurrentQueue extends TailState {
+abstract class StartPad extends TailState2 {
+    private long p00, p01, p02, p03, p04, p05, p06, p07;
+    private long p08, p09, p10, p11, p12, p13, p14, p15;
+
+    StartPad(Object[] queue) {
+        super(queue);
+    }
+}
+
+@SuppressWarnings("unused")
+public abstract class AbstractConcurrentQueue extends StartPad {
     protected static final VarHandle HEAD;
     protected static final VarHandle TAIL;
     protected static final VarHandle EPOCH;
@@ -112,6 +134,10 @@ public abstract class AbstractConcurrentQueue extends TailState {
         return (long) TAIL.getAcquire(impl);
     }
 
+    protected static void setTailPlain(AbstractConcurrentQueue impl, long tail) {
+        impl.tail = tail;
+    }
+
     protected static void setTailRelease(AbstractConcurrentQueue impl, long tail) {
         TAIL.setRelease(impl, tail);
     }
@@ -122,6 +148,10 @@ public abstract class AbstractConcurrentQueue extends TailState {
 
     protected static boolean casTail(AbstractConcurrentQueue impl, long current, long next) {
         return TAIL.compareAndSet(impl, current, next);
+    }
+
+    protected static long caeTail(AbstractConcurrentQueue impl, long current, long next) {
+        return (long) TAIL.compareAndExchange(impl, current, next);
     }
 
     // ----- TAIL EPOCH -----
@@ -136,6 +166,10 @@ public abstract class AbstractConcurrentQueue extends TailState {
 
     protected static void setTailEpochPlain(AbstractConcurrentQueue impl, long epoch) {
         impl.tailEpoch = epoch;
+    }
+
+    protected static void setTailEpochRelease(AbstractConcurrentQueue impl, long epoch) {
+        EPOCH.setRelease(impl, epoch);
     }
 
     protected static void addTailEpochPlain(AbstractConcurrentQueue impl, long value) {

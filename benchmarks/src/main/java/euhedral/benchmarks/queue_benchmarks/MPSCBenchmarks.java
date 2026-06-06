@@ -1,15 +1,12 @@
 package euhedral.benchmarks.queue_benchmarks;
 
-import euhedral.atomics.PaddedAtomicReferenceArray;
+import euhedral.experimental.UnboundedMpscQueue;
 import euhedral.hardware_utils.PinnedThreadExecutor;
-import euhedral.hashing.HasherApi;
-import euhedral.io.utils.MathFunctions;
-import euhedral.queues.PartitionedUnboundedMpscArrayQueue;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import org.jctools.queues.MessagePassingQueue;
-import org.jctools.queues.MpscUnboundedXaddArrayQueue;
+import org.jctools.queues.varhandle.MpscUnboundedVarHandleArrayQueue;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -40,36 +37,26 @@ public class MPSCBenchmarks {
     @Fork(1)
     @BenchmarkMode({Mode.AverageTime})
     @OutputTimeUnit(TimeUnit.NANOSECONDS)
-    @Warmup(iterations = 3, time = 5, timeUnit = TimeUnit.SECONDS)
-    @Measurement(iterations = 5, time = 3, timeUnit = TimeUnit.SECONDS)
+    @Warmup(iterations = 3, time = 3, timeUnit = TimeUnit.SECONDS)
+    @Measurement(iterations = 5, time = 5, timeUnit = TimeUnit.SECONDS)
     @State(Scope.Benchmark)
     public static class BatchSizeProfile {
-        private final PaddedAtomicReferenceArray<MpscUnboundedXaddArrayQueue<Integer>> jcTools = new PaddedAtomicReferenceArray<>(4);
-        private final PartitionedUnboundedMpscArrayQueue<Integer> euhedral = new PartitionedUnboundedMpscArrayQueue<>(
-                4, 4096);
+        private final MpscUnboundedVarHandleArrayQueue<Integer> jcTools = new MpscUnboundedVarHandleArrayQueue<>(4096);
+        private final UnboundedMpscQueue<Integer> euhedral = new UnboundedMpscQueue<>(4096);
         private final CyclicBarrier start = new CyclicBarrier(17);
-        private final CyclicBarrier end = new CyclicBarrier(18);
+        private final CyclicBarrier end = new CyclicBarrier(2);
         private final PinnedThreadExecutor[] executors = new PinnedThreadExecutor[32];
         private QueueConsumer consumer;
 
-        private final Integer[] values = new Integer[4096];
 
-        private final long seed = HasherApi.BASE_SEED;
-
-        @Param({"64", "512", "1024", "2048"})
+        @Param({"64", "512", "2048"})
         private int batchSize;
 
         @Setup(Level.Trial)
         public void setup(Blackhole blackhole) {
-            for(int i = 0; i < jcTools.length(); i++) {
-                jcTools.set(i, new MpscUnboundedXaddArrayQueue<>(4096, 4));
-            }
             consumer = new QueueConsumer(blackhole);
             for (int i = 0; i < executors.length; i++) {
-                executors[i] = PinnedThreadExecutor.getOrSetIfAbsent(i, "Thread-" + i, Thread.MAX_PRIORITY, true);
-            }
-            for(int i = 0; i < values.length; i++){
-                values[i] = i;
+                executors[i] = PinnedThreadExecutor.getOrSetIfAbsent(i, "Thread-" + i, Thread.MAX_PRIORITY, false);
             }
         }
 
@@ -80,15 +67,11 @@ public class MPSCBenchmarks {
                 executors[t].execute(() -> {
                     try {
                         start.await();
-                        long seed = this.seed;
                         for (int i = 0; i < 4096; i++) {
-                            int idx = jcTools.fromRawIdx(HasherApi.mix(seed++));
-                            idx = (int) MathFunctions.unsignedMultiplyHigh(idx, euhedral.partitions());
-                            while (!jcTools.getPlain(idx).relaxedOffer(values[i])) {
+                            while (!jcTools.offer(1)) {
                                 Thread.onSpinWait();
                             }
                         }
-                        end.await();
                     } catch (Throwable e) {
                         throw new RuntimeException(e);
                     }
@@ -100,13 +83,8 @@ public class MPSCBenchmarks {
                     start.await();
                     int count = 0;
                     while (count != 65_536) {
-                        for(int i = 0; i < jcTools.length() && count < 65_536; i++) {
-                            int batch = Math.min(batchSize, 65_536 - count);
-                            int c = jcTools.getPlain(i).drain(consumer, batch);
-                            count += c;
-
-                        }
-                        Thread.onSpinWait();
+                        int c = jcTools.drain(consumer, batchSize);
+                        count += c;
                     }
                     end.await();
                 } catch (Throwable e) {
@@ -123,15 +101,11 @@ public class MPSCBenchmarks {
                 executors[t].execute(() -> {
                     try {
                         start.await();
-                        long seed = this.seed;
                         for (int i = 0; i < 4096; i++) {
-                            int idx = jcTools.fromRawIdx(HasherApi.mix(seed++));
-                            idx = (int) MathFunctions.unsignedMultiplyHigh(idx, euhedral.partitions());
-                            while (!euhedral.offer(idx, values[i])) {
+                            while (!euhedral.offer(1)) {
                                 Thread.onSpinWait();
                             }
                         }
-                        end.await();
                     } catch (Throwable e) {
                         throw new RuntimeException(e);
                     }
@@ -143,8 +117,7 @@ public class MPSCBenchmarks {
                     start.await();
                     long count = 0;
                     while (count != 65_536) {
-                        long batch = Math.min(batchSize, 65_536 - count);
-                        long c = euhedral.drain(consumer, batch);
+                        long c = euhedral.drain(consumer, batchSize);
                         count += c;
                     }
                     end.await();
@@ -153,6 +126,151 @@ public class MPSCBenchmarks {
                 }
             });
             end.await();
+        }
+
+        @TearDown(Level.Trial)
+        public void teardown() {
+            PinnedThreadExecutor.closeAll();
+        }
+    }
+
+    @Fork(1)
+    @BenchmarkMode({Mode.AverageTime})
+    @OutputTimeUnit(TimeUnit.NANOSECONDS)
+    @Warmup(iterations = 3, time = 3, timeUnit = TimeUnit.SECONDS)
+    @Measurement(iterations = 5, time = 5, timeUnit = TimeUnit.SECONDS)
+    @State(Scope.Benchmark)
+    public static class Regimes {
+        private final MpscUnboundedVarHandleArrayQueue<Integer> jcTools = new MpscUnboundedVarHandleArrayQueue<>(4096);
+        private final UnboundedMpscQueue<Integer> euhedral = new UnboundedMpscQueue<>(4096);
+
+        private final CyclicBarrier start16 = new CyclicBarrier(16);
+        private final CyclicBarrier end17 = new CyclicBarrier(17);
+
+        private final CyclicBarrier start2 = new CyclicBarrier(2);
+        private final CyclicBarrier end2 = new CyclicBarrier(2);
+
+        private final PinnedThreadExecutor[] executors = new PinnedThreadExecutor[32];
+        private QueueConsumer consumer;
+
+        @Setup(Level.Trial)
+        public void setup(Blackhole blackhole) {
+            consumer = new QueueConsumer(blackhole);
+            for (int i = 0; i < executors.length; i++) {
+                executors[i] = PinnedThreadExecutor.getOrSetIfAbsent(i, "Thread-" + i, Thread.MAX_PRIORITY, false);
+            }
+        }
+
+        @Setup(Level.Invocation)
+        public void clear() {
+            start16.reset();
+            end17.reset();
+            start2.reset();
+            end2.reset();
+            jcTools.clear();
+            euhedral.clear();
+        }
+
+        @Benchmark
+        @OperationsPerInvocation(65_536)
+        public void jcOffer() throws Throwable {
+            for(int t = 0; t < 16; t++) {
+                executors[t].execute(() -> {
+                    try {
+                        start16.await();
+                        for (int i = 0; i < 4096; i++) {
+                            while (!jcTools.offer(1)) {
+                                Thread.onSpinWait();
+                            }
+                        }
+                        end17.await();
+                    } catch (Throwable e) {
+                        throw new RuntimeException(e);
+                    }
+                });
+            }
+            end17.await();
+        }
+
+        @Benchmark
+        @OperationsPerInvocation(65_536)
+        public void euhedralOffer() throws Throwable {
+            for(int t = 0; t < 16; t++) {
+                executors[t].execute(() -> {
+                    try {
+                        start16.await();
+                        for (int i = 0; i < 4096; i++) {
+                            while (!euhedral.offer(1)) {
+                                Thread.onSpinWait();
+                            }
+                        }
+                        end17.await();
+                    } catch (Throwable e) {
+                        throw new RuntimeException(e);
+                    }
+                });
+            }
+            end17.await();
+        }
+
+        @Benchmark
+        @OperationsPerInvocation(65_536)
+        public void jcOfferDrain1v1() throws Throwable {
+            executors[1].execute(() -> {
+                try {
+                    start2.await();
+                    for (int i = 0; i < 65_536; i++) {
+                        while (!jcTools.offer(1)) {
+                            Thread.onSpinWait();
+                        }
+                    }
+                } catch (Throwable e) {
+                    throw new RuntimeException(e);
+                }
+            });
+            executors[3].execute(() -> {
+                try {
+                    start2.await();
+                    int count = 0;
+                    while (count != 65_536) {
+                        count += jcTools.drain(consumer, 2048);
+                    }
+                    end2.await();
+                } catch (Throwable e) {
+                    throw new RuntimeException(e);
+                }
+            });
+            end2.await();
+        }
+
+        @Benchmark
+        @OperationsPerInvocation(65_536)
+        public void euhedralOfferDrain1v1() throws Throwable {
+            executors[1].execute(() -> {
+                try {
+                    start2.await();
+                    for (int i = 0; i < 65_536; i++) {
+                        while (!euhedral.offer(1)) {
+                            Thread.onSpinWait();
+                        }
+                    }
+                } catch (Throwable e) {
+                    throw new RuntimeException(e);
+                }
+            });
+            executors[3].execute(() -> {
+                try {
+                    start2.await();
+                    long count = 0;
+                    while (count != 65_536) {
+                        count += euhedral.drain(consumer, 2048);
+                    }
+                    end2.await();
+                } catch (Throwable e) {
+                    throw new RuntimeException(e);
+                }
+            });
+            end2.await();
         }
 
         @TearDown(Level.Trial)

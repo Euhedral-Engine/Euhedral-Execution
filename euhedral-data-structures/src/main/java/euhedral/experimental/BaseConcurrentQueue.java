@@ -10,18 +10,7 @@ import java.util.Objects;
 import java.util.function.Consumer;
 
 @SuppressWarnings("unused")
-abstract class TailPad extends AbstractConcurrentQueue {
-
-    private long p00, p01, p02, p03, p04, p05, p06, p07;
-    private long p08, p09, p10, p11, p12, p13, p14, p15;
-
-    TailPad(Object[] queue) {
-        super(queue);
-    }
-}
-
-@SuppressWarnings("unused")
-public abstract class BaseConcurrentQueue extends TailPad {
+public abstract class BaseConcurrentQueue extends AbstractConcurrentQueue {
 
     private static void linkChunk(Object[] oldQueue, Object[] nextQueue, int cIdx) {
         oldQueue[oldQueue.length - 1] = nextQueue;
@@ -30,14 +19,12 @@ public abstract class BaseConcurrentQueue extends TailPad {
         QueueUtils.storeVolatile(oldQueue, cIdx, QueueUtils.SENTINEL);
     }
 
-    protected final long slots;
     protected final long chunkMask;
     protected final int linkIndex;
 
     protected BaseConcurrentQueue(int chunkSize) {
         super(new Object[(int) roundChunkSize(chunkSize) + 2]);
-        this.slots = this.headQueue.length - (SHIFT * 2 + 1);
-        this.chunkMask = this.slots << SHIFT;
+        this.chunkMask = this.headQueue.length - (SHIFT * 2 + 1) << SHIFT;
         this.linkIndex = this.headQueue.length - 1;
     }
 
@@ -84,9 +71,8 @@ public abstract class BaseConcurrentQueue extends TailPad {
         long head = getHeadAcquire(this);
 
         long distance = tail - head;
-        long diff = this.slots - distance;
-        if (diff >= 0) {
-            addTailEpochPlain(this, diff << SHIFT);
+        if (head + this.chunkMask > tail) {
+            addTailEpochPlain(this, this.chunkMask);
             storeInTailQueuePlain(this, cIdx, obj);
             setTailRelease(this, tail + INCREMENT);
             return;
@@ -98,7 +84,7 @@ public abstract class BaseConcurrentQueue extends TailPad {
 
         setTailQueuePlain(this, nextQueue);
 
-        addTailEpochPlain(this, this.slots << SHIFT);
+        addTailEpochPlain(this, this.chunkMask);
 
         nextQueue[cIdx] = obj;
         setTailRelease(this, tail + INCREMENT);
@@ -136,7 +122,6 @@ public abstract class BaseConcurrentQueue extends TailPad {
             // Get the current chunk before trying to claim a slot
             queue = getTailQueuePlain(this);
 
-            // Fastest
             if ((epoch - tail) > 0) {
                 if (!casTail(this, tail, tail + INCREMENT)) {
                     continue;
@@ -144,8 +129,14 @@ public abstract class BaseConcurrentQueue extends TailPad {
                 cIdx = QueueUtils.chunkIndex(tail, this.chunkMask);
                 break;
             }
-            // Slower
-            if (updateTailEpoch(tail, epoch)) {
+
+            // Update epoch
+            long head = getHeadAcquire(this);
+            if (head + this.chunkMask > tail) {
+                if(!casTailEpoch(this, epoch, head + this.chunkMask)) {
+                    continue;
+                }
+
                 if(casTail(this, tail, tail + INCREMENT)) {
                     cIdx = QueueUtils.chunkIndex(tail, this.chunkMask);
                     break;
@@ -153,34 +144,20 @@ public abstract class BaseConcurrentQueue extends TailPad {
                 continue;
             }
 
-            // Slowest
-            if (casTail(this, tail, tail + HALF_INCREMENT)) {
+            if(casTail(this, tail, tail + HALF_INCREMENT)) {
                 cIdx = QueueUtils.chunkIndex(tail, this.chunkMask);
 
                 Object[] nextQueue = allocateChunk(queue.length);
-                linkChunk(queue, nextQueue, cIdx);
-
-                queue = nextQueue;
-                setTailQueuePlain(this, queue);
-                setTailEpochPlain(this, tail + this.slots);
+                setTailQueuePlain(this, nextQueue);
+                setTailEpochPlain(this, tail + this.chunkMask);
                 getAndAddTail(this, HALF_INCREMENT);
+
+                linkChunk(queue, nextQueue, cIdx);
+                queue = nextQueue;
                 break;
             }
         }
         QueueUtils.storeRelease(queue, cIdx, obj);
-    }
-
-    private boolean updateTailEpoch(long tail, long epoch) {
-        long head = getHeadAcquire(this);
-
-        long distance = tail - head;
-        long diff = this.slots - distance;
-        if (diff >= 0) {
-            long update = diff << SHIFT;
-            casTailEpoch(this, epoch, epoch + update);
-            return true;
-        }
-        return false;
     }
 
     // ----- Single Consumer -----
