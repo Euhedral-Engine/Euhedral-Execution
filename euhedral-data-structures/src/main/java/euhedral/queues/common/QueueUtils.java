@@ -11,8 +11,8 @@ public class QueueUtils {
     public static final long ULONG_MAX = -1L;
 
     public static final int SHIFT = 1;
-    public static final int INCREMENT = 2;
-    public static final int HALF_INCREMENT = 1;
+    public static final long INCREMENT = 1L << SHIFT;
+    public static final long HALF_INCREMENT = INCREMENT >>> 1;
 
     public static final Object SENTINEL = new Object();
     public static final Consumer<Object> NO_OP = o -> {};
@@ -103,5 +103,23 @@ public class QueueUtils {
 
     public static int chunkIndex(long raw, long mask) {
         return (int) ((raw & mask) >>> SHIFT) + SHIFT;
+    }
+
+    public static long chunkMask(int chunkSize) {
+        long chunkMask = roundChunkSize(chunkSize) - 1;
+        return chunkMask << SHIFT;
+    }
+
+    public static int queueSize(int chunkSize) {
+        int rounded = (int) roundChunkSize(chunkSize);
+        return rounded + (SHIFT * 2);
+    }
+
+    public static long roundChunkSize(long chunkSize) {
+        if (chunkSize <= 0) {
+            throw new IllegalArgumentException("chunkSize must be positive");
+        }
+
+        return Long.highestOneBit((chunkSize - 1) << 1);
     }
 }
