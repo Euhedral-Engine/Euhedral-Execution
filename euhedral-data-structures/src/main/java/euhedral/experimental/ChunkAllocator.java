@@ -1,10 +1,12 @@
 package euhedral.experimental;
 
+import euhedral.queues.common.QueueUtils;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
+import java.util.function.Consumer;
 
-@SuppressWarnings("unused")
-public final class ChunkAllocator extends BaseConcurrentQueue {
+@SuppressWarnings({"unchecked", "unused", "rawtypes"})
+final class ChunkAllocator extends BaseConcurrentQueue {
 
     private static final VarHandle STORED;
 
@@ -44,5 +46,42 @@ public final class ChunkAllocator extends BaseConcurrentQueue {
 
         chunk[chunk.length - 1] = null;
         spOffer(chunk);
+    }
+
+    @Override
+    public boolean offer(Object obj) {
+        return false;
+    }
+
+    @Override
+    public Object peek() {
+        return null;
+    }
+
+    @Override
+    public Object poll() {
+        return null;
+    }
+
+    @Override
+    public void fill(Object[] objs) {
+
+    }
+
+    @Override
+    public void fill(Iterable objs) {
+
+    }
+
+    @Override
+    public long drain(Consumer consumer, long limit) {
+        return 0;
+    }
+
+    @Override
+    public void clear() {
+        while (scDrain(QueueUtils.NO_OP, Long.MAX_VALUE) > 0) {
+            Thread.onSpinWait();
+        }
     }
 }
