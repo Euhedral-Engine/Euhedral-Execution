@@ -2,7 +2,6 @@ package euhedral.experimental;
 
 import static euhedral.queues.common.QueueUtils.HALF_INCREMENT;
 import static euhedral.queues.common.QueueUtils.INCREMENT;
-import static euhedral.queues.common.QueueUtils.SHIFT;
 
 import euhedral.queues.common.QueueUtils;
 import java.lang.invoke.VarHandle;
@@ -23,8 +22,8 @@ public abstract class BaseConcurrentQueue extends AbstractConcurrentQueue {
     protected final int linkIndex;
 
     protected BaseConcurrentQueue(int chunkSize) {
-        super(new Object[(int) roundChunkSize(chunkSize) + 2]);
-        this.chunkMask = this.headQueue.length - (SHIFT * 2 + 1) << SHIFT;
+        super(new Object[QueueUtils.queueSize(chunkSize)]);
+        this.chunkMask = QueueUtils.chunkMask(chunkSize);
         this.linkIndex = this.headQueue.length - 1;
     }
 
@@ -62,32 +61,25 @@ public abstract class BaseConcurrentQueue extends AbstractConcurrentQueue {
             return;
         }
 
-        spSlowStore(obj, tail);
-    }
-
-    private void spSlowStore(Object obj, long tail) {
         int cIdx = QueueUtils.chunkIndex(tail, this.chunkMask);
-
         long head = getHeadAcquire(this);
 
-        long distance = tail - head;
         if (head + this.chunkMask > tail) {
-            addTailEpochPlain(this, this.chunkMask);
+            setTailEpochPlain(this, head + this.chunkMask);
             storeInTailQueuePlain(this, cIdx, obj);
-            setTailRelease(this, tail + INCREMENT);
+            getAndAddTail(this, INCREMENT);
             return;
         }
 
         Object[] oldQueue = getTailQueuePlain(this);
         Object[] nextQueue = allocateChunk(oldQueue.length);
+        nextQueue[cIdx] = obj;
+
         linkChunk(oldQueue, nextQueue, cIdx);
 
         setTailQueuePlain(this, nextQueue);
-
         addTailEpochPlain(this, this.chunkMask);
-
-        nextQueue[cIdx] = obj;
-        setTailRelease(this, tail + INCREMENT);
+        getAndAddTail(this, INCREMENT);
     }
 
     // ----- Multi Producer -----
@@ -180,10 +172,10 @@ public abstract class BaseConcurrentQueue extends AbstractConcurrentQueue {
             return 0;
         }
 
-        long head = getHeadPlain(this);
-
         // Acquire before touching the queue.
         VarHandle.acquireFence();
+
+        long head = getHeadPlain(this);
 
         Object[] queue = getHeadQueuePlain(this);
 
@@ -196,22 +188,21 @@ public abstract class BaseConcurrentQueue extends AbstractConcurrentQueue {
                 break;
             }
 
+            queue[cIdx] = null;
             if (obj == QueueUtils.SENTINEL) {
-                Object[] temp = (Object[]) queue[this.linkIndex];
-                queue[cIdx] = null;
-                freeChunk(queue);
-                queue = temp;
+                Object[] retired = queue;
+                queue = (Object[]) queue[this.linkIndex];
+
+                freeChunk(retired);
+
                 setHeadQueuePlain(this, queue);
                 continue;
             }
 
-            setHeadQueueSlotPlain(this, cIdx, null);
             consumer.accept(obj);
             head += INCREMENT;
             total++;
         }
-
-        VarHandle.releaseFence();
 
         setHeadRelease(this, head);
 

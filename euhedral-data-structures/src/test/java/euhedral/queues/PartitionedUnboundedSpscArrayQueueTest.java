@@ -50,7 +50,7 @@ class PartitionedUnboundedSpscArrayQueueTest {
 
     private static void cycle(int partitions) throws Exception {
         UnboundedSpscQueue<Long> q =
-                new UnboundedSpscQueue<>(1024, 4);
+                new UnboundedSpscQueue<>(256, 4);
         int batch = 2048;
 
         Consumer<Long> consumer = (val) -> {
