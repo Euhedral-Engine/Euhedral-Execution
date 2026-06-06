@@ -4,12 +4,13 @@ import static euhedral.queues.common.QueueUtils.HALF_INCREMENT;
 import static euhedral.queues.common.QueueUtils.INCREMENT;
 
 import euhedral.queues.common.QueueUtils;
+import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.Objects;
 import java.util.function.Consumer;
 
-@SuppressWarnings("unused")
-public abstract class BaseConcurrentQueue extends AbstractConcurrentQueue {
+@SuppressWarnings({"rawtypes","unused"})
+public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue {
 
     private static void linkChunk(Object[] oldQueue, Object[] nextQueue, int cIdx) {
         oldQueue[oldQueue.length - 1] = nextQueue;
@@ -22,10 +23,24 @@ public abstract class BaseConcurrentQueue extends AbstractConcurrentQueue {
     protected final int linkIndex;
 
     protected BaseConcurrentQueue(int chunkSize) {
-        super(new Object[QueueUtils.queueSize(chunkSize)]);
-        this.chunkMask = QueueUtils.chunkMask(chunkSize);
+        super(new Object[QueueUtils.queueSize(Math.max(chunkSize, 2))]);
+        this.chunkMask = QueueUtils.chunkMask(Math.max(chunkSize, 2));
         this.linkIndex = this.headQueue.length - 1;
     }
+
+    public abstract boolean offer(T obj);
+
+    public abstract T peek();
+
+    public abstract T poll();
+
+    public abstract void fill(T[] objs);
+
+    public abstract void fill(Iterable<T> objs);
+
+    public abstract long drain(Consumer<T> consumer, long limit);
+
+    public abstract void clear();
 
     protected Object[] allocateChunk(int chunkSize) {
         return new Object[chunkSize];
@@ -35,6 +50,7 @@ public abstract class BaseConcurrentQueue extends AbstractConcurrentQueue {
     }
 
     // ----- Single Producer -----
+
     protected final void spFill(Object[] objs) {
         Objects.requireNonNull(objs);
         for (Object obj : objs) {
@@ -125,18 +141,18 @@ public abstract class BaseConcurrentQueue extends AbstractConcurrentQueue {
             // Update epoch
             long head = getHeadAcquire(this);
             if (head + this.chunkMask > tail) {
-                if(!casTailEpoch(this, epoch, head + this.chunkMask)) {
+                if (!casTailEpoch(this, epoch, head + this.chunkMask)) {
                     continue;
                 }
 
-                if(casTail(this, tail, tail + INCREMENT)) {
+                if (casTail(this, tail, tail + INCREMENT)) {
                     cIdx = QueueUtils.chunkIndex(tail, this.chunkMask);
                     break;
                 }
                 continue;
             }
 
-            if(casTail(this, tail, tail + HALF_INCREMENT)) {
+            if (casTail(this, tail, tail + HALF_INCREMENT)) {
                 cIdx = QueueUtils.chunkIndex(tail, this.chunkMask);
 
                 Object[] nextQueue = allocateChunk(queue.length);
@@ -192,6 +208,7 @@ public abstract class BaseConcurrentQueue extends AbstractConcurrentQueue {
             if (obj == QueueUtils.SENTINEL) {
                 Object[] retired = queue;
                 queue = (Object[]) queue[this.linkIndex];
+                retired[this.linkIndex] = null;
 
                 freeChunk(retired);
 
@@ -227,6 +244,8 @@ public abstract class BaseConcurrentQueue extends AbstractConcurrentQueue {
         if (obj == QueueUtils.SENTINEL) {
             Object[] temp = (Object[]) QueueUtils.loadAcquire(queue, this.linkIndex);
             queue[cIdx] = null;
+            queue[this.linkIndex] = null;
+
             freeChunk(queue);
             setHeadQueuePlain(this, temp);
 
@@ -245,5 +264,47 @@ public abstract class BaseConcurrentQueue extends AbstractConcurrentQueue {
 
     public final int size() {
         return (int) Math.min(sizeLong(), Integer.MAX_VALUE);
+    }
+
+    public final boolean isEmpty() {
+        return sizeLong() == 0;
+    }
+
+    private abstract static class MCAccessFlag<T> extends BaseConcurrentQueue<T> {
+
+        protected static final VarHandle MC_FLAG;
+
+        static {
+            try {
+                MC_FLAG = MethodHandles.lookup()
+                        .findVarHandle(MCAccessFlag.class, "mcFlag", long.class);
+            } catch (Throwable t) {
+                throw new ExceptionInInitializerError(t);
+            }
+        }
+
+        long mcFlag = 0;
+
+        MCAccessFlag(int chunkSize) {
+            super(chunkSize);
+        }
+
+        protected static boolean acquireMcLock(BaseConcurrentQueue impl) {
+            return MC_FLAG.compareAndSet(impl, 0, 1);
+        }
+
+        protected static void releaseMcLock(BaseConcurrentQueue impl) {
+            MC_FLAG.setRelease(impl, 0);
+        }
+    }
+
+    public abstract static class MultiConsumer<T> extends MCAccessFlag<T> {
+
+        private long p00, p01, p02, p03, p04, p05, p06, p07;
+        private long p08, p09, p10, p11, p12, p13, p14, p15;
+
+        MultiConsumer(int chunkSize) {
+            super(chunkSize);
+        }
     }
 }

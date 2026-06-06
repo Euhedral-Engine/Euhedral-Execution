@@ -4,15 +4,15 @@ import euhedral.queues.common.QueueUtils;
 import java.util.function.Consumer;
 
 @SuppressWarnings({"unchecked", "unused"})
-public final class UnboundedMpscQueue<T> extends BaseConcurrentQueue {
+public final class MpscQueue<T> extends BaseConcurrentQueue<T> {
 
     private final ChunkAllocator allocator;
 
-    public UnboundedMpscQueue(int chunkSize) {
+    public MpscQueue(int chunkSize) {
         this(chunkSize, 0);
     }
 
-    public UnboundedMpscQueue(int chunkSize, int maxPooledChunks) {
+    public MpscQueue(int chunkSize, int maxPooledChunks) {
         super(chunkSize);
 
         if (maxPooledChunks > 0) {
@@ -22,31 +22,38 @@ public final class UnboundedMpscQueue<T> extends BaseConcurrentQueue {
         }
     }
 
+    @Override
     public boolean offer(T obj) {
         mpOffer(obj);
         return true;
     }
 
+    @Override
     public T peek() {
         return (T) scPeek();
     }
 
+    @Override
     public T poll() {
         return (T) scPoll();
     }
 
+    @Override
     public void fill(T[] objs) {
         mpFill(objs);
     }
 
+    @Override
     public void fill(Iterable<T> objs) {
         mpFill((Iterable<Object>) objs);
     }
 
+    @Override
     public long drain(Consumer<T> consumer, long limit) {
         return scDrain((Consumer<Object>) consumer, limit);
     }
 
+    @Override
     public void clear() {
         while (scDrain(QueueUtils.NO_OP, Long.MAX_VALUE) > 0) {
             Thread.onSpinWait();
