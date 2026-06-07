@@ -5,7 +5,7 @@ import java.util.Objects;
 import java.util.function.Consumer;
 
 @SuppressWarnings({"unchecked", "unused"})
-public final class MpmcQueue<T> extends BaseConcurrentQueue.MultiConsumer<T> {
+public sealed class MpmcQueue<T> extends BaseConcurrentQueue.MultiConsumer<T> permits BoundedMpmcQueue {
 
     private final ChunkAllocator allocator;
     private final long maxConsumeBatch;
@@ -19,7 +19,11 @@ public final class MpmcQueue<T> extends BaseConcurrentQueue.MultiConsumer<T> {
     }
 
     public MpmcQueue(int chunkSize, int maxPooledChunks, long maxConsumeBatch) {
-        super(chunkSize);
+        this(chunkSize, maxPooledChunks, maxConsumeBatch, false);
+    }
+
+    MpmcQueue(int chunkSize, int maxPooledChunks, long maxConsumeBatch, boolean bounded) {
+        super(chunkSize, bounded);
         if (maxConsumeBatch <= 0) {
             throw new IllegalArgumentException("maxConsumeBatch must be positive");
         }
@@ -33,13 +37,12 @@ public final class MpmcQueue<T> extends BaseConcurrentQueue.MultiConsumer<T> {
     }
 
     @Override
-    public boolean offer(T obj) {
-        mpOffer(obj);
-        return true;
+    public final boolean offer(T obj) {
+        return mpOffer(obj);
     }
 
     @Override
-    public T peek() {
+    public final T peek() {
         if (!acquireMcLock(this)) {
             return null;
         }
@@ -51,7 +54,7 @@ public final class MpmcQueue<T> extends BaseConcurrentQueue.MultiConsumer<T> {
     }
 
     @Override
-    public T poll() {
+    public final T poll() {
         if (!acquireMcLock(this)) {
             return null;
         }
@@ -63,17 +66,17 @@ public final class MpmcQueue<T> extends BaseConcurrentQueue.MultiConsumer<T> {
     }
 
     @Override
-    public void fill(T[] objs) {
+    public final void fill(T[] objs) {
         mpFill(objs);
     }
 
     @Override
-    public void fill(Iterable<T> objs) {
+    public final void fill(Iterable<T> objs) {
         mpFill((Iterable<Object>) objs);
     }
 
     @Override
-    public long drain(Consumer<T> consumer, long limit) {
+    public final long drain(Consumer<T> consumer, long limit) {
         Objects.requireNonNull(consumer);
         if (limit <= 0) {
             return 0;
@@ -99,7 +102,7 @@ public final class MpmcQueue<T> extends BaseConcurrentQueue.MultiConsumer<T> {
     }
 
     @Override
-    public void clear() {
+    public final void clear() {
         while (!acquireMcLock(this)) {
             Thread.onSpinWait();
         }
@@ -113,7 +116,7 @@ public final class MpmcQueue<T> extends BaseConcurrentQueue.MultiConsumer<T> {
     }
 
     @Override
-    protected Object[] allocateChunk(int chunkSize) {
+    protected final Object[] allocateChunk(int chunkSize) {
         if (this.allocator == null) {
             return new Object[chunkSize];
         }
@@ -121,7 +124,7 @@ public final class MpmcQueue<T> extends BaseConcurrentQueue.MultiConsumer<T> {
     }
 
     @Override
-    protected void freeChunk(Object[] chunk) {
+    protected final void freeChunk(Object[] chunk) {
         if (this.allocator != null) {
             this.allocator.free(chunk);
         }
