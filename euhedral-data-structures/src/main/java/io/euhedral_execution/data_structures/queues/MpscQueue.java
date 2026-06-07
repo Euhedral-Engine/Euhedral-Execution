@@ -1,6 +1,7 @@
 package io.euhedral_execution.data_structures.queues;
 
 import io.euhedral_execution.data_structures.queues.common.QueueUtils;
+import java.util.Collection;
 import java.util.function.Consumer;
 
 @SuppressWarnings({"unchecked", "unused"})
@@ -46,8 +47,8 @@ public sealed class MpscQueue<T> extends BaseConcurrentQueue<T> permits BoundedM
     }
 
     @Override
-    public final void fill(Iterable<T> objs) {
-        mpFill((Iterable<Object>) objs);
+    public final void fill(Collection<T> objs) {
+        mpFill((Collection<Object>) objs);
     }
 
     @Override

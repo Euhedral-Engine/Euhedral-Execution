@@ -2,10 +2,13 @@ package io.euhedral_execution.data_structures.queues;
 
 import static io.euhedral_execution.data_structures.queues.common.QueueUtils.HALF_INCREMENT;
 import static io.euhedral_execution.data_structures.queues.common.QueueUtils.INCREMENT;
+import static io.euhedral_execution.data_structures.queues.common.QueueUtils.SHIFT;
 
 import io.euhedral_execution.data_structures.queues.common.QueueUtils;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
+import java.util.Collection;
+import java.util.Iterator;
 import java.util.Objects;
 import java.util.function.Consumer;
 
@@ -38,7 +41,7 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue {
 
     public abstract void fill(T[] objs);
 
-    public abstract void fill(Iterable<T> objs);
+    public abstract void fill(Collection<T> objs);
 
     public abstract long drain(Consumer<T> consumer, long limit);
 
@@ -53,24 +56,112 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue {
 
     // ----- Single Producer -----
 
-    /// Queue fill logic for single-producer queues
-    protected final void spFill(Object[] objs) {
-        Objects.requireNonNull(objs);
-        for (Object obj : objs) {
-            if(!spOffer(obj)) {
-                return;
-            }
-        }
+    protected final int spFill(Object[] objs) {
+        return spFill(objs, 0, objs.length);
     }
 
     /// Queue fill logic for single-producer queues
-    protected final void spFill(Iterable<Object> objs) {
+    protected final int spFill(Object[] objs, int start, int end) {
         Objects.requireNonNull(objs);
-        for (Object obj : objs) {
-            if(!spOffer(obj)) {
-                return;
-            }
+        if(end - start <= 0) {
+            return 0;
         }
+
+        int total = 0;
+        long size = (long) (end - start) << SHIFT;
+        while (size > 0) {
+            long tail = getTailPlain(this);
+            long epoch = getTailEpochPlain(this);
+
+            long claim = Math.min(size, epoch - tail);
+
+            // Slow Path
+            if(claim == 0) {
+                if(!spEpochUpdate(tail, epoch)) {
+                    break;
+                }
+                continue;
+            }
+
+            size -= claim;
+
+            // Fast Path
+            while(claim > 0) {
+                Object obj = objs[start++];
+                Objects.requireNonNull(obj, "null elements cannot be inserted into this queue");
+
+                int cIdx = QueueUtils.chunkIndex(tail, this.chunkMask);
+                storeInTailQueuePlain(this, cIdx, obj);
+                claim -= INCREMENT;
+                tail += INCREMENT;
+                total++;
+            }
+            setTailRelease(this, tail);
+        }
+        return total;
+    }
+
+    /// Queue fill logic for single-producer queues
+    protected final int spFill(Collection<Object> objs) {
+        Objects.requireNonNull(objs);
+
+        int total = 0;
+        long size = (long) objs.size() << SHIFT;
+        Iterator<Object> iter = objs.iterator();
+
+        while (size > 0) {
+            long tail = getTailPlain(this);
+            long epoch = getTailEpochPlain(this);
+
+            long claim = Math.min(size, epoch - tail);
+
+            // Slow Path
+            if(claim == 0) {
+                if(!spEpochUpdate(tail, epoch)) {
+                    break;
+                }
+                continue;
+            }
+
+            size -= claim;
+
+            // Fast Path
+            while(claim > 0 && iter.hasNext()) {
+                Object obj = iter.next();
+                Objects.requireNonNull(obj, "null elements cannot be inserted into this queue");
+
+                int cIdx = QueueUtils.chunkIndex(tail, this.chunkMask);
+                storeInTailQueuePlain(this, cIdx, obj);
+                claim -= INCREMENT;
+                tail += INCREMENT;
+                total++;
+            }
+            setTailRelease(this, tail);
+        }
+        return total;
+    }
+
+    private boolean spEpochUpdate(long tail, long epoch) {
+        int cIdx = QueueUtils.chunkIndex(tail, this.chunkMask);
+        long head = getHeadAcquire(this);
+
+        if (head + this.chunkMask > tail) {
+            setTailEpochPlain(this, head + this.chunkMask);
+            return true;
+        }
+
+        if(this.bounded) {
+            return false;
+        }
+
+        Object[] oldQueue = getTailQueuePlain(this);
+        Object[] nextQueue = allocateChunk(oldQueue.length);
+
+        linkChunk(oldQueue, nextQueue, cIdx);
+
+        setTailQueuePlain(this, nextQueue);
+        addTailEpochPlain(this, this.chunkMask);
+        return true;
     }
 
     /// Queue offer logic for single-producer queues
@@ -112,102 +203,7 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue {
         return true;
     }
 
-    // ----- Multi Producer -----
-
-    /// Queue fill logic for multi-producer queues
-    protected final void mpFill(Object[] objs) {
-        for (Object obj : objs) {
-            if(!mpOffer(obj)) {
-                return;
-            }
-        }
-    }
-
-    /// Queue fill logic for multi-producer queues
-    protected final void mpFill(Iterable<Object> objs) {
-        for (Object obj : objs) {
-            if(!mpOffer(obj)) {
-                return;
-            }
-        }
-    }
-
-    /// Queue offer logic for multi-producer queues
-    protected final boolean mpOffer(Object obj) {
-        Objects.requireNonNull(obj);
-
-        int cIdx;
-        Object[] queue;
-        while (true) {
-            long tail = getTailAcquire(this);
-
-            // If odd, resizing.
-            if ((tail & HALF_INCREMENT) == 1) {
-                continue;
-            }
-
-            long epoch = getTailEpochAcquire(this);
-
-            // Get the current chunk before trying to claim a slot
-            queue = getTailQueuePlain(this);
-
-            if ((epoch - tail) > 0) {
-                if (!casTail(this, tail, tail + INCREMENT)) {
-                    continue;
-                }
-                cIdx = QueueUtils.chunkIndex(tail, this.chunkMask);
-                break;
-            }
-
-            // Update epoch
-            long head = getHeadAcquire(this);
-            if (head + this.chunkMask > tail) {
-                if (!casTailEpoch(this, epoch, head + this.chunkMask)) {
-                    continue;
-                }
-
-                if (casTail(this, tail, tail + INCREMENT)) {
-                    cIdx = QueueUtils.chunkIndex(tail, this.chunkMask);
-                    break;
-                }
-                continue;
-            }
-
-            if(this.bounded) {
-                return false;
-            }
-
-            if (casTail(this, tail, tail + HALF_INCREMENT)) {
-                cIdx = QueueUtils.chunkIndex(tail, this.chunkMask);
-
-                Object[] nextQueue = allocateChunk(queue.length);
-                setTailQueuePlain(this, nextQueue);
-                setTailEpochPlain(this, tail + this.chunkMask);
-                getAndAddTail(this, HALF_INCREMENT);
-
-                linkChunk(queue, nextQueue, cIdx);
-                queue = nextQueue;
-                break;
-            }
-        }
-        QueueUtils.storeRelease(queue, cIdx, obj);
-        return true;
-    }
-
     // ----- Single Consumer -----
-
-    /// Queue poll logic for single-consumer queues
-    protected final Object scPoll() {
-        long head = getHeadPlain(this);
-        int cIdx = QueueUtils.chunkIndex(head, this.chunkMask);
-        Object obj = this.scPeekInternal(cIdx);
-
-        if (obj != null) {
-            setHeadQueueSlotPlain(this, cIdx, null);
-            setHeadRelease(this, head + INCREMENT);
-        }
-        return obj;
-    }
 
     /// Queue drain logic for single-consumer queues
     protected final long scDrain(Consumer<Object> consumer, long limit) {
@@ -254,6 +250,19 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue {
         return total;
     }
 
+    /// Queue poll logic for single-consumer queues
+    protected final Object scPoll() {
+        long head = getHeadPlain(this);
+        int cIdx = QueueUtils.chunkIndex(head, this.chunkMask);
+        Object obj = this.scPeekInternal(cIdx);
+
+        if (obj != null) {
+            setHeadQueueSlotPlain(this, cIdx, null);
+            setHeadRelease(this, head + INCREMENT);
+        }
+        return obj;
+    }
+
     /// Queue peek logic for single-consumer queues
     protected final Object scPeek() {
         long head = getHeadPlain(this);
@@ -285,6 +294,101 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue {
         return obj;
     }
 
+    // ----- Multi Producer -----
+
+    /// Queue fill logic for multi-producer queues
+    protected final void mpFill(Object[] objs) {
+        for (Object obj : objs) {
+            if(!mpOffer(obj)) {
+                return;
+            }
+        }
+    }
+
+    /// Queue fill logic for multi-producer queues
+    protected final void mpFill(Collection<Object> objs) {
+        Objects.requireNonNull(objs);
+
+        for (Object obj : objs) {
+            if(!mpOffer(obj)) {
+                return;
+            }
+        }
+    }
+
+    /// Queue offer logic for multi-producer queues
+    protected final boolean mpOffer(Object obj) {
+        Objects.requireNonNull(obj);
+
+        int cIdx;
+        Object[] queue;
+        while (true) {
+            long tail = getTailAcquire(this);
+
+            // If odd, resizing.
+            if ((tail & HALF_INCREMENT) == 1) {
+                continue;
+            }
+
+            long epoch = getTailEpochAcquire(this);
+
+            // Get the current chunk before trying to claim a slot
+            queue = getTailQueuePlain(this);
+
+            ClaimStatus status = mpClaim(tail, epoch, INCREMENT);
+            if(status == ClaimStatus.SUCCESS) {
+                cIdx = QueueUtils.chunkIndex(tail, this.chunkMask);
+                break;
+            }
+            if(status == ClaimStatus.FAILURE) {
+                continue;
+            }
+
+            if(this.bounded) {
+                return false;
+            }
+
+            if (casTail(this, tail, tail + HALF_INCREMENT)) {
+                cIdx = QueueUtils.chunkIndex(tail, this.chunkMask);
+
+                Object[] nextQueue = allocateChunk(queue.length);
+                setTailQueuePlain(this, nextQueue);
+                setTailEpochPlain(this, tail + this.chunkMask);
+                getAndAddTail(this, HALF_INCREMENT);
+
+                linkChunk(queue, nextQueue, cIdx);
+                queue = nextQueue;
+                break;
+            }
+        }
+        QueueUtils.storeRelease(queue, cIdx, obj);
+        return true;
+    }
+
+    private ClaimStatus mpClaim(long tail, long epoch, long delta) {
+        long claim = tail + delta;
+        if(claim <= epoch) {
+            if (!casTail(this, tail, claim)) {
+                return ClaimStatus.FAILURE;
+            }
+            return ClaimStatus.SUCCESS;
+        }
+
+        long head = getHeadAcquire(this);
+        long nextEpoch = head + this.chunkMask;
+        if((nextEpoch - tail) <= 0) {
+            return ClaimStatus.RESIZE;
+        }
+
+        if(!casTailEpoch(this, epoch, nextEpoch)) {
+            return ClaimStatus.FAILURE;
+        }
+        if(!casTail(this, tail, claim)) {
+            return ClaimStatus.FAILURE;
+        }
+        return ClaimStatus.SUCCESS;
+    }
+
     public final long sizeLong() {
         long head = getHeadAcquire(this);
         long tail = getTailAcquire(this);
@@ -297,6 +401,12 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue {
 
     public final boolean isEmpty() {
         return sizeLong() == 0;
+    }
+
+    private enum ClaimStatus {
+        SUCCESS,
+        FAILURE,
+        RESIZE
     }
 
     private abstract static class MCAccessFlag<T> extends BaseConcurrentQueue<T> {

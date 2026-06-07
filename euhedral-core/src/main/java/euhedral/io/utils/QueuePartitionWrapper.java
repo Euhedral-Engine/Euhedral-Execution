@@ -62,8 +62,8 @@ public class QueuePartitionWrapper {
         return this.sizeBytes.getAcquire(partition);
     }
 
-    public void purge() {
-        this.queue.purge();
+    public void clear() {
+        this.queue.clear();
     }
 
     private static long addCap(long num1, long num2) {

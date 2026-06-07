@@ -1,11 +1,12 @@
 package euhedral.benchmarks.queue_benchmarks;
 
 import euhedral.hardware_utils.PinnedThreadExecutor;
+import io.euhedral_execution.data_structures.queues.MpmcQueue;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import org.jctools.queues.MessagePassingQueue;
-import org.jctools.queues.MpmcArrayQueue;
+import org.jctools.queues.MpmcUnboundedXaddArrayQueue;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -40,9 +41,9 @@ public class MPMCBenchmarks {
     @Measurement(iterations = 5, time = 3, timeUnit = TimeUnit.SECONDS)
     @State(Scope.Benchmark)
     public static class BatchSizeProfile {
-        private final MpmcArrayQueue<Integer> jcTools = new MpmcArrayQueue<>(65_536);
-        private final PartitionedMpmcArrayQueue<Integer> euhedral = new PartitionedMpmcArrayQueue<>(
-                65_536);
+        private final MpmcUnboundedXaddArrayQueue<Integer> jcTools = new MpmcUnboundedXaddArrayQueue<>(4096, 4);
+        private final MpmcQueue<Integer> euhedral = new MpmcQueue<>(
+                4096, 4);
         private final CyclicBarrier start = new CyclicBarrier(16);
         private final CyclicBarrier end = new CyclicBarrier(33);
         private final PinnedThreadExecutor[] executors = new PinnedThreadExecutor[32];
