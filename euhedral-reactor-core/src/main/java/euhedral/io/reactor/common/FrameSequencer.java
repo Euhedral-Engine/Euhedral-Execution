@@ -6,7 +6,7 @@ import euhedral.io.impl.FrameFactory;
 import euhedral.io.impl.FrameFactory.FrameCreate;
 import euhedral.io.impl.FrameFactory.FrameReplace;
 import euhedral.io.impl.FrameManager;
-import euhedral.queues.PartitionedUnboundedSpscArrayQueue;
+import euhedral.queues.PartitionedSpscQueue;
 
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -22,11 +22,11 @@ public class FrameSequencer<T, R> {
     private final long sequencePassword;
 
     private final PaddedAtomicLong wip = new PaddedAtomicLong(0);
-    private final PartitionedUnboundedSpscArrayQueue<SequencedFrame<T, R>> sequence = new PartitionedUnboundedSpscArrayQueue<>(
+    private final PartitionedSpscQueue<SequencedFrame<T, R>> sequence = new PartitionedSpscQueue<>(
             1, 32_768, 1);
 
     private final Sinks.Many<R> output = Sinks.unsafe().many().unicast()
-            .onBackpressureBuffer(new PartitionedUnboundedSpscArrayQueue<>(8_192));
+            .onBackpressureBuffer(new PartitionedSpscQueue<>(8_192));
 
     public FrameSequencer(long ingestPassword) {
         this.ingestPassword = ingestPassword;

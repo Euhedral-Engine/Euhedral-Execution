@@ -7,7 +7,7 @@ import euhedral.io.flow_control.UpstreamQueue.UpstreamHandle;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.LatticeInterceptor;
 import euhedral.io.generics.LatticeSource;
-import euhedral.queues.PartitionedMpscArrayQueue;
+import euhedral.queues.PartitionedMpscQueue;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.BitSet;
@@ -53,7 +53,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
     /// This queue acts like a capacitor for contention. When the number of upstreams is very low,
     /// downstream demand hits the same upstreams repeatedly. This small queue gives them another
     /// squirrel to chase.
-    protected final PartitionedMpscArrayQueue<AbstractFrame> parallelQueue;
+    protected final PartitionedMpscQueue<AbstractFrame> parallelQueue;
 
     protected final LatticeEdge[] downstreams;
     protected final RoutingFunction routingFunction;
@@ -76,7 +76,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
         this.sibling = this;
         if (!terminal) {
             this.wip = new PaddedAtomicLong(0);
-            this.parallelQueue = new PartitionedMpscArrayQueue<>(2_048);
+            this.parallelQueue = new PartitionedMpscQueue<>(2_048);
         } else {
             this.wip = null;
             this.parallelQueue = null;
