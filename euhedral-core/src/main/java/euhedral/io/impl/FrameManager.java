@@ -1,8 +1,8 @@
 package euhedral.io.impl;
 
 import euhedral.io.frames.AbstractFrame;
-import euhedral.queues.PartitionedMpscQueue;
-import euhedral.queues.common.PartitionedQueue;
+import io.euhedral_execution.data_structures.queues.PartitionedMpscQueue;
+import io.euhedral_execution.data_structures.queues.common.PartitionedQueue;
 import java.util.Arrays;
 import lombok.Getter;
 import lombok.Setter;

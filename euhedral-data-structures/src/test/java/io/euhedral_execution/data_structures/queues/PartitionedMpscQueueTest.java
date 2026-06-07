@@ -1,4 +1,4 @@
-package euhedral.queues;
+package io.euhedral_execution.data_structures.queues;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;

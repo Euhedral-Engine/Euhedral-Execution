@@ -17,7 +17,7 @@ import euhedral.io.flow_control.UpstreamQueue;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.CacheManager;
 import euhedral.io.utils.DrainBuffer;
-import euhedral.queues.PartitionedSpscQueue;
+import io.euhedral_execution.data_structures.queues.PartitionedSpscQueue;
 import java.util.concurrent.Callable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
