@@ -4,7 +4,7 @@ import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.LatticeInterceptor;
 import euhedral.io.generics.LatticeReceiver;
 import euhedral.io.generics.LatticeSource;
-import euhedral.queues.PartitionedUnboundedMpscArrayQueue;
+import euhedral.queues.PartitionedMpscQueue;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.concurrent.atomic.AtomicLong;
@@ -62,8 +62,8 @@ public class UpstreamQueue {
     }
 
     final long[] pullBucket = new long[]{0L, 0L};
-    private final PartitionedUnboundedMpscArrayQueue<UpstreamHandle> upstreams =
-            new PartitionedUnboundedMpscArrayQueue<>(1, 512, 0);
+    private final PartitionedMpscQueue<UpstreamHandle> upstreams =
+            new PartitionedMpscQueue<>(1, 512, 0);
     private final UpstreamHandle[] drainBuffer = new UpstreamHandle[512];
     private final int[] pullIdx = new int[]{0};
     @Getter

@@ -1,7 +1,6 @@
 package euhedral.queues;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -13,36 +12,30 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.LongAdder;
-
 import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 
-class PartitionedMpmcArrayQueueTest {
+class PartitionedMpmcQueueTest {
 
     @Test
     void singleThreadOfferDrain() {
-        PartitionedMpmcArrayQueue<Integer> q = new PartitionedMpmcArrayQueue<>(4, 128, false);
+        int chunkSize = 128;
+        PartitionedMpmcQueue<Integer> q =
+                new PartitionedMpmcQueue<>(4, chunkSize, 2);
 
-        for (int i = 0; i < 1000; i++) {
-            if (i < 128) {
-                assertTrue(q.offer(0, i));
-            } else {
-                assertFalse(q.offer(0, i));
-            }
+        for (int i = 1; i <= chunkSize * 4; i++) {
+            assertTrue(q.offer(0, i));
         }
 
-        final int[] drained = new int[] {-1};
+        final int[] drained = new int[] {0};
         Consumer<Integer> consumer = (val) -> {
-            if (val != ++drained[0] || val >= 128) {
+            if (val != ++drained[0]) {
                 fail("Corruption! Last Value: " + drained[0] + " Current: " + val);
             }
         };
-        q.drain(consumer, 1000);
-        while(q.drain(consumer, 1000) > 0) {
-            Thread.onSpinWait();
-        }
+        q.drain(consumer, chunkSize * 4);
 
-        assertEquals(127, drained[0]);
+        assertEquals(chunkSize * 4, drained[0]);
     }
 
     @Test
@@ -55,35 +48,40 @@ class PartitionedMpmcArrayQueueTest {
         cycle(4);
     }
 
-    private void cycle(int partitions) throws Exception {
-        PartitionedMpmcArrayQueue<Long> q =
-                new PartitionedMpmcArrayQueue<>(partitions, 4096, false);
+    private static void cycle(int partitions) throws Exception {
+        PartitionedMpmcQueue<Long> q =
+                new PartitionedMpmcQueue<>(partitions, 1024, 4);
+        int producers = 8;
+        int batch = 100_000;
 
         Consumer<Long> consumer = (val) -> {
         };
-        ExecutorService exec = Executors.newFixedThreadPool(16);
-        for (int x = 0; x < 10; x++) {
-            CountDownLatch end = new CountDownLatch(8);
+        ExecutorService exec = Executors.newFixedThreadPool(producers * 2);
+        for (int x = 0; x < 20; x++) {
+            CountDownLatch end = new CountDownLatch(producers);
 
-            int batch = 100_000;
             LongAdder offered = new LongAdder();
             LongAdder drained = new LongAdder();
-            for (int i = 0; i < 8; i++) {
+            for (int i = 0; i < producers; i++) {
                 exec.submit(() -> {
-                    for (int j = 0; j < batch; j++) {
-                        long v = ThreadLocalRandom.current().nextLong();
+                    try {
+                        for (int j = 0; j < batch; j++) {
+                            long v = ThreadLocalRandom.current().nextLong();
 
-                        while (!q.offer(v, System.nanoTime())) {
-                            Thread.onSpinWait();
+                            while (!q.offer(v, System.nanoTime())) {
+                                Thread.onSpinWait();
+                            }
+                            offered.increment();
                         }
-                        offered.increment();
+                    } catch (Throwable t) {
+                        t.printStackTrace();
                     }
                 });
             }
 
-            for (int i = 0; i < 8; i++) {
+            for (int i = 0; i < producers; i++) {
                 exec.submit(() -> {
-                    while (drained.sum() < batch * 8) {
+                    while (drained.sum() < batch * producers) {
                         long count = q.drain(consumer, 4096);
                         drained.add(count);
                         Thread.yield();
@@ -93,9 +91,9 @@ class PartitionedMpmcArrayQueueTest {
             }
             end.await(5, TimeUnit.SECONDS);
 
-            assertEquals(800_000, drained.sum(),
-                    String.format("Iteration: %d Consumed: %d Offered: %d\n%s", x, drained.sum(),
-                            offered.sum(), q));
+            assertEquals(producers * batch, drained.sum(),
+                    String.format("Iteration: %d Consumed: %d Offered: %d", x, drained.sum(),
+                            offered.sum()));
         }
     }
 
@@ -105,7 +103,8 @@ class PartitionedMpmcArrayQueueTest {
         int perProducer = 50_000;
         int total = producers * perProducer;
 
-        PartitionedMpmcArrayQueue<Long> q = new PartitionedMpmcArrayQueue<>(8, 1024, false);
+        PartitionedMpmcQueue<Long> q =
+                new PartitionedMpmcQueue<>(8, 1024, 4);
 
         ExecutorService exec = Executors.newFixedThreadPool(producers);
 
@@ -143,17 +142,18 @@ class PartitionedMpmcArrayQueueTest {
 
         exec.shutdownNow();
 
-        assertEquals(produced.size(), consumed.size());
-        assertEquals(produced, consumed);
+        assertEquals(produced.size(), consumed.size(), q.toString());
+        assertEquals(produced, consumed, q.toString());
     }
 
     @Test
-    void multiConsumerNoDuplication() throws Exception {
+    void multiConsumerNoLossNoDuplication() throws Exception {
         int producers = 4;
         int consumers = 4;
         int perProducer = 50_000;
 
-        PartitionedMpmcArrayQueue<Long> q = new PartitionedMpmcArrayQueue<>(4, 512, false);
+        PartitionedMpmcQueue<Long> q =
+                new PartitionedMpmcQueue<>(4, 512, 4);
 
         ExecutorService exec = Executors.newFixedThreadPool(producers + consumers);
 
@@ -191,37 +191,9 @@ class PartitionedMpmcArrayQueueTest {
             });
         }
 
-        consLatch.await(1, TimeUnit.SECONDS);
+        consLatch.await(5, TimeUnit.SECONDS);
         exec.shutdownNow();
 
-        assertEquals(producers * perProducer, consumed.size());
-
-    }
-
-    @Test
-    void retireAndDrainCompletes() {
-        PartitionedMpmcArrayQueue<Integer> q = new PartitionedMpmcArrayQueue<>(2, 64, true);
-
-        int inserted = 0;
-
-        for (int i = 0; i < 1000; i++) {
-            if (q.offer(0, i)) {
-                inserted++;
-            }
-        }
-
-        while (q.offer(0, 9999)) {
-            inserted++;
-        }
-
-        final int[] total = new int[1];
-        Consumer<Integer> consumer = (val) -> {
-            total[0]++;
-        };
-        while (!q.isEmpty()) {
-            q.drain(consumer, inserted);
-        }
-
-        assertEquals(inserted, total[0]);
+        assertEquals(producers * perProducer, consumed.size(), q.toString());
     }
 }

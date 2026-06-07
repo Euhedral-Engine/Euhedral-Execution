@@ -1,8 +1,7 @@
 package euhedral.io.impl;
 
 import euhedral.io.frames.AbstractFrame;
-import euhedral.queues.PartitionedMpscArrayQueue;
-import euhedral.queues.PartitionedUnboundedMpscArrayQueue;
+import euhedral.queues.PartitionedMpscQueue;
 import euhedral.queues.common.PartitionedQueue;
 import java.util.Arrays;
 import lombok.Getter;
@@ -45,7 +44,7 @@ public class FrameManager<DATA, FRAME extends AbstractFrame> implements AutoClos
         int actual = Integer.highestOneBit((chunkSize - 1) << 1);
         actual = actual <= 0 ? 1 : actual;
 
-        this.recycleQueue = new PartitionedUnboundedMpscArrayQueue<>(1, actual, pooledChunks);
+        this.recycleQueue = new PartitionedMpscQueue<>(1, actual, pooledChunks);
         this.password = password;
         this.buffer = new AbstractFrame[Math.max(actual, 256)];
     }
@@ -55,7 +54,7 @@ public class FrameManager<DATA, FRAME extends AbstractFrame> implements AutoClos
         int actual = Integer.highestOneBit((capacity - 1) << 1);
         actual = actual <= 0 ? 1 : actual;
 
-        this.recycleQueue = new PartitionedMpscArrayQueue<>(actual);
+        this.recycleQueue = new PartitionedMpscQueue<>(actual);
         this.password = password;
         this.buffer = new AbstractFrame[Math.max(actual, 256)];
     }

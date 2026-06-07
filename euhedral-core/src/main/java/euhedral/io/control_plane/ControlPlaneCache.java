@@ -27,7 +27,7 @@ import euhedral.io.utils.FlowRecorder;
 import euhedral.io.utils.FlowRecorder.FlowSnapshot;
 import euhedral.io.utils.MathFunctions;
 import euhedral.io.utils.QueuePartitionWrapper;
-import euhedral.queues.PartitionedUnboundedMpscArrayQueue;
+import euhedral.queues.PartitionedMpscQueue;
 import euhedral.queues.common.QueueUtils;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
@@ -174,7 +174,7 @@ public class ControlPlaneCache extends LatticeVertex implements CacheManager {
             this.chunkSize = getChunkSize(config, partitions);
             this.frameQuota = (long) this.chunkSize * partitions;
             this.queueRing = new QueuePartitionWrapper(
-                    new PartitionedUnboundedMpscArrayQueue<>(partitions, this.chunkSize,
+                    new PartitionedMpscQueue<>(partitions, this.chunkSize,
                             config.maxPooledChunks()));
             this.mask = partitions - 1;
             this.heads = new int[SystemInfo.getCpuCount()];

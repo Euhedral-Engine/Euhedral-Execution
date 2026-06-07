@@ -25,9 +25,8 @@ import euhedral.io.metrics.ExecutionMetrics;
 import euhedral.io.utils.DrainBuffer;
 import euhedral.io.utils.FlowRecorder;
 import euhedral.io.utils.FlowRecorder.FlowSnapshot;
-import euhedral.queues.PartitionedArrayQueue;
-import euhedral.queues.PartitionedSpscArrayQueue;
-import euhedral.queues.PartitionedUnboundedMpscArrayQueue;
+import euhedral.queues.PartitionedMpscQueue;
+import euhedral.queues.PartitionedSpscQueue;
 import euhedral.queues.common.PartitionedQueue;
 import euhedral.queues.common.QueueUtils;
 import java.lang.invoke.MethodHandles;
@@ -207,10 +206,8 @@ public class ControlPlaneFragment implements SlotManager {
                 smtExec = PinnedThreadExecutor.getOrSetIfAbsent(cpus[1],
                         this.config.cloneConfig().shardName() + "-ControlPlaneFragment-SMT-"
                                 + this.config.cloneConfig().coreId(), Thread.MAX_PRIORITY, false);
-                this.buffer = new PartitionedSpscArrayQueue<>(bufferSize);
-            } else {
-                this.buffer = new PartitionedArrayQueue<>(bufferSize);
             }
+            this.buffer = new PartitionedSpscQueue<>(bufferSize);
             this.handle = new DownstreamHandle(this.cpuId, this::getPressure);
             this.bufferWrapper = new DrainBuffer(this.buffer, bufferSize, false);
             this.buddyState = new SMTState(executionLatency, bufferWrapper.arrivalLatencyRecorder,
@@ -220,7 +217,7 @@ public class ControlPlaneFragment implements SlotManager {
                     SystemInfo.getCoreInfo(SystemInfo.getCpuInfo(layout.cpu()).core()).pCore();
 
             this.completeSink =
-                    new BufferedBridge(new PartitionedUnboundedMpscArrayQueue<>(1, bufferSize, 4),
+                    new BufferedBridge(new PartitionedMpscQueue<>(1, bufferSize, 4),
                             frame -> {
                                 IN_FLIGHT.setOpaque(this, this.inFlight - 1);
                                 state.receivingOrderedWork =
