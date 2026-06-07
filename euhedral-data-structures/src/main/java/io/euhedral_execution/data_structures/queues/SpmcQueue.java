@@ -5,7 +5,8 @@ import java.util.Objects;
 import java.util.function.Consumer;
 
 @SuppressWarnings({"unchecked", "unused"})
-public final class SpmcQueue<T> extends BaseConcurrentQueue.MultiConsumer<T> {
+public sealed class SpmcQueue<T> extends BaseConcurrentQueue.MultiConsumer<T> permits
+        BoundedSpmcQueue {
 
     private final ChunkAllocator allocator;
     private final long maxConsumeBatch;
@@ -19,8 +20,13 @@ public final class SpmcQueue<T> extends BaseConcurrentQueue.MultiConsumer<T> {
     }
 
     public SpmcQueue(int chunkSize, int maxPooledChunks, long maxConsumeBatch) {
-        super(chunkSize);
-        if(maxConsumeBatch <= 0) {
+        this(chunkSize, maxPooledChunks, maxConsumeBatch, false);
+    }
+
+    SpmcQueue(int chunkSize, int maxPooledChunks, long maxConsumeBatch, boolean bounded) {
+        super(chunkSize, bounded);
+
+        if (maxConsumeBatch <= 0) {
             throw new IllegalArgumentException("maxConsumeBatch must be positive");
         }
 
@@ -33,13 +39,12 @@ public final class SpmcQueue<T> extends BaseConcurrentQueue.MultiConsumer<T> {
     }
 
     @Override
-    public boolean offer(T obj) {
-        spOffer(obj);
-        return true;
+    public final boolean offer(T obj) {
+        return spOffer(obj);
     }
 
     @Override
-    public T peek() {
+    public final T peek() {
         if (!acquireMcLock(this)) {
             return null;
         }
@@ -51,7 +56,7 @@ public final class SpmcQueue<T> extends BaseConcurrentQueue.MultiConsumer<T> {
     }
 
     @Override
-    public T poll() {
+    public final T poll() {
         if (!acquireMcLock(this)) {
             return null;
         }
@@ -63,31 +68,31 @@ public final class SpmcQueue<T> extends BaseConcurrentQueue.MultiConsumer<T> {
     }
 
     @Override
-    public void fill(T[] objs) {
+    public final void fill(T[] objs) {
         spFill(objs);
     }
 
     @Override
-    public void fill(Iterable<T> objs) {
+    public final void fill(Iterable<T> objs) {
         spFill((Iterable<Object>) objs);
     }
 
     @Override
-    public long drain(Consumer<T> consumer, long limit) {
+    public final long drain(Consumer<T> consumer, long limit) {
         Objects.requireNonNull(consumer);
-        if(limit <= 0) {
+        if (limit <= 0) {
             return 0;
         }
 
         long total = 0;
-        while(total < limit) {
+        while (total < limit) {
             if (!acquireMcLock(this)) {
                 return total;
             }
             try {
                 long batch = Math.min(limit - total, this.maxConsumeBatch);
                 long temp = scDrain((Consumer<Object>) consumer, batch);
-                if(temp == 0) {
+                if (temp == 0) {
                     break;
                 }
                 total += temp;
@@ -99,7 +104,7 @@ public final class SpmcQueue<T> extends BaseConcurrentQueue.MultiConsumer<T> {
     }
 
     @Override
-    public void clear() {
+    public final void clear() {
         while (!acquireMcLock(this)) {
             Thread.onSpinWait();
         }
@@ -113,7 +118,7 @@ public final class SpmcQueue<T> extends BaseConcurrentQueue.MultiConsumer<T> {
     }
 
     @Override
-    protected Object[] allocateChunk(int chunkSize) {
+    protected final Object[] allocateChunk(int chunkSize) {
         if (this.allocator == null) {
             return new Object[chunkSize];
         }
@@ -121,7 +126,7 @@ public final class SpmcQueue<T> extends BaseConcurrentQueue.MultiConsumer<T> {
     }
 
     @Override
-    protected void freeChunk(Object[] chunk) {
+    protected final void freeChunk(Object[] chunk) {
         if (this.allocator != null) {
             this.allocator.free(chunk);
         }
