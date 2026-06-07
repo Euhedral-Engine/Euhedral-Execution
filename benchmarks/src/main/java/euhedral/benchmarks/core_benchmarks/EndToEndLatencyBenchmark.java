@@ -1,6 +1,5 @@
 package euhedral.benchmarks.core_benchmarks;
 
-import euhedral.atomics.PaddedLongAdder;
 import euhedral.benchmarks.frames.NoOpFrame;
 import euhedral.benchmarks.pipelines.NoOpPipeline;
 import euhedral.hardware_utils.SystemInfo;
@@ -12,6 +11,7 @@ import euhedral.io.config.ControlPlaneConfig;
 import euhedral.io.config.SchedulingConfig;
 import euhedral.io.control_plane.ControlPlaneLattice;
 import euhedral.io.ingest.ArrayIngestSink;
+import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
 import java.lang.invoke.VarHandle;
 import java.util.BitSet;
 import java.util.concurrent.ThreadLocalRandom;

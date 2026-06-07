@@ -1,6 +1,5 @@
 package euhedral.benchmarks.core_benchmarks;
 
-import euhedral.atomics.PaddedLongAdder;
 import euhedral.benchmarks.frames.NoOpFrame;
 import euhedral.benchmarks.pipelines.NoOpPipeline;
 import euhedral.hashing.HasherApi;
@@ -9,6 +8,7 @@ import euhedral.io.config.ControlPlaneConfig;
 import euhedral.io.config.SchedulingConfig;
 import euhedral.io.control_plane.ControlPlaneLattice;
 import euhedral.io.reactor.common.EuhedralSubscriber;
+import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import org.openjdk.jmh.annotations.Benchmark;

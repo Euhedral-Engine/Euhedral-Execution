@@ -1,7 +1,7 @@
 package euhedral.benchmarks.queue_benchmarks;
 
-import euhedral.experimental.UnboundedMpscQueue;
 import euhedral.hardware_utils.PinnedThreadExecutor;
+import euhedral.queues.MpscQueue;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -42,7 +42,7 @@ public class MPSCBenchmarks {
     @State(Scope.Benchmark)
     public static class BatchSizeProfile {
         private final MpscUnboundedVarHandleArrayQueue<Integer> jcTools = new MpscUnboundedVarHandleArrayQueue<>(4096);
-        private final UnboundedMpscQueue<Integer> euhedral = new UnboundedMpscQueue<>(4096);
+        private final MpscQueue<Integer> euhedral = new MpscQueue<>(4096);
         private final CyclicBarrier start = new CyclicBarrier(17);
         private final CyclicBarrier end = new CyclicBarrier(2);
         private final PinnedThreadExecutor[] executors = new PinnedThreadExecutor[32];
@@ -142,7 +142,7 @@ public class MPSCBenchmarks {
     @State(Scope.Benchmark)
     public static class Regimes {
         private final MpscUnboundedVarHandleArrayQueue<Integer> jcTools = new MpscUnboundedVarHandleArrayQueue<>(4096);
-        private final UnboundedMpscQueue<Integer> euhedral = new UnboundedMpscQueue<>(4096);
+        private final MpscQueue<Integer> euhedral = new MpscQueue<>(4096);
 
         private final CyclicBarrier start16 = new CyclicBarrier(16);
         private final CyclicBarrier end17 = new CyclicBarrier(17);

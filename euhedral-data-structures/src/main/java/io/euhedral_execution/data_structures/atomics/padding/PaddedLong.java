@@ -1,6 +1,6 @@
-package euhedral.atomics.padding;
+package io.euhedral_execution.data_structures.atomics.padding;
 
-public abstract class PaddedReference<T> extends ReferenceHolder<T> {
+public class PaddedLong extends LongHolder {
 
     byte b000, b001, b002, b003, b004, b005, b006, b007;
     byte b008, b009, b010, b011, b012, b013, b014, b015;

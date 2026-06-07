@@ -1,4 +1,4 @@
-package euhedral.experimental;
+package euhedral.queues;
 
 import static euhedral.queues.common.QueueUtils.HALF_INCREMENT;
 import static euhedral.queues.common.QueueUtils.INCREMENT;

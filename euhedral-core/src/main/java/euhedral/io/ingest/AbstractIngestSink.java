@@ -1,10 +1,10 @@
 package euhedral.io.ingest;
 
-import euhedral.atomics.PaddedAtomicLong;
 import euhedral.io.control_plane.ControlPlaneLattice;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.LatticeReceiver;
 import euhedral.io.generics.LatticeSource;
+import io.euhedral_execution.data_structures.atomics.PaddedAtomicLong;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.function.Consumer;

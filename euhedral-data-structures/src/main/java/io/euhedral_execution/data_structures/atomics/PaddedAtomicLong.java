@@ -1,6 +1,6 @@
-package euhedral.atomics;
+package io.euhedral_execution.data_structures.atomics;
 
-import euhedral.atomics.padding.PaddedLong;
+import io.euhedral_execution.data_structures.atomics.padding.PaddedLong;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.function.LongBinaryOperator;

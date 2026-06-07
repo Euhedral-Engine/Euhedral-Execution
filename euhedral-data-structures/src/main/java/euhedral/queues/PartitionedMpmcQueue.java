@@ -1,6 +1,5 @@
 package euhedral.queues;
 
-import euhedral.experimental.MpmcQueue;
 import java.util.function.Consumer;
 
 /// ## An unbounded MPMC array queue with partitions.
