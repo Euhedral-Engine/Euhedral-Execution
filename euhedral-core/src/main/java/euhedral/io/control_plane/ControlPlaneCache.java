@@ -447,7 +447,7 @@ public class ControlPlaneCache extends LatticeVertex implements CacheManager {
                 }
             }
         }
-        this.queueRing.purge();
+        this.queueRing.clear();
         Arrays.stream(partitionStats).forEach(PartitionStats::reset);
         this.fillRecorder.getOpaque().record(1, true);
         this.fillBytesRecorder.getOpaque().record(1, false);
