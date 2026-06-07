@@ -1,6 +1,7 @@
 package euhedral.benchmarks.queue_benchmarks;
 
 import euhedral.hardware_utils.PinnedThreadExecutor;
+import io.euhedral_execution.data_structures.queues.PartitionedSpscQueue;
 import io.euhedral_execution.data_structures.queues.SpscQueue;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.TimeUnit;
@@ -147,7 +148,7 @@ public class SPSCBenchmarks {
     public static class BatchDrain {
 
         private final SpscArrayQueue<Integer> jcTools = new SpscArrayQueue<>(1024);
-        private final PartitionedSpscArrayQueue<Integer> euhedral = new PartitionedSpscArrayQueue<>(
+        private final PartitionedSpscQueue<Integer> euhedral = new PartitionedSpscQueue<>(
                 1024);
 
         private QueueConsumer consumer;

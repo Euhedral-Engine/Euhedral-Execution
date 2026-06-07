@@ -1,6 +1,7 @@
 package io.euhedral_execution.data_structures.queues;
 
 import io.euhedral_execution.data_structures.queues.common.QueueUtils;
+import java.util.Collection;
 import java.util.Objects;
 import java.util.function.Consumer;
 
@@ -73,8 +74,8 @@ public sealed class SpmcQueue<T> extends BaseConcurrentQueue.MultiConsumer<T> pe
     }
 
     @Override
-    public final void fill(Iterable<T> objs) {
-        spFill((Iterable<Object>) objs);
+    public final void fill(Collection<T> objs) {
+        spFill((Collection<Object>) objs);
     }
 
     @Override

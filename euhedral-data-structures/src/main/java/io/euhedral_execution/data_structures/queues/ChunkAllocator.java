@@ -3,6 +3,7 @@ package io.euhedral_execution.data_structures.queues;
 import io.euhedral_execution.data_structures.queues.common.QueueUtils;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
+import java.util.Collection;
 import java.util.function.Consumer;
 
 @SuppressWarnings({"unchecked", "unused", "rawtypes"})
@@ -69,7 +70,7 @@ final class ChunkAllocator extends BaseConcurrentQueue {
     }
 
     @Override
-    public void fill(Iterable objs) {
+    public void fill(Collection objs) {
 
     }
 
