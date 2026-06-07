@@ -17,8 +17,7 @@ import euhedral.io.flow_control.UpstreamQueue;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.CacheManager;
 import euhedral.io.utils.DrainBuffer;
-import euhedral.queues.PartitionedArrayQueue;
-import euhedral.queues.common.PartitionedQueue;
+import euhedral.queues.PartitionedSpscQueue;
 import java.util.concurrent.Callable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -277,8 +276,8 @@ class ControlPlaneCacheTest {
         ControlPlaneCache.DownstreamHandle handle =
                 new ControlPlaneCache.DownstreamHandle(0, () -> 0.0);
 
-        PartitionedQueue<AbstractFrame> queue =
-                new PartitionedArrayQueue<>(64);
+        PartitionedSpscQueue<AbstractFrame> queue =
+                new PartitionedSpscQueue<>(64);
 
         DrainBuffer buffer =
                 new DrainBuffer(queue, 64, false);

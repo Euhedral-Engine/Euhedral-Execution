@@ -11,7 +11,7 @@ import euhedral.io.reactor.common.BackpressureHandler;
 import euhedral.io.reactor.common.EuhedralSubscriber;
 import euhedral.io.reactor.common.FrameSequencer;
 import euhedral.io.reactor.common.SequencedFrame;
-import euhedral.queues.PartitionedUnboundedMpscArrayQueue;
+import euhedral.queues.PartitionedMpscQueue;
 import java.util.Objects;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -122,7 +122,7 @@ public final class EuhedralOperator {
         final AtomicBoolean dead = new AtomicBoolean(false);
 
         final Sinks.Many<R> returnSink = Sinks.many().unicast()
-                .onBackpressureBuffer(new PartitionedUnboundedMpscArrayQueue<>(1, 2048, 1));
+                .onBackpressureBuffer(new PartitionedMpscQueue<>(1, 2048, 1));
 
         final Consumer<R> consumer = (obj) -> {
             int cycles = 0;

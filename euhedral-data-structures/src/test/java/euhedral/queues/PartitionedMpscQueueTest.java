@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
-import euhedral.experimental.UnboundedMpscQueue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
@@ -16,12 +15,12 @@ import java.util.concurrent.atomic.LongAdder;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 
-class PartitionedUnboundedMpscArrayQueueTest {
+class PartitionedMpscQueueTest {
     @Test
     void singleThreadOfferDrain() {
         int chunkSize = 128;
-        UnboundedMpscQueue<Integer> q =
-                new UnboundedMpscQueue<>(chunkSize, 2);
+        PartitionedMpscQueue<Integer> q =
+                new PartitionedMpscQueue<>(1, chunkSize, 2);
 
         for (int i = 1; i <= chunkSize * 4; i++) {
             assertTrue(q.offer(i));
@@ -49,21 +48,22 @@ class PartitionedUnboundedMpscArrayQueueTest {
     }
 
     private void cycle(int partitions) {
-        UnboundedMpscQueue<Long> q =
-                new UnboundedMpscQueue<>(4096, 2);
+        PartitionedMpscQueue<Long> q =
+                new PartitionedMpscQueue<>(partitions, 4096, 2);
+        int producers = 8;
         int batch = 100_000;
 
         Consumer<Long> consumer = (val) -> {
         };
-        ExecutorService exec = Executors.newFixedThreadPool(16);
+        ExecutorService exec = Executors.newFixedThreadPool(producers);
         for (int x = 0; x < 20; x++) {
             LongAdder drained = new LongAdder();
-            for (int i = 0; i < 8; i++) {
+            for (int i = 0; i < producers; i++) {
                 exec.submit(() -> {
                     for (int j = 0; j < batch; j++) {
                         long v = ThreadLocalRandom.current().nextLong();
 
-                        while (!q.offer(System.nanoTime())) {
+                        while (!q.offer(v, System.nanoTime())) {
                             Thread.onSpinWait();
                         }
                     }
@@ -71,12 +71,12 @@ class PartitionedUnboundedMpscArrayQueueTest {
             }
 
             long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-            while (drained.sum() < batch * 8 && System.nanoTime() < deadline) {
+            while (drained.sum() < batch * producers && System.nanoTime() < deadline) {
                 long count = q.drain(consumer, 4096);
                 drained.add(count);
                 Thread.yield();
             }
-            assertEquals(800_000, drained.sum(), "Iteration: " + x);
+            assertEquals(batch * producers, drained.sum(), "Iteration: " + x);
         }
     }
 
@@ -86,8 +86,8 @@ class PartitionedUnboundedMpscArrayQueueTest {
         int perProducer = 50_000;
         int total = producers * perProducer;
 
-        UnboundedMpscQueue<Long> q =
-                new UnboundedMpscQueue<>(1024);
+        PartitionedMpscQueue<Long> q =
+                new PartitionedMpscQueue<>(4, 1024, 4);
 
         ExecutorService exec = Executors.newFixedThreadPool(producers);
 
@@ -102,7 +102,7 @@ class PartitionedUnboundedMpscArrayQueueTest {
                 for (int i = 0; i < perProducer; i++) {
                     long val = (((long) id) << 32) | i;
 
-                    while (!q.offer(val)) {
+                    while (!q.offer(ThreadLocalRandom.current().nextLong(), val)) {
                         Thread.yield();
                     }
 
@@ -117,10 +117,6 @@ class PartitionedUnboundedMpscArrayQueueTest {
                 fail("Duplicate: " + val);
             }
         };
-
-        while(produced.size() < total) {
-            Thread.onSpinWait();
-        }
 
         long deadline = System.nanoTime() + TimeUnit.DAYS.toNanos(1);
         while ((latch.getCount() > 0 || consumed.size() < total)

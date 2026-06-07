@@ -47,5 +47,5 @@ public interface PartitionedQueue<T> extends Queue<T> {
 
     void clear();
 
-    void purge();
+    void clear(int partition);
 }

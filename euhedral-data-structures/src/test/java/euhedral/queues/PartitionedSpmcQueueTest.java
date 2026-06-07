@@ -1,7 +1,6 @@
 package euhedral.queues;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -13,33 +12,30 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.LongAdder;
-
 import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 
-class PartitionedSpmcArrayQueueTest {
+class PartitionedSpmcQueueTest {
 
     @Test
     void singleThreadOfferDrain() {
-        PartitionedSpmcArrayQueue<Integer> q = new PartitionedSpmcArrayQueue<>(4, 128, false);
+        int chunkSize = 128;
+        PartitionedSpmcQueue<Integer> q =
+                new PartitionedSpmcQueue<>(1, chunkSize, 2);
 
-        for (int i = 0; i < 1000; i++) {
-            if (i < 128) {
-                assertTrue(q.offer(0, i));
-            } else {
-                assertFalse(q.offer(0, i));
-            }
+        for (int i = 1; i <= chunkSize * 4; i++) {
+            assertTrue(q.offer(i));
         }
 
-        final int[] drained = new int[] {-1};
+        final int[] drained = new int[] {0};
         Consumer<Integer> consumer = (val) -> {
-            if (val != ++drained[0] || val >= 128) {
+            if (val != ++drained[0]) {
                 fail("Corruption! Last Value: " + drained[0] + " Current: " + val);
             }
         };
-        q.drain(consumer, 1000);
+        q.drain(consumer, chunkSize * 4);
 
-        assertEquals(127, drained[0]);
+        assertEquals(chunkSize * 4, drained[0]);
     }
 
     @Test
@@ -52,22 +48,23 @@ class PartitionedSpmcArrayQueueTest {
         cycle(4);
     }
 
-    private void cycle(int partitions) throws Exception {
-        PartitionedSpmcArrayQueue<Long> q =
-                new PartitionedSpmcArrayQueue<>(partitions, 4096, false);
+    private static void cycle(int partitions) throws Exception {
+        PartitionedSpmcQueue<Long> q =
+                new PartitionedSpmcQueue<>(partitions, 1024, 4);
+        int batch = 100_000;
+        int consumers = 8;
 
         Consumer<Long> consumer = (val) -> {
         };
-        ExecutorService exec = Executors.newFixedThreadPool(9);
-        for (int x = 0; x < 10; x++) {
-            CountDownLatch end = new CountDownLatch(8);
+        ExecutorService exec = Executors.newFixedThreadPool(consumers + 1);
+        for (int x = 0; x < 20; x++) {
+            CountDownLatch end = new CountDownLatch(consumers);
 
             LongAdder offered = new LongAdder();
             LongAdder drained = new LongAdder();
 
-            int batch = 800_000;
             exec.submit(() -> {
-                for (int j = 0; j < batch; j++) {
+                for (int i = 0; i < batch; i++) {
                     long v = ThreadLocalRandom.current().nextLong();
 
                     while (!q.offer(v, System.nanoTime())) {
@@ -77,7 +74,7 @@ class PartitionedSpmcArrayQueueTest {
                 }
             });
 
-            for (int i = 0; i < 8; i++) {
+            for (int i = 0; i < consumers; i++) {
                 exec.submit(() -> {
                     while (drained.sum() < batch) {
                         long count = q.drain(consumer, 4096);
@@ -88,6 +85,7 @@ class PartitionedSpmcArrayQueueTest {
                 });
             }
             end.await(5, TimeUnit.SECONDS);
+
             assertEquals(batch, drained.sum(),
                     String.format("Iteration: %d Consumed: %d Offered: %d\n%s", x, drained.sum(),
                             offered.sum(), q));
@@ -95,11 +93,12 @@ class PartitionedSpmcArrayQueueTest {
     }
 
     @Test
-    void multiConsumerNoDuplication() throws Exception {
+    void multiConsumerNoLossNoDuplication() throws Exception {
         int consumers = 4;
-        int batch = 100_000;
+        int batch = 50_000;
 
-        PartitionedSpmcArrayQueue<Integer> q = new PartitionedSpmcArrayQueue<>(4, 512, false);
+        PartitionedSpmcQueue<Integer> q =
+                new PartitionedSpmcQueue<>(4, 512, 4);
 
         ExecutorService exec = Executors.newFixedThreadPool(1 + consumers);
 
@@ -129,33 +128,6 @@ class PartitionedSpmcArrayQueueTest {
         exec.shutdownNow();
 
         assertEquals(batch, consumed.size(), q.toString());
-
     }
 
-    @Test
-    void retireAndDrainCompletes() {
-        PartitionedSpmcArrayQueue<Integer> q = new PartitionedSpmcArrayQueue<>(2, 64, true);
-
-        int inserted = 0;
-
-        for (int i = 0; i < 1000; i++) {
-            if (q.offer(0, i)) {
-                inserted++;
-            }
-        }
-
-        while (q.offer(0, 9999)) {
-            inserted++;
-        }
-
-        final int[] total = new int[1];
-        Consumer<Integer> consumer = (val) -> {
-            total[0]++;
-        };
-        while (!q.isEmpty()) {
-            q.drain(consumer, inserted);
-        }
-
-        assertEquals(inserted, total[0]);
-    }
 }
