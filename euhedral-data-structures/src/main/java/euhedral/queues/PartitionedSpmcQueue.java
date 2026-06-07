@@ -1,6 +1,5 @@
 package euhedral.queues;
 
-import euhedral.experimental.SpmcQueue;
 import java.util.function.Consumer;
 
 /// ## An unbounded SPMC array queue with partitions.

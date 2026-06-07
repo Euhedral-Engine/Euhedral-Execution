@@ -1,6 +1,6 @@
 package euhedral.io.metrics;
 
-import euhedral.atomics.AtomicDouble;
+import io.euhedral_execution.data_structures.atomics.AtomicDouble;
 import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Meter;

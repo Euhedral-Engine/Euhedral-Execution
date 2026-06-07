@@ -1,6 +1,5 @@
 package euhedral.queues;
 
-import euhedral.experimental.MpscQueue;
 import java.util.function.Consumer;
 
 /// ## An unbounded multi-producer-single-consumer array queue with partitions.

@@ -1,4 +1,4 @@
-package euhedral.atomics.padding;
+package io.euhedral_execution.data_structures.atomics.padding;
 
 public class PaddedDouble extends DoubleHolder{
 

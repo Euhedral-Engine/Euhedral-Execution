@@ -1,9 +1,9 @@
-package euhedral.atomics;
+package io.euhedral_execution.data_structures.atomics;
 
-import euhedral.atomics.helpers.DoubleInterfaces.DoubleBinaryOperator;
-import euhedral.atomics.helpers.DoubleInterfaces.DoubleUnaryOperator;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 
 @SuppressWarnings("unused")
 public class AtomicDouble {
@@ -103,38 +103,38 @@ public class AtomicDouble {
 
     // ----- CAS -----
 
-    public double getAndUpdate(DoubleUnaryOperator updateFunction) {
+    public double getAndUpdate(Function<Double, Double> updateFunction) {
         double prev, next;
         do {
             prev = get();
-            next = updateFunction.applyAsDouble(prev);
+            next = updateFunction.apply(prev);
         } while (!weakCompareAndSet(prev, next));
         return prev;
     }
 
-    public double updateAndGet(DoubleUnaryOperator updateFunction) {
+    public double updateAndGet(Function<Double, Double> updateFunction) {
         double prev, next;
         do {
             prev = get();
-            next = updateFunction.applyAsDouble(prev);
+            next = updateFunction.apply(prev);
         } while (!weakCompareAndSet(prev, next));
         return next;
     }
 
-    public double getAndAccumulate(double val, DoubleBinaryOperator accumulator) {
+    public double getAndAccumulate(double val, BiFunction<Double, Double, Double> accumulator) {
         double prev, next;
         do {
             prev = get();
-            next = accumulator.applyAsDouble(prev, val);
+            next = accumulator.apply(prev, val);
         } while (!HANDLE.compareAndSet(this, prev, next));
         return prev;
     }
 
-    public double accumulateAndGet(double val, DoubleBinaryOperator accumulator) {
+    public double accumulateAndGet(double val, BiFunction<Double, Double, Double> accumulator) {
         double prev, next;
         do {
             prev = get();
-            next = accumulator.applyAsDouble(prev, val);
+            next = accumulator.apply(prev, val);
         } while (!HANDLE.compareAndSet(this, prev, next));
         return next;
     }

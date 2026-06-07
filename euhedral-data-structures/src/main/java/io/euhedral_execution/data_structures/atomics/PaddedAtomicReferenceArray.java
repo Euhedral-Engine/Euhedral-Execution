@@ -1,4 +1,4 @@
-package euhedral.atomics;
+package io.euhedral_execution.data_structures.atomics;
 
 import com.sun.management.HotSpotDiagnosticMXBean;
 import java.lang.invoke.MethodHandles;

@@ -1,8 +1,8 @@
 package euhedral.benchmarks.frames;
 
-import euhedral.atomics.PaddedLongAdder;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.impl.FrameManager;
+import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
 
 public class MandelbrotPixel extends AbstractFrame {
 
