@@ -1,4 +1,4 @@
-package euhedral.queues.common;
+package io.euhedral_execution.data_structures.queues.common;
 
 import com.sun.management.HotSpotDiagnosticMXBean;
 import java.lang.invoke.MethodHandles;

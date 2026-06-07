@@ -1,8 +1,8 @@
 package euhedral.io.utils;
 
 import euhedral.io.frames.AbstractFrame;
-import euhedral.queues.common.PartitionedQueue;
 import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
+import io.euhedral_execution.data_structures.queues.common.PartitionedQueue;
 import lombok.Getter;
 import org.jspecify.annotations.NonNull;
 

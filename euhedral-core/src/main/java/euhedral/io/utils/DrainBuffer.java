@@ -1,9 +1,8 @@
 package euhedral.io.utils;
 
-import java.util.function.Consumer;
-
 import euhedral.io.frames.AbstractFrame;
-import euhedral.queues.common.PartitionedQueue;
+import io.euhedral_execution.data_structures.queues.common.PartitionedQueue;
+import java.util.function.Consumer;
 import lombok.Getter;
 
 /// Used for draining from queues. Automatically tracks the number of frames and bytes drained as

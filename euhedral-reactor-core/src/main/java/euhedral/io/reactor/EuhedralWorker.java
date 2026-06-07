@@ -6,7 +6,7 @@ import euhedral.io.generics.LatticeReceiver;
 import euhedral.io.generics.LatticeSource;
 import euhedral.io.ingest.AbstractIngestSink;
 import euhedral.io.reactor.common.TaskFrame;
-import euhedral.queues.PartitionedMpscQueue;
+import io.euhedral_execution.data_structures.queues.PartitionedMpscQueue;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.Objects;

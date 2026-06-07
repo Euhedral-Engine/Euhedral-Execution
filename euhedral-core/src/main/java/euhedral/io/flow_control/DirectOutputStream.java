@@ -3,7 +3,7 @@ package euhedral.io.flow_control;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.LatticeReceiver;
 import euhedral.io.generics.LatticeSource;
-import euhedral.queues.common.PartitionedQueue;
+import io.euhedral_execution.data_structures.queues.common.PartitionedQueue;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.concurrent.atomic.AtomicLong;

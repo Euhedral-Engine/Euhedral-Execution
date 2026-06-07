@@ -11,7 +11,7 @@ import static org.mockito.Mockito.when;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.LatticeSource;
 import euhedral.io.utils.DrainBuffer;
-import euhedral.queues.common.PartitionedQueue;
+import io.euhedral_execution.data_structures.queues.common.PartitionedQueue;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import org.jctools.maps.NonBlockingHashMapLong;
