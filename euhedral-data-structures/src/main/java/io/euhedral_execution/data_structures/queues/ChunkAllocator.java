@@ -24,7 +24,7 @@ final class ChunkAllocator extends BaseConcurrentQueue {
     private int stored = 0;
 
     public ChunkAllocator(int chunkSize, int maxPooledChunks) {
-        super(Math.max(chunkSize, 4));
+        super(Math.max(chunkSize, 4), true);
         this.maxPooledChunks = maxPooledChunks;
     }
 

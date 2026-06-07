@@ -21,11 +21,13 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue {
 
     protected final long chunkMask;
     protected final int linkIndex;
+    protected final boolean bounded;
 
-    protected BaseConcurrentQueue(int chunkSize) {
+    protected BaseConcurrentQueue(int chunkSize, boolean bounded) {
         super(new Object[QueueUtils.queueSize(Math.max(chunkSize, 2))]);
         this.chunkMask = QueueUtils.chunkMask(Math.max(chunkSize, 2));
         this.linkIndex = this.headQueue.length - 1;
+        this.bounded = bounded;
     }
 
     public abstract boolean offer(T obj);
@@ -51,21 +53,28 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue {
 
     // ----- Single Producer -----
 
+    /// Queue fill logic for single-producer queues
     protected final void spFill(Object[] objs) {
         Objects.requireNonNull(objs);
         for (Object obj : objs) {
-            spOffer(obj);
+            if(!spOffer(obj)) {
+                return;
+            }
         }
     }
 
+    /// Queue fill logic for single-producer queues
     protected final void spFill(Iterable<Object> objs) {
         Objects.requireNonNull(objs);
         for (Object obj : objs) {
-            spOffer(obj);
+            if(!spOffer(obj)) {
+                return;
+            }
         }
     }
 
-    protected final void spOffer(Object obj) {
+    /// Queue offer logic for single-producer queues
+    protected final boolean spOffer(Object obj) {
         Objects.requireNonNull(obj);
 
         long tail = getTailPlain(this);
@@ -74,7 +83,7 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue {
         if ((tailEpoch - tail) > 0) {
             storeInTailQueuePlain(this, QueueUtils.chunkIndex(tail, this.chunkMask), obj);
             setTailRelease(this, tail + INCREMENT);
-            return;
+            return true;
         }
 
         int cIdx = QueueUtils.chunkIndex(tail, this.chunkMask);
@@ -84,7 +93,11 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue {
             setTailEpochPlain(this, head + this.chunkMask);
             storeInTailQueuePlain(this, cIdx, obj);
             getAndAddTail(this, INCREMENT);
-            return;
+            return true;
+        }
+
+        if(this.bounded) {
+            return false;
         }
 
         Object[] oldQueue = getTailQueuePlain(this);
@@ -96,23 +109,31 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue {
         setTailQueuePlain(this, nextQueue);
         addTailEpochPlain(this, this.chunkMask);
         getAndAddTail(this, INCREMENT);
+        return true;
     }
 
     // ----- Multi Producer -----
 
+    /// Queue fill logic for multi-producer queues
     protected final void mpFill(Object[] objs) {
         for (Object obj : objs) {
-            mpOffer(obj);
+            if(!mpOffer(obj)) {
+                return;
+            }
         }
     }
 
+    /// Queue fill logic for multi-producer queues
     protected final void mpFill(Iterable<Object> objs) {
         for (Object obj : objs) {
-            mpOffer(obj);
+            if(!mpOffer(obj)) {
+                return;
+            }
         }
     }
 
-    protected final void mpOffer(Object obj) {
+    /// Queue offer logic for multi-producer queues
+    protected final boolean mpOffer(Object obj) {
         Objects.requireNonNull(obj);
 
         int cIdx;
@@ -152,6 +173,10 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue {
                 continue;
             }
 
+            if(this.bounded) {
+                return false;
+            }
+
             if (casTail(this, tail, tail + HALF_INCREMENT)) {
                 cIdx = QueueUtils.chunkIndex(tail, this.chunkMask);
 
@@ -166,10 +191,12 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue {
             }
         }
         QueueUtils.storeRelease(queue, cIdx, obj);
+        return true;
     }
 
     // ----- Single Consumer -----
 
+    /// Queue poll logic for single-consumer queues
     protected final Object scPoll() {
         long head = getHeadPlain(this);
         int cIdx = QueueUtils.chunkIndex(head, this.chunkMask);
@@ -182,6 +209,7 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue {
         return obj;
     }
 
+    /// Queue drain logic for single-consumer queues
     protected final long scDrain(Consumer<Object> consumer, long limit) {
         Objects.requireNonNull(consumer);
         if (limit <= 0) {
@@ -226,6 +254,7 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue {
         return total;
     }
 
+    /// Queue peek logic for single-consumer queues
     protected final Object scPeek() {
         long head = getHeadPlain(this);
         int cIdx = QueueUtils.chunkIndex(head, this.chunkMask);
@@ -285,8 +314,8 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue {
 
         long mcFlag = 0;
 
-        MCAccessFlag(int chunkSize) {
-            super(chunkSize);
+        MCAccessFlag(int chunkSize, boolean bounded) {
+            super(chunkSize, bounded);
         }
 
         protected static boolean acquireMcLock(BaseConcurrentQueue impl) {
@@ -303,8 +332,8 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue {
         private long p00, p01, p02, p03, p04, p05, p06, p07;
         private long p08, p09, p10, p11, p12, p13, p14, p15;
 
-        MultiConsumer(int chunkSize) {
-            super(chunkSize);
+        MultiConsumer(int chunkSize, boolean bounded) {
+            super(chunkSize, bounded);
         }
     }
 }

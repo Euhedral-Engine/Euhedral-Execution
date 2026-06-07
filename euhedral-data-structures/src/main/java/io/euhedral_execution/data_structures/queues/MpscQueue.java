@@ -4,7 +4,7 @@ import io.euhedral_execution.data_structures.queues.common.QueueUtils;
 import java.util.function.Consumer;
 
 @SuppressWarnings({"unchecked", "unused"})
-public final class MpscQueue<T> extends BaseConcurrentQueue<T> {
+public sealed class MpscQueue<T> extends BaseConcurrentQueue<T> permits BoundedMpscQueue {
 
     private final ChunkAllocator allocator;
 
@@ -13,8 +13,11 @@ public final class MpscQueue<T> extends BaseConcurrentQueue<T> {
     }
 
     public MpscQueue(int chunkSize, int maxPooledChunks) {
-        super(chunkSize);
+        this(chunkSize, maxPooledChunks, false);
+    }
 
+    MpscQueue(int chunkSize, int maxPooledChunks, boolean bounded) {
+        super(chunkSize, bounded);
         if (maxPooledChunks > 0) {
             this.allocator = new ChunkAllocator(maxPooledChunks, maxPooledChunks);
         } else {
@@ -23,45 +26,44 @@ public final class MpscQueue<T> extends BaseConcurrentQueue<T> {
     }
 
     @Override
-    public boolean offer(T obj) {
-        mpOffer(obj);
-        return true;
+    public final boolean offer(T obj) {
+        return mpOffer(obj);
     }
 
     @Override
-    public T peek() {
+    public final T peek() {
         return (T) scPeek();
     }
 
     @Override
-    public T poll() {
+    public final T poll() {
         return (T) scPoll();
     }
 
     @Override
-    public void fill(T[] objs) {
+    public final void fill(T[] objs) {
         mpFill(objs);
     }
 
     @Override
-    public void fill(Iterable<T> objs) {
+    public final void fill(Iterable<T> objs) {
         mpFill((Iterable<Object>) objs);
     }
 
     @Override
-    public long drain(Consumer<T> consumer, long limit) {
+    public final long drain(Consumer<T> consumer, long limit) {
         return scDrain((Consumer<Object>) consumer, limit);
     }
 
     @Override
-    public void clear() {
+    public final void clear() {
         while (scDrain(QueueUtils.NO_OP, Long.MAX_VALUE) > 0) {
             Thread.onSpinWait();
         }
     }
 
     @Override
-    protected Object[] allocateChunk(int chunkSize) {
+    protected final Object[] allocateChunk(int chunkSize) {
         if (this.allocator == null) {
             return new Object[chunkSize];
         }
@@ -69,7 +71,7 @@ public final class MpscQueue<T> extends BaseConcurrentQueue<T> {
     }
 
     @Override
-    protected void freeChunk(Object[] chunk) {
+    protected final void freeChunk(Object[] chunk) {
         if (this.allocator != null) {
             this.allocator.free(chunk);
         }
