@@ -1,7 +1,7 @@
-package euhedral.queues;
+package io.euhedral_execution.data_structures.queues;
 
-import euhedral.queues.common.ConcurrentPartitionedQueue;
-import euhedral.queues.common.QueueUtils;
+import io.euhedral_execution.data_structures.queues.common.ConcurrentPartitionedQueue;
+import io.euhedral_execution.data_structures.queues.common.QueueUtils;
 import java.util.AbstractQueue;
 import java.util.Collection;
 import java.util.Iterator;

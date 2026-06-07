@@ -1,28 +1,28 @@
-package euhedral.queues;
+package io.euhedral_execution.data_structures.queues;
 
 import java.util.function.Consumer;
 
-/// ## An unbounded MPMC array queue with partitions.
+/// ## An unbounded SPSC array queue with partitions.
 ///
 /// @param <T> Type to store
 @SuppressWarnings({"unchecked", "unused"})
-public final class PartitionedMpmcQueue<T> extends AbstractPartitionedQueue<T> {
+public final class PartitionedSpscQueue<T> extends AbstractPartitionedQueue<T> {
 
-    private final MpmcQueue<T>[] queues;
+    private final SpscQueue<T>[] queues;
 
-    public PartitionedMpmcQueue(int chunkSize) {
+    public PartitionedSpscQueue(int chunkSize) {
         this(1, chunkSize, 0);
     }
 
-    public PartitionedMpmcQueue(int partitions, int chunkSize) {
+    public PartitionedSpscQueue(int partitions, int chunkSize) {
         this(partitions, chunkSize, 0);
     }
 
-    public PartitionedMpmcQueue(int partitions, int chunkSize, int maxPooledChunks) {
+    public PartitionedSpscQueue(int partitions, int chunkSize, int maxPooledChunks) {
         super(partitions);
-        this.queues = new MpmcQueue[partitions];
+        this.queues = new SpscQueue[partitions];
         for (int i = 0; i < partitions; i++) {
-            this.queues[i] = new MpmcQueue<>(chunkSize, maxPooledChunks);
+            this.queues[i] = new SpscQueue<>(chunkSize, maxPooledChunks);
         }
     }
 
@@ -66,3 +66,4 @@ public final class PartitionedMpmcQueue<T> extends AbstractPartitionedQueue<T> {
         this.queues[partition].clear();
     }
 }
+

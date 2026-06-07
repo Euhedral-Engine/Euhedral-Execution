@@ -1,11 +1,9 @@
-package euhedral.queues;
+package io.euhedral_execution.data_structures.queues;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -15,13 +13,13 @@ import java.util.concurrent.atomic.LongAdder;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 
-class PartitionedSpmcQueueTest {
+class PartitionedSpscQueueTest {
 
     @Test
     void singleThreadOfferDrain() {
         int chunkSize = 128;
-        PartitionedSpmcQueue<Integer> q =
-                new PartitionedSpmcQueue<>(1, chunkSize, 2);
+        PartitionedSpscQueue<Integer> q =
+                new PartitionedSpscQueue<>(1, chunkSize, 2);
 
         for (int i = 1; i <= chunkSize * 4; i++) {
             assertTrue(q.offer(i));
@@ -49,16 +47,15 @@ class PartitionedSpmcQueueTest {
     }
 
     private static void cycle(int partitions) throws Exception {
-        PartitionedSpmcQueue<Long> q =
-                new PartitionedSpmcQueue<>(partitions, 1024, 4);
-        int batch = 100_000;
-        int consumers = 8;
+        PartitionedSpscQueue<Long> q =
+                new PartitionedSpscQueue<>(partitions, 256, 4);
+        int batch = 2048;
 
         Consumer<Long> consumer = (val) -> {
         };
-        ExecutorService exec = Executors.newFixedThreadPool(consumers + 1);
-        for (int x = 0; x < 20; x++) {
-            CountDownLatch end = new CountDownLatch(consumers);
+        ExecutorService exec = Executors.newFixedThreadPool(2);
+        for (int x = 0; x < 10_000; x++) {
+            CountDownLatch end = new CountDownLatch(1);
 
             LongAdder offered = new LongAdder();
             LongAdder drained = new LongAdder();
@@ -74,60 +71,56 @@ class PartitionedSpmcQueueTest {
                 }
             });
 
-            for (int i = 0; i < consumers; i++) {
-                exec.submit(() -> {
-                    while (drained.sum() < batch) {
-                        long count = q.drain(consumer, 4096);
-                        drained.add(count);
-                        Thread.yield();
-                    }
-                    end.countDown();
-                });
-            }
+            exec.submit(() -> {
+                while (drained.sum() < batch) {
+                    long count = q.drain(consumer, batch);
+                    drained.add(count);
+                    Thread.yield();
+                }
+                end.countDown();
+            });
             end.await(5, TimeUnit.SECONDS);
 
             assertEquals(batch, drained.sum(),
-                    String.format("Iteration: %d Consumed: %d Offered: %d\n%s", x, drained.sum(),
-                            offered.sum(), q));
+                    String.format("Iteration: %d Consumed: %d Offered: %d", x, drained.sum(),
+                            offered.sum()));
         }
     }
 
     @Test
-    void multiConsumerNoLossNoDuplication() throws Exception {
-        int consumers = 4;
+    void spscNoLossNoDuplication() throws Exception {
         int batch = 50_000;
 
-        PartitionedSpmcQueue<Integer> q =
-                new PartitionedSpmcQueue<>(4, 512, 4);
+        PartitionedSpscQueue<Long> q =
+                new PartitionedSpscQueue<>(4, 512, 4);
 
-        ExecutorService exec = Executors.newFixedThreadPool(1 + consumers);
+        ExecutorService exec = Executors.newFixedThreadPool(2);
 
-        Set<Integer> consumed = ConcurrentHashMap.newKeySet();
+        LongAdder consumed = new LongAdder();
 
         exec.submit(() -> {
             for (int i = 0; i < batch; i++) {
-                while (!q.offer(ThreadLocalRandom.current().nextLong(), i)) {
+                long val = i;
+
+                while (!q.offer(ThreadLocalRandom.current().nextLong(), val)) {
                     Thread.yield();
                 }
             }
         });
 
-        CountDownLatch consLatch = new CountDownLatch(consumers);
-        Consumer<Integer> consumer = consumed::add;
+        CountDownLatch consLatch = new CountDownLatch(1);
+        Consumer<Long> consumer = (val) -> consumed.increment();
 
-        for (int c = 0; c < consumers; c++) {
-            exec.submit(() -> {
-                while (consumed.size() < batch) {
-                    q.drain(consumer, 512);
-                }
-                consLatch.countDown();
-            });
-        }
+        exec.submit(() -> {
+            while (consumed.sum() < batch) {
+                q.drain(consumer, 512);
+            }
+            consLatch.countDown();
+        });
 
         consLatch.await(5, TimeUnit.SECONDS);
         exec.shutdownNow();
 
-        assertEquals(batch, consumed.size(), q.toString());
+        assertEquals(batch, consumed.sum(), q.toString());
     }
-
 }

@@ -1,9 +1,9 @@
-package euhedral.queues;
+package io.euhedral_execution.data_structures.queues;
 
-import static euhedral.queues.common.QueueUtils.HALF_INCREMENT;
-import static euhedral.queues.common.QueueUtils.INCREMENT;
+import static io.euhedral_execution.data_structures.queues.common.QueueUtils.HALF_INCREMENT;
+import static io.euhedral_execution.data_structures.queues.common.QueueUtils.INCREMENT;
 
-import euhedral.queues.common.QueueUtils;
+import io.euhedral_execution.data_structures.queues.common.QueueUtils;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.Objects;

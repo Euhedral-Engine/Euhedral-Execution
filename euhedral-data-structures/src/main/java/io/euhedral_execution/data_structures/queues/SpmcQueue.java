@@ -1,6 +1,6 @@
-package euhedral.queues;
+package io.euhedral_execution.data_structures.queues;
 
-import euhedral.queues.common.QueueUtils;
+import io.euhedral_execution.data_structures.queues.common.QueueUtils;
 import java.util.Objects;
 import java.util.function.Consumer;
 
