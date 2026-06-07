@@ -44,7 +44,6 @@ public class MPSCBenchmarks {
         private final MpscUnboundedVarHandleArrayQueue<Integer> jcTools = new MpscUnboundedVarHandleArrayQueue<>(4096);
         private final MpscQueue<Integer> euhedral = new MpscQueue<>(4096);
         private final CyclicBarrier start = new CyclicBarrier(17);
-        private final CyclicBarrier end = new CyclicBarrier(2);
         private final PinnedThreadExecutor[] executors = new PinnedThreadExecutor[32];
         private QueueConsumer consumer;
 
@@ -77,21 +76,13 @@ public class MPSCBenchmarks {
                     }
                 });
             }
+            start.await();
 
-            executors[16].execute(() -> {
-                try {
-                    start.await();
-                    int count = 0;
-                    while (count != 65_536) {
-                        int c = jcTools.drain(consumer, batchSize);
-                        count += c;
-                    }
-                    end.await();
-                } catch (Throwable e) {
-                    throw new RuntimeException(e);
-                }
-            });
-            end.await();
+            int count = 0;
+            while (count != 65_536) {
+                int c = jcTools.drain(consumer, batchSize);
+                count += c;
+            }
         }
 
         @Benchmark
@@ -111,21 +102,13 @@ public class MPSCBenchmarks {
                     }
                 });
             }
+            start.await();
 
-            executors[16].execute(() -> {
-                try {
-                    start.await();
-                    long count = 0;
-                    while (count != 65_536) {
-                        long c = euhedral.drain(consumer, batchSize);
-                        count += c;
-                    }
-                    end.await();
-                } catch (Throwable e) {
-                    throw new RuntimeException(e);
-                }
-            });
-            end.await();
+            long count = 0;
+            while (count != 65_536) {
+                long c = euhedral.drain(consumer, batchSize);
+                count += c;
+            }
         }
 
         @TearDown(Level.Trial)
@@ -148,7 +131,6 @@ public class MPSCBenchmarks {
         private final CyclicBarrier end17 = new CyclicBarrier(17);
 
         private final CyclicBarrier start2 = new CyclicBarrier(2);
-        private final CyclicBarrier end2 = new CyclicBarrier(2);
 
         private final PinnedThreadExecutor[] executors = new PinnedThreadExecutor[32];
         private QueueConsumer consumer;
@@ -166,7 +148,6 @@ public class MPSCBenchmarks {
             start16.reset();
             end17.reset();
             start2.reset();
-            end2.reset();
             jcTools.clear();
             euhedral.clear();
         }
@@ -228,19 +209,12 @@ public class MPSCBenchmarks {
                     throw new RuntimeException(e);
                 }
             });
-            executors[3].execute(() -> {
-                try {
-                    start2.await();
-                    int count = 0;
-                    while (count != 65_536) {
-                        count += jcTools.drain(consumer, 2048);
-                    }
-                    end2.await();
-                } catch (Throwable e) {
-                    throw new RuntimeException(e);
-                }
-            });
-            end2.await();
+            start2.await();
+
+            int count = 0;
+            while (count != 65_536) {
+                count += jcTools.drain(consumer, 2048);
+            }
         }
 
         @Benchmark
@@ -258,19 +232,11 @@ public class MPSCBenchmarks {
                     throw new RuntimeException(e);
                 }
             });
-            executors[3].execute(() -> {
-                try {
-                    start2.await();
-                    long count = 0;
-                    while (count != 65_536) {
-                        count += euhedral.drain(consumer, 2048);
-                    }
-                    end2.await();
-                } catch (Throwable e) {
-                    throw new RuntimeException(e);
-                }
-            });
-            end2.await();
+            start2.await();
+            long count = 0;
+            while (count != 65_536) {
+                count += euhedral.drain(consumer, 2048);
+            }
         }
 
         @TearDown(Level.Trial)

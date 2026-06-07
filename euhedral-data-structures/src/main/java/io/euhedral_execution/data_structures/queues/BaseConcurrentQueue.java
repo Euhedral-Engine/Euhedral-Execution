@@ -12,7 +12,7 @@ import java.util.Iterator;
 import java.util.Objects;
 import java.util.function.Consumer;
 
-@SuppressWarnings({"rawtypes","unused"})
+@SuppressWarnings({"rawtypes", "unused"})
 public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue {
 
     private static void linkChunk(Object[] oldQueue, Object[] nextQueue, int cIdx) {
@@ -63,7 +63,7 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue {
     /// Queue fill logic for single-producer queues
     protected final int spFill(Object[] objs, int start, int end) {
         Objects.requireNonNull(objs);
-        if(end - start <= 0) {
+        if (end - start <= 0) {
             return 0;
         }
 
@@ -76,8 +76,8 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue {
             long claim = Math.min(size, epoch - tail);
 
             // Slow Path
-            if(claim == 0) {
-                if(!spEpochUpdate(tail, epoch)) {
+            if (claim == 0) {
+                if (!spEpochUpdate(tail, epoch)) {
                     break;
                 }
                 continue;
@@ -86,7 +86,7 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue {
             size -= claim;
 
             // Fast Path
-            while(claim > 0) {
+            while (claim > 0) {
                 Object obj = objs[start++];
                 Objects.requireNonNull(obj, "null elements cannot be inserted into this queue");
 
@@ -116,8 +116,8 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue {
             long claim = Math.min(size, epoch - tail);
 
             // Slow Path
-            if(claim == 0) {
-                if(!spEpochUpdate(tail, epoch)) {
+            if (claim == 0) {
+                if (!spEpochUpdate(tail, epoch)) {
                     break;
                 }
                 continue;
@@ -126,7 +126,7 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue {
             size -= claim;
 
             // Fast Path
-            while(claim > 0 && iter.hasNext()) {
+            while (claim > 0 && iter.hasNext()) {
                 Object obj = iter.next();
                 Objects.requireNonNull(obj, "null elements cannot be inserted into this queue");
 
@@ -150,7 +150,7 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue {
             return true;
         }
 
-        if(this.bounded) {
+        if (this.bounded) {
             return false;
         }
 
@@ -187,7 +187,7 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue {
             return true;
         }
 
-        if(this.bounded) {
+        if (this.bounded) {
             return false;
         }
 
@@ -297,23 +297,135 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue {
     // ----- Multi Producer -----
 
     /// Queue fill logic for multi-producer queues
-    protected final void mpFill(Object[] objs) {
-        for (Object obj : objs) {
-            if(!mpOffer(obj)) {
-                return;
+    protected final int mpFill(Object[] objs) {
+        return mpFill(objs, 0, objs.length);
+    }
+
+    protected final int mpFill(Object[] objs, int start, int end) {
+        Objects.requireNonNull(objs);
+        if (end - start <= 0) {
+            return 0;
+        }
+
+        int total = 0;
+        long size = (long) (end - start) << SHIFT;
+        while (size > 0) {
+            long tail = getTailAcquire(this);
+
+            // If odd, resizing.
+            if ((tail & HALF_INCREMENT) == 1) {
+                continue;
+            }
+
+            long epoch = getTailEpochAcquire(this);
+            Object[] queue = getTailQueuePlain(this);
+
+            long claim = Math.min(size, epoch - tail);
+
+            ClaimStatus status = mpClaim(tail, epoch, claim);
+
+            // Fast Path
+            if (status == ClaimStatus.SUCCESS) {
+                size -= claim;
+                while (claim > 0) {
+                    Object obj = objs[start++];
+                    Objects.requireNonNull(obj, "null elements cannot be inserted into this queue");
+
+                    int cIdx = QueueUtils.chunkIndex(tail, this.chunkMask);
+                    storeInTailQueuePlain(this, cIdx, obj);
+                    claim -= INCREMENT;
+                    tail += INCREMENT;
+                    total++;
+                }
+                VarHandle.releaseFence();
+                continue;
+            }
+            if (status == ClaimStatus.FAILURE) {
+                continue;
+            }
+
+            if (this.bounded) {
+                break;
+            }
+
+            if (casTail(this, tail, tail + HALF_INCREMENT)) {
+                int cIdx = QueueUtils.chunkIndex(tail, this.chunkMask);
+
+                Object[] nextQueue = allocateChunk(queue.length);
+                nextQueue[cIdx] = objs[start++];
+                setTailQueuePlain(this, nextQueue);
+                setTailEpochPlain(this, tail + this.chunkMask);
+                getAndAddTail(this, HALF_INCREMENT);
+
+                linkChunk(queue, nextQueue, cIdx);
+                total++;
             }
         }
+        return total;
     }
 
     /// Queue fill logic for multi-producer queues
-    protected final void mpFill(Collection<Object> objs) {
+    protected final int mpFill(Collection<Object> objs) {
         Objects.requireNonNull(objs);
 
-        for (Object obj : objs) {
-            if(!mpOffer(obj)) {
-                return;
+        int total = 0;
+        long size = (long) objs.size() << SHIFT;
+        Iterator<Object> iter = objs.iterator();
+
+        while (size > 0) {
+            long tail = getTailAcquire(this);
+
+            // If odd, resizing.
+            if ((tail & HALF_INCREMENT) == 1) {
+                continue;
+            }
+
+            long epoch = getTailEpochAcquire(this);
+            Object[] queue = getTailQueuePlain(this);
+
+            long claim = Math.min(size, epoch - tail);
+            ClaimStatus status = mpClaim(tail, epoch, claim);
+
+            // Fast Path
+            if (status == ClaimStatus.SUCCESS) {
+                size -= claim;
+                while (claim > 0) {
+                    Object obj = iter.next();
+                    Objects.requireNonNull(obj, "null elements cannot be inserted into this queue");
+
+                    int cIdx = QueueUtils.chunkIndex(tail, this.chunkMask);
+                    storeInTailQueuePlain(this, cIdx, obj);
+                    claim -= INCREMENT;
+                    tail += INCREMENT;
+                    total++;
+                }
+                VarHandle.releaseFence();
+                continue;
+            }
+            if (status == ClaimStatus.FAILURE) {
+                continue;
+            }
+
+            if (this.bounded) {
+                break;
+            }
+
+            if (casTail(this, tail, tail + HALF_INCREMENT)) {
+                int cIdx = QueueUtils.chunkIndex(tail, this.chunkMask);
+
+                Object[] nextQueue = allocateChunk(queue.length);
+                nextQueue[cIdx] = iter.next();
+                Objects.requireNonNull(nextQueue[cIdx],
+                        "null elements cannot be inserted into this queue");
+                setTailQueuePlain(this, nextQueue);
+                setTailEpochPlain(this, tail + this.chunkMask);
+                getAndAddTail(this, HALF_INCREMENT);
+
+                linkChunk(queue, nextQueue, cIdx);
+                total++;
             }
         }
+        return total;
     }
 
     /// Queue offer logic for multi-producer queues
@@ -336,15 +448,15 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue {
             queue = getTailQueuePlain(this);
 
             ClaimStatus status = mpClaim(tail, epoch, INCREMENT);
-            if(status == ClaimStatus.SUCCESS) {
+            if (status == ClaimStatus.SUCCESS) {
                 cIdx = QueueUtils.chunkIndex(tail, this.chunkMask);
                 break;
             }
-            if(status == ClaimStatus.FAILURE) {
+            if (status == ClaimStatus.FAILURE) {
                 continue;
             }
 
-            if(this.bounded) {
+            if (this.bounded) {
                 return false;
             }
 
@@ -367,7 +479,7 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue {
 
     private ClaimStatus mpClaim(long tail, long epoch, long delta) {
         long claim = tail + delta;
-        if(claim <= epoch) {
+        if (claim <= epoch) {
             if (!casTail(this, tail, claim)) {
                 return ClaimStatus.FAILURE;
             }
@@ -376,14 +488,14 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue {
 
         long head = getHeadAcquire(this);
         long nextEpoch = head + this.chunkMask;
-        if((nextEpoch - tail) <= 0) {
+        if ((nextEpoch - tail) <= 0) {
             return ClaimStatus.RESIZE;
         }
 
-        if(!casTailEpoch(this, epoch, nextEpoch)) {
+        if (!casTailEpoch(this, epoch, nextEpoch)) {
             return ClaimStatus.FAILURE;
         }
-        if(!casTail(this, tail, claim)) {
+        if (!casTail(this, tail, claim)) {
             return ClaimStatus.FAILURE;
         }
         return ClaimStatus.SUCCESS;
@@ -422,18 +534,17 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue {
             }
         }
 
-        long mcFlag = 0;
-
-        MCAccessFlag(int chunkSize, boolean bounded) {
-            super(chunkSize, bounded);
-        }
-
         protected static boolean acquireMcLock(BaseConcurrentQueue impl) {
             return MC_FLAG.compareAndSet(impl, 0, 1);
         }
 
         protected static void releaseMcLock(BaseConcurrentQueue impl) {
             MC_FLAG.setRelease(impl, 0);
+        }
+        long mcFlag = 0;
+
+        MCAccessFlag(int chunkSize, boolean bounded) {
+            super(chunkSize, bounded);
         }
     }
 
