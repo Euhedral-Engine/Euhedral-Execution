@@ -37,15 +37,15 @@ public class MPMCBenchmarks {
     @Fork(1)
     @BenchmarkMode({Mode.AverageTime})
     @OutputTimeUnit(TimeUnit.NANOSECONDS)
-    @Warmup(iterations = 3, time = 5, timeUnit = TimeUnit.SECONDS)
-    @Measurement(iterations = 5, time = 3, timeUnit = TimeUnit.SECONDS)
+    @Warmup(iterations = 3, time = 3, timeUnit = TimeUnit.SECONDS)
+    @Measurement(iterations = 5, time = 5, timeUnit = TimeUnit.SECONDS)
     @State(Scope.Benchmark)
     public static class BatchSizeProfile {
         private final MpmcUnboundedXaddArrayQueue<Integer> jcTools = new MpmcUnboundedXaddArrayQueue<>(4096, 4);
         private final MpmcQueue<Integer> euhedral = new MpmcQueue<>(
                 4096, 4);
         private final CyclicBarrier start = new CyclicBarrier(16);
-        private final CyclicBarrier end = new CyclicBarrier(33);
+        private final CyclicBarrier end = new CyclicBarrier(17);
         private final PinnedThreadExecutor[] executors = new PinnedThreadExecutor[32];
         private QueueConsumer consumer;
 
@@ -77,7 +77,6 @@ public class MPMCBenchmarks {
                                 Thread.onSpinWait();
                             }
                         }
-                        end.await();
                     } catch (Throwable e) {
                         throw new RuntimeException(e);
                     }
@@ -138,7 +137,6 @@ public class MPMCBenchmarks {
                             }
                             count += c;
                         }
-                        end.await();
                     } catch (Throwable e) {
                         throw new RuntimeException(e);
                     }
