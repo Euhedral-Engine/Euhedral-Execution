@@ -1,6 +1,5 @@
 package euhedral.benchmarks.core_benchmarks;
 
-import euhedral.atomics.PaddedLongAdder;
 import euhedral.benchmarks.frames.ArrayFrame;
 import euhedral.benchmarks.frames.MandelbulbFrame;
 import euhedral.benchmarks.pipelines.FractalPipeline;
@@ -16,6 +15,7 @@ import euhedral.io.control_plane.RoutingPolicy;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.ingest.ArrayIngestSink;
 import euhedral.io.utils.MathFunctions;
+import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
 import java.util.concurrent.TimeUnit;
 import org.openjdk.jmh.annotations.AuxCounters;
 import org.openjdk.jmh.annotations.AuxCounters.Type;

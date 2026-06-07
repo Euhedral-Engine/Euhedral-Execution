@@ -1,8 +1,7 @@
 package euhedral.benchmarks.queue_benchmarks;
 
-import euhedral.experimental.UnboundedSpscQueue;
 import euhedral.hardware_utils.PinnedThreadExecutor;
-import euhedral.queues.PartitionedSpscArrayQueue;
+import euhedral.queues.SpscQueue;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -45,7 +44,7 @@ public class SPSCBenchmarks {
     public static class OfferWhileDrain {
 
         private final SpscUnboundedVarHandleArrayQueue<Integer> jcTools = new SpscUnboundedVarHandleArrayQueue<>(1024);
-        private final UnboundedSpscQueue<Integer> euhedral = new UnboundedSpscQueue<>(
+        private final SpscQueue<Integer> euhedral = new SpscQueue<>(
                 1024, 2);
         private final CyclicBarrier barrier = new CyclicBarrier(3);
         private final PinnedThreadExecutor[] pool = new PinnedThreadExecutor[2];

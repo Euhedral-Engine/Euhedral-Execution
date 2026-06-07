@@ -1,6 +1,5 @@
 package euhedral.benchmarks.core_benchmarks;
 
-import euhedral.atomics.PaddedLongAdder;
 import euhedral.benchmarks.core_benchmarks.utils.MandelbrotCanvas;
 import euhedral.benchmarks.frames.ArrayFrame;
 import euhedral.benchmarks.frames.MandelbrotPixel;
@@ -13,6 +12,7 @@ import euhedral.io.control_plane.ControlPlaneLattice;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.reactor.common.EuhedralSubscriber;
 import euhedral.io.utils.MathFunctions;
+import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 import org.openjdk.jmh.annotations.Benchmark;

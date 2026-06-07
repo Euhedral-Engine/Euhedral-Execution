@@ -1,18 +1,18 @@
-package euhedral.experimental;
+package euhedral.queues;
 
 import euhedral.queues.common.QueueUtils;
 import java.util.function.Consumer;
 
 @SuppressWarnings({"unchecked", "unused"})
-public final class MpscQueue<T> extends BaseConcurrentQueue<T> {
+public final class SpscQueue<T> extends BaseConcurrentQueue<T> {
 
     private final ChunkAllocator allocator;
 
-    public MpscQueue(int chunkSize) {
+    public SpscQueue(int chunkSize) {
         this(chunkSize, 0);
     }
 
-    public MpscQueue(int chunkSize, int maxPooledChunks) {
+    public SpscQueue(int chunkSize, int maxPooledChunks) {
         super(chunkSize);
 
         if (maxPooledChunks > 0) {
@@ -24,7 +24,7 @@ public final class MpscQueue<T> extends BaseConcurrentQueue<T> {
 
     @Override
     public boolean offer(T obj) {
-        mpOffer(obj);
+        spOffer(obj);
         return true;
     }
 
@@ -40,12 +40,12 @@ public final class MpscQueue<T> extends BaseConcurrentQueue<T> {
 
     @Override
     public void fill(T[] objs) {
-        mpFill(objs);
+        spFill(objs);
     }
 
     @Override
     public void fill(Iterable<T> objs) {
-        mpFill((Iterable<Object>) objs);
+        spFill((Iterable<Object>) objs);
     }
 
     @Override

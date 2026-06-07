@@ -1,26 +1,26 @@
-package euhedral.experimental;
+package euhedral.queues;
 
 import euhedral.queues.common.QueueUtils;
 import java.util.Objects;
 import java.util.function.Consumer;
 
 @SuppressWarnings({"unchecked", "unused"})
-public final class MpmcQueue<T> extends BaseConcurrentQueue.MultiConsumer<T> {
+public final class SpmcQueue<T> extends BaseConcurrentQueue.MultiConsumer<T> {
 
     private final ChunkAllocator allocator;
     private final long maxConsumeBatch;
 
-    public MpmcQueue(int chunkSize) {
+    public SpmcQueue(int chunkSize) {
         this(chunkSize, 0, Long.MAX_VALUE);
     }
 
-    public MpmcQueue(int chunkSize, int maxPooledChunks) {
-        this(chunkSize, maxPooledChunks, Long.MAX_VALUE);
+    public SpmcQueue(int chunkSize, int maxPooledChunks) {
+        this(chunkSize, 0, Long.MAX_VALUE);
     }
 
-    public MpmcQueue(int chunkSize, int maxPooledChunks, long maxConsumeBatch) {
+    public SpmcQueue(int chunkSize, int maxPooledChunks, long maxConsumeBatch) {
         super(chunkSize);
-        if (maxConsumeBatch <= 0) {
+        if(maxConsumeBatch <= 0) {
             throw new IllegalArgumentException("maxConsumeBatch must be positive");
         }
 
@@ -34,7 +34,7 @@ public final class MpmcQueue<T> extends BaseConcurrentQueue.MultiConsumer<T> {
 
     @Override
     public boolean offer(T obj) {
-        mpOffer(obj);
+        spOffer(obj);
         return true;
     }
 
@@ -64,23 +64,23 @@ public final class MpmcQueue<T> extends BaseConcurrentQueue.MultiConsumer<T> {
 
     @Override
     public void fill(T[] objs) {
-        mpFill(objs);
+        spFill(objs);
     }
 
     @Override
     public void fill(Iterable<T> objs) {
-        mpFill((Iterable<Object>) objs);
+        spFill((Iterable<Object>) objs);
     }
 
     @Override
     public long drain(Consumer<T> consumer, long limit) {
         Objects.requireNonNull(consumer);
-        if (limit <= 0) {
+        if(limit <= 0) {
             return 0;
         }
 
         long total = 0;
-        while (total < limit) {
+        while(total < limit) {
             if (!acquireMcLock(this)) {
                 return total;
             }

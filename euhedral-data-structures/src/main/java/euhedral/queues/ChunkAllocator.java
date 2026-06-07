@@ -1,4 +1,4 @@
-package euhedral.experimental;
+package euhedral.queues;
 
 import euhedral.queues.common.QueueUtils;
 import java.lang.invoke.MethodHandles;

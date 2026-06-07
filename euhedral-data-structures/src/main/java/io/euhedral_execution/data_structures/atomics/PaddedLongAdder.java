@@ -1,4 +1,4 @@
-package euhedral.atomics;
+package io.euhedral_execution.data_structures.atomics;
 
 import java.lang.invoke.VarHandle;
 import java.util.concurrent.ThreadLocalRandom;
