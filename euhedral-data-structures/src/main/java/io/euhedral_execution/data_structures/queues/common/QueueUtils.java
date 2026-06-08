@@ -7,7 +7,8 @@ import java.lang.management.ManagementFactory;
 import java.util.function.Consumer;
 
 public class QueueUtils {
-    static final VarHandle QUEUE = MethodHandles.arrayElementVarHandle(Object[].class);
+    private static final VarHandle QUEUE = MethodHandles.arrayElementVarHandle(Object[].class);
+    public static final int MAX_SIZE = 1 << 30;
 
     public static final int SHIFT = 1;
     public static final long INCREMENT = 1L << SHIFT;
@@ -73,6 +74,7 @@ public class QueueUtils {
             throw new IllegalArgumentException("chunkSize must be positive");
         }
 
-        return Long.highestOneBit((chunkSize - 1) << 1);
+        long rounded = Long.highestOneBit((chunkSize - 1) << 1);
+        return rounded > MAX_SIZE ? MAX_SIZE : rounded;
     }
 }

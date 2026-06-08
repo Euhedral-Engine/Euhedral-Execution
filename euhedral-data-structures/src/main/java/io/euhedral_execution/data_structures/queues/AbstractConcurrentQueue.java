@@ -2,26 +2,27 @@ package io.euhedral_execution.data_structures.queues;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
+import java.util.AbstractQueue;
 
 @SuppressWarnings("unused")
-abstract class TailPad {
+abstract class TailPad<T> extends AbstractQueue<T> {
     private long p00, p01, p02, p03, p04, p05, p06, p07;
     private long p08, p09, p10, p11, p12, p13, p14, p15;
 }
 
-abstract class TailState extends TailPad {
+abstract class TailState<T> extends TailPad<T> {
 
     protected long tail;
 
 }
 
 @SuppressWarnings("unused")
-abstract class MidPad1 extends TailState {
+abstract class MidPad1<T> extends TailState<T> {
     private long p00, p01, p02, p03, p04, p05, p06, p07;
     private long p08, p09, p10, p11, p12, p13, p14, p15;
 }
 
-abstract class HeadState extends MidPad1 {
+abstract class HeadState<T> extends MidPad1<T> {
     protected long head;
     protected Object[] headQueue;
 
@@ -32,7 +33,7 @@ abstract class HeadState extends MidPad1 {
 }
 
 @SuppressWarnings("unused")
-abstract class MidPad2 extends HeadState {
+abstract class MidPad2<T> extends HeadState<T> {
 
     private long p00, p01, p02, p03, p04, p05, p06, p07;
     private long p08, p09, p10, p11, p12, p13, p14;
@@ -43,7 +44,7 @@ abstract class MidPad2 extends HeadState {
 
 }
 
-abstract class TailState2 extends MidPad2 {
+abstract class TailState2<T> extends MidPad2<T> {
     protected long tailEpoch;
     protected Object[] tailQueue;
 
@@ -54,7 +55,7 @@ abstract class TailState2 extends MidPad2 {
 }
 
 @SuppressWarnings("unused")
-abstract class StartPad extends TailState2 {
+abstract class StartPad<T> extends TailState2<T> {
     private long p00, p01, p02, p03, p04, p05, p06, p07;
     private long p08, p09, p10, p11, p12, p13, p14, p15;
 
@@ -63,8 +64,8 @@ abstract class StartPad extends TailState2 {
     }
 }
 
-@SuppressWarnings("unused")
-public abstract class AbstractConcurrentQueue extends StartPad {
+@SuppressWarnings({"rawtypes","unused"})
+public abstract class AbstractConcurrentQueue<T> extends StartPad<T> {
     protected static final VarHandle HEAD;
     protected static final VarHandle TAIL;
     protected static final VarHandle EPOCH;

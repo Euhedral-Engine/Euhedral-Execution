@@ -3,7 +3,7 @@ package euhedral.io.flow_control;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.LatticeReceiver;
 import euhedral.io.generics.LatticeSource;
-import io.euhedral_execution.data_structures.queues.common.PartitionedQueue;
+import io.euhedral_execution.data_structures.queues.common.BatchableQueue;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.concurrent.atomic.AtomicLong;
@@ -33,7 +33,7 @@ public class DirectOutputStream implements LatticeSource {
 
     protected final AtomicLong demand = new AtomicLong(0);
 
-    protected final PartitionedQueue<AbstractFrame> buffer;
+    protected final BatchableQueue<AbstractFrame> buffer;
     protected final Consumer<AbstractFrame> applyToEach;
 
     protected boolean unlimited = false;
@@ -41,7 +41,7 @@ public class DirectOutputStream implements LatticeSource {
     protected LatticeReceiver terminal = null;
 
 
-    public DirectOutputStream(@NonNull PartitionedQueue<AbstractFrame> buffer,
+    public DirectOutputStream(@NonNull BatchableQueue<AbstractFrame> buffer,
             Consumer<AbstractFrame> applyToEach) {
         this.buffer = buffer;
         this.applyToEach = applyToEach;

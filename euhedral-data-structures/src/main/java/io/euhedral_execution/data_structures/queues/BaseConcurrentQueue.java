@@ -4,6 +4,7 @@ import static io.euhedral_execution.data_structures.queues.common.QueueUtils.HAL
 import static io.euhedral_execution.data_structures.queues.common.QueueUtils.INCREMENT;
 import static io.euhedral_execution.data_structures.queues.common.QueueUtils.SHIFT;
 
+import io.euhedral_execution.data_structures.queues.common.BatchableQueue;
 import io.euhedral_execution.data_structures.queues.common.QueueUtils;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
@@ -11,9 +12,11 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.Objects;
 import java.util.function.Consumer;
+import org.jspecify.annotations.NonNull;
 
 @SuppressWarnings({"rawtypes", "unused"})
-public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue {
+public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue<T> implements
+        BatchableQueue<T> {
 
     private static void linkChunk(Object[] oldQueue, Object[] nextQueue, int cIdx) {
         oldQueue[oldQueue.length - 1] = nextQueue;
@@ -25,6 +28,7 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue {
     protected final long chunkMask;
     protected final int linkIndex;
     protected final boolean bounded;
+    protected final ThreadSafeIterator iterator = new ThreadSafeIterator();
 
     protected BaseConcurrentQueue(int chunkSize, boolean bounded) {
         super(new Object[QueueUtils.queueSize(Math.max(chunkSize, 2))]);
@@ -39,9 +43,9 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue {
 
     public abstract T poll();
 
-    public abstract void fill(T[] objs);
+    public abstract int fill(T[] objs);
 
-    public abstract void fill(Collection<T> objs);
+    public abstract int fill(Collection<T> objs);
 
     public abstract long drain(Consumer<T> consumer, long limit);
 
@@ -504,15 +508,35 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue {
     public final long sizeLong() {
         long head = getHeadAcquire(this);
         long tail = getTailAcquire(this);
-        return tail - head;
-    }
-
-    public final int size() {
-        return (int) Math.min(sizeLong(), Integer.MAX_VALUE);
+        return (tail - head) >>> QueueUtils.SHIFT;
     }
 
     public final boolean isEmpty() {
         return sizeLong() == 0;
+    }
+
+    // ----- Queue<T> Interface -----
+
+    public final boolean add(T obj) {
+        if (offer(obj)) {
+            return true;
+        }
+        throw new IllegalStateException("Queue full");
+    }
+
+    public final @NonNull Iterator<T> iterator() {
+        return this.iterator;
+    }
+
+    /// Use `sizeLong()` for an accurate count
+    @Deprecated
+    public final int size() {
+        return (int) Math.min(sizeLong(), Integer.MAX_VALUE);
+    }
+
+    @Override
+    public String toString() {
+        return this.getClass().getSimpleName() + "-" + this.getClass().hashCode();
     }
 
     private enum ClaimStatus {
@@ -541,6 +565,7 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue {
         protected static void releaseMcLock(BaseConcurrentQueue impl) {
             MC_FLAG.setRelease(impl, 0);
         }
+
         long mcFlag = 0;
 
         MCAccessFlag(int chunkSize, boolean bounded) {
@@ -555,6 +580,40 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue {
 
         MultiConsumer(int chunkSize, boolean bounded) {
             super(chunkSize, bounded);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    protected class ThreadSafeIterator implements Iterator<T> {
+        long pos = 0;
+
+        @Override
+        public boolean hasNext() {
+            long head = getHeadAcquire(BaseConcurrentQueue.this);
+            if(head > pos) {
+                pos = head;
+            }
+            int cIdx = QueueUtils.chunkIndex(pos, chunkMask);
+            Object[] queue = getHeadQueuePlain(BaseConcurrentQueue.this);
+            if(queue[cIdx] == QueueUtils.SENTINEL) {
+                queue = (Object[]) queue[queue.length - 1];
+            }
+            return queue[cIdx] != null;
+        }
+
+        @Override
+        public T next() {
+            long head = getHeadAcquire(BaseConcurrentQueue.this);
+            if(head > pos) {
+                pos = head;
+            }
+            int cIdx = QueueUtils.chunkIndex(pos, chunkMask);
+            Object[] queue = getHeadQueuePlain(BaseConcurrentQueue.this);
+            if(queue[cIdx] == QueueUtils.SENTINEL) {
+                queue = (Object[]) queue[queue.length - 1];
+            }
+            pos += INCREMENT;
+            return (T) queue[cIdx];
         }
     }
 }

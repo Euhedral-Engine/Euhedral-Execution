@@ -16,7 +16,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import euhedral.io.frames.AbstractFrame;
-import io.euhedral_execution.data_structures.queues.common.PartitionedQueue;
+import io.euhedral_execution.data_structures.queues.common.BatchableQueue;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,7 +25,7 @@ import test_utils.TestReceiver;
 
 class DirectOutputStreamTest {
 
-    private PartitionedQueue<AbstractFrame> queue;
+    private BatchableQueue<AbstractFrame> queue;
     private Consumer<AbstractFrame> applyToEach;
     private DirectOutputStream stream;
     private TestReceiver terminal;
@@ -33,7 +33,7 @@ class DirectOutputStreamTest {
     @BeforeEach
     @SuppressWarnings("unchecked")
     void setup() {
-        queue = mock(PartitionedQueue.class);
+        queue = mock(BatchableQueue.class);
         applyToEach = mock(Consumer.class);
 
         stream = new DirectOutputStream(queue, applyToEach);
