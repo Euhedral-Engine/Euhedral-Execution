@@ -14,7 +14,7 @@ import java.util.Objects;
 import java.util.function.Consumer;
 import org.jspecify.annotations.NonNull;
 
-@SuppressWarnings({"rawtypes", "unused"})
+@SuppressWarnings({"rawtypes", "unchecked", "unused"})
 public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue<T> implements
         BatchableQueue<T> {
 
@@ -23,6 +23,29 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue<T> 
 
         // Publish must happen after link.
         QueueUtils.storeVolatile(oldQueue, cIdx, QueueUtils.SENTINEL);
+    }
+
+    protected static boolean spEpochUpdate(BaseConcurrentQueue<?> impl, long tail, long epoch) {
+        int cIdx = QueueUtils.chunkIndex(tail, impl.chunkMask);
+        long head = getHeadAcquire(impl);
+
+        if (head + impl.chunkMask > tail) {
+            setTailEpochPlain(impl, head + impl.chunkMask);
+            return true;
+        }
+
+        if (impl.bounded) {
+            return false;
+        }
+
+        Object[] oldQueue = getTailQueuePlain(impl);
+        Object[] nextQueue = impl.allocateChunk(oldQueue.length);
+
+        linkChunk(oldQueue, nextQueue, cIdx);
+
+        setTailQueuePlain(impl, nextQueue);
+        addTailEpochPlain(impl, impl.chunkMask);
+        return true;
     }
 
     protected final long chunkMask;
@@ -36,20 +59,6 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue<T> 
         this.linkIndex = this.headQueue.length - 1;
         this.bounded = bounded;
     }
-
-    public abstract boolean offer(T obj);
-
-    public abstract T peek();
-
-    public abstract T poll();
-
-    public abstract int fill(T[] objs);
-
-    public abstract int fill(Collection<T> objs);
-
-    public abstract long drain(Consumer<T> consumer, long limit);
-
-    public abstract void clear();
 
     protected Object[] allocateChunk(int chunkSize) {
         return new Object[chunkSize];
@@ -81,7 +90,7 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue<T> 
 
             // Slow Path
             if (claim == 0) {
-                if (!spEpochUpdate(tail, epoch)) {
+                if (!spEpochUpdate(this, tail, epoch)) {
                     break;
                 }
                 continue;
@@ -121,7 +130,7 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue<T> 
 
             // Slow Path
             if (claim == 0) {
-                if (!spEpochUpdate(tail, epoch)) {
+                if (!spEpochUpdate(this, tail, epoch)) {
                     break;
                 }
                 continue;
@@ -143,29 +152,6 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue<T> 
             setTailRelease(this, tail);
         }
         return total;
-    }
-
-    private boolean spEpochUpdate(long tail, long epoch) {
-        int cIdx = QueueUtils.chunkIndex(tail, this.chunkMask);
-        long head = getHeadAcquire(this);
-
-        if (head + this.chunkMask > tail) {
-            setTailEpochPlain(this, head + this.chunkMask);
-            return true;
-        }
-
-        if (this.bounded) {
-            return false;
-        }
-
-        Object[] oldQueue = getTailQueuePlain(this);
-        Object[] nextQueue = allocateChunk(oldQueue.length);
-
-        linkChunk(oldQueue, nextQueue, cIdx);
-
-        setTailQueuePlain(this, nextQueue);
-        addTailEpochPlain(this, this.chunkMask);
-        return true;
     }
 
     /// Queue offer logic for single-producer queues
@@ -296,6 +282,125 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue<T> 
         }
 
         return obj;
+    }
+
+    protected final long scToSpTransfer(BaseConcurrentQueue<T> receiver, Consumer<T> sideEffect,
+            long limit) {
+        Objects.requireNonNull(receiver);
+        if (limit <= 0) {
+            return 0;
+        }
+
+        VarHandle.acquireFence();
+
+        long myHead = getHeadPlain(this);
+        long myTail = getTailPlain(this);
+        if (myHead == myTail) {
+            return 0;
+        }
+        Object[] myQueue = getHeadQueuePlain(this);
+
+        long total = 0;
+        long size = Math.min(myTail - myHead, limit << QueueUtils.SHIFT);
+        while (size > 0) {
+            long theirTail = getTailPlain(receiver);
+            long theirEpoch = getTailEpochPlain(receiver);
+
+            long claim = Math.min(size, theirEpoch - theirTail);
+
+            // Slow Path
+            if (claim == 0) {
+                if (!spEpochUpdate(receiver, theirTail, theirEpoch)) {
+                    break;
+                }
+                continue;
+            }
+
+            size -= claim;
+
+            // Fast Path
+            while (claim > 0) {
+                int myIdx = QueueUtils.chunkIndex(myHead, this.chunkMask);
+                Object obj = myQueue[myIdx];
+                myQueue[myIdx] = null;
+                if (obj == QueueUtils.SENTINEL) {
+                    Object[] temp = myQueue;
+                    myQueue = (Object[]) myQueue[myQueue.length - 1];
+
+                    temp[myQueue.length - 1] = null;
+                    setHeadQueuePlain(this, myQueue);
+                    obj = myQueue[myIdx];
+
+                    freeChunk(temp);
+                }
+                if (obj == null) {
+                    size = 0;
+                    break;
+                }
+                int theirIdx = QueueUtils.chunkIndex(theirTail, receiver.chunkMask);
+                storeInTailQueuePlain(receiver, theirIdx, obj);
+                claim -= INCREMENT;
+                myHead += INCREMENT;
+                theirTail += INCREMENT;
+                total++;
+
+                if(sideEffect != null) {
+                    sideEffect.accept((T) obj);
+                }
+            }
+            setTailRelease(receiver, theirTail);
+        }
+        setHeadRelease(this, myHead);
+        return total;
+    }
+
+    protected final long scToMpTransfer(BaseConcurrentQueue<T> receiver, Consumer<T> sideEffect, long limit) {
+        Objects.requireNonNull(receiver);
+        if (limit <= 0) {
+            return 0;
+        }
+
+        VarHandle.acquireFence();
+
+        long head = getHeadPlain(this);
+        long tail = getTailPlain(this);
+        if (head == tail) {
+            return 0;
+        }
+        Object[] queue = getHeadQueuePlain(this);
+
+        long total = 0;
+        long size = Math.min(tail - head, limit << QueueUtils.SHIFT);
+        while (size > 0) {
+            int cIdx = QueueUtils.chunkIndex(head, this.chunkMask);
+            Object obj = queue[cIdx];
+            if(obj == null) {
+                break;
+            }
+            if (obj == QueueUtils.SENTINEL) {
+                Object[] temp = queue;
+                queue = (Object[]) queue[queue.length - 1];
+
+                temp[queue.length - 1] = null;
+                setHeadQueuePlain(this, queue);
+                obj = queue[cIdx];
+
+                freeChunk(temp);
+            }
+            if(obj == null) {
+                break;
+            }
+
+            if(!receiver.offer((T) obj)) {
+                break;
+            }
+            head += INCREMENT;
+            size -= INCREMENT;
+            if(sideEffect != null) {
+                sideEffect.accept((T) obj);
+            }
+        }
+        return total;
     }
 
     // ----- Multi Producer -----
@@ -505,12 +610,14 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue<T> 
         return ClaimStatus.SUCCESS;
     }
 
+    @Override
     public final long sizeLong() {
         long head = getHeadAcquire(this);
         long tail = getTailAcquire(this);
         return (tail - head) >>> QueueUtils.SHIFT;
     }
 
+    @Override
     public final boolean isEmpty() {
         return sizeLong() == 0;
     }
@@ -585,17 +692,18 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue<T> 
 
     @SuppressWarnings("unchecked")
     protected class ThreadSafeIterator implements Iterator<T> {
+
         long pos = 0;
 
         @Override
         public boolean hasNext() {
             long head = getHeadAcquire(BaseConcurrentQueue.this);
-            if(head > pos) {
+            if (head > pos) {
                 pos = head;
             }
             int cIdx = QueueUtils.chunkIndex(pos, chunkMask);
             Object[] queue = getHeadQueuePlain(BaseConcurrentQueue.this);
-            if(queue[cIdx] == QueueUtils.SENTINEL) {
+            if (queue[cIdx] == QueueUtils.SENTINEL) {
                 queue = (Object[]) queue[queue.length - 1];
             }
             return queue[cIdx] != null;
@@ -604,12 +712,12 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue<T> 
         @Override
         public T next() {
             long head = getHeadAcquire(BaseConcurrentQueue.this);
-            if(head > pos) {
+            if (head > pos) {
                 pos = head;
             }
             int cIdx = QueueUtils.chunkIndex(pos, chunkMask);
             Object[] queue = getHeadQueuePlain(BaseConcurrentQueue.this);
-            if(queue[cIdx] == QueueUtils.SENTINEL) {
+            if (queue[cIdx] == QueueUtils.SENTINEL) {
                 queue = (Object[]) queue[queue.length - 1];
             }
             pos += INCREMENT;
