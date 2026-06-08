@@ -7,7 +7,6 @@
     <groupId>io.euhedral-execution</groupId>
     <artifactId>euhedral-execution</artifactId>
     <version>0.0.4-SNAPSHOT</version>
-    <relativePath>../pom.xml</relativePath>
   </parent>
 
   <name>Euhedral Data Structures</name>
