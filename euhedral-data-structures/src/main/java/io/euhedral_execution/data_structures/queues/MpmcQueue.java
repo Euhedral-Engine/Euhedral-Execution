@@ -59,18 +59,6 @@ public sealed class MpmcQueue<T> extends BaseConcurrentQueue.MultiConsumer<T> pe
 
     @Override
     public final T peek() {
-        while (!acquireMcLock(this)) {
-            Thread.onSpinWait();
-        }
-        try {
-            return (T) scPeek();
-        } finally {
-            releaseMcLock(this);
-        }
-    }
-
-    @Override
-    public final T tryPeek() {
         if(!acquireMcLock(this)) {
             return null;
         }
@@ -83,18 +71,6 @@ public sealed class MpmcQueue<T> extends BaseConcurrentQueue.MultiConsumer<T> pe
 
     @Override
     public final T poll() {
-        while (!acquireMcLock(this)) {
-            Thread.onSpinWait();
-        }
-        try {
-            return (T) scPoll();
-        } finally {
-            releaseMcLock(this);
-        }
-    }
-
-    @Override
-    public final T tryPoll() {
         if(!acquireMcLock(this)) {
             return null;
         }
@@ -129,8 +105,8 @@ public sealed class MpmcQueue<T> extends BaseConcurrentQueue.MultiConsumer<T> pe
 
         long total = 0;
         while (total < limit) {
-            while (!acquireMcLock(this)) {
-                Thread.onSpinWait();
+            if(!acquireMcLock(this)) {
+                break;
             }
             try {
                 long batch = Math.min(limit - total, this.maxConsumeBatch);

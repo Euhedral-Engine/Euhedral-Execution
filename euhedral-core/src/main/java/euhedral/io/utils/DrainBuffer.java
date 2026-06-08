@@ -33,6 +33,10 @@ public class DrainBuffer implements Consumer<AbstractFrame> {
         while (!buffer.offer(frame)) {
             Thread.onSpinWait();
         }
+        record(frame);
+    }
+
+    public void record(AbstractFrame frame) {
         if (frame.getIngestNs() > 0) {
             long now = System.nanoTime();
             arrivalLatencyRecorder.record(now, now - frame.getIngestNs(), threadSafe);
