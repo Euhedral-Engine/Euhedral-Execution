@@ -65,13 +65,18 @@ final class ChunkAllocator extends BaseConcurrentQueue {
     }
 
     @Override
-    public void fill(Object[] objs) {
-
+    public int fill(Object[] objs) {
+        return 0;
     }
 
     @Override
-    public void fill(Collection objs) {
+    public int fill(Object[] objs, int start, int end) {
+        return 0;
+    }
 
+    @Override
+    public int fill(Collection objs) {
+        return 0;
     }
 
     @Override
@@ -84,5 +89,10 @@ final class ChunkAllocator extends BaseConcurrentQueue {
         while (scDrain(QueueUtils.NO_OP, Long.MAX_VALUE) > 0) {
             Thread.onSpinWait();
         }
+    }
+
+    @Override
+    public long capacity() {
+        return this.maxPooledChunks;
     }
 }

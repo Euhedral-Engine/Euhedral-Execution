@@ -17,13 +17,14 @@ import euhedral.io.flow_control.UpstreamQueue;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.CacheManager;
 import euhedral.io.utils.DrainBuffer;
-import io.euhedral_execution.data_structures.queues.PartitionedSpscQueue;
+import io.euhedral_execution.data_structures.queues.PlainQueue;
 import java.util.concurrent.Callable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 @SuppressWarnings("resource")
 class ControlPlaneCacheTest {
+
     private CloneConfig cloneConfig() {
         CloneConfig clone = mock(CloneConfig.class);
 
@@ -276,8 +277,8 @@ class ControlPlaneCacheTest {
         ControlPlaneCache.DownstreamHandle handle =
                 new ControlPlaneCache.DownstreamHandle(0, () -> 0.0);
 
-        PartitionedSpscQueue<AbstractFrame> queue =
-                new PartitionedSpscQueue<>(64);
+        PlainQueue<AbstractFrame> queue =
+                new PlainQueue<>(64);
 
         DrainBuffer buffer =
                 new DrainBuffer(queue, 64, false);

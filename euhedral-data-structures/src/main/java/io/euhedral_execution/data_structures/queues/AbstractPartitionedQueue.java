@@ -3,7 +3,6 @@ package io.euhedral_execution.data_structures.queues;
 import io.euhedral_execution.data_structures.queues.common.ConcurrentPartitionedQueue;
 import io.euhedral_execution.data_structures.queues.common.QueueUtils;
 import java.util.AbstractQueue;
-import java.util.Collection;
 import java.util.Iterator;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Consumer;
@@ -104,22 +103,6 @@ abstract sealed class AbstractPartitionedQueue<T> extends AbstractQueue<T> imple
     }
 
     // ----- Queue<T> Interface -----
-
-    /// Inserts the specified object into this queue if it is possible to do so immediately without
-    /// violating capacity restrictions, returning `true` upon success and throwing an
-    /// `IllegalStateException` if no space is currently available.
-    ///
-    /// @param obj the object to add
-    /// @return `true` (as specified by [Collection#add])
-    /// @throws IllegalStateException if the object cannot be added at this time due to capacity
-    /// restrictions
-    @Override
-    public final boolean add(T obj) {
-        if (offer(obj)) {
-            return true;
-        }
-        throw new IllegalStateException("Queue full");
-    }
 
     /// Not supported
     ///

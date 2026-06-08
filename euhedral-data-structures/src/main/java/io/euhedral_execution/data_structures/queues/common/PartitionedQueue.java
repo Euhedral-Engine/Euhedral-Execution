@@ -37,9 +37,7 @@ public interface PartitionedQueue<T> extends Queue<T> {
 
     long size(int partition);
 
-    default int maxPooledChunks() {
-        return 0;
-    }
+    int maxPooledChunks();
 
     int partitions();
 

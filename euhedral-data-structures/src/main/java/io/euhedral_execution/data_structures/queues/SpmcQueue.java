@@ -4,13 +4,20 @@ import io.euhedral_execution.data_structures.queues.common.QueueUtils;
 import java.util.Collection;
 import java.util.Objects;
 import java.util.function.Consumer;
+import lombok.Getter;
 
 @SuppressWarnings({"unchecked", "unused"})
 public sealed class SpmcQueue<T> extends BaseConcurrentQueue.MultiConsumer<T> permits
         BoundedSpmcQueue {
 
     private final ChunkAllocator allocator;
+    @Getter
     private final long maxConsumeBatch;
+
+    @Getter
+    private final int maxPooledChunks;
+
+    private final long capacity;
 
     public SpmcQueue(int chunkSize) {
         this(chunkSize, 0, Long.MAX_VALUE);
@@ -33,8 +40,15 @@ public sealed class SpmcQueue<T> extends BaseConcurrentQueue.MultiConsumer<T> pe
 
         if (maxPooledChunks > 0) {
             this.allocator = new ChunkAllocator(maxPooledChunks, maxPooledChunks);
+            this.maxPooledChunks = maxPooledChunks;
         } else {
             this.allocator = null;
+            this.maxPooledChunks = 0;
+        }
+        if(bounded) {
+            this.capacity = (QueueUtils.chunkMask(chunkSize) >>> QueueUtils.SHIFT);
+        } else {
+            this.capacity = Long.MAX_VALUE;
         }
         this.maxConsumeBatch = maxConsumeBatch;
     }
@@ -69,13 +83,18 @@ public sealed class SpmcQueue<T> extends BaseConcurrentQueue.MultiConsumer<T> pe
     }
 
     @Override
-    public final void fill(T[] objs) {
-        spFill(objs);
+    public final int fill(T[] objs) {
+        return spFill(objs);
     }
 
     @Override
-    public final void fill(Collection<T> objs) {
-        spFill((Collection<Object>) objs);
+    public int fill(T[] objs, int start, int end) {
+        return spFill(objs, start, end);
+    }
+
+    @Override
+    public final int fill(Collection<T> objs) {
+        return spFill((Collection<Object>) objs);
     }
 
     @Override
@@ -131,5 +150,10 @@ public sealed class SpmcQueue<T> extends BaseConcurrentQueue.MultiConsumer<T> pe
         if (this.allocator != null) {
             this.allocator.free(chunk);
         }
+    }
+
+    @Override
+    public final long capacity() {
+        return this.capacity;
     }
 }
