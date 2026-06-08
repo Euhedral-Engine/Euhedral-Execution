@@ -9,7 +9,6 @@ import euhedral.io.config.SchedulingConfig;
 import euhedral.io.control_plane.ControlPlaneLattice;
 import euhedral.io.ingest.ArrayIngestSink;
 import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -29,10 +28,10 @@ import org.openjdk.jmh.infra.Blackhole;
 @BenchmarkMode({Mode.Throughput, Mode.SampleTime})
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 @State(Scope.Benchmark)
-@Warmup(iterations = 3, time = 10, timeUnit = TimeUnit.SECONDS)
+@Warmup(iterations = 3, time = 5, timeUnit = TimeUnit.SECONDS)
 @Measurement(iterations = 5, time = 10, timeUnit = TimeUnit.SECONDS)
 @Fork(1)
-public class TrueThroughputBenchmark {
+public class ThroughputBenchmark {
 
     private static final int BATCH = 32_000_000;
 
@@ -61,8 +60,7 @@ public class TrueThroughputBenchmark {
 
     @Setup(Level.Trial)
     public void setup(Blackhole blackhole) {
-        long hash = ThreadLocalRandom.current().nextLong();
-        hash = HasherApi.mix(hash);
+        long hash = HasherApi.BASE_SEED;
 
         for (int i = 0; i < frames.length; i++) {
             this.frames[i] = NoOpFrame.generate(hash, 1_000_000, this.counters);
@@ -75,7 +73,7 @@ public class TrueThroughputBenchmark {
         CacheConfig cacheConfig = CacheConfig.defaultConfig();
         SchedulingConfig emConfig = SchedulingConfig.balancedDefault();
         NoOpPipeline pipeline = new NoOpPipeline(cacheConfig, emConfig, blackhole);
-        ControlPlaneConfig config = new ControlPlaneConfig("ThroughputComparisonBenchmark", null,
+        ControlPlaneConfig config = new ControlPlaneConfig("ThroughputBenchmark", null,
                 null,
                 pipeline, null, null);
         this.controlPlane = ControlPlaneLattice.getOrCreate(config);
@@ -87,6 +85,12 @@ public class TrueThroughputBenchmark {
         this.counters.reset();
         for (var sink : this.sinks) {
             sink.reset();
+        }
+        long seed = HasherApi.BASE_SEED;
+        for(var list : this.frames) {
+            for(NoOpFrame frame : list) {
+                frame.randomizeHash(seed++);
+            }
         }
     }
 

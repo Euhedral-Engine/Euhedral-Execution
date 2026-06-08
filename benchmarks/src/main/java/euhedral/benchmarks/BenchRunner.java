@@ -4,8 +4,7 @@ import euhedral.benchmarks.core_benchmarks.BatchedMandelbrotBenchmark;
 import euhedral.benchmarks.core_benchmarks.EndToEndLatencyBenchmark;
 import euhedral.benchmarks.core_benchmarks.HighScaleBenchmark;
 import euhedral.benchmarks.core_benchmarks.MandelbrotBenchmark;
-import euhedral.benchmarks.core_benchmarks.ThroughputComparisonBenchmark;
-import euhedral.benchmarks.core_benchmarks.TrueThroughputBenchmark;
+import euhedral.benchmarks.core_benchmarks.ThroughputBenchmark;
 import euhedral.benchmarks.queue_benchmarks.MPMCBenchmarks;
 import euhedral.benchmarks.queue_benchmarks.MPSCBenchmarks;
 import euhedral.benchmarks.queue_benchmarks.SPSCBenchmarks;
@@ -13,6 +12,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.StringJoiner;
 import java.util.TreeSet;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.options.ChainedOptionsBuilder;
@@ -31,7 +31,7 @@ public class BenchRunner {
     public static void main(String[] args) throws Exception {
         Set<String> benchmarks =
                 new TreeSet<>(
-                        Set.of("all", "core-high-scale", "core-latency", "core-throughput", "core-throughput-comp",
+                        Set.of("all", "core-high-scale", "core-latency", "core-throughput",
                                 "batched-mandelbrot", "mandelbrot", "queues-spsc", "queues-mpsc", "queues-mpmc"));
         if (args.length == 0) {
             System.out.println("Please specify a benchmark to run. Options: " + benchmarks);
@@ -58,12 +58,13 @@ public class BenchRunner {
 
         boolean gc = "true".equalsIgnoreCase(System.getProperty("gc", "false").trim());
         boolean perf = "true".equalsIgnoreCase(System.getProperty("perf", "false").trim());
+        List<String> flags = new ArrayList<>(FLAGS);
+        StringJoiner tests = new StringJoiner("|");
         for (String task : tasks) {
             if (task.equals("all")) {
                 continue;
             }
             Class<?> benchmark;
-            List<String> flags = new ArrayList<>(FLAGS);
             switch (task) {
                 case "batched-mandelbrot" -> {
                     benchmark = BatchedMandelbrotBenchmark.class;
@@ -98,8 +99,7 @@ public class BenchRunner {
                     flags.add("-DXms100g");
                     flags.add("-DXmx100g");
                 }
-                case "core-throughput" -> benchmark = TrueThroughputBenchmark.class;
-                case "core-throughput-comp" -> benchmark = ThroughputComparisonBenchmark.class;
+                case "core-throughput" -> benchmark = ThroughputBenchmark.class;
                 case "core-latency" -> benchmark = EndToEndLatencyBenchmark.class;
                 case "queues-spsc" -> benchmark = SPSCBenchmarks.class;
                 case "queues-mpmc" -> benchmark = MPMCBenchmarks.class;
@@ -107,17 +107,18 @@ public class BenchRunner {
                 default -> throw new IllegalArgumentException("Unknown benchmark: " + task);
             }
 
-            ChainedOptionsBuilder opt = new OptionsBuilder().include(benchmark.getName())
-                    .jvmArgsAppend(flags.toArray(new String[0]));
-            if (gc) {
-                opt.addProfiler("gc");
-            }
-            if (perf) {
-                opt.addProfiler("perf",
-                        "events=cycles,instructions,cache-misses,L1-dcache-loads,L1-dcache-load-misses,L1-icache-loads,L1-icache-load-misses,dTLB-loads,dTLB-load-misses,branch-loads,branch-misses");
-
-            }
-            new Runner(opt.build()).run();
+            tests.add(benchmark.getName());
         }
+        ChainedOptionsBuilder opt = new OptionsBuilder().include(tests.toString())
+                .jvmArgsAppend(flags.toArray(new String[0]));
+        if (gc) {
+            opt.addProfiler("gc");
+        }
+        if (perf) {
+            opt.addProfiler("perf",
+                    "events=cycles,instructions,cache-misses,L1-dcache-loads,L1-dcache-load-misses,L1-icache-loads,L1-icache-load-misses,dTLB-loads,dTLB-load-misses,branch-loads,branch-misses");
+
+        }
+        new Runner(opt.build()).run();
     }
 }
