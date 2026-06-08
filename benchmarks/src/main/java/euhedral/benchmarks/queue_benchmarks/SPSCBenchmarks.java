@@ -65,14 +65,14 @@ public class SPSCBenchmarks {
         public void jcOfferAndDrain() {
             executor.execute(() -> {
                 for (int i = 0; i < 2048; i++) {
-                    while (!jcTools.relaxedOffer(i)) {
+                    while (!jcTools.offer(i)) {
                         Thread.onSpinWait();
                     }
                 }
             });
 
             int count = 0;
-            while (count != 2048) {
+            while (count < 2048) {
                 int c = jcTools.drain(consumer, 2048 - count);
                 if (c == 0) {
                     Thread.onSpinWait();
@@ -129,6 +129,8 @@ public class SPSCBenchmarks {
 
         @Setup(Level.Invocation)
         public void prep() {
+            jcTools.clear();
+            euhedral.clear();
             for (int i = 0; i < 1024; i++) {
                 jcTools.offer(i);
                 euhedral.offer(i);
