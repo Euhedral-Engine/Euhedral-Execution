@@ -73,6 +73,20 @@ public sealed class SpscQueue<T> extends BaseConcurrentQueue<T> permits BoundedS
         return scDrain((Consumer<Object>) consumer, limit);
     }
 
+    public final long drain(BaseConcurrentQueue<T> receiver, long limit) {
+        return drain(receiver, null, limit);
+    }
+
+    public final long drain(BaseConcurrentQueue<T> receiver, Consumer<T> sideEffect, long limit) {
+        if(receiver instanceof SpscQueue<T> spsc) {
+            return scToSpTransfer(spsc, sideEffect, limit);
+        }
+        if(receiver instanceof SpmcQueue<T> spmc) {
+            return scToSpTransfer(spmc, sideEffect, limit);
+        }
+        return scToMpTransfer(receiver, sideEffect, limit);
+    }
+
     @Override
     public final void clear() {
         while (scDrain(QueueUtils.NO_OP, Long.MAX_VALUE) > 0) {

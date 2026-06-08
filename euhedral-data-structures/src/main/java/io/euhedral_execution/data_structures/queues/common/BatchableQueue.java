@@ -19,6 +19,16 @@ public interface BatchableQueue<T> {
 
     T peek();
 
+    // Performs a `poll()` without waiting to win synchronization
+    default T tryPoll() {
+        return poll();
+    }
+
+    // Performs a `peek()` without waiting to win synchronization
+    default T tryPeek() {
+        return peek();
+    }
+
     void clear();
 
     long sizeLong();
