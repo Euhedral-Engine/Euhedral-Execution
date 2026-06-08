@@ -3,11 +3,16 @@ package io.euhedral_execution.data_structures.queues;
 import io.euhedral_execution.data_structures.queues.common.QueueUtils;
 import java.util.Collection;
 import java.util.function.Consumer;
+import lombok.Getter;
 
 @SuppressWarnings({"unchecked", "unused"})
 public sealed class SpscQueue<T> extends BaseConcurrentQueue<T> permits BoundedSpscQueue {
 
     private final ChunkAllocator allocator;
+
+    @Getter
+    private final int maxPooledChunks;
+    private final long capacity;
 
     public SpscQueue(int chunkSize) {
         this(chunkSize, 0);
@@ -21,8 +26,15 @@ public sealed class SpscQueue<T> extends BaseConcurrentQueue<T> permits BoundedS
         super(chunkSize, bounded);
         if (maxPooledChunks > 0) {
             this.allocator = new ChunkAllocator(maxPooledChunks, maxPooledChunks);
+            this.maxPooledChunks = maxPooledChunks;
         } else {
             this.allocator = null;
+            this.maxPooledChunks = 0;
+        }
+        if(bounded) {
+            this.capacity = (QueueUtils.chunkMask(chunkSize) >>> QueueUtils.SHIFT);
+        } else {
+            this.capacity = Long.MAX_VALUE;
         }
     }
 
@@ -42,13 +54,18 @@ public sealed class SpscQueue<T> extends BaseConcurrentQueue<T> permits BoundedS
     }
 
     @Override
-    public final void fill(T[] objs) {
-        spFill(objs);
+    public final int fill(T[] objs) {
+        return spFill(objs);
     }
 
     @Override
-    public final void fill(Collection<T> objs) {
-        spFill((Collection<Object>) objs);
+    public int fill(T[] objs, int start, int end) {
+        return spFill(objs, start, end);
+    }
+
+    @Override
+    public final int fill(Collection<T> objs) {
+        return spFill((Collection<Object>) objs);
     }
 
     @Override
@@ -76,5 +93,10 @@ public sealed class SpscQueue<T> extends BaseConcurrentQueue<T> permits BoundedS
         if (this.allocator != null) {
             this.allocator.free(chunk);
         }
+    }
+
+    @Override
+    public final long capacity() {
+        return this.capacity;
     }
 }

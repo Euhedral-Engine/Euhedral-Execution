@@ -65,5 +65,10 @@ public final class PartitionedSpscQueue<T> extends AbstractPartitionedQueue<T> {
     public void clear(int partition) {
         this.queues[partition].clear();
     }
+
+    @Override
+    public int maxPooledChunks() {
+        return this.queues[0].getMaxPooledChunks();
+    }
 }
 

@@ -11,7 +11,7 @@ import static org.mockito.Mockito.when;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.LatticeSource;
 import euhedral.io.utils.DrainBuffer;
-import io.euhedral_execution.data_structures.queues.common.PartitionedQueue;
+import io.euhedral_execution.data_structures.queues.common.BatchableQueue;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import org.jctools.maps.NonBlockingHashMapLong;
@@ -120,8 +120,8 @@ class UpstreamQueueTest {
 
         queue.addUpstream(upstream);
 
-        PartitionedQueue<AbstractFrame> partitionedQueue =
-                mock(PartitionedQueue.class);
+        BatchableQueue<AbstractFrame> partitionedQueue =
+                mock(BatchableQueue.class);
         when(partitionedQueue.capacity()).thenReturn(10_000L);
 
         DrainBuffer buffer = new DrainBuffer(
@@ -218,8 +218,8 @@ class UpstreamQueueTest {
     void shouldPullFromHandleWithBuffer() {
         TestUpstreamHandle upstream = new TestUpstreamHandle();
 
-        PartitionedQueue<AbstractFrame> partitionedQueue =
-                mock(PartitionedQueue.class);
+        BatchableQueue<AbstractFrame> partitionedQueue =
+                mock(BatchableQueue.class);
         when(partitionedQueue.capacity()).thenReturn(10_000L);
 
         DrainBuffer buffer = new DrainBuffer(

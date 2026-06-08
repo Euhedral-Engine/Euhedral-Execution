@@ -26,8 +26,9 @@ import euhedral.io.utils.DrainBuffer;
 import euhedral.io.utils.FlowRecorder;
 import euhedral.io.utils.FlowRecorder.FlowSnapshot;
 import io.euhedral_execution.data_structures.queues.PartitionedMpscQueue;
-import io.euhedral_execution.data_structures.queues.PartitionedSpscQueue;
-import io.euhedral_execution.data_structures.queues.common.PartitionedQueue;
+import io.euhedral_execution.data_structures.queues.PlainQueue;
+import io.euhedral_execution.data_structures.queues.SpscQueue;
+import io.euhedral_execution.data_structures.queues.common.BatchableQueue;
 import io.euhedral_execution.data_structures.queues.common.QueueUtils;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
@@ -119,7 +120,7 @@ public class ControlPlaneFragment implements SlotManager {
 
     protected final int bufferSize;
     protected final DrainBuffer bufferWrapper;
-    protected final PartitionedQueue<AbstractFrame> buffer;
+    protected final BatchableQueue<AbstractFrame> buffer;
     protected final BufferedBridge completeSink;
 
     protected final int maxUpdateInterval;
@@ -206,8 +207,11 @@ public class ControlPlaneFragment implements SlotManager {
                 smtExec = PinnedThreadExecutor.getOrSetIfAbsent(cpus[1],
                         this.config.cloneConfig().shardName() + "-ControlPlaneFragment-SMT-"
                                 + this.config.cloneConfig().coreId(), Thread.MAX_PRIORITY, false);
+                this.buffer = new SpscQueue<>(bufferSize);
+            } else {
+                this.buffer = new PlainQueue<>(bufferSize);
             }
-            this.buffer = new PartitionedSpscQueue<>(bufferSize);
+
             this.handle = new DownstreamHandle(this.cpuId, this::getPressure);
             this.bufferWrapper = new DrainBuffer(this.buffer, bufferSize, false);
             this.buddyState = new SMTState(executionLatency, bufferWrapper.arrivalLatencyRecorder,
@@ -281,7 +285,7 @@ public class ControlPlaneFragment implements SlotManager {
             }
             dumpLocks();
             AbstractFrame frame;
-            while ((frame = this.buffer.poll(0)) != null) {
+            while ((frame = this.buffer.poll()) != null) {
                 frame.kill();
             }
             this.buffer.clear();
