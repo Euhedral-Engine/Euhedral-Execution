@@ -82,7 +82,7 @@ public abstract class AbstractConcurrentQueue<T> extends StartPad<T> {
         }
     }
 
-    AbstractConcurrentQueue(Object[] queue) {
+    protected AbstractConcurrentQueue(Object[] queue) {
         super(queue);
     }
 

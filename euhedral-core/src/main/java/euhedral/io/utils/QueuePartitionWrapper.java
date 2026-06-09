@@ -26,7 +26,7 @@ public class QueuePartitionWrapper {
         return false;
     }
 
-    public long drain(int partition, @NonNull DrainBuffer drainBuffer, int limit) {
+    public long drain(int partition, @NonNull DrainBuffer drainBuffer, long limit) {
         if (limit <= 0) {
             return 0;
         }

@@ -14,7 +14,7 @@ public record CacheConfig(@Nullable CloneConfig cloneConfig, double L2MemoryBudg
     }
 
     public static CacheConfig defaultConfig(String metricPrefix, MeterRegistry registry) {
-        return new CacheConfig(null, 0.7, 4, 1, 4, metricPrefix, registry);
+        return new CacheConfig(null, 0.7, 8, 1, 4, metricPrefix, registry);
     }
 
     @Override
