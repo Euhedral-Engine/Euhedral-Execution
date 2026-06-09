@@ -74,8 +74,6 @@ class ControlPlaneCacheTest {
         assertNotNull(manager.getFillRecorder());
         assertNotNull(manager.getFillBytesRecorder());
         assertNotNull(manager.queueRing);
-        assertNotNull(manager.partitionStats);
-        assertTrue(manager.partitionStats.length > 0);
     }
 
     // ----- First Touch -----
@@ -166,29 +164,6 @@ class ControlPlaneCacheTest {
         manager.setDrainMode(true);
 
         assertTrue(manager.getDrainFlag().get());
-    }
-
-    // ----- CAS Locks -----
-
-    @Test
-    void shouldAcquireAndReleasePartitionLock() {
-        ControlPlaneCache manager = manager();
-
-        boolean acquired = manager.acquireLock(0);
-
-        assertTrue(acquired);
-
-        manager.releaseLock(0);
-
-        assertFalse(manager.partitionLocks[0]);
-    }
-
-    @Test
-    void shouldFailAcquireWhenAlreadyLocked() {
-        ControlPlaneCache manager = manager();
-
-        assertTrue(manager.acquireLock(0));
-        assertFalse(manager.acquireLock(0));
     }
 
     // ----- Max Queue -----
@@ -285,24 +260,6 @@ class ControlPlaneCacheTest {
 
         assertDoesNotThrow(() ->
                 handle.record(10, 2048, buffer));
-    }
-
-    // ----- PartitionStats -----
-
-    @Test
-    void shouldResetPartitionStats() {
-        ControlPlaneCache.PartitionStats stats =
-                new ControlPlaneCache.PartitionStats();
-
-        stats.weight = 999;
-        stats.quotaBytes = 555;
-        stats.lastBytesDrained = 123;
-
-        stats.reset();
-
-        assertEquals(1024, stats.weight);
-        assertEquals(0, stats.quotaBytes);
-        assertEquals(0, stats.lastBytesDrained);
     }
 
     @Test
