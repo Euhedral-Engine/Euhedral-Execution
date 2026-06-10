@@ -6,7 +6,7 @@ import euhedral.benchmarks.pipelines.FractalPipeline;
 import euhedral.hashing.HasherApi;
 import euhedral.io.config.CacheConfig;
 import euhedral.io.config.ControlPlaneConfig;
-import euhedral.io.config.SchedulingConfig;
+import euhedral.io.config.FragmentConfig;
 import euhedral.io.control_plane.ControlPlaneLattice;
 import euhedral.io.reactor.common.EuhedralSubscriber;
 import euhedral.io.utils.MathFunctions;
@@ -210,7 +210,7 @@ public class MandelbrotBenchmark {
             this.outputFileName = System.getProperty("outputFile");
 
             CacheConfig cacheConfig = CacheConfig.defaultConfig();
-            SchedulingConfig emConfig = SchedulingConfig.balancedDefault();
+            FragmentConfig emConfig = FragmentConfig.balancedDefault();
             FractalPipeline pipeline =
                     new FractalPipeline(cacheConfig, emConfig, blackhole);
             ControlPlaneConfig config = new ControlPlaneConfig("MandelbrotBenchmark", null, null,

@@ -11,27 +11,26 @@ import org.slf4j.LoggerFactory;
 
 /// ## The base implementation of a CloneableObject
 ///
-/// This class is responsible for connecting a [CacheManager], [SlotManager], and [PipelineExecutor]
-/// together. It also automatically broadcasts lifecycle updates to the instances.
+/// This class is responsible for connecting a [SlotManager] to a [PipelineExecutor]. It also
+/// automatically broadcasts lifecycle updates to the instances.
 public abstract class AbstractCloneablePipeline implements CloneableObject {
 
     protected final Logger logger;
     protected final CloneConfig config;
 
-    protected final CacheManager cacheManager;
     protected final SlotManager slotManager;
     protected final PipelineExecutor executor;
 
     public AbstractCloneablePipeline(@Nullable CloneConfig cloneConfig,
-            @NonNull CacheManager cacheManager, @NonNull SlotManager slotManager,
+            @NonNull SlotManager slotManager,
             @NonNull PipelineExecutor executor) {
-        if(cloneConfig != null) {
-            this.logger = LoggerFactory.getLogger(cloneConfig.shardName() + "-pipeline-" + cloneConfig.coreId());
+        if (cloneConfig != null) {
+            this.logger = LoggerFactory.getLogger(
+                    cloneConfig.shardName() + "-pipeline-" + cloneConfig.coreId());
         } else {
             this.logger = LoggerFactory.getLogger(this.getClass().getSimpleName());
         }
         this.config = cloneConfig;
-        this.cacheManager = cacheManager;
         this.slotManager = slotManager;
         this.executor = executor;
     }
@@ -40,18 +39,13 @@ public abstract class AbstractCloneablePipeline implements CloneableObject {
     public void start() {
         this.executor.start();
         this.slotManager.start();
-        this.cacheManager.start();
 
         this.executor.reportCompletionsTo(this.slotManager);
         this.executor.input(this.slotManager.output());
-        this.slotManager.input(this.cacheManager.output());
     }
 
     @Override
     public boolean isStarted() {
-        if (this.cacheManager != null && !this.cacheManager.isStarted()) {
-            return false;
-        }
         if (this.slotManager != null && !this.slotManager.isStarted()) {
             return false;
         }
@@ -60,9 +54,6 @@ public abstract class AbstractCloneablePipeline implements CloneableObject {
 
     @Override
     public void update(CoreSnapshot snapshot) {
-        if (this.cacheManager != null) {
-            this.cacheManager.update(snapshot);
-        }
         if (this.slotManager != null) {
             this.slotManager.update(snapshot);
         }
@@ -73,7 +64,7 @@ public abstract class AbstractCloneablePipeline implements CloneableObject {
 
     @Override
     public void input(LatticeSource stream) {
-        this.cacheManager.input(stream);
+        this.slotManager.input(stream);
     }
 
     @Override
@@ -82,15 +73,7 @@ public abstract class AbstractCloneablePipeline implements CloneableObject {
     }
 
     @Override
-    public double getPressure() {
-        return this.slotManager == null ? 0.0 : this.slotManager.getPressure();
-    }
-
-    @Override
     public boolean isDrained() {
-        if (this.cacheManager != null && !this.cacheManager.isDrained()) {
-            return false;
-        }
         if (this.slotManager != null && !this.slotManager.isDrained()) {
             return false;
         }
@@ -105,9 +88,6 @@ public abstract class AbstractCloneablePipeline implements CloneableObject {
         if (this.slotManager != null) {
             this.slotManager.setDrainMode(value);
         }
-        if (this.cacheManager != null) {
-            this.cacheManager.setDrainMode(value);
-        }
     }
 
     @Override
@@ -117,9 +97,6 @@ public abstract class AbstractCloneablePipeline implements CloneableObject {
 
     @Override
     public void dumpLocks() {
-        if (this.cacheManager != null) {
-            this.cacheManager.dumpLocks();
-        }
         if (this.slotManager != null) {
             this.slotManager.dumpLocks();
         }
@@ -180,13 +157,6 @@ public abstract class AbstractCloneablePipeline implements CloneableObject {
                 }
             } catch (Exception e) {
                 this.logger.error("Failed to close {}", this.executor.getClass(), e);
-            }
-            try {
-                if (this.cacheManager != null) {
-                    this.cacheManager.close();
-                }
-            } catch (Exception e) {
-                this.logger.error("Failed to close {}", this.cacheManager.getClass(), e);
             }
         } catch (Exception e) {
             this.logger.error("Failed to close pipeline properly", e);

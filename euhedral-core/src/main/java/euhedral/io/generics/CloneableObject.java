@@ -49,10 +49,6 @@ public interface CloneableObject extends AutoCloseable {
         return null;
     }
 
-    default double getPressure() {
-        return 0;
-    }
-
     default boolean isDrained() {
         return true;
     }

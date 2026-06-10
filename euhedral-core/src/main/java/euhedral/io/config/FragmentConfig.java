@@ -27,39 +27,39 @@ import org.jspecify.annotations.Nullable;
 /// @param meterRegistry     Used to record execution metrics.
 /// @param metricPrefix      Prefix applied to the metric names. It will default to the shard name
 /// if it is null or empty.
-public record SchedulingConfig(@Nullable CloneConfig cloneConfig, int minConcurrency,
-                               int maxUpdateInterval,
-                               boolean enableSMT,
-                               @NonNull IdleCyclePolicy idleCyclePolicy,
-                               @Nullable MeterRegistry meterRegistry,
-                               @Nullable String metricPrefix)
+public record FragmentConfig(@Nullable CloneConfig cloneConfig, int minConcurrency,
+                             int maxUpdateInterval,
+                             boolean enableSMT,
+                             @NonNull IdleCyclePolicy idleCyclePolicy,
+                             @Nullable MeterRegistry meterRegistry,
+                             @Nullable String metricPrefix)
         implements CloneableObject {
 
-    public static SchedulingConfig powerSavingDefault() {
+    public static FragmentConfig powerSavingDefault() {
         return powerSavingDefault(null, null);
     }
 
-    public static SchedulingConfig powerSavingDefault(MeterRegistry meterRegistry,
+    public static FragmentConfig powerSavingDefault(MeterRegistry meterRegistry,
             String metricPrefix) {
-        return new SchedulingConfig(null, 1_024, 256, false,
+        return new FragmentConfig(null, 1_024, 1024, false,
                 IdleCyclePolicy.POWER_SAVING, meterRegistry,
                 metricPrefix);
     }
 
-    public static SchedulingConfig balancedDefault() {
+    public static FragmentConfig balancedDefault() {
         return balancedDefault(null, null);
     }
 
-    public static SchedulingConfig balancedDefault(MeterRegistry meterRegistry,
+    public static FragmentConfig balancedDefault(MeterRegistry meterRegistry,
             String metricPrefix) {
-        return new SchedulingConfig(null, 4_096, 1024, false,
+        return new FragmentConfig(null, 4_096, 1024, false,
                 IdleCyclePolicy.DEFAULT, meterRegistry,
                 metricPrefix);
     }
 
     @Override
-    public SchedulingConfig clone(CloneConfig cloneConfig) {
-        return new SchedulingConfig(cloneConfig, minConcurrency, maxUpdateInterval,
+    public FragmentConfig clone(CloneConfig cloneConfig) {
+        return new FragmentConfig(cloneConfig, minConcurrency, maxUpdateInterval,
                 enableSMT,
                 idleCyclePolicy, meterRegistry, metricPrefix);
     }
