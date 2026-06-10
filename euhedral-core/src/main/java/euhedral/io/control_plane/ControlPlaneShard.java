@@ -188,7 +188,6 @@ public class ControlPlaneShard implements AutoCloseable {
         if(!this.primed.getOpaque()) {
             this.clones.setRelease(nextClones);
             this.activeCoreIds.setRelease(nextCores);
-            this.coreDistributor.get().setDownstreamMapping(newCores, nextHandles);
             for (var clone : nextClones) {
                 if (clone != null) {
                     clone.setDrainMode(false);

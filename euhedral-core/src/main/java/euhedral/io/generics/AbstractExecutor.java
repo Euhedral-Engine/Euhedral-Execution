@@ -4,7 +4,6 @@ import euhedral.hardware_utils.PinnedThreadExecutor;
 import euhedral.io.config.CloneConfig;
 import euhedral.io.flow_control.BufferedBridge;
 import euhedral.io.frames.AbstractFrame;
-import euhedral.io.frames.CancelFrame;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import org.slf4j.Logger;
@@ -62,7 +61,7 @@ public abstract class AbstractExecutor implements CloneableObject {
             execute(frame);
         } catch (Exception e) {
             frame.setCancelledExecution(true);
-            if (!(e instanceof CancelFrame)) {
+            if (!(e instanceof AbstractFrame.CancelSignal)) {
                 logger.error("Uncaught exception while executing frame. {}", frame, e);
             }
         }

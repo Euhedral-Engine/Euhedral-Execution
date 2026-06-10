@@ -1,26 +1,26 @@
 package euhedral.io.frames;
 
 import euhedral.io.impl.FrameManager;
+import java.util.Collection;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 @SuppressWarnings("unused")
-public final class ArrayFrame extends AbstractFrame {
-
+public final class CollectionFrame extends AbstractFrame {
     private final AtomicBoolean killSwitch;
 
-    private AbstractFrame[] frames;
+    private Collection<AbstractFrame> frames;
     private long sizeBytes;
 
-    public ArrayFrame(long idHash, AbstractFrame[] frames) {
+    public CollectionFrame(long idHash, Collection<AbstractFrame> frames) {
         this(idHash, frames, null, null);
     }
 
-    public ArrayFrame(long idHash, AbstractFrame[] frames, AtomicBoolean killSwitch) {
+    public CollectionFrame(long idHash, Collection<AbstractFrame> frames, AtomicBoolean killSwitch) {
         this(idHash, frames, killSwitch, null);
     }
 
-    public ArrayFrame(long idHash, AbstractFrame[] frames, AtomicBoolean killSwitch,
+    public CollectionFrame(long idHash, Collection<AbstractFrame> frames, AtomicBoolean killSwitch,
             FrameManager<AbstractFrame[], ArrayFrame> frameManager) {
         super(idHash, frameManager);
         Objects.requireNonNull(frames);
@@ -58,7 +58,7 @@ public final class ArrayFrame extends AbstractFrame {
         }
     }
 
-    public void replace(AbstractFrame[] frames) {
+    public void replace(Collection<AbstractFrame> frames) {
         Objects.requireNonNull(frames);
         this.frames = frames;
         long sizeBytes = 0;

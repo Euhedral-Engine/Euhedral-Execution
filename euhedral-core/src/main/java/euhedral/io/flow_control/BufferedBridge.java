@@ -6,7 +6,7 @@ import java.util.function.Consumer;
 
 /// An intermediary buffer used for communication between pipeline stages.
 @SuppressWarnings("unused")
-public class BufferedBridge {
+public final class BufferedBridge {
 
     private final PartitionedQueue<AbstractFrame> buffer;
     private final Consumer<AbstractFrame> drainFunc;

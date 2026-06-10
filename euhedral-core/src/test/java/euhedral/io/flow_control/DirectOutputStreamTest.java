@@ -65,7 +65,7 @@ class DirectOutputStreamTest {
     void shouldRequestDemand() {
         stream.request(5);
 
-        assertEquals(5, stream.demand.get());
+        assertEquals(5, stream.getDemand());
     }
 
     @Test
@@ -194,11 +194,11 @@ class DirectOutputStreamTest {
 
         when(queue.drain(any(), anyInt())).thenReturn(5L);
 
-        long before = stream.demand.get();
+        long before = stream.getDemand();
 
         stream.push(10);
 
-        long after = stream.demand.get();
+        long after = stream.getDemand();
 
         assertEquals(before, after);
     }
@@ -213,7 +213,7 @@ class DirectOutputStreamTest {
 
         stream.push(5);
 
-        assertEquals(5, stream.demand.get());
+        assertEquals(5, stream.getDemand());
     }
 
 }
