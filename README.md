@@ -1,30 +1,23 @@
 # Euhedral Execution
 
-Welcome to Euhedral. A NUMA-aware, lock-free, self-tuning execution framework for Java.
+Welcome to **Euhedral**, an execution system designed to adapt to both the workloads it receives and
+the hardware it runs on.
 
-At the center of the project is euhedral-core:
+At it's core is **euhedral-core**, a pull-based execution engine that treats CPUs like a
+distributed system.
 
-A pull-based execution engine that treats CPUs like a distributed system. Threads are pinned to
-hardware. Work is routed by deterministic hashing. Queues are sized around cache topology.
-Scheduling adapts continuously based on observed runtime pressure.
+Instead of assigning work from the top down, Euhedral lets execution emerge from demand. Persistent
+workers continuously pull, route, and redistribute work through a structure shaped around cache and
+NUMA boundaries.
 
-Think:
-
-- Reactive pipelines without the scheduler guesswork
-- Lock-free execution without thread pools fighting each other
-- Distributed-system-style routing, but entirely inside a single process
-- Hardware-aware scheduling that understands the machine it runs on
-
-The system automatically:
+### What it does automatically
 
 - Detects CPU, core, cache, and NUMA topology
-- Pins workers to CPUs
-- Rebalances under topology changes
-- Preserves ordering guarantees for related work
-- Tunes dispatch and concurrency dynamically under load
-
-The result is a scheduler designed for extremely low latency, high throughput, and stable behavior
-under chaotic workloads.
+- Pins execution loops to specific CPUs
+- Routes work using deterministic partitioning
+- Rebalances as topology or load changes
+- Preserves ordering for related work streams
+- Tunes dispatch rate and concurrency based on observed runtime pressure
 
 ---
 
@@ -32,149 +25,23 @@ under chaotic workloads.
 
 ---
 
-## Architecture
-
-Architecture documentation:
-
-- [Architecture.md](./docs/ARCHITECTURE.md)
-
-Architecture diagrams coming soon.
-
-## Amazon EC2 Benchmarks
-
-These benchmarks test performance in a cloud environment on server hardware. They feature
-comparisons with the standard Reactor schedulers.
-
-- [Amazon EC2 32 vCPU Graviton4](./benchmarks/AMAZON_GRAVITON_4_BENCHMARKS.md)
-- [Amazon EC2 32 vCPU Intel Xeon 6](./benchmarks/AMAZON_XEON_6_BENCHMARKS.md)
-- [Amazon EC2 192 vCPU Graviton4](./benchmarks/AMAZON_GRAVITON_4_192_CORES_BENCHMARKS.md)
-
-The benchmarks in the sections below were performed on a consumer desktop.
-
----
-
-## Quick Mental Model
-
-```
-    SYSTEM VIEW                               IMPLEMENTATION VIEW
---------------------------------------------------------------------------------
-
-ControlPlaneLattice            ->        Edge Load Balancer (Global L7 Router)
-↓
-ControlPlaneShard              ->        Shard Load Balancer (Partition Router)
-↓
-ControlPlaneCache              ->        Ingress Gateway / Stateful Cache Layer
-↓
-ControlPlaneFragment           ->        Task Scheduler
-↓
-AbstractExecutor               ->        Worker Runtime
-↓
-AbstractFrame.execute()        ->        Compute Kernel
-```
-
-Everything below the ControlPlaneLattice is replicated according to hardware topology.
-
-- Sockets become shards
-- L2-sharing CPUs cooperate through localized queues (ControlPlaneCache)
-- CPUs become pinned execution scheduling loops (ControlPlaneFragment)
-
----
-
-## Why Euhedral Exists
-
-General use schedulers do not fully take advantage of the hardware they run on.
-
-**Euhedral optimizes for**:
-
-- Stable latency
-- Predictable execution
-- Cache locality
-- Hardware awareness
-- Minimal coordination overhead
-- Sustained throughput under pressure
-
-It continuously adapts execution behavior using runtime feedback and scales to match the
-physical reality of the system.
-
-**Euhedral reacts to**:
-
-- Queue residency
-- CPU pressure
-- Memory pressure
-- Backpressure
-- Drain rates
-- Topology changes
-- Effective CPU availability
-
-**Goals**:
-
-- Keep the machine busy without making it angry.
-- Abstract complexity away from the user.
-- Make it easy to use and compatible with what exists.
-
----
-
-## Core Ideas
-
-### Frames are the unit of execution
-
-Work is represented as lightweight reusable AbstractFrame instances.
-
-Frames are intentionally small:
-
-```java
-public abstract void execute();
-```
-
-They are designed to be:
-
-- Recyclable
-- Routable
-- Composable
-- Cache-friendly
-- Cheap to schedule
-
-Pipelines emerge naturally by chaining them in stages together.
-
-### CPUs are treated like independent workers
-
-Euhedral pins one execution loop per CPU and routes work deterministically.
-
-Ordered work stays ordered because hashes stay stable.
-
-Parallel work spreads evenly because hashes can be mixed.
-
-```java
-frame.randomizeHash(HasherApi.combine(idHash, seed++));
-```
-
-### Scheduling is adaptive
-
-The ControlPlaneFragment continuously tunes execution behavior based on observed conditions.
-
-It adjusts:
-
-- Concurrency
-- Dispatch pacing
-- Idle behavior
-- Demand signaling
-- SMT coordination
-
-Using:
-
-- TCP Vegas-style latency modeling
-- Little's Law
-- Hardware pressure signals
-- Queue residency observations
-
-### Queues are topology-aware
-
-The ControlPlaneCache creates partitioned queues sized based on L2 cache capacity. The
-ControlPlaneFragment creates an execution buffer sized to fit in L1.
-
 ## Benchmarks
 
-Benchmarks were performed on:
+Euhedral was built by measuring execution behavior rather than optimizing for theoretical scheduling
+strategies. The benchmarks below focus on end-to-end latency, throughput, and irregular workloads,
+with comparisons against existing schedulers where appropriate.
+
+### Amazon EC2 (server workloads)
+
+- [Graviton4 (32 vCPU)](./benchmarks/AMAZON_GRAVITON_4_BENCHMARKS.md)
+- [Intel Xeon 6 (32 vCPU)](./benchmarks/AMAZON_XEON_6_BENCHMARKS.md)
+- [Graviton4 (192 vCPU)](./benchmarks/AMAZON_GRAVITON_4_192_CORES_BENCHMARKS.md)
+
+---
+
+### Intel i9-14900K
+
+Setup:
 
 - Intel i9-14900K
 - 64GB DDR5
@@ -200,25 +67,16 @@ All tests were ran with these same flags.
 --add-opens java.base/java.util=ALL-UNNAMED
 ```
 
-Euhedral itself only requires
+Euhedral only requires
 
 ```
 -XX:+UseThreadPriorities
 --add-opens java.base/java.util=ALL-UNNAMED
 ```
 
-The remaining flags silence warnings from JMH and temporary dependencies.
-
 ### End to End Latency
 
-Measures:
-
-- Routing
-- Scheduling
-- Queue residency
-- Dispatch overhead
-
-Each invocation executes **100K** no-op frames.
+Each invocation executes 100K no-op frames and measures routing, scheduling, and dispatch overhead.
 
 #### E-Core Cluster (4 cores with shared L2)
 
@@ -240,7 +98,7 @@ p9999:      88.000 ns/op
 
 ### Throughput
 
-32 million no-op frames per invocation utilizing all cores.
+32M no-op frames per run across all cores.
 
 ```
 Throughput:   0.037 ops/ns = 37,000,000 ops/s
@@ -252,24 +110,99 @@ p9999:        30.000 ns/op
 
 ### Mandelbrot
 
-A deliberately chaotic workload
+A deliberately chaotic workload designed to stress memory locality.
 
-Rendered an 8K [Mandelbrot set](https://en.wikipedia.org/wiki/Mandelbrot_set) using:
+Renders an 8K [Mandelbrot set](https://en.wikipedia.org/wiki/Mandelbrot_set) using:
 
 - 2X SSAA
 - 5,000 max iterations
 - randomized pixel ordering
 
-This benchmark intentionally destroys locality and creates highly irregular execution behavior.
+Workload:
 
-Total tasks: 132,710,400
-Average time: 410ns/op
+- 33,177,600 **frames**
+- 132,710,400 **total operations**
+
+```Average time: 410ns/op```
+
+---
+
+## Execution Flow (High Level)
+
+```
+    SYSTEM VIEW                               HARDWARE ANALGOY
+--------------------------------------------------------------------------------
+
+ControlPlaneLattice            ->        VCCSA / System Agent (global uncore)
+↓
+ControlPlaneShard              ->        Socket / NUMA Partition
+↓
+ControlPlaneCache              ->        L2/L3 Cache + Cache Controller
+↓
+WorkRequester                  ->        L1 Data Cache + Prefetcher + Cache Refill Logic
+↓
+ControlPlaneFragment           ->        Core Power & Demand Generation (the active execution loop)
+↓
+AbstractExecutor               ->        Execution Pipeline / ALUs
+↓
+AbstractFrame.execute()        ->        Instruction / Compute Kernel
+```
+
+There is no central scheduler assigning tasks to threads. Work is pulled through the system based on
+demand.
+
+---
+
+## Core Model
+
+### Frames are the unit of execution
+
+Work is represented as lightweight reusable `AbstractFrame` instances:
+
+```java
+public abstract void execute();
+```
+
+Frames are intentionally small and designed to move easily through the system. They are cheap to
+schedule, cache-friendly, and composable. When chained together, they naturally form pipelines
+without needing a central coordinator.
+
+### CPUs are treated as independent execution units
+
+Each CPU runs its own pinned execution loop. Work is routed deterministically so that ordering is
+preserved when needed and evenly distributed when it is not.
+
+Instead of a scheduler assigning tasks, each execution loop pulls work based on availability and
+demand.
+
+### Scheduling is adaptive
+
+The system adjusts execution behavior based on observed conditions:
+
+- queue pressure
+- CPU load
+- memory pressure
+- backpressure
+- drain rates
+- topology changes
+
+This happens continuously at runtime rather than through static configuration.
+
+### Queues are topology-aware
+
+Queues are sized and partitioned around cache boundaries. Higher-level queues align with shared
+cache regions, while execution buffers are designed to stay close to L1.
+
+The goal is to keep contention low and keep data moving through the cache hierarchy efficiently.
+
+---
 
 ## Modules
 
 ### euhedral-core
 
-The execution engine.
+The execution engine. It manages how work moves through the system and how execution loops stay
+saturated without central scheduling.
 
 #### Major Components
 
@@ -277,8 +210,8 @@ The execution engine.
 |:--------------------------------------------------------------|:-----------------------------------------------|
 | <span style="white-space: nowrap">ControlPlaneLattice</span>  | Global orchestration and topology management   |
 | <span style="white-space: nowrap">ControlPlaneShard</span>    | Per-socket orchestration and worker management |
-| <span style="white-space: nowrap">ControlPlaneCache</span>    | Cache-local deficit round-robin queue          |
-| <span style="white-space: nowrap">ControlPlaneFragment</span> | Adaptive pinned execution scheduling loop      |
+| <span style="white-space: nowrap">ControlPlaneCache</span>    | Cache-local work distribution queue            |
+| <span style="white-space: nowrap">ControlPlaneFragment</span> | Adaptive pinned execution loop                 |
 | <span style="white-space: nowrap">AbstractExecutors</span>    | Thin execution wrapper                         |
 | <span style="white-space: nowrap">AbstractFrame</span>        | Base unit of work                              |
 
@@ -286,14 +219,19 @@ The execution engine.
 
 Lock-free queues and padded atomics.
 
-Includes partitioned, bounded, and unbounded queue variants of:
+Includes SPSC, SPMC, MPSC, and MPMC queues in partitioned, bounded, and unbounded variants.
 
-- SPSC
-- SPMC
-- MPSC
-- MPMC
+Optimized specifically for batch operations on the consumer side in high contention scenarios.
 
-Designed specifically for high-core-count contention scenarios.
+### euhedral-reactor-core
+
+Reactor integration layer.
+
+Provides:
+
+- publishOn() / subscribeOn() support
+- flatMap / flatMapSequential / concatMap compatibility
+- Euhedral-backed execution pipeline
 
 ### euhedral-hardware-utils
 
@@ -318,37 +256,28 @@ Supports:
 
 ### euhedral-hashing
 
-Fast deterministic hashing based on xxHash64.
+Fast deterministic hashing (xxHash64-based) used for routing, ordering, and load distribution.
 
-Used for:
+---
 
-- Routing
-- Ordering guarantees
-- Load distribution
-- Parallel fan-out
+## Architecture
 
-### euhedral-reactor-core
+Architecture documentation:
 
-Reactor integration layer.
+- [Architecture.md](./docs/ARCHITECTURE.md)
 
-Provides:
-
-- Reactor Scheduler support
-- .transform() integration
-- flatMap / map compatibility
-- Euhedral-backed execution pipeline
+Architecture diagrams coming soon.
 
 ---
 
 ## Project Status
 
-The core runtime is operational and benchmarked, but documenation and API refinement are ongoing.
+The core runtime is stable and benchmarked, but evolving.
 
 Current focus areas:
 
-- Benchmark on EC2 bare-metal with 192 cpus on arm64 and x64
-- More stress testing
-- Additional architecture docs
+- Benchmarks on high core count multi-socket systems
+- Real-world workload testing
 - More integration examples
 - Dependency cleanup
-- Reactor integration improvements
+- Documentation
