@@ -100,8 +100,8 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
     protected final FlowRecorder drainRecorder;
     protected final FlowRecorder drainBytesRecorder;
 
-    final QueuePartitionWrapper L2Cache;
-    final int chunkSize;
+    protected final QueuePartitionWrapper L2Cache;
+    protected final int chunkSize;
     final int mask;
 
     boolean primed;

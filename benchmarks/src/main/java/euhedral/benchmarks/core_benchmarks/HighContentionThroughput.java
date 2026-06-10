@@ -1,5 +1,7 @@
 package euhedral.benchmarks.core_benchmarks;
 
+import java.util.concurrent.TimeUnit;
+
 import euhedral.benchmarks.frames.NoOpFrame;
 import euhedral.benchmarks.pipelines.NoOpExecutor;
 import euhedral.hashing.HasherApi;
@@ -8,7 +10,6 @@ import euhedral.io.control_plane.ControlPlaneLattice;
 import euhedral.io.impl.BaseCloneableObject;
 import euhedral.io.ingest.ArrayIngestSink;
 import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
-import java.util.concurrent.TimeUnit;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -30,9 +31,11 @@ import org.openjdk.jmh.infra.Blackhole;
 @Warmup(iterations = 3, time = 5, timeUnit = TimeUnit.SECONDS)
 @Measurement(iterations = 5, time = 10, timeUnit = TimeUnit.SECONDS)
 @Fork(1)
-public class ThroughputBenchmark {
+public class HighContentionThroughput {
 
-    private static final int BATCH = 32_000_000;
+    private static final int BATCH = 1_000_000;
+    private static final int PRODUCERS = 32;
+    private static final int TASKS = BATCH * PRODUCERS;
 
     private static void await(PaddedLongAdder counters) {
         int spin = 0;
@@ -40,7 +43,7 @@ public class ThroughputBenchmark {
 
         while (System.nanoTime() < deadline) {
             if ((spin++ & 31) == 0) {
-                if (counters.sum() >= BATCH) {
+                if (counters.sum() >= TASKS) {
                     break;
                 }
             }
@@ -52,28 +55,28 @@ public class ThroughputBenchmark {
         }
     }
 
-    private final PaddedLongAdder counters = new PaddedLongAdder(
-            Runtime.getRuntime().availableProcessors(), true, true);
-    private final NoOpFrame[][] frames = new NoOpFrame[32][];
-    private final ArrayIngestSink[] sinks = new ArrayIngestSink[32];
+    private final PaddedLongAdder counters =
+            new PaddedLongAdder(Runtime.getRuntime().availableProcessors(), true, true);
+    private final NoOpFrame[][] frames = new NoOpFrame[PRODUCERS][];
+    private final ArrayIngestSink[] sinks = new ArrayIngestSink[PRODUCERS];
     private ControlPlaneLattice controlPlane;
 
     @Setup(Level.Trial)
     public void setup(Blackhole blackhole) {
-        long hash = HasherApi.BASE_SEED;
+        long idHash = HasherApi.mix(HasherApi.BASE_SEED);
+        long seed = HasherApi.BASE_SEED;
 
         for (int i = 0; i < frames.length; i++) {
-            this.frames[i] = NoOpFrame.generate(hash, 1_000_000, this.counters);
+            this.frames[i] = NoOpFrame.generate(idHash, BATCH, this.counters);
             for (NoOpFrame frame : this.frames[i]) {
-                frame.randomizeHash(hash++);
+                frame.randomizeHash(seed++);
             }
             this.sinks[i] = new ArrayIngestSink(this.frames[i]);
         }
 
         BaseCloneableObject base = new BaseCloneableObject(new NoOpExecutor(blackhole));
-        ControlPlaneConfig config = new ControlPlaneConfig("ThroughputBenchmark", null,
-                null,
-                base, null, null);
+        ControlPlaneConfig config =
+                new ControlPlaneConfig("HighContentionThroughput", null, null, base, null, null);
         this.controlPlane = ControlPlaneLattice.getOrCreate(config);
         this.controlPlane.start();
     }
@@ -81,19 +84,17 @@ public class ThroughputBenchmark {
     @Setup(Level.Invocation)
     public void setup() {
         this.counters.reset();
-        for (var sink : this.sinks) {
-            sink.reset();
-        }
         long seed = HasherApi.BASE_SEED;
-        for (var list : this.frames) {
-            for (NoOpFrame frame : list) {
+        for (int i = 0; i < frames.length; i++) {
+            for (NoOpFrame frame : frames[i]) {
                 frame.randomizeHash(seed++);
             }
+            sinks[i] = new ArrayIngestSink(frames[i]);
         }
     }
 
     @Benchmark
-    @OperationsPerInvocation(BATCH)
+    @OperationsPerInvocation(TASKS)
     public void ingest32million32sources() {
         for (var sink : this.sinks) {
             this.controlPlane.addUpstream(sink);
