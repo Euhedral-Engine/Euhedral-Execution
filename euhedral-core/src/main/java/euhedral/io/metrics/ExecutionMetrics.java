@@ -8,7 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Supplier;
 
-public class ExecutionMetrics implements AutoCloseable {
+public final class ExecutionMetrics implements AutoCloseable {
     private final List<Meter> meters = new ArrayList<>();
 
     public ExecutionMetrics(MeterRegistry registry, FragmentConfig config,

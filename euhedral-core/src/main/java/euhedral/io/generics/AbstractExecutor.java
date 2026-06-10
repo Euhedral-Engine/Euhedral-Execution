@@ -5,36 +5,54 @@ import euhedral.io.config.CloneConfig;
 import euhedral.io.flow_control.BufferedBridge;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.frames.CancelFrame;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /// ## The terminal execution sink of Euhedral Core
 ///
-/// `AbstractExecutor` is the final execution boundary for frames. It receives scheduled work,
-/// executes it, and forwards completed frames to the completion channel.
+/// `AbstractExecutor` is the final execution boundary for frames. It receives,
+/// executes, and forwards completed frames to the completion channel.
 ///
 /// Execution is intentionally minimal and without side effects. Completed frames are always pushed
 /// into the completion sink, which decouples execution from downstream acknowledgment.
-public abstract class AbstractExecutor implements PipelineExecutor {
+public abstract class AbstractExecutor implements CloneableObject {
+    private static final VarHandle PRIMED;
+
+    static {
+        try {
+            PRIMED = MethodHandles.lookup().findVarHandle(AbstractExecutor.class, "primed", boolean.class);
+        } catch (Throwable t) {
+            throw new ExceptionInInitializerError(t);
+        }
+    }
 
     protected final Logger logger = LoggerFactory.getLogger(this.getClass());
 
     protected final PinnedThreadExecutor executorService;
     private BufferedBridge completeSink;
 
+    private boolean primed = false;
+
     public AbstractExecutor(PinnedThreadExecutor executorService) {
         this.executorService = executorService;
     }
 
-    @Override
-    public final void reportCompletionsTo(CloneableObject clone) {
-        this.completeSink = clone.completeChannel();
+    public final void setCompletionChannel(CloneableObject clone) {
+        if(PRIMED.compareAndSet(this, false, true)) {
+            this.completeSink = clone.completeChannel();
+        } else {
+            throw new IllegalStateException("This executor already has a completion channel");
+        }
     }
 
     @Override
     public void input(LatticeSource stream) {
         stream.addDownstream(new ExecutionTerminal());
     }
+
+    public abstract void execute(AbstractFrame frame);
 
     private void executeInternal(AbstractFrame frame) {
         try {
@@ -64,7 +82,7 @@ public abstract class AbstractExecutor implements PipelineExecutor {
     public void close() {
     }
 
-    protected class ExecutionTerminal implements LatticeReceiver {
+    private class ExecutionTerminal implements LatticeReceiver {
 
         public ExecutionTerminal() {
 

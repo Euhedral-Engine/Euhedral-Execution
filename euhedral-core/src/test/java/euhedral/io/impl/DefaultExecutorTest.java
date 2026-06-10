@@ -65,7 +65,7 @@ class DefaultExecutorTest {
 
     @Test
     void shouldWireCompleteSink() {
-        executor.reportCompletionsTo(cloneable);
+        executor.setCompletionChannel(cloneable);
 
         when(sink.offer(any())).thenReturn(true);
 
@@ -79,7 +79,7 @@ class DefaultExecutorTest {
 
     @Test
     void shouldExecuteFrameNormally() {
-        executor.reportCompletionsTo(cloneable);
+        executor.setCompletionChannel(cloneable);
 
         when(sink.offer(any())).thenReturn(true);
 
@@ -93,7 +93,7 @@ class DefaultExecutorTest {
 
     @Test
     void shouldSkipDeadFrameAndThrowIntoErrorPath() {
-        executor.reportCompletionsTo(cloneable);
+        executor.setCompletionChannel(cloneable);
 
         when(sink.offer(any())).thenReturn(true);
 
@@ -107,7 +107,7 @@ class DefaultExecutorTest {
 
     @Test
     void shouldMarkCancelledOnException() {
-        executor.reportCompletionsTo(cloneable);
+        executor.setCompletionChannel(cloneable);
 
         when(sink.offer(any())).thenReturn(true);
 
@@ -123,7 +123,7 @@ class DefaultExecutorTest {
 
     @Test
     void shouldRetryUntilSinkAccepts() {
-        executor.reportCompletionsTo(cloneable);
+        executor.setCompletionChannel(cloneable);
 
         AtomicInteger calls = new AtomicInteger();
 
