@@ -3,8 +3,9 @@ package euhedral.benchmarks;
 import euhedral.benchmarks.core_benchmarks.BatchedMandelbrotBenchmark;
 import euhedral.benchmarks.core_benchmarks.EndToEndLatencyBenchmark;
 import euhedral.benchmarks.core_benchmarks.HighScaleBenchmark;
+import euhedral.benchmarks.core_benchmarks.LightContentionThroughput;
 import euhedral.benchmarks.core_benchmarks.MandelbrotBenchmark;
-import euhedral.benchmarks.core_benchmarks.ThroughputBenchmark;
+import euhedral.benchmarks.core_benchmarks.HighContentionThroughput;
 import euhedral.benchmarks.queue_benchmarks.MPMCBenchmarks;
 import euhedral.benchmarks.queue_benchmarks.MPSCBenchmarks;
 import euhedral.benchmarks.queue_benchmarks.SPSCBenchmarks;
@@ -31,7 +32,7 @@ public class BenchRunner {
     public static void main(String[] args) throws Exception {
         Set<String> benchmarks =
                 new TreeSet<>(
-                        Set.of("all", "core-high-scale", "core-latency", "core-throughput",
+                        Set.of("all", "core-high-scale", "core-latency", "core-hc-throughput", "core-lc-throughput",
                                 "batched-mandelbrot", "mandelbrot", "queues-spsc", "queues-mpsc", "queues-mpmc"));
         if (args.length == 0) {
             System.out.println("Please specify a benchmark to run. Options: " + benchmarks);
@@ -99,8 +100,9 @@ public class BenchRunner {
                     flags.add("-DXms100g");
                     flags.add("-DXmx100g");
                 }
-                case "core-throughput" -> benchmark = ThroughputBenchmark.class;
                 case "core-latency" -> benchmark = EndToEndLatencyBenchmark.class;
+                case "core-hc-throughput" -> benchmark = HighContentionThroughput.class;
+                case "core-lc-throughput" -> benchmark = LightContentionThroughput.class;
                 case "queues-spsc" -> benchmark = SPSCBenchmarks.class;
                 case "queues-mpmc" -> benchmark = MPMCBenchmarks.class;
                 case "queues-mpsc" -> benchmark = MPSCBenchmarks.class;

@@ -406,7 +406,7 @@ public final class ControlPlaneFragment extends WorkRequester {
                 long ingestCount = super.getL2CacheCount();
                 int bufferCount = super.requesterState.bufferCount.getAcquire();
                 // This is usually hit when there are producers present but nothing is flowing
-                if (processed == 0 && (this.state.rests & 15) != 0 && this.upstreamCount > 0
+                if ((this.state.rests & 15) != 0 && this.upstreamCount > 0
                         && !this.state.receivingOrderedWork && ingestCount == 0 && bufferCount == 0
                         && this.state.lastEmptyNs - this.state.lastActiveNs
                         > 10 * this.state.maxParkNs) {
@@ -414,8 +414,9 @@ public final class ControlPlaneFragment extends WorkRequester {
                     continue;
                 }
 
-                if (processed == 0 && bufferCount == 0) {
+                if (bufferCount == 0) {
                     this.state.rests++;
+                    idleSpin(Math.min(5, this.state.rests));
                 }
             }
         } catch (Throwable e) {

@@ -7,7 +7,7 @@ import lombok.Getter;
 
 /// Used for draining from queues. Automatically tracks the number of frames and bytes drained as
 /// well as their arrival latency.
-public class DrainBuffer implements Consumer<AbstractFrame> {
+public final class DrainBuffer implements Consumer<AbstractFrame> {
 
     public final BatchableQueue<AbstractFrame> buffer;
     public final FlowRecorder arrivalLatencyRecorder = new FlowRecorder();
