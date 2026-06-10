@@ -154,7 +154,7 @@ class ControlPlaneCacheTest {
     void shouldReturnZeroTotalCountInitially() {
         ControlPlaneCache manager = manager();
 
-        assertEquals(0, manager.getTotalCount());
+        assertEquals(0, manager.getQueueCount());
     }
 
     @Test
