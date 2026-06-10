@@ -1,8 +1,9 @@
 package euhedral.io.impl;
 
 import euhedral.io.frames.AbstractFrame;
-import io.euhedral_execution.data_structures.queues.PartitionedMpscQueue;
-import io.euhedral_execution.data_structures.queues.common.PartitionedQueue;
+import io.euhedral_execution.data_structures.queues.BoundedMpscQueue;
+import io.euhedral_execution.data_structures.queues.MpscQueue;
+import io.euhedral_execution.data_structures.queues.common.BatchableQueue;
 import java.util.Arrays;
 import lombok.Getter;
 import lombok.Setter;
@@ -20,10 +21,10 @@ import org.jspecify.annotations.Nullable;
 /// @param <DATA>  The data type to use to replace fields in the frame
 /// @param <FRAME> The frame type to recycle
 @SuppressWarnings({"unchecked", "unused"})
-public class FrameManager<DATA, FRAME extends AbstractFrame> implements AutoCloseable {
+public final class FrameManager<DATA, FRAME extends AbstractFrame> implements AutoCloseable {
 
     @Getter
-    private final PartitionedQueue<AbstractFrame> recycleQueue;
+    private final BatchableQueue<AbstractFrame> recycleQueue;
     private final long password;
     private final AbstractFrame[] buffer;
 
@@ -44,7 +45,7 @@ public class FrameManager<DATA, FRAME extends AbstractFrame> implements AutoClos
         int actual = Integer.highestOneBit((chunkSize - 1) << 1);
         actual = actual <= 0 ? 1 : actual;
 
-        this.recycleQueue = new PartitionedMpscQueue<>(1, actual, pooledChunks);
+        this.recycleQueue = new MpscQueue<>(actual, pooledChunks);
         this.password = password;
         this.buffer = new AbstractFrame[Math.max(actual, 256)];
     }
@@ -54,7 +55,7 @@ public class FrameManager<DATA, FRAME extends AbstractFrame> implements AutoClos
         int actual = Integer.highestOneBit((capacity - 1) << 1);
         actual = actual <= 0 ? 1 : actual;
 
-        this.recycleQueue = new PartitionedMpscQueue<>(actual);
+        this.recycleQueue = new BoundedMpscQueue<>(actual);
         this.password = password;
         this.buffer = new AbstractFrame[Math.max(actual, 256)];
     }

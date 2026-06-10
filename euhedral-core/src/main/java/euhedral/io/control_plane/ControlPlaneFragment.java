@@ -17,9 +17,8 @@ import euhedral.io.config.FragmentConfig;
 import euhedral.io.flow_control.BufferedBridge;
 import euhedral.io.flow_control.DirectOutputStream;
 import euhedral.io.frames.AbstractFrame;
-import euhedral.io.frames.DummyInitFrame;
+import euhedral.io.frames.DummyFrame;
 import euhedral.io.generics.LatticeSource;
-import euhedral.io.generics.SlotManager;
 import euhedral.io.metrics.ExecutionMetrics;
 import euhedral.io.utils.DrainBuffer;
 import euhedral.io.utils.FlowRecorder;
@@ -71,7 +70,7 @@ import org.slf4j.LoggerFactory;
 /// tasks. A pipeline of frames naturally executes in parallel across stages as work flows through.
 ///
 /// **This is the distributed control surface of the system. Everything else is just plumbing.**
-public final class ControlPlaneFragment extends WorkRequester implements SlotManager {
+public final class ControlPlaneFragment extends WorkRequester {
 
     private static final long RATE_NS_TO_SEC = 1_000_000_000L;
 
@@ -294,7 +293,7 @@ public final class ControlPlaneFragment extends WorkRequester implements SlotMan
         }
         super.firstTouch();
         for (int i = 0; i < super.L1Size * 2; i++) {
-            super.L1Cache.offer(DummyInitFrame.INSTANCE);
+            super.L1Cache.offer(DummyFrame.INSTANCE);
         }
         super.L1Cache.clear();
     }

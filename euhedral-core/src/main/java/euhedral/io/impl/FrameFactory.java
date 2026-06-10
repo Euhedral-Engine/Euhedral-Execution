@@ -10,7 +10,7 @@ import java.util.concurrent.ThreadLocalRandom;
 /// A class for automatically creating or updating frames using the passed in functions.
 ///
 /// Typically used in tandem with a [FrameManager]
-public class FrameFactory<DATA, F extends AbstractFrame> {
+public final class FrameFactory<DATA, F extends AbstractFrame> {
     private final long idHash = HasherApi.mix(ThreadLocalRandom.current().nextLong());
 
     private final FrameCreate<DATA, F> frameGenerator;
