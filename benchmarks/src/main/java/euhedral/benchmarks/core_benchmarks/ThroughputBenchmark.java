@@ -1,12 +1,11 @@
 package euhedral.benchmarks.core_benchmarks;
 
 import euhedral.benchmarks.frames.NoOpFrame;
-import euhedral.benchmarks.pipelines.NoOpPipeline;
+import euhedral.benchmarks.pipelines.NoOpExecutor;
 import euhedral.hashing.HasherApi;
-import euhedral.io.config.CacheConfig;
 import euhedral.io.config.ControlPlaneConfig;
-import euhedral.io.config.FragmentConfig;
 import euhedral.io.control_plane.ControlPlaneLattice;
+import euhedral.io.impl.BaseCloneableObject;
 import euhedral.io.ingest.ArrayIngestSink;
 import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
 import java.util.concurrent.TimeUnit;
@@ -52,6 +51,7 @@ public class ThroughputBenchmark {
             }
         }
     }
+
     private final PaddedLongAdder counters = new PaddedLongAdder(
             Runtime.getRuntime().availableProcessors(), true, true);
     private final NoOpFrame[][] frames = new NoOpFrame[32][];
@@ -70,12 +70,10 @@ public class ThroughputBenchmark {
             this.sinks[i] = new ArrayIngestSink(this.frames[i]);
         }
 
-        CacheConfig cacheConfig = CacheConfig.defaultConfig();
-        FragmentConfig emConfig = FragmentConfig.balancedDefault();
-        NoOpPipeline pipeline = new NoOpPipeline(cacheConfig, emConfig, blackhole);
+        BaseCloneableObject base = new BaseCloneableObject(new NoOpExecutor(blackhole));
         ControlPlaneConfig config = new ControlPlaneConfig("ThroughputBenchmark", null,
                 null,
-                pipeline, null, null);
+                base, null, null);
         this.controlPlane = ControlPlaneLattice.getOrCreate(config);
         this.controlPlane.start();
     }
@@ -87,8 +85,8 @@ public class ThroughputBenchmark {
             sink.reset();
         }
         long seed = HasherApi.BASE_SEED;
-        for(var list : this.frames) {
-            for(NoOpFrame frame : list) {
+        for (var list : this.frames) {
+            for (NoOpFrame frame : list) {
                 frame.randomizeHash(seed++);
             }
         }

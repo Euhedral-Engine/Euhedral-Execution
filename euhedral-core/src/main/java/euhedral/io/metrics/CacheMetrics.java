@@ -9,7 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Supplier;
 
-public class CacheMetrics implements AutoCloseable {
+public final class CacheMetrics implements AutoCloseable {
 
     public final DistributionSummary subQBacklogSummary;
 

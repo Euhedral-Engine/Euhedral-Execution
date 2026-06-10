@@ -1,18 +1,17 @@
 package euhedral.benchmarks.core_benchmarks;
 
-import euhedral.benchmarks.frames.ArrayFrame;
+import euhedral.benchmarks.frames.BenchArrayFrame;
 import euhedral.benchmarks.frames.MandelbulbFrame;
-import euhedral.benchmarks.pipelines.FractalPipeline;
+import euhedral.benchmarks.pipelines.FractalExecutor;
 import euhedral.hardware_utils.PinnedThreadExecutor;
 import euhedral.hardware_utils.SystemInfo;
 import euhedral.hardware_utils.SystemInfo.SocketInfo;
 import euhedral.hashing.HasherApi;
-import euhedral.io.config.CacheConfig;
 import euhedral.io.config.ControlPlaneConfig;
-import euhedral.io.config.FragmentConfig;
 import euhedral.io.control_plane.ControlPlaneLattice;
 import euhedral.io.control_plane.RoutingPolicy;
 import euhedral.io.frames.AbstractFrame;
+import euhedral.io.impl.BaseCloneableObject;
 import euhedral.io.ingest.ArrayIngestSink;
 import euhedral.io.utils.MathFunctions;
 import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
@@ -164,7 +163,7 @@ public class HighScaleBenchmark {
                     while (total > 0) {
                         AbstractFrame[] set = new AbstractFrame[Math.min(1024, total)];
                         System.arraycopy(row, iter * 1024, set, 0, set.length);
-                        chunkArray[iter++] = new ArrayFrame(pixels[0][0][0].getIdHash(), set,
+                        chunkArray[iter++] = new BenchArrayFrame(pixels[0][0][0].getIdHash(), set,
                                 this.counters);
 
                         chunkArray[iter - 1].randomizeHash(seed++);
@@ -176,12 +175,10 @@ public class HighScaleBenchmark {
                 }
             }
 
-            CacheConfig cacheConfig = CacheConfig.defaultConfig();
-            FragmentConfig schedConfig = FragmentConfig.balancedDefault();
-            FractalPipeline pipeline =
-                    new FractalPipeline(cacheConfig, schedConfig, blackhole);
+            FractalExecutor executor = new FractalExecutor(blackhole);
+            BaseCloneableObject base = new BaseCloneableObject(executor);
             ControlPlaneConfig config = new ControlPlaneConfig("HighScaleBenchmark", null, null,
-                    pipeline, null, null);
+                    base, null, null);
             this.controlPlane = ControlPlaneLattice.getOrCreate(config);
             this.controlPlane.start();
         }
@@ -254,7 +251,7 @@ public class HighScaleBenchmark {
                     while (total > 0) {
                         AbstractFrame[] set = new AbstractFrame[Math.min(1024, total)];
                         System.arraycopy(row, iter * 1024, set, 0, set.length);
-                        chunkArray[iter++] = new ArrayFrame(pixels[0][0][0].getIdHash(), set,
+                        chunkArray[iter++] = new BenchArrayFrame(pixels[0][0][0].getIdHash(), set,
                                 this.counters);
 
                         chunkArray[iter - 1].randomizeHash(seed++);
@@ -266,12 +263,10 @@ public class HighScaleBenchmark {
                 }
             }
 
-            CacheConfig cacheConfig = CacheConfig.defaultConfig();
-            FragmentConfig schedConfig = FragmentConfig.balancedDefault();
-            FractalPipeline pipeline =
-                    new FractalPipeline(cacheConfig, schedConfig, blackhole);
+            FractalExecutor executor = new FractalExecutor(blackhole);
+            BaseCloneableObject base = new BaseCloneableObject(executor);
             ControlPlaneConfig config = new ControlPlaneConfig("HighScaleBenchmark", null, null,
-                    pipeline, null, null);
+                    base, null, null);
             this.controlPlane = ControlPlaneLattice.getOrCreate(config);
             this.controlPlane.start();
         }
@@ -334,12 +329,10 @@ public class HighScaleBenchmark {
                 }
             }
 
-            CacheConfig cacheConfig = CacheConfig.defaultConfig();
-            FragmentConfig schedConfig = FragmentConfig.balancedDefault();
-            FractalPipeline pipeline =
-                    new FractalPipeline(cacheConfig, schedConfig, blackhole);
+            FractalExecutor executor = new FractalExecutor(blackhole);
+            BaseCloneableObject base = new BaseCloneableObject(executor);
             ControlPlaneConfig config = new ControlPlaneConfig("HighScaleBenchmark", null, null,
-                    pipeline, null, null);
+                    base, null, null);
             this.controlPlane = ControlPlaneLattice.getOrCreate(config);
             this.controlPlane.start();
         }
@@ -403,12 +396,10 @@ public class HighScaleBenchmark {
                 }
             }
 
-            CacheConfig cacheConfig = CacheConfig.defaultConfig();
-            FragmentConfig schedConfig = FragmentConfig.balancedDefault();
-            FractalPipeline pipeline =
-                    new FractalPipeline(cacheConfig, schedConfig, blackhole);
+            FractalExecutor executor = new FractalExecutor(blackhole);
+            BaseCloneableObject base = new BaseCloneableObject(executor);
             ControlPlaneConfig config = new ControlPlaneConfig("HighScaleBenchmark", null, null,
-                    pipeline, null, null);
+                    base, null, null);
             this.controlPlane = ControlPlaneLattice.getOrCreate(config);
             this.controlPlane.start();
         }

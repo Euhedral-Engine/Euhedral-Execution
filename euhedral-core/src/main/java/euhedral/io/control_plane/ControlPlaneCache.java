@@ -12,7 +12,7 @@ import euhedral.io.flow_control.LatticeEdge;
 import euhedral.io.flow_control.LatticeVertex;
 import euhedral.io.flow_control.UpstreamQueue;
 import euhedral.io.frames.AbstractFrame;
-import euhedral.io.frames.DummyInitFrame;
+import euhedral.io.frames.DummyFrame;
 import euhedral.io.generics.CloneableObject;
 import euhedral.io.generics.LatticeReceiver;
 import euhedral.io.generics.LatticeSource;
@@ -269,7 +269,7 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
         for (int i = 0; i < 3; i++) {
             for (int j = 0; j < this.L2Cache.partitions(); j++) {
                 for (int k = 0; k < chunkSize; k++) {
-                    this.L2Cache.offer(j, DummyInitFrame.INSTANCE);
+                    this.L2Cache.offer(j, DummyFrame.INSTANCE);
                 }
             }
         }

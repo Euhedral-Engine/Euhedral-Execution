@@ -19,7 +19,7 @@ import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.CloneableObject;
 import euhedral.io.generics.LatticeSource;
 import euhedral.io.generics.LatticeTerminal;
-import euhedral.io.impl.DefaultCloneablePipeline;
+import euhedral.io.impl.BaseCloneableObject;
 import euhedral.io.ingest.AbstractIngestSink;
 import java.time.Duration;
 import java.util.Arrays;
@@ -103,7 +103,7 @@ public class ControlPlaneLattice implements LatticeTerminal, AutoCloseable {
                 return curr;
             }
 
-            return new ControlPlaneLattice(name, null, new DefaultCloneablePipeline(),
+            return new ControlPlaneLattice(name, null, new BaseCloneableObject(),
                     SystemInfo.getCpuSet());
         });
     }
@@ -120,7 +120,7 @@ public class ControlPlaneLattice implements LatticeTerminal, AutoCloseable {
                 allowedCpus = SystemInfo.getCpuSet();
             }
             if (cloneable == null) {
-                cloneable = new DefaultCloneablePipeline(config.metricPrefix(),
+                cloneable = new BaseCloneableObject(config.metricPrefix(),
                         config.meterRegistry());
             }
             return new ControlPlaneLattice(config.name(), config.baseShard(), cloneable,
