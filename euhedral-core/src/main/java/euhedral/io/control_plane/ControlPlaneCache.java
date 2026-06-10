@@ -6,7 +6,6 @@ import static euhedral.io.utils.MathFunctions.ewma;
 import euhedral.hardware_utils.SystemInfo;
 import euhedral.hardware_utils.SystemInfo.CpuCacheLayout;
 import euhedral.hardware_utils.common.SystemUtilization.CoreSnapshot;
-import euhedral.hashing.HasherApi;
 import euhedral.io.config.CacheConfig;
 import euhedral.io.config.CloneConfig;
 import euhedral.io.flow_control.LatticeEdge;
@@ -14,14 +13,12 @@ import euhedral.io.flow_control.LatticeVertex;
 import euhedral.io.flow_control.UpstreamQueue;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.frames.DummyInitFrame;
-import euhedral.io.generics.CacheManager;
+import euhedral.io.generics.CloneableObject;
 import euhedral.io.generics.LatticeReceiver;
 import euhedral.io.generics.LatticeSource;
 import euhedral.io.metrics.CacheMetrics;
 import euhedral.io.utils.DrainBuffer;
 import euhedral.io.utils.FlowRecorder;
-import euhedral.io.utils.FlowRecorder.FlowSnapshot;
-import euhedral.io.utils.MathFunctions;
 import euhedral.io.utils.QueuePartitionWrapper;
 import io.euhedral_execution.data_structures.atomics.AtomicDouble;
 import io.euhedral_execution.data_structures.atomics.PaddedAtomicLong;
@@ -31,19 +28,12 @@ import io.euhedral_execution.data_structures.queues.PartitionedMpscQueue;
 import io.euhedral_execution.data_structures.queues.common.QueueUtils;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
-import java.util.Arrays;
 import java.util.BitSet;
-import java.util.StringJoiner;
-import java.util.concurrent.Callable;
-import java.util.concurrent.atomic.AtomicLong;
 
-import it.unimi.dsi.fastutil.ints.Int2IntArrayMap;
-import it.unimi.dsi.fastutil.ints.Int2ObjectArrayMap;
-import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import org.jctools.maps.NonBlockingHashMapLong;
 import org.jspecify.annotations.NonNull;
 
-public class ControlPlaneCache extends LatticeVertex implements CacheManager {
+public abstract class ControlPlaneCache extends LatticeVertex implements CloneableObject {
 
     protected static final VarHandle PRIMED;
     protected static final VarHandle TOTAL_BYTES;
@@ -72,15 +62,6 @@ public class ControlPlaneCache extends LatticeVertex implements CacheManager {
                                               + config.cloneConfig().coreId() : "ControlPlaneCache";
     }
 
-    protected static int getPartitionCount(CacheConfig config) {
-        CloneConfig cloneConfig = config.cloneConfig();
-        if (cloneConfig != null) {
-            CpuCacheLayout layout = SystemInfo.getCacheLayout(cloneConfig.getCpuSet()[0]);
-            return config.partitionsPerCpu() * Integer.highestOneBit(layout.sharesL2());
-        }
-        return 0;
-    }
-
     protected static int getChunkSize(CacheConfig config, int partitions) {
         CloneConfig cloneConfig = config.cloneConfig();
         if (cloneConfig == null) {
@@ -89,6 +70,9 @@ public class ControlPlaneCache extends LatticeVertex implements CacheManager {
 
         CpuCacheLayout layout = SystemInfo.getCacheLayout(cloneConfig.getCpuSet()[0]);
         long L2 = layout.bytesL2();
+        if(layout.sharesL2() > 2) {
+            L2 /= layout.sharesL2();
+        }
 
         double budget = config.L2MemoryBudget();
         budget = clampDouble(budget, 0, 1.0);
@@ -103,71 +87,67 @@ public class ControlPlaneCache extends LatticeVertex implements CacheManager {
         return Math.max(chunk, 512);
     }
 
-    protected final CacheConfig config;
+    protected final CacheConfig cacheConfig;
     protected final CacheMetrics metrics;
 
     protected final AtomicDouble capFactor = new AtomicDouble(1d);
     protected final PaddedAtomicLong memoryLimit;
     protected final PaddedLongAdder avgFrameSize;
-    protected final NonBlockingHashMapLong<DownstreamHandle> handles;
     protected final long frameQuota;
 
     protected final QueuePartitionWrapper queueRing;
     protected final int chunkSize;
     protected final int mask;
-    protected final int[] heads;
-
-    protected final boolean[] partitionLocks;
-
-    protected final AtomicLong cacheLock = new AtomicLong(0);
 
     protected final PaddedAtomicReference<FlowRecorder> fillRecorder;
     protected final PaddedAtomicReference<FlowRecorder> fillBytesRecorder;
+    protected final FlowRecorder drainRecorder;
+    protected final FlowRecorder drainBytesRecorder;
 
     protected boolean primed;
     protected long totalCount = 0L;
     protected long totalQueuedSizeBytes = 0L;
 
-    public ControlPlaneCache(@NonNull CacheConfig config) {
-        super(getName(config), getPartitionCount(config), RoutingFunction.DEFAULT,
-                true);
-        this.config = config;
+    protected int head;
 
-        int partitions = getPartitionCount(config);
+    public ControlPlaneCache(@NonNull CacheConfig cacheConfig) {
+        super(getName(cacheConfig), cacheConfig.partitionsPerCpu(), RoutingFunction.DEFAULT,
+                true);
+        this.cacheConfig = cacheConfig;
+
+        int partitions = cacheConfig.partitionsPerCpu();
         if (partitions <= 0) {
             this.metrics = null;
             this.memoryLimit = null;
             this.avgFrameSize = null;
-            this.handles = null;
             this.frameQuota = 0;
             this.queueRing = null;
             this.chunkSize = 0;
             this.mask = 0;
-            this.heads = null;
-            this.partitionLocks = new boolean[0];
             this.fillRecorder = null;
             this.fillBytesRecorder = null;
+            this.drainRecorder = null;
+            this.drainBytesRecorder = null;
         } else {
-            CpuCacheLayout layout = SystemInfo.getCacheLayout(config.cloneConfig().getCpuSet()[0]);
-            if (config.registry() != null) {
-                this.metrics = new CacheMetrics(config.metricPrefix(), layout.maskL2(), capFactor,
-                        () -> (long) TOTAL_BYTES.getOpaque(this), config.registry());
+            CpuCacheLayout layout = SystemInfo.getCacheLayout(cacheConfig.cloneConfig().getCpuSet()[0]);
+            if (cacheConfig.registry() != null) {
+                this.metrics = new CacheMetrics(cacheConfig.metricPrefix(), layout.maskL2(), capFactor,
+                        () -> (long) TOTAL_BYTES.getOpaque(this), cacheConfig.registry());
             } else {
                 this.metrics = null;
             }
             this.memoryLimit = new PaddedAtomicLong(0);
             this.avgFrameSize = new PaddedLongAdder(partitions, true, true);
-            this.handles = new NonBlockingHashMapLong<>(4);
-            this.chunkSize = getChunkSize(config, partitions);
+            this.chunkSize = getChunkSize(cacheConfig, partitions);
             this.frameQuota = (long) this.chunkSize * partitions;
             this.queueRing = new QueuePartitionWrapper(
                     new PartitionedMpscQueue<>(partitions, this.chunkSize,
-                            config.maxPooledChunks()));
+                            cacheConfig.maxPooledChunks()));
             this.mask = partitions - 1;
-            this.heads = new int[SystemInfo.getCpuCount()];
-            this.partitionLocks = new boolean[partitions];
             this.fillRecorder = new PaddedAtomicReference<>(new FlowRecorder());
             this.fillBytesRecorder = new PaddedAtomicReference<>(new FlowRecorder());
+            this.drainRecorder = new FlowRecorder();
+            this.drainBytesRecorder = new FlowRecorder();
 
             BitSet mappings = new BitSet(partitions);
             mappings.set(0, partitions);
@@ -181,18 +161,14 @@ public class ControlPlaneCache extends LatticeVertex implements CacheManager {
             super.setDownstreamMapping(mappings, queueHandles);
             setDrain(false);
 
-            String[] chunks = layout.maskL2().split(",");
-            StringJoiner sj = new StringJoiner(",");
-            for (var c : chunks) {
-                sj.add("0x" + c);
-            }
-            this.logger.debug("Initialized to serve cpus (little-endian): {}", sj);
             this.logger.debug("Partitions: {} PartitionChunkSize: {} CapacityPerQueueNode: {}",
                     partitions, this.chunkSize, partitions * this.chunkSize);
         }
     }
 
-    public long drain(DownstreamHandle handle, DrainBuffer drainBuffer, int maxFill, long demand) {
+    public abstract double getPressure();
+
+    public long drain(DrainBuffer drainBuffer, int maxFill, long demand) {
         drainBuffer.reset();
         if (maxFill <= 0) {
             hookOnDrain(demand);
@@ -203,39 +179,24 @@ public class ControlPlaneCache extends LatticeVertex implements CacheManager {
         long totalBytesDrained = 0;
         long initialCount = (long) TOTAL_COUNT.getOpaque(this);
         if(initialCount > 0) {
-            long permission = this.cacheLock.getAndAdd(1);
-
-            while(permission < 0) {
-                while(permission < 0) {
-                    permission = this.cacheLock.getOpaque();
-                }
-                permission = this.cacheLock.getAndAdd(1);
-            }
-
             int cycles = 0;
+            for (int i = 0; i < maxFill && cycles <= this.queueRing.partitions(); ) {
 
-            try {
-                for (int i = 0; i < maxFill && cycles <= this.queueRing.partitions(); ) {
+                int drainCount = (int) this.queueRing.drain(this.head, drainBuffer, maxFill - totalDrain);
+                long drainedBytes = drainBuffer.drainedBytes;
 
-                    int drainCount = (int) this.queueRing.drain(handle.head, drainBuffer, maxFill - totalDrain);
-                    long drainedBytes = drainBuffer.drainedBytes;
-
-                    cycles++;
-                    if (drainCount > 0) {
-                        i += drainCount;
-                        totalBytesDrained += drainedBytes;
-                        totalDrain += drainCount;
-                        if (drainCount > config.ringWalkResetThreshold()) {
-                            cycles = 0;
-                        }
+                cycles++;
+                if (drainCount > 0) {
+                    i += drainCount;
+                    totalBytesDrained += drainedBytes;
+                    totalDrain += drainCount;
+                    if (drainCount > cacheConfig.ringWalkResetThreshold()) {
+                        cycles = 0;
                     }
-
-                    this.heads[handle.cpu] = (handle.head + 1) & mask;
-                    handle.head = (handle.head + 1) % handle.partitionCount + handle.assignments[0];
-                    VarHandle.fullFence();
                 }
-            } finally {
-                this.cacheLock.getAndAdd(-1);
+
+                this.head = (this.head + 1) & mask;
+                VarHandle.fullFence();
             }
         }
         if (totalDrain > 0) {
@@ -246,7 +207,9 @@ public class ControlPlaneCache extends LatticeVertex implements CacheManager {
         if (totalDrain < maxFill) {
             pull(drainBuffer, maxFill - totalDrain);
         }
-        handle.record(totalDrain, totalBytesDrained, drainBuffer);
+        long now = System.nanoTime();
+        this.drainRecorder.record(now, totalDrain + drainBuffer.drainCount, false);
+        this.drainBytesRecorder.record(now, totalBytesDrained + drainBuffer.drainedBytes, false);
         hookOnDrain(demand);
 
         totalDrain += drainBuffer.drainCount;
@@ -272,19 +235,9 @@ public class ControlPlaneCache extends LatticeVertex implements CacheManager {
             return;
         }
 
-        this.memoryLimit.getAndSet(snapshot.memoryLimit() * this.handles.size());
+        this.memoryLimit.getAndSet(snapshot.memoryLimit());
 
-        double pressure = 0.0;
-        try {
-            for (DownstreamHandle handle : this.handles.values()) {
-                pressure += handle.downstreamPressure.call();
-            }
-            pressure /= this.handles.size();
-            pressure = clampDouble(pressure, 0.0, 1.0);
-        } catch (Throwable ignored) {
-            pressure = 1.0;
-        }
-
+        double pressure = clampDouble(getPressure(), 0.0, 1.0);
         double target = 1.0 - (0.85 * pressure);
 
         double curr = this.capFactor.getPlain();
@@ -303,11 +256,11 @@ public class ControlPlaneCache extends LatticeVertex implements CacheManager {
         return upstream.getCachedUpCount();
     }
 
-    public FlowRecorder getFillRecorder() {
+    public final FlowRecorder getFillRecorder() {
         return this.fillRecorder.getPlain();
     }
 
-    public FlowRecorder getFillBytesRecorder() {
+    public final FlowRecorder getFillBytesRecorder() {
         return this.fillBytesRecorder.getPlain();
     }
 
@@ -338,65 +291,7 @@ public class ControlPlaneCache extends LatticeVertex implements CacheManager {
         TOTAL_BYTES.setOpaque(this, 0);
     }
 
-    public void addHandle(DownstreamHandle handle) {
-        while (!this.cacheLock.compareAndSet(0, Long.MIN_VALUE)) {
-            Thread.onSpinWait();
-        }
-        try {
-            this.handles.put(handle.cpu, handle);
-
-            int count = this.handles.size();
-
-            DownstreamHandle lastHandle = null;
-            int start = 0;
-            int parts = this.queueRing.partitions() / count;
-            for (var h : this.handles.values()) {
-                lastHandle = h;
-                h.assignments[0] = start;
-                h.assignments[1] = start + parts;
-                h.head = start;
-                h.partitionCount = parts;
-                start += parts;
-            }
-            if(lastHandle != null) {
-                lastHandle.assignments[1] = this.queueRing.partitions();
-                lastHandle.partitionCount = lastHandle.assignments[1] - lastHandle.assignments[0];
-            }
-            VarHandle.fullFence();
-        } finally {
-            this.cacheLock.setRelease(0);
-        }
-    }
-
-    public void removeHandle(int cpu) {
-        while (!this.cacheLock.compareAndSet(0, Long.MIN_VALUE)) {
-            Thread.onSpinWait();
-        }
-        try {
-            this.handles.remove(cpu);
-            int count = this.handles.size();
-
-            DownstreamHandle lastHandle = null;
-            int start = 0;
-            int parts = this.queueRing.partitions() / Math.max(count, 1);
-            for (var h : this.handles.values()) {
-                lastHandle = h;
-                h.assignments[0] = start;
-                h.assignments[1] = start + parts;
-                h.partitionCount = parts;
-                start += parts;
-            }
-            if(lastHandle != null) {
-                lastHandle.assignments[1] = this.queueRing.partitions();
-                lastHandle.partitionCount = lastHandle.assignments[1] - lastHandle.assignments[0];
-            }
-            VarHandle.fullFence();
-        } finally {
-            this.cacheLock.setRelease(0);
-        }
-    }
-
-    public long getTotalCount() {
+    public long getQueueCount() {
         return (long) TOTAL_COUNT.getOpaque(this);
     }
 
@@ -408,12 +303,6 @@ public class ControlPlaneCache extends LatticeVertex implements CacheManager {
             return (long) (byteQuota * cap);
         }
         return (long) (hardwareMax * cap);
-    }
-
-    public long getProportionalMaxQueuedBytes() {
-        int shares = this.handles.size();
-        long max = getMaxQueuedBytes();
-        return shares <= 2 ? max : max / shares;
     }
 
     public boolean isEmpty() {
@@ -435,11 +324,6 @@ public class ControlPlaneCache extends LatticeVertex implements CacheManager {
     }
 
     @Override
-    public ControlPlaneCache output() {
-        return this;
-    }
-
-    @Override
     public boolean isDrained() {
         return isEmpty();
     }
@@ -450,43 +334,8 @@ public class ControlPlaneCache extends LatticeVertex implements CacheManager {
     }
 
     @Override
-    public CacheManager clone(CloneConfig cloneConfig) {
-        CpuCacheLayout layout = SystemInfo.getCacheLayout(cloneConfig.getCpuSet()[0]);
-
-        long hash = HasherApi.getHash(layout.maskL2());
-        return CACHES.computeIfAbsent(hash,
-                (k) -> new ControlPlaneCache(this.config.clone(cloneConfig)));
-    }
-
-    @Override
     public void close() {
         super.close();
-    }
-
-    public static class DownstreamHandle {
-
-        public final int cpu;
-        public final Callable<Double> downstreamPressure;
-        private final int[] assignments = new int[2];
-
-        private int head;
-        private int partitionCount;
-
-        public FlowRecorder drainRecorder;
-        public FlowRecorder drainBytesRecorder;
-
-        public DownstreamHandle(int cpu, Callable<Double> downstreamPressure) {
-            this.cpu = cpu;
-            this.drainRecorder = new FlowRecorder();
-            this.drainBytesRecorder = new FlowRecorder();
-            this.downstreamPressure = downstreamPressure;
-        }
-
-        public void record(long totalDrain, long totalBytesDrained, DrainBuffer drainBuffer) {
-            long now = System.nanoTime();
-            this.drainRecorder.record(now, totalDrain + drainBuffer.drainCount, true);
-            this.drainBytesRecorder.record(now, totalBytesDrained + drainBuffer.drainedBytes, true);
-        }
     }
 
     protected class PartitionSubscriber implements LatticeReceiver {

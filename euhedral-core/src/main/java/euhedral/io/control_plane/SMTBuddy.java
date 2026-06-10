@@ -30,7 +30,6 @@ public class SMTBuddy implements AutoCloseable {
 
     protected final PinnedThreadExecutor executor;
     protected final AtomicBoolean running = new AtomicBoolean(false);
-    protected final DownstreamHandle handle;
     protected final DrainBuffer bufferWrapper;
     protected final int bufferSize;
     protected final int lowWaterMark;
@@ -38,9 +37,8 @@ public class SMTBuddy implements AutoCloseable {
     protected ControlPlaneCache ingest;
     protected volatile Thread cycleThread;
 
-    public SMTBuddy(DownstreamHandle handle, DrainBuffer buffer, SMTState state, PinnedThreadExecutor executor) {
+    public SMTBuddy(DrainBuffer buffer, SMTState state, PinnedThreadExecutor executor) {
         this.state = state;
-        this.handle = handle;
         this.bufferWrapper = buffer;
         this.bufferSize = buffer.getSize();
         this.lowWaterMark = bufferSize >> 2;
@@ -123,7 +121,7 @@ public class SMTBuddy implements AutoCloseable {
         ControlPlaneCache ingest = (ControlPlaneCache)  INGEST.getOpaque(this);
 
         this.state.refresh();
-        long demand = calculateDemand(ingest.getTotalCount());
+        long demand = calculateDemand(ingest.getQueueCount());
         int maxFill = this.bufferSize - this.state.bufferCount.get();
         int count = (int) ingest.drain(handle, this.bufferWrapper, maxFill, demand);
 
