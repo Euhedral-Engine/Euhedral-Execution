@@ -7,7 +7,7 @@ import euhedral.benchmarks.pipelines.FractalPipeline;
 import euhedral.hashing.HasherApi;
 import euhedral.io.config.CacheConfig;
 import euhedral.io.config.ControlPlaneConfig;
-import euhedral.io.config.SchedulingConfig;
+import euhedral.io.config.FragmentConfig;
 import euhedral.io.control_plane.ControlPlaneLattice;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.reactor.common.EuhedralSubscriber;
@@ -215,7 +215,7 @@ public class BatchedMandelbrotBenchmark {
             }
 
             CacheConfig cacheConfig = CacheConfig.defaultConfig();
-            SchedulingConfig schedConfig = SchedulingConfig.balancedDefault();
+            FragmentConfig schedConfig = FragmentConfig.balancedDefault();
             FractalPipeline pipeline =
                     new FractalPipeline(cacheConfig, schedConfig, blackhole);
             ControlPlaneConfig config = new ControlPlaneConfig("MandelbrotBenchmark", null, null,

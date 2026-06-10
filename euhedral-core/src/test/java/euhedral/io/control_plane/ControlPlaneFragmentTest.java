@@ -10,12 +10,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import euhedral.io.config.CacheConfig;
 import euhedral.io.config.CloneConfig;
-import euhedral.io.config.SchedulingConfig;
+import euhedral.io.config.FragmentConfig;
 import java.time.Duration;
 import org.junit.jupiter.api.Test;
 
 class ControlPlaneFragmentTest {
+
     private CloneConfig cloneConfig() {
         CloneConfig clone = mock(CloneConfig.class);
 
@@ -26,13 +28,17 @@ class ControlPlaneFragmentTest {
         return clone;
     }
 
-    private SchedulingConfig config() {
-        return new SchedulingConfig(
+    private CacheConfig cConfig() {
+        return new CacheConfig(cloneConfig(), 0.7, 4, 1, 4, null, null);
+    }
+
+    private FragmentConfig sConfig() {
+        return new FragmentConfig(
                 cloneConfig(),
                 64,
                 128,
                 false,
-                new SchedulingConfig.IdleCyclePolicy(
+                new FragmentConfig.IdleCyclePolicy(
                         0.4,
                         0.8,
                         1.0,
@@ -45,7 +51,7 @@ class ControlPlaneFragmentTest {
 
     @Test
     void shouldConstructWithoutCloneConfig() {
-        ControlPlaneFragment manager = new ControlPlaneFragment(config());
+        ControlPlaneFragment manager = new ControlPlaneFragment(cConfig(), sConfig());
 
         assertNotNull(manager);
         assertFalse(manager.isStarted());
@@ -53,7 +59,7 @@ class ControlPlaneFragmentTest {
 
     @Test
     void shouldInitializeMinimumConcurrency() {
-        ControlPlaneFragment manager = new ControlPlaneFragment(config());
+        ControlPlaneFragment manager = new ControlPlaneFragment(cConfig(), sConfig());
 
         assertEquals(64, manager.currentConcurrency);
         assertEquals(64, manager.currentRate);
@@ -62,19 +68,19 @@ class ControlPlaneFragmentTest {
 
     @Test
     void shouldCreateRequiredInfrastructure() {
-        ControlPlaneFragment manager = new ControlPlaneFragment(config());
+        ControlPlaneFragment manager = new ControlPlaneFragment(cConfig(), sConfig());
 
         assertNotNull(manager.output());
         assertNotNull(manager.completeChannel());
 
-        assertNotNull(manager.buffer);
+        assertNotNull(manager.L1Cache);
         assertNotNull(manager.bufferWrapper);
         assertNotNull(manager.outputStream);
     }
 
     @Test
     void shouldEnableDrainMode() {
-        ControlPlaneFragment manager = new ControlPlaneFragment(config());
+        ControlPlaneFragment manager = new ControlPlaneFragment(cConfig(), sConfig());
 
         manager.setDrainMode(true);
 
@@ -83,14 +89,14 @@ class ControlPlaneFragmentTest {
 
     @Test
     void shouldFirstTouchWithoutFailure() {
-        ControlPlaneFragment manager = new ControlPlaneFragment(config());
+        ControlPlaneFragment manager = new ControlPlaneFragment(cConfig(), sConfig());
 
         assertDoesNotThrow(manager::firstTouch);
     }
 
     @Test
     void shouldCloneManager() {
-        ControlPlaneFragment manager = new ControlPlaneFragment(config());
+        ControlPlaneFragment manager = new ControlPlaneFragment(cConfig(), sConfig());
 
         CloneConfig cloneConfig = cloneConfig();
 
@@ -104,9 +110,9 @@ class ControlPlaneFragmentTest {
     void shouldPropagateCloneConfig() {
         CloneConfig cloneConfig = cloneConfig();
 
-        SchedulingConfig config = config();
+        FragmentConfig config = sConfig();
 
-        SchedulingConfig cloned =
+        FragmentConfig cloned =
                 config.clone(cloneConfig);
 
         assertSame(cloneConfig, cloned.cloneConfig());
@@ -124,7 +130,7 @@ class ControlPlaneFragmentTest {
 
     @Test
     void shouldReturnPressureWithinBounds() {
-        ControlPlaneFragment manager = new ControlPlaneFragment(config());
+        ControlPlaneFragment manager = new ControlPlaneFragment(cConfig(), sConfig());
 
         double pressure = manager.getPressure();
 
@@ -134,14 +140,14 @@ class ControlPlaneFragmentTest {
 
     @Test
     void shouldBeInitiallyDrained() {
-        ControlPlaneFragment manager = new ControlPlaneFragment(config());
+        ControlPlaneFragment manager = new ControlPlaneFragment(cConfig(), sConfig());
 
         assertTrue(manager.isDrained());
     }
 
     @Test
     void shouldCloseSafely() {
-        ControlPlaneFragment manager = new ControlPlaneFragment(config());
+        ControlPlaneFragment manager = new ControlPlaneFragment(cConfig(), sConfig());
 
         assertDoesNotThrow(manager::close);
     }

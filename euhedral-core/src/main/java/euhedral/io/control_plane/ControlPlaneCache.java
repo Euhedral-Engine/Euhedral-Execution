@@ -70,7 +70,7 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
 
         CpuCacheLayout layout = SystemInfo.getCacheLayout(cloneConfig.getCpuSet()[0]);
         long L2 = layout.bytesL2();
-        if(layout.sharesL2() > 2) {
+        if (layout.sharesL2() > 2) {
             L2 /= layout.sharesL2();
         }
 
@@ -95,20 +95,20 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
     protected final PaddedLongAdder avgFrameSize;
     protected final long frameQuota;
 
-    protected final QueuePartitionWrapper queueRing;
-    protected final int chunkSize;
-    protected final int mask;
-
     protected final PaddedAtomicReference<FlowRecorder> fillRecorder;
     protected final PaddedAtomicReference<FlowRecorder> fillBytesRecorder;
     protected final FlowRecorder drainRecorder;
     protected final FlowRecorder drainBytesRecorder;
 
-    protected boolean primed;
-    protected long totalCount = 0L;
-    protected long totalQueuedSizeBytes = 0L;
+    final QueuePartitionWrapper L2Cache;
+    final int chunkSize;
+    final int mask;
 
-    protected int head;
+    boolean primed;
+    long totalCount = 0L;
+    long totalQueuedSizeBytes = 0L;
+
+    private int head;
 
     public ControlPlaneCache(@NonNull CacheConfig cacheConfig) {
         super(getName(cacheConfig), cacheConfig.partitionsPerCpu(), RoutingFunction.DEFAULT,
@@ -116,12 +116,12 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
         this.cacheConfig = cacheConfig;
 
         int partitions = cacheConfig.partitionsPerCpu();
-        if (partitions <= 0) {
+        if (partitions <= 0 || cacheConfig.cloneConfig() == null) {
             this.metrics = null;
             this.memoryLimit = null;
             this.avgFrameSize = null;
             this.frameQuota = 0;
-            this.queueRing = null;
+            this.L2Cache = null;
             this.chunkSize = 0;
             this.mask = 0;
             this.fillRecorder = null;
@@ -129,9 +129,11 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
             this.drainRecorder = null;
             this.drainBytesRecorder = null;
         } else {
-            CpuCacheLayout layout = SystemInfo.getCacheLayout(cacheConfig.cloneConfig().getCpuSet()[0]);
+            CpuCacheLayout layout = SystemInfo.getCacheLayout(
+                    cacheConfig.cloneConfig().getCpuSet()[0]);
             if (cacheConfig.registry() != null) {
-                this.metrics = new CacheMetrics(cacheConfig.metricPrefix(), layout.maskL2(), capFactor,
+                this.metrics = new CacheMetrics(cacheConfig.metricPrefix(), layout.maskL2(),
+                        capFactor,
                         () -> (long) TOTAL_BYTES.getOpaque(this), cacheConfig.registry());
             } else {
                 this.metrics = null;
@@ -140,7 +142,7 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
             this.avgFrameSize = new PaddedLongAdder(partitions, true, true);
             this.chunkSize = getChunkSize(cacheConfig, partitions);
             this.frameQuota = (long) this.chunkSize * partitions;
-            this.queueRing = new QueuePartitionWrapper(
+            this.L2Cache = new QueuePartitionWrapper(
                     new PartitionedMpscQueue<>(partitions, this.chunkSize,
                             cacheConfig.maxPooledChunks()));
             this.mask = partitions - 1;
@@ -168,21 +170,22 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
 
     public abstract double getPressure();
 
-    public long drain(DrainBuffer drainBuffer, int maxFill, long demand) {
+    public final long drain(DrainBuffer drainBuffer, int maxFill, long demand) {
         drainBuffer.reset();
         if (maxFill <= 0) {
-            hookOnDrain(demand);
+            request(demand);
             return 0;
         }
 
         long totalDrain = 0;
         long totalBytesDrained = 0;
         long initialCount = (long) TOTAL_COUNT.getOpaque(this);
-        if(initialCount > 0) {
+        if (initialCount > 0) {
             int cycles = 0;
-            for (int i = 0; i < maxFill && cycles <= this.queueRing.partitions(); ) {
+            for (int i = 0; i < maxFill && cycles <= this.L2Cache.partitions(); ) {
 
-                int drainCount = (int) this.queueRing.drain(this.head, drainBuffer, maxFill - totalDrain);
+                int drainCount = (int) this.L2Cache.drain(this.head, drainBuffer,
+                        maxFill - totalDrain);
                 long drainedBytes = drainBuffer.drainedBytes;
 
                 cycles++;
@@ -210,14 +213,15 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
         long now = System.nanoTime();
         this.drainRecorder.record(now, totalDrain + drainBuffer.drainCount, false);
         this.drainBytesRecorder.record(now, totalBytesDrained + drainBuffer.drainedBytes, false);
-        hookOnDrain(demand);
+        request(demand);
 
         totalDrain += drainBuffer.drainCount;
         drainBuffer.reset();
         return totalDrain;
     }
 
-    public void hookOnDrain(long demand) {
+    @Override
+    public final void request(long demand) {
         if (demand <= 0) {
             return;
         }
@@ -247,21 +251,13 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
     }
 
     @Override
-    public long getUpstreamCount() {
+    public final long getUpstreamCount() {
         UpstreamQueue upstream = UPSTREAM.get();
         if (upstream == null) {
             upstream = getThreadUpstreamQueue();
             UPSTREAM.set(upstream);
         }
         return upstream.getCachedUpCount();
-    }
-
-    public final FlowRecorder getFillRecorder() {
-        return this.fillRecorder.getPlain();
-    }
-
-    public final FlowRecorder getFillBytesRecorder() {
-        return this.fillBytesRecorder.getPlain();
     }
 
     @Override
@@ -271,13 +267,13 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
         }
 
         for (int i = 0; i < 3; i++) {
-            for (int j = 0; j < this.queueRing.partitions(); j++) {
+            for (int j = 0; j < this.L2Cache.partitions(); j++) {
                 for (int k = 0; k < chunkSize; k++) {
-                    this.queueRing.offer(j, DummyInitFrame.INSTANCE);
+                    this.L2Cache.offer(j, DummyInitFrame.INSTANCE);
                 }
             }
         }
-        this.queueRing.clear();
+        this.L2Cache.clear();
         this.fillRecorder.getOpaque().record(1, true);
         this.fillBytesRecorder.getOpaque().record(1, false);
 
@@ -291,22 +287,18 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
         TOTAL_BYTES.setOpaque(this, 0);
     }
 
-    public long getQueueCount() {
+    public final long getL2CacheCount() {
         return (long) TOTAL_COUNT.getOpaque(this);
     }
 
-    public long getMaxQueuedBytes() {
+    public final long getL2MaxQueuedBytes() {
         double cap = this.capFactor.getAcquire();
-        long byteQuota = this.frameQuota * (this.avgFrameSize.sum() / this.queueRing.partitions());
+        long byteQuota = this.frameQuota * (this.avgFrameSize.sum() / this.L2Cache.partitions());
         long hardwareMax = this.memoryLimit.getOpaque();
         if (hardwareMax > byteQuota) {
             return (long) (byteQuota * cap);
         }
         return (long) (hardwareMax * cap);
-    }
-
-    public boolean isEmpty() {
-        return (long) TOTAL_COUNT.getOpaque(this) <= 0;
     }
 
     @Override
@@ -325,7 +317,7 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
 
     @Override
     public boolean isDrained() {
-        return isEmpty();
+        return (long) TOTAL_COUNT.getOpaque(this) <= 0;
     }
 
     @Override
@@ -358,7 +350,7 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
 
         @Override
         public void push(AbstractFrame frame) {
-            while (!ControlPlaneCache.this.queueRing.offer(this.idx, frame)) {
+            while (!ControlPlaneCache.this.L2Cache.offer(this.idx, frame)) {
                 Thread.onSpinWait();
             }
 

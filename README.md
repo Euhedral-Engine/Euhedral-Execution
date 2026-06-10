@@ -169,11 +169,8 @@ Using:
 
 ### Queues are topology-aware
 
-ControlPlaneCache creates deficit round-robin queues sized around L2 cache topology.
-
-Only CPUs sharing L2 consume from the same queue.
-
-This dramatically reduces unnecessary cache traffic while maintaining balanced throughput.
+The ControlPlaneCache creates partitioned queues sized based on L2 cache capacity. The
+ControlPlaneFragment creates an execution buffer sized to fit in L1.
 
 ## Benchmarks
 
