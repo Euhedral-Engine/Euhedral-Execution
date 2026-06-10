@@ -5,7 +5,7 @@ import euhedral.benchmarks.pipelines.NoOpPipeline;
 import euhedral.hashing.HasherApi;
 import euhedral.io.config.CacheConfig;
 import euhedral.io.config.ControlPlaneConfig;
-import euhedral.io.config.SchedulingConfig;
+import euhedral.io.config.FragmentConfig;
 import euhedral.io.control_plane.ControlPlaneLattice;
 import euhedral.io.ingest.ArrayIngestSink;
 import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
@@ -71,7 +71,7 @@ public class ThroughputBenchmark {
         }
 
         CacheConfig cacheConfig = CacheConfig.defaultConfig();
-        SchedulingConfig emConfig = SchedulingConfig.balancedDefault();
+        FragmentConfig emConfig = FragmentConfig.balancedDefault();
         NoOpPipeline pipeline = new NoOpPipeline(cacheConfig, emConfig, blackhole);
         ControlPlaneConfig config = new ControlPlaneConfig("ThroughputBenchmark", null,
                 null,

@@ -8,7 +8,7 @@ import euhedral.hardware_utils.SystemInfo.CpuCacheLayout;
 import euhedral.hashing.HasherApi;
 import euhedral.io.config.CacheConfig;
 import euhedral.io.config.ControlPlaneConfig;
-import euhedral.io.config.SchedulingConfig;
+import euhedral.io.config.FragmentConfig;
 import euhedral.io.control_plane.ControlPlaneLattice;
 import euhedral.io.ingest.ArrayIngestSink;
 import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
@@ -98,7 +98,7 @@ public class EndToEndLatencyBenchmark {
 
             System.out.println("Benchmark is using P cpus " + cpus);
             CacheConfig cacheConfig = CacheConfig.defaultConfig();
-            SchedulingConfig schedConfig = SchedulingConfig.balancedDefault();
+            FragmentConfig schedConfig = FragmentConfig.balancedDefault();
             NoOpPipeline pipeline = new NoOpPipeline(cacheConfig, schedConfig, blackhole);
             ControlPlaneConfig config = new ControlPlaneConfig("EndToEndLatencyBenchmark", cpus,
                     null,
@@ -194,7 +194,7 @@ public class EndToEndLatencyBenchmark {
 
             System.out.println("Benchmark is using E cpus " + cpus);
             CacheConfig cacheConfig = CacheConfig.defaultConfig();
-            SchedulingConfig schedConfig = SchedulingConfig.balancedDefault();
+            FragmentConfig schedConfig = FragmentConfig.balancedDefault();
             NoOpPipeline pipeline = new NoOpPipeline(cacheConfig, schedConfig, blackhole);
             ControlPlaneConfig config = new ControlPlaneConfig("EndToEndLatencyBenchmark", cpus,
                     null,
