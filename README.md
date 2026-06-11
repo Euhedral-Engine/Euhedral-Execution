@@ -127,7 +127,7 @@ Workload:
 
 ---
 
-## Execution Flow (High Level)
+## Execution Flow
 
 ```
     SYSTEM VIEW                               HARDWARE ANALGOY
@@ -143,9 +143,9 @@ WorkRequester                  ->        L1 Data Cache + Prefetcher + Cache Refi
 ↓
 ControlPlaneFragment           ->        Core Power & Demand Generation (the active execution loop)
 ↓
-AbstractExecutor               ->        Execution Pipeline / ALUs
+AbstractExecutor               ->        Execution Pipeline
 ↓
-AbstractFrame.execute()        ->        Instruction / Compute Kernel
+AbstractFrame.execute()        ->        Compute Kernel
 ```
 
 There is no central scheduler assigning tasks to threads. Work is pulled through the system based on
@@ -171,9 +171,6 @@ without needing a central coordinator.
 
 Each CPU runs its own pinned execution loop. Work is routed deterministically so that ordering is
 preserved when needed and evenly distributed when it is not.
-
-Instead of a scheduler assigning tasks, each execution loop pulls work based on availability and
-demand.
 
 ### Scheduling is adaptive
 
