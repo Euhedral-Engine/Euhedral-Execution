@@ -137,8 +137,8 @@ order is randomized, the chunks of 1024 have relatively uniform execution time.
 
 ### Results
 
-![](./data/ec2_batched_mandelbrot_ns_op.png)
-![](./data/ec2_batched_mandelbrot_allocations.png)
+![](../data/ec2_batched_mandelbrot_ns_op.png)
+![](../data/ec2_batched_mandelbrot_allocations.png)
 
 | Scheduler              | ns/op | Alloc mb/sec | bytes/op | GC Counts | GC Time |
 |:-----------------------|------:|-------------:|---------:|----------:|--------:|
@@ -190,8 +190,8 @@ cores.
 
 ### Results
 
-![](./data/ec2_1b1_mandelbrot_ns_op.png)
-![](./data/ec2_1b1_mandelbrot_allocations.png)
+![](../data/ec2_1b1_mandelbrot_ns_op.png)
+![](../data/ec2_1b1_mandelbrot_allocations.png)
 
 | Scheduler              |   ns/op | Alloc mb/sec | bytes/op | GC Counts | GC Time |
 |:-----------------------|--------:|-------------:|---------:|----------:|--------:|
