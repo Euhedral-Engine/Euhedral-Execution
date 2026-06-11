@@ -4,6 +4,7 @@ import static euhedral.io.utils.MathFunctions.unsignedMultiplyHigh;
 
 import euhedral.hardware_utils.SystemInfo;
 import euhedral.hardware_utils.SystemInfo.CpuInfo;
+import euhedral.hardware_utils.SystemInfo.SocketInfo;
 import euhedral.hardware_utils.TopologyMapper.EffectiveSocketTopology;
 import euhedral.hardware_utils.common.SystemUtilization.CoreSnapshot;
 import euhedral.hardware_utils.common.SystemUtilization.SocketSnapshot;
@@ -12,6 +13,8 @@ import euhedral.io.flow_control.LatticeEdge;
 import euhedral.io.flow_control.LatticeVertex;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.CloneableObject;
+import io.euhedral_execution.data_structures.queues.PartitionedMpmcQueue;
+import io.euhedral_execution.data_structures.queues.common.QueueUtils;
 import java.time.Duration;
 import java.util.BitSet;
 import java.util.HashSet;
@@ -76,8 +79,22 @@ public class ControlPlaneShard implements AutoCloseable {
         this.logger.info("Starting.");
         this.shardExecutor = Executors.newFixedThreadPool(topology.effectiveCores().length(),
                 (r) -> new Thread(r, this.shardName + "+ExecutorService"));
+
+        SocketInfo info = SystemInfo.getSocketInfo(snapshot.socketId());
+        long sizeL3 = SystemInfo.socketL3Cache(snapshot.socketId());
+        int cores = info.getCoreSet().cardinality();
+        long chunkSize = sizeL3 / cores;
+        chunkSize = (long) (chunkSize * 0.7);
+        chunkSize /= QueueUtils.REFERENCE_SIZE;
+
+        PartitionedMpmcQueue<AbstractFrame> cacheL3 = new PartitionedMpmcQueue<>(cores,
+                (int) chunkSize);
+
+        logger.debug("L3 Cache: Partitions: {} PartionChunkSize: {}", cores,
+                QueueUtils.chunkMask((int) chunkSize) + QueueUtils.INCREMENT >>> QueueUtils.SHIFT);
         LatticeVertex coreDistributor = new LatticeVertex(this.shardName + "-CoreDistributor",
-                topology.effectiveCores().length(), this::route, false);
+                topology.effectiveCores().length(), this::route, cacheL3,
+                RoutingPolicy.SOCKET_LOCAL);
         this.coreDistributor.set(coreDistributor);
         coreDistributor.addUpstream(upstream);
         update(snapshot, topology);
@@ -86,14 +103,14 @@ public class ControlPlaneShard implements AutoCloseable {
     /// Routes work based on their policy level or uses default global routing.
     protected int route(AbstractFrame frame, int mapSize) {
         RoutingPolicy policy = frame.getRoutingPolicy();
-        if (policy != null && policy.level > RoutingPolicy.SOCKET_LOCAL.level) {
+        if (policy.level > RoutingPolicy.SOCKET_LOCAL.level) {
             int[] reverseMapping = this.reverseMapping.getOpaque();
             CpuInfo location = frame.getOrigin();
             int node = location != null ? location.core() : -1;
 
             if (node >= 0 && node < reverseMapping.length) {
                 node = reverseMapping[node];
-                if(node < mapSize) {
+                if (node < mapSize) {
                     return node;
                 }
             }
@@ -185,7 +202,7 @@ public class ControlPlaneShard implements AutoCloseable {
             nextCores[idx++] = i;
         }
 
-        if(!this.primed.getOpaque()) {
+        if (!this.primed.getOpaque()) {
             this.clones.setRelease(nextClones);
             this.activeCoreIds.setRelease(nextCores);
             for (var clone : nextClones) {

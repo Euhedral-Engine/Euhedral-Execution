@@ -44,7 +44,7 @@ import org.slf4j.LoggerFactory;
 ///
 /// **Role:**
 ///
-///`ControlPlaneLattice` is the top-level orchestration and organization layer for the distributed
+/// `ControlPlaneLattice` is the top-level orchestration and organization layer for the distributed
 /// scheduling system.
 ///
 /// It owns system topology, shard placement, and runtime rebalancing. It distributes work across
@@ -230,7 +230,8 @@ public final class ControlPlaneLattice implements LatticeTerminal, AutoCloseable
         }
 
         LatticeVertex controller = new LatticeVertex(this.name + "-GlobalDistributor",
-                this.effectiveTopology.socketTopologies().size(), this::route, false);
+                this.effectiveTopology.socketTopologies().size(), this::route, null,
+                RoutingPolicy.ANYWHERE);
         this.ingestController.set(controller);
     }
 
@@ -242,7 +243,7 @@ public final class ControlPlaneLattice implements LatticeTerminal, AutoCloseable
     /// Routes work based on their policy level or uses default global routing.
     private int route(AbstractFrame frame, int mapSize) {
         RoutingPolicy policy = frame.getRoutingPolicy();
-        if (policy != null && policy.level > RoutingPolicy.ANYWHERE.level) {
+        if (policy.level > RoutingPolicy.ANYWHERE.level) {
             int[] reverseMapping = this.reverseMapping.getOpaque();
             CpuInfo location = frame.getOrigin();
 

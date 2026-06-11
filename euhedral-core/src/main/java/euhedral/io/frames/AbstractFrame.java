@@ -10,6 +10,7 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import lombok.Getter;
 import lombok.Setter;
+import org.jspecify.annotations.NonNull;
 
 /// ## Base unit of work within Euhedral Core
 ///
@@ -93,7 +94,7 @@ public abstract class AbstractFrame {
     private long routingHash;
     @Getter @Setter
     private CpuInfo origin;
-    @Getter @Setter
+    @Setter
     private RoutingPolicy routingPolicy;
     @Getter @Setter
     private long startNs;
@@ -150,6 +151,10 @@ public abstract class AbstractFrame {
             return this.recycler.recycle(this);
         }
         return false;
+    }
+
+    public final @NonNull RoutingPolicy getRoutingPolicy() {
+        return this.routingPolicy == null ? RoutingPolicy.ANYWHERE : this.routingPolicy;
     }
 
     /// Throws the internal cancellation error used to stop execution immediately.
