@@ -2,12 +2,13 @@ package euhedral.io.flow_control;
 
 import static euhedral.io.utils.MathFunctions.unsignedMultiplyHigh;
 
+import euhedral.io.control_plane.RoutingPolicy;
 import euhedral.io.flow_control.UpstreamQueue.UpstreamHandle;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.LatticeInterceptor;
 import euhedral.io.generics.LatticeSource;
 import io.euhedral_execution.data_structures.atomics.PaddedAtomicLong;
-import io.euhedral_execution.data_structures.queues.PartitionedMpscQueue;
+import io.euhedral_execution.data_structures.queues.PartitionedMpmcQueue;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.BitSet;
@@ -45,42 +46,35 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
         }
     }
 
-    protected final boolean terminal;
+    protected final boolean hasCache;
 
     protected final Logger logger;
     protected final String name;
 
-    /// This queue acts like a capacitor for contention. When the number of upstreams is very low,
-    /// downstream demand hits the same upstreams repeatedly. This small queue gives them another
-    /// squirrel to chase.
-    protected final PartitionedMpscQueue<AbstractFrame> parallelQueue;
+    protected final PartitionedMpmcQueue<AbstractFrame> cache;
+    protected final RoutingPolicy cachePolicy;
 
     protected final LatticeEdge[] downstreams;
     protected final RoutingFunction routingFunction;
-    private final PaddedAtomicLong wip;
 
     protected RoutingState routingState = new RoutingState(new int[0]);
 
     public LatticeVertex(String name, int downstreamCount) {
-        this(name, downstreamCount, RoutingFunction.DEFAULT, false);
+        this(name, downstreamCount, RoutingFunction.DEFAULT, null, RoutingPolicy.ANYWHERE);
     }
 
     public LatticeVertex(String name, int downstreamCount, RoutingFunction routingFunction,
-            boolean terminal) {
+            PartitionedMpmcQueue<AbstractFrame> cache, RoutingPolicy cachePolicy) {
         super(new AtomicBoolean(false));
-        this.terminal = terminal;
         this.logger = LoggerFactory.getLogger(name);
         this.name = name;
         this.downstreams = new LatticeEdge[downstreamCount];
         this.routingFunction = routingFunction;
         this.sibling = this;
-        if (!terminal) {
-            this.wip = new PaddedAtomicLong(0);
-            this.parallelQueue = new PartitionedMpscQueue<>(2_048);
-        } else {
-            this.wip = null;
-            this.parallelQueue = null;
-        }
+
+        this.hasCache = cache != null;
+        this.cache = cache;
+        this.cachePolicy = cachePolicy;
     }
 
     /// Links the stream as an upstream source.
@@ -147,7 +141,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
     }
 
     public boolean isDrained() {
-        return this.parallelQueue == null || this.parallelQueue.isEmpty();
+        return this.cache == null || this.cache.isEmpty();
     }
 
     /// Adds the interceptor to the upstream. If it is a [LatticeEdge], it bubbles it up and sets
@@ -172,6 +166,13 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
     /// Picks a downstream link and sends work down.
     @Override
     public void push(AbstractFrame frame) {
+        if (this.hasCache && !frame.isOrdered()
+                && frame.getRoutingPolicy().level <= this.cachePolicy.level) {
+            if (this.cache.offer(frame.getRoutingHash(), frame)) {
+                return;
+            }
+        }
+
         RoutingState state = (RoutingState) ROUTING_STATE.getOpaque(this);
         int mapLen = state.mappings.length;
 
@@ -188,15 +189,9 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
             return;
         }
 
-        if (this.parallelQueue != null && !this.parallelQueue.isEmpty()) {
-            if (this.wip.compareAndSet(0, 1)) {
-                try {
-                    long count = this.parallelQueue.drain(consumer, demand);
-                    demand -= count;
-                } finally {
-                    this.wip.set(0);
-                }
-            }
+        if (this.cache != null && !this.cache.isEmpty()) {
+            long count = this.cache.drain(consumer, demand);
+            demand -= count;
         }
 
         LatticeEdge parent = (LatticeEdge) PARENT.getOpaque(this);
@@ -282,16 +277,6 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
                 frame.setIngestNs(System.nanoTime());
             } else {
                 frame.setIngestNs(0);
-            }
-
-            if (frame.isOrdered()) {
-                LatticeVertex.this.push(frame);
-                return;
-            }
-
-            boolean hasQueue = LatticeVertex.this.parallelQueue != null;
-            if (hasQueue && LatticeVertex.this.parallelQueue.offer(frame)) {
-                return;
             }
 
             LatticeVertex.this.push(frame);

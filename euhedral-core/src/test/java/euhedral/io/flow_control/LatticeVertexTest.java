@@ -15,8 +15,11 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 
+import euhedral.io.control_plane.RoutingPolicy;
+import euhedral.io.flow_control.LatticeVertex.RoutingFunction;
 import euhedral.io.generics.LatticeSource;
 import euhedral.io.utils.DrainBuffer;
+import io.euhedral_execution.data_structures.queues.PartitionedMpmcQueue;
 import java.util.BitSet;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.AfterEach;
@@ -33,7 +36,8 @@ class LatticeVertexTest {
     void setup() {
         UpstreamQueue.UP_QUEUE.remove();
 
-        node = new LatticeVertex("test-node", 4);
+        node = new LatticeVertex("test-node", 4, RoutingFunction.DEFAULT,
+                new PartitionedMpmcQueue<>(4), RoutingPolicy.ANYWHERE);
     }
 
     @AfterEach
@@ -45,9 +49,9 @@ class LatticeVertexTest {
     void shouldInitializeNode() {
         assertEquals("test-node", node.name);
         assertEquals(4, node.downstreams.length);
-        assertNotNull(node.parallelQueue);
+        assertNotNull(node.cache);
         assertNotNull(node.getDrainFlag());
-        assertFalse(node.terminal);
+        assertTrue(node.hasCache);
     }
 
     @Test
@@ -56,11 +60,11 @@ class LatticeVertexTest {
                 "terminal",
                 2,
                 LatticeVertex.RoutingFunction.DEFAULT,
-                true
+                null, RoutingPolicy.ANYWHERE
         );
 
-        assertTrue(terminal.terminal);
-        assertNull(terminal.parallelQueue);
+        assertFalse(terminal.hasCache);
+        assertNull(terminal.cache);
     }
 
     @Test
@@ -162,6 +166,8 @@ class LatticeVertexTest {
 
     @Test
     void shouldRouteFramesToCorrectDownstream() {
+        node = new LatticeVertex("test-node", 4, RoutingFunction.DEFAULT, null,
+                RoutingPolicy.ANYWHERE);
         node.setDrain(true);
 
         TestReceiver first = new TestReceiver();
@@ -300,11 +306,13 @@ class LatticeVertexTest {
 
         interceptor.push(frame);
 
-        assertFalse(node.parallelQueue.isEmpty());
+        assertFalse(node.cache.isEmpty());
     }
 
     @Test
     void shouldDirectlyRouteOrderedFrames() {
+        node = new LatticeVertex("test-node", 4, RoutingFunction.DEFAULT, null,
+                RoutingPolicy.ANYWHERE);
         node.setDrain(true);
 
         TestReceiver terminal = new TestReceiver();
