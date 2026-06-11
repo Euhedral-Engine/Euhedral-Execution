@@ -3,20 +3,20 @@ package euhedral.io.flow_control;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.LatticeReceiver;
 import euhedral.io.generics.LatticeSource;
-import euhedral.queues.common.PartitionedQueue;
+import io.euhedral_execution.data_structures.queues.common.BatchableQueue;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import org.jspecify.annotations.NonNull;
 
-/// Used for pushing frames from one stage to the next. Assumes that only one thread will call push
-/// at a time. This class can only have one downstream.
-public class DirectOutputStream implements LatticeSource {
+/// Used for pushing frames from one stage to the next. Assumes that only one thread will control
+/// the push side. This class can only have one downstream.
+public final class DirectOutputStream implements LatticeSource {
 
-    protected static final VarHandle COMPLETE;
-    protected static final VarHandle TERMINAL;
-    protected static final VarHandle UNLIMITED;
+    private static final VarHandle COMPLETE;
+    private static final VarHandle TERMINAL;
+    private static final VarHandle UNLIMITED;
 
     static {
         try {
@@ -31,17 +31,16 @@ public class DirectOutputStream implements LatticeSource {
         }
     }
 
-    protected final AtomicLong demand = new AtomicLong(0);
+    private final AtomicLong demand = new AtomicLong(0);
 
-    protected final PartitionedQueue<AbstractFrame> buffer;
-    protected final Consumer<AbstractFrame> applyToEach;
+    private final BatchableQueue<AbstractFrame> buffer;
+    private final Consumer<AbstractFrame> applyToEach;
 
-    protected boolean unlimited = false;
-    protected boolean complete = false;
-    protected LatticeReceiver terminal = null;
+    boolean unlimited = false;
+    boolean complete = false;
+    LatticeReceiver terminal = null;
 
-
-    public DirectOutputStream(@NonNull PartitionedQueue<AbstractFrame> buffer,
+    public DirectOutputStream(@NonNull BatchableQueue<AbstractFrame> buffer,
             Consumer<AbstractFrame> applyToEach) {
         this.buffer = buffer;
         this.applyToEach = applyToEach;
@@ -52,8 +51,8 @@ public class DirectOutputStream implements LatticeSource {
         this.buffer.drain(consumer, demand);
     }
 
-    /// Pushes the indicated number of frames to the next stage. Only safe to be called by one thread
-    /// at a time.
+    /// Pushes the indicated number of frames to the next stage. Only safe to be called by one
+    /// thread at a time.
     ///
     /// @param max Maximum number of frames to push
     public long push(long max) {
@@ -126,4 +125,9 @@ public class DirectOutputStream implements LatticeSource {
         COMPLETE.setVolatile(this, true);
         TERMINAL.setVolatile(this, null);
     }
+
+    public long getDemand() {
+        return this.demand.getAcquire();
+    }
 }
+

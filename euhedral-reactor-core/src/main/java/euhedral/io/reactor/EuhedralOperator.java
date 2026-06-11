@@ -1,6 +1,5 @@
 package euhedral.io.reactor;
 
-import euhedral.atomics.PaddedAtomicLong;
 import euhedral.hashing.HasherApi;
 import euhedral.io.frames.FunctionFrame;
 import euhedral.io.impl.FrameFactory;
@@ -11,7 +10,8 @@ import euhedral.io.reactor.common.BackpressureHandler;
 import euhedral.io.reactor.common.EuhedralSubscriber;
 import euhedral.io.reactor.common.FrameSequencer;
 import euhedral.io.reactor.common.SequencedFrame;
-import euhedral.queues.PartitionedUnboundedMpscArrayQueue;
+import io.euhedral_execution.data_structures.atomics.PaddedAtomicLong;
+import io.euhedral_execution.data_structures.queues.PartitionedMpscQueue;
 import java.util.Objects;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -122,7 +122,7 @@ public final class EuhedralOperator {
         final AtomicBoolean dead = new AtomicBoolean(false);
 
         final Sinks.Many<R> returnSink = Sinks.many().unicast()
-                .onBackpressureBuffer(new PartitionedUnboundedMpscArrayQueue<>(1, 2048, 1));
+                .onBackpressureBuffer(new PartitionedMpscQueue<>(1, 2048, 1));
 
         final Consumer<R> consumer = (obj) -> {
             int cycles = 0;

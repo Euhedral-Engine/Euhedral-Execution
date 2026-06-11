@@ -1,17 +1,16 @@
 package euhedral.benchmarks.core_benchmarks;
 
-import euhedral.atomics.PaddedLongAdder;
 import euhedral.benchmarks.frames.NoOpFrame;
-import euhedral.benchmarks.pipelines.NoOpPipeline;
+import euhedral.benchmarks.pipelines.NoOpExecutor;
 import euhedral.hardware_utils.SystemInfo;
 import euhedral.hardware_utils.SystemInfo.CoreInfo;
 import euhedral.hardware_utils.SystemInfo.CpuCacheLayout;
 import euhedral.hashing.HasherApi;
-import euhedral.io.config.CacheConfig;
 import euhedral.io.config.ControlPlaneConfig;
-import euhedral.io.config.SchedulingConfig;
 import euhedral.io.control_plane.ControlPlaneLattice;
+import euhedral.io.impl.BaseCloneableObject;
 import euhedral.io.ingest.ArrayIngestSink;
+import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
 import java.lang.invoke.VarHandle;
 import java.util.BitSet;
 import java.util.concurrent.ThreadLocalRandom;
@@ -97,12 +96,9 @@ public class EndToEndLatencyBenchmark {
             cpus.or(SystemInfo.getCoreInfo(i).getCpuSet());
 
             System.out.println("Benchmark is using P cpus " + cpus);
-            CacheConfig cacheConfig = CacheConfig.defaultConfig();
-            SchedulingConfig schedConfig = SchedulingConfig.balancedDefault();
-            NoOpPipeline pipeline = new NoOpPipeline(cacheConfig, schedConfig, blackhole);
+            BaseCloneableObject base = new BaseCloneableObject(new NoOpExecutor(blackhole));
             ControlPlaneConfig config = new ControlPlaneConfig("EndToEndLatencyBenchmark", cpus,
-                    null,
-                    pipeline, null, null);
+                    null, base, null, null);
             this.controlPlane = ControlPlaneLattice.getOrCreate(config);
             this.controlPlane.start();
         }
@@ -193,12 +189,9 @@ public class EndToEndLatencyBenchmark {
             }
 
             System.out.println("Benchmark is using E cpus " + cpus);
-            CacheConfig cacheConfig = CacheConfig.defaultConfig();
-            SchedulingConfig schedConfig = SchedulingConfig.balancedDefault();
-            NoOpPipeline pipeline = new NoOpPipeline(cacheConfig, schedConfig, blackhole);
+            BaseCloneableObject base = new BaseCloneableObject(new NoOpExecutor(blackhole));
             ControlPlaneConfig config = new ControlPlaneConfig("EndToEndLatencyBenchmark", cpus,
-                    null,
-                    pipeline, null, null);
+                    null, base, null, null);
             this.controlPlane = ControlPlaneLattice.getOrCreate(config);
             this.controlPlane.start();
         }

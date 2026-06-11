@@ -2,29 +2,24 @@ package euhedral.io.control_plane;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import euhedral.hardware_utils.common.SystemUtilization.CoreSnapshot;
-import euhedral.hardware_utils.common.SystemUtilization.CpuSnapshot;
 import euhedral.io.config.CacheConfig;
 import euhedral.io.config.CloneConfig;
 import euhedral.io.flow_control.UpstreamQueue;
-import euhedral.io.frames.AbstractFrame;
-import euhedral.io.generics.CacheManager;
-import euhedral.io.utils.DrainBuffer;
-import euhedral.queues.PartitionedArrayQueue;
-import euhedral.queues.common.PartitionedQueue;
-import java.util.concurrent.Callable;
+import euhedral.io.generics.CloneableObject;
+import java.util.function.Supplier;
+import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 @SuppressWarnings("resource")
 class ControlPlaneCacheTest {
+
     private CloneConfig cloneConfig() {
         CloneConfig clone = mock(CloneConfig.class);
 
@@ -48,7 +43,7 @@ class ControlPlaneCacheTest {
     }
 
     private ControlPlaneCache manager() {
-        return new ControlPlaneCache(config());
+        return new CPCImpl(config(), () -> 0.0);
     }
 
     @AfterEach
@@ -70,12 +65,9 @@ class ControlPlaneCacheTest {
     void shouldInitializeFields() {
         ControlPlaneCache manager = manager();
 
-        assertNotNull(manager.handles);
-        assertNotNull(manager.getFillRecorder());
-        assertNotNull(manager.getFillBytesRecorder());
-        assertNotNull(manager.queueRing);
-        assertNotNull(manager.partitionStats);
-        assertTrue(manager.partitionStats.length > 0);
+        assertNotNull(manager.fillRecorder);
+        assertNotNull(manager.fillBytesRecorder);
+        assertNotNull(manager.L2Cache);
     }
 
     // ----- First Touch -----
@@ -99,44 +91,7 @@ class ControlPlaneCacheTest {
         });
     }
 
-    // ----- Management -----
-
-    @Test
-    void shouldAddHandle() {
-        ControlPlaneCache manager = manager();
-
-        ControlPlaneCache.DownstreamHandle handle =
-                new ControlPlaneCache.DownstreamHandle(1, () -> 0.0);
-
-        manager.addHandle(handle);
-
-        assertNotNull(manager.handles);
-        assertEquals(1, manager.handles.size());
-    }
-
-    @Test
-    void shouldRemoveHandle() {
-        ControlPlaneCache manager = manager();
-
-        ControlPlaneCache.DownstreamHandle handle =
-                new ControlPlaneCache.DownstreamHandle(1, () -> 0.0);
-
-        manager.addHandle(handle);
-
-        manager.removeHandle(1);
-
-        assertNotNull(manager.handles);
-        assertEquals(0, manager.handles.size());
-    }
-
     // ----- Queue State -----
-
-    @Test
-    void shouldBeInitiallyEmpty() {
-        ControlPlaneCache manager = manager();
-
-        assertTrue(manager.isEmpty());
-    }
 
     @Test
     void shouldBeInitiallyDrained() {
@@ -156,7 +111,7 @@ class ControlPlaneCacheTest {
     void shouldReturnZeroTotalCountInitially() {
         ControlPlaneCache manager = manager();
 
-        assertEquals(0, manager.getTotalCount());
+        assertEquals(0, manager.getL2CacheCount());
     }
 
     @Test
@@ -168,36 +123,13 @@ class ControlPlaneCacheTest {
         assertTrue(manager.getDrainFlag().get());
     }
 
-    // ----- CAS Locks -----
-
-    @Test
-    void shouldAcquireAndReleasePartitionLock() {
-        ControlPlaneCache manager = manager();
-
-        boolean acquired = manager.acquireLock(0);
-
-        assertTrue(acquired);
-
-        manager.releaseLock(0);
-
-        assertFalse(manager.partitionLocks[0]);
-    }
-
-    @Test
-    void shouldFailAcquireWhenAlreadyLocked() {
-        ControlPlaneCache manager = manager();
-
-        assertTrue(manager.acquireLock(0));
-        assertFalse(manager.acquireLock(0));
-    }
-
     // ----- Max Queue -----
 
     @Test
     void shouldCalculateMaxQueuedBytes() {
         ControlPlaneCache manager = manager();
 
-        long max = manager.getMaxQueuedBytes();
+        long max = manager.getL2MaxQueuedBytes();
 
         assertTrue(max >= 0);
     }
@@ -206,7 +138,7 @@ class ControlPlaneCacheTest {
     void shouldCalculateProportionalMaxQueuedBytes() {
         ControlPlaneCache manager = manager();
 
-        long max = manager.getProportionalMaxQueuedBytes();
+        long max = manager.getL2MaxQueuedBytes();
 
         assertTrue(max >= 0);
     }
@@ -220,14 +152,7 @@ class ControlPlaneCacheTest {
 
     @Test
     void shouldUpdateCapFactorFromSnapshot() throws Exception {
-        ControlPlaneCache manager = manager();
-
-        ControlPlaneCache.DownstreamHandle handle =
-                new ControlPlaneCache.DownstreamHandle(0, () -> 0.5);
-
-        manager.addHandle(handle);
-
-        CpuSnapshot cpu = mock(CpuSnapshot.class);
+        ControlPlaneCache manager = new CPCImpl(config(), () -> 0.5);
 
         CoreSnapshot snapshot = mock(CoreSnapshot.class);
 
@@ -238,77 +163,30 @@ class ControlPlaneCacheTest {
         assertTrue(manager.capFactor.getAcquire() > 0.0);
     }
 
-    // ----- Cloning -----
-
-    @Test
-    void shouldCloneManager() {
-        ControlPlaneCache manager = manager();
-
-        CacheManager cloned = manager.clone(cloneConfig());
-
-        assertNotNull(cloned);
-    }
-
-    @Test
-    void shouldReuseCacheForSameHash() {
-        ControlPlaneCache manager = manager();
-
-        CacheManager one = manager.clone(cloneConfig());
-        CacheManager two = manager.clone(cloneConfig());
-
-        assertSame(one, two);
-    }
-
-    // ----- Downstream Handle -----
-
-    @Test
-    void shouldCreateDownstreamHandle() throws Exception {
-        Callable<Double> pressure = () -> 0.25;
-
-        ControlPlaneCache.DownstreamHandle handle =
-                new ControlPlaneCache.DownstreamHandle(2, pressure);
-
-        assertEquals(2, handle.cpu);
-        assertEquals(0.25, handle.downstreamPressure.call());
-    }
-
-    @Test
-    void shouldRecordDrainMetrics() {
-        ControlPlaneCache.DownstreamHandle handle =
-                new ControlPlaneCache.DownstreamHandle(0, () -> 0.0);
-
-        PartitionedQueue<AbstractFrame> queue =
-                new PartitionedArrayQueue<>(64);
-
-        DrainBuffer buffer =
-                new DrainBuffer(queue, 64, false);
-
-        assertDoesNotThrow(() ->
-                handle.record(10, 2048, buffer));
-    }
-
-    // ----- PartitionStats -----
-
-    @Test
-    void shouldResetPartitionStats() {
-        ControlPlaneCache.PartitionStats stats =
-                new ControlPlaneCache.PartitionStats();
-
-        stats.weight = 999;
-        stats.quotaBytes = 555;
-        stats.lastBytesDrained = 123;
-
-        stats.reset();
-
-        assertEquals(1024, stats.weight);
-        assertEquals(0, stats.quotaBytes);
-        assertEquals(0, stats.lastBytesDrained);
-    }
-
     @Test
     void shouldCloseSafely() {
         ControlPlaneCache manager = manager();
 
         assertDoesNotThrow(manager::close);
+    }
+
+    private static class CPCImpl extends ControlPlaneCache {
+
+        final Supplier<Double> pressure;
+
+        public CPCImpl(@NonNull CacheConfig cacheConfig, @NonNull Supplier<Double> pressure) {
+            super(cacheConfig);
+            this.pressure = pressure;
+        }
+
+        @Override
+        public double getPressure() {
+            return pressure.get();
+        }
+
+        @Override
+        public CloneableObject clone(CloneConfig cloneConfig) {
+            return null;
+        }
     }
 }

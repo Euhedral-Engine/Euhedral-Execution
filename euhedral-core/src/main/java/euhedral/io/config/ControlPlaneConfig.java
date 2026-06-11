@@ -3,6 +3,7 @@ package euhedral.io.config;
 import euhedral.io.control_plane.ControlPlaneLattice;
 import euhedral.io.control_plane.ControlPlaneShard;
 import euhedral.io.generics.CloneableObject;
+import euhedral.io.impl.BaseCloneableObject;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.BitSet;
 import org.jspecify.annotations.Nullable;
@@ -17,7 +18,7 @@ import org.jspecify.annotations.Nullable;
 /// use the default implementation.
 /// @param cloneableObject Allows you to pass any implementation of [CloneableObject] for cloning
 /// onto cores. This is how you can pass a
-/// [DefaultCloneablePipeline][euhedral.io.impl.DefaultCloneablePipeline] with custom configuration
+/// [BaseCloneableObject][BaseCloneableObject] with custom configuration
 /// values.
 /// @param meterRegistry   Enables collection of metrics from the pipeline. Automatically given to
 /// the default cloneableObjects if you don't use a custom one.

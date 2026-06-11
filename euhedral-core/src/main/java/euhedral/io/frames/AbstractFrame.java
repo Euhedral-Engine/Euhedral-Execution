@@ -85,7 +85,7 @@ public abstract class AbstractFrame {
     }
 
     protected final FrameManager recycler;
-    public final CancelFrame cancel;
+    public final CancelSignal cancel;
 
     @Getter
     private final long idHash;
@@ -105,7 +105,7 @@ public abstract class AbstractFrame {
     private boolean cancelledExecution = false;
 
     public AbstractFrame(long idHash, FrameManager recycler) {
-        this.cancel = new CancelFrame(this);
+        this.cancel = new CancelSignal();
         this.idHash = idHash;
         this.recycler = recycler;
         this.routingHash = idHash;
@@ -165,4 +165,16 @@ public abstract class AbstractFrame {
     }
 
     public abstract long getSizeBytes();
+
+    /// This class is thrown as a cancellation signal. This signal is automatically handled by the
+    /// [ControlPlaneFragment][euhedral.io.control_plane.ControlPlaneFragment] and
+    /// [AbstractExecutor][euhedral.io.generics.AbstractExecutor].
+    public final class CancelSignal extends RuntimeException {
+        public final AbstractFrame payload;
+
+        public CancelSignal() {
+            super(null, null, false, false);
+            this.payload = AbstractFrame.this;
+        }
+    }
 }

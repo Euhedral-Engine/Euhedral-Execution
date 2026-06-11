@@ -4,8 +4,8 @@ import euhedral.io.control_plane.ControlPlaneLattice;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.LatticeReceiver;
 import euhedral.io.generics.LatticeSource;
-import euhedral.queues.PartitionedUnboundedMpmcArrayQueue;
-import euhedral.queues.common.ConcurrentPartitionedQueue;
+import io.euhedral_execution.data_structures.queues.PartitionedMpmcQueue;
+import io.euhedral_execution.data_structures.queues.common.ConcurrentPartitionedQueue;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.Objects;
@@ -20,7 +20,7 @@ public final class QueueIngestSink extends AbstractIngestSink {
     private final Delegate delegate;
 
     public QueueIngestSink() {
-        this(new PartitionedUnboundedMpmcArrayQueue<>(16_384));
+        this(new PartitionedMpmcQueue<>(16_384));
     }
 
     public QueueIngestSink(@NonNull ConcurrentPartitionedQueue<AbstractFrame> queue) {

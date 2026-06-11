@@ -1,6 +1,6 @@
 package euhedral.io.metrics;
 
-import euhedral.io.config.SchedulingConfig;
+import euhedral.io.config.FragmentConfig;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -8,10 +8,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Supplier;
 
-public class ExecutionMetrics implements AutoCloseable {
+public final class ExecutionMetrics implements AutoCloseable {
     private final List<Meter> meters = new ArrayList<>();
 
-    public ExecutionMetrics(MeterRegistry registry, SchedulingConfig config,
+    public ExecutionMetrics(MeterRegistry registry, FragmentConfig config,
             Supplier<Integer> inFlight,
             Supplier<Long> latency, Supplier<Long> currentConcurrency,
             Supplier<Long> currentRate, Supplier<Double> pressure) {

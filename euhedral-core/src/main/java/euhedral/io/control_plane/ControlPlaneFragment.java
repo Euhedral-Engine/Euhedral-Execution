@@ -11,30 +11,27 @@ import euhedral.hardware_utils.SystemInfo.CpuInfo;
 import euhedral.hardware_utils.ThreadTools;
 import euhedral.hardware_utils.common.SystemUtilization.CoreSnapshot;
 import euhedral.hardware_utils.common.SystemUtilization.CpuSnapshot;
+import euhedral.io.config.CacheConfig;
 import euhedral.io.config.CloneConfig;
-import euhedral.io.config.SchedulingConfig;
-import euhedral.io.control_plane.ControlPlaneCache.DownstreamHandle;
-import euhedral.io.control_plane.SMTBuddy.SMTState;
+import euhedral.io.config.FragmentConfig;
 import euhedral.io.flow_control.BufferedBridge;
 import euhedral.io.flow_control.DirectOutputStream;
 import euhedral.io.frames.AbstractFrame;
-import euhedral.io.frames.DummyInitFrame;
+import euhedral.io.frames.DummyFrame;
 import euhedral.io.generics.LatticeSource;
-import euhedral.io.generics.SlotManager;
 import euhedral.io.metrics.ExecutionMetrics;
 import euhedral.io.utils.DrainBuffer;
 import euhedral.io.utils.FlowRecorder;
 import euhedral.io.utils.FlowRecorder.FlowSnapshot;
-import euhedral.queues.PartitionedArrayQueue;
-import euhedral.queues.PartitionedSpscArrayQueue;
-import euhedral.queues.PartitionedUnboundedMpscArrayQueue;
-import euhedral.queues.common.PartitionedQueue;
-import euhedral.queues.common.QueueUtils;
+import io.euhedral_execution.data_structures.queues.PartitionedMpscQueue;
+import io.euhedral_execution.data_structures.queues.PlainQueue;
+import io.euhedral_execution.data_structures.queues.SpscQueue;
+import io.euhedral_execution.data_structures.queues.common.BatchableQueue;
+import io.euhedral_execution.data_structures.queues.common.QueueUtils;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.LockSupport;
-import lombok.AccessLevel;
 import lombok.Getter;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
@@ -42,8 +39,9 @@ import org.slf4j.LoggerFactory;
 
 /// ## The core of Euhedral Core
 ///
-/// `ControlPlaneFragment` is the control loop that sits between ingress and execution. It continuously
-/// tunes concurrency, dispatch rate, and idle behavior based on what the system is actually doing.
+/// `ControlPlaneFragment` is the control loop that sits between ingress and execution. It
+/// continuously tunes concurrency, dispatch rate, and idle behavior based on what the system is
+/// actually doing.
 ///
 /// **It coordinates:**
 ///
@@ -72,18 +70,16 @@ import org.slf4j.LoggerFactory;
 /// tasks. A pipeline of frames naturally executes in parallel across stages as work flows through.
 ///
 /// **This is the distributed control surface of the system. Everything else is just plumbing.**
-@Getter(AccessLevel.PROTECTED)
-public class ControlPlaneFragment implements SlotManager {
+public final class ControlPlaneFragment extends WorkRequester {
 
-    protected static final long RATE_NS_TO_SEC = 1_000_000_000L;
+    private static final long RATE_NS_TO_SEC = 1_000_000_000L;
 
-    protected static final VarHandle AVG_LATENCY;
-    protected static final VarHandle CONCURRENCY;
-    protected static final VarHandle DRAIN;
-    protected static final VarHandle INGEST;
-    protected static final VarHandle IN_FLIGHT;
-    protected static final VarHandle RATE;
-    protected static final VarHandle SNAPSHOT;
+    private static final VarHandle AVG_LATENCY;
+    private static final VarHandle CONCURRENCY;
+    private static final VarHandle DRAIN;
+    private static final VarHandle IN_FLIGHT;
+    private static final VarHandle RATE;
+    private static final VarHandle SNAPSHOT;
 
     static {
         try {
@@ -93,8 +89,6 @@ public class ControlPlaneFragment implements SlotManager {
                     .findVarHandle(ControlPlaneFragment.class, "currentConcurrency", long.class);
             DRAIN = MethodHandles.lookup()
                     .findVarHandle(ControlPlaneFragment.class, "drainMode", boolean.class);
-            INGEST = MethodHandles.lookup()
-                    .findVarHandle(ControlPlaneFragment.class, "ingest", ControlPlaneCache.class);
             IN_FLIGHT = MethodHandles.lookup()
                     .findVarHandle(ControlPlaneFragment.class, "inFlight", int.class);
             RATE = MethodHandles.lookup()
@@ -106,121 +100,121 @@ public class ControlPlaneFragment implements SlotManager {
         }
     }
 
+    private static DrainBuffer createDrainBuffer(FragmentConfig config) {
+        if (config.cloneConfig() == null) {
+            return null;
+        }
+
+        int[] cpus = config.cloneConfig().getCpuSet();
+
+        CpuCacheLayout layout = SystemInfo.getCacheLayout(cpus[0]);
+        long temp = layout.bytesL1();
+        temp = (long) (temp * 0.7);
+        int bufferSize = (int) Math.min(Long.highestOneBit((temp - 1) << 1), Integer.MAX_VALUE);
+        bufferSize /= QueueUtils.REFERENCE_SIZE;
+        bufferSize = Math.max(bufferSize, 64);
+
+        BatchableQueue<AbstractFrame> queue;
+        if (cpus.length > 1 && config.enableSMT()) {
+            queue = new SpscQueue<>(bufferSize);
+        } else {
+            queue = new PlainQueue<>(bufferSize);
+        }
+        return new DrainBuffer(queue, bufferSize, false);
+    }
+
+    private static PinnedThreadExecutor createSmtThread(FragmentConfig config) {
+        if (config.cloneConfig() == null) {
+            return null;
+        }
+
+        int[] cpus = config.cloneConfig().getCpuSet();
+        if (cpus.length > 1 && config.enableSMT()) {
+            return PinnedThreadExecutor.getOrSetIfAbsent(cpus[1],
+                    config.cloneConfig().shardName() + "-ControlPlaneFragment-SMT-"
+                            + config.cloneConfig().coreId(), Thread.MAX_PRIORITY, false);
+        }
+        return null;
+    }
 
     public final int cpuId;
 
-    @Getter
-    protected final SchedulingConfig config;
-    protected final ExecutionMetrics metrics;
-    protected final Logger logger;
-    protected final boolean isPCore;
-    protected final AtomicBoolean running = new AtomicBoolean(false);
-
-    protected final FlowRecorder executionLatency;
-
-    protected final int bufferSize;
-    protected final DrainBuffer bufferWrapper;
-    protected final PartitionedQueue<AbstractFrame> buffer;
-    protected final BufferedBridge completeSink;
-
-    protected final int maxUpdateInterval;
+    final DirectOutputStream outputStream;
 
     @Getter
-    protected final PinnedThreadExecutor pinnedExecutor;
-    protected final Thread shutdownHook;
-    protected final DownstreamHandle handle;
+    private final FragmentConfig fragmentConfig;
 
-    protected final DirectOutputStream outputStream;
+    private final Logger logger;
+    private final ExecutionMetrics metrics;
+    private final boolean isPCore;
+    private final FlowRecorder executionLatency;
+    private final BufferedBridge completeSink;
+    private final int maxUpdateInterval;
+    private final AtomicBoolean running = new AtomicBoolean(false);
 
-    protected final CycleState state;
-    protected final SMTState buddyState;
-    protected final SMTBuddy buddy;
+    @Getter
+    private final PinnedThreadExecutor pinnedExecutor;
+    private final Thread shutdownHook;
+    private final CycleState state;
 
-    protected boolean drainMode = false;
-    protected CoreSnapshot coreSnapshot = null;
+    boolean drainMode = false;
+    CoreSnapshot coreSnapshot = null;
 
-    protected ControlPlaneCache ingest = null;
+    long avgLatency;
+    long currentConcurrency;
+    long currentRate;
+    long effectiveConcurrencyLimit;
 
-    protected long avgLatency;
-    protected long currentConcurrency;
-    protected long currentRate;
-    protected long effectiveConcurrencyLimit;
-
-    protected int inFlight = 0;
-
-    protected long upstreamCount = 0;
-
-    protected boolean primed = false;
+    int inFlight = 0;
+    private long upstreamCount = 0;
     private Thread cycleThread;
 
-    public ControlPlaneFragment(@NonNull SchedulingConfig config) {
-        this.config = config;
-        this.maxUpdateInterval = Integer.highestOneBit(Math.max(config.maxUpdateInterval(), 2));
+    public ControlPlaneFragment(@NonNull CacheConfig cacheConfig,
+            @NonNull FragmentConfig fragmentConfig) {
+        super(cacheConfig, fragmentConfig.idleCyclePolicy().maxParkTime().toNanos(),
+                createDrainBuffer(fragmentConfig), createSmtThread(fragmentConfig));
+        this.fragmentConfig = fragmentConfig;
+        this.maxUpdateInterval = Integer.highestOneBit(
+                Math.max(fragmentConfig.maxUpdateInterval(), 2));
 
-        this.currentRate = config.minConcurrency();
-        this.currentConcurrency = Math.max(1, config.minConcurrency());
-        this.effectiveConcurrencyLimit = config.minConcurrency();
+        this.currentRate = fragmentConfig.minConcurrency();
+        this.currentConcurrency = Math.max(1, fragmentConfig.minConcurrency());
+        this.effectiveConcurrencyLimit = fragmentConfig.minConcurrency();
 
-        if (config.cloneConfig() == null) {
+        if (fragmentConfig.cloneConfig() == null) {
             this.cpuId = -1;
             this.logger = LoggerFactory.getLogger(ControlPlaneFragment.class);
             this.executionLatency = null;
             this.state = null;
             this.pinnedExecutor = null;
-            this.buffer = null;
-            this.bufferSize = 0;
-            this.bufferWrapper = null;
-            this.buddy = null;
-            this.buddyState = null;
             this.isPCore = false;
             this.metrics = null;
             this.completeSink = null;
             this.outputStream = null;
             this.shutdownHook = null;
-            this.handle = null;
         } else {
             String name =
-                    config.cloneConfig().shardName() + "-ControlPlaneFragment-" + config.cloneConfig()
+                    fragmentConfig.cloneConfig().shardName() + "-ControlPlaneFragment-"
+                            + fragmentConfig.cloneConfig()
                             .coreId();
             this.logger = LoggerFactory.getLogger(name);
 
-            int[] cpus = config.cloneConfig().getCpuSet();
+            int[] cpus = fragmentConfig.cloneConfig().getCpuSet();
             this.cpuId = cpus[0];
 
             this.executionLatency = new FlowRecorder();
             this.state = new CycleState();
 
-            CpuCacheLayout layout = SystemInfo.getCacheLayout(cpus[0]);
-            long temp = layout.bytesL1();
-            temp = (long) (temp * 0.7);
-            int bufferSize = (int) Math.min(Long.highestOneBit((temp - 1) << 1), Integer.MAX_VALUE);
-            bufferSize /= QueueUtils.REFERENCE_SIZE;
-            bufferSize = Math.max(bufferSize, 64);
-            this.bufferSize = bufferSize;
-
             this.pinnedExecutor =
                     PinnedThreadExecutor.getOrSetIfAbsent(cpus[0], name, Thread.MAX_PRIORITY,
                             false);
 
-            PinnedThreadExecutor smtExec = null;
-            if (cpus.length > 1 && config.enableSMT()) {
-                smtExec = PinnedThreadExecutor.getOrSetIfAbsent(cpus[1],
-                        this.config.cloneConfig().shardName() + "-ControlPlaneFragment-SMT-"
-                                + this.config.cloneConfig().coreId(), Thread.MAX_PRIORITY, false);
-                this.buffer = new PartitionedSpscArrayQueue<>(bufferSize);
-            } else {
-                this.buffer = new PartitionedArrayQueue<>(bufferSize);
-            }
-            this.handle = new DownstreamHandle(this.cpuId, this::getPressure);
-            this.bufferWrapper = new DrainBuffer(this.buffer, bufferSize, false);
-            this.buddyState = new SMTState(executionLatency, bufferWrapper.arrivalLatencyRecorder,
-                    config.idleCyclePolicy().maxParkTime().toNanos());
-            this.buddy = new SMTBuddy(handle, bufferWrapper, buddyState, smtExec);
+            CpuCacheLayout layout = SystemInfo.getCacheLayout(cpus[0]);
             this.isPCore =
                     SystemInfo.getCoreInfo(SystemInfo.getCpuInfo(layout.cpu()).core()).pCore();
 
             this.completeSink =
-                    new BufferedBridge(new PartitionedUnboundedMpscArrayQueue<>(1, bufferSize, 4),
+                    new BufferedBridge(new PartitionedMpscQueue<>(1, super.L1Size, 4),
                             frame -> {
                                 IN_FLIGHT.setOpaque(this, this.inFlight - 1);
                                 state.receivingOrderedWork =
@@ -229,7 +223,7 @@ public class ControlPlaneFragment implements SlotManager {
                                 frame.reset();
                                 frame.doFinally();
                             }, this::recordCompletion);
-            this.outputStream = new DirectOutputStream(this.buffer, frame -> {
+            this.outputStream = new DirectOutputStream(super.bufferWrapper.buffer, frame -> {
                 if ((this.state.dispatches++ & this.state.updateIntervalMask) == 0) {
                     frame.setStartNs(System.nanoTime());
                 } else {
@@ -237,24 +231,14 @@ public class ControlPlaneFragment implements SlotManager {
                 }
             });
 
-            this.metrics = new ExecutionMetrics(config.meterRegistry(), config,
+            this.metrics = new ExecutionMetrics(fragmentConfig.meterRegistry(), fragmentConfig,
                     () -> (int) IN_FLIGHT.getOpaque(this), () -> (long) AVG_LATENCY.getOpaque(this),
                     () -> (long) CONCURRENCY.getOpaque(this), () -> (long) RATE.getOpaque(this),
                     this::getPressure);
             this.shutdownHook = new Thread(this::close);
             Runtime.getRuntime().addShutdownHook(this.shutdownHook);
             this.logger.debug("CPU: {} P-Core: {} SMTMode: {} BufferCapacity: {}", this.cpuId,
-                    this.isPCore, cpus.length > 1 && config.enableSMT(), bufferSize);
-        }
-    }
-
-    @Override
-    public void input(LatticeSource stream) {
-        if (stream instanceof ControlPlaneCache iStream && INGEST.compareAndSet(this, null,
-                iStream)) {
-            this.buddy.setIngest(iStream);
-            INGEST.setRelease(this, iStream);
-            iStream.addHandle(this.handle);
+                    this.isPCore, cpus.length > 1 && fragmentConfig.enableSMT(), super.L1Size);
         }
     }
 
@@ -266,13 +250,6 @@ public class ControlPlaneFragment implements SlotManager {
     @Override
     public void close() {
         if (this.running.compareAndSet(true, false)) {
-            ControlPlaneCache ingest = (ControlPlaneCache) INGEST.getAcquire(this);
-            if (ingest != null) {
-                ingest.removeThread(this.cycleThread);
-                ingest.removeHandle(this.cpuId);
-                ingest.close();
-            }
-            this.buddy.close();
             if (this.cycleThread != null) {
                 try {
                     LockSupport.unpark(this.cycleThread);
@@ -284,10 +261,10 @@ public class ControlPlaneFragment implements SlotManager {
             }
             dumpLocks();
             AbstractFrame frame;
-            while ((frame = this.buffer.poll(0)) != null) {
+            while ((frame = super.L1Cache.poll()) != null) {
                 frame.kill();
             }
-            this.buffer.clear();
+            super.L1Cache.clear();
             this.metrics.close();
             this.pinnedExecutor.close();
             try {
@@ -295,6 +272,7 @@ public class ControlPlaneFragment implements SlotManager {
             } catch (Exception ignored) {
 
             }
+            super.close();
         }
         this.logger.debug("Closed");
     }
@@ -310,13 +288,14 @@ public class ControlPlaneFragment implements SlotManager {
         if (this.running.getAcquire()) {
             return;
         }
-        if (this.buffer == null) {
+        if (super.L1Cache == null) {
             return;
         }
-        for (int i = 0; i < this.bufferSize * 2; i++) {
-            this.buffer.offer(DummyInitFrame.INSTANCE);
+        super.firstTouch();
+        for (int i = 0; i < super.L1Size * 2; i++) {
+            super.L1Cache.offer(DummyFrame.INSTANCE);
         }
-        this.buffer.clear();
+        super.L1Cache.clear();
     }
 
     @Override
@@ -331,12 +310,13 @@ public class ControlPlaneFragment implements SlotManager {
                     "Pinned Executor has not been set. To start this class, it needs to be instantiated with a CloneConfig.");
         }
         if (this.running.compareAndSet(false, true)) {
-            CloneConfig cloneConfig = this.config.cloneConfig();
+            CloneConfig cloneConfig = this.fragmentConfig.cloneConfig();
             if (cloneConfig != null) {
                 if (this.pinnedExecutor.isShutdown()) {
                     this.pinnedExecutor.start(
-                            this.config.cloneConfig().shardName() + "-ControlPlaneFragment-"
-                                    + this.config.cloneConfig().coreId(), Thread.MAX_PRIORITY,
+                            this.fragmentConfig.cloneConfig().shardName() + "-ControlPlaneFragment-"
+                                    + this.fragmentConfig.cloneConfig().coreId(),
+                            Thread.MAX_PRIORITY,
                             false);
                 }
 
@@ -353,20 +333,12 @@ public class ControlPlaneFragment implements SlotManager {
                                 this.cpuId);
                     }
                     ThreadTools.setTimerResolution(1);
-                    if (this.config.enableSMT() && cloneConfig.getCpuSet().length > 1) {
-                        this.buddy.start();
+                    if (this.fragmentConfig.enableSMT() && cloneConfig.getCpuSet().length > 1) {
+                        super.start();
                         this.state.smtMode = true;
                     }
 
-                    while (this.ingest == null && !Thread.currentThread().isInterrupted()) {
-                        this.ingest = (ControlPlaneCache) INGEST.getOpaque(this);
-                        this.buddy.setIngest(ingest);
-                        LockSupport.parkNanos(2_000L);
-                    }
-                    if (Thread.currentThread().isInterrupted()) {
-                        return;
-                    }
-                    this.ingest.register();
+                    super.register();
                     cycle();
                 });
             } else {
@@ -375,7 +347,7 @@ public class ControlPlaneFragment implements SlotManager {
         }
     }
 
-    protected void cycle() {
+    private void cycle() {
         try {
             long dispatchWaitNs = 0;
             while (this.running.get() && !Thread.currentThread().isInterrupted()) {
@@ -418,7 +390,7 @@ public class ControlPlaneFragment implements SlotManager {
                     continue;
                 }
 
-                long newUpCount = this.ingest.getUpstreamCount();
+                long newUpCount = super.getUpstreamCount();
                 if (this.upstreamCount != newUpCount) {
                     this.state.idleRecorder.reset(false);
                     this.state.rests = 0;
@@ -426,14 +398,15 @@ public class ControlPlaneFragment implements SlotManager {
                 }
 
                 this.state.lastEmptyNs = System.nanoTime();
-                if (!this.state.smtMode && this.state.lastEmptyNs > buddyState.demandWaitNs) {
-                    this.buddy.doStuff();
+                if (!this.state.smtMode
+                        && this.state.lastEmptyNs > super.requesterState.demandWaitNs) {
+                    super.pullIntoL1();
                 }
 
-                long ingestCount = this.ingest.getTotalCount();
-                int bufferCount = this.buddyState.bufferCount.getAcquire();
+                long ingestCount = super.getL2CacheCount();
+                int bufferCount = super.requesterState.bufferCount.getAcquire();
                 // This is usually hit when there are producers present but nothing is flowing
-                if (processed == 0 && (this.state.rests & 15) != 0 && this.upstreamCount > 0
+                if ((this.state.rests & 15) != 0 && this.upstreamCount > 0
                         && !this.state.receivingOrderedWork && ingestCount == 0 && bufferCount == 0
                         && this.state.lastEmptyNs - this.state.lastActiveNs
                         > 10 * this.state.maxParkNs) {
@@ -441,8 +414,9 @@ public class ControlPlaneFragment implements SlotManager {
                     continue;
                 }
 
-                if (processed == 0 && bufferCount == 0) {
+                if (bufferCount == 0) {
                     this.state.rests++;
+                    idleSpin(Math.min(5, this.state.rests));
                 }
             }
         } catch (Throwable e) {
@@ -452,8 +426,8 @@ public class ControlPlaneFragment implements SlotManager {
         }
     }
 
-    protected int dispatch() {
-        int bufferCount = this.buddyState.bufferCount.getAcquire();
+    private int dispatch() {
+        int bufferCount = super.requesterState.bufferCount.getAcquire();
         if (bufferCount == 0) {
             return 0;
         }
@@ -469,14 +443,14 @@ public class ControlPlaneFragment implements SlotManager {
             IN_FLIGHT.setOpaque(this, this.inFlight + quota);
             processed = (int) this.outputStream.push(quota);
             if (processed > 0) {
-                this.buddyState.bufferCount.addAndGet(-processed);
+                super.requesterState.bufferCount.addAndGet(-processed);
                 IN_FLIGHT.setOpaque(this, this.inFlight + (processed - quota));
             }
         }
         return processed;
     }
 
-    protected void updateLimits() {
+    private void updateLimits() {
         FlowSnapshot flowSnapshot = this.executionLatency.getFlowSnapshot();
         this.executionLatency.refreshSnapshot(flowSnapshot, false);
 
@@ -512,7 +486,7 @@ public class ControlPlaneFragment implements SlotManager {
     /// P-cores are allowed to push harder than E-cores before throttling begins.
     ///
     /// Final limits are clamped against configured minimums and a hardware-derived ceiling.
-    protected void updateEffectiveConcurrencyLimit(long ideal) {
+    private void updateEffectiveConcurrencyLimit(long ideal) {
         CoreSnapshot coreSnapshot = (CoreSnapshot) SNAPSHOT.getOpaque(this);
         CpuSnapshot cpuSnapshot = coreSnapshot.cpuSnapshots()[this.cpuId];
 
@@ -525,10 +499,10 @@ public class ControlPlaneFragment implements SlotManager {
         adaptiveCap = (long) (adaptiveCap * (1.0 - pressure));
 
         long cpuCount = cpuSnapshot.globalCpuCount();
-        long hardwareMax = cpuCount * this.bufferSize;
+        long hardwareMax = cpuCount * super.L1Size;
 
         this.effectiveConcurrencyLimit =
-                clampLong(adaptiveCap, this.config.minConcurrency(), hardwareMax);
+                clampLong(adaptiveCap, this.fragmentConfig.minConcurrency(), hardwareMax);
     }
 
     /// Adjusts execution concurrency using a blend of TCP Vegas-style queue estimation and Little’s
@@ -552,7 +526,7 @@ public class ControlPlaneFragment implements SlotManager {
     ///   - Multiple consistent signals are required before tuning
     ///
     /// This prevents oscillation while still allowing the system to react quickly under load.
-    protected void updateConcurrency(long ideal, double queueEstimate) {
+    private void updateConcurrency(long ideal, double queueEstimate) {
         boolean drain = (boolean) DRAIN.getOpaque(this);
         if (drain) {
             CONCURRENCY.setOpaque(this, this.effectiveConcurrencyLimit);
@@ -624,7 +598,7 @@ public class ControlPlaneFragment implements SlotManager {
     /// pause interval to reduce contention and avoid runaway queue growth.
     ///
     /// This acts as a lightweight adaptive pacing mechanism for demand signaling.
-    protected long calculateDispatchWaitNs(long nowNs) {
+    private long calculateDispatchWaitNs(long nowNs) {
         if (this.state.maxParkNs <= 0) {
             return 0;
         }
@@ -670,41 +644,40 @@ public class ControlPlaneFragment implements SlotManager {
     ///
     /// While parked, sibling SMT workers may temporarily steal coordination work to help keep
     /// shared queues moving and reduce cold-start latency when traffic resumes.
-    protected void idleSpin(long parks) {
+    private void idleSpin(long parks) {
         long now = System.nanoTime();
         this.state.idleRecorder.record(now, 1, false);
 
         double idleRatio = this.state.idleRecorder.getRollingAverage(now, false);
-        if (idleRatio <= this.config.idleCyclePolicy().spinThreshold()) {
+        if (idleRatio <= this.fragmentConfig.idleCyclePolicy().spinThreshold()) {
             Thread.onSpinWait();
-        } else if (idleRatio <= this.config.idleCyclePolicy().yieldThreshold()) {
+        } else if (idleRatio <= this.fragmentConfig.idleCyclePolicy().yieldThreshold()) {
             Thread.yield();
-        } else if (idleRatio <= this.config.idleCyclePolicy().parkThreshold()
+        } else if (idleRatio <= this.fragmentConfig.idleCyclePolicy().parkThreshold()
                 || this.upstreamCount == 0) {
             while (parks-- > 0) {
                 park(this.state.maxParkNs);
 
-                if (this.buddyState.bufferCount.get() > 0) {
+                if (super.requesterState.bufferCount.get() > 0) {
                     break;
                 }
 
-                ControlPlaneCache ingest = (ControlPlaneCache) INGEST.getOpaque(this);
                 if (!this.state.smtMode) {
-                    if (this.upstreamCount != ingest.getUpstreamCount()) {
+                    if (this.upstreamCount != super.getUpstreamCount()) {
                         break;
                     }
 
                     if (this.upstreamCount == 0) {
-                        this.buddy.doStuff();
-                        long count = this.buddyState.bufferCount.getOpaque();
+                        super.pullIntoL1();
+                        long count = super.requesterState.bufferCount.getOpaque();
                         if (count > 0) {
                             break;
                         }
                         continue;
                     }
 
-                    if (ingest.getTotalCount() >= (this.bufferSize >> 3)) {
-                        this.buddy.doStuff();
+                    if (super.getL2CacheCount() >= (super.L1Size >> 3)) {
+                        super.pullIntoL1();
                         break;
                     }
                 }
@@ -712,11 +685,11 @@ public class ControlPlaneFragment implements SlotManager {
         }
     }
 
-    protected final void park(long parkNs) {
+    private void park(long parkNs) {
         LockSupport.parkNanos(parkNs);
     }
 
-    protected void recordCompletion(AbstractFrame frame) {
+    private void recordCompletion(AbstractFrame frame) {
         if (!frame.isCancelledExecution() && frame.getStartNs() > 0) {
             long now = System.nanoTime();
             this.executionLatency.record(now, now - frame.getStartNs(), false);
@@ -726,6 +699,7 @@ public class ControlPlaneFragment implements SlotManager {
     @Override
     public void update(CoreSnapshot snapshot) {
         SNAPSHOT.setOpaque(this, snapshot);
+        super.update(snapshot);
     }
 
     @Override
@@ -753,7 +727,8 @@ public class ControlPlaneFragment implements SlotManager {
 
     @Override
     public ControlPlaneFragment clone(CloneConfig cloneConfig) {
-        return new ControlPlaneFragment(this.config.clone(cloneConfig));
+        return new ControlPlaneFragment(super.cacheConfig.clone(cloneConfig),
+                this.fragmentConfig.clone(cloneConfig));
     }
 
     @Override
@@ -763,17 +738,18 @@ public class ControlPlaneFragment implements SlotManager {
 
     @Override
     public boolean isDrained() {
-        return (int) IN_FLIGHT.getAcquire(this) == 0 && this.buffer.isEmpty();
+        return super.isDrained() && (int) IN_FLIGHT.getAcquire(this) == 0 && super.L1Cache.isEmpty();
     }
 
     @Override
     public void setDrainMode(boolean value) {
         DRAIN.setRelease(this, value);
+        super.setDrainMode(value);
     }
 
-    protected class CycleState {
+    private class CycleState {
 
-        public final long maxParkNs = config.idleCyclePolicy().maxParkTime().toNanos();
+        public final long maxParkNs = fragmentConfig.idleCyclePolicy().maxParkTime().toNanos();
 
         public final FlowRecorder idleRecorder = new FlowRecorder();
 

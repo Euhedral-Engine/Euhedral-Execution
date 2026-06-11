@@ -4,10 +4,11 @@ import euhedral.hardware_utils.PinnedThreadExecutor;
 import euhedral.hardware_utils.common.SystemUtilization.CoreSnapshot;
 import euhedral.io.config.CloneConfig;
 import euhedral.io.flow_control.BufferedBridge;
+import euhedral.io.impl.BaseCloneableObject;
 
 /// ## Base interface for everything below the [`ControlPlaneShard`][euhedral.io.control_plane.ControlPlaneShard]
 ///
-/// Method Call Sequence if Using [`AbstractCloneablePipeline`][AbstractCloneablePipeline]:
+/// Method Call Sequence if Using [`BaseCloneableObject`][BaseCloneableObject]:
 /// - clone()
 /// - firstTouch()
 /// - start()
@@ -47,10 +48,6 @@ public interface CloneableObject extends AutoCloseable {
 
     default BufferedBridge completeChannel() {
         return null;
-    }
-
-    default double getPressure() {
-        return 0;
     }
 
     default boolean isDrained() {

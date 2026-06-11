@@ -1,12 +1,12 @@
 package euhedral.io.flow_control;
 
 import euhedral.io.frames.AbstractFrame;
-import euhedral.queues.common.PartitionedQueue;
+import io.euhedral_execution.data_structures.queues.common.PartitionedQueue;
 import java.util.function.Consumer;
 
 /// An intermediary buffer used for communication between pipeline stages.
 @SuppressWarnings("unused")
-public class BufferedBridge {
+public final class BufferedBridge {
 
     private final PartitionedQueue<AbstractFrame> buffer;
     private final Consumer<AbstractFrame> drainFunc;

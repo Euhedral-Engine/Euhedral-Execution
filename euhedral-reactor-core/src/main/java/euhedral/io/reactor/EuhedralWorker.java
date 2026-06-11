@@ -6,7 +6,7 @@ import euhedral.io.generics.LatticeReceiver;
 import euhedral.io.generics.LatticeSource;
 import euhedral.io.ingest.AbstractIngestSink;
 import euhedral.io.reactor.common.TaskFrame;
-import euhedral.queues.PartitionedUnboundedMpscArrayQueue;
+import io.euhedral_execution.data_structures.queues.PartitionedMpscQueue;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.Objects;
@@ -91,12 +91,12 @@ public class EuhedralWorker extends AbstractIngestSink implements Worker {
             }
         }
 
-        private final PartitionedUnboundedMpscArrayQueue<TaskFrame> queue;
+        private final PartitionedMpscQueue<TaskFrame> queue;
 
         private boolean complete;
 
         Delegate(int chunkSize, int maxPooledChunks) {
-            this.queue = new PartitionedUnboundedMpscArrayQueue<>(1, chunkSize, maxPooledChunks);
+            this.queue = new PartitionedMpscQueue<>(1, chunkSize, maxPooledChunks);
         }
 
         @Override

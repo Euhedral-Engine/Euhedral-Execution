@@ -19,7 +19,7 @@ import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.CloneableObject;
 import euhedral.io.generics.LatticeSource;
 import euhedral.io.generics.LatticeTerminal;
-import euhedral.io.impl.DefaultCloneablePipeline;
+import euhedral.io.impl.BaseCloneableObject;
 import euhedral.io.ingest.AbstractIngestSink;
 import java.time.Duration;
 import java.util.Arrays;
@@ -89,7 +89,7 @@ import org.slf4j.LoggerFactory;
 ///
 /// ---
 @SuppressWarnings("unused")
-public class ControlPlaneLattice implements LatticeTerminal, AutoCloseable {
+public final class ControlPlaneLattice implements LatticeTerminal, AutoCloseable {
 
     private static final AtomicReference<ControlPlaneLattice> INSTANCE = new AtomicReference<>();
 
@@ -103,7 +103,7 @@ public class ControlPlaneLattice implements LatticeTerminal, AutoCloseable {
                 return curr;
             }
 
-            return new ControlPlaneLattice(name, null, new DefaultCloneablePipeline(),
+            return new ControlPlaneLattice(name, null, new BaseCloneableObject(),
                     SystemInfo.getCpuSet());
         });
     }
@@ -120,7 +120,7 @@ public class ControlPlaneLattice implements LatticeTerminal, AutoCloseable {
                 allowedCpus = SystemInfo.getCpuSet();
             }
             if (cloneable == null) {
-                cloneable = new DefaultCloneablePipeline(config.metricPrefix(),
+                cloneable = new BaseCloneableObject(config.metricPrefix(),
                         config.meterRegistry());
             }
             return new ControlPlaneLattice(config.name(), config.baseShard(), cloneable,
@@ -128,33 +128,33 @@ public class ControlPlaneLattice implements LatticeTerminal, AutoCloseable {
         });
     }
 
-    protected final String name;
-    protected final TopologyMapper topology;
-    protected final ResourceMonitor resourceMonitor;
-    protected final Logger logger;
-    protected final ExecutorService controlPlaneExecutor;
-    protected final AtomicBoolean closed = new AtomicBoolean(false);
-    protected final Thread shutdownHook;
+    final String name;
+    final TopologyMapper topology;
+    final ResourceMonitor resourceMonitor;
+    final Logger logger;
+    final ExecutorService controlPlaneExecutor;
+    final AtomicBoolean closed = new AtomicBoolean(false);
+    final Thread shutdownHook;
 
-    protected final AtomicBoolean started = new AtomicBoolean(false);
-    protected final AtomicBoolean ready = new AtomicBoolean(false);
-    protected final AtomicBoolean primed = new AtomicBoolean(false);
-    protected final AtomicBoolean rebalancing = new AtomicBoolean(false);
-    protected final AtomicReference<LatticeVertex> ingestController;
+    final AtomicBoolean started = new AtomicBoolean(false);
+    final AtomicBoolean ready = new AtomicBoolean(false);
+    final AtomicBoolean primed = new AtomicBoolean(false);
+    final AtomicBoolean rebalancing = new AtomicBoolean(false);
+    final AtomicReference<LatticeVertex> ingestController;
 
-    protected final ControlPlaneShard baseShard;
-    protected final ControlPlaneShard[] shards;
-    protected final LatticeEdge[] shardHandles;
+    final ControlPlaneShard baseShard;
+    final ControlPlaneShard[] shards;
+    final LatticeEdge[] shardHandles;
 
-    protected final BitSet allowedCores;
-    protected final AtomicReference<int[]> activeShardIds = new AtomicReference<>(new int[0]);
-    protected final AtomicReference<int[]> weightedShardMap = new AtomicReference<>(new int[0]);
-    protected final AtomicReference<int[]> reverseMapping = new AtomicReference<>(new int[0]);
+    final BitSet allowedCores;
+    final AtomicReference<int[]> activeShardIds = new AtomicReference<>(new int[0]);
+    final AtomicReference<int[]> weightedShardMap = new AtomicReference<>(new int[0]);
+    final AtomicReference<int[]> reverseMapping = new AtomicReference<>(new int[0]);
 
-    protected volatile int currentGlobalVersion = Integer.MIN_VALUE;
-    protected volatile EffectiveSystemTopology effectiveTopology;
+    volatile int currentGlobalVersion = Integer.MIN_VALUE;
+    volatile EffectiveSystemTopology effectiveTopology;
 
-    protected ControlPlaneLattice(String name, ControlPlaneShard baseShard,
+    ControlPlaneLattice(String name, ControlPlaneShard baseShard,
             CloneableObject cloneableObject, BitSet allowedCpus) {
         this.topology = new TopologyMapper(allowedCpus);
         this.resourceMonitor = new ResourceMonitor(this.topology, Duration.ofMillis(200));
@@ -217,7 +217,7 @@ public class ControlPlaneLattice implements LatticeTerminal, AutoCloseable {
     }
 
     /// Constructs the [ControlPlaneShards] and the ingest controller.
-    protected void init() {
+    private void init() {
         this.logger.info("Initializing");
 
         for (int i = 0; i < this.shards.length; i++) {
@@ -234,13 +234,13 @@ public class ControlPlaneLattice implements LatticeTerminal, AutoCloseable {
         this.ingestController.set(controller);
     }
 
-    protected ControlPlaneShard createShard(int socketId) {
+    private ControlPlaneShard createShard(int socketId) {
         String shardName = this.name + "-ControlPlaneShard-" + socketId;
         return this.baseShard.clone(socketId, shardName);
     }
 
     /// Routes work based on their policy level or uses default global routing.
-    protected int route(AbstractFrame frame, int mapSize) {
+    private int route(AbstractFrame frame, int mapSize) {
         RoutingPolicy policy = frame.getRoutingPolicy();
         if (policy != null && policy.level > RoutingPolicy.ANYWHERE.level) {
             int[] reverseMapping = this.reverseMapping.getOpaque();
@@ -259,7 +259,7 @@ public class ControlPlaneLattice implements LatticeTerminal, AutoCloseable {
 
     /// Hands out the shard-specific hardware utilization reports or initiates a rebalance on
     /// topology change.
-    protected void update(HardwareUtilization utilization) {
+    void update(HardwareUtilization utilization) {
         int nextVersion = this.topology.getGlobalVersion();
 
         if (this.currentGlobalVersion != nextVersion) {
@@ -301,7 +301,7 @@ public class ControlPlaneLattice implements LatticeTerminal, AutoCloseable {
 
     /// Spawns new shards if a socket becomes available. Shuts down shards if the socket is removed.
     /// Updates existing shards with their new utilization reports.
-    protected void handleSystemTopologyChange(HardwareUtilization utilization) {
+    private void handleSystemTopologyChange(HardwareUtilization utilization) {
         if (!this.rebalancing.compareAndSet(false, true)) {
             return;
         }
@@ -385,7 +385,7 @@ public class ControlPlaneLattice implements LatticeTerminal, AutoCloseable {
 
     /// Cuts ingest by setting the ingest controller to drain mode and changes the mappings to the
     /// next shards. Does not reactivate ingest in here.
-    protected void remapIngestController() {
+    private void remapIngestController() {
         this.ingestController.get().setDrain(true);
         BitSet effectiveSockets = this.effectiveTopology.effectiveSockets();
         BitSet effectiveCpus = this.effectiveTopology.effectiveCpus();
@@ -407,7 +407,7 @@ public class ControlPlaneLattice implements LatticeTerminal, AutoCloseable {
         this.weightedShardMap.lazySet(weightedShardMap);
     }
 
-    protected void startShard(int shardId, SocketSnapshot snapshot,
+    private void startShard(int shardId, SocketSnapshot snapshot,
             EffectiveSocketTopology topology) {
         if (this.shards[shardId].isStarted()) {
             return;
@@ -417,7 +417,7 @@ public class ControlPlaneLattice implements LatticeTerminal, AutoCloseable {
     }
 
     /// Calculates the proportional quota for a shard based on their CPU count.
-    protected double getShardQuota(int socketId, double systemQuotaPool) {
+    private double getShardQuota(int socketId, double systemQuotaPool) {
         int totalEffectiveCpus = this.effectiveTopology.effectiveCpus().cardinality();
         int socketEffectiveCpus =
                 this.effectiveTopology.socketTopologies().get(socketId).effectiveCpus()
@@ -426,7 +426,7 @@ public class ControlPlaneLattice implements LatticeTerminal, AutoCloseable {
         return ((double) socketEffectiveCpus / Math.max(1, totalEffectiveCpus)) * systemQuotaPool;
     }
 
-    public boolean ready() {
+    private boolean ready() {
         while (true) {
             int count = this.ingestController.getOpaque().getThreadCount();
             if (count >= getActiveWorkers()) {

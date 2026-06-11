@@ -1,8 +1,8 @@
 package euhedral.io.utils;
 
-import euhedral.atomics.PaddedLongAdder;
 import euhedral.io.frames.AbstractFrame;
-import euhedral.queues.common.PartitionedQueue;
+import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
+import io.euhedral_execution.data_structures.queues.common.PartitionedQueue;
 import lombok.Getter;
 import org.jspecify.annotations.NonNull;
 
@@ -26,7 +26,7 @@ public class QueuePartitionWrapper {
         return false;
     }
 
-    public long drain(int partition, @NonNull DrainBuffer drainBuffer, int limit) {
+    public long drain(int partition, @NonNull DrainBuffer drainBuffer, long limit) {
         if (limit <= 0) {
             return 0;
         }
@@ -62,8 +62,8 @@ public class QueuePartitionWrapper {
         return this.sizeBytes.getAcquire(partition);
     }
 
-    public void purge() {
-        this.queue.purge();
+    public void clear() {
+        this.queue.clear();
     }
 
     private static long addCap(long num1, long num2) {

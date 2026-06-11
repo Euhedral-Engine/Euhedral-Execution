@@ -1,26 +1,23 @@
 package euhedral.io.utils;
 
-import java.util.function.Consumer;
-
 import euhedral.io.frames.AbstractFrame;
-import euhedral.queues.common.PartitionedQueue;
+import io.euhedral_execution.data_structures.queues.common.BatchableQueue;
+import java.util.function.Consumer;
 import lombok.Getter;
 
 /// Used for draining from queues. Automatically tracks the number of frames and bytes drained as
 /// well as their arrival latency.
-public class DrainBuffer implements Consumer<AbstractFrame> {
+public final class DrainBuffer implements Consumer<AbstractFrame> {
 
-    public final PartitionedQueue<AbstractFrame> buffer;
+    public final BatchableQueue<AbstractFrame> buffer;
+    public final FlowRecorder arrivalLatencyRecorder = new FlowRecorder();
     private final boolean threadSafe;
     @Getter
     private final int size;
-
-    public final FlowRecorder arrivalLatencyRecorder = new FlowRecorder();
-
     public long drainCount = 0;
     public long drainedBytes = 0;
 
-    public DrainBuffer(PartitionedQueue<AbstractFrame> buffer, int size, boolean threadSafe) {
+    public DrainBuffer(BatchableQueue<AbstractFrame> buffer, int size, boolean threadSafe) {
         this.buffer = buffer;
         this.threadSafe = threadSafe;
         this.size = size;
@@ -33,9 +30,13 @@ public class DrainBuffer implements Consumer<AbstractFrame> {
 
     @Override
     public void accept(AbstractFrame frame) {
-        while (!buffer.offer(0, frame)) {
+        while (!buffer.offer(frame)) {
             Thread.onSpinWait();
         }
+        record(frame);
+    }
+
+    public void record(AbstractFrame frame) {
         if (frame.getIngestNs() > 0) {
             long now = System.nanoTime();
             arrivalLatencyRecorder.record(now, now - frame.getIngestNs(), threadSafe);

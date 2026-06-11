@@ -6,7 +6,7 @@
   <parent>
     <groupId>io.euhedral-execution</groupId>
     <artifactId>euhedral-execution</artifactId>
-    <version>0.0.4-SNAPSHOT</version>
+    <version>0.0.4</version>
   </parent>
 
   <name>Euhedral Core</name>
@@ -28,7 +28,7 @@
     <dependency>
       <groupId>io.euhedral-execution</groupId>
       <artifactId>euhedral-hashing</artifactId>
-      <version>0.0.4-SNAPSHOT</version>
+      <version>${project.version}</version>
       <scope>compile</scope>
     </dependency>
 
@@ -58,7 +58,7 @@
 
     <dependency>
       <groupId>org.jctools</groupId>
-      <artifactId>jctools-core</artifactId>
+      <artifactId>jctools-core-jdk11</artifactId>
       <scope>compile</scope>
     </dependency>
     <dependency>

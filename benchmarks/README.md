@@ -2,13 +2,17 @@
 
 ### Benchmarks
 
-| Benchmark            | Description                                                        |
-|----------------------|--------------------------------------------------------------------|
-| all                  | Runs all benchmarks                                                |
-| core-latency         | Latency benchmarks for euhedral-core                               |
-| core-throughput      | Throughput benchmarks for euhedral-core                            |
-| core-throughput-comp | Throughput comparison benchmarks between euhedral-core and Reactor |
-| mandelbrot           | Mandelbrot stress test for euhedral-core and Reactor               |
+| Benchmark            | Description                                                                                     |
+|----------------------|-------------------------------------------------------------------------------------------------|
+| all                  | Runs all benchmarks                                                                             |
+| core-latency         | Latency benchmarks for euhedral-core                                                            |
+| core-throughput      | Throughput benchmarks for euhedral-core                                                         |
+| batched-mandelbrot   | Execution efficiency stress test for euhedral-core and Reactor                                  |
+| mandelbrot           | Mandelbrot stress test for euhedral-core and Reactor                                            |
+| core-high-scale      | Throughput benchmarks for euhedral-core meant to be ran on extremely large instances. 92+ cores |
+| queues-spsc          | Runs the SPSC queue benchmarks comparing with JCTools                                           |
+| queues-mpsc          | Runs the MPSC queue benchmarks comparing with JCTools                                           |
+| queues-mpmc          | Runs the MPMC queue benchmarks comparing with JCTools                                           |
 
 
 ### Flags
