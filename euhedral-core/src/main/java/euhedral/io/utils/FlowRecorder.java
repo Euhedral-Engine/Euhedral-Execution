@@ -35,6 +35,9 @@ public class FlowRecorder {
     private long lastRecordingTime;
     @Getter
     private long lastInterval;
+    @Getter
+    private long lastRecordedUnits;
+
     private long averageRate, rateVariation = 0L;
     private long averageUnits, unitVariation = 0L;
     private long averageInterval, intervalVariation = 0L;
@@ -190,8 +193,9 @@ public class FlowRecorder {
         decay(now, alpha);
 
         lastRecordingTime = now;
-        currWindowCount++;
         lastInterval = interval;
+        lastRecordedUnits = units;
+        currWindowCount++;
         rollingSum += units;
 
         long currentUnitsScaled = units << SHIFT;
@@ -255,18 +259,18 @@ public class FlowRecorder {
         flowSnapshot.avgUnits = (averageUnits >> SHIFT) + unitRemainder * SCALE_INV;
         flowSnapshot.unitVariation = (unitVariation >> SHIFT) + varUnitRemainder * SCALE_INV;
         flowSnapshot.unitCV = flowSnapshot.avgUnits == 0 ? 0.0
-                : flowSnapshot.avgUnits / flowSnapshot.unitVariation;
+                : flowSnapshot.unitVariation / flowSnapshot.avgUnits;
 
         flowSnapshot.avgRate = (averageRate >> SHIFT) + rateRemainder * SCALE_INV;
         flowSnapshot.rateVariation = (rateVariation >> SHIFT) + varRateRemainder * SCALE_INV;
         flowSnapshot.rateCV =
-                flowSnapshot.avgRate == 0 ? 0.0 : flowSnapshot.avgRate / flowSnapshot.rateVariation;
+                flowSnapshot.avgRate == 0 ? 0.0 : flowSnapshot.rateVariation / flowSnapshot.avgRate;
 
         flowSnapshot.avgInterval = (averageInterval >> SHIFT) + intervalRemainder * SCALE_INV;
         flowSnapshot.intervalVariation =
                 (intervalVariation >> SHIFT) + varIntervRemainder * SCALE_INV;
         flowSnapshot.intervalCV = flowSnapshot.avgInterval == 0 ? 0.0
-                : flowSnapshot.avgInterval / flowSnapshot.intervalVariation;
+                : flowSnapshot.intervalVariation / flowSnapshot.avgInterval;
 
         flowSnapshot.throughputNs = averageRate <= 0 ? 0 : (SCALE) / averageRate;
     }
