@@ -4,6 +4,11 @@ import static euhedral.io.utils.MathFunctions.clampDouble;
 import static euhedral.io.utils.MathFunctions.clampLong;
 import static euhedral.io.utils.MathFunctions.log2;
 
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.LockSupport;
+
 import euhedral.hardware_utils.PinnedThreadExecutor;
 import euhedral.hardware_utils.SystemInfo;
 import euhedral.hardware_utils.SystemInfo.CpuCacheLayout;
@@ -28,10 +33,6 @@ import io.euhedral_execution.data_structures.queues.PlainQueue;
 import io.euhedral_execution.data_structures.queues.SpscQueue;
 import io.euhedral_execution.data_structures.queues.common.BatchableQueue;
 import io.euhedral_execution.data_structures.queues.common.QueueUtils;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.VarHandle;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.locks.LockSupport;
 import lombok.Getter;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
@@ -174,8 +175,8 @@ public final class ControlPlaneFragment extends WorkRequester {
         super(cacheConfig, fragmentConfig.idleCyclePolicy().maxParkTime().toNanos(),
                 createDrainBuffer(fragmentConfig), createSmtThread(fragmentConfig));
         this.fragmentConfig = fragmentConfig;
-        this.maxUpdateInterval = Integer.highestOneBit(
-                Math.max(fragmentConfig.maxUpdateInterval(), 2));
+        this.maxUpdateInterval =
+                Integer.highestOneBit(Math.max(fragmentConfig.maxUpdateInterval(), 2));
 
         this.currentRate = fragmentConfig.minConcurrency();
         this.currentConcurrency = Math.max(1, fragmentConfig.minConcurrency());
@@ -193,10 +194,8 @@ public final class ControlPlaneFragment extends WorkRequester {
             this.outputStream = null;
             this.shutdownHook = null;
         } else {
-            String name =
-                    fragmentConfig.cloneConfig().shardName() + "-ControlPlaneFragment-"
-                            + fragmentConfig.cloneConfig()
-                            .coreId();
+            String name = fragmentConfig.cloneConfig().shardName() + "-ControlPlaneFragment-"
+                    + fragmentConfig.cloneConfig().coreId();
             this.logger = LoggerFactory.getLogger(name);
 
             int[] cpus = fragmentConfig.cloneConfig().getCpuSet();
@@ -214,15 +213,13 @@ public final class ControlPlaneFragment extends WorkRequester {
                     SystemInfo.getCoreInfo(SystemInfo.getCpuInfo(layout.cpu()).core()).pCore();
 
             this.completeSink =
-                    new BufferedBridge(new PartitionedMpscQueue<>(1, super.L1Size, 4),
-                            frame -> {
-                                IN_FLIGHT.setOpaque(this, this.inFlight - 1);
-                                state.receivingOrderedWork =
-                                        upstreamCount == 1 && frame.isOrdered();
-                                state.completed++;
-                                frame.reset();
-                                frame.doFinally();
-                            }, this::recordCompletion);
+                    new BufferedBridge(new PartitionedMpscQueue<>(1, super.L1Size, 4), frame -> {
+                        IN_FLIGHT.setOpaque(this, this.inFlight - 1);
+                        state.receivingOrderedWork = upstreamCount == 1 && frame.isOrdered();
+                        state.completed++;
+                        frame.reset();
+                        frame.doFinally();
+                    }, this::recordCompletion);
             this.outputStream = new DirectOutputStream(super.bufferWrapper.buffer, frame -> {
                 if ((this.state.dispatches++ & this.state.updateIntervalMask) == 0) {
                     frame.setStartNs(System.nanoTime());
@@ -316,8 +313,7 @@ public final class ControlPlaneFragment extends WorkRequester {
                     this.pinnedExecutor.start(
                             this.fragmentConfig.cloneConfig().shardName() + "-ControlPlaneFragment-"
                                     + this.fragmentConfig.cloneConfig().coreId(),
-                            Thread.MAX_PRIORITY,
-                            false);
+                            Thread.MAX_PRIORITY, false);
                 }
 
                 this.pinnedExecutor.execute(() -> {
@@ -468,11 +464,14 @@ public final class ControlPlaneFragment extends WorkRequester {
 
         AVG_LATENCY.setOpaque(this, (long) (flowSnapshot.avgUnits + avgVariance));
 
-        double queueEstimate =
-                this.executionLatency.getVegasQueueEstimate(flowSnapshot, flowSnapshot.avgUnits,
-                        this.currentConcurrency);
+        double queueEstimate = this.executionLatency.getVegasQueueEstimate(flowSnapshot,
+                this.executionLatency.getLastRecordedUnits(), this.currentConcurrency);
 
         RATE.setOpaque(this, flowSnapshot.throughputNs * RATE_NS_TO_SEC);
+
+        // Execution latency only records time unit
+        // throughputNs = avgRateNs
+        // avgRate = units / interval = latencyNs / intervalNs
         long ideal = flowSnapshot.throughputNs * updateInterval;
         updateEffectiveConcurrencyLimit(ideal);
         updateConcurrency(ideal, queueEstimate);
@@ -738,7 +737,8 @@ public final class ControlPlaneFragment extends WorkRequester {
 
     @Override
     public boolean isDrained() {
-        return super.isDrained() && (int) IN_FLIGHT.getAcquire(this) == 0 && super.L1Cache.isEmpty();
+        return super.isDrained() && (int) IN_FLIGHT.getAcquire(this) == 0
+                && super.L1Cache.isEmpty();
     }
 
     @Override
