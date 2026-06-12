@@ -25,7 +25,7 @@ import reactor.core.scheduler.Scheduler;
 /// highly recommended that you use [EuhedralOperator] with it instead. EuhedralOperator is built
 /// and optimized to take advantage of Euhedral Core's parallelism and memory efficiency while
 /// handling backpressure for you.
-@SuppressWarnings({"resource", "unused"})
+@SuppressWarnings({"unused"})
 public class EuhedralScheduler implements Scheduler {
 
     private static final AtomicReference<EuhedralScheduler> INSTANCE = new AtomicReference<>();

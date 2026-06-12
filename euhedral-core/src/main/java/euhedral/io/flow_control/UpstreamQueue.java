@@ -52,13 +52,13 @@ public class UpstreamQueue {
         return queue;
     }
 
-    protected static void drain(UpstreamHandle handle, Consumer<AbstractFrame> consumer,
+    protected static long drain(UpstreamHandle handle, Consumer<AbstractFrame> consumer,
             long demand) {
         if (consumer != null) {
-            handle.pull(consumer, demand);
-            return;
+            return handle.pull(consumer, demand);
         }
         handle.request(demand);
+        return 0;
     }
 
     final long[] pullBucket = new long[]{0L, 0L};
@@ -88,17 +88,19 @@ public class UpstreamQueue {
 
     /// Pulls work without requesting from the [UpstreamHandles][UpstreamHandle]. If the consumer is
     /// `null`, it will **request** the work.
-    public void pull(Consumer<AbstractFrame> consumer, long demand) {
+    public long pull(Consumer<AbstractFrame> consumer, long demand) {
         getTrueUpstreamCount();
         this.pullIdx[0] = 0;
 
         if (demand == 0 || this.cachedUpCount == 0) {
-            return;
+            return 0;
         }
 
         int count;
         long removed = 0;
         calculatePullBuckets(demand);
+
+        long totalPull = 0;
 
         boolean workDone = true;
         // Cycle through the queue and pull round-robin style.
@@ -111,7 +113,7 @@ public class UpstreamQueue {
                         long requestAmount = Math.min(demand, this.pullBucket[1]);
                         demand -= requestAmount;
                         workDone = true;
-                        drain(handle, consumer, requestAmount);
+                        totalPull += drain(handle, consumer, requestAmount);
                     }
                     while (!this.upstreams.offer(handle)) {
                         Thread.onSpinWait();
@@ -123,6 +125,7 @@ public class UpstreamQueue {
             }
         }
         this.cachedUpCount = (long) UP_COUNT.getAndAdd(this, -removed) - removed;
+        return totalPull;
     }
 
     /// Performs a binary search to calculate even buckets of 32 items or more per [UpstreamHandle]
@@ -176,7 +179,7 @@ public class UpstreamQueue {
     /// A wrapper for an upstream source.
     public static abstract class UpstreamHandle implements LatticeInterceptor {
 
-        public abstract void pull(Consumer<AbstractFrame> consumer, long demand);
+        public abstract long pull(Consumer<AbstractFrame> consumer, long demand);
 
         public abstract boolean isComplete();
 

@@ -176,10 +176,6 @@ public class LatticeEdge extends UpstreamHandle implements AutoCloseable {
 
         acquireLock();
         PARENT.setRelease(this, parent);
-        LatticeReceiver down = (LatticeReceiver) DOWNSTREAM.getOpaque(this);
-        if (down instanceof LatticeEdge rs) {
-            rs.setParent(parent);
-        }
         transferToParent();
         parent.transferToParent();
         releaseLock();
@@ -217,18 +213,17 @@ public class LatticeEdge extends UpstreamHandle implements AutoCloseable {
     /// Pulls available work from the [UpstreamHandles][UpstreamHandle] without requesting more
     /// work.
     @Override
-    public void pull(Consumer<AbstractFrame> consumer, long demand) {
+    public long pull(Consumer<AbstractFrame> consumer, long demand) {
         if ((boolean) CLOSED.getOpaque(this) || this.drain.getOpaque()) {
-            return;
+            return 0;
         }
 
         LatticeEdge parent = (LatticeEdge) PARENT.getOpaque(this);
         if (parent != null) {
-            parent.pull(consumer, demand);
-            return;
+            return parent.pull(consumer, demand);
         }
         UpstreamQueue queue = UpstreamQueue.get(this.aggregators, this.threadCount);
-        queue.pull(consumer, demand);
+        return queue.pull(consumer, demand);
     }
 
     /// Transfers this edge's state to its parent.

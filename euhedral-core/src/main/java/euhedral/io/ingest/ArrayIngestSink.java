@@ -48,21 +48,24 @@ public final class ArrayIngestSink extends AbstractIngestSink {
         }
 
         @Override
-        public void hookOnPull(Consumer<AbstractFrame> consumer, long demand) {
+        public long hookOnPull(Consumer<AbstractFrame> consumer, long demand) {
             if(start >= array.length) {
                 complete();
-                return;
+                return 0;
             }
 
             long end = start + demand;
 
+            long total = 0;
             while (start < end && start < array.length) {
                 consumer.accept(array[start++]);
+                total++;
             }
             VarHandle.releaseFence();
             if (start >= array.length) {
                 complete();
             }
+            return total;
         }
 
         @Override

@@ -168,7 +168,8 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
     public void push(AbstractFrame frame) {
         if (this.hasCache && !frame.isOrdered()
                 && frame.getRoutingPolicy().level <= this.cachePolicy.level) {
-            if (this.cache.offer(frame.getRoutingHash(), frame)) {
+            int idx = RoutingFunction.DEFAULT.route(frame, this.cache.partitions());
+            if (this.cache.offer(idx, frame)) {
                 return;
             }
         }
@@ -184,20 +185,23 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
     /// Pulls available work from the `parallelQueue` if it is not null. Recursively climbs the
     /// graph and does the same.
     @Override
-    public void pull(Consumer<AbstractFrame> consumer, long demand) {
+    public long pull(Consumer<AbstractFrame> consumer, long demand) {
         if (demand <= 0 || consumer == null) {
-            return;
+            return 0;
         }
 
-        if (this.cache != null && !this.cache.isEmpty()) {
+        long total = 0;
+        if (this.cache != null) {
             long count = this.cache.drain(consumer, demand);
             demand -= count;
+            total += count;
         }
 
         LatticeEdge parent = (LatticeEdge) PARENT.getOpaque(this);
         if (parent != null) {
-            parent.pull(consumer, demand);
+            total += parent.pull(consumer, demand);
         }
+        return total;
     }
 
     @Override
@@ -283,8 +287,8 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
         }
 
         @Override
-        public void pull(Consumer<AbstractFrame> consumer, long demand) {
-            LatticeVertex.this.pull(consumer, demand);
+        public long pull(Consumer<AbstractFrame> consumer, long demand) {
+            return LatticeVertex.this.pull(consumer, demand);
         }
 
         @Override

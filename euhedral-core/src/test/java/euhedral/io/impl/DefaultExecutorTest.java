@@ -152,8 +152,8 @@ class DefaultExecutorTest {
         }
 
         @Override
-        public void pull(Consumer<AbstractFrame> consumer, long demand) {
-
+        public long pull(Consumer<AbstractFrame> consumer, long demand) {
+            return demand;
         }
 
         @Override

@@ -1,5 +1,6 @@
 package euhedral.benchmarks.core_benchmarks;
 
+import java.lang.invoke.VarHandle;
 import java.util.concurrent.TimeUnit;
 
 import euhedral.benchmarks.frames.NoOpFrame;
@@ -91,6 +92,7 @@ public class HighContentionThroughput {
             }
             sinks[i] = new ArrayIngestSink(frames[i]);
         }
+        VarHandle.fullFence();
     }
 
     @Benchmark
