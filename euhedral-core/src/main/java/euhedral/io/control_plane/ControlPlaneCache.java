@@ -170,8 +170,10 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
 
     public abstract double getPressure();
 
-    public final long drain(DrainBuffer drainBuffer, int maxFill, long demand) {
+    public final long pull(DrainBuffer drainBuffer, int maxFill, long demand) {
         drainBuffer.reset();
+        demand -= super.pull(super::push, demand);
+
         if (maxFill <= 0) {
             request(demand);
             return 0;
@@ -206,16 +208,11 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
             TOTAL_COUNT.getAndAdd(this, -totalDrain);
             TOTAL_BYTES.getAndAdd(this, -totalBytesDrained);
         }
-        drainBuffer.reset();
-        if (totalDrain < maxFill) {
-            pull(drainBuffer, maxFill - totalDrain);
-        }
         long now = System.nanoTime();
-        this.drainRecorder.record(now, totalDrain + drainBuffer.drainCount, false);
-        this.drainBytesRecorder.record(now, totalBytesDrained + drainBuffer.drainedBytes, false);
+        this.drainRecorder.record(now, totalDrain, false);
+        this.drainBytesRecorder.record(now, totalBytesDrained, false);
         request(demand);
 
-        totalDrain += drainBuffer.drainCount;
         drainBuffer.reset();
         return totalDrain;
     }

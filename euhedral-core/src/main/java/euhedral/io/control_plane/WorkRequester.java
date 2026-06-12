@@ -113,7 +113,7 @@ public abstract class WorkRequester extends ControlPlaneCache {
         this.requesterState.refresh();
         long demand = calculateDemand(super.getL2CacheCount());
         int maxFill = this.L1Size - this.requesterState.bufferCount.get();
-        int count = (int) super.drain(this.bufferWrapper, maxFill, demand);
+        int count = (int) super.pull(this.bufferWrapper, maxFill, demand);
 
         if (count > 0) {
             this.requesterState.bufferCount.addAndGet(count);

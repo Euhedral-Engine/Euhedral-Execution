@@ -18,7 +18,7 @@ public interface LatticeSource {
     /// - Demand from this call cannot be accumulated like `request()`
     /// - Frames must be passed directly to the consumer and not pushed
     /// - Frames must not be generated to meet the demand
-    void pull(Consumer<AbstractFrame> consumer, long demand);
+    long pull(Consumer<AbstractFrame> consumer, long demand);
 
     /// A synchronous method called by downstreams to collect work without triggering a `push`
     ///
@@ -27,8 +27,8 @@ public interface LatticeSource {
     /// Rules:
     /// - Demand from this call cannot be accumulated like `request()`
     /// - Frames must be passed directly to the consumer and not pushed
-    default void userPull(Consumer<AbstractFrame> consumer, long demand) {
-        pull(consumer, demand);
+    default long userPull(Consumer<AbstractFrame> consumer, long demand) {
+        return pull(consumer, demand);
     }
 
     void request(long demand);

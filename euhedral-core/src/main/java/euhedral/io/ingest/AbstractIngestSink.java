@@ -63,15 +63,15 @@ public abstract class AbstractIngestSink {
         }
 
         @Override
-        public final void pull(Consumer<AbstractFrame> consumer, long demand) {
+        public final long pull(Consumer<AbstractFrame> consumer, long demand) {
             var terminal = getTerminal();
             if (terminal == null || demand <= 0) {
-                return;
+                return 0;
             }
-            hookOnPull(consumer, demand);
+            return hookOnPull(consumer, demand);
         }
 
-        public abstract void hookOnPull(Consumer<AbstractFrame> consumer, long demand);
+        public abstract long hookOnPull(Consumer<AbstractFrame> consumer, long demand);
 
         @Override
         public final void request(long demand) {

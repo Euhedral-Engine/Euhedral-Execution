@@ -47,8 +47,8 @@ public final class DirectOutputStream implements LatticeSource {
     }
 
     @Override
-    public void pull(Consumer<AbstractFrame> consumer, long demand) {
-        this.buffer.drain(consumer, demand);
+    public long pull(Consumer<AbstractFrame> consumer, long demand) {
+        return this.buffer.drain(consumer, demand);
     }
 
     /// Pushes the indicated number of frames to the next stage. Only safe to be called by one

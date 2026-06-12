@@ -274,8 +274,9 @@ class UpstreamQueueTest {
         boolean complete;
 
         @Override
-        public void pull(Consumer<AbstractFrame> consumer, long demand) {
+        public long pull(Consumer<AbstractFrame> consumer, long demand) {
             this.pulled += demand;
+            return demand;
         }
 
         @Override

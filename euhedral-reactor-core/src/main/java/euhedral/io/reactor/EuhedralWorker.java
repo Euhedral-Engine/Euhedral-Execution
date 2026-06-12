@@ -100,8 +100,8 @@ public class EuhedralWorker extends AbstractIngestSink implements Worker {
         }
 
         @Override
-        public void hookOnPull(Consumer<AbstractFrame> consumer, long demand) {
-
+        public long hookOnPull(Consumer<AbstractFrame> consumer, long demand) {
+            return 0;
         }
 
         @Override
