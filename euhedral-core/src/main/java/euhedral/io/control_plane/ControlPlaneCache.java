@@ -19,16 +19,17 @@ import euhedral.io.generics.LatticeSource;
 import euhedral.io.metrics.CacheMetrics;
 import euhedral.io.utils.DrainBuffer;
 import euhedral.io.utils.FlowRecorder;
+import euhedral.io.utils.FlowRecorder.FlowSnapshot;
 import euhedral.io.utils.QueuePartitionWrapper;
 import io.euhedral_execution.data_structures.atomics.AtomicDouble;
 import io.euhedral_execution.data_structures.atomics.PaddedAtomicLong;
 import io.euhedral_execution.data_structures.atomics.PaddedAtomicReference;
-import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
 import io.euhedral_execution.data_structures.queues.PartitionedMpscQueue;
 import io.euhedral_execution.data_structures.queues.common.QueueUtils;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.BitSet;
+import java.util.function.Consumer;
 
 import org.jctools.maps.NonBlockingHashMapLong;
 import org.jspecify.annotations.NonNull;
@@ -92,7 +93,6 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
 
     protected final AtomicDouble capFactor = new AtomicDouble(1d);
     protected final PaddedAtomicLong memoryLimit;
-    protected final PaddedLongAdder avgFrameSize;
     protected final long frameQuota;
 
     protected final PaddedAtomicReference<FlowRecorder> fillRecorder;
@@ -102,12 +102,16 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
 
     protected final QueuePartitionWrapper L2Cache;
     protected final int chunkSize;
-    final int mask;
+
+    private final PullWrapper pullWrapper;
+    private final FlowSnapshot fillSnapshot;
+    private final FlowSnapshot fillBytesSnapshot;
 
     boolean primed;
     long totalCount = 0L;
     long totalQueuedSizeBytes = 0L;
 
+    final int mask;
     private int head;
 
     public ControlPlaneCache(@NonNull CacheConfig cacheConfig) {
@@ -119,13 +123,15 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
         if (partitions <= 0 || cacheConfig.cloneConfig() == null) {
             this.metrics = null;
             this.memoryLimit = null;
-            this.avgFrameSize = null;
             this.frameQuota = 0;
             this.L2Cache = null;
+            this.pullWrapper = null;
             this.chunkSize = 0;
             this.mask = 0;
             this.fillRecorder = null;
             this.fillBytesRecorder = null;
+            this.fillSnapshot = null;
+            this.fillBytesSnapshot = null;
             this.drainRecorder = null;
             this.drainBytesRecorder = null;
         } else {
@@ -139,15 +145,17 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
                 this.metrics = null;
             }
             this.memoryLimit = new PaddedAtomicLong(0);
-            this.avgFrameSize = new PaddedLongAdder(partitions, true, true);
             this.chunkSize = getChunkSize(cacheConfig, partitions);
             this.frameQuota = (long) this.chunkSize * partitions;
             this.L2Cache = new QueuePartitionWrapper(
                     new PartitionedMpscQueue<>(partitions, this.chunkSize,
                             cacheConfig.maxPooledChunks()));
+            this.pullWrapper = new PullWrapper((PartitionedMpscQueue<AbstractFrame>) this.L2Cache.getQueue());
             this.mask = partitions - 1;
             this.fillRecorder = new PaddedAtomicReference<>(new FlowRecorder());
             this.fillBytesRecorder = new PaddedAtomicReference<>(new FlowRecorder());
+            this.fillSnapshot = this.fillRecorder.getPlain().getFlowSnapshot();
+            this.fillBytesSnapshot = this.fillBytesRecorder.getPlain().getFlowSnapshot();
             this.drainRecorder = new FlowRecorder();
             this.drainBytesRecorder = new FlowRecorder();
 
@@ -172,7 +180,17 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
 
     public final long pull(DrainBuffer drainBuffer, int maxFill, long demand) {
         drainBuffer.reset();
-        demand -= super.pull(super::push, demand);
+
+        this.pullWrapper.reset();
+        long now = System.nanoTime();
+        demand -= super.pull(this.pullWrapper, demand);
+
+        if(this.pullWrapper.framesAdded > 0) {
+            TOTAL_COUNT.getAndAdd(ControlPlaneCache.this, this.pullWrapper.framesAdded);
+            TOTAL_BYTES.getAndAdd(ControlPlaneCache.this, this.pullWrapper.bytesAdded);
+        }
+        this.fillRecorder.getPlain().record(now, this.pullWrapper.framesAdded, true);
+        this.fillBytesRecorder.getPlain().record(now, this.pullWrapper.bytesAdded, true);
 
         if (maxFill <= 0) {
             request(demand);
@@ -182,6 +200,7 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
         long totalDrain = 0;
         long totalBytesDrained = 0;
         long initialCount = (long) TOTAL_COUNT.getOpaque(this);
+        now = System.nanoTime();
         if (initialCount > 0) {
             int cycles = 0;
             for (int i = 0; i < maxFill && cycles <= this.L2Cache.partitions(); ) {
@@ -208,7 +227,6 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
             TOTAL_COUNT.getAndAdd(this, -totalDrain);
             TOTAL_BYTES.getAndAdd(this, -totalBytesDrained);
         }
-        long now = System.nanoTime();
         this.drainRecorder.record(now, totalDrain, false);
         this.drainBytesRecorder.record(now, totalBytesDrained, false);
         request(demand);
@@ -278,7 +296,6 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
         this.fillBytesRecorder.getOpaque().reset(false);
 
         this.capFactor.lazySet(1.0);
-        this.avgFrameSize.lazyFill(0);
         this.memoryLimit.lazySet(0);
         TOTAL_COUNT.setOpaque(this, 0);
         TOTAL_BYTES.setOpaque(this, 0);
@@ -289,8 +306,21 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
     }
 
     public final long getL2MaxQueuedBytes() {
+        this.fillRecorder.getPlain().refreshSnapshot(this.fillSnapshot, true);
+        this.fillBytesRecorder.getPlain().refreshSnapshot(this.fillBytesSnapshot, true);
+
         double cap = this.capFactor.getAcquire();
-        long byteQuota = this.frameQuota * (this.avgFrameSize.sum() / this.L2Cache.partitions());
+
+        long avgFillCount = (long) this.fillSnapshot.avgUnits;
+        long avgFillBytes = (long) this.fillBytesSnapshot.avgUnits;
+        long avgSize;
+        if(avgFillBytes == 0 || avgFillCount == 0) {
+            avgSize = 1024;
+        } else {
+            avgSize = avgFillBytes / avgFillCount;
+        }
+
+        long byteQuota = this.frameQuota * (avgSize / this.L2Cache.partitions());
         long hardwareMax = this.memoryLimit.getOpaque();
         if (hardwareMax > byteQuota) {
             return (long) (byteQuota * cap);
@@ -352,16 +382,13 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
             }
 
             long size = frame.getSizeBytes();
-            long adjustedSize = size <= 0 ? 256 : size;
-            ControlPlaneCache.this.avgFrameSize.getAndAccumulate(this.idx, adjustedSize,
-                    this::ewma);
 
-            TOTAL_BYTES.getAndAdd(ControlPlaneCache.this, adjustedSize);
+            TOTAL_BYTES.getAndAdd(ControlPlaneCache.this, size);
             long count = (long) TOTAL_COUNT.getAndAdd(ControlPlaneCache.this, 1) + 1;
             if ((count & 63) == 0) {
                 long now = System.nanoTime();
                 ControlPlaneCache.this.fillRecorder.getPlain().record(now, 64, true);
-                ControlPlaneCache.this.fillBytesRecorder.getPlain().record(now, adjustedSize, true);
+                ControlPlaneCache.this.fillBytesRecorder.getPlain().record(now, size * 64, true);
             }
         }
 
@@ -382,6 +409,33 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
         @Override
         public void onComplete() {
 
+        }
+    }
+
+    private static class PullWrapper implements Consumer<AbstractFrame> {
+
+        final PartitionedMpscQueue<AbstractFrame> queue;
+        long framesAdded = 0;
+        long bytesAdded = 0;
+
+        PullWrapper(PartitionedMpscQueue<AbstractFrame> queue) {
+            this.queue = queue;
+        }
+
+        @Override
+        public void accept(AbstractFrame frame) {
+            this.framesAdded++;
+            this.bytesAdded += frame.getSizeBytes();
+
+            int idx = RoutingFunction.DEFAULT.route(frame, queue.partitions());
+            while(!queue.offer(idx, frame)) {
+                Thread.onSpinWait();
+            }
+        }
+
+        void reset() {
+            this.framesAdded = 0;
+            this.bytesAdded = 0;
         }
     }
 }

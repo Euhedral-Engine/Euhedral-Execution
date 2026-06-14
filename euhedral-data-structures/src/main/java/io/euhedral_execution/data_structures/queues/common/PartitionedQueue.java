@@ -31,6 +31,8 @@ public interface PartitionedQueue<T> extends Queue<T> {
 
     long drain(Consumer<T> consumer, long limit);
 
+    long drain(Consumer<T> consumer, long limit, int startingPartition);
+
     long drain(int partition, Consumer<T> consumer, long limit);
 
     boolean isEmpty();

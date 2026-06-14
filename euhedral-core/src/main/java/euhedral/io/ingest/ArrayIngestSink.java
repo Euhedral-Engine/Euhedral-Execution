@@ -19,6 +19,7 @@ public final class ArrayIngestSink extends AbstractIngestSink {
     public ArrayIngestSink(@NonNull AbstractFrame[] frames) {
         Objects.requireNonNull(frames);
         this.delegate = new Delegate(frames);
+        VarHandle.fullFence();
     }
 
     /// Returns the delegate the ControlPlaneLattice will use to ingest the array.
@@ -26,10 +27,8 @@ public final class ArrayIngestSink extends AbstractIngestSink {
         return this.delegate;
     }
 
-    /// Resets the sink to allow it to be ingested again. The sink must be passed back into the
-    /// ControlPlaneLattice's ingest again.
-    public void reset() {
-        this.delegate.reset();
+    public @NonNull AbstractFrame[] getFrameArray() {
+        return this.delegate.array;
     }
 
     /// Disconnects from the [ControlPlaneLattice] immediately.
@@ -87,13 +86,6 @@ public final class ArrayIngestSink extends AbstractIngestSink {
             if (start >= array.length) {
                 complete();
             }
-        }
-
-        @Override
-        public void reset() {
-            super.reset();
-            this.start = 0;
-            VarHandle.releaseFence();
         }
     }
 }

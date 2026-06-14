@@ -13,6 +13,7 @@ import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferInt;
 import java.io.IOException;
+import java.lang.invoke.VarHandle;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.concurrent.TimeUnit;
@@ -122,7 +123,7 @@ public class MandelbrotBenchmark {
                 int id = i;
                 this.monos[i] = Mono.fromRunnable(() -> {
                     MandelbrotPixel frame = this.pixels[id];
-                    frame.compute();
+                    frame.execute();
                     frame.cpu = counters.fromRawIdx(Thread.currentThread().getId());
                     frame.doFinally();
                     blackhole.consume(frame);
@@ -210,8 +211,8 @@ public class MandelbrotBenchmark {
 
             FractalExecutor executor = new FractalExecutor(blackhole);
             BaseCloneableObject base = new BaseCloneableObject(executor);
-            ControlPlaneConfig config = new ControlPlaneConfig("MandelbrotBenchmark", null, null,
-                    base, null, null);
+            ControlPlaneConfig config = ControlPlaneConfig.defaultConfig("MandelbrotBenchmark",
+                    base);
             this.controlPlane = ControlPlaneLattice.getOrCreate(config);
             this.controlPlane.start();
 
@@ -232,6 +233,7 @@ public class MandelbrotBenchmark {
             for (var pixel : this.pixels) {
                 pixel.randomizeHash(seed++);
             }
+            VarHandle.fullFence();
         }
 
         @Benchmark

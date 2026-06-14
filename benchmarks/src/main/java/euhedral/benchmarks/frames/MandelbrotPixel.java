@@ -49,12 +49,12 @@ public class MandelbrotPixel extends AbstractFrame {
         this.pixelHeightStep = pixelHeightStep;
     }
 
-    public int compute() {
+    @Override
+    public void execute() {
         double[] subOffsetsX = {-0.25 * pixelWidthStep, 0.25 * pixelWidthStep, -0.25 * pixelWidthStep, 0.25 * pixelWidthStep};
         double[] subOffsetsY = {-0.25 * pixelHeightStep, -0.25 * pixelHeightStep, 0.25 * pixelHeightStep, 0.25 * pixelHeightStep};
 
         int baseArrayOffset = this.taskIndex * 4;
-        int totalEscapeAccumulator = 0;
 
         for (int sample = 0; sample < 4; sample++) {
             double subCr = this.cr + subOffsetsX[sample];
@@ -141,15 +141,7 @@ public class MandelbrotPixel extends AbstractFrame {
 
             this.magnitudes[baseArrayOffset + sample] = zr * zr + zi * zi;
             this.escapes[baseArrayOffset + sample] = count;
-            totalEscapeAccumulator += count;
         }
-
-        return totalEscapeAccumulator / 4;
-    }
-
-    @Override
-    public void execute() {
-
     }
 
     private boolean iterate(double zr, double zi, int count) {

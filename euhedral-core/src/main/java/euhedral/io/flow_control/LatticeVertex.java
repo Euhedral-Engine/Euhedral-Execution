@@ -192,7 +192,9 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
 
         long total = 0;
         if (this.cache != null) {
-            long count = this.cache.drain(consumer, demand);
+            long tId = Thread.currentThread().getId();
+            int startIdx = (int) unsignedMultiplyHigh(tId, this.cache.partitions());
+            long count = this.cache.drain(consumer, demand, startIdx);
             demand -= count;
             total += count;
         }
