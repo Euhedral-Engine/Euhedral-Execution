@@ -57,11 +57,6 @@ public abstract class AbstractIngestSink {
             return this.demand.accumulateAndGet(demand, Delegate::accumulate);
         }
 
-        protected void reset() {
-            TERMINAL.setRelease(this, null);
-            this.demand.setPlain(0);
-        }
-
         @Override
         public final long pull(Consumer<AbstractFrame> consumer, long demand) {
             var terminal = getTerminal();

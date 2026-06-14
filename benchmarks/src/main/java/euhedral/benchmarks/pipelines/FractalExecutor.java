@@ -26,23 +26,13 @@ public class FractalExecutor extends AbstractExecutor {
     @Override
     public void execute(AbstractFrame frame) {
         switch (frame) {
-            case MandelbrotPixel fractal -> {
-                int escape = fractal.compute();
-                blackhole.consume(escape);
-                blackhole.consume(fractal);
-                fractal.cpu = this.executorService.getCpu();
-            }
-            case MandelbulbFrame fractal -> {
-                fractal.cpu = this.executorService.getCpu();
-                fractal.execute();
-            }
-            case BenchArrayFrame array -> {
-                array.execute();
-                array.cpu = this.executorService.getCpu();
-                blackhole.consume(array);
-            }
+            case MandelbrotPixel fractal -> fractal.cpu = this.executorService.getCpu();
+            case MandelbulbFrame fractal -> fractal.cpu = this.executorService.getCpu();
+            case BenchArrayFrame array -> array.cpu = this.executorService.getCpu();
             default -> frame.throwMeAsError();
         }
+        frame.execute();
+        blackhole.consume(frame);
     }
 
     @Override

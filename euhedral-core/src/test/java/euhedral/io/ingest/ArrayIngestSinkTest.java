@@ -97,26 +97,6 @@ class ArrayIngestSinkTest {
     }
 
     @Test
-    void shouldResetState() {
-        delegate.addDownstream(terminal);
-
-        delegate.request(2);
-
-        sink.reset();
-
-        TestReceiver second = new TestReceiver();
-
-        delegate.addDownstream(second);
-        delegate.request(10);
-
-        assertEquals(3, second.received.size());
-        assertEquals("a", second.received.get(0).value);
-        assertEquals("b", second.received.get(1).value);
-        assertEquals("c", second.received.get(2).value);
-        assertTrue(second.completed);
-    }
-
-    @Test
     void shouldHandleDemandOverflow() {
         delegate.addDownstream(terminal);
 

@@ -607,7 +607,8 @@ public final class ControlPlaneFragment extends WorkRequester {
         double avgLatency = Math.max(exec.avgUnits, 1.0);
         double avgVariance = exec.unitVariation;
 
-        double queuePressure = this.executionLatency.getVegasQueueEstimate(exec, exec.avgUnits,
+        double queuePressure = this.executionLatency.getVegasQueueEstimate(exec,
+                this.executionLatency.getLastRecordedUnits(),
                 this.currentConcurrency);
 
         CoreSnapshot core = (CoreSnapshot) SNAPSHOT.getOpaque(this);

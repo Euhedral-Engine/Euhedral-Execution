@@ -46,6 +46,18 @@ abstract sealed class AbstractPartitionedQueue<T> extends AbstractQueue<T> imple
     }
 
     @Override
+    public long drain(Consumer<T> consumer, long limit, int startingPartition) {
+        long total = 0;
+        int cycles = 0;
+        while(cycles < this.partitions && total < limit) {
+            int idx = startingPartition++ % this.partitions;
+            total += drain(idx, consumer, limit - total);
+            cycles++;
+        }
+        return total;
+    }
+
+    @Override
     public final long drain(Consumer<T> consumer, long limit) {
         long total = 0;
         for (int i = 0; i < partitions; i++) {
