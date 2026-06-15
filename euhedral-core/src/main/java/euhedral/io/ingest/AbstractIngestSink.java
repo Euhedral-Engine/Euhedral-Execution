@@ -32,10 +32,8 @@ public abstract class AbstractIngestSink {
         }
 
         protected static long accumulate(long curr, long next) {
-            if (curr + next < 0) {
-                return Long.MAX_VALUE;
-            }
-            return curr + next;
+            long sum = curr + next;
+            return sum < 0 ? Long.MAX_VALUE : sum;
         }
 
         protected final PaddedAtomicLong demand = new PaddedAtomicLong(0);

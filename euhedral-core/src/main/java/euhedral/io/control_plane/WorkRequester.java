@@ -1,6 +1,7 @@
 package euhedral.io.control_plane;
 
 import euhedral.hardware_utils.PinnedThreadExecutor;
+import euhedral.hardware_utils.SystemInfo;
 import euhedral.hardware_utils.ThreadTools;
 import euhedral.io.config.CacheConfig;
 import euhedral.io.frames.AbstractFrame;
@@ -65,6 +66,8 @@ public abstract class WorkRequester extends ControlPlaneCache {
     }
 
     private void cycle() {
+        super.register();
+
         ThreadTools.setTimerResolution(1);
         while (!Thread.interrupted() && this.running.getOpaque()) {
             int bufferCount = this.requesterState.bufferCount.getAcquire();
@@ -106,7 +109,7 @@ public abstract class WorkRequester extends ControlPlaneCache {
     private boolean pull() {
         this.requesterState.nowNs = System.nanoTime();
         if (this.requesterState.nowNs < this.requesterState.demandWaitNs) {
-            Thread.onSpinWait();
+            pullNoDemand();
             return false;
         }
 
@@ -124,6 +127,16 @@ public abstract class WorkRequester extends ControlPlaneCache {
         return true;
     }
 
+    private void pullNoDemand() {
+        this.requesterState.refresh();
+        int maxFill = this.L1Size - this.requesterState.bufferCount.get();
+        int count = (int) super.pull(this.bufferWrapper, maxFill, 0);
+
+        if (count > 0) {
+            this.requesterState.bufferCount.addAndGet(count);
+        }
+    }
+
     private long calculateDemand(long ingestCount) {
         double drainRate = this.requesterState.drain.avgRate;
         double drainRateVar = this.requesterState.drain.rateVariation;
@@ -138,11 +151,7 @@ public abstract class WorkRequester extends ControlPlaneCache {
                 super.getL2MaxQueuedBytes());
 
         long maxFill = this.L1Size - bufferCount;
-        if (demand < maxFill) {
-            demand += maxFill - bufferCount;
-        }
-
-        return demand;
+        return Math.max(demand, maxFill);
     }
 
     /// Calculates when the next ingest pull should occur.
@@ -161,29 +170,23 @@ public abstract class WorkRequester extends ControlPlaneCache {
 
         if (warmedUp) {
             FlowRecorder.FlowSnapshot fill = this.requesterState.fill;
-            double fillRate = this.requesterState.fill.avgRate;
+//            double fillRate = this.requesterState.fill.avgRate;
             double execLatency = this.requesterState.exec.avgUnits;
 
-            double execRate = 1.0 / Math.max(execLatency, 1.0);
+            double fillInterval =
+                    fill.avgInterval + fill.intervalVariation;
+            fillInterval = Math.max(fillInterval, 1_000);
 
-            if (fillRate < execRate * 0.5) {
-                return nowNs + (long) fill.avgInterval;
-            } else {
-                double fillInterval =
-                        fill.avgInterval + fill.intervalVariation;
-                fillInterval = Math.max(fillInterval, 1_000);
+            double avgFill = fill.avgUnits + fill.unitVariation;
+            avgFill = Math.max(avgFill, 64);
 
-                double avgFill = fill.avgUnits + fill.unitVariation;
-                avgFill = Math.max(avgFill, 64);
+            double intervalCount = maxFill / avgFill;
 
-                double intervalCount = maxFill / avgFill;
+            long maxWaitNs = (long) (execLatency * this.L1Size / 2);
+            maxWaitNs = Math.min(maxWaitNs, this.requesterState.maxParkNs << 2);
 
-                long maxWaitNs = (long) (execLatency * this.L1Size / 2);
-                maxWaitNs = Math.min(maxWaitNs, this.requesterState.maxParkNs * 4);
-
-                long fillWait = (long) (intervalCount * fillInterval);
-                return nowNs + Math.min(maxWaitNs, fillWait);
-            }
+            long fillWait = (long) (intervalCount * fillInterval);
+            return nowNs + Math.min(maxWaitNs, fillWait);
         }
         return 0;
     }

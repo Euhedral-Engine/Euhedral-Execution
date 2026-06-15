@@ -4,6 +4,7 @@ import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.LatticeInterceptor;
 import euhedral.io.generics.LatticeReceiver;
 import euhedral.io.generics.LatticeSource;
+import euhedral.io.utils.MathFunctions;
 import io.euhedral_execution.data_structures.queues.PartitionedMpscQueue;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
@@ -134,35 +135,18 @@ public class UpstreamQueue {
     /// pullBucket[1] = Size of each bucket
     /// ```
     protected void calculatePullBuckets(long demand) {
-        int start = 0;
-        int end = (int) this.cachedUpCount;
-        end = Math.max(end, 1);
-        this.pullBucket[0] = end - start;
-        this.pullBucket[1] = demand;
-
-        if (demand <= 1024 || end <= 1) {
+        if (demand <= 32 || this.cachedUpCount < 2) {
             this.pullBucket[0] = 1;
+            this.pullBucket[1] = demand;
             return;
         }
 
-        if (demand > 32L * end) {
-            this.pullBucket[1] = demand / end;
-            return;
-        }
+        int buckets = (int) MathFunctions.clampLong(demand / 32, 1L, this.cachedUpCount);
+        buckets = Math.max(buckets, 1);
 
-        int mid = (end - start) / 2;
-
-        while (mid != 0) {
-            this.pullBucket[1] = demand / mid;
-            if (this.pullBucket[1] < 32) {
-                end = mid;
-                mid = (end - start) / 2;
-            } else {
-                mid = (end - mid) / 2;
-            }
-        }
-        this.pullBucket[0] = end - start;
-        this.pullBucket[0] = Math.max(this.pullBucket[0], 1);
+        long bucketSize = (demand + buckets - 1) / buckets;
+        this.pullBucket[0] = buckets;
+        this.pullBucket[1] = bucketSize;
     }
 
     /// Transfers [UpstreamHandle] objects into the class's drainBuffer.

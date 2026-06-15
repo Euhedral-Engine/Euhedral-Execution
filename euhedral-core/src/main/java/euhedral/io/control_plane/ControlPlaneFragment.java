@@ -4,11 +4,6 @@ import static euhedral.io.utils.MathFunctions.clampDouble;
 import static euhedral.io.utils.MathFunctions.clampLong;
 import static euhedral.io.utils.MathFunctions.log2;
 
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.VarHandle;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.locks.LockSupport;
-
 import euhedral.hardware_utils.PinnedThreadExecutor;
 import euhedral.hardware_utils.SystemInfo;
 import euhedral.hardware_utils.SystemInfo.CpuCacheLayout;
@@ -33,6 +28,10 @@ import io.euhedral_execution.data_structures.queues.PlainQueue;
 import io.euhedral_execution.data_structures.queues.SpscQueue;
 import io.euhedral_execution.data_structures.queues.common.BatchableQueue;
 import io.euhedral_execution.data_structures.queues.common.QueueUtils;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.LockSupport;
 import lombok.Getter;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
@@ -332,9 +331,10 @@ public final class ControlPlaneFragment extends WorkRequester {
                     if (this.fragmentConfig.enableSMT() && cloneConfig.getCpuSet().length > 1) {
                         super.start();
                         this.state.smtMode = true;
+                    } else {
+                        super.register();
                     }
 
-                    super.register();
                     cycle();
                 });
             } else {
@@ -394,13 +394,12 @@ public final class ControlPlaneFragment extends WorkRequester {
                 }
 
                 this.state.lastEmptyNs = System.nanoTime();
-                if (!this.state.smtMode
-                        && this.state.lastEmptyNs > super.requesterState.demandWaitNs) {
+                if (!this.state.smtMode) {
                     super.pullIntoL1();
                 }
 
                 long ingestCount = super.getL2CacheCount();
-                int bufferCount = super.requesterState.bufferCount.getAcquire();
+                int bufferCount = super.getL1CacheCount();
                 // This is usually hit when there are producers present but nothing is flowing
                 if ((this.state.rests & 15) != 0 && this.upstreamCount > 0
                         && !this.state.receivingOrderedWork && ingestCount == 0 && bufferCount == 0
@@ -423,7 +422,7 @@ public final class ControlPlaneFragment extends WorkRequester {
     }
 
     private int dispatch() {
-        int bufferCount = super.requesterState.bufferCount.getAcquire();
+        int bufferCount = super.getL1CacheCount();
         if (bufferCount == 0) {
             return 0;
         }

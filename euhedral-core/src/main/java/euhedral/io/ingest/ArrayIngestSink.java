@@ -57,7 +57,9 @@ public final class ArrayIngestSink extends AbstractIngestSink {
 
             long total = 0;
             while (start < end && start < array.length) {
-                consumer.accept(array[start++]);
+                AbstractFrame frame = array[start++];
+                Objects.requireNonNull(frame);
+                consumer.accept(frame);
                 total++;
             }
             VarHandle.releaseFence();
@@ -78,7 +80,9 @@ public final class ArrayIngestSink extends AbstractIngestSink {
 
             int count = 0;
             while (start < end && start < array.length) {
-                terminal.push(array[start++]);
+                AbstractFrame frame = array[start++];
+                Objects.requireNonNull(frame);
+                terminal.push(frame);
                 count++;
             }
             addAndGetDemand(-count);

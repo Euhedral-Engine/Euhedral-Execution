@@ -6,7 +6,6 @@ import euhedral.io.control_plane.ControlPlaneFragment;
 import euhedral.io.control_plane.RoutingPolicy;
 import euhedral.io.generics.AbstractExecutor;
 import euhedral.io.impl.FrameManager;
-import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import lombok.Getter;
 import lombok.Setter;
@@ -75,16 +74,6 @@ import org.jspecify.annotations.NonNull;
 @SuppressWarnings({"rawtypes", "unchecked", "unused"})
 public abstract class AbstractFrame {
 
-    protected static final VarHandle ROUTING_HASH;
-
-    static {
-        try {
-            ROUTING_HASH = MethodHandles.lookup().findVarHandle(AbstractFrame.class, "routingHash", long.class);
-        } catch (Throwable t) {
-            throw new ExceptionInInitializerError(t);
-        }
-    }
-
     protected final FrameManager recycler;
     public final CancelSignal cancel;
 
@@ -115,11 +104,10 @@ public abstract class AbstractFrame {
     /// Does the thing.
     public abstract void execute();
 
-    /// Mixes the combined hash with the seed.
+    /// Sets the routingHash by mixing the idHash with the seed.
     public final void randomizeHash(long seed) {
         seed = HasherApi.mix(seed);
-        long newHash = this.routingHash;
-        ROUTING_HASH.setRelease(this, newHash ^ seed);
+        this.routingHash = this.idHash ^ seed;
     }
 
     /// Liveness check.
@@ -142,7 +130,8 @@ public abstract class AbstractFrame {
         this.startNs = 0;
         this.ingestNs = 0;
         this.cancelledExecution = false;
-        ROUTING_HASH.setRelease(this, this.idHash);
+        this.routingHash = this.idHash;
+        VarHandle.releaseFence();
     }
 
     /// Returns the frame to the recycler for reuse.

@@ -36,6 +36,6 @@ public class DemandOptimizer {
         }
 
         long maxItems = availableBytes / itemByteSize;
-        return Math.min(toRequest, maxItems);
+        return MathFunctions.clampLong(toRequest, 0, maxItems);
     }
 }

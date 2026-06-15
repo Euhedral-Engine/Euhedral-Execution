@@ -258,9 +258,6 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
     public class UpstreamInterceptor extends UpstreamHandle {
 
         private static long addCap(long num1, long num2) {
-            if (num1 < 0 || num2 < 0) {
-                return Long.MAX_VALUE;
-            }
             long sum = num1 + num2;
             return sum < 0 ? Long.MAX_VALUE : sum;
         }
@@ -299,39 +296,25 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
                 return;
             }
 
-            if (this.wip.compareAndSet(0, 1)) {
-                try {
-                    long demand = addAndReset(num);
-                    this.upstream.request(demand);
-                } catch (Throwable t) {
-                    logger.error("Upstream threw an exception during request", t);
-                    this.complete();
-                } finally {
-                    this.wip.set(0);
-                }
-                return;
-            }
             this.demand.accumulateAndGet(num, UpstreamInterceptor::addCap);
-            if (this.wip.compareAndSet(0, 1)) {
-                try {
-                    long d = addAndReset(0);
-                    this.upstream.request(d);
-                } catch (Throwable t) {
-                    logger.error("UpstreamHandle threw an exception during request", t);
-                    this.complete();
-                } finally {
-                    this.wip.set(0);
-                }
-            }
-        }
 
-        private long addAndReset(long num) {
-            long sum = this.demand.getAndSet(0);
-            sum += num;
-            if (sum < 0) {
-                return Long.MAX_VALUE;
+            if (this.wip.getAndIncrement() == 0) {
+                do {
+                    try {
+                        long demand = this.demand.getAcquire();
+                        if(demand > 0) {
+                            this.upstream.request(demand);
+                            this.demand.accumulateAndGet(-demand, UpstreamInterceptor::addCap);
+                        } else if(this.complete.getOpaque()) {
+                            return;
+                        }
+                    } catch (Throwable t) {
+                        logger.error("Upstream threw an exception during request", t);
+                        this.complete();
+                        break;
+                    }
+                } while(this.wip.decrementAndGet() != 0);
             }
-            return sum;
         }
 
         @Override
@@ -345,6 +328,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
         public void onComplete() {
             if (this.complete.compareAndSet(false, true)) {
                 logger.trace("UpstreamHandle Complete");
+                removeUpstream(this);
             }
         }
 
@@ -353,6 +337,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
             if (this.complete.compareAndSet(false, true)) {
                 logger.trace("Closing UpstreamHandle");
                 this.upstream.complete();
+                removeUpstream(this);
             }
         }
 
