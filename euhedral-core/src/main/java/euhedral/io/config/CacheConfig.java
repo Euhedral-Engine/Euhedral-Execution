@@ -25,6 +25,14 @@ public record CacheConfig(@Nullable CloneConfig cloneConfig, double L2MemoryBudg
     }
 
     @Override
+    public int getCore() {
+        if(cloneConfig != null) {
+            return cloneConfig.coreId();
+        }
+        return -1;
+    }
+
+    @Override
     public void close() throws Exception {
 
     }

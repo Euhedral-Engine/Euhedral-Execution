@@ -1,7 +1,6 @@
 package euhedral.io.control_plane;
 
 import euhedral.hardware_utils.PinnedThreadExecutor;
-import euhedral.hardware_utils.SystemInfo;
 import euhedral.hardware_utils.ThreadTools;
 import euhedral.io.config.CacheConfig;
 import euhedral.io.frames.AbstractFrame;
@@ -9,6 +8,7 @@ import euhedral.io.utils.DemandOptimizer;
 import euhedral.io.utils.DrainBuffer;
 import euhedral.io.utils.FlowRecorder;
 import euhedral.io.utils.FlowRecorder.FlowSnapshot;
+import euhedral.io.utils.MathFunctions;
 import io.euhedral_execution.data_structures.queues.common.BatchableQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -21,19 +21,18 @@ public abstract class WorkRequester extends ControlPlaneCache {
     protected final BatchableQueue<AbstractFrame> L1Cache;
     protected final DrainBuffer bufferWrapper;
     protected final FlowRecorder executionLatency = new FlowRecorder();
-
-    private final PinnedThreadExecutor executor;
-    private final AtomicBoolean running = new AtomicBoolean(false);
     protected final int L1Size;
     protected final int lowWaterMark;
 
+    private final PinnedThreadExecutor executor;
+    private final AtomicBoolean running = new AtomicBoolean(false);
     protected volatile Thread cycleThread;
 
     public WorkRequester(@NonNull CacheConfig cacheConfig, long maxParkNs,
             DrainBuffer buffer, PinnedThreadExecutor executor) {
         super(cacheConfig);
 
-        if(buffer == null) {
+        if (buffer == null) {
             this.requesterState = null;
             this.L1Cache = null;
             this.bufferWrapper = null;
@@ -41,20 +40,15 @@ public abstract class WorkRequester extends ControlPlaneCache {
             this.L1Size = 0;
             this.lowWaterMark = 0;
         } else {
-            this.requesterState = new RequesterState(this.executionLatency, buffer.arrivalLatencyRecorder, maxParkNs);
+            this.requesterState = new RequesterState(this.executionLatency,
+                    buffer.arrivalLatencyRecorder, super.fillRecorder.getPlain(),
+                    super.fillBytesRecorder.getPlain(),
+                    super.drainRecorder, maxParkNs);
             this.L1Cache = buffer.buffer;
             this.bufferWrapper = buffer;
             this.L1Size = buffer.getSize();
             this.lowWaterMark = L1Size >> 2;
             this.executor = executor;
-
-            this.requesterState.fillRecorder = super.fillRecorder.getPlain();
-            this.requesterState.fillBytesRecorder = super.fillBytesRecorder.getPlain();
-            this.requesterState.drainRecorder = super.drainRecorder;
-
-            this.requesterState.fill = this.requesterState.fillRecorder.getFlowSnapshot();
-            this.requesterState.fillBytes = this.requesterState.fillBytesRecorder.getFlowSnapshot();
-            this.requesterState.drain = this.requesterState.drainRecorder.getFlowSnapshot();
         }
 
     }
@@ -86,7 +80,7 @@ public abstract class WorkRequester extends ControlPlaneCache {
         }
     }
 
-    protected void pullIntoL1() {
+    protected void manualPull() {
         if (!this.running.getOpaque()) {
             int bufferCount = this.requesterState.bufferCount.getPlain();
             if (bufferCount > this.lowWaterMark) {
@@ -108,33 +102,47 @@ public abstract class WorkRequester extends ControlPlaneCache {
     /// Returns `true` when a pull cycle was executed.
     private boolean pull() {
         this.requesterState.nowNs = System.nanoTime();
+        this.requesterState.refresh();
         if (this.requesterState.nowNs < this.requesterState.demandWaitNs) {
             pullNoDemand();
             return false;
         }
 
-        this.requesterState.refresh();
         long demand = calculateDemand(super.getL2CacheCount());
-        int maxFill = this.L1Size - this.requesterState.bufferCount.get();
-        int count = (int) super.pull(this.bufferWrapper, maxFill, demand);
+        int l1MaxFill = this.L1Size - this.requesterState.bufferCount.get();
+        long l2Fill = calculateL2Pull(l1MaxFill);
+        int count = (int) super.pull(this.bufferWrapper, l1MaxFill, l2Fill, demand);
 
         if (count > 0) {
             this.requesterState.bufferCount.addAndGet(count);
         }
 
         this.requesterState.refresh();
-        this.requesterState.demandWaitNs = calculateDemandWaitNs(System.nanoTime(), maxFill);
+        this.requesterState.demandWaitNs = calculateDemandWaitNs(System.nanoTime(), l1MaxFill);
         return true;
     }
 
     private void pullNoDemand() {
         this.requesterState.refresh();
-        int maxFill = this.L1Size - this.requesterState.bufferCount.get();
-        int count = (int) super.pull(this.bufferWrapper, maxFill, 0);
+        int l1MaxFill = this.L1Size - this.requesterState.bufferCount.get();
+        long l2Fill = calculateL2Pull(l1MaxFill);
+        int count = (int) super.pull(this.bufferWrapper, l1MaxFill, l2Fill, 0);
 
         if (count > 0) {
             this.requesterState.bufferCount.addAndGet(count);
         }
+    }
+
+    private long calculateL2Pull(int l1MaxFill) {
+        long execThroughput = this.requesterState.exec.throughputNs;
+        if(execThroughput == 0) {
+            return Math.max(l1MaxFill - super.getL2CacheCount(), 0L);
+        }
+
+        long l2Pull = execThroughput - super.getL2CacheCount();
+        l2Pull = (3 * l2Pull) >>> 1; // 1.5x
+
+        return MathFunctions.clampLong(l2Pull, 0L, super.getL2MaxQueueCount());
     }
 
     private long calculateDemand(long ingestCount) {
@@ -143,7 +151,8 @@ public abstract class WorkRequester extends ControlPlaneCache {
         double arrivalLatencyNs = this.requesterState.arrival.avgUnits;
         double arrivalLatencyVar = this.requesterState.arrival.unitVariation;
         double avgFrameSize =
-                this.requesterState.fillBytes.avgUnits + this.requesterState.fillBytes.unitVariation;
+                this.requesterState.fillBytes.avgUnits
+                        + this.requesterState.fillBytes.unitVariation;
 
         int bufferCount = this.requesterState.bufferCount.getAcquire();
         long demand = DemandOptimizer.getDemand(drainRate, arrivalLatencyNs, drainRateVar,
@@ -166,7 +175,8 @@ public abstract class WorkRequester extends ControlPlaneCache {
     /// flow.
     private long calculateDemandWaitNs(long nowNs, long maxFill) {
         boolean warmedUp = this.requesterState.fillRecorder.getRollingSum() > this.L1Size
-                && this.requesterState.fill.avgInterval > 0 && this.requesterState.fill.avgUnits > 0;
+                && this.requesterState.fill.avgInterval > 0
+                && this.requesterState.fill.avgUnits > 0;
 
         if (warmedUp) {
             FlowRecorder.FlowSnapshot fill = this.requesterState.fill;
@@ -191,6 +201,10 @@ public abstract class WorkRequester extends ControlPlaneCache {
         return 0;
     }
 
+    public int getL1CacheCount() {
+        return this.requesterState.bufferCount.getAcquire();
+    }
+
     @Override
     public void close() {
         if (this.running.compareAndSet(true, false)) {
@@ -213,16 +227,17 @@ public abstract class WorkRequester extends ControlPlaneCache {
 
         public final FlowRecorder executionLatency;
         public final FlowRecorder arrivalLatency;
+
+        public final FlowRecorder fillRecorder;
+        public final FlowRecorder fillBytesRecorder;
+        public final FlowRecorder drainRecorder;
+
         public final FlowSnapshot exec;
         public final FlowSnapshot arrival;
 
-        public FlowRecorder fillRecorder = null;
-        public FlowRecorder fillBytesRecorder = null;
-        public FlowRecorder drainRecorder = null;
-
-        public FlowSnapshot fill;
-        public FlowSnapshot fillBytes;
-        public FlowSnapshot drain;
+        public final FlowSnapshot fill;
+        public final FlowSnapshot fillBytes;
+        public final FlowSnapshot drain;
 
         public long demandWaitNs = 0;
 
@@ -231,12 +246,21 @@ public abstract class WorkRequester extends ControlPlaneCache {
         private long nowNs = 0;
 
         public RequesterState(FlowRecorder executionLatency, FlowRecorder arrivalLatency,
+                FlowRecorder fillRecorder, FlowRecorder fillBytesRecorder,
+                FlowRecorder drainRecorder,
                 long maxParkNs) {
             this.maxParkNs = maxParkNs;
             this.arrivalLatency = arrivalLatency;
             this.executionLatency = executionLatency;
-            this.arrival = arrivalLatency.getFlowSnapshot();
+            this.fillRecorder = fillRecorder;
+            this.fillBytesRecorder = fillBytesRecorder;
+            this.drainRecorder = drainRecorder;
+
             this.exec = executionLatency.getFlowSnapshot();
+            this.arrival = arrivalLatency.getFlowSnapshot();
+            this.fill = fillRecorder.getFlowSnapshot();
+            this.fillBytes = fillBytesRecorder.getFlowSnapshot();
+            this.drain = drainRecorder.getFlowSnapshot();
         }
 
         public void refresh() {

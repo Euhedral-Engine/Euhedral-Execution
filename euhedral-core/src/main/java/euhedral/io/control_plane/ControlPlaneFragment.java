@@ -200,7 +200,7 @@ public final class ControlPlaneFragment extends WorkRequester {
             int[] cpus = fragmentConfig.cloneConfig().getCpuSet();
             this.cpuId = cpus[0];
 
-            this.executionLatency = new FlowRecorder();
+            this.executionLatency = super.executionLatency;
             this.state = new CycleState();
 
             this.pinnedExecutor =
@@ -395,7 +395,7 @@ public final class ControlPlaneFragment extends WorkRequester {
 
                 this.state.lastEmptyNs = System.nanoTime();
                 if (!this.state.smtMode) {
-                    super.pullIntoL1();
+                    super.manualPull();
                 }
 
                 long ingestCount = super.getL2CacheCount();
@@ -468,7 +468,7 @@ public final class ControlPlaneFragment extends WorkRequester {
 
         RATE.setOpaque(this, flowSnapshot.throughputNs * RATE_NS_TO_SEC);
 
-        // Execution latency only records time unit
+        // Execution latency only records time units
         // throughputNs = avgRateNs
         // avgRate = units / interval = latencyNs / intervalNs
         long ideal = flowSnapshot.throughputNs * updateInterval;
@@ -667,7 +667,7 @@ public final class ControlPlaneFragment extends WorkRequester {
                     }
 
                     if (this.upstreamCount == 0) {
-                        super.pullIntoL1();
+                        super.manualPull();
                         long count = super.requesterState.bufferCount.getOpaque();
                         if (count > 0) {
                             break;
@@ -676,7 +676,7 @@ public final class ControlPlaneFragment extends WorkRequester {
                     }
 
                     if (super.getL2CacheCount() >= (super.L1Size >> 3)) {
-                        super.pullIntoL1();
+                        super.manualPull();
                         break;
                     }
                 }
