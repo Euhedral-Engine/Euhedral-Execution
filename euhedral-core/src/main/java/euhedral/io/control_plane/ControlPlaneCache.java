@@ -188,9 +188,9 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
         if(this.pullWrapper.framesAdded > 0) {
             TOTAL_COUNT.getAndAdd(ControlPlaneCache.this, this.pullWrapper.framesAdded);
             TOTAL_BYTES.getAndAdd(ControlPlaneCache.this, this.pullWrapper.bytesAdded);
+            this.fillRecorder.getPlain().record(now, this.pullWrapper.framesAdded, true);
+            this.fillBytesRecorder.getPlain().record(now, this.pullWrapper.bytesAdded, true);
         }
-        this.fillRecorder.getPlain().record(now, this.pullWrapper.framesAdded, true);
-        this.fillBytesRecorder.getPlain().record(now, this.pullWrapper.bytesAdded, true);
 
         if (maxFill <= 0) {
             request(demand);
@@ -223,12 +223,13 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
                 VarHandle.fullFence();
             }
         }
+
         if (totalDrain > 0) {
             TOTAL_COUNT.getAndAdd(this, -totalDrain);
             TOTAL_BYTES.getAndAdd(this, -totalBytesDrained);
+            this.drainRecorder.record(now, totalDrain, false);
+            this.drainBytesRecorder.record(now, totalBytesDrained, false);
         }
-        this.drainRecorder.record(now, totalDrain, false);
-        this.drainBytesRecorder.record(now, totalBytesDrained, false);
         request(demand);
 
         drainBuffer.reset();

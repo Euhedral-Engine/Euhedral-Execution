@@ -35,4 +35,8 @@ public final class BufferedBridge {
         }
         return success;
     }
+
+    public long size() {
+        return this.buffer.sizeLong();
+    }
 }

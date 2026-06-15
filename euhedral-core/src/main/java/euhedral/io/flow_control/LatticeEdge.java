@@ -263,6 +263,21 @@ public class LatticeEdge extends UpstreamHandle implements AutoCloseable {
         this.upstreamHandles.clear();
     }
 
+    public void removeUpstream(UpstreamHandle handle) {
+        LatticeEdge parent = (LatticeEdge) PARENT.getOpaque(this);
+        if(parent != null) {
+            removeUpstream(handle);
+        }
+        acquireLock();
+        try {
+            if (this.upstreamHandles.remove(handle)) {
+                this.upstreamCount.decrementAndGet();
+            }
+        } finally {
+            releaseLock();
+        }
+    }
+
     /// If the parameter is a LatticeEdge, it sets it as its parent or bubbles it up the chain. If
     /// it is an [UpstreamHandle][UpstreamHandle], it adds it to all
     /// [UpstreamQueues][UpstreamQueue]
