@@ -98,7 +98,6 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
     protected final PaddedAtomicReference<FlowRecorder> fillRecorder;
     protected final PaddedAtomicReference<FlowRecorder> fillBytesRecorder;
     protected final FlowRecorder drainRecorder;
-    protected final FlowRecorder drainBytesRecorder;
 
     protected final QueuePartitionWrapper L2Cache;
     protected final int chunkSize;
@@ -133,7 +132,6 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
             this.fillSnapshot = null;
             this.fillBytesSnapshot = null;
             this.drainRecorder = null;
-            this.drainBytesRecorder = null;
         } else {
             CpuCacheLayout layout = SystemInfo.getCacheLayout(
                     cacheConfig.cloneConfig().getCpuSet()[0]);
@@ -157,7 +155,6 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
             this.fillSnapshot = this.fillRecorder.getPlain().getFlowSnapshot();
             this.fillBytesSnapshot = this.fillBytesRecorder.getPlain().getFlowSnapshot();
             this.drainRecorder = new FlowRecorder();
-            this.drainBytesRecorder = new FlowRecorder();
 
             BitSet mappings = new BitSet(partitions);
             mappings.set(0, partitions);
@@ -178,12 +175,12 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
 
     public abstract double getPressure();
 
-    public final long pull(DrainBuffer drainBuffer, int maxFill, long demand) {
+    public final long pull(DrainBuffer drainBuffer, int maxBufferFill, long maxL2Fill, long demand) {
         drainBuffer.reset();
 
         this.pullWrapper.reset();
         long now = System.nanoTime();
-        demand -= super.pull(this.pullWrapper, demand);
+        super.pull(this.pullWrapper, maxL2Fill);
 
         if(this.pullWrapper.framesAdded > 0) {
             TOTAL_COUNT.getAndAdd(ControlPlaneCache.this, this.pullWrapper.framesAdded);
@@ -192,7 +189,7 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
             this.fillBytesRecorder.getPlain().record(now, this.pullWrapper.bytesAdded, true);
         }
 
-        if (maxFill <= 0) {
+        if (maxBufferFill <= 0) {
             request(demand);
             return 0;
         }
@@ -203,10 +200,10 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
         now = System.nanoTime();
         if (initialCount > 0) {
             int cycles = 0;
-            for (int i = 0; i < maxFill && cycles <= this.L2Cache.partitions(); ) {
+            for (int i = 0; i < maxBufferFill && cycles <= this.L2Cache.partitions(); ) {
 
                 int drainCount = (int) this.L2Cache.drain(this.head, drainBuffer,
-                        maxFill - totalDrain);
+                        maxBufferFill - totalDrain);
                 long drainedBytes = drainBuffer.drainedBytes;
 
                 cycles++;
@@ -228,7 +225,6 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
             TOTAL_COUNT.getAndAdd(this, -totalDrain);
             TOTAL_BYTES.getAndAdd(this, -totalBytesDrained);
             this.drainRecorder.record(now, totalDrain, false);
-            this.drainBytesRecorder.record(now, totalBytesDrained, false);
         }
         request(demand);
 
@@ -306,6 +302,11 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
         return (long) TOTAL_COUNT.getOpaque(this);
     }
 
+    public final long getL2MaxQueueCount() {
+        double cap = this.capFactor.getAcquire();
+        return (long) (this.frameQuota * cap);
+    }
+
     public final long getL2MaxQueuedBytes() {
         this.fillRecorder.getPlain().refreshSnapshot(this.fillSnapshot, true);
         this.fillBytesRecorder.getPlain().refreshSnapshot(this.fillBytesSnapshot, true);
@@ -321,7 +322,7 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
             avgSize = avgFillBytes / avgFillCount;
         }
 
-        long byteQuota = this.frameQuota * (avgSize / this.L2Cache.partitions());
+        long byteQuota = this.frameQuota * avgSize;
         long hardwareMax = this.memoryLimit.getOpaque();
         if (hardwareMax > byteQuota) {
             return (long) (byteQuota * cap);
@@ -341,6 +342,11 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
         } else {
             stream.addDownstream(this);
         }
+    }
+
+    @Override
+    public int getCore() {
+        return this.cacheConfig.getCore();
     }
 
     @Override
