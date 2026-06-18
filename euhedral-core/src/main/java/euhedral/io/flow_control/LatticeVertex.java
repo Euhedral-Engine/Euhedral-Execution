@@ -166,6 +166,11 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
     /// Picks a downstream link and sends work down.
     @Override
     public void push(AbstractFrame frame) {
+        if(this.downstreams.length < 2) {
+            this.downstreams[0].push(frame);
+            return;
+        }
+
         if (this.hasCache && !frame.isOrdered()
                 && frame.getRoutingPolicy().level <= this.cachePolicy.level) {
             int idx = RoutingFunction.DEFAULT.route(frame, this.cache.partitions());

@@ -14,7 +14,7 @@ public final class ExecutionMetrics implements AutoCloseable {
     public ExecutionMetrics(MeterRegistry registry, FragmentConfig config,
             Supplier<Integer> inFlight,
             Supplier<Long> latency, Supplier<Long> currentConcurrency,
-            Supplier<Long> currentRate, Supplier<Double> pressure) {
+            Supplier<Long> currentRate) {
         String prefix = config.metricPrefix();
         if (prefix == null ||  prefix.isBlank()) {
             prefix = "euhedral";
@@ -40,11 +40,6 @@ public final class ExecutionMetrics implements AutoCloseable {
             meters.add(Gauge.builder(prefix + ".execution.throughput", currentRate)
                     .description("Current execution rate (execution/sec)").tag("core", coreId)
                     .register(registry));
-
-            meters.add(Gauge.builder(prefix + ".execution.pressure", pressure)
-                    .description(
-                            "Combined signal of reported hardware and calculated execution pressure")
-                    .tag("core", coreId).register(registry));
         }
     }
 

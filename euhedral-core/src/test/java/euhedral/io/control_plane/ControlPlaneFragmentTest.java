@@ -73,8 +73,7 @@ class ControlPlaneFragmentTest {
         assertNotNull(manager.output());
         assertNotNull(manager.completeChannel());
 
-        assertNotNull(manager.L1Cache);
-        assertNotNull(manager.bufferWrapper);
+        assertNotNull(manager.getCache());
         assertNotNull(manager.outputStream);
     }
 
@@ -126,16 +125,6 @@ class ControlPlaneFragmentTest {
                 config.maxUpdateInterval(),
                 cloned.maxUpdateInterval()
         );
-    }
-
-    @Test
-    void shouldReturnPressureWithinBounds() {
-        ControlPlaneFragment manager = new ControlPlaneFragment(cConfig(), sConfig());
-
-        double pressure = manager.getPressure();
-
-        assertTrue(pressure >= 0.0);
-        assertTrue(pressure <= 1.0);
     }
 
     @Test

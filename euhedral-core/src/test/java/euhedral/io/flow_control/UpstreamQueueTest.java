@@ -6,12 +6,10 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.LatticeSource;
-import euhedral.io.utils.DrainBuffer;
-import io.euhedral_execution.data_structures.queues.common.BatchableQueue;
+import euhedral.io.utils.QueueConsumer;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import org.jctools.maps.NonBlockingHashMapLong;
@@ -115,19 +113,13 @@ class UpstreamQueueTest {
     }
 
     @Test
-    void shouldPullWithDrainBuffer() {
+    void shouldPullWithConsumer() {
         TestUpstreamHandle upstream = new TestUpstreamHandle();
 
         queue.addUpstream(upstream);
 
-        BatchableQueue<AbstractFrame> partitionedQueue =
-                mock(BatchableQueue.class);
-        when(partitionedQueue.capacity()).thenReturn(10_000L);
-
-        DrainBuffer buffer = new DrainBuffer(
-                partitionedQueue,
-                32,
-                false
+        QueueConsumer buffer = new QueueConsumer(
+                frame -> {}
         );
 
         queue.pull(buffer, 64);
@@ -212,26 +204,6 @@ class UpstreamQueueTest {
 
         assertEquals(123, upstream.requested);
         assertEquals(0, upstream.pulled);
-    }
-
-    @Test
-    void shouldPullFromHandleWithBuffer() {
-        TestUpstreamHandle upstream = new TestUpstreamHandle();
-
-        BatchableQueue<AbstractFrame> partitionedQueue =
-                mock(BatchableQueue.class);
-        when(partitionedQueue.capacity()).thenReturn(10_000L);
-
-        DrainBuffer buffer = new DrainBuffer(
-                partitionedQueue,
-                16,
-                false
-        );
-
-        UpstreamQueue.drain(upstream, buffer, 64);
-
-        assertEquals(0, upstream.requested);
-        assertEquals(64, upstream.pulled);
     }
 
     @Test

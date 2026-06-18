@@ -9,7 +9,7 @@ public class DemandOptimizer {
     /// variance-derived safety buffer to reduce the risk of underrun during bursty workloads.
     ///
     /// The final request count is capped by the remaining byte budget.
-    public static long getDemand(double drainRate, double arrivalLatency, double drainRateVariance,
+    public static long calculateDemand(double drainRate, double arrivalLatency, double drainRateVariance,
             double latencyVariance, long currentCount, long itemByteSize, long maxBytes) {
         long availableBytes = maxBytes - (currentCount * itemByteSize);
         if (availableBytes <= 0 || itemByteSize <= 0) {

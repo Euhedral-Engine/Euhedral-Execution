@@ -1,8 +1,5 @@
 package euhedral.benchmarks.core_benchmarks;
 
-import java.lang.invoke.VarHandle;
-import java.util.concurrent.TimeUnit;
-
 import euhedral.benchmarks.frames.NoOpFrame;
 import euhedral.benchmarks.pipelines.NoOpExecutor;
 import euhedral.hashing.HasherApi;
@@ -11,6 +8,8 @@ import euhedral.io.control_plane.ControlPlaneLattice;
 import euhedral.io.impl.BaseCloneableObject;
 import euhedral.io.ingest.ArrayIngestSink;
 import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
+import java.lang.invoke.VarHandle;
+import java.util.concurrent.TimeUnit;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -97,7 +96,7 @@ public class HighContentionThroughput {
 
     @Benchmark
     @OperationsPerInvocation(TASKS)
-    public void ingest32million32sources() {
+    public void ingest() {
         for (var sink : this.sinks) {
             this.controlPlane.addUpstream(sink);
         }

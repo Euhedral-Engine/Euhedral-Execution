@@ -4,7 +4,7 @@ import euhedral.io.generics.CloneableObject;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.jspecify.annotations.Nullable;
 
-public record CacheConfig(@Nullable CloneConfig cloneConfig, double L2MemoryBudget,
+public record CacheConfig(@Nullable CloneConfig cloneConfig, double memoryBudget,
                           int partitionsPerCpu, int maxPooledChunks,
                           int ringWalkResetThreshold, String metricPrefix,
                           @Nullable MeterRegistry registry) implements CloneableObject {
@@ -19,7 +19,7 @@ public record CacheConfig(@Nullable CloneConfig cloneConfig, double L2MemoryBudg
 
     @Override
     public CacheConfig clone(CloneConfig cloneConfig) {
-        return new CacheConfig(cloneConfig, L2MemoryBudget, partitionsPerCpu, maxPooledChunks,
+        return new CacheConfig(cloneConfig, memoryBudget, partitionsPerCpu, maxPooledChunks,
                 ringWalkResetThreshold,
                 metricPrefix, registry);
     }

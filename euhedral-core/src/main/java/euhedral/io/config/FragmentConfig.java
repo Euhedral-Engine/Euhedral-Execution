@@ -41,7 +41,7 @@ public record FragmentConfig(@Nullable CloneConfig cloneConfig, int minConcurren
 
     public static FragmentConfig powerSavingDefault(MeterRegistry meterRegistry,
             String metricPrefix) {
-        return new FragmentConfig(null, 1_024, 1024, false,
+        return new FragmentConfig(null, 64, 1024, false,
                 IdleCyclePolicy.POWER_SAVING, meterRegistry,
                 metricPrefix);
     }
@@ -52,7 +52,7 @@ public record FragmentConfig(@Nullable CloneConfig cloneConfig, int minConcurren
 
     public static FragmentConfig balancedDefault(MeterRegistry meterRegistry,
             String metricPrefix) {
-        return new FragmentConfig(null, 4_096, 1024, false,
+        return new FragmentConfig(null, 512, 1024, false,
                 IdleCyclePolicy.DEFAULT, meterRegistry,
                 metricPrefix);
     }

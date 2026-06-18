@@ -66,8 +66,7 @@ class ControlPlaneCacheTest {
         ControlPlaneCache manager = manager();
 
         assertNotNull(manager.fillRecorder);
-        assertNotNull(manager.fillBytesRecorder);
-        assertNotNull(manager.L2Cache);
+        assertNotNull(manager.getCache());
     }
 
     // ----- First Touch -----
@@ -111,7 +110,7 @@ class ControlPlaneCacheTest {
     void shouldReturnZeroTotalCountInitially() {
         ControlPlaneCache manager = manager();
 
-        assertEquals(0, manager.getL2CacheCount());
+        assertEquals(0, manager.getCacheCount());
     }
 
     @Test
@@ -124,24 +123,6 @@ class ControlPlaneCacheTest {
     }
 
     // ----- Max Queue -----
-
-    @Test
-    void shouldCalculateMaxQueuedBytes() {
-        ControlPlaneCache manager = manager();
-
-        long max = manager.getL2MaxQueuedBytes();
-
-        assertTrue(max >= 0);
-    }
-
-    @Test
-    void shouldCalculateProportionalMaxQueuedBytes() {
-        ControlPlaneCache manager = manager();
-
-        long max = manager.getL2MaxQueuedBytes();
-
-        assertTrue(max >= 0);
-    }
 
     @Test
     void shouldIgnoreNullSnapshot() {
@@ -177,11 +158,6 @@ class ControlPlaneCacheTest {
         public CPCImpl(@NonNull CacheConfig cacheConfig, @NonNull Supplier<Double> pressure) {
             super(cacheConfig);
             this.pressure = pressure;
-        }
-
-        @Override
-        public double getPressure() {
-            return pressure.get();
         }
 
         @Override
