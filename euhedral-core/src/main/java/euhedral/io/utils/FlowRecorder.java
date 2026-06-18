@@ -26,6 +26,7 @@ public class FlowRecorder {
     @Getter
     private final FlowSnapshot flowSnapshot = new FlowSnapshot();
 
+    @Getter
     private long dynamicWindowNs;
     private long prevWindowCount = 0;
     private long currWindowCount = 0;
@@ -186,6 +187,7 @@ public class FlowRecorder {
             }
             return;
         }
+        interval = Math.min(interval, dynamicWindowNs * 2);
 
         int alpha = getRatio(interval, dynamicWindowNs);
         alpha = clampInt(alpha, 1024, SCALE);
@@ -242,19 +244,26 @@ public class FlowRecorder {
     }
 
     public void refreshSnapshot(FlowSnapshot flowSnapshot, boolean threadSafe) {
+        refreshSnapshot(flowSnapshot, 0, threadSafe);
+    }
+
+    public void refreshSnapshot(FlowSnapshot flowSnapshot, long now, boolean threadSafe) {
         if (threadSafe) {
             acquireLock();
         }
-        if (flowSnapshot.lastRecordingTimeNs != lastRecordingTime) {
-            refreshSnapshot(flowSnapshot);
+        if(now > this.lastRecordingTime) {
+            decay(now, false);
         }
-        if (threadSafe) {
+        refreshSnapshot(flowSnapshot);
+        if(threadSafe) {
             releaseLock();
         }
     }
 
     private void refreshSnapshot(FlowSnapshot flowSnapshot) {
         flowSnapshot.lastRecordingTimeNs = lastRecordingTime;
+        flowSnapshot.lastRecordedUnits = lastRecordedUnits;
+        flowSnapshot.lastRecordedInterval = lastInterval;
 
         flowSnapshot.avgUnits = (averageUnits >> SHIFT) + unitRemainder * SCALE_INV;
         flowSnapshot.unitVariation = (unitVariation >> SHIFT) + varUnitRemainder * SCALE_INV;
@@ -272,15 +281,16 @@ public class FlowRecorder {
         flowSnapshot.intervalCV = flowSnapshot.avgInterval == 0 ? 0.0
                 : flowSnapshot.intervalVariation / flowSnapshot.avgInterval;
 
-        flowSnapshot.throughputNs = averageRate <= 0 ? 0 : (SCALE) / averageRate;
+        flowSnapshot.throughputNs = averageRate <= 0 ? 0 : (SCALE) / (double) averageRate;
+        flowSnapshot.throughputVariationNs = rateVariation <= 0 ? 0 : (SCALE) / (double) rateVariation;
     }
 
-    public double getRollingAverage(long now, boolean getThreadSafe) {
+    public double getRollingAverage(boolean getThreadSafe) {
         if (getThreadSafe) {
             acquireLock();
         }
 
-        long count = getEffectiveMeasurementWindowCount(now, false);
+        long count = getEffectiveMeasurementWindowCount(this.lastRecordingTime, false);
         double rollingSum = count == 0 ? 0 : (double) this.rollingSum / count;
 
         if (getThreadSafe) {
@@ -320,7 +330,8 @@ public class FlowRecorder {
     /**
      * Returns the queue estimate scaled by the provided 'scaler'.
      */
-    public double getVegasQueueEstimate(FlowSnapshot flowSnapshot, double units, long scaler) {
+    public static double getVegasQueueEstimate(FlowSnapshot flowSnapshot, long scaler) {
+        double units = flowSnapshot.lastRecordedUnits;
         double averageUnits = flowSnapshot.avgUnits;
         if (units <= averageUnits || averageUnits <= 0) {
             return 0L;
@@ -350,6 +361,8 @@ public class FlowRecorder {
     public static final class FlowSnapshot {
 
         public long lastRecordingTimeNs = 0;
+        public long lastRecordedUnits = 0;
+        public long lastRecordedInterval = 0;
 
         public double avgUnits;
         public double unitVariation;
@@ -363,6 +376,7 @@ public class FlowRecorder {
         public double intervalVariation;
         public double intervalCV;
 
-        public long throughputNs;
+        public double throughputNs;
+        public double throughputVariationNs;
     }
 }

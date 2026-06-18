@@ -15,8 +15,7 @@ public final class CacheMetrics implements AutoCloseable {
 
     private final List<Meter> meters = new ArrayList<>();
 
-    public CacheMetrics(String metricPrefix, String tag, AtomicDouble capFactor,
-            Supplier<Long> totalQueuedSizeBytes, MeterRegistry registry) {
+    public CacheMetrics(String metricPrefix, String tag, AtomicDouble capFactor, MeterRegistry registry) {
         if (metricPrefix == null || metricPrefix.isBlank()) {
             metricPrefix = "euhedral";
         }
@@ -35,12 +34,6 @@ public final class CacheMetrics implements AutoCloseable {
                             .description(
                                     "Current buffer capacity multiplier. Higher is better. (0.15 to 1.0)")
                             .tag("core", tag).register(registry));
-
-            meters.add(Gauge.builder(metricPrefix + ".cache_backlog",
-                            () -> totalQueuedSizeBytes.get() / 1024)
-                    .description("Total bytes buffered in all sub queues of the ControlPlaneCache")
-                    .tag("core", tag)
-                    .baseUnit("KB").register(registry));
         } else {
             subQBacklogSummary = null;
         }

@@ -18,7 +18,7 @@ import static org.mockito.Mockito.verify;
 import euhedral.io.control_plane.RoutingPolicy;
 import euhedral.io.flow_control.LatticeVertex.RoutingFunction;
 import euhedral.io.generics.LatticeSource;
-import euhedral.io.utils.DrainBuffer;
+import euhedral.io.utils.QueueConsumer;
 import io.euhedral_execution.data_structures.queues.PartitionedMpmcQueue;
 import java.util.BitSet;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -275,7 +275,7 @@ class LatticeVertexTest {
 
     @Test
     void shouldIgnoreInvalidPullArguments() {
-        DrainBuffer buffer = mock(DrainBuffer.class);
+        QueueConsumer buffer = mock(QueueConsumer.class);
 
         assertDoesNotThrow(() -> node.pull(null, 10));
         assertDoesNotThrow(() -> node.pull(buffer, 0));
@@ -288,7 +288,7 @@ class LatticeVertexTest {
 
         node.setParent(parent);
 
-        DrainBuffer buffer = mock(DrainBuffer.class);
+        QueueConsumer buffer = mock(QueueConsumer.class);
 
         node.pull(buffer, 10);
 

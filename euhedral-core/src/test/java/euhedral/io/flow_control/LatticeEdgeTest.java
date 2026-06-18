@@ -14,7 +14,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import euhedral.io.flow_control.UpstreamQueue.UpstreamHandle;
-import euhedral.io.utils.DrainBuffer;
+import euhedral.io.utils.QueueConsumer;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -146,7 +146,7 @@ class LatticeEdgeTest {
     void shouldIgnorePullWhenDrainActive() {
         drain.set(true);
 
-        DrainBuffer buffer = mock(DrainBuffer.class);
+        QueueConsumer buffer = mock(QueueConsumer.class);
 
         assertDoesNotThrow(() -> edge.pull(buffer, 10));
     }
@@ -188,7 +188,7 @@ class LatticeEdgeTest {
 
         edge.setParent(parent);
 
-        DrainBuffer buffer = mock(DrainBuffer.class);
+        QueueConsumer buffer = mock(QueueConsumer.class);
 
         edge.pull(buffer, 123);
 
