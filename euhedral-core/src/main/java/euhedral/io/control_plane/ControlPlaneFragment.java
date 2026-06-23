@@ -2,7 +2,6 @@ package euhedral.io.control_plane;
 
 import static euhedral.io.utils.MathFunctions.clampDouble;
 import static euhedral.io.utils.MathFunctions.clampLong;
-import static euhedral.io.utils.MathFunctions.log2;
 
 import euhedral.hardware_utils.PinnedThreadExecutor;
 import euhedral.hardware_utils.SystemInfo;
@@ -67,27 +66,19 @@ import org.slf4j.LoggerFactory;
 /// **This is the distributed control surface of the system. Everything else is just plumbing.**
 public final class ControlPlaneFragment extends WorkRequester {
 
-    private static final long RATE_NS_TO_SEC = 1_000_000_000L;
-
     private static final VarHandle AVG_LATENCY;
-    private static final VarHandle CONCURRENCY;
     private static final VarHandle DRAIN;
     private static final VarHandle IN_FLIGHT;
-    private static final VarHandle RATE;
     private static final VarHandle SNAPSHOT;
 
     static {
         try {
             AVG_LATENCY = MethodHandles.lookup()
                     .findVarHandle(ControlPlaneFragment.class, "avgLatency", long.class);
-            CONCURRENCY = MethodHandles.lookup()
-                    .findVarHandle(ControlPlaneFragment.class, "currentConcurrency", long.class);
             DRAIN = MethodHandles.lookup()
                     .findVarHandle(ControlPlaneFragment.class, "drainMode", boolean.class);
             IN_FLIGHT = MethodHandles.lookup()
                     .findVarHandle(ControlPlaneFragment.class, "inFlight", long.class);
-            RATE = MethodHandles.lookup()
-                    .findVarHandle(ControlPlaneFragment.class, "currentRate", long.class);
             SNAPSHOT = MethodHandles.lookup()
                     .findVarHandle(ControlPlaneFragment.class, "coreSnapshot", CoreSnapshot.class);
         } catch (Exception e) {
@@ -121,7 +112,6 @@ public final class ControlPlaneFragment extends WorkRequester {
     private final boolean isPCore;
     private final FlowRecorder executionLatency;
     private final BufferedBridge completeSink;
-    private final int maxUpdateInterval;
     private final AtomicBoolean running = new AtomicBoolean(false);
 
     @Getter
@@ -133,9 +123,7 @@ public final class ControlPlaneFragment extends WorkRequester {
     CoreSnapshot coreSnapshot = null;
 
     long avgLatency;
-    long currentConcurrency;
-    long currentRate;
-    long effectiveConcurrencyLimit;
+    long effectiveBatchLimit;
 
     long inFlight = 0;
     private long upstreamCount = 0;
@@ -145,12 +133,8 @@ public final class ControlPlaneFragment extends WorkRequester {
             @NonNull FragmentConfig fragmentConfig) {
         super(cacheConfig, fragmentConfig.idleCyclePolicy().maxParkTime().toNanos(), createSmtThread(fragmentConfig));
         this.fragmentConfig = fragmentConfig;
-        this.maxUpdateInterval =
-                Integer.highestOneBit(Math.max(fragmentConfig.maxUpdateInterval(), 2));
 
-        this.currentRate = fragmentConfig.minConcurrency();
-        this.currentConcurrency = this.maxUpdateInterval;
-        this.effectiveConcurrencyLimit = fragmentConfig.minConcurrency();
+        this.effectiveBatchLimit = 1024;
 
         if (fragmentConfig.cloneConfig() == null) {
             this.cpuId = -1;
@@ -185,22 +169,13 @@ public final class ControlPlaneFragment extends WorkRequester {
             this.completeSink =
                     new BufferedBridge(new PartitionedMpscQueue<>(1, fragmentConfig.maxUpdateInterval(), 4), frame -> {
                         IN_FLIGHT.setOpaque(this, this.inFlight - 1);
-                        state.receivingOrderedWork = upstreamCount == 1 && frame.isOrdered();
-                        state.completed++;
                         frame.reset();
                         frame.doFinally();
                     }, this::recordCompletion);
-            this.outputStream = new LatticeHotSource(frame -> {
-                if ((this.state.dispatches++ & this.state.updateMask) == 0) {
-                    frame.setStartNs(System.nanoTime());
-                } else {
-                    frame.setStartNs(0);
-                }
-            });
+            this.outputStream = new LatticeHotSource();
 
             this.metrics = new ExecutionMetrics(fragmentConfig.meterRegistry(), fragmentConfig,
-                    () -> (int) IN_FLIGHT.getOpaque(this), () -> (long) AVG_LATENCY.getOpaque(this),
-                    () -> (long) CONCURRENCY.getOpaque(this), () -> (long) RATE.getOpaque(this));
+                    () -> (int) IN_FLIGHT.getOpaque(this), () -> (long) AVG_LATENCY.getOpaque(this));
             this.shutdownHook = new Thread(this::close);
             Runtime.getRuntime().addShutdownHook(this.shutdownHook);
             this.logger.debug("CPU: {} P-Core: {} SMTMode: {}", this.cpuId,
@@ -303,12 +278,7 @@ public final class ControlPlaneFragment extends WorkRequester {
         try {
             long dispatchWaitNs = 0;
             while (this.running.get() && !Thread.currentThread().isInterrupted()) {
-                this.state.receivingOrderedWork = false;
                 this.completeSink.drain();
-                if (this.state.completed > this.state.updateMask) {
-                    updateLimits();
-                    this.state.completed = 0;
-                }
 
                 this.state.lastActiveNs = System.nanoTime();
                 long remaining = dispatchWaitNs - this.state.lastActiveNs;
@@ -374,17 +344,14 @@ public final class ControlPlaneFragment extends WorkRequester {
     }
 
     private long dispatch() {
+        manuallyPull();
         long cacheCount = super.getCacheCount();
-        if(cacheCount == 0) {
-            cacheCount = manuallyPull();
-        }
         if(cacheCount == 0) {
             return 0;
         }
 
-        long limit = this.currentConcurrency - this.inFlight;
+        long limit = this.state.batchSize - this.inFlight;
         limit = Math.min(cacheCount, limit);
-        limit = Math.min(this.state.batchSize, limit);
 
         if (limit > 0) {
             IN_FLIGHT.setOpaque(this, this.inFlight + limit);
@@ -393,34 +360,57 @@ public final class ControlPlaneFragment extends WorkRequester {
         return limit;
     }
 
-    private void updateLimits() {
-        FlowSnapshot flowSnapshot = this.executionLatency.getFlowSnapshot();
-        this.executionLatency.refreshSnapshot(flowSnapshot, false);
+    private void recordCompletion(AbstractFrame frame) {
+        this.state.completed++;
 
-        double avgVariance = flowSnapshot.unitVariation;
-        long updateInterval = this.state.updateMask + 1;
-        double scaledVariance = avgVariance * updateInterval;
+        if (this.state.completed >= this.state.batchSize) {
+            this.state.completed = 0;
 
-        // Decrease the sampling rate if the variance is larger than the window.
-        if (scaledVariance >= updateInterval) {
-            this.state.updateMask(Math.min(updateInterval << 1, this.maxUpdateInterval) - 1);
-        } else if (scaledVariance <= (updateInterval >>> 1)) {
-            this.state.updateMask(Math.max(2, updateInterval >>> 1) - 1);
+            long now = System.nanoTime();
+            this.executionLatency.record(now, 1, this.state.smtMode);
+
+            updateLimits(now);
         }
+    }
 
-        AVG_LATENCY.setOpaque(this, (long) (flowSnapshot.avgUnits + avgVariance));
-
-        double queueEstimate = FlowRecorder.getVegasQueueEstimate(flowSnapshot, this.currentConcurrency);
-
-        RATE.setOpaque(this, (long) flowSnapshot.throughputNs * RATE_NS_TO_SEC);
+    private void updateLimits(long nowNs) {
+        FlowSnapshot exec = this.executionLatency.getFlowSnapshot();
+        FlowSnapshot execThroughput = super.executionThroughput.getFlowSnapshot();
 
         // Execution latency only records time units
-        // throughputNs = avgRateNs
-        // avgRate = units / interval = latencyNs / intervalNs
-        long ideal = (long) flowSnapshot.throughputNs * updateInterval;
-        ideal = Math.max(ideal, 1L);
-        updateEffectiveConcurrencyLimit(ideal);
-        updateConcurrency(ideal, queueEstimate);
+        // avgUnitsOverTime = units / interval = latencyNs / intervalNs = = (1 / intervalNs) * latencyNs
+        //
+        // Little's Law:
+        // pressure = (batchSize / intervalNs) * latencyNs
+        long throughput = Math.round(exec.avgUnitsOverTime * this.state.batchSize);
+        super.executionThroughput.record(nowNs, throughput, this.state.smtMode);
+        super.executionThroughput.refreshSnapshot(execThroughput, this.state.smtMode);
+        this.executionLatency.refreshSnapshot(exec, this.state.smtMode);
+
+
+        double avgLatency = exec.avgInterval / this.state.batchSize;
+        AVG_LATENCY.setOpaque(this, (long) avgLatency);
+
+        if(avgLatency == 0) {
+            return;
+        }
+
+        double latencyCV = execThroughput.intervalCV;
+        long batch = this.state.batchSize;
+
+        if(latencyCV > 0.05 && execThroughput.unitCV > 0.0002) { // Fast Rise
+            batch += (long) Math.max(Math.sqrt(batch >> 2), 4);
+        } else if(throughput > execThroughput.avgUnits) {
+            batch = throughput;
+        } else if (batch > execThroughput.avgUnits){
+            double diff = batch - execThroughput.avgUnits;
+            batch -= (long) Math.ceil(Math.max(diff * 0.15, 1));
+            batch = Math.max(2L, batch);
+        }
+
+        updateEffectiveBatchLimit(batch);
+
+        this.state.updateBatchSize(Math.min(batch, this.effectiveBatchLimit));
     }
 
     /// Updates the maximum allowed in-flight work for this executor.
@@ -431,11 +421,9 @@ public final class ControlPlaneFragment extends WorkRequester {
     /// P-cores are allowed to push harder than E-cores before throttling begins.
     ///
     /// Final limits are clamped against configured minimums and a hardware-derived ceiling.
-    private void updateEffectiveConcurrencyLimit(long ideal) {
+    private void updateEffectiveBatchLimit(long ideal) {
         CoreSnapshot coreSnapshot = (CoreSnapshot) SNAPSHOT.getOpaque(this);
         CpuSnapshot cpuSnapshot = coreSnapshot.cpuSnapshots()[this.cpuId];
-
-        ideal = Math.max(ideal, this.currentConcurrency);
 
         long adaptiveCap = ideal << 2;
 
@@ -445,86 +433,8 @@ public final class ControlPlaneFragment extends WorkRequester {
 
         long hardwareMax = super.frameQuota;
 
-        this.effectiveConcurrencyLimit =
-                clampLong(adaptiveCap, this.fragmentConfig.minConcurrency(), hardwareMax);
-    }
-
-    /// Adjusts execution concurrency using a blend of TCP Vegas-style queue estimation and Little’s
-    /// Law demand modeling.
-    ///
-    /// Vegas behavior is used to detect queue pressure:
-    ///
-    ///   - Low queue residency -> increase concurrency
-    ///   - High queue residency -> reduce concurrency
-    ///   - Stable queues -> hold steady
-    ///
-    /// Little’s Law provides a secondary correction based on observed throughput and latency.
-    ///
-    /// Variability in execution rate and latency expands the ideal target window to avoid
-    /// overreacting to bursty workloads.
-    ///
-    /// Concurrency changes are intentionally conservative:
-    ///
-    ///   - Small adjustments are ignored
-    ///   - Direction changes reset stability tracking
-    ///   - Multiple consistent signals are required before tuning
-    ///
-    /// This prevents oscillation while still allowing the system to react quickly under load.
-    private void updateConcurrency(long ideal, double queueEstimate) {
-        boolean drain = (boolean) DRAIN.getOpaque(this);
-        if (drain) {
-            CONCURRENCY.setOpaque(this, this.effectiveConcurrencyLimit);
-            return;
-        }
-
-        long current = this.currentConcurrency;
-
-        // Vegas thresholds
-        long logOfCurrent = Math.max(3, log2(current));
-        long alpha = Math.max(3, 3 * logOfCurrent);
-        long beta = Math.max(6, 6 * logOfCurrent);
-
-        double vegasFactor;
-        if (queueEstimate <= alpha) {
-            vegasFactor = (alpha - queueEstimate) / (double) alpha;
-        } else if (queueEstimate >= beta) {
-            vegasFactor = -(queueEstimate - beta) / (double) beta;
-        } else {
-            vegasFactor = 0.0;
-        }
-
-        vegasFactor = clampDouble(vegasFactor, -1.0, 1.0);
-
-        FlowSnapshot flowSnapshot = this.executionLatency.getFlowSnapshot();
-        double cvRate = flowSnapshot.rateCV;
-        double cvLatency = flowSnapshot.unitCV;
-        double variability = Math.min(1.0, (cvRate + cvLatency) * 0.5);
-
-        ideal = (long) (ideal * (1.0 + variability));
-
-        double littlesFactor = 0.0;
-        if (ideal > 0) {
-            littlesFactor = (ideal - current) / (double) ideal;
-            littlesFactor = clampDouble(littlesFactor, -1.0, 1.0);
-        }
-
-        double combined = (vegasFactor * 0.8) + (littlesFactor * 0.2);
-        double gain = 0.10;  // max 10% step
-
-        if (Math.signum(combined) != Math.signum(this.state.concurrencyFactor)) {
-            this.state.stabilityCounter = 0;
-        } else {
-            this.state.stabilityCounter++;
-        }
-        this.state.concurrencyFactor = combined;
-
-        if (Math.abs(combined) < gain || this.state.stabilityCounter < 3) {
-            return;
-        }
-
-        long next = (long) (current * (1.0 + combined * gain));
-
-        CONCURRENCY.setOpaque(this, clampLong(next, 1, this.effectiveConcurrencyLimit));
+        this.effectiveBatchLimit =
+                clampLong(adaptiveCap, 2, hardwareMax);
     }
 
     /// Calculates how long dispatch should back off before pulling more work.
@@ -550,25 +460,15 @@ public final class ControlPlaneFragment extends WorkRequester {
         FlowSnapshot exec = this.executionLatency.getFlowSnapshot();
 
         double avgLatency = Math.max(exec.avgUnits, 1.0);
-        double avgVariance = exec.unitVariation;
-
-        double queuePressure = FlowRecorder.getVegasQueueEstimate(exec, this.currentConcurrency);
 
         CoreSnapshot core = (CoreSnapshot) SNAPSHOT.getOpaque(this);
         CpuSnapshot cpu = core.cpuSnapshots()[this.cpuId];
-        double cpuPressure = cpu.pressure();
-        double cpuThrottle = cpuPressure * (this.isPCore ? 0.5 : 0.7);
 
-        long baseIntervalNs = (long) avgLatency;
+        double cpuPressure = cpu.pressure() * (this.isPCore ? 0.5 : 0.7);
+        double trendFactor = 1.0 + clampDouble(exec.unitTrend, -1.0, 1.0);
 
-        double queueFactor =
-                1.0 + (queuePressure / (double) (Math.max(this.currentConcurrency, 1)));
-        double variability = 1.0 + Math.min(1.0, avgVariance * 0.5);
+        long interval = (long) (avgLatency * Math.max(cpuPressure, trendFactor));
 
-        long interval = (long) (baseIntervalNs * queueFactor * variability);
-
-        // CPU backpressure
-        interval = (long) (interval * (1.0 + cpuThrottle));
         interval = clampLong(interval, 0, this.state.maxParkNs);
 
         return nowNs + interval;
@@ -602,10 +502,6 @@ public final class ControlPlaneFragment extends WorkRequester {
             while (parks-- > 0) {
                 park(this.state.maxParkNs);
 
-                if (super.requesterState.bufferCount.get() > 0) {
-                    break;
-                }
-
                 if (!this.state.smtMode) {
                     if (this.upstreamCount != super.getUpstreamCount()) {
                         break;
@@ -629,13 +525,6 @@ public final class ControlPlaneFragment extends WorkRequester {
 
     private void park(long parkNs) {
         LockSupport.parkNanos(parkNs);
-    }
-
-    private void recordCompletion(AbstractFrame frame) {
-        if (!frame.isCancelledExecution() && frame.getStartNs() > 0) {
-            long now = System.nanoTime();
-            this.executionLatency.record(now, now - frame.getStartNs(), this.state.smtMode);
-        }
     }
 
     @Override
@@ -677,7 +566,8 @@ public final class ControlPlaneFragment extends WorkRequester {
 
         static {
             try {
-                BATCH_SIZE = MethodHandles.lookup().findVarHandle(CycleState.class, "batchSize", long.class);
+                BATCH_SIZE = MethodHandles.lookup().findVarHandle(CycleState.class,
+                        "batchSize", long.class);
             } catch (Throwable t) {
                 throw new ExceptionInInitializerError(t);
             }
@@ -690,16 +580,12 @@ public final class ControlPlaneFragment extends WorkRequester {
         boolean smtMode = false;
 
         long rests = 0;
-        long dispatches = 0;
         int completed = 0;
 
         long lastActiveNs = 0;
         long lastEmptyNs = 0;
 
-        long batchSize = 2;
-        long updateMask = 1;
-        double concurrencyFactor = 1.0;
-        int stabilityCounter = 0;
+        long batchSize = 3;
 
         boolean receivingOrderedWork = false;
 
@@ -714,12 +600,11 @@ public final class ControlPlaneFragment extends WorkRequester {
             return this.batchSize;
         }
 
-        void updateMask(long mask) {
-            this.updateMask = mask;
+        void updateBatchSize(long size) {
             if(this.smtMode) {
-                BATCH_SIZE.setRelease(this, mask + 1);
+                BATCH_SIZE.setRelease(this, size);
             } else {
-                this.batchSize = mask + 1;
+                this.batchSize = size;
             }
         }
     }

@@ -13,8 +13,7 @@ public final class ExecutionMetrics implements AutoCloseable {
 
     public ExecutionMetrics(MeterRegistry registry, FragmentConfig config,
             Supplier<Integer> inFlight,
-            Supplier<Long> latency, Supplier<Long> currentConcurrency,
-            Supplier<Long> currentRate) {
+            Supplier<Long> latency) {
         String prefix = config.metricPrefix();
         if (prefix == null ||  prefix.isBlank()) {
             prefix = "euhedral";
@@ -28,18 +27,10 @@ public final class ExecutionMetrics implements AutoCloseable {
                     .description("Average time for execution of work.").tag("core", coreId)
                     .baseUnit("nanoseconds").register(registry));
 
-            meters.add(Gauge.builder(prefix + ".execution.concurrency.current",
-                            currentConcurrency).description("Current adaptive concurrency limit")
-                    .tag("core", coreId).register(registry));
-
             meters.add(
                     Gauge.builder(prefix + ".execution.inflight.count", inFlight)
                             .description("Number of frames being executed").tag("core", coreId)
                             .register(registry));
-
-            meters.add(Gauge.builder(prefix + ".execution.throughput", currentRate)
-                    .description("Current execution rate (execution/sec)").tag("core", coreId)
-                    .register(registry));
         }
     }
 

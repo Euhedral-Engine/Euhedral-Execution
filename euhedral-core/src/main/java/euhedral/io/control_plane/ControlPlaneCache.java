@@ -18,7 +18,6 @@ import euhedral.io.generics.LatticeReceiver;
 import euhedral.io.generics.LatticeSource;
 import euhedral.io.metrics.CacheMetrics;
 import euhedral.io.utils.FlowRecorder;
-import euhedral.io.utils.FlowRecorder.FlowSnapshot;
 import euhedral.io.utils.QueueConsumer;
 import io.euhedral_execution.data_structures.atomics.AtomicDouble;
 import io.euhedral_execution.data_structures.atomics.PaddedAtomicLong;
@@ -99,7 +98,6 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
 
     protected final PaddedAtomicReference<FlowRecorder> fillRecorder;
     protected final FlowRecorder pullRecorder;
-    protected final FlowRecorder pullFailureRecorder;
     protected final FlowRecorder drainRecorder;
 
     @Getter(AccessLevel.PROTECTED)
@@ -126,7 +124,6 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
             this.chunkSize = 0;
             this.fillRecorder = null;
             this.pullRecorder = null;
-            this.pullFailureRecorder = null;
             this.drainRecorder = null;
         } else {
             if (cacheConfig.registry() != null) {
@@ -144,7 +141,6 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
             this.cacheTerminal = new CacheTerminal(this);
             this.fillRecorder = new PaddedAtomicReference<>(new FlowRecorder());
             this.pullRecorder = new FlowRecorder();
-            this.pullFailureRecorder = new FlowRecorder();
             this.drainRecorder = new FlowRecorder();
 
             BitSet mappings = new BitSet(1);
@@ -173,7 +169,6 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
         if(added > 0) {
             TOTAL_COUNT.getAndAdd(ControlPlaneCache.this, this.cacheTerminal.framesAdded);
         }
-        this.pullFailureRecorder.record(now, added == 0 ? 1 : 0, false);
         return added;
     }
 

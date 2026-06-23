@@ -58,15 +58,6 @@ class ControlPlaneFragmentTest {
     }
 
     @Test
-    void shouldInitializeMinimumConcurrency() {
-        ControlPlaneFragment manager = new ControlPlaneFragment(cConfig(), sConfig());
-
-        assertEquals(64, manager.currentConcurrency);
-        assertEquals(64, manager.currentRate);
-        assertEquals(64, manager.effectiveConcurrencyLimit);
-    }
-
-    @Test
     void shouldCreateRequiredInfrastructure() {
         ControlPlaneFragment manager = new ControlPlaneFragment(cConfig(), sConfig());
 
