@@ -21,11 +21,36 @@ public class FlowRecorder {
     public static final double SCALE_INV = 1.0 / SCALE;
     public static final int MASK = SCALE - 1;
 
+    /**
+     * Returns the queue estimate scaled by the provided 'scaler'.
+     */
+    public static double getVegasQueueEstimate(FlowSnapshot flowSnapshot, long scaler) {
+        double units = flowSnapshot.lastRecordedUnits;
+        double averageUnits = flowSnapshot.avgUnits;
+        if (units <= averageUnits || averageUnits <= 0) {
+            return 0L;
+        }
+
+        double unitVariation = flowSnapshot.unitVariation;
+        double target = averageUnits + unitVariation;
+
+        // Buffer: ~6% of Average to prevent jitter
+        double buffer = averageUnits * 0.06;
+
+        double minTarget = averageUnits + buffer;
+        if (target < minTarget) {
+            target = minTarget;
+        }
+
+        double diff = units - averageUnits;
+        double denominator = target - averageUnits;
+
+        return (scaler * diff) / denominator;
+    }
     private final long minWindowNs, maxWindowNs;
     private final AtomicBoolean wip = new AtomicBoolean();
     @Getter
     private final FlowSnapshot flowSnapshot = new FlowSnapshot();
-
     @Getter
     private long dynamicWindowNs;
     private long prevWindowCount = 0;
@@ -38,14 +63,13 @@ public class FlowRecorder {
     private long lastInterval;
     @Getter
     private long lastRecordedUnits;
-
-    private long averageRate, rateVariation = 0L;
-    private long averageUnits, unitVariation = 0L;
-    private long averageInterval, intervalVariation = 0L;
+    private long averageUnitsOverTime, uotVariation = 0L, uotTrend = 0L;
+    private long averageUnits, unitVariation = 0L, unitTrend = 0L;
+    private long averageInterval, intervalVariation = 0L, intervalTrend = 0L;
     @Getter
     private long rollingSum = 0;
-    private long rateRemainder, varRateRemainder, unitRemainder, varUnitRemainder,
-            intervalRemainder, varIntervRemainder;
+    private long uotRemainder, varUoTRemainder, uotTrendRemainder, unitRemainder, varUnitRemainder, unitTrendRemainder,
+            intervalRemainder, varIntervalRemainder, intervalTrendRemainder;
 
     public FlowRecorder() {
         this(Duration.ofNanos(10_000), Duration.ofMillis(1));
@@ -86,12 +110,16 @@ public class FlowRecorder {
         if (elapsed > dynamicWindowNs) {
             int decayAlpha = getRatio(dynamicWindowNs, elapsed);
             decayAlpha = Math.min(decayAlpha, SCALE);
-            averageRate = ewma(averageRate, 0, decayAlpha, EwmaRemainder.RATE);
+            averageUnitsOverTime = ewma(averageUnitsOverTime, 0, decayAlpha, EwmaRemainder.UOT);
             averageUnits = ewma(averageUnits, 0, decayAlpha, EwmaRemainder.UNIT);
             averageInterval = ewma(averageInterval, 0, decayAlpha, EwmaRemainder.INTERVAL);
-            rateVariation = ewma(rateVariation, 0, decayAlpha, EwmaRemainder.VAR_RATE);
+
+            uotVariation = ewma(uotVariation, 0, decayAlpha, EwmaRemainder.VAR_UOT);
+            unitTrend = ewma(unitTrend, 0, decayAlpha, EwmaRemainder.UOT_TREND);
             unitVariation = ewma(unitVariation, 0, decayAlpha, EwmaRemainder.VAR_UNIT);
+            unitTrend = ewma(unitTrend, 0, decayAlpha, EwmaRemainder.UNIT_TREND);
             intervalVariation = ewma(averageInterval, 0, decayAlpha, EwmaRemainder.VAR_INTERVAL);
+            intervalTrend = ewma(intervalTrend, 0, decayAlpha, EwmaRemainder.INTERVAL_TREND);
         }
     }
 
@@ -99,12 +127,15 @@ public class FlowRecorder {
         long delta = (newVal - oldVal) * alpha;
 
         long remainder = switch (type) {
-            case RATE -> rateRemainder;
-            case VAR_RATE -> varRateRemainder;
+            case UOT -> uotRemainder;
+            case VAR_UOT -> varUoTRemainder;
+            case UOT_TREND -> uotTrendRemainder;
             case UNIT -> unitRemainder;
             case VAR_UNIT -> varUnitRemainder;
+            case UNIT_TREND -> unitTrendRemainder;
             case INTERVAL -> intervalRemainder;
-            case VAR_INTERVAL -> varIntervRemainder;
+            case VAR_INTERVAL -> varIntervalRemainder;
+            case INTERVAL_TREND -> intervalTrendRemainder;
         };
 
         long totalDelta = delta + remainder;
@@ -112,12 +143,15 @@ public class FlowRecorder {
 
         long newRemainder = totalDelta & MASK;
         switch (type) {
-            case RATE -> rateRemainder = newRemainder;
-            case VAR_RATE -> varRateRemainder = newRemainder;
+            case UOT -> uotRemainder = newRemainder;
+            case VAR_UOT -> varUoTRemainder = newRemainder;
+            case UOT_TREND -> uotTrendRemainder = newRemainder;
             case UNIT -> unitRemainder = newRemainder;
             case VAR_UNIT -> varUnitRemainder = newRemainder;
+            case UNIT_TREND -> unitTrendRemainder = newRemainder;
             case INTERVAL -> intervalRemainder = newRemainder;
-            case VAR_INTERVAL -> varIntervRemainder = newRemainder;
+            case VAR_INTERVAL -> varIntervalRemainder = newRemainder;
+            case INTERVAL_TREND -> intervalTrendRemainder = newRemainder;
         }
 
         return oldVal + appliedDelta;
@@ -147,25 +181,36 @@ public class FlowRecorder {
         if (threadSafe) {
             acquireLock();
         }
-        dynamicWindowNs = 3_000_000_000L;
+        dynamicWindowNs = this.minWindowNs;
         prevWindowCount = 0;
         currWindowCount = 0;
         windowStartNs = System.nanoTime();
         lastRecordingTime = windowStartNs;
+        lastRecordedUnits = 0;
         lastInterval = 0;
-        averageRate = 0;
-        rateVariation = 0;
+        rollingSum = 0;
+
         averageUnits = 0;
         unitVariation = 0;
-        averageInterval = 0;
-        intervalVariation = 0;
-        rollingSum = 0;
-        rateRemainder = 0;
-        varRateRemainder = 0;
+        unitTrend = 0;
         unitRemainder = 0;
         varUnitRemainder = 0;
+        unitTrendRemainder = 0;
+
+        averageUnitsOverTime = 0;
+        uotVariation = 0;
+        uotTrend = 0;
+        uotRemainder = 0;
+        varUoTRemainder = 0;
+        uotTrendRemainder = 0;
+
+        averageInterval = 0;
+        intervalVariation = 0;
+        intervalTrend = 0;
         intervalRemainder = 0;
-        varIntervRemainder = 0;
+        varIntervalRemainder = 0;
+        intervalTrendRemainder = 0;
+
         if (threadSafe) {
             releaseLock();
         }
@@ -205,8 +250,8 @@ public class FlowRecorder {
 
         updateMetrics(currentRateScaled, currentUnitsScaled, interval, alpha);
 
-        if (averageRate > 0) {
-            int varRatio = getRatio(rateVariation, averageRate);
+        if (averageUnitsOverTime > 0) {
+            int varRatio = getRatio(uotVariation, averageUnitsOverTime);
             long baseWindow = interval * 10;
             long adjustment = (baseWindow * varRatio) >> (SHIFT + 1);
             // Shrink window as jitter (variation) increases
@@ -227,18 +272,26 @@ public class FlowRecorder {
             int alpha) {
         long prevUnits = averageUnits;
 
-        averageRate = ewma(averageRate, currentRate, alpha, EwmaRemainder.RATE);
+        averageUnitsOverTime = ewma(averageUnitsOverTime, currentRate, alpha, EwmaRemainder.UOT);
         averageUnits = ewma(averageUnits, currentUnits, alpha, EwmaRemainder.UNIT);
         averageInterval = ewma(averageInterval, currentInterval, alpha, EwmaRemainder.INTERVAL);
 
         if (prevUnits != 0) {
-            rateVariation = ewma(rateVariation, Math.abs(currentRate - averageRate) / 2, alpha,
-                    EwmaRemainder.VAR_RATE);
-            unitVariation = ewma(unitVariation, Math.abs(currentUnits - averageUnits) / 2, alpha,
+            uotVariation = ewma(uotVariation, Math.abs(currentRate - averageUnitsOverTime) >> 1,
+                    alpha,
+                    EwmaRemainder.VAR_UOT);
+            uotTrend = ewma(uotTrend, (currentRate - averageUnitsOverTime) >> 1, alpha,
+                    EwmaRemainder.UOT_TREND);
+            unitVariation = ewma(unitVariation, Math.abs(currentUnits - averageUnits) >> 1, alpha,
                     EwmaRemainder.VAR_UNIT);
+            unitTrend = ewma(unitTrend, (currentUnits - averageUnits) >> 1, alpha,
+                    EwmaRemainder.UNIT_TREND);
             intervalVariation =
-                    ewma(intervalVariation, Math.abs(currentInterval - averageInterval) / 2, alpha,
+                    ewma(intervalVariation, Math.abs(currentInterval - averageInterval) >> 1, alpha,
                             EwmaRemainder.VAR_INTERVAL);
+            intervalTrend =
+                    ewma(intervalTrend, (currentInterval - averageInterval) >> 1, alpha,
+                            EwmaRemainder.INTERVAL_TREND);
         }
 
     }
@@ -251,11 +304,11 @@ public class FlowRecorder {
         if (threadSafe) {
             acquireLock();
         }
-        if(now > this.lastRecordingTime) {
+        if (now > this.lastRecordingTime) {
             decay(now, false);
         }
         refreshSnapshot(flowSnapshot);
-        if(threadSafe) {
+        if (threadSafe) {
             releaseLock();
         }
     }
@@ -267,22 +320,24 @@ public class FlowRecorder {
 
         flowSnapshot.avgUnits = (averageUnits >> SHIFT) + unitRemainder * SCALE_INV;
         flowSnapshot.unitVariation = (unitVariation >> SHIFT) + varUnitRemainder * SCALE_INV;
+        flowSnapshot.unitTrend = (unitTrend >> SHIFT) + unitTrendRemainder * SCALE_INV;
         flowSnapshot.unitCV = flowSnapshot.avgUnits == 0 ? 0.0
                 : flowSnapshot.unitVariation / flowSnapshot.avgUnits;
 
-        flowSnapshot.avgRate = (averageRate >> SHIFT) + rateRemainder * SCALE_INV;
-        flowSnapshot.rateVariation = (rateVariation >> SHIFT) + varRateRemainder * SCALE_INV;
-        flowSnapshot.rateCV =
-                flowSnapshot.avgRate == 0 ? 0.0 : flowSnapshot.rateVariation / flowSnapshot.avgRate;
+        flowSnapshot.avgUnitsOverTime = (averageUnitsOverTime >> SHIFT) + uotRemainder * SCALE_INV;
+        flowSnapshot.unitsOverTimeVariation = (uotVariation >> SHIFT) + varUoTRemainder * SCALE_INV;
+        flowSnapshot.unitsOverTimeTrend = (uotTrend >> SHIFT) + uotTrendRemainder * SCALE_INV;
+        flowSnapshot.unitsOverTimeCV =
+                flowSnapshot.avgUnitsOverTime
+                        == 0 ? 0.0
+                        : flowSnapshot.unitsOverTimeVariation / flowSnapshot.avgUnitsOverTime;
 
         flowSnapshot.avgInterval = (averageInterval >> SHIFT) + intervalRemainder * SCALE_INV;
         flowSnapshot.intervalVariation =
-                (intervalVariation >> SHIFT) + varIntervRemainder * SCALE_INV;
+                (intervalVariation >> SHIFT) + varIntervalRemainder * SCALE_INV;
+        flowSnapshot.intervalTrend = (intervalTrend >> SHIFT) + intervalTrendRemainder * SCALE_INV;
         flowSnapshot.intervalCV = flowSnapshot.avgInterval == 0 ? 0.0
                 : flowSnapshot.intervalVariation / flowSnapshot.avgInterval;
-
-        flowSnapshot.throughputNs = averageRate <= 0 ? 0 : (SCALE) / (double) averageRate;
-        flowSnapshot.throughputVariationNs = rateVariation <= 0 ? 0 : (SCALE) / (double) rateVariation;
     }
 
     public double getRollingAverage(boolean getThreadSafe) {
@@ -327,35 +382,8 @@ public class FlowRecorder {
         return prevContribution + currContribution;
     }
 
-    /**
-     * Returns the queue estimate scaled by the provided 'scaler'.
-     */
-    public static double getVegasQueueEstimate(FlowSnapshot flowSnapshot, long scaler) {
-        double units = flowSnapshot.lastRecordedUnits;
-        double averageUnits = flowSnapshot.avgUnits;
-        if (units <= averageUnits || averageUnits <= 0) {
-            return 0L;
-        }
-
-        double unitVariation = flowSnapshot.unitVariation;
-        double target = averageUnits + unitVariation;
-
-        // Buffer: ~6% of Average to prevent jitter
-        double buffer = averageUnits * 0.06;
-
-        double minTarget = averageUnits + buffer;
-        if (target < minTarget) {
-            target = minTarget;
-        }
-
-        double diff = units - averageUnits;
-        double denominator = target - averageUnits;
-
-        return (scaler * diff) / denominator;
-    }
-
     private enum EwmaRemainder {
-        RATE, VAR_RATE, UNIT, VAR_UNIT, INTERVAL, VAR_INTERVAL
+        UOT, VAR_UOT, UOT_TREND, UNIT, VAR_UNIT, UNIT_TREND, INTERVAL, VAR_INTERVAL, INTERVAL_TREND
     }
 
     public static final class FlowSnapshot {
@@ -366,17 +394,18 @@ public class FlowRecorder {
 
         public double avgUnits;
         public double unitVariation;
+        public double unitTrend;
         public double unitCV;
-
-        public double avgRate;
-        public double rateVariation;
-        public double rateCV;
 
         public double avgInterval;
         public double intervalVariation;
+        public double intervalTrend;
         public double intervalCV;
 
-        public double throughputNs;
-        public double throughputVariationNs;
+        public double avgUnitsOverTime;
+        public double unitsOverTimeVariation;
+        public double unitsOverTimeTrend;
+        public double unitsOverTimeCV;
+
     }
 }

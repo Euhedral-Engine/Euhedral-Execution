@@ -9,6 +9,7 @@ import java.util.function.Consumer;
 
 /// Used for pushing frames from one stage to the next. Assumes that only one thread will control
 /// the push side. This class can only have one downstream.
+@SuppressWarnings("unused")
 public final class LatticeHotSource implements LatticeSource, Consumer<AbstractFrame> {
 
     private static final VarHandle COMPLETE;
@@ -30,6 +31,10 @@ public final class LatticeHotSource implements LatticeSource, Consumer<AbstractF
     boolean complete = false;
     LatticeReceiver terminal = null;
 
+    public LatticeHotSource() {
+        this.applyToEach = null;
+    }
+
     public LatticeHotSource(
             Consumer<AbstractFrame> applyToEach) {
         this.applyToEach = applyToEach;
@@ -46,7 +51,7 @@ public final class LatticeHotSource implements LatticeSource, Consumer<AbstractF
             return;
         }
 
-        if(this.applyToEach != null) {
+        if (this.applyToEach != null) {
             this.applyToEach.accept(frame);
         }
 

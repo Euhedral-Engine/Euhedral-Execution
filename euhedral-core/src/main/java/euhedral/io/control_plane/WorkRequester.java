@@ -9,7 +9,6 @@ import euhedral.io.utils.FlowRecorder.FlowSnapshot;
 import euhedral.io.utils.MathFunctions;
 import euhedral.io.utils.QueueConsumer;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.Consumer;
 import org.jspecify.annotations.NonNull;
@@ -17,13 +16,13 @@ import org.jspecify.annotations.NonNull;
 public abstract class WorkRequester extends ControlPlaneCache {
 
     protected final RequesterState requesterState;
+    protected final FlowRecorder executionThroughput = new FlowRecorder();
     protected final FlowRecorder executionLatency = new FlowRecorder();
     protected final long lowWaterMark;
 
     private final PinnedThreadExecutor executor;
     private final AtomicBoolean running = new AtomicBoolean(false);
     protected volatile Thread cycleThread;
-    private FlowRecorder requestLatency = new FlowRecorder();
 
     public WorkRequester(@NonNull CacheConfig cacheConfig, long maxParkNs, PinnedThreadExecutor executor) {
         super(cacheConfig);
@@ -42,6 +41,10 @@ public abstract class WorkRequester extends ControlPlaneCache {
         }
     }
 
+    protected abstract long getBatchSize();
+
+    protected abstract void accept(AbstractFrame frame);
+
     public void start() {
         if (this.running.compareAndSet(false, true)) {
             this.executor.execute(this::cycle);
@@ -53,90 +56,82 @@ public abstract class WorkRequester extends ControlPlaneCache {
 
         ThreadTools.setTimerResolution(1);
         while (!Thread.interrupted() && this.running.getOpaque()) {
-            long bufferCount = this.requesterState.bufferCount.getAcquire();
-            if (bufferCount > this.lowWaterMark) {
+            if (requestAndPull(getBatchSize()) <= 0) {
                 Thread.onSpinWait();
-                continue;
             }
-
-            if (requestAndPull() <= 0) {
-                Thread.onSpinWait();
-                continue;
-            }
-
-            LockSupport.parkNanos(
-                    (long) ((this.requesterState.demandWaitNs - this.requesterState.nowNs) * 0.8));
         }
     }
 
     protected long drain(long limit) {
-        manuallyPull();
         return super.drain(this.requesterState, limit);
     }
 
     protected long manuallyPull() {
         if (!this.running.getOpaque()) {
-            return requestAndPull();
+            long batch = getBatchSize();
+            long refill = noDemandPull(batch);
+            if(refill != batch) {
+                requestAndPull(batch - refill);
+            }
         }
         return 0;
     }
 
-    private long requestAndPull() {
+    private long requestAndPull(long batchSize) {
         long cacheCount = super.getCacheCount();
-        if (cacheCount != 0) {
-            long pull = pullNoDemand();
-            if(pull > 0) {
-                return pull;
-            }
-        }
 
         this.requesterState.refresh();
         this.requesterState.nowNs = System.nanoTime();
         this.requesterState.batchLatencyRecorder.record(this.requesterState.nowNs,
                 this.requesterState.nowNs - this.requesterState.drain.lastRecordingTimeNs, false);
 
-        long demand = calculateDemand();
         long pulled = 0;
-        if(demand > 0) {
-            super.request(demand);
-            long now = System.nanoTime();
-            this.requestLatency.record(now, now - this.requesterState.nowNs, false);
-            this.requesterState.nowNs = now;
+        long demand = calculateDemand(batchSize, cacheCount);
+        if(demand > 0 && cacheCount < demand) {
+            demand = Math.max(demand - cacheCount, batchSize);
 
-            long pull = Math.min(demand, super.getMaxQueueCount() - cacheCount);
-            pull = Math.min(pull, getBatchSize() * 4);
+            super.request(demand);
+            cacheCount = getCacheCount();
+
+            long pull = Math.min(batchSize, super.getMaxQueueCount() - cacheCount);
             pulled = super.pull(pull);
         } else {
-            super.pull(Math.min(getBatchSize(), super.getMaxQueueCount() - cacheCount));
+            super.pull(Math.min(batchSize, super.getMaxQueueCount() - cacheCount));
         }
 
         return pulled;
     }
 
-    private long pullNoDemand() {
+    private long noDemandPull(long limit) {
         long capacity = super.getMaxQueueCount() - super.getCacheCount();
-        long maxFill = Math.min(capacity, getBatchSize());
+        long maxFill = Math.min(capacity, limit);
 
         return super.pull(maxFill);
     }
 
-    protected abstract long getBatchSize();
-
-    protected abstract void accept(AbstractFrame frame);
-
-    private long calculateDemand() {
+    private long calculateDemand(long batchSize, long cacheCount) {
         FlowSnapshot drain = this.requesterState.drain;
-        FlowSnapshot demandLatency = this.requestLatency.getFlowSnapshot();
-        this.requestLatency.refreshSnapshot(demandLatency, false);
+        FlowSnapshot pull = this.requesterState.pull;
+        FlowSnapshot throughput = this.executionThroughput.getFlowSnapshot();
+        this.executionThroughput.refreshSnapshot(throughput, false);
 
-        double drainThroughput = drain.throughputNs;
+        double drainThroughput = drain.avgUnitsOverTime;
         if(drainThroughput == 0) {
             return this.lowWaterMark;
         }
 
-        double ideal = drainThroughput * (demandLatency.avgUnits);
+        long batch = getBatchSize();
 
-        return Math.max(0, Math.round(ideal));
+        double multiplier = 1.0;
+        if(pull.avgUnits > 0) {
+            multiplier = MathFunctions.clampDouble(batch / pull.avgUnits, 1.0, 6.0);
+        }
+
+        double ideal = batch * multiplier;
+//        if(getCore() == 6) {
+//            logger.info("Batch: {} Demand: {} LastPull: {} AvgPull: {} PullVariation: {} PullCV: {} PullThroughput: {}", batch, ideal, pull.lastRecordedUnits, pull.avgUnits, pull.unitVariation, pull.unitCV, pull.avgUnitsOverTime);
+//        }
+        return Math.max(batchSize, Math.round(ideal));
     }
 
     @Override
@@ -171,13 +166,8 @@ public abstract class WorkRequester extends ControlPlaneCache {
         public final FlowSnapshot exec;
 
         public final FlowRecorder batchLatencyRecorder = new FlowRecorder();
-        public long demandWaitNs = 0;
-
-        public AtomicLong bufferCount = new AtomicLong(0);
 
         private long nowNs = 0;
-        private long windowStartNs = 0;
-        private long windowEndNs = 0;
 
         public RequesterState(Consumer<AbstractFrame> consumer, boolean smt, FlowRecorder executionLatency,
                 FlowRecorder fillRecorder,

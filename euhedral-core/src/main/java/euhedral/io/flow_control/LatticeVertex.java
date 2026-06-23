@@ -198,10 +198,17 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
         long total = 0;
         if (this.cache != null) {
             long tId = Thread.currentThread().getId();
-            int startIdx = (int) unsignedMultiplyHigh(tId, this.cache.partitions());
-            long count = this.cache.drain(consumer, demand, startIdx);
-            demand -= count;
-            total += count;
+            int head = (int) unsignedMultiplyHigh(tId, this.cache.partitions());
+            int cycles = 0;
+            while(demand > 0 && cycles < this.cache.partitions()) {
+                long count = this.cache.drain(head++, consumer, demand);
+                demand -= count;
+                total += count;
+                cycles = count > 4 ? 0 : cycles + 1;
+                if(head == this.cache.partitions()) {
+                    head = 0;
+                }
+            }
         }
 
         LatticeEdge parent = (LatticeEdge) PARENT.getOpaque(this);
@@ -271,7 +278,6 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
         private final PaddedAtomicLong wip = new PaddedAtomicLong(0);
         private final PaddedAtomicLong demand = new PaddedAtomicLong(0);
         public LatticeSource upstream;
-        private long count = 0;
 
         @Override
         public void addUpstream(@NonNull LatticeSource upstream) {
@@ -281,12 +287,6 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
 
         @Override
         public void push(AbstractFrame frame) {
-            if ((this.count++ & 63) == 0) {
-                frame.setIngestNs(System.nanoTime());
-            } else {
-                frame.setIngestNs(0);
-            }
-
             LatticeVertex.this.push(frame);
         }
 
