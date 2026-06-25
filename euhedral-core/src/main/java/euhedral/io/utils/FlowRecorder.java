@@ -346,12 +346,12 @@ public class FlowRecorder {
         }
 
         long count = getEffectiveMeasurementWindowCount(this.lastRecordingTime, false);
-        double rollingSum = count == 0 ? 0 : (double) this.rollingSum / count;
+        double rollingAverage = count == 0 ? 0 : (double) this.rollingSum / count;
 
         if (getThreadSafe) {
             releaseLock();
         }
-        return rollingSum;
+        return rollingAverage;
     }
 
     public long getEffectiveMeasurementWindowCount(long now, boolean getThreadSafe) {

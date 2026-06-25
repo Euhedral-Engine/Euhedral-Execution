@@ -12,16 +12,22 @@ public class FlowPredictor {
 
     private final double[] sumW;
     private final double[] sumY;
+    private final double[] sumY2;
 
     private long rand = HasherApi.mix(ThreadLocalRandom.current().nextLong());
 
     public FlowPredictor(int buckets, double decayFactor) {
-        buckets = Integer.highestOneBit(buckets);
+        buckets = Integer.highestOneBit(buckets) << 6;
+        if(buckets == 0) {
+            buckets = 1 << 16;
+        }
+
         this.decayFactor = decayFactor;
         this.mask = buckets - 1;
 
-        this.sumY = new double[buckets];
         this.sumW = new double[buckets];
+        this.sumY = new double[buckets];
+        this.sumY2 = new double[buckets];
     }
 
     public void record(double x, double y) {
@@ -29,10 +35,12 @@ public class FlowPredictor {
 
         this.sumW[idx] = (this.sumW[idx] * this.decayFactor) + 1.0;
         this.sumY[idx] = (this.sumY[idx] * this.decayFactor) + y;
+        this.sumY2[idx] = (this.sumY2[idx] * this.decayFactor) + (y * y);
     }
 
     public double predictY(double x) {
         int idx = getIndex(x);
+
         double weight = this.sumW[idx];
 
         if(weight < 1e-6) {
@@ -57,29 +65,71 @@ public class FlowPredictor {
         double xPlus = currentX + stepSize;
         double xMinus = Math.max(1.0, currentX - stepSize);
 
-        double yCurrent = predictY(currentX);
-        double yPlus = predictY(xPlus);
-        double yMinus = predictY(xMinus);
+        double scoreCurrent = mean(currentX) + stdDev(currentX);
+        double scorePlus = mean(xPlus) + stdDev(xPlus);
+        double scoreMinus = mean(xMinus) + stdDev(xMinus);
 
-        if(yPlus > yCurrent && yPlus >= yMinus) {
+        if(scorePlus > scoreCurrent && scorePlus >= scoreMinus) {
             return xPlus;
-        } else if (yMinus > yCurrent) {
+        } else if (scoreMinus > scoreCurrent) {
             return xMinus;
         }
 
         return currentX;
     }
 
-    public void reset() {
-        Arrays.fill(this.sumW, 0);
-        Arrays.fill(this.sumY, 0);
-    }
-    private int getIndex(double x) {
-        if(x <= 0) {
-            return 0;
+    public double mean(double x) {
+        int idx = getIndex(x);
+
+        double w = this.sumW[idx];
+        if(w < 1e-6) {
+            return 0.0;
         }
 
+        return this.sumY[idx] / w;
+    }
+
+    public double variance(double x) {
+        int idx = getIndex(x);
+
+        double w = this.sumW[idx];
+        if(w < 1e-6) {
+            return 0.0;
+        }
+
+        double mean = this.sumY[idx] / w;
+        double mean2 = this.sumY2[idx] / w;
+
+        return Math.max(0.0, mean2 - (mean * mean));
+    }
+
+    public double stdDev(double x) {
+        return Math.sqrt(variance(x));
+    }
+
+    public double cv(double x) {
+        double mean = mean(x);
+
+        if(mean < 1e-6) {
+            return Double.POSITIVE_INFINITY;
+        }
+
+        return stdDev(x) / mean;
+    }
+
+    public void reset() {
+        Arrays.fill(this.sumW, 0.0);
+        Arrays.fill(this.sumY, 0.0);
+        Arrays.fill(this.sumY2, 0.0);
+    }
+
+    private int getIndex(double x) {
         int exponent = Math.getExponent(x);
-        return exponent & this.mask;
+        double normalized = x / Math.scalb(1.0, exponent);
+
+        int mantissa = (int)((normalized - 1.0) * 16.0);
+
+        int idx = (exponent << 4) | mantissa;
+        return idx & this.mask;
     }
 }

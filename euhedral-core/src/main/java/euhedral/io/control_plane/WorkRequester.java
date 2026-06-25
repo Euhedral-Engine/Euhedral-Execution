@@ -4,10 +4,12 @@ import euhedral.hardware_utils.PinnedThreadExecutor;
 import euhedral.hardware_utils.ThreadTools;
 import euhedral.io.config.CacheConfig;
 import euhedral.io.frames.AbstractFrame;
+import euhedral.io.utils.FlowPredictor;
 import euhedral.io.utils.FlowRecorder;
 import euhedral.io.utils.FlowRecorder.FlowSnapshot;
+import euhedral.io.utils.MathFunctions;
 import euhedral.io.utils.QueueConsumer;
-import java.time.Duration;
+
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.Consumer;
@@ -16,9 +18,9 @@ import org.jspecify.annotations.NonNull;
 public abstract class WorkRequester extends ControlPlaneCache {
 
     protected final RequesterState requesterState;
-    protected final FlowRecorder upstreamCache = new FlowRecorder(Duration.ofNanos(100_000), Duration.ofMillis(10));
-    protected final FlowRecorder executionThroughput = new FlowRecorder();
-    protected final FlowRecorder executionLatency = new FlowRecorder();
+
+    protected final FlowPredictor requestPredictor = new FlowPredictor(128, 0.990);
+
     protected final long lowWaterMark;
 
     private final PinnedThreadExecutor executor;
@@ -33,10 +35,9 @@ public abstract class WorkRequester extends ControlPlaneCache {
             this.lowWaterMark = 0;
             this.executor = null;
         } else {
-            this.requesterState = new RequesterState(this::accept, executor != null, this.executionLatency,
+            this.requesterState = new RequesterState(this::accept, executor != null,
                     super.fillRecorder.getPlain(),
-                    super.pullRecorder,
-                    super.drainRecorder, maxParkNs);
+                    super.pullRecorder, maxParkNs);
             this.lowWaterMark = super.getMaxQueueCount() >> 2;
             this.executor = executor;
         }
@@ -45,6 +46,24 @@ public abstract class WorkRequester extends ControlPlaneCache {
     protected abstract long getBatchSize();
 
     protected abstract void accept(AbstractFrame frame);
+
+    protected void updateRequestSize(double measuredThroughput) {
+        long requestSize = this.requesterState.requestSize;
+        this.requestPredictor.record(requestSize, measuredThroughput);
+
+        double stdDev = this.requestPredictor.stdDev(requestSize);
+        double mean = this.requestPredictor.mean(requestSize);
+
+        double exploration = MathFunctions.clampDouble(2.0 * stdDev / Math.max(mean, 1e-6), 0.01, 0.25);
+
+        double step = Math.max(4, Math.sqrt(stdDev));
+        if(!Double.isFinite(step)) {
+            step = 4;
+        }
+
+        double predictedNext = this.requestPredictor.computeNextBestX(requestSize, step, exploration);
+        this.requesterState.requestSize = Math.max(Math.round(predictedNext), 4L);
+    }
 
     public void start() {
         if (this.running.compareAndSet(false, true)) {
@@ -77,54 +96,27 @@ public abstract class WorkRequester extends ControlPlaneCache {
     private long requestAndPull() {
         this.requesterState.refresh();
 
-        long demand = calculateDemand();
+        long demand = this.requesterState.requestSize;
 
         double pullT = this.requesterState.pull.avgUnitsOverTime;
         double fillT = this.requesterState.fill.avgUnitsOverTime;
-        double totalT = pullT + fillT;
 
-        long pull = getBatchSize();
-        if(totalT > 0) {
-            pull = (long) Math.ceil(pull * 0.5 * pullT / totalT);
+        long pull = demand;
+        if(fillT > 0) {
+            pull = (long) Math.ceil(pull * pullT / (pullT + fillT));
         }
         pull = Math.min(pull, super.getMaxQueueCount() - super.getCacheCount());
 
+        long upCache = super.getUpstreamCacheCount();
+
+        double pressure =
+                demand / Math.max(1.0, upCache / (double) super.getThreadCount());
+        pressure = Math.min(1.0, pressure);
+
+        demand = Math.round(demand * pressure);
+
         super.request(demand);
         return super.pull(pull);
-    }
-
-    private long calculateDemand() {
-        FlowSnapshot pull = this.requesterState.pull;
-        FlowSnapshot fill = this.requesterState.fill;
-        FlowSnapshot execThroughput = this.executionThroughput.getFlowSnapshot();
-        this.executionThroughput.refreshSnapshot(execThroughput, false);
-
-        double avgReplenish = pull.avgUnits + fill.avgUnitsOverTime * Math.max(pull.avgInterval, fill.avgInterval);
-        if(avgReplenish == 0) {
-            return getBatchSize();
-        }
-
-        long upCache = super.getUpstreamCacheCount();
-        this.upstreamCache.record(upCache, false);
-
-        FlowSnapshot totalUpstreamCache = this.upstreamCache.getFlowSnapshot();
-        this.upstreamCache.refreshSnapshot(totalUpstreamCache, false);
-
-        long coWorkers = super.getThreadCount();
-
-        long request = (long) execThroughput.avgUnits;
-        request = Math.max(request, 4);
-
-        if(request * coWorkers < upCache) {
-            request = 0;
-        } else if(totalUpstreamCache.unitTrend < 0) {
-            request += Math.max(Math.round(Math.sqrt(request)), 4);
-        }
-
-        if(getCore() == 6) {
-            logger.info("AvgPull: {} PullInterval: {} ExecThroughput: {} ExecInterval: {} Request: {} AvgCache: {} CacheTrend: {}", pull.avgUnits, pull.avgInterval, execThroughput.avgUnits, execThroughput.avgInterval, request, totalUpstreamCache.avgUnits, totalUpstreamCache.unitTrend);
-        }
-        return request;
     }
 
     @Override
@@ -150,40 +142,29 @@ public abstract class WorkRequester extends ControlPlaneCache {
 
         public final FlowRecorder fillRecorder;
         public final FlowRecorder pullRecorder;
-        public final FlowRecorder drainRecorder;
-        public final FlowRecorder executionLatency;
 
         public final FlowSnapshot fill;
         public final FlowSnapshot pull;
-        public final FlowSnapshot drain;
-        public final FlowSnapshot exec;
 
-        private long requestSize = 4;
+        public long requestSize = 4;
 
-        public RequesterState(Consumer<AbstractFrame> consumer, boolean smt, FlowRecorder executionLatency,
+        public RequesterState(Consumer<AbstractFrame> consumer, boolean smt,
                 FlowRecorder fillRecorder,
                 FlowRecorder pullRecorder,
-                FlowRecorder drainRecorder,
                 long maxParkNs) {
             super(consumer);
             this.smt = smt;
             this.maxParkNs = maxParkNs;
             this.fillRecorder = fillRecorder;
             this.pullRecorder = pullRecorder;
-            this.drainRecorder = drainRecorder;
-            this.executionLatency = executionLatency;
 
             this.fill = fillRecorder.getFlowSnapshot();
             this.pull = pullRecorder.getFlowSnapshot();
-            this.drain = drainRecorder.getFlowSnapshot();
-            this.exec = executionLatency.getFlowSnapshot();
         }
 
         public void refresh() {
-            this.executionLatency.refreshSnapshot(this.exec, this.smt);
             this.fillRecorder.refreshSnapshot(this.fill, true);
             this.pullRecorder.refreshSnapshot(this.pull, false);
-            this.drainRecorder.refreshSnapshot(this.drain, this.smt);
         }
     }
 }

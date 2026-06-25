@@ -98,7 +98,6 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
 
     protected final PaddedAtomicReference<FlowRecorder> fillRecorder;
     protected final FlowRecorder pullRecorder;
-    protected final FlowRecorder drainRecorder;
 
     @Getter(AccessLevel.PROTECTED)
     private final PartitionedMpscQueue<AbstractFrame> cache;
@@ -124,7 +123,6 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
             this.chunkSize = 0;
             this.fillRecorder = null;
             this.pullRecorder = null;
-            this.drainRecorder = null;
         } else {
             if (cacheConfig.registry() != null) {
                 this.metrics = new CacheMetrics(cacheConfig.metricPrefix(), cacheConfig.cloneConfig().coreId() + "",
@@ -141,7 +139,6 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
             this.cacheTerminal = new CacheTerminal(this);
             this.fillRecorder = new PaddedAtomicReference<>(new FlowRecorder());
             this.pullRecorder = new FlowRecorder();
-            this.drainRecorder = new FlowRecorder();
 
             BitSet mappings = new BitSet(1);
             mappings.set(0);
@@ -189,8 +186,6 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
 
             TOTAL_COUNT.getAndAdd(this, -queueConsumer.drainCount);
         }
-
-        this.drainRecorder.record(now, queueConsumer.drainCount, true);
 
         long totalDrain = queueConsumer.drainCount;
         queueConsumer.reset();
