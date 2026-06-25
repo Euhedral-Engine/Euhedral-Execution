@@ -110,8 +110,8 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
     long totalCount = 0L;
 
     public ControlPlaneCache(@NonNull CacheConfig cacheConfig) {
-        super(getName(cacheConfig), cacheConfig.partitionsPerCpu(), (frame, mapSize) -> 0,
-                null, RoutingPolicy.CACHE_LOCAL);
+        super(getName(cacheConfig), 1, (frame, mapSize) -> 0,
+                0, RoutingPolicy.CACHE_LOCAL);
         this.cacheConfig = cacheConfig;
 
         int partitions = cacheConfig.partitionsPerCpu();
@@ -145,14 +145,14 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
 
             BitSet mappings = new BitSet(1);
             mappings.set(0);
-            LatticeEdge[] queueHandles = new LatticeEdge[]{new LatticeEdge(super.drain)};
-            queueHandles[0].addDownstream(this.cacheTerminal);
+            LatticeEdge[] terminal = new LatticeEdge[]{new LatticeEdge(super.drain)};
+            terminal[0].addDownstream(this.cacheTerminal);
 
             setDrain(true);
-            super.setDownstreamMapping(mappings, queueHandles);
+            super.setDownstreamMapping(mappings, terminal);
             setDrain(false);
 
-            this.logger.debug("Partitions: {} PartitionChunkSize: {} CapacityPerQueueNode: {}",
+            this.logger.debug("Partitions: {} PartitionChunkSize: {} L2AndL1Capacity: {}",
                     partitions, this.chunkSize, partitions * this.chunkSize);
         }
     }

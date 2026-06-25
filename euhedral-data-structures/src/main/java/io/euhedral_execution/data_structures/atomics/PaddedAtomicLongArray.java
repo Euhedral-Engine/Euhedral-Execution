@@ -144,7 +144,15 @@ public sealed class PaddedAtomicLongArray permits PaddedLongAdder {
     }
 
     public long addAndGet(int idx, long val) {
-        return (long) HANDLE.getAndAdd(this.array, getPhysicalIdx(idx), val) + val;
+        return getAndAdd(idx, val) + val;
+    }
+
+    public long getAndAddRelease(int idx, long val) {
+        return (long) HANDLE.getAndAddRelease(this.array, getPhysicalIdx(idx), val);
+    }
+
+    public long addReleaseAndGet(int idx, long val) {
+        return getAndAddRelease(idx, val) + val;
     }
 
     // ----- CAS -----

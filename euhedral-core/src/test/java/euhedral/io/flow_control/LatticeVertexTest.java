@@ -19,7 +19,6 @@ import euhedral.io.control_plane.RoutingPolicy;
 import euhedral.io.flow_control.LatticeVertex.RoutingFunction;
 import euhedral.io.generics.LatticeSource;
 import euhedral.io.utils.QueueConsumer;
-import io.euhedral_execution.data_structures.queues.PartitionedMpmcQueue;
 import java.util.BitSet;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.AfterEach;
@@ -37,7 +36,7 @@ class LatticeVertexTest {
         UpstreamQueue.UP_QUEUE.remove();
 
         node = new LatticeVertex("test-node", 4, RoutingFunction.DEFAULT,
-                new PartitionedMpmcQueue<>(4), RoutingPolicy.ANYWHERE);
+                16, RoutingPolicy.ANYWHERE);
     }
 
     @AfterEach
@@ -60,7 +59,7 @@ class LatticeVertexTest {
                 "terminal",
                 2,
                 LatticeVertex.RoutingFunction.DEFAULT,
-                null, RoutingPolicy.ANYWHERE
+                0, RoutingPolicy.ANYWHERE
         );
 
         assertFalse(terminal.hasCache);
@@ -166,7 +165,7 @@ class LatticeVertexTest {
 
     @Test
     void shouldRouteFramesToCorrectDownstream() {
-        node = new LatticeVertex("test-node", 4, RoutingFunction.DEFAULT, null,
+        node = new LatticeVertex("test-node", 4, RoutingFunction.DEFAULT, 0,
                 RoutingPolicy.ANYWHERE);
         node.setDrain(true);
 
@@ -306,12 +305,18 @@ class LatticeVertexTest {
 
         interceptor.push(frame);
 
-        assertFalse(node.cache.isEmpty());
+        boolean isEmpty = true;
+        for(var queue : node.cache) {
+            if(queue != null) {
+                isEmpty &= queue.isEmpty();
+            }
+        }
+        assertFalse(isEmpty);
     }
 
     @Test
     void shouldDirectlyRouteOrderedFrames() {
-        node = new LatticeVertex("test-node", 4, RoutingFunction.DEFAULT, null,
+        node = new LatticeVertex("test-node", 4, RoutingFunction.DEFAULT, 0,
                 RoutingPolicy.ANYWHERE);
         node.setDrain(true);
 

@@ -143,6 +143,9 @@ public class ResourceMonitor implements AutoCloseable {
     }
 
     public final HardwareUtilization getUtilization() {
+        if(!this.running.getAcquire()) {
+            poll();
+        }
         return this.hardwareUtilization;
     }
 

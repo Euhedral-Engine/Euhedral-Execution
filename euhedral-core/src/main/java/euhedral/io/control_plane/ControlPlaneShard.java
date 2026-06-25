@@ -13,7 +13,6 @@ import euhedral.io.flow_control.LatticeEdge;
 import euhedral.io.flow_control.LatticeVertex;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.CloneableObject;
-import io.euhedral_execution.data_structures.queues.PartitionedMpmcQueue;
 import io.euhedral_execution.data_structures.queues.common.QueueUtils;
 import java.time.Duration;
 import java.util.BitSet;
@@ -83,17 +82,13 @@ public class ControlPlaneShard implements AutoCloseable {
         SocketInfo info = SystemInfo.getSocketInfo(snapshot.socketId());
         long sizeL3 = SystemInfo.socketL3Cache(snapshot.socketId());
         int cores = info.getCoreSet().cardinality();
-        long chunkSize = sizeL3 / cores;
-        chunkSize = (long) (chunkSize * 0.7);
-        chunkSize /= QueueUtils.REFERENCE_SIZE;
+        long capacity = (long) (sizeL3 * 0.7);
+        capacity /= QueueUtils.REFERENCE_SIZE;
 
-        PartitionedMpmcQueue<AbstractFrame> cacheL3 = new PartitionedMpmcQueue<>(cores,
-                (int) chunkSize);
-
-        logger.debug("L3 Cache: Partitions: {} PartionChunkSize: {}", cores,
-                QueueUtils.roundChunkSize(chunkSize));
+        logger.debug("L3 Cache: Partitions: {} PartionChunkSize: {} Capacity: {}", cores,
+                QueueUtils.roundChunkSize(capacity) / cores, cores * QueueUtils.roundChunkSize(capacity));
         LatticeVertex coreDistributor = new LatticeVertex(this.shardName + "-CoreDistributor",
-                topology.effectiveCores().length(), this::route, cacheL3,
+                SystemInfo.getMaxCoreId() + 1, this::route, (int) capacity,
                 RoutingPolicy.SOCKET_LOCAL);
         this.coreDistributor.set(coreDistributor);
         coreDistributor.addUpstream(upstream);
@@ -213,6 +208,7 @@ public class ControlPlaneShard implements AutoCloseable {
             this.coreDistributor.get().setDrain(false);
             this.primed.set(true);
             this.rebalancing.set(false);
+            logger.info("Priming Complete");
         } else {
             drainAndPruneClones(newCores, snapshot, nextClones);
             this.clones.setRelease(nextClones);

@@ -263,7 +263,7 @@ public final class ControlPlaneFragment extends WorkRequester {
                         super.start();
                         this.state.smtMode = true;
                     } else {
-                        super.register();
+                        super.register(getCore());
                     }
 
                     cycle();

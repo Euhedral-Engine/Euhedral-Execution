@@ -42,7 +42,7 @@ class LatticeEdgeTest {
 
     @Test
     void shouldCreateThreadQueueOnRegister() {
-        edge.register();
+        edge.register(0);
 
         assertEquals(1, edge.getThreadCount());
     }
@@ -259,7 +259,7 @@ class LatticeEdgeTest {
 
         edge.addUpstream(upstream);
 
-        edge.register();
+        edge.register(0);
 
         assertEquals(1, edge.getThreadCount());
     }
@@ -272,7 +272,7 @@ class LatticeEdgeTest {
 
         edge.addUpstream(upstream);
 
-        edge.register();
+        edge.register(0);
 
         LatticeEdge parent = new LatticeEdge(new AtomicBoolean());
 
@@ -284,7 +284,7 @@ class LatticeEdgeTest {
 
     @Test
     void shouldRemoveThread() {
-        edge.register();
+        edge.register(0);
 
         assertEquals(1, edge.getThreadCount());
 

@@ -20,29 +20,29 @@ public final class PaddedLongAdder extends PaddedAtomicLongArray {
 
     public void increment() {
         long rand = ThreadLocalRandom.current().nextLong();
-        super.incrementAndGet(super.fromRawIdx(rand));
+        super.getAndAddRelease(super.fromRawIdx(rand), 1);
     }
 
     public void increment(int idx) {
-        super.incrementAndGet(idx);
+        super.getAndAddRelease(idx, 1);
     }
 
     public void decrement() {
         long rand = ThreadLocalRandom.current().nextLong();
-        super.decrementAndGet(super.fromRawIdx(rand));
+        super.getAndAddRelease(super.fromRawIdx(rand), -1);
     }
 
     public void decrement(int idx) {
-        super.decrementAndGet(idx);
+        super.getAndAddRelease(idx, -1);
     }
 
     public void add(long value) {
         long rand = ThreadLocalRandom.current().nextLong();
-        super.addAndGet(super.fromRawIdx(rand), value);
+        super.getAndAddRelease(super.fromRawIdx(rand), value);
     }
 
     public void add(int idx, long value) {
-        super.addAndGet(idx, value);
+        super.getAndAddRelease(idx, value);
     }
 
     public long sum() {
@@ -69,10 +69,8 @@ public final class PaddedLongAdder extends PaddedAtomicLongArray {
             }
         } else {
             for (int i = 0; i < super.array.length; i++) {
-                sum += super.array[i];
-                super.array[i] = 0;
+                sum += super.getAndSet(i, 0);
             }
-            VarHandle.fullFence();
         }
         return sum;
     }

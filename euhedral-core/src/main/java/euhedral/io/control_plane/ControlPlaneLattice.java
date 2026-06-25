@@ -158,6 +158,7 @@ public final class ControlPlaneLattice implements LatticeTerminal, AutoCloseable
             CloneableObject cloneableObject, BitSet allowedCpus) {
         this.topology = new TopologyMapper(allowedCpus);
         this.resourceMonitor = new ResourceMonitor(this.topology, Duration.ofMillis(200));
+        this.resourceMonitor.addListener(this::update);
 
         this.baseShard = Objects.requireNonNullElseGet(baseShard,
                 () -> new ControlPlaneShard(-1, "BaseShard", cloneableObject));
@@ -179,16 +180,16 @@ public final class ControlPlaneLattice implements LatticeTerminal, AutoCloseable
 
     public void start() {
         if (this.started.compareAndSet(false, true)) {
-            this.resourceMonitor.start();
-
             init();
-            this.topology.update(this.resourceMonitor.getUtilization());
 
-            update(resourceMonitor.getUtilization());
-            this.resourceMonitor.addListener(this::update);
-            while (this.rebalancing.get() || !this.ready()) {
+            HardwareUtilization utilization = this.resourceMonitor.getUtilization();
+            this.topology.update(utilization);
+            update(utilization);
+
+            while (this.rebalancing.getAcquire() || !this.ready()) {
                 LockSupport.parkNanos(1_000L);
             }
+            this.resourceMonitor.start();
             this.ready.setRelease(true);
         }
     }
@@ -230,7 +231,7 @@ public final class ControlPlaneLattice implements LatticeTerminal, AutoCloseable
         }
 
         LatticeVertex controller = new LatticeVertex(this.name + "-GlobalDistributor",
-                this.effectiveTopology.socketTopologies().size(), this::route, null,
+                SystemInfo.getMaxSocketId() + 1, this::route, 0,
                 RoutingPolicy.ANYWHERE);
         this.ingestController.set(controller);
     }
