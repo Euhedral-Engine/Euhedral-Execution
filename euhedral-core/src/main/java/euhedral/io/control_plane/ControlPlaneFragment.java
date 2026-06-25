@@ -18,8 +18,8 @@ import euhedral.io.flow_control.LatticeHotSource;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.LatticeSource;
 import euhedral.io.metrics.ExecutionMetrics;
+import euhedral.io.utils.FlowPredictor;
 import euhedral.io.utils.FlowRecorder;
-import euhedral.io.utils.FlowRecorder.FlowSnapshot;
 import euhedral.io.utils.MathFunctions;
 import io.euhedral_execution.data_structures.queues.PartitionedMpscQueue;
 import java.lang.invoke.MethodHandles;
@@ -110,7 +110,6 @@ public final class ControlPlaneFragment extends WorkRequester {
     private final Logger logger;
     private final ExecutionMetrics metrics;
     private final boolean isPCore;
-    private final FlowRecorder executionLatency;
     private final BufferedBridge completeSink;
     private final AtomicBoolean running = new AtomicBoolean(false);
 
@@ -139,7 +138,6 @@ public final class ControlPlaneFragment extends WorkRequester {
         if (fragmentConfig.cloneConfig() == null) {
             this.cpuId = -1;
             this.logger = LoggerFactory.getLogger(ControlPlaneFragment.class);
-            this.executionLatency = null;
             this.state = null;
             this.pinnedExecutor = null;
             this.isPCore = false;
@@ -155,7 +153,6 @@ public final class ControlPlaneFragment extends WorkRequester {
             int[] cpus = fragmentConfig.cloneConfig().getCpuSet();
             this.cpuId = cpus[0];
 
-            this.executionLatency = super.executionLatency;
             this.state = new CycleState(fragmentConfig.idleCyclePolicy().maxParkTime().toNanos());
 
             this.pinnedExecutor =
@@ -324,7 +321,7 @@ public final class ControlPlaneFragment extends WorkRequester {
                 long cacheCount = super.getCacheCount();
                 // This is usually hit when there are producers present but nothing is flowing
                 if ((this.state.rests & 15) != 0 && this.upstreamCount > 0
-                        && !this.state.receivingOrderedWork && cacheCount == 0
+                        && cacheCount == 0
                         && this.state.lastEmptyNs - this.state.lastActiveNs
                         > 10 * this.state.maxParkNs) {
                     idleSpin(Math.min(15, this.state.rests));
@@ -367,49 +364,46 @@ public final class ControlPlaneFragment extends WorkRequester {
             this.state.completed = 0;
 
             long now = System.nanoTime();
-            this.executionLatency.record(now, 1, this.state.smtMode);
-
             updateLimits(now);
         }
     }
 
     private void updateLimits(long nowNs) {
-        FlowSnapshot exec = this.executionLatency.getFlowSnapshot();
-        FlowSnapshot execThroughput = super.executionThroughput.getFlowSnapshot();
-
-        // Execution latency only records time units
-        // avgUnitsOverTime = units / interval = latencyNs / intervalNs = = (1 / intervalNs) * latencyNs
-        //
-        // Little's Law:
-        // pressure = (batchSize / intervalNs) * latencyNs
-        long throughput = Math.round(exec.avgUnitsOverTime * this.state.batchSize);
-        super.executionThroughput.record(nowNs, throughput, this.state.smtMode);
-        super.executionThroughput.refreshSnapshot(execThroughput, this.state.smtMode);
-        this.executionLatency.refreshSnapshot(exec, this.state.smtMode);
-
-
-        double avgLatency = exec.avgInterval / this.state.batchSize;
-        AVG_LATENCY.setOpaque(this, (long) avgLatency);
-
-        if(avgLatency == 0) {
+        if(this.state.batchStart == 0) {
+            this.state.batchStart = nowNs;
             return;
         }
+        long elapsed = nowNs - this.state.batchStart;
 
-        double latencyCV = execThroughput.intervalCV;
+        double avgLatency = (double) elapsed / this.state.batchSize;
+        AVG_LATENCY.setOpaque(this, (long) avgLatency);
+
+        double throughput = this.state.batchSize / (double) elapsed;
+
         long batch = this.state.batchSize;
+        this.state.batchPredictor.record(batch, throughput);
 
-        if(latencyCV > 0.05 && execThroughput.unitCV > 0.0002) { // Fast Rise
-            batch += (long) Math.max(Math.sqrt(batch >> 2), 4);
-        } else if(throughput > execThroughput.avgUnits) {
-            batch = throughput;
-        } else if (batch > execThroughput.avgUnits){
-            double diff = batch - execThroughput.avgUnits;
-            batch -= (long) Math.ceil(Math.max(diff * 0.15, 1));
-            batch = Math.max(2L, batch);
+        double mean = this.state.batchPredictor.mean(batch);
+        double stdDev = this.state.batchPredictor.stdDev(batch);
+
+        double exploration = MathFunctions.clampDouble(2.0 * stdDev / Math.max(mean, 1e-6), 0.01, 0.25);
+
+        double step = Math.max(4, Math.sqrt(stdDev));
+        if(!Double.isFinite(step)) {
+            step = 4;
         }
+
+        batch = Math.round(this.state.batchPredictor.computeNextBestX(batch, step, exploration));
+        batch = Math.max(batch, 2L);
 
         updateEffectiveBatchLimit(batch);
 
+//        if(getCore() == 8) {
+//            logger.info("Batch: {} Request: {} Throughput: {} ThroughputCV: {} StdDev: {} LastInterval: {}", this.state.batchSize, super.requesterState.requestSize, throughput, stdDev / Math.max(mean, 1e-0), stdDev, elapsed);
+//        }
+
+        super.updateRequestSize(throughput);
+        this.state.batchStart = nowNs;
         this.state.updateBatchSize(Math.min(batch, this.effectiveBatchLimit));
     }
 
@@ -456,22 +450,22 @@ public final class ControlPlaneFragment extends WorkRequester {
         if (this.state.maxParkNs <= 0) {
             return 0;
         }
-
-        FlowSnapshot exec = this.executionLatency.getFlowSnapshot();
-
-        double avgLatency = Math.max(exec.avgUnits, 1.0);
-
-        CoreSnapshot core = (CoreSnapshot) SNAPSHOT.getOpaque(this);
-        CpuSnapshot cpu = core.cpuSnapshots()[this.cpuId];
-
-        double cpuPressure = cpu.pressure() * (this.isPCore ? 0.5 : 0.7);
-        double trendFactor = 1.0 + clampDouble(exec.unitTrend, -1.0, 1.0);
-
-        long interval = (long) (avgLatency * Math.max(cpuPressure, trendFactor));
-
-        interval = clampLong(interval, 0, this.state.maxParkNs);
-
-        return nowNs + interval;
+        return 0;
+//        FlowSnapshot exec = this.executionLatency.getFlowSnapshot();
+//
+//        double avgLatency = Math.max(exec.avgUnits, 1.0);
+//
+//        CoreSnapshot core = (CoreSnapshot) SNAPSHOT.getOpaque(this);
+//        CpuSnapshot cpu = core.cpuSnapshots()[this.cpuId];
+//
+//        double cpuPressure = cpu.pressure() * (this.isPCore ? 0.5 : 0.7);
+//        double trendFactor = 1.0 + clampDouble(exec.unitTrend, -1.0, 1.0);
+//
+//        long interval = (long) (avgLatency * Math.max(cpuPressure, trendFactor));
+//
+//        interval = clampLong(interval, 0, this.state.maxParkNs);
+//
+//        return nowNs + interval;
     }
 
     /// Adaptive idle strategy for pinned executors.
@@ -575,6 +569,8 @@ public final class ControlPlaneFragment extends WorkRequester {
 
         final long maxParkNs;
 
+        long batchStart = 0;
+        final FlowPredictor batchPredictor = new FlowPredictor(128, 0.990);
         final FlowRecorder idleRecorder = new FlowRecorder();
 
         boolean smtMode = false;
@@ -586,8 +582,6 @@ public final class ControlPlaneFragment extends WorkRequester {
         long lastEmptyNs = 0;
 
         long batchSize = 3;
-
-        boolean receivingOrderedWork = false;
 
         public CycleState(long maxParkNs) {
             this.maxParkNs = maxParkNs;
