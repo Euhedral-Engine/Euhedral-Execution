@@ -8,46 +8,53 @@ import java.util.concurrent.ThreadLocalRandom;
 public class FlowPredictor {
 
     private final int mask;
-    private final double decayFactor;
+    private final double alpha;
 
-    private final double[] sumW;
-    private final double[] sumY;
-    private final double[] sumY2;
+    private final int[] exponent;
+    private final double[] mean;
+    private final double[] variance;
+
+    private final boolean optimizeMax;
 
     private long rand = HasherApi.mix(ThreadLocalRandom.current().nextLong());
 
-    public FlowPredictor(int buckets, double decayFactor) {
+    public FlowPredictor(int buckets, double alpha, boolean optimizeMax) {
         buckets = Integer.highestOneBit(buckets) << 6;
         if(buckets == 0) {
             buckets = 1 << 16;
         }
 
-        this.decayFactor = decayFactor;
+        this.alpha = alpha;
         this.mask = buckets - 1;
 
-        this.sumW = new double[buckets];
-        this.sumY = new double[buckets];
-        this.sumY2 = new double[buckets];
+        this.exponent = new int[buckets];
+        this.mean = new double[buckets];
+        this.variance = new double[buckets];
+        Arrays.fill(this.exponent, Integer.MIN_VALUE);
+
+        this.optimizeMax = optimizeMax;
     }
 
     public void record(double x, double y) {
         int idx = getIndex(x);
 
-        this.sumW[idx] = (this.sumW[idx] * this.decayFactor) + 1.0;
-        this.sumY[idx] = (this.sumY[idx] * this.decayFactor) + y;
-        this.sumY2[idx] = (this.sumY2[idx] * this.decayFactor) + (y * y);
-    }
+        int exponent = Math.getExponent(x);
+        if(this.exponent[idx] == Integer.MIN_VALUE || this.exponent[idx] != exponent) {
+            this.exponent[idx] = exponent;
+            this.mean[idx] = y;
+            this.variance[idx] = 0;
+        } else {
+            double delta = y - this.mean[idx];
+            double stdDev = Math.sqrt(this.variance[idx]);
 
-    public double predictY(double x) {
-        int idx = getIndex(x);
-
-        double weight = this.sumW[idx];
-
-        if(weight < 1e-6) {
-            return 0.0;
+            if(Math.abs(delta) <= stdDev * 2) {
+                this.mean[idx] += this.alpha * delta;
+                this.variance[idx] = (1 - this.alpha) * (this.variance[idx] + this.alpha * delta * delta);
+            } else {
+                this.mean[idx] = MathFunctions.ewma(this.mean[idx], y, 0.2);
+                this.variance[idx] = 0.8 * this.variance[idx] + 0.2 * delta * delta;
+            }
         }
-
-        return this.sumY[idx] / weight;
     }
 
     public double computeNextBestX(double currentX, double stepSize, double explorationRate) {
@@ -66,13 +73,29 @@ public class FlowPredictor {
         double xMinus = Math.max(1.0, currentX - stepSize);
 
         double scoreCurrent = mean(currentX) + stdDev(currentX);
-        double scorePlus = mean(xPlus) + stdDev(xPlus);
-        double scoreMinus = mean(xMinus) + stdDev(xMinus);
+        double scorePlus = 0;
+        double scoreMinus = 0;
 
-        if(scorePlus > scoreCurrent && scorePlus >= scoreMinus) {
-            return xPlus;
-        } else if (scoreMinus > scoreCurrent) {
-            return xMinus;
+        int exponent = Math.getExponent(currentX);
+        if(Math.abs(exponent - Math.getExponent(xPlus)) <= 1) {
+            scorePlus = mean(xPlus) + stdDev(xPlus);
+        }
+        if(Math.abs(exponent - Math.getExponent(xMinus)) <= 1) {
+            scoreMinus = mean(xMinus) + stdDev(xMinus);
+        }
+
+        if(this.optimizeMax) {
+            if(scorePlus > scoreCurrent && scorePlus >= scoreMinus) {
+                return xPlus;
+            } else if (scoreMinus > scoreCurrent) {
+                return xMinus;
+            }
+        } else {
+            if(scorePlus < scoreCurrent && scorePlus <= scoreMinus) {
+                return xPlus;
+            } else if (scoreMinus < scoreCurrent) {
+                return xMinus;
+            }
         }
 
         return currentX;
@@ -80,27 +103,12 @@ public class FlowPredictor {
 
     public double mean(double x) {
         int idx = getIndex(x);
-
-        double w = this.sumW[idx];
-        if(w < 1e-6) {
-            return 0.0;
-        }
-
-        return this.sumY[idx] / w;
+        return this.mean[idx];
     }
 
     public double variance(double x) {
         int idx = getIndex(x);
-
-        double w = this.sumW[idx];
-        if(w < 1e-6) {
-            return 0.0;
-        }
-
-        double mean = this.sumY[idx] / w;
-        double mean2 = this.sumY2[idx] / w;
-
-        return Math.max(0.0, mean2 - (mean * mean));
+        return this.variance[idx];
     }
 
     public double stdDev(double x) {
@@ -118,9 +126,9 @@ public class FlowPredictor {
     }
 
     public void reset() {
-        Arrays.fill(this.sumW, 0.0);
-        Arrays.fill(this.sumY, 0.0);
-        Arrays.fill(this.sumY2, 0.0);
+        Arrays.fill(this.exponent, Integer.MIN_VALUE);
+        Arrays.fill(this.mean, 0.0);
+        Arrays.fill(this.variance, 0.0);
     }
 
     private int getIndex(double x) {

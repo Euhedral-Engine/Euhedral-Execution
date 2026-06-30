@@ -46,11 +46,6 @@ public class SequencedFrame<T, R> extends AbstractFrame {
     }
 
     @Override
-    public long getSizeBytes() {
-        return 256;
-    }
-
-    @Override
     public boolean isAlive() {
         return killSwitch.get();
     }

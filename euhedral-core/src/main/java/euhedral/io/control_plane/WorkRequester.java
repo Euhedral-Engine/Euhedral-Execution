@@ -19,8 +19,6 @@ public abstract class WorkRequester extends ControlPlaneCache {
 
     protected final RequesterState requesterState;
 
-    protected final FlowPredictor requestPredictor = new FlowPredictor(128, 0.990);
-
     protected final long lowWaterMark;
 
     private final PinnedThreadExecutor executor;
@@ -46,24 +44,6 @@ public abstract class WorkRequester extends ControlPlaneCache {
     protected abstract long getBatchSize();
 
     protected abstract void accept(AbstractFrame frame);
-
-    protected void updateRequestSize(double measuredThroughput) {
-        long requestSize = this.requesterState.requestSize;
-        this.requestPredictor.record(requestSize, measuredThroughput);
-
-        double stdDev = this.requestPredictor.stdDev(requestSize);
-        double mean = this.requestPredictor.mean(requestSize);
-
-        double exploration = MathFunctions.clampDouble(2.0 * stdDev / Math.max(mean, 1e-6), 0.01, 0.25);
-
-        double step = Math.max(4, Math.sqrt(stdDev));
-        if(!Double.isFinite(step)) {
-            step = 4;
-        }
-
-        double predictedNext = this.requestPredictor.computeNextBestX(requestSize, step, exploration);
-        this.requesterState.requestSize = Math.max(Math.round(predictedNext), 4L);
-    }
 
     public void start() {
         if (this.running.compareAndSet(false, true)) {
@@ -96,24 +76,19 @@ public abstract class WorkRequester extends ControlPlaneCache {
     private long requestAndPull() {
         this.requesterState.refresh();
 
-        long demand = this.requesterState.requestSize;
-
-        double pullT = this.requesterState.pull.avgUnitsOverTime;
-        double fillT = this.requesterState.fill.avgUnitsOverTime;
-
-        long pull = demand;
-        if(fillT > 0) {
-            pull = (long) Math.ceil(pull * pullT / (pullT + fillT));
-        }
-        pull = Math.min(pull, super.getMaxQueueCount() - super.getCacheCount());
+        long demand = getBatchSize() * 2;
 
         long upCache = super.getUpstreamCacheCount();
+        long maxLocalCache = super.getMaxQueueCount();
+        long localCache = super.getCacheCount();
 
-        double pressure =
-                demand / Math.max(1.0, upCache / (double) super.getThreadCount());
-        pressure = Math.min(1.0, pressure);
+        long pull = demand;
+        pull = Math.min(pull, maxLocalCache - localCache);
 
-        demand = Math.round(demand * pressure);
+        long totalStored = upCache + localCache;
+        if(totalStored > maxLocalCache || localCache >= demand) {
+            demand = 0;
+        }
 
         super.request(demand);
         return super.pull(pull);
@@ -143,10 +118,10 @@ public abstract class WorkRequester extends ControlPlaneCache {
         public final FlowRecorder fillRecorder;
         public final FlowRecorder pullRecorder;
 
+        final FlowPredictor pullPredictor = new FlowPredictor(128, 0.05, true);
+
         public final FlowSnapshot fill;
         public final FlowSnapshot pull;
-
-        public long requestSize = 4;
 
         public RequesterState(Consumer<AbstractFrame> consumer, boolean smt,
                 FlowRecorder fillRecorder,

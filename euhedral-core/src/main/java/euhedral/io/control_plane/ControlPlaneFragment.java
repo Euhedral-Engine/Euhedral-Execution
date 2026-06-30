@@ -1,6 +1,5 @@
 package euhedral.io.control_plane;
 
-import static euhedral.io.utils.MathFunctions.clampDouble;
 import static euhedral.io.utils.MathFunctions.clampLong;
 
 import euhedral.hardware_utils.PinnedThreadExecutor;
@@ -374,14 +373,16 @@ public final class ControlPlaneFragment extends WorkRequester {
             return;
         }
         long elapsed = nowNs - this.state.batchStart;
+        if(this.state.lastInterval > 0 && this.state.lastInterval * 4 < elapsed) {
+            this.state.batchPredictor.reset();
+        }
+        this.state.lastInterval = elapsed;
 
         double avgLatency = (double) elapsed / this.state.batchSize;
         AVG_LATENCY.setOpaque(this, (long) avgLatency);
 
-        double throughput = this.state.batchSize / (double) elapsed;
-
         long batch = this.state.batchSize;
-        this.state.batchPredictor.record(batch, throughput);
+        this.state.batchPredictor.record(batch, avgLatency);
 
         double mean = this.state.batchPredictor.mean(batch);
         double stdDev = this.state.batchPredictor.stdDev(batch);
@@ -394,15 +395,14 @@ public final class ControlPlaneFragment extends WorkRequester {
         }
 
         batch = Math.round(this.state.batchPredictor.computeNextBestX(batch, step, exploration));
-        batch = Math.max(batch, 2L);
+        batch = MathFunctions.clampLong(batch, 2L, 4096L);
 
         updateEffectiveBatchLimit(batch);
 
-//        if(getCore() == 8) {
-//            logger.info("Batch: {} Request: {} Throughput: {} ThroughputCV: {} StdDev: {} LastInterval: {}", this.state.batchSize, super.requesterState.requestSize, throughput, stdDev / Math.max(mean, 1e-0), stdDev, elapsed);
-//        }
+        if(getCore() == 8) {
+            logger.info("Batch: {} Latency: {} LatencyCV: {} StdDev: {} LastInterval: {}", this.state.batchSize, avgLatency, stdDev / Math.max(mean, 1e-0), stdDev, elapsed);
+        }
 
-        super.updateRequestSize(throughput);
         this.state.batchStart = nowNs;
         this.state.updateBatchSize(Math.min(batch, this.effectiveBatchLimit));
     }
@@ -570,7 +570,9 @@ public final class ControlPlaneFragment extends WorkRequester {
         final long maxParkNs;
 
         long batchStart = 0;
-        final FlowPredictor batchPredictor = new FlowPredictor(128, 0.990);
+        long lastInterval = 0;
+        final FlowPredictor batchPredictor = new FlowPredictor(128, 0.05, false);
+
         final FlowRecorder idleRecorder = new FlowRecorder();
 
         boolean smtMode = false;

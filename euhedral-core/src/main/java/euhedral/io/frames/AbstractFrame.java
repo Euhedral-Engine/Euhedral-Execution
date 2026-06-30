@@ -85,11 +85,6 @@ public abstract class AbstractFrame {
     private CpuInfo origin;
     @Setter
     private RoutingPolicy routingPolicy;
-    @Getter @Setter
-    private long startNs;
-
-    @Getter @Setter
-    private long ingestNs;
 
     @Getter @Setter
     private boolean cancelledExecution = false;
@@ -127,19 +122,15 @@ public abstract class AbstractFrame {
 
     /// Resets execution state so the frame can be reused.
     public final void reset() {
-        this.startNs = 0;
-        this.ingestNs = 0;
         this.cancelledExecution = false;
-        this.routingHash = this.idHash;
         VarHandle.releaseFence();
     }
 
     /// Returns the frame to the recycler for reuse.
-    public final boolean recycle() {
+    public final void recycle() {
         if (this.recycler != null) {
-            return this.recycler.recycle(this);
+            this.recycler.recycle(this);
         }
-        return false;
     }
 
     public final @NonNull RoutingPolicy getRoutingPolicy() {
@@ -157,8 +148,6 @@ public abstract class AbstractFrame {
     public final boolean isOrdered() {
         return this.idHash == this.routingHash;
     }
-
-    public abstract long getSizeBytes();
 
     /// This class is thrown as a cancellation signal. This signal is automatically handled by the
     /// [ControlPlaneFragment][euhedral.io.control_plane.ControlPlaneFragment] and

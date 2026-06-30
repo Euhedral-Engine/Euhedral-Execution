@@ -312,7 +312,6 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
         final ControlPlaneCache cpc;
 
         long framesAdded = 0;
-        long bytesAdded = 0;
 
         CacheTerminal(ControlPlaneCache cpc) {
             this.cpc = cpc;
@@ -335,7 +334,6 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
         @Override
         public void accept(AbstractFrame frame) {
             this.framesAdded++;
-            this.bytesAdded += frame.getSizeBytes();
 
             int idx = RoutingFunction.DEFAULT.route(frame, this.cpc.cache.partitions());
             while(!this.cpc.cache.offer(idx, frame)) {
@@ -345,7 +343,6 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
 
         void reset() {
             this.framesAdded = 0;
-            this.bytesAdded = 0;
         }
 
         @Override

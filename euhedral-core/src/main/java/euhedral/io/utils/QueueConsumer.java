@@ -10,21 +10,18 @@ public class QueueConsumer implements Consumer<AbstractFrame> {
     public final Consumer<AbstractFrame> consumer;
 
     public long drainCount = 0;
-    public long drainedBytes = 0;
 
     public QueueConsumer(Consumer<AbstractFrame> consumer) {
         this.consumer = consumer;
     }
 
     public void reset() {
-        drainCount = 0;
-        drainedBytes = 0;
+        this.drainCount = 0;
     }
 
     @Override
     public void accept(AbstractFrame frame) {
-        drainCount++;
-        drainedBytes += frame.getSizeBytes();
+        this.drainCount++;
         this.consumer.accept(frame);
     }
 }
