@@ -291,7 +291,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
                 this.downstreams[i].close();
                 this.downstreams[i] = null;
             }
-            if(this.cache[i] != null) {
+            if(this.hasCache && this.cache[i] != null) {
                 this.cache[i].clear();
                 this.cache[i] = null;
             }
@@ -373,15 +373,25 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
 
             this.demand.accumulateAndGet(num, UpstreamInterceptor::addCap);
 
-            if (this.wip.getAndIncrement() == 0) {
+            long wip = this.wip.getAndIncrement();
+            if (wip == 0) {
+                int count = 0;
                 do {
                     try {
+                        if(count > 4) {
+                            this.wip.lazySet(0);
+                            break;
+                        }
                         long demand = this.demand.getAcquire();
                         if(demand > 0) {
+                            count++;
                             this.upstream.request(demand);
                             this.demand.accumulateAndGet(-demand, UpstreamInterceptor::addCap);
                         } else if(this.complete.getOpaque()) {
                             return;
+                        } else {
+                            this.wip.lazySet(0);
+                            break;
                         }
                     } catch (Throwable t) {
                         logger.error("Upstream threw an exception during request", t);

@@ -286,7 +286,8 @@ public class LatticeEdge extends UpstreamHandle implements AutoCloseable {
         }
         acquireLock();
         try {
-            if (this.upstreamHandles.remove(handle)) {
+            Boolean val = this.upstreamHandles.remove(handle);
+            if (val != null && val) {
                 this.upstreamCount.decrementAndGet();
             }
         } finally {

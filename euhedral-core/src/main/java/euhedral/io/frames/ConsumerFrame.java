@@ -33,11 +33,6 @@ public final class ConsumerFrame<T> extends AbstractFrame {
     }
 
     @Override
-    public long getSizeBytes() {
-        return 256;
-    }
-
-    @Override
     public boolean isAlive() {
         if(this.killSwitch != null) {
             return !killSwitch.getOpaque();

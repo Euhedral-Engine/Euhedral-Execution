@@ -27,11 +27,6 @@ public class NoOpFrame extends AbstractFrame {
     public void execute() {}
 
     @Override
-    public long getSizeBytes() {
-        return 64;
-    }
-
-    @Override
     public boolean isAlive() {
         return true;
     }
