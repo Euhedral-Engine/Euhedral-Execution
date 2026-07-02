@@ -65,7 +65,6 @@ class ControlPlaneCacheTest {
     void shouldInitializeFields() {
         ControlPlaneCache manager = manager();
 
-        assertNotNull(manager.fillRecorder);
         assertNotNull(manager.getCache());
     }
 

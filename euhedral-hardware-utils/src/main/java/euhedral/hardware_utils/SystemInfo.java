@@ -139,6 +139,10 @@ public final class SystemInfo {
         return CPU_COUNT;
     }
 
+    public static int getCoreCount() {
+        return CORE_COUNT;
+    }
+
     public static int getMaxCoreId() {
         return MAX_CORE_ID;
     }

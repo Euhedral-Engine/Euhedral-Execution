@@ -17,11 +17,9 @@ import euhedral.io.generics.CloneableObject;
 import euhedral.io.generics.LatticeReceiver;
 import euhedral.io.generics.LatticeSource;
 import euhedral.io.metrics.CacheMetrics;
-import euhedral.io.utils.FlowRecorder;
 import euhedral.io.utils.QueueConsumer;
 import io.euhedral_execution.data_structures.atomics.AtomicDouble;
 import io.euhedral_execution.data_structures.atomics.PaddedAtomicLong;
-import io.euhedral_execution.data_structures.atomics.PaddedAtomicReference;
 import io.euhedral_execution.data_structures.queues.PartitionedMpscQueue;
 import io.euhedral_execution.data_structures.queues.common.QueueUtils;
 import java.lang.invoke.MethodHandles;
@@ -96,9 +94,6 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
     @Getter
     protected final long frameQuota;
 
-    protected final PaddedAtomicReference<FlowRecorder> fillRecorder;
-    protected final FlowRecorder pullRecorder;
-
     @Getter(AccessLevel.PROTECTED)
     private final PartitionedMpscQueue<AbstractFrame> cache;
     protected final int chunkSize;
@@ -121,8 +116,6 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
             this.cache = null;
             this.cacheTerminal = null;
             this.chunkSize = 0;
-            this.fillRecorder = null;
-            this.pullRecorder = null;
         } else {
             if (cacheConfig.registry() != null) {
                 this.metrics = new CacheMetrics(cacheConfig.metricPrefix(), cacheConfig.cloneConfig().coreId() + "",
@@ -137,8 +130,6 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
                     new PartitionedMpscQueue<>(partitions, this.chunkSize,
                             cacheConfig.maxPooledChunks());
             this.cacheTerminal = new CacheTerminal(this);
-            this.fillRecorder = new PaddedAtomicReference<>(new FlowRecorder());
-            this.pullRecorder = new FlowRecorder();
 
             BitSet mappings = new BitSet(1);
             mappings.set(0);
@@ -149,7 +140,7 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
             super.setDownstreamMapping(mappings, terminal);
             setDrain(false);
 
-            this.logger.debug("Partitions: {} PartitionChunkSize: {} L2AndL1Capacity: {}",
+            this.logger.debug("Partitions: {} PartitionChunkSize: {} CacheCapacity: {}",
                     partitions, this.chunkSize, partitions * this.chunkSize);
         }
     }
@@ -160,28 +151,25 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
         }
 
         this.cacheTerminal.reset();
-        long now = System.nanoTime();
         long added = super.pull(this.cacheTerminal, limit);
-        this.pullRecorder.record(now, added, false);
         if(added > 0) {
             TOTAL_COUNT.getAndAdd(ControlPlaneCache.this, this.cacheTerminal.framesAdded);
         }
         return added;
     }
 
-    public final long drain(QueueConsumer queueConsumer, long maxBufferFill) {
-        if (maxBufferFill <= 0) {
+    public final long drain(QueueConsumer queueConsumer, long limit) {
+        if (limit <= 0) {
             return 0;
         }
         queueConsumer.reset();
 
-        long now = System.nanoTime();
         long initialCount = (long) TOTAL_COUNT.getOpaque(this);
         if (initialCount > 0) {
-            long count = this.cache.drain(queueConsumer, maxBufferFill);
-            while(queueConsumer.drainCount < maxBufferFill &&
+            long count = this.cache.drain(queueConsumer, limit);
+            while(queueConsumer.drainCount < limit &&
                     count > this.cacheConfig.ringWalkResetThreshold()) {
-                count = this.cache.drain(queueConsumer, maxBufferFill - queueConsumer.drainCount);
+                count = this.cache.drain(queueConsumer, limit - queueConsumer.drainCount);
             }
 
             TOTAL_COUNT.getAndAdd(this, -queueConsumer.drainCount);
@@ -255,9 +243,6 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
             }
         }
         this.cache.clear();
-        this.fillRecorder.getOpaque().record(1, true);
-
-        this.fillRecorder.getOpaque().reset(false);
 
         this.capFactor.lazySet(1.0);
         this.memoryLimit.lazySet(0);
@@ -324,11 +309,7 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
                 Thread.onSpinWait();
             }
 
-            long count = (long) TOTAL_COUNT.getAndAdd(this.cpc, 1) + 1;
-            if ((count & 63) == 0) {
-                long now = System.nanoTime();
-                this.cpc.fillRecorder.getPlain().record(now, 64, true);
-            }
+            TOTAL_COUNT.getAndAddRelease(this.cpc, 1);
         }
 
         @Override

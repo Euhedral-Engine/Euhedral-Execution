@@ -1,13 +1,11 @@
 package euhedral.io.control_plane;
 
 import euhedral.hardware_utils.PinnedThreadExecutor;
+import euhedral.hardware_utils.SystemInfo;
 import euhedral.hardware_utils.ThreadTools;
 import euhedral.io.config.CacheConfig;
 import euhedral.io.frames.AbstractFrame;
-import euhedral.io.utils.FlowPredictor;
 import euhedral.io.utils.FlowRecorder;
-import euhedral.io.utils.FlowRecorder.FlowSnapshot;
-import euhedral.io.utils.MathFunctions;
 import euhedral.io.utils.QueueConsumer;
 
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -33,15 +31,11 @@ public abstract class WorkRequester extends ControlPlaneCache {
             this.lowWaterMark = 0;
             this.executor = null;
         } else {
-            this.requesterState = new RequesterState(this::accept, executor != null,
-                    super.fillRecorder.getPlain(),
-                    super.pullRecorder, maxParkNs);
+            this.requesterState = new RequesterState(this::accept, executor != null, maxParkNs);
             this.lowWaterMark = super.getMaxQueueCount() >> 2;
             this.executor = executor;
         }
     }
-
-    protected abstract long getBatchSize();
 
     protected abstract void accept(AbstractFrame frame);
 
@@ -56,7 +50,7 @@ public abstract class WorkRequester extends ControlPlaneCache {
 
         ThreadTools.setTimerResolution(1);
         while (!Thread.interrupted() && this.running.getOpaque()) {
-            if (requestAndPull() <= 0) {
+            if (requestAndPull() == 0) {
                 Thread.onSpinWait();
             }
         }
@@ -68,30 +62,73 @@ public abstract class WorkRequester extends ControlPlaneCache {
 
     protected long manuallyPull() {
         if (!this.running.getOpaque()) {
-            requestAndPull();
+            return requestAndPull();
         }
         return 0;
     }
 
     private long requestAndPull() {
-        this.requesterState.refresh();
-
-        long demand = getBatchSize() * 2;
-
-        long upCache = super.getUpstreamCacheCount();
-        long maxLocalCache = super.getMaxQueueCount();
         long localCache = super.getCacheCount();
+        long batch = this.requesterState.batchSize;
+        if(localCache >= batch) {
+            return 0;
+        }
+        long remoteCache = super.getUpstreamCacheCount();
+        long totalCache = localCache + remoteCache;
 
-        long pull = demand;
-        pull = Math.min(pull, maxLocalCache - localCache);
-
-        long totalStored = upCache + localCache;
-        if(totalStored > maxLocalCache || localCache >= demand) {
-            demand = 0;
+        long demand = this.requesterState.requestSize;
+        if(totalCache < demand) {
+            super.request(demand);
         }
 
-        super.request(demand);
-        return super.pull(pull);
+        if(totalCache == 0 && super.getUpstreamCount() == 0) {
+            this.requesterState.resetRequester();
+            return 0;
+        }
+
+        long maxLocalCache = super.getMaxQueueCount();
+        if(localCache >= maxLocalCache) {
+            return 0;
+        }
+
+        long lowWaterMark = Math.min(maxLocalCache >> 2, batch << 2);
+        lowWaterMark = Math.max(lowWaterMark, 1);
+
+        if(localCache > lowWaterMark) {
+            return 0;
+        }
+
+        long target = Math.min(maxLocalCache >> 1, batch << 3);
+        target = Math.max(target, 1);
+
+        long pull = target - localCache;
+
+        long added = super.pull(pull);
+        localCache += added;
+
+        long now = System.nanoTime();
+        this.requesterState.requestRecorder.record(now, this.requesterState.requestSize);
+        this.requesterState.batchDiffRecorder.record(now, target - localCache);
+
+        double avgDiff = this.requesterState.batchDiffRecorder.averageUnits();
+        long avgRequest = Math.round(this.requesterState.requestRecorder.averageUnits());
+        if(avgRequest == demand && localCache < lowWaterMark) {
+            long step = Math.round(Math.sqrt(batch) * 2);
+            step = Math.max(step, lowWaterMark - localCache);
+            demand += step;
+            this.requesterState.requestSize = Math.min(demand, Math.min(batch * this.requesterState.requestMultiplier, 65_536));
+        } else if(avgRequest == demand && avgDiff < batch) {
+            long step = Math.round(Math.sqrt(batch) * 2);
+            step = Math.max(step, Math.round(batch - avgDiff));
+            demand -= step;
+            this.requesterState.requestSize = Math.max(demand, 4);
+        }
+
+        return added;
+    }
+
+    protected void updateRequester(long batchSize) {
+        this.requesterState.batchSize = batchSize;
     }
 
     @Override
@@ -115,31 +152,24 @@ public abstract class WorkRequester extends ControlPlaneCache {
         public final long maxParkNs;
         public final boolean smt;
 
-        public final FlowRecorder fillRecorder;
-        public final FlowRecorder pullRecorder;
-
-        final FlowPredictor pullPredictor = new FlowPredictor(128, 0.05, true);
-
-        public final FlowSnapshot fill;
-        public final FlowSnapshot pull;
+        protected final FlowRecorder batchDiffRecorder = new FlowRecorder();
+        protected final FlowRecorder requestRecorder = new FlowRecorder();
+        protected final long requestMultiplier = Math.max(SystemInfo.getCoreCount(), 2);
+        private long batchSize = 2;
+        private long requestSize = 4;
 
         public RequesterState(Consumer<AbstractFrame> consumer, boolean smt,
-                FlowRecorder fillRecorder,
-                FlowRecorder pullRecorder,
                 long maxParkNs) {
             super(consumer);
             this.smt = smt;
             this.maxParkNs = maxParkNs;
-            this.fillRecorder = fillRecorder;
-            this.pullRecorder = pullRecorder;
-
-            this.fill = fillRecorder.getFlowSnapshot();
-            this.pull = pullRecorder.getFlowSnapshot();
         }
 
-        public void refresh() {
-            this.fillRecorder.refreshSnapshot(this.fill, true);
-            this.pullRecorder.refreshSnapshot(this.pull, false);
+        protected void resetRequester() {
+            this.batchDiffRecorder.reset();
+            this.requestRecorder.reset();
+            this.batchSize = 2;
+            this.requestSize = 4;
         }
     }
 }

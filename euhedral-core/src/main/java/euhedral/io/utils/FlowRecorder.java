@@ -1,411 +1,338 @@
 package euhedral.io.utils;
 
-import static euhedral.io.utils.MathFunctions.clampInt;
-import static euhedral.io.utils.MathFunctions.clampLong;
-
 import java.time.Duration;
-import java.util.concurrent.atomic.AtomicBoolean;
-
 import lombok.Getter;
 import org.jspecify.annotations.NonNull;
 
-/// This class calculates rates, units, intervals, and variances of each for any type of unit using
-/// fixed-point arithmetic.
-///
-/// It has a built-in dynamic sizing and sliding window that responds to jitter.
+@SuppressWarnings("unused")
 public class FlowRecorder {
-
-    // 16 bits of precision
-    public static final int SHIFT = 16;
-    public static final int SCALE = 1 << SHIFT;
-    public static final double SCALE_INV = 1.0 / SCALE;
-    public static final int MASK = SCALE - 1;
-
-    /**
-     * Returns the queue estimate scaled by the provided 'scaler'.
-     */
-    public static double getVegasQueueEstimate(FlowSnapshot flowSnapshot, long scaler) {
-        double units = flowSnapshot.lastRecordedUnits;
-        double averageUnits = flowSnapshot.avgUnits;
-        if (units <= averageUnits || averageUnits <= 0) {
-            return 0L;
-        }
-
-        double unitVariation = flowSnapshot.unitVariation;
-        double target = averageUnits + unitVariation;
-
-        // Buffer: ~6% of Average to prevent jitter
-        double buffer = averageUnits * 0.06;
-
-        double minTarget = averageUnits + buffer;
-        if (target < minTarget) {
-            target = minTarget;
-        }
-
-        double diff = units - averageUnits;
-        double denominator = target - averageUnits;
-
-        return (scaler * diff) / denominator;
-    }
-    private final long minWindowNs, maxWindowNs;
-    private final AtomicBoolean wip = new AtomicBoolean();
     @Getter
-    private final FlowSnapshot flowSnapshot = new FlowSnapshot();
-    @Getter
-    private long dynamicWindowNs;
+    private final FlowSnapshot snapshot = new FlowSnapshot();
+
+    private final double alpha;
+
+    private final long measurementWindowNs;
+    private long windowStartNs;
+
     private long prevWindowCount = 0;
     private long currWindowCount = 0;
-    @Getter
-    private long windowStartNs;
+
     @Getter
     private long lastRecordingTime;
     @Getter
     private long lastInterval;
     @Getter
     private long lastRecordedUnits;
-    private long averageUnitsOverTime, uotVariation = 0L, uotTrend = 0L;
-    private long averageUnits, unitVariation = 0L, unitTrend = 0L;
-    private long averageInterval, intervalVariation = 0L, intervalTrend = 0L;
+
     @Getter
     private long rollingSum = 0;
-    private long uotRemainder, varUoTRemainder, uotTrendRemainder, unitRemainder, varUnitRemainder, unitTrendRemainder,
-            intervalRemainder, varIntervalRemainder, intervalTrendRemainder;
+
+    private double averageUnits, averageInterval, averageUnitsOverTime;
+    @Getter
+    private long minUnits = Long.MAX_VALUE, minInterval = Long.MAX_VALUE;
+    @Getter
+    private long maxUnits = Long.MIN_VALUE, maxInterval = Long.MIN_VALUE;
+    @Getter
+    private double minUoT = Double.MAX_VALUE;
+    @Getter
+    private double maxUoT = Double.MIN_VALUE;
+
+    private double unitVariance, intervalVariance, uotVariance;
+    private double unitTrend, intervalTrend, uotTrend;
 
     public FlowRecorder() {
-        this(Duration.ofNanos(10_000), Duration.ofMillis(1));
+        this(Duration.ofMillis(10), 0.05);
     }
 
-    public FlowRecorder(@NonNull Duration minWindowSize, @NonNull Duration maxWindowSize) {
-        this.minWindowNs = minWindowSize.toNanos();
-        this.maxWindowNs = maxWindowSize.toNanos();
-        this.dynamicWindowNs = minWindowNs;
+    public FlowRecorder(@NonNull Duration maxWindowSize, double alpha) {
+        this.measurementWindowNs = maxWindowSize.toNanos();
         this.windowStartNs = System.nanoTime();
-        this.lastRecordingTime = windowStartNs;
+        this.lastRecordingTime = 0;
+        this.alpha = alpha;
+        this.snapshot.updateSnapshot();
     }
 
-    public void decay(long now, boolean threadSafe) {
-        if (now <= 0) {
+    public void record(long units) {
+        record(System.nanoTime(), units);
+    }
+
+    public void record(long now, long units) {
+
+        long interval = (now - this.lastRecordingTime);
+        if (now <= 0 || interval <= 0) {
             return;
         }
 
-        if (threadSafe) {
-            acquireLock();
+        if(this.lastRecordingTime == 0) {
+            this.lastRecordingTime = now;
+            this.lastRecordedUnits = units;
+            this.rollingSum = units;
+            this.prevWindowCount = 0;
+            this.currWindowCount = 1;
+            return;
         }
-        long interval = (now - lastRecordingTime);
-        int alpha = getRatio(interval, dynamicWindowNs);
-        alpha = clampInt(alpha, 1024, SCALE);
-        decay(now, alpha);
-        if (threadSafe) {
-            releaseLock();
-        }
-    }
 
-    private void decay(long now, long alpha) {
-        long decayDelta = (-rollingSum) * alpha;
-        long appliedDecay = decayDelta >> SHIFT;
 
-        rollingSum += appliedDecay;
+        this.lastRecordingTime = now;
+        this.lastRecordedUnits = units;
+        this.currWindowCount++;
+        this.lastInterval = interval;
 
-        long elapsed = now - lastRecordingTime;
-        if (elapsed > dynamicWindowNs) {
-            int decayAlpha = getRatio(dynamicWindowNs, elapsed);
-            decayAlpha = Math.min(decayAlpha, SCALE);
-            averageUnitsOverTime = ewma(averageUnitsOverTime, 0, decayAlpha, EwmaRemainder.UOT);
-            averageUnits = ewma(averageUnits, 0, decayAlpha, EwmaRemainder.UNIT);
-            averageInterval = ewma(averageInterval, 0, decayAlpha, EwmaRemainder.INTERVAL);
+        updateMetrics(units, interval, this.alpha);
 
-            uotVariation = ewma(uotVariation, 0, decayAlpha, EwmaRemainder.VAR_UOT);
-            unitTrend = ewma(unitTrend, 0, decayAlpha, EwmaRemainder.UOT_TREND);
-            unitVariation = ewma(unitVariation, 0, decayAlpha, EwmaRemainder.VAR_UNIT);
-            unitTrend = ewma(unitTrend, 0, decayAlpha, EwmaRemainder.UNIT_TREND);
-            intervalVariation = ewma(averageInterval, 0, decayAlpha, EwmaRemainder.VAR_INTERVAL);
-            intervalTrend = ewma(intervalTrend, 0, decayAlpha, EwmaRemainder.INTERVAL_TREND);
+        if (now - this.windowStartNs > this.measurementWindowNs) {
+            this.prevWindowCount = this.currWindowCount;
+            this.currWindowCount = 0;
+            this.windowStartNs = now;
         }
     }
 
-    private long ewma(long oldVal, long newVal, int alpha, EwmaRemainder type) {
-        long delta = (newVal - oldVal) * alpha;
+    private void updateMetrics(long currentUnits, long currentInterval, double alpha) {
+        double unitsOverTime = (double) currentUnits / Math.max(currentInterval, 1e-9);
 
-        long remainder = switch (type) {
-            case UOT -> uotRemainder;
-            case VAR_UOT -> varUoTRemainder;
-            case UOT_TREND -> uotTrendRemainder;
-            case UNIT -> unitRemainder;
-            case VAR_UNIT -> varUnitRemainder;
-            case UNIT_TREND -> unitTrendRemainder;
-            case INTERVAL -> intervalRemainder;
-            case VAR_INTERVAL -> varIntervalRemainder;
-            case INTERVAL_TREND -> intervalTrendRemainder;
-        };
-
-        long totalDelta = delta + remainder;
-        long appliedDelta = totalDelta >> SHIFT;
-
-        long newRemainder = totalDelta & MASK;
-        switch (type) {
-            case UOT -> uotRemainder = newRemainder;
-            case VAR_UOT -> varUoTRemainder = newRemainder;
-            case UOT_TREND -> uotTrendRemainder = newRemainder;
-            case UNIT -> unitRemainder = newRemainder;
-            case VAR_UNIT -> varUnitRemainder = newRemainder;
-            case UNIT_TREND -> unitTrendRemainder = newRemainder;
-            case INTERVAL -> intervalRemainder = newRemainder;
-            case VAR_INTERVAL -> varIntervalRemainder = newRemainder;
-            case INTERVAL_TREND -> intervalTrendRemainder = newRemainder;
+        this.rollingSum = Math.round((1.0 - alpha) * this.rollingSum + currentUnits);
+        if(this.averageInterval == 0) {
+            this.averageUnits = currentUnits;
+            this.averageInterval = currentInterval;
+            this.averageUnitsOverTime = unitsOverTime;
+            this.minUnits = currentUnits;
+            this.maxUnits = currentUnits;
+            this.minInterval = currentInterval;
+            this.maxInterval = currentInterval;
+            this.minUoT = unitsOverTime;
+            this.maxUoT = unitsOverTime;
+            return;
         }
 
-        return oldVal + appliedDelta;
+        double delta = Math.abs(currentInterval - this.averageInterval);
+        if(this.windowStartNs + delta > this.windowStartNs + this.measurementWindowNs) {
+            reset();
+            return;
+        }
+
+        this.averageUnits = MathFunctions.ewma(this.averageUnits, currentUnits, alpha);
+        this.averageInterval = MathFunctions.ewma(this.averageInterval, currentInterval, alpha);
+        this.averageUnitsOverTime = MathFunctions.ewma(this.averageUnitsOverTime, unitsOverTime, alpha);
+
+        tryDecayMaxima();
+        this.minUnits = Math.min(this.minUnits, currentUnits);
+        this.minInterval = Math.min(this.minInterval, currentInterval);
+        this.minUoT = Math.min(this.minUoT, unitsOverTime);
+        this.maxUnits = Math.max(this.maxUnits, currentUnits);
+        this.maxInterval = Math.max(this.maxInterval, currentInterval);
+        this.maxUoT = Math.max(this.maxUoT, unitsOverTime);
+
+        double decay = 1.0 - alpha;
+        delta = currentUnits - this.averageUnits;
+        this.unitVariance = decay * (this.unitVariance + alpha * delta * delta);
+        this.unitTrend = this.unitVariance == 0 ? 0 : MathFunctions.ewma(this.unitTrend, delta, alpha);
+
+        delta = currentInterval - this.averageInterval;
+        this.intervalVariance = decay * (this.intervalVariance + alpha * delta * delta);
+        this.intervalTrend = this.intervalVariance == 0 ? 0 : MathFunctions.ewma(this.intervalTrend, delta, alpha);
+
+        delta = unitsOverTime - this.averageUnitsOverTime;
+        this.uotVariance = decay * (this.uotVariance + alpha * delta * delta);
+        this.uotTrend = this.uotVariance == 0 ? 0 : MathFunctions.ewma(this.uotTrend, delta, alpha);
     }
 
-    private int getRatio(long num, long den) {
-        if (den <= 0) {
+    private void tryDecayMaxima() {
+        double stdDev = unitStandardDeviation() * 3;
+        if(this.minUnits < this.averageUnits - stdDev) {
+            this.minUnits = Long.MAX_VALUE;
+        }
+        if(this.maxUnits > this.averageUnits + stdDev) {
+            this.maxUnits = Long.MIN_VALUE;
+        }
+
+        stdDev = intervalStandardDeviation() * 3;
+        if(this.minInterval < this.averageInterval - stdDev) {
+            this.minInterval = Long.MAX_VALUE;
+        }
+        if(this.maxInterval > this.averageInterval + stdDev) {
+            this.maxInterval = Long.MIN_VALUE;
+        }
+
+        stdDev = uotStandardDeviation() * 3;
+        if(this.minUoT < this.averageUnitsOverTime - stdDev) {
+            this.minUoT = Double.MAX_VALUE;
+        }
+        if(this.maxUoT > this.averageUnitsOverTime + stdDev) {
+            this.maxUoT = Double.MIN_VALUE;
+        }
+    }
+
+    public void reset() {
+        this.prevWindowCount = 0;
+        this.currWindowCount = 0;
+        this.lastRecordingTime = 0;
+        this.windowStartNs = System.nanoTime();
+
+        this.rollingSum = 0;
+
+        this.averageUnitsOverTime = 0;
+        this.minUoT = Double.MAX_VALUE;
+        this.maxUoT = Double.MIN_VALUE;
+
+        this.averageUnits = 0;
+        this.minUnits = Long.MAX_VALUE;
+        this.maxUnits = Long.MIN_VALUE;
+
+        this.averageInterval = 0;
+        this.minInterval = Long.MAX_VALUE;
+        this.maxInterval = Long.MIN_VALUE;
+
+        this.unitVariance = 0;
+        this.uotVariance = 0;
+        this.intervalVariance = 0;
+
+        this.unitTrend = 0;
+        this.intervalTrend = 0;
+        this.uotTrend = 0;
+        this.snapshot.updateSnapshot();
+    }
+
+    public double getRollingAverage() {
+        return getRollingAverage(System.nanoTime());
+    }
+
+    public double getRollingAverage(long now) {
+        double count = getEffectiveMeasurementWindowCount(now);
+        if(count == 0) {
             return 0;
         }
-        if (num >= den) {
-            return SCALE;
-        }
-        return (int) ((num << SHIFT) / den);
+        return this.rollingSum / count;
     }
 
-    private void acquireLock() {
-        while (!wip.compareAndSet(false, true)) {
-            Thread.onSpinWait();
-        }
+    public double getEffectiveMeasurementWindowCount() {
+        return getEffectiveMeasurementWindowCount(System.nanoTime());
     }
 
-    private void releaseLock() {
-        wip.set(false);
-    }
-
-    public void reset(boolean threadSafe) {
-        if (threadSafe) {
-            acquireLock();
-        }
-        dynamicWindowNs = this.minWindowNs;
-        prevWindowCount = 0;
-        currWindowCount = 0;
-        windowStartNs = System.nanoTime();
-        lastRecordingTime = windowStartNs;
-        lastRecordedUnits = 0;
-        lastInterval = 0;
-        rollingSum = 0;
-
-        averageUnits = 0;
-        unitVariation = 0;
-        unitTrend = 0;
-        unitRemainder = 0;
-        varUnitRemainder = 0;
-        unitTrendRemainder = 0;
-
-        averageUnitsOverTime = 0;
-        uotVariation = 0;
-        uotTrend = 0;
-        uotRemainder = 0;
-        varUoTRemainder = 0;
-        uotTrendRemainder = 0;
-
-        averageInterval = 0;
-        intervalVariation = 0;
-        intervalTrend = 0;
-        intervalRemainder = 0;
-        varIntervalRemainder = 0;
-        intervalTrendRemainder = 0;
-
-        if (threadSafe) {
-            releaseLock();
-        }
-    }
-
-    public void record(long units, boolean threadSafeRecord) {
-        record(System.nanoTime(), units, threadSafeRecord);
-    }
-
-    public void record(long now, long units, boolean threadSafeRecord) {
-        if (threadSafeRecord) {
-            acquireLock();
-        }
-
-        long interval = (now - lastRecordingTime);
-        if (now <= 0 || interval <= 0) {
-            if (threadSafeRecord) {
-                releaseLock();
-            }
-            return;
-        }
-        interval = Math.min(interval, dynamicWindowNs * 2);
-
-        int alpha = getRatio(interval, dynamicWindowNs);
-        alpha = clampInt(alpha, 1024, SCALE);
-
-        decay(now, alpha);
-
-        lastRecordingTime = now;
-        lastInterval = interval;
-        lastRecordedUnits = units;
-        currWindowCount++;
-        rollingSum += units;
-
-        long currentUnitsScaled = units << SHIFT;
-        long currentRateScaled = currentUnitsScaled / interval;
-
-        updateMetrics(currentRateScaled, currentUnitsScaled, interval, alpha);
-
-        if (averageUnitsOverTime > 0) {
-            int varRatio = getRatio(uotVariation, averageUnitsOverTime);
-            long baseWindow = interval * 10;
-            long adjustment = (baseWindow * varRatio) >> (SHIFT + 1);
-            // Shrink window as jitter (variation) increases
-            dynamicWindowNs = clampLong(baseWindow - adjustment, minWindowNs, maxWindowNs);
-        }
-
-        if (now - windowStartNs > dynamicWindowNs) {
-            prevWindowCount = currWindowCount;
-            currWindowCount = 0;
-            windowStartNs = now;
-        }
-        if (threadSafeRecord) {
-            releaseLock();
-        }
-    }
-
-    private void updateMetrics(long currentRate, long currentUnits, long currentInterval,
-            int alpha) {
-        long prevUnits = averageUnits;
-
-        averageUnitsOverTime = ewma(averageUnitsOverTime, currentRate, alpha, EwmaRemainder.UOT);
-        averageUnits = ewma(averageUnits, currentUnits, alpha, EwmaRemainder.UNIT);
-        averageInterval = ewma(averageInterval, currentInterval, alpha, EwmaRemainder.INTERVAL);
-
-        if (prevUnits != 0) {
-            uotVariation = ewma(uotVariation, Math.abs(currentRate - averageUnitsOverTime) >> 1,
-                    alpha,
-                    EwmaRemainder.VAR_UOT);
-            uotTrend = ewma(uotTrend, (currentRate - averageUnitsOverTime) >> 1, alpha,
-                    EwmaRemainder.UOT_TREND);
-            unitVariation = ewma(unitVariation, Math.abs(currentUnits - averageUnits) >> 1, alpha,
-                    EwmaRemainder.VAR_UNIT);
-            unitTrend = ewma(unitTrend, (currentUnits - averageUnits) >> 1, alpha,
-                    EwmaRemainder.UNIT_TREND);
-            intervalVariation =
-                    ewma(intervalVariation, Math.abs(currentInterval - averageInterval) >> 1, alpha,
-                            EwmaRemainder.VAR_INTERVAL);
-            intervalTrend =
-                    ewma(intervalTrend, (currentInterval - averageInterval) >> 1, alpha,
-                            EwmaRemainder.INTERVAL_TREND);
-        }
-
-    }
-
-    public void refreshSnapshot(FlowSnapshot flowSnapshot, boolean threadSafe) {
-        refreshSnapshot(flowSnapshot, 0, threadSafe);
-    }
-
-    public void refreshSnapshot(FlowSnapshot flowSnapshot, long now, boolean threadSafe) {
-        if (threadSafe) {
-            acquireLock();
-        }
-        if (now > this.lastRecordingTime) {
-            decay(now, false);
-        }
-        refreshSnapshot(flowSnapshot);
-        if (threadSafe) {
-            releaseLock();
-        }
-    }
-
-    private void refreshSnapshot(FlowSnapshot flowSnapshot) {
-        flowSnapshot.lastRecordingTimeNs = lastRecordingTime;
-        flowSnapshot.lastRecordedUnits = lastRecordedUnits;
-        flowSnapshot.lastRecordedInterval = lastInterval;
-
-        flowSnapshot.avgUnits = (averageUnits >> SHIFT) + unitRemainder * SCALE_INV;
-        flowSnapshot.unitVariation = (unitVariation >> SHIFT) + varUnitRemainder * SCALE_INV;
-        flowSnapshot.unitTrend = (unitTrend >> SHIFT) + unitTrendRemainder * SCALE_INV;
-        flowSnapshot.unitCV = flowSnapshot.avgUnits == 0 ? 0.0
-                : flowSnapshot.unitVariation / flowSnapshot.avgUnits;
-
-        flowSnapshot.avgUnitsOverTime = (averageUnitsOverTime >> SHIFT) + uotRemainder * SCALE_INV;
-        flowSnapshot.unitsOverTimeVariation = (uotVariation >> SHIFT) + varUoTRemainder * SCALE_INV;
-        flowSnapshot.unitsOverTimeTrend = (uotTrend >> SHIFT) + uotTrendRemainder * SCALE_INV;
-        flowSnapshot.unitsOverTimeCV =
-                flowSnapshot.avgUnitsOverTime
-                        == 0 ? 0.0
-                        : flowSnapshot.unitsOverTimeVariation / flowSnapshot.avgUnitsOverTime;
-
-        flowSnapshot.avgInterval = (averageInterval >> SHIFT) + intervalRemainder * SCALE_INV;
-        flowSnapshot.intervalVariation =
-                (intervalVariation >> SHIFT) + varIntervalRemainder * SCALE_INV;
-        flowSnapshot.intervalTrend = (intervalTrend >> SHIFT) + intervalTrendRemainder * SCALE_INV;
-        flowSnapshot.intervalCV = flowSnapshot.avgInterval == 0 ? 0.0
-                : flowSnapshot.intervalVariation / flowSnapshot.avgInterval;
-    }
-
-    public double getRollingAverage(boolean getThreadSafe) {
-        if (getThreadSafe) {
-            acquireLock();
-        }
-
-        long count = getEffectiveMeasurementWindowCount(this.lastRecordingTime, false);
-        double rollingAverage = count == 0 ? 0 : (double) this.rollingSum / count;
-
-        if (getThreadSafe) {
-            releaseLock();
-        }
-        return rollingAverage;
-    }
-
-    public long getEffectiveMeasurementWindowCount(long now, boolean getThreadSafe) {
-        if (getThreadSafe) {
-            acquireLock();
-        }
+    public double getEffectiveMeasurementWindowCount(long now) {
         long prevWindowCount = this.prevWindowCount;
         long currWindowCount = this.currWindowCount;
-        long dynamicWindowNs = this.dynamicWindowNs;
+        long dynamicWindowNs = this.measurementWindowNs;
         long windowStartNs = this.windowStartNs;
-        if (getThreadSafe) {
-            releaseLock();
+
+
+        if(windowStartNs + dynamicWindowNs < now) {
+            return 0;
         }
 
         long elapsed = now - windowStartNs;
-
-        if (elapsed >= dynamicWindowNs) {
-            return currWindowCount;
+        if(elapsed == 0) {
+            return prevWindowCount;
         }
 
-        long progress = (elapsed << SHIFT) / dynamicWindowNs;
-        long invProgress = SCALE - progress;
+        double progress = (double) elapsed / dynamicWindowNs;
+        double invProgress = 1.0 / progress;
 
         // effective = (prev * (1 - progress)) + current
-        long prevContribution = (prevWindowCount * invProgress) >> SHIFT;
-        long currContribution = (currWindowCount * progress) >> SHIFT;
+        double prevContribution = prevWindowCount * invProgress;
+        double currContribution = currWindowCount * progress;
 
         return prevContribution + currContribution;
     }
 
-    private enum EwmaRemainder {
-        UOT, VAR_UOT, UOT_TREND, UNIT, VAR_UNIT, UNIT_TREND, INTERVAL, VAR_INTERVAL, INTERVAL_TREND
+    public double averageUnits() {
+        return this.averageUnits;
     }
 
-    public static final class FlowSnapshot {
+    public double unitVariance() {
+        return this.unitVariance;
+    }
 
-        public long lastRecordingTimeNs = 0;
-        public long lastRecordedUnits = 0;
-        public long lastRecordedInterval = 0;
+    public double unitTrend() {
+        return this.unitTrend;
+    }
 
-        public double avgUnits;
-        public double unitVariation;
-        public double unitTrend;
-        public double unitCV;
+    public double averageInterval() {
+        return this.averageInterval;
+    }
 
-        public double avgInterval;
-        public double intervalVariation;
-        public double intervalTrend;
-        public double intervalCV;
+    public double intervalVariance() {
+        return this.intervalVariance;
+    }
 
-        public double avgUnitsOverTime;
-        public double unitsOverTimeVariation;
-        public double unitsOverTimeTrend;
-        public double unitsOverTimeCV;
+    public double intervalTrend() {
+        return this.intervalTrend;
+    }
 
+    public double averageUnitsOverTime() {
+        return this.averageUnitsOverTime;
+    }
+
+    public double unitsOverTimeVariance() {
+        return this.uotVariance;
+    }
+
+    public double unitsOverTimeTrend() {
+        return this.uotTrend;
+    }
+
+    public double unitStandardDeviation() {
+        return Math.sqrt(this.unitVariance);
+    }
+
+    public double intervalStandardDeviation() {
+        return Math.sqrt(this.intervalVariance);
+    }
+
+    public double uotStandardDeviation() {
+        return Math.sqrt(this.uotVariance);
+    }
+
+    public double unitCV() {
+        if(this.averageUnits == 0) {
+            return 0;
+        }
+        return unitStandardDeviation() / averageUnits();
+    }
+
+    public double intervalCV() {
+        if(this.averageInterval == 0) {
+            return 0;
+        }
+        return intervalStandardDeviation() / averageInterval();
+    }
+
+    public double unitsOverTimeCV() {
+        if(this.averageUnitsOverTime == 0) {
+            return 0;
+        }
+        return uotStandardDeviation() / averageUnitsOverTime();
+    }
+
+    public final class FlowSnapshot {
+        public boolean isReset = true;
+
+        public double averageUnits, averageInterval, averageUnitsOverTime;
+        public long minUnits, minInterval;
+        public long maxUnits, maxInterval;
+        public double minUoT;
+        public double maxUoT;
+
+        public double unitVariance, intervalVariance, uotVariance;
+        public double unitTrend, intervalTrend, uotTrend;
+
+        public void updateSnapshot() {
+            this.averageUnits = FlowRecorder.this.averageUnits;
+            this.averageInterval = FlowRecorder.this.averageInterval;
+            this.averageUnitsOverTime = FlowRecorder.this.averageUnitsOverTime;
+            this.minUnits = FlowRecorder.this.minUnits;
+            this.minInterval = FlowRecorder.this.minInterval;
+            this.maxUnits = FlowRecorder.this.maxUnits;
+            this.maxInterval = FlowRecorder.this.maxInterval;
+            this.minUoT = FlowRecorder.this.minUoT;
+            this.maxUoT = FlowRecorder.this.maxUoT;
+            this.unitVariance = FlowRecorder.this.unitVariance;
+            this.intervalVariance = FlowRecorder.this.intervalVariance;
+            this.uotVariance = FlowRecorder.this.uotVariance;
+            this.unitTrend = FlowRecorder.this.unitTrend;
+            this.intervalTrend = FlowRecorder.this.intervalTrend;
+            this.uotTrend = FlowRecorder.this.uotTrend;
+
+            this.isReset = this.minUnits == Long.MAX_VALUE && this.maxUnits == Long.MIN_VALUE;
+        }
     }
 }

@@ -9,7 +9,7 @@ import euhedral.io.generics.LatticeInterceptor;
 import euhedral.io.generics.LatticeSource;
 import io.euhedral_execution.data_structures.atomics.PaddedAtomicLong;
 import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
-import io.euhedral_execution.data_structures.queues.MpmcQueue;
+import io.euhedral_execution.data_structures.queues.BoundedMpmcQueue;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.BitSet;
@@ -55,7 +55,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
     protected final LatticeEdge[] downstreams;
     protected final RoutingFunction routingFunction;
 
-    protected final MpmcQueue<AbstractFrame>[] cache;
+    protected final BoundedMpmcQueue<AbstractFrame>[] cache;
     protected final int cachePool;
     protected final RoutingPolicy cachePolicy;
     private final PaddedLongAdder cacheCount;
@@ -78,7 +78,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
 
         this.hasCache = cachePool > 0;
         this.cachePool = cachePool;
-        this.cache = this.hasCache ? new MpmcQueue[downstreamCount] : null;
+        this.cache = this.hasCache ? new BoundedMpmcQueue[downstreamCount] : null;
         this.cacheCount = this.hasCache ? new PaddedLongAdder(downstreamCount, false, false) : null;
         this.cachePolicy = cachePolicy;
     }
@@ -134,7 +134,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
                 this.downstreams[i] = handles[i];
 
                 if(this.hasCache) {
-                    this.cache[i] = new MpmcQueue<>(Math.max(4, active.cardinality() / this.cachePool));
+                    this.cache[i] = new BoundedMpmcQueue<>(Math.max(4, this.cachePool / active.cardinality()));
                 }
 
                 if (curr == null) {
