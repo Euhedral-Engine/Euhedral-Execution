@@ -1,7 +1,6 @@
 package euhedral.io.control_plane;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
@@ -35,8 +34,6 @@ class ControlPlaneFragmentTest {
     private FragmentConfig sConfig() {
         return new FragmentConfig(
                 cloneConfig(),
-                64,
-                128,
                 false,
                 new FragmentConfig.IdleCyclePolicy(
                         0.4,
@@ -106,16 +103,6 @@ class ControlPlaneFragmentTest {
                 config.clone(cloneConfig);
 
         assertSame(cloneConfig, cloned.cloneConfig());
-
-        assertEquals(
-                config.minConcurrency(),
-                cloned.minConcurrency()
-        );
-
-        assertEquals(
-                config.maxUpdateInterval(),
-                cloned.maxUpdateInterval()
-        );
     }
 
     @Test

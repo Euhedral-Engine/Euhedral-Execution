@@ -85,8 +85,10 @@ public class ControlPlaneShard implements AutoCloseable {
         long capacity = (long) (sizeL3 * 0.7);
         capacity /= QueueUtils.REFERENCE_SIZE;
 
+        long chunkSize = capacity == 0 ? 0 : QueueUtils.roundChunkSize(capacity);
+
         logger.debug("L3 Cache: Partitions: {} PartionChunkSize: {} Capacity: {}", cores,
-                QueueUtils.roundChunkSize(capacity) / cores, cores * QueueUtils.roundChunkSize(capacity));
+                chunkSize / Math.max(cores, 1), cores * chunkSize);
         LatticeVertex coreDistributor = new LatticeVertex(this.shardName + "-CoreDistributor",
                 SystemInfo.getMaxCoreId() + 1, this::route, (int) capacity,
                 RoutingPolicy.SOCKET_LOCAL);

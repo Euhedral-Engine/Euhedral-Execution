@@ -2,12 +2,6 @@ package euhedral.io.control_plane;
 
 import static euhedral.io.utils.MathFunctions.clampLong;
 
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.VarHandle;
-import java.time.Duration;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.locks.LockSupport;
-
 import euhedral.hardware_utils.PinnedThreadExecutor;
 import euhedral.hardware_utils.SystemInfo;
 import euhedral.hardware_utils.SystemInfo.CpuCacheLayout;
@@ -27,6 +21,11 @@ import euhedral.io.utils.FlowRecorder;
 import euhedral.io.utils.FlowRecorder.FlowSnapshot;
 import euhedral.io.utils.MathFunctions;
 import io.euhedral_execution.data_structures.queues.PartitionedMpscQueue;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
+import java.time.Duration;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.LockSupport;
 import lombok.Getter;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
@@ -166,9 +165,9 @@ public final class ControlPlaneFragment extends WorkRequester {
                     SystemInfo.getCoreInfo(SystemInfo.getCpuInfo(layout.cpu()).core()).pCore();
 
             this.completeSink = new BufferedBridge(
-                    new PartitionedMpscQueue<>(1, fragmentConfig.maxUpdateInterval(), 4), frame -> {
+                    new PartitionedMpscQueue<>(1, 4096, 1), frame -> {
                 IN_FLIGHT.setOpaque(this, this.inFlight - 1);
-                frame.reset();
+                frame.setCancelledExecution(false);
                 frame.doFinally();
             }, this::recordCompletion);
             this.outputStream = new LatticeHotSource();
@@ -506,7 +505,7 @@ public final class ControlPlaneFragment extends WorkRequester {
 
     @Override
     public boolean isDrained() {
-        return super.isDrained() && (int) IN_FLIGHT.getAcquire(this) == 0;
+        return super.isDrained() && (long) IN_FLIGHT.getAcquire(this) == 0;
     }
 
     @Override

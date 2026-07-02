@@ -19,11 +19,13 @@ import euhedral.io.control_plane.RoutingPolicy;
 import euhedral.io.flow_control.LatticeVertex.RoutingFunction;
 import euhedral.io.generics.LatticeSource;
 import euhedral.io.utils.QueueConsumer;
+import java.util.Arrays;
 import java.util.BitSet;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import test_utils.TestFrame;
 import test_utils.TestReceiver;
 
@@ -36,7 +38,17 @@ class LatticeVertexTest {
         UpstreamQueue.UP_QUEUE.remove();
 
         node = new LatticeVertex("test-node", 4, RoutingFunction.DEFAULT,
-                16, RoutingPolicy.ANYWHERE);
+                32, RoutingPolicy.ANYWHERE);
+        BitSet active = new BitSet(4);
+        active.set(0, 4);
+
+        LatticeEdge mockEdge = Mockito.mock(LatticeEdge.class);
+        LatticeEdge[] handles = new LatticeEdge[4];
+        Arrays.fill(handles, mockEdge);
+
+        node.setDrain(true);
+        node.setDownstreamMapping(active, handles);
+        node.setDrain(false);
     }
 
     @AfterEach
@@ -305,13 +317,13 @@ class LatticeVertexTest {
 
         interceptor.push(frame);
 
-        boolean isEmpty = true;
+        boolean hasItem = false;
         for(var queue : node.cache) {
             if(queue != null) {
-                isEmpty &= queue.isEmpty();
+                hasItem |= !queue.isEmpty();
             }
         }
-        assertFalse(isEmpty);
+        assertTrue(hasItem);
     }
 
     @Test
