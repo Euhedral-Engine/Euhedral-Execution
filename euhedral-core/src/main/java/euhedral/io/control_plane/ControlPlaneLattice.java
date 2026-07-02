@@ -219,8 +219,6 @@ public final class ControlPlaneLattice implements LatticeTerminal, AutoCloseable
 
     /// Constructs the [ControlPlaneShards] and the ingest controller.
     private void init() {
-        this.logger.info("Initializing");
-
         for (int i = 0; i < this.shards.length; i++) {
             SocketInfo info = SystemInfo.getSocketInfo(i);
             if (info == null) {

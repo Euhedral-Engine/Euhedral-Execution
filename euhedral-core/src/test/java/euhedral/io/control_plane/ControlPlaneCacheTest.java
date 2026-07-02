@@ -8,11 +8,11 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import euhedral.hardware_utils.common.SystemUtilization.CoreSnapshot;
+import euhedral.hardware_utils.common.SystemUtilization.CpuSnapshot;
 import euhedral.io.config.CacheConfig;
 import euhedral.io.config.CloneConfig;
 import euhedral.io.flow_control.UpstreamQueue;
 import euhedral.io.generics.CloneableObject;
-import java.util.function.Supplier;
 import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -43,7 +43,7 @@ class ControlPlaneCacheTest {
     }
 
     private ControlPlaneCache manager() {
-        return new CPCImpl(config(), () -> 0.0);
+        return new CPCImpl(config());
     }
 
     @AfterEach
@@ -132,9 +132,12 @@ class ControlPlaneCacheTest {
 
     @Test
     void shouldUpdateCapFactorFromSnapshot() throws Exception {
-        ControlPlaneCache manager = new CPCImpl(config(), () -> 0.5);
+        ControlPlaneCache manager = new CPCImpl(config());
 
         CoreSnapshot snapshot = mock(CoreSnapshot.class);
+        CpuSnapshot cpuSnap = mock(CpuSnapshot.class);
+        when(snapshot.cpuSnapshots()).thenReturn(new CpuSnapshot[]{cpuSnap});
+        when(cpuSnap.pressure()).thenReturn(0.50);
 
         when(snapshot.memoryLimit()).thenReturn(1024L * 1024L);
 
@@ -152,11 +155,8 @@ class ControlPlaneCacheTest {
 
     private static class CPCImpl extends ControlPlaneCache {
 
-        final Supplier<Double> pressure;
-
-        public CPCImpl(@NonNull CacheConfig cacheConfig, @NonNull Supplier<Double> pressure) {
+        public CPCImpl(@NonNull CacheConfig cacheConfig) {
             super(cacheConfig);
-            this.pressure = pressure;
         }
 
         @Override

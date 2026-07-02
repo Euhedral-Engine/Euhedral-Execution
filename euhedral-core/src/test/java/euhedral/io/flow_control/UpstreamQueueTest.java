@@ -73,16 +73,16 @@ class UpstreamQueueTest {
     }
 
     @Test
-    void shouldRequestFromOneUpstreamsWhenAtOrBelow1024() {
+    void shouldRequestFromOneUpstreamsWhenAtOrBelow32() {
         TestUpstreamHandle first = new TestUpstreamHandle();
         TestUpstreamHandle second = new TestUpstreamHandle();
 
         queue.addUpstream(first);
         queue.addUpstream(second);
 
-        queue.request(1024);
+        queue.request(32);
 
-        assertEquals(1024, first.requested);
+        assertEquals(32, first.requested);
         assertEquals(0, second.requested);
     }
 

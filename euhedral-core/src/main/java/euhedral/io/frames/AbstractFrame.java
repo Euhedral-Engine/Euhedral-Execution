@@ -6,7 +6,6 @@ import euhedral.io.control_plane.ControlPlaneFragment;
 import euhedral.io.control_plane.RoutingPolicy;
 import euhedral.io.generics.AbstractExecutor;
 import euhedral.io.impl.FrameManager;
-import java.lang.invoke.VarHandle;
 import lombok.Getter;
 import lombok.Setter;
 import org.jspecify.annotations.NonNull;
@@ -56,21 +55,6 @@ import org.jspecify.annotations.NonNull;
 /// - `kill()` -> hard stop (this and related work)
 /// - `isAlive()` -> soft liveness check (engine may cancel if false)
 /// - `doFinally()` -> post-execution hook (safe mutation point)
-///
-/// ---
-///
-/// ### Mental model
-///
-/// Think of a frame as a tiny packet of work that keeps getting reshaped and forwarded until the
-/// system is done with it.
-///
-/// It’s lightweight on purpose.
-///
-/// It doesn’t want to be expensive.
-///
-/// It just wants to move.
-///
-/// (And then get reused.)
 @SuppressWarnings({"rawtypes", "unchecked", "unused"})
 public abstract class AbstractFrame {
 
@@ -110,7 +94,7 @@ public abstract class AbstractFrame {
     /// If this returns `false`, the engine is allowed to cancel execution.
     public abstract boolean isAlive();
 
-    /// Hard stop for this frame (and related execution).
+    /// Hard stop for this frame.
     public abstract void kill();
 
     /// Post-execution hook.
@@ -120,10 +104,9 @@ public abstract class AbstractFrame {
         recycle();
     }
 
-    /// Resets execution state so the frame can be reused.
-    public final void reset() {
-        this.cancelledExecution = false;
-        VarHandle.releaseFence();
+    /// Resets the routingHash to the idHash.
+    public void reset() {
+        this.routingHash = idHash;
     }
 
     /// Returns the frame to the recycler for reuse.

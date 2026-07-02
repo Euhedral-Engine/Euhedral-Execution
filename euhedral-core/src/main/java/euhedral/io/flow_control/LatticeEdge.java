@@ -87,6 +87,8 @@ public class LatticeEdge extends UpstreamHandle implements AutoCloseable {
         LatticeEdge parent = (LatticeEdge) PARENT.getOpaque(this);
         if (parent != null) {
             parent.register(id);
+        } else {
+            getThreadUpstreamQueue();
         }
     }
 

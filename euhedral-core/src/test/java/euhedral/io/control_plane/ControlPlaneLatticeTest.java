@@ -130,7 +130,7 @@ class ControlPlaneLatticeTest {
 
         ResourceMonitor mockedRM = mockResourceMonitor.constructed().get(0);
         verify(mockedRM, times(1)).addListener(any());
-        verify(mockedRM, times(2)).getUtilization();
+        verify(mockedRM, times(1)).getUtilization();
         verify(mockUtilization, times(1)).getSocketSnapshot(eq(0), any(), anyDouble());
         verify(mockUtilization, times(1)).getSocketSnapshot(eq(1), any(), anyDouble());
 
