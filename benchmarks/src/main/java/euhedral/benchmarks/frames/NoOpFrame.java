@@ -1,9 +1,12 @@
 package euhedral.benchmarks.frames;
 
+import euhedral.hashing.HasherApi;
 import euhedral.io.frames.AbstractFrame;
 import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class NoOpFrame extends AbstractFrame {
+    private static final AtomicInteger GENERATION = new AtomicInteger(1);
 
     public final PaddedLongAdder counters;
 
@@ -11,9 +14,18 @@ public class NoOpFrame extends AbstractFrame {
     public int cpu;
 
     public static NoOpFrame[] generate(long idHash, int length, PaddedLongAdder counters) {
+        return generate(idHash, length, counters, false);
+    }
+
+    public static NoOpFrame[] generate(long idHash, int length, PaddedLongAdder counters, boolean ordered) {
+        long seed = HasherApi.mix(HasherApi.BASE_SEED + GENERATION.getAndIncrement());
+
         NoOpFrame[] frames = new NoOpFrame[length];
         for(int i = 0; i < length; i++) {
             frames[i] = new NoOpFrame(idHash, counters);
+            if(!ordered) {
+                frames[i].randomizeHash(seed++);
+            }
         }
         return frames;
     }

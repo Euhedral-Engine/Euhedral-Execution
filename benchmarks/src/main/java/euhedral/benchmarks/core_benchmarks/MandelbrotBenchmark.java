@@ -2,7 +2,7 @@ package euhedral.benchmarks.core_benchmarks;
 
 import euhedral.benchmarks.core_benchmarks.utils.MandelbrotCanvas;
 import euhedral.benchmarks.frames.MandelbrotPixel;
-import euhedral.benchmarks.pipelines.FractalExecutor;
+import euhedral.benchmarks.utils.FractalExecutor;
 import euhedral.hashing.HasherApi;
 import euhedral.io.config.ControlPlaneConfig;
 import euhedral.io.control_plane.ControlPlaneLattice;

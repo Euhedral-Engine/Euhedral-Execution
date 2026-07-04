@@ -1,4 +1,4 @@
-package euhedral.benchmarks.pipelines;
+package euhedral.benchmarks.utils;
 
 import euhedral.benchmarks.frames.BenchArrayFrame;
 import euhedral.benchmarks.frames.MandelbrotPixel;

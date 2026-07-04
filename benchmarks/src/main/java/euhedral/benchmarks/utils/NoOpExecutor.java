@@ -1,4 +1,4 @@
-package euhedral.benchmarks.pipelines;
+package euhedral.benchmarks.utils;
 
 import euhedral.benchmarks.frames.NoOpFrame;
 import euhedral.hardware_utils.PinnedThreadExecutor;
