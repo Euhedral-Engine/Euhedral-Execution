@@ -3,6 +3,7 @@ package io.euhedral_execution.data_structures.atomics;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.Arrays;
+import java.util.StringJoiner;
 import java.util.function.LongBinaryOperator;
 import java.util.function.LongUnaryOperator;
 
@@ -240,6 +241,16 @@ public sealed class PaddedAtomicLongArray permits PaddedLongAdder {
 
     @Override
     public String toString() {
-        return Arrays.toString(this.array);
+        if (this.boundsCheck) {
+            StringJoiner sj = new StringJoiner(", ", "[", "]");
+            for (int i = 0; i < this.length; i++) {
+                sj.add(Double.toString(this.array[((i + 1) * this.padding) + i]));
+            }
+            VarHandle.acquireFence();
+            return sj.toString();
+        }
+        String string = Arrays.toString(this.array);
+        VarHandle.acquireFence();
+        return string;
     }
 }
