@@ -45,6 +45,38 @@ public final class PaddedLongAdder extends PaddedAtomicLongArray {
         super.getAndAddRelease(idx, value);
     }
 
+    public long min() {
+        long min = Long.MAX_VALUE;
+        if (boundsCheck) {
+            for (int i = 0; i < super.length(); i++) {
+                min = Math.min(min, super.array[((i + 1) * this.padding) + i]);
+            }
+            VarHandle.acquireFence();
+        } else {
+            for (long l : super.array) {
+                min = Math.min(min, l);
+            }
+            VarHandle.acquireFence();
+        }
+        return min;
+    }
+
+    public long max() {
+        long max = Long.MIN_VALUE;
+        if (boundsCheck) {
+            for (int i = 0; i < super.length(); i++) {
+                max = Math.max(max, super.array[((i + 1) * this.padding) + i]);
+            }
+            VarHandle.acquireFence();
+        } else {
+            for (long l : super.array) {
+                max = Math.max(max, l);
+            }
+            VarHandle.acquireFence();
+        }
+        return max;
+    }
+
     public long sum() {
         long sum = 0;
         if (boundsCheck) {
