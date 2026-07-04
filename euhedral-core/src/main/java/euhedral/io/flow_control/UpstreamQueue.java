@@ -10,7 +10,6 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
-import lombok.Getter;
 import org.jctools.maps.NonBlockingHashMapLong;
 
 /// ## The upstream aggregation and scheduling layer
@@ -67,10 +66,16 @@ public class UpstreamQueue {
             new PartitionedMpscQueue<>(1, 512, 0);
     private final UpstreamHandle[] drainBuffer = new UpstreamHandle[512];
     private final int[] pullIdx = new int[]{0};
-    @Getter
+
     long cachedUpCount = 0L;
     private long upstreamCount = 0L;
 
+    public long getCachedUpCount() {
+        if(this.cachedUpCount == 0L) {
+            return getTrueUpstreamCount();
+        }
+        return this.cachedUpCount;
+    }
     public long getTrueUpstreamCount() {
         this.cachedUpCount = (long) UP_COUNT.getOpaque(this);
         return this.cachedUpCount;

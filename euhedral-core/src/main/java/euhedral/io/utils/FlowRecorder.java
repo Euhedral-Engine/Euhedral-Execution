@@ -11,6 +11,7 @@ public class FlowRecorder {
 
     private final double alpha;
 
+    @Getter
     private final long measurementWindowNs;
     private long windowStartNs;
 
@@ -94,7 +95,7 @@ public class FlowRecorder {
         if(this.averageInterval == 0) {
             this.averageUnits = currentUnits;
             this.averageInterval = currentInterval;
-            this.averageUnitsOverTime = unitsOverTime;
+            this.averageUnitsOverTime = 0;
             this.minUnits = currentUnits;
             this.maxUnits = currentUnits;
             this.minInterval = currentInterval;
@@ -102,6 +103,8 @@ public class FlowRecorder {
             this.minUoT = unitsOverTime;
             this.maxUoT = unitsOverTime;
             return;
+        } else if(this.prevWindowCount + this.currWindowCount == 2) {
+            this.averageUnitsOverTime = unitsOverTime;
         }
 
         double delta = Math.abs(currentInterval - this.averageInterval);
@@ -204,6 +207,10 @@ public class FlowRecorder {
         return this.rollingSum / count;
     }
 
+    public long getCurrentWindowCount() {
+        return this.currWindowCount;
+    }
+
     public double getEffectiveMeasurementWindowCount() {
         return getEffectiveMeasurementWindowCount(System.nanoTime());
     }
@@ -224,6 +231,10 @@ public class FlowRecorder {
             return prevWindowCount;
         }
 
+        if(prevWindowCount == 0 && now >= this.lastRecordingTime) {
+            return currWindowCount;
+        }
+
         double progress = (double) elapsed / dynamicWindowNs;
         double invProgress = 1.0 / progress;
 
@@ -231,7 +242,8 @@ public class FlowRecorder {
         double prevContribution = prevWindowCount * invProgress;
         double currContribution = currWindowCount * progress;
 
-        return prevContribution + currContribution;
+        double total = prevContribution + currContribution;
+        return total < 1 ? 1 : total;
     }
 
     public double averageUnits() {
