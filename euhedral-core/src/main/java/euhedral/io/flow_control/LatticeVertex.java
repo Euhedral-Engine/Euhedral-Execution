@@ -7,6 +7,7 @@ import euhedral.io.flow_control.UpstreamQueue.UpstreamHandle;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.LatticeInterceptor;
 import euhedral.io.generics.LatticeSource;
+import euhedral.io.utils.FlowThread;
 import io.euhedral_execution.data_structures.atomics.PaddedAtomicLong;
 import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
 import io.euhedral_execution.data_structures.queues.BoundedMpmcQueue;
@@ -101,13 +102,24 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
     }
 
     @Override
+    public long getUpstreamCacheCapacity() {
+        long total = 0;
+        if(this.hasCache) {
+            total += this.cachePool;
+        }
+        total += super.getUpstreamCacheCount();
+        return total < 0 ? Long.MAX_VALUE : total;
+    }
+
+    @Override
     public long getUpstreamCacheCount() {
         long total = 0;
 
         if(this.hasCache) {
             total = this.cacheCount.sum();
         }
-        return total + super.getUpstreamCacheCount();
+        total += super.getUpstreamCacheCount();
+        return total < 0 ? Long.MAX_VALUE : total;
     }
 
     public AtomicBoolean getDrainFlag() {
@@ -223,6 +235,10 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
                 && frame.getRoutingPolicy().level <= this.cachePolicy.level) {
             CacheHead head = this.cacheHead.get();
             if (this.cache[idx].offer(frame)) {
+                FlowThread.FlowContext context = FlowThread.getContext();
+                if(context != null) {
+                    context.satisfiedRequest++;
+                }
                 if(head != null) {
                     this.cacheCount.increment(head.counterIdx);
                 } else {
@@ -346,7 +362,6 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
 
         public final AtomicBoolean complete = new AtomicBoolean(false);
         private final PaddedAtomicLong wip = new PaddedAtomicLong(0);
-        private final PaddedAtomicLong demand = new PaddedAtomicLong(0);
         public LatticeSource upstream;
 
         @Override
@@ -371,34 +386,15 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
                 return;
             }
 
-            this.demand.accumulateAndGet(num, UpstreamInterceptor::addCap);
-
-            long wip = this.wip.getAndIncrement();
-            if (wip == 0) {
-                int count = 0;
-                do {
-                    try {
-                        if(count > 4) {
-                            this.wip.lazySet(0);
-                            break;
-                        }
-                        long demand = this.demand.getAcquire();
-                        if(demand > 0) {
-                            count++;
-                            this.upstream.request(demand);
-                            this.demand.accumulateAndGet(-demand, UpstreamInterceptor::addCap);
-                        } else if(this.complete.getOpaque()) {
-                            return;
-                        } else {
-                            this.wip.lazySet(0);
-                            break;
-                        }
-                    } catch (Throwable t) {
-                        logger.error("Upstream threw an exception during request", t);
-                        this.complete();
-                        break;
-                    }
-                } while(this.wip.decrementAndGet() != 0);
+            if (this.wip.getAndIncrement() == 0) {
+                try {
+                    this.upstream.request(num);
+                } catch (Throwable t) {
+                    logger.error("Upstream threw an exception during request", t);
+                    this.complete();
+                } finally {
+                    this.wip.lazySet(0);
+                }
             }
         }
 

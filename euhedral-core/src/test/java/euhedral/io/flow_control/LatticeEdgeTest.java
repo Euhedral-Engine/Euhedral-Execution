@@ -248,7 +248,7 @@ class LatticeEdgeTest {
 
         edge.addUpstream(upstream);
 
-        assertEquals(1, edge.getUpstreamCount());
+        assertEquals(1, edge.getUpstreamHandleCount());
     }
 
     @Test
@@ -278,7 +278,7 @@ class LatticeEdgeTest {
 
         edge.setParent(parent);
 
-        assertTrue(parent.getUpstreamCount() > 0);
+        assertTrue(parent.getUpstreamHandleCount() > 0);
         assertTrue(parent.getThreadCount() > 0);
     }
 

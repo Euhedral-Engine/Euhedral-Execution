@@ -144,6 +144,14 @@ public class LatticeEdge extends UpstreamHandle implements AutoCloseable {
         }
     }
 
+    public long getUpstreamCacheCapacity() {
+        LatticeEdge parent = (LatticeEdge) PARENT.getOpaque(this);
+        if (parent != null) {
+            return parent.getUpstreamCacheCapacity();
+        }
+        return 0;
+    }
+
     public long getUpstreamCacheCount() {
         LatticeEdge parent = (LatticeEdge) PARENT.getOpaque(this);
         if (parent != null) {
@@ -153,10 +161,10 @@ public class LatticeEdge extends UpstreamHandle implements AutoCloseable {
     }
 
     /// Returns the number of [UpstreamHandles][UpstreamHandle]
-    public long getUpstreamCount() {
+    public long getUpstreamHandleCount() {
         LatticeEdge parent = (LatticeEdge) PARENT.getOpaque(this);
         if (parent != null) {
-            return parent.getUpstreamCount();
+            return parent.getUpstreamHandleCount();
         }
         return this.upstreamCount.getOpaque();
     }
