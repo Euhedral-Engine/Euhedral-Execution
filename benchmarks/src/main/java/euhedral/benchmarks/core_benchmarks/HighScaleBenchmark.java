@@ -1,11 +1,8 @@
 package euhedral.benchmarks.core_benchmarks;
 
-import java.lang.invoke.VarHandle;
-import java.util.concurrent.TimeUnit;
-
 import euhedral.benchmarks.frames.BenchArrayFrame;
 import euhedral.benchmarks.frames.MandelbulbFrame;
-import euhedral.benchmarks.pipelines.FractalExecutor;
+import euhedral.benchmarks.utils.FractalExecutor;
 import euhedral.hardware_utils.PinnedThreadExecutor;
 import euhedral.hardware_utils.SystemInfo;
 import euhedral.hardware_utils.SystemInfo.SocketInfo;
@@ -18,6 +15,8 @@ import euhedral.io.impl.BaseCloneableObject;
 import euhedral.io.ingest.ArrayIngestSink;
 import euhedral.io.utils.MathFunctions;
 import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
+import java.lang.invoke.VarHandle;
+import java.util.concurrent.TimeUnit;
 import org.openjdk.jmh.annotations.AuxCounters;
 import org.openjdk.jmh.annotations.AuxCounters.Type;
 import org.openjdk.jmh.annotations.Benchmark;

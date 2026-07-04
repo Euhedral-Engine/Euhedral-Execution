@@ -1,14 +1,13 @@
 package euhedral.benchmarks.core_benchmarks;
 
 import euhedral.benchmarks.frames.NoOpFrame;
-import euhedral.benchmarks.pipelines.NoOpExecutor;
+import euhedral.benchmarks.utils.NoOpExecutor;
+import euhedral.benchmarks.utils.RepeatingSink;
 import euhedral.hashing.HasherApi;
 import euhedral.io.config.ControlPlaneConfig;
 import euhedral.io.control_plane.ControlPlaneLattice;
 import euhedral.io.impl.BaseCloneableObject;
-import euhedral.io.ingest.ArrayIngestSink;
 import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
-import java.lang.invoke.VarHandle;
 import java.util.concurrent.TimeUnit;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -33,17 +32,22 @@ import org.openjdk.jmh.infra.Blackhole;
 @Fork(1)
 public class HighContentionThroughput {
 
-    private static final int BATCH = 1_000_000;
     private static final int PRODUCERS = 32;
-    private static final int TASKS = BATCH * PRODUCERS;
+    private static final int TASKS = 32_000_000;
 
     private static void await(PaddedLongAdder counters) {
         int spin = 0;
+        long now;
+        long log = System.nanoTime();
         long deadline = System.nanoTime() + TimeUnit.MINUTES.toNanos(1);
-
-        while (System.nanoTime() < deadline) {
+        while ((now = System.nanoTime()) < deadline) {
             if ((spin++ & 31) == 0) {
-                if (counters.sum() >= TASKS) {
+                long sum = counters.sum();
+                if(now - log >= 3_000_000_000L) {
+                    System.out.println("Progress: " + sum);
+                    log = now;
+                }
+                if (sum >= TASKS) {
                     break;
                 }
             }
@@ -57,21 +61,15 @@ public class HighContentionThroughput {
 
     private final PaddedLongAdder counters =
             new PaddedLongAdder(Runtime.getRuntime().availableProcessors(), true, true);
-    private final NoOpFrame[][] frames = new NoOpFrame[PRODUCERS][];
-    private final ArrayIngestSink[] sinks = new ArrayIngestSink[PRODUCERS];
+    private final RepeatingSink[] sinks = new RepeatingSink[PRODUCERS];
     private ControlPlaneLattice controlPlane;
 
     @Setup(Level.Trial)
     public void setup(Blackhole blackhole) {
         long idHash = HasherApi.mix(HasherApi.BASE_SEED);
-        long seed = HasherApi.BASE_SEED;
 
-        for (int i = 0; i < frames.length; i++) {
-            this.frames[i] = NoOpFrame.generate(idHash, BATCH, this.counters);
-            for (NoOpFrame frame : this.frames[i]) {
-                frame.randomizeHash(seed++);
-            }
-            this.sinks[i] = new ArrayIngestSink(this.frames[i]);
+        for (int i = 0; i < sinks.length; i++) {
+            this.sinks[i] = new RepeatingSink(NoOpFrame.generate(idHash, 250_000, this.counters));
         }
 
         BaseCloneableObject base = new BaseCloneableObject(new NoOpExecutor(blackhole));
@@ -79,28 +77,15 @@ public class HighContentionThroughput {
                 new ControlPlaneConfig("HighContentionThroughput", null, null, base, null, null);
         this.controlPlane = ControlPlaneLattice.getOrCreate(config);
         this.controlPlane.start();
-    }
-
-    @Setup(Level.Invocation)
-    public void setup() {
-        this.counters.reset();
-        long seed = HasherApi.BASE_SEED;
-        for (int i = 0; i < frames.length; i++) {
-            for (NoOpFrame frame : frames[i]) {
-                frame.randomizeHash(seed++);
-            }
-            sinks[i] = new ArrayIngestSink(frames[i]);
+        for (var sink : this.sinks) {
+            this.controlPlane.addUpstream(sink);
         }
-        VarHandle.fullFence();
     }
 
     @Benchmark
     @OperationsPerInvocation(TASKS)
     public void ingest() {
-        for (var sink : this.sinks) {
-            this.controlPlane.addUpstream(sink);
-        }
-
+        this.counters.reset();
         await(this.counters);
     }
 
