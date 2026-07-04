@@ -278,6 +278,8 @@ public class LatticeEdge extends UpstreamHandle implements AutoCloseable {
             return;
         }
 
+        acquireLock();
+
         var downstream = (LatticeReceiver) DOWNSTREAM.getAcquire(this);
         if (downstream != null) {
             downstream.onComplete();
@@ -286,6 +288,9 @@ public class LatticeEdge extends UpstreamHandle implements AutoCloseable {
         this.aggregators.clear();
         this.sibling = null;
         UP_QUEUES.setRelease(this, null);
+        for(var handle : this.upstreamHandles.keySet()) {
+            handle.complete();
+        }
         this.upstreamHandles.clear();
     }
 

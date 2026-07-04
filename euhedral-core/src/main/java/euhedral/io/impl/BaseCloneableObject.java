@@ -9,6 +9,7 @@ import euhedral.io.control_plane.ControlPlaneFragment;
 import euhedral.io.generics.AbstractExecutor;
 import euhedral.io.generics.CloneableObject;
 import euhedral.io.generics.LatticeSource;
+import euhedral.io.utils.FlowThread;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.concurrent.Future;
 import org.slf4j.Logger;
@@ -87,8 +88,6 @@ public final class BaseCloneableObject implements CloneableObject {
     public void start() {
         this.executor.start();
         this.fragment.start();
-
-        this.executor.setCompletionChannel(this.fragment);
         this.executor.input(this.fragment.output());
     }
 
@@ -169,7 +168,7 @@ public final class BaseCloneableObject implements CloneableObject {
         PinnedThreadExecutor executor = PinnedThreadExecutor.get(cpu);
 
         if (executor == null) {
-            executor = PinnedThreadExecutor.getOrSetIfAbsent(cpu,
+            executor = PinnedThreadExecutor.getOrSetIfAbsent(FlowThread.getFactory(), cpu,
                     cloneConfig.shardName() + "-" + BaseCloneableObject.class,
                     Thread.MAX_PRIORITY, true);
             createdExecutor = true;

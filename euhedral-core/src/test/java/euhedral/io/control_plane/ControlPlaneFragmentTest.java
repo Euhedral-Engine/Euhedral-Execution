@@ -59,7 +59,6 @@ class ControlPlaneFragmentTest {
         ControlPlaneFragment manager = new ControlPlaneFragment(cConfig(), sConfig());
 
         assertNotNull(manager.output());
-        assertNotNull(manager.completeChannel());
 
         assertNotNull(manager.getCache());
         assertNotNull(manager.outputStream);
