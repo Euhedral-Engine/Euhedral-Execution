@@ -29,7 +29,7 @@ public class FractalExecutor extends AbstractExecutor {
             case MandelbrotPixel fractal -> fractal.cpu = this.executorService.getCpu();
             case MandelbulbFrame fractal -> fractal.cpu = this.executorService.getCpu();
             case BenchArrayFrame array -> array.cpu = this.executorService.getCpu();
-            default -> frame.throwMeAsError();
+            default -> frame.throwCancelSignal();
         }
         frame.execute();
         blackhole.consume(frame);

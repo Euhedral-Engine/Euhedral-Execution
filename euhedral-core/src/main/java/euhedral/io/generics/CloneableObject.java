@@ -3,7 +3,6 @@ package euhedral.io.generics;
 import euhedral.hardware_utils.PinnedThreadExecutor;
 import euhedral.hardware_utils.common.SystemUtilization.CoreSnapshot;
 import euhedral.io.config.CloneConfig;
-import euhedral.io.flow_control.BufferedBridge;
 import euhedral.io.impl.BaseCloneableObject;
 
 /// ## Base interface for everything below the [`ControlPlaneShard`][euhedral.io.control_plane.ControlPlaneShard]
@@ -43,10 +42,6 @@ public interface CloneableObject extends AutoCloseable {
     }
 
     default LatticeSource output() {
-        return null;
-    }
-
-    default BufferedBridge completeChannel() {
         return null;
     }
 

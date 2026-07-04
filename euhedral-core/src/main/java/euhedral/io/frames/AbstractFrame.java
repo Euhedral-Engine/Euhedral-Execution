@@ -58,8 +58,9 @@ import org.jspecify.annotations.NonNull;
 @SuppressWarnings({"rawtypes", "unchecked", "unused"})
 public abstract class AbstractFrame {
 
+    public static final CancelSignal CANCEL_SIGNAL = new CancelSignal();
+
     protected final FrameManager recycler;
-    public final CancelSignal cancel;
 
     @Getter
     private final long idHash;
@@ -70,11 +71,7 @@ public abstract class AbstractFrame {
     @Setter
     private RoutingPolicy routingPolicy;
 
-    @Getter @Setter
-    private boolean cancelledExecution = false;
-
     public AbstractFrame(long idHash, FrameManager recycler) {
-        this.cancel = new CancelSignal();
         this.idHash = idHash;
         this.recycler = recycler;
         this.routingHash = idHash;
@@ -104,6 +101,13 @@ public abstract class AbstractFrame {
         recycle();
     }
 
+    /// Post-execution hook.
+    ///
+    /// Called after execution is canceled due to an uncaught error. At this point it is safe to mutate frame state.
+    public void doFinallyWithError(Throwable t) {
+        recycle();
+    }
+
     /// Resets the routingHash to the idHash.
     public void reset() {
         this.routingHash = idHash;
@@ -124,8 +128,8 @@ public abstract class AbstractFrame {
     ///
     /// Handled by [`AbstractExecutor`][AbstractExecutor] and
     /// [`ControlPlaneFragment`][ControlPlaneFragment].
-    public final void throwMeAsError() {
-        throw this.cancel;
+    public final void throwCancelSignal() {
+        throw CANCEL_SIGNAL;
     }
 
     public final boolean isOrdered() {
@@ -135,12 +139,9 @@ public abstract class AbstractFrame {
     /// This class is thrown as a cancellation signal. This signal is automatically handled by the
     /// [ControlPlaneFragment][euhedral.io.control_plane.ControlPlaneFragment] and
     /// [AbstractExecutor][euhedral.io.generics.AbstractExecutor].
-    public final class CancelSignal extends RuntimeException {
-        public final AbstractFrame payload;
-
-        public CancelSignal() {
+    public static final class CancelSignal extends RuntimeException {
+        private CancelSignal() {
             super(null, null, false, false);
-            this.payload = AbstractFrame.this;
         }
     }
 }

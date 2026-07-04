@@ -186,7 +186,7 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
             return;
         }
 
-        if (getUpstreamCount() > 0) {
+        if (super.getUpstreamHandleCount() > 0) {
             UPSTREAM.get().request(demand);
         } else {
             super.request(demand);
@@ -220,7 +220,7 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
     }
 
     @Override
-    public final long getUpstreamCount() {
+    public final long getUpstreamHandleCount() {
         UpstreamQueue upstream = UPSTREAM.get();
         if (upstream == null) {
             upstream = getThreadUpstreamQueue();
