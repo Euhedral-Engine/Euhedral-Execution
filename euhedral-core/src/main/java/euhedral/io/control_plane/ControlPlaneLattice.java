@@ -452,13 +452,8 @@ public final class ControlPlaneLattice implements LatticeTerminal, AutoCloseable
         if (!this.closed.compareAndSet(false, true)) {
             return;
         }
-        LatticeVertex controller = this.ingestController.getAndSet(null);
-        controller.setDrain(true);
-
         this.resourceMonitor.close();
         PinnedThreadExecutor.closeAll();
-
-        this.activeShardIds.set(null);
         for (int i = 0; i < this.shards.length; i++) {
             if (this.shards[i] != null) {
                 try {
@@ -471,6 +466,9 @@ public final class ControlPlaneLattice implements LatticeTerminal, AutoCloseable
                 }
             }
         }
+        this.activeShardIds.set(null);
+
+        LatticeVertex controller = this.ingestController.getAndSet(null);
 
         try {
             controller.close();

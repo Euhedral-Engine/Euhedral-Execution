@@ -456,6 +456,20 @@ public class ControlPlaneShard implements AutoCloseable {
     public void close() throws Exception {
         this.started.set(false);
         this.logger.info("Closing.");
+        CloneableObject[] clones = this.clones.getAcquire();
+        for (int i = 0; i < clones.length; i++) {
+            CloneableObject clone = clones[i];
+            if (clone != null) {
+                try {
+                    clone.close();
+                } catch (Exception e) {
+                    this.logger.error("Failed to close clone.", e);
+                }
+                clone.dumpLocks();
+                clones[i] = null;
+            }
+        }
+
         this.coreDistributor.getAndUpdate(distributor -> {
             if (distributor != null) {
                 try {
@@ -466,30 +480,6 @@ public class ControlPlaneShard implements AutoCloseable {
             }
             return null;
         });
-
-        this.logger.info("Closing cores.");
-        LatticeEdge[] handles = this.coreHandles.getAcquire();
-        for (int i = 0; i < handles.length; i++) {
-            if (handles[i] != null) {
-                handles[i].onComplete();
-                handles[i] = null;
-            }
-        }
-
-        this.logger.info("Closing clones.");
-        CloneableObject[] clones = this.clones.getAcquire();
-        for (int i = 0; i < clones.length; i++) {
-            CloneableObject clone = clones[i];
-            if (clone != null) {
-                try {
-                    clone.close();
-                } catch (Exception e) {
-                    this.logger.error("Failed to close the clone.", e);
-                }
-                clone.dumpLocks();
-                clones[i] = null;
-            }
-        }
 
         if (this.shardExecutor != null) {
             this.shardExecutor.shutdownNow();
