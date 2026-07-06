@@ -124,14 +124,14 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
     }
 
     public AtomicBoolean getDrainFlag() {
-        return this.drain;
+        return super.drain;
     }
 
     /// Rebuilds the routing table and sets the new downstreams. Must be in drain mode to succeed.
     ///
     /// @return Whether the mapping was changed
     public boolean setDownstreamMapping(BitSet active, LatticeEdge[] handles) {
-        if (!this.drain.get()) {
+        if (!super.drain.get()) {
             return false;
         }
 
@@ -184,7 +184,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
     }
 
     public void setDrain(boolean value) {
-        this.drain.set(value);
+        super.drain.set(value);
     }
 
     public boolean isDrained() {
@@ -259,7 +259,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
     /// graph and does the same.
     @Override
     public long pull(Consumer<AbstractFrame> consumer, long demand) {
-        if (demand <= 0 || consumer == null) {
+        if (demand <= 0 || consumer == null || this.closed.getOpaque() || super.drain.getOpaque()) {
             return 0;
         }
 
@@ -385,7 +385,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
 
         @Override
         public void request(long num) {
-            if (num <= 0 || LatticeVertex.this.drain.getOpaque() || this.complete.getOpaque()) {
+            if (num <= 0 || LatticeVertex.this.closed.getOpaque() || LatticeVertex.this.drain.getOpaque() || this.complete.getOpaque()) {
                 return;
             }
 

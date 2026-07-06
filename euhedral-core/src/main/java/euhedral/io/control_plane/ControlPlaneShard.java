@@ -437,6 +437,17 @@ public class ControlPlaneShard implements AutoCloseable {
     public void close() throws Exception {
         this.started.set(false);
         this.logger.info("Closing.");
+        this.coreDistributor.getAndUpdate(distributor -> {
+            if (distributor != null) {
+                try {
+                    distributor.close();
+                } catch (Exception e) {
+                    this.logger.error("CRITICAL: Failed to close the LatticeVertex.", e);
+                }
+            }
+            return null;
+        });
+
         CloneableObject[] clones = this.clones.getAcquire();
         for (int i = 0; i < clones.length; i++) {
             CloneableObject clone = clones[i];
@@ -451,16 +462,6 @@ public class ControlPlaneShard implements AutoCloseable {
             }
         }
 
-        this.coreDistributor.getAndUpdate(distributor -> {
-            if (distributor != null) {
-                try {
-                    distributor.close();
-                } catch (Exception e) {
-                    this.logger.error("CRITICAL: Failed to close the LatticeVertex.", e);
-                }
-            }
-            return null;
-        });
 
         if (this.shardExecutor != null) {
             this.shardExecutor.shutdownNow();
