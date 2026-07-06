@@ -278,8 +278,6 @@ public class LatticeEdge extends UpstreamHandle implements AutoCloseable {
             return;
         }
 
-        acquireLock();
-
         var downstream = (LatticeReceiver) DOWNSTREAM.getAcquire(this);
         if (downstream != null) {
             downstream.onComplete();
@@ -288,26 +286,21 @@ public class LatticeEdge extends UpstreamHandle implements AutoCloseable {
         this.aggregators.clear();
         this.sibling = null;
         UP_QUEUES.setRelease(this, null);
+        acquireLock();
         for(var handle : this.upstreamHandles.keySet()) {
-            handle.complete();
+            handle.onComplete();
         }
         this.upstreamHandles.clear();
+        releaseLock();
     }
 
     public void removeUpstream(UpstreamHandle handle) {
         LatticeEdge parent = (LatticeEdge) PARENT.getOpaque(this);
         if(parent != null) {
             removeUpstream(handle);
+            return;
         }
-        acquireLock();
-        try {
-            Boolean val = this.upstreamHandles.remove(handle);
-            if (val != null && val) {
-                this.upstreamCount.decrementAndGet();
-            }
-        } finally {
-            releaseLock();
-        }
+        this.upstreamCount.decrementAndGet();
     }
 
     /// If the parameter is a LatticeEdge, it sets it as its parent or bubbles it up the chain. If

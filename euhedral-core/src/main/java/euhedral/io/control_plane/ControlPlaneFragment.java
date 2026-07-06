@@ -66,15 +66,12 @@ import org.slf4j.LoggerFactory;
 /// **This is the distributed control surface of the system. Everything else is just plumbing.**
 public final class ControlPlaneFragment extends WorkRequester {
 
-    private static final PaddedDoubleAdder GLOBAL_THROUGHPUT = new PaddedDoubleAdder(SystemInfo.getMaxCoreId() + 1);
-
     private static final VarHandle AVG_LATENCY;
     private static final VarHandle DRAIN;
     private static final VarHandle IN_FLIGHT;
     private static final VarHandle SNAPSHOT;
 
     static {
-        GLOBAL_THROUGHPUT.fill(Double.NEGATIVE_INFINITY);
         try {
             AVG_LATENCY = MethodHandles.lookup()
                     .findVarHandle(ControlPlaneFragment.class, "avgLatency", long.class);
@@ -89,21 +86,9 @@ public final class ControlPlaneFragment extends WorkRequester {
         }
     }
 
-    private static PinnedThreadExecutor createSmtThread(FragmentConfig config) {
-        if (config.cloneConfig() == null) {
-            return null;
-        }
-
-        int[] cpus = config.cloneConfig().getCpuSet();
-        if (cpus.length > 1 && config.enableSMT()) {
-            return PinnedThreadExecutor.getOrSetIfAbsent(FlowThread.getFactory(), cpus[1],
-                    config.cloneConfig().shardName() + "-ControlPlaneFragment-SMT-"
-                            + config.cloneConfig().coreId(), Thread.MAX_PRIORITY, false);
-        }
-        return null;
-    }
-
-    public final int cpuId;
+    public final int socket;
+    public final int core;
+    public final int cpu;
 
     final LatticeHotSource outputStream;
 
@@ -132,14 +117,15 @@ public final class ControlPlaneFragment extends WorkRequester {
 
     public ControlPlaneFragment(@NonNull CacheConfig cacheConfig,
             @NonNull FragmentConfig fragmentConfig) {
-        super(cacheConfig, fragmentConfig.idleCyclePolicy().maxParkTime().toNanos(),
-                createSmtThread(fragmentConfig));
+        super(cacheConfig, fragmentConfig.idleCyclePolicy().maxParkTime().toNanos());
         this.fragmentConfig = fragmentConfig;
 
         this.effectiveBatchLimit = 1024;
 
         if (fragmentConfig.cloneConfig() == null) {
-            this.cpuId = -1;
+            this.socket = -1;
+            this.core = -1;
+            this.cpu = -1;
             this.logger = LoggerFactory.getLogger(ControlPlaneFragment.class);
             this.state = null;
             this.pinnedExecutor = null;
@@ -153,7 +139,11 @@ public final class ControlPlaneFragment extends WorkRequester {
             this.logger = LoggerFactory.getLogger(name);
 
             int[] cpus = fragmentConfig.cloneConfig().getCpuSet();
-            this.cpuId = cpus[0];
+            this.cpu = cpus[0];
+
+            CpuInfo info = SystemInfo.getCpuInfo(this.cpu);
+            this.socket = info.socket();
+            this.core = info.core();
 
             this.state = new CycleState(fragmentConfig.idleCyclePolicy().maxParkTime().toNanos());
 
@@ -172,7 +162,7 @@ public final class ControlPlaneFragment extends WorkRequester {
                     () -> (long) AVG_LATENCY.getOpaque(this));
             this.shutdownHook = new Thread(this::close);
             Runtime.getRuntime().addShutdownHook(this.shutdownHook);
-            this.logger.debug("CPU: {} P-Core: {} SMTMode: {}", this.cpuId, this.isPCore,
+            this.logger.debug("CPU: {} P-Core: {} SMTMode: {}", this.cpu, this.isPCore,
                     cpus.length > 1 && fragmentConfig.enableSMT());
         }
     }
@@ -200,7 +190,6 @@ public final class ControlPlaneFragment extends WorkRequester {
                 this.cycleThread = null;
             }
             dumpLocks();
-            super.pull(AbstractFrame::kill, Long.MAX_VALUE);
             this.metrics.close();
             this.pinnedExecutor.close();
             try {
@@ -210,7 +199,7 @@ public final class ControlPlaneFragment extends WorkRequester {
             }
             super.close();
         }
-        this.logger.debug("Closed");
+        this.logger.trace("Closed");
     }
 
     public void dumpLocks() {
@@ -247,10 +236,10 @@ public final class ControlPlaneFragment extends WorkRequester {
                     if (cloneConfig.coreId() != origin.core()) {
                         this.logger.warn(
                                 "Attempted to pin to CPU: {} Core: {} but was assigned: {}",
-                                this.cpuId, cloneConfig.coreId(), origin);
+                                this.cpu, cloneConfig.coreId(), origin);
                     } else {
                         this.logger.debug("Pinned to Core {} CPU {}", cloneConfig.coreId(),
-                                this.cpuId);
+                                this.cpu);
                     }
                     ThreadTools.setTimerResolution(1);
                     if (this.fragmentConfig.enableSMT() && cloneConfig.getCpuSet().length > 1) {
@@ -274,15 +263,14 @@ public final class ControlPlaneFragment extends WorkRequester {
             Objects.requireNonNull(threadContext);
 
             double throughput = 0.0;
-            while (this.running.getOpaque() && !Thread.currentThread().isInterrupted()) {
+            while (keepRunning()) {
                 long newUpCount = super.getUpstreamHandleCount();
                 if (this.upstreamCount != newUpCount && newUpCount > 0) {
                     this.upstreamCount = newUpCount;
-                    GLOBAL_THROUGHPUT.setRelease(super.getCore(), Double.NEGATIVE_INFINITY);
+                    GlobalState.resetThroughput(this.socket, this.cpu);
                 } else if (this.upstreamCount != newUpCount || this.upstreamCount == 0) {
                     this.upstreamCount = 0;
                     this.state.reset();
-                    GLOBAL_THROUGHPUT.setRelease(super.getCore(), Double.NEGATIVE_INFINITY);
                     throughput = 0;
                     idleSpin();
                 }
@@ -291,7 +279,7 @@ public final class ControlPlaneFragment extends WorkRequester {
                 long processed = 0;
                 FlowRecorder batchEfficiency = this.state.batchEfficiency;
                 batchEfficiency.reset();
-                while(!Thread.currentThread().isInterrupted()) {
+                while(keepRunning()) {
                     processed += execute();
                     if(batchEfficiency.averageUnits() >= 600 || super.getCacheCount() != 0) {
                         Thread.onSpinWait();
@@ -308,7 +296,7 @@ public final class ControlPlaneFragment extends WorkRequester {
                 long requested = 0;
                 FlowRecorder requestEfficiency = this.state.requestEfficiency;
                 requestEfficiency.reset();
-                while(!Thread.currentThread().isInterrupted()) {
+                while(keepRunning()) {
                     super.request();
                     long satisfied = threadContext.satisfiedRequest;
                     requested += satisfied;
@@ -323,12 +311,13 @@ public final class ControlPlaneFragment extends WorkRequester {
                     }
                     LockSupport.parkNanos(50_000);
                 }
+
                 long totalWork = processed + requested;
                 long totalWorkTime = System.nanoTime() - now;
                 double instantT = totalWork / (double) totalWorkTime;
 
                 throughput = throughput == 0 ? instantT : MathFunctions.ewma(throughput, instantT, 0.10);
-                breakoutSpin(throughput);
+                breakoutSpin(this.cpu, throughput);
             }
         } catch (Throwable e) {
             this.logger.error("[CRITICAL]", e);
@@ -339,7 +328,7 @@ public final class ControlPlaneFragment extends WorkRequester {
 
     private long execute() {
         long total = 0;
-        while(!Thread.currentThread().isInterrupted()) {
+        while(keepRunning()) {
             requestAndPull(this.state.batchSize);
 
             long cacheCount = super.getCacheCount();
@@ -411,17 +400,9 @@ public final class ControlPlaneFragment extends WorkRequester {
         this.state.batchSize = currentBatch;
     }
 
-    /// Updates the maximum allowed in-flight work for this executor.
-    ///
-    /// The limit scales with observed throughput and current concurrency, then backs off under CPU
-    /// pressure to avoid oversaturating the core.
-    ///
-    /// P-cores are allowed to push harder than E-cores before throttling begins.
-    ///
-    /// Final limits are clamped against configured minimums and a hardware-derived ceiling.
     private void updateEffectiveBatchLimit(long ideal) {
         CoreSnapshot coreSnapshot = (CoreSnapshot) SNAPSHOT.getOpaque(this);
-        CpuSnapshot cpuSnapshot = coreSnapshot.cpuSnapshots()[this.cpuId];
+        CpuSnapshot cpuSnapshot = coreSnapshot.cpuSnapshots()[this.cpu];
 
         long adaptiveCap = ideal << 2;
 
@@ -434,11 +415,30 @@ public final class ControlPlaneFragment extends WorkRequester {
         this.effectiveBatchLimit = clampLong(adaptiveCap, 2, hardwareMax);
     }
 
-    private void breakoutSpin(double throughput) {
-        int core = super.getCore();
-        GLOBAL_THROUGHPUT.setRelease(core, throughput);
+    private long requestSpin(FlowThread.FlowContext threadContext, FlowRecorder requestEfficiency) {
+        long requested = 0;
+        while(keepRunning()) {
+            super.request();
+            long satisfied = threadContext.satisfiedRequest;
+            requested += satisfied;
 
-        double globalAvgT = GLOBAL_THROUGHPUT.mean();
+            double efficiency = satisfied / (double) Math.max(threadContext.originalRequest, 1);
+            efficiency = MathFunctions.clampDouble(efficiency, 0.0, 1.0);
+            requestEfficiency.record(Math.round(efficiency * 1_000));
+
+            double measurements = requestEfficiency.getEffectiveMeasurementWindowCount(requestEfficiency.getLastRecordingTime());
+            if(requestEfficiency.averageUnits() < 600 && measurements >= 10) {
+                break;
+            }
+            LockSupport.parkNanos(50_000);
+        }
+        return requested;
+    }
+
+    private void breakoutSpin(int cpu, double throughput) {
+        GlobalState.setThroughput(this.socket, cpu, throughput);
+
+        double globalAvgT = GlobalState.meanThroughput(this.socket);
 
         if(throughput < globalAvgT) {
             logger.trace("Backoff Spin");
@@ -449,7 +449,7 @@ public final class ControlPlaneFragment extends WorkRequester {
     }
 
     private void idleSpin() {
-        while(!Thread.currentThread().isInterrupted()) {
+        while(keepRunning()) {
             long upCount = super.getUpstreamHandleCount();
             if(upCount != this.upstreamCount) {
                 this.upstreamCount = upCount;
@@ -463,6 +463,10 @@ public final class ControlPlaneFragment extends WorkRequester {
     public void update(CoreSnapshot snapshot) {
         SNAPSHOT.setOpaque(this, snapshot);
         super.update(snapshot);
+    }
+
+    private boolean keepRunning() {
+        return this.running.getOpaque() && !Thread.currentThread().isInterrupted();
     }
 
     @Override
@@ -482,7 +486,7 @@ public final class ControlPlaneFragment extends WorkRequester {
         super.setDrainMode(value);
     }
 
-    private static class CycleState {
+    private class CycleState {
 
         final long maxParkNs;
 
@@ -503,6 +507,7 @@ public final class ControlPlaneFragment extends WorkRequester {
         }
 
         void reset() {
+            GlobalState.resetThroughput(ControlPlaneFragment.this.socket, ControlPlaneFragment.this.cpu);
             this.batchRecorder.reset();
             this.batchEfficiency.reset();
             this.requestEfficiency.reset();

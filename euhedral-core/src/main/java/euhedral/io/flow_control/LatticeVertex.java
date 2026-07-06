@@ -48,6 +48,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
         }
     }
 
+    protected final AtomicBoolean closed = new AtomicBoolean(false);
     protected final boolean hasCache;
 
     protected final Logger logger;
@@ -220,6 +221,9 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
     /// Picks a downstream link and sends work down.
     @Override
     public void push(AbstractFrame frame) {
+        if(this.closed.getOpaque()) {
+            return;
+        }
         if(this.downstreams.length < 2) {
             this.downstreams[0].push(frame);
             return;
@@ -301,6 +305,9 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
     /// Closes and removes all downstreams.
     @Override
     public void close() {
+        if(!this.closed.compareAndSet(false, true)) {
+            return;
+        }
         super.close();
         for (int i = 0; i < this.downstreams.length; i++) {
             if (this.downstreams[i] != null) {

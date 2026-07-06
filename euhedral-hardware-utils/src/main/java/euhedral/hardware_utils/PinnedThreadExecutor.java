@@ -72,7 +72,6 @@ public final class PinnedThreadExecutor extends AbstractExecutorService implemen
     private final CleanupState cleanupState;
     private final AtomicBoolean isShutdown = new AtomicBoolean();
     private final ConcurrentHashMap<Thread, Boolean> threadPool = new ConcurrentHashMap<>();
-    private final Thread cleanup;
 
     @Getter
     private final int cpu;
@@ -97,6 +96,7 @@ public final class PinnedThreadExecutor extends AbstractExecutorService implemen
                     LOGGER.error("PinnedThreadExecutor: [{}] encountered an error.", this.name, e);
                 } finally {
                     ThreadTools.releaseAffinity();
+                    this.threadPool.remove(Thread.currentThread());
                 }
             });
             thread.setName(this.name);
@@ -105,13 +105,6 @@ public final class PinnedThreadExecutor extends AbstractExecutorService implemen
             thread.setDaemon(this.daemon);
             return thread;
         };
-        this.cleanup = new Thread(() -> {
-            while (!Thread.interrupted()) {
-                threadPool.keySet().removeIf(t -> !t.isAlive());
-                LockSupport.parkNanos(200_000_000L);
-            }
-        });
-        this.cleanup.start();
         Runtime.getRuntime().addShutdownHook(new Thread(this::shutdownNow));
 
         this.cleanupState = new CleanupState(cpu, this);
@@ -134,13 +127,6 @@ public final class PinnedThreadExecutor extends AbstractExecutorService implemen
     public @NonNull List<Runnable> shutdownNow() {
         if (!isShutdown.compareAndSet(false, true)) {
             return Collections.emptyList();
-        }
-        try {
-            cleanup.interrupt();
-            LockSupport.unpark(cleanup);
-            cleanup.join();
-        } catch (Throwable ignored) {
-
         }
         for (Thread thread : threadPool.keySet()) {
             try {
@@ -168,13 +154,6 @@ public final class PinnedThreadExecutor extends AbstractExecutorService implemen
     public void shutdown() {
         if (!isShutdown.compareAndSet(false, true)) {
             return;
-        }
-        try {
-            cleanup.interrupt();
-            LockSupport.unpark(cleanup);
-            cleanup.join();
-        } catch (Throwable ignored) {
-
         }
         for (Thread thread : threadPool.keySet()) {
             thread.interrupt();

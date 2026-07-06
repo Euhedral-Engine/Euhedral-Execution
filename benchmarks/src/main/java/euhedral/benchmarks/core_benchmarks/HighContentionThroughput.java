@@ -3,6 +3,7 @@ package euhedral.benchmarks.core_benchmarks;
 import euhedral.benchmarks.frames.NoOpFrame;
 import euhedral.benchmarks.utils.NoOpExecutor;
 import euhedral.benchmarks.utils.RepeatingSink;
+import euhedral.hardware_utils.SystemInfo;
 import euhedral.hashing.HasherApi;
 import euhedral.io.config.ControlPlaneConfig;
 import euhedral.io.control_plane.ControlPlaneLattice;
@@ -27,12 +28,12 @@ import org.openjdk.jmh.infra.Blackhole;
 @BenchmarkMode({Mode.Throughput, Mode.SampleTime})
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 @State(Scope.Benchmark)
-@Warmup(iterations = 3, time = 5, timeUnit = TimeUnit.SECONDS)
-@Measurement(iterations = 5, time = 10, timeUnit = TimeUnit.SECONDS)
+@Warmup(iterations = 3, time = 3, timeUnit = TimeUnit.SECONDS)
+@Measurement(iterations = 5, time = 5, timeUnit = TimeUnit.SECONDS)
 @Fork(1)
 public class HighContentionThroughput {
 
-    private static final int PRODUCERS = 32;
+    private static final int PRODUCERS = SystemInfo.CPU_COUNT;
     private static final int TASKS = 32_000_000;
 
     private static void await(PaddedLongAdder counters) {
