@@ -41,7 +41,7 @@ public abstract class WorkRequester extends ControlPlaneCache {
         long remoteCapacity = super.getUpstreamCacheCapacity();
         long remoteCache = super.getUpstreamCacheCount();
 
-        long highWaterMark = Math.round(remoteCapacity * super.capFactor.getAcquire()) >> 1;
+        long highWaterMark = Math.round(remoteCapacity * super.getCapFactor()) >> 1;
 
         long demand = SystemInfo.SOCKET_COUNT * (highWaterMark - remoteCache);
         if (remoteCapacity > 0) {

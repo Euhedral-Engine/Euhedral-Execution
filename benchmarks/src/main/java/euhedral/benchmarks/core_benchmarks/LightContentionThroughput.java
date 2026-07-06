@@ -51,10 +51,10 @@ public class LightContentionThroughput {
     }
 
     @State(Scope.Benchmark)
-    @BenchmarkMode({Mode.Throughput, Mode.SampleTime})
+    @BenchmarkMode({Mode.Throughput})
     @OutputTimeUnit(TimeUnit.NANOSECONDS)
-    @Warmup(iterations = 3, time = 5, timeUnit = TimeUnit.SECONDS)
-    @Measurement(iterations = 5, time = 10, timeUnit = TimeUnit.SECONDS)
+    @Warmup(iterations = 3, time = 3, timeUnit = TimeUnit.SECONDS)
+    @Measurement(iterations = 5, time = 5, timeUnit = TimeUnit.SECONDS)
     @Fork(1)
     public static class PCore {
         private final PaddedLongAdder counters = new PaddedLongAdder(
@@ -116,10 +116,10 @@ public class LightContentionThroughput {
     }
 
     @State(Scope.Benchmark)
-    @BenchmarkMode({Mode.Throughput, Mode.SampleTime})
+    @BenchmarkMode({Mode.Throughput})
     @OutputTimeUnit(TimeUnit.NANOSECONDS)
-    @Warmup(iterations = 3, time = 5, timeUnit = TimeUnit.SECONDS)
-    @Measurement(iterations = 5, time = 10, timeUnit = TimeUnit.SECONDS)
+    @Warmup(iterations = 3, time = 3, timeUnit = TimeUnit.SECONDS)
+    @Measurement(iterations = 5, time = 5, timeUnit = TimeUnit.SECONDS)
     @Fork(1)
     public static class ECore {
         private final PaddedLongAdder counters = new PaddedLongAdder(

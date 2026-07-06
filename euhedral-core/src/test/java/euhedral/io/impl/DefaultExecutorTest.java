@@ -13,6 +13,8 @@ import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.CloneableObject;
 import euhedral.io.generics.LatticeReceiver;
 import euhedral.io.generics.LatticeSource;
+
+import java.util.BitSet;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -30,7 +32,7 @@ class DefaultExecutorTest {
     @Test
     void shouldCloneExecutor() {
         DefaultExecutor cloned =
-                (DefaultExecutor) executor.clone(new CloneConfig("", 0, 0, null));
+                (DefaultExecutor) executor.clone(new CloneConfig("", 0, 0, new BitSet()));
 
         assertNotNull(cloned);
         assertNotSame(executor, cloned);
@@ -41,7 +43,7 @@ class DefaultExecutorTest {
         PinnedThreadExecutor newExec = mock(PinnedThreadExecutor.class);
 
         DefaultExecutor cloned =
-                (DefaultExecutor) executor.clone(new CloneConfig("", 0, 0, null),
+                (DefaultExecutor) executor.clone(new CloneConfig("", 0, 0, new BitSet()),
                         newExec);
 
         assertNotNull(cloned);

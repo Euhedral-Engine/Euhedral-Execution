@@ -1,5 +1,9 @@
 package euhedral.io.metrics;
 
+import static euhedral.io.metrics.MetricsAggregator.CORE_TAG;
+import static euhedral.io.metrics.MetricsAggregator.DEFAULT_PREFIX;
+import static euhedral.io.metrics.MetricsAggregator.metricName;
+
 import euhedral.io.config.FragmentConfig;
 import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.Gauge;
@@ -8,14 +12,11 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 @SuppressWarnings("unused")
 public final class ExecutionMetrics implements AutoCloseable {
-
-    public static final String CORE_TAG = "core";
 
     private static final long OP_NS_TO_OP_SEC = TimeUnit.SECONDS.toNanos(1);
 
@@ -30,43 +31,9 @@ public final class ExecutionMetrics implements AutoCloseable {
         }
     }
 
-    public static Collection<DistributionSummary> getLatencySummaries(MeterRegistry registry) {
-        return registry.getMeters().stream()
-                .filter(m -> m instanceof DistributionSummary && m.getId().getName()
-                        .endsWith("execution.latency")).map(DistributionSummary.class::cast)
-                .toList();
-    }
-
-    public static Collection<DistributionSummary> getLatencySummaries(String metricPrefix,
-            MeterRegistry registry) {
-        return summaries(metricPrefix, ".execution.latency", registry);
-    }
-
-    public static Collection<DistributionSummary> getThroughputSummaries(MeterRegistry registry) {
-        return registry.getMeters().stream()
-                .filter(m -> m instanceof DistributionSummary && m.getId().getName()
-                        .endsWith("execution.throughput")).map(DistributionSummary.class::cast)
-                .toList();
-    }
-
-    public static Collection<DistributionSummary> getThroughputSummaries(String metricPrefix,
-            MeterRegistry registry) {
-        return summaries(metricPrefix, ".execution.throughput", registry);
-    }
-
-    private static Collection<DistributionSummary> summaries(String prefix, String suffix, MeterRegistry registry) {
-        if (prefix == null || prefix.isBlank()) {
-            return List.of();
-        }
-        if (prefix.endsWith(".")) {
-            prefix = prefix.substring(0, prefix.length() - 1);
-        }
-
-        return registry.find(prefix + suffix).summaries();
-    }
-
     private final MeterRegistry registry;
-    private final List<Meter> meters = new ArrayList<>();
+
+    private final List<Meter> meters;
     private final DistributionSummary latency;
     private final DistributionSummary throughput;
 
@@ -75,25 +42,22 @@ public final class ExecutionMetrics implements AutoCloseable {
     public ExecutionMetrics(FragmentConfig config) {
         String prefix = config.metricPrefix();
         if (prefix == null || prefix.isBlank()) {
-            prefix = "euhedral";
+            prefix = DEFAULT_PREFIX;
         }
-        if (prefix.endsWith(".")) {
-            prefix = prefix.substring(0, prefix.length() - 1);
-        }
-
 
         this.registry = config.meterRegistry();
         if (this.registry != null && config.cloneConfig() != null) {
+            this.meters = new ArrayList<>();
             String coreId = String.valueOf(config.cloneConfig().coreId());
 
-            this.latency = DistributionSummary.builder(prefix + ".execution.latency")
+            this.latency = DistributionSummary.builder(metricName(prefix, MetricsAggregator.LATENCY_SUMMARY_SUFFIX))
                     .description("Average execution latency of work.")
                     .tag(CORE_TAG, coreId)
                     .baseUnit("nanoseconds")
                     .register(this.registry);
             this.meters.add(this.latency);
 
-            this.throughput = DistributionSummary.builder(prefix + ".execution.throughput")
+            this.throughput = DistributionSummary.builder(metricName(prefix, MetricsAggregator.THROUGHPUT_SUMMARY_SUFFIX))
                     .description("Average throughput of work.")
                     .tag(CORE_TAG, coreId)
                     .baseUnit("seconds")
@@ -101,11 +65,12 @@ public final class ExecutionMetrics implements AutoCloseable {
             this.meters.add(this.throughput);
 
             this.meters.add(
-                    Gauge.builder(prefix + ".execution.inProgress", this::getInProgress)
+                    Gauge.builder(metricName(prefix, MetricsAggregator.IN_PROGRESS_SUFFIX), this::getInProgress)
                             .description("Number of frames being executed")
                             .tag(CORE_TAG, coreId)
                             .register(this.registry));
         } else {
+            this.meters = null;
             this.latency = null;
             this.throughput = null;
         }
@@ -135,7 +100,7 @@ public final class ExecutionMetrics implements AutoCloseable {
     public void close() {
         if(this.registry != null) {
             this.meters.forEach(this.registry::remove);
+            this.meters.clear();
         }
-        this.meters.clear();
     }
 }
