@@ -1,5 +1,6 @@
 package euhedral.io.utils;
 
+import euhedral.io.flow_control.UpstreamQueue;
 import java.util.function.Function;
 
 @SuppressWarnings("unused")
@@ -59,6 +60,8 @@ public class FlowThread extends Thread {
     }
 
     public static final class FlowContext {
+
+        public UpstreamQueue upstream;
 
         public long satisfiedRequest = 0;
         public long originalRequest = 0;

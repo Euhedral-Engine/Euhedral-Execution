@@ -452,6 +452,7 @@ public final class ControlPlaneLattice implements LatticeTerminal, AutoCloseable
         if (!this.closed.compareAndSet(false, true)) {
             return;
         }
+        logger.info("Closing.");
         this.resourceMonitor.close();
         PinnedThreadExecutor.closeAll();
         for (int i = 0; i < this.shards.length; i++) {

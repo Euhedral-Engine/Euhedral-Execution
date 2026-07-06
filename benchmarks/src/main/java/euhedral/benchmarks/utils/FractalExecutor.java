@@ -14,21 +14,21 @@ public class FractalExecutor extends AbstractExecutor {
     private final Blackhole blackhole;
 
     public  FractalExecutor(Blackhole blackhole) {
-        super(null);
+        super(-1);
         this.blackhole = blackhole;
     }
 
-    FractalExecutor(PinnedThreadExecutor executor, Blackhole blackhole) {
-        super(executor);
+    FractalExecutor(int cpu, Blackhole blackhole) {
+        super(cpu);
         this.blackhole = blackhole;
     }
 
     @Override
     public void execute(AbstractFrame frame) {
         switch (frame) {
-            case MandelbrotPixel fractal -> fractal.cpu = this.executorService.getCpu();
-            case MandelbulbFrame fractal -> fractal.cpu = this.executorService.getCpu();
-            case BenchArrayFrame array -> array.cpu = this.executorService.getCpu();
+            case MandelbrotPixel fractal -> fractal.cpu = super.cpu;
+            case MandelbulbFrame fractal -> fractal.cpu = super.cpu;
+            case BenchArrayFrame array -> array.cpu = super.cpu;
             default -> frame.throwCancelSignal();
         }
         frame.execute();
@@ -37,12 +37,12 @@ public class FractalExecutor extends AbstractExecutor {
 
     @Override
     public AbstractExecutor clone(CloneConfig cloneConfig) {
-        return new FractalExecutor(super.executorService, this.blackhole);
+        return new FractalExecutor(cloneConfig.effectiveCpus().nextSetBit(0), this.blackhole);
     }
 
     @Override
     public AbstractExecutor clone(CloneConfig cloneConfig,
             PinnedThreadExecutor executor) {
-        return new FractalExecutor(executor, this.blackhole);
+        return new FractalExecutor(cloneConfig.effectiveCpus().nextSetBit(0), this.blackhole);
     }
 }

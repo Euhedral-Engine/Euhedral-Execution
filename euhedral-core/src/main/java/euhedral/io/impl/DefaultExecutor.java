@@ -10,8 +10,8 @@ import euhedral.io.generics.AbstractExecutor;
 /// Simply hits `execute()` on a frame.
 public final class DefaultExecutor extends AbstractExecutor {
 
-    public DefaultExecutor(PinnedThreadExecutor executorService) {
-        super(executorService);
+    public DefaultExecutor(int cpu) {
+        super(cpu);
     }
 
     @Override
@@ -21,11 +21,11 @@ public final class DefaultExecutor extends AbstractExecutor {
 
     @Override
     public AbstractExecutor clone(CloneConfig cloneConfig) {
-        return new DefaultExecutor(this.executorService);
+        return new DefaultExecutor(cloneConfig.effectiveCpus().nextSetBit(0));
     }
 
     @Override
     public AbstractExecutor clone(CloneConfig cloneConfig, PinnedThreadExecutor executor) {
-        return new DefaultExecutor(executor);
+        return new DefaultExecutor(cloneConfig.effectiveCpus().nextSetBit(0));
     }
 }

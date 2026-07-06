@@ -4,30 +4,41 @@ import euhedral.io.generics.CloneableObject;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.jspecify.annotations.Nullable;
 
-public record CacheConfig(@Nullable CloneConfig cloneConfig, double memoryBudget,
-                          int partitionsPerCpu, int maxPooledChunks,
-                          int ringWalkResetThreshold, String metricPrefix,
-                          @Nullable MeterRegistry registry) implements CloneableObject {
+@SuppressWarnings("unused")
+public record CacheConfig(@Nullable CloneConfig cloneConfig,
+                          double memoryBudget,
+                          int partitions,
+                          int maxPooledChunks,
+                          int ringWalkResetThreshold,
+                          String metricPrefix,
+                          @Nullable MeterRegistry registry
+) implements CloneableObject {
 
-    public static CacheConfig defaultConfig() {
-        return defaultConfig(null, null);
+    public static CacheConfig ofDefault() {
+        return ofDefault(null, null);
     }
 
-    public static CacheConfig defaultConfig(String metricPrefix, MeterRegistry registry) {
+    public static CacheConfig ofDefault(String metricPrefix, MeterRegistry registry) {
         return new CacheConfig(null, 0.7, 8, 1, 4, metricPrefix, registry);
     }
 
     @Override
     public CacheConfig clone(CloneConfig cloneConfig) {
-        return new CacheConfig(cloneConfig, memoryBudget, partitionsPerCpu, maxPooledChunks,
+        return new CacheConfig(
+                cloneConfig,
+                memoryBudget,
+                partitions,
+                maxPooledChunks,
                 ringWalkResetThreshold,
-                metricPrefix, registry);
+                metricPrefix,
+                registry
+        );
     }
 
     @Override
     public int getCore() {
-        if(cloneConfig != null) {
-            return cloneConfig.coreId();
+        if (this.cloneConfig != null) {
+            return this.cloneConfig.coreId();
         }
         return -1;
     }

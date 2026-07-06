@@ -24,8 +24,7 @@ class DefaultExecutorTest {
 
     @BeforeEach
     void setup() {
-        PinnedThreadExecutor executorService = mock(PinnedThreadExecutor.class);
-        executor = new DefaultExecutor(executorService);
+        executor = new DefaultExecutor(0);
     }
 
     @Test

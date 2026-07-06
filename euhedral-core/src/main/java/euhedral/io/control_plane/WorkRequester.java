@@ -5,32 +5,39 @@ import euhedral.io.config.CacheConfig;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.utils.FlowThread;
 import euhedral.io.utils.QueueConsumer;
-import java.util.Objects;
-import java.util.function.Consumer;
 import org.jspecify.annotations.NonNull;
 
 public abstract class WorkRequester extends ControlPlaneCache {
 
-    private final RequesterState requesterState;
+    private final QueueConsumer consumer;
+    private final long safetyFactor;
+    private final long pullMultiplier;
 
-    public WorkRequester(@NonNull CacheConfig cacheConfig, long maxParkNs) {
+    public WorkRequester(@NonNull CacheConfig cacheConfig) {
         super(cacheConfig);
 
         if (super.getCache() == null) {
-            this.requesterState = null;
+            this.consumer = null;
+            this.safetyFactor = 0;
+            this.pullMultiplier = 0;
         } else {
-            this.requesterState = new RequesterState(this::accept, maxParkNs,
-                    cacheConfig.getCore());
+            this.consumer = new QueueConsumer(this::accept);
+
+            int cores = SystemInfo.getSocketInfo(SystemInfo.getCoreInfo(cacheConfig.getCore()).socket()).getCoreSet()
+                    .cardinality();
+            int base = (cores * 3) >> 3;
+            this.safetyFactor = Math.max(base >> 1, 2);
+            this.pullMultiplier = this.safetyFactor << 1;
         }
     }
 
     protected abstract void accept(AbstractFrame frame);
 
     protected long drain(long limit) {
-        return super.drain(this.requesterState, limit);
+        return super.drain(this.consumer, limit);
     }
 
-    protected void request() {
+    protected void request(FlowThread.FlowContext context) {
         long remoteCapacity = super.getUpstreamCacheCapacity();
         long remoteCache = super.getUpstreamCacheCount();
 
@@ -42,64 +49,38 @@ public abstract class WorkRequester extends ControlPlaneCache {
             demand = Math.max(demand, 1);
         }
 
-        FlowThread.FlowContext context = FlowThread.getContext();
-        Objects.requireNonNull(context);
         context.satisfiedRequest = 0;
         context.originalRequest = demand;
         if (remoteCache < highWaterMark || remoteCapacity == 0) {
-            super.request(demand);
+            context.upstream.request(demand);
         }
     }
 
-    protected long requestAndPull(long batchSize) {
-        FlowThread.FlowContext context = FlowThread.getContext();
-        Objects.requireNonNull(context);
-        context.clearCounters();
-
+    protected long requestAndPull(FlowThread.FlowContext context, long batchSize) {
         long localCache = super.getCacheCount();
 
         long maxLocalCache = super.getMaxQueueCount();
-        long lowWaterMark = Math.min(maxLocalCache >> 2,
-                batchSize * this.requesterState.safetyFactor);
+        long lowWaterMark = Math.min(maxLocalCache >> 2, batchSize * this.safetyFactor);
         lowWaterMark = Math.max(lowWaterMark, 1);
         if (localCache >= lowWaterMark) {
             return 0;
         }
 
-        long target = Math.min(maxLocalCache >> 1, batchSize * this.requesterState.pullMultiplier);
+        long target = Math.min(maxLocalCache >> 1, batchSize * this.pullMultiplier);
         target = Math.max(target, 1);
 
         long pull = target - localCache;
 
         long remoteCache = super.getUpstreamCacheCount();
-        long demand = batchSize * this.requesterState.pullMultiplier;
+        long demand = batchSize * this.pullMultiplier;
         if ((remoteCache + localCache) < demand) {
             demand *= SystemInfo.SOCKET_COUNT;
             context.originalRequest = demand;
-            super.request(demand);
+            context.upstream.request(demand);
         }
 
         context.originalPull = pull;
         context.satisfiedPull = super.pull(pull);
         return context.satisfiedPull;
-    }
-
-    private static class RequesterState extends QueueConsumer {
-
-        public final long maxParkNs;
-
-        protected final long safetyFactor;
-        protected final long pullMultiplier;
-
-        public RequesterState(Consumer<AbstractFrame> consumer, long maxParkNs, int core) {
-            super(consumer);
-            this.maxParkNs = maxParkNs;
-
-            int cores = SystemInfo.getSocketInfo(SystemInfo.getCoreInfo(core).socket()).getCoreSet()
-                    .cardinality();
-            int base = (cores * 3) >> 3;
-            this.safetyFactor = Math.max(base >> 1, 2);
-            this.pullMultiplier = this.safetyFactor << 1;
-        }
     }
 }
