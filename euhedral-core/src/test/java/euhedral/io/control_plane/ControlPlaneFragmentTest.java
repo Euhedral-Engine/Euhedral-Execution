@@ -12,7 +12,6 @@ import static org.mockito.Mockito.when;
 import euhedral.io.config.CacheConfig;
 import euhedral.io.config.CloneConfig;
 import euhedral.io.config.FragmentConfig;
-import java.time.Duration;
 import org.junit.jupiter.api.Test;
 
 class ControlPlaneFragmentTest {
@@ -34,13 +33,8 @@ class ControlPlaneFragmentTest {
     private FragmentConfig sConfig() {
         return new FragmentConfig(
                 cloneConfig(),
-                false,
-                new FragmentConfig.IdleCyclePolicy(
-                        0.4,
-                        0.8,
-                        1.0,
-                        Duration.ofNanos(10_000)
-                ),
+                cConfig(),
+                4096,
                 null,
                 null
         );
@@ -48,7 +42,7 @@ class ControlPlaneFragmentTest {
 
     @Test
     void shouldConstructWithoutCloneConfig() {
-        ControlPlaneFragment manager = new ControlPlaneFragment(cConfig(), sConfig());
+        ControlPlaneFragment manager = new ControlPlaneFragment(sConfig());
 
         assertNotNull(manager);
         assertFalse(manager.isStarted());
@@ -56,7 +50,7 @@ class ControlPlaneFragmentTest {
 
     @Test
     void shouldCreateRequiredInfrastructure() {
-        ControlPlaneFragment manager = new ControlPlaneFragment(cConfig(), sConfig());
+        ControlPlaneFragment manager = new ControlPlaneFragment(sConfig());
 
         assertNotNull(manager.output());
 
@@ -66,7 +60,7 @@ class ControlPlaneFragmentTest {
 
     @Test
     void shouldEnableDrainMode() {
-        ControlPlaneFragment manager = new ControlPlaneFragment(cConfig(), sConfig());
+        ControlPlaneFragment manager = new ControlPlaneFragment(sConfig());
 
         manager.setDrainMode(true);
 
@@ -75,14 +69,14 @@ class ControlPlaneFragmentTest {
 
     @Test
     void shouldFirstTouchWithoutFailure() {
-        ControlPlaneFragment manager = new ControlPlaneFragment(cConfig(), sConfig());
+        ControlPlaneFragment manager = new ControlPlaneFragment(sConfig());
 
         assertDoesNotThrow(manager::firstTouch);
     }
 
     @Test
     void shouldCloneManager() {
-        ControlPlaneFragment manager = new ControlPlaneFragment(cConfig(), sConfig());
+        ControlPlaneFragment manager = new ControlPlaneFragment(sConfig());
 
         CloneConfig cloneConfig = cloneConfig();
 
@@ -106,14 +100,14 @@ class ControlPlaneFragmentTest {
 
     @Test
     void shouldBeInitiallyDrained() {
-        ControlPlaneFragment manager = new ControlPlaneFragment(cConfig(), sConfig());
+        ControlPlaneFragment manager = new ControlPlaneFragment(sConfig());
 
         assertTrue(manager.isDrained());
     }
 
     @Test
     void shouldCloseSafely() {
-        ControlPlaneFragment manager = new ControlPlaneFragment(cConfig(), sConfig());
+        ControlPlaneFragment manager = new ControlPlaneFragment(sConfig());
 
         assertDoesNotThrow(manager::close);
     }

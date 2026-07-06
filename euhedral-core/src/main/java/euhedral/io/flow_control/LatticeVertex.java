@@ -302,7 +302,6 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
         }
     }
 
-    /// Closes and removes all downstreams.
     @Override
     public void close() {
         if(!this.closed.compareAndSet(false, true)) {
@@ -312,14 +311,11 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
         for (int i = 0; i < this.downstreams.length; i++) {
             if (this.downstreams[i] != null) {
                 this.downstreams[i].close();
-                this.downstreams[i] = null;
             }
             if(this.hasCache && this.cache[i] != null) {
                 this.cache[i].clear();
-                this.cache[i] = null;
             }
         }
-        ROUTING_STATE.setRelease(this, null);
     }
 
     /// Defines how the [LatticeVertex] will pick which downstream to send work to.

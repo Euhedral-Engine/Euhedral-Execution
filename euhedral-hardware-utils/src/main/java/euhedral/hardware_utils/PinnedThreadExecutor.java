@@ -131,6 +131,8 @@ public final class PinnedThreadExecutor extends AbstractExecutorService implemen
         for (Thread thread : threadPool.keySet()) {
             try {
                 thread.interrupt();
+                LockSupport.unpark(thread);
+                thread.interrupt();
                 thread.join();
             } catch (Throwable ignored) {
 

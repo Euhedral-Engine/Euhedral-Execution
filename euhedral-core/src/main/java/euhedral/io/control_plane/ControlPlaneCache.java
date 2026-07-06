@@ -10,7 +10,6 @@ import euhedral.io.config.CacheConfig;
 import euhedral.io.config.CloneConfig;
 import euhedral.io.flow_control.LatticeEdge;
 import euhedral.io.flow_control.LatticeVertex;
-import euhedral.io.flow_control.UpstreamQueue;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.frames.DummyFrame;
 import euhedral.io.generics.CloneableObject;
@@ -28,17 +27,12 @@ import java.util.BitSet;
 import java.util.function.Consumer;
 import lombok.AccessLevel;
 import lombok.Getter;
-import org.jctools.maps.NonBlockingHashMapLong;
 import org.jspecify.annotations.NonNull;
 
 public abstract class ControlPlaneCache extends LatticeVertex implements CloneableObject {
 
     protected static final VarHandle PRIMED;
     protected static final VarHandle TOTAL_COUNT;
-
-    protected static final ThreadLocal<UpstreamQueue> UPSTREAM = new ThreadLocal<>();
-    protected static final NonBlockingHashMapLong<ControlPlaneCache> CACHES =
-            new NonBlockingHashMapLong<>();
 
     static {
         try {
@@ -86,19 +80,20 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
         return Math.max(chunk, 512);
     }
 
-    protected final CacheConfig cacheConfig;
-    protected final CacheMetrics metrics;
+    private final CacheConfig cacheConfig;
+    private final CacheMetrics metrics;
 
     protected final AtomicDouble capFactor = new AtomicDouble(1d);
     protected final PaddedAtomicLong memoryLimit;
-    @Getter
-    protected final long frameQuota;
 
     @Getter(AccessLevel.PROTECTED)
     private final PartitionedMpscQueue<AbstractFrame> cache;
-    protected final int chunkSize;
+    private final int chunkSize;
 
     private final CacheTerminal cacheTerminal;
+
+    @Getter
+    private final long frameQuota;
 
     boolean primed;
     long totalCount = 0L;
@@ -108,7 +103,7 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
                 0, RoutingPolicy.CACHE_LOCAL);
         this.cacheConfig = cacheConfig;
 
-        int partitions = cacheConfig.partitionsPerCpu();
+        int partitions = cacheConfig.partitions();
         if (partitions <= 0 || cacheConfig.cloneConfig() == null) {
             this.metrics = null;
             this.memoryLimit = null;
@@ -181,19 +176,6 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
     }
 
     @Override
-    public final void request(long demand) {
-        if (demand <= 0) {
-            return;
-        }
-
-        if (super.getUpstreamHandleCount() > 0) {
-            UPSTREAM.get().request(demand);
-        } else {
-            super.request(demand);
-        }
-    }
-
-    @Override
     public void update(CoreSnapshot snapshot) {
         if (snapshot == null) {
             return;
@@ -217,16 +199,6 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
         double alpha = (target < curr) ? 0.2 : 0.02;
         double clamped = clampDouble(ewma(curr, target, alpha), 0.15, 1.0);
         this.capFactor.setRelease(clamped);
-    }
-
-    @Override
-    public final long getUpstreamHandleCount() {
-        UpstreamQueue upstream = UPSTREAM.get();
-        if (upstream == null) {
-            upstream = getThreadUpstreamQueue();
-            UPSTREAM.set(upstream);
-        }
-        return upstream.getCachedUpCount();
     }
 
     @Override
@@ -296,15 +268,17 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
 
         final ControlPlaneCache cpc;
 
+        private final int partitions;
         long framesAdded = 0;
 
         CacheTerminal(ControlPlaneCache cpc) {
             this.cpc = cpc;
+            this.partitions = cpc == null ? 0 : cpc.cache.partitions();
         }
 
         @Override
         public void push(AbstractFrame frame) {
-            int idx = RoutingFunction.DEFAULT.route(frame, this.cpc.cache.partitions());
+            int idx = RoutingFunction.DEFAULT.route(frame, this.partitions);
             while (!this.cpc.cache.offer(idx, frame)) {
                 Thread.onSpinWait();
             }
@@ -316,7 +290,7 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
         public void accept(AbstractFrame frame) {
             this.framesAdded++;
 
-            int idx = RoutingFunction.DEFAULT.route(frame, this.cpc.cache.partitions());
+            int idx = RoutingFunction.DEFAULT.route(frame, this.partitions);
             while(!this.cpc.cache.offer(idx, frame)) {
                 Thread.onSpinWait();
             }

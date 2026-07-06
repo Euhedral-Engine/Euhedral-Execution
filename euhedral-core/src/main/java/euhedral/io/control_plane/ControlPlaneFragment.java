@@ -9,7 +9,6 @@ import euhedral.hardware_utils.SystemInfo.CpuInfo;
 import euhedral.hardware_utils.ThreadTools;
 import euhedral.hardware_utils.common.SystemUtilization.CoreSnapshot;
 import euhedral.hardware_utils.common.SystemUtilization.CpuSnapshot;
-import euhedral.io.config.CacheConfig;
 import euhedral.io.config.CloneConfig;
 import euhedral.io.config.FragmentConfig;
 import euhedral.io.flow_control.LatticeHotSource;
@@ -19,7 +18,6 @@ import euhedral.io.metrics.ExecutionMetrics;
 import euhedral.io.utils.FlowRecorder;
 import euhedral.io.utils.FlowThread;
 import euhedral.io.utils.MathFunctions;
-import io.euhedral_execution.data_structures.atomics.PaddedDoubleAdder;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.time.Duration;
@@ -34,51 +32,18 @@ import org.slf4j.LoggerFactory;
 /// ## The core of Euhedral Core
 ///
 /// `ControlPlaneFragment` is the control loop that sits between ingress and execution. It
-/// continuously tunes concurrency, dispatch rate, and idle behavior based on what the system is
-/// actually doing.
+/// continuously tunes batch sizes, dispatch rate, and idle behavior based on how the system is
+/// behaving.
 ///
-/// **It coordinates:**
-///
-///   - Concurrency (how many frames are in flight)
-///   - Dispatch pacing (how fast work is pulled)
-///   - Idle behavior (spin -> yield -> park)
-///   - SMT buddy coordination
-///   - Backpressure and drain control
-///
-/// It uses a TCP Vegas-style latency model combined with Little’s Law and hardware pressure signals
-/// to estimate how much work a core can sustain while keeping latency stable.
-///
-/// **Goals:**
-///
-///   - Keep the core busy without overwhelming it
-///   - Keep queues short
-///   - Avoid latency blowups
-///   - Don't thrash the cache
-///
-/// #### Designed for pinned execution, reactive pipelines, and lock-free queues
-///
-/// Under load, it pushes harder. Under pressure, it backs off. When idle, it gradually transitions
-/// from spinning -> yielding -> parking.
-///
-/// Frames are the unit of execution: small, composable stages that behave like ultra-lightweight
-/// tasks. A pipeline of frames naturally executes in parallel across stages as work flows through.
-///
-/// **This is the distributed control surface of the system. Everything else is just plumbing.**
 public final class ControlPlaneFragment extends WorkRequester {
 
-    private static final VarHandle AVG_LATENCY;
     private static final VarHandle DRAIN;
-    private static final VarHandle IN_FLIGHT;
     private static final VarHandle SNAPSHOT;
 
     static {
         try {
-            AVG_LATENCY = MethodHandles.lookup()
-                    .findVarHandle(ControlPlaneFragment.class, "avgLatency", long.class);
             DRAIN = MethodHandles.lookup()
                     .findVarHandle(ControlPlaneFragment.class, "drainMode", boolean.class);
-            IN_FLIGHT = MethodHandles.lookup()
-                    .findVarHandle(ControlPlaneFragment.class, "inFlight", long.class);
             SNAPSHOT = MethodHandles.lookup()
                     .findVarHandle(ControlPlaneFragment.class, "coreSnapshot", CoreSnapshot.class);
         } catch (Exception e) {
@@ -89,81 +54,65 @@ public final class ControlPlaneFragment extends WorkRequester {
     public final int socket;
     public final int core;
     public final int cpu;
-
-    final LatticeHotSource outputStream;
-
-    @Getter
-    private final FragmentConfig fragmentConfig;
+    public final boolean isPCore;
 
     private final Logger logger;
     private final ExecutionMetrics metrics;
-    private final boolean isPCore;
-    private final AtomicBoolean running = new AtomicBoolean(false);
 
     @Getter
-    private final PinnedThreadExecutor pinnedExecutor;
-    private final Thread shutdownHook;
+    private final FragmentConfig config;
+
+    private final AtomicBoolean running = new AtomicBoolean(false);
+
+    private final PinnedThreadExecutor mainExecutor;
     private final CycleState state;
 
+    final LatticeHotSource outputStream;
     boolean drainMode = false;
     CoreSnapshot coreSnapshot = null;
 
-    long avgLatency;
-    long effectiveBatchLimit;
+    private volatile Thread mainThread;
 
-    long inFlight = 0;
-    private long upstreamCount = 0;
-    private Thread cycleThread;
+    public ControlPlaneFragment(@NonNull FragmentConfig config) {
+        super(config.cacheConfig());
+        this.config = config;
 
-    public ControlPlaneFragment(@NonNull CacheConfig cacheConfig,
-            @NonNull FragmentConfig fragmentConfig) {
-        super(cacheConfig, fragmentConfig.idleCyclePolicy().maxParkTime().toNanos());
-        this.fragmentConfig = fragmentConfig;
-
-        this.effectiveBatchLimit = 1024;
-
-        if (fragmentConfig.cloneConfig() == null) {
+        if (config.cloneConfig() == null) {
             this.socket = -1;
             this.core = -1;
             this.cpu = -1;
             this.logger = LoggerFactory.getLogger(ControlPlaneFragment.class);
             this.state = null;
-            this.pinnedExecutor = null;
+            this.mainExecutor = null;
             this.isPCore = false;
             this.metrics = null;
             this.outputStream = null;
-            this.shutdownHook = null;
         } else {
-            String name = fragmentConfig.cloneConfig().shardName() + "-ControlPlaneFragment-"
-                    + fragmentConfig.cloneConfig().coreId();
+            String name = config.cloneConfig().shardName() + "-ControlPlaneFragment-"
+                    + config.cloneConfig().coreId();
             this.logger = LoggerFactory.getLogger(name);
 
-            int[] cpus = fragmentConfig.cloneConfig().getCpuSet();
+            int[] cpus = config.cloneConfig().getCpuSet();
             this.cpu = cpus[0];
 
             CpuInfo info = SystemInfo.getCpuInfo(this.cpu);
             this.socket = info.socket();
             this.core = info.core();
 
-            this.state = new CycleState(fragmentConfig.idleCyclePolicy().maxParkTime().toNanos());
+            this.state = new CycleState();
 
-            this.pinnedExecutor =
-                    PinnedThreadExecutor.getOrSetIfAbsent(cpus[0], name, Thread.MAX_PRIORITY,
+            this.mainExecutor =
+                    PinnedThreadExecutor.getOrSetIfAbsent(this.cpu, name, Thread.MAX_PRIORITY,
                             false);
 
-            CpuCacheLayout layout = SystemInfo.getCacheLayout(cpus[0]);
+            CpuCacheLayout layout = SystemInfo.getCacheLayout(this.cpu);
             this.isPCore =
                     SystemInfo.getCoreInfo(SystemInfo.getCpuInfo(layout.cpu()).core()).pCore();
 
             this.outputStream = new LatticeHotSource();
 
-            this.metrics = new ExecutionMetrics(fragmentConfig.meterRegistry(), fragmentConfig,
-                    () -> (int) IN_FLIGHT.getOpaque(this),
-                    () -> (long) AVG_LATENCY.getOpaque(this));
-            this.shutdownHook = new Thread(this::close);
-            Runtime.getRuntime().addShutdownHook(this.shutdownHook);
-            this.logger.debug("CPU: {} P-Core: {} SMTMode: {}", this.cpu, this.isPCore,
-                    cpus.length > 1 && fragmentConfig.enableSMT());
+            this.metrics = new ExecutionMetrics(config);
+            this.logger.debug("CPU: {} P-Core: {}", this.cpu, this.isPCore);
         }
     }
 
@@ -178,182 +127,130 @@ public final class ControlPlaneFragment extends WorkRequester {
     }
 
     @Override
-    public void close() {
-        if (this.running.compareAndSet(true, false)) {
-            if (this.cycleThread != null) {
-                try {
-                    LockSupport.unpark(this.cycleThread);
-                    this.cycleThread.interrupt();
-                    this.cycleThread.join(500);
-                } catch (Exception ignored) {
-                }
-                this.cycleThread = null;
-            }
-            dumpLocks();
-            this.metrics.close();
-            this.pinnedExecutor.close();
-            try {
-                Runtime.getRuntime().removeShutdownHook(this.shutdownHook);
-            } catch (Exception ignored) {
-
-            }
-            super.close();
-        }
-        this.logger.trace("Closed");
-    }
-
-    public void dumpLocks() {
-        if (this.pinnedExecutor != null) {
-            this.pinnedExecutor.close();
-        }
-    }
-
-    @Override
     public boolean isStarted() {
         return this.running.getAcquire();
     }
 
     @Override
     public void start() {
-        if (this.pinnedExecutor == null) {
+        if (this.mainExecutor == null) {
             throw new IllegalStateException(
                     "Pinned Executor has not been set. To start this class, it needs to be instantiated with a CloneConfig.");
         }
         if (this.running.compareAndSet(false, true)) {
-            CloneConfig cloneConfig = this.fragmentConfig.cloneConfig();
-            if (cloneConfig != null) {
-                if (this.pinnedExecutor.isShutdown()) {
-                    this.pinnedExecutor.start(
-                            this.fragmentConfig.cloneConfig().shardName() + "-ControlPlaneFragment-"
-                                    + this.fragmentConfig.cloneConfig().coreId(),
-                            Thread.MAX_PRIORITY, false);
-                }
-
-                this.pinnedExecutor.execute(() -> {
-                    this.cycleThread = Thread.currentThread();
-
-                    CpuInfo origin = ThreadTools.getCpuInfo();
-                    if (cloneConfig.coreId() != origin.core()) {
-                        this.logger.warn(
-                                "Attempted to pin to CPU: {} Core: {} but was assigned: {}",
-                                this.cpu, cloneConfig.coreId(), origin);
-                    } else {
-                        this.logger.debug("Pinned to Core {} CPU {}", cloneConfig.coreId(),
-                                this.cpu);
-                    }
-                    ThreadTools.setTimerResolution(1);
-                    if (this.fragmentConfig.enableSMT() && cloneConfig.getCpuSet().length > 1) {
-                        super.start();
-                        this.state.smtMode = true;
-                    } else {
-                        super.register(getCore());
-                    }
-
-                    cycle();
-                });
-            } else {
-                cycle();
+            if (this.mainExecutor.isShutdown()) {
+                this.mainExecutor.start(this.logger.getName(), Thread.MAX_PRIORITY, false);
             }
+
+            this.mainExecutor.execute(() -> {
+                this.mainThread = Thread.currentThread();
+
+                CpuInfo origin = ThreadTools.getCpuInfo();
+                if (this.core != origin.core()) {
+                    this.logger.warn(
+                            "Attempted to pin to Core: {} CPU: {} but was assigned: {}",
+                            this.core, this.cpu, origin);
+                } else {
+                    this.logger.debug("Pinned to Core {} CPU {}", this.core, this.cpu);
+                }
+                ThreadTools.setTimerResolution(1);
+                super.register(this.core);
+
+                cycle();
+            });
         }
     }
 
     private void cycle() {
         try {
-            FlowThread.FlowContext threadContext = FlowThread.getContext();
-            Objects.requireNonNull(threadContext);
+            FlowThread.FlowContext context = FlowThread.getContext();
+            Objects.requireNonNull(context);
+            context.upstream = getThreadUpstreamQueue();
 
             double throughput = 0.0;
             while (keepRunning()) {
-                long newUpCount = super.getUpstreamHandleCount();
-                if (this.upstreamCount != newUpCount && newUpCount > 0) {
-                    this.upstreamCount = newUpCount;
+                long newUpCount = context.upstream.getCachedUpCount();
+                if (this.state.upstreamCount != newUpCount && newUpCount > 0) {
+                    this.state.upstreamCount = newUpCount;
                     GlobalState.resetThroughput(this.socket, this.cpu);
-                } else if (this.upstreamCount != newUpCount || this.upstreamCount == 0) {
-                    this.upstreamCount = 0;
+                } else if (this.state.upstreamCount != newUpCount
+                        || this.state.upstreamCount == 0) {
+                    this.state.upstreamCount = 0;
                     this.state.reset();
                     throughput = 0;
-                    idleSpin();
+                    this.state.upstreamCount = idleSpin(context);
                 }
+
+                FlowRecorder batchEfficiency = this.state.batchEfficiency;
+                FlowRecorder requestEfficiency = this.state.requestEfficiency;
+                batchEfficiency.reset();
+                requestEfficiency.reset();
 
                 long now = System.nanoTime();
-                long processed = 0;
-                FlowRecorder batchEfficiency = this.state.batchEfficiency;
-                batchEfficiency.reset();
-                while(keepRunning()) {
-                    processed += execute();
-                    if(batchEfficiency.averageUnits() >= 600 || super.getCacheCount() != 0) {
-                        Thread.onSpinWait();
-                        continue;
-                    }
 
-                    double measurements = batchEfficiency.getEffectiveMeasurementWindowCount(batchEfficiency.getLastRecordingTime());
-                    if(measurements > 1) {
-                        break;
-                    }
-                    Thread.onSpinWait();
-                }
-
-                long requested = 0;
-                FlowRecorder requestEfficiency = this.state.requestEfficiency;
-                requestEfficiency.reset();
-                while(keepRunning()) {
-                    super.request();
-                    long satisfied = threadContext.satisfiedRequest;
-                    requested += satisfied;
-
-                    double efficiency = satisfied / (double) Math.max(threadContext.originalRequest, 1);
-                    efficiency = MathFunctions.clampDouble(efficiency, 0.0, 1.0);
-                    requestEfficiency.record(Math.round(efficiency * 1_000));
-
-                    double measurements = requestEfficiency.getEffectiveMeasurementWindowCount(requestEfficiency.getLastRecordingTime());
-                    if(requestEfficiency.averageUnits() < 600 && measurements >= 10) {
-                        break;
-                    }
-                    LockSupport.parkNanos(50_000);
-                }
+                long processed = execute(context, batchEfficiency);
+                long requested = requestSpin(context, requestEfficiency);
 
                 long totalWork = processed + requested;
                 long totalWorkTime = System.nanoTime() - now;
                 double instantT = totalWork / (double) totalWorkTime;
 
-                throughput = throughput == 0 ? instantT : MathFunctions.ewma(throughput, instantT, 0.10);
-                breakoutSpin(this.cpu, throughput);
+                throughput =
+                        throughput == 0 ? instantT : MathFunctions.ewma(throughput, instantT, 0.10);
+                if (!(boolean) DRAIN.getOpaque(this)) {
+                    breakoutSpin(this.cpu, throughput);
+                }
             }
         } catch (Throwable e) {
-            this.logger.error("[CRITICAL]", e);
+            this.logger.error("[CRITICAL] Terminal error encountered in the main loop. Exiting.",
+                    e);
         } finally {
             this.running.set(false);
         }
     }
 
-    private long execute() {
+    private long execute(FlowThread.FlowContext context, FlowRecorder batchEfficiency) {
         long total = 0;
-        while(keepRunning()) {
-            requestAndPull(this.state.batchSize);
+        while (keepRunning()) {
+            while (keepRunning()) {
+                requestAndPull(context, this.state.batchSize);
 
-            long cacheCount = super.getCacheCount();
-            if (cacheCount == 0) {
-                this.state.batchEfficiency.record(0);
-                break;
+                long cacheCount = super.getCacheCount();
+                if (cacheCount == 0) {
+                    this.state.batchEfficiency.record(0);
+                    break;
+                }
+
+                long limit = this.state.batchSize - this.state.completed;
+                limit = Math.min(limit, cacheCount);
+                this.metrics.addInProgress(limit);
+
+                double efficiency = (double) limit / this.state.batchSize;
+
+                long start = System.nanoTime();
+                this.state.completed += super.drain(limit);
+                long end = System.nanoTime();
+
+                this.metrics.addInProgress(-limit);
+                this.state.throughputRecorder.record(end, (end - start) / limit);
+                this.state.batchEfficiency.record(end, Math.round((efficiency) * 1_000));
+
+                if (this.state.completed >= this.state.batchSize) {
+                    this.state.completed = 0;
+                    updateLimits(end);
+                }
+                Thread.onSpinWait();
             }
 
-            long limit = this.state.batchSize - this.state.completed;
-            limit = Math.min(limit, cacheCount);
-            IN_FLIGHT.setOpaque(this, this.inFlight + limit);
+            if (batchEfficiency.averageUnits() >= 600 || super.getCacheCount() != 0) {
+                Thread.onSpinWait();
+                continue;
+            }
 
-            double efficiency = (double) limit / this.state.batchSize;
-
-            long start = System.nanoTime();
-            this.state.completed += super.drain(limit);
-            long end = System.nanoTime();
-
-            this.state.throughputRecorder.record(end, (end - start) / limit);
-            this.state.batchEfficiency.record(end, Math.round((efficiency) * 1_000));
-
-            if(this.state.completed >= this.state.batchSize) {
-                this.state.completed = 0;
-                this.state.batchRecorder.record(end, this.state.batchSize);
-                updateLimits(end);
+            double measurements = batchEfficiency.getEffectiveMeasurementWindowCount(
+                    batchEfficiency.getLastRecordingTime());
+            if (measurements > 1) {
+                break;
             }
             Thread.onSpinWait();
         }
@@ -362,12 +259,21 @@ public final class ControlPlaneFragment extends WorkRequester {
     }
 
     private void updateLimits(long nowNs) {
+        this.state.batchRecorder.record(nowNs, this.state.batchSize);
         if (this.state.batchStart == 0) {
             this.state.batchStart = nowNs;
             return;
         }
 
-        AVG_LATENCY.setOpaque(this, Math.round(1.0 / this.state.batchRecorder.averageUnitsOverTime()));
+        if (this.config.meterRegistry() != null) {
+            double throughput = this.state.batchRecorder.averageUnitsOverTime();
+            this.metrics.reportThroughput(throughput);
+
+            double latency = 1.0 / throughput;
+            if (Double.isFinite(latency)) {
+                this.metrics.reportLatency(Math.round(latency));
+            }
+        }
 
         long currentBatch = this.state.batchSize;
 
@@ -379,55 +285,50 @@ public final class ControlPlaneFragment extends WorkRequester {
         double diffLower = avgThroughput - recorder.getMinUoT();
 
         double averageBatch = Math.round(this.state.batchRecorder.averageUnits());
-        if(currentBatch == averageBatch) {
+        if (currentBatch == averageBatch) {
             if (avgThroughput < 0.90) {
                 currentBatch += Math.round(Math.max(Math.sqrt(currentBatch), 1));
-            } else if(avgThroughput > 1.0){
+            } else if (avgThroughput > 1.0) {
                 currentBatch -= Math.round(Math.max(Math.sqrt(currentBatch), 1));
-            } else if(diffLower < diffUpper) {
+            } else if (diffLower < diffUpper) {
                 currentBatch++;
             } else {
                 currentBatch--;
             }
         }
 
-        currentBatch = MathFunctions.clampLong(currentBatch, 2, 4096);
-
-        updateEffectiveBatchLimit(currentBatch);
-        currentBatch = Math.min(currentBatch, this.effectiveBatchLimit);
+        currentBatch = MathFunctions.clampLong(currentBatch, 2, this.config.maxBatchSize());
+        currentBatch = Math.min(currentBatch, getBatchLimit());
 
         this.state.batchStart = nowNs;
         this.state.batchSize = currentBatch;
     }
 
-    private void updateEffectiveBatchLimit(long ideal) {
+    private long getBatchLimit() {
         CoreSnapshot coreSnapshot = (CoreSnapshot) SNAPSHOT.getOpaque(this);
         CpuSnapshot cpuSnapshot = coreSnapshot.cpuSnapshots()[this.cpu];
 
-        long adaptiveCap = ideal << 2;
-
         double pressure = cpuSnapshot.pressure();
         pressure *= this.isPCore ? 0.5 : 0.7;
-        adaptiveCap = (long) (adaptiveCap * (1.0 - pressure));
+        long adaptiveCap = Math.round(this.config.maxBatchSize() * (1.0 - pressure));
 
-        long hardwareMax = super.frameQuota;
-
-        this.effectiveBatchLimit = clampLong(adaptiveCap, 2, hardwareMax);
+        return clampLong(adaptiveCap, 2, super.getFrameQuota());
     }
 
-    private long requestSpin(FlowThread.FlowContext threadContext, FlowRecorder requestEfficiency) {
+    private long requestSpin(FlowThread.FlowContext context, FlowRecorder requestEfficiency) {
         long requested = 0;
-        while(keepRunning()) {
-            super.request();
-            long satisfied = threadContext.satisfiedRequest;
+        while (keepRunning()) {
+            super.request(context);
+            long satisfied = context.satisfiedRequest;
             requested += satisfied;
 
-            double efficiency = satisfied / (double) Math.max(threadContext.originalRequest, 1);
+            double efficiency = satisfied / (double) Math.max(context.originalRequest, 1);
             efficiency = MathFunctions.clampDouble(efficiency, 0.0, 1.0);
             requestEfficiency.record(Math.round(efficiency * 1_000));
 
-            double measurements = requestEfficiency.getEffectiveMeasurementWindowCount(requestEfficiency.getLastRecordingTime());
-            if(requestEfficiency.averageUnits() < 600 && measurements >= 10) {
+            long now = requestEfficiency.getLastRecordingTime();
+            double measurements = requestEfficiency.getEffectiveMeasurementWindowCount(now);
+            if (requestEfficiency.averageUnits() < 600 && measurements >= 10) {
                 break;
             }
             LockSupport.parkNanos(50_000);
@@ -440,7 +341,7 @@ public final class ControlPlaneFragment extends WorkRequester {
 
         double globalAvgT = GlobalState.meanThroughput(this.socket);
 
-        if(throughput < globalAvgT) {
+        if (throughput < globalAvgT) {
             logger.trace("Backoff Spin");
             LockSupport.parkNanos(15_000);
             return;
@@ -448,15 +349,15 @@ public final class ControlPlaneFragment extends WorkRequester {
         Thread.yield();
     }
 
-    private void idleSpin() {
-        while(keepRunning()) {
-            long upCount = super.getUpstreamHandleCount();
-            if(upCount != this.upstreamCount) {
-                this.upstreamCount = upCount;
-                break;
+    private long idleSpin(FlowThread.FlowContext threadContext) {
+        while (keepRunning()) {
+            long upCount = threadContext.upstream.getCachedUpCount();
+            if (upCount > 0) {
+                return upCount;
             }
             LockSupport.parkNanos(20_000L);
         }
+        return 0;
     }
 
     @Override
@@ -471,13 +372,12 @@ public final class ControlPlaneFragment extends WorkRequester {
 
     @Override
     public ControlPlaneFragment clone(CloneConfig cloneConfig) {
-        return new ControlPlaneFragment(super.cacheConfig.clone(cloneConfig),
-                this.fragmentConfig.clone(cloneConfig));
+        return new ControlPlaneFragment(this.config.clone(cloneConfig));
     }
 
     @Override
     public boolean isDrained() {
-        return super.isDrained() && (long) IN_FLIGHT.getAcquire(this) == 0;
+        return super.isDrained() && this.metrics.getInProgress() == 0;
     }
 
     @Override
@@ -486,32 +386,52 @@ public final class ControlPlaneFragment extends WorkRequester {
         super.setDrainMode(value);
     }
 
+    @Override
+    public void close() {
+        if (this.running.compareAndSet(true, false)) {
+            if (this.mainThread != null) {
+                try {
+                    this.mainThread.interrupt();
+                    LockSupport.unpark(this.mainThread);
+                    this.mainThread.interrupt();
+                    this.mainThread.join(500);
+                } catch (Exception ignored) {
+                }
+                this.mainThread = null;
+            }
+            dumpLocks();
+            this.metrics.close();
+        }
+        super.close();
+        this.logger.trace("Closed");
+    }
+
+    @Override
+    public void dumpLocks() {
+        if (this.mainExecutor != null) {
+            this.mainExecutor.close();
+        }
+    }
+
     private class CycleState {
 
-        final long maxParkNs;
-
         final FlowRecorder batchRecorder = new FlowRecorder();
-        final FlowRecorder batchEfficiency = new FlowRecorder(Duration.ofSeconds(1), 0.10);
         final FlowRecorder throughputRecorder = new FlowRecorder();
+        final FlowRecorder batchEfficiency = new FlowRecorder(Duration.ofSeconds(1), 0.10);
         final FlowRecorder requestEfficiency = new FlowRecorder(Duration.ofSeconds(1), 0.10);
-        final FlowRecorder idleRecorder = new FlowRecorder(Duration.ofMillis(5), 0.10);
 
         long batchStart = 0;
         long batchSize = 2;
-
         long completed = 0;
-        boolean smtMode = false;
 
-        public CycleState(long maxParkNs) {
-            this.maxParkNs = maxParkNs;
-        }
+        long upstreamCount = 0;
 
         void reset() {
-            GlobalState.resetThroughput(ControlPlaneFragment.this.socket, ControlPlaneFragment.this.cpu);
+            GlobalState.resetThroughput(ControlPlaneFragment.this.socket,
+                    ControlPlaneFragment.this.cpu);
             this.batchRecorder.reset();
             this.batchEfficiency.reset();
             this.requestEfficiency.reset();
-            this.idleRecorder.reset();
             this.throughputRecorder.reset();
 
             this.batchStart = 0;

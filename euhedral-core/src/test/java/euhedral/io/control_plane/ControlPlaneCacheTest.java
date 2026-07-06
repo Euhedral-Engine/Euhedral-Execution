@@ -48,8 +48,6 @@ class ControlPlaneCacheTest {
 
     @AfterEach
     void cleanup() {
-        ControlPlaneCache.CACHES.clear();
-        ControlPlaneCache.UPSTREAM.remove();
         UpstreamQueue.UP_QUEUE.remove();
     }
 

@@ -12,30 +12,30 @@ public class NoOpExecutor extends AbstractExecutor {
     private final Blackhole blackhole;
 
     public NoOpExecutor(Blackhole blackhole) {
-        this(null, blackhole);
+        this(-1, blackhole);
     }
 
-    NoOpExecutor(PinnedThreadExecutor executor, Blackhole blackhole) {
-        super(executor);
+    NoOpExecutor(int cpu, Blackhole blackhole) {
+        super(cpu);
         this.blackhole = blackhole;
     }
 
     @Override
     public void execute(AbstractFrame frame) {
         if (frame instanceof NoOpFrame noOp) {
-            noOp.cpu = this.executorService.getCpu();
+            noOp.cpu = super.cpu;
         }
         blackhole.consume(frame);
     }
 
     @Override
     public NoOpExecutor clone(CloneConfig cloneConfig) {
-        return new NoOpExecutor(super.executorService, this.blackhole);
+        return new NoOpExecutor(cloneConfig.effectiveCpus().nextSetBit(0), this.blackhole);
     }
 
     @Override
     public NoOpExecutor clone(CloneConfig cloneConfig,
             PinnedThreadExecutor executor) {
-        return new NoOpExecutor(executor, this.blackhole);
+        return new NoOpExecutor(cloneConfig.effectiveCpus().nextSetBit(0), this.blackhole);
     }
 }

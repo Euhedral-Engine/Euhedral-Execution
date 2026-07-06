@@ -17,10 +17,10 @@ public abstract class AbstractExecutor implements CloneableObject {
 
     protected final Logger logger = LoggerFactory.getLogger(this.getClass());
 
-    protected final PinnedThreadExecutor executorService;
+    protected final int cpu;
 
-    public AbstractExecutor(PinnedThreadExecutor executorService) {
-        this.executorService = executorService;
+    public AbstractExecutor(int cpu) {
+        this.cpu = cpu;
     }
 
     @Override
