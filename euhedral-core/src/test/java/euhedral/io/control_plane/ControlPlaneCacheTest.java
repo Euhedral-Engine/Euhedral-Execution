@@ -141,7 +141,7 @@ class ControlPlaneCacheTest {
 
         manager.update(snapshot);
 
-        assertTrue(manager.capFactor.getAcquire() > 0.0);
+        assertTrue(manager.capFactor > 0.0);
     }
 
     @Test

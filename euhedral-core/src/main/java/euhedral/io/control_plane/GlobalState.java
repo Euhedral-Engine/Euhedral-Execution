@@ -1,21 +1,27 @@
 package euhedral.io.control_plane;
 
+import java.util.BitSet;
+
 import euhedral.hardware_utils.SystemInfo;
 import euhedral.hardware_utils.SystemInfo.SocketInfo;
 import io.euhedral_execution.data_structures.atomics.PaddedDoubleAdder;
-import java.util.BitSet;
 
 @SuppressWarnings("unused")
 public class GlobalState {
+
     private static final PaddedDoubleAdder[] GLOBAL_THROUGHPUT;
 
     static {
-        int sockets = SystemInfo.SOCKET_COUNT;
+        int maxSocket = SystemInfo.MAX_SOCKET_ID;
 
-        GLOBAL_THROUGHPUT = new PaddedDoubleAdder[sockets];
+        GLOBAL_THROUGHPUT = new PaddedDoubleAdder[maxSocket + 1];
 
-        for(int i = 0; i < sockets; i++) {
+        for (int i = 0; i < maxSocket + 1; i++) {
             SocketInfo info = SystemInfo.getSocketInfo(i);
+            if (info == null) {
+                continue;
+            }
+
             BitSet cpus = info.getCpuSet();
 
             int highest = cpus.previousSetBit(cpus.size());

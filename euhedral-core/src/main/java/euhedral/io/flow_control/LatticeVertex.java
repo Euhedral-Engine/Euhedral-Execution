@@ -26,7 +26,7 @@ import org.slf4j.LoggerFactory;
 /// across multiple downstream branches. It is responsible for distributing work deterministically
 /// across a fixed topology.
 ///
-/// #### Routing is hash-based and intentionally lightweight
+/// #### Routing is hash-based
 ///
 /// ```java
 /// int idx = (int) unsignedMultiplyHigh(frame.getCombinedHash(), mapSize);
@@ -34,7 +34,7 @@ import org.slf4j.LoggerFactory;
 /// ```
 ///
 /// **Each frame is routed to exactly one downstream, ensuring stable partitioning under load.**
-@SuppressWarnings("unused")
+@SuppressWarnings({"unchecked", "unused"})
 public class LatticeVertex extends LatticeEdge implements AutoCloseable {
 
     protected static final VarHandle ROUTING_STATE;
@@ -52,7 +52,6 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
     protected final boolean hasCache;
 
     protected final Logger logger;
-    protected final String name;
 
     protected final LatticeEdge[] downstreams;
     protected final RoutingFunction routingFunction;
@@ -73,7 +72,6 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
             int cachePool, RoutingPolicy cachePolicy) {
         super(new AtomicBoolean(false));
         this.logger = LoggerFactory.getLogger(name);
-        this.name = name;
         this.downstreams = new LatticeEdge[downstreamCount];
         this.routingFunction = routingFunction;
         this.sibling = this;
@@ -204,6 +202,10 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
     /// defaults to the logic in LatticeEdge.
     @Override
     public void addUpstream(LatticeInterceptor interceptor) {
+        if(this.closed.getAcquire()) {
+            throw new RuntimeException("Cannot add upstream after closed.");
+        }
+
         if (interceptor instanceof LatticeEdge edge) {
             super.addUpstream(edge);
             edge.addDownstream(this);

@@ -1,5 +1,10 @@
 package euhedral.hardware_utils;
 
+import java.util.BitSet;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.StringJoiner;
+
 import euhedral.hardware_utils.common.OSName;
 import euhedral.hardware_utils.common.SystemSnapshotProvider;
 import euhedral.hardware_utils.common.SystemUtilization.SystemSnapshot;
@@ -10,27 +15,27 @@ import euhedral.hardware_utils.macOS.OSXResources;
 import euhedral.hardware_utils.windows.WindowsResources;
 import euhedral.hardware_utils.windows.WindowsSystemLayout;
 import it.unimi.dsi.fastutil.ints.Int2ObjectArrayMap;
-import java.util.BitSet;
-import java.util.HashSet;
-import java.util.Set;
-import java.util.StringJoiner;
 import lombok.Getter;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+@SuppressWarnings("unused")
 public final class SystemInfo {
 
     public static final long DEFAULT_L1 = 32L * 1024L;
     public static final long DEFAULT_L2 = 256L * 1024L;
     public static final long DEFAULT_L3 = 4L * 1024L * 1024L;
-    public static final SystemSnapshotProvider SNAPSHOTTER;
+
     public static final int CACHE_LINE_SIZE_BYTES;
     public static final int CPU_COUNT;
     public static final int CORE_COUNT;
     public static final int SOCKET_COUNT;
     public static final int MAX_CORE_ID;
     public static final int MAX_SOCKET_ID;
+
+    public static final SystemSnapshotProvider SNAPSHOTTER;
+
     private static final Logger LOGGER = LoggerFactory.getLogger(SystemInfo.class);
     private static final UnmodifiableBitSet CPU_SET;
     private static final UnmodifiableBitSet P_CORE_SET;
@@ -281,10 +286,10 @@ public final class SystemInfo {
         }
 
         BitSet cpus = info.getCpuSet();
-        Set<String> visited =  new HashSet<>();
+        Set<String> visited = new HashSet<>();
         for (int i = cpus.nextSetBit(0); i >= 0; i = cpus.nextSetBit(i + 1)) {
             CpuCacheLayout layout = getCacheLayout(i);
-            if(visited.contains(layout.maskL3)) {
+            if (visited.contains(layout.maskL3)) {
                 continue;
             }
             sum += layout.bytesL3;
@@ -317,7 +322,7 @@ public final class SystemInfo {
     public record CpuInfo(int cpu, int core, int socket) {
 
         @Override
-        public String toString() {
+        public @NonNull String toString() {
             String base = CpuInfo.class.getSimpleName() + ": ["
                     + "cpu = " + cpu + ", "
                     + "core = " + core + ", "

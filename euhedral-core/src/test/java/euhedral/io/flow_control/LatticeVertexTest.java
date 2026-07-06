@@ -58,7 +58,6 @@ class LatticeVertexTest {
 
     @Test
     void shouldInitializeNode() {
-        assertEquals("test-node", node.name);
         assertEquals(4, node.downstreams.length);
         assertNotNull(node.cache);
         assertNotNull(node.getDrainFlag());
@@ -249,9 +248,6 @@ class LatticeVertexTest {
 
         verify(edge1).close();
         verify(edge2).close();
-
-        assertNull(node.downstreams[0]);
-        assertNull(node.downstreams[1]);
     }
 
     @Test

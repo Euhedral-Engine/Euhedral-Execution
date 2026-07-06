@@ -61,8 +61,8 @@ public class EndToEndLatencyBenchmark {
     @State(Scope.Benchmark)
     @BenchmarkMode({Mode.SampleTime})
     @OutputTimeUnit(TimeUnit.NANOSECONDS)
-    @Warmup(iterations = 3, time = 5, timeUnit = TimeUnit.SECONDS)
-    @Measurement(iterations = 5, time = 10, timeUnit = TimeUnit.SECONDS)
+    @Warmup(iterations = 3, time = 10, timeUnit = TimeUnit.SECONDS)
+    @Measurement(iterations = 5, time = 5, timeUnit = TimeUnit.SECONDS)
     @Fork(3)
     public static class PCore {
 
@@ -121,8 +121,8 @@ public class EndToEndLatencyBenchmark {
     @State(Scope.Benchmark)
     @BenchmarkMode({Mode.SampleTime})
     @OutputTimeUnit(TimeUnit.NANOSECONDS)
-    @Warmup(iterations = 3, time = 5, timeUnit = TimeUnit.SECONDS)
-    @Measurement(iterations = 5, time = 10, timeUnit = TimeUnit.SECONDS)
+    @Warmup(iterations = 3, time = 10, timeUnit = TimeUnit.SECONDS)
+    @Measurement(iterations = 5, time = 5, timeUnit = TimeUnit.SECONDS)
     @Fork(3)
     public static class ECore {
 

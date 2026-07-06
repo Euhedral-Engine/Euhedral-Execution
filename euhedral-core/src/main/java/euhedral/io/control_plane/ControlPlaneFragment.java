@@ -339,8 +339,12 @@ public final class ControlPlaneFragment extends WorkRequester {
     private void breakoutSpin(int cpu, double throughput) {
         GlobalState.setThroughput(this.socket, cpu, throughput);
 
-        double globalAvgT = GlobalState.meanThroughput(this.socket);
+        if(this.isPCore) {
+            Thread.yield();
+            return;
+        }
 
+        double globalAvgT = GlobalState.meanThroughput(this.socket);
         if (throughput < globalAvgT) {
             logger.trace("Backoff Spin");
             LockSupport.parkNanos(15_000);
