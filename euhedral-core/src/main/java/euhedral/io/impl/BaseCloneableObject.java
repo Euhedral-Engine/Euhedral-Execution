@@ -139,7 +139,7 @@ public final class BaseCloneableObject implements CloneableObject {
             PinnedThreadExecutor executor) {
         return new BaseCloneableObject(cloneConfig,
                 (ControlPlaneFragment) this.fragment.clone(cloneConfig, executor),
-                this.executor.clone(cloneConfig, executor));
+                this.executor.clone(cloneConfig));
     }
 
     @Override
@@ -179,7 +179,7 @@ public final class BaseCloneableObject implements CloneableObject {
     }
 
     @Override
-    public void close() throws Exception {
+    public void close() {
         try {
             try {
                 if (this.fragment != null) {

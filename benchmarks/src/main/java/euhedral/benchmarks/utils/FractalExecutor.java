@@ -36,13 +36,7 @@ public class FractalExecutor extends AbstractExecutor {
     }
 
     @Override
-    public AbstractExecutor clone(CloneConfig cloneConfig) {
-        return new FractalExecutor(cloneConfig.effectiveCpus().nextSetBit(0), this.blackhole);
-    }
-
-    @Override
-    public AbstractExecutor clone(CloneConfig cloneConfig,
-            PinnedThreadExecutor executor) {
-        return new FractalExecutor(cloneConfig.effectiveCpus().nextSetBit(0), this.blackhole);
+    public AbstractExecutor hookOnClone(int cpu) {
+        return new FractalExecutor(cpu, this.blackhole);
     }
 }

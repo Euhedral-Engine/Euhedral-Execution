@@ -19,7 +19,7 @@ public final class DefaultExecutor extends AbstractExecutor {
     }
 
     @Override
-    public AbstractExecutor clone(CloneConfig cloneConfig) {
-        return new DefaultExecutor(cloneConfig.effectiveCpus().nextSetBit(0));
+    public AbstractExecutor hookOnClone(int cpu) {
+        return new DefaultExecutor(cpu);
     }
 }

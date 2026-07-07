@@ -29,13 +29,7 @@ public class NoOpExecutor extends AbstractExecutor {
     }
 
     @Override
-    public NoOpExecutor clone(CloneConfig cloneConfig) {
-        return new NoOpExecutor(cloneConfig.effectiveCpus().nextSetBit(0), this.blackhole);
-    }
-
-    @Override
-    public NoOpExecutor clone(CloneConfig cloneConfig,
-            PinnedThreadExecutor executor) {
-        return new NoOpExecutor(cloneConfig.effectiveCpus().nextSetBit(0), this.blackhole);
+    public NoOpExecutor hookOnClone(int cpu) {
+        return new NoOpExecutor(cpu, this.blackhole);
     }
 }

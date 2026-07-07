@@ -33,8 +33,4 @@ public record FragmentConfig(@Nullable CloneConfig cloneConfig,
         }
         return -1;
     }
-
-    @Override
-    public void close() {
-    }
 }

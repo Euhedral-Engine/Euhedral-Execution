@@ -335,11 +335,9 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
 
         public final int[] mappings;
         public final int mask;
-        public final boolean isPow2;
 
         RoutingState(int[] mappings) {
             this.mappings = mappings;
-            this.isPow2 = (mappings.length & (mappings.length - 1)) == 0;
             this.mask = mappings.length - 1;
         }
     }
