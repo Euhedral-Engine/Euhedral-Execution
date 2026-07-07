@@ -33,7 +33,7 @@ with comparisons against existing schedulers where appropriate.
 
 ### Amazon EC2 (server workloads)
 
-- [Graviton4 (32 vCPU)](./benchmarks/AMAZON_GRAVITON_4_BENCHMARKS.md)
+- [Graviton5 (32 vCPU)](./benchmarks/AMAZON_GRAVITON_5_BENCHMARKS.md)
 - [Intel Xeon 6 (32 vCPU)](./benchmarks/AMAZON_XEON_6_BENCHMARKS.md)
 - [Graviton4 (192 vCPU)](./benchmarks/AMAZON_GRAVITON_4_192_CORES_BENCHMARKS.md)
 

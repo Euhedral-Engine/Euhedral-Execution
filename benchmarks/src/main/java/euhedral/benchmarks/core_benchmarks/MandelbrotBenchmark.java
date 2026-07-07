@@ -13,7 +13,6 @@ import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferInt;
 import java.io.IOException;
-import java.lang.invoke.VarHandle;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.concurrent.TimeUnit;
@@ -228,11 +227,6 @@ public class MandelbrotBenchmark {
         public void setupInvocation() {
             this.counters.reset();
             makeSub();
-            long seed = SEED;
-            for (var pixel : this.pixels) {
-                pixel.randomizeHash(seed++);
-            }
-            VarHandle.fullFence();
         }
 
         @Benchmark
