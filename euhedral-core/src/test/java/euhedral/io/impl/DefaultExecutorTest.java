@@ -32,7 +32,7 @@ class DefaultExecutorTest {
     @Test
     void shouldCloneExecutor() {
         DefaultExecutor cloned =
-                (DefaultExecutor) executor.clone(new CloneConfig("", 0, 0, new BitSet()));
+                (DefaultExecutor) executor.clone(new CloneConfig("", 0, new BitSet()));
 
         assertNotNull(cloned);
         assertNotSame(executor, cloned);
@@ -43,7 +43,7 @@ class DefaultExecutorTest {
         PinnedThreadExecutor newExec = mock(PinnedThreadExecutor.class);
 
         DefaultExecutor cloned =
-                (DefaultExecutor) executor.clone(new CloneConfig("", 0, 0, new BitSet()),
+                (DefaultExecutor) executor.clone(new CloneConfig("", 0, new BitSet()),
                         newExec);
 
         assertNotNull(cloned);

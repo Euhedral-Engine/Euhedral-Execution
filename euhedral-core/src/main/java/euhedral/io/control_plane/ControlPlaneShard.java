@@ -21,6 +21,7 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.HashSet;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -32,14 +33,26 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.LockSupport;
 import lombok.Getter;
 import org.jctools.queues.SpscArrayQueue;
+import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+@SuppressWarnings("unused")
 public class ControlPlaneShard {
 
     protected static final VarHandle HANDLE = MethodHandles.arrayElementVarHandle(LatticeEdge[].class);
 
+    public static ControlPlaneShard createBaseShard(@NonNull CloneableObject cloneableObject) {
+        Objects.requireNonNull(cloneableObject);
+        return new ControlPlaneShard(-1, ControlPlaneShard.class.getSimpleName(), cloneableObject, Duration.ZERO);
+    }
+    public static ControlPlaneShard createBaseShard(String name, @NonNull CloneableObject cloneableObject) {
+        Objects.requireNonNull(cloneableObject);
+        return new ControlPlaneShard(-1, name, cloneableObject, Duration.ZERO);
+    }
+
     protected final Logger logger;
+    protected final Duration shutdownTimeout;
 
     @Getter
     protected final int socket;
@@ -63,9 +76,10 @@ public class ControlPlaneShard {
     protected final LatticeEdge[] coreHandles = new LatticeEdge[SystemInfo.getMaxCoreId() + 1];
     protected volatile ExecutorService shardExecutor;
 
-    public ControlPlaneShard(int socket, String shardName,
-            CloneableObject obj) {
+    protected ControlPlaneShard(int socket, String shardName,
+            CloneableObject obj, Duration shutdownTimeout) {
         this.logger = LoggerFactory.getLogger(shardName);
+        this.shutdownTimeout = shutdownTimeout;
         this.socket = socket;
         this.shardName = shardName;
         this.cloneableObject = obj;
@@ -82,7 +96,7 @@ public class ControlPlaneShard {
         }
         this.logger.info("Starting.");
         this.shardExecutor = Executors.newFixedThreadPool(topology.effectiveCores().length(),
-                (r) -> new Thread(r, this.shardName + "+ExecutorService"));
+                (r) -> new Thread(r, this.shardName + "-ExecutorService"));
 
         SocketInfo info = SystemInfo.getSocketInfo(snapshot.socketId());
         long sizeL3 = SystemInfo.socketL3Cache(snapshot.socketId());
@@ -92,7 +106,7 @@ public class ControlPlaneShard {
 
         long chunkSize = capacity == 0 ? 0 : QueueUtils.roundChunkSize(capacity);
 
-        logger.debug("L3 Cache: Partitions: {} PartionChunkSize: {} Capacity: {}", cores,
+        logger.debug("L3 Cache: Partitions: {} PartitionChunkSize: {} Capacity: {}", cores,
                 chunkSize / Math.max(cores, 1), cores * chunkSize);
         LatticeVertex coreDistributor = new LatticeVertex(this.shardName + "-CoreDistributor",
                 SystemInfo.getMaxCoreId() + 1, this::route, (int) capacity,
@@ -135,7 +149,7 @@ public class ControlPlaneShard {
 
         int nextVersion = topology.version();
         if (!this.primed.getOpaque()) {
-            this.logger.info("Initializing clones for socket topology V{}", nextVersion);
+            this.logger.info("Priming clones for socket topology V{}", nextVersion);
             handleTopologyChange(snapshot, topology);
         } else if (this.currentVersion.getAcquire() != nextVersion) {
             this.logger.warn(
@@ -229,8 +243,7 @@ public class ControlPlaneShard {
     /// Creates a clone on the core, links it to the core distributor, starts it, and updates it.
     private CloneableObject spawnClone(int coreId, CoreSnapshot snapshot,
             CloneableObject[] nextClones) {
-        CloneConfig config = new CloneConfig(this.shardName, coreId, snapshot.quotaCpus(),
-                snapshot.effectiveCpus());
+        CloneConfig config = new CloneConfig(this.shardName, coreId, snapshot.effectiveCpus());
 
         CloneableObject clone = this.cloneableObject.clone(config);
         nextClones[coreId] = clone;
@@ -275,10 +288,10 @@ public class ControlPlaneShard {
         clones.drain(clone -> CompletableFuture.runAsync(() -> {
             Thread.currentThread().setName(this.shardName + "-" + clone.getCore());
             final long deadline =
-                    System.nanoTime() + Duration.ofSeconds(1).toNanos();
+                    System.nanoTime() + this.shutdownTimeout.toNanos();
 
             while (!clone.isDrained()) {
-                LockSupport.parkNanos(5_000);
+                LockSupport.parkNanos(10_000);
                 if (System.nanoTime() >= deadline) {
                     break;
                 }
@@ -365,7 +378,7 @@ public class ControlPlaneShard {
 
         CompletableFuture.runAsync(() -> {
             Thread.currentThread().setName(this.shardName + "-" + coreId);
-            long deadline = System.nanoTime() + Duration.ofMinutes(1).toNanos();
+            long deadline = System.nanoTime() + this.shutdownTimeout.toNanos();
             try {
                 while (!oldClone.isDrained()) {
                     LockSupport.parkNanos(5_000);
@@ -429,8 +442,8 @@ public class ControlPlaneShard {
     }
 
     /// Creates a shallow copy of the shard.
-    public ControlPlaneShard clone(int shardId, String shardName) {
-        return new ControlPlaneShard(shardId, shardName, this.cloneableObject);
+    public ControlPlaneShard clone(int socketId, String rootName, Duration shutdownTimeout) {
+        return new ControlPlaneShard(socketId, rootName + "-" + this.shardName + "-" + socketId, this.cloneableObject, shutdownTimeout);
     }
 
     /// Forcefully shuts down all cores.

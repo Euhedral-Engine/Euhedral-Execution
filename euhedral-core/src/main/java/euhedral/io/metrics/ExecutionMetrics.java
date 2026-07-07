@@ -45,7 +45,7 @@ public final class ExecutionMetrics implements AutoCloseable {
             prefix = DEFAULT_PREFIX;
         }
 
-        this.registry = config.meterRegistry();
+        this.registry = config.registry();
         if (this.registry != null && config.cloneConfig() != null) {
             this.meters = new ArrayList<>();
             String coreId = String.valueOf(config.cloneConfig().coreId());

@@ -6,10 +6,12 @@ import euhedral.benchmarks.utils.RepeatingSink;
 import euhedral.hardware_utils.SystemInfo;
 import euhedral.hardware_utils.SystemInfo.CoreInfo;
 import euhedral.hardware_utils.SystemInfo.CpuCacheLayout;
-import euhedral.io.config.ControlPlaneConfig;
+import euhedral.io.config.LatticeConfig;
 import euhedral.io.control_plane.ControlPlaneLattice;
+import euhedral.io.control_plane.ControlPlaneShard;
 import euhedral.io.impl.BaseCloneableObject;
 import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
+import java.time.Duration;
 import java.util.BitSet;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
@@ -92,8 +94,8 @@ public class EndToEndLatencyBenchmark {
 
             System.out.println("Benchmark is using P cpus " + cpus);
             BaseCloneableObject base = new BaseCloneableObject(new NoOpExecutor(blackhole));
-            ControlPlaneConfig config = new ControlPlaneConfig("EndToEndLatencyBenchmark", cpus,
-                    null, base, null, null);
+            LatticeConfig config = new LatticeConfig("EndToEndLatencyBenchmark", cpus,
+                    Duration.ofSeconds(1), ControlPlaneShard.createBaseShard(base));
             this.controlPlane = ControlPlaneLattice.getOrCreate(config);
             this.controlPlane.start();
             this.controlPlane.addUpstream(this.ingestSink);
@@ -162,8 +164,8 @@ public class EndToEndLatencyBenchmark {
 
             System.out.println("Benchmark is using E cpus " + cpus);
             BaseCloneableObject base = new BaseCloneableObject(new NoOpExecutor(blackhole));
-            ControlPlaneConfig config = new ControlPlaneConfig("EndToEndLatencyBenchmark", cpus,
-                    null, base, null, null);
+            LatticeConfig config = new LatticeConfig("EndToEndLatencyBenchmark", cpus,
+                    Duration.ofSeconds(1), ControlPlaneShard.createBaseShard(base));
             this.controlPlane = ControlPlaneLattice.getOrCreate(config);
             this.controlPlane.start();
             this.controlPlane.addUpstream(this.ingestSink);
