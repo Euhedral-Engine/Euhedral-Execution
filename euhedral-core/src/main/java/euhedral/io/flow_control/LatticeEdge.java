@@ -1,10 +1,5 @@
 package euhedral.io.flow_control;
 
-import euhedral.io.flow_control.UpstreamQueue.UpstreamHandle;
-import euhedral.io.frames.AbstractFrame;
-import euhedral.io.generics.LatticeInterceptor;
-import euhedral.io.generics.LatticeReceiver;
-import io.euhedral_execution.data_structures.atomics.PaddedAtomicLong;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.Collection;
@@ -14,6 +9,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.Consumer;
+
+import euhedral.io.flow_control.UpstreamQueue.UpstreamHandle;
+import euhedral.io.frames.AbstractFrame;
+import euhedral.io.generics.LatticeInterceptor;
+import euhedral.io.generics.LatticeReceiver;
+import io.euhedral_execution.data_structures.atomics.PaddedAtomicLong;
 import lombok.Getter;
 import lombok.Setter;
 import org.jctools.maps.NonBlockingHashMapLong;
@@ -62,6 +63,7 @@ public class LatticeEdge extends UpstreamHandle implements AutoCloseable {
 
     protected final NonBlockingHashMapLong<UpstreamQueue> aggregators =
             new NonBlockingHashMapLong<>();
+
     private final WeakHashMap<UpstreamHandle, Boolean> upstreamHandles = new WeakHashMap<>();
     private final PaddedAtomicLong upstreamCount = new PaddedAtomicLong(0);
     private final AtomicLong threadCount = new AtomicLong(0);
@@ -287,7 +289,7 @@ public class LatticeEdge extends UpstreamHandle implements AutoCloseable {
         this.sibling = null;
         UP_QUEUES.setRelease(this, null);
         acquireLock();
-        for(var handle : this.upstreamHandles.keySet()) {
+        for (var handle : this.upstreamHandles.keySet()) {
             handle.onComplete();
         }
         this.upstreamHandles.clear();
@@ -296,7 +298,7 @@ public class LatticeEdge extends UpstreamHandle implements AutoCloseable {
 
     public void removeUpstream(UpstreamHandle handle) {
         LatticeEdge parent = (LatticeEdge) PARENT.getOpaque(this);
-        if(parent != null) {
+        if (parent != null) {
             removeUpstream(handle);
             return;
         }

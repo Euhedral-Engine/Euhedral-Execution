@@ -215,7 +215,7 @@ public final class ControlPlaneFragment extends WorkRequester {
             while (keepRunning()) {
                 requestAndPull(context, this.state.batchSize);
 
-                long cacheCount = super.getCacheCount();
+                long cacheCount = super.getLocalCacheCount();
                 if (cacheCount == 0) {
                     this.state.batchEfficiency.record(0);
                     break;
@@ -242,7 +242,7 @@ public final class ControlPlaneFragment extends WorkRequester {
                 Thread.onSpinWait();
             }
 
-            if (batchEfficiency.averageUnits() >= 600 || super.getCacheCount() != 0) {
+            if (batchEfficiency.averageUnits() >= 600 || super.getLocalCacheCount() != 0) {
                 Thread.onSpinWait();
                 continue;
             }

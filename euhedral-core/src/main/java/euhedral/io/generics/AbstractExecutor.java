@@ -51,7 +51,9 @@ public abstract class AbstractExecutor implements CloneableObject {
     public abstract AbstractExecutor clone(CloneConfig cloneConfig);
 
     @Override
-    public abstract AbstractExecutor clone(CloneConfig cloneConfig, PinnedThreadExecutor executor);
+    public AbstractExecutor clone(CloneConfig cloneConfig, PinnedThreadExecutor executor) {
+        return clone(cloneConfig);
+    }
 
     @Override
     public void close() {

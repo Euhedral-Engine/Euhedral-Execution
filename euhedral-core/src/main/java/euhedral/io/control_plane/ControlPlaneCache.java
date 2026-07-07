@@ -15,13 +15,13 @@ import euhedral.io.config.CacheConfig;
 import euhedral.io.config.CloneConfig;
 import euhedral.io.flow_control.LatticeEdge;
 import euhedral.io.flow_control.LatticeVertex;
+import euhedral.io.flow_control.RoutingPolicy;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.frames.DummyFrame;
 import euhedral.io.generics.CloneableObject;
 import euhedral.io.generics.LatticeReceiver;
 import euhedral.io.generics.LatticeSource;
 import euhedral.io.metrics.CacheMetrics;
-import euhedral.io.utils.QueueConsumer;
 import io.euhedral_execution.data_structures.queues.PartitionedMpscQueue;
 import io.euhedral_execution.data_structures.queues.common.QueueUtils;
 import lombok.AccessLevel;
@@ -84,7 +84,7 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
 
     private final CacheConfig cacheConfig;
     private final CacheMetrics metrics;
-
+    private final int core;
 
     @Getter(AccessLevel.PROTECTED)
     private final PartitionedMpscQueue<AbstractFrame> cache;
@@ -106,14 +106,16 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
         int partitions = cacheConfig.partitions();
         if (partitions <= 0 || cacheConfig.cloneConfig() == null) {
             this.metrics = null;
-            this.frameQuota = 0;
             this.cache = null;
-            this.cacheTerminal = null;
             this.chunkSize = 0;
+            this.cacheTerminal = null;
+            this.frameQuota = 0;
+            this.core = -1;
         } else {
             this.metrics = new CacheMetrics(cacheConfig, () -> (long) TOTAL_COUNT.getAcquire(this));
             this.chunkSize = getChunkSize(cacheConfig, partitions);
             this.frameQuota = (long) this.chunkSize * partitions;
+            this.core = cacheConfig.getCore();
             this.cache = new PartitionedMpscQueue<>(partitions, this.chunkSize,
                     cacheConfig.maxPooledChunks());
             this.cacheTerminal = new CacheTerminal(this);
@@ -145,26 +147,26 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
         return added;
     }
 
-    public final long drain(QueueConsumer queueConsumer, long limit) {
+    public final long drain(Consumer<AbstractFrame> consumer, long limit) {
         if (limit <= 0) {
             return 0;
         }
-        queueConsumer.reset();
 
+        long total = 0;
         long initialCount = (long) TOTAL_COUNT.getOpaque(this);
         if (initialCount > 0) {
-            long count = this.cache.drain(queueConsumer, limit);
-            while (queueConsumer.drainCount < limit
+            total = this.cache.drain(consumer, limit);
+            long count = total;
+            while (total < limit
                     && count > this.cacheConfig.ringWalkResetThreshold()) {
-                count = this.cache.drain(queueConsumer, limit - queueConsumer.drainCount);
+                count = this.cache.drain(consumer, limit - total);
+                total += count;
             }
 
-            TOTAL_COUNT.getAndAdd(this, -queueConsumer.drainCount);
+            TOTAL_COUNT.getAndAdd(this, -total);
         }
 
-        long totalDrain = queueConsumer.drainCount;
-        queueConsumer.reset();
-        return totalDrain;
+        return total;
     }
 
     @Override
@@ -211,17 +213,17 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
         TOTAL_COUNT.setOpaque(this, 0);
     }
 
-    public final long getCacheCount() {
+    public final long getLocalCacheCount() {
         return (long) TOTAL_COUNT.getOpaque(this);
     }
 
-    public final long getMaxQueueCount() {
+    public final long getMaxLocalCacheCount() {
         double cap = (double) CAP_FACTOR.getAcquire(this);
         return (long) (this.frameQuota * cap);
     }
 
     @Override
-    public boolean setDownstreamMapping(BitSet active, LatticeEdge[] edges) {
+    public final boolean setDownstreamMapping(BitSet active, LatticeEdge[] edges) {
         return false;
     }
 
@@ -235,11 +237,11 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
     }
 
     @Override
-    public int getCore() {
-        return this.cacheConfig.getCore();
+    public final int getCore() {
+        return this.core;
     }
 
-    public double getCapFactor() {
+    public final double getCapFactor() {
         return (double) CAP_FACTOR.getAcquire(this);
     }
 
@@ -250,12 +252,7 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
 
     @Override
     public void setDrainMode(boolean value) {
-        super.drain.set(value);
-    }
-
-    @Override
-    public void close() {
-        super.close();
+        super.setDrain(value);
     }
 
     private static class CacheTerminal implements LatticeReceiver, Consumer<AbstractFrame> {

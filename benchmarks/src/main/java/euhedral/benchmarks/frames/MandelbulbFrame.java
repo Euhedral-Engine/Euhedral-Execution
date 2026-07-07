@@ -3,7 +3,7 @@ package euhedral.benchmarks.frames;
 import euhedral.hardware_utils.SystemInfo.CpuInfo;
 import euhedral.hardware_utils.ThreadTools;
 import euhedral.hashing.HasherApi;
-import euhedral.io.control_plane.RoutingPolicy;
+import euhedral.io.flow_control.RoutingPolicy;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.impl.FrameManager;
 import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
