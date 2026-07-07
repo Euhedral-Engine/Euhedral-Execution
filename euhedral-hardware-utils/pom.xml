@@ -6,11 +6,15 @@
   <parent>
     <groupId>io.euhedral-execution</groupId>
     <artifactId>euhedral-execution</artifactId>
-    <version>0.0.5</version>
+    <version>0.0.6-SNAPSHOT</version>
   </parent>
 
   <name>Euhedral Hardware Utils</name>
   <artifactId>euhedral-hardware-utils</artifactId>
+
+  <properties>
+    <skip.central.publish>false</skip.central.publish>
+  </properties>
 
   <dependencies>
     <!--    Annotations   -->
