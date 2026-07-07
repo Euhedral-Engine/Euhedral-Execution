@@ -94,8 +94,8 @@ public final class ControlPlaneLattice implements LatticeTerminal {
     private static final AtomicReference<ControlPlaneLattice> INSTANCE = new AtomicReference<>();
     private static final VarHandle HANDLES = MethodHandles.arrayElementVarHandle(LatticeEdge[].class);
 
-    public static ControlPlaneLattice get() {
-        return INSTANCE.get();
+    public static ControlPlaneLattice getOrCreate() {
+        return getOrCreate("EuhedralLattice", "EuhedralShard");
     }
 
     public static ControlPlaneLattice getOrCreate(String name, String shardName) {

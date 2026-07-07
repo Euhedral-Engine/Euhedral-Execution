@@ -20,6 +20,7 @@ import euhedral.hardware_utils.TopologyMapper.EffectiveSocketTopology;
 import euhedral.hardware_utils.TopologyMapper.EffectiveSystemTopology;
 import euhedral.hardware_utils.common.SystemUtilization.HardwareUtilization;
 import euhedral.hardware_utils.common.SystemUtilization.SocketSnapshot;
+import euhedral.hardware_utils.common.UnmodifiableBitSet;
 import euhedral.io.config.LatticeConfig;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -68,6 +69,9 @@ class ControlPlaneLatticeTest {
     @BeforeEach
     public void setup() {
         mockSysInfo = Mockito.mockStatic(SystemInfo.class);
+        BitSet cpus = new BitSet();
+        cpus.set(0, 8);
+        mockSysInfo.when(() -> SystemInfo.getCpuSet()).thenReturn(UnmodifiableBitSet.wrap(cpus));
         mockTopologyMapper = Mockito.mockConstructionWithAnswer(TopologyMapper.class,
                 invocation -> {
                     Class<?> clazz = invocation.getMethod().getReturnType();
@@ -93,7 +97,7 @@ class ControlPlaneLatticeTest {
                     }
                     return mock(ResourceMonitor.class);
                 });
-        ControlPlaneLattice plane = ControlPlaneLattice.get();
+        ControlPlaneLattice plane = ControlPlaneLattice.getOrCreate();
         if (plane != null) {
             plane.close();
         }
@@ -137,7 +141,7 @@ class ControlPlaneLatticeTest {
         assertEquals(effectiveSystemTopology.globalVersion(), controlPlane.currentGlobalVersion);
         assertTrue(controlPlane.primed.get());
         Awaitility.await().atMost(Duration.ofSeconds(2)).untilFalse(controlPlane.rebalancing);
-        assertArrayEquals(new int[]{0, 1}, ControlPlaneLattice.get().activeShardIds.get());
+        assertArrayEquals(new int[]{0, 1}, ControlPlaneLattice.getOrCreate().activeShardIds.get());
         assertEquals(2, controlPlane.shardHandles.length);
         assertEquals(2, controlPlane.shards.length);
         assertArrayEquals(new int[]{0, 0, 0, 0, 1, 1, 1, 1}, controlPlane.weightedShardMap.get());
@@ -164,7 +168,7 @@ class ControlPlaneLatticeTest {
 
         when(mockShard.isStarted()).thenReturn(true);
 
-        ControlPlaneLattice.get().update(mockUtilization);
+        ControlPlaneLattice.getOrCreate().update(mockUtilization);
 
         Thread.sleep(100);
 

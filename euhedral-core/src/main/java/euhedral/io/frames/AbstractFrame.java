@@ -17,7 +17,7 @@ import org.jspecify.annotations.NonNull;
 /// It carries execution state, routing hashes, and lifecycle hooks required by an
 /// [`AbstractExecutor`][euhedral.io].
 ///
-/// Frames are designed to be *hot-path reusable*. They are not created and discarded like typical
+/// Frames are designed to be *reusable*. They are not created and discarded like typical
 /// tasks. Instead, they are recycled through a [FrameManager] to avoid GC churn and keep allocation
 /// pressure near zero.
 ///
@@ -31,20 +31,20 @@ import org.jspecify.annotations.NonNull;
 /// Frames are routed based on a `routingHash`. This is what determines how work spreads across
 /// parallel paths.
 ///
-/// For stable ordering, keep the hash consistent across retries:
+/// For stable ordering, keep the hash consistent across instances:
 ///
 /// ```java
-/// long idHash = frame.getIdHash();
-/// final long seed = 123;
-/// frame.randomizeHash(HasherApi.combine(idHash, seed));
+/// long idHash = HasherApi.mix(1234);
+/// Frame frame1 = new Frame(idHash);
+/// Frame frame2 = new Frame(idHash);
 /// ```
 ///
 /// For parallel distribution, vary the seed so frames naturally spread out:
 ///
 /// ```java
-/// long idHash = frame.getIdHash();
 /// long seed = 123;
-/// frame.randomizeHash(HasherApi.combine(idHash, seed++));
+/// frame1.randomizeHash(HasherApi.mix(seed++));
+/// frame2.randomizeHash(HasherApi.mix(seed++));
 /// ```
 ///
 /// ---
@@ -55,6 +55,7 @@ import org.jspecify.annotations.NonNull;
 /// - `kill()` -> hard stop (this and related work)
 /// - `isAlive()` -> soft liveness check (engine may cancel if false)
 /// - `doFinally()` -> post-execution hook (safe mutation point)
+/// - `doFinallyWithError()` -> post-execution hook after an uncaught exception (safe mutation point)
 @SuppressWarnings({"rawtypes", "unchecked", "unused"})
 public abstract class AbstractFrame {
 
