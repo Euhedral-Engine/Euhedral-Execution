@@ -7,7 +7,7 @@
   <parent>
     <groupId>io.euhedral-execution</groupId>
     <artifactId>euhedral-execution</artifactId>
-    <version>0.0.5-SNAPSHOT</version>
+    <version>0.0.6</version>
   </parent>
 
   <name>Euhedral Benchmarks</name>
@@ -17,6 +17,8 @@
     <maven.compiler.source>25</maven.compiler.source>
     <maven.compiler.target>25</maven.compiler.target>
     <maven.deploy.skip>true</maven.deploy.skip>
+    <central.deployment.skip>true</central.deployment.skip>
+
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
 
