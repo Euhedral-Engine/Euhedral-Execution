@@ -27,8 +27,8 @@ NUMA boundaries.
 
 ## Benchmarks
 
-Euhedral was built by measuring execution behavior rather than optimizing for theoretical scheduling
-strategies. The benchmarks below focus on end-to-end latency, throughput, and irregular workloads,
+Euhedral was built by measuring execution behavior and creating adaptations to adjust to different
+workloads. The benchmarks below focus on end-to-end latency, throughput, and irregular workloads,
 with comparisons against existing schedulers where appropriate.
 
 ### Amazon EC2 (server workloads)
@@ -74,43 +74,32 @@ Euhedral only requires
 --add-opens java.base/java.util=ALL-UNNAMED
 ```
 
-### End to End Latency
+### Throughput (op/ns)
+
+32M no-op frames per invocation using all cores. This benchmarks the overhead of Euhedral without a
+workload.
+
+Throughput: 0.159 ops/ns = 159,000,000 ops/s
+
+Latency:
+
+| p0 | p50 | p90 | p95 |  p99 | p100 |
+|---:|----:|----:|----:|-----:|-----:|
+|  6 |   6 |   6 |   6 | 6.74 |    7 |
+
+### End to End Latency (ns/op)
 
 Each invocation executes 100K no-op frames and measures routing, scheduling, and dispatch overhead.
 
-#### E-Core Cluster (4 cores with shared L2)
-
-```
-Alloc Rate:  0.542  B/op
-p50:         34.000 ns/op
-p99:         38.000 ns/op
-p9999        67.239 ns/op
-```
-
-#### P-Core Cluster (2 cores)
-
-```
-Alloc Rate: 0.192 B/op
-p50:        61.000 ns/op
-p99:        68.000 ns/op
-p9999:      88.000 ns/op
-```
-
-### Throughput
-
-32M no-op frames per run across all cores.
-
-```
-Throughput:   0.037 ops/ns = 37,000,000 ops/s
-Alloc Rate:   2.746 B/op
-p50:          27.000 ns/op
-p99:          30.000 ns/op
-p9999:        30.000 ns/op
-```
+|        | Cores | p0 | p50 | p90 | p95 | p99 | p100 |
+|--------|------:|---:|----:|----:|----:|----:|-----:|
+| P-Core |     2 | 16 |  21 |  23 |  23 |  25 |   34 |
+| E-Core |     4 | 18 |  28 |  33 |  35 |  37 |   46 |
 
 ### Mandelbrot
 
-A deliberately chaotic workload designed to stress memory locality.
+A deliberately chaotic workload designed to stress memory locality and adaptive behavior. Each pixel
+can take anywhere from a few nanoseconds to microseconds.
 
 Renders an 8K [Mandelbrot set](https://en.wikipedia.org/wiki/Mandelbrot_set) using:
 
@@ -123,7 +112,9 @@ Workload:
 - 33,177,600 **frames**
 - 132,710,400 **total operations**
 
-```Average time: 410ns/op```
+| Average Time  | Alloc MB/s | B/op   |
+|---------------|------------|--------|
+| 337.378 ns/op | 67.099     | 24.051 |
 
 ---
 
