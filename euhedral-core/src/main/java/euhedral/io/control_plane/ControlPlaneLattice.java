@@ -15,6 +15,7 @@ import euhedral.hardware_utils.common.SystemUtilization.SocketSnapshot;
 import euhedral.io.config.ControlPlaneConfig;
 import euhedral.io.flow_control.LatticeEdge;
 import euhedral.io.flow_control.LatticeVertex;
+import euhedral.io.flow_control.RoutingPolicy;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.CloneableObject;
 import euhedral.io.generics.LatticeSource;

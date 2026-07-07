@@ -9,7 +9,6 @@ import static org.mockito.Mockito.verify;
 
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.LatticeSource;
-import euhedral.io.utils.QueueConsumer;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import org.jctools.maps.NonBlockingHashMapLong;
@@ -18,7 +17,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import test_utils.TestReceiver;
 
-@SuppressWarnings("unchecked")
 class UpstreamQueueTest {
 
     private UpstreamQueue queue;
@@ -118,11 +116,7 @@ class UpstreamQueueTest {
 
         queue.addUpstream(upstream);
 
-        QueueConsumer buffer = new QueueConsumer(
-                frame -> {}
-        );
-
-        queue.pull(buffer, 64);
+        queue.pull(frame -> {}, 64);
 
         assertEquals(0, upstream.requested);
         assertEquals(64, upstream.pulled);

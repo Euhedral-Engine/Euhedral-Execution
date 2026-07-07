@@ -9,7 +9,7 @@ import euhedral.hardware_utils.SystemInfo.SocketInfo;
 import euhedral.hashing.HasherApi;
 import euhedral.io.config.ControlPlaneConfig;
 import euhedral.io.control_plane.ControlPlaneLattice;
-import euhedral.io.control_plane.RoutingPolicy;
+import euhedral.io.flow_control.RoutingPolicy;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.impl.BaseCloneableObject;
 import euhedral.io.ingest.ArrayIngestSink;

@@ -15,13 +15,14 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 
-import euhedral.io.control_plane.RoutingPolicy;
 import euhedral.io.flow_control.LatticeVertex.RoutingFunction;
+import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.LatticeSource;
-import euhedral.io.utils.QueueConsumer;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -282,11 +283,10 @@ class LatticeVertexTest {
 
     @Test
     void shouldIgnoreInvalidPullArguments() {
-        QueueConsumer buffer = mock(QueueConsumer.class);
 
         assertDoesNotThrow(() -> node.pull(null, 10));
-        assertDoesNotThrow(() -> node.pull(buffer, 0));
-        assertDoesNotThrow(() -> node.pull(buffer, -1));
+        assertDoesNotThrow(() -> node.pull(frame -> {}, 0));
+        assertDoesNotThrow(() -> node.pull(frame -> {}, -1));
     }
 
     @Test
@@ -295,11 +295,11 @@ class LatticeVertexTest {
 
         node.setParent(parent);
 
-        QueueConsumer buffer = mock(QueueConsumer.class);
+        Consumer<AbstractFrame> consumer = frame -> {};
 
-        node.pull(buffer, 10);
+        node.pull(consumer, 10);
 
-        verify(parent).pull(buffer, 10);
+        verify(parent).pull(consumer, 10);
     }
 
     @Test

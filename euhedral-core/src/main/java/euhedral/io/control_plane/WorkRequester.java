@@ -4,12 +4,10 @@ import euhedral.hardware_utils.SystemInfo;
 import euhedral.io.config.CacheConfig;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.utils.FlowThread;
-import euhedral.io.utils.QueueConsumer;
 import org.jspecify.annotations.NonNull;
 
 public abstract class WorkRequester extends ControlPlaneCache {
 
-    private final QueueConsumer consumer;
     private final long safetyFactor;
     private final long pullMultiplier;
 
@@ -17,24 +15,20 @@ public abstract class WorkRequester extends ControlPlaneCache {
         super(cacheConfig);
 
         if (super.getCache() == null) {
-            this.consumer = null;
             this.safetyFactor = 0;
             this.pullMultiplier = 0;
         } else {
-            this.consumer = new QueueConsumer(this::accept);
-
             int cores = SystemInfo.getSocketInfo(SystemInfo.getCoreInfo(cacheConfig.getCore()).socket()).getCoreSet()
                     .cardinality();
-            int base = (cores * 3) >> 3;
-            this.safetyFactor = Math.max(base >> 1, 2);
-            this.pullMultiplier = this.safetyFactor << 1;
+            this.pullMultiplier = (cores * 3L) >> 3; // 37.5% of the core count
+            this.safetyFactor = Math.max(this.pullMultiplier >> 1, 2);
         }
     }
 
     protected abstract void accept(AbstractFrame frame);
 
     protected long drain(long limit) {
-        return super.drain(this.consumer, limit);
+        return super.drain(this::accept, limit);
     }
 
     protected void request(FlowThread.FlowContext context) {
@@ -56,14 +50,14 @@ public abstract class WorkRequester extends ControlPlaneCache {
         }
     }
 
-    protected long requestAndPull(FlowThread.FlowContext context, long batchSize) {
-        long localCache = super.getCacheCount();
+    protected void requestAndPull(FlowThread.FlowContext context, long batchSize) {
+        long localCache = super.getLocalCacheCount();
 
-        long maxLocalCache = super.getMaxQueueCount();
+        long maxLocalCache = super.getMaxLocalCacheCount();
         long lowWaterMark = Math.min(maxLocalCache >> 2, batchSize * this.safetyFactor);
         lowWaterMark = Math.max(lowWaterMark, 1);
         if (localCache >= lowWaterMark) {
-            return 0;
+            return;
         }
 
         long target = Math.min(maxLocalCache >> 1, batchSize * this.pullMultiplier);
@@ -81,6 +75,5 @@ public abstract class WorkRequester extends ControlPlaneCache {
 
         context.originalPull = pull;
         context.satisfiedPull = super.pull(pull);
-        return context.satisfiedPull;
     }
 }

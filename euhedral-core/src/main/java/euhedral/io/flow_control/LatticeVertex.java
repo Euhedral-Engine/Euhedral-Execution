@@ -2,7 +2,6 @@ package euhedral.io.flow_control;
 
 import static euhedral.io.utils.MathFunctions.unsignedMultiplyHigh;
 
-import euhedral.io.control_plane.RoutingPolicy;
 import euhedral.io.flow_control.UpstreamQueue.UpstreamHandle;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.LatticeInterceptor;
@@ -182,7 +181,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
     }
 
     public void setDrain(boolean value) {
-        super.drain.set(value);
+        super.drain.setRelease(value);
     }
 
     public boolean isDrained() {
