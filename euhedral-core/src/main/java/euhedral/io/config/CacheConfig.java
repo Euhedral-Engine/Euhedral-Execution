@@ -42,10 +42,4 @@ public record CacheConfig(@Nullable CloneConfig cloneConfig,
         }
         return -1;
     }
-
-    @Override
-    public void close() throws Exception {
-
-    }
-
 }

@@ -90,7 +90,7 @@ import org.slf4j.LoggerFactory;
 ///
 /// ---
 @SuppressWarnings("unused")
-public final class ControlPlaneLattice implements LatticeTerminal, AutoCloseable {
+public final class ControlPlaneLattice implements LatticeTerminal {
 
     private static final AtomicReference<ControlPlaneLattice> INSTANCE = new AtomicReference<>();
 
@@ -448,7 +448,6 @@ public final class ControlPlaneLattice implements LatticeTerminal, AutoCloseable
     }
 
     /// Permanently shuts down the ControlPlaneLattice.
-    @Override
     public void close() {
         if (!this.closed.compareAndSet(false, true)) {
             return;

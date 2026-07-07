@@ -35,7 +35,7 @@ import org.jctools.queues.SpscArrayQueue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class ControlPlaneShard implements AutoCloseable {
+public class ControlPlaneShard {
 
     protected static final VarHandle HANDLE = MethodHandles.arrayElementVarHandle(LatticeEdge[].class);
 
@@ -434,7 +434,6 @@ public class ControlPlaneShard implements AutoCloseable {
     }
 
     /// Forcefully shuts down all cores.
-    @Override
     public void close() throws Exception {
         this.started.set(false);
         this.logger.info("Closing.");

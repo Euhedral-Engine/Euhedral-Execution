@@ -33,7 +33,7 @@ import org.jctools.maps.NonBlockingHashMapLong;
 /// upward toward upstream sources. The structure is designed to continuously reconcile both
 /// directions under concurrent mutation.
 @SuppressWarnings("unused")
-public class LatticeEdge extends UpstreamHandle implements AutoCloseable {
+public class LatticeEdge extends UpstreamHandle {
 
     protected static final VarHandle ADDING_UPSTREAM;
     protected static final VarHandle CLOSED;
@@ -274,7 +274,6 @@ public class LatticeEdge extends UpstreamHandle implements AutoCloseable {
     }
 
     /// Clears the state and permanently closes.
-    @Override
     public void close() {
         if (!CLOSED.compareAndSet(this, false, true)) {
             return;

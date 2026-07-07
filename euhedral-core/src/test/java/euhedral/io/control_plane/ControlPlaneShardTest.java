@@ -176,10 +176,5 @@ class ControlPlaneShardTest {
         public TestClone clone(CloneConfig cloneConfig) {
             return new TestClone();
         }
-
-        @Override
-        public void close() throws Exception {
-
-        }
     }
 }
