@@ -23,11 +23,6 @@ public final class RunnableFrame extends AbstractFrame {
     }
 
     @Override
-    public long getSizeBytes() {
-        return 64;
-    }
-
-    @Override
     public boolean isAlive() {
         if(killSwitch != null) {
             return killSwitch.getOpaque();

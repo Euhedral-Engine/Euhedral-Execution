@@ -1,22 +1,17 @@
-package euhedral.io.ingest;
+package euhedral.benchmarks.utils;
 
-import euhedral.io.control_plane.ControlPlaneLattice;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.LatticeReceiver;
 import euhedral.io.generics.LatticeSource;
+import euhedral.io.ingest.AbstractIngestSink;
 import java.lang.invoke.VarHandle;
 import java.util.Objects;
 import java.util.function.Consumer;
-import org.jspecify.annotations.NonNull;
 
-/// Wraps an array to allow it to be ingested by the
-/// [ControlPlaneLattice][ControlPlaneLattice]
-@SuppressWarnings("unused")
-public final class ArrayIngestSink extends AbstractIngestSink {
-
+public class RepeatingSink extends AbstractIngestSink {
     private final Delegate delegate;
 
-    public ArrayIngestSink(@NonNull AbstractFrame[] frames) {
+    public RepeatingSink(AbstractFrame[] frames) {
         Objects.requireNonNull(frames);
         this.delegate = new Delegate(frames);
         VarHandle.fullFence();
@@ -25,10 +20,6 @@ public final class ArrayIngestSink extends AbstractIngestSink {
     /// Returns the delegate the ControlPlaneLattice will use to ingest the array.
     public LatticeSource getDelegate() {
         return this.delegate;
-    }
-
-    public @NonNull AbstractFrame[] getFrameArray() {
-        return this.delegate.array;
     }
 
     /// Disconnects from the [ControlPlaneLattice] immediately.
@@ -48,48 +39,30 @@ public final class ArrayIngestSink extends AbstractIngestSink {
 
         @Override
         public long hookOnPull(Consumer<AbstractFrame> consumer, long demand) {
-            if(start >= array.length) {
-                complete();
-                return 0;
-            }
-
-            long end = start + demand;
-
             long total = 0;
-            while (start < end && start < array.length) {
-                AbstractFrame frame = array[start++];
+            while (total < demand) {
+                AbstractFrame frame = this.array[this.start++];
                 Objects.requireNonNull(frame);
                 consumer.accept(frame);
                 total++;
+                this.start %= this.array.length;
             }
             VarHandle.releaseFence();
-            if (start >= array.length) {
-                complete();
-            }
             return total;
         }
 
         @Override
         public void hookOnRequest(LatticeReceiver terminal, long demand) {
-            if(start >= array.length) {
-                complete();
-                return;
-            }
-
-            long end = start + demand;
-
-            int count = 0;
-            while (start < end && start < array.length) {
-                AbstractFrame frame = array[start++];
+            int total = 0;
+            while (total < demand) {
+                AbstractFrame frame = this.array[this.start++];
                 Objects.requireNonNull(frame);
                 terminal.push(frame);
-                count++;
+                total++;
+                this.start %= this.array.length;
             }
-            addAndGetDemand(-count);
+            addAndGetDemand(-total);
             VarHandle.releaseFence();
-            if (start >= array.length) {
-                complete();
-            }
         }
     }
 }

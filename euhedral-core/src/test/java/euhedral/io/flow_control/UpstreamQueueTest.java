@@ -6,12 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.LatticeSource;
-import euhedral.io.utils.DrainBuffer;
-import io.euhedral_execution.data_structures.queues.common.BatchableQueue;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import org.jctools.maps.NonBlockingHashMapLong;
@@ -20,7 +17,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import test_utils.TestReceiver;
 
-@SuppressWarnings("unchecked")
 class UpstreamQueueTest {
 
     private UpstreamQueue queue;
@@ -75,16 +71,16 @@ class UpstreamQueueTest {
     }
 
     @Test
-    void shouldRequestFromOneUpstreamsWhenAtOrBelow1024() {
+    void shouldRequestFromOneUpstreamsWhenAtOrBelow32() {
         TestUpstreamHandle first = new TestUpstreamHandle();
         TestUpstreamHandle second = new TestUpstreamHandle();
 
         queue.addUpstream(first);
         queue.addUpstream(second);
 
-        queue.request(1024);
+        queue.request(32);
 
-        assertEquals(1024, first.requested);
+        assertEquals(32, first.requested);
         assertEquals(0, second.requested);
     }
 
@@ -115,22 +111,12 @@ class UpstreamQueueTest {
     }
 
     @Test
-    void shouldPullWithDrainBuffer() {
+    void shouldPullWithConsumer() {
         TestUpstreamHandle upstream = new TestUpstreamHandle();
 
         queue.addUpstream(upstream);
 
-        BatchableQueue<AbstractFrame> partitionedQueue =
-                mock(BatchableQueue.class);
-        when(partitionedQueue.capacity()).thenReturn(10_000L);
-
-        DrainBuffer buffer = new DrainBuffer(
-                partitionedQueue,
-                32,
-                false
-        );
-
-        queue.pull(buffer, 64);
+        queue.pull(frame -> {}, 64);
 
         assertEquals(0, upstream.requested);
         assertEquals(64, upstream.pulled);
@@ -215,26 +201,6 @@ class UpstreamQueueTest {
     }
 
     @Test
-    void shouldPullFromHandleWithBuffer() {
-        TestUpstreamHandle upstream = new TestUpstreamHandle();
-
-        BatchableQueue<AbstractFrame> partitionedQueue =
-                mock(BatchableQueue.class);
-        when(partitionedQueue.capacity()).thenReturn(10_000L);
-
-        DrainBuffer buffer = new DrainBuffer(
-                partitionedQueue,
-                16,
-                false
-        );
-
-        UpstreamQueue.drain(upstream, buffer, 64);
-
-        assertEquals(0, upstream.requested);
-        assertEquals(64, upstream.pulled);
-    }
-
-    @Test
     void shouldDefaultUnsupportedOperations() {
         UpstreamQueue.UpstreamHandle handle =
                 new TestUpstreamHandle();
@@ -274,8 +240,9 @@ class UpstreamQueueTest {
         boolean complete;
 
         @Override
-        public void pull(Consumer<AbstractFrame> consumer, long demand) {
+        public long pull(Consumer<AbstractFrame> consumer, long demand) {
             this.pulled += demand;
+            return demand;
         }
 
         @Override

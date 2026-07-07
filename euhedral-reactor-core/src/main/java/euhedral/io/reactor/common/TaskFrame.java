@@ -82,11 +82,6 @@ public final class TaskFrame extends AbstractFrame implements Disposable {
     }
 
     @Override
-    public long getSizeBytes() {
-        return 64;
-    }
-
-    @Override
     public void execute() {
         this.task.run();
     }

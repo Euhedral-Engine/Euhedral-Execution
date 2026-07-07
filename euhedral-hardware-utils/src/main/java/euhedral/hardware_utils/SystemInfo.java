@@ -1,5 +1,10 @@
 package euhedral.hardware_utils;
 
+import java.util.BitSet;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.StringJoiner;
+
 import euhedral.hardware_utils.common.OSName;
 import euhedral.hardware_utils.common.SystemSnapshotProvider;
 import euhedral.hardware_utils.common.SystemUtilization.SystemSnapshot;
@@ -10,32 +15,28 @@ import euhedral.hardware_utils.macOS.OSXResources;
 import euhedral.hardware_utils.windows.WindowsResources;
 import euhedral.hardware_utils.windows.WindowsSystemLayout;
 import it.unimi.dsi.fastutil.ints.Int2ObjectArrayMap;
-import java.util.BitSet;
-import java.util.StringJoiner;
 import lombok.Getter;
 import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+@SuppressWarnings("unused")
 public final class SystemInfo {
-
-    private static final Logger LOGGER = LoggerFactory.getLogger(SystemInfo.class);
 
     public static final long DEFAULT_L1 = 32L * 1024L;
     public static final long DEFAULT_L2 = 256L * 1024L;
     public static final long DEFAULT_L3 = 4L * 1024L * 1024L;
 
-    public static final SystemSnapshotProvider SNAPSHOTTER;
-
     public static final int CACHE_LINE_SIZE_BYTES;
-
     public static final int CPU_COUNT;
     public static final int CORE_COUNT;
     public static final int SOCKET_COUNT;
     public static final int MAX_CORE_ID;
     public static final int MAX_SOCKET_ID;
 
+    public static final SystemSnapshotProvider SNAPSHOTTER;
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(SystemInfo.class);
     private static final UnmodifiableBitSet CPU_SET;
     private static final UnmodifiableBitSet P_CORE_SET;
     private static final UnmodifiableBitSet E_CORE_SET;
@@ -112,9 +113,9 @@ public final class SystemInfo {
         BitSet eCores = new BitSet(MAX_CORE_ID);
         BitSet pCpus = new BitSet(CPU_INFO.size());
         BitSet eCpus = new BitSet(CPU_INFO.size());
-        if(OSName.CURRENT_OS != OSName.UNSUPPORTED) {
+        if (OSName.CURRENT_OS != OSName.UNSUPPORTED) {
             CACHE_LINE_SIZE_BYTES = CPU_CACHE.get(0).cacheLineBytes;
-            for(int c : CPU_INFO.keySet()) {
+            for (int c : CPU_INFO.keySet()) {
                 cpus.set(c);
                 int core = CPU_INFO.get(c).core;
                 CoreInfo coreInfo = CORE_INFO.get(core);
@@ -141,6 +142,10 @@ public final class SystemInfo {
 
     public static int getCpuCount() {
         return CPU_COUNT;
+    }
+
+    public static int getCoreCount() {
+        return CORE_COUNT;
     }
 
     public static int getMaxCoreId() {
@@ -253,24 +258,45 @@ public final class SystemInfo {
         return sj.toString();
     }
 
-    public static @Nullable SocketInfo getSocketInfo(int socket) {
+    public static SocketInfo getSocketInfo(int socket) {
         return SOCKET_INFO.get(socket);
     }
 
-    public static @Nullable CoreInfo getCoreInfo(int core) {
+    public static CoreInfo getCoreInfo(int core) {
         return CORE_INFO.get(core);
     }
 
-    public static @Nullable CpuInfo getCpuInfo(int cpu) {
+    public static CpuInfo getCpuInfo(int cpu) {
         return CPU_INFO.get(cpu);
     }
 
-    public static @Nullable CpuCacheLayout getCacheLayout(int cpu) {
+    public static CpuCacheLayout getCacheLayout(int cpu) {
         return CPU_CACHE.get(cpu);
     }
 
     public static @NonNull UnmodifiableBitSet getCpuSet() {
         return CPU_SET;
+    }
+
+    public static long socketL3Cache(int socket) {
+        long sum = 0;
+        SocketInfo info = getSocketInfo(socket);
+        if (info == null) {
+            return sum;
+        }
+
+        BitSet cpus = info.getCpuSet();
+        Set<String> visited = new HashSet<>();
+        for (int i = cpus.nextSetBit(0); i >= 0; i = cpus.nextSetBit(i + 1)) {
+            CpuCacheLayout layout = getCacheLayout(i);
+            if (visited.contains(layout.maskL3)) {
+                continue;
+            }
+            sum += layout.bytesL3;
+            visited.add(layout.maskL3);
+        }
+
+        return sum;
     }
 
     public static @NonNull UnmodifiableBitSet get_P_CoreSet() {
@@ -296,7 +322,7 @@ public final class SystemInfo {
     public record CpuInfo(int cpu, int core, int socket) {
 
         @Override
-        public String toString() {
+        public @NonNull String toString() {
             String base = CpuInfo.class.getSimpleName() + ": ["
                     + "cpu = " + cpu + ", "
                     + "core = " + core + ", "
@@ -365,7 +391,7 @@ public final class SystemInfo {
 
         @Override
         public @NonNull String toString() {
-            String base =  CpuCacheLayout.class.getSimpleName()
+            String base = CpuCacheLayout.class.getSimpleName()
                     + ": [cpu = " + cpu + ", "
                     + "bytesL1 = " + formatBytes(bytesL1) + ", "
                     + "bytesL2 = " + formatBytes(bytesL2) + ", "

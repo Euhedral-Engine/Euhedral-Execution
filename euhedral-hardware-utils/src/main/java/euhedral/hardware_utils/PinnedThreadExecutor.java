@@ -12,12 +12,14 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.LockSupport;
+import java.util.function.Function;
 import lombok.Getter;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class PinnedThreadExecutor extends AbstractExecutorService implements AutoCloseable {
+
     private static final Logger LOGGER = LoggerFactory.getLogger(PinnedThreadExecutor.class);
 
     private static final Cleaner CLEANER = Cleaner.create();
@@ -26,13 +28,19 @@ public final class PinnedThreadExecutor extends AbstractExecutorService implemen
 
     public static PinnedThreadExecutor getOrSetIfAbsent(long cpu, String name, int priority,
             boolean daemon) {
+        return getOrSetIfAbsent(Thread::new, cpu, name, priority, daemon);
+    }
+
+    public static PinnedThreadExecutor getOrSetIfAbsent(Function<Runnable, ? extends Thread> threadCreator,
+            long cpu, String name, int priority,
+            boolean daemon) {
         var exec = get(cpu);
         if (exec == null) {
-            PinnedThreadExecutor executor = new PinnedThreadExecutor(name, (int) cpu, priority,
+            PinnedThreadExecutor executor = new PinnedThreadExecutor(threadCreator, name, (int) cpu, priority,
                     daemon);
             PINNED_EXECUTORS.put(cpu, new WeakReference<>(executor));
             return executor;
-        } else if(exec.isShutdown()) {
+        } else if (exec.isShutdown()) {
             exec.start(name, priority, daemon);
         }
         return exec;
@@ -64,7 +72,6 @@ public final class PinnedThreadExecutor extends AbstractExecutorService implemen
     private final CleanupState cleanupState;
     private final AtomicBoolean isShutdown = new AtomicBoolean();
     private final ConcurrentHashMap<Thread, Boolean> threadPool = new ConcurrentHashMap<>();
-    private final Thread cleanup;
 
     @Getter
     private final int cpu;
@@ -73,13 +80,14 @@ public final class PinnedThreadExecutor extends AbstractExecutorService implemen
     private volatile int priority;
     private volatile boolean daemon;
 
-    private PinnedThreadExecutor(String name, int cpu, int priority, boolean daemon) {
+    private PinnedThreadExecutor(Function<Runnable, ? extends Thread> threadCreator, String name, int cpu,
+            int priority, boolean daemon) {
         this.cpu = cpu;
         this.name = name;
         this.priority = priority;
         this.daemon = daemon;
         this.pinnedFactory = runnable -> {
-            Thread thread = new Thread(() -> {
+            Thread thread = threadCreator.apply(() -> {
                 try {
                     ThreadTools.setAffinity(cpu);
 
@@ -88,20 +96,15 @@ public final class PinnedThreadExecutor extends AbstractExecutorService implemen
                     LOGGER.error("PinnedThreadExecutor: [{}] encountered an error.", this.name, e);
                 } finally {
                     ThreadTools.releaseAffinity();
+                    this.threadPool.remove(Thread.currentThread());
                 }
             });
             thread.setName(this.name);
-            thread.setPriority(Math.max(Thread.MIN_PRIORITY, Math.min(this.priority, Thread.MAX_PRIORITY)));
+            thread.setPriority(
+                    Math.max(Thread.MIN_PRIORITY, Math.min(this.priority, Thread.MAX_PRIORITY)));
             thread.setDaemon(this.daemon);
             return thread;
         };
-        this.cleanup = new Thread(() -> {
-            while (!Thread.interrupted()) {
-                threadPool.keySet().removeIf(t -> !t.isAlive());
-                LockSupport.parkNanos(200_000_000L);
-            }
-        });
-        this.cleanup.start();
         Runtime.getRuntime().addShutdownHook(new Thread(this::shutdownNow));
 
         this.cleanupState = new CleanupState(cpu, this);
@@ -109,8 +112,9 @@ public final class PinnedThreadExecutor extends AbstractExecutorService implemen
     }
 
     public void start(String name, int priority, boolean daemon) {
-        if(!isShutdown.compareAndSet(true, false)) {
-            LOGGER.debug("PinnedThreadExecutor: [{}] is already started\n{}.", this.name, Arrays.toString(Thread.currentThread().getStackTrace()));
+        if (!isShutdown.compareAndSet(true, false)) {
+            LOGGER.debug("PinnedThreadExecutor: [{}] is already started\n{}.", this.name,
+                    Arrays.toString(Thread.currentThread().getStackTrace()));
             return;
         }
         this.name = name;
@@ -124,17 +128,12 @@ public final class PinnedThreadExecutor extends AbstractExecutorService implemen
         if (!isShutdown.compareAndSet(false, true)) {
             return Collections.emptyList();
         }
-        try {
-            cleanup.interrupt();
-            LockSupport.unpark(cleanup);
-            cleanup.join();
-        } catch (Throwable ignored) {
-
-        }
         for (Thread thread : threadPool.keySet()) {
             try {
                 thread.interrupt();
-                thread.join();
+                LockSupport.unpark(thread);
+                thread.interrupt();
+                thread.join(500);
             } catch (Throwable ignored) {
 
             }
@@ -158,13 +157,6 @@ public final class PinnedThreadExecutor extends AbstractExecutorService implemen
         if (!isShutdown.compareAndSet(false, true)) {
             return;
         }
-        try {
-            cleanup.interrupt();
-            LockSupport.unpark(cleanup);
-            cleanup.join();
-        } catch (Throwable ignored) {
-
-        }
         for (Thread thread : threadPool.keySet()) {
             thread.interrupt();
         }
@@ -179,6 +171,7 @@ public final class PinnedThreadExecutor extends AbstractExecutorService implemen
     public void close() {
         cleanupState.run();
     }
+
     @Override
     public boolean isTerminated() {
         if (!isShutdown.get()) {

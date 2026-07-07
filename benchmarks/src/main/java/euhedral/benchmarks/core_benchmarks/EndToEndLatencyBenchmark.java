@@ -1,17 +1,17 @@
 package euhedral.benchmarks.core_benchmarks;
 
 import euhedral.benchmarks.frames.NoOpFrame;
-import euhedral.benchmarks.pipelines.NoOpExecutor;
+import euhedral.benchmarks.utils.NoOpExecutor;
+import euhedral.benchmarks.utils.RepeatingSink;
 import euhedral.hardware_utils.SystemInfo;
 import euhedral.hardware_utils.SystemInfo.CoreInfo;
 import euhedral.hardware_utils.SystemInfo.CpuCacheLayout;
-import euhedral.hashing.HasherApi;
-import euhedral.io.config.ControlPlaneConfig;
+import euhedral.io.config.LatticeConfig;
 import euhedral.io.control_plane.ControlPlaneLattice;
+import euhedral.io.control_plane.ControlPlaneShard;
 import euhedral.io.impl.BaseCloneableObject;
-import euhedral.io.ingest.ArrayIngestSink;
 import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
-import java.lang.invoke.VarHandle;
+import java.time.Duration;
 import java.util.BitSet;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
@@ -35,10 +35,7 @@ public class EndToEndLatencyBenchmark {
 
     private static final int BATCH_SIZE = 100_000;
 
-    private static long run(ControlPlaneLattice controlPlane, PaddedLongAdder counters,
-            ArrayIngestSink ingestSink, Blackhole bh) {
-        controlPlane.addUpstream(ingestSink);
-
+    private static void await(PaddedLongAdder counters) {
         int spin = 0;
         long sum;
 
@@ -61,22 +58,19 @@ public class EndToEndLatencyBenchmark {
                 Thread.onSpinWait();
             }
         }
-        bh.consume(sum);
-        return sum;
     }
 
     @State(Scope.Benchmark)
     @BenchmarkMode({Mode.SampleTime})
     @OutputTimeUnit(TimeUnit.NANOSECONDS)
     @Warmup(iterations = 3, time = 5, timeUnit = TimeUnit.SECONDS)
-    @Measurement(iterations = 5, time = 10, timeUnit = TimeUnit.SECONDS)
+    @Measurement(iterations = 5, time = 5, timeUnit = TimeUnit.SECONDS)
     @Fork(3)
     public static class PCore {
 
-        final NoOpFrame[] frames = new NoOpFrame[BATCH_SIZE];
         final PaddedLongAdder counters = new PaddedLongAdder(
                 Runtime.getRuntime().availableProcessors());
-        ArrayIngestSink ingestSink;
+        RepeatingSink ingestSink;
         private ControlPlaneLattice controlPlane;
         private boolean skip = false;
 
@@ -88,6 +82,9 @@ public class EndToEndLatencyBenchmark {
                 return;
             }
 
+            long idHash = ThreadLocalRandom.current().nextLong();
+            this.ingestSink = new RepeatingSink(NoOpFrame.generate(idHash, BATCH_SIZE, counters));
+
             int i = cores.nextSetBit(1);
             CoreInfo info = SystemInfo.getCoreInfo(i);
             BitSet cpus = info.getCpuSet();
@@ -97,47 +94,21 @@ public class EndToEndLatencyBenchmark {
 
             System.out.println("Benchmark is using P cpus " + cpus);
             BaseCloneableObject base = new BaseCloneableObject(new NoOpExecutor(blackhole));
-            ControlPlaneConfig config = new ControlPlaneConfig("EndToEndLatencyBenchmark", cpus,
-                    null, base, null, null);
+            LatticeConfig config = new LatticeConfig("EndToEndLatencyBenchmark", cpus,
+                    Duration.ofSeconds(1), ControlPlaneShard.createBaseShard(base));
             this.controlPlane = ControlPlaneLattice.getOrCreate(config);
             this.controlPlane.start();
-        }
-
-        @Setup(Level.Iteration)
-        public void iterSetup() {
-            if (skip) {
-                return;
-            }
-            long idHash = ThreadLocalRandom.current().nextLong();
-            idHash = HasherApi.mix(idHash);
-            for (int i = 0; i < frames.length; i++) {
-                frames[i] = new NoOpFrame(idHash, counters);
-            }
+            this.controlPlane.addUpstream(this.ingestSink);
         }
 
         @Benchmark
         @OperationsPerInvocation(BATCH_SIZE)
-        public long endToEnd(Blackhole bh) {
-            if (skip) {
-                return 0;
-            }
-            return run(controlPlane, counters, ingestSink, bh);
-        }
-
-        @Setup(Level.Invocation)
-        public void reset() {
+        public void endToEnd() {
             if (skip) {
                 return;
             }
-            counters.reset();
-
-            long seed = ThreadLocalRandom.current().nextLong();
-            seed = HasherApi.mix(seed);
-            for (var frame : frames) {
-                frame.randomizeHash(seed++);
-            }
-            ingestSink = new ArrayIngestSink(frames);
-            VarHandle.fullFence();
+            this.counters.reset();
+            await(this.counters);
         }
 
         @TearDown(Level.Trial)
@@ -153,14 +124,13 @@ public class EndToEndLatencyBenchmark {
     @BenchmarkMode({Mode.SampleTime})
     @OutputTimeUnit(TimeUnit.NANOSECONDS)
     @Warmup(iterations = 3, time = 5, timeUnit = TimeUnit.SECONDS)
-    @Measurement(iterations = 5, time = 10, timeUnit = TimeUnit.SECONDS)
+    @Measurement(iterations = 5, time = 5, timeUnit = TimeUnit.SECONDS)
     @Fork(3)
     public static class ECore {
 
-        final NoOpFrame[] frames = new NoOpFrame[BATCH_SIZE];
         final PaddedLongAdder counters = new PaddedLongAdder(
                 Runtime.getRuntime().availableProcessors());
-        ArrayIngestSink ingestSink;
+        RepeatingSink ingestSink;
         private ControlPlaneLattice controlPlane;
         private boolean skip = false;
 
@@ -172,6 +142,10 @@ public class EndToEndLatencyBenchmark {
                 skip = true;
                 return;
             }
+
+            long idHash = ThreadLocalRandom.current().nextLong();
+            this.ingestSink = new RepeatingSink(NoOpFrame.generate(idHash, BATCH_SIZE, counters));
+
             for (int i = eCpus.nextSetBit(0); i >= 0; i = eCpus.nextSetBit(i + 1)) {
                 CpuCacheLayout layout = SystemInfo.getCacheLayout(i);
                 BitSet l2 = layout.getL2Mask();
@@ -190,48 +164,21 @@ public class EndToEndLatencyBenchmark {
 
             System.out.println("Benchmark is using E cpus " + cpus);
             BaseCloneableObject base = new BaseCloneableObject(new NoOpExecutor(blackhole));
-            ControlPlaneConfig config = new ControlPlaneConfig("EndToEndLatencyBenchmark", cpus,
-                    null, base, null, null);
+            LatticeConfig config = new LatticeConfig("EndToEndLatencyBenchmark", cpus,
+                    Duration.ofSeconds(1), ControlPlaneShard.createBaseShard(base));
             this.controlPlane = ControlPlaneLattice.getOrCreate(config);
             this.controlPlane.start();
-        }
-
-        @Setup(Level.Iteration)
-        public void iterSetup() {
-            if (skip) {
-                return;
-            }
-
-            long idHash = ThreadLocalRandom.current().nextLong();
-            idHash = HasherApi.mix(idHash);
-            for (int i = 0; i < frames.length; i++) {
-                frames[i] = new NoOpFrame(idHash, counters);
-            }
+            this.controlPlane.addUpstream(this.ingestSink);
         }
 
         @Benchmark
         @OperationsPerInvocation(BATCH_SIZE)
-        public long endToEnd(Blackhole bh) {
-            if (skip) {
-                return 0;
-            }
-            return run(controlPlane, counters, ingestSink, bh);
-        }
-
-        @Setup(Level.Invocation)
-        public void reset() {
+        public void endToEnd() {
             if (skip) {
                 return;
             }
-            counters.reset();
-
-            long seed = ThreadLocalRandom.current().nextLong();
-            seed = HasherApi.mix(seed);
-            for (var frame : frames) {
-                frame.randomizeHash(seed++);
-            }
-            ingestSink = new ArrayIngestSink(frames);
-            VarHandle.fullFence();
+            this.counters.reset();
+            await(this.counters);
         }
 
         @TearDown(Level.Trial)

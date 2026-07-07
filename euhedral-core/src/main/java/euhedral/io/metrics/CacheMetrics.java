@@ -1,57 +1,66 @@
 package euhedral.io.metrics;
 
-import io.euhedral_execution.data_structures.atomics.AtomicDouble;
-import io.micrometer.core.instrument.DistributionSummary;
-import io.micrometer.core.instrument.Gauge;
-import io.micrometer.core.instrument.Meter;
-import io.micrometer.core.instrument.MeterRegistry;
+import static euhedral.io.metrics.MetricsAggregator.CORE_TAG;
+import static euhedral.io.metrics.MetricsAggregator.DEFAULT_PREFIX;
+import static euhedral.io.metrics.MetricsAggregator.metricName;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Supplier;
 
+import euhedral.io.config.CacheConfig;
+import io.micrometer.core.instrument.DistributionSummary;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.Meter;
+import io.micrometer.core.instrument.MeterRegistry;
+
 public final class CacheMetrics implements AutoCloseable {
 
-    public final DistributionSummary subQBacklogSummary;
+    private final MeterRegistry registry;
 
-    private final List<Meter> meters = new ArrayList<>();
+    private final List<Meter> meters;
+    public final DistributionSummary capFactor;
 
-    public CacheMetrics(String metricPrefix, String tag, AtomicDouble capFactor,
-            Supplier<Long> totalQueuedSizeBytes, MeterRegistry registry) {
-        if (metricPrefix == null || metricPrefix.isBlank()) {
-            metricPrefix = "euhedral";
+    public CacheMetrics(CacheConfig config, Supplier<Long> cacheCount) {
+        String prefix = config.metricPrefix();
+        if (prefix == null || prefix.isBlank()) {
+            prefix = DEFAULT_PREFIX;
         }
-        metricPrefix = metricPrefix.split("\\.")[0];
 
+        this.registry = config.registry();
         if (registry != null) {
+            this.meters = new ArrayList<>();
+            String tag = String.valueOf(config.cloneConfig().coreId());
 
-            subQBacklogSummary =
-                    DistributionSummary.builder(metricPrefix + ".cache_partition_backlog_bytes")
-                            .description("Amount of bytes stored in a partition")
-                            .tag("core", tag).publishPercentiles(0.5, 0.95, 0.99)
-                            .register(registry);
+            this.meters.add(
+                    Gauge.builder(metricName(prefix, MetricsAggregator.CACHE_BACKLOG_SUFFIX),
+                                    cacheCount)
+                            .description("Number of frames stored in the fragment cache.")
+                            .baseUnit("frames").tag(CORE_TAG, tag).register(registry));
 
-            meters.add(
-                    Gauge.builder(metricPrefix + ".cap_factor", capFactor, AtomicDouble::getAcquire)
-                            .description(
-                                    "Current buffer capacity multiplier. Higher is better. (0.15 to 1.0)")
-                            .tag("core", tag).register(registry));
+            this.capFactor = DistributionSummary.builder(
+                            metricName(prefix, MetricsAggregator.CAP_FACTOR_SUFFIX)).description(
+                            "Current buffer capacity multiplier. Higher is better. (0.15 to 1.0)")
+                    .tag(CORE_TAG, tag).register(registry);
+            this.meters.add(this.capFactor);
 
-            meters.add(Gauge.builder(metricPrefix + ".cache_backlog",
-                            () -> totalQueuedSizeBytes.get() / 1024)
-                    .description("Total bytes buffered in all sub queues of the ControlPlaneCache")
-                    .tag("core", tag)
-                    .baseUnit("KB").register(registry));
         } else {
-            subQBacklogSummary = null;
+            this.meters = null;
+            this.capFactor = null;
+        }
+    }
+
+    public void recordCapFactor(double cap) {
+        if (this.registry != null) {
+            this.capFactor.record(cap);
         }
     }
 
     @Override
     public void close() {
-        meters.forEach(Meter::close);
-        meters.clear();
-        if (subQBacklogSummary != null) {
-            subQBacklogSummary.close();
+        if (this.registry != null) {
+            meters.forEach(this.registry::remove);
+            meters.clear();
         }
     }
 }

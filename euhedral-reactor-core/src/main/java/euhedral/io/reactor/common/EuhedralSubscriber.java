@@ -88,8 +88,8 @@ public final class EuhedralSubscriber implements Subscriber<AbstractFrame>, Latt
     }
 
     @Override
-    public void pull(Consumer<AbstractFrame> consumer, long demand) {
-
+    public long pull(Consumer<AbstractFrame> consumer, long demand) {
+        return 0;
     }
 
     @Override

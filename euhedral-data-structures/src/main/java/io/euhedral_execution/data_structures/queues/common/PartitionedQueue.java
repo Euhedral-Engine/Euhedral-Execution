@@ -1,14 +1,18 @@
 package io.euhedral_execution.data_structures.queues.common;
 
 import java.util.Queue;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Consumer;
 
+@SuppressWarnings("unused")
 public interface PartitionedQueue<T> extends Queue<T> {
 
     /// Offers the object to each partition starting from 0 until it succeeds.
     ///
     /// @return success
-    boolean offer(T element);
+    default boolean offer(T obj) {
+        return offer(ThreadLocalRandom.current().nextLong(), obj);
+    }
 
     /// Offers the object to a random partition based on the seed. If the seed does not change, the
     /// same partition will be picked.
@@ -26,6 +30,8 @@ public interface PartitionedQueue<T> extends Queue<T> {
     T poll(int partition);
 
     long drain(Consumer<T> consumer, long limit);
+
+    long drain(Consumer<T> consumer, long limit, int startingPartition);
 
     long drain(int partition, Consumer<T> consumer, long limit);
 

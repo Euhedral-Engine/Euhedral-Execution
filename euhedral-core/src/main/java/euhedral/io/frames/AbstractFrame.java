@@ -3,13 +3,12 @@ package euhedral.io.frames;
 import euhedral.hardware_utils.SystemInfo.CpuInfo;
 import euhedral.hashing.HasherApi;
 import euhedral.io.control_plane.ControlPlaneFragment;
-import euhedral.io.control_plane.RoutingPolicy;
+import euhedral.io.flow_control.RoutingPolicy;
 import euhedral.io.generics.AbstractExecutor;
 import euhedral.io.impl.FrameManager;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.VarHandle;
 import lombok.Getter;
 import lombok.Setter;
+import org.jspecify.annotations.NonNull;
 
 /// ## Base unit of work within Euhedral Core
 ///
@@ -18,7 +17,7 @@ import lombok.Setter;
 /// It carries execution state, routing hashes, and lifecycle hooks required by an
 /// [`AbstractExecutor`][euhedral.io].
 ///
-/// Frames are designed to be *hot-path reusable*. They are not created and discarded like typical
+/// Frames are designed to be *reusable*. They are not created and discarded like typical
 /// tasks. Instead, they are recycled through a [FrameManager] to avoid GC churn and keep allocation
 /// pressure near zero.
 ///
@@ -32,20 +31,20 @@ import lombok.Setter;
 /// Frames are routed based on a `routingHash`. This is what determines how work spreads across
 /// parallel paths.
 ///
-/// For stable ordering, keep the hash consistent across retries:
+/// For stable ordering, keep the hash consistent across instances:
 ///
 /// ```java
-/// long idHash = frame.getIdHash();
-/// final long seed = 123;
-/// frame.randomizeHash(HasherApi.combine(idHash, seed));
+/// long idHash = HasherApi.mix(1234);
+/// Frame frame1 = new Frame(idHash);
+/// Frame frame2 = new Frame(idHash);
 /// ```
 ///
 /// For parallel distribution, vary the seed so frames naturally spread out:
 ///
 /// ```java
-/// long idHash = frame.getIdHash();
 /// long seed = 123;
-/// frame.randomizeHash(HasherApi.combine(idHash, seed++));
+/// frame1.randomizeHash(HasherApi.mix(seed++));
+/// frame2.randomizeHash(HasherApi.mix(seed++));
 /// ```
 ///
 /// ---
@@ -56,36 +55,13 @@ import lombok.Setter;
 /// - `kill()` -> hard stop (this and related work)
 /// - `isAlive()` -> soft liveness check (engine may cancel if false)
 /// - `doFinally()` -> post-execution hook (safe mutation point)
-///
-/// ---
-///
-/// ### Mental model
-///
-/// Think of a frame as a tiny packet of work that keeps getting reshaped and forwarded until the
-/// system is done with it.
-///
-/// It’s lightweight on purpose.
-///
-/// It doesn’t want to be expensive.
-///
-/// It just wants to move.
-///
-/// (And then get reused.)
+/// - `doFinallyWithError()` -> post-execution hook after an uncaught exception (safe mutation point)
 @SuppressWarnings({"rawtypes", "unchecked", "unused"})
 public abstract class AbstractFrame {
 
-    protected static final VarHandle ROUTING_HASH;
-
-    static {
-        try {
-            ROUTING_HASH = MethodHandles.lookup().findVarHandle(AbstractFrame.class, "routingHash", long.class);
-        } catch (Throwable t) {
-            throw new ExceptionInInitializerError(t);
-        }
-    }
+    public static final CancelSignal CANCEL_SIGNAL = new CancelSignal();
 
     protected final FrameManager recycler;
-    public final CancelSignal cancel;
 
     @Getter
     private final long idHash;
@@ -93,19 +69,10 @@ public abstract class AbstractFrame {
     private long routingHash;
     @Getter @Setter
     private CpuInfo origin;
-    @Getter @Setter
+    @Setter
     private RoutingPolicy routingPolicy;
-    @Getter @Setter
-    private long startNs;
-
-    @Getter @Setter
-    private long ingestNs;
-
-    @Getter @Setter
-    private boolean cancelledExecution = false;
 
     public AbstractFrame(long idHash, FrameManager recycler) {
-        this.cancel = new CancelSignal();
         this.idHash = idHash;
         this.recycler = recycler;
         this.routingHash = idHash;
@@ -114,11 +81,10 @@ public abstract class AbstractFrame {
     /// Does the thing.
     public abstract void execute();
 
-    /// Mixes the combined hash with the seed.
+    /// Sets the routingHash by mixing the idHash with the seed.
     public final void randomizeHash(long seed) {
         seed = HasherApi.mix(seed);
-        long newHash = this.routingHash;
-        ROUTING_HASH.setRelease(this, newHash ^ seed);
+        this.routingHash = this.idHash ^ seed;
     }
 
     /// Liveness check.
@@ -126,7 +92,7 @@ public abstract class AbstractFrame {
     /// If this returns `false`, the engine is allowed to cancel execution.
     public abstract boolean isAlive();
 
-    /// Hard stop for this frame (and related execution).
+    /// Hard stop for this frame.
     public abstract void kill();
 
     /// Post-execution hook.
@@ -136,45 +102,47 @@ public abstract class AbstractFrame {
         recycle();
     }
 
-    /// Resets execution state so the frame can be reused.
-    public final void reset() {
-        this.startNs = 0;
-        this.ingestNs = 0;
-        this.cancelledExecution = false;
-        ROUTING_HASH.setRelease(this, this.idHash);
+    /// Post-execution hook.
+    ///
+    /// Called after execution is canceled due to an uncaught error. At this point it is safe to mutate frame state.
+    public void doFinallyWithError(Throwable t) {
+        recycle();
+    }
+
+    /// Resets the routingHash to the idHash.
+    public void reset() {
+        this.routingHash = idHash;
     }
 
     /// Returns the frame to the recycler for reuse.
-    public final boolean recycle() {
+    public final void recycle() {
         if (this.recycler != null) {
-            return this.recycler.recycle(this);
+            this.recycler.recycle(this);
         }
-        return false;
+    }
+
+    public final @NonNull RoutingPolicy getRoutingPolicy() {
+        return this.routingPolicy == null ? RoutingPolicy.ANYWHERE : this.routingPolicy;
     }
 
     /// Throws the internal cancellation error used to stop execution immediately.
     ///
     /// Handled by [`AbstractExecutor`][AbstractExecutor] and
     /// [`ControlPlaneFragment`][ControlPlaneFragment].
-    public final void throwMeAsError() {
-        throw this.cancel;
+    public final void throwCancelSignal() {
+        throw CANCEL_SIGNAL;
     }
 
     public final boolean isOrdered() {
         return this.idHash == this.routingHash;
     }
 
-    public abstract long getSizeBytes();
-
     /// This class is thrown as a cancellation signal. This signal is automatically handled by the
     /// [ControlPlaneFragment][euhedral.io.control_plane.ControlPlaneFragment] and
     /// [AbstractExecutor][euhedral.io.generics.AbstractExecutor].
-    public final class CancelSignal extends RuntimeException {
-        public final AbstractFrame payload;
-
-        public CancelSignal() {
+    public static final class CancelSignal extends RuntimeException {
+        private CancelSignal() {
             super(null, null, false, false);
-            this.payload = AbstractFrame.this;
         }
     }
 }

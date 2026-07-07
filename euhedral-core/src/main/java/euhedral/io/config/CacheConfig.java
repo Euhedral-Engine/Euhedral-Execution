@@ -4,29 +4,65 @@ import euhedral.io.generics.CloneableObject;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.jspecify.annotations.Nullable;
 
-public record CacheConfig(@Nullable CloneConfig cloneConfig, double L2MemoryBudget,
-                          int partitionsPerCpu, int maxPooledChunks,
-                          int ringWalkResetThreshold, String metricPrefix,
-                          @Nullable MeterRegistry registry) implements CloneableObject {
+/// ### Configuration for the [ControlPlaneCache][euhedral.io.control_plane.ControlPlaneCache]
+///
+/// @param memoryBudget           Percentage of L2 and L1 cache that will be used to size the
+/// queues. (0.0, 1.0]
+/// @param partitions             Number of partitions in the cache.
+/// @param maxPooledChunks        Number of chunks per partition to store after the unbounded queues
+/// expand.
+/// @param ringWalkResetThreshold Minimum number of frames needed to collect during a traversal
+/// through the partitions to restart the cycle. Higher values cause the drain loop to break faster.
+/// Lower values cause it to spin longer.
+/// @param metricPrefix           Prefix string to prepend to exported metrics.
+/// @param registry               Registry for reporting collected metrics.
+@SuppressWarnings("unused")
+public record CacheConfig(@Nullable CloneConfig cloneConfig,
+                          double memoryBudget,
+                          int partitions,
+                          int maxPooledChunks,
+                          int ringWalkResetThreshold,
+                          @Nullable String metricPrefix,
+                          @Nullable MeterRegistry registry
+) implements CloneableObject {
 
-    public static CacheConfig defaultConfig() {
-        return defaultConfig(null, null);
+    public static CacheConfig ofDefaults() {
+        return ofDefaults(null, null);
     }
 
-    public static CacheConfig defaultConfig(String metricPrefix, MeterRegistry registry) {
-        return new CacheConfig(null, 0.7, 8, 1, 4, metricPrefix, registry);
+    public static CacheConfig ofDefaults(String metricPrefix, MeterRegistry registry) {
+        return new CacheConfig(null, 0.7, 8, 0, 4, metricPrefix, registry);
+    }
+
+    public CacheConfig {
+        if (!Double.isFinite(memoryBudget) || memoryBudget <= 0) {
+            throw new IllegalArgumentException(
+                    "memoryBudget must be finite and greater than 0. Provided: " + memoryBudget);
+        }
+        if (partitions <= 0) {
+            throw new IllegalArgumentException(
+                    "partitions must be greater than 0. Provided: " + partitions);
+        }
     }
 
     @Override
     public CacheConfig clone(CloneConfig cloneConfig) {
-        return new CacheConfig(cloneConfig, L2MemoryBudget, partitionsPerCpu, maxPooledChunks,
+        return new CacheConfig(
+                cloneConfig,
+                memoryBudget,
+                partitions,
+                maxPooledChunks,
                 ringWalkResetThreshold,
-                metricPrefix, registry);
+                metricPrefix,
+                registry
+        );
     }
 
     @Override
-    public void close() throws Exception {
-
+    public int getCore() {
+        if (this.cloneConfig != null) {
+            return this.cloneConfig.coreId();
+        }
+        return -1;
     }
-
 }

@@ -11,11 +11,6 @@ public class TestFrame extends AbstractFrame {
     }
 
     @Override
-    public long getSizeBytes() {
-        return 0;
-    }
-
-    @Override
     public void execute() {
 
     }

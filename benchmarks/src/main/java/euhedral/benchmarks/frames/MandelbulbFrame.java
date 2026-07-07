@@ -3,7 +3,7 @@ package euhedral.benchmarks.frames;
 import euhedral.hardware_utils.SystemInfo.CpuInfo;
 import euhedral.hardware_utils.ThreadTools;
 import euhedral.hashing.HasherApi;
-import euhedral.io.control_plane.RoutingPolicy;
+import euhedral.io.flow_control.RoutingPolicy;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.impl.FrameManager;
 import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
@@ -184,11 +184,6 @@ public class MandelbulbFrame extends AbstractFrame {
             zz = zr * Math.cos(theta) + pz;
         }
         return 0.5 * Math.log(r) * r / dr;
-    }
-
-    @Override
-    public long getSizeBytes() {
-        return 64;
     }
 
     @Override

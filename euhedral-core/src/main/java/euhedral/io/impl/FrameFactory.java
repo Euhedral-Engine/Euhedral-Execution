@@ -44,9 +44,7 @@ public final class FrameFactory<DATA, F extends AbstractFrame> {
         frame.reset();
 
         frameReplace.replace(data, frame);
-        if(frame.isOrdered()) {
-            frame.randomizeHash(idHash);
-        } else {
+        if(!frame.isOrdered()) {
             frame.randomizeHash(seed++);
         }
         frame.setOrigin(originLocation);
