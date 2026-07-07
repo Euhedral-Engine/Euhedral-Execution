@@ -20,25 +20,25 @@ These are required to run your program with Euhedral.
 ## Level 0 (Make the ControlPlaneLattice)
 
 The ControlPlaneLattice manages multiple workers; frames are distributed based on their routingHash
-and
-are processed independently by workers. Currently, only one ControlPlaneLattice instance may be
-active per
-JVM process.
+and are processed independently by workers. Currently, only one ControlPlaneLattice instance may be
+active per JVM process.
 
 Creating the ControlPlaneLattice
 
 ```java
-ControlPlaneLattice controlPlane = ControlPlaneLattice.getOrCreate("Lots of Things Doer 9000");
+ControlPlaneLattice controlPlane = ControlPlaneLattice.getOrCreate();
 controlPlane.start();
 ```
 
 If you want to collect the per-CPU metrics
 
 ```java
+String name = "ThingDoer9000";
+String shardName = "ShardOfThingDoer";
 String metricPrefix = "euhedral.metrics";
 MeterRegistry registry; // Any implementation of io.micrometer.core.instrument.MeterRegistry
 
-ControlPlaneConfig config = ControlPlaneConfig.defaultConfig("Lots of Things Doer 9000", metricPrefix, registry);
+ControlPlaneConfig config = ControlPlaneConfig.ofDefaults(name, shardName, metricPrefix, registry);
 ControlPlaneLattice controlPlane = ControlPlaneLattice.getOrCreate(config);
 controlPlane.start();
 ```
@@ -98,6 +98,8 @@ across sinks.
 
 Default frames:
 
+- ArrayFrame
+- CollectionFrame
 - FunctionFrame
 - ConsumerFrame
 - RunnableFrame
@@ -121,8 +123,7 @@ sink.offer(thing1);
 sink.offer(thing2);
 ```
 
-Give it to the ControlPlaneLattice. Euhedral is asynchronous and non-blocking. Frames will be
-executed in the background.
+Give it to the ControlPlaneLattice. Frames will be executed asynchronously.
 
 ```java
 controlPlane.addUpstream(sink);
@@ -134,7 +135,7 @@ controlPlane.addUpstream(sink);
 ```
 
 Close the sink when you're done with it. This notifies the ControlPlaneLattice that no more frames
-will come through it so it gets disconnected.
+will come through it and disconnect it.
 
 ```java
 sink.completeGracefully();
@@ -146,11 +147,13 @@ sink.completeGracefully();
 
 **Remember: The routingHash defaults to the idHash provided at construction.**
 
-Using the same constructs in Level 2, only a slight modification is needed to make frames execute in
-parallel. You change the hash they use for routing.
+Using the same setup as Level 2, only a slight change is needed to make frames execute in
+parallel. Modify the hash they use for routing.
 
-`randomizeHash(seed)` mixes your idHash with the seed to generate the routingHash. This changes
-where each frame will be executed. It can only be safely done before ingestion.
+Every frame with the same idHash coming from the same ingest source will execute in the order they
+were received. Calling `randomizeHash(seed)` on the frame mixes its idHash with the seed to generate
+a new routingHash. This changes where each frame will be executed. It can only be safely done before
+ingestion.
 
 The seed only needs to be changed slightly for each frame.
 
@@ -165,13 +168,10 @@ thing1.randomizeHash(seed++);
 thing2.randomizeHash(seed++);
 ```
 
-You can also use the seed as the idHash directly. But if you want some frames to run in order, and
-some to run in parallel, randomize the hash after making them.
-
 **Performance Note:**
 
 Euhedral performs parallel execution best when hashes are well mixed and evenly distributed. It
-relies on hash distribution to fan out work across workers. randomizeHash() uses HasherApi
+relies on hash distribution to fan out work across the system. randomizeHash() uses HasherApi
 internally to mix what you pass it. Using HasherApi.mix() on a random number is recommended for
 creating ids and seeds because it uses a fast, high-quality hash function (xxHash64), but any
 equivalent hash function will work.
@@ -182,14 +182,14 @@ equivalent hash function will work.
 
 Make a class that extends AbstractFrame.
 
-| Function         | Description                                                                                                                 |
-|------------------|-----------------------------------------------------------------------------------------------------------------------------|
-| getSizeBytes()   | Used by Euhedral to estimate the impact of executing your frame and control memory usage. Doesn't need to be 100% accurate. |
-| execute()        | What it does.                                                                                                               |
-| isAlive()        | Checked by Euhedral. It will not execute it if it's false.                                                                  |
-| kill()           | Marks the frame as inactive and prevents the frame from being executed if it has not started yet.                           |
-| doFinally()      | What Euhedral does with your frame after executing. Defaults to sending it to the recycler if you've set one.               |
-| throwMeAsError() | If you want to cancel a frame after it starts executing, call this and Euhedral will stop it.                               |
+| Function                        | Description                                                                                                                                                                                                                                               |
+|---------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| execute()                       | What it does.                                                                                                                                                                                                                                             |
+| isAlive()                       | Checked by Euhedral. It will not execute it if it's false.                                                                                                                                                                                                |
+| kill()                          | Marks the frame as inactive and prevents the frame from being executed if it has not started yet.                                                                                                                                                         |
+| doFinally()                     | What Euhedral does with your frame after executing. Defaults to sending it to the recycler if you've set one.                                                                                                                                             |
+| doFinallyWithError(Throwable t) | If execute() throws an unexpected error, Euhedral will call this instead of doFinally()                                                                                                                                                                   |
+| throwCancelSignal()             | If you want to cancel a frame after it starts executing, call this and Euhedral will stop it. This will throw a specific RuntimeException (AbstractFrame.CancelSignal) that should be filtered out and thrown again if caught in your execute() function. |
 
 ```java
 public class MyCustomFrame extends AbstractFrame {
@@ -209,11 +209,6 @@ public class MyCustomFrame extends AbstractFrame {
     }
     
     @Override
-    public long getSizeBytes() {
-        return 64;    
-    }
-    
-    @Override
     public boolean isAlive() {
         return !this.killSwitch.getOpaque();
     }
@@ -221,6 +216,12 @@ public class MyCustomFrame extends AbstractFrame {
     @Override
     public void kill() {
         this.killSwitch.setRelease(true);
+    }
+    
+    @Override
+    public void doFinallyWithError(Throwable t) {
+        System.err.println(t);
+        super.recycle();    
     }
     
     @Override
@@ -274,6 +275,6 @@ for(int i = 0; i < 1_000_000; i++) {
 sink.completeGracefully();
 ```
 
-**IMPORTANT NOTE: Frames are reset after execution whether you use the recycler or not. This sets
+**IMPORTANT NOTE: Frames are reset after execution whether if you use the FrameManager. This sets
 their routingHash back to their idHash. If you want them to continue executing in parallel,
 randomize the routing hash again in replace().**

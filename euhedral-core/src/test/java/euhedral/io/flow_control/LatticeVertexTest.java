@@ -15,13 +15,18 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 
+import euhedral.io.flow_control.LatticeVertex.RoutingFunction;
+import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.LatticeSource;
-import euhedral.io.utils.DrainBuffer;
+import java.util.Arrays;
 import java.util.BitSet;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import test_utils.TestFrame;
 import test_utils.TestReceiver;
 
@@ -33,7 +38,18 @@ class LatticeVertexTest {
     void setup() {
         UpstreamQueue.UP_QUEUE.remove();
 
-        node = new LatticeVertex("test-node", 4);
+        node = new LatticeVertex("test-node", 4, RoutingFunction.DEFAULT,
+                32, RoutingPolicy.ANYWHERE);
+        BitSet active = new BitSet(4);
+        active.set(0, 4);
+
+        LatticeEdge mockEdge = Mockito.mock(LatticeEdge.class);
+        LatticeEdge[] handles = new LatticeEdge[4];
+        Arrays.fill(handles, mockEdge);
+
+        node.setDrain(true);
+        node.setDownstreamMapping(active, handles);
+        node.setDrain(false);
     }
 
     @AfterEach
@@ -43,11 +59,10 @@ class LatticeVertexTest {
 
     @Test
     void shouldInitializeNode() {
-        assertEquals("test-node", node.name);
         assertEquals(4, node.downstreams.length);
-        assertNotNull(node.parallelQueue);
+        assertNotNull(node.cache);
         assertNotNull(node.getDrainFlag());
-        assertFalse(node.terminal);
+        assertTrue(node.hasCache);
     }
 
     @Test
@@ -56,11 +71,11 @@ class LatticeVertexTest {
                 "terminal",
                 2,
                 LatticeVertex.RoutingFunction.DEFAULT,
-                true
+                0, RoutingPolicy.ANYWHERE
         );
 
-        assertTrue(terminal.terminal);
-        assertNull(terminal.parallelQueue);
+        assertFalse(terminal.hasCache);
+        assertNull(terminal.cache);
     }
 
     @Test
@@ -162,6 +177,8 @@ class LatticeVertexTest {
 
     @Test
     void shouldRouteFramesToCorrectDownstream() {
+        node = new LatticeVertex("test-node", 4, RoutingFunction.DEFAULT, 0,
+                RoutingPolicy.ANYWHERE);
         node.setDrain(true);
 
         TestReceiver first = new TestReceiver();
@@ -232,9 +249,6 @@ class LatticeVertexTest {
 
         verify(edge1).close();
         verify(edge2).close();
-
-        assertNull(node.downstreams[0]);
-        assertNull(node.downstreams[1]);
     }
 
     @Test
@@ -269,11 +283,10 @@ class LatticeVertexTest {
 
     @Test
     void shouldIgnoreInvalidPullArguments() {
-        DrainBuffer buffer = mock(DrainBuffer.class);
 
         assertDoesNotThrow(() -> node.pull(null, 10));
-        assertDoesNotThrow(() -> node.pull(buffer, 0));
-        assertDoesNotThrow(() -> node.pull(buffer, -1));
+        assertDoesNotThrow(() -> node.pull(frame -> {}, 0));
+        assertDoesNotThrow(() -> node.pull(frame -> {}, -1));
     }
 
     @Test
@@ -282,11 +295,11 @@ class LatticeVertexTest {
 
         node.setParent(parent);
 
-        DrainBuffer buffer = mock(DrainBuffer.class);
+        Consumer<AbstractFrame> consumer = frame -> {};
 
-        node.pull(buffer, 10);
+        node.pull(consumer, 10);
 
-        verify(parent).pull(buffer, 10);
+        verify(parent).pull(consumer, 10);
     }
 
     @Test
@@ -300,11 +313,19 @@ class LatticeVertexTest {
 
         interceptor.push(frame);
 
-        assertFalse(node.parallelQueue.isEmpty());
+        boolean hasItem = false;
+        for(var queue : node.cache) {
+            if(queue != null) {
+                hasItem |= !queue.isEmpty();
+            }
+        }
+        assertTrue(hasItem);
     }
 
     @Test
     void shouldDirectlyRouteOrderedFrames() {
+        node = new LatticeVertex("test-node", 4, RoutingFunction.DEFAULT, 0,
+                RoutingPolicy.ANYWHERE);
         node.setDrain(true);
 
         TestReceiver terminal = new TestReceiver();

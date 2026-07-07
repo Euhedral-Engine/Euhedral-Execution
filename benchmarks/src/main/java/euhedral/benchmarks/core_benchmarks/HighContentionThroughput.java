@@ -1,15 +1,15 @@
 package euhedral.benchmarks.core_benchmarks;
 
-import java.util.concurrent.TimeUnit;
-
 import euhedral.benchmarks.frames.NoOpFrame;
-import euhedral.benchmarks.pipelines.NoOpExecutor;
+import euhedral.benchmarks.utils.NoOpExecutor;
+import euhedral.benchmarks.utils.RepeatingSink;
+import euhedral.hardware_utils.SystemInfo;
 import euhedral.hashing.HasherApi;
-import euhedral.io.config.ControlPlaneConfig;
+import euhedral.io.config.LatticeConfig;
 import euhedral.io.control_plane.ControlPlaneLattice;
 import euhedral.io.impl.BaseCloneableObject;
-import euhedral.io.ingest.ArrayIngestSink;
 import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
+import java.util.concurrent.TimeUnit;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -28,22 +28,27 @@ import org.openjdk.jmh.infra.Blackhole;
 @BenchmarkMode({Mode.Throughput, Mode.SampleTime})
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 @State(Scope.Benchmark)
-@Warmup(iterations = 3, time = 5, timeUnit = TimeUnit.SECONDS)
-@Measurement(iterations = 5, time = 10, timeUnit = TimeUnit.SECONDS)
+@Warmup(iterations = 3, time = 3, timeUnit = TimeUnit.SECONDS)
+@Measurement(iterations = 5, time = 5, timeUnit = TimeUnit.SECONDS)
 @Fork(1)
 public class HighContentionThroughput {
 
-    private static final int BATCH = 1_000_000;
-    private static final int PRODUCERS = 32;
-    private static final int TASKS = BATCH * PRODUCERS;
+    private static final int PRODUCERS = SystemInfo.CPU_COUNT;
+    private static final int TASKS = 32_000_000;
 
     private static void await(PaddedLongAdder counters) {
         int spin = 0;
+        long now;
+        long log = System.nanoTime();
         long deadline = System.nanoTime() + TimeUnit.MINUTES.toNanos(1);
-
-        while (System.nanoTime() < deadline) {
+        while ((now = System.nanoTime()) < deadline) {
             if ((spin++ & 31) == 0) {
-                if (counters.sum() >= TASKS) {
+                long sum = counters.sum();
+                if (now - log >= 3_000_000_000L) {
+                    System.out.println("Progress: " + sum);
+                    log = now;
+                }
+                if (sum >= TASKS) {
                     break;
                 }
             }
@@ -57,49 +62,30 @@ public class HighContentionThroughput {
 
     private final PaddedLongAdder counters =
             new PaddedLongAdder(Runtime.getRuntime().availableProcessors(), true, true);
-    private final NoOpFrame[][] frames = new NoOpFrame[PRODUCERS][];
-    private final ArrayIngestSink[] sinks = new ArrayIngestSink[PRODUCERS];
+    private final RepeatingSink[] sinks = new RepeatingSink[PRODUCERS];
     private ControlPlaneLattice controlPlane;
 
     @Setup(Level.Trial)
     public void setup(Blackhole blackhole) {
         long idHash = HasherApi.mix(HasherApi.BASE_SEED);
-        long seed = HasherApi.BASE_SEED;
 
-        for (int i = 0; i < frames.length; i++) {
-            this.frames[i] = NoOpFrame.generate(idHash, BATCH, this.counters);
-            for (NoOpFrame frame : this.frames[i]) {
-                frame.randomizeHash(seed++);
-            }
-            this.sinks[i] = new ArrayIngestSink(this.frames[i]);
+        for (int i = 0; i < sinks.length; i++) {
+            this.sinks[i] = new RepeatingSink(NoOpFrame.generate(idHash, 250_000, this.counters));
         }
 
         BaseCloneableObject base = new BaseCloneableObject(new NoOpExecutor(blackhole));
-        ControlPlaneConfig config =
-                new ControlPlaneConfig("HighContentionThroughput", null, null, base, null, null);
+        LatticeConfig config = LatticeConfig.ofDefaults(base);
         this.controlPlane = ControlPlaneLattice.getOrCreate(config);
         this.controlPlane.start();
-    }
-
-    @Setup(Level.Invocation)
-    public void setup() {
-        this.counters.reset();
-        long seed = HasherApi.BASE_SEED;
-        for (int i = 0; i < frames.length; i++) {
-            for (NoOpFrame frame : frames[i]) {
-                frame.randomizeHash(seed++);
-            }
-            sinks[i] = new ArrayIngestSink(frames[i]);
+        for (var sink : this.sinks) {
+            this.controlPlane.addUpstream(sink);
         }
     }
 
     @Benchmark
     @OperationsPerInvocation(TASKS)
-    public void ingest32million32sources() {
-        for (var sink : this.sinks) {
-            this.controlPlane.addUpstream(sink);
-        }
-
+    public void ingest() {
+        this.counters.reset();
         await(this.counters);
     }
 

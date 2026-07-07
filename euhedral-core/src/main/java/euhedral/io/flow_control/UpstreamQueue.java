@@ -4,12 +4,12 @@ import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.LatticeInterceptor;
 import euhedral.io.generics.LatticeReceiver;
 import euhedral.io.generics.LatticeSource;
+import euhedral.io.utils.MathFunctions;
 import io.euhedral_execution.data_structures.queues.PartitionedMpscQueue;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
-import lombok.Getter;
 import org.jctools.maps.NonBlockingHashMapLong;
 
 /// ## The upstream aggregation and scheduling layer
@@ -52,13 +52,13 @@ public class UpstreamQueue {
         return queue;
     }
 
-    protected static void drain(UpstreamHandle handle, Consumer<AbstractFrame> consumer,
+    protected static long drain(UpstreamHandle handle, Consumer<AbstractFrame> consumer,
             long demand) {
         if (consumer != null) {
-            handle.pull(consumer, demand);
-            return;
+            return handle.pull(consumer, demand);
         }
         handle.request(demand);
+        return 0;
     }
 
     final long[] pullBucket = new long[]{0L, 0L};
@@ -66,10 +66,16 @@ public class UpstreamQueue {
             new PartitionedMpscQueue<>(1, 512, 0);
     private final UpstreamHandle[] drainBuffer = new UpstreamHandle[512];
     private final int[] pullIdx = new int[]{0};
-    @Getter
+
     long cachedUpCount = 0L;
     private long upstreamCount = 0L;
 
+    public long getCachedUpCount() {
+        if(this.cachedUpCount == 0L) {
+            return getTrueUpstreamCount();
+        }
+        return this.cachedUpCount;
+    }
     public long getTrueUpstreamCount() {
         this.cachedUpCount = (long) UP_COUNT.getOpaque(this);
         return this.cachedUpCount;
@@ -88,17 +94,19 @@ public class UpstreamQueue {
 
     /// Pulls work without requesting from the [UpstreamHandles][UpstreamHandle]. If the consumer is
     /// `null`, it will **request** the work.
-    public void pull(Consumer<AbstractFrame> consumer, long demand) {
+    public long pull(Consumer<AbstractFrame> consumer, long demand) {
         getTrueUpstreamCount();
         this.pullIdx[0] = 0;
 
         if (demand == 0 || this.cachedUpCount == 0) {
-            return;
+            return 0;
         }
 
         int count;
         long removed = 0;
         calculatePullBuckets(demand);
+
+        long totalPull = 0;
 
         boolean workDone = true;
         // Cycle through the queue and pull round-robin style.
@@ -111,7 +119,7 @@ public class UpstreamQueue {
                         long requestAmount = Math.min(demand, this.pullBucket[1]);
                         demand -= requestAmount;
                         workDone = true;
-                        drain(handle, consumer, requestAmount);
+                        totalPull += drain(handle, consumer, requestAmount);
                     }
                     while (!this.upstreams.offer(handle)) {
                         Thread.onSpinWait();
@@ -123,6 +131,7 @@ public class UpstreamQueue {
             }
         }
         this.cachedUpCount = (long) UP_COUNT.getAndAdd(this, -removed) - removed;
+        return totalPull;
     }
 
     /// Performs a binary search to calculate even buckets of 32 items or more per [UpstreamHandle]
@@ -131,35 +140,18 @@ public class UpstreamQueue {
     /// pullBucket[1] = Size of each bucket
     /// ```
     protected void calculatePullBuckets(long demand) {
-        int start = 0;
-        int end = (int) this.cachedUpCount;
-        end = Math.max(end, 1);
-        this.pullBucket[0] = end - start;
-        this.pullBucket[1] = demand;
-
-        if (demand <= 1024 || end <= 1) {
+        if (demand <= 32 || this.cachedUpCount < 2) {
             this.pullBucket[0] = 1;
+            this.pullBucket[1] = demand;
             return;
         }
 
-        if (demand > 32L * end) {
-            this.pullBucket[1] = demand / end;
-            return;
-        }
+        int buckets = (int) MathFunctions.clampLong(demand / 32, 1L, this.cachedUpCount);
+        buckets = Math.max(buckets, 1);
 
-        int mid = (end - start) / 2;
-
-        while (mid != 0) {
-            this.pullBucket[1] = demand / mid;
-            if (this.pullBucket[1] < 32) {
-                end = mid;
-                mid = (end - start) / 2;
-            } else {
-                mid = (end - mid) / 2;
-            }
-        }
-        this.pullBucket[0] = end - start;
-        this.pullBucket[0] = Math.max(this.pullBucket[0], 1);
+        long bucketSize = (demand + buckets - 1) / buckets;
+        this.pullBucket[0] = buckets;
+        this.pullBucket[1] = bucketSize;
     }
 
     /// Transfers [UpstreamHandle] objects into the class's drainBuffer.
@@ -176,7 +168,7 @@ public class UpstreamQueue {
     /// A wrapper for an upstream source.
     public static abstract class UpstreamHandle implements LatticeInterceptor {
 
-        public abstract void pull(Consumer<AbstractFrame> consumer, long demand);
+        public abstract long pull(Consumer<AbstractFrame> consumer, long demand);
 
         public abstract boolean isComplete();
 

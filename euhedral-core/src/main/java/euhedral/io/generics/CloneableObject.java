@@ -3,7 +3,6 @@ package euhedral.io.generics;
 import euhedral.hardware_utils.PinnedThreadExecutor;
 import euhedral.hardware_utils.common.SystemUtilization.CoreSnapshot;
 import euhedral.io.config.CloneConfig;
-import euhedral.io.flow_control.BufferedBridge;
 import euhedral.io.impl.BaseCloneableObject;
 
 /// ## Base interface for everything below the [`ControlPlaneShard`][euhedral.io.control_plane.ControlPlaneShard]
@@ -12,9 +11,8 @@ import euhedral.io.impl.BaseCloneableObject;
 /// - clone()
 /// - firstTouch()
 /// - start()
-/// - reportErrorsTo()
 /// - ingest() / output()
-public interface CloneableObject extends AutoCloseable {
+public interface CloneableObject {
 
     default CloneableObject clone(CloneConfig cloneConfig, PinnedThreadExecutor executor) {
         return clone(cloneConfig);
@@ -27,8 +25,8 @@ public interface CloneableObject extends AutoCloseable {
 
     /// Used by CloneableObjects that create objects on instantiation. This method will be called
     /// once before start(). Implementations should fill their queues, touch all their state
-    /// objects, and then reset them. On Linux, this ensures they are allocated on the NUMA node
-    /// closest to the cpu that needs them.
+    /// objects, and then reset them. On Linux, this ensures data structures are allocated on the
+    /// NUMA node closest to the cpu that needs them.
     default void firstTouch() {
     }
 
@@ -46,10 +44,6 @@ public interface CloneableObject extends AutoCloseable {
         return null;
     }
 
-    default BufferedBridge completeChannel() {
-        return null;
-    }
-
     default boolean isDrained() {
         return true;
     }
@@ -64,5 +58,8 @@ public interface CloneableObject extends AutoCloseable {
 
     default int getCore() {
         return -1;
+    }
+
+    default void close() {
     }
 }

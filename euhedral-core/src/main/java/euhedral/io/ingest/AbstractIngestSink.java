@@ -32,10 +32,8 @@ public abstract class AbstractIngestSink {
         }
 
         protected static long accumulate(long curr, long next) {
-            if (curr + next < 0) {
-                return Long.MAX_VALUE;
-            }
-            return curr + next;
+            long sum = curr + next;
+            return sum < 0 ? Long.MAX_VALUE : sum;
         }
 
         protected final PaddedAtomicLong demand = new PaddedAtomicLong(0);
@@ -57,21 +55,16 @@ public abstract class AbstractIngestSink {
             return this.demand.accumulateAndGet(demand, Delegate::accumulate);
         }
 
-        protected void reset() {
-            TERMINAL.setRelease(this, null);
-            this.demand.setPlain(0);
-        }
-
         @Override
-        public final void pull(Consumer<AbstractFrame> consumer, long demand) {
+        public final long pull(Consumer<AbstractFrame> consumer, long demand) {
             var terminal = getTerminal();
             if (terminal == null || demand <= 0) {
-                return;
+                return 0;
             }
-            hookOnPull(consumer, demand);
+            return hookOnPull(consumer, demand);
         }
 
-        public abstract void hookOnPull(Consumer<AbstractFrame> consumer, long demand);
+        public abstract long hookOnPull(Consumer<AbstractFrame> consumer, long demand);
 
         @Override
         public final void request(long demand) {

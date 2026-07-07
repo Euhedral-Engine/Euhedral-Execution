@@ -4,7 +4,6 @@ import io.euhedral_execution.data_structures.queues.common.ConcurrentPartitioned
 import io.euhedral_execution.data_structures.queues.common.QueueUtils;
 import java.util.AbstractQueue;
 import java.util.Iterator;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Consumer;
 import org.jspecify.annotations.NonNull;
 
@@ -16,11 +15,6 @@ abstract sealed class AbstractPartitionedQueue<T> extends AbstractQueue<T> imple
 
     AbstractPartitionedQueue(int partitions) {
         this.partitions = partitions;
-    }
-
-    @Override
-    public final boolean offer(T obj) {
-        return offer(ThreadLocalRandom.current().nextLong(), obj);
     }
 
     @Override
@@ -49,6 +43,18 @@ abstract sealed class AbstractPartitionedQueue<T> extends AbstractQueue<T> imple
             }
         }
         return null;
+    }
+
+    @Override
+    public long drain(Consumer<T> consumer, long limit, int startingPartition) {
+        long total = 0;
+        int cycles = 0;
+        while(cycles < this.partitions && total < limit) {
+            int idx = startingPartition++ % this.partitions;
+            total += drain(idx, consumer, limit - total);
+            cycles++;
+        }
+        return total;
     }
 
     @Override

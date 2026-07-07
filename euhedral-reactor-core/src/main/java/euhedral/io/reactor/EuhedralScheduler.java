@@ -1,6 +1,6 @@
 package euhedral.io.reactor;
 
-import euhedral.io.config.ControlPlaneConfig;
+import euhedral.io.config.LatticeConfig;
 import euhedral.io.control_plane.ControlPlaneLattice;
 import euhedral.io.reactor.common.EuhedralSubscriber;
 import euhedral.io.utils.MathFunctions;
@@ -25,7 +25,7 @@ import reactor.core.scheduler.Scheduler;
 /// highly recommended that you use [EuhedralOperator] with it instead. EuhedralOperator is built
 /// and optimized to take advantage of Euhedral Core's parallelism and memory efficiency while
 /// handling backpressure for you.
-@SuppressWarnings({"resource", "unused"})
+@SuppressWarnings({"unused"})
 public class EuhedralScheduler implements Scheduler {
 
     private static final AtomicReference<EuhedralScheduler> INSTANCE = new AtomicReference<>();
@@ -38,19 +38,18 @@ public class EuhedralScheduler implements Scheduler {
     }
 
     public static @NonNull EuhedralScheduler getOrCreate() {
-        return getOrCreate("EuhedralScheduler", null, null);
+        return getOrCreate(LatticeConfig.ofDefaults("EuhedralScheduler", "EuhedralWorker"));
     }
 
-    public static @NonNull EuhedralScheduler getOrCreate(String name) {
-        return getOrCreate(name, null, null);
+    public static @NonNull EuhedralScheduler getOrCreate(String name, String workerName) {
+        return getOrCreate(LatticeConfig.ofDefaults(name, workerName));
     }
 
-    public static @NonNull EuhedralScheduler getOrCreate(String name, @Nullable String metricPrefix,
-            @Nullable MeterRegistry meterRegistry) {
-        return getOrCreate(ControlPlaneConfig.defaultConfig(name, metricPrefix, meterRegistry));
+    public static @NonNull EuhedralScheduler getOrCreate(String name, String workerName, String metricPrefix, MeterRegistry registry) {
+        return getOrCreate(LatticeConfig.ofDefaults(name, workerName, metricPrefix, registry));
     }
 
-    public static @NonNull EuhedralScheduler getOrCreate(ControlPlaneConfig config) {
+    public static @NonNull EuhedralScheduler getOrCreate(LatticeConfig config) {
         EuhedralScheduler instance = INSTANCE.getOpaque();
         if (instance != null) {
             return instance;

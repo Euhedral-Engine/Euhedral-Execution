@@ -10,7 +10,6 @@ public final class CollectionFrame extends AbstractFrame {
     private final AtomicBoolean killSwitch;
 
     private Collection<AbstractFrame> frames;
-    private long sizeBytes;
 
     public CollectionFrame(long idHash, Collection<AbstractFrame> frames) {
         this(idHash, frames, null, null);
@@ -26,7 +25,7 @@ public final class CollectionFrame extends AbstractFrame {
         Objects.requireNonNull(frames);
 
         this.killSwitch = killSwitch;
-        replace(frames);
+        this.frames = frames;
     }
 
     @Override
@@ -36,11 +35,6 @@ public final class CollectionFrame extends AbstractFrame {
                 frame.execute();
             }
         }
-    }
-
-    @Override
-    public long getSizeBytes() {
-        return sizeBytes;
     }
 
     @Override
@@ -61,12 +55,5 @@ public final class CollectionFrame extends AbstractFrame {
     public void replace(Collection<AbstractFrame> frames) {
         Objects.requireNonNull(frames);
         this.frames = frames;
-        long sizeBytes = 0;
-        for (AbstractFrame frame : frames) {
-            if(frame != null) {
-                sizeBytes += frame.getSizeBytes();
-            }
-        }
-        this.sizeBytes = sizeBytes;
     }
 }

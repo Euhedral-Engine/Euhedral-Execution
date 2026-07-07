@@ -10,45 +10,34 @@ import euhedral.io.config.CacheConfig;
 import euhedral.io.config.CloneConfig;
 import euhedral.io.flow_control.LatticeEdge;
 import euhedral.io.flow_control.LatticeVertex;
-import euhedral.io.flow_control.UpstreamQueue;
+import euhedral.io.flow_control.RoutingPolicy;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.frames.DummyFrame;
 import euhedral.io.generics.CloneableObject;
 import euhedral.io.generics.LatticeReceiver;
 import euhedral.io.generics.LatticeSource;
 import euhedral.io.metrics.CacheMetrics;
-import euhedral.io.utils.DrainBuffer;
-import euhedral.io.utils.FlowRecorder;
-import euhedral.io.utils.QueuePartitionWrapper;
-import io.euhedral_execution.data_structures.atomics.AtomicDouble;
-import io.euhedral_execution.data_structures.atomics.PaddedAtomicLong;
-import io.euhedral_execution.data_structures.atomics.PaddedAtomicReference;
-import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
 import io.euhedral_execution.data_structures.queues.PartitionedMpscQueue;
 import io.euhedral_execution.data_structures.queues.common.QueueUtils;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.BitSet;
-
-import org.jctools.maps.NonBlockingHashMapLong;
+import java.util.function.Consumer;
+import lombok.AccessLevel;
+import lombok.Getter;
 import org.jspecify.annotations.NonNull;
 
 public abstract class ControlPlaneCache extends LatticeVertex implements CloneableObject {
 
+    protected static final VarHandle CAP_FACTOR;
     protected static final VarHandle PRIMED;
-    protected static final VarHandle TOTAL_BYTES;
     protected static final VarHandle TOTAL_COUNT;
-
-    protected static final ThreadLocal<UpstreamQueue> UPSTREAM = new ThreadLocal<>();
-    protected static final NonBlockingHashMapLong<ControlPlaneCache> CACHES =
-            new NonBlockingHashMapLong<>();
 
     static {
         try {
+            CAP_FACTOR = MethodHandles.lookup().findVarHandle(ControlPlaneCache.class, "capFactor", double.class);
             PRIMED = MethodHandles.lookup()
                     .findVarHandle(ControlPlaneCache.class, "primed", boolean.class);
-            TOTAL_BYTES = MethodHandles.lookup()
-                    .findVarHandle(ControlPlaneCache.class, "totalQueuedSizeBytes", long.class);
             TOTAL_COUNT = MethodHandles.lookup()
                     .findVarHandle(ControlPlaneCache.class, "totalCount", long.class);
         } catch (Exception e) {
@@ -73,164 +62,113 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
         if (layout.sharesL2() > 2) {
             L2 /= layout.sharesL2();
         }
+        long L1 = layout.bytesL1();
 
-        double budget = config.L2MemoryBudget();
+        double budget = config.memoryBudget();
         budget = clampDouble(budget, 0, 1.0);
-        if (budget == 0) {
-            budget = 0.7;
+        if (budget <= 0 || !Double.isFinite(budget)) {
+            throw new IllegalArgumentException(
+                    "Memory budget must be greater than 0 and less than 1. Provided: " + config.memoryBudget());
         }
 
-        int chunk = (int) Math.min(L2 / partitions, Integer.MAX_VALUE);
+        long totalMemory = L2 + L1;
+        totalMemory = totalMemory < 0 ? Long.MAX_VALUE : totalMemory;
+
+        int chunk = (int) Math.min(totalMemory / partitions, Integer.MAX_VALUE);
         chunk = (int) (chunk * budget);
         chunk = Integer.highestOneBit(chunk);
         chunk /= QueueUtils.REFERENCE_SIZE;
         return Math.max(chunk, 512);
     }
 
-    protected final CacheConfig cacheConfig;
-    protected final CacheMetrics metrics;
+    private final CacheConfig cacheConfig;
+    private final CacheMetrics metrics;
+    private final int core;
 
-    protected final AtomicDouble capFactor = new AtomicDouble(1d);
-    protected final PaddedAtomicLong memoryLimit;
-    protected final PaddedLongAdder avgFrameSize;
-    protected final long frameQuota;
+    @Getter(AccessLevel.PROTECTED)
+    private final PartitionedMpscQueue<AbstractFrame> cache;
+    private final int chunkSize;
 
-    protected final PaddedAtomicReference<FlowRecorder> fillRecorder;
-    protected final PaddedAtomicReference<FlowRecorder> fillBytesRecorder;
-    protected final FlowRecorder drainRecorder;
-    protected final FlowRecorder drainBytesRecorder;
+    private final CacheTerminal cacheTerminal;
 
-    protected final QueuePartitionWrapper L2Cache;
-    protected final int chunkSize;
-    final int mask;
+    @Getter
+    private final long frameQuota;
 
     boolean primed;
+    double capFactor = 1.0;
     long totalCount = 0L;
-    long totalQueuedSizeBytes = 0L;
-
-    private int head;
 
     public ControlPlaneCache(@NonNull CacheConfig cacheConfig) {
-        super(getName(cacheConfig), cacheConfig.partitionsPerCpu(), RoutingFunction.DEFAULT,
-                true);
+        super(getName(cacheConfig), 1, (frame, mapSize) -> 0, 0, RoutingPolicy.CACHE_LOCAL);
         this.cacheConfig = cacheConfig;
 
-        int partitions = cacheConfig.partitionsPerCpu();
-        if (partitions <= 0 || cacheConfig.cloneConfig() == null) {
+        int partitions = cacheConfig.partitions();
+        if(partitions <= 0) {
+            throw new IllegalArgumentException("Partitions must be greater than 0. Provided: " + cacheConfig.partitions());
+        }
+        if (cacheConfig.cloneConfig() == null) {
             this.metrics = null;
-            this.memoryLimit = null;
-            this.avgFrameSize = null;
-            this.frameQuota = 0;
-            this.L2Cache = null;
+            this.cache = null;
             this.chunkSize = 0;
-            this.mask = 0;
-            this.fillRecorder = null;
-            this.fillBytesRecorder = null;
-            this.drainRecorder = null;
-            this.drainBytesRecorder = null;
+            this.cacheTerminal = null;
+            this.frameQuota = 0;
+            this.core = -1;
         } else {
-            CpuCacheLayout layout = SystemInfo.getCacheLayout(
-                    cacheConfig.cloneConfig().getCpuSet()[0]);
-            if (cacheConfig.registry() != null) {
-                this.metrics = new CacheMetrics(cacheConfig.metricPrefix(), layout.maskL2(),
-                        capFactor,
-                        () -> (long) TOTAL_BYTES.getOpaque(this), cacheConfig.registry());
-            } else {
-                this.metrics = null;
-            }
-            this.memoryLimit = new PaddedAtomicLong(0);
-            this.avgFrameSize = new PaddedLongAdder(partitions, true, true);
+            this.metrics = new CacheMetrics(cacheConfig, () -> (long) TOTAL_COUNT.getAcquire(this));
             this.chunkSize = getChunkSize(cacheConfig, partitions);
             this.frameQuota = (long) this.chunkSize * partitions;
-            this.L2Cache = new QueuePartitionWrapper(
-                    new PartitionedMpscQueue<>(partitions, this.chunkSize,
-                            cacheConfig.maxPooledChunks()));
-            this.mask = partitions - 1;
-            this.fillRecorder = new PaddedAtomicReference<>(new FlowRecorder());
-            this.fillBytesRecorder = new PaddedAtomicReference<>(new FlowRecorder());
-            this.drainRecorder = new FlowRecorder();
-            this.drainBytesRecorder = new FlowRecorder();
+            this.core = cacheConfig.getCore();
+            this.cache = new PartitionedMpscQueue<>(partitions, this.chunkSize,
+                    cacheConfig.maxPooledChunks());
+            this.cacheTerminal = new CacheTerminal(this);
 
-            BitSet mappings = new BitSet(partitions);
-            mappings.set(0, partitions);
-            LatticeEdge[] queueHandles = new LatticeEdge[partitions];
+            BitSet mappings = new BitSet(1);
+            mappings.set(0);
+            LatticeEdge[] terminal = new LatticeEdge[] {new LatticeEdge(super.drain)};
+            terminal[0].addDownstream(this.cacheTerminal);
 
-            for (int i = 0; i < partitions; i++) {
-                queueHandles[i] = new LatticeEdge(super.drain);
-                queueHandles[i].addDownstream(new PartitionSubscriber(i));
-            }
             setDrain(true);
-            super.setDownstreamMapping(mappings, queueHandles);
+            super.setDownstreamMapping(mappings, terminal);
             setDrain(false);
 
-            this.logger.debug("Partitions: {} PartitionChunkSize: {} CapacityPerQueueNode: {}",
-                    partitions, this.chunkSize, partitions * this.chunkSize);
+            this.logger.debug("Partitions: {} PartitionChunkSize: {} CacheCapacity: {}", partitions,
+                    this.chunkSize, partitions * this.chunkSize);
         }
     }
 
-    public abstract double getPressure();
-
-    public final long drain(DrainBuffer drainBuffer, int maxFill, long demand) {
-        drainBuffer.reset();
-        if (maxFill <= 0) {
-            request(demand);
+    public final long pull(long limit) {
+        if (limit <= 0) {
             return 0;
         }
 
-        long totalDrain = 0;
-        long totalBytesDrained = 0;
-        long initialCount = (long) TOTAL_COUNT.getOpaque(this);
-        if (initialCount > 0) {
-            int cycles = 0;
-            for (int i = 0; i < maxFill && cycles <= this.L2Cache.partitions(); ) {
-
-                int drainCount = (int) this.L2Cache.drain(this.head, drainBuffer,
-                        maxFill - totalDrain);
-                long drainedBytes = drainBuffer.drainedBytes;
-
-                cycles++;
-                if (drainCount > 0) {
-                    i += drainCount;
-                    totalBytesDrained += drainedBytes;
-                    totalDrain += drainCount;
-                    if (drainCount > cacheConfig.ringWalkResetThreshold()) {
-                        cycles = 0;
-                    }
-                }
-
-                this.head = (this.head + 1) & mask;
-                VarHandle.fullFence();
-            }
+        this.cacheTerminal.reset();
+        long added = super.pull(this.cacheTerminal, limit);
+        if (added > 0) {
+            TOTAL_COUNT.getAndAdd(ControlPlaneCache.this, this.cacheTerminal.framesAdded);
         }
-        if (totalDrain > 0) {
-            TOTAL_COUNT.getAndAdd(this, -totalDrain);
-            TOTAL_BYTES.getAndAdd(this, -totalBytesDrained);
-        }
-        drainBuffer.reset();
-        if (totalDrain < maxFill) {
-            pull(drainBuffer, maxFill - totalDrain);
-        }
-        long now = System.nanoTime();
-        this.drainRecorder.record(now, totalDrain + drainBuffer.drainCount, false);
-        this.drainBytesRecorder.record(now, totalBytesDrained + drainBuffer.drainedBytes, false);
-        request(demand);
-
-        totalDrain += drainBuffer.drainCount;
-        drainBuffer.reset();
-        return totalDrain;
+        return added;
     }
 
-    @Override
-    public final void request(long demand) {
-        if (demand <= 0) {
-            return;
+    public final long drain(Consumer<AbstractFrame> consumer, long limit) {
+        if (limit <= 0) {
+            return 0;
         }
 
-        if (getUpstreamCount() > 0) {
-            UPSTREAM.get().request(demand);
-        } else {
-            super.request(demand);
+        long total = 0;
+        long initialCount = (long) TOTAL_COUNT.getOpaque(this);
+        if (initialCount > 0) {
+            total = this.cache.drain(consumer, limit);
+            long count = total;
+            while (total < limit
+                    && count > this.cacheConfig.ringWalkResetThreshold()) {
+                count = this.cache.drain(consumer, limit - total);
+                total += count;
+            }
+
+            TOTAL_COUNT.getAndAdd(this, -total);
         }
+
+        return total;
     }
 
     @Override
@@ -239,25 +177,23 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
             return;
         }
 
-        this.memoryLimit.getAndSet(snapshot.memoryLimit());
+        double pressure = 0;
+        CloneConfig config = this.cacheConfig.cloneConfig();
+        if (config != null) {
+            for (int cpu : this.cacheConfig.cloneConfig().getCpuSet()) {
+                pressure = Math.max(pressure, snapshot.cpuSnapshots()[cpu].pressure());
+            }
+            pressure = clampDouble(pressure, 0.0, 1.0);
+            pressure = Math.round(pressure * 10_000.0) / 10_000.0;
+        }
 
-        double pressure = clampDouble(getPressure(), 0.0, 1.0);
         double target = 1.0 - (0.85 * pressure);
 
-        double curr = this.capFactor.getPlain();
+        double curr = (double) CAP_FACTOR.getAcquire(this);
         double alpha = (target < curr) ? 0.2 : 0.02;
         double clamped = clampDouble(ewma(curr, target, alpha), 0.15, 1.0);
-        this.capFactor.setRelease(clamped);
-    }
-
-    @Override
-    public final long getUpstreamCount() {
-        UpstreamQueue upstream = UPSTREAM.get();
-        if (upstream == null) {
-            upstream = getThreadUpstreamQueue();
-            UPSTREAM.set(upstream);
-        }
-        return upstream.getCachedUpCount();
+        CAP_FACTOR.setRelease(this, clamped);
+        this.metrics.recordCapFactor(clamped);
     }
 
     @Override
@@ -267,42 +203,29 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
         }
 
         for (int i = 0; i < 3; i++) {
-            for (int j = 0; j < this.L2Cache.partitions(); j++) {
+            for (int j = 0; j < this.cache.partitions(); j++) {
                 for (int k = 0; k < chunkSize; k++) {
-                    this.L2Cache.offer(j, DummyFrame.INSTANCE);
+                    this.cache.offer(j, DummyFrame.INSTANCE);
                 }
             }
         }
-        this.L2Cache.clear();
-        this.fillRecorder.getOpaque().record(1, true);
-        this.fillBytesRecorder.getOpaque().record(1, false);
+        this.cache.clear();
 
-        this.fillRecorder.getOpaque().reset(false);
-        this.fillBytesRecorder.getOpaque().reset(false);
-
-        this.capFactor.lazySet(1.0);
-        this.avgFrameSize.lazyFill(0);
-        this.memoryLimit.lazySet(0);
+        CAP_FACTOR.setRelease(this, 1.0);
         TOTAL_COUNT.setOpaque(this, 0);
-        TOTAL_BYTES.setOpaque(this, 0);
     }
 
-    public final long getL2CacheCount() {
+    public final long getLocalCacheCount() {
         return (long) TOTAL_COUNT.getOpaque(this);
     }
 
-    public final long getL2MaxQueuedBytes() {
-        double cap = this.capFactor.getAcquire();
-        long byteQuota = this.frameQuota * (this.avgFrameSize.sum() / this.L2Cache.partitions());
-        long hardwareMax = this.memoryLimit.getOpaque();
-        if (hardwareMax > byteQuota) {
-            return (long) (byteQuota * cap);
-        }
-        return (long) (hardwareMax * cap);
+    public final long getMaxLocalCacheCount() {
+        double cap = (double) CAP_FACTOR.getAcquire(this);
+        return (long) (this.frameQuota * cap);
     }
 
     @Override
-    public boolean setDownstreamMapping(BitSet active, LatticeEdge[] edges) {
+    public final boolean setDownstreamMapping(BitSet active, LatticeEdge[] edges) {
         return false;
     }
 
@@ -316,60 +239,58 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
     }
 
     @Override
+    public final int getCore() {
+        return this.core;
+    }
+
+    public final double getCapFactor() {
+        return (double) CAP_FACTOR.getAcquire(this);
+    }
+
+    @Override
     public boolean isDrained() {
         return (long) TOTAL_COUNT.getOpaque(this) <= 0;
     }
 
     @Override
     public void setDrainMode(boolean value) {
-        super.drain.set(value);
+        super.setDrain(value);
     }
 
-    @Override
-    public void close() {
-        super.close();
-    }
+    private static class CacheTerminal implements LatticeReceiver, Consumer<AbstractFrame> {
 
-    protected class PartitionSubscriber implements LatticeReceiver {
+        final ControlPlaneCache cpc;
 
-        private final int idx;
-        private final double smoothingFactor;
+        private final int partitions;
+        long framesAdded = 0;
 
-        public PartitionSubscriber(int idx) {
-            this.idx = idx;
-            double dt = 0.1;
-            double tau = 2.0; // 2 Seconds
-            double smoothingFactor = 1.0 - Math.exp(-dt / tau);
-
-            if (!Double.isFinite(smoothingFactor) || smoothingFactor <= 0) {
-                this.smoothingFactor = 0.0645; // Fallback to 1 - e^(-0.2/3.0)
-            } else {
-                this.smoothingFactor = clampDouble(smoothingFactor, 0.01, 1.0);
-            }
+        CacheTerminal(ControlPlaneCache cpc) {
+            this.cpc = cpc;
+            this.partitions = cpc == null ? 0 : cpc.cache.partitions();
         }
 
         @Override
         public void push(AbstractFrame frame) {
-            while (!ControlPlaneCache.this.L2Cache.offer(this.idx, frame)) {
+            int idx = RoutingFunction.DEFAULT.route(frame, this.partitions);
+            while (!this.cpc.cache.offer(idx, frame)) {
                 Thread.onSpinWait();
             }
 
-            long size = frame.getSizeBytes();
-            long adjustedSize = size <= 0 ? 256 : size;
-            ControlPlaneCache.this.avgFrameSize.getAndAccumulate(this.idx, adjustedSize,
-                    this::ewma);
+            TOTAL_COUNT.getAndAddRelease(this.cpc, 1);
+        }
 
-            TOTAL_BYTES.getAndAdd(ControlPlaneCache.this, adjustedSize);
-            long count = (long) TOTAL_COUNT.getAndAdd(ControlPlaneCache.this, 1) + 1;
-            if ((count & 63) == 0) {
-                long now = System.nanoTime();
-                ControlPlaneCache.this.fillRecorder.getPlain().record(now, 64, true);
-                ControlPlaneCache.this.fillBytesRecorder.getPlain().record(now, adjustedSize, true);
+        @Override
+        public void accept(AbstractFrame frame) {
+            this.framesAdded++;
+
+            int idx = RoutingFunction.DEFAULT.route(frame, this.partitions);
+            while (!this.cpc.cache.offer(idx, frame)) {
+                Thread.onSpinWait();
             }
         }
 
-        private long ewma(long curr, long next) {
-            return (long) ((1 - this.smoothingFactor) * curr + this.smoothingFactor * next);
+        void reset() {
+            this.framesAdded = 0;
         }
 
         @Override

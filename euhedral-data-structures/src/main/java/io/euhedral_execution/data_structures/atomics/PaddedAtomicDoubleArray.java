@@ -3,21 +3,23 @@ package io.euhedral_execution.data_structures.atomics;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.Arrays;
+import java.util.StringJoiner;
 import java.util.function.DoubleBinaryOperator;
 import java.util.function.DoubleUnaryOperator;
 
 import org.jspecify.annotations.NonNull;
 
 @SuppressWarnings("unused")
-public final class PaddedAtomicDoubleArray {
+public sealed class PaddedAtomicDoubleArray permits PaddedDoubleAdder {
     private static final VarHandle HANDLE = MethodHandles.arrayElementVarHandle(double[].class);
 
     private static final int PADDING = 7;
 
-    private final int padding;
-    private final double[] array;
+    protected final double[] array;
+    protected final boolean boundsCheck;
+    protected final int padding;
+
     private final int length;
-    private final boolean boundsCheck;
     private final boolean pow2;
 
     public PaddedAtomicDoubleArray(int length) {
@@ -145,6 +147,14 @@ public final class PaddedAtomicDoubleArray {
         return (double) HANDLE.getAndAdd(this.array, getPhysicalIdx(idx), val) + val;
     }
 
+    public double getAndAddRelease(int idx, double val) {
+        return (double) HANDLE.getAndAddRelease(this.array, getPhysicalIdx(idx), val);
+    }
+
+    public double addReleaseAndGet(int idx, double val) {
+        return getAndAddRelease(idx, val) + val;
+    }
+
     // ----- CAS -----
 
     public double getAndUpdate(int idx, @NonNull DoubleUnaryOperator updateFunction) {
@@ -230,6 +240,16 @@ public final class PaddedAtomicDoubleArray {
 
     @Override
     public String toString() {
-        return Arrays.toString(this.array);
+        if (this.boundsCheck) {
+            StringJoiner sj = new StringJoiner(", ", "[", "]");
+            for (int i = 0; i < this.length; i++) {
+                sj.add(Double.toString(this.array[((i + 1) * this.padding) + i]));
+            }
+            VarHandle.acquireFence();
+            return sj.toString();
+        }
+        String string = Arrays.toString(this.array);
+        VarHandle.acquireFence();
+        return string;
     }
 }

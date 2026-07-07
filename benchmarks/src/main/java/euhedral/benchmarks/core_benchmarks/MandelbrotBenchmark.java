@@ -2,9 +2,9 @@ package euhedral.benchmarks.core_benchmarks;
 
 import euhedral.benchmarks.core_benchmarks.utils.MandelbrotCanvas;
 import euhedral.benchmarks.frames.MandelbrotPixel;
-import euhedral.benchmarks.pipelines.FractalExecutor;
+import euhedral.benchmarks.utils.FractalExecutor;
 import euhedral.hashing.HasherApi;
-import euhedral.io.config.ControlPlaneConfig;
+import euhedral.io.config.LatticeConfig;
 import euhedral.io.control_plane.ControlPlaneLattice;
 import euhedral.io.impl.BaseCloneableObject;
 import euhedral.io.reactor.common.EuhedralSubscriber;
@@ -122,7 +122,7 @@ public class MandelbrotBenchmark {
                 int id = i;
                 this.monos[i] = Mono.fromRunnable(() -> {
                     MandelbrotPixel frame = this.pixels[id];
-                    frame.compute();
+                    frame.execute();
                     frame.cpu = counters.fromRawIdx(Thread.currentThread().getId());
                     frame.doFinally();
                     blackhole.consume(frame);
@@ -210,8 +210,7 @@ public class MandelbrotBenchmark {
 
             FractalExecutor executor = new FractalExecutor(blackhole);
             BaseCloneableObject base = new BaseCloneableObject(executor);
-            ControlPlaneConfig config = new ControlPlaneConfig("MandelbrotBenchmark", null, null,
-                    base, null, null);
+            LatticeConfig config = LatticeConfig.ofDefaults(base);
             this.controlPlane = ControlPlaneLattice.getOrCreate(config);
             this.controlPlane.start();
 
@@ -228,10 +227,6 @@ public class MandelbrotBenchmark {
         public void setupInvocation() {
             this.counters.reset();
             makeSub();
-            long seed = SEED;
-            for (var pixel : this.pixels) {
-                pixel.randomizeHash(seed++);
-            }
         }
 
         @Benchmark

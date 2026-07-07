@@ -9,13 +9,14 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import euhedral.hardware_utils.SystemInfo;
+import euhedral.hardware_utils.SystemInfo.SocketInfo;
 import euhedral.hardware_utils.TopologyMapper.EffectiveSocketTopology;
 import euhedral.hardware_utils.common.SystemUtilization.CoreSnapshot;
 import euhedral.hardware_utils.common.SystemUtilization.SocketSnapshot;
 import euhedral.io.config.CloneConfig;
 import euhedral.io.flow_control.LatticeEdge;
-import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.CloneableObject;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.List;
@@ -46,16 +47,19 @@ class ControlPlaneShardTest {
     public void testInitialization() {
         TestClone clone = mock(TestClone.class);
         LatticeEdge upstream = Mockito.spy(new LatticeEdge(new AtomicBoolean()));
-        AbstractFrame frame = mock(AbstractFrame.class);
 
         doReturn(clone).when(clone).clone(any(CloneConfig.class));
 
         mockSysInfo.when(SystemInfo::getMaxCoreId).thenReturn(1);
-        ControlPlaneShard shard = new ControlPlaneShard(1, "TestShard", clone);
+        ControlPlaneShard shard = new ControlPlaneShard(1, "TestShard", clone, Duration.ZERO);
 
         EffectiveSocketTopology topology = getTopology();
         SocketSnapshot snapshot = getSocketSnapshot(topology);
+        SocketInfo info = mock(SocketInfo.class);
         CloneConfig[] configs = getConfigs(snapshot, topology);
+
+        mockSysInfo.when(() -> SystemInfo.getSocketInfo(snapshot.socketId())).thenReturn(info);
+        when(info.getCoreSet()).thenReturn(new BitSet());
 
         shard.start(snapshot, topology, upstream);
 
@@ -88,9 +92,15 @@ class ControlPlaneShardTest {
         when(clones[1].isStarted()).thenReturn(true);
 
         mockSysInfo.when(SystemInfo::getMaxCoreId).thenReturn(1);
-        ControlPlaneShard shard = new ControlPlaneShard(1, "TestShard", baseClone);
+        ControlPlaneShard shard = new ControlPlaneShard(1, "TestShard", baseClone, Duration.ofMinutes(1));
 
         EffectiveSocketTopology topo1 = getTopology(); // Version 0, Core 0 and 1 active
+
+        SocketInfo info = mock(SocketInfo.class);
+        SocketSnapshot snapshot1 = getSocketSnapshot(topo1);
+        mockSysInfo.when(() -> SystemInfo.getSocketInfo(snapshot1.socketId())).thenReturn(info);
+        when(info.getCoreSet()).thenReturn(new BitSet());
+
         shard.start(getSocketSnapshot(topo1), topo1, upstream);
 
         verify(clones[0]).start();
@@ -155,7 +165,7 @@ class ControlPlaneShardTest {
             EffectiveSocketTopology topology) {
         CloneConfig[] configs = new CloneConfig[topology.effectiveCores().cardinality()];
         for (int i = 0; i < configs.length; i++) {
-            configs[i] = new CloneConfig("TestShard", i, snapshot.coreSnapshots()[i].quotaCpus(),
+            configs[i] = new CloneConfig("TestShard", i,
                     snapshot.coreSnapshots()[i].effectiveCpus());
         }
         return configs;
@@ -166,11 +176,6 @@ class ControlPlaneShardTest {
         @Override
         public TestClone clone(CloneConfig cloneConfig) {
             return new TestClone();
-        }
-
-        @Override
-        public void close() throws Exception {
-
         }
     }
 }

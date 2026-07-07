@@ -14,8 +14,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import euhedral.io.flow_control.UpstreamQueue.UpstreamHandle;
-import euhedral.io.utils.DrainBuffer;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
+
+import euhedral.io.frames.AbstractFrame;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -42,7 +44,7 @@ class LatticeEdgeTest {
 
     @Test
     void shouldCreateThreadQueueOnRegister() {
-        edge.register();
+        edge.register(0);
 
         assertEquals(1, edge.getThreadCount());
     }
@@ -146,9 +148,7 @@ class LatticeEdgeTest {
     void shouldIgnorePullWhenDrainActive() {
         drain.set(true);
 
-        DrainBuffer buffer = mock(DrainBuffer.class);
-
-        assertDoesNotThrow(() -> edge.pull(buffer, 10));
+        assertDoesNotThrow(() -> edge.pull(frame -> {}, 10));
     }
 
     @Test
@@ -188,11 +188,11 @@ class LatticeEdgeTest {
 
         edge.setParent(parent);
 
-        DrainBuffer buffer = mock(DrainBuffer.class);
+        Consumer<AbstractFrame> consumer = frame -> {};
 
-        edge.pull(buffer, 123);
+        edge.pull(consumer, 123);
 
-        verify(parent).pull(buffer, 123);
+        verify(parent).pull(consumer, 123);
     }
 
     @Test
@@ -248,7 +248,7 @@ class LatticeEdgeTest {
 
         edge.addUpstream(upstream);
 
-        assertEquals(1, edge.getUpstreamCount());
+        assertEquals(1, edge.getUpstreamHandleCount());
     }
 
     @Test
@@ -259,7 +259,7 @@ class LatticeEdgeTest {
 
         edge.addUpstream(upstream);
 
-        edge.register();
+        edge.register(0);
 
         assertEquals(1, edge.getThreadCount());
     }
@@ -272,19 +272,19 @@ class LatticeEdgeTest {
 
         edge.addUpstream(upstream);
 
-        edge.register();
+        edge.register(0);
 
         LatticeEdge parent = new LatticeEdge(new AtomicBoolean());
 
         edge.setParent(parent);
 
-        assertTrue(parent.getUpstreamCount() > 0);
+        assertTrue(parent.getUpstreamHandleCount() > 0);
         assertTrue(parent.getThreadCount() > 0);
     }
 
     @Test
     void shouldRemoveThread() {
-        edge.register();
+        edge.register(0);
 
         assertEquals(1, edge.getThreadCount());
 

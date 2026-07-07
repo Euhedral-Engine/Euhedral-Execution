@@ -1,10 +1,5 @@
 package euhedral.io.flow_control;
 
-import euhedral.io.flow_control.UpstreamQueue.UpstreamHandle;
-import euhedral.io.frames.AbstractFrame;
-import euhedral.io.generics.LatticeInterceptor;
-import euhedral.io.generics.LatticeReceiver;
-import io.euhedral_execution.data_structures.atomics.PaddedAtomicLong;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.Collection;
@@ -14,6 +9,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.Consumer;
+
+import euhedral.io.flow_control.UpstreamQueue.UpstreamHandle;
+import euhedral.io.frames.AbstractFrame;
+import euhedral.io.generics.LatticeInterceptor;
+import euhedral.io.generics.LatticeReceiver;
+import io.euhedral_execution.data_structures.atomics.PaddedAtomicLong;
 import lombok.Getter;
 import lombok.Setter;
 import org.jctools.maps.NonBlockingHashMapLong;
@@ -32,7 +33,7 @@ import org.jctools.maps.NonBlockingHashMapLong;
 /// upward toward upstream sources. The structure is designed to continuously reconcile both
 /// directions under concurrent mutation.
 @SuppressWarnings("unused")
-public class LatticeEdge extends UpstreamHandle implements AutoCloseable {
+public class LatticeEdge extends UpstreamHandle {
 
     protected static final VarHandle ADDING_UPSTREAM;
     protected static final VarHandle CLOSED;
@@ -62,6 +63,7 @@ public class LatticeEdge extends UpstreamHandle implements AutoCloseable {
 
     protected final NonBlockingHashMapLong<UpstreamQueue> aggregators =
             new NonBlockingHashMapLong<>();
+
     private final WeakHashMap<UpstreamHandle, Boolean> upstreamHandles = new WeakHashMap<>();
     private final PaddedAtomicLong upstreamCount = new PaddedAtomicLong(0);
     private final AtomicLong threadCount = new AtomicLong(0);
@@ -83,8 +85,13 @@ public class LatticeEdge extends UpstreamHandle implements AutoCloseable {
     /// all [UpstreamHandles][UpstreamHandle] associated with the LatticeEdge.
     ///
     /// This does not need to be called to avoid errors. It is a micro-optimization.
-    public void register() {
-        getThreadUpstreamQueue();
+    public void register(int id) {
+        LatticeEdge parent = (LatticeEdge) PARENT.getOpaque(this);
+        if (parent != null) {
+            parent.register(id);
+        } else {
+            getThreadUpstreamQueue();
+        }
     }
 
     /// Gets the thread-local [UpstreamQueue] object for the calling thread. This queue contains all
@@ -98,22 +105,23 @@ public class LatticeEdge extends UpstreamHandle implements AutoCloseable {
         UpstreamQueue queue = UpstreamQueue.UP_QUEUE.get();
 
         if (queue == null) {
-            queue = UpstreamQueue.get(this.aggregators, this.threadCount);
-            while (!ADDING_UPSTREAM.compareAndSet(this, false, true)) {
-                Thread.onSpinWait();
-            }
+            acquireLock();
+            try {
+                queue = UpstreamQueue.get(this.aggregators, this.threadCount);
 
-            Iterator<UpstreamHandle> iter = this.upstreamHandles.keySet().iterator();
-            while (iter.hasNext()) {
-                UpstreamHandle handle = iter.next();
-                if (handle.isComplete()) {
-                    iter.remove();
-                    continue;
+                Iterator<UpstreamHandle> iter = this.upstreamHandles.keySet().iterator();
+                while (iter.hasNext()) {
+                    UpstreamHandle handle = iter.next();
+                    if (handle.isComplete()) {
+                        iter.remove();
+                        continue;
+                    }
+                    queue.addUpstream(handle);
                 }
-                queue.addUpstream(handle);
+                queue.getTrueUpstreamCount();
+            } finally {
+                releaseLock();
             }
-            queue.getTrueUpstreamCount();
-            ADDING_UPSTREAM.setRelease(this, false);
         }
         return queue;
     }
@@ -138,17 +146,37 @@ public class LatticeEdge extends UpstreamHandle implements AutoCloseable {
         }
     }
 
-    /// Returns the number of [UpstreamHandles][UpstreamHandle]
-    public long getUpstreamCount() {
+    public long getUpstreamCacheCapacity() {
         LatticeEdge parent = (LatticeEdge) PARENT.getOpaque(this);
         if (parent != null) {
-            return parent.getUpstreamCount();
+            return parent.getUpstreamCacheCapacity();
+        }
+        return 0;
+    }
+
+    public long getUpstreamCacheCount() {
+        LatticeEdge parent = (LatticeEdge) PARENT.getOpaque(this);
+        if (parent != null) {
+            return parent.getUpstreamCacheCount();
+        }
+        return 0;
+    }
+
+    /// Returns the number of [UpstreamHandles][UpstreamHandle]
+    public long getUpstreamHandleCount() {
+        LatticeEdge parent = (LatticeEdge) PARENT.getOpaque(this);
+        if (parent != null) {
+            return parent.getUpstreamHandleCount();
         }
         return this.upstreamCount.getOpaque();
     }
 
     /// Returns the number of threads registered with this LatticeEdge.
     public int getThreadCount() {
+        LatticeEdge parent = (LatticeEdge) PARENT.getOpaque(this);
+        if (parent != null) {
+            return parent.getThreadCount();
+        }
         return this.threadCount.intValue();
     }
 
@@ -176,12 +204,7 @@ public class LatticeEdge extends UpstreamHandle implements AutoCloseable {
 
         acquireLock();
         PARENT.setRelease(this, parent);
-        LatticeReceiver down = (LatticeReceiver) DOWNSTREAM.getOpaque(this);
-        if (down instanceof LatticeEdge rs) {
-            rs.setParent(parent);
-        }
         transferToParent();
-        parent.transferToParent();
         releaseLock();
     }
 
@@ -217,18 +240,17 @@ public class LatticeEdge extends UpstreamHandle implements AutoCloseable {
     /// Pulls available work from the [UpstreamHandles][UpstreamHandle] without requesting more
     /// work.
     @Override
-    public void pull(Consumer<AbstractFrame> consumer, long demand) {
+    public long pull(Consumer<AbstractFrame> consumer, long demand) {
         if ((boolean) CLOSED.getOpaque(this) || this.drain.getOpaque()) {
-            return;
+            return 0;
         }
 
         LatticeEdge parent = (LatticeEdge) PARENT.getOpaque(this);
         if (parent != null) {
-            parent.pull(consumer, demand);
-            return;
+            return parent.pull(consumer, demand);
         }
         UpstreamQueue queue = UpstreamQueue.get(this.aggregators, this.threadCount);
-        queue.pull(consumer, demand);
+        return queue.pull(consumer, demand);
     }
 
     /// Transfers this edge's state to its parent.
@@ -241,6 +263,7 @@ public class LatticeEdge extends UpstreamHandle implements AutoCloseable {
         parent.upstreamCount.addAndGet(this.upstreamCount.get());
         parent.threadCount.addAndGet(this.threadCount.get());
         parent.upstreamHandles.putAll(this.upstreamHandles);
+        parent.transferToParent();
         this.upstreamHandles.clear();
         this.aggregators.clear();
     }
@@ -251,7 +274,6 @@ public class LatticeEdge extends UpstreamHandle implements AutoCloseable {
     }
 
     /// Clears the state and permanently closes.
-    @Override
     public void close() {
         if (!CLOSED.compareAndSet(this, false, true)) {
             return;
@@ -265,7 +287,21 @@ public class LatticeEdge extends UpstreamHandle implements AutoCloseable {
         this.aggregators.clear();
         this.sibling = null;
         UP_QUEUES.setRelease(this, null);
+        acquireLock();
+        for (var handle : this.upstreamHandles.keySet()) {
+            handle.onComplete();
+        }
         this.upstreamHandles.clear();
+        releaseLock();
+    }
+
+    public void removeUpstream(UpstreamHandle handle) {
+        LatticeEdge parent = (LatticeEdge) PARENT.getOpaque(this);
+        if (parent != null) {
+            removeUpstream(handle);
+            return;
+        }
+        this.upstreamCount.decrementAndGet();
     }
 
     /// If the parameter is a LatticeEdge, it sets it as its parent or bubbles it up the chain. If

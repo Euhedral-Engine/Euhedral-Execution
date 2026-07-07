@@ -1,4 +1,4 @@
-package euhedral.io.control_plane;
+package euhedral.io.flow_control;
 
 public enum RoutingPolicy {
     ANYWHERE(0),

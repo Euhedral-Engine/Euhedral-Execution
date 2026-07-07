@@ -40,11 +40,6 @@ public final class FunctionFrame<PAYLOAD, RET_VAL> extends AbstractFrame {
     }
 
     @Override
-    public long getSizeBytes() {
-        return 256;
-    }
-
-    @Override
     public boolean isAlive() {
         if(this.killSwitch != null) {
             return !this.killSwitch.getOpaque();

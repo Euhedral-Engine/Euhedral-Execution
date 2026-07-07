@@ -3,9 +3,9 @@ package euhedral.benchmarks.core_benchmarks;
 import euhedral.benchmarks.core_benchmarks.utils.MandelbrotCanvas;
 import euhedral.benchmarks.frames.BenchArrayFrame;
 import euhedral.benchmarks.frames.MandelbrotPixel;
-import euhedral.benchmarks.pipelines.FractalExecutor;
+import euhedral.benchmarks.utils.FractalExecutor;
 import euhedral.hashing.HasherApi;
-import euhedral.io.config.ControlPlaneConfig;
+import euhedral.io.config.LatticeConfig;
 import euhedral.io.control_plane.ControlPlaneLattice;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.impl.BaseCloneableObject;
@@ -13,6 +13,7 @@ import euhedral.io.reactor.common.EuhedralSubscriber;
 import euhedral.io.utils.MathFunctions;
 import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
 import java.io.IOException;
+import java.lang.invoke.VarHandle;
 import java.util.concurrent.TimeUnit;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -213,14 +214,6 @@ public class BatchedMandelbrotBenchmark {
                 throw new RuntimeException("degree is not set. Please run with -Ddegree=N");
             }
 
-            FractalExecutor executor = new FractalExecutor(blackhole);
-            BaseCloneableObject base = new BaseCloneableObject(executor);
-            ControlPlaneConfig config = new ControlPlaneConfig("BatchedMandelbrotBenchmark", null,
-                    null,
-                    base, null, null);
-            this.controlPlane = ControlPlaneLattice.getOrCreate(config);
-            this.controlPlane.start();
-
             MandelbrotPixel[] pixels = new MandelbrotPixel[CANVAS];
             MandelbrotCanvas.generate(WIDTH, HEIGHT, CENTER_X, CENTER_Y, H_DIAMETER,
                     ITERATION_CAP, BAILOUT_RADIUS_SQ, Integer.parseInt(degree), this.magnitudes,
@@ -229,9 +222,8 @@ public class BatchedMandelbrotBenchmark {
                     pixels);
             shuffle(pixels);
 
-            MandelbrotPixel[][] pixelArray = new MandelbrotPixel[CANVAS / BATCH + (
-                    CANVAS % BATCH > 0 ? 1 : 0)][];
-            this.frames = new BenchArrayFrame[pixelArray.length];
+            int arrSize = CANVAS / BATCH + (CANVAS % BATCH > 0 ? 1 : 0);
+            this.frames = new BenchArrayFrame[arrSize];
 
             long seed = SEED;
 
@@ -246,6 +238,14 @@ public class BatchedMandelbrotBenchmark {
                 idx++;
             }
             makeSub();
+            System.out.println("Total pixels: " + pixels.length);
+
+            FractalExecutor executor = new FractalExecutor(blackhole);
+            BaseCloneableObject base = new BaseCloneableObject(executor);
+            LatticeConfig config = LatticeConfig.ofDefaults(base);
+            this.controlPlane = ControlPlaneLattice.getOrCreate(config);
+            this.controlPlane.start();
+
         }
 
         @Setup(Level.Invocation)
@@ -256,6 +256,7 @@ public class BatchedMandelbrotBenchmark {
             for (var f : this.frames) {
                 f.randomizeHash(seed++);
             }
+            VarHandle.fullFence();
         }
 
         @Benchmark

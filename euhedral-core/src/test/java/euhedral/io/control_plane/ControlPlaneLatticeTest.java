@@ -20,7 +20,8 @@ import euhedral.hardware_utils.TopologyMapper.EffectiveSocketTopology;
 import euhedral.hardware_utils.TopologyMapper.EffectiveSystemTopology;
 import euhedral.hardware_utils.common.SystemUtilization.HardwareUtilization;
 import euhedral.hardware_utils.common.SystemUtilization.SocketSnapshot;
-import euhedral.io.config.ControlPlaneConfig;
+import euhedral.hardware_utils.common.UnmodifiableBitSet;
+import euhedral.io.config.LatticeConfig;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.BitSet;
@@ -68,6 +69,9 @@ class ControlPlaneLatticeTest {
     @BeforeEach
     public void setup() {
         mockSysInfo = Mockito.mockStatic(SystemInfo.class);
+        BitSet cpus = new BitSet();
+        cpus.set(0, 8);
+        mockSysInfo.when(() -> SystemInfo.getCpuSet()).thenReturn(UnmodifiableBitSet.wrap(cpus));
         mockTopologyMapper = Mockito.mockConstructionWithAnswer(TopologyMapper.class,
                 invocation -> {
                     Class<?> clazz = invocation.getMethod().getReturnType();
@@ -93,7 +97,7 @@ class ControlPlaneLatticeTest {
                     }
                     return mock(ResourceMonitor.class);
                 });
-        ControlPlaneLattice plane = ControlPlaneLattice.get();
+        ControlPlaneLattice plane = ControlPlaneLattice.getOrCreate();
         if (plane != null) {
             plane.close();
         }
@@ -118,8 +122,8 @@ class ControlPlaneLatticeTest {
         ControlPlaneLattice controlPlane = createControlPlaneWithMocks(snapshots);
         controlPlane.start();
 
-        verify(mockShard, times(1)).clone(eq(0), any());
-        verify(mockShard, times(1)).clone(eq(1), any());
+        verify(mockShard, times(1)).clone(eq(0), any(), any());
+        verify(mockShard, times(1)).clone(eq(1), any(), any());
         verify(mockShard, times(4)).isStarted();
         verify(mockShard, times(1)).start(eq(snapshots[0]),
                 eq(effectiveSystemTopology.socketTopologies().get(0)),
@@ -130,14 +134,14 @@ class ControlPlaneLatticeTest {
 
         ResourceMonitor mockedRM = mockResourceMonitor.constructed().get(0);
         verify(mockedRM, times(1)).addListener(any());
-        verify(mockedRM, times(2)).getUtilization();
+        verify(mockedRM, times(1)).getUtilization();
         verify(mockUtilization, times(1)).getSocketSnapshot(eq(0), any(), anyDouble());
         verify(mockUtilization, times(1)).getSocketSnapshot(eq(1), any(), anyDouble());
 
         assertEquals(effectiveSystemTopology.globalVersion(), controlPlane.currentGlobalVersion);
         assertTrue(controlPlane.primed.get());
         Awaitility.await().atMost(Duration.ofSeconds(2)).untilFalse(controlPlane.rebalancing);
-        assertArrayEquals(new int[]{0, 1}, ControlPlaneLattice.get().activeShardIds.get());
+        assertArrayEquals(new int[]{0, 1}, ControlPlaneLattice.getOrCreate().activeShardIds.get());
         assertEquals(2, controlPlane.shardHandles.length);
         assertEquals(2, controlPlane.shards.length);
         assertArrayEquals(new int[]{0, 0, 0, 0, 1, 1, 1, 1}, controlPlane.weightedShardMap.get());
@@ -164,12 +168,12 @@ class ControlPlaneLatticeTest {
 
         when(mockShard.isStarted()).thenReturn(true);
 
-        ControlPlaneLattice.get().update(mockUtilization);
+        ControlPlaneLattice.getOrCreate().update(mockUtilization);
 
         Thread.sleep(100);
 
-        verify(mockShard, times(1)).clone(eq(0), any());
-        verify(mockShard, times(1)).clone(eq(1), any());
+        verify(mockShard, times(1)).clone(eq(0), any(), any());
+        verify(mockShard, times(1)).clone(eq(1), any(), any());
         verify(mockShard, times(1)).start(eq(snapshots[0]),
                 eq(effectiveSystemTopology.socketTopologies().get(0)),
                 any());
@@ -202,7 +206,7 @@ class ControlPlaneLatticeTest {
             mockSysInfo.when(() -> SystemInfo.getSocketInfo(id)).thenReturn(socketInfo);
             when(mockUtilization.getSocketSnapshot(eq(i), any(), anyDouble())).thenReturn(
                     snapshots[i]);
-            when(mockShard.clone(eq(i), any())).thenReturn(mockShard);
+            when(mockShard.clone(eq(i), any(), any())).thenReturn(mockShard);
         }
 
         for (int i = 0; i < 8; i += 2) {
@@ -217,8 +221,7 @@ class ControlPlaneLatticeTest {
 
         when(mockShard.isStarted()).thenReturn(false);
 
-        ControlPlaneConfig config = new ControlPlaneConfig("TestControlPlane", null, mockShard,
-                null, null, null);
+        LatticeConfig config = new LatticeConfig("TestControlPlane", new BitSet(), Duration.ZERO, mockShard);
         return ControlPlaneLattice.getOrCreate(config);
     }
 

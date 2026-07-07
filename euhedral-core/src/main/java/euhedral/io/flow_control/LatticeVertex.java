@@ -6,8 +6,10 @@ import euhedral.io.flow_control.UpstreamQueue.UpstreamHandle;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.generics.LatticeInterceptor;
 import euhedral.io.generics.LatticeSource;
+import euhedral.io.utils.FlowThread;
 import io.euhedral_execution.data_structures.atomics.PaddedAtomicLong;
-import io.euhedral_execution.data_structures.queues.PartitionedMpscQueue;
+import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
+import io.euhedral_execution.data_structures.queues.BoundedMpmcQueue;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.BitSet;
@@ -23,7 +25,7 @@ import org.slf4j.LoggerFactory;
 /// across multiple downstream branches. It is responsible for distributing work deterministically
 /// across a fixed topology.
 ///
-/// #### Routing is hash-based and intentionally lightweight
+/// #### Routing is hash-based
 ///
 /// ```java
 /// int idx = (int) unsignedMultiplyHigh(frame.getCombinedHash(), mapSize);
@@ -31,7 +33,7 @@ import org.slf4j.LoggerFactory;
 /// ```
 ///
 /// **Each frame is routed to exactly one downstream, ensuring stable partitioning under load.**
-@SuppressWarnings("unused")
+@SuppressWarnings({"unchecked", "unused"})
 public class LatticeVertex extends LatticeEdge implements AutoCloseable {
 
     protected static final VarHandle ROUTING_STATE;
@@ -45,42 +47,39 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
         }
     }
 
-    protected final boolean terminal;
+    protected final AtomicBoolean closed = new AtomicBoolean(false);
+    protected final boolean hasCache;
 
     protected final Logger logger;
-    protected final String name;
-
-    /// This queue acts like a capacitor for contention. When the number of upstreams is very low,
-    /// downstream demand hits the same upstreams repeatedly. This small queue gives them another
-    /// squirrel to chase.
-    protected final PartitionedMpscQueue<AbstractFrame> parallelQueue;
 
     protected final LatticeEdge[] downstreams;
     protected final RoutingFunction routingFunction;
-    private final PaddedAtomicLong wip;
+
+    protected final BoundedMpmcQueue<AbstractFrame>[] cache;
+    protected final int cachePool;
+    protected final RoutingPolicy cachePolicy;
+    private final PaddedLongAdder cacheCount;
+    private final ThreadLocal<CacheHead> cacheHead = new ThreadLocal<>();
 
     protected RoutingState routingState = new RoutingState(new int[0]);
 
     public LatticeVertex(String name, int downstreamCount) {
-        this(name, downstreamCount, RoutingFunction.DEFAULT, false);
+        this(name, downstreamCount, RoutingFunction.DEFAULT, 0, RoutingPolicy.ANYWHERE);
     }
 
     public LatticeVertex(String name, int downstreamCount, RoutingFunction routingFunction,
-            boolean terminal) {
+            int cachePool, RoutingPolicy cachePolicy) {
         super(new AtomicBoolean(false));
-        this.terminal = terminal;
         this.logger = LoggerFactory.getLogger(name);
-        this.name = name;
         this.downstreams = new LatticeEdge[downstreamCount];
         this.routingFunction = routingFunction;
         this.sibling = this;
-        if (!terminal) {
-            this.wip = new PaddedAtomicLong(0);
-            this.parallelQueue = new PartitionedMpscQueue<>(2_048);
-        } else {
-            this.wip = null;
-            this.parallelQueue = null;
-        }
+
+        this.hasCache = cachePool > 0;
+        this.cachePool = cachePool;
+        this.cache = this.hasCache ? new BoundedMpmcQueue[downstreamCount] : null;
+        this.cacheCount = this.hasCache ? new PaddedLongAdder(downstreamCount, false, false) : null;
+        this.cachePolicy = cachePolicy;
     }
 
     /// Links the stream as an upstream source.
@@ -89,15 +88,47 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
         stream.addDownstream(interceptor);
     }
 
+    @Override
+    public void register(int id) {
+        if(this.hasCache) {
+            CacheHead head = this.cacheHead.get();
+            if(head == null) {
+                this.cacheHead.set(new CacheHead(id, this.cacheCount.fromRawIdx(id)));
+            }
+        }
+        super.register(id);
+    }
+
+    @Override
+    public long getUpstreamCacheCapacity() {
+        long total = 0;
+        if(this.hasCache) {
+            total += this.cachePool;
+        }
+        total += super.getUpstreamCacheCount();
+        return total < 0 ? Long.MAX_VALUE : total;
+    }
+
+    @Override
+    public long getUpstreamCacheCount() {
+        long total = 0;
+
+        if(this.hasCache) {
+            total = this.cacheCount.sum();
+        }
+        total += super.getUpstreamCacheCount();
+        return total < 0 ? Long.MAX_VALUE : total;
+    }
+
     public AtomicBoolean getDrainFlag() {
-        return this.drain;
+        return super.drain;
     }
 
     /// Rebuilds the routing table and sets the new downstreams. Must be in drain mode to succeed.
     ///
     /// @return Whether the mapping was changed
     public boolean setDownstreamMapping(BitSet active, LatticeEdge[] handles) {
-        if (!this.drain.get()) {
+        if (!super.drain.get()) {
             return false;
         }
 
@@ -112,6 +143,10 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
                 handles[i].setParent(this);
                 this.downstreams[i] = handles[i];
 
+                if(this.hasCache) {
+                    this.cache[i] = new BoundedMpmcQueue<>(Math.max(4, this.cachePool / active.cardinality()));
+                }
+
                 if (curr == null) {
                     first = handles[i];
                     curr = handles[i];
@@ -125,6 +160,9 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
                     prev = curr;
                     curr = handles[i];
                 }
+            } else if(this.hasCache && this.cache[i] != null) {
+                this.cache[i].clear();
+                this.cache[i] = null;
             }
         }
         if (curr != null) {
@@ -143,11 +181,19 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
     }
 
     public void setDrain(boolean value) {
-        this.drain.set(value);
+        super.drain.setRelease(value);
     }
 
     public boolean isDrained() {
-        return this.parallelQueue == null || this.parallelQueue.isEmpty();
+        if(!this.hasCache) {
+            return true;
+        }
+        for(var queue : this.cache) {
+            if(queue != null && !queue.isEmpty()) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /// Adds the interceptor to the upstream. If it is a [LatticeEdge], it bubbles it up and sets
@@ -155,6 +201,10 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
     /// defaults to the logic in LatticeEdge.
     @Override
     public void addUpstream(LatticeInterceptor interceptor) {
+        if(this.closed.getAcquire()) {
+            throw new RuntimeException("Cannot add upstream after closed.");
+        }
+
         if (interceptor instanceof LatticeEdge edge) {
             super.addUpstream(edge);
             edge.addDownstream(this);
@@ -172,37 +222,76 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
     /// Picks a downstream link and sends work down.
     @Override
     public void push(AbstractFrame frame) {
+        if(this.closed.getOpaque()) {
+            return;
+        }
+        if(this.downstreams.length < 2) {
+            this.downstreams[0].push(frame);
+            return;
+        }
+
         RoutingState state = (RoutingState) ROUTING_STATE.getOpaque(this);
         int mapLen = state.mappings.length;
 
         int logicalIdx = this.routingFunction.route(frame, mapLen);
-        int id = state.mappings[logicalIdx];
-        this.downstreams[id].push(frame);
+        int idx = state.mappings[logicalIdx];
+
+        if (this.hasCache && !frame.isOrdered()
+                && frame.getRoutingPolicy().level <= this.cachePolicy.level) {
+            CacheHead head = this.cacheHead.get();
+            if (this.cache[idx].offer(frame)) {
+                FlowThread.FlowContext context = FlowThread.getContext();
+                if(context != null) {
+                    context.satisfiedRequest++;
+                }
+                if(head != null) {
+                    this.cacheCount.increment(head.counterIdx);
+                } else {
+                    this.cacheCount.increment(this.cacheCount.fromRawIdx(frame.getRoutingHash()));
+                }
+                return;
+            }
+        }
+
+        this.downstreams[idx].push(frame);
     }
 
     /// Pulls available work from the `parallelQueue` if it is not null. Recursively climbs the
     /// graph and does the same.
     @Override
-    public void pull(Consumer<AbstractFrame> consumer, long demand) {
-        if (demand <= 0 || consumer == null) {
-            return;
+    public long pull(Consumer<AbstractFrame> consumer, long demand) {
+        if (demand <= 0 || consumer == null || this.closed.getOpaque() || super.drain.getOpaque()) {
+            return 0;
         }
 
-        if (this.parallelQueue != null && !this.parallelQueue.isEmpty()) {
-            if (this.wip.compareAndSet(0, 1)) {
-                try {
-                    long count = this.parallelQueue.drain(consumer, demand);
+        long total = 0;
+        if (this.cache != null) {
+            CacheHead head = this.cacheHead.get();
+            if(head != null) {
+                RoutingState state = (RoutingState) ROUTING_STATE.getOpaque(this);
+                long bucket = Math.max(1, demand / state.mappings.length);
+
+                int cycles = 0;
+                while(cycles < state.mappings.length && demand > 0) {
+                    int idx = state.mappings[head.idx];
+                    long count = this.cache[idx].drain(consumer, Math.min(bucket, demand));
+                    total += count;
                     demand -= count;
-                } finally {
-                    this.wip.set(0);
+                    cycles++;
+
+                    if (count > 0) {
+                        this.cacheCount.add(head.counterIdx, -count);
+                    }
+                    head.idx = (head.idx + 1) % state.mappings.length;
                 }
             }
         }
 
         LatticeEdge parent = (LatticeEdge) PARENT.getOpaque(this);
         if (parent != null) {
-            parent.pull(consumer, demand);
+            total += parent.pull(consumer, demand);
         }
+        return total;
     }
 
     @Override
@@ -214,17 +303,20 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
         }
     }
 
-    /// Closes and removes all downstreams.
     @Override
     public void close() {
+        if(!this.closed.compareAndSet(false, true)) {
+            return;
+        }
         super.close();
         for (int i = 0; i < this.downstreams.length; i++) {
             if (this.downstreams[i] != null) {
                 this.downstreams[i].close();
-                this.downstreams[i] = null;
+            }
+            if(this.hasCache && this.cache[i] != null) {
+                this.cache[i].clear();
             }
         }
-        ROUTING_STATE.setRelease(this, null);
     }
 
     /// Defines how the [LatticeVertex] will pick which downstream to send work to.
@@ -243,12 +335,21 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
 
         public final int[] mappings;
         public final int mask;
-        public final boolean isPow2;
 
         RoutingState(int[] mappings) {
             this.mappings = mappings;
-            this.isPow2 = (mappings.length & (mappings.length - 1)) == 0;
             this.mask = mappings.length - 1;
+        }
+    }
+
+    private static final class CacheHead {
+        final int id;
+        final int counterIdx;
+        int idx = 0;
+
+        CacheHead(int id, int counterIdx) {
+            this.id = id;
+            this.counterIdx = counterIdx;
         }
     }
 
@@ -257,18 +358,13 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
     public class UpstreamInterceptor extends UpstreamHandle {
 
         private static long addCap(long num1, long num2) {
-            if (num1 < 0 || num2 < 0) {
-                return Long.MAX_VALUE;
-            }
             long sum = num1 + num2;
             return sum < 0 ? Long.MAX_VALUE : sum;
         }
 
         public final AtomicBoolean complete = new AtomicBoolean(false);
         private final PaddedAtomicLong wip = new PaddedAtomicLong(0);
-        private final PaddedAtomicLong demand = new PaddedAtomicLong(0);
         public LatticeSource upstream;
-        private long count = 0;
 
         @Override
         public void addUpstream(@NonNull LatticeSource upstream) {
@@ -278,69 +374,30 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
 
         @Override
         public void push(AbstractFrame frame) {
-            if ((this.count++ & 63) == 0) {
-                frame.setIngestNs(System.nanoTime());
-            } else {
-                frame.setIngestNs(0);
-            }
-
-            if (frame.isOrdered()) {
-                LatticeVertex.this.push(frame);
-                return;
-            }
-
-            boolean hasQueue = LatticeVertex.this.parallelQueue != null;
-            if (hasQueue && LatticeVertex.this.parallelQueue.offer(frame)) {
-                return;
-            }
-
             LatticeVertex.this.push(frame);
         }
 
         @Override
-        public void pull(Consumer<AbstractFrame> consumer, long demand) {
-            LatticeVertex.this.pull(consumer, demand);
+        public long pull(Consumer<AbstractFrame> consumer, long demand) {
+            return LatticeVertex.this.pull(consumer, demand);
         }
 
         @Override
         public void request(long num) {
-            if (num <= 0 || LatticeVertex.this.drain.getOpaque() || this.complete.getOpaque()) {
+            if (num <= 0 || LatticeVertex.this.closed.getOpaque() || LatticeVertex.this.drain.getOpaque() || this.complete.getOpaque()) {
                 return;
             }
 
-            if (this.wip.compareAndSet(0, 1)) {
+            if (this.wip.getAndIncrement() == 0) {
                 try {
-                    long demand = addAndReset(num);
-                    this.upstream.request(demand);
+                    this.upstream.request(num);
                 } catch (Throwable t) {
                     logger.error("Upstream threw an exception during request", t);
                     this.complete();
                 } finally {
-                    this.wip.set(0);
-                }
-                return;
-            }
-            this.demand.accumulateAndGet(num, UpstreamInterceptor::addCap);
-            if (this.wip.compareAndSet(0, 1)) {
-                try {
-                    long d = addAndReset(0);
-                    this.upstream.request(d);
-                } catch (Throwable t) {
-                    logger.error("UpstreamHandle threw an exception during request", t);
-                    this.complete();
-                } finally {
-                    this.wip.set(0);
+                    this.wip.lazySet(0);
                 }
             }
-        }
-
-        private long addAndReset(long num) {
-            long sum = this.demand.getAndSet(0);
-            sum += num;
-            if (sum < 0) {
-                return Long.MAX_VALUE;
-            }
-            return sum;
         }
 
         @Override
@@ -354,6 +411,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
         public void onComplete() {
             if (this.complete.compareAndSet(false, true)) {
                 logger.trace("UpstreamHandle Complete");
+                removeUpstream(this);
             }
         }
 
@@ -362,6 +420,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
             if (this.complete.compareAndSet(false, true)) {
                 logger.trace("Closing UpstreamHandle");
                 this.upstream.complete();
+                removeUpstream(this);
             }
         }
 
