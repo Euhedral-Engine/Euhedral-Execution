@@ -7,10 +7,12 @@ import euhedral.hardware_utils.SystemInfo;
 import euhedral.hardware_utils.SystemInfo.CoreInfo;
 import euhedral.hardware_utils.SystemInfo.CpuCacheLayout;
 import euhedral.hashing.HasherApi;
-import euhedral.io.config.ControlPlaneConfig;
+import euhedral.io.config.LatticeConfig;
 import euhedral.io.control_plane.ControlPlaneLattice;
+import euhedral.io.control_plane.ControlPlaneShard;
 import euhedral.io.impl.BaseCloneableObject;
 import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
+import java.time.Duration;
 import java.util.BitSet;
 import java.util.concurrent.TimeUnit;
 import org.openjdk.jmh.annotations.Benchmark;
@@ -87,8 +89,8 @@ public class LightContentionThroughput {
 
             System.out.println("Benchmark is using P cpus " + cpus);
             BaseCloneableObject base = new BaseCloneableObject(new NoOpExecutor(blackhole));
-            ControlPlaneConfig config = new ControlPlaneConfig("LightContentionThroughputBenchmark", cpus,
-                    null, base, null, null);
+            LatticeConfig config = new LatticeConfig("LightContentionThroughputBenchmark", cpus,
+                    Duration.ofSeconds(1), ControlPlaneShard.createBaseShard(base));
             this.controlPlane = ControlPlaneLattice.getOrCreate(config);
             this.controlPlane.start();
             for(var sink : sinks) {
@@ -161,8 +163,8 @@ public class LightContentionThroughput {
 
             System.out.println("Benchmark is using E cpus " + cpus);
             BaseCloneableObject base = new BaseCloneableObject(new NoOpExecutor(blackhole));
-            ControlPlaneConfig config = new ControlPlaneConfig("LightContentionThroughputBenchmark", cpus,
-                    null, base, null, null);
+            LatticeConfig config = new LatticeConfig("LightContentionThroughputBenchmark", cpus,
+                    Duration.ofSeconds(1), ControlPlaneShard.createBaseShard(base));
             this.controlPlane = ControlPlaneLattice.getOrCreate(config);
             this.controlPlane.start();
             for(var sink : sinks) {

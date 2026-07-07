@@ -28,21 +28,21 @@ public final class BaseCloneableObject implements CloneableObject {
     private final AbstractExecutor executor;
 
     public BaseCloneableObject() {
-        this(FragmentConfig.ofDefault(), new DefaultExecutor(-1));
+        this(FragmentConfig.ofDefaults(), new DefaultExecutor(-1));
     }
 
     public BaseCloneableObject(String metricPrefix,
             MeterRegistry meterRegistry) {
-        this(FragmentConfig.ofDefault(metricPrefix, meterRegistry), new DefaultExecutor(-1));
+        this(FragmentConfig.ofDefaults(metricPrefix, meterRegistry), new DefaultExecutor(-1));
     }
 
     public BaseCloneableObject(AbstractExecutor executor) {
-        this(FragmentConfig.ofDefault(), executor);
+        this(FragmentConfig.ofDefaults(), executor);
     }
 
     public BaseCloneableObject(String metricPrefix,
             MeterRegistry meterRegistry, AbstractExecutor executor) {
-        this(FragmentConfig.ofDefault(metricPrefix, meterRegistry), executor);
+        this(FragmentConfig.ofDefaults(metricPrefix, meterRegistry), executor);
     }
 
     public BaseCloneableObject(FragmentConfig fragmentConfig) {

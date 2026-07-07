@@ -5,7 +5,7 @@ import euhedral.benchmarks.frames.BenchArrayFrame;
 import euhedral.benchmarks.frames.MandelbrotPixel;
 import euhedral.benchmarks.utils.FractalExecutor;
 import euhedral.hashing.HasherApi;
-import euhedral.io.config.ControlPlaneConfig;
+import euhedral.io.config.LatticeConfig;
 import euhedral.io.control_plane.ControlPlaneLattice;
 import euhedral.io.frames.AbstractFrame;
 import euhedral.io.impl.BaseCloneableObject;
@@ -242,9 +242,7 @@ public class BatchedMandelbrotBenchmark {
 
             FractalExecutor executor = new FractalExecutor(blackhole);
             BaseCloneableObject base = new BaseCloneableObject(executor);
-            ControlPlaneConfig config = ControlPlaneConfig.defaultConfig(
-                    "BatchedMandelbrotBenchmark",
-                    base);
+            LatticeConfig config = LatticeConfig.ofDefaults(base);
             this.controlPlane = ControlPlaneLattice.getOrCreate(config);
             this.controlPlane.start();
 

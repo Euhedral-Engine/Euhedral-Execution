@@ -7,7 +7,7 @@ import euhedral.hardware_utils.PinnedThreadExecutor;
 import euhedral.hardware_utils.SystemInfo;
 import euhedral.hardware_utils.SystemInfo.SocketInfo;
 import euhedral.hashing.HasherApi;
-import euhedral.io.config.ControlPlaneConfig;
+import euhedral.io.config.LatticeConfig;
 import euhedral.io.control_plane.ControlPlaneLattice;
 import euhedral.io.flow_control.RoutingPolicy;
 import euhedral.io.frames.AbstractFrame;
@@ -175,7 +175,7 @@ public class HighScaleBenchmark {
 
             FractalExecutor executor = new FractalExecutor(blackhole);
             BaseCloneableObject base = new BaseCloneableObject(executor);
-            ControlPlaneConfig config = ControlPlaneConfig.defaultConfig("HighScaleBenchmark", base);
+            LatticeConfig config = LatticeConfig.ofDefaults(base);
             this.controlPlane = ControlPlaneLattice.getOrCreate(config);
             this.controlPlane.start();
         }
@@ -250,7 +250,7 @@ public class HighScaleBenchmark {
 
             FractalExecutor executor = new FractalExecutor(blackhole);
             BaseCloneableObject base = new BaseCloneableObject(executor);
-            ControlPlaneConfig config = ControlPlaneConfig.defaultConfig("HighScaleBenchmark", base);
+            LatticeConfig config = LatticeConfig.ofDefaults(base);
             this.controlPlane = ControlPlaneLattice.getOrCreate(config);
             this.controlPlane.start();
             System.out.println("Total tasks: " + this.totalTasks);

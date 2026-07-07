@@ -88,8 +88,7 @@ public final class ControlPlaneFragment extends WorkRequester {
             this.metrics = null;
             this.outputStream = null;
         } else {
-            String name = config.cloneConfig().shardName() + "-ControlPlaneFragment-"
-                    + config.cloneConfig().coreId();
+            String name = config.cloneConfig().shardName() + "-Worker-" + config.cloneConfig().coreId();
             this.logger = LoggerFactory.getLogger(name);
 
             int[] cpus = config.cloneConfig().getCpuSet();
@@ -265,7 +264,7 @@ public final class ControlPlaneFragment extends WorkRequester {
             return;
         }
 
-        if (this.config.meterRegistry() != null) {
+        if (this.config.registry() != null) {
             double throughput = this.state.batchRecorder.averageUnitsOverTime();
             this.metrics.reportThroughput(throughput);
 

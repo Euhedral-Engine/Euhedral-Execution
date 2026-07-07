@@ -5,7 +5,7 @@ import euhedral.benchmarks.utils.NoOpExecutor;
 import euhedral.benchmarks.utils.RepeatingSink;
 import euhedral.hardware_utils.SystemInfo;
 import euhedral.hashing.HasherApi;
-import euhedral.io.config.ControlPlaneConfig;
+import euhedral.io.config.LatticeConfig;
 import euhedral.io.control_plane.ControlPlaneLattice;
 import euhedral.io.impl.BaseCloneableObject;
 import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
@@ -44,7 +44,7 @@ public class HighContentionThroughput {
         while ((now = System.nanoTime()) < deadline) {
             if ((spin++ & 31) == 0) {
                 long sum = counters.sum();
-                if(now - log >= 3_000_000_000L) {
+                if (now - log >= 3_000_000_000L) {
                     System.out.println("Progress: " + sum);
                     log = now;
                 }
@@ -74,8 +74,7 @@ public class HighContentionThroughput {
         }
 
         BaseCloneableObject base = new BaseCloneableObject(new NoOpExecutor(blackhole));
-        ControlPlaneConfig config =
-                new ControlPlaneConfig("HighContentionThroughput", null, null, base, null, null);
+        LatticeConfig config = LatticeConfig.ofDefaults(base);
         this.controlPlane = ControlPlaneLattice.getOrCreate(config);
         this.controlPlane.start();
         for (var sink : this.sinks) {

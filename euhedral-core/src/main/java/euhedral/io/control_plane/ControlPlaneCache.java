@@ -3,11 +3,6 @@ package euhedral.io.control_plane;
 import static euhedral.io.utils.MathFunctions.clampDouble;
 import static euhedral.io.utils.MathFunctions.ewma;
 
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.VarHandle;
-import java.util.BitSet;
-import java.util.function.Consumer;
-
 import euhedral.hardware_utils.SystemInfo;
 import euhedral.hardware_utils.SystemInfo.CpuCacheLayout;
 import euhedral.hardware_utils.common.SystemUtilization.CoreSnapshot;
@@ -24,6 +19,10 @@ import euhedral.io.generics.LatticeSource;
 import euhedral.io.metrics.CacheMetrics;
 import io.euhedral_execution.data_structures.queues.PartitionedMpscQueue;
 import io.euhedral_execution.data_structures.queues.common.QueueUtils;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
+import java.util.BitSet;
+import java.util.function.Consumer;
 import lombok.AccessLevel;
 import lombok.Getter;
 import org.jspecify.annotations.NonNull;
@@ -69,7 +68,7 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
         budget = clampDouble(budget, 0, 1.0);
         if (budget <= 0 || !Double.isFinite(budget)) {
             throw new IllegalArgumentException(
-                    "Memory budget must be greater than 0 and less than 1. Provided: " + budget);
+                    "Memory budget must be greater than 0 and less than 1. Provided: " + config.memoryBudget());
         }
 
         long totalMemory = L2 + L1;
@@ -104,7 +103,10 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
         this.cacheConfig = cacheConfig;
 
         int partitions = cacheConfig.partitions();
-        if (partitions <= 0 || cacheConfig.cloneConfig() == null) {
+        if(partitions <= 0) {
+            throw new IllegalArgumentException("Partitions must be greater than 0. Provided: " + cacheConfig.partitions());
+        }
+        if (cacheConfig.cloneConfig() == null) {
             this.metrics = null;
             this.cache = null;
             this.chunkSize = 0;
