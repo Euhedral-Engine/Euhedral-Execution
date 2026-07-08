@@ -1,6 +1,6 @@
 package test_utils;
 
-import euhedral.io.frames.AbstractFrame;
+import io.euhedral_execution.core.frames.AbstractFrame;
 
 public class TestFrame extends AbstractFrame {
     public final String value;

@@ -1,8 +1,8 @@
 package test_utils;
 
-import euhedral.io.frames.AbstractFrame;
-import euhedral.io.generics.LatticeReceiver;
-import euhedral.io.generics.LatticeSource;
+import io.euhedral_execution.core.frames.AbstractFrame;
+import io.euhedral_execution.core.generics.LatticeReceiver;
+import io.euhedral_execution.core.generics.LatticeSource;
 import java.util.ArrayList;
 import java.util.List;
 

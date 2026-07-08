@@ -1,7 +1,7 @@
 package euhedral.benchmarks.frames;
 
 import euhedral.hashing.HasherApi;
-import euhedral.io.frames.AbstractFrame;
+import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
 import java.util.concurrent.atomic.AtomicInteger;
 

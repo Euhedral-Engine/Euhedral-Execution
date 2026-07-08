@@ -1,7 +1,7 @@
 package euhedral.io.reactor.common;
 
-import euhedral.io.frames.AbstractFrame;
-import euhedral.io.impl.FrameManager;
+import io.euhedral_execution.core.frames.AbstractFrame;
+import io.euhedral_execution.core.impl.FrameManager;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import lombok.Getter;

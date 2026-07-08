@@ -1,10 +1,8 @@
 package euhedral.benchmarks.utils;
 
 import euhedral.benchmarks.frames.NoOpFrame;
-import euhedral.hardware_utils.PinnedThreadExecutor;
-import euhedral.io.config.CloneConfig;
-import euhedral.io.frames.AbstractFrame;
-import euhedral.io.generics.AbstractExecutor;
+import io.euhedral_execution.core.frames.AbstractFrame;
+import io.euhedral_execution.core.generics.AbstractExecutor;
 import org.openjdk.jmh.infra.Blackhole;
 
 public class NoOpExecutor extends AbstractExecutor {
