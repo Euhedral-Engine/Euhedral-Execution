@@ -16,8 +16,6 @@
   <properties>
     <maven.compiler.source>25</maven.compiler.source>
     <maven.compiler.target>25</maven.compiler.target>
-    <maven.deploy.skip>true</maven.deploy.skip>
-    <central.deployment.skip>true</central.deployment.skip>
 
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <skip.central.publish>true</skip.central.publish>
