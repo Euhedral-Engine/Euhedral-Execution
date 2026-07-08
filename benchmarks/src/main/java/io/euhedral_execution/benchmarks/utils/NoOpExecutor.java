@@ -1,6 +1,6 @@
-package euhedral.benchmarks.utils;
+package io.euhedral_execution.benchmarks.utils;
 
-import euhedral.benchmarks.frames.NoOpFrame;
+import io.euhedral_execution.benchmarks.frames.NoOpFrame;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.generics.AbstractExecutor;
 import org.openjdk.jmh.infra.Blackhole;

@@ -1,8 +1,8 @@
-package euhedral.benchmarks.core_benchmarks;
+package io.euhedral_execution.benchmarks.core_benchmarks;
 
-import euhedral.benchmarks.frames.NoOpFrame;
-import euhedral.benchmarks.utils.NoOpExecutor;
-import euhedral.benchmarks.utils.RepeatingSink;
+import io.euhedral_execution.benchmarks.frames.NoOpFrame;
+import io.euhedral_execution.benchmarks.utils.NoOpExecutor;
+import io.euhedral_execution.benchmarks.utils.RepeatingSink;
 import io.euhedral_execution.core.config.LatticeConfig;
 import io.euhedral_execution.core.control_plane.ControlPlaneLattice;
 import io.euhedral_execution.core.impl.BaseCloneableObject;

@@ -1,14 +1,14 @@
-package euhedral.benchmarks;
+package io.euhedral_execution.benchmarks;
 
-import euhedral.benchmarks.core_benchmarks.BatchedMandelbrotBenchmark;
-import euhedral.benchmarks.core_benchmarks.EndToEndLatencyBenchmark;
-import euhedral.benchmarks.core_benchmarks.HighScaleBenchmark;
-import euhedral.benchmarks.core_benchmarks.LightContentionThroughput;
-import euhedral.benchmarks.core_benchmarks.MandelbrotBenchmark;
-import euhedral.benchmarks.core_benchmarks.HighContentionThroughput;
-import euhedral.benchmarks.queue_benchmarks.MPMCBenchmarks;
-import euhedral.benchmarks.queue_benchmarks.MPSCBenchmarks;
-import euhedral.benchmarks.queue_benchmarks.SPSCBenchmarks;
+import io.euhedral_execution.benchmarks.core_benchmarks.BatchedMandelbrotBenchmark;
+import io.euhedral_execution.benchmarks.core_benchmarks.EndToEndLatencyBenchmark;
+import io.euhedral_execution.benchmarks.core_benchmarks.HighContentionThroughput;
+import io.euhedral_execution.benchmarks.core_benchmarks.HighScaleBenchmark;
+import io.euhedral_execution.benchmarks.core_benchmarks.LightContentionThroughput;
+import io.euhedral_execution.benchmarks.core_benchmarks.MandelbrotBenchmark;
+import io.euhedral_execution.benchmarks.queue_benchmarks.MPMCBenchmarks;
+import io.euhedral_execution.benchmarks.queue_benchmarks.MPSCBenchmarks;
+import io.euhedral_execution.benchmarks.queue_benchmarks.SPSCBenchmarks;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;

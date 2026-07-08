@@ -1,6 +1,6 @@
-package euhedral.benchmarks.core_benchmarks.utils;
+package io.euhedral_execution.benchmarks.core_benchmarks.utils;
 
-import euhedral.benchmarks.frames.MandelbrotPixel;
+import io.euhedral_execution.benchmarks.frames.MandelbrotPixel;
 import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
 import io.euhedral_execution.hashing.HasherApi;
 import java.util.concurrent.ThreadLocalRandom;

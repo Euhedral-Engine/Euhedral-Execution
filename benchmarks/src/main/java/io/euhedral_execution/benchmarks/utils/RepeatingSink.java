@@ -1,4 +1,4 @@
-package euhedral.benchmarks.utils;
+package io.euhedral_execution.benchmarks.utils;
 
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.generics.LatticeReceiver;
