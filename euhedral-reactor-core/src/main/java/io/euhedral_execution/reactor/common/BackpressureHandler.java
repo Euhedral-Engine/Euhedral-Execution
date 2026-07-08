@@ -1,4 +1,4 @@
-package euhedral.io.reactor.common;
+package io.euhedral_execution.reactor.common;
 
 import java.util.concurrent.locks.LockSupport;
 import reactor.core.publisher.Sinks;

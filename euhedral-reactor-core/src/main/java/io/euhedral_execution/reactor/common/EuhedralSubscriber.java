@@ -1,4 +1,4 @@
-package euhedral.io.reactor.common;
+package io.euhedral_execution.reactor.common;
 
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.generics.LatticeReceiver;
