@@ -1,6 +1,5 @@
 package euhedral.io.reactor;
 
-import euhedral.hashing.HasherApi;
 import euhedral.io.reactor.common.BackpressureHandler;
 import euhedral.io.reactor.common.EuhedralSubscriber;
 import euhedral.io.reactor.common.FrameSequencer;
@@ -12,6 +11,7 @@ import io.euhedral_execution.core.impl.FrameFactory.FrameReplace;
 import io.euhedral_execution.core.impl.FrameManager;
 import io.euhedral_execution.data_structures.atomics.PaddedAtomicLong;
 import io.euhedral_execution.data_structures.queues.PartitionedMpscQueue;
+import io.euhedral_execution.hashing.HasherApi;
 import java.util.Objects;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;

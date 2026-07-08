@@ -1,8 +1,8 @@
 package euhedral.benchmarks.core_benchmarks.utils;
 
 import euhedral.benchmarks.frames.MandelbrotPixel;
-import euhedral.hashing.HasherApi;
 import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
+import io.euhedral_execution.hashing.HasherApi;
 import java.util.concurrent.ThreadLocalRandom;
 
 public class MandelbrotCanvas {
