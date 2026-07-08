@@ -59,10 +59,6 @@ public abstract class AbstractExecutor implements CloneableObject {
 
     public abstract AbstractExecutor hookOnClone(int cpu);
 
-    @Override
-    public void close() {
-    }
-
     private class ExecutionTerminal implements LatticeReceiver {
 
         public ExecutionTerminal() {

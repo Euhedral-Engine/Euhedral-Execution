@@ -152,11 +152,6 @@ public class EuhedralScheduler implements Scheduler {
         return Mono.fromRunnable(this::dispose);
     }
 
-    @Override
-    public void init() {
-        Scheduler.super.init();
-    }
-
     private EuhedralWorker getSink() {
         long rand = SEED.getAndAddRelease(1);
         int idx = (int) MathFunctions.unsignedMultiplyHigh(rand, this.sinks.length);
