@@ -18,7 +18,7 @@
 
   <groupId>io.euhedral-execution</groupId>
   <artifactId>euhedral-execution</artifactId>
-  <version>0.0.6</version>
+  <version>0.0.7-SNAPSHOT</version>
   <packaging>pom</packaging>
 
   <name>euhedral-execution</name>
