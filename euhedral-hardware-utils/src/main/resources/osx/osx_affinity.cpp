@@ -10,7 +10,7 @@ extern "C" {
 #endif
 
 JNIEXPORT jint JNICALL
-Java_euhedral_hardware_1utils_osx_OSXAffinity_setThreadAffinity(JNIEnv *env,
+Java_io_euhedral_1execution_hardware_1utils_osx_OSXAffinity_setThreadAffinity(JNIEnv *env,
                                                             jclass clazz,
                                                             jlongArray maskArray) {
   jsize len = env->GetArrayLength(maskArray);
@@ -48,7 +48,7 @@ Java_euhedral_hardware_1utils_osx_OSXAffinity_setThreadAffinity(JNIEnv *env,
 }
 
 JNIEXPORT jint JNICALL
-Java_euhedral_hardware_1utils_osx_OSXAffinity_getCpu(JNIEnv *env, jclass clazz) {
+Java_io_euhedral_1execution_hardware_1utils_osx_OSXAffinity_getCpu(JNIEnv *env, jclass clazz) {
 #if defined(__x86_64__) || defined(__i386__)
   uint32_t a, b, c, d;
   __cpuid_count(1, 0, a, b, c, d);
@@ -59,7 +59,7 @@ Java_euhedral_hardware_1utils_osx_OSXAffinity_getCpu(JNIEnv *env, jclass clazz) 
 }
 
 JNIEXPORT jboolean JNICALL
-Java_euhedral_hardware_1utils_osx_OSXAffinity_setThreadTickPolicy(JNIEnv *env,
+Java_io_euhedral_1execution_hardware_1utils_osx_OSXAffinity_setThreadTickPolicy(JNIEnv *env,
                                                               jclass clazz,
                                                               jlong nanos) {
 

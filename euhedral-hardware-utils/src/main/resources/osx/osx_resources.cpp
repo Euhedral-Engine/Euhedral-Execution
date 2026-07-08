@@ -9,7 +9,7 @@ extern "C" {
 
 // CPU Times
 JNIEXPORT jlongArray JNICALL
-Java_euhedral_hardware_1utils_osx_OSXResources_getCpuTimes(JNIEnv *env,
+Java_io_euhedral_1execution_hardware_1utils_osx_OSXResources_getCpuTimes(JNIEnv *env,
                                                            jclass) {
 
   struct rusage usage;
@@ -32,7 +32,7 @@ Java_euhedral_hardware_1utils_osx_OSXResources_getCpuTimes(JNIEnv *env,
 
 // CPU Load (system-wide)
 JNIEXPORT jdouble JNICALL
-Java_euhedral_hardware_1utils_osx_OSXResources_getSystemCpuLoad(JNIEnv *,
+Java_io_euhedral_1execution_hardware_1utils_osx_OSXResources_getSystemCpuLoad(JNIEnv *,
                                                                 jclass) {
 
   host_cpu_load_info_data_t cpuinfo;
@@ -55,7 +55,7 @@ Java_euhedral_hardware_1utils_osx_OSXResources_getSystemCpuLoad(JNIEnv *,
 
 // Memory
 JNIEXPORT jlongArray JNICALL
-Java_euhedral_hardware_1utils_osx_OSXResources_getMemorySnapshot(JNIEnv *env,
+Java_io_euhedral_1execution_hardware_1utils_osx_OSXResources_getMemorySnapshot(JNIEnv *env,
                                                                  jclass) {
 
   jlong values[3] = {0, 0, 0};
@@ -86,7 +86,7 @@ Java_euhedral_hardware_1utils_osx_OSXResources_getMemorySnapshot(JNIEnv *env,
 
 // IO Bytes
 JNIEXPORT jlong JNICALL
-Java_euhedral_hardware_1utils_osx_OSXResources_getIoBytes(JNIEnv *, jclass) {
+Java_io_euhedral_1execution_hardware_1utils_osx_OSXResources_getIoBytes(JNIEnv *, jclass) {
   struct rusage_info_v3 rusage;
   if (proc_pid_rusage(getpid(), RUSAGE_INFO_V3, (void **)&rusage) == 0) {
     return (jlong)(rusage.ri_diskio_bytesread + rusage.ri_diskio_byteswritten);
@@ -95,7 +95,7 @@ Java_euhedral_hardware_1utils_osx_OSXResources_getIoBytes(JNIEnv *, jclass) {
 }
 
 JNIEXPORT jobjectArray JNICALL
-Java_euhedral_hardware_1utils_osx_OSXResources_getCoreTypeMask(
+Java_io_euhedral_1execution_hardware_1utils_osx_OSXResources_getCoreTypeMask(
     JNIEnv *env, jobject obj, jboolean getPCores) {
   const char *levelKey =
       getPCores ? "hw.perflevel0.logicalcpu" : "hw.perflevel1.logicalcpu";

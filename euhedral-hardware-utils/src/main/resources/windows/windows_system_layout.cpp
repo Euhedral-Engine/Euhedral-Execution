@@ -8,7 +8,7 @@ extern "C" {
 #endif
 
 JNIEXPORT jbyteArray JNICALL
-Java_euhedral_hardware_1utils_windows_WindowsSystemLayout_getRawTopologyInfo(
+Java_io_euhedral_1execution_hardware_1utils_windows_WindowsSystemLayout_getRawTopologyInfo(
     JNIEnv *env, jclass clazz) {
   DWORD length = 0;
   GetLogicalProcessorInformationEx(RelationAll, nullptr, &length);

@@ -8,7 +8,7 @@ extern "C" {
 #endif
 
 JNIEXPORT jlong JNICALL
-Java_euhedral_hardware_1utils_osx_OSXSystemLayout_getSysctlLong(JNIEnv *env,
+Java_io_euhedral_1execution_hardware_1utils_osx_OSXSystemLayout_getSysctlLong(JNIEnv *env,
                                                                 jobject obj,
                                                                 jstring jkey) {
   const char *key = env->GetStringUTFChars(jkey, NULL);
@@ -20,7 +20,7 @@ Java_euhedral_hardware_1utils_osx_OSXSystemLayout_getSysctlLong(JNIEnv *env,
 }
 
 JNIEXPORT jint JNICALL
-Java_euhedral_hardware_1utils_osx_OSXSystemLayout_getSysctlInt(JNIEnv *env,
+Java_io_euhedral_1execution_hardware_1utils_osx_OSXSystemLayout_getSysctlInt(JNIEnv *env,
                                                                jobject obj,
                                                                jstring jkey) {
   const char *key = env->GetStringUTFChars(jkey, NULL);
@@ -32,7 +32,7 @@ Java_euhedral_hardware_1utils_osx_OSXSystemLayout_getSysctlInt(JNIEnv *env,
 }
 
 JNIEXPORT jstring JNICALL
-Java_euhedral_hardware_1utils_osx_OSXSystemLayout_getSysctlString(JNIEnv *env,
+Java_io_euhedral_1execution_hardware_1utils_osx_OSXSystemLayout_getSysctlString(JNIEnv *env,
                                                                   jobject obj,
                                                                   jstring jkey) {
   const char *key = env->GetStringUTFChars(jkey, NULL);
