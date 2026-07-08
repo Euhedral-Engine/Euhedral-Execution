@@ -1,10 +1,10 @@
-package euhedral.io.reactor;
+package io.euhedral_execution.reactor;
 
-import euhedral.io.reactor.common.EuhedralSubscriber;
 import io.euhedral_execution.core.config.LatticeConfig;
 import io.euhedral_execution.core.control_plane.ControlPlaneLattice;
 import io.euhedral_execution.core.utils.MathFunctions;
 import io.euhedral_execution.data_structures.atomics.PaddedAtomicLong;
+import io.euhedral_execution.reactor.common.EuhedralSubscriber;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.Objects;
 import java.util.concurrent.ThreadLocalRandom;

@@ -1,16 +1,17 @@
-package euhedral.io.reactor.common;
+package io.euhedral_execution.reactor.common;
 
-import euhedral.io.reactor.EuhedralWorker;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.hashing.HasherApi;
+import io.euhedral_execution.reactor.EuhedralWorker;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.LockSupport;
 import lombok.Getter;
 import reactor.core.Disposable;
 
-public class TaskFrame extends AbstractFrame implements Disposable {
+public final class TaskFrame extends AbstractFrame implements Disposable {
 
     private static final VarHandle DISPOSED;
 
@@ -23,7 +24,7 @@ public class TaskFrame extends AbstractFrame implements Disposable {
         }
     }
 
-    public static TaskFrame build(long idHash, Runnable task, EuhedralWorker sink, long delay, long period, TimeUnit unit) {
+    public static TaskFrame create(long idHash, Runnable task, EuhedralWorker sink, long delay, long period, TimeUnit unit) {
         return new TaskFrame(idHash, task, sink, delay, period, unit);
     }
 
@@ -49,7 +50,8 @@ public class TaskFrame extends AbstractFrame implements Disposable {
         if(delayNs <= 0 && periodNs <= 0) {
             sink.submit(this);
         } else {
-            this.thread = Thread.ofVirtual().start(() -> {
+            CompletableFuture.runAsync(() -> {
+                this.thread = Thread.currentThread();
                 if (delay > 0) {
                     LockSupport.parkNanos(delayNs);
                 }
