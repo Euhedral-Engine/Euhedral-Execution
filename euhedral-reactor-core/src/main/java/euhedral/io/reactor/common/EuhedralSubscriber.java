@@ -1,8 +1,8 @@
 package euhedral.io.reactor.common;
 
-import euhedral.io.frames.AbstractFrame;
-import euhedral.io.generics.LatticeReceiver;
-import euhedral.io.generics.LatticeSource;
+import io.euhedral_execution.core.frames.AbstractFrame;
+import io.euhedral_execution.core.generics.LatticeReceiver;
+import io.euhedral_execution.core.generics.LatticeSource;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.function.Consumer;

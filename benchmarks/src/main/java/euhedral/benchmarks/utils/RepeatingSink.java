@@ -1,9 +1,9 @@
 package euhedral.benchmarks.utils;
 
-import euhedral.io.frames.AbstractFrame;
-import euhedral.io.generics.LatticeReceiver;
-import euhedral.io.generics.LatticeSource;
-import euhedral.io.ingest.AbstractIngestSink;
+import io.euhedral_execution.core.frames.AbstractFrame;
+import io.euhedral_execution.core.generics.LatticeReceiver;
+import io.euhedral_execution.core.generics.LatticeSource;
+import io.euhedral_execution.core.ingest.AbstractIngestSink;
 import java.lang.invoke.VarHandle;
 import java.util.Objects;
 import java.util.function.Consumer;

@@ -1,11 +1,11 @@
 package euhedral.io.reactor;
 
 import euhedral.hashing.HasherApi;
-import euhedral.io.frames.AbstractFrame;
-import euhedral.io.generics.LatticeReceiver;
-import euhedral.io.generics.LatticeSource;
-import euhedral.io.ingest.AbstractIngestSink;
 import euhedral.io.reactor.common.TaskFrame;
+import io.euhedral_execution.core.frames.AbstractFrame;
+import io.euhedral_execution.core.generics.LatticeReceiver;
+import io.euhedral_execution.core.generics.LatticeSource;
+import io.euhedral_execution.core.ingest.AbstractIngestSink;
 import io.euhedral_execution.data_structures.queues.PartitionedMpscQueue;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;

@@ -1,9 +1,9 @@
 package euhedral.io.reactor;
 
-import euhedral.io.config.LatticeConfig;
-import euhedral.io.control_plane.ControlPlaneLattice;
 import euhedral.io.reactor.common.EuhedralSubscriber;
-import euhedral.io.utils.MathFunctions;
+import io.euhedral_execution.core.config.LatticeConfig;
+import io.euhedral_execution.core.control_plane.ControlPlaneLattice;
+import io.euhedral_execution.core.utils.MathFunctions;
 import io.euhedral_execution.data_structures.atomics.PaddedAtomicLong;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.Objects;
