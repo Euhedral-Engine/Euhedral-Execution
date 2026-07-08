@@ -13,7 +13,8 @@
   <artifactId>euhedral-hardware-utils</artifactId>
 
   <properties>
-    <skip.central.publish>false</skip.central.publish>
+    <maven.compiler.release>17</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
 
   <dependencies>

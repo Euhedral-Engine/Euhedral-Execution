@@ -15,7 +15,6 @@
   <properties>
     <maven.compiler.release>17</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <skip.central.publish>false</skip.central.publish>
   </properties>
 
   <dependencies>

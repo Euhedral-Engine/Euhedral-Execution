@@ -1,6 +1,7 @@
 name: Euhedral Execution Deploy
 
 on:
+  workflow_dispatch:
   push:
     branches: [ "main" ]
 
@@ -25,10 +26,6 @@ jobs:
           persist-credentials: true
           fetch-depth: 0
 
-      - name: Configure Git User
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
       - name: Cache macOS SDK
         id: cache-macos-sdk
         uses: actions/cache@v4
@@ -97,7 +94,7 @@ jobs:
       - name: Check Existing Releases
         if: ${{ steps.check_version.outputs.is_snapshot == 'false' }}
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           TARGET_TAG: ${{ steps.check_version.outputs.TARGET_TAG }}
         run: |
           if gh release view "$TARGET_TAG" >/dev/null 2>&1 || git rev-parse "$TARGET_TAG" >/dev/null 2>&1; then
@@ -115,17 +112,30 @@ jobs:
       - name: Build and Deploy to Apache Maven Central
         if: ${{ steps.check_version.outputs.is_snapshot == 'false' }}
         run: |
-          mise exec -- mvn -B clean deploy -DskiTests -P release -s settings.xml
+          mise exec -- mvn -B clean deploy -DskiTests -pl '!benchmarks,!euhedral-execution' -P release -s settings.xml
         env:
           CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
           CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
 
+      - name: Configure Git
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.GIT_SIGNING_KEY }}" > ~/.ssh/id_signing
+          chmod 600 ~/.ssh/id_signing
+          
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@://github.com"
+          
+          git config --global gpg.format ssh
+          git config --global user.signingkey ~/.ssh/id_signing
+          git config --global commit.gpgsign true
+          git config --global tag.gpgSign true
+
       - name: Create Git Tag and GitHub Release
         if: ${{ steps.check_version.outputs.is_snapshot == 'false' }}
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           TARGET_TAG: ${{ steps.check_version.outputs.TARGET_TAG }}
         run: |
           git tag -a "$TARGET_TAG" -m "Release $TARGET_TAG"
