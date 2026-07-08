@@ -1,4 +1,4 @@
-package euhedral.hashing;
+package io.euhedral_execution.hashing;
 
 public final class ByteHasher extends AbstractHasher {
 

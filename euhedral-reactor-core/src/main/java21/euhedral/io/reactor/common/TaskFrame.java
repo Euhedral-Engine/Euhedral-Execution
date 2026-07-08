@@ -1,8 +1,8 @@
 package euhedral.io.reactor.common;
 
-import euhedral.hashing.HasherApi;
 import euhedral.io.reactor.EuhedralWorker;
 import io.euhedral_execution.core.frames.AbstractFrame;
+import io.euhedral_execution.hashing.HasherApi;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.concurrent.TimeUnit;

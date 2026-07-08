@@ -1,12 +1,12 @@
 package euhedral.benchmarks.frames;
 
-import euhedral.hashing.HasherApi;
 import io.euhedral_execution.core.flow_control.RoutingPolicy;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.impl.FrameManager;
 import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
 import io.euhedral_execution.hardware_utils.SystemInfo.CpuInfo;
 import io.euhedral_execution.hardware_utils.ThreadTools;
+import io.euhedral_execution.hashing.HasherApi;
 import java.util.concurrent.ThreadLocalRandom;
 import org.openjdk.jmh.infra.Blackhole;
 

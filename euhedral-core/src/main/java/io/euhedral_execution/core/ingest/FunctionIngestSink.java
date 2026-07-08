@@ -1,12 +1,12 @@
 package io.euhedral_execution.core.ingest;
 
-import euhedral.hashing.HasherApi;
 import io.euhedral_execution.core.frames.FunctionFrame;
 import io.euhedral_execution.core.generics.LatticeSource;
 import io.euhedral_execution.core.impl.FrameFactory;
 import io.euhedral_execution.core.impl.FrameFactory.FrameCreate;
 import io.euhedral_execution.core.impl.FrameFactory.FrameReplace;
 import io.euhedral_execution.core.impl.FrameManager;
+import io.euhedral_execution.hashing.HasherApi;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.Collection;
