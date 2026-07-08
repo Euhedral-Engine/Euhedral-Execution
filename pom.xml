@@ -51,6 +51,7 @@
     <module>euhedral-hardware-utils</module>
     <module>euhedral-hashing</module>
     <module>euhedral-reactor-core</module>
+    <module>euhedral-spring-core</module>
   </modules>
 
   <repositories>
