@@ -7,9 +7,9 @@ module euhedral.hardware_utils {
     requires java.management;
     requires jdk.management;
 
-    exports euhedral.hardware_utils;
-    exports euhedral.hardware_utils.common;
-    exports euhedral.hardware_utils.linux;
-    exports euhedral.hardware_utils.macOS;
-    exports euhedral.hardware_utils.windows;
+    exports io.euhedral_execution.hardware_utils;
+    exports io.euhedral_execution.hardware_utils.common;
+    exports io.euhedral_execution.hardware_utils.linux;
+    exports io.euhedral_execution.hardware_utils.macOS;
+    exports io.euhedral_execution.hardware_utils.windows;
 }

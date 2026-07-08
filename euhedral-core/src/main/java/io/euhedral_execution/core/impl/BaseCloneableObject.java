@@ -1,7 +1,5 @@
 package io.euhedral_execution.core.impl;
 
-import euhedral.hardware_utils.PinnedThreadExecutor;
-import euhedral.hardware_utils.common.SystemUtilization.CoreSnapshot;
 import io.euhedral_execution.core.config.CloneConfig;
 import io.euhedral_execution.core.config.FragmentConfig;
 import io.euhedral_execution.core.control_plane.ControlPlaneFragment;
@@ -9,6 +7,8 @@ import io.euhedral_execution.core.generics.AbstractExecutor;
 import io.euhedral_execution.core.generics.CloneableObject;
 import io.euhedral_execution.core.generics.LatticeSource;
 import io.euhedral_execution.core.utils.FlowThread;
+import io.euhedral_execution.hardware_utils.PinnedThreadExecutor;
+import io.euhedral_execution.hardware_utils.common.SystemUtilization.CoreSnapshot;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.concurrent.Future;
 import org.slf4j.Logger;

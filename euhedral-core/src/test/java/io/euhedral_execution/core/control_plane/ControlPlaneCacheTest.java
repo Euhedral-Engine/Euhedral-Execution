@@ -7,12 +7,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import euhedral.hardware_utils.common.SystemUtilization.CoreSnapshot;
-import euhedral.hardware_utils.common.SystemUtilization.CpuSnapshot;
 import io.euhedral_execution.core.config.CacheConfig;
 import io.euhedral_execution.core.config.CloneConfig;
 import io.euhedral_execution.core.flow_control.UpstreamQueue;
 import io.euhedral_execution.core.generics.CloneableObject;
+import io.euhedral_execution.hardware_utils.common.SystemUtilization.CoreSnapshot;
+import io.euhedral_execution.hardware_utils.common.SystemUtilization.CpuSnapshot;
 import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;

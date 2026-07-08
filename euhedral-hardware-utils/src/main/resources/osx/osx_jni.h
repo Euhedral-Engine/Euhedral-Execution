@@ -32,51 +32,51 @@ extern "C" {
 // osx_affinity.cpp
 
 JNIEXPORT jint JNICALL
-Java_euhedral_hardware_1utils_osx_OSXAffinity_setThreadAffinity(JNIEnv *env,
+Java_io_euhedral_1execution_hardware_1utils_osx_OSXAffinity_setThreadAffinity(JNIEnv *env,
                                                             jclass clazz,
                                                             jlongArray maskArray);
 
 JNIEXPORT jint JNICALL
-Java_euhedral_hardware_1utils_osx_OSXAffinity_getCpu(JNIEnv *env, jclass clazz);
+Java_io_euhedral_1execution_hardware_1utils_osx_OSXAffinity_getCpu(JNIEnv *env, jclass clazz);
 
 JNIEXPORT jboolean JNICALL
-Java_euhedral_hardware_1utils_osx_OSXAffinity_setThreadTickPolicy(JNIEnv *env,
+Java_io_euhedral_1execution_hardware_1utils_osx_OSXAffinity_setThreadTickPolicy(JNIEnv *env,
                                                               jclass clazz,
                                                               jlong nanos);
 
 // osx_resources.cpp
 
 JNIEXPORT jlongArray JNICALL
-Java_euhedral_hardware_1utils_osx_OSXResources_getCpuTimes(JNIEnv *env, jclass);
+Java_io_euhedral_1execution_hardware_1utils_osx_OSXResources_getCpuTimes(JNIEnv *env, jclass);
 
 JNIEXPORT jdouble JNICALL
-Java_euhedral_hardware_1utils_osx_OSXResources_getSystemCpuLoad(JNIEnv *, jclass);
+Java_io_euhedral_1execution_hardware_1utils_osx_OSXResources_getSystemCpuLoad(JNIEnv *, jclass);
 
 JNIEXPORT jlongArray JNICALL
-Java_euhedral_hardware_1utils_osx_OSXResources_getMemorySnapshot(JNIEnv *env,
+Java_io_euhedral_1execution_hardware_1utils_osx_OSXResources_getMemorySnapshot(JNIEnv *env,
                                                                  jclass);
 
 JNIEXPORT jlong JNICALL
-Java_euhedral_hardware_1utils_osx_OSXResources_getIoBytes(JNIEnv *, jclass);
+Java_io_euhedral_1execution_hardware_1utils_osx_OSXResources_getIoBytes(JNIEnv *, jclass);
 
 JNIEXPORT jobjectArray JNICALL
-Java_euhedral_hardware_1utils_osx_OSXResources_getCoreTypeMask(
+Java_io_euhedral_1execution_hardware_1utils_osx_OSXResources_getCoreTypeMask(
     JNIEnv *env, jobject obj, jboolean getPCores);
 
 // osx_system_layout.cpp
 
 JNIEXPORT jlong JNICALL
-Java_euhedral_hardware_1utils_osx_OSXSystemLayout_getSysctlLong(JNIEnv *env,
+Java_io_euhedral_1execution_hardware_1utils_osx_OSXSystemLayout_getSysctlLong(JNIEnv *env,
                                                                 jobject obj,
                                                                 jstring jkey);
 
 JNIEXPORT jint JNICALL
-Java_euhedral_hardware_1utils_osx_OSXSystemLayout_getSysctlInt(JNIEnv *env,
+Java_io_euhedral_1execution_hardware_1utils_osx_OSXSystemLayout_getSysctlInt(JNIEnv *env,
                                                                jobject obj,
                                                                jstring jkey);
 
 JNIEXPORT jstring JNICALL
-Java_euhedral_hardware_1utils_osx_OSXSystemLayout_getSysctlString(JNIEnv *env,
+Java_io_euhedral_1execution_hardware_1utils_osx_OSXSystemLayout_getSysctlString(JNIEnv *env,
                                                                   jobject obj,
                                                                   jstring jkey);
 

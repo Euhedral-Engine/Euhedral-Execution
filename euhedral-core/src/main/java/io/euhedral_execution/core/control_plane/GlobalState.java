@@ -1,8 +1,8 @@
 package io.euhedral_execution.core.control_plane;
 
-import euhedral.hardware_utils.SystemInfo;
-import euhedral.hardware_utils.SystemInfo.SocketInfo;
 import io.euhedral_execution.data_structures.atomics.PaddedDoubleAdder;
+import io.euhedral_execution.hardware_utils.SystemInfo;
+import io.euhedral_execution.hardware_utils.SystemInfo.SocketInfo;
 import java.util.BitSet;
 
 @SuppressWarnings("unused")

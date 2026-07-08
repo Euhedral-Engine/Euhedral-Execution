@@ -42,7 +42,7 @@ static void init() {
 }
 
 JNIEXPORT void JNICALL
-Java_euhedral_hardware_1utils_windows_WindowsResources_getCpuTimes(JNIEnv *env, jclass clazz, jlongArray buffer) {
+Java_io_euhedral_1execution_hardware_1utils_windows_WindowsResources_getCpuTimes(JNIEnv *env, jclass clazz, jlongArray buffer) {
     FILETIME createTime, exitTime, kernelTime, userTime;
     if (!GetProcessTimes(GetCurrentProcess(), &createTime, &exitTime, &kernelTime, &userTime)) {
         return;
@@ -57,7 +57,7 @@ Java_euhedral_hardware_1utils_windows_WindowsResources_getCpuTimes(JNIEnv *env, 
 }
 
 JNIEXPORT jdouble JNICALL
-Java_euhedral_hardware_1utils_windows_WindowsResources_getCpuQuota(JNIEnv *env, jclass clazz) {
+Java_io_euhedral_1execution_hardware_1utils_windows_WindowsResources_getCpuQuota(JNIEnv *env, jclass clazz) {
     init();
     if (!g_InJob) return -1.0;
 
@@ -71,7 +71,7 @@ Java_euhedral_hardware_1utils_windows_WindowsResources_getCpuQuota(JNIEnv *env, 
 }
 
 JNIEXPORT jlong JNICALL
-Java_euhedral_hardware_1utils_windows_WindowsResources_getAffinityMask(JNIEnv *env, jclass clazz) {
+Java_io_euhedral_1execution_hardware_1utils_windows_WindowsResources_getAffinityMask(JNIEnv *env, jclass clazz) {
     DWORD_PTR processMask = 0;
     DWORD_PTR systemMask = 0;
     GetProcessAffinityMask(GetCurrentProcess(), &processMask, &systemMask);
@@ -79,7 +79,7 @@ Java_euhedral_hardware_1utils_windows_WindowsResources_getAffinityMask(JNIEnv *e
 }
 
 JNIEXPORT jint JNICALL
-Java_euhedral_hardware_1utils_windows_WindowsResources_getPerCpuLoad(JNIEnv *env, jclass clazz, jdoubleArray buffer) {
+Java_io_euhedral_1execution_hardware_1utils_windows_WindowsResources_getPerCpuLoad(JNIEnv *env, jclass clazz, jdoubleArray buffer) {
     init();
     DWORD cpuCount = g_CpuCount;
     ULONG bufferSize = cpuCount * sizeof(ULONG64);
@@ -101,7 +101,7 @@ Java_euhedral_hardware_1utils_windows_WindowsResources_getPerCpuLoad(JNIEnv *env
 }
 
 JNIEXPORT void JNICALL
-Java_euhedral_hardware_1utils_windows_WindowsResources_getMemorySnapshot(JNIEnv *env, jclass clazz, jlongArray buffer) {
+Java_io_euhedral_1execution_hardware_1utils_windows_WindowsResources_getMemorySnapshot(JNIEnv *env, jclass clazz, jlongArray buffer) {
     init();
 
     jlong* values = env->GetLongArrayElements(buffer, NULL);
@@ -133,7 +133,7 @@ Java_euhedral_hardware_1utils_windows_WindowsResources_getMemorySnapshot(JNIEnv 
 }
 
 JNIEXPORT jlong JNICALL
-Java_euhedral_hardware_1utils_windows_WindowsResources_getIoBytes(JNIEnv *env, jclass clazz) {
+Java_io_euhedral_1execution_hardware_1utils_windows_WindowsResources_getIoBytes(JNIEnv *env, jclass clazz) {
     IO_COUNTERS io;
     if (GetProcessIoCounters(GetCurrentProcess(), &io)) {
         return (jlong)(io.ReadTransferCount + io.WriteTransferCount);

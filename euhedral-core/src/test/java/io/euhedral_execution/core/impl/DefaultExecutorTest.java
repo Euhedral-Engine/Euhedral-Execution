@@ -7,12 +7,12 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import euhedral.hardware_utils.PinnedThreadExecutor;
 import io.euhedral_execution.core.config.CloneConfig;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.generics.CloneableObject;
 import io.euhedral_execution.core.generics.LatticeReceiver;
 import io.euhedral_execution.core.generics.LatticeSource;
+import io.euhedral_execution.hardware_utils.PinnedThreadExecutor;
 import java.util.BitSet;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;

@@ -1,10 +1,10 @@
 package io.euhedral_execution.core.impl;
 
-import euhedral.hardware_utils.SystemInfo;
-import euhedral.hardware_utils.SystemInfo.CpuInfo;
-import euhedral.hardware_utils.ThreadTools;
 import euhedral.hashing.HasherApi;
 import io.euhedral_execution.core.frames.AbstractFrame;
+import io.euhedral_execution.hardware_utils.SystemInfo;
+import io.euhedral_execution.hardware_utils.SystemInfo.CpuInfo;
+import io.euhedral_execution.hardware_utils.ThreadTools;
 import java.util.concurrent.ThreadLocalRandom;
 
 /// A class for automatically creating or updating frames using the passed in functions.

@@ -8,7 +8,7 @@ extern "C" {
 #endif
 
 JNIEXPORT jint JNICALL
-Java_euhedral_hardware_1utils_windows_WindowsAffinity_setThreadAffinity(
+Java_io_euhedral_1execution_hardware_1utils_windows_WindowsAffinity_setThreadAffinity(
     JNIEnv *env, jclass clazz, jlongArray maskArray) {
   jsize len = env->GetArrayLength(maskArray);
   if (len == 0)
@@ -58,13 +58,13 @@ Java_euhedral_hardware_1utils_windows_WindowsAffinity_setThreadAffinity(
   return result;
 }
 
-JNIEXPORT jint JNICALL Java_euhedral_hardware_1utils_windows_WindowsAffinity_getCpu(
+JNIEXPORT jint JNICALL Java_io_euhedral_1execution_hardware_1utils_windows_WindowsAffinity_getCpu(
     JNIEnv *env, jclass clazz) {
   return (jint)GetCurrentProcessorNumber();
 }
 
 JNIEXPORT jint JNICALL
-Java_euhedral_hardware_1utils_windows_WindowsTimerResolution_ntSetTimerResolution(
+Java_io_euhedral_1execution_hardware_1utils_windows_WindowsTimerResolution_ntSetTimerResolution(
     JNIEnv *env, jclass clazz, jint resolution, jboolean set) {
 
   HMODULE hNtDll = GetModuleHandleA("ntdll.dll");
