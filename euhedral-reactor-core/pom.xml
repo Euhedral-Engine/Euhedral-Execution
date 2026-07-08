@@ -84,6 +84,7 @@
             </goals>
             <configuration>
               <release>21</release>
+              <multiReleaseOutput>true</multiReleaseOutput>
               <compileSourceRoots>
                 <root>${project.basedir}/src/main/java21</root>
               </compileSourceRoots>

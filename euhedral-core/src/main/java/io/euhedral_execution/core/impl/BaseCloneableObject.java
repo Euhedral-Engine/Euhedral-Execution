@@ -16,7 +16,7 @@ import org.slf4j.LoggerFactory;
 
 /// ## The base implementation of a CloneableObject
 ///
-/// This class is responsible for connecting a [ControlPlaneFragment] to a [PipelineExecutor]. It
+/// This class is responsible for connecting a [ControlPlaneFragment] to an [AbstractExecutor]. It
 /// also automatically broadcasts lifecycle updates to the instances.
 @SuppressWarnings("unused")
 public final class BaseCloneableObject implements CloneableObject {

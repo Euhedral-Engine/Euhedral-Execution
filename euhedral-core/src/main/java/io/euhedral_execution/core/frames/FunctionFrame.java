@@ -7,6 +7,9 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 /// A generic frame that applies its function to the payload and passes the result to its consumer.
+///
+/// @param <PAYLOAD> Data type to be passed to the function
+/// @param <RET_VAL> Data type that is returned by the function
 @SuppressWarnings("unused")
 public final class FunctionFrame<PAYLOAD, RET_VAL> extends AbstractFrame {
 

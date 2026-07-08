@@ -7,6 +7,7 @@ import org.jspecify.annotations.Nullable;
 
 /// ### Configuration for the [ControlPlaneCache][ControlPlaneCache]
 ///
+/// @param cloneConfig            See [CloneConfig]
 /// @param memoryBudget           Percentage of L2 and L1 cache that will be used to size the
 /// queues. (0.0, 1.0]
 /// @param partitions             Number of partitions in the cache.

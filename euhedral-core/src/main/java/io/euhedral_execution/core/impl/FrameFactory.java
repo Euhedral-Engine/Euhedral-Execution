@@ -10,24 +10,27 @@ import java.util.concurrent.ThreadLocalRandom;
 /// A class for automatically creating or updating frames using the passed in functions.
 ///
 /// Typically used in tandem with a [FrameManager]
-public final class FrameFactory<DATA, F extends AbstractFrame> {
+///
+/// @param <DATA> Data type to pass to the create and replace functions
+/// @param <FRAME> Frame type to create and manage
+public final class FrameFactory<DATA, FRAME extends AbstractFrame> {
     private final long idHash = HasherApi.mix(ThreadLocalRandom.current().nextLong());
 
-    private final FrameCreate<DATA, F> frameGenerator;
-    private final FrameReplace<DATA, F> frameReplace;
+    private final FrameCreate<DATA, FRAME> frameGenerator;
+    private final FrameReplace<DATA, FRAME> frameReplace;
     private final CpuInfo originLocation;
 
     private long seed = ThreadLocalRandom.current().nextLong();
 
-    public FrameFactory(FrameCreate<DATA, F> frameGenerator, FrameReplace<DATA, F> frameReplace) {
+    public FrameFactory(FrameCreate<DATA, FRAME> frameGenerator, FrameReplace<DATA, FRAME> frameReplace) {
         this.frameGenerator = frameGenerator;
         this.frameReplace = frameReplace;
         this.originLocation = SystemInfo.getCpuInfo(ThreadTools.getCpu());
     }
 
     /// Creates a frame with the data.
-    public F create(DATA data) {
-        F frame = frameGenerator.create(idHash, data);
+    public FRAME create(DATA data) {
+        FRAME frame = frameGenerator.create(idHash, data);
         if(frame.isOrdered()) {
             frame.randomizeHash(idHash);
         } else {
@@ -40,7 +43,7 @@ public final class FrameFactory<DATA, F extends AbstractFrame> {
     /// Replaces the data in the frame.
     ///
     /// @param data Data to give to the frame
-    public void replace(DATA data, F frame) {
+    public void replace(DATA data, FRAME frame) {
         frame.reset();
 
         frameReplace.replace(data, frame);

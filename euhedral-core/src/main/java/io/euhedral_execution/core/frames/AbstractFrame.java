@@ -15,7 +15,7 @@ import org.jspecify.annotations.NonNull;
 /// A frame is the smallest unit of execution in the system.
 ///
 /// It carries execution state, routing hashes, and lifecycle hooks required by an
-/// [`AbstractExecutor`][euhedral.io].
+/// [`AbstractExecutor`][io.euhedral_execution.core.generics].
 ///
 /// Frames are designed to be *reusable*. They are not created and discarded like typical
 /// tasks. Instead, they are recycled through a [FrameManager] to avoid GC churn and keep allocation

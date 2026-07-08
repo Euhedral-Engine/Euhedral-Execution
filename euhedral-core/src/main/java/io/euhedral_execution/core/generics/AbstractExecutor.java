@@ -15,7 +15,7 @@ import org.slf4j.LoggerFactory;
 /// into the completion sink, which decouples execution from downstream acknowledgment.
 public abstract class AbstractExecutor implements CloneableObject {
 
-    protected final Logger logger = LoggerFactory.getLogger(this.getClass());
+    private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
     protected final int cpu;
 

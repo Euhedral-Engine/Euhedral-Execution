@@ -1,0 +1,15 @@
+module euhedral.reactor.core {
+    requires static lombok;
+
+    requires euhedral.core;
+    requires euhedral.data.structures;
+    requires euhedral.hashing;
+
+    requires micrometer.core;
+    requires org.jspecify;
+    requires org.reactivestreams;
+    requires reactor.core;
+
+    exports io.euhedral_execution.reactor;
+    exports io.euhedral_execution.reactor.common;
+}
