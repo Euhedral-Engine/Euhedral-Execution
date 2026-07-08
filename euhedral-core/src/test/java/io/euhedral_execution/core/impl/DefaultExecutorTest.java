@@ -9,7 +9,6 @@ import static org.mockito.Mockito.when;
 
 import io.euhedral_execution.core.config.CloneConfig;
 import io.euhedral_execution.core.frames.AbstractFrame;
-import io.euhedral_execution.core.generics.CloneableObject;
 import io.euhedral_execution.core.generics.LatticeReceiver;
 import io.euhedral_execution.core.generics.LatticeSource;
 import io.euhedral_execution.hardware_utils.PinnedThreadExecutor;
@@ -96,19 +95,6 @@ class DefaultExecutorTest {
 
         @Override
         public void complete() {
-        }
-    }
-
-    static class TestCloneableObject implements CloneableObject {
-
-        @Override
-        public CloneableObject clone(CloneConfig cloneConfig) {
-            return null;
-        }
-
-        @Override
-        public void close() {
-
         }
     }
 }
