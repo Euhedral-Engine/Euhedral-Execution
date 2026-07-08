@@ -2,13 +2,6 @@ package io.euhedral_execution.core.control_plane;
 
 import static io.euhedral_execution.core.utils.MathFunctions.clampLong;
 
-import euhedral.hardware_utils.PinnedThreadExecutor;
-import euhedral.hardware_utils.SystemInfo;
-import euhedral.hardware_utils.SystemInfo.CpuCacheLayout;
-import euhedral.hardware_utils.SystemInfo.CpuInfo;
-import euhedral.hardware_utils.ThreadTools;
-import euhedral.hardware_utils.common.SystemUtilization.CoreSnapshot;
-import euhedral.hardware_utils.common.SystemUtilization.CpuSnapshot;
 import io.euhedral_execution.core.config.CloneConfig;
 import io.euhedral_execution.core.config.FragmentConfig;
 import io.euhedral_execution.core.flow_control.LatticeHotSource;
@@ -18,6 +11,13 @@ import io.euhedral_execution.core.metrics.ExecutionMetrics;
 import io.euhedral_execution.core.utils.FlowRecorder;
 import io.euhedral_execution.core.utils.FlowThread;
 import io.euhedral_execution.core.utils.MathFunctions;
+import io.euhedral_execution.hardware_utils.PinnedThreadExecutor;
+import io.euhedral_execution.hardware_utils.SystemInfo;
+import io.euhedral_execution.hardware_utils.SystemInfo.CpuCacheLayout;
+import io.euhedral_execution.hardware_utils.SystemInfo.CpuInfo;
+import io.euhedral_execution.hardware_utils.ThreadTools;
+import io.euhedral_execution.hardware_utils.common.SystemUtilization.CoreSnapshot;
+import io.euhedral_execution.hardware_utils.common.SystemUtilization.CpuSnapshot;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.time.Duration;

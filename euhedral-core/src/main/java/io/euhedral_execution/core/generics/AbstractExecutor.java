@@ -1,8 +1,8 @@
 package io.euhedral_execution.core.generics;
 
-import euhedral.hardware_utils.PinnedThreadExecutor;
 import io.euhedral_execution.core.config.CloneConfig;
 import io.euhedral_execution.core.frames.AbstractFrame;
+import io.euhedral_execution.hardware_utils.PinnedThreadExecutor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

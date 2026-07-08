@@ -1,11 +1,11 @@
 package io.euhedral_execution.core.frames;
 
-import euhedral.hardware_utils.SystemInfo.CpuInfo;
 import euhedral.hashing.HasherApi;
 import io.euhedral_execution.core.control_plane.ControlPlaneFragment;
 import io.euhedral_execution.core.flow_control.RoutingPolicy;
 import io.euhedral_execution.core.generics.AbstractExecutor;
 import io.euhedral_execution.core.impl.FrameManager;
+import io.euhedral_execution.hardware_utils.SystemInfo.CpuInfo;
 import lombok.Getter;
 import lombok.Setter;
 import org.jspecify.annotations.NonNull;

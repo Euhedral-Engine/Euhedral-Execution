@@ -1,9 +1,9 @@
 package io.euhedral_execution.core.control_plane;
 
-import euhedral.hardware_utils.SystemInfo;
 import io.euhedral_execution.core.config.CacheConfig;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.utils.FlowThread;
+import io.euhedral_execution.hardware_utils.SystemInfo;
 import org.jspecify.annotations.NonNull;
 
 public abstract class WorkRequester extends ControlPlaneCache {

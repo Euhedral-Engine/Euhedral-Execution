@@ -23,40 +23,40 @@ typedef NTSTATUS(NTAPI *pfnNtSetTimerResolution)(ULONG DesiredResolution,
 // windows_affinity.cpp
 
 JNIEXPORT jint JNICALL
-Java_euhedral_hardware_1utils_windows_WindowsAffinity_setThreadAffinity(
+Java_io_euhedral_1execution_hardware_1utils_windows_WindowsAffinity_setThreadAffinity(
     JNIEnv *env, jclass clazz, jlongArray maskArray);
 
-JNIEXPORT jint JNICALL Java_euhedral_hardware_1utils_windows_WindowsAffinity_getCpu(
+JNIEXPORT jint JNICALL Java_io_euhedral_1execution_hardware_1utils_windows_WindowsAffinity_getCpu(
     JNIEnv *env, jclass clazz);
 
 JNIEXPORT jint JNICALL
-Java_euhedral_hardware_1utils_windows_WindowsTimerResolution_ntSetTimerResolution(
+Java_io_euhedral_1execution_hardware_1utils_windows_WindowsTimerResolution_ntSetTimerResolution(
     JNIEnv *env, jclass clazz, jint resolution, jboolean set);
 
 // windows_resources.cpp
 
 JNIEXPORT void JNICALL
-Java_euhedral_hardware_1utils_windows_WindowsResources_getCpuTimes(JNIEnv *env, jclass clazz, jlongArray buffer);
+Java_io_euhedral_1execution_hardware_1utils_windows_WindowsResources_getCpuTimes(JNIEnv *env, jclass clazz, jlongArray buffer);
 
 JNIEXPORT jdouble JNICALL
-Java_euhedral_hardware_1utils_windows_WindowsResources_getCpuQuota(JNIEnv *env, jclass clazz);
+Java_io_euhedral_1execution_hardware_1utils_windows_WindowsResources_getCpuQuota(JNIEnv *env, jclass clazz);
 
 JNIEXPORT jlong JNICALL
-Java_euhedral_hardware_1utils_windows_WindowsResources_getAffinityMask(JNIEnv *env, jclass clazz);
+Java_io_euhedral_1execution_hardware_1utils_windows_WindowsResources_getAffinityMask(JNIEnv *env, jclass clazz);
 
 JNIEXPORT jint JNICALL
-Java_euhedral_hardware_1utils_windows_WindowsResources_getPerCpuLoad(JNIEnv *env, jclass clazz, jdoubleArray buffer);
+Java_io_euhedral_1execution_hardware_1utils_windows_WindowsResources_getPerCpuLoad(JNIEnv *env, jclass clazz, jdoubleArray buffer);
 
 JNIEXPORT void JNICALL
-Java_euhedral_hardware_1utils_windows_WindowsResources_getMemorySnapshot(JNIEnv *env, jclass clazz, jlongArray buffer);
+Java_io_euhedral_1execution_hardware_1utils_windows_WindowsResources_getMemorySnapshot(JNIEnv *env, jclass clazz, jlongArray buffer);
 
 JNIEXPORT jlong JNICALL
-Java_euhedral_hardware_1utils_windows_WindowsResources_getIoBytes(JNIEnv *env, jclass clazz);
+Java_io_euhedral_1execution_hardware_1utils_windows_WindowsResources_getIoBytes(JNIEnv *env, jclass clazz);
 
 // windows_system_layout.cpp
 
 JNIEXPORT jbyteArray JNICALL
-Java_euhedral_hardware_1utils_windows_WindowsSystemLayout_getRawTopologyInfo(
+Java_io_euhedral_1execution_hardware_1utils_windows_WindowsSystemLayout_getRawTopologyInfo(
     JNIEnv *env, jclass clazz);
 
 #ifdef __cplusplus

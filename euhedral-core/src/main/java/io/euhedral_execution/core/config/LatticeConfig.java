@@ -1,10 +1,10 @@
 package io.euhedral_execution.core.config;
 
-import euhedral.hardware_utils.SystemInfo;
 import io.euhedral_execution.core.control_plane.ControlPlaneLattice;
 import io.euhedral_execution.core.control_plane.ControlPlaneShard;
 import io.euhedral_execution.core.generics.CloneableObject;
 import io.euhedral_execution.core.impl.BaseCloneableObject;
+import io.euhedral_execution.hardware_utils.SystemInfo;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.util.BitSet;

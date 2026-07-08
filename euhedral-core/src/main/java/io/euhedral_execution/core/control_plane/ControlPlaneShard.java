@@ -2,12 +2,6 @@ package io.euhedral_execution.core.control_plane;
 
 import static io.euhedral_execution.core.utils.MathFunctions.unsignedMultiplyHigh;
 
-import euhedral.hardware_utils.SystemInfo;
-import euhedral.hardware_utils.SystemInfo.CpuInfo;
-import euhedral.hardware_utils.SystemInfo.SocketInfo;
-import euhedral.hardware_utils.TopologyMapper.EffectiveSocketTopology;
-import euhedral.hardware_utils.common.SystemUtilization.CoreSnapshot;
-import euhedral.hardware_utils.common.SystemUtilization.SocketSnapshot;
 import io.euhedral_execution.core.config.CloneConfig;
 import io.euhedral_execution.core.flow_control.LatticeEdge;
 import io.euhedral_execution.core.flow_control.LatticeVertex;
@@ -15,6 +9,12 @@ import io.euhedral_execution.core.flow_control.RoutingPolicy;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.generics.CloneableObject;
 import io.euhedral_execution.data_structures.queues.common.QueueUtils;
+import io.euhedral_execution.hardware_utils.SystemInfo;
+import io.euhedral_execution.hardware_utils.SystemInfo.CpuInfo;
+import io.euhedral_execution.hardware_utils.SystemInfo.SocketInfo;
+import io.euhedral_execution.hardware_utils.TopologyMapper.EffectiveSocketTopology;
+import io.euhedral_execution.hardware_utils.common.SystemUtilization.CoreSnapshot;
+import io.euhedral_execution.hardware_utils.common.SystemUtilization.SocketSnapshot;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.time.Duration;
