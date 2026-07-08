@@ -1,11 +1,10 @@
-name: Euhedral Execution Deploy
+name: Bump Version
 
 on:
-  push:
-    branches: [ "main" ]
+  workflow_dispatch:
 
 jobs:
-  deploy:
+  bump_version:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -25,10 +24,40 @@ jobs:
           persist-credentials: true
           fetch-depth: 0
 
-      - name: Configure Git User
+      - name: Install mise tools
+        uses: jdx/mise-action@v2
+        with:
+          install: true
+          cache: true
+
+      - name: Parse POM Version
+        id: check_version
         run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          POM_VERSION=$(mise exec -- mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          echo "TARGET_TAG=v$POM_VERSION" >> $GITHUB_OUTPUT
+
+          if [[ "$POM_VERSION" == *"-SNAPSHOT"* ]]; then
+            echo "is_snapshot=true" >> $GITHUB_OUTPUT
+            echo "Detected SNAPSHOT version: $POM_VERSION. Aborting version bump."
+            exit 1
+          else
+            echo "is_snapshot=false" >> $GITHUB_OUTPUT
+            echo "Detected RELEASE version: $POM_VERSION. Validating deployment targets."
+          fi
+
+      - name: Check Existing Releases
+        if: ${{ steps.check_version.outputs.is_snapshot == 'false' }}
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          TARGET_TAG: ${{ steps.check_version.outputs.TARGET_TAG }}
+        run: |
+          if gh release view "$TARGET_TAG" >/dev/null 2>&1 || git rev-parse "$TARGET_TAG" >/dev/null 2>&1; then
+            echo "::error::Release aborted. A release or tag named $TARGET_TAG already exists."
+            exit 1
+          else
+            echo "Version $TARGET_TAG is unique. Proceeding."
+          fi
+
       - name: Cache macOS SDK
         id: cache-macos-sdk
         uses: actions/cache@v4
@@ -51,22 +80,16 @@ jobs:
           mkdir -p ~/.local/share/mise/installs/macos-sdk
           curl -f -L -s https://github.com/joseluisq/macosx-sdks/releases/download/26.1/MacOSX26.1.sdk.tar.xz | tar -xJ --strip-components=1 -C ~/.local/share/mise/installs/macos-sdk/
 
-      - name: Install mise tools
-        uses: jdx/mise-action@v2
-        with:
-          install: true
-          cache: true
-
       - name: Fetch and Merge Multi-OS JNI Headers
         if: ${{ !env.ACT }}
         run: |
           MISE_JDK_PATH=$(mise where java)
           INCLUDE_DIR="$MISE_JDK_PATH/include"
           mkdir -p "$INCLUDE_DIR/darwin" "$INCLUDE_DIR/win32"
-
+  
           cp "$INCLUDE_DIR/linux/jni_md.h" "$INCLUDE_DIR/darwin/jni_md.h"
           cp "$INCLUDE_DIR/linux/jni_md.h" "$INCLUDE_DIR/win32/jni_md.h"
-
+  
           echo "Final JNI Include Directory Layout:"
           ls -R "$INCLUDE_DIR"
 
@@ -74,53 +97,9 @@ jobs:
         run: |
           mise exec -- mvn dependency:go-offline -B --file pom.xml
 
-      - name: Install GPG Private Key
-        uses: crazy-max/ghaction-import-gpg@v6
-        with:
-          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
-          passphrase: ${{ secrets.GPG_PASSPHRASE }}
-
-      - name: Parse POM Version
-        id: check_version
-        run: |
-          POM_VERSION=$(mise exec -- mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
-          echo "TARGET_TAG=v$POM_VERSION" >> $GITHUB_OUTPUT
-          
-          if [[ "$POM_VERSION" == *"-SNAPSHOT"* ]]; then
-            echo "is_snapshot=true" >> $GITHUB_OUTPUT
-            echo "Detected SNAPSHOT version: $POM_VERSION. Will compile and verify, but SKIP deployment."
-          else
-            echo "is_snapshot=false" >> $GITHUB_OUTPUT
-            echo "Detected RELEASE version: $POM_VERSION. Validating deployment targets."
-          fi
-
-      - name: Check Existing Releases
-        if: ${{ steps.check_version.outputs.is_snapshot == 'false' }}
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          TARGET_TAG: ${{ steps.check_version.outputs.TARGET_TAG }}
-        run: |
-          if gh release view "$TARGET_TAG" >/dev/null 2>&1 || git rev-parse "$TARGET_TAG" >/dev/null 2>&1; then
-            echo "::error::Deployment aborted. A release or tag named $TARGET_TAG already exists."
-            exit 1
-          else
-            echo "Version $TARGET_TAG is unique. Proceeding."
-          fi
-
       - name: Build and Verify
-        if: ${{ steps.check_version.outputs.is_snapshot == 'true' }}
         run: |
           mise exec -- mvn -B verify --file pom.xml
-
-      - name: Build and Deploy to Apache Maven Central
-        if: ${{ steps.check_version.outputs.is_snapshot == 'false' }}
-        run: |
-          mise exec -- mvn -B clean deploy -DskiTests -P release -s settings.xml
-        env:
-          CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
-          CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
-          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
 
       - name: Configure Git Identity
         run: |
@@ -134,23 +113,23 @@ jobs:
         run: |
           git tag -a "$TARGET_TAG" -m "Release $TARGET_TAG"
           git push origin "$TARGET_TAG"
-          
+
           FILES=()
           for file in **/target/*.jar; do
             if [[ ! "$file" == *"-sources.jar" ]] && [[ ! "$file" == *"-javadoc.jar" ]]; then
               FILES+=("$file")
             fi
           done
-          
+
           gh release create "$TARGET_TAG" --generate-notes "${FILES[@]}"
 
       - name: Roll to Next Development Snapshot
         if: ${{ steps.check_version.outputs.is_snapshot == 'false' }}
         run: |
           mise exec -- mvn versions:set -DnextSnapshot=true -DgenerateBackupPoms=false
-          
+
           NEW_SNAPSHOT=$(mise exec -- mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
-          
+
           git add **/pom.xml pom.xml
           git commit -m "actions: Bump version to $NEW_SNAPSHOT [skip ci]"
           git push origin main
