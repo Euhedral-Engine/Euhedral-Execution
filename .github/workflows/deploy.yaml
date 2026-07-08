@@ -112,7 +112,7 @@ jobs:
       - name: Build and Deploy to Apache Maven Central
         if: ${{ steps.check_version.outputs.is_snapshot == 'false' }}
         run: |
-          mise exec -- mvn -B clean deploy -DskiTests -pl '!benchmarks,!euhedral-execution' -P release -s settings.xml
+          mise exec -- mvn -B clean deploy -DskiTests -pl '!benchmarks' -P release -s settings.xml
         env:
           CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
           CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}

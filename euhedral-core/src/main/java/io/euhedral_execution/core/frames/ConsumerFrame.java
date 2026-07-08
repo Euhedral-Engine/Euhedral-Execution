@@ -6,6 +6,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 /// A generic frame that consumes its payload when executed.
+///
+/// @param <T> Data type to consume
 public final class ConsumerFrame<T> extends AbstractFrame {
 
     private final Consumer<T> consumer;
