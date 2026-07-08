@@ -12,9 +12,16 @@ jobs:
       packages: write
 
     steps:
+      - name: Generate GitHub App Token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.DEPLOY_ID }}
+          private-key: ${{ secrets.DEPLOY_KEY }}
+
       - uses: actions/checkout@v4
         with:
-          token: ${{ secrets.DEPLOY_ACTION }}
+          token: ${{ steps.app-token.outputs.token }}
           persist-credentials: true
           fetch-depth: 0
 
@@ -118,12 +125,20 @@ jobs:
       - name: Create Git Tag and GitHub Release
         if: ${{ steps.check_version.outputs.is_snapshot == 'false' }}
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           TARGET_TAG: ${{ steps.check_version.outputs.TARGET_TAG }}
         run: |
           git tag -a "$TARGET_TAG" -m "Release $TARGET_TAG"
           git push origin "$TARGET_TAG"
-          gh release create "$TARGET_TAG" --generate-notes **/target/*.jar
+          
+          FILES=()
+          for file in **/target/*.jar; do
+            if [[ ! "$file" == *"-sources.jar" ]] && [[ ! "$file" == *"-javadoc.jar" ]]; then
+              FILES+=("$file")
+            fi
+          done
+          
+          gh release create "$TARGET_TAG" --generate-notes "${FILES[@]}"
 
       - name: Roll to Next Development Snapshot
         if: ${{ steps.check_version.outputs.is_snapshot == 'false' }}
@@ -133,5 +148,5 @@ jobs:
           NEW_SNAPSHOT=$(mise exec -- mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
           
           git add **/pom.xml pom.xml
-          git commit -m "chore: Bump version to $NEW_SNAPSHOT [skip ci]"
+          git commit -m "actions: Bump version to $NEW_SNAPSHOT [skip ci]"
           git push origin main
