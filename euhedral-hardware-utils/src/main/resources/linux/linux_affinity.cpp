@@ -16,7 +16,7 @@ extern "C" {
 #endif
 
 JNIEXPORT jint JNICALL
-Java_euhedral_hardware_1utils_linux_LinuxAffinity_setThreadAffinity(
+Java_io_euhedral_1execution_hardware_1utils_linux_LinuxAffinity_setThreadAffinity(
     JNIEnv *env, jclass clazz, jlongArray maskArray) {
 
     jsize len = env->GetArrayLength(maskArray);
@@ -41,12 +41,12 @@ Java_euhedral_hardware_1utils_linux_LinuxAffinity_setThreadAffinity(
     return (jint)err;
 }
 
-JNIEXPORT jint JNICALL Java_euhedral_hardware_1utils_linux_LinuxAffinity_getCpu(
+JNIEXPORT jint JNICALL Java_io_euhedral_1execution_hardware_1utils_linux_LinuxAffinity_getCpu(
     JNIEnv *env, jclass clazz) {
   return (jint)sched_getcpu();
 }
 
-JNIEXPORT jint JNICALL Java_euhedral_hardware_1utils_linux_LinuxAffinity_prctl(
+JNIEXPORT jint JNICALL Java_io_euhedral_1execution_hardware_1utils_linux_LinuxAffinity_prctl(
     JNIEnv *env, jclass clazz, jlong nanos) {
   return prctl(PR_SET_TIMER_SLACK, (unsigned long)nanos, 0UL, 0UL, 0UL);
 }
