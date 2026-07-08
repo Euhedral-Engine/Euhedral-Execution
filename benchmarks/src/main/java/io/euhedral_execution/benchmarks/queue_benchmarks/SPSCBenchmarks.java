@@ -1,4 +1,4 @@
-package euhedral.benchmarks.queue_benchmarks;
+package io.euhedral_execution.benchmarks.queue_benchmarks;
 
 import io.euhedral_execution.data_structures.queues.SpscQueue;
 import io.euhedral_execution.hardware_utils.PinnedThreadExecutor;

@@ -1,4 +1,4 @@
-package euhedral.benchmarks.frames;
+package io.euhedral_execution.benchmarks.frames;
 
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;

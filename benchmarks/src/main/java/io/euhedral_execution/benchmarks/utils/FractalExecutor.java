@@ -1,8 +1,8 @@
-package euhedral.benchmarks.utils;
+package io.euhedral_execution.benchmarks.utils;
 
-import euhedral.benchmarks.frames.BenchArrayFrame;
-import euhedral.benchmarks.frames.MandelbrotPixel;
-import euhedral.benchmarks.frames.MandelbulbFrame;
+import io.euhedral_execution.benchmarks.frames.BenchArrayFrame;
+import io.euhedral_execution.benchmarks.frames.MandelbrotPixel;
+import io.euhedral_execution.benchmarks.frames.MandelbulbFrame;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.generics.AbstractExecutor;
 import org.openjdk.jmh.infra.Blackhole;

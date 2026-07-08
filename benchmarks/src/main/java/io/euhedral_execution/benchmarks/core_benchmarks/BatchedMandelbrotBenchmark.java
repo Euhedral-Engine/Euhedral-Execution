@@ -1,9 +1,9 @@
-package euhedral.benchmarks.core_benchmarks;
+package io.euhedral_execution.benchmarks.core_benchmarks;
 
-import euhedral.benchmarks.core_benchmarks.utils.MandelbrotCanvas;
-import euhedral.benchmarks.frames.BenchArrayFrame;
-import euhedral.benchmarks.frames.MandelbrotPixel;
-import euhedral.benchmarks.utils.FractalExecutor;
+import io.euhedral_execution.benchmarks.core_benchmarks.utils.MandelbrotCanvas;
+import io.euhedral_execution.benchmarks.frames.BenchArrayFrame;
+import io.euhedral_execution.benchmarks.frames.MandelbrotPixel;
+import io.euhedral_execution.benchmarks.utils.FractalExecutor;
 import io.euhedral_execution.core.config.LatticeConfig;
 import io.euhedral_execution.core.control_plane.ControlPlaneLattice;
 import io.euhedral_execution.core.frames.AbstractFrame;
