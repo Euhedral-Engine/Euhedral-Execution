@@ -70,7 +70,7 @@ public class GrpcFrame extends AbstractFrame {
     }
 
     public void replace(GrpcMessage message) {
-        reset();
+        resetHash();
         this.grpcMessage = message;
     }
 
