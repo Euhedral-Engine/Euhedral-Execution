@@ -164,7 +164,7 @@ public final class EuhedralOperator {
                             framed.subscribe(subscriber);
                             this.scheduler.ingest(subscriber);
                         })
-                .doFinally(sig -> {
+                .doOnError(sig -> {
                     dead.setRelease(true);
                     killSwitch.tryEmitEmpty();
                     recycler.close();

@@ -44,7 +44,7 @@ public final class FrameFactory<DATA, FRAME extends AbstractFrame> {
     ///
     /// @param data Data to give to the frame
     public void replace(DATA data, FRAME frame) {
-        frame.reset();
+        frame.resetHash();
 
         frameReplace.replace(data, frame);
         if(!frame.isOrdered()) {

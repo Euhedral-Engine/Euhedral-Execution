@@ -18,6 +18,7 @@ module euhedral.spring.core {
     requires spring.context;
     requires spring.grpc.core;
     requires spring.messaging;
+    requires euhedral.reactor.core;
 
     exports io.euhedral_execution.spring.core.frames;
     exports io.euhedral_execution.spring.core.utils;

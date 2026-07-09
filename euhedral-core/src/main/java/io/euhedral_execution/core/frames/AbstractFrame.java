@@ -79,7 +79,7 @@ public abstract class AbstractFrame {
     }
 
     /// Does the thing.
-    public abstract void execute();
+    public void execute() {}
 
     /// Sets the routingHash by mixing the idHash with the seed.
     public final void randomizeHash(long seed) {
@@ -110,7 +110,7 @@ public abstract class AbstractFrame {
     }
 
     /// Resets the routingHash to the idHash.
-    public void reset() {
+    public void resetHash() {
         this.routingHash = idHash;
     }
 
