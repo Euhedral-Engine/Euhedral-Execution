@@ -19,6 +19,6 @@ module euhedral.spring.core {
 
     exports io.euhedral_execution.spring.core.frames;
     exports io.euhedral_execution.spring.core.utils;
-    exports io.euhedral_execution.spring.core.protocols.grpc.base;
     exports io.euhedral_execution.spring.core.protocols.grpc.protos;
+    exports io.euhedral_execution.spring.core.protocols.grpc;
 }

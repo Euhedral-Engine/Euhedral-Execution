@@ -1,4 +1,4 @@
-package io.euhedral_execution.spring.core.protocols.grpc.base;
+package io.euhedral_execution.spring.core.protocols.grpc;
 
 import io.euhedral_execution.spring.core.frames.GrpcFrame.CommunicationMethod;
 import io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage;
@@ -12,7 +12,7 @@ import org.reactivestreams.Subscription;
 import reactor.core.CoreSubscriber;
 import reactor.core.publisher.Flux;
 
-public class GrpcClientInterceptor extends Flux<GrpcMessage> implements
+public class GrpcClientHandler extends Flux<GrpcMessage> implements
         ClientResponseObserver<GrpcMessage, GrpcMessage>, Subscription {
 
     private final CommunicationMethod method;
@@ -30,11 +30,11 @@ public class GrpcClientInterceptor extends Flux<GrpcMessage> implements
     private volatile boolean complete = false;
     private volatile boolean cancelled = false;
 
-    public GrpcClientInterceptor(CommunicationMethod method) {
+    public GrpcClientHandler(CommunicationMethod method) {
         this(method, 4096, 256);
     }
 
-    public GrpcClientInterceptor(CommunicationMethod method, int maxRequest, int demandLowWaterMark) {
+    public GrpcClientHandler(CommunicationMethod method, int maxRequest, int demandLowWaterMark) {
         this.method = method;
         this.demandLowWaterMark = demandLowWaterMark;
         this.maxRequest = maxRequest;
@@ -99,7 +99,7 @@ public class GrpcClientInterceptor extends Flux<GrpcMessage> implements
         if (demand <= 0 || cancelled || complete) {
             return;
         }
-        this.demand.accumulateAndGet(demand, GrpcClientInterceptor::addDemand);
+        this.demand.accumulateAndGet(demand, GrpcClientHandler::addDemand);
 
         if (ready && pending.get() <= demandLowWaterMark) {
             drainDemand();

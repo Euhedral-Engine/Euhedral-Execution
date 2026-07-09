@@ -1,4 +1,4 @@
-package io.euhedral_execution.spring.core.protocols.grpc.base;
+package io.euhedral_execution.spring.core.protocols.grpc;
 
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.generics.LatticeReceiver;
@@ -21,7 +21,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import org.reactivestreams.Subscription;
 
-public class GrpcServerInboundHandle implements LatticeSource, StreamObserver<GrpcMessage>,
+public class GrpcServerHandler implements LatticeSource, StreamObserver<GrpcMessage>,
         Subscription {
 
     private static final VarHandle CANCELLED;
@@ -31,11 +31,11 @@ public class GrpcServerInboundHandle implements LatticeSource, StreamObserver<Gr
     static {
         try {
             CANCELLED = MethodHandles.lookup()
-                    .findVarHandle(GrpcServerInboundHandle.class, "cancelled", boolean.class);
+                    .findVarHandle(GrpcServerHandler.class, "cancelled", boolean.class);
             COMPLETE = MethodHandles.lookup()
-                    .findVarHandle(GrpcServerInboundHandle.class, "complete", boolean.class);
+                    .findVarHandle(GrpcServerHandler.class, "complete", boolean.class);
             DOWNSTREAM = MethodHandles.lookup()
-                    .findVarHandle(GrpcServerInboundHandle.class, "downstream",
+                    .findVarHandle(GrpcServerHandler.class, "downstream",
                             LatticeReceiver.class);
         } catch (Throwable t) {
             throw new ExceptionInInitializerError(t);
@@ -57,7 +57,7 @@ public class GrpcServerInboundHandle implements LatticeSource, StreamObserver<Gr
 
     private long seed = ThreadLocalRandom.current().nextLong();
 
-    public GrpcServerInboundHandle(long idHash, ServerCallStreamObserver<GrpcMessage> client,
+    public GrpcServerHandler(long idHash, ServerCallStreamObserver<GrpcMessage> client,
             CommunicationMethod method) {
         this.client = client;
         this.method = method;
@@ -121,7 +121,7 @@ public class GrpcServerInboundHandle implements LatticeSource, StreamObserver<Gr
 
         int request = (int) Math.min(demand, Integer.MAX_VALUE - pending);
         if (request > 0) {
-            this.pending.getAndAccumulate(demand, GrpcServerInboundHandle::addPending);
+            this.pending.getAndAccumulate(demand, GrpcServerHandler::addPending);
             this.client.request(request);
         }
     }

@@ -1,4 +1,4 @@
-package io.euhedral_execution.spring.core.protocols.grpc.base;
+package io.euhedral_execution.spring.core.protocols.grpc;
 
 import io.euhedral_execution.spring.core.frames.GrpcFrame.CommunicationMethod;
 import io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceGrpc;
@@ -22,7 +22,7 @@ public class GrpcTransportClient implements AutoCloseable {
     }
 
     public Mono<GrpcMessage> sendSingleRespondSingle(GrpcMessage message) {
-        GrpcClientInterceptor interceptor = new GrpcClientInterceptor(
+        GrpcClientHandler interceptor = new GrpcClientHandler(
                 CommunicationMethod.SINGLE_RESPONSE);
         return Mono.from(interceptor).doOnSubscribe(sub -> stub.unaryMethod(message, interceptor));
     }
@@ -32,19 +32,19 @@ public class GrpcTransportClient implements AutoCloseable {
     }
 
     public Mono<GrpcMessage> sendStreamRespondSingle(Flux<GrpcMessage> messageFlux) {
-        GrpcClientInterceptor interceptor = new GrpcClientInterceptor(
+        GrpcClientHandler interceptor = new GrpcClientHandler(
                 CommunicationMethod.CLIENT_STREAM);
         return Mono.from(interceptor).doOnSubscribe(sub -> stub.clientStreamMethod(interceptor));
     }
 
     public Flux<GrpcMessage> sendSingleRespondStream(GrpcMessage message) {
-        GrpcClientInterceptor interceptor = new GrpcClientInterceptor(
+        GrpcClientHandler interceptor = new GrpcClientHandler(
                 CommunicationMethod.SERVER_STREAM);
         return interceptor.doOnSubscribe(sub -> stub.serverStreamMethod(message, interceptor));
     }
 
     public Flux<GrpcMessage> sendStreamRespondStream(Flux<GrpcMessage> messageFlux) {
-        GrpcClientInterceptor interceptor = new GrpcClientInterceptor(CommunicationMethod.BIDI);
+        GrpcClientHandler interceptor = new GrpcClientHandler(CommunicationMethod.BIDI);
         return interceptor.doOnSubscribe(sub -> stub.bidirectionalMethod(interceptor));
     }
 
