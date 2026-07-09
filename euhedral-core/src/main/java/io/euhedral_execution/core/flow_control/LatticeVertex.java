@@ -404,6 +404,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
         public void onError(Throwable throwable) {
             if (this.complete.compareAndSet(false, true)) {
                 logger.error("UpstreamHandle Error", throwable);
+                removeUpstream(this);
             }
         }
 
