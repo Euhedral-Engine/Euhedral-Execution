@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+package io.euhedral_execution.spring.core.protocols.grpc.protos;
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/any.proto";
+
+option java_package = "io.euhedral_execution.spring.core.protocols.grpc.protos";
+option java_outer_classname = "GrpcTransportServiceMd";
+
+service GrpcTransportService {
+  // Single Request/Response
+  rpc UnaryMethod (GrpcMessage) returns (GrpcMessage);
+
+  // Client streaming
+  rpc ClientStreamMethod (stream GrpcMessage) returns (GrpcMessage);
+
+  // Server streaming
+  rpc ServerStreamMethod (GrpcMessage) returns (stream GrpcMessage);
+
+  // Bidirectional streaming
+  rpc BidirectionalMethod (stream GrpcMessage) returns (stream GrpcMessage);
+}
+
+message GrpcMessage {
+  bool isOrdered = 1;
+
+  oneof message {
+    GrpcSpringMessage springMessage = 2;
+    google.protobuf.Any customMessage = 3;
+  }
+}
+
+message GrpcSpringMessage {
+  google.protobuf.Struct headers = 1;
+  bytes data = 2;
+}
