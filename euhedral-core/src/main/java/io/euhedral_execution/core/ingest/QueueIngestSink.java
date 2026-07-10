@@ -20,7 +20,7 @@ public final class QueueIngestSink extends AbstractIngestSink {
     private final Delegate delegate;
 
     public QueueIngestSink() {
-        this(new PartitionedMpmcQueue<>(16_384));
+        this(new PartitionedMpmcQueue<>(8_192));
     }
 
     public QueueIngestSink(@NonNull ConcurrentPartitionedQueue<AbstractFrame> queue) {
@@ -58,6 +58,14 @@ public final class QueueIngestSink extends AbstractIngestSink {
     /// Clears the queue.
     public void clear() {
         this.delegate.queue.clear();
+    }
+
+    public long size() {
+        return this.delegate.queue.sizeLong();
+    }
+
+    public long getDemand() {
+        return this.delegate.demand.getAcquire();
     }
 
     /// Disconnects from the [ControlPlaneLattice] immediately. Does not clear

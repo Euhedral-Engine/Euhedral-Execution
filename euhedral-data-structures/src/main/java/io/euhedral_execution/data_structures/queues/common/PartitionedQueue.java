@@ -29,6 +29,10 @@ public interface PartitionedQueue<T> extends Queue<T> {
 
     T poll(int partition);
 
+    default long drain(Consumer<T> consumer) {
+        return drain(consumer, Long.MAX_VALUE);
+    }
+
     long drain(Consumer<T> consumer, long limit);
 
     long drain(Consumer<T> consumer, long limit, int startingPartition);
