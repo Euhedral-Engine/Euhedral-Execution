@@ -3,9 +3,9 @@ package io.euhedral_execution.spring.core.frames;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.impl.FrameManager;
 import io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage;
-import io.euhedral_execution.spring.core.utils.KillSwitch;
 import io.grpc.stub.ServerCallStreamObserver;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.LockSupport;
 import lombok.Getter;
 import lombok.Setter;
@@ -17,7 +17,6 @@ public class GrpcFrame extends AbstractFrame {
     private final ServerCallStreamObserver<GrpcMessage> client;
     @Getter
     private final CommunicationMethod method;
-    private final KillSwitch killSwitch;
     @Getter
     @Setter
     private GrpcMessage grpcMessage;
@@ -25,30 +24,12 @@ public class GrpcFrame extends AbstractFrame {
     public GrpcFrame(long idHash, GrpcMessage grpcMessage,
             CommunicationMethod method,
             ServerCallStreamObserver<GrpcMessage> client, FrameManager<GrpcMessage, GrpcFrame> recycleSink,
-            KillSwitch ks) {
-        super(idHash, recycleSink);
+            AtomicBoolean killSwitch) {
+        super(idHash, recycleSink, killSwitch);
 
         this.grpcMessage = grpcMessage;
         this.method = method;
         this.client = client;
-        this.killSwitch = ks;
-    }
-
-    @Override
-    public void execute() {
-
-    }
-
-    @Override
-    public boolean isAlive() {
-        return killSwitch == null || !killSwitch.isBooped();
-    }
-
-    @Override
-    public void kill() {
-        if (killSwitch != null) {
-            killSwitch.boop();
-        }
     }
 
     public void respond(GrpcMessage response) {

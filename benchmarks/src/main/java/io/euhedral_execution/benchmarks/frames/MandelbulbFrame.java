@@ -73,7 +73,7 @@ public class MandelbulbFrame extends AbstractFrame {
             double x, double y,
             int width, int height, int maxRaySteps, int iterationCap,
             double bailoutRadiusSq, Blackhole blackhole, PaddedLongAdder counters) {
-        super(idHash, recycler);
+        super(idHash, recycler, null);
         this.width = width;
         this.height = height;
         this.maxRaySteps = maxRaySteps;

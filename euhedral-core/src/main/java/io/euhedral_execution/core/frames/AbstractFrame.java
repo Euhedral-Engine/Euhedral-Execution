@@ -6,9 +6,11 @@ import io.euhedral_execution.core.generics.AbstractExecutor;
 import io.euhedral_execution.core.impl.FrameManager;
 import io.euhedral_execution.hardware_utils.SystemInfo.CpuInfo;
 import io.euhedral_execution.hashing.HasherApi;
+import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.Getter;
 import lombok.Setter;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 /// ## Base unit of work within Euhedral Core
 ///
@@ -62,6 +64,7 @@ public abstract class AbstractFrame {
     public static final CancelSignal CANCEL_SIGNAL = new CancelSignal();
 
     protected final FrameManager recycler;
+    protected final AtomicBoolean killSwitch;
 
     @Getter
     private final long idHash;
@@ -72,9 +75,14 @@ public abstract class AbstractFrame {
     @Setter
     private RoutingPolicy routingPolicy;
 
-    public AbstractFrame(long idHash, FrameManager recycler) {
+    public AbstractFrame(long idHash) {
+        this(idHash, null, null);
+    }
+
+    public AbstractFrame(long idHash, @Nullable FrameManager recycler, @Nullable AtomicBoolean killSwitch) {
         this.idHash = idHash;
         this.recycler = recycler;
+        this.killSwitch = killSwitch;
         this.routingHash = idHash;
     }
 
@@ -90,10 +98,16 @@ public abstract class AbstractFrame {
     /// Liveness check.
     ///
     /// If this returns `false`, the engine is allowed to cancel execution.
-    public abstract boolean isAlive();
+    public boolean isAlive() {
+        return this.killSwitch == null || !this.killSwitch.getAcquire();
+    }
 
     /// Hard stop for this frame.
-    public abstract void kill();
+    public void kill() {
+        if(this.killSwitch != null) {
+            this.killSwitch.setRelease(true);
+        }
+    }
 
     /// Post-execution hook.
     ///

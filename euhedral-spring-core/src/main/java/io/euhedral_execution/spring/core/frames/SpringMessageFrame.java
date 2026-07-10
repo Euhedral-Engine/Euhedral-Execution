@@ -3,8 +3,8 @@ package io.euhedral_execution.spring.core.frames;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.impl.FrameManager;
 import io.euhedral_execution.reactor.common.BackpressureHandler;
-import io.euhedral_execution.spring.core.utils.KillSwitch;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import lombok.Getter;
 import lombok.Setter;
@@ -15,11 +15,6 @@ import reactor.core.publisher.Sinks;
 
 @SuppressWarnings("unused")
 public class SpringMessageFrame extends AbstractFrame {
-
-    private final KillSwitch senderKillSwitch;
-
-    @Setter
-    private KillSwitch receiverKillSwitch;
 
     @Setter
     private Sinks.Many<SpringMessageFrame> returnSink;
@@ -32,10 +27,9 @@ public class SpringMessageFrame extends AbstractFrame {
     }
 
     public SpringMessageFrame(long idHash, Message<?> message, @Nullable FrameManager<Message<?>, SpringMessageFrame> recycler,
-            @Nullable KillSwitch senderKillSwitch) {
-        super(idHash, recycler);
+            @Nullable AtomicBoolean killSwitch) {
+        super(idHash, recycler, killSwitch);
         this.message = message;
-        this.senderKillSwitch = senderKillSwitch;
     }
 
     private Map<String, Object> cleanHeaders(Map<String, Object> headers) {
@@ -46,23 +40,6 @@ public class SpringMessageFrame extends AbstractFrame {
                 .filter(entry -> !entry.getKey().equals(MessageHeaders.ID) &&
                         !entry.getKey().equals(MessageHeaders.TIMESTAMP))
                 .collect(Collectors.toUnmodifiableMap(Map.Entry::getKey, Map.Entry::getValue));
-    }
-
-    @Override
-    public boolean isAlive() {
-        boolean isAlive = this.receiverKillSwitch == null || !this.receiverKillSwitch.isBooped();
-        isAlive &= this.senderKillSwitch == null || !this.senderKillSwitch.isBooped();
-        return isAlive;
-    }
-
-    @Override
-    public void kill() {
-        if (this.receiverKillSwitch != null) {
-            this.receiverKillSwitch.boop();
-        }
-        if(this.senderKillSwitch != null) {
-            this.senderKillSwitch.boop();
-        }
     }
 
     public boolean canSendResponse() {

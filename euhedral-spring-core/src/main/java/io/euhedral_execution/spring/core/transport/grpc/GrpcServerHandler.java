@@ -11,12 +11,12 @@ import io.euhedral_execution.hashing.HasherApi;
 import io.euhedral_execution.spring.core.frames.GrpcFrame;
 import io.euhedral_execution.spring.core.frames.GrpcFrame.CommunicationMethod;
 import io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage;
-import io.euhedral_execution.spring.core.utils.KillSwitch;
 import io.grpc.stub.ServerCallStreamObserver;
 import io.grpc.stub.StreamObserver;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import org.reactivestreams.Subscription;
@@ -64,9 +64,9 @@ public class GrpcServerHandler implements LatticeSource, StreamObserver<GrpcMess
         this.ingestPassword = HasherApi.combine(ThreadLocalRandom.current().nextLong(), idHash);
         this.manager = new FrameManager<>(8_192, ingestPassword);
 
-        KillSwitch killSwitch = new KillSwitch();
+        AtomicBoolean killSwitch = new AtomicBoolean();
         client.setOnCancelHandler(() -> {
-            killSwitch.boop();
+            killSwitch.setRelease(true);
             complete();
         });
 

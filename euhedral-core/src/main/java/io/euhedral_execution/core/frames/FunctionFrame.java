@@ -8,32 +8,28 @@ import java.util.function.Function;
 
 /// A generic frame that applies its function to the payload and passes the result to its consumer.
 ///
-/// @param <PAYLOAD> Data type to be passed to the function
-/// @param <RET_VAL> Data type that is returned by the function
+/// @param <P> Data type to be passed to the function
+/// @param <R> Data type that is returned by the function
 @SuppressWarnings("unused")
-public final class FunctionFrame<PAYLOAD, RET_VAL> extends AbstractFrame {
+public final class FunctionFrame<P, R> extends AbstractFrame {
 
-    final Function<PAYLOAD, RET_VAL> function;
-    final Consumer<RET_VAL> consumer;
+    final Function<P, R> function;
+    final Consumer<R> consumer;
 
-    private final AtomicBoolean killSwitch;
+    private P payload;
 
-    private PAYLOAD payload;
-
-    public FunctionFrame(long idHash, Function<PAYLOAD, RET_VAL> function,
-            Consumer<RET_VAL> consumer, PAYLOAD payload) {
+    public FunctionFrame(long idHash, Function<P, R> function,
+            Consumer<R> consumer, P payload) {
         this(idHash, function, consumer, payload, null, null);
     }
 
-    public FunctionFrame(long idHash, Function<PAYLOAD, RET_VAL> function,
-            Consumer<RET_VAL> consumer, PAYLOAD payload, AtomicBoolean killSwitch,
-            FrameManager<PAYLOAD, FunctionFrame<PAYLOAD, RET_VAL>> recycler) {
-        super(idHash, recycler);
+    public FunctionFrame(long idHash, Function<P, R> function,
+            Consumer<R> consumer, P payload, FrameManager<P, FunctionFrame<P, R>> recycler, AtomicBoolean killSwitch) {
+        super(idHash, recycler, killSwitch);
         Objects.requireNonNull(function);
         Objects.requireNonNull(consumer);
         this.function = function;
         this.consumer = consumer;
-        this.killSwitch = killSwitch;
         this.payload = payload;
     }
 
@@ -42,22 +38,7 @@ public final class FunctionFrame<PAYLOAD, RET_VAL> extends AbstractFrame {
         this.consumer.accept(this.function.apply(this.payload));
     }
 
-    @Override
-    public boolean isAlive() {
-        if(this.killSwitch != null) {
-            return !this.killSwitch.getOpaque();
-        }
-        return true;
-    }
-
-    @Override
-    public void kill() {
-        if(this.killSwitch != null) {
-            this.killSwitch.setRelease(true);
-        }
-    }
-
-    public void replace(PAYLOAD payload) {
+    public void replace(P payload) {
         this.payload = payload;
     }
 }
