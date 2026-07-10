@@ -2,7 +2,7 @@
 // source: io/euhedral_execution/spring/core/protocols/grpc/protos/GrpcTransportService.proto
 
 // Protobuf Java Version: 3.25.8
-package io.euhedral_execution.spring.core.protocols.grpc.protos;
+package io.euhedral_execution.spring.core.transport.grpc.protos;
 
 public final class GrpcTransportServiceMd {
   private GrpcTransportServiceMd() {}
@@ -34,11 +34,11 @@ public final class GrpcTransportServiceMd {
      * <code>.io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage springMessage = 2;</code>
      * @return The springMessage.
      */
-    io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage getSpringMessage();
+    io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage getSpringMessage();
     /**
      * <code>.io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage springMessage = 2;</code>
      */
-    io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessageOrBuilder getSpringMessageOrBuilder();
+    io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessageOrBuilder getSpringMessageOrBuilder();
 
     /**
      * <code>.google.protobuf.Any customMessage = 3;</code>
@@ -55,7 +55,7 @@ public final class GrpcTransportServiceMd {
      */
     com.google.protobuf.AnyOrBuilder getCustomMessageOrBuilder();
 
-    io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage.MessageCase getMessageCase();
+    io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage.MessageCase getMessageCase();
   }
   /**
    * Protobuf type {@code io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcMessage}
@@ -81,15 +81,15 @@ public final class GrpcTransportServiceMd {
 
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcMessage_descriptor;
+      return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcMessage_descriptor;
     }
 
     @java.lang.Override
     protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcMessage_fieldAccessorTable
+      return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcMessage_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
-              io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage.class, io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage.Builder.class);
+              io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage.class, io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage.Builder.class);
     }
 
     private int messageCase_ = 0;
@@ -159,21 +159,21 @@ public final class GrpcTransportServiceMd {
      * @return The springMessage.
      */
     @java.lang.Override
-    public io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage getSpringMessage() {
+    public io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage getSpringMessage() {
       if (messageCase_ == 2) {
-         return (io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage) message_;
+         return (io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage) message_;
       }
-      return io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.getDefaultInstance();
+      return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.getDefaultInstance();
     }
     /**
      * <code>.io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage springMessage = 2;</code>
      */
     @java.lang.Override
-    public io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessageOrBuilder getSpringMessageOrBuilder() {
+    public io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessageOrBuilder getSpringMessageOrBuilder() {
       if (messageCase_ == 2) {
-         return (io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage) message_;
+         return (io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage) message_;
       }
-      return io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.getDefaultInstance();
+      return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.getDefaultInstance();
     }
 
     public static final int CUSTOMMESSAGE_FIELD_NUMBER = 3;
@@ -225,7 +225,7 @@ public final class GrpcTransportServiceMd {
         output.writeBool(1, isOrdered_);
       }
       if (messageCase_ == 2) {
-        output.writeMessage(2, (io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage) message_);
+        output.writeMessage(2, (io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage) message_);
       }
       if (messageCase_ == 3) {
         output.writeMessage(3, (com.google.protobuf.Any) message_);
@@ -245,7 +245,7 @@ public final class GrpcTransportServiceMd {
       }
       if (messageCase_ == 2) {
         size += com.google.protobuf.CodedOutputStream
-          .computeMessageSize(2, (io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage) message_);
+          .computeMessageSize(2, (io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage) message_);
       }
       if (messageCase_ == 3) {
         size += com.google.protobuf.CodedOutputStream
@@ -261,10 +261,10 @@ public final class GrpcTransportServiceMd {
       if (obj == this) {
        return true;
       }
-      if (!(obj instanceof io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage)) {
+      if (!(obj instanceof io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage)) {
         return super.equals(obj);
       }
-      io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage other = (io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage) obj;
+      io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage other = (io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage) obj;
 
       if (getIsOrdered()
           != other.getIsOrdered()) return false;
@@ -312,44 +312,44 @@ public final class GrpcTransportServiceMd {
       return hash;
     }
 
-    public static io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage parseFrom(
+    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage parseFrom(
         java.nio.ByteBuffer data)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
-    public static io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage parseFrom(
+    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage parseFrom(
         java.nio.ByteBuffer data,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
-    public static io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage parseFrom(
+    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage parseFrom(
         com.google.protobuf.ByteString data)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
-    public static io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage parseFrom(
+    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage parseFrom(
         com.google.protobuf.ByteString data,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
-    public static io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage parseFrom(byte[] data)
+    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage parseFrom(byte[] data)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
-    public static io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage parseFrom(
+    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage parseFrom(
         byte[] data,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
-    public static io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage parseFrom(java.io.InputStream input)
+    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage parseFrom(java.io.InputStream input)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
-    public static io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage parseFrom(
+    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
@@ -357,26 +357,26 @@ public final class GrpcTransportServiceMd {
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
-    public static io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage parseDelimitedFrom(java.io.InputStream input)
+    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input);
     }
 
-    public static io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage parseDelimitedFrom(
+    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
-    public static io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage parseFrom(
+    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
-    public static io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage parseFrom(
+    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
@@ -389,7 +389,7 @@ public final class GrpcTransportServiceMd {
     public static Builder newBuilder() {
       return DEFAULT_INSTANCE.toBuilder();
     }
-    public static Builder newBuilder(io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage prototype) {
+    public static Builder newBuilder(io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage prototype) {
       return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
     }
     @java.lang.Override
@@ -410,18 +410,18 @@ public final class GrpcTransportServiceMd {
     public static final class Builder extends
         com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
         // @@protoc_insertion_point(builder_implements:io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcMessage)
-        io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessageOrBuilder {
+        io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessageOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
-        return io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcMessage_descriptor;
+        return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcMessage_descriptor;
       }
 
       @java.lang.Override
       protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcMessage_fieldAccessorTable
+        return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcMessage_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
-                io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage.class, io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage.Builder.class);
+                io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage.class, io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage.Builder.class);
       }
 
       // Construct using io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage.newBuilder()
@@ -453,17 +453,17 @@ public final class GrpcTransportServiceMd {
       @java.lang.Override
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
-        return io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcMessage_descriptor;
+        return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcMessage_descriptor;
       }
 
       @java.lang.Override
-      public io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage getDefaultInstanceForType() {
-        return io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage.getDefaultInstance();
+      public io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage getDefaultInstanceForType() {
+        return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage.getDefaultInstance();
       }
 
       @java.lang.Override
-      public io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage build() {
-        io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage result = buildPartial();
+      public io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage build() {
+        io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage result = buildPartial();
         if (!result.isInitialized()) {
           throw newUninitializedMessageException(result);
         }
@@ -471,22 +471,22 @@ public final class GrpcTransportServiceMd {
       }
 
       @java.lang.Override
-      public io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage buildPartial() {
-        io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage result = new io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage(this);
+      public io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage buildPartial() {
+        io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage result = new io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage(this);
         if (bitField0_ != 0) { buildPartial0(result); }
         buildPartialOneofs(result);
         onBuilt();
         return result;
       }
 
-      private void buildPartial0(io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage result) {
+      private void buildPartial0(io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage result) {
         int from_bitField0_ = bitField0_;
         if (((from_bitField0_ & 0x00000001) != 0)) {
           result.isOrdered_ = isOrdered_;
         }
       }
 
-      private void buildPartialOneofs(io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage result) {
+      private void buildPartialOneofs(io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage result) {
         result.messageCase_ = messageCase_;
         result.message_ = this.message_;
         if (messageCase_ == 2 &&
@@ -533,16 +533,16 @@ public final class GrpcTransportServiceMd {
       }
       @java.lang.Override
       public Builder mergeFrom(com.google.protobuf.Message other) {
-        if (other instanceof io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage) {
-          return mergeFrom((io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage)other);
+        if (other instanceof io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage) {
+          return mergeFrom((io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage)other);
         } else {
           super.mergeFrom(other);
           return this;
         }
       }
 
-      public Builder mergeFrom(io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage other) {
-        if (other == io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage.getDefaultInstance()) return this;
+      public Builder mergeFrom(io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage other) {
+        if (other == io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage.getDefaultInstance()) return this;
         if (other.getIsOrdered() != false) {
           setIsOrdered(other.getIsOrdered());
         }
@@ -669,7 +669,7 @@ public final class GrpcTransportServiceMd {
       }
 
       private com.google.protobuf.SingleFieldBuilderV3<
-          io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage, io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.Builder, io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessageOrBuilder> springMessageBuilder_;
+          io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage, io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.Builder, io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessageOrBuilder> springMessageBuilder_;
       /**
        * <code>.io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage springMessage = 2;</code>
        * @return Whether the springMessage field is set.
@@ -683,23 +683,23 @@ public final class GrpcTransportServiceMd {
        * @return The springMessage.
        */
       @java.lang.Override
-      public io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage getSpringMessage() {
+      public io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage getSpringMessage() {
         if (springMessageBuilder_ == null) {
           if (messageCase_ == 2) {
-            return (io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage) message_;
+            return (io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage) message_;
           }
-          return io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.getDefaultInstance();
+          return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.getDefaultInstance();
         } else {
           if (messageCase_ == 2) {
             return springMessageBuilder_.getMessage();
           }
-          return io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.getDefaultInstance();
+          return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.getDefaultInstance();
         }
       }
       /**
        * <code>.io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage springMessage = 2;</code>
        */
-      public Builder setSpringMessage(io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage value) {
+      public Builder setSpringMessage(io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage value) {
         if (springMessageBuilder_ == null) {
           if (value == null) {
             throw new NullPointerException();
@@ -716,7 +716,7 @@ public final class GrpcTransportServiceMd {
        * <code>.io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage springMessage = 2;</code>
        */
       public Builder setSpringMessage(
-          io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.Builder builderForValue) {
+          io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.Builder builderForValue) {
         if (springMessageBuilder_ == null) {
           message_ = builderForValue.build();
           onChanged();
@@ -729,11 +729,11 @@ public final class GrpcTransportServiceMd {
       /**
        * <code>.io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage springMessage = 2;</code>
        */
-      public Builder mergeSpringMessage(io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage value) {
+      public Builder mergeSpringMessage(io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage value) {
         if (springMessageBuilder_ == null) {
           if (messageCase_ == 2 &&
-              message_ != io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.getDefaultInstance()) {
-            message_ = io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.newBuilder((io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage) message_)
+              message_ != io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.getDefaultInstance()) {
+            message_ = io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.newBuilder((io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage) message_)
                 .mergeFrom(value).buildPartial();
           } else {
             message_ = value;
@@ -771,36 +771,36 @@ public final class GrpcTransportServiceMd {
       /**
        * <code>.io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage springMessage = 2;</code>
        */
-      public io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.Builder getSpringMessageBuilder() {
+      public io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.Builder getSpringMessageBuilder() {
         return getSpringMessageFieldBuilder().getBuilder();
       }
       /**
        * <code>.io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage springMessage = 2;</code>
        */
       @java.lang.Override
-      public io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessageOrBuilder getSpringMessageOrBuilder() {
+      public io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessageOrBuilder getSpringMessageOrBuilder() {
         if ((messageCase_ == 2) && (springMessageBuilder_ != null)) {
           return springMessageBuilder_.getMessageOrBuilder();
         } else {
           if (messageCase_ == 2) {
-            return (io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage) message_;
+            return (io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage) message_;
           }
-          return io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.getDefaultInstance();
+          return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.getDefaultInstance();
         }
       }
       /**
        * <code>.io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage springMessage = 2;</code>
        */
       private com.google.protobuf.SingleFieldBuilderV3<
-          io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage, io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.Builder, io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessageOrBuilder> 
+          io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage, io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.Builder, io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessageOrBuilder>
           getSpringMessageFieldBuilder() {
         if (springMessageBuilder_ == null) {
           if (!(messageCase_ == 2)) {
-            message_ = io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.getDefaultInstance();
+            message_ = io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.getDefaultInstance();
           }
           springMessageBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
-              io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage, io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.Builder, io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessageOrBuilder>(
-                  (io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage) message_,
+              io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage, io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.Builder, io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessageOrBuilder>(
+                  (io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage) message_,
                   getParentForChildren(),
                   isClean());
           message_ = null;
@@ -968,12 +968,12 @@ public final class GrpcTransportServiceMd {
     }
 
     // @@protoc_insertion_point(class_scope:io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcMessage)
-    private static final io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage DEFAULT_INSTANCE;
+    private static final io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage DEFAULT_INSTANCE;
     static {
-      DEFAULT_INSTANCE = new io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage();
+      DEFAULT_INSTANCE = new io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage();
     }
 
-    public static io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage getDefaultInstance() {
+    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage getDefaultInstance() {
       return DEFAULT_INSTANCE;
     }
 
@@ -1009,7 +1009,7 @@ public final class GrpcTransportServiceMd {
     }
 
     @java.lang.Override
-    public io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage getDefaultInstanceForType() {
+    public io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage getDefaultInstanceForType() {
       return DEFAULT_INSTANCE;
     }
 
@@ -1065,15 +1065,15 @@ public final class GrpcTransportServiceMd {
 
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcSpringMessage_descriptor;
+      return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcSpringMessage_descriptor;
     }
 
     @java.lang.Override
     protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcSpringMessage_fieldAccessorTable
+      return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcSpringMessage_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
-              io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.class, io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.Builder.class);
+              io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.class, io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.Builder.class);
     }
 
     private int bitField0_;
@@ -1161,10 +1161,10 @@ public final class GrpcTransportServiceMd {
       if (obj == this) {
        return true;
       }
-      if (!(obj instanceof io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage)) {
+      if (!(obj instanceof io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage)) {
         return super.equals(obj);
       }
-      io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage other = (io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage) obj;
+      io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage other = (io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage) obj;
 
       if (hasHeaders() != other.hasHeaders()) return false;
       if (hasHeaders()) {
@@ -1195,44 +1195,44 @@ public final class GrpcTransportServiceMd {
       return hash;
     }
 
-    public static io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage parseFrom(
+    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage parseFrom(
         java.nio.ByteBuffer data)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
-    public static io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage parseFrom(
+    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage parseFrom(
         java.nio.ByteBuffer data,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
-    public static io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage parseFrom(
+    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage parseFrom(
         com.google.protobuf.ByteString data)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
-    public static io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage parseFrom(
+    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage parseFrom(
         com.google.protobuf.ByteString data,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
-    public static io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage parseFrom(byte[] data)
+    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage parseFrom(byte[] data)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
-    public static io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage parseFrom(
+    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage parseFrom(
         byte[] data,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
-    public static io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage parseFrom(java.io.InputStream input)
+    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage parseFrom(java.io.InputStream input)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
-    public static io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage parseFrom(
+    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
@@ -1240,26 +1240,26 @@ public final class GrpcTransportServiceMd {
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
-    public static io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage parseDelimitedFrom(java.io.InputStream input)
+    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input);
     }
 
-    public static io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage parseDelimitedFrom(
+    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
-    public static io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage parseFrom(
+    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
-    public static io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage parseFrom(
+    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
@@ -1272,7 +1272,7 @@ public final class GrpcTransportServiceMd {
     public static Builder newBuilder() {
       return DEFAULT_INSTANCE.toBuilder();
     }
-    public static Builder newBuilder(io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage prototype) {
+    public static Builder newBuilder(io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage prototype) {
       return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
     }
     @java.lang.Override
@@ -1293,18 +1293,18 @@ public final class GrpcTransportServiceMd {
     public static final class Builder extends
         com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
         // @@protoc_insertion_point(builder_implements:io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage)
-        io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessageOrBuilder {
+        io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessageOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
-        return io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcSpringMessage_descriptor;
+        return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcSpringMessage_descriptor;
       }
 
       @java.lang.Override
       protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcSpringMessage_fieldAccessorTable
+        return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcSpringMessage_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
-                io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.class, io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.Builder.class);
+                io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.class, io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.Builder.class);
       }
 
       // Construct using io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.newBuilder()
@@ -1339,17 +1339,17 @@ public final class GrpcTransportServiceMd {
       @java.lang.Override
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
-        return io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcSpringMessage_descriptor;
+        return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcSpringMessage_descriptor;
       }
 
       @java.lang.Override
-      public io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage getDefaultInstanceForType() {
-        return io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.getDefaultInstance();
+      public io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage getDefaultInstanceForType() {
+        return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.getDefaultInstance();
       }
 
       @java.lang.Override
-      public io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage build() {
-        io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage result = buildPartial();
+      public io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage build() {
+        io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage result = buildPartial();
         if (!result.isInitialized()) {
           throw newUninitializedMessageException(result);
         }
@@ -1357,14 +1357,14 @@ public final class GrpcTransportServiceMd {
       }
 
       @java.lang.Override
-      public io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage buildPartial() {
-        io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage result = new io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage(this);
+      public io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage buildPartial() {
+        io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage result = new io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage(this);
         if (bitField0_ != 0) { buildPartial0(result); }
         onBuilt();
         return result;
       }
 
-      private void buildPartial0(io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage result) {
+      private void buildPartial0(io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage result) {
         int from_bitField0_ = bitField0_;
         int to_bitField0_ = 0;
         if (((from_bitField0_ & 0x00000001) != 0)) {
@@ -1413,16 +1413,16 @@ public final class GrpcTransportServiceMd {
       }
       @java.lang.Override
       public Builder mergeFrom(com.google.protobuf.Message other) {
-        if (other instanceof io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage) {
-          return mergeFrom((io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage)other);
+        if (other instanceof io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage) {
+          return mergeFrom((io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage)other);
         } else {
           super.mergeFrom(other);
           return this;
         }
       }
 
-      public Builder mergeFrom(io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage other) {
-        if (other == io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.getDefaultInstance()) return this;
+      public Builder mergeFrom(io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage other) {
+        if (other == io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.getDefaultInstance()) return this;
         if (other.hasHeaders()) {
           mergeHeaders(other.getHeaders());
         }
@@ -1653,12 +1653,12 @@ public final class GrpcTransportServiceMd {
     }
 
     // @@protoc_insertion_point(class_scope:io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage)
-    private static final io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage DEFAULT_INSTANCE;
+    private static final io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage DEFAULT_INSTANCE;
     static {
-      DEFAULT_INSTANCE = new io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage();
+      DEFAULT_INSTANCE = new io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage();
     }
 
-    public static io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage getDefaultInstance() {
+    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage getDefaultInstance() {
       return DEFAULT_INSTANCE;
     }
 
@@ -1694,7 +1694,7 @@ public final class GrpcTransportServiceMd {
     }
 
     @java.lang.Override
-    public io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage getDefaultInstanceForType() {
+    public io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage getDefaultInstanceForType() {
       return DEFAULT_INSTANCE;
     }
 

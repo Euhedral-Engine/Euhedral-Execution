@@ -1,4 +1,4 @@
-package io.euhedral_execution.spring.core.protocols.grpc;
+package io.euhedral_execution.spring.core.transport.grpc;
 
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.generics.LatticeReceiver;
@@ -10,7 +10,7 @@ import io.euhedral_execution.core.impl.FrameManager;
 import io.euhedral_execution.hashing.HasherApi;
 import io.euhedral_execution.spring.core.frames.GrpcFrame;
 import io.euhedral_execution.spring.core.frames.GrpcFrame.CommunicationMethod;
-import io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage;
+import io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage;
 import io.euhedral_execution.spring.core.utils.KillSwitch;
 import io.grpc.stub.ServerCallStreamObserver;
 import io.grpc.stub.StreamObserver;

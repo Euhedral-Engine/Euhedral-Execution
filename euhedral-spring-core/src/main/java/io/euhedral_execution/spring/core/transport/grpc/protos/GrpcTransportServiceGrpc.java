@@ -1,4 +1,4 @@
-package io.euhedral_execution.spring.core.protocols.grpc.protos;
+package io.euhedral_execution.spring.core.transport.grpc.protos;
 
 import static io.grpc.MethodDescriptor.generateFullMethodName;
 
@@ -12,29 +12,29 @@ public final class GrpcTransportServiceGrpc {
   public static final java.lang.String SERVICE_NAME = "io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportService";
 
   // Static method descriptors that strictly reflect the proto.
-  private static volatile io.grpc.MethodDescriptor<io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage,
-      io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage> getUnaryMethodMethod;
+  private static volatile io.grpc.MethodDescriptor<io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage,
+      io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage> getUnaryMethodMethod;
 
   @io.grpc.stub.annotations.RpcMethod(
       fullMethodName = SERVICE_NAME + '/' + "UnaryMethod",
-      requestType = io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage.class,
-      responseType = io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage.class,
+      requestType = io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage.class,
+      responseType = io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage.class,
       methodType = io.grpc.MethodDescriptor.MethodType.UNARY)
-  public static io.grpc.MethodDescriptor<io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage,
-      io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage> getUnaryMethodMethod() {
-    io.grpc.MethodDescriptor<io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage, io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage> getUnaryMethodMethod;
+  public static io.grpc.MethodDescriptor<io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage,
+      io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage> getUnaryMethodMethod() {
+    io.grpc.MethodDescriptor<io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage, io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage> getUnaryMethodMethod;
     if ((getUnaryMethodMethod = GrpcTransportServiceGrpc.getUnaryMethodMethod) == null) {
       synchronized (GrpcTransportServiceGrpc.class) {
         if ((getUnaryMethodMethod = GrpcTransportServiceGrpc.getUnaryMethodMethod) == null) {
           GrpcTransportServiceGrpc.getUnaryMethodMethod = getUnaryMethodMethod =
-              io.grpc.MethodDescriptor.<io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage, io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage>newBuilder()
+              io.grpc.MethodDescriptor.<io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage, io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage>newBuilder()
               .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
               .setFullMethodName(generateFullMethodName(SERVICE_NAME, "UnaryMethod"))
               .setSampledToLocalTracing(true)
               .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
-                  io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage.getDefaultInstance()))
+                  io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage.getDefaultInstance()))
               .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
-                  io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage.getDefaultInstance()))
+                  io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage.getDefaultInstance()))
               .setSchemaDescriptor(new GrpcTransportServiceMethodDescriptorSupplier("UnaryMethod"))
               .build();
         }
@@ -43,29 +43,29 @@ public final class GrpcTransportServiceGrpc {
     return getUnaryMethodMethod;
   }
 
-  private static volatile io.grpc.MethodDescriptor<io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage,
-      io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage> getClientStreamMethodMethod;
+  private static volatile io.grpc.MethodDescriptor<io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage,
+      io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage> getClientStreamMethodMethod;
 
   @io.grpc.stub.annotations.RpcMethod(
       fullMethodName = SERVICE_NAME + '/' + "ClientStreamMethod",
-      requestType = io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage.class,
-      responseType = io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage.class,
+      requestType = io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage.class,
+      responseType = io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage.class,
       methodType = io.grpc.MethodDescriptor.MethodType.CLIENT_STREAMING)
-  public static io.grpc.MethodDescriptor<io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage,
-      io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage> getClientStreamMethodMethod() {
-    io.grpc.MethodDescriptor<io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage, io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage> getClientStreamMethodMethod;
+  public static io.grpc.MethodDescriptor<io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage,
+      io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage> getClientStreamMethodMethod() {
+    io.grpc.MethodDescriptor<io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage, io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage> getClientStreamMethodMethod;
     if ((getClientStreamMethodMethod = GrpcTransportServiceGrpc.getClientStreamMethodMethod) == null) {
       synchronized (GrpcTransportServiceGrpc.class) {
         if ((getClientStreamMethodMethod = GrpcTransportServiceGrpc.getClientStreamMethodMethod) == null) {
           GrpcTransportServiceGrpc.getClientStreamMethodMethod = getClientStreamMethodMethod =
-              io.grpc.MethodDescriptor.<io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage, io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage>newBuilder()
+              io.grpc.MethodDescriptor.<io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage, io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage>newBuilder()
               .setType(io.grpc.MethodDescriptor.MethodType.CLIENT_STREAMING)
               .setFullMethodName(generateFullMethodName(SERVICE_NAME, "ClientStreamMethod"))
               .setSampledToLocalTracing(true)
               .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
-                  io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage.getDefaultInstance()))
+                  io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage.getDefaultInstance()))
               .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
-                  io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage.getDefaultInstance()))
+                  io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage.getDefaultInstance()))
               .setSchemaDescriptor(new GrpcTransportServiceMethodDescriptorSupplier("ClientStreamMethod"))
               .build();
         }
@@ -74,29 +74,29 @@ public final class GrpcTransportServiceGrpc {
     return getClientStreamMethodMethod;
   }
 
-  private static volatile io.grpc.MethodDescriptor<io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage,
-      io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage> getServerStreamMethodMethod;
+  private static volatile io.grpc.MethodDescriptor<io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage,
+      io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage> getServerStreamMethodMethod;
 
   @io.grpc.stub.annotations.RpcMethod(
       fullMethodName = SERVICE_NAME + '/' + "ServerStreamMethod",
-      requestType = io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage.class,
-      responseType = io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage.class,
+      requestType = io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage.class,
+      responseType = io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage.class,
       methodType = io.grpc.MethodDescriptor.MethodType.SERVER_STREAMING)
-  public static io.grpc.MethodDescriptor<io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage,
-      io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage> getServerStreamMethodMethod() {
-    io.grpc.MethodDescriptor<io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage, io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage> getServerStreamMethodMethod;
+  public static io.grpc.MethodDescriptor<io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage,
+      io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage> getServerStreamMethodMethod() {
+    io.grpc.MethodDescriptor<io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage, io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage> getServerStreamMethodMethod;
     if ((getServerStreamMethodMethod = GrpcTransportServiceGrpc.getServerStreamMethodMethod) == null) {
       synchronized (GrpcTransportServiceGrpc.class) {
         if ((getServerStreamMethodMethod = GrpcTransportServiceGrpc.getServerStreamMethodMethod) == null) {
           GrpcTransportServiceGrpc.getServerStreamMethodMethod = getServerStreamMethodMethod =
-              io.grpc.MethodDescriptor.<io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage, io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage>newBuilder()
+              io.grpc.MethodDescriptor.<io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage, io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage>newBuilder()
               .setType(io.grpc.MethodDescriptor.MethodType.SERVER_STREAMING)
               .setFullMethodName(generateFullMethodName(SERVICE_NAME, "ServerStreamMethod"))
               .setSampledToLocalTracing(true)
               .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
-                  io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage.getDefaultInstance()))
+                  io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage.getDefaultInstance()))
               .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
-                  io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage.getDefaultInstance()))
+                  io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage.getDefaultInstance()))
               .setSchemaDescriptor(new GrpcTransportServiceMethodDescriptorSupplier("ServerStreamMethod"))
               .build();
         }
@@ -105,29 +105,29 @@ public final class GrpcTransportServiceGrpc {
     return getServerStreamMethodMethod;
   }
 
-  private static volatile io.grpc.MethodDescriptor<io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage,
-      io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage> getBidirectionalMethodMethod;
+  private static volatile io.grpc.MethodDescriptor<io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage,
+      io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage> getBidirectionalMethodMethod;
 
   @io.grpc.stub.annotations.RpcMethod(
       fullMethodName = SERVICE_NAME + '/' + "BidirectionalMethod",
-      requestType = io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage.class,
-      responseType = io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage.class,
+      requestType = io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage.class,
+      responseType = io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage.class,
       methodType = io.grpc.MethodDescriptor.MethodType.BIDI_STREAMING)
-  public static io.grpc.MethodDescriptor<io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage,
-      io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage> getBidirectionalMethodMethod() {
-    io.grpc.MethodDescriptor<io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage, io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage> getBidirectionalMethodMethod;
+  public static io.grpc.MethodDescriptor<io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage,
+      io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage> getBidirectionalMethodMethod() {
+    io.grpc.MethodDescriptor<io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage, io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage> getBidirectionalMethodMethod;
     if ((getBidirectionalMethodMethod = GrpcTransportServiceGrpc.getBidirectionalMethodMethod) == null) {
       synchronized (GrpcTransportServiceGrpc.class) {
         if ((getBidirectionalMethodMethod = GrpcTransportServiceGrpc.getBidirectionalMethodMethod) == null) {
           GrpcTransportServiceGrpc.getBidirectionalMethodMethod = getBidirectionalMethodMethod =
-              io.grpc.MethodDescriptor.<io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage, io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage>newBuilder()
+              io.grpc.MethodDescriptor.<io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage, io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage>newBuilder()
               .setType(io.grpc.MethodDescriptor.MethodType.BIDI_STREAMING)
               .setFullMethodName(generateFullMethodName(SERVICE_NAME, "BidirectionalMethod"))
               .setSampledToLocalTracing(true)
               .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
-                  io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage.getDefaultInstance()))
+                  io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage.getDefaultInstance()))
               .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
-                  io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage.getDefaultInstance()))
+                  io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage.getDefaultInstance()))
               .setSchemaDescriptor(new GrpcTransportServiceMethodDescriptorSupplier("BidirectionalMethod"))
               .build();
         }
@@ -204,8 +204,8 @@ public final class GrpcTransportServiceGrpc {
      * Single Request/Response
      * </pre>
      */
-    default void unaryMethod(io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage request,
-        io.grpc.stub.StreamObserver<io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage> responseObserver) {
+    default void unaryMethod(io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage request,
+        io.grpc.stub.StreamObserver<io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage> responseObserver) {
       io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall(getUnaryMethodMethod(), responseObserver);
     }
 
@@ -214,8 +214,8 @@ public final class GrpcTransportServiceGrpc {
      * Client streaming
      * </pre>
      */
-    default io.grpc.stub.StreamObserver<io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage> clientStreamMethod(
-        io.grpc.stub.StreamObserver<io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage> responseObserver) {
+    default io.grpc.stub.StreamObserver<io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage> clientStreamMethod(
+        io.grpc.stub.StreamObserver<io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage> responseObserver) {
       return io.grpc.stub.ServerCalls.asyncUnimplementedStreamingCall(getClientStreamMethodMethod(), responseObserver);
     }
 
@@ -224,8 +224,8 @@ public final class GrpcTransportServiceGrpc {
      * Server streaming
      * </pre>
      */
-    default void serverStreamMethod(io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage request,
-        io.grpc.stub.StreamObserver<io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage> responseObserver) {
+    default void serverStreamMethod(io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage request,
+        io.grpc.stub.StreamObserver<io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage> responseObserver) {
       io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall(getServerStreamMethodMethod(), responseObserver);
     }
 
@@ -234,8 +234,8 @@ public final class GrpcTransportServiceGrpc {
      * Bidirectional streaming
      * </pre>
      */
-    default io.grpc.stub.StreamObserver<io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage> bidirectionalMethod(
-        io.grpc.stub.StreamObserver<io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage> responseObserver) {
+    default io.grpc.stub.StreamObserver<io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage> bidirectionalMethod(
+        io.grpc.stub.StreamObserver<io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage> responseObserver) {
       return io.grpc.stub.ServerCalls.asyncUnimplementedStreamingCall(getBidirectionalMethodMethod(), responseObserver);
     }
   }
@@ -272,8 +272,8 @@ public final class GrpcTransportServiceGrpc {
      * Single Request/Response
      * </pre>
      */
-    public void unaryMethod(io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage request,
-        io.grpc.stub.StreamObserver<io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage> responseObserver) {
+    public void unaryMethod(io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage request,
+        io.grpc.stub.StreamObserver<io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage> responseObserver) {
       io.grpc.stub.ClientCalls.asyncUnaryCall(
           getChannel().newCall(getUnaryMethodMethod(), getCallOptions()), request, responseObserver);
     }
@@ -283,8 +283,8 @@ public final class GrpcTransportServiceGrpc {
      * Client streaming
      * </pre>
      */
-    public io.grpc.stub.StreamObserver<io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage> clientStreamMethod(
-        io.grpc.stub.StreamObserver<io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage> responseObserver) {
+    public io.grpc.stub.StreamObserver<io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage> clientStreamMethod(
+        io.grpc.stub.StreamObserver<io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage> responseObserver) {
       return io.grpc.stub.ClientCalls.asyncClientStreamingCall(
           getChannel().newCall(getClientStreamMethodMethod(), getCallOptions()), responseObserver);
     }
@@ -294,8 +294,8 @@ public final class GrpcTransportServiceGrpc {
      * Server streaming
      * </pre>
      */
-    public void serverStreamMethod(io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage request,
-        io.grpc.stub.StreamObserver<io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage> responseObserver) {
+    public void serverStreamMethod(io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage request,
+        io.grpc.stub.StreamObserver<io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage> responseObserver) {
       io.grpc.stub.ClientCalls.asyncServerStreamingCall(
           getChannel().newCall(getServerStreamMethodMethod(), getCallOptions()), request, responseObserver);
     }
@@ -305,8 +305,8 @@ public final class GrpcTransportServiceGrpc {
      * Bidirectional streaming
      * </pre>
      */
-    public io.grpc.stub.StreamObserver<io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage> bidirectionalMethod(
-        io.grpc.stub.StreamObserver<io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage> responseObserver) {
+    public io.grpc.stub.StreamObserver<io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage> bidirectionalMethod(
+        io.grpc.stub.StreamObserver<io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage> responseObserver) {
       return io.grpc.stub.ClientCalls.asyncBidiStreamingCall(
           getChannel().newCall(getBidirectionalMethodMethod(), getCallOptions()), responseObserver);
     }
@@ -333,7 +333,7 @@ public final class GrpcTransportServiceGrpc {
      * Single Request/Response
      * </pre>
      */
-    public io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage unaryMethod(io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage request) throws io.grpc.StatusException {
+    public io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage unaryMethod(io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage request) throws io.grpc.StatusException {
       return io.grpc.stub.ClientCalls.blockingV2UnaryCall(
           getChannel(), getUnaryMethodMethod(), getCallOptions(), request);
     }
@@ -344,7 +344,7 @@ public final class GrpcTransportServiceGrpc {
      * </pre>
      */
     @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/10918")
-    public io.grpc.stub.BlockingClientCall<io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage, io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage>
+    public io.grpc.stub.BlockingClientCall<io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage, io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage>
         clientStreamMethod() {
       return io.grpc.stub.ClientCalls.blockingClientStreamingCall(
           getChannel(), getClientStreamMethodMethod(), getCallOptions());
@@ -356,8 +356,8 @@ public final class GrpcTransportServiceGrpc {
      * </pre>
      */
     @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/10918")
-    public io.grpc.stub.BlockingClientCall<?, io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage>
-        serverStreamMethod(io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage request) {
+    public io.grpc.stub.BlockingClientCall<?, io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage>
+        serverStreamMethod(io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage request) {
       return io.grpc.stub.ClientCalls.blockingV2ServerStreamingCall(
           getChannel(), getServerStreamMethodMethod(), getCallOptions(), request);
     }
@@ -368,7 +368,7 @@ public final class GrpcTransportServiceGrpc {
      * </pre>
      */
     @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/10918")
-    public io.grpc.stub.BlockingClientCall<io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage, io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage>
+    public io.grpc.stub.BlockingClientCall<io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage, io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage>
         bidirectionalMethod() {
       return io.grpc.stub.ClientCalls.blockingBidiStreamingCall(
           getChannel(), getBidirectionalMethodMethod(), getCallOptions());
@@ -396,7 +396,7 @@ public final class GrpcTransportServiceGrpc {
      * Single Request/Response
      * </pre>
      */
-    public io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage unaryMethod(io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage request) {
+    public io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage unaryMethod(io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage request) {
       return io.grpc.stub.ClientCalls.blockingUnaryCall(
           getChannel(), getUnaryMethodMethod(), getCallOptions(), request);
     }
@@ -406,8 +406,8 @@ public final class GrpcTransportServiceGrpc {
      * Server streaming
      * </pre>
      */
-    public java.util.Iterator<io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage> serverStreamMethod(
-        io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage request) {
+    public java.util.Iterator<io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage> serverStreamMethod(
+        io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage request) {
       return io.grpc.stub.ClientCalls.blockingServerStreamingCall(
           getChannel(), getServerStreamMethodMethod(), getCallOptions(), request);
     }
@@ -434,8 +434,8 @@ public final class GrpcTransportServiceGrpc {
      * Single Request/Response
      * </pre>
      */
-    public com.google.common.util.concurrent.ListenableFuture<io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage> unaryMethod(
-        io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage request) {
+    public com.google.common.util.concurrent.ListenableFuture<io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage> unaryMethod(
+        io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage request) {
       return io.grpc.stub.ClientCalls.futureUnaryCall(
           getChannel().newCall(getUnaryMethodMethod(), getCallOptions()), request);
     }
@@ -464,12 +464,12 @@ public final class GrpcTransportServiceGrpc {
     public void invoke(Req request, io.grpc.stub.StreamObserver<Resp> responseObserver) {
       switch (methodId) {
         case METHODID_UNARY_METHOD:
-          serviceImpl.unaryMethod((io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage) request,
-              (io.grpc.stub.StreamObserver<io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage>) responseObserver);
+          serviceImpl.unaryMethod((io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage) request,
+              (io.grpc.stub.StreamObserver<io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage>) responseObserver);
           break;
         case METHODID_SERVER_STREAM_METHOD:
-          serviceImpl.serverStreamMethod((io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage) request,
-              (io.grpc.stub.StreamObserver<io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage>) responseObserver);
+          serviceImpl.serverStreamMethod((io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage) request,
+              (io.grpc.stub.StreamObserver<io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage>) responseObserver);
           break;
         default:
           throw new AssertionError();
@@ -483,10 +483,10 @@ public final class GrpcTransportServiceGrpc {
       switch (methodId) {
         case METHODID_CLIENT_STREAM_METHOD:
           return (io.grpc.stub.StreamObserver<Req>) serviceImpl.clientStreamMethod(
-              (io.grpc.stub.StreamObserver<io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage>) responseObserver);
+              (io.grpc.stub.StreamObserver<io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage>) responseObserver);
         case METHODID_BIDIRECTIONAL_METHOD:
           return (io.grpc.stub.StreamObserver<Req>) serviceImpl.bidirectionalMethod(
-              (io.grpc.stub.StreamObserver<io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage>) responseObserver);
+              (io.grpc.stub.StreamObserver<io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage>) responseObserver);
         default:
           throw new AssertionError();
       }
@@ -499,29 +499,29 @@ public final class GrpcTransportServiceGrpc {
           getUnaryMethodMethod(),
           io.grpc.stub.ServerCalls.asyncUnaryCall(
             new MethodHandlers<
-              io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage,
-              io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage>(
+              io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage,
+              io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage>(
                 service, METHODID_UNARY_METHOD)))
         .addMethod(
           getClientStreamMethodMethod(),
           io.grpc.stub.ServerCalls.asyncClientStreamingCall(
             new MethodHandlers<
-              io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage,
-              io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage>(
+              io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage,
+              io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage>(
                 service, METHODID_CLIENT_STREAM_METHOD)))
         .addMethod(
           getServerStreamMethodMethod(),
           io.grpc.stub.ServerCalls.asyncServerStreamingCall(
             new MethodHandlers<
-              io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage,
-              io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage>(
+              io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage,
+              io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage>(
                 service, METHODID_SERVER_STREAM_METHOD)))
         .addMethod(
           getBidirectionalMethodMethod(),
           io.grpc.stub.ServerCalls.asyncBidiStreamingCall(
             new MethodHandlers<
-              io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage,
-              io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage>(
+              io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage,
+              io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage>(
                 service, METHODID_BIDIRECTIONAL_METHOD)))
         .build();
   }
@@ -532,7 +532,7 @@ public final class GrpcTransportServiceGrpc {
 
     @java.lang.Override
     public com.google.protobuf.Descriptors.FileDescriptor getFileDescriptor() {
-      return io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.getDescriptor();
+      return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.getDescriptor();
     }
 
     @java.lang.Override

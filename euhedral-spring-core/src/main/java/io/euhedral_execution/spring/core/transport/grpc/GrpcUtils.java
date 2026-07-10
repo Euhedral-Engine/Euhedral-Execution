@@ -1,12 +1,12 @@
-package io.euhedral_execution.spring.core.protocols.grpc;
+package io.euhedral_execution.spring.core.transport.grpc;
 
 import com.google.protobuf.ByteString;
 import com.google.protobuf.ListValue;
 import com.google.protobuf.NullValue;
 import com.google.protobuf.Struct;
 import com.google.protobuf.Value;
-import io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage;
-import io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage;
+import io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage;
+import io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;

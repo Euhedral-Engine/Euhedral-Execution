@@ -1,4 +1,4 @@
-package io.euhedral_execution.spring.core.protocols.kafka;
+package io.euhedral_execution.spring.core.transport.kafka;
 
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.generics.LatticeReceiver;
@@ -10,9 +10,9 @@ import io.euhedral_execution.core.impl.FrameManager;
 import io.euhedral_execution.data_structures.queues.SpscQueue;
 import io.euhedral_execution.hashing.HasherApi;
 import io.euhedral_execution.spring.core.frames.KafkaFrame;
-import io.euhedral_execution.spring.core.protocols.kafka.IngestEventHandler.Event;
-import io.euhedral_execution.spring.core.protocols.kafka.OffsetCollector.CommitPolicy;
-import io.euhedral_execution.spring.core.protocols.kafka.OffsetCollector.Offset;
+import io.euhedral_execution.spring.core.transport.kafka.IngestEventHandler.Event;
+import io.euhedral_execution.spring.core.transport.kafka.OffsetCollector.CommitPolicy;
+import io.euhedral_execution.spring.core.transport.kafka.OffsetCollector.Offset;
 import io.euhedral_execution.spring.core.utils.KillSwitch;
 import it.unimi.dsi.fastutil.longs.Long2ObjectArrayMap;
 import it.unimi.dsi.fastutil.longs.LongArraySet;

@@ -7,7 +7,7 @@ import io.euhedral_execution.core.impl.BaseCloneableObject;
 import io.euhedral_execution.core.impl.DefaultExecutor;
 import io.euhedral_execution.reactor.EuhedralOperator;
 import io.euhedral_execution.reactor.EuhedralScheduler;
-import io.euhedral_execution.spring.core.protocols.kafka.EuhedralKafkaBinder;
+import io.euhedral_execution.spring.core.transport.kafka.EuhedralKafkaBinder;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;

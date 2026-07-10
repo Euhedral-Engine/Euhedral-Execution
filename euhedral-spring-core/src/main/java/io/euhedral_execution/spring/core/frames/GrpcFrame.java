@@ -2,7 +2,7 @@ package io.euhedral_execution.spring.core.frames;
 
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.impl.FrameManager;
-import io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage;
+import io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage;
 import io.euhedral_execution.spring.core.utils.KillSwitch;
 import io.grpc.stub.ServerCallStreamObserver;
 import java.util.Objects;

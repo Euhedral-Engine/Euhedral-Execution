@@ -1,4 +1,4 @@
-package io.euhedral_execution.spring.core.protocols.kafka;
+package io.euhedral_execution.spring.core.transport.kafka;
 
 import io.euhedral_execution.core.control_plane.ControlPlaneLattice;
 import io.euhedral_execution.hashing.HasherApi;
