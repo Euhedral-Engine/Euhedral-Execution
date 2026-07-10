@@ -39,4 +39,5 @@ module euhedral.spring.core {
     exports io.euhedral_execution.spring.core.protocols.grpc.protos;
     exports io.euhedral_execution.spring.core.protocols.grpc;
     exports io.euhedral_execution.spring.core.protocols.kafka;
+    exports io.euhedral_execution.spring.core.protocols.spring_messaging;
 }
