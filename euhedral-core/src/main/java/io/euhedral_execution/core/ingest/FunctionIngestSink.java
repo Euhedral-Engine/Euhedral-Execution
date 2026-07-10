@@ -60,7 +60,7 @@ public final class FunctionIngestSink<T, R> extends AbstractIngestSink {
         final long[] seed = {HasherApi.mix(password + 1)};
         FrameCreate<T, FunctionFrame<T, R>> generate = (idHash, data) -> {
             FunctionFrame<T, R> frame = new FunctionFrame<>(idHash, function, consumer, data,
-                    killSwitch, frameManager);
+                    frameManager, killSwitch);
             if (parallel) {
                 frame.randomizeHash(seed[0]++);
             }

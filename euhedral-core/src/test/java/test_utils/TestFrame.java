@@ -6,7 +6,7 @@ public class TestFrame extends AbstractFrame {
     public final String value;
 
     public TestFrame(String value) {
-        super(0, null);
+        super(0);
         this.value = value;
     }
 

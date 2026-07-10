@@ -1,27 +1,25 @@
 package io.euhedral_execution.reactor;
 
-import io.euhedral_execution.core.frames.FunctionFrame;
+import io.euhedral_execution.core.frames.CallbackFrame;
 import io.euhedral_execution.core.impl.FrameFactory;
 import io.euhedral_execution.core.impl.FrameFactory.FrameCreate;
 import io.euhedral_execution.core.impl.FrameFactory.FrameReplace;
 import io.euhedral_execution.core.impl.FrameManager;
 import io.euhedral_execution.data_structures.atomics.PaddedAtomicLong;
-import io.euhedral_execution.data_structures.queues.PartitionedMpscQueue;
+import io.euhedral_execution.data_structures.queues.BoundedMpmcQueue;
 import io.euhedral_execution.hashing.HasherApi;
-import io.euhedral_execution.reactor.common.BackpressureHandler;
+import io.euhedral_execution.reactor.common.EuhedralSink;
 import io.euhedral_execution.reactor.common.EuhedralSubscriber;
 import io.euhedral_execution.reactor.common.FrameSequencer;
 import io.euhedral_execution.reactor.common.SequencedFrame;
 import java.util.Objects;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Consumer;
 import java.util.function.Function;
 import org.jspecify.annotations.NonNull;
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Sinks;
-import reactor.core.publisher.Sinks.EmitResult;
 
 /// ### The Generic Interface for [EuhedralScheduler]
 ///
@@ -51,24 +49,27 @@ public final class EuhedralOperator {
     private final EuhedralScheduler scheduler;
     private final int recycleCapacity;
 
+    private final int responseQueueSize;
+
     private final PaddedAtomicLong seed = new PaddedAtomicLong(
             ThreadLocalRandom.current().nextLong());
 
     public EuhedralOperator(EuhedralScheduler scheduler) {
-        this(scheduler, 16_384);
+        this(scheduler, 2_048, 4_096);
     }
 
-    public EuhedralOperator(EuhedralScheduler scheduler, int recycleCapacity) {
+    public EuhedralOperator(EuhedralScheduler scheduler, int recycleCapacity,
+            int responseQueueSize) {
         Objects.requireNonNull(scheduler, "Scheduler must not be null");
         if (recycleCapacity < 0) {
             throw new IllegalArgumentException("Recycle capacity must be non-negative");
         }
         this.scheduler = scheduler;
         this.recycleCapacity = recycleCapacity;
+        this.responseQueueSize = responseQueueSize;
     }
 
-    public @NonNull <T, R> Function<Flux<T>, Publisher<R>> flatMap(
-            @NonNull Function<T, R> mapper) {
+    public @NonNull <T, R> Function<Flux<T>, Publisher<R>> flatMap(@NonNull Function<T, R> mapper) {
         return flux -> flatMap(flux, mapper);
     }
 
@@ -108,46 +109,35 @@ public final class EuhedralOperator {
         });
     }
 
-    public @NonNull <T, R> Publisher<R> concatMap(@NonNull Flux<T> flux, @NonNull Function<T, R> mapper) {
+    public @NonNull <T, R> Publisher<R> concatMap(@NonNull Flux<T> flux,
+            @NonNull Function<T, R> mapper) {
         Objects.requireNonNull(flux);
         Objects.requireNonNull(mapper);
         return map(flux, mapper, true);
     }
 
-    private <T, R> Publisher<R> map(Flux<T> flux, Function<T, R> mapper, boolean ordered) {
+    private <T, R> Publisher<R> map(Flux<T> raw, Function<T, R> function, boolean ordered) {
+        EuhedralSink<T, R> response = new EuhedralSink<>(
+                new BoundedMpmcQueue<>(this.responseQueueSize));
+
         long[] seed = {this.seed.getAndAddRelease(1)};
         final long password = HasherApi.mix(seed[0]++);
 
-        final Sinks.One<Void> killSwitch = Sinks.unsafe().one();
-        final AtomicBoolean dead = new AtomicBoolean(false);
+        AtomicBoolean senderSwitch = new AtomicBoolean();
+        Sinks.One<Void> killSwitch = Sinks.unsafe().one();
 
-        final Sinks.Many<R> returnSink = Sinks.many().unicast()
-                .onBackpressureBuffer(new PartitionedMpscQueue<>(1, 2048, 1));
-
-        final Consumer<R> consumer = (obj) -> {
-            int cycles = 0;
-            EmitResult result = BackpressureHandler.push(obj, returnSink);
-            if (result == EmitResult.FAIL_CANCELLED
-                    || result == EmitResult.FAIL_TERMINATED
-                    || result == EmitResult.FAIL_ZERO_SUBSCRIBER) {
-                dead.setRelease(true);
-                killSwitch.tryEmitEmpty();
-            }
-        };
-
-        FrameManager<T, FunctionFrame<T, R>> recycler = new FrameManager<>(this.recycleCapacity,
+        FrameManager<T, CallbackFrame<T, R>> recycler = new FrameManager<>(this.recycleCapacity,
                 password);
 
-        FrameCreate<T, FunctionFrame<T, R>> frameCreate = (idHash, data) -> {
-            FunctionFrame<T, R> frame = new FunctionFrame<>(idHash,
-                    mapper, consumer, data, dead,
-                    recycler);
+        FrameCreate<T, CallbackFrame<T, R>> frameCreate = (idHash, data) -> {
+            CallbackFrame<T, R> frame = new CallbackFrame<>(idHash, data, function, response,
+                    recycler, senderSwitch);
             if (!ordered) {
                 frame.randomizeHash(seed[0]++);
             }
             return frame;
         };
-        FrameReplace<T, FunctionFrame<T, R>> frameReplace = (data, oldFrame) -> {
+        FrameReplace<T, CallbackFrame<T, R>> frameReplace = (data, oldFrame) -> {
             oldFrame.replace(data);
             if (!ordered) {
                 oldFrame.randomizeHash(seed[0]++);
@@ -155,19 +145,23 @@ public final class EuhedralOperator {
         };
         recycler.setFactory(new FrameFactory<>(frameCreate, frameReplace));
 
-        final Flux<FunctionFrame<T, R>> framed = flux.takeUntilOther(killSwitch.asMono())
-                .map(obj -> recycler.getOrCreate(obj, password));
-
         EuhedralSubscriber subscriber = new EuhedralSubscriber();
-        return returnSink.asFlux().doOnSubscribe(
-                        sub -> {
-                            framed.subscribe(subscriber);
-                            this.scheduler.ingest(subscriber);
-                        })
-                .doFinally(sig -> {
-                    dead.setRelease(true);
-                    killSwitch.tryEmitEmpty();
-                    recycler.close();
-                });
+        return response.asFlux().doOnSubscribe(sub -> {
+            raw.takeUntilOther(killSwitch.asMono()).map(obj -> recycler.getOrCreate(obj, password))
+                    .doOnCancel(() -> {
+                        senderSwitch.setRelease(true);
+                        killSwitch.tryEmitEmpty();
+                    }).doOnError(err -> {
+                        senderSwitch.setRelease(true);
+                        killSwitch.tryEmitEmpty();
+                    }).subscribe(subscriber);
+            this.scheduler.ingest(subscriber);
+        }).doOnCancel(() -> {
+            senderSwitch.setRelease(true);
+            killSwitch.tryEmitEmpty();
+        }).doOnError(err -> {
+            senderSwitch.setRelease(true);
+            killSwitch.tryEmitEmpty();
+        });
     }
 }

@@ -3,12 +3,15 @@ package io.euhedral_execution.core.frames;
 import io.euhedral_execution.core.control_plane.ControlPlaneFragment;
 import io.euhedral_execution.core.flow_control.RoutingPolicy;
 import io.euhedral_execution.core.generics.AbstractExecutor;
+import io.euhedral_execution.core.generics.FramePusher;
 import io.euhedral_execution.core.impl.FrameManager;
 import io.euhedral_execution.hardware_utils.SystemInfo.CpuInfo;
 import io.euhedral_execution.hashing.HasherApi;
+import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.Getter;
 import lombok.Setter;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 /// ## Base unit of work within Euhedral Core
 ///
@@ -17,8 +20,8 @@ import org.jspecify.annotations.NonNull;
 /// It carries execution state, routing hashes, and lifecycle hooks required by an
 /// [`AbstractExecutor`][io.euhedral_execution.core.generics].
 ///
-/// Frames are designed to be *reusable*. They are not created and discarded like typical
-/// tasks. Instead, they are recycled through a [FrameManager] to avoid GC churn and keep allocation
+/// Frames are designed to be *reusable*. They are not created and discarded like typical tasks.
+/// Instead, they are recycled through a [FrameManager] to avoid GC churn and keep allocation
 /// pressure near zero.
 ///
 /// Once execution completes, the frame is returned to its origin, reset, and potentially dispatched
@@ -52,34 +55,58 @@ import org.jspecify.annotations.NonNull;
 /// ### Lifecycle Notes
 ///
 /// - `execute()` -> does the work
+/// - `giveToReceiver()` -> sends a response frame
 /// - `kill()` -> hard stop (this and related work)
 /// - `isAlive()` -> soft liveness check (engine may cancel if false)
 /// - `doFinally()` -> post-execution hook (safe mutation point)
-/// - `doFinallyWithError()` -> post-execution hook after an uncaught exception (safe mutation point)
+/// - `doFinallyWithError()` -> post-execution hook after an uncaught exception (safe mutation
+/// point)
 @SuppressWarnings({"rawtypes", "unchecked", "unused"})
 public abstract class AbstractFrame {
 
     public static final CancelSignal CANCEL_SIGNAL = new CancelSignal();
 
+    protected final FramePusher responseReceiver;
     protected final FrameManager recycler;
+    protected final AtomicBoolean killSwitch;
 
     @Getter
     private final long idHash;
     @Getter
     private long routingHash;
-    @Getter @Setter
+    @Getter
+    @Setter
     private CpuInfo origin;
     @Setter
     private RoutingPolicy routingPolicy;
 
-    public AbstractFrame(long idHash, FrameManager recycler) {
+    public AbstractFrame(long idHash) {
+        this(idHash, null, null);
+    }
+
+    public AbstractFrame(long idHash, @Nullable FrameManager recycler,
+            @Nullable AtomicBoolean killSwitch) {
+        this(idHash, null, null, null);
+    }
+
+    public AbstractFrame(long idHash, @Nullable FramePusher responseReceiver,
+            @Nullable FrameManager recycler, @Nullable AtomicBoolean killSwitch) {
         this.idHash = idHash;
         this.recycler = recycler;
+        this.killSwitch = killSwitch;
         this.routingHash = idHash;
+        this.responseReceiver = responseReceiver;
     }
 
     /// Does the thing.
-    public abstract void execute();
+    public void execute() {
+    }
+
+    protected  <T extends AbstractFrame> void giveToReceiver(T obj) {
+        if(this.responseReceiver != null) {
+            this.responseReceiver.push(obj);
+        }
+    }
 
     /// Sets the routingHash by mixing the idHash with the seed.
     public final void randomizeHash(long seed) {
@@ -90,10 +117,16 @@ public abstract class AbstractFrame {
     /// Liveness check.
     ///
     /// If this returns `false`, the engine is allowed to cancel execution.
-    public abstract boolean isAlive();
+    public boolean isAlive() {
+        return this.killSwitch == null || !this.killSwitch.getAcquire();
+    }
 
     /// Hard stop for this frame.
-    public abstract void kill();
+    public void kill() {
+        if (this.killSwitch != null) {
+            this.killSwitch.setRelease(true);
+        }
+    }
 
     /// Post-execution hook.
     ///
@@ -104,13 +137,14 @@ public abstract class AbstractFrame {
 
     /// Post-execution hook.
     ///
-    /// Called after execution is canceled due to an uncaught error. At this point it is safe to mutate frame state.
+    /// Called after execution is canceled due to an uncaught error. At this point it is safe to
+    /// mutate frame state.
     public void doFinallyWithError(Throwable t) {
         recycle();
     }
 
     /// Resets the routingHash to the idHash.
-    public void reset() {
+    public void resetHash() {
         this.routingHash = idHash;
     }
 
@@ -138,9 +172,9 @@ public abstract class AbstractFrame {
     }
 
     /// This class is thrown as a cancellation signal. This signal is automatically handled by the
-    /// [ControlPlaneFragment][ControlPlaneFragment] and
-    /// [AbstractExecutor][AbstractExecutor].
+    /// [ControlPlaneFragment][ControlPlaneFragment] and [AbstractExecutor][AbstractExecutor].
     public static final class CancelSignal extends RuntimeException {
+
         private CancelSignal() {
             super(null, null, false, false);
         }

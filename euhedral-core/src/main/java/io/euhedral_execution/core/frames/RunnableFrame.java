@@ -8,32 +8,20 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public final class RunnableFrame extends AbstractFrame {
 
     private final Runnable runnable;
-    private final AtomicBoolean killSwitch;
 
-    public RunnableFrame(long idHash, Runnable runnable, AtomicBoolean killSwitch,
-            FrameManager<Void, RunnableFrame> recycler) {
-        super(idHash, recycler);
+    public RunnableFrame(long idHash, Runnable runnable) {
+        super(idHash);
         this.runnable = runnable;
-        this.killSwitch = killSwitch;
+    }
+
+    public RunnableFrame(long idHash, Runnable runnable,
+            FrameManager<Void, RunnableFrame> recycler, AtomicBoolean killSwitch) {
+        super(idHash, recycler, killSwitch);
+        this.runnable = runnable;
     }
 
     @Override
     public void execute() {
         runnable.run();
-    }
-
-    @Override
-    public boolean isAlive() {
-        if(killSwitch != null) {
-            return killSwitch.getOpaque();
-        }
-        return true;
-    }
-
-    @Override
-    public void kill() {
-        if(killSwitch != null) {
-            killSwitch.setRelease(true);
-        }
     }
 }

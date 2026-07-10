@@ -73,7 +73,6 @@ public final class FrameManager<DATA, FRAME extends AbstractFrame> implements Au
         if (frame == null) {
             return factory.create(data);
         }
-        frame.reset();
         factory.replace(data, frame);
         return frame;
     }

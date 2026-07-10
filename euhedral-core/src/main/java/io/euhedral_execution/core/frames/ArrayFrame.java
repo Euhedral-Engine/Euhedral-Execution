@@ -7,8 +7,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @SuppressWarnings("unused")
 public final class ArrayFrame extends AbstractFrame {
 
-    private final AtomicBoolean killSwitch;
-
     private AbstractFrame[] frames;
 
     public ArrayFrame(long idHash, AbstractFrame[] frames) {
@@ -16,15 +14,14 @@ public final class ArrayFrame extends AbstractFrame {
     }
 
     public ArrayFrame(long idHash, AbstractFrame[] frames, AtomicBoolean killSwitch) {
-        this(idHash, frames, killSwitch, null);
+        this(idHash, frames, null, killSwitch);
     }
 
-    public ArrayFrame(long idHash, AbstractFrame[] frames, AtomicBoolean killSwitch,
-            FrameManager<AbstractFrame[], ArrayFrame> frameManager) {
-        super(idHash, frameManager);
+    public ArrayFrame(long idHash, AbstractFrame[] frames,
+            FrameManager<AbstractFrame[], ArrayFrame> frameManager, AtomicBoolean killSwitch) {
+        super(idHash, frameManager, killSwitch);
         Objects.requireNonNull(frames);
 
-        this.killSwitch = killSwitch;
         this.frames = frames;
     }
 
@@ -34,21 +31,6 @@ public final class ArrayFrame extends AbstractFrame {
             if (frame != null && frame.isAlive()) {
                 frame.execute();
             }
-        }
-    }
-
-    @Override
-    public boolean isAlive() {
-        if(this.killSwitch != null) {
-            return !this.killSwitch.getAcquire();
-        }
-        return true;
-    }
-
-    @Override
-    public void kill() {
-        if(this.killSwitch != null) {
-            this.killSwitch.setRelease(true);
         }
     }
 
