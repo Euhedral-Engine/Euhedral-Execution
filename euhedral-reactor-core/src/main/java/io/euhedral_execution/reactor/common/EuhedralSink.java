@@ -30,7 +30,7 @@ public class EuhedralSink<T, R> extends LatticeHotReceiver<ChainFrame<CallbackFr
 
     @Override
     protected Response hookOnPush(ChainFrame<CallbackFrame<T, R>> frame) {
-        if(!frame.isAlive()) {
+        if (!frame.isAlive()) {
             return Response.CANCEL;
         }
         CallbackFrame<T, R> casted = (CallbackFrame<T, R>) frame;

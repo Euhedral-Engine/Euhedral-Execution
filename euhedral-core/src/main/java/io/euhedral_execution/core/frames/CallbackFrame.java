@@ -9,7 +9,8 @@ import lombok.Getter;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
-public final class CallbackFrame<T, R> extends ChainFrame<CallbackFrame<T, R>>{
+@SuppressWarnings("unused")
+public final class CallbackFrame<T, R> extends ChainFrame<CallbackFrame<T, R>> {
 
     private final Function<T, R> function;
 

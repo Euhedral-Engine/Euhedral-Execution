@@ -9,6 +9,7 @@ import io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServ
 import io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage;
 import io.grpc.stub.ServerCallStreamObserver;
 import io.grpc.stub.StreamObserver;
+import java.util.concurrent.ThreadLocalRandom;
 
 public abstract class GrpcTransportServer extends GrpcTransportServiceImplBase {
 
@@ -29,9 +30,8 @@ public abstract class GrpcTransportServer extends GrpcTransportServiceImplBase {
     @Override
     public void unaryMethod(GrpcMessage message,
             StreamObserver<GrpcMessage> responseObserver) {
+        long idHash = HasherApi.mix(ThreadLocalRandom.current().nextLong());
         ServerCallStreamObserver<GrpcMessage> serverCallObserver = (ServerCallStreamObserver<GrpcMessage>) responseObserver;
-        String connectionId = ConnectionIdInterceptor.CONN_ID_KEY.get();
-        long idHash = HasherApi.getHash(connectionId);
 
         GrpcFrame frame = new GrpcFrame(idHash, message, CommunicationMethod.SINGLE_RESPONSE,
                 serverCallObserver, null, null);
@@ -41,11 +41,9 @@ public abstract class GrpcTransportServer extends GrpcTransportServiceImplBase {
     @Override
     public StreamObserver<GrpcMessage> clientStreamMethod(
             StreamObserver<GrpcMessage> responseObserver) {
+        long idHash = HasherApi.mix(ThreadLocalRandom.current().nextLong());
         ServerCallStreamObserver<GrpcMessage> serverCallObserver = (ServerCallStreamObserver<GrpcMessage>) responseObserver;
         serverCallObserver.disableAutoInboundFlowControl();
-
-        String connectionId = ConnectionIdInterceptor.CONN_ID_KEY.get();
-        long idHash = HasherApi.getHash(connectionId);
 
         GrpcServerHandler serverHandler = new GrpcServerHandler(
                 idHash, serverCallObserver, CommunicationMethod.CLIENT_STREAM);
@@ -58,11 +56,9 @@ public abstract class GrpcTransportServer extends GrpcTransportServiceImplBase {
     @Override
     public void serverStreamMethod(GrpcMessage request,
             StreamObserver<GrpcMessage> responseObserver) {
+        long idHash = HasherApi.mix(ThreadLocalRandom.current().nextLong());
         ServerCallStreamObserver<GrpcMessage> serverCallObserver = (ServerCallStreamObserver<GrpcMessage>) responseObserver;
         serverCallObserver.disableAutoInboundFlowControl();
-
-        String connectionId = ConnectionIdInterceptor.CONN_ID_KEY.get();
-        long idHash = HasherApi.getHash(connectionId);
 
         GrpcServerHandler serverHandler = new GrpcServerHandler(
                 idHash, serverCallObserver, CommunicationMethod.SERVER_STREAM);
@@ -73,11 +69,9 @@ public abstract class GrpcTransportServer extends GrpcTransportServiceImplBase {
     @Override
     public StreamObserver<GrpcMessage> bidirectionalMethod(
             StreamObserver<GrpcMessage> responseObserver) {
+        long idHash = HasherApi.mix(ThreadLocalRandom.current().nextLong());
         ServerCallStreamObserver<GrpcMessage> serverCallObserver = (ServerCallStreamObserver<GrpcMessage>) responseObserver;
         serverCallObserver.disableAutoInboundFlowControl();
-
-        String connectionId = ConnectionIdInterceptor.CONN_ID_KEY.get();
-        long idHash = HasherApi.getHash(connectionId);
 
         GrpcServerHandler serverHandler = new GrpcServerHandler(
                 idHash, serverCallObserver, CommunicationMethod.BIDI);
@@ -85,5 +79,4 @@ public abstract class GrpcTransportServer extends GrpcTransportServiceImplBase {
         processStream(serverHandler);
         return serverHandler;
     }
-
 }
