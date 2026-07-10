@@ -11,11 +11,10 @@ import lombok.Setter;
 import org.jspecify.annotations.Nullable;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageHeaders;
-import org.springframework.messaging.support.MessageBuilder;
 import reactor.core.publisher.Sinks;
 
 @SuppressWarnings("unused")
-public class RSocketFrame extends AbstractFrame {
+public class SpringMessageFrame extends AbstractFrame {
 
     private final KillSwitch senderKillSwitch;
 
@@ -23,24 +22,20 @@ public class RSocketFrame extends AbstractFrame {
     private KillSwitch receiverKillSwitch;
 
     @Setter
-    private Sinks.Many<RSocketFrame> returnSink;
+    private Sinks.Many<SpringMessageFrame> returnSink;
 
     @Getter
-    private Map<String, Object> headers;
-    @Getter
-    private byte[] payload;
+    Message<?> message;
 
-    public RSocketFrame(long idHash, Message<byte[]> message, @Nullable FrameManager<Message<byte[]>, RSocketFrame> recycler,
-            @Nullable KillSwitch senderKillSwitch) {
-        this(idHash, message.getHeaders(), message.getPayload(), recycler, senderKillSwitch);
+    public SpringMessageFrame(long idHash, Message<?> message) {
+        this(idHash, message, null, null);
     }
 
-    public RSocketFrame(long idHash, Map<String, Object> headers, byte[] payload,
-            @Nullable FrameManager<Message<byte[]>, RSocketFrame> recycler, @Nullable KillSwitch senderKillSwitch) {
+    public SpringMessageFrame(long idHash, Message<?> message, @Nullable FrameManager<Message<?>, SpringMessageFrame> recycler,
+            @Nullable KillSwitch senderKillSwitch) {
         super(idHash, recycler);
+        this.message = message;
         this.senderKillSwitch = senderKillSwitch;
-        this.headers = cleanHeaders(headers);
-        this.payload = payload;
     }
 
     private Map<String, Object> cleanHeaders(Map<String, Object> headers) {
@@ -74,7 +69,7 @@ public class RSocketFrame extends AbstractFrame {
         return this.returnSink != null;
     }
 
-    public void respond(RSocketFrame frame) {
+    public void respond(SpringMessageFrame frame) {
         if(this.returnSink != null) {
             if(!BackpressureHandler.push(frame, this.returnSink).isSuccess()) {
                 throwCancelSignal();
@@ -82,16 +77,7 @@ public class RSocketFrame extends AbstractFrame {
         }
     }
 
-    public void replace(Message<byte[]> message) {
-        replace(message.getHeaders(), message.getPayload());
-    }
-
-    public void replace(Map<String, Object> headers, byte[] payload) {
-        this.headers = cleanHeaders(headers);
-        this.payload = payload;
-    }
-
-    public Message<byte[]> toSpringMessage() {
-        return MessageBuilder.withPayload(this.payload).copyHeaders(this.headers).build();
+    public void replace(Message<?> message) {
+        this.message = message;
     }
 }
