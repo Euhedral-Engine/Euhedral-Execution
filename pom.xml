@@ -34,12 +34,9 @@
     <argLine/>
 
     <lombok.version>1.18.42</lombok.version>
-    <h2.version>2.2.224</h2.version>
-    <cloudevents.version>4.0.1</cloudevents.version>
     <reactor-test.version>3.7.12</reactor-test.version>
-    <r2dbc-h2.version>1.0.1.RELEASE</r2dbc-h2.version>
-    <spring-boot.version>4.0.1</spring-boot.version>
-    <spring-cloud.version>2025.1.1</spring-cloud.version>
+    <spring-boot.version>4.1.0</spring-boot.version>
+    <spring-cloud.version>2025.1.2</spring-cloud.version>
 
     <skip.central.publish>true</skip.central.publish>
   </properties>
@@ -103,11 +100,9 @@
       </dependency>
 
       <dependency>
-        <groupId>io.projectreactor</groupId>
-        <artifactId>reactor-bom</artifactId>
-        <version>2025.0.5</version>
-        <type>pom</type>
-        <scope>import</scope>
+        <groupId>com.google.guava</groupId>
+        <artifactId>guava</artifactId>
+        <version>33.3.0-jre</version>
       </dependency>
 
       <dependency>
@@ -123,11 +118,6 @@
         <scope>provided</scope>
       </dependency>
 
-      <dependency>
-        <groupId>com.google.guava</groupId>
-        <artifactId>guava</artifactId>
-        <version>33.3.0-jre</version>
-      </dependency>
 
       <dependency>
         <groupId>ch.qos.logback</groupId>
@@ -179,11 +169,6 @@
         <groupId>it.unimi.dsi</groupId>
         <artifactId>fastutil</artifactId>
         <version>8.5.18</version>
-      </dependency>
-      <dependency>
-        <groupId>org.openjdk.jol</groupId>
-        <artifactId>jol-core</artifactId>
-        <version>0.17</version>
       </dependency>
 
       <dependency>

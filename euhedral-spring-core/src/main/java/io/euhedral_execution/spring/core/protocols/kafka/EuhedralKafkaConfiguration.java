@@ -15,7 +15,7 @@ import org.springframework.context.annotation.Configuration;
 public class EuhedralKafkaConfiguration {
 
     @Bean
-    public EuhedralKafkaBinder clioKafkaBinder(
+    public EuhedralKafkaBinder euhedralKafkaBinder(
             ControlPlaneLattice controlPlane,
             KafkaMessageChannelBinder kafkaBinder,
             KafkaTopicProvisioner kafkaProvisioner,
