@@ -9,8 +9,6 @@ import lombok.Setter;
 
 public class SequencedFrame<T, R> extends AbstractFrame {
 
-    private final AtomicBoolean killSwitch;
-
     private final FrameSequencer<T, R> sequencer;
 
     @Getter
@@ -33,8 +31,7 @@ public class SequencedFrame<T, R> extends AbstractFrame {
     public SequencedFrame(long idHash,
             T payload, Function<T, R> function, AtomicBoolean killSwitch, FrameSequencer<T, R> sequencer,
             FrameManager<T, SequencedFrame<T, R>> recycler) {
-        super(idHash, recycler);
-        this.killSwitch = killSwitch;
+        super(idHash, recycler, killSwitch);
         this.sequencer = sequencer;
         this.function = function;
         this.payload = payload;
@@ -43,16 +40,6 @@ public class SequencedFrame<T, R> extends AbstractFrame {
     @Override
     public void execute() {
         retVal = function.apply(payload);
-    }
-
-    @Override
-    public boolean isAlive() {
-        return killSwitch.get();
-    }
-
-    @Override
-    public void kill() {
-        killSwitch.set(true);
     }
 
     public void replace(T payload) {

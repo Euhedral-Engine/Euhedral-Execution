@@ -7,7 +7,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 @SuppressWarnings("unused")
 public final class CollectionFrame extends AbstractFrame {
-    private final AtomicBoolean killSwitch;
 
     private Collection<AbstractFrame> frames;
 
@@ -15,16 +14,16 @@ public final class CollectionFrame extends AbstractFrame {
         this(idHash, frames, null, null);
     }
 
-    public CollectionFrame(long idHash, Collection<AbstractFrame> frames, AtomicBoolean killSwitch) {
-        this(idHash, frames, killSwitch, null);
+    public CollectionFrame(long idHash, Collection<AbstractFrame> frames,
+            AtomicBoolean killSwitch) {
+        this(idHash, frames, null, killSwitch);
     }
 
-    public CollectionFrame(long idHash, Collection<AbstractFrame> frames, AtomicBoolean killSwitch,
-            FrameManager<AbstractFrame[], ArrayFrame> frameManager) {
-        super(idHash, frameManager);
+    public CollectionFrame(long idHash, Collection<AbstractFrame> frames,
+            FrameManager<AbstractFrame[], ArrayFrame> frameManager, AtomicBoolean killSwitch) {
+        super(idHash, frameManager, killSwitch);
         Objects.requireNonNull(frames);
 
-        this.killSwitch = killSwitch;
         this.frames = frames;
     }
 
@@ -34,21 +33,6 @@ public final class CollectionFrame extends AbstractFrame {
             if (frame != null && frame.isAlive()) {
                 frame.execute();
             }
-        }
-    }
-
-    @Override
-    public boolean isAlive() {
-        if(this.killSwitch != null) {
-            return !this.killSwitch.getAcquire();
-        }
-        return true;
-    }
-
-    @Override
-    public void kill() {
-        if(this.killSwitch != null) {
-            this.killSwitch.setRelease(true);
         }
     }
 

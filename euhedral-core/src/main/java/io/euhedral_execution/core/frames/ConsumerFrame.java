@@ -8,10 +8,10 @@ import java.util.function.Consumer;
 /// A generic frame that consumes its payload when executed.
 ///
 /// @param <T> Data type to consume
+@SuppressWarnings("unused")
 public final class ConsumerFrame<T> extends AbstractFrame {
 
     private final Consumer<T> consumer;
-    private final AtomicBoolean killSwitch;
 
     private T payload;
 
@@ -21,32 +21,16 @@ public final class ConsumerFrame<T> extends AbstractFrame {
 
     public ConsumerFrame(long idHash, Consumer<T> consumer, T payload, AtomicBoolean killSwitch,
             FrameManager<T, ConsumerFrame<T>> recycler) {
-        super(idHash, recycler);
+        super(idHash, recycler, killSwitch);
         Objects.requireNonNull(consumer);
         Objects.requireNonNull(payload);
         this.consumer = consumer;
-        this.killSwitch = killSwitch;
         this.payload = payload;
     }
 
     @Override
     public void execute() {
         this.consumer.accept(this.payload);
-    }
-
-    @Override
-    public boolean isAlive() {
-        if(this.killSwitch != null) {
-            return !killSwitch.getOpaque();
-        }
-        return true;
-    }
-
-    @Override
-    public void kill() {
-        if(this.killSwitch != null) {
-            killSwitch.setRelease(true);
-        }
     }
 
     public void replace(T object) {

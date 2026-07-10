@@ -108,7 +108,8 @@ public final class EuhedralOperator {
         });
     }
 
-    public @NonNull <T, R> Publisher<R> concatMap(@NonNull Flux<T> flux, @NonNull Function<T, R> mapper) {
+    public @NonNull <T, R> Publisher<R> concatMap(@NonNull Flux<T> flux,
+            @NonNull Function<T, R> mapper) {
         Objects.requireNonNull(flux);
         Objects.requireNonNull(mapper);
         return map(flux, mapper, true);
@@ -140,8 +141,7 @@ public final class EuhedralOperator {
 
         FrameCreate<T, FunctionFrame<T, R>> frameCreate = (idHash, data) -> {
             FunctionFrame<T, R> frame = new FunctionFrame<>(idHash,
-                    mapper, consumer, data, dead,
-                    recycler);
+                    mapper, consumer, data, recycler, dead);
             if (!ordered) {
                 frame.randomizeHash(seed[0]++);
             }

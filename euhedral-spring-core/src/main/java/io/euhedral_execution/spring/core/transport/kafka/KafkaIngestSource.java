@@ -368,6 +368,7 @@ public class KafkaIngestSource implements LatticeSource {
             if (ingestor == null) {
                 this.logger.info("Adding partition: {}-{}", part.topic(), part.partition());
                 ingestor = new PartitionIngestor(part, hash, new KillSwitch());
+                ingestor.killSwitch().addGoner(this::complete);
             }
             this.ingestors.put(hash, ingestor);
             old.remove(hash);

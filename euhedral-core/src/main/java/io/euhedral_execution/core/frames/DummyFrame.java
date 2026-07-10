@@ -7,21 +7,7 @@ public final class DummyFrame extends AbstractFrame {
     public static final DummyFrame INSTANCE = new DummyFrame();
 
     private DummyFrame() {
-        super(0, null);
+        super(0);
     }
 
-    @Override
-    public void execute() {
-
-    }
-
-    @Override
-    public boolean isAlive() {
-        return false;
-    }
-
-    @Override
-    public void kill() {
-
-    }
 }

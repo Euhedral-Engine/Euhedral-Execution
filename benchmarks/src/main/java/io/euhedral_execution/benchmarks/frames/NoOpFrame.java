@@ -31,21 +31,8 @@ public class NoOpFrame extends AbstractFrame {
     }
 
     public NoOpFrame(long idHash, PaddedLongAdder counters) {
-        super(idHash, null);
+        super(idHash);
         this.counters = counters;
-    }
-
-    @Override
-    public void execute() {}
-
-    @Override
-    public boolean isAlive() {
-        return true;
-    }
-
-    @Override
-    public void kill() {
-
     }
 
     @Override

@@ -24,7 +24,7 @@ public class KafkaFrame extends AbstractFrame {
             Offset ack,
             FrameManager<ConsumerRecord<?, ?>, KafkaFrame> recycler,
             KillSwitch ks) {
-        super(idHash, recycler);
+        super(idHash, recycler, null);
         this.record = record;
         this.ack = ack;
         this.killSwitch = ks;
