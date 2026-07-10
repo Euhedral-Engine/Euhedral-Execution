@@ -55,7 +55,7 @@ public final class EuhedralOperator {
             ThreadLocalRandom.current().nextLong());
 
     public EuhedralOperator(EuhedralScheduler scheduler) {
-        this(scheduler, 16_384);
+        this(scheduler, 2_048);
     }
 
     public EuhedralOperator(EuhedralScheduler scheduler, int recycleCapacity) {

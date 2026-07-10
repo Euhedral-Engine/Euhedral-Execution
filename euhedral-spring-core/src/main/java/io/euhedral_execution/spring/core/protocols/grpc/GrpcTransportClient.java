@@ -5,11 +5,14 @@ import io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServ
 import io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage;
 import io.grpc.ManagedChannel;
 import java.util.concurrent.TimeUnit;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 @SuppressWarnings("unused")
-public class GrpcTransportClient implements AutoCloseable {
+public abstract class GrpcTransportClient {
+    private static final Logger LOGGER = LoggerFactory.getLogger(GrpcTransportClient.class);
 
     private final GrpcTransportServiceGrpc.GrpcTransportServiceStub stub;
 
@@ -48,11 +51,6 @@ public class GrpcTransportClient implements AutoCloseable {
         return interceptor.doOnSubscribe(sub -> stub.bidirectionalMethod(interceptor));
     }
 
-    @Override
-    public void close() {
-        shutdown();
-    }
-
     public void shutdown() {
         var channel = (ManagedChannel) stub.getChannel();
         if (channel != null && !channel.isShutdown()) {
@@ -62,8 +60,7 @@ public class GrpcTransportClient implements AutoCloseable {
                     channel.shutdownNow();
                 }
             } catch (InterruptedException e) {
-                channel.shutdownNow();
-                Thread.currentThread().interrupt();
+                LOGGER.error("GrpcTransportClient improperly shut down!", e);
             }
         }
     }
