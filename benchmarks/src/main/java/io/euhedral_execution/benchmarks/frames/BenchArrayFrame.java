@@ -11,7 +11,7 @@ public class BenchArrayFrame extends AbstractFrame {
     public int cpu;
 
     public BenchArrayFrame(long idHash, AbstractFrame[] frames, PaddedLongAdder counters) {
-        super(idHash, null);
+        super(idHash);
 
         this.frames = frames;
         this.counters = counters;

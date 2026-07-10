@@ -31,7 +31,7 @@ public class MandelbrotPixel extends AbstractFrame {
             double pixelWidthStep, double pixelHeightStep,
             int width, int height, int iterationCap,
             double bailoutRadiusSq, double[] magnitudes, int[] escapes, PaddedLongAdder counters) {
-        super(idHash, recycler);
+        super(idHash, recycler, null);
         this.width = width;
         this.height = height;
         this.iterationCap = iterationCap;

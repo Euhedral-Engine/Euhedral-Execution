@@ -13,6 +13,10 @@ public interface BatchableQueue<T> {
 
     boolean offer(T obj);
 
+    default long drain(Consumer<T> consumer) {
+        return drain(consumer, Long.MAX_VALUE);
+    }
+
     long drain(Consumer<T> consumer, long limit);
 
     T poll();

@@ -3,25 +3,13 @@ package io.euhedral_execution.reactor.common;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.hashing.HasherApi;
 import io.euhedral_execution.reactor.EuhedralWorker;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.VarHandle;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.LockSupport;
 import lombok.Getter;
 import reactor.core.Disposable;
 
 public class TaskFrame extends AbstractFrame implements Disposable {
-
-    private static final VarHandle DISPOSED;
-
-    static {
-        try {
-            DISPOSED = MethodHandles.lookup()
-                    .findVarHandle(TaskFrame.class, "disposed", boolean.class);
-        } catch (Throwable t) {
-            throw new ExceptionInInitializerError(t);
-        }
-    }
 
     public static TaskFrame build(long idHash, Runnable task, EuhedralWorker sink, long delay, long period, TimeUnit unit) {
         return new TaskFrame(idHash, task, sink, delay, period, unit);
@@ -31,12 +19,11 @@ public class TaskFrame extends AbstractFrame implements Disposable {
     @Getter
     private final long periodNs;
 
-    private boolean disposed;
     private Thread thread;
     private long seed;
 
     private TaskFrame(long idHash, Runnable task, EuhedralWorker sink, long delay, long period, TimeUnit unit) {
-        super(idHash, null);
+        super(idHash, null, new AtomicBoolean());
 
         this.task = task;
         this.periodNs = unit.toNanos(period);
@@ -54,7 +41,7 @@ public class TaskFrame extends AbstractFrame implements Disposable {
                     LockSupport.parkNanos(delayNs);
                 }
                 if (periodNs > 0) {
-                    while (!Thread.interrupted() && !(boolean) DISPOSED.getOpaque(this)) {
+                    while (!Thread.interrupted() && isAlive()) {
                         if(sink.isDisposed()) {
                             break;
                         }
@@ -71,7 +58,7 @@ public class TaskFrame extends AbstractFrame implements Disposable {
                         }
                         randomizeHash(this.seed++);
                     }
-                    DISPOSED.setRelease(this, true);
+                    kill();
                 } else {
                     sink.submit(this);
                 }
@@ -85,18 +72,8 @@ public class TaskFrame extends AbstractFrame implements Disposable {
     }
 
     @Override
-    public boolean isAlive() {
-        return !isDisposed();
-    }
-
-    @Override
-    public void kill() {
-        dispose();
-    }
-
-    @Override
     public void dispose() {
-        DISPOSED.setVolatile(this, true);
+        kill();
         if(this.thread != null) {
             this.thread.interrupt();
             LockSupport.unpark(this.thread);
@@ -105,7 +82,7 @@ public class TaskFrame extends AbstractFrame implements Disposable {
 
     @Override
     public boolean isDisposed() {
-        return (boolean) DISPOSED.getOpaque(this);
+        return !isAlive();
     }
 
     @Override

@@ -8,6 +8,10 @@ import io.euhedral_execution.core.generics.AbstractExecutor;
 /// Simply hits `execute()` on a frame.
 public final class DefaultExecutor extends AbstractExecutor {
 
+    public DefaultExecutor() {
+        super(-1);
+    }
+
     public DefaultExecutor(int cpu) {
         super(cpu);
     }

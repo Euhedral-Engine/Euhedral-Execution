@@ -26,7 +26,7 @@ import reactor.core.scheduler.Scheduler;
 /// and optimized to take advantage of Euhedral Core's parallelism and memory efficiency while
 /// handling backpressure for you.
 @SuppressWarnings({"unused"})
-public class EuhedralScheduler implements Scheduler {
+public final class EuhedralScheduler implements Scheduler {
 
     private static final AtomicReference<EuhedralScheduler> INSTANCE = new AtomicReference<>();
     private static final AtomicBoolean CONSTRUCTING = new AtomicBoolean(false);
@@ -35,6 +35,24 @@ public class EuhedralScheduler implements Scheduler {
 
     public static @Nullable EuhedralScheduler get() {
         return INSTANCE.getOpaque();
+    }
+
+    public static @NonNull EuhedralScheduler getOrCreate(ControlPlaneLattice controlPlane) {
+        EuhedralScheduler instance = INSTANCE.getOpaque();
+        if (instance != null) {
+            return instance;
+        }
+
+        if (CONSTRUCTING.compareAndSet(false, true)) {
+            instance = new EuhedralScheduler(controlPlane);
+            INSTANCE.set(instance);
+            return instance;
+        }
+
+        while ((instance = INSTANCE.getOpaque()) == null) {
+            Thread.onSpinWait();
+        }
+        return instance;
     }
 
     public static @NonNull EuhedralScheduler getOrCreate() {

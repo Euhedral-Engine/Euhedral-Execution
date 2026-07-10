@@ -2,6 +2,7 @@ package io.euhedral_execution.core.config;
 
 import io.euhedral_execution.core.control_plane.ControlPlaneLattice;
 import io.euhedral_execution.core.control_plane.ControlPlaneShard;
+import io.euhedral_execution.core.generics.AbstractExecutor;
 import io.euhedral_execution.core.generics.CloneableObject;
 import io.euhedral_execution.core.impl.BaseCloneableObject;
 import io.euhedral_execution.hardware_utils.SystemInfo;
@@ -17,8 +18,8 @@ import org.jspecify.annotations.NonNull;
 /// @param allowedCpus     Which CPUs the lattice can bind to.
 /// @param shutdownTimeout Amount of time given to shards and clones to gracefully shut down before
 /// forcefully shutting them down.
-/// @param baseShard       Base [ControlPlaneShard][ControlPlaneShard]
-/// that will be cloned across sockets.
+/// @param baseShard       Base [ControlPlaneShard][ControlPlaneShard] that will be cloned across
+/// sockets.
 @SuppressWarnings("unused")
 public record LatticeConfig(String name, @NonNull BitSet allowedCpus,
                             @NonNull Duration shutdownTimeout,
@@ -28,34 +29,61 @@ public record LatticeConfig(String name, @NonNull BitSet allowedCpus,
         return ofDefaults("EuhedralLattice", "EuhedralShard");
     }
 
-    /// @param name Top-level name
+    /// @param name      Top-level name
     /// @param shardName Second-level name
     public static LatticeConfig ofDefaults(String name, String shardName) {
         return ofDefaults(name, shardName, new BaseCloneableObject());
     }
 
-    /// @param name Top-level name
-    /// @param shardName Second-level name
+    /// @param name         Top-level name
+    /// @param shardName    Second-level name
     /// @param metricPrefix Prefix prepended to collected metrics
-    /// @param meterRegistry Registry for collecting metrics
+    /// @param registry     Registry for collecting metrics
     public static LatticeConfig ofDefaults(String name, String shardName, String metricPrefix,
-            MeterRegistry meterRegistry) {
-        return ofDefaults(name, shardName, new BaseCloneableObject(metricPrefix, meterRegistry));
+            MeterRegistry registry) {
+        return ofDefaults(name, shardName, new BaseCloneableObject(metricPrefix, registry));
     }
 
-    /// @param name Top-level name
+    /// @param executor Executor to give to [BaseCloneableObject]
+    public static LatticeConfig ofDefaults(@NonNull AbstractExecutor executor) {
+        return ofDefaults("EuhedralLattice", "EuhedralShard", executor);
+    }
+
+    /// @param name      Top-level name
     /// @param shardName Second-level name
-    /// @param cloneableObject Object to be replicated and assigned a core
+    /// @param executor  Executor to give to [BaseCloneableObject]
+    public static LatticeConfig ofDefaults(String name, String shardName,
+            AbstractExecutor executor) {
+        return ofDefaults(name, shardName, new BaseCloneableObject(executor));
+    }
+
+    /// @param name         Top-level name
+    /// @param shardName    Second-level name
+    /// @param metricPrefix Prefix prepended to collected metrics
+    /// @param registry     Registry for collecting metrics
+    /// @param executor     Executor to give to [BaseCloneableObject]
+    public static LatticeConfig ofDefaults(String name, String shardName, String metricPrefix,
+            MeterRegistry registry, AbstractExecutor executor) {
+        return ofDefaults(name, shardName,
+                new BaseCloneableObject(metricPrefix, registry, executor));
+    }
+
+    /// @param name            Top-level name
+    /// @param shardName       Second-level name
+    /// @param cloneableObject Object to be replicated and assigned a core. See
+    /// [BaseCloneableObject]
     public static LatticeConfig ofDefaults(String name, String shardName,
             @NonNull CloneableObject cloneableObject) {
         return new LatticeConfig(name, SystemInfo.getCpuSet(), Duration.ofMinutes(1),
                 ControlPlaneShard.createBaseShard(shardName, cloneableObject));
     }
 
-    /// @param cloneableObject Object to be replicated and assigned a core
+    /// @param cloneableObject Object to be replicated and assigned a core. See
+    /// [BaseCloneableObject]
     public static LatticeConfig ofDefaults(@NonNull CloneableObject cloneableObject) {
         return ofDefaults("EuhedralLattice", "EuhedralShard", cloneableObject);
     }
+
 
     public LatticeConfig {
         Objects.requireNonNull(allowedCpus);
