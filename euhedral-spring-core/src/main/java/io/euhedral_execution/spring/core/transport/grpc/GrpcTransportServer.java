@@ -1,12 +1,12 @@
-package io.euhedral_execution.spring.core.protocols.grpc;
+package io.euhedral_execution.spring.core.transport.grpc;
 
 import io.euhedral_execution.core.control_plane.ControlPlaneLattice;
 import io.euhedral_execution.core.ingest.SingleUseSource;
 import io.euhedral_execution.hashing.HasherApi;
 import io.euhedral_execution.spring.core.frames.GrpcFrame;
 import io.euhedral_execution.spring.core.frames.GrpcFrame.CommunicationMethod;
-import io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceGrpc.GrpcTransportServiceImplBase;
-import io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage;
+import io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceGrpc.GrpcTransportServiceImplBase;
+import io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage;
 import io.grpc.stub.ServerCallStreamObserver;
 import io.grpc.stub.StreamObserver;
 

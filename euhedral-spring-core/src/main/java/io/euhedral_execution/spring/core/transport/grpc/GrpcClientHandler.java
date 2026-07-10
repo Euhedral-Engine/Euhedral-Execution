@@ -1,7 +1,7 @@
-package io.euhedral_execution.spring.core.protocols.grpc;
+package io.euhedral_execution.spring.core.transport.grpc;
 
 import io.euhedral_execution.spring.core.frames.GrpcFrame.CommunicationMethod;
-import io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage;
+import io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage;
 import io.grpc.stub.ClientCallStreamObserver;
 import io.grpc.stub.ClientResponseObserver;
 import java.util.concurrent.CancellationException;

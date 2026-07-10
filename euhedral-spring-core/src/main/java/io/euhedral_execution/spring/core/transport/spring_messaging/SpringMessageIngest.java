@@ -1,4 +1,4 @@
-package io.euhedral_execution.spring.core.protocols.spring_messaging;
+package io.euhedral_execution.spring.core.transport.spring_messaging;
 
 import io.euhedral_execution.core.control_plane.ControlPlaneLattice;
 import io.euhedral_execution.core.impl.FrameFactory;

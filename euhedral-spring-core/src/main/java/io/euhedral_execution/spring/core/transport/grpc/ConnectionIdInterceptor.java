@@ -1,4 +1,4 @@
-package io.euhedral_execution.spring.core.protocols.grpc;
+package io.euhedral_execution.spring.core.transport.grpc;
 
 import io.grpc.Context;
 import io.grpc.Contexts;

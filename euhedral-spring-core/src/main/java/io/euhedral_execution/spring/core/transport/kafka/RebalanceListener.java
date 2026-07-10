@@ -1,6 +1,6 @@
-package io.euhedral_execution.spring.core.protocols.kafka;
+package io.euhedral_execution.spring.core.transport.kafka;
 
-import io.euhedral_execution.spring.core.protocols.kafka.IngestEventHandler.Event;
+import io.euhedral_execution.spring.core.transport.kafka.IngestEventHandler.Event;
 import java.util.Collection;
 import java.util.concurrent.atomic.AtomicReference;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;

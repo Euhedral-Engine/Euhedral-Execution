@@ -1,8 +1,8 @@
-package io.euhedral_execution.spring.core.protocols.grpc;
+package io.euhedral_execution.spring.core.transport.grpc;
 
 import io.euhedral_execution.spring.core.frames.GrpcFrame.CommunicationMethod;
-import io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceGrpc;
-import io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage;
+import io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceGrpc;
+import io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage;
 import io.grpc.ManagedChannel;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
