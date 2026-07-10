@@ -9,10 +9,8 @@ import io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServ
 import io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcTransportServiceMd.GrpcMessage;
 import io.grpc.stub.ServerCallStreamObserver;
 import io.grpc.stub.StreamObserver;
-import org.springframework.grpc.server.service.GrpcService;
 
-@GrpcService
-public class GrpcTransportServer extends GrpcTransportServiceImplBase {
+public abstract class GrpcTransportServer extends GrpcTransportServiceImplBase {
 
     private final ControlPlaneLattice controlPlane;
 

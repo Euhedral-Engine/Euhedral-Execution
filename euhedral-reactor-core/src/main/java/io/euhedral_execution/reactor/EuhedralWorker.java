@@ -18,7 +18,7 @@ import reactor.core.Disposable;
 import reactor.core.scheduler.Scheduler.Worker;
 
 @SuppressWarnings("unused")
-public class EuhedralWorker extends AbstractIngestSink implements Worker {
+public final class EuhedralWorker extends AbstractIngestSink implements Worker {
 
     static EuhedralWorker spawn(int chunkSize, int maxPooledChunks) {
         return new EuhedralWorker(chunkSize, maxPooledChunks);

@@ -15,6 +15,7 @@ module euhedral.spring.core {
     requires it.unimi.dsi.fastutil;
     requires jakarta.annotation;
     requires kafka.clients;
+    requires micrometer.core;
     requires org.apache.commons.lang3;
     requires org.jctools.core;
     requires org.jspecify;
@@ -22,6 +23,7 @@ module euhedral.spring.core {
     requires org.slf4j;
     requires reactor.core;
     requires spring.beans;
+    requires spring.boot.autoconfigure;
     requires spring.boot.kafka;
     requires spring.cloud.context;
     requires spring.cloud.stream;
