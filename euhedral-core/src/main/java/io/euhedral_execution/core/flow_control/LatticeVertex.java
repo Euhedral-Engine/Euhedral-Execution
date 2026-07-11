@@ -7,9 +7,11 @@ import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.generics.LatticeInterceptor;
 import io.euhedral_execution.core.generics.LatticeSource;
 import io.euhedral_execution.core.utils.FlowThread;
+import io.euhedral_execution.core.utils.SpinWait;
 import io.euhedral_execution.data_structures.atomics.PaddedAtomicLong;
 import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
 import io.euhedral_execution.data_structures.queues.BoundedMpmcQueue;
+import io.euhedral_execution.data_structures.queues.MpscQueue;
 import io.euhedral_execution.hashing.HasherApi;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
@@ -76,7 +78,6 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
         this.logger = LoggerFactory.getLogger(name);
         this.downstreams = new LatticeEdge[downstreamCount];
         this.routingFunction = routingFunction;
-        this.sibling = this;
 
         this.hasCache = cachePool > 0;
         this.cachePool = cachePool;
@@ -96,7 +97,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
         if(this.hasCache) {
             CacheHead head = this.cacheHead.get();
             if(head == null) {
-                this.cacheHead.set(new CacheHead(id, this.cacheCount.fromRawIdx(id)));
+                this.cacheHead.set(new CacheHead(this.cacheCount.fromRawIdx(id)));
             }
         }
         super.register(id);
@@ -135,7 +136,6 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
             return false;
         }
 
-        LatticeEdge first = null;
         LatticeEdge prev = null;
         LatticeEdge curr = null;
         int mIdx = 0;
@@ -151,15 +151,11 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
                 }
 
                 if (curr == null) {
-                    first = handles[i];
                     curr = handles[i];
                 } else if (prev == null) {
-                    first.sibling = curr;
                     prev = curr;
                     curr = handles[i];
-                    prev.sibling = curr;
                 } else {
-                    curr.sibling = handles[i];
                     prev = curr;
                     curr = handles[i];
                 }
@@ -167,9 +163,6 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
                 this.cache[i].clear();
                 this.cache[i] = null;
             }
-        }
-        if (curr != null) {
-            curr.sibling = first;
         }
 
         ROUTING_STATE.setVolatile(this, new RoutingState(mappings));
@@ -209,7 +202,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
         }
 
         if (interceptor instanceof LatticeEdge edge) {
-            super.addUpstream(edge);
+            setParent(edge);
             edge.addDownstream(this);
             for (var down : this.downstreams) {
                 if (down != null) {
@@ -217,8 +210,22 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
                     down.setParent(parent);
                 }
             }
-        } else if (interceptor instanceof UpstreamHandle) {
-            super.addUpstream(interceptor);
+        } else if (interceptor instanceof UpstreamHandle upstream) {
+            LatticeEdge parent = (LatticeEdge) PARENT.getOpaque(this);
+            if (parent != null) {
+                parent.addUpstream(upstream);
+                return;
+            }
+
+            SpinWait.await(super.drain::getOpaque);
+
+            for(int i = 0; i < UPSTREAMS.length; i++) {
+                MpscQueue<UpstreamHandle> queue = UPSTREAMS[i];
+                if(queue != null && ACTIVE_PARTITIONS.getAcquire(i) > 0) {
+                    queue.offer(upstream);
+                }
+            }
+            super.upstreamCount.incrementAndGet();
         }
     }
 
@@ -346,12 +353,10 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
     }
 
     private static final class CacheHead {
-        final int id;
         final int counterIdx;
         int idx = 0;
 
-        CacheHead(int id, int counterIdx) {
-            this.id = id;
+        CacheHead(int counterIdx) {
             this.counterIdx = counterIdx;
         }
     }

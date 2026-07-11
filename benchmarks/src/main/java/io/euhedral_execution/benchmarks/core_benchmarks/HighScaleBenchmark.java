@@ -185,15 +185,10 @@ public class HighScaleBenchmark {
             this.counters.reset();
 
             int idx = 0;
-            long seed = HasherApi.BASE_SEED;
             for (ArrayIngestSink sink : sinks) {
                 AbstractFrame[] array = sink.getFrameArray();
-                for (var frame : array) {
-                    frame.randomizeHash(seed++);
-                }
                 this.sinks[idx++] = new ArrayIngestSink(array);
             }
-            VarHandle.fullFence();
         }
 
         @Benchmark
@@ -223,7 +218,7 @@ public class HighScaleBenchmark {
     @OutputTimeUnit(TimeUnit.NANOSECONDS)
     @State(Scope.Benchmark)
     @Warmup(iterations = 0)
-    @Measurement(iterations = 1, time = 60, timeUnit = TimeUnit.SECONDS)
+    @Measurement(iterations = 1, time = 30, timeUnit = TimeUnit.SECONDS)
     @Fork(value = 1)
     public static class OneByOne {
 
@@ -235,6 +230,13 @@ public class HighScaleBenchmark {
 
         @Setup(Level.Trial)
         public void setup(Blackhole blackhole) throws Exception {
+            FractalExecutor executor = new FractalExecutor(blackhole);
+            BaseCloneableObject base = new BaseCloneableObject(executor);
+            LatticeConfig config = LatticeConfig.ofDefaults(base);
+            this.controlPlane = ControlPlaneLattice.getOrCreate(config);
+            this.controlPlane.start();
+
+            System.out.println("Allocating...");
             MandelbulbFrame[][][] pixels = generate(blackhole, this.counters);
 
             int idx = 0;
@@ -248,11 +250,6 @@ public class HighScaleBenchmark {
                 }
             }
 
-            FractalExecutor executor = new FractalExecutor(blackhole);
-            BaseCloneableObject base = new BaseCloneableObject(executor);
-            LatticeConfig config = LatticeConfig.ofDefaults(base);
-            this.controlPlane = ControlPlaneLattice.getOrCreate(config);
-            this.controlPlane.start();
             System.out.println("Total tasks: " + this.totalTasks);
         }
 
@@ -261,15 +258,10 @@ public class HighScaleBenchmark {
             this.counters.reset();
 
             int idx = 0;
-            long seed = HasherApi.BASE_SEED;
             for (ArrayIngestSink sink : sinks) {
                 AbstractFrame[] array = sink.getFrameArray();
-                for (var frame : array) {
-                    frame.randomizeHash(seed++);
-                }
                 this.sinks[idx++] = new ArrayIngestSink(array);
             }
-            VarHandle.fullFence();
         }
 
         @Benchmark

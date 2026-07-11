@@ -5,9 +5,8 @@
     </encoder>
   </appender>
 
-  <root level="info">
+  <root level="${EuhedralLogLevel:-INFO}">
     <appender-ref ref="STDOUT" />
   </root>
 
-  <logger name="net.openhft" level="OFF" />
 </configuration>

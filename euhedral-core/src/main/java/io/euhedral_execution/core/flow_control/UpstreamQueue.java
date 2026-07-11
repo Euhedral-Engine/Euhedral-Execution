@@ -6,7 +6,10 @@ import io.euhedral_execution.core.generics.LatticeReceiver;
 import io.euhedral_execution.core.generics.LatticeSource;
 import io.euhedral_execution.core.utils.MathFunctions;
 import io.euhedral_execution.data_structures.atomics.PaddedAtomicLong;
-import io.euhedral_execution.data_structures.queues.PartitionedMpmcQueue;
+import io.euhedral_execution.data_structures.queues.MpscQueue;
+import io.euhedral_execution.hardware_utils.SystemInfo;
+import io.euhedral_execution.hardware_utils.ThreadTools;
+
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
@@ -29,7 +32,7 @@ public class UpstreamQueue {
 
     public static final ThreadLocal<UpstreamQueue> UP_QUEUE = new ThreadLocal<>();
 
-    public static UpstreamQueue get(PartitionedMpmcQueue<UpstreamHandle> upstreams, PaddedAtomicLong upstreamCount, AtomicLong counter) {
+    public static UpstreamQueue get(MpscQueue<UpstreamHandle>[] upstreams, PaddedAtomicLong upstreamCount, AtomicLong counter) {
         UpstreamQueue queue = UP_QUEUE.get();
         if (queue == null) {
             queue = new UpstreamQueue(upstreams, upstreamCount);
@@ -49,15 +52,16 @@ public class UpstreamQueue {
     }
 
     final long[] pullBucket = new long[]{0L, 0L};
-    private final PartitionedMpmcQueue<UpstreamHandle> upstreams;
+    private final MpscQueue<UpstreamHandle>[] upstreams;
     private final PaddedAtomicLong upstreamCount;
-    private int pullIdx = 0;
+    private final int core;
 
     long cachedUpCount = 0L;
 
-    public UpstreamQueue(PartitionedMpmcQueue<UpstreamHandle> upstreams, PaddedAtomicLong upstreamCount) {
+    public UpstreamQueue(MpscQueue<UpstreamHandle>[] upstreams, PaddedAtomicLong upstreamCount) {
         this.upstreams = upstreams;
         this.upstreamCount = upstreamCount;
+        this.core = SystemInfo.getCpuInfo(ThreadTools.getCpu()).core();
     }
 
     public long getCachedUpCount() {
@@ -91,8 +95,7 @@ public class UpstreamQueue {
         int cycles = 0;
         // Cycle through the queue and pull round-robin style.
         while (cycles < this.cachedUpCount && demand > 0) {
-            UpstreamHandle handle = this.upstreams.poll(this.pullIdx++);
-            this.pullIdx %= this.upstreams.partitions();
+            UpstreamHandle handle = this.upstreams[core].poll();
 
             if(handle == null) {
                 cycles++;
@@ -108,7 +111,7 @@ public class UpstreamQueue {
             totalPull += drain(handle, consumer, request);
             cycles = 0;
 
-            this.upstreams.offer(handle.getId(), handle);
+            this.upstreams[core].offer(handle);
         }
         return totalPull;
     }
