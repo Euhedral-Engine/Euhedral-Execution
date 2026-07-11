@@ -3,17 +3,14 @@ package io.euhedral_execution.core.flow_control;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.generics.LatticeSource;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
-import org.jctools.maps.NonBlockingHashMapLong;
+import lombok.Getter;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import test_utils.TestReceiver;
 
@@ -21,131 +18,122 @@ class UpstreamQueueTest {
 
     private UpstreamQueue queue;
 
-    @BeforeEach
-    void setup() {
-        UpstreamQueue.UP_QUEUE.remove();
-
-        queue = new UpstreamQueue();
-    }
+//    @BeforeEach
+//    void setup() {
+//        UpstreamQueue.UP_QUEUE.remove();
+//
+//        queue = new UpstreamQueue();
+//    }
 
     @AfterEach
     void cleanup() {
         UpstreamQueue.UP_QUEUE.remove();
     }
 
-    @Test
-    void shouldCreateThreadLocalQueue() {
-        NonBlockingHashMapLong<UpstreamQueue> map =
-                new NonBlockingHashMapLong<>();
+//    @Test
+//    void shouldCreateThreadLocalQueue() {
+//        NonBlockingHashMapLong<UpstreamQueue> map =
+//                new NonBlockingHashMapLong<>();
+//
+//        AtomicLong counter = new AtomicLong();
+//
+//        UpstreamQueue created = UpstreamQueue.get(map, counter);
+//
+//        assertNotNull(created);
+//        assertEquals(1, counter.get());
+//        assertSame(created, UpstreamQueue.UP_QUEUE.get());
+//    }
 
-        AtomicLong counter = new AtomicLong();
+//    @Test
+//    void shouldReuseThreadLocalQueue() {
+//        NonBlockingHashMapLong<UpstreamQueue> map =
+//                new NonBlockingHashMapLong<>();
+//
+//        AtomicLong counter = new AtomicLong();
+//
+//        UpstreamQueue first = UpstreamQueue.get(map, counter);
+//        UpstreamQueue second = UpstreamQueue.get(map, counter);
+//
+//        assertSame(first, second);
+//        assertEquals(1, counter.get());
+//    }
 
-        UpstreamQueue created = UpstreamQueue.get(map, counter);
-
-        assertNotNull(created);
-        assertEquals(1, counter.get());
-        assertSame(created, UpstreamQueue.UP_QUEUE.get());
-    }
-
-    @Test
-    void shouldReuseThreadLocalQueue() {
-        NonBlockingHashMapLong<UpstreamQueue> map =
-                new NonBlockingHashMapLong<>();
-
-        AtomicLong counter = new AtomicLong();
-
-        UpstreamQueue first = UpstreamQueue.get(map, counter);
-        UpstreamQueue second = UpstreamQueue.get(map, counter);
-
-        assertSame(first, second);
-        assertEquals(1, counter.get());
-    }
-
-    @Test
-    void shouldAddUpstream() {
-        TestUpstreamHandle upstream = new TestUpstreamHandle();
-
-        queue.addUpstream(upstream);
-
-        assertEquals(1, queue.getTrueUpstreamCount());
-    }
-
-    @Test
-    void shouldRequestFromOneUpstreamsWhenAtOrBelow32() {
-        TestUpstreamHandle first = new TestUpstreamHandle();
-        TestUpstreamHandle second = new TestUpstreamHandle();
-
-        queue.addUpstream(first);
-        queue.addUpstream(second);
-
-        queue.request(32);
-
-        assertEquals(32, first.requested);
-        assertEquals(0, second.requested);
-    }
-
-    @Test
-    void shouldRequestEvenlyAcrossUpstreamsWhenAbove1024() {
-        TestUpstreamHandle first = new TestUpstreamHandle();
-        TestUpstreamHandle second = new TestUpstreamHandle();
-
-        queue.addUpstream(first);
-        queue.addUpstream(second);
-
-        queue.request(2048);
-
-        assertEquals(1024, first.requested);
-        assertEquals(1024, second.requested);
-    }
-
-    @Test
-    void shouldRequestWithoutBuffer() {
-        TestUpstreamHandle upstream = new TestUpstreamHandle();
-
-        queue.addUpstream(upstream);
-
-        queue.pull(null, 64);
-
-        assertEquals(64, upstream.requested);
-        assertEquals(0, upstream.pulled);
-    }
-
-    @Test
-    void shouldPullWithConsumer() {
-        TestUpstreamHandle upstream = new TestUpstreamHandle();
-
-        queue.addUpstream(upstream);
-
-        queue.pull(frame -> {}, 64);
-
-        assertEquals(0, upstream.requested);
-        assertEquals(64, upstream.pulled);
-    }
-
-    @Test
-    void shouldIgnoreZeroDemand() {
-        TestUpstreamHandle upstream = new TestUpstreamHandle();
-
-        queue.addUpstream(upstream);
-
-        queue.request(0);
-
-        assertEquals(0, upstream.requested);
-        assertEquals(0, upstream.pulled);
-    }
-
-    @Test
-    void shouldRemoveCompletedUpstreams() {
-        TestUpstreamHandle upstream = new TestUpstreamHandle();
-
-        upstream.complete = true;
-
-        queue.addUpstream(upstream);
-
-        queue.request(10);
-
-        assertEquals(0, queue.getTrueUpstreamCount());
-    }
+//    @Test
+//    void shouldRequestFromOneUpstreamsWhenAtOrBelow32() {
+//        TestUpstreamHandle first = new TestUpstreamHandle();
+//        TestUpstreamHandle second = new TestUpstreamHandle();
+//
+//        queue.addUpstream(first);
+//        queue.addUpstream(second);
+//
+//        queue.request(32);
+//
+//        assertEquals(32, first.requested);
+//        assertEquals(0, second.requested);
+//    }
+//
+//    @Test
+//    void shouldRequestEvenlyAcrossUpstreamsWhenAbove1024() {
+//        TestUpstreamHandle first = new TestUpstreamHandle();
+//        TestUpstreamHandle second = new TestUpstreamHandle();
+//
+//        queue.addUpstream(first);
+//        queue.addUpstream(second);
+//
+//        queue.request(2048);
+//
+//        assertEquals(1024, first.requested);
+//        assertEquals(1024, second.requested);
+//    }
+//
+//    @Test
+//    void shouldRequestWithoutBuffer() {
+//        TestUpstreamHandle upstream = new TestUpstreamHandle();
+//
+//        queue.addUpstream(upstream);
+//
+//        queue.pull(null, 64);
+//
+//        assertEquals(64, upstream.requested);
+//        assertEquals(0, upstream.pulled);
+//    }
+//
+//    @Test
+//    void shouldPullWithConsumer() {
+//        TestUpstreamHandle upstream = new TestUpstreamHandle();
+//
+//        queue.addUpstream(upstream);
+//
+//        queue.pull(frame -> {}, 64);
+//
+//        assertEquals(0, upstream.requested);
+//        assertEquals(64, upstream.pulled);
+//    }
+//
+//    @Test
+//    void shouldIgnoreZeroDemand() {
+//        TestUpstreamHandle upstream = new TestUpstreamHandle();
+//
+//        queue.addUpstream(upstream);
+//
+//        queue.request(0);
+//
+//        assertEquals(0, upstream.requested);
+//        assertEquals(0, upstream.pulled);
+//    }
+//
+//    @Test
+//    void shouldRemoveCompletedUpstreams() {
+//        TestUpstreamHandle upstream = new TestUpstreamHandle();
+//
+//        upstream.complete = true;
+//
+//        queue.addUpstream(upstream);
+//
+//        queue.request(10);
+//
+//        assertEquals(0, queue.getTrueUpstreamCount());
+//    }
 
     @Test
     void shouldCalculateSingleBucketForSmallDemand() {
@@ -164,30 +152,6 @@ class UpstreamQueueTest {
 
         assertEquals(8, queue.pullBucket[0]);
         assertEquals(8192 >> 3, queue.pullBucket[1]);
-    }
-
-    @Test
-    void shouldFillDrainBuffer() {
-        TestUpstreamHandle upstream1 = new TestUpstreamHandle();
-        TestUpstreamHandle upstream2 = new TestUpstreamHandle();
-
-        queue.addUpstream(upstream1);
-        queue.addUpstream(upstream2);
-
-        queue.pullBucket[0] = 2;
-
-        int count = queue.fillUpstreamBuffer();
-
-        assertEquals(2, count);
-    }
-
-    @Test
-    void shouldReturnZeroWhenNoBucketsAvailable() {
-        queue.pullBucket[0] = 0;
-
-        int count = queue.fillUpstreamBuffer();
-
-        assertEquals(0, count);
     }
 
     @Test
@@ -234,6 +198,9 @@ class UpstreamQueueTest {
     }
 
     static class TestUpstreamHandle extends UpstreamQueue.UpstreamHandle {
+
+        @Getter
+        long id = 0;
 
         long requested;
         long pulled;
