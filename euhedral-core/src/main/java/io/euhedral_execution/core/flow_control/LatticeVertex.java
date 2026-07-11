@@ -10,11 +10,14 @@ import io.euhedral_execution.core.utils.FlowThread;
 import io.euhedral_execution.data_structures.atomics.PaddedAtomicLong;
 import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
 import io.euhedral_execution.data_structures.queues.BoundedMpmcQueue;
+import io.euhedral_execution.hashing.HasherApi;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.BitSet;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+import lombok.Getter;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -361,6 +364,9 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
             long sum = num1 + num2;
             return sum < 0 ? Long.MAX_VALUE : sum;
         }
+
+        @Getter
+        private final long id = HasherApi.mix(ThreadLocalRandom.current().nextLong());
 
         public final AtomicBoolean complete = new AtomicBoolean(false);
         private final PaddedAtomicLong wip = new PaddedAtomicLong(0);

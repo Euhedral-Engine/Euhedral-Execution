@@ -5,18 +5,17 @@ import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.generics.LatticeInterceptor;
 import io.euhedral_execution.core.generics.LatticeReceiver;
 import io.euhedral_execution.data_structures.atomics.PaddedAtomicLong;
+import io.euhedral_execution.data_structures.queues.PartitionedMpmcQueue;
+import io.euhedral_execution.hardware_utils.SystemInfo;
+import io.euhedral_execution.hashing.HasherApi;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
-import java.util.Collection;
-import java.util.Iterator;
-import java.util.WeakHashMap;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.locks.LockSupport;
 import java.util.function.Consumer;
 import lombok.Getter;
 import lombok.Setter;
-import org.jctools.maps.NonBlockingHashMapLong;
 
 /// ## The main infrastructure class of Euhedral Core
 ///
@@ -34,36 +33,29 @@ import org.jctools.maps.NonBlockingHashMapLong;
 @SuppressWarnings("unused")
 public class LatticeEdge extends UpstreamHandle {
 
-    protected static final VarHandle ADDING_UPSTREAM;
     protected static final VarHandle CLOSED;
     protected static final VarHandle DOWNSTREAM;
     protected static final VarHandle PARENT;
-    protected static final VarHandle UP_QUEUES;
 
     static {
         try {
-            ADDING_UPSTREAM = MethodHandles.lookup()
-                    .findVarHandle(LatticeEdge.class, "addingUpstream", boolean.class);
             CLOSED = MethodHandles.lookup()
                     .findVarHandle(LatticeEdge.class, "closed", boolean.class);
             DOWNSTREAM = MethodHandles.lookup()
                     .findVarHandle(LatticeEdge.class, "downstream", LatticeReceiver.class);
             PARENT = MethodHandles.lookup()
                     .findVarHandle(LatticeEdge.class, "parent", LatticeEdge.class);
-            UP_QUEUES = MethodHandles.lookup()
-                    .findVarHandle(LatticeEdge.class, "upstreamQueues", Collection.class);
         } catch (Exception e) {
             throw new ExceptionInInitializerError(e);
         }
     }
 
+    @Getter
+    protected final long id = HasherApi.mix(ThreadLocalRandom.current().nextLong());
 
     protected final AtomicBoolean drain;
 
-    protected final NonBlockingHashMapLong<UpstreamQueue> aggregators =
-            new NonBlockingHashMapLong<>();
-
-    private final WeakHashMap<UpstreamHandle, Boolean> upstreamHandles = new WeakHashMap<>();
+    private final PartitionedMpmcQueue<UpstreamHandle> upstreams;
     private final PaddedAtomicLong upstreamCount = new PaddedAtomicLong(0);
     private final AtomicLong threadCount = new AtomicLong(0);
     public LatticeReceiver downstream = null;
@@ -72,12 +64,13 @@ public class LatticeEdge extends UpstreamHandle {
     @Setter
     protected volatile LatticeEdge sibling = null;
 
-    private Collection<UpstreamQueue> upstreamQueues = aggregators.values();
     private boolean addingUpstream = false;
     private boolean closed = false;
 
     public LatticeEdge(AtomicBoolean drain) {
         this.drain = drain;
+        int cores = SystemInfo.getCoreCount();
+        this.upstreams = new PartitionedMpmcQueue<>(Math.max(cores >> 1, 4), 128);
     }
 
     /// Creates a thread-local [UpstreamQueue] object for the calling thread. This queue contains
@@ -101,27 +94,9 @@ public class LatticeEdge extends UpstreamHandle {
             return parent.getThreadUpstreamQueue();
         }
 
-        UpstreamQueue queue = UpstreamQueue.UP_QUEUE.get();
+        UpstreamQueue queue = UpstreamQueue.get(this.upstreams, this.upstreamCount, this.threadCount);
+        queue.getTrueUpstreamCount();
 
-        if (queue == null) {
-            acquireLock();
-            try {
-                queue = UpstreamQueue.get(this.aggregators, this.threadCount);
-
-                Iterator<UpstreamHandle> iter = this.upstreamHandles.keySet().iterator();
-                while (iter.hasNext()) {
-                    UpstreamHandle handle = iter.next();
-                    if (handle.isComplete()) {
-                        iter.remove();
-                        continue;
-                    }
-                    queue.addUpstream(handle);
-                }
-                queue.getTrueUpstreamCount();
-            } finally {
-                releaseLock();
-            }
-        }
         return queue;
     }
 
@@ -137,11 +112,10 @@ public class LatticeEdge extends UpstreamHandle {
             return;
         }
 
-        var queue = this.aggregators.remove(thread.getId());
+        UpstreamQueue queue = UpstreamQueue.UP_QUEUE.get();
         if (queue != null) {
             this.threadCount.decrementAndGet();
-            Collection<UpstreamQueue> observed = aggregators.values();
-            UP_QUEUES.compareAndSet(this, observed, aggregators.values());
+            UpstreamQueue.UP_QUEUE.remove();
         }
     }
 
@@ -201,10 +175,8 @@ public class LatticeEdge extends UpstreamHandle {
             return;
         }
 
-        acquireLock();
         PARENT.setRelease(this, parent);
         transferToParent();
-        releaseLock();
     }
 
     /// Sends work downstream.
@@ -232,7 +204,7 @@ public class LatticeEdge extends UpstreamHandle {
             return;
         }
 
-        UpstreamQueue queue = UpstreamQueue.get(this.aggregators, this.threadCount);
+        UpstreamQueue queue = UpstreamQueue.get(this.upstreams, this.upstreamCount, this.threadCount);
         queue.request(num);
     }
 
@@ -248,7 +220,7 @@ public class LatticeEdge extends UpstreamHandle {
         if (parent != null) {
             return parent.pull(consumer, demand);
         }
-        UpstreamQueue queue = UpstreamQueue.get(this.aggregators, this.threadCount);
+        UpstreamQueue queue = UpstreamQueue.get(this.upstreams, this.upstreamCount, this.threadCount);
         return queue.pull(consumer, demand);
     }
 
@@ -258,13 +230,10 @@ public class LatticeEdge extends UpstreamHandle {
         if (parent == null) {
             return;
         }
-        parent.aggregators.putAll(this.aggregators);
+        this.upstreams.drain(parent.upstreams::offer);
         parent.upstreamCount.addAndGet(this.upstreamCount.get());
         parent.threadCount.addAndGet(this.threadCount.get());
-        parent.upstreamHandles.putAll(this.upstreamHandles);
         parent.transferToParent();
-        this.upstreamHandles.clear();
-        this.aggregators.clear();
     }
 
     @Override
@@ -283,15 +252,8 @@ public class LatticeEdge extends UpstreamHandle {
             downstream.onComplete();
             DOWNSTREAM.setRelease(this, null);
         }
-        this.aggregators.clear();
+        this.upstreams.drain(LatticeInterceptor::onComplete);
         this.sibling = null;
-        UP_QUEUES.setRelease(this, null);
-        acquireLock();
-        for (var handle : this.upstreamHandles.keySet()) {
-            handle.onComplete();
-        }
-        this.upstreamHandles.clear();
-        releaseLock();
     }
 
     public void removeUpstream(UpstreamHandle handle) {
@@ -311,44 +273,15 @@ public class LatticeEdge extends UpstreamHandle {
         if (up instanceof LatticeEdge dh) {
             setParent(dh);
         } else if (up instanceof UpstreamHandle upstream) {
-            acquireLock();
 
             LatticeEdge parent = (LatticeEdge) PARENT.getOpaque(this);
             if (parent != null) {
-                releaseLock();
                 parent.addUpstream(upstream);
                 return;
             }
 
-            try {
-                int cycles = 0;
-                while (this.drain.getOpaque()) {
-                    if (cycles++ < 128) {
-                        Thread.onSpinWait();
-                    } else if (cycles < 512) {
-                        Thread.yield();
-                    } else {
-                        cycles = 0;
-                        LockSupport.parkNanos(1_000);
-                    }
-                }
-
-                this.upstreamHandles.put(upstream, true);
-
-                Collection<UpstreamQueue> queues = this.aggregators.values();
-                while (queues.size() != this.threadCount.get()) {
-                    if (UP_QUEUES.compareAndSet(this, queues, this.aggregators.values())) {
-                        break;
-                    }
-                    queues = this.aggregators.values();
-                }
-                for (var queue : queues) {
-                    queue.addUpstream(upstream);
-                }
-                this.upstreamCount.incrementAndGet();
-            } finally {
-                releaseLock();
-            }
+            this.upstreams.offer(getId(), upstream);
+            this.upstreamCount.incrementAndGet();
         }
     }
 
@@ -390,24 +323,6 @@ public class LatticeEdge extends UpstreamHandle {
         }
         terminal.onError(
                 new IllegalStateException("Already added as an upstream by a terminal downstream"));
-    }
-
-    private void acquireLock() {
-        int cycles = 0;
-        while (!ADDING_UPSTREAM.compareAndSet(this, false, true)) {
-            if (cycles++ < 128) {
-                Thread.onSpinWait();
-            } else if (cycles < 512) {
-                Thread.yield();
-            } else {
-                cycles = 0;
-                LockSupport.parkNanos(1_000);
-            }
-        }
-    }
-
-    private void releaseLock() {
-        ADDING_UPSTREAM.setRelease(this, false);
     }
 
     @Override
