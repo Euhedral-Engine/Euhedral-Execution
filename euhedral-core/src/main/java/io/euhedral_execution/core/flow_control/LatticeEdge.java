@@ -4,9 +4,13 @@ import io.euhedral_execution.core.flow_control.UpstreamQueue.UpstreamHandle;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.generics.LatticeInterceptor;
 import io.euhedral_execution.core.generics.LatticeReceiver;
+import io.euhedral_execution.core.utils.SpinWait;
 import io.euhedral_execution.data_structures.atomics.PaddedAtomicLong;
-import io.euhedral_execution.data_structures.queues.PartitionedMpmcQueue;
+import io.euhedral_execution.data_structures.atomics.PaddedAtomicLongArray;
+import io.euhedral_execution.data_structures.queues.MpscQueue;
 import io.euhedral_execution.hardware_utils.SystemInfo;
+import io.euhedral_execution.hardware_utils.SystemInfo.CoreInfo;
+import io.euhedral_execution.hardware_utils.ThreadTools;
 import io.euhedral_execution.hashing.HasherApi;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
@@ -15,7 +19,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import lombok.Getter;
-import lombok.Setter;
 
 /// ## The main infrastructure class of Euhedral Core
 ///
@@ -30,12 +33,16 @@ import lombok.Setter;
 /// Work flows downward through the graph toward receivers, while demand and backpressure flow
 /// upward toward upstream sources. The structure is designed to continuously reconcile both
 /// directions under concurrent mutation.
-@SuppressWarnings("unused")
+@SuppressWarnings({"unchecked","unused"})
 public class LatticeEdge extends UpstreamHandle {
 
     protected static final VarHandle CLOSED;
     protected static final VarHandle DOWNSTREAM;
     protected static final VarHandle PARENT;
+
+    protected static final MpscQueue<UpstreamHandle>[] UPSTREAMS;
+    protected static final PaddedAtomicLongArray ACTIVE_PARTITIONS;
+
 
     static {
         try {
@@ -45,6 +52,16 @@ public class LatticeEdge extends UpstreamHandle {
                     .findVarHandle(LatticeEdge.class, "downstream", LatticeReceiver.class);
             PARENT = MethodHandles.lookup()
                     .findVarHandle(LatticeEdge.class, "parent", LatticeEdge.class);
+
+            int cores = SystemInfo.getCoreCount();
+            UPSTREAMS = new MpscQueue[SystemInfo.getMaxCoreId() + 1];
+            ACTIVE_PARTITIONS = new PaddedAtomicLongArray(UPSTREAMS.length);
+            for(int i = 0; i < UPSTREAMS.length; i++) {
+                CoreInfo info = SystemInfo.getCoreInfo(i);
+                if(info != null) {
+                    UPSTREAMS[i] = new MpscQueue<>(256);
+                }
+            }
         } catch (Exception e) {
             throw new ExceptionInInitializerError(e);
         }
@@ -55,22 +72,15 @@ public class LatticeEdge extends UpstreamHandle {
 
     protected final AtomicBoolean drain;
 
-    private final PartitionedMpmcQueue<UpstreamHandle> upstreams;
-    private final PaddedAtomicLong upstreamCount = new PaddedAtomicLong(0);
-    private final AtomicLong threadCount = new AtomicLong(0);
+    protected final PaddedAtomicLong upstreamCount = new PaddedAtomicLong(0);
+    protected final AtomicLong threadCount = new AtomicLong(0);
     public LatticeReceiver downstream = null;
     protected LatticeEdge parent = null;
-    @Getter
-    @Setter
-    protected volatile LatticeEdge sibling = null;
 
-    private boolean addingUpstream = false;
     private boolean closed = false;
 
     public LatticeEdge(AtomicBoolean drain) {
         this.drain = drain;
-        int cores = SystemInfo.getCoreCount();
-        this.upstreams = new PartitionedMpmcQueue<>(Math.max(cores >> 1, 4), 128);
     }
 
     /// Creates a thread-local [UpstreamQueue] object for the calling thread. This queue contains
@@ -83,6 +93,8 @@ public class LatticeEdge extends UpstreamHandle {
             parent.register(id);
         } else {
             getThreadUpstreamQueue();
+            int core = SystemInfo.getCpuInfo(ThreadTools.getCpu()).core();
+            ACTIVE_PARTITIONS.setRelease(core, 1);
         }
     }
 
@@ -94,21 +106,18 @@ public class LatticeEdge extends UpstreamHandle {
             return parent.getThreadUpstreamQueue();
         }
 
-        UpstreamQueue queue = UpstreamQueue.get(this.upstreams, this.upstreamCount, this.threadCount);
+        UpstreamQueue queue = UpstreamQueue.get(UPSTREAMS, this.upstreamCount, this.threadCount);
         queue.getTrueUpstreamCount();
 
         return queue;
     }
 
     /// Removes a thread and its [UpstreamQueue] from the mapping.
-    public void removeThread(Thread thread) {
-        if (thread == null) {
-            return;
-        }
+    public void removeThread() {
 
         LatticeEdge parent = (LatticeEdge) PARENT.getOpaque(this);
         if (parent != null) {
-            parent.removeThread(thread);
+            parent.removeThread();
             return;
         }
 
@@ -116,6 +125,9 @@ public class LatticeEdge extends UpstreamHandle {
         if (queue != null) {
             this.threadCount.decrementAndGet();
             UpstreamQueue.UP_QUEUE.remove();
+            int core = SystemInfo.getCpuInfo(ThreadTools.getCpu()).core();
+            ACTIVE_PARTITIONS.setRelease(core, 0);
+            UPSTREAMS[core].clear();
         }
     }
 
@@ -151,20 +163,6 @@ public class LatticeEdge extends UpstreamHandle {
             return parent.getThreadCount();
         }
         return this.threadCount.intValue();
-    }
-
-    /// Returns the number of LatticeEdge horizontally-linked at this edge's layer.
-    public int getLayerWidth() {
-        if (this.sibling == null) {
-            return 1;
-        }
-        int count = 1;
-        LatticeEdge sib = this.sibling;
-        while (sib != this) {
-            count++;
-            sib = sib.sibling;
-        }
-        return count;
     }
 
     /// Sets the parent LatticeEdge and transfers all [UpstreamHandles][UpstreamHandle] and
@@ -204,7 +202,7 @@ public class LatticeEdge extends UpstreamHandle {
             return;
         }
 
-        UpstreamQueue queue = UpstreamQueue.get(this.upstreams, this.upstreamCount, this.threadCount);
+        UpstreamQueue queue = UpstreamQueue.get(UPSTREAMS, this.upstreamCount, this.threadCount);
         queue.request(num);
     }
 
@@ -220,7 +218,7 @@ public class LatticeEdge extends UpstreamHandle {
         if (parent != null) {
             return parent.pull(consumer, demand);
         }
-        UpstreamQueue queue = UpstreamQueue.get(this.upstreams, this.upstreamCount, this.threadCount);
+        UpstreamQueue queue = UpstreamQueue.get(UPSTREAMS, this.upstreamCount, this.threadCount);
         return queue.pull(consumer, demand);
     }
 
@@ -230,7 +228,6 @@ public class LatticeEdge extends UpstreamHandle {
         if (parent == null) {
             return;
         }
-        this.upstreams.drain(parent.upstreams::offer);
         parent.upstreamCount.addAndGet(this.upstreamCount.get());
         parent.threadCount.addAndGet(this.threadCount.get());
         parent.transferToParent();
@@ -252,8 +249,6 @@ public class LatticeEdge extends UpstreamHandle {
             downstream.onComplete();
             DOWNSTREAM.setRelease(this, null);
         }
-        this.upstreams.drain(LatticeInterceptor::onComplete);
-        this.sibling = null;
     }
 
     public void removeUpstream(UpstreamHandle handle) {
@@ -280,7 +275,14 @@ public class LatticeEdge extends UpstreamHandle {
                 return;
             }
 
-            this.upstreams.offer(getId(), upstream);
+            SpinWait.await(this.drain::getOpaque);
+
+            for(int i = 0; i < UPSTREAMS.length; i++) {
+                MpscQueue<UpstreamHandle> queue = UPSTREAMS[i];
+                if(queue != null && ACTIVE_PARTITIONS.getAcquire(i) > 0) {
+                    queue.offer(upstream);
+                }
+            }
             this.upstreamCount.incrementAndGet();
         }
     }

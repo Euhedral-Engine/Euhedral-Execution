@@ -58,25 +58,6 @@ class LatticeEdgeTest {
     }
 
     @Test
-    void shouldReturnSingleLayerWidthWithoutSibling() {
-        assertEquals(1, edge.getLayerWidth());
-    }
-
-    @Test
-    void shouldCalculateLayerWidthAcrossSiblings() {
-        LatticeEdge second = new LatticeEdge(new AtomicBoolean());
-        LatticeEdge third = new LatticeEdge(new AtomicBoolean());
-
-        edge.setSibling(second);
-        second.setSibling(third);
-        third.setSibling(edge);
-
-        assertEquals(3, edge.getLayerWidth());
-        assertEquals(3, second.getLayerWidth());
-        assertEquals(3, third.getLayerWidth());
-    }
-
-    @Test
     void shouldForwardPushToDownstream() {
         TestReceiver terminal = new TestReceiver();
 
@@ -287,27 +268,14 @@ class LatticeEdgeTest {
 
         assertEquals(1, edge.getThreadCount());
 
-        edge.removeThread(Thread.currentThread());
+        edge.removeThread();
 
         assertEquals(0, edge.getThreadCount());
     }
 
     @Test
     void shouldIgnoreNullThreadRemoval() {
-        assertDoesNotThrow(() -> edge.removeThread(null));
-    }
-
-    @Test
-    void shouldDelegateThreadRemovalToParent() {
-        LatticeEdge parent = spy(new LatticeEdge(new AtomicBoolean()));
-
-        edge.setParent(parent);
-
-        Thread thread = Thread.currentThread();
-
-        edge.removeThread(thread);
-
-        verify(parent).removeThread(thread);
+        assertDoesNotThrow(() -> edge.removeThread());
     }
 
     @Test

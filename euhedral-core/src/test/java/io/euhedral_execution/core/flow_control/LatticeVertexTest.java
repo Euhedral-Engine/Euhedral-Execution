@@ -148,33 +148,6 @@ class LatticeVertexTest {
     }
 
     @Test
-    void shouldCreateSiblingRing() {
-        node.setDrain(true);
-
-        BitSet active = new BitSet();
-        active.set(0);
-        active.set(1);
-        active.set(2);
-
-        LatticeEdge a = new LatticeEdge(new AtomicBoolean());
-        LatticeEdge b = new LatticeEdge(new AtomicBoolean());
-        LatticeEdge c = new LatticeEdge(new AtomicBoolean());
-
-        LatticeEdge[] handles = new LatticeEdge[4];
-        handles[0] = a;
-        handles[1] = b;
-        handles[2] = c;
-
-        node.setDownstreamMapping(active, handles);
-
-        assertSame(b, a.getSibling());
-        assertSame(c, b.getSibling());
-        assertSame(a, c.getSibling());
-
-        assertEquals(3, a.getLayerWidth());
-    }
-
-    @Test
     void shouldRouteFramesToCorrectDownstream() {
         node = new LatticeVertex("test-node", 4, RoutingFunction.DEFAULT, 0,
                 RoutingPolicy.ANYWHERE);
