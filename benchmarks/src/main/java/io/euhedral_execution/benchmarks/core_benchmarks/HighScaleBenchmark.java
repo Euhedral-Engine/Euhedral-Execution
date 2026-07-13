@@ -15,7 +15,6 @@ import io.euhedral_execution.hardware_utils.PinnedThreadExecutor;
 import io.euhedral_execution.hardware_utils.SystemInfo;
 import io.euhedral_execution.hardware_utils.SystemInfo.SocketInfo;
 import io.euhedral_execution.hashing.HasherApi;
-import java.lang.invoke.VarHandle;
 import java.util.concurrent.TimeUnit;
 import org.openjdk.jmh.annotations.AuxCounters;
 import org.openjdk.jmh.annotations.AuxCounters.Type;
@@ -140,10 +139,18 @@ public class HighScaleBenchmark {
 
         @Setup(Level.Trial)
         public void setup(Blackhole blackhole) throws Exception {
+            FractalExecutor executor = new FractalExecutor(blackhole);
+            BaseCloneableObject base = new BaseCloneableObject(executor);
+            LatticeConfig config = LatticeConfig.ofDefaults(base);
+            this.controlPlane = ControlPlaneLattice.getOrCreate(config);
+            this.controlPlane.start();
+
+            System.out.println("Allocating...");
             MandelbulbFrame[][][] pixels = generate(blackhole, this.counters);
 
             long seed = SEED;
 
+            System.out.println("Grouping and Shuffling...");
             int idx = 0;
             // Go through each image
             for (var canvas : pixels) {
@@ -171,86 +178,8 @@ public class HighScaleBenchmark {
                     ArrayIngestSink sink = new ArrayIngestSink(chunkArray);
                     sinks[idx++] = sink;
                 }
+                System.out.println("Total tasks: " + TASKS);
             }
-
-            FractalExecutor executor = new FractalExecutor(blackhole);
-            BaseCloneableObject base = new BaseCloneableObject(executor);
-            LatticeConfig config = LatticeConfig.ofDefaults(base);
-            this.controlPlane = ControlPlaneLattice.getOrCreate(config);
-            this.controlPlane.start();
-        }
-
-        @Setup(Level.Invocation)
-        public void reset() {
-            this.counters.reset();
-
-            int idx = 0;
-            for (ArrayIngestSink sink : sinks) {
-                AbstractFrame[] array = sink.getFrameArray();
-                this.sinks[idx++] = new ArrayIngestSink(array);
-            }
-        }
-
-        @Benchmark
-        public void render(OpCounter opCounter) {
-            for (ArrayIngestSink sink : this.sinks) {
-                this.controlPlane.addUpstream(sink);
-            }
-
-            waitOnRender(this.counters, TASKS);
-            opCounter.operations = TASKS;
-        }
-
-        @TearDown(Level.Trial)
-        public void shutdown() {
-            this.controlPlane.close();
-        }
-
-        @State(Scope.Thread)
-        @AuxCounters(Type.OPERATIONS)
-        public static class OpCounter {
-
-            public long operations;
-        }
-    }
-
-    @BenchmarkMode({Mode.AverageTime})
-    @OutputTimeUnit(TimeUnit.NANOSECONDS)
-    @State(Scope.Benchmark)
-    @Warmup(iterations = 0)
-    @Measurement(iterations = 1, time = 30, timeUnit = TimeUnit.SECONDS)
-    @Fork(value = 1)
-    public static class OneByOne {
-
-        private final PaddedLongAdder counters =
-                new PaddedLongAdder(Runtime.getRuntime().availableProcessors(), true, true);
-        private final ArrayIngestSink[] sinks = new ArrayIngestSink[64 * SystemInfo.SOCKET_COUNT];
-        private ControlPlaneLattice controlPlane;
-        private int totalTasks;
-
-        @Setup(Level.Trial)
-        public void setup(Blackhole blackhole) throws Exception {
-            FractalExecutor executor = new FractalExecutor(blackhole);
-            BaseCloneableObject base = new BaseCloneableObject(executor);
-            LatticeConfig config = LatticeConfig.ofDefaults(base);
-            this.controlPlane = ControlPlaneLattice.getOrCreate(config);
-            this.controlPlane.start();
-
-            System.out.println("Allocating...");
-            MandelbulbFrame[][][] pixels = generate(blackhole, this.counters);
-
-            int idx = 0;
-            System.out.println("Shuffling...");
-            for (var canvas : pixels) {
-                for (var row : canvas) {
-                    this.totalTasks += row.length;
-                    shuffle(row);
-                    ArrayIngestSink sink = new ArrayIngestSink(row);
-                    sinks[idx++] = sink;
-                }
-            }
-
-            System.out.println("Total tasks: " + this.totalTasks);
         }
 
         @Setup(Level.Invocation)
@@ -270,10 +199,91 @@ public class HighScaleBenchmark {
                 this.controlPlane.addUpstream(sink);
             }
 
-            waitOnRender(this.counters, this.totalTasks);
-            opCounter.operations += this.totalTasks;
+            waitOnRender(this.counters, TASKS);
+            opCounter.operations += TASKS;
             invocations.invocations++;
-            invocations.measurements += this.totalTasks;
+            invocations.measurements += TASKS;
+        }
+
+        @TearDown(Level.Trial)
+        public void shutdown() {
+            this.controlPlane.close();
+        }
+
+        @State(Scope.Thread)
+        @AuxCounters(Type.OPERATIONS)
+        public static class OpCounter {
+
+            public long operations;
+        }
+
+        @State(Scope.Thread)
+        @AuxCounters(Type.EVENTS)
+        public static class Invocations {
+
+            public long invocations;
+            public long measurements;
+        }
+    }
+
+    @BenchmarkMode({Mode.AverageTime})
+    @OutputTimeUnit(TimeUnit.NANOSECONDS)
+    @State(Scope.Benchmark)
+    @Warmup(iterations = 0)
+    @Measurement(iterations = 1, time = 30, timeUnit = TimeUnit.SECONDS)
+    @Fork(value = 1)
+    public static class OneByOne {
+
+        private final PaddedLongAdder counters =
+                new PaddedLongAdder(Runtime.getRuntime().availableProcessors(), true, true);
+        private final ArrayIngestSink[] sinks = new ArrayIngestSink[64 * SystemInfo.SOCKET_COUNT];
+        private ControlPlaneLattice controlPlane;
+
+        @Setup(Level.Trial)
+        public void setup(Blackhole blackhole) throws Exception {
+            FractalExecutor executor = new FractalExecutor(blackhole);
+            BaseCloneableObject base = new BaseCloneableObject(executor);
+            LatticeConfig config = LatticeConfig.ofDefaults(base);
+            this.controlPlane = ControlPlaneLattice.getOrCreate(config);
+            this.controlPlane.start();
+
+            System.out.println("Allocating...");
+            MandelbulbFrame[][][] pixels = generate(blackhole, this.counters);
+
+            int idx = 0;
+            System.out.println("Shuffling...");
+            for (var canvas : pixels) {
+                for (var row : canvas) {
+                    shuffle(row);
+                    ArrayIngestSink sink = new ArrayIngestSink(row);
+                    sinks[idx++] = sink;
+                }
+            }
+
+            System.out.println("Total tasks: " + TASKS);
+        }
+
+        @Setup(Level.Invocation)
+        public void reset() {
+            this.counters.reset();
+
+            int idx = 0;
+            for (ArrayIngestSink sink : sinks) {
+                AbstractFrame[] array = sink.getFrameArray();
+                this.sinks[idx++] = new ArrayIngestSink(array);
+            }
+        }
+
+        @Benchmark
+        public void render(OpCounter opCounter, Invocations invocations) {
+            for (ArrayIngestSink sink : this.sinks) {
+                this.controlPlane.addUpstream(sink);
+            }
+
+            waitOnRender(this.counters, TASKS);
+            opCounter.operations += TASKS;
+            invocations.invocations++;
+            invocations.measurements += TASKS;
         }
 
         @TearDown(Level.Trial)
