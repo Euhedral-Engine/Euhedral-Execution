@@ -34,8 +34,10 @@ with comparisons against existing schedulers where appropriate.
 ### Amazon EC2 (server workloads)
 
 - [Graviton5 (32 vCPU)](./benchmarks/AMAZON_GRAVITON_5_BENCHMARKS.md)
-- [Intel Xeon 6 (32 vCPU)](./benchmarks/AMAZON_XEON_6_BENCHMARKS.md)
-- [Graviton4 (192 vCPU)](./benchmarks/AMAZON_GRAVITON_4_192_CORES_BENCHMARKS.md)
+- [Comparison Benchmarks at High Scale](./benchmarks/HIGH_SCALE_BENCHMARKS.md)
+  - Intel Xeon 6 (96 Core)
+  - AMD EPYC 9R45 (96 Core)
+  - Graviton5 (192 Core)
 
 ---
 
@@ -264,7 +266,7 @@ The core runtime is stable and benchmarked, but evolving.
 
 Current focus areas:
 
-- Benchmarks on high core count multi-socket systems
+- SMT features
 - Real-world workload testing
 - More integration examples
 - Dependency cleanup
