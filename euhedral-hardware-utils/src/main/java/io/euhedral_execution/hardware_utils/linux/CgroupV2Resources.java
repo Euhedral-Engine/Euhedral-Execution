@@ -52,9 +52,9 @@ public class CgroupV2Resources implements SystemSnapshotProvider {
                         }
                     }
                 });
-            } catch (Throwable t) {
+            } catch (Exception e) {
                 DEVICE_KEYS.add(7);
-                LOGGER.error("Failed to read storage device list.", t);
+                LOGGER.error("Failed to read storage device list.", e);
             }
         }
     }
@@ -96,50 +96,50 @@ public class CgroupV2Resources implements SystemSnapshotProvider {
 
         try {
             procStatChannel = FileChannel.open(LinuxPaths.PROC_STAT, StandardOpenOption.READ);
-        } catch (Throwable ignored) {
-
+        } catch (Exception ignored) {
+            // Throws if not supported.
         }
         try {
             effectiveCpuChannel = FileChannel.open(LinuxPaths.EFFECTIVE_CPU,
                     StandardOpenOption.READ);
-        } catch (Throwable ignored) {
-
+        } catch (Exception ignored) {
+            // Throws if not supported.
         }
         try {
             cpuMaxChannel = FileChannel.open(LinuxPaths.CPU_MAX, StandardOpenOption.READ);
-        } catch (Throwable ignored) {
-
+        } catch (Exception ignored) {
+            // Throws if not supported.
         }
         try {
             cpuPressureChannel = FileChannel.open(LinuxPaths.CPU_PRESSURE, StandardOpenOption.READ);
-        } catch (Throwable ignored) {
-
+        } catch (Exception ignored) {
+            // Throws if not supported.
         }
         try {
             cpuStatChannel = FileChannel.open(LinuxPaths.CPU_STAT, StandardOpenOption.READ);
-        } catch (Throwable ignored) {
-
+        } catch (Exception ignored) {
+            // Throws if not supported.
         }
         try {
             memoryMaxChannel = FileChannel.open(LinuxPaths.MEMORY_MAX, StandardOpenOption.READ);
-        } catch (Throwable ignored) {
-
+        } catch (Exception ignored) {
+            // Throws if not supported.
         }
         try {
             memoryCurrentChannel = FileChannel.open(LinuxPaths.MEMORY_CURRENT,
                     StandardOpenOption.READ);
-        } catch (Throwable ignored) {
-
+        } catch (Exception ignored) {
+            // Throws if not supported.
         }
         try {
             memoryStatChannel = FileChannel.open(LinuxPaths.MEMORY_STAT, StandardOpenOption.READ);
-        } catch (Throwable ignored) {
-
+        } catch (Exception ignored) {
+            // Throws if not supported.
         }
         try {
             ioStatChannel = FileChannel.open(LinuxPaths.IO_STAT, StandardOpenOption.READ);
-        } catch (Throwable ignored) {
-
+        } catch (Exception ignored) {
+            // Throws if not supported.
         }
 
         this.procStatChannel = procStatChannel;
@@ -195,8 +195,8 @@ public class CgroupV2Resources implements SystemSnapshotProvider {
                             memorySnapshot,
                             ioBytes
                     );
-        } catch (Throwable t) {
-            LOGGER.error("Error generating SystemSnapshot.", t);
+        } catch (Exception e) {
+            LOGGER.error("Error generating SystemSnapshot.", e);
         } finally {
             this.snapshot.set(snapshot);
             wip.set(false);

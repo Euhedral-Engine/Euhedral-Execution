@@ -129,7 +129,7 @@ class ControlPlaneCacheTest {
     }
 
     @Test
-    void shouldUpdateCapFactorFromSnapshot() throws Exception {
+    void shouldUpdateCapFactorFromSnapshot() {
         ControlPlaneCache manager = new CPCImpl(config());
 
         CoreSnapshot snapshot = mock(CoreSnapshot.class);

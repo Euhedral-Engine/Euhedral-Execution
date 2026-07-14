@@ -26,6 +26,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.List;
+import java.util.concurrent.locks.LockSupport;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -67,11 +68,11 @@ class ControlPlaneLatticeTest {
     private int version = 0;
 
     @BeforeEach
-    public void setup() {
+    void setup() {
         mockSysInfo = Mockito.mockStatic(SystemInfo.class);
         BitSet cpus = new BitSet();
         cpus.set(0, 8);
-        mockSysInfo.when(() -> SystemInfo.getCpuSet()).thenReturn(UnmodifiableBitSet.wrap(cpus));
+        mockSysInfo.when(SystemInfo::getCpuSet).thenReturn(UnmodifiableBitSet.wrap(cpus));
         mockTopologyMapper = Mockito.mockConstructionWithAnswer(TopologyMapper.class,
                 invocation -> {
                     Class<?> clazz = invocation.getMethod().getReturnType();
@@ -107,7 +108,7 @@ class ControlPlaneLatticeTest {
     }
 
     @AfterEach
-    public void tearDown() {
+    void tearDown() {
         mockSysInfo.close();
         mockTopologyMapper.close();
         mockResourceMonitor.close();
@@ -115,7 +116,7 @@ class ControlPlaneLatticeTest {
     }
 
     @Test
-    public void testInitialization() {
+    void testInitialization() {
         SocketSnapshot[] snapshots = new SocketSnapshot[effectiveSystemTopology.effectiveSockets()
                 .cardinality()];
 
@@ -148,7 +149,7 @@ class ControlPlaneLatticeTest {
     }
 
     @Test
-    public void testGlobalRebalance() throws Exception {
+    void testGlobalRebalance() {
         SocketSnapshot[] snapshots = new SocketSnapshot[effectiveSystemTopology.effectiveSockets()
                 .cardinality()];
 
@@ -170,7 +171,7 @@ class ControlPlaneLatticeTest {
 
         ControlPlaneLattice.getOrCreate().update(mockUtilization);
 
-        Thread.sleep(100);
+        LockSupport.parkNanos(100_000_000);
 
         verify(mockShard, times(1)).clone(eq(0), any(), any());
         verify(mockShard, times(1)).clone(eq(1), any(), any());

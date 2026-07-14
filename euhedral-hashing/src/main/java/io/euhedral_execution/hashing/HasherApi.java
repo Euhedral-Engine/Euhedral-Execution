@@ -25,5 +25,23 @@ public final class HasherApi extends AbstractHasher {
     public static long getHash(String s, long seed) {
         return StringHasher.getHash(s, seed);
     }
+
+    public static long mixWithZeroCheck(long hash) {
+        long h64 = mix(hash);
+        return h64 == 0 ? BASE_SEED : h64;
+    }
+
+    public static long mix(long hash) {
+        hash ^= hash >>> 33;
+        hash *= P2;
+        hash ^= hash >>> 29;
+        hash *= P3;
+        hash ^= hash >>> 32;
+        return hash;
+    }
+
+    private HasherApi() {
+
+    }
 }
 

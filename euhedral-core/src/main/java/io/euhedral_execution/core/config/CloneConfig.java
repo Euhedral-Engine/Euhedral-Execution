@@ -1,18 +1,16 @@
 package io.euhedral_execution.core.config;
 
-import io.euhedral_execution.core.control_plane.ControlPlaneLattice;
-import io.euhedral_execution.core.generics.CloneableObject;
 import java.util.BitSet;
 import java.util.Objects;
 
-/// Configuration for a [CloneableObject][CloneableObject]
+/// Configuration for a [CloneableObject][io.euhedral_execution.core.generics.CloneableObject]
 ///
 /// This configuration is instantiated and populated dynamically. The
-/// [ControlPlaneLattice][ControlPlaneLattice] and its shards will create
-/// these and instantiate objects with them.
+/// [ControlPlaneLattice][io.euhedral_execution.core.control_plane.ControlPlaneLattice] and its
+/// shards will create these and instantiate objects with them.
 ///
-/// @param shardName Name of the shard managing the clone
-/// @param coreId Physical ID of the assigned core
+/// @param shardName     Name of the shard managing the clone
+/// @param coreId        Physical ID of the assigned core
 /// @param effectiveCpus The logical cpus available for use on the core
 public record CloneConfig(String shardName, int coreId, BitSet effectiveCpus) {
 
