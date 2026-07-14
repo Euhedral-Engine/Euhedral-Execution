@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
@@ -15,11 +16,17 @@ import static org.mockito.Mockito.when;
 
 import io.euhedral_execution.core.flow_control.UpstreamQueue.UpstreamHandle;
 import io.euhedral_execution.core.frames.AbstractFrame;
+import io.euhedral_execution.hardware_utils.SystemInfo;
+import io.euhedral_execution.hardware_utils.SystemInfo.CoreInfo;
+import io.euhedral_execution.hardware_utils.SystemInfo.CpuInfo;
+import io.euhedral_execution.hardware_utils.ThreadTools;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
 import test_utils.TestFrame;
 import test_utils.TestReceiver;
 
@@ -27,10 +34,26 @@ class LatticeEdgeTest {
 
     private AtomicBoolean drain;
     private LatticeEdge edge;
+    private MockedStatic<SystemInfo> mockSysInfo;
+    private MockedStatic<ThreadTools> mockThreadTools;
 
     @BeforeEach
     void setup() {
         UpstreamQueue.UP_QUEUE.remove();
+        ThreadTools.getCpu();
+
+        mockSysInfo = Mockito.mockStatic(SystemInfo.class);
+        mockSysInfo.when(SystemInfo::getMaxCoreId).thenReturn(64);
+        mockSysInfo.when(SystemInfo::getCoreCount).thenReturn(64);
+
+        CoreInfo core = new CoreInfo("", true, 0, 0);
+        mockSysInfo.when(() -> SystemInfo.getCoreInfo(anyInt())).thenReturn(core);
+
+        CpuInfo cpu = new CpuInfo(0, 0, 0);
+        mockSysInfo.when(() -> SystemInfo.getCpuInfo(anyInt())).thenReturn(cpu);
+
+        mockThreadTools = Mockito.mockStatic(ThreadTools.class);
+        mockThreadTools.when(ThreadTools::getCpu).thenReturn(0);
 
         drain = new AtomicBoolean(false);
         edge = new LatticeEdge(drain);
@@ -39,11 +62,13 @@ class LatticeEdgeTest {
     @AfterEach
     void cleanup() {
         UpstreamQueue.UP_QUEUE.remove();
+        mockSysInfo.close();
+        mockThreadTools.close();
     }
 
     @Test
     void shouldCreateThreadQueueOnRegister() {
-        edge.register(0);
+        edge.register();
 
         assertEquals(1, edge.getThreadCount());
     }
@@ -55,25 +80,6 @@ class LatticeEdgeTest {
 
         assertSame(first, second);
         assertEquals(1, edge.getThreadCount());
-    }
-
-    @Test
-    void shouldReturnSingleLayerWidthWithoutSibling() {
-        assertEquals(1, edge.getLayerWidth());
-    }
-
-    @Test
-    void shouldCalculateLayerWidthAcrossSiblings() {
-        LatticeEdge second = new LatticeEdge(new AtomicBoolean());
-        LatticeEdge third = new LatticeEdge(new AtomicBoolean());
-
-        edge.setSibling(second);
-        second.setSibling(third);
-        third.setSibling(edge);
-
-        assertEquals(3, edge.getLayerWidth());
-        assertEquals(3, second.getLayerWidth());
-        assertEquals(3, third.getLayerWidth());
     }
 
     @Test
@@ -147,7 +153,8 @@ class LatticeEdgeTest {
     void shouldIgnorePullWhenDrainActive() {
         drain.set(true);
 
-        assertDoesNotThrow(() -> edge.pull(frame -> {}, 10));
+        assertDoesNotThrow(() -> edge.pull(frame -> {
+        }, 10));
     }
 
     @Test
@@ -187,7 +194,8 @@ class LatticeEdgeTest {
 
         edge.setParent(parent);
 
-        Consumer<AbstractFrame> consumer = frame -> {};
+        Consumer<AbstractFrame> consumer = frame -> {
+        };
 
         edge.pull(consumer, 123);
 
@@ -258,7 +266,7 @@ class LatticeEdgeTest {
 
         edge.addUpstream(upstream);
 
-        edge.register(0);
+        edge.register();
 
         assertEquals(1, edge.getThreadCount());
     }
@@ -271,7 +279,7 @@ class LatticeEdgeTest {
 
         edge.addUpstream(upstream);
 
-        edge.register(0);
+        edge.register();
 
         LatticeEdge parent = new LatticeEdge(new AtomicBoolean());
 
@@ -283,31 +291,18 @@ class LatticeEdgeTest {
 
     @Test
     void shouldRemoveThread() {
-        edge.register(0);
+        edge.register();
 
         assertEquals(1, edge.getThreadCount());
 
-        edge.removeThread(Thread.currentThread());
+        edge.removeThread();
 
         assertEquals(0, edge.getThreadCount());
     }
 
     @Test
     void shouldIgnoreNullThreadRemoval() {
-        assertDoesNotThrow(() -> edge.removeThread(null));
-    }
-
-    @Test
-    void shouldDelegateThreadRemovalToParent() {
-        LatticeEdge parent = spy(new LatticeEdge(new AtomicBoolean()));
-
-        edge.setParent(parent);
-
-        Thread thread = Thread.currentThread();
-
-        edge.removeThread(thread);
-
-        verify(parent).removeThread(thread);
+        assertDoesNotThrow(() -> edge.removeThread());
     }
 
     @Test

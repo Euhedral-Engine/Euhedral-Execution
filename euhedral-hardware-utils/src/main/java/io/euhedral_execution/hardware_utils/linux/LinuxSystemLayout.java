@@ -4,14 +4,6 @@ import static io.euhedral_execution.hardware_utils.SystemInfo.DEFAULT_L1;
 import static io.euhedral_execution.hardware_utils.SystemInfo.DEFAULT_L2;
 import static io.euhedral_execution.hardware_utils.SystemInfo.DEFAULT_L3;
 
-import io.euhedral_execution.hardware_utils.SystemInfo;
-import io.euhedral_execution.hardware_utils.SystemInfo.CoreInfo;
-import io.euhedral_execution.hardware_utils.SystemInfo.CpuCacheLayout;
-import io.euhedral_execution.hardware_utils.SystemInfo.CpuInfo;
-import io.euhedral_execution.hardware_utils.SystemInfo.SocketInfo;
-import io.euhedral_execution.hardware_utils.common.OSName;
-import it.unimi.dsi.fastutil.ints.Int2BooleanArrayMap;
-import it.unimi.dsi.fastutil.ints.Int2ObjectArrayMap;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -20,6 +12,15 @@ import java.util.BitSet;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+
+import io.euhedral_execution.hardware_utils.SystemInfo;
+import io.euhedral_execution.hardware_utils.SystemInfo.CoreInfo;
+import io.euhedral_execution.hardware_utils.SystemInfo.CpuCacheLayout;
+import io.euhedral_execution.hardware_utils.SystemInfo.CpuInfo;
+import io.euhedral_execution.hardware_utils.SystemInfo.SocketInfo;
+import io.euhedral_execution.hardware_utils.common.OSName;
+import it.unimi.dsi.fastutil.ints.Int2BooleanArrayMap;
+import it.unimi.dsi.fastutil.ints.Int2ObjectArrayMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -65,41 +66,34 @@ public final class LinuxSystemLayout {
                         }
                     }).toList();
             Int2BooleanArrayMap pCpu = rankCpus();
-            list
-                .forEach(cpuDir -> {
-                    Path topology = cpuDir.resolve("topology");
+            list.forEach(cpuDir -> {
+                Path topology = cpuDir.resolve("topology");
 
-                    int cpu = parseCpu(cpuDir.getFileName().toString());
-                    int core = cpu;
-                    int socket = 0;
-                    String coreCpuSet = "";
+                int cpu = parseCpu(cpuDir.getFileName().toString());
+                int core = cpu;
+                int socket = 0;
+                String coreCpuSet = "";
 
-                    try {
-                        core = Integer.parseInt(read(topology.resolve("core_id")));
-                        socket = Integer.parseInt(
-                                read(topology.resolve("physical_package_id")));
-                        coreCpuSet = SystemInfo.toHexMask(
-                                parseCpuList(read(topology.resolve("core_cpus_list"))));
-                    } catch (IOException e) {
-                        LOGGER.error("Failed to read topology for CPU: {}", cpu, e);
-                    }
-                    cpuInfo.put(cpu, new CpuInfo(cpu, core, socket));
-                    coreInfo.put(core,
-                            new CoreInfo(coreCpuSet, pCpu.get(cpu), core, socket));
+                try {
+                    core = Integer.parseInt(read(topology.resolve("core_id")));
+                    socket = Integer.parseInt(read(topology.resolve("physical_package_id")));
+                    coreCpuSet = SystemInfo.toHexMask(
+                            parseCpuList(read(topology.resolve("core_cpus_list"))));
+                } catch (IOException e) {
+                    LOGGER.error("Failed to read topology for CPU: {}", cpu, e);
+                }
+                cpuInfo.put(cpu, new CpuInfo(cpu, core, socket));
+                coreInfo.put(core, new CoreInfo(coreCpuSet, pCpu.get(cpu), core, socket));
 
-                    BitSet cpuSet = socketToCpu.computeIfAbsent(socket, k -> new BitSet());
-                    BitSet coreSet = socketToCore.computeIfAbsent(socket, k -> new BitSet());
-                    cpuSet.set(cpu);
-                    coreSet.set(core);
-                });
+                BitSet cpuSet = socketToCpu.computeIfAbsent(socket, k -> new BitSet());
+                BitSet coreSet = socketToCore.computeIfAbsent(socket, k -> new BitSet());
+                cpuSet.set(cpu);
+                coreSet.set(core);
+            });
             for (var entry : socketToCore.entrySet()) {
                 int socket = entry.getKey();
-                socketInfo.put(socket,
-                        new SocketInfo(
-                                SystemInfo.toHexMask(socketToCpu.get(socket)),
-                                SystemInfo.toHexMask(entry.getValue()),
-                                socket
-                        ));
+                socketInfo.put(socket, new SocketInfo(SystemInfo.toHexMask(socketToCpu.get(socket)),
+                        SystemInfo.toHexMask(entry.getValue()), socket));
             }
         } catch (IOException e) {
             LOGGER.error("Failed to list cpus.", e);
@@ -136,9 +130,7 @@ public final class LinuxSystemLayout {
 
                         int level = Integer.parseInt(read(index.resolve("level")));
                         cacheLineBytes[0] = Math.min(cacheLineBytes[0],
-                                Integer.parseInt(
-                                        read(index.resolve(
-                                                "coherency_line_size"))));
+                                Integer.parseInt(read(index.resolve("coherency_line_size"))));
                         size[level - 1] = toBytes(read(index.resolve("size")));
                         masks[level - 1] = read(index.resolve("shared_cpu_map"));
                         shared[level - 1] = parseSharedCount(masks[level - 1]);
@@ -163,12 +155,12 @@ public final class LinuxSystemLayout {
             cpuCache.put(cpu, layout);
             cpuRankings.compute(cpu, (k, curr) -> {
                 if (curr == null) {
-                    curr = new Ranking(cpu, new long[1]);
+                    curr = new Ranking(cpu, new long[2]);
                 }
                 int l2Div = layout.sharesL2() > 2 ? layout.sharesL2() : 1;
-                l2Div += shared[2] == 1 ?  1 : 0;
-                curr.capacity[0] += layout.bytesL1() * layout.sharesL1() +
-                                    layout.bytesL2() / l2Div;
+                l2Div += shared[2] == 1 ? 1 : 0;
+                curr.capacity[0] += layout.bytesL1() * layout.sharesL1() + layout.bytesL2() / l2Div;
+                curr.capacity[1] = layout.sharesL1();
                 return curr;
             });
         }
@@ -184,15 +176,21 @@ public final class LinuxSystemLayout {
         long maxGap = -1;
 
         for (int i = 0; i < sorted.length - 1; i++) {
-            long gap = sorted[i].capacity[0] - sorted[i+1].capacity[0];
+            long gap = sorted[i].capacity[0] - sorted[i + 1].capacity[0];
             if (gap > maxGap) {
                 maxGap = gap;
                 splitIndex = i;
             }
         }
 
-        for (int p = 0; p < sorted.length; p++) {
-            pCpu.put(sorted[p].cpu, p <= splitIndex);
+        if (maxGap > 0) {
+            for (int p = 0; p < sorted.length; p++) {
+                pCpu.put(sorted[p].cpu, p <= splitIndex);
+            }
+        } else {
+            for (Ranking ranking : sorted) {
+                pCpu.put(ranking.cpu, ranking.capacity[1] > 1);
+            }
         }
 
         return pCpu;

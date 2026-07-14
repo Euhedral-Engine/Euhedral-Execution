@@ -111,7 +111,6 @@ public final class ControlPlaneFragment extends WorkRequester {
             this.outputStream = new LatticeHotSource();
 
             this.metrics = new ExecutionMetrics(config);
-            this.logger.debug("CPU: {} P-Core: {}", this.cpu, this.isPCore);
         }
     }
 
@@ -150,12 +149,13 @@ public final class ControlPlaneFragment extends WorkRequester {
                             "Attempted to pin to Core: {} CPU: {} but was assigned: {}",
                             this.core, this.cpu, origin);
                 } else {
-                    this.logger.debug("Pinned to Core {} CPU {}", this.core, this.cpu);
+                    this.logger.debug("Pinned to Core {} CPU {} P-Core: {}", this.core, this.cpu, this.isPCore);
                 }
                 ThreadTools.setTimerResolution(1);
-                super.register(this.core);
+                super.register();
 
                 cycle();
+                super.removeThread();
             });
         }
     }

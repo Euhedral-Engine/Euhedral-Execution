@@ -7,11 +7,16 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
+import io.euhedral_execution.core.flow_control.UpstreamQueue.UpstreamHandle;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.generics.LatticeSource;
+import io.euhedral_execution.data_structures.atomics.PaddedAtomicLong;
+import io.euhedral_execution.data_structures.queues.MpscQueue;
+import io.euhedral_execution.hardware_utils.SystemInfo;
+import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
-import org.jctools.maps.NonBlockingHashMapLong;
+import lombok.Getter;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -20,12 +25,14 @@ import test_utils.TestReceiver;
 class UpstreamQueueTest {
 
     private UpstreamQueue queue;
+    private PaddedAtomicLong count = new PaddedAtomicLong();
+    private MpscQueue<UpstreamHandle> handles = new MpscQueue<>(64);
 
     @BeforeEach
     void setup() {
         UpstreamQueue.UP_QUEUE.remove();
 
-        queue = new UpstreamQueue();
+        queue = new UpstreamQueue(0, handles, count);
     }
 
     @AfterEach
@@ -35,12 +42,12 @@ class UpstreamQueueTest {
 
     @Test
     void shouldCreateThreadLocalQueue() {
-        NonBlockingHashMapLong<UpstreamQueue> map =
-                new NonBlockingHashMapLong<>();
+        MpscQueue<UpstreamHandle>[] arr = new MpscQueue[SystemInfo.getMaxCoreId() + 1];
+        Arrays.fill(arr, this.handles);
 
         AtomicLong counter = new AtomicLong();
 
-        UpstreamQueue created = UpstreamQueue.get(map, counter);
+        UpstreamQueue created = UpstreamQueue.get(arr, count, counter);
 
         assertNotNull(created);
         assertEquals(1, counter.get());
@@ -49,25 +56,16 @@ class UpstreamQueueTest {
 
     @Test
     void shouldReuseThreadLocalQueue() {
-        NonBlockingHashMapLong<UpstreamQueue> map =
-                new NonBlockingHashMapLong<>();
+        MpscQueue<UpstreamHandle>[] arr = new MpscQueue[SystemInfo.getMaxCoreId() + 1];
+        Arrays.fill(arr, this.handles);
 
         AtomicLong counter = new AtomicLong();
 
-        UpstreamQueue first = UpstreamQueue.get(map, counter);
-        UpstreamQueue second = UpstreamQueue.get(map, counter);
+        UpstreamQueue first = UpstreamQueue.get(arr, count, counter);
+        UpstreamQueue second = UpstreamQueue.get(arr, count, counter);
 
         assertSame(first, second);
         assertEquals(1, counter.get());
-    }
-
-    @Test
-    void shouldAddUpstream() {
-        TestUpstreamHandle upstream = new TestUpstreamHandle();
-
-        queue.addUpstream(upstream);
-
-        assertEquals(1, queue.getTrueUpstreamCount());
     }
 
     @Test
@@ -75,8 +73,9 @@ class UpstreamQueueTest {
         TestUpstreamHandle first = new TestUpstreamHandle();
         TestUpstreamHandle second = new TestUpstreamHandle();
 
-        queue.addUpstream(first);
-        queue.addUpstream(second);
+        handles.offer(first);
+        handles.offer(second);
+        count.getAndAdd(2);
 
         queue.request(32);
 
@@ -89,8 +88,9 @@ class UpstreamQueueTest {
         TestUpstreamHandle first = new TestUpstreamHandle();
         TestUpstreamHandle second = new TestUpstreamHandle();
 
-        queue.addUpstream(first);
-        queue.addUpstream(second);
+        handles.offer(first);
+        handles.offer(second);
+        count.getAndAdd(2);
 
         queue.request(2048);
 
@@ -102,7 +102,8 @@ class UpstreamQueueTest {
     void shouldRequestWithoutBuffer() {
         TestUpstreamHandle upstream = new TestUpstreamHandle();
 
-        queue.addUpstream(upstream);
+        handles.offer(upstream);
+        count.incrementAndGet();
 
         queue.pull(null, 64);
 
@@ -114,7 +115,8 @@ class UpstreamQueueTest {
     void shouldPullWithConsumer() {
         TestUpstreamHandle upstream = new TestUpstreamHandle();
 
-        queue.addUpstream(upstream);
+        handles.offer(upstream);
+        count.incrementAndGet();
 
         queue.pull(frame -> {}, 64);
 
@@ -126,7 +128,7 @@ class UpstreamQueueTest {
     void shouldIgnoreZeroDemand() {
         TestUpstreamHandle upstream = new TestUpstreamHandle();
 
-        queue.addUpstream(upstream);
+        handles.offer(upstream);
 
         queue.request(0);
 
@@ -140,7 +142,7 @@ class UpstreamQueueTest {
 
         upstream.complete = true;
 
-        queue.addUpstream(upstream);
+        handles.offer(upstream);
 
         queue.request(10);
 
@@ -151,43 +153,14 @@ class UpstreamQueueTest {
     void shouldCalculateSingleBucketForSmallDemand() {
         queue.cachedUpCount = 64;
 
-        queue.calculatePullBuckets(32);
-
-        assertEquals(1, queue.pullBucket[0]);
+        assertEquals(32, queue.calculatePullBuckets(32));
     }
 
     @Test
     void shouldCalculateDistributedBucketsForLargeDemand() {
         queue.cachedUpCount = 8;
 
-        queue.calculatePullBuckets(8192);
-
-        assertEquals(8, queue.pullBucket[0]);
-        assertEquals(8192 >> 3, queue.pullBucket[1]);
-    }
-
-    @Test
-    void shouldFillDrainBuffer() {
-        TestUpstreamHandle upstream1 = new TestUpstreamHandle();
-        TestUpstreamHandle upstream2 = new TestUpstreamHandle();
-
-        queue.addUpstream(upstream1);
-        queue.addUpstream(upstream2);
-
-        queue.pullBucket[0] = 2;
-
-        int count = queue.fillUpstreamBuffer();
-
-        assertEquals(2, count);
-    }
-
-    @Test
-    void shouldReturnZeroWhenNoBucketsAvailable() {
-        queue.pullBucket[0] = 0;
-
-        int count = queue.fillUpstreamBuffer();
-
-        assertEquals(0, count);
+        assertEquals(8192 >> 3, queue.calculatePullBuckets(8192));
     }
 
     @Test
@@ -234,6 +207,9 @@ class UpstreamQueueTest {
     }
 
     static class TestUpstreamHandle extends UpstreamQueue.UpstreamHandle {
+
+        @Getter
+        long id = 0;
 
         long requested;
         long pulled;
