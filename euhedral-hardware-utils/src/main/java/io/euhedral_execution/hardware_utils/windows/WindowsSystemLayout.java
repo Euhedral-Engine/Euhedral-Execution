@@ -19,7 +19,7 @@ import java.util.BitSet;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Consumer;
+import java.util.function.IntConsumer;
 
 public final class WindowsSystemLayout {
 
@@ -109,7 +109,7 @@ public final class WindowsSystemLayout {
         isPCore = null;
     }
 
-    private void processMask(long mask, int group, Consumer<Integer> action) {
+    private void processMask(long mask, int group, IntConsumer action) {
         int bits = 0;
         while (mask > 0) {
             int curr = Long.numberOfTrailingZeros(mask) + 1;

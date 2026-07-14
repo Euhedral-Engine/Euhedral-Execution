@@ -16,7 +16,7 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.support.MessageBuilder;
 
-@SuppressWarnings("unused")
+@SuppressWarnings({"unchecked","unused"})
 public class GrpcUtils {
 
     /// Converts a Java Map into a gRPC Struct, supporting nested maps and lists.
@@ -65,7 +65,7 @@ public class GrpcUtils {
             case STRUCT_VALUE -> fromGrpcStruct(value.getStructValue());
             case LIST_VALUE ->
                     value.getListValue().getValuesList().stream().map(GrpcUtils::fromValue)
-                            .collect(Collectors.toList());
+                            .toList();
             case KIND_NOT_SET -> value;
         };
     }
@@ -103,5 +103,9 @@ public class GrpcUtils {
                 springMessage.getData().toByteArray());
         builder.copyHeaders(fromGrpcStruct(springMessage.getHeaders()));
         return builder.build();
+    }
+
+    private GrpcUtils() {
+
     }
 }

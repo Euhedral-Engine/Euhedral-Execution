@@ -213,7 +213,7 @@ public final class ControlPlaneFragment extends WorkRequester {
 
                 long cacheCount = super.getLocalCacheCount();
                 if (cacheCount == 0) {
-                    this.state.batchEfficiency.record(0);
+                    this.state.batchEfficiency.recordUnits(0);
                     break;
                 }
 
@@ -228,8 +228,8 @@ public final class ControlPlaneFragment extends WorkRequester {
                 long end = System.nanoTime();
 
                 this.metrics.addInProgress(-limit);
-                this.state.throughputRecorder.record(end, (end - start) / limit);
-                this.state.batchEfficiency.record(end, Math.round((efficiency) * 1_000));
+                this.state.throughputRecorder.recordUnits(end, (end - start) / limit);
+                this.state.batchEfficiency.recordUnits(end, Math.round((efficiency) * 1_000));
 
                 if (this.state.completed >= this.state.batchSize) {
                     this.state.completed = 0;
@@ -255,7 +255,7 @@ public final class ControlPlaneFragment extends WorkRequester {
     }
 
     private void updateLimits(long nowNs) {
-        this.state.batchRecorder.record(nowNs, this.state.batchSize);
+        this.state.batchRecorder.recordUnits(nowNs, this.state.batchSize);
         if (this.state.batchStart == 0) {
             this.state.batchStart = nowNs;
             return;
@@ -320,7 +320,7 @@ public final class ControlPlaneFragment extends WorkRequester {
 
             double efficiency = satisfied / (double) Math.max(context.originalRequest, 1);
             efficiency = MathFunctions.clampDouble(efficiency, 0.0, 1.0);
-            requestEfficiency.record(Math.round(efficiency * 1_000));
+            requestEfficiency.recordUnits(Math.round(efficiency * 1_000));
 
             long now = requestEfficiency.getLastRecordingTime();
             double measurements = requestEfficiency.getEffectiveMeasurementWindowCount(now);
@@ -396,6 +396,7 @@ public final class ControlPlaneFragment extends WorkRequester {
                     this.mainThread.interrupt();
                     this.mainThread.join(500);
                 } catch (Exception ignored) {
+                    // Closing. Ignore interrupts
                 }
                 this.mainThread = null;
             }

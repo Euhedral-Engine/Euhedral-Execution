@@ -5,7 +5,7 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.lang.management.ManagementFactory;
 import java.util.Arrays;
-import java.util.function.Function;
+import java.util.function.UnaryOperator;
 import org.jspecify.annotations.NonNull;
 
 @SuppressWarnings({"unchecked", "unused"})
@@ -135,7 +135,7 @@ public final class PaddedAtomicReferenceArray<T> {
 
     // ----- CAS -----
 
-    public T getAndUpdate(int idx, @NonNull Function<T, T> updateFunction) {
+    public T getAndUpdate(int idx, @NonNull UnaryOperator<T> updateFunction) {
         int pIdx = getPhysicalIdx(idx);
         T prev, next;
         do {
@@ -145,7 +145,7 @@ public final class PaddedAtomicReferenceArray<T> {
         return prev;
     }
 
-    public T updateAndGet(int idx, @NonNull Function<T, T> updateFunction) {
+    public T updateAndGet(int idx, @NonNull UnaryOperator<T> updateFunction) {
         int pIdx = getPhysicalIdx(idx);
         T prev, next;
         do {

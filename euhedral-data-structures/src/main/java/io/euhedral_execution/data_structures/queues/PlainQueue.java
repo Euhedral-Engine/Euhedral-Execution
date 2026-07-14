@@ -107,13 +107,12 @@ public class PlainQueue<T> extends AbstractQueue<T> implements BatchableQueue<T>
     public final long drain(Consumer<T> consumer, long limit) {
         long total = 0;
         for (long i = this.queue.head; i < this.queue.tail && total < limit;
-                i += QueueUtils.INCREMENT) {
+                i += QueueUtils.INCREMENT, total++) {
             T obj = poll();
             if (obj == null) {
                 break;
             }
             consumer.accept(obj);
-            total++;
         }
         return total;
     }

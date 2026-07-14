@@ -33,20 +33,27 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
 import org.openjdk.jmh.infra.Blackhole;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
-@BenchmarkMode({Mode.AverageTime})
+@SuppressWarnings("unchecked")
 public class MandelbrotBenchmark {
 
     // 8K Resolution 2X SSAA (7680 * 4320 * 4 = 132,710,400 distinct tasks)
     public static final int WIDTH = 7680;
     public static final int HEIGHT = 4320;
     public static final int CANVAS = WIDTH * HEIGHT;
+
     public static final int ITERATION_CAP = 5_000;
     public static final double BAILOUT_RADIUS_SQ = 1_000_000.0;
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(MandelbrotBenchmark.class);
     private static final long SEED = HasherApi.BASE_SEED;
+    private static final String TOTAL_TASKS = "Total Tasks: " + (CANVAS * 4);
+
     private static final double CENTER_X = -0.743_644_786_0;
     private static final double CENTER_Y = 0.131_825_253_6;
     private static final double H_DIAMETER = 0.000_002_936;
@@ -78,7 +85,7 @@ public class MandelbrotBenchmark {
                     break;
                 }
                 if (now - log >= TimeUnit.SECONDS.toNanos(3)) {
-                    System.out.println("Progress: " + sum);
+                    LOGGER.info("Progress: {}", sum);
                     log = now;
                 }
             }
@@ -88,6 +95,10 @@ public class MandelbrotBenchmark {
                 Thread.onSpinWait();
             }
         }
+    }
+
+    private MandelbrotBenchmark() {
+
     }
 
     @BenchmarkMode({Mode.AverageTime})
@@ -104,7 +115,7 @@ public class MandelbrotBenchmark {
         private final MandelbrotPixel[] pixels = new MandelbrotPixel[CANVAS];
         private final PaddedLongAdder counters =
                 new PaddedLongAdder(Runtime.getRuntime().availableProcessors(), false, true);
-        private Mono<MandelbrotPixel>[] monos = new Mono[CANVAS];
+        private final Mono<MandelbrotPixel>[] monos = new Mono[CANVAS];
 
         @Setup(Level.Trial)
         public void setup(Blackhole blackhole) {
@@ -123,7 +134,7 @@ public class MandelbrotBenchmark {
                 this.monos[i] = Mono.fromRunnable(() -> {
                     MandelbrotPixel frame = this.pixels[id];
                     frame.execute();
-                    frame.cpu = counters.fromRawIdx(Thread.currentThread().getId());
+                    frame.cpu = counters.fromRawIdx(Thread.currentThread().threadId());
                     frame.doFinally();
                     blackhole.consume(frame);
                 });
@@ -138,7 +149,7 @@ public class MandelbrotBenchmark {
         @Benchmark
         @OperationsPerInvocation(CANVAS * 4)
         public void renderSchedulersParallel(Blackhole blackhole) {
-            System.out.println("Total Tasks: " + CANVAS * 4);
+            LOGGER.info(TOTAL_TASKS);
 
             Flux.fromArray(this.monos)
                     .flatMap(m -> m.subscribeOn(Schedulers.parallel()),
@@ -153,7 +164,7 @@ public class MandelbrotBenchmark {
         @Benchmark
         @OperationsPerInvocation(CANVAS * 4)
         public void renderSchedulersBoundedElastic(Blackhole blackhole) {
-            System.out.println("Total Tasks: " + CANVAS * 4);
+            LOGGER.info(TOTAL_TASKS);
 
             Flux.fromArray(this.monos)
                     .flatMap(m -> m.subscribeOn(Schedulers.boundedElastic()),
@@ -232,7 +243,7 @@ public class MandelbrotBenchmark {
         @Benchmark
         @OperationsPerInvocation(CANVAS * 4)
         public void render(Blackhole blackhole) {
-            System.out.println("Total Tasks: " + CANVAS * 4);
+            LOGGER.info(TOTAL_TASKS);
 
             Flux.fromArray(this.pixels).subscribe(subscriber);
             this.controlPlane.addUpstream(this.subscriber);
@@ -255,25 +266,22 @@ public class MandelbrotBenchmark {
                 escape.recordValue(Math.min(count, ITERATION_CAP));
             }
 
+            String histString = "Avg:   %.3f\nP0:    %d\nP50:   %d\nP90:   %d\nP99:   %d\nP99.9: %d\nP100:  %d\n\n";
+
             Histogram mHist = mag.getIntervalHistogram();
-            System.out.println("Magnitude Histogram:");
-            System.out.printf("Avg:   %.3f\n", mHist.getMean());
-            System.out.printf("P0:    %d\n", mHist.getValueAtPercentile(0));
-            System.out.printf("P50:   %d\n", mHist.getValueAtPercentile(50));
-            System.out.printf("P90:   %d\n", mHist.getValueAtPercentile(90));
-            System.out.printf("P99:   %d\n", mHist.getValueAtPercentile(99));
-            System.out.printf("P99.9: %d\n", mHist.getValueAtPercentile(99.9));
-            System.out.printf("P100:  %d\n\n", mHist.getValueAtPercentile(100));
+            String mString = String.format(histString, mHist.getMean(), mHist.getValueAtPercentile(0),
+                    mHist.getValueAtPercentile(50), mHist.getValueAtPercentile(90),
+                    mHist.getValueAtPercentile(99), mHist.getValueAtPercentile(99.9),
+                    mHist.getValueAtPercentile(100));
+            LOGGER.info("\nMagnitude Histogram:\n{}", mString);
 
             Histogram eHist = escape.getIntervalHistogram();
-            System.out.println("Escape Histogram:");
-            System.out.printf("Avg:   %.3f\n", eHist.getMean());
-            System.out.printf("P0:    %d\n", eHist.getValueAtPercentile(0));
-            System.out.printf("P50:   %d\n", eHist.getValueAtPercentile(50));
-            System.out.printf("P90:   %d\n", eHist.getValueAtPercentile(90));
-            System.out.printf("P99:   %d\n", eHist.getValueAtPercentile(99));
-            System.out.printf("P99.9: %d\n", eHist.getValueAtPercentile(99.9));
-            System.out.printf("P100:  %d\n", eHist.getValueAtPercentile(100));
+            String eString = String.format(histString, eHist.getMean(), eHist.getValueAtPercentile(0),
+                    eHist.getValueAtPercentile(50), eHist.getValueAtPercentile(90),
+                    eHist.getValueAtPercentile(99), eHist.getValueAtPercentile(99.9),
+                    eHist.getValueAtPercentile(100));
+
+            LOGGER.info("\nEscape Histogram:\n{}", eString);
 
             Path path = Paths.get("");
             if (this.outputFileName == null || this.outputFileName.isBlank()) {
@@ -285,11 +293,11 @@ public class MandelbrotBenchmark {
             }
             path = path.resolve(this.outputFileName);
 
-            System.out.println("Rendering final image");
+            LOGGER.info("Rendering final image");
             MandelbrotCanvas.render(rawImageBuffer, magnitudes, escapes, degree, ITERATION_CAP,
                     BAILOUT_RADIUS_SQ);
 
-            System.out.printf("Exporting Mandelbrot d=%d symmetry image to disk...\n", this.degree);
+            LOGGER.info("Exporting Mandelbrot d={} image to disk...", this.degree);
             ImageIO.write(this.outputImage, "png", path.toFile());
         }
     }

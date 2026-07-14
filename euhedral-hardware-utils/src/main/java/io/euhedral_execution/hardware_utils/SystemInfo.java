@@ -132,7 +132,9 @@ public final class SystemInfo {
         E_CORE_SET = UnmodifiableBitSet.wrap(eCores);
         P_CPU_SET = UnmodifiableBitSet.wrap(pCpus);
         E_CPU_SET = UnmodifiableBitSet.wrap(eCpus);
-        LOGGER.debug("\n{}", asString());
+
+        String debugOut = asString();
+        LOGGER.debug("\n{}", debugOut);
     }
 
     public static int getCacheLineBytes() {
@@ -298,19 +300,19 @@ public final class SystemInfo {
         return sum;
     }
 
-    public static @NonNull UnmodifiableBitSet get_P_CoreSet() {
+    public static @NonNull UnmodifiableBitSet getPCoreSet() {
         return P_CORE_SET;
     }
 
-    public static @NonNull UnmodifiableBitSet get_E_CoreSet() {
+    public static @NonNull UnmodifiableBitSet getECoreSet() {
         return E_CORE_SET;
     }
 
-    public static @NonNull UnmodifiableBitSet get_P_CpuSet() {
+    public static @NonNull UnmodifiableBitSet getPCpuSet() {
         return P_CPU_SET;
     }
 
-    public static @NonNull UnmodifiableBitSet get_E_CpuSet() {
+    public static @NonNull UnmodifiableBitSet getECpuSet() {
         return E_CPU_SET;
     }
 

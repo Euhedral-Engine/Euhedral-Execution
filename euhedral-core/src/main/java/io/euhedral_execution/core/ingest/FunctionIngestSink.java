@@ -28,8 +28,8 @@ public final class FunctionIngestSink<T, R> extends AbstractIngestSink {
         try {
             COMPLETE = MethodHandles.lookup()
                     .findVarHandle(FunctionIngestSink.class, "complete", boolean.class);
-        } catch (Throwable t) {
-            throw new ExceptionInInitializerError(t);
+        } catch (Exception e) {
+            throw new ExceptionInInitializerError(e);
         }
     }
 

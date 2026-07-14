@@ -39,7 +39,7 @@ public abstract class SystemLogicalProcessorInformation {
 
     public final Relationship relationship;
 
-    public SystemLogicalProcessorInformation(Relationship relationship) {
+    protected SystemLogicalProcessorInformation(Relationship relationship) {
         this.relationship = relationship;
     }
 }

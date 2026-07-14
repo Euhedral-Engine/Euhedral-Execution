@@ -15,7 +15,7 @@ public abstract class GrpcTransportServer extends GrpcTransportServiceImplBase {
 
     private final ControlPlaneLattice controlPlane;
 
-    public GrpcTransportServer(ControlPlaneLattice controlPlane) {
+    protected GrpcTransportServer(ControlPlaneLattice controlPlane) {
         this.controlPlane = controlPlane;
     }
 

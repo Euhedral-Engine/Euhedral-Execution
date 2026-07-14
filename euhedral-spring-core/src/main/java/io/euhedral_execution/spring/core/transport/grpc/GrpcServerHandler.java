@@ -21,6 +21,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import org.reactivestreams.Subscription;
 
+@SuppressWarnings("unused")
 public class GrpcServerHandler implements LatticeSource, StreamObserver<GrpcMessage>,
         Subscription {
 
@@ -37,8 +38,8 @@ public class GrpcServerHandler implements LatticeSource, StreamObserver<GrpcMess
             DOWNSTREAM = MethodHandles.lookup()
                     .findVarHandle(GrpcServerHandler.class, "downstream",
                             LatticeReceiver.class);
-        } catch (Throwable t) {
-            throw new ExceptionInInitializerError(t);
+        } catch (Exception e) {
+            throw new ExceptionInInitializerError(e);
         }
     }
 

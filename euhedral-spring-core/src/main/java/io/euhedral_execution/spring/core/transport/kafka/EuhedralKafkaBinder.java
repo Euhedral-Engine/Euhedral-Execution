@@ -48,7 +48,7 @@ public class EuhedralKafkaBinder extends
     private static final String BINDER_NAMES = "binder-names";
     private static final String TOPIC_NAMES = "topic-names";
 
-    private final Logger logger = LoggerFactory.getLogger(EuhedralKafkaBinder.class);
+    private final Logger log = LoggerFactory.getLogger(EuhedralKafkaBinder.class);
 
     private final ControlPlaneLattice controlPlane;
 
@@ -106,7 +106,7 @@ public class EuhedralKafkaBinder extends
     @Override
     protected MessageProducer createConsumerEndpoint(ConsumerDestination destination, String group,
             ExtendedConsumerProperties<KafkaConsumerProperties> properties) {
-        logger.debug("Adding group: {}", group);
+        log.debug("Adding group: {}", group);
 
         Map<String, Object> props = buildConsumerProps(group, properties.getExtension());
         if (props.isEmpty()) {

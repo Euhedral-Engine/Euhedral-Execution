@@ -91,10 +91,12 @@ class DefaultExecutorTest {
 
         @Override
         public void request(long n) {
+            // Test
         }
 
         @Override
         public void complete() {
+            // Test
         }
     }
 }

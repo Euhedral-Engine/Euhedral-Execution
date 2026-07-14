@@ -22,6 +22,7 @@ import org.reactivestreams.Subscription;
 /// // Or
 /// controlPlane.ingest(subscriber);
 /// ```
+@SuppressWarnings("unused")
 public final class EuhedralSubscriber implements Subscriber<AbstractFrame>, LatticeSource {
     private static final VarHandle COMPLETE;
     private static final VarHandle SUBSCRIBER;

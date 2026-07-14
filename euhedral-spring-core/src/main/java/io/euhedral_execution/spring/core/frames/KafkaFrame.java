@@ -2,7 +2,8 @@ package io.euhedral_execution.spring.core.frames;
 
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.impl.FrameManager;
-import io.euhedral_execution.spring.core.transport.kafka.OffsetCollector.Offset;
+import io.euhedral_execution.spring.core.transport.kafka.OffsetCollector;
+import io.euhedral_execution.spring.core.transport.kafka.OffsetCollector.OffsetMd;
 import io.euhedral_execution.spring.core.utils.KillSwitch;
 import lombok.Getter;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -14,21 +15,21 @@ public class KafkaFrame extends AbstractFrame {
     private KillSwitch partitionKillSwitch;
 
     @Getter
-    private ConsumerRecord<?, ?> record;
+    private ConsumerRecord<?, ?> cRecord;
 
     @Getter
     private boolean ready = false;
 
     @Getter
-    private Offset ack;
+    private OffsetMd ack;
 
     public KafkaFrame(long idHash,
-            ConsumerRecord<?, ?> record,
-            @NonNull Offset ack,
+            ConsumerRecord<?, ?> cRecord,
+            OffsetCollector.OffsetMd ack,
             @Nullable FrameManager<ConsumerRecord<?, ?>, KafkaFrame> recycler,
             @NonNull KillSwitch partitionKillSwitch) {
         super(idHash, recycler, null);
-        this.record = record;
+        this.cRecord = cRecord;
         this.ack = ack;
         this.partitionKillSwitch = partitionKillSwitch;
     }
@@ -49,9 +50,9 @@ public class KafkaFrame extends AbstractFrame {
         recycle();
     }
 
-    public void replace(ConsumerRecord<?, ?> record, @NonNull Offset ack,
+    public void replace(ConsumerRecord<?, ?> cRecord, OffsetCollector.OffsetMd ack,
             @NonNull KillSwitch partitionKillSwitch) {
-        this.record = record;
+        this.cRecord = cRecord;
         this.ack = ack;
         this.ready = false;
         this.partitionKillSwitch = partitionKillSwitch;

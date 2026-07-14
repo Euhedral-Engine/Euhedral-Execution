@@ -456,7 +456,7 @@ public final class ControlPlaneLattice implements LatticeTerminal {
             this.controlPlaneExecutor.shutdownNow();
             Runtime.getRuntime().removeShutdownHook(this.shutdownHook);
         } catch (Exception ignored) {
-
+            // Executor pool errors can be ignored on shutdown.
         }
     }
 

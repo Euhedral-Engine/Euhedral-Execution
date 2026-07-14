@@ -25,7 +25,6 @@ import java.util.function.Consumer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 import test_utils.TestFrame;
 import test_utils.TestReceiver;
 
@@ -42,7 +41,7 @@ class LatticeVertexTest {
         BitSet active = new BitSet(4);
         active.set(0, 4);
 
-        LatticeEdge mockEdge = Mockito.mock(LatticeEdge.class);
+        LatticeEdge mockEdge = mock(LatticeEdge.class);
         LatticeEdge[] handles = new LatticeEdge[4];
         Arrays.fill(handles, mockEdge);
 

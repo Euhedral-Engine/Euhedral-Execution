@@ -4,15 +4,6 @@ import static io.euhedral_execution.hardware_utils.SystemInfo.DEFAULT_L1;
 import static io.euhedral_execution.hardware_utils.SystemInfo.DEFAULT_L2;
 import static io.euhedral_execution.hardware_utils.SystemInfo.DEFAULT_L3;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.Arrays;
-import java.util.BitSet;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-
 import io.euhedral_execution.hardware_utils.SystemInfo;
 import io.euhedral_execution.hardware_utils.SystemInfo.CoreInfo;
 import io.euhedral_execution.hardware_utils.SystemInfo.CpuCacheLayout;
@@ -21,6 +12,14 @@ import io.euhedral_execution.hardware_utils.SystemInfo.SocketInfo;
 import io.euhedral_execution.hardware_utils.common.OSName;
 import it.unimi.dsi.fastutil.ints.Int2BooleanArrayMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectArrayMap;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.BitSet;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -62,7 +61,7 @@ public final class LinuxSystemLayout {
                             cpuRankings.get(cpu).capacity[0] *= Long.parseLong(
                                     read(cpuDir.resolve("cpufreq/cpuinfo_max_freq")));
                         } catch (Throwable ignored) {
-
+                            // Not all info is supported
                         }
                     }).toList();
             Int2BooleanArrayMap pCpu = rankCpus();
@@ -135,6 +134,7 @@ public final class LinuxSystemLayout {
                         masks[level - 1] = read(index.resolve("shared_cpu_map"));
                         shared[level - 1] = parseSharedCount(masks[level - 1]);
                     } catch (IOException ignored) {
+                        // Not all info is supported.
                     }
                 });
             } catch (Exception e) {
