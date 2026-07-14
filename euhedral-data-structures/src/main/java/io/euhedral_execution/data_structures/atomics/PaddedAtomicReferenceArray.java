@@ -11,7 +11,7 @@ import org.jspecify.annotations.NonNull;
 @SuppressWarnings({"unchecked", "unused"})
 public final class PaddedAtomicReferenceArray<T> {
 
-    public static final int PADDING;
+    public static final int MAX_PADDING;
     private static final VarHandle HANDLE = MethodHandles.arrayElementVarHandle(Object[].class);
 
     static {
@@ -29,7 +29,7 @@ public final class PaddedAtomicReferenceArray<T> {
             }
         }
 
-        PADDING = (64 / ptr) - 1;
+        MAX_PADDING = (64 / ptr) - 1;
     }
 
     private final int padding;
@@ -43,7 +43,7 @@ public final class PaddedAtomicReferenceArray<T> {
     }
 
     public PaddedAtomicReferenceArray(int length, boolean boundsCheck, boolean pad128) {
-        int padding = pad128 ? PADDING * 2 + 2 : PADDING + 1;
+        int padding = pad128 ? MAX_PADDING * 2 + 2 : MAX_PADDING + 1;
 
         long padded;
         do {

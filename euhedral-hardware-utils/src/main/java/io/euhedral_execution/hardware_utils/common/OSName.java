@@ -4,7 +4,7 @@ public enum OSName {
     LINUX("Linux"), OSX("MacOS"), WINDOWS("Windows"), UNSUPPORTED("UNSUPPORTED");
 
     public static final OSName CURRENT_OS;
-    public final String name;
+    public final String os;
 
     static {
         String os = System.getProperty("os.name").toLowerCase();
@@ -31,12 +31,12 @@ public enum OSName {
         return CURRENT_OS == WINDOWS;
     }
 
-    OSName(String name) {
-        this.name = name;
+    OSName(String os) {
+        this.os = os;
     }
 
     @Override
     public String toString() {
-        return this.name;
+        return this.os;
     }
 }

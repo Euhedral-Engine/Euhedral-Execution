@@ -59,7 +59,7 @@ class LatticeVertexTest {
     @Test
     void shouldInitializeNode() {
         assertEquals(4, node.downstreams.length);
-        assertNotNull(node.cache);
+        assertNotNull(node.remoteCache);
         assertNotNull(node.getDrainFlag());
         assertTrue(node.hasCache);
     }
@@ -74,7 +74,7 @@ class LatticeVertexTest {
         );
 
         assertFalse(terminal.hasCache);
-        assertNull(terminal.cache);
+        assertNull(terminal.remoteCache);
     }
 
     @Test
@@ -286,7 +286,7 @@ class LatticeVertexTest {
         interceptor.push(frame);
 
         boolean hasItem = false;
-        for(var queue : node.cache) {
+        for(var queue : node.remoteCache) {
             if(queue != null) {
                 hasItem |= !queue.isEmpty();
             }
@@ -368,7 +368,7 @@ class LatticeVertexTest {
 
         verify(upstream).complete();
 
-        assertTrue(interceptor.complete.get());
+        assertTrue(interceptor.isComplete.get());
     }
 
     @Test
@@ -378,7 +378,7 @@ class LatticeVertexTest {
 
         interceptor.onComplete();
 
-        assertTrue(interceptor.complete.get());
+        assertTrue(interceptor.isComplete.get());
     }
 
     @Test
@@ -388,7 +388,7 @@ class LatticeVertexTest {
 
         interceptor.onError(new RuntimeException("boom"));
 
-        assertTrue(interceptor.complete.get());
+        assertTrue(interceptor.isComplete.get());
     }
 
     @Test
