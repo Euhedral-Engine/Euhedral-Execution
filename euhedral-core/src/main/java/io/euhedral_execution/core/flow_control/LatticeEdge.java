@@ -57,7 +57,6 @@ public class LatticeEdge extends UpstreamHandle {
             PARENT = MethodHandles.lookup()
                     .findVarHandle(LatticeEdge.class, "parent", LatticeEdge.class);
 
-            int cores = SystemInfo.getCoreCount();
             UPSTREAMS = new MpscQueue[SystemInfo.getMaxCoreId() + 1];
             ACTIVE_PARTITIONS = new PaddedAtomicLongArray(UPSTREAMS.length);
             for(int i = 0; i < UPSTREAMS.length; i++) {
@@ -91,13 +90,13 @@ public class LatticeEdge extends UpstreamHandle {
     /// all [UpstreamHandles][UpstreamHandle] associated with the LatticeEdge.
     ///
     /// This does not need to be called to avoid errors. It is a micro-optimization.
-    public void register(int id) {
+    public void register() {
         LatticeEdge parent = (LatticeEdge) PARENT.getOpaque(this);
         if (parent != null) {
-            parent.register(id);
+            parent.register();
         } else {
-            getThreadUpstreamQueue();
-            int core = SystemInfo.getCpuInfo(ThreadTools.getCpu()).core();
+            UpstreamQueue queue = getThreadUpstreamQueue();
+            int core = queue.core;
             ACTIVE_PARTITIONS.setRelease(core, 1);
 
             SpinWait.await(() -> !HANDLE_LOCK.compareAndSet(0, 1));

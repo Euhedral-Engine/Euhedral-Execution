@@ -152,7 +152,7 @@ public final class ControlPlaneFragment extends WorkRequester {
                     this.logger.debug("Pinned to Core {} CPU {} P-Core: {}", this.core, this.cpu, this.isPCore);
                 }
                 ThreadTools.setTimerResolution(1);
-                super.register(this.core);
+                super.register();
 
                 cycle();
                 super.removeThread();
