@@ -29,9 +29,12 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
 import org.openjdk.jmh.infra.Blackhole;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class LightContentionThroughput {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(LightContentionThroughput.class);
     private static final int BATCH = 10_000_000;
 
     private static void await(PaddedLongAdder counters) {
@@ -39,17 +42,20 @@ public class LightContentionThroughput {
         long deadline = System.nanoTime() + TimeUnit.MINUTES.toNanos(1);
 
         while (System.nanoTime() < deadline) {
-            if ((spin++ & 31) == 0) {
-                if (counters.sum() >= BATCH) {
+            if ((spin++ & 31) == 0 && counters.sum() >= BATCH) {
                     break;
                 }
-            }
+
             if ((spin & 127) == 0) {
                 Thread.yield();
             } else {
                 Thread.onSpinWait();
             }
         }
+    }
+
+    private LightContentionThroughput() {
+
     }
 
     @State(Scope.Benchmark)
@@ -67,7 +73,7 @@ public class LightContentionThroughput {
 
         @Setup(Level.Trial)
         public void setup(Blackhole blackhole) {
-            BitSet cores = (BitSet) SystemInfo.get_P_CoreSet().clone();
+            BitSet cores = (BitSet) SystemInfo.getPCoreSet().clone();
             if (cores.cardinality() == 0) {
                 skip = true;
                 return;
@@ -87,7 +93,7 @@ public class LightContentionThroughput {
                 sinks[i] = new RepeatingSink(NoOpFrame.generate(idHash, parts, counters));
             }
 
-            System.out.println("Benchmark is using P cpus " + cpus);
+            LOGGER.info("Benchmark is using P cpus {}", cpus);
             BaseCloneableObject base = new BaseCloneableObject(new NoOpExecutor(blackhole));
             LatticeConfig config = new LatticeConfig("LightContentionThroughputBenchmark", cpus,
                     Duration.ofSeconds(1), ControlPlaneShard.createBaseShard(base));
@@ -132,7 +138,7 @@ public class LightContentionThroughput {
 
         @Setup(Level.Trial)
         public void setup(Blackhole blackhole) {
-            BitSet eCpus = (BitSet) SystemInfo.get_E_CpuSet().clone();
+            BitSet eCpus = (BitSet) SystemInfo.getECpuSet().clone();
             BitSet cpus = eCpus;
             if (cpus.cardinality() == 0) {
                 skip = true;
@@ -161,7 +167,7 @@ public class LightContentionThroughput {
                 sinks[i] = new RepeatingSink(NoOpFrame.generate(idHash, parts, counters));
             }
 
-            System.out.println("Benchmark is using E cpus " + cpus);
+            LOGGER.info("Benchmark is using E cpus {}", cpus);
             BaseCloneableObject base = new BaseCloneableObject(new NoOpExecutor(blackhole));
             LatticeConfig config = new LatticeConfig("LightContentionThroughputBenchmark", cpus,
                     Duration.ofSeconds(1), ControlPlaneShard.createBaseShard(base));

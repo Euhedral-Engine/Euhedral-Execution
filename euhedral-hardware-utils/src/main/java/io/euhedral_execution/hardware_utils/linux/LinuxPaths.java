@@ -7,11 +7,13 @@ import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.Optional;
 import java.util.stream.Stream;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public final class LinuxPaths {
-    // cgroupV2
 
     public static final Path CGROUP_V2_ROOT_PATH = Paths.get("/sys/fs/cgroup/");
+    // cgroupV2
     public static final Path CGROUP_V2_USR_PATH;
     public static final Path CPU_MAX;
     public static final Path CPU_STAT;
@@ -21,20 +23,20 @@ public final class LinuxPaths {
     public static final Path MEMORY_CURRENT;
     public static final Path MEMORY_STAT;
     public static final Path IO_STAT;
+    public static final Path CPU_INFO_BASE = Paths.get("/sys/devices/system/cpu/");
 
     // Misc
-
-    public static final Path CPU_INFO_BASE = Paths.get("/sys/devices/system/cpu/");
     public static final Path PROC_STAT = Paths.get("/proc/stat");
+    private static final Logger LOGGER = LoggerFactory.getLogger(LinuxPaths.class);
 
     static {
-        if(OSName.isLinux()) {
+        if (OSName.isLinux()) {
             Path root;
             try {
                 root = getCgroupV2UserPath();
             } catch (Throwable t) {
                 root = CGROUP_V2_ROOT_PATH;
-                System.err.println("Failed to read controllers. cgroupV1 is not supported");
+                LOGGER.error("Failed to read controllers. cgroupV1 is not supported");
             }
             CGROUP_V2_USR_PATH = root;
             CPU_MAX = resolveCgroupPath("cpu.max");
@@ -88,10 +90,15 @@ public final class LinuxPaths {
             if (Files.isWritable(subtreeControl)) {
                 Files.writeString(subtreeControl, "+" + controllerName, StandardOpenOption.APPEND);
             }
-        } catch (Throwable ignored) {
+        } catch (Exception ignored) {
+            // This block tests permissions by trying to write. If an exception is thrown, permission is denied.
         }
 
         return resolvedUser.toFile().exists() ? resolvedUser
                 : CGROUP_V2_ROOT_PATH.resolve(controller);
+    }
+
+    private LinuxPaths() {
+
     }
 }

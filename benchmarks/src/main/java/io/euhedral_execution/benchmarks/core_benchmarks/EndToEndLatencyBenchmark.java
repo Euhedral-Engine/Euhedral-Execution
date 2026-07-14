@@ -29,10 +29,13 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
 import org.openjdk.jmh.infra.Blackhole;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @State(Scope.Benchmark)
 public class EndToEndLatencyBenchmark {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(EndToEndLatencyBenchmark.class);
     private static final int BATCH_SIZE = 100_000;
 
     private static void await(PaddedLongAdder counters) {
@@ -50,7 +53,7 @@ public class EndToEndLatencyBenchmark {
 
             if ((spin++ & 1023) == 0) {
                 if ((System.nanoTime() - start) > timeoutNanos) {
-                    System.err.printf("Timeout! Target: %d, Processed: %d\n", BATCH_SIZE, sum);
+                    LOGGER.error("Timeout! Target: {}, Processed: {}", BATCH_SIZE, sum);
                     break;
                 }
                 Thread.yield();
@@ -58,6 +61,10 @@ public class EndToEndLatencyBenchmark {
                 Thread.onSpinWait();
             }
         }
+    }
+
+    private EndToEndLatencyBenchmark() {
+
     }
 
     @State(Scope.Benchmark)
@@ -76,7 +83,7 @@ public class EndToEndLatencyBenchmark {
 
         @Setup(Level.Trial)
         public void setup(Blackhole blackhole) {
-            BitSet cores = (BitSet) SystemInfo.get_P_CoreSet().clone();
+            BitSet cores = (BitSet) SystemInfo.getPCoreSet().clone();
             if (cores.cardinality() == 0) {
                 skip = true;
                 return;
@@ -92,7 +99,7 @@ public class EndToEndLatencyBenchmark {
             i = cores.nextSetBit(i + 1);
             cpus.or(SystemInfo.getCoreInfo(i).getCpuSet());
 
-            System.out.println("Benchmark is using P cpus " + cpus);
+            LOGGER.info("Benchmark is using P cpus {}", cpus);
             BaseCloneableObject base = new BaseCloneableObject(new NoOpExecutor(blackhole));
             LatticeConfig config = new LatticeConfig("EndToEndLatencyBenchmark", cpus,
                     Duration.ofSeconds(1), ControlPlaneShard.createBaseShard(base));
@@ -136,7 +143,7 @@ public class EndToEndLatencyBenchmark {
 
         @Setup(Level.Trial)
         public void setup(Blackhole blackhole) {
-            BitSet eCpus = (BitSet) SystemInfo.get_E_CpuSet().clone();
+            BitSet eCpus = (BitSet) SystemInfo.getECpuSet().clone();
             BitSet cpus = eCpus;
             if (cpus.cardinality() == 0) {
                 skip = true;
@@ -162,7 +169,7 @@ public class EndToEndLatencyBenchmark {
                 }
             }
 
-            System.out.println("Benchmark is using E cpus " + cpus);
+            LOGGER.info("Benchmark is using E cpus {}", cpus);
             BaseCloneableObject base = new BaseCloneableObject(new NoOpExecutor(blackhole));
             LatticeConfig config = new LatticeConfig("EndToEndLatencyBenchmark", cpus,
                     Duration.ofSeconds(1), ControlPlaneShard.createBaseShard(base));

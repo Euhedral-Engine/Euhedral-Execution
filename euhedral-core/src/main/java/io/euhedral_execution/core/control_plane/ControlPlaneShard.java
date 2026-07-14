@@ -290,7 +290,7 @@ public class ControlPlaneShard {
             }
         }
 
-        if (this.coresToDrain.get() == 0) {
+        if (deadClones.isEmpty()) {
             tryRestartIngest();
             return;
         }

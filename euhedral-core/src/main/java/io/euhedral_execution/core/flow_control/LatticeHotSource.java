@@ -78,7 +78,7 @@ public final class LatticeHotSource implements LatticeSource, Consumer<AbstractF
 
     @Override
     public void request(long num) {
-
+        // Pushes without demand
     }
 
     @Override

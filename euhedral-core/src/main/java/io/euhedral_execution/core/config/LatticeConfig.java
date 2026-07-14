@@ -24,9 +24,11 @@ import org.jspecify.annotations.NonNull;
 public record LatticeConfig(String name, @NonNull BitSet allowedCpus,
                             @NonNull Duration shutdownTimeout,
                             @NonNull ControlPlaneShard baseShard) {
+    public static final String DEFAULT_NAME = "EuhedralLattice";
+    public static final String DEFAULT_SHARD_NAME = "EuhedralShard";
 
     public static LatticeConfig ofDefaults() {
-        return ofDefaults("EuhedralLattice", "EuhedralShard");
+        return ofDefaults(DEFAULT_NAME, DEFAULT_SHARD_NAME);
     }
 
     /// @param name      Top-level name
@@ -46,7 +48,7 @@ public record LatticeConfig(String name, @NonNull BitSet allowedCpus,
 
     /// @param executor Executor to give to [BaseCloneableObject]
     public static LatticeConfig ofDefaults(@NonNull AbstractExecutor executor) {
-        return ofDefaults("EuhedralLattice", "EuhedralShard", executor);
+        return ofDefaults(DEFAULT_NAME, DEFAULT_SHARD_NAME, executor);
     }
 
     /// @param name      Top-level name
@@ -81,7 +83,7 @@ public record LatticeConfig(String name, @NonNull BitSet allowedCpus,
     /// @param cloneableObject Object to be replicated and assigned a core. See
     /// [BaseCloneableObject]
     public static LatticeConfig ofDefaults(@NonNull CloneableObject cloneableObject) {
-        return ofDefaults("EuhedralLattice", "EuhedralShard", cloneableObject);
+        return ofDefaults(DEFAULT_NAME, DEFAULT_SHARD_NAME, cloneableObject);
     }
 
 

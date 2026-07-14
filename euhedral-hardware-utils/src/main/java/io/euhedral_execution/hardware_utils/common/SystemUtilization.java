@@ -1,5 +1,6 @@
 package io.euhedral_execution.hardware_utils.common;
 
+import java.util.Arrays;
 import java.util.BitSet;
 import java.util.List;
 import org.jspecify.annotations.NonNull;
@@ -31,6 +32,18 @@ public final class SystemUtilization {
                                double memoryUtilization, BitSet effectiveCpus,
                                CpuSnapshot[] cpuSnapshots) {
 
+        @Override
+        public boolean equals(Object other) {
+            if (other instanceof CoreSnapshot os) {
+                return coreId == os.coreId && quotaCpus == os.quotaCpus && period == os.period
+                        && globalCpuCount == os.globalCpuCount
+                        && globalMemoryLimit == os.globalMemoryLimit
+                        && memoryLimit == os.memoryLimit
+                        && memoryUtilization == os.memoryUtilization
+                        && Arrays.equals(cpuSnapshots, os.cpuSnapshots);
+            }
+            return false;
+        }
     }
 
     public record CpuSnapshot(int cpuId, double quotaCpus, long period, int globalCpuCount,
@@ -51,7 +64,11 @@ public final class SystemUtilization {
                 long period, long cpuUsage, long cpuThrottle, UnmodifiableBitSet effectiveCpus,
                 double[] pressurePerCpu,
                 long[] memorySnapshot, long ioBytes) {
-            assert (memorySnapshot.length >= 3);
+            if (memorySnapshot.length != MemorySnapshotIdx.values().length) {
+                throw new IllegalArgumentException(
+                        "Memory snapshot should have " + MemorySnapshotIdx.values().length
+                                + " elements.");
+            }
 
             long memoryLimit = memorySnapshot[MemorySnapshotIdx.MEMORY_LIMIT.idx];
             long memoryUsage = memorySnapshot[MemorySnapshotIdx.MEMORY_USAGE.idx];
@@ -147,6 +164,7 @@ public final class SystemUtilization {
             }
 
             long coreMemoryPool = perCpuMemoryPool * cpuCount;
+            coreMemoryPool = Math.max(coreMemoryPool, 1);
             return new CoreSnapshot(coreId, cpuQuotaPool, period, effectiveCpus.cardinality(),
                     globalMemoryPool, (long) (globalMemoryPool * totalMemoryUtilization),
                     coreMemoryPool, (double) (memPerCpuUsageBytes * cpuCount) / coreMemoryPool,

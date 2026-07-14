@@ -26,8 +26,8 @@ public final class ExecutionMetrics implements AutoCloseable {
         try {
             IN_PROGRESS = MethodHandles.lookup()
                     .findVarHandle(ExecutionMetrics.class, "inProgress", long.class);
-        } catch (Throwable t) {
-            throw new ExceptionInInitializerError(t);
+        } catch (Exception e) {
+            throw new ExceptionInInitializerError(e);
         }
     }
 

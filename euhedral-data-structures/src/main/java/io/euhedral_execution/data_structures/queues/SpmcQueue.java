@@ -24,7 +24,7 @@ public sealed class SpmcQueue<T> extends BaseConcurrentQueue.MultiConsumer<T> pe
     }
 
     public SpmcQueue(int chunkSize, int maxPooledChunks) {
-        this(chunkSize, 0, Long.MAX_VALUE);
+        this(chunkSize, maxPooledChunks, Long.MAX_VALUE);
     }
 
     public SpmcQueue(int chunkSize, int maxPooledChunks, long maxConsumeBatch) {

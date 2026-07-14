@@ -86,8 +86,8 @@ public final class QueueIngestSink extends AbstractIngestSink {
         static {
             try {
                 FINISH = MethodHandles.lookup().findVarHandle(Delegate.class, "finish", boolean.class);
-            } catch (Throwable t) {
-                throw new ExceptionInInitializerError(t);
+            } catch (Exception e) {
+                throw new ExceptionInInitializerError(e);
             }
         }
 

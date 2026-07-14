@@ -10,6 +10,7 @@ import java.util.BitSet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+@SuppressWarnings("unused")
 public final class ThreadTools {
     private static final Logger LOGGER = LoggerFactory.getLogger(ThreadTools.class);
 
@@ -126,5 +127,9 @@ public final class ThreadTools {
     /// @return success
     public static boolean setTimerResolution(long nanos) {
         return PINNER.setTimerResolution(nanos);
+    }
+
+    private ThreadTools() {
+
     }
 }

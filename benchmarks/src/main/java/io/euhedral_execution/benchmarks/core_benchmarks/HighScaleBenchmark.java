@@ -31,6 +31,8 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
 import org.openjdk.jmh.infra.Blackhole;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @BenchmarkMode({Mode.Throughput})
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
@@ -39,6 +41,8 @@ import org.openjdk.jmh.infra.Blackhole;
 @Measurement(iterations = 1, time = 60, timeUnit = TimeUnit.SECONDS)
 @Fork(value = 1)
 public class HighScaleBenchmark {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(HighScaleBenchmark.class);
 
     public static final int MAX_RAY_STEPS = 200;
     public static final int ITERATION_CAP = 120;
@@ -55,7 +59,7 @@ public class HighScaleBenchmark {
     private static void shuffle(MandelbulbFrame[] pixels) {
         long seed = SEED;
         for (int i = pixels.length - 1; i > 0; i--) {
-            int j = (int) MathFunctions.unsignedMultiplyHigh(HasherApi.mix(seed++), i + 1);
+            int j = (int) MathFunctions.unsignedMultiplyHigh(HasherApi.mix(seed++), i + 1L);
             MandelbulbFrame temp = pixels[i];
             temp.randomizeHash(seed++);
             pixels[j].randomizeHash(seed++);
@@ -79,7 +83,7 @@ public class HighScaleBenchmark {
                     break;
                 }
                 if (now - log >= TimeUnit.SECONDS.toNanos(3)) {
-                    System.out.println("Progress: " + sum);
+                    LOGGER.info("Progress: {}", sum);
                     log = now;
                 }
             }
@@ -111,17 +115,21 @@ public class HighScaleBenchmark {
                         true);
 
                 final int socketId = i;
-                executor.submit(() -> {
+                executor.submit(() ->
                     pixels[socketId] =
                             MandelbulbFrame.generate(64, 1_500_625, 9_800, 9800, CENTER_X, CENTER_Y,
                                     0.0, MAX_RAY_STEPS, ITERATION_CAP, BAILOUT_RADIUS_SQ, blackhole,
                                     counters, socketLocal ? RoutingPolicy.SOCKET_LOCAL
-                                            : RoutingPolicy.ANYWHERE);
-                }).get();
+                                            : RoutingPolicy.ANYWHERE)
+                ).get();
                 executor.shutdownNow();
             }
         }
         return pixels;
+    }
+
+    private HighScaleBenchmark() {
+
     }
 
     @BenchmarkMode({Mode.AverageTime})
@@ -145,12 +153,12 @@ public class HighScaleBenchmark {
             this.controlPlane = ControlPlaneLattice.getOrCreate(config);
             this.controlPlane.start();
 
-            System.out.println("Allocating...");
+            LOGGER.info("Allocating...");
             MandelbulbFrame[][][] pixels = generate(blackhole, this.counters);
 
             long seed = SEED;
 
-            System.out.println("Grouping and Shuffling...");
+            LOGGER.info("Grouping and Shuffling...");
             int idx = 0;
             // Go through each image
             for (var canvas : pixels) {
@@ -178,7 +186,7 @@ public class HighScaleBenchmark {
                     ArrayIngestSink sink = new ArrayIngestSink(chunkArray);
                     sinks[idx++] = sink;
                 }
-                System.out.println("Total tasks: " + TASKS);
+                LOGGER.info("Total tasks: {}", TASKS);
             }
         }
 
@@ -194,7 +202,7 @@ public class HighScaleBenchmark {
         }
 
         @Benchmark
-        public void render(OpCounter opCounter, Invocations invocations) {
+        public void render(OpCounter opCounter, InvocationCounter invocations) {
             for (ArrayIngestSink sink : this.sinks) {
                 this.controlPlane.addUpstream(sink);
             }
@@ -219,7 +227,7 @@ public class HighScaleBenchmark {
 
         @State(Scope.Thread)
         @AuxCounters(Type.EVENTS)
-        public static class Invocations {
+        public static class InvocationCounter {
 
             public long invocations;
             public long measurements;
@@ -247,11 +255,11 @@ public class HighScaleBenchmark {
             this.controlPlane = ControlPlaneLattice.getOrCreate(config);
             this.controlPlane.start();
 
-            System.out.println("Allocating...");
+            LOGGER.info("Allocating...");
             MandelbulbFrame[][][] pixels = generate(blackhole, this.counters);
 
             int idx = 0;
-            System.out.println("Shuffling...");
+            LOGGER.info("Shuffling...");
             for (var canvas : pixels) {
                 for (var row : canvas) {
                     shuffle(row);
@@ -260,7 +268,7 @@ public class HighScaleBenchmark {
                 }
             }
 
-            System.out.println("Total tasks: " + TASKS);
+            LOGGER.info("Total tasks: {}", TASKS);
         }
 
         @Setup(Level.Invocation)
@@ -275,7 +283,7 @@ public class HighScaleBenchmark {
         }
 
         @Benchmark
-        public void render(OpCounter opCounter, Invocations invocations) {
+        public void render(OpCounter opCounter, InvocationCounter invocations) {
             for (ArrayIngestSink sink : this.sinks) {
                 this.controlPlane.addUpstream(sink);
             }
@@ -300,7 +308,7 @@ public class HighScaleBenchmark {
 
         @State(Scope.Thread)
         @AuxCounters(Type.EVENTS)
-        public static class Invocations {
+        public static class InvocationCounter {
 
             public long invocations;
             public long measurements;

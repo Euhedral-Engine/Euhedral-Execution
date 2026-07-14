@@ -11,11 +11,15 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import org.reactivestreams.Publisher;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Sinks;
 import reactor.core.publisher.Sinks.EmitResult;
 
 public class FrameSequencer<T, R> {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(FrameSequencer.class);
 
     private final long ingestPassword;
     private final long sequencePassword;
@@ -112,8 +116,8 @@ public class FrameSequencer<T, R> {
                         }
                     }
                 } while (this.wip.decrementAndGet() != 0);
-            } catch (Throwable t) {
-                System.err.println("Uncaught Exception: " + t.getMessage());
+            } catch (Exception e) {
+                LOGGER.error("Uncaught Exception!", e);
             } finally {
                 this.wip.setRelease(0);
             }

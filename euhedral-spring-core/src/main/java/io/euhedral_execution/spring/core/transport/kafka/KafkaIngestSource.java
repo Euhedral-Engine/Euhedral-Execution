@@ -12,7 +12,7 @@ import io.euhedral_execution.hashing.HasherApi;
 import io.euhedral_execution.spring.core.frames.KafkaFrame;
 import io.euhedral_execution.spring.core.transport.kafka.IngestEventHandler.Event;
 import io.euhedral_execution.spring.core.transport.kafka.OffsetCollector.CommitPolicy;
-import io.euhedral_execution.spring.core.transport.kafka.OffsetCollector.Offset;
+import io.euhedral_execution.spring.core.transport.kafka.OffsetCollector.OffsetMd;
 import io.euhedral_execution.spring.core.utils.KillSwitch;
 import it.unimi.dsi.fastutil.longs.Long2ObjectArrayMap;
 import it.unimi.dsi.fastutil.longs.LongArraySet;
@@ -35,6 +35,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+@SuppressWarnings("unused")
 public class KafkaIngestSource implements LatticeSource {
 
     public static final String MIN_COMMIT_BATCH = "min.commit.batch";
@@ -60,8 +61,8 @@ public class KafkaIngestSource implements LatticeSource {
                     .findVarHandle(KafkaIngestSource.class, "lastPollNs", long.class);
             LOCK = MethodHandles.lookup()
                     .findVarHandle(KafkaIngestSource.class, "lock", boolean.class);
-        } catch (Throwable t) {
-            throw new ExceptionInInitializerError(t);
+        } catch (Exception e) {
+            throw new ExceptionInInitializerError(e);
         }
     }
 
@@ -69,8 +70,8 @@ public class KafkaIngestSource implements LatticeSource {
         return HasherApi.getHash(partition.topic(), partition.partition());
     }
 
-    public static long getPartitionHash(ConsumerRecord<?, ?> record) {
-        return HasherApi.getHash(record.topic(), record.partition());
+    public static long getPartitionHash(ConsumerRecord<?, ?> cRecord) {
+        return HasherApi.getHash(cRecord.topic(), cRecord.partition());
     }
 
     private static CommitPolicy getCommitPolicy(Map<String, Object> props) {
@@ -136,8 +137,9 @@ public class KafkaIngestSource implements LatticeSource {
                         consumer.resume(consumer.assignment());
 
                         LAST_POLL.setRelease(this, now);
-                    } catch (Throwable ignored) {}
-                    finally {
+                    } catch (Exception ignored) {
+                        // In case of NPE
+                    } finally {
                         LOCK.setRelease(this, false);
                     }
                     LockSupport.parkNanos((long) (0.75 * heartbeat));
@@ -179,11 +181,11 @@ public class KafkaIngestSource implements LatticeSource {
                 var records = this.kafkaConsumer.getPlain().poll(Duration.ZERO);
 
                 int count = 0;
-                for (var record : records) {
+                for (var cRecord : records) {
                     if (demand-- > 0) {
-                        push(record);
+                        push(cRecord);
                     } else {
-                        this.queue.offer(record);
+                        this.queue.offer(cRecord);
                     }
                     count++;
                 }
@@ -199,15 +201,15 @@ public class KafkaIngestSource implements LatticeSource {
         }
     }
 
-    private void push(ConsumerRecord<?, ?> record) {
+    private void push(ConsumerRecord<?, ?> cRecord) {
         LatticeReceiver receiver = (LatticeReceiver) DOWNSTREAM.getOpaque(this);
         if (receiver == null) {
             return;
         }
-        long partHash = getPartitionHash(record);
+        long partHash = getPartitionHash(cRecord);
         PartitionIngestor sender = ingestors.get(partHash);
 
-        KafkaFrame frame = manager.getOrCreate(record, this.ingestPassword);
+        KafkaFrame frame = manager.getOrCreate(cRecord, this.ingestPassword);
         this.offsetCollector.registerFrame(sender.partition, frame, this.ingestPassword);
 
         receiver.push(frame);
@@ -385,16 +387,16 @@ public class KafkaIngestSource implements LatticeSource {
         FrameManager<ConsumerRecord<?, ?>, KafkaFrame> manager = new FrameManager<>(8_192,
                 this.ingestPassword);
 
-        FrameCreate<ConsumerRecord<?, ?>, KafkaFrame> create = (idHash, record) -> {
-            long partHash = getPartitionHash(record);
+        FrameCreate<ConsumerRecord<?, ?>, KafkaFrame> create = (idHash, cRecord) -> {
+            long partHash = getPartitionHash(cRecord);
             PartitionIngestor sender = ingestors.get(partHash);
-            return new KafkaFrame(idHash, record, new Offset(record.offset()), manager,
+            return new KafkaFrame(idHash, cRecord, new OffsetMd(cRecord.offset()), manager,
                     sender.killSwitch);
         };
-        FrameReplace<ConsumerRecord<?, ?>, KafkaFrame> replace = (record, frame) -> {
-            long partHash = getPartitionHash(record);
+        FrameReplace<ConsumerRecord<?, ?>, KafkaFrame> replace = (cRecord, frame) -> {
+            long partHash = getPartitionHash(cRecord);
             PartitionIngestor sender = ingestors.get(partHash);
-            frame.replace(record, new Offset(record.offset()), sender.killSwitch);
+            frame.replace(cRecord, new OffsetMd(cRecord.offset()), sender.killSwitch);
         };
         manager.setFactory(new FrameFactory<>(create, replace));
         return manager;
@@ -426,8 +428,8 @@ public class KafkaIngestSource implements LatticeSource {
                 LockSupport.unpark(this.heartbeat);
                 this.heartbeat.interrupt();
                 this.heartbeat.join(500);
-            } catch (Throwable ignored) {
-
+            } catch (Exception ignored) {
+                // Ignore interrupt on complete
             }
 
             KafkaConsumer<?, ?> consumer = this.kafkaConsumer.getAndSet(null);

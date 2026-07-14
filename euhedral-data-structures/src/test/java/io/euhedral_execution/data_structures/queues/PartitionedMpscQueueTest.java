@@ -27,7 +27,7 @@ class PartitionedMpscQueueTest {
         }
 
         final int[] drained = new int[]{0};
-        Consumer<Integer> consumer = (val) -> {
+        Consumer<Integer> consumer = val -> {
             if (val != ++drained[0]) {
                 fail("Corruption! Last Value: " + drained[0] + " Current: " + val);
             }
@@ -53,7 +53,7 @@ class PartitionedMpscQueueTest {
         int producers = 8;
         int batch = 100_000;
 
-        Consumer<Long> consumer = (val) -> {
+        Consumer<Long> consumer = val -> {
         };
         ExecutorService exec = Executors.newFixedThreadPool(producers);
         for (int x = 0; x < 20; x++) {
@@ -112,7 +112,7 @@ class PartitionedMpscQueueTest {
             });
         }
 
-        Consumer<Long> consumer = (val) -> {
+        Consumer<Long> consumer = val -> {
             if (!consumed.add(val)) {
                 fail("Duplicate: " + val);
             }

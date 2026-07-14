@@ -39,10 +39,7 @@ public class OffsetCollector {
             long key = partition.hashCode();
 
             PartitionCollector collector = collectors.get(key);
-            if (collector == null) {
-                collector = new PartitionCollector(partition);
-                collectors.put(key, collector);
-            }
+            collectors.computeIfAbsent(key, k -> new PartitionCollector(partition));
             collector.register(frame);
         }
     }
@@ -94,7 +91,7 @@ public class OffsetCollector {
 
         public final TopicPartition partition;
 
-        private final Long2ObjectOpenHashMap<Offset> offsets = new Long2ObjectOpenHashMap<>(
+        private final Long2ObjectOpenHashMap<OffsetMd> offsets = new Long2ObjectOpenHashMap<>(
                 8_096);
         private final LongHeapPriorityQueue offsetHeap = new LongHeapPriorityQueue(8_096);
         private long lastCollect = System.nanoTime();
@@ -110,7 +107,7 @@ public class OffsetCollector {
         }
 
         public void register(KafkaFrame frame) {
-            Offset ack = frame.getAck();
+            OffsetMd ack = frame.getAck();
             if (this.offsetHeap.isEmpty()) {
                 this.minOffset = ack.offset;
             }
@@ -140,7 +137,7 @@ public class OffsetCollector {
         private void drain() {
             while (!this.offsetHeap.isEmpty()) {
                 long minOffset = this.offsetHeap.firstLong();
-                Offset ack = this.offsets.get(minOffset);
+                OffsetMd ack = this.offsets.get(minOffset);
 
                 if (ack == null) {
                     this.offsetHeap.dequeueLong();
@@ -155,18 +152,31 @@ public class OffsetCollector {
         }
     }
 
-    public static class Offset implements Comparable<Offset> {
+    public static class OffsetMd implements Comparable<OffsetMd> {
 
         public final long offset;
         public volatile boolean ready;
 
-        public Offset(long offset) {
+        public OffsetMd(long offset) {
             this.offset = offset;
         }
 
         @Override
-        public int compareTo(Offset o) {
-            return Long.compare(offset, o.offset);
+        public int compareTo(OffsetMd o) {
+            return Long.compare(this.offset, o.offset);
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if(obj instanceof OffsetMd other) {
+                return this.offset == other.offset;
+            }
+            return false;
+        }
+
+        @Override
+        public int hashCode() {
+            return Long.hashCode(this.offset);
         }
     }
 

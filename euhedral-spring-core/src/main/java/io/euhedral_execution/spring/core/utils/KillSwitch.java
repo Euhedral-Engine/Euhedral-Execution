@@ -23,7 +23,7 @@ public class KillSwitch {
             try {
                 action.run();
             } catch (Exception ignored) {
-
+                // Ignore exceptions in user shutdown.
             }
         }
     }
