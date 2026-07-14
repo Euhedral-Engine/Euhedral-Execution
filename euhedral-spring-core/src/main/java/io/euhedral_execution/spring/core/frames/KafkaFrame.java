@@ -6,9 +6,12 @@ import io.euhedral_execution.spring.core.transport.kafka.OffsetCollector.Offset;
 import io.euhedral_execution.spring.core.utils.KillSwitch;
 import lombok.Getter;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 public class KafkaFrame extends AbstractFrame {
-    private KillSwitch killSwitch;
+
+    private KillSwitch partitionKillSwitch;
 
     @Getter
     private ConsumerRecord<?, ?> record;
@@ -21,23 +24,23 @@ public class KafkaFrame extends AbstractFrame {
 
     public KafkaFrame(long idHash,
             ConsumerRecord<?, ?> record,
-            Offset ack,
-            FrameManager<ConsumerRecord<?, ?>, KafkaFrame> recycler,
-            KillSwitch ks) {
+            @NonNull Offset ack,
+            @Nullable FrameManager<ConsumerRecord<?, ?>, KafkaFrame> recycler,
+            @NonNull KillSwitch partitionKillSwitch) {
         super(idHash, recycler, null);
         this.record = record;
         this.ack = ack;
-        this.killSwitch = ks;
+        this.partitionKillSwitch = partitionKillSwitch;
     }
 
     @Override
     public boolean isAlive() {
-        return !killSwitch.isBooped();
+        return !partitionKillSwitch.isBooped();
     }
 
     @Override
     public void kill() {
-        killSwitch.boop();
+        partitionKillSwitch.boop();
     }
 
     @Override
@@ -46,10 +49,11 @@ public class KafkaFrame extends AbstractFrame {
         recycle();
     }
 
-    public void replace(ConsumerRecord<?, ?> record, Offset ack, KillSwitch killSwitch) {
+    public void replace(ConsumerRecord<?, ?> record, @NonNull Offset ack,
+            @NonNull KillSwitch partitionKillSwitch) {
         this.record = record;
         this.ack = ack;
         this.ready = false;
-        this.killSwitch = killSwitch;
+        this.partitionKillSwitch = partitionKillSwitch;
     }
 }

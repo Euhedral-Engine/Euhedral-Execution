@@ -27,6 +27,8 @@ import java.util.function.Consumer;
 import lombok.AccessLevel;
 import lombok.Getter;
 import org.jspecify.annotations.NonNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public abstract class ControlPlaneCache extends LatticeVertex implements CloneableObject {
 
@@ -82,12 +84,13 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
         return Math.max(chunk, 512);
     }
 
+    private final Logger logger;
     private final CacheConfig cacheConfig;
     private final CacheMetrics metrics;
     private final int core;
 
     @Getter(AccessLevel.PROTECTED)
-    private final PartitionedMpscQueue<AbstractFrame> cache;
+    private final PartitionedMpscQueue<AbstractFrame> localCache;
     private final int chunkSize;
 
     private final CacheTerminal cacheTerminal;
@@ -108,18 +111,20 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
             throw new IllegalArgumentException("Partitions must be greater than 0. Provided: " + cacheConfig.partitions());
         }
         if (cacheConfig.cloneConfig() == null) {
+            this.logger = null;
             this.metrics = null;
-            this.cache = null;
+            this.localCache = null;
             this.chunkSize = 0;
             this.cacheTerminal = null;
             this.frameQuota = 0;
             this.core = -1;
         } else {
+            this.logger = LoggerFactory.getLogger(getName(cacheConfig));
             this.metrics = new CacheMetrics(cacheConfig, () -> (long) TOTAL_COUNT.getAcquire(this));
             this.chunkSize = getChunkSize(cacheConfig, partitions);
             this.frameQuota = (long) this.chunkSize * partitions;
             this.core = cacheConfig.getCore();
-            this.cache = new PartitionedMpscQueue<>(partitions, this.chunkSize,
+            this.localCache = new PartitionedMpscQueue<>(partitions, this.chunkSize,
                     cacheConfig.maxPooledChunks());
             this.cacheTerminal = new CacheTerminal(this);
 
@@ -159,11 +164,11 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
         long total = 0;
         long initialCount = (long) TOTAL_COUNT.getOpaque(this);
         if (initialCount > 0) {
-            total = this.cache.drain(consumer, limit);
+            total = this.localCache.drain(consumer, limit);
             long count = total;
             while (total < limit
                     && count > this.cacheConfig.ringWalkResetThreshold()) {
-                count = this.cache.drain(consumer, limit - total);
+                count = this.localCache.drain(consumer, limit - total);
                 total += count;
             }
 
@@ -205,13 +210,13 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
         }
 
         for (int i = 0; i < 3; i++) {
-            for (int j = 0; j < this.cache.partitions(); j++) {
+            for (int j = 0; j < this.localCache.partitions(); j++) {
                 for (int k = 0; k < chunkSize; k++) {
-                    this.cache.offer(j, DummyFrame.INSTANCE);
+                    this.localCache.offer(j, DummyFrame.INSTANCE);
                 }
             }
         }
-        this.cache.clear();
+        this.localCache.clear();
 
         CAP_FACTOR.setRelease(this, 1.0);
         TOTAL_COUNT.setOpaque(this, 0);
@@ -268,13 +273,13 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
 
         CacheTerminal(ControlPlaneCache cpc) {
             this.cpc = cpc;
-            this.partitions = cpc == null ? 0 : cpc.cache.partitions();
+            this.partitions = cpc == null ? 0 : cpc.localCache.partitions();
         }
 
         @Override
         public void push(AbstractFrame frame) {
             int idx = RoutingFunction.DEFAULT.route(frame, this.partitions);
-            while (!this.cpc.cache.offer(idx, frame)) {
+            while (!this.cpc.localCache.offer(idx, frame)) {
                 Thread.onSpinWait();
             }
 
@@ -286,7 +291,7 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
             this.framesAdded++;
 
             int idx = RoutingFunction.DEFAULT.route(frame, this.partitions);
-            while (!this.cpc.cache.offer(idx, frame)) {
+            while (!this.cpc.localCache.offer(idx, frame)) {
                 Thread.onSpinWait();
             }
         }

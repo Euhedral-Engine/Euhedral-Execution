@@ -18,9 +18,16 @@ import java.util.TreeSet;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.options.ChainedOptionsBuilder;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class BenchRunner {
+    private static final Logger LOGGER = LoggerFactory.getLogger(BenchRunner.class);
 
+    private static final Set<String> BENCHMARKS =
+            new TreeSet<>(
+                    Set.of("all", "core-high-scale", "core-latency", "core-hc-throughput", "core-lc-throughput",
+                            "batched-mandelbrot", "mandelbrot", "queues-spsc", "queues-mpsc", "queues-mpmc"));
     private static final List<String> FLAGS =
             List.of("-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED",
                     "--sun-misc-unsafe-memory-access=allow", "--add-exports",
@@ -29,36 +36,74 @@ public class BenchRunner {
                     "java.base/java.util=ALL-UNNAMED",
                     "-Dorg.slf4j.simpleLogger.defaultLogLevel=error");
 
-    public static void main(String[] args) throws Exception {
-        Set<String> benchmarks =
-                new TreeSet<>(
-                        Set.of("all", "core-high-scale", "core-latency", "core-hc-throughput", "core-lc-throughput",
-                                "batched-mandelbrot", "mandelbrot", "queues-spsc", "queues-mpsc", "queues-mpmc"));
-        if (args.length == 0) {
-            System.out.println("Please specify a benchmark to run. Options: " + benchmarks);
-            return;
-        }
-
+    private static Set<String> getBenchmarks(String[] args) {
         Set<String> tasks = new LinkedHashSet<>();
         for (String a : args) {
             String name = a.trim().toLowerCase();
-            if (!benchmarks.contains(name)) {
-                System.out.println("Unknown benchmark: " + name);
-                System.out.println(
-                        "Please specify a valid benchmark to run. Options: " + benchmarks);
-                return;
+            if (!BENCHMARKS.contains(name)) {
+                LOGGER.error("Unknown benchmark: {}", name);
+                LOGGER.error("Please specify a valid benchmark to run. Options: {}", BENCHMARKS);
+                return Set.of();
             }
             if (name.equals("all")) {
-                System.out.println("Warning! Running all benchmarks. This could take a while...");
-                Thread.sleep(1000);
-                tasks = benchmarks;
-                break;
+                LOGGER.warn("Warning! Running all benchmarks. This could take a while...");
+                return BENCHMARKS;
             }
             tasks.add(name);
         }
+        return tasks;
+    }
 
+    private static void configureMandelbrot(List<String> flags) {
+        String degree = System.getProperty("degree", "2");
+        flags.add("-Ddegree=" + degree);
+
+        String dir = System.getProperty("outputDir");
+        String fileName = System.getProperty("outputFile");
+
+        boolean dirEmpty = dir == null || dir.isBlank();
+        boolean fileEmpty = fileName == null || fileName.isBlank();
+
+        if (!dirEmpty) {
+            if (fileEmpty) {
+                fileName = String.format("mandelbrot-D%s.png", degree);
+            } else if (!fileName.endsWith(".png")) {
+                fileName += ".png";
+            }
+            flags.add("-DoutputDir=" + dir);
+            flags.add("-DoutputFile=" + fileName);
+        } else if (!fileEmpty) {
+            if (!fileName.endsWith(".png")) {
+                fileName += ".png";
+            }
+            flags.add("-DoutputFile=" + fileName);
+        }
+    }
+
+    private static void addProfilers(ChainedOptionsBuilder opt) {
         boolean gc = "true".equalsIgnoreCase(System.getProperty("gc", "false").trim());
         boolean perf = "true".equalsIgnoreCase(System.getProperty("perf", "false").trim());
+        if (gc) {
+            opt.addProfiler("gc");
+        }
+        if (perf) {
+            opt.addProfiler("perf",
+                    "events=cycles,instructions,cache-misses,L1-dcache-loads,L1-dcache-load-misses,L1-icache-loads,L1-icache-load-misses,dTLB-loads,dTLB-load-misses,branch-loads,branch-misses");
+        }
+    }
+
+    public static void main(String[] args) throws Exception {
+
+        if (args.length == 0) {
+            LOGGER.error("Please specify a benchmark to run. Options: {}", BENCHMARKS);
+            return;
+        }
+
+        Set<String> tasks = getBenchmarks(args);
+        if(tasks.isEmpty()) {
+            return;
+        }
+
         List<String> flags = new ArrayList<>(FLAGS);
         StringJoiner tests = new StringJoiner("|");
         for (String task : tasks) {
@@ -74,26 +119,7 @@ public class BenchRunner {
                 }
                 case "mandelbrot" -> {
                     benchmark = MandelbrotBenchmark.class;
-                    String degree = System.getProperty("degree", "2");
-                    flags.add("-Ddegree=" + degree);
-
-                    String dir = System.getProperty("outputDir");
-                    String fileName = System.getProperty("outputFile");
-                    if (dir != null && !dir.isBlank()) {
-                        if (fileName == null || fileName.isBlank()) {
-                            continue;
-                        } else if (fileName.endsWith(".png")) {
-                            fileName += ".png";
-                        }
-                        flags.add("-DoutputDir=" + dir);
-                        flags.add("-DoutputFile=" + fileName);
-                    } else if (fileName != null && !fileName.isBlank()) {
-
-                        if (!fileName.endsWith(".png")) {
-                            fileName += ".png";
-                        }
-                        flags.add("-DoutputFile=" + fileName);
-                    }
+                    configureMandelbrot(flags);
                 }
                 case "core-high-scale" -> {
                     benchmark = HighScaleBenchmark.class;
@@ -113,14 +139,7 @@ public class BenchRunner {
         }
         ChainedOptionsBuilder opt = new OptionsBuilder().include(tests.toString())
                 .jvmArgsAppend(flags.toArray(new String[0]));
-        if (gc) {
-            opt.addProfiler("gc");
-        }
-        if (perf) {
-            opt.addProfiler("perf",
-                    "events=cycles,instructions,cache-misses,L1-dcache-loads,L1-dcache-load-misses,L1-icache-loads,L1-icache-load-misses,dTLB-loads,dTLB-load-misses,branch-loads,branch-misses");
-
-        }
+        addProfilers(opt);
         new Runner(opt.build()).run();
     }
 }
