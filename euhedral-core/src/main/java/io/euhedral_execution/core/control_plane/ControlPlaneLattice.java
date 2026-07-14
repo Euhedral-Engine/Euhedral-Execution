@@ -178,6 +178,11 @@ public final class ControlPlaneLattice implements LatticeTerminal {
         }
     }
 
+    private boolean ready() {
+        int count = this.ingestController.getOpaque().getThreadCount();
+        return count >= getActiveWorkers();
+    }
+
     /// Takes an [AbstractIngestSink] and adds it as a global input source.
     public void addUpstream(@NonNull AbstractIngestSink sink) {
         addUpstream(sink.getDelegate());
@@ -402,16 +407,6 @@ public final class ControlPlaneLattice implements LatticeTerminal {
                         .cardinality();
 
         return ((double) socketEffectiveCpus / Math.max(1, totalEffectiveCpus)) * systemQuotaPool;
-    }
-
-    private boolean ready() {
-        while (true) {
-            int count = this.ingestController.getOpaque().getThreadCount();
-            if (count >= getActiveWorkers()) {
-                return true;
-            }
-            LockSupport.parkNanos(5_000);
-        }
     }
 
     public int getActiveWorkers() {

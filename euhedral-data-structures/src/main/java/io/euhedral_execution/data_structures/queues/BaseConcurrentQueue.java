@@ -429,7 +429,7 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue<T> 
             long epoch = getTailEpochAcquire(this);
             Object[] queue = getTailQueuePlain(this);
 
-            long claim = Math.min(size, epoch - tail);
+            long claim = epoch == 0 ? size : Math.min(size, epoch - tail);
 
             ClaimStatus status = mpClaim(tail, epoch, claim);
 
@@ -492,7 +492,7 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue<T> 
             long epoch = getTailEpochAcquire(this);
             Object[] queue = getTailQueuePlain(this);
 
-            long claim = Math.min(size, epoch - tail);
+            long claim = epoch == 0 ? size : Math.min(size, epoch - tail);
             ClaimStatus status = mpClaim(tail, epoch, claim);
 
             // Fast Path

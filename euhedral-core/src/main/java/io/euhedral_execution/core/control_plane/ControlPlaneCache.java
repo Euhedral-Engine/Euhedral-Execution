@@ -21,6 +21,7 @@ import io.euhedral_execution.hardware_utils.SystemInfo.CpuCacheLayout;
 import io.euhedral_execution.hardware_utils.common.SystemUtilization.CoreSnapshot;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
+import java.text.NumberFormat;
 import java.util.BitSet;
 import java.util.function.Consumer;
 import lombok.AccessLevel;
@@ -132,7 +133,8 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
             setDrain(false);
 
             this.logger.debug("Partitions: {} PartitionChunkSize: {} CacheCapacity: {}", partitions,
-                    this.chunkSize, partitions * this.chunkSize);
+                    NumberFormat.getNumberInstance().format(this.chunkSize),
+                    NumberFormat.getNumberInstance().format((long) partitions * this.chunkSize));
         }
     }
 

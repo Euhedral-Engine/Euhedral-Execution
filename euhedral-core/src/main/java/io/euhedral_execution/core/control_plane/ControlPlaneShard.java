@@ -17,6 +17,7 @@ import io.euhedral_execution.hardware_utils.common.SystemUtilization.CoreSnapsho
 import io.euhedral_execution.hardware_utils.common.SystemUtilization.SocketSnapshot;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
+import java.text.NumberFormat;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.BitSet;
@@ -107,7 +108,9 @@ public class ControlPlaneShard {
         long chunkSize = capacity == 0 ? 0 : QueueUtils.roundChunkSize(capacity);
 
         logger.debug("L3 Cache: Partitions: {} PartitionChunkSize: {} Capacity: {}", cores,
-                chunkSize / Math.max(cores, 1), cores * chunkSize);
+                NumberFormat.getNumberInstance().format(chunkSize / Math.max(cores, 1)),
+                NumberFormat.getNumberInstance().format(cores * chunkSize));
+
         LatticeVertex coreDistributor = new LatticeVertex(this.shardName + "-CoreDistributor",
                 SystemInfo.getMaxCoreId() + 1, this::route, (int) capacity,
                 RoutingPolicy.SOCKET_LOCAL);
