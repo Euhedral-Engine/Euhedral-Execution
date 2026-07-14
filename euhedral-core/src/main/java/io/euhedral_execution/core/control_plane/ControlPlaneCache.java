@@ -61,11 +61,11 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
         }
 
         CpuCacheLayout layout = SystemInfo.getCacheLayout(cloneConfig.getCpuSet()[0]);
-        long L2 = layout.bytesL2();
+        long l2 = layout.bytesL2();
         if (layout.sharesL2() > 2) {
-            L2 /= layout.sharesL2();
+            l2 /= layout.sharesL2();
         }
-        long L1 = layout.bytesL1();
+        long l1 = layout.bytesL1();
 
         double budget = config.memoryBudget();
         budget = clampDouble(budget, 0, 1.0);
@@ -74,7 +74,7 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
                     "Memory budget must be greater than 0 and less than 1. Provided: " + config.memoryBudget());
         }
 
-        long totalMemory = L2 + L1;
+        long totalMemory = l2 + l1;
         totalMemory = totalMemory < 0 ? Long.MAX_VALUE : totalMemory;
 
         int chunk = (int) Math.min(totalMemory / partitions, Integer.MAX_VALUE);
@@ -102,7 +102,7 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
     double capFactor = 1.0;
     long totalCount = 0L;
 
-    public ControlPlaneCache(@NonNull CacheConfig cacheConfig) {
+    protected ControlPlaneCache(@NonNull CacheConfig cacheConfig) {
         super(getName(cacheConfig), 1, (frame, mapSize) -> 0, 0, RoutingPolicy.CACHE_LOCAL);
         this.cacheConfig = cacheConfig;
 
@@ -137,9 +137,10 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
             super.setDownstreamMapping(mappings, terminal);
             setDrain(false);
 
+            String chunkSize = NumberFormat.getNumberInstance().format(this.chunkSize);
+            String cacheCapacity = NumberFormat.getNumberInstance().format((long) partitions * this.chunkSize);
             this.logger.debug("Partitions: {} PartitionChunkSize: {} CacheCapacity: {}", partitions,
-                    NumberFormat.getNumberInstance().format(this.chunkSize),
-                    NumberFormat.getNumberInstance().format((long) partitions * this.chunkSize));
+                    chunkSize, cacheCapacity);
         }
     }
 
@@ -302,17 +303,17 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
 
         @Override
         public void addUpstream(LatticeSource subscription) {
-
+            // This terminal receives no upstreams.
         }
 
         @Override
         public void onError(Throwable throwable) {
-
+            // This terminal does not handle errors.
         }
 
         @Override
         public void onComplete() {
-
+            // This terminal does not complete.
         }
     }
 }

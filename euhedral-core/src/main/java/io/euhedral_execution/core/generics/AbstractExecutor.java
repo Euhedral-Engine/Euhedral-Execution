@@ -19,7 +19,7 @@ public abstract class AbstractExecutor implements CloneableObject {
 
     protected final int cpu;
 
-    public AbstractExecutor(int cpu) {
+    protected AbstractExecutor(int cpu) {
         this.cpu = cpu;
     }
 
@@ -29,23 +29,6 @@ public abstract class AbstractExecutor implements CloneableObject {
     }
 
     public abstract void execute(AbstractFrame frame);
-
-    private void executeInternal(AbstractFrame frame) {
-        try {
-            if (!frame.isAlive()) {
-                frame.throwCancelSignal();
-            }
-            execute(frame);
-        } catch (Throwable t) {
-            if (!(t instanceof AbstractFrame.CancelSignal)) {
-                logger.error("Uncaught exception while executing frame. {}", frame, t);
-                frame.doFinallyWithError(t);
-                return;
-            }
-        }
-
-        frame.doFinally();
-    }
 
     @Override
     public AbstractExecutor clone(CloneConfig cloneConfig, PinnedThreadExecutor executor) {
@@ -61,10 +44,6 @@ public abstract class AbstractExecutor implements CloneableObject {
 
     private class ExecutionTerminal implements LatticeReceiver {
 
-        public ExecutionTerminal() {
-
-        }
-
         @Override
         public void addUpstream(LatticeSource stream) {
             stream.request(Long.MAX_VALUE);
@@ -73,20 +52,41 @@ public abstract class AbstractExecutor implements CloneableObject {
         @Override
         public void push(AbstractFrame frame) {
             try {
-                executeInternal(frame);
-            } catch (Throwable t) {
-                logger.error("Uncaught exception while running doFinally() on frame. {}", frame, t);
+                execute(frame);
+            } catch (Exception e) {
+                logger.error("Uncaught exception while running doFinally() on frame. {}", frame, e);
+            }
+        }
+
+        private void execute(AbstractFrame frame) {
+            try {
+                if (!frame.isAlive()) {
+                    frame.throwCancelSignal();
+                }
+                AbstractExecutor.this.execute(frame);
+            } catch (Exception e) {
+                if (!(e instanceof AbstractFrame.CancelSignal)) {
+                    logger.error("Uncaught exception while executing frame. {}", frame, e);
+                    frame.doFinallyWithError(e);
+                    return;
+                }
+            }
+
+            try {
+                frame.doFinally();
+            } catch (Exception e) {
+                logger.error("Uncaught exception while running doFinally. {}", frame);
             }
         }
 
         @Override
         public void onError(Throwable throwable) {
-
+            // ControlPlaneFragment should never signal an error
         }
 
         @Override
         public void onComplete() {
-
+            // ControlPlaneFragment should never signal complete
         }
     }
 }

@@ -27,15 +27,15 @@ public final class ConsumerIngestSink<T> extends AbstractIngestSink {
         try {
             COMPLETE = MethodHandles.lookup()
                     .findVarHandle(ConsumerIngestSink.class, "complete", boolean.class);
-        } catch (Throwable t) {
-            throw new ExceptionInInitializerError(t);
+        } catch (Exception e) {
+            throw new ExceptionInInitializerError(e);
         }
     }
 
     private final FrameManager<T, ConsumerFrame<T>> frameManager;
     private final QueueIngestSink sink;
 
-    private final long password = ThreadLocalRandom.current().nextLong();
+    private final long password = HasherApi.mix(ThreadLocalRandom.current().nextLong());
     private final AtomicBoolean killSwitch = new AtomicBoolean(false);
 
     boolean complete;

@@ -55,19 +55,14 @@ public final class ControlPlaneFragment extends WorkRequester {
     public final int core;
     public final int cpu;
     public final boolean isPCore;
-
+    final LatticeHotSource outputStream;
     private final Logger logger;
     private final ExecutionMetrics metrics;
-
     @Getter
     private final FragmentConfig config;
-
     private final AtomicBoolean running = new AtomicBoolean(false);
-
     private final PinnedThreadExecutor mainExecutor;
     private final CycleState state;
-
-    final LatticeHotSource outputStream;
     boolean drainMode = false;
     CoreSnapshot coreSnapshot = null;
 
@@ -88,7 +83,8 @@ public final class ControlPlaneFragment extends WorkRequester {
             this.metrics = null;
             this.outputStream = null;
         } else {
-            String name = config.cloneConfig().shardName() + "-Worker-" + config.cloneConfig().coreId();
+            String name =
+                    config.cloneConfig().shardName() + "-Worker-" + config.cloneConfig().coreId();
             this.logger = LoggerFactory.getLogger(name);
 
             int[] cpus = config.cloneConfig().getCpuSet();
@@ -149,7 +145,8 @@ public final class ControlPlaneFragment extends WorkRequester {
                             "Attempted to pin to Core: {} CPU: {} but was assigned: {}",
                             this.core, this.cpu, origin);
                 } else {
-                    this.logger.debug("Pinned to Core {} CPU {} P-Core: {}", this.core, this.cpu, this.isPCore);
+                    this.logger.debug("Pinned to Core {} CPU {} P-Core: {}", this.core, this.cpu,
+                            this.isPCore);
                 }
                 ThreadTools.setTimerResolution(1);
                 super.register();
@@ -200,7 +197,7 @@ public final class ControlPlaneFragment extends WorkRequester {
                     breakoutSpin(this.cpu, throughput);
                 }
             }
-        } catch (Throwable e) {
+        } catch (Exception e) {
             this.logger.error("[CRITICAL] Terminal error encountered in the main loop. Exiting.",
                     e);
         } finally {
@@ -338,7 +335,7 @@ public final class ControlPlaneFragment extends WorkRequester {
     private void breakoutSpin(int cpu, double throughput) {
         GlobalState.setThroughput(this.socket, cpu, throughput);
 
-        if(this.isPCore) {
+        if (this.isPCore) {
             Thread.yield();
             return;
         }

@@ -12,9 +12,9 @@ import io.euhedral_execution.core.utils.MathFunctions;
 import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
 import io.euhedral_execution.hashing.HasherApi;
 import io.euhedral_execution.reactor.common.EuhedralSubscriber;
-import java.io.IOException;
 import java.lang.invoke.VarHandle;
 import java.util.concurrent.TimeUnit;
+import org.jspecify.annotations.NonNull;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -29,13 +29,17 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
 import org.openjdk.jmh.infra.Blackhole;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import reactor.core.publisher.BaseSubscriber;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
+@SuppressWarnings("unchecked")
 @BenchmarkMode({Mode.AverageTime})
 public class BatchedMandelbrotBenchmark {
+    private static final Logger LOGGER = LoggerFactory.getLogger(BatchedMandelbrotBenchmark.class);
 
     // 8K Resolution 2X SSAA (7680 * 4320 * 4 = 132,710,400 distinct tasks)
     public static final int WIDTH = 7680;
@@ -52,7 +56,7 @@ public class BatchedMandelbrotBenchmark {
     private static void shuffle(MandelbrotPixel[] pixels) {
         long seed = SEED;
         for (int i = CANVAS - 1; i > 0; i--) {
-            int j = (int) MathFunctions.unsignedMultiplyHigh(HasherApi.mix(seed++), i + 1);
+            int j = (int) MathFunctions.unsignedMultiplyHigh(HasherApi.mix(seed++), i + 1L);
             MandelbrotPixel temp = pixels[i];
             temp.randomizeHash(seed);
             pixels[j].randomizeHash(seed++);
@@ -76,7 +80,7 @@ public class BatchedMandelbrotBenchmark {
                     break;
                 }
                 if (now - log >= TimeUnit.SECONDS.toNanos(3)) {
-                    System.out.println("Progress: " + sum);
+                    LOGGER.info("Progress: {}", sum);
                     log = now;
                 }
             }
@@ -91,6 +95,10 @@ public class BatchedMandelbrotBenchmark {
         }
     }
 
+    private BatchedMandelbrotBenchmark() {
+
+    }
+
     @BenchmarkMode({Mode.AverageTime})
     @OutputTimeUnit(TimeUnit.NANOSECONDS)
     @State(Scope.Benchmark)
@@ -103,16 +111,15 @@ public class BatchedMandelbrotBenchmark {
         private final int[] escapes = new int[CANVAS * 4];
         private final PaddedLongAdder counters =
                 new PaddedLongAdder(Runtime.getRuntime().availableProcessors(), false, true);
-        private BenchArrayFrame[] frames;
         private Mono<BenchArrayFrame>[] monos;
         private BaseSubscriber<BenchArrayFrame> subscriber;
 
         private void makeSub(Blackhole blackhole) {
             this.subscriber = new BaseSubscriber<>() {
                 @Override
-                protected void hookOnNext(BenchArrayFrame frame) {
+                protected void hookOnNext(@NonNull BenchArrayFrame frame) {
                     frame.execute();
-                    frame.cpu = counters.fromRawIdx(Thread.currentThread().getId());
+                    frame.cpu = counters.fromRawIdx(Thread.currentThread().threadId());
                     frame.doFinally();
                     blackhole.consume(frame);
                 }
@@ -136,7 +143,7 @@ public class BatchedMandelbrotBenchmark {
 
             MandelbrotPixel[][] pixelArray = new MandelbrotPixel[CANVAS / BATCH + (
                     CANVAS % BATCH > 0 ? 1 : 0)][];
-            this.frames = new BenchArrayFrame[pixelArray.length];
+            BenchArrayFrame[] frames = new BenchArrayFrame[pixelArray.length];
             this.monos = new Mono[pixelArray.length];
 
             int idx = 0;
@@ -144,8 +151,8 @@ public class BatchedMandelbrotBenchmark {
             while (total > 0) {
                 AbstractFrame[] set = new AbstractFrame[Math.min(BATCH, total)];
                 System.arraycopy(pixels, idx * BATCH, set, 0, set.length);
-                this.frames[idx] = new BenchArrayFrame(pixels[0].getIdHash(), set, this.counters);
-                this.monos[idx] = Mono.just(this.frames[idx]);
+                frames[idx] = new BenchArrayFrame(pixels[0].getIdHash(), set, this.counters);
+                this.monos[idx] = Mono.just(frames[idx]);
                 total -= Math.min(BATCH, total);
                 idx++;
             }
@@ -238,7 +245,7 @@ public class BatchedMandelbrotBenchmark {
                 idx++;
             }
             makeSub();
-            System.out.println("Total pixels: " + pixels.length);
+            LOGGER.info("Total pixels: {}", pixels.length);
 
             FractalExecutor executor = new FractalExecutor(blackhole);
             BaseCloneableObject base = new BaseCloneableObject(executor);
@@ -271,7 +278,7 @@ public class BatchedMandelbrotBenchmark {
         }
 
         @TearDown(Level.Trial)
-        public void teardown() throws IOException {
+        public void teardown() {
             controlPlane.close();
         }
     }

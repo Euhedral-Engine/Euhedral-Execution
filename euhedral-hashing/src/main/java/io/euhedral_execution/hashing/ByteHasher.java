@@ -34,15 +34,15 @@ public final class ByteHasher extends AbstractHasher {
 
         int i = (len >= 32) ? (len / 32) * 32 : 0;
         while (i <= len - 8) {
-            h64 = tail_1(h64, readLong(data, i));
+            h64 = tail1(h64, readLong(data, i));
             i += 8;
         }
         if (i <= len - 4) {
-            h64 = tail_2(h64, readInt(data, i));
+            h64 = tail2(h64, readInt(data, i));
             i += 4;
         }
         while (i < len) {
-            h64 = tail_3(h64, data[i++]);
+            h64 = tail3(h64, data[i++]);
         }
 
         return mix(h64);
@@ -68,5 +68,9 @@ public final class ByteHasher extends AbstractHasher {
 
     public static long getHash(byte[] data1, byte[] data2) {
         return getHash(data2, getHash(data1, BASE_SEED));
+    }
+
+    private ByteHasher() {
+
     }
 }

@@ -41,13 +41,17 @@ import org.slf4j.LoggerFactory;
 @SuppressWarnings("unused")
 public class ControlPlaneShard {
 
-    protected static final VarHandle HANDLE = MethodHandles.arrayElementVarHandle(LatticeEdge[].class);
+    protected static final VarHandle HANDLE = MethodHandles.arrayElementVarHandle(
+            LatticeEdge[].class);
 
     public static ControlPlaneShard createBaseShard(@NonNull CloneableObject cloneableObject) {
         Objects.requireNonNull(cloneableObject);
-        return new ControlPlaneShard(-1, ControlPlaneShard.class.getSimpleName(), cloneableObject, Duration.ZERO);
+        return new ControlPlaneShard(-1, ControlPlaneShard.class.getSimpleName(), cloneableObject,
+                Duration.ZERO);
     }
-    public static ControlPlaneShard createBaseShard(String name, @NonNull CloneableObject cloneableObject) {
+
+    public static ControlPlaneShard createBaseShard(String name,
+            @NonNull CloneableObject cloneableObject) {
         Objects.requireNonNull(cloneableObject);
         return new ControlPlaneShard(-1, name, cloneableObject, Duration.ZERO);
     }
@@ -97,7 +101,7 @@ public class ControlPlaneShard {
         }
         this.logger.info("Starting.");
         this.shardExecutor = Executors.newFixedThreadPool(topology.effectiveCores().length(),
-                (r) -> new Thread(r, this.shardName + "-ExecutorService"));
+                r -> new Thread(r, this.shardName + "-ExecutorService"));
 
         SocketInfo info = SystemInfo.getSocketInfo(snapshot.socketId());
         long sizeL3 = SystemInfo.socketL3Cache(snapshot.socketId());
@@ -107,9 +111,10 @@ public class ControlPlaneShard {
 
         long chunkSize = capacity == 0 ? 0 : QueueUtils.roundChunkSize(capacity);
 
+        String partChunk = NumberFormat.getNumberInstance().format(chunkSize / Math.max(cores, 1));
+        String strCap = NumberFormat.getNumberInstance().format(cores * chunkSize);
         logger.debug("L3 Cache: Partitions: {} PartitionChunkSize: {} Capacity: {}", cores,
-                NumberFormat.getNumberInstance().format(chunkSize / Math.max(cores, 1)),
-                NumberFormat.getNumberInstance().format(cores * chunkSize));
+                partChunk, strCap);
 
         LatticeVertex coreDistributor = new LatticeVertex(this.shardName + "-CoreDistributor",
                 SystemInfo.getMaxCoreId() + 1, this::route, (int) capacity,
@@ -181,24 +186,46 @@ public class ControlPlaneShard {
         distributor.setDrain(true);
 
         BitSet newCores = topology.effectiveCores();
-        int[] nextCores = new int[newCores.cardinality()];
+        createHandles(newCores, distributor);
+        distributor.setDownstreamMapping(newCores, this.coreHandles);
 
-        CloneableObject[] clones = this.clones.getOpaque();
-        CloneableObject[] nextClones = new CloneableObject[topology.effectiveCores().length()];
+        CloneableObject[] oldClones = this.clones.getPlain();
+        createNextClones(snapshot, topology);
 
+        if (!this.primed.getOpaque()) {
+            for (var clone : this.clones.getPlain()) {
+                if (clone != null) {
+                    clone.setDrainMode(false);
+                }
+            }
+            this.coreDistributor.get().setDrain(false);
+            this.primed.set(true);
+            this.rebalancing.set(false);
+            logger.info("Priming Complete");
+        } else {
+            drainAndPruneClones(oldClones, snapshot);
+        }
+    }
+
+    protected void createHandles(BitSet newCores, LatticeVertex distributor) {
         for (int i = newCores.nextSetBit(0); i >= 0; i = newCores.nextSetBit(i + 1)) {
             LatticeEdge handle = this.coreHandles[i];
-            if(handle == null) {
+            if (handle == null) {
                 handle = new LatticeEdge(distributor.getDrainFlag());
                 this.coreHandles[i] = handle;
                 HANDLE.setRelease(this.coreHandles, i, handle);
             }
         }
+    }
 
-        distributor.setDownstreamMapping(newCores, this.coreHandles);
+    protected void createNextClones(SocketSnapshot snapshot,
+            EffectiveSocketTopology topology) {
+        CloneableObject[] clones = this.clones.getOpaque();
+        BitSet newCores = topology.effectiveCores();
 
         int idx = 0;
-        // Create new clones
+        int[] nextCores = new int[newCores.cardinality()];
+        CloneableObject[] nextClones = new CloneableObject[topology.effectiveCores().length()];
         for (int i = newCores.nextSetBit(0); i >= 0; i = newCores.nextSetBit(i + 1)) {
             if (i >= clones.length || clones[i] == null) {
                 nextClones[i] = spawnClone(i, snapshot.coreSnapshots()[i], nextClones);
@@ -211,27 +238,11 @@ public class ControlPlaneShard {
             }
             nextCores[idx++] = i;
         }
-
-        if (!this.primed.getOpaque()) {
-            this.clones.setRelease(nextClones);
-            this.activeCoreIds.setRelease(nextCores);
-            for (var clone : nextClones) {
-                if (clone != null) {
-                    clone.setDrainMode(false);
-                }
-            }
-            this.coreDistributor.get().setDrain(false);
-            this.primed.set(true);
-            this.rebalancing.set(false);
-            logger.info("Priming Complete");
-        } else {
-            drainAndPruneClones(newCores, snapshot, nextClones);
-            this.clones.setRelease(nextClones);
-            this.activeCoreIds.setRelease(nextCores);
-        }
+        this.clones.setRelease(nextClones);
+        this.activeCoreIds.setRelease(nextCores);
     }
 
-    private void updateClone(CloneableObject clone, CoreSnapshot snapshot) {
+    protected void updateClone(CloneableObject clone, CoreSnapshot snapshot) {
         if (snapshot == null) {
             return;
         }
@@ -244,7 +255,7 @@ public class ControlPlaneShard {
     }
 
     /// Creates a clone on the core, links it to the core distributor, starts it, and updates it.
-    private CloneableObject spawnClone(int coreId, CoreSnapshot snapshot,
+    protected CloneableObject spawnClone(int coreId, CoreSnapshot snapshot,
             CloneableObject[] nextClones) {
         CloneConfig config = new CloneConfig(this.shardName, coreId, snapshot.effectiveCpus());
 
@@ -261,24 +272,20 @@ public class ControlPlaneShard {
     }
 
     /// Drains all active clones and removes clones that are not in the next active set.
-    private void drainAndPruneClones(BitSet active, SocketSnapshot snapshot,
-            CloneableObject[] nextClones) {
+    protected void drainAndPruneClones(CloneableObject[] oldClones, SocketSnapshot snapshot) {
         this.logger.info("Draining and pruning clones.");
 
         CloneableObject[] currClones = this.clones.getOpaque();
+
         Set<Integer> deadClones = new HashSet<>();
-        SpscArrayQueue<CloneableObject> clones = new SpscArrayQueue<>(
-                currClones.length);
-        for (int i = 0; i < currClones.length; i++) {
-            CloneableObject clone = currClones[i];
-            if (clone != null) {
-                if (!active.get(i)) {
-                    currClones[i] = null;
-                    this.coreHandles[i] = null;
-                    deadClones.add(i);
-                }
-                clone.setDrainMode(true);
+        SpscArrayQueue<CloneableObject> clones = new SpscArrayQueue<>(currClones.length);
+        for (int i = 0; i < oldClones.length; i++) {
+            CloneableObject clone = oldClones[i];
+            if (clone != null && (i >= currClones.length || currClones[i] == null)) {
                 this.coresToDrain.incrementAndGet();
+                this.coreHandles[i] = null;
+                clone.setDrainMode(true);
+                deadClones.add(i);
                 clones.relaxedOffer(clone);
             }
         }
@@ -313,7 +320,7 @@ public class ControlPlaneShard {
                 if (!deadClones.contains(clone.getCore())) {
                     int core = clone.getCore();
                     this.logger.info("Restarting clone on core {}", core);
-                    spawnClone(core, snapshot.coreSnapshots()[core], nextClones);
+                    spawnClone(core, snapshot.coreSnapshots()[core], currClones);
                 }
             } else if (deadClones.contains(clone.getCore())) {
                 int core = clone.getCore();
@@ -446,11 +453,12 @@ public class ControlPlaneShard {
 
     /// Creates a shallow copy of the shard.
     public ControlPlaneShard clone(int socketId, String rootName, Duration shutdownTimeout) {
-        return new ControlPlaneShard(socketId, rootName + "-" + this.shardName + "-" + socketId, this.cloneableObject, shutdownTimeout);
+        return new ControlPlaneShard(socketId, rootName + "-" + this.shardName + "-" + socketId,
+                this.cloneableObject, shutdownTimeout);
     }
 
     /// Forcefully shuts down all cores.
-    public void close() throws Exception {
+    public void close() {
         this.started.set(false);
         this.logger.info("Closing.");
         this.coreDistributor.getAndUpdate(distributor -> {
@@ -477,7 +485,6 @@ public class ControlPlaneShard {
                 clones[i] = null;
             }
         }
-
 
         if (this.shardExecutor != null) {
             this.shardExecutor.shutdownNow();
