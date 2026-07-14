@@ -14,7 +14,7 @@ public sealed class PaddedAtomicLongArray permits PaddedLongAdder {
 
     private static final VarHandle HANDLE = MethodHandles.arrayElementVarHandle(long[].class);
 
-    private static final int PADDING = 7;
+    private static final int MAX_PADDING = 7;
 
     protected final int padding;
     protected final long[] array;
@@ -28,7 +28,7 @@ public sealed class PaddedAtomicLongArray permits PaddedLongAdder {
     }
 
     public PaddedAtomicLongArray(int length, boolean boundsCheck, boolean pad128) {
-        int padding = pad128 ? PADDING * 2 + 2 : PADDING + 1;
+        int padding = pad128 ? MAX_PADDING * 2 + 2 : MAX_PADDING + 1;
 
         long padded;
         do {
