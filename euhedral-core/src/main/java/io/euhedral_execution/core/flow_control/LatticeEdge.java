@@ -14,6 +14,7 @@ import io.euhedral_execution.hardware_utils.ThreadTools;
 import io.euhedral_execution.hashing.HasherApi;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
+import java.util.WeakHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -42,6 +43,9 @@ public class LatticeEdge extends UpstreamHandle {
 
     protected static final MpscQueue<UpstreamHandle>[] UPSTREAMS;
     protected static final PaddedAtomicLongArray ACTIVE_PARTITIONS;
+
+    protected static final WeakHashMap<UpstreamHandle, Boolean> HANDLES = new WeakHashMap<>(128);
+    protected static final PaddedAtomicLong HANDLE_LOCK = new PaddedAtomicLong();
 
 
     static {
@@ -95,6 +99,13 @@ public class LatticeEdge extends UpstreamHandle {
             getThreadUpstreamQueue();
             int core = SystemInfo.getCpuInfo(ThreadTools.getCpu()).core();
             ACTIVE_PARTITIONS.setRelease(core, 1);
+
+            SpinWait.await(() -> !HANDLE_LOCK.compareAndSet(0, 1));
+            try {
+                UPSTREAMS[core].fill(HANDLES.keySet());
+            } finally {
+                HANDLE_LOCK.set(0);
+            }
         }
     }
 
@@ -276,6 +287,13 @@ public class LatticeEdge extends UpstreamHandle {
             }
 
             SpinWait.await(this.drain::getOpaque);
+
+            SpinWait.await(() -> !HANDLE_LOCK.compareAndSet(0, 1));
+            try {
+                HANDLES.put(upstream, Boolean.TRUE);
+            } finally {
+                HANDLE_LOCK.set(0);
+            }
 
             for(int i = 0; i < UPSTREAMS.length; i++) {
                 MpscQueue<UpstreamHandle> queue = UPSTREAMS[i];
