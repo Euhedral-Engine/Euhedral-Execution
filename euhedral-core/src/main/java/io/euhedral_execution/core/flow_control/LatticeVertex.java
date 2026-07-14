@@ -219,6 +219,13 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
 
             SpinWait.await(super.drain::getOpaque);
 
+            SpinWait.await(() -> !HANDLE_LOCK.compareAndSet(0, 1));
+            try {
+                HANDLES.put(upstream, Boolean.TRUE);
+            } finally {
+                HANDLE_LOCK.set(0);
+            }
+
             for(int i = 0; i < UPSTREAMS.length; i++) {
                 MpscQueue<UpstreamHandle> queue = UPSTREAMS[i];
                 if(queue != null && ACTIVE_PARTITIONS.getAcquire(i) > 0) {
