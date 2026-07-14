@@ -36,6 +36,10 @@ public final class UnmodifiableBitSet extends BitSet {
         }
     }
 
+    public UnmodifiableBitSet(UnmodifiableBitSet other) {
+        this.delegate = other.delegate;
+    }
+
     @Override
     public byte[] toByteArray() {
         return delegate.toByteArray();
@@ -178,7 +182,7 @@ public final class UnmodifiableBitSet extends BitSet {
 
     @Override
     public Object clone() {
-        return delegate.clone();
+        return new UnmodifiableBitSet(this);
     }
 
     @Override

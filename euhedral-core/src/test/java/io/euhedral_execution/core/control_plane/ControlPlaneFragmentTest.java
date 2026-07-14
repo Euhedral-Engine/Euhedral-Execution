@@ -54,7 +54,7 @@ class ControlPlaneFragmentTest {
 
         assertNotNull(manager.output());
 
-        assertNotNull(manager.getCache());
+        assertNotNull(manager.getLocalCache());
         assertNotNull(manager.outputStream);
     }
 

@@ -34,10 +34,9 @@ import lombok.Getter;
 /// Work flows downward through the graph toward receivers, while demand and backpressure flow
 /// upward toward upstream sources. The structure is designed to continuously reconcile both
 /// directions under concurrent mutation.
-@SuppressWarnings({"unchecked","unused"})
+@SuppressWarnings({"unchecked", "unused"})
 public class LatticeEdge extends UpstreamHandle {
 
-    protected static final VarHandle CLOSED;
     protected static final VarHandle DOWNSTREAM;
     protected static final VarHandle PARENT;
 
@@ -47,6 +46,7 @@ public class LatticeEdge extends UpstreamHandle {
     protected static final WeakHashMap<UpstreamHandle, Boolean> HANDLES = new WeakHashMap<>(128);
     protected static final PaddedAtomicLong HANDLE_LOCK = new PaddedAtomicLong();
 
+    private static final VarHandle CLOSED;
 
     static {
         try {
@@ -59,9 +59,9 @@ public class LatticeEdge extends UpstreamHandle {
 
             UPSTREAMS = new MpscQueue[SystemInfo.getMaxCoreId() + 1];
             ACTIVE_PARTITIONS = new PaddedAtomicLongArray(UPSTREAMS.length);
-            for(int i = 0; i < UPSTREAMS.length; i++) {
+            for (int i = 0; i < UPSTREAMS.length; i++) {
                 CoreInfo info = SystemInfo.getCoreInfo(i);
-                if(info != null) {
+                if (info != null) {
                     UPSTREAMS[i] = new MpscQueue<>(256);
                 }
             }
@@ -294,9 +294,9 @@ public class LatticeEdge extends UpstreamHandle {
                 HANDLE_LOCK.set(0);
             }
 
-            for(int i = 0; i < UPSTREAMS.length; i++) {
+            for (int i = 0; i < UPSTREAMS.length; i++) {
                 MpscQueue<UpstreamHandle> queue = UPSTREAMS[i];
-                if(queue != null && ACTIVE_PARTITIONS.getAcquire(i) > 0) {
+                if (queue != null && ACTIVE_PARTITIONS.getAcquire(i) > 0) {
                     queue.offer(upstream);
                 }
             }

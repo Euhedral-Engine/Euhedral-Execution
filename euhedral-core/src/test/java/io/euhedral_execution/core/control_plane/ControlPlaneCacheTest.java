@@ -63,7 +63,7 @@ class ControlPlaneCacheTest {
     void shouldInitializeFields() {
         ControlPlaneCache manager = manager();
 
-        assertNotNull(manager.getCache());
+        assertNotNull(manager.getLocalCache());
     }
 
     // ----- First Touch -----

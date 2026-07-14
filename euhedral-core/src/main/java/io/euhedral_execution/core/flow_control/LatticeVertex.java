@@ -44,9 +44,12 @@ import org.slf4j.LoggerFactory;
 public class LatticeVertex extends LatticeEdge implements AutoCloseable {
 
     protected static final VarHandle ROUTING_STATE;
+    private static final VarHandle CLOSED;
 
     static {
         try {
+            CLOSED = MethodHandles.lookup()
+                    .findVarHandle(LatticeVertex.class, "closed", boolean.class);
             ROUTING_STATE = MethodHandles.lookup()
                     .findVarHandle(LatticeVertex.class, "routingState", RoutingState.class);
         } catch (Exception e) {
@@ -54,21 +57,17 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
         }
     }
 
-    protected final AtomicBoolean closed = new AtomicBoolean(false);
     protected final boolean hasCache;
-
-    protected final Logger logger;
-
     protected final LatticeEdge[] downstreams;
     protected final RoutingFunction routingFunction;
-
-    protected final BoundedMpmcQueue<AbstractFrame>[] cache;
+    protected final BoundedMpmcQueue<AbstractFrame>[] remoteCache;
     protected final int cachePool;
     protected final RoutingPolicy cachePolicy;
+    private final Logger logger;
     private final PaddedLongAdder cacheCount;
     private final ThreadLocal<CacheHead> cacheHead = new ThreadLocal<>();
-
     protected RoutingState routingState = new RoutingState(new int[0]);
+    private boolean closed = false;
 
     public LatticeVertex(String name, int downstreamCount) {
         this(name, downstreamCount, RoutingFunction.DEFAULT, 0, RoutingPolicy.ANYWHERE);
@@ -83,7 +82,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
 
         this.hasCache = cachePool > 0;
         this.cachePool = cachePool;
-        this.cache = this.hasCache ? new BoundedMpmcQueue[downstreamCount] : null;
+        this.remoteCache = this.hasCache ? new BoundedMpmcQueue[downstreamCount] : null;
         this.cacheCount = this.hasCache ? new PaddedLongAdder(downstreamCount, false, false) : null;
         this.cachePolicy = cachePolicy;
     }
@@ -96,9 +95,9 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
 
     @Override
     public void register() {
-        if(this.hasCache) {
+        if (this.hasCache) {
             CacheHead head = this.cacheHead.get();
-            if(head == null) {
+            if (head == null) {
                 int core = SystemInfo.getCpuInfo(ThreadTools.getCpu()).core();
                 this.cacheHead.set(new CacheHead(this.cacheCount.fromRawIdx(core)));
             }
@@ -109,7 +108,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
     @Override
     public long getUpstreamCacheCapacity() {
         long total = 0;
-        if(this.hasCache) {
+        if (this.hasCache) {
             total += this.cachePool;
         }
         total += super.getUpstreamCacheCount();
@@ -120,7 +119,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
     public long getUpstreamCacheCount() {
         long total = 0;
 
-        if(this.hasCache) {
+        if (this.hasCache) {
             total = this.cacheCount.sum();
         }
         total += super.getUpstreamCacheCount();
@@ -149,8 +148,9 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
                 handles[i].setParent(this);
                 this.downstreams[i] = handles[i];
 
-                if(this.hasCache) {
-                    this.cache[i] = new BoundedMpmcQueue<>(Math.max(4, this.cachePool / active.cardinality()));
+                if (this.hasCache) {
+                    this.remoteCache[i] = new BoundedMpmcQueue<>(
+                            Math.max(4, this.cachePool / active.cardinality()));
                 }
 
                 if (curr == null) {
@@ -162,9 +162,9 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
                     prev = curr;
                     curr = handles[i];
                 }
-            } else if(this.hasCache && this.cache[i] != null) {
-                this.cache[i].clear();
-                this.cache[i] = null;
+            } else if (this.hasCache && this.remoteCache[i] != null) {
+                this.remoteCache[i].clear();
+                this.remoteCache[i] = null;
             }
         }
 
@@ -184,11 +184,11 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
     }
 
     public boolean isDrained() {
-        if(!this.hasCache) {
+        if (!this.hasCache) {
             return true;
         }
-        for(var queue : this.cache) {
-            if(queue != null && !queue.isEmpty()) {
+        for (var queue : this.remoteCache) {
+            if (queue != null && !queue.isEmpty()) {
                 return false;
             }
         }
@@ -200,7 +200,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
     /// defaults to the logic in LatticeEdge.
     @Override
     public void addUpstream(LatticeInterceptor interceptor) {
-        if(this.closed.getAcquire()) {
+        if ((boolean) CLOSED.getOpaque(this)) {
             throw new RuntimeException("Cannot add upstream after closed.");
         }
 
@@ -229,9 +229,9 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
                 HANDLE_LOCK.set(0);
             }
 
-            for(int i = 0; i < UPSTREAMS.length; i++) {
+            for (int i = 0; i < UPSTREAMS.length; i++) {
                 MpscQueue<UpstreamHandle> queue = UPSTREAMS[i];
-                if(queue != null && ACTIVE_PARTITIONS.getAcquire(i) > 0) {
+                if (queue != null && ACTIVE_PARTITIONS.getAcquire(i) > 0) {
                     queue.offer(upstream);
                 }
             }
@@ -242,10 +242,10 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
     /// Picks a downstream link and sends work down.
     @Override
     public void push(AbstractFrame frame) {
-        if(this.closed.getOpaque()) {
+        if ((boolean) CLOSED.getOpaque(this)) {
             return;
         }
-        if(this.downstreams.length < 2) {
+        if (this.downstreams.length < 2) {
             this.downstreams[0].push(frame);
             return;
         }
@@ -259,12 +259,12 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
         if (this.hasCache && !frame.isOrdered()
                 && frame.getRoutingPolicy().level <= this.cachePolicy.level) {
             CacheHead head = this.cacheHead.get();
-            if (this.cache[idx].offer(frame)) {
+            if (this.remoteCache[idx].offer(frame)) {
                 FlowThread.FlowContext context = FlowThread.getContext();
-                if(context != null) {
+                if (context != null) {
                     context.satisfiedRequest++;
                 }
-                if(head != null) {
+                if (head != null) {
                     this.cacheCount.increment(head.counterIdx);
                 } else {
                     this.cacheCount.increment(this.cacheCount.fromRawIdx(frame.getRoutingHash()));
@@ -280,21 +280,22 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
     /// graph and does the same.
     @Override
     public long pull(Consumer<AbstractFrame> consumer, long demand) {
-        if (demand <= 0 || consumer == null || this.closed.getOpaque() || super.drain.getOpaque()) {
+        if (demand <= 0 || consumer == null || (boolean) CLOSED.getOpaque(this)
+                || super.drain.getOpaque()) {
             return 0;
         }
 
         long total = 0;
-        if (this.cache != null) {
+        if (this.remoteCache != null) {
             CacheHead head = this.cacheHead.get();
-            if(head != null) {
+            if (head != null) {
                 RoutingState state = (RoutingState) ROUTING_STATE.getOpaque(this);
                 long bucket = Math.max(1, demand / state.mappings.length);
 
                 int cycles = 0;
-                while(cycles < state.mappings.length && demand > 0) {
+                while (cycles < state.mappings.length && demand > 0) {
                     int idx = state.mappings[head.idx];
-                    long count = this.cache[idx].drain(consumer, Math.min(bucket, demand));
+                    long count = this.remoteCache[idx].drain(consumer, Math.min(bucket, demand));
                     total += count;
                     demand -= count;
                     cycles++;
@@ -325,7 +326,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
 
     @Override
     public void close() {
-        if(!this.closed.compareAndSet(false, true)) {
+        if (!CLOSED.compareAndSet(this, false, true)) {
             return;
         }
         super.close();
@@ -333,8 +334,8 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
             if (this.downstreams[i] != null) {
                 this.downstreams[i].close();
             }
-            if(this.hasCache && this.cache[i] != null) {
-                this.cache[i].clear();
+            if (this.hasCache && this.remoteCache[i] != null) {
+                this.remoteCache[i].clear();
             }
         }
     }
@@ -363,6 +364,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
     }
 
     private static final class CacheHead {
+
         final int counterIdx;
         int idx = 0;
 
@@ -379,11 +381,9 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
             long sum = num1 + num2;
             return sum < 0 ? Long.MAX_VALUE : sum;
         }
-
+        public final AtomicBoolean isComplete = new AtomicBoolean(false);
         @Getter
         private final long id = HasherApi.mix(ThreadLocalRandom.current().nextLong());
-
-        public final AtomicBoolean complete = new AtomicBoolean(false);
         private final PaddedAtomicLong wip = new PaddedAtomicLong(0);
         public LatticeSource upstream;
 
@@ -405,7 +405,8 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
 
         @Override
         public void request(long num) {
-            if (num <= 0 || LatticeVertex.this.closed.getOpaque() || LatticeVertex.this.drain.getOpaque() || this.complete.getOpaque()) {
+            if (num <= 0 || (boolean) CLOSED.getOpaque(LatticeVertex.this)
+                    || LatticeVertex.this.drain.getOpaque() || this.isComplete.getOpaque()) {
                 return;
             }
 
@@ -423,7 +424,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
 
         @Override
         public void onError(Throwable throwable) {
-            if (this.complete.compareAndSet(false, true)) {
+            if (this.isComplete.compareAndSet(false, true)) {
                 logger.error("UpstreamHandle Error", throwable);
                 removeUpstream(this);
             }
@@ -431,7 +432,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
 
         @Override
         public void onComplete() {
-            if (this.complete.compareAndSet(false, true)) {
+            if (this.isComplete.compareAndSet(false, true)) {
                 logger.trace("UpstreamHandle Complete");
                 removeUpstream(this);
             }
@@ -439,7 +440,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
 
         @Override
         public void complete() {
-            if (this.complete.compareAndSet(false, true)) {
+            if (this.isComplete.compareAndSet(false, true)) {
                 logger.trace("Closing UpstreamHandle");
                 this.upstream.complete();
                 removeUpstream(this);
@@ -448,7 +449,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
 
         @Override
         public boolean isComplete() {
-            return this.complete.getOpaque();
+            return this.isComplete.getOpaque();
         }
     }
 }
