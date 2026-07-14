@@ -35,7 +35,8 @@ public class UpstreamQueue {
     public static UpstreamQueue get(MpscQueue<UpstreamHandle>[] upstreams, PaddedAtomicLong upstreamCount, AtomicLong counter) {
         UpstreamQueue queue = UP_QUEUE.get();
         if (queue == null) {
-            queue = new UpstreamQueue(upstreams, upstreamCount);
+            int core = SystemInfo.getCpuInfo(ThreadTools.getCpu()).core();
+            queue = new UpstreamQueue(core, upstreams[core], upstreamCount);
             UP_QUEUE.set(queue);
             counter.incrementAndGet();
         }
@@ -51,17 +52,17 @@ public class UpstreamQueue {
         return 0;
     }
 
-    final long[] pullBucket = new long[]{0L, 0L};
-    private final MpscQueue<UpstreamHandle>[] upstreams;
+    public final int core;
+    private final MpscQueue<UpstreamHandle> upstreams;
     private final PaddedAtomicLong upstreamCount;
-    private final int core;
+
 
     long cachedUpCount = 0L;
 
-    public UpstreamQueue(MpscQueue<UpstreamHandle>[] upstreams, PaddedAtomicLong upstreamCount) {
+    public UpstreamQueue(int core, MpscQueue<UpstreamHandle> upstreams, PaddedAtomicLong upstreamCount) {
+        this.core = core;
         this.upstreams = upstreams;
         this.upstreamCount = upstreamCount;
-        this.core = SystemInfo.getCpuInfo(ThreadTools.getCpu()).core();
     }
 
     public long getCachedUpCount() {
@@ -95,7 +96,7 @@ public class UpstreamQueue {
         int cycles = 0;
         // Cycle through the queue and pull round-robin style.
         while (cycles < this.cachedUpCount && demand > 0) {
-            UpstreamHandle handle = this.upstreams[core].poll();
+            UpstreamHandle handle = this.upstreams.poll();
 
             if(handle == null) {
                 cycles++;
@@ -111,7 +112,7 @@ public class UpstreamQueue {
             totalPull += drain(handle, consumer, request);
             cycles = 0;
 
-            this.upstreams[core].offer(handle);
+            this.upstreams.offer(handle);
         }
         return totalPull;
     }

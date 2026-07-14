@@ -12,6 +12,8 @@ import io.euhedral_execution.data_structures.atomics.PaddedAtomicLong;
 import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
 import io.euhedral_execution.data_structures.queues.BoundedMpmcQueue;
 import io.euhedral_execution.data_structures.queues.MpscQueue;
+import io.euhedral_execution.hardware_utils.SystemInfo;
+import io.euhedral_execution.hardware_utils.ThreadTools;
 import io.euhedral_execution.hashing.HasherApi;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
@@ -93,14 +95,15 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
     }
 
     @Override
-    public void register(int id) {
+    public void register() {
         if(this.hasCache) {
             CacheHead head = this.cacheHead.get();
             if(head == null) {
-                this.cacheHead.set(new CacheHead(this.cacheCount.fromRawIdx(id)));
+                int core = SystemInfo.getCpuInfo(ThreadTools.getCpu()).core();
+                this.cacheHead.set(new CacheHead(this.cacheCount.fromRawIdx(core)));
             }
         }
-        super.register(id);
+        super.register();
     }
 
     @Override

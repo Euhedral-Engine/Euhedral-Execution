@@ -3,155 +3,164 @@ package io.euhedral_execution.core.flow_control;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
+import io.euhedral_execution.core.flow_control.UpstreamQueue.UpstreamHandle;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.generics.LatticeSource;
+import io.euhedral_execution.data_structures.atomics.PaddedAtomicLong;
+import io.euhedral_execution.data_structures.queues.MpscQueue;
+import io.euhedral_execution.hardware_utils.SystemInfo;
+import java.util.Arrays;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import lombok.Getter;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import test_utils.TestReceiver;
 
 class UpstreamQueueTest {
 
     private UpstreamQueue queue;
+    private PaddedAtomicLong count = new PaddedAtomicLong();
+    private MpscQueue<UpstreamHandle> handles = new MpscQueue<>(64);
 
-//    @BeforeEach
-//    void setup() {
-//        UpstreamQueue.UP_QUEUE.remove();
-//
-//        queue = new UpstreamQueue();
-//    }
+    @BeforeEach
+    void setup() {
+        UpstreamQueue.UP_QUEUE.remove();
+
+        queue = new UpstreamQueue(0, handles, count);
+    }
 
     @AfterEach
     void cleanup() {
         UpstreamQueue.UP_QUEUE.remove();
     }
 
-//    @Test
-//    void shouldCreateThreadLocalQueue() {
-//        NonBlockingHashMapLong<UpstreamQueue> map =
-//                new NonBlockingHashMapLong<>();
-//
-//        AtomicLong counter = new AtomicLong();
-//
-//        UpstreamQueue created = UpstreamQueue.get(map, counter);
-//
-//        assertNotNull(created);
-//        assertEquals(1, counter.get());
-//        assertSame(created, UpstreamQueue.UP_QUEUE.get());
-//    }
+    @Test
+    void shouldCreateThreadLocalQueue() {
+        MpscQueue<UpstreamHandle>[] arr = new MpscQueue[SystemInfo.getMaxCoreId() + 1];
+        Arrays.fill(arr, this.handles);
 
-//    @Test
-//    void shouldReuseThreadLocalQueue() {
-//        NonBlockingHashMapLong<UpstreamQueue> map =
-//                new NonBlockingHashMapLong<>();
-//
-//        AtomicLong counter = new AtomicLong();
-//
-//        UpstreamQueue first = UpstreamQueue.get(map, counter);
-//        UpstreamQueue second = UpstreamQueue.get(map, counter);
-//
-//        assertSame(first, second);
-//        assertEquals(1, counter.get());
-//    }
+        AtomicLong counter = new AtomicLong();
 
-//    @Test
-//    void shouldRequestFromOneUpstreamsWhenAtOrBelow32() {
-//        TestUpstreamHandle first = new TestUpstreamHandle();
-//        TestUpstreamHandle second = new TestUpstreamHandle();
-//
-//        queue.addUpstream(first);
-//        queue.addUpstream(second);
-//
-//        queue.request(32);
-//
-//        assertEquals(32, first.requested);
-//        assertEquals(0, second.requested);
-//    }
-//
-//    @Test
-//    void shouldRequestEvenlyAcrossUpstreamsWhenAbove1024() {
-//        TestUpstreamHandle first = new TestUpstreamHandle();
-//        TestUpstreamHandle second = new TestUpstreamHandle();
-//
-//        queue.addUpstream(first);
-//        queue.addUpstream(second);
-//
-//        queue.request(2048);
-//
-//        assertEquals(1024, first.requested);
-//        assertEquals(1024, second.requested);
-//    }
-//
-//    @Test
-//    void shouldRequestWithoutBuffer() {
-//        TestUpstreamHandle upstream = new TestUpstreamHandle();
-//
-//        queue.addUpstream(upstream);
-//
-//        queue.pull(null, 64);
-//
-//        assertEquals(64, upstream.requested);
-//        assertEquals(0, upstream.pulled);
-//    }
-//
-//    @Test
-//    void shouldPullWithConsumer() {
-//        TestUpstreamHandle upstream = new TestUpstreamHandle();
-//
-//        queue.addUpstream(upstream);
-//
-//        queue.pull(frame -> {}, 64);
-//
-//        assertEquals(0, upstream.requested);
-//        assertEquals(64, upstream.pulled);
-//    }
-//
-//    @Test
-//    void shouldIgnoreZeroDemand() {
-//        TestUpstreamHandle upstream = new TestUpstreamHandle();
-//
-//        queue.addUpstream(upstream);
-//
-//        queue.request(0);
-//
-//        assertEquals(0, upstream.requested);
-//        assertEquals(0, upstream.pulled);
-//    }
-//
-//    @Test
-//    void shouldRemoveCompletedUpstreams() {
-//        TestUpstreamHandle upstream = new TestUpstreamHandle();
-//
-//        upstream.complete = true;
-//
-//        queue.addUpstream(upstream);
-//
-//        queue.request(10);
-//
-//        assertEquals(0, queue.getTrueUpstreamCount());
-//    }
+        UpstreamQueue created = UpstreamQueue.get(arr, count, counter);
+
+        assertNotNull(created);
+        assertEquals(1, counter.get());
+        assertSame(created, UpstreamQueue.UP_QUEUE.get());
+    }
+
+    @Test
+    void shouldReuseThreadLocalQueue() {
+        MpscQueue<UpstreamHandle>[] arr = new MpscQueue[SystemInfo.getMaxCoreId() + 1];
+        Arrays.fill(arr, this.handles);
+
+        AtomicLong counter = new AtomicLong();
+
+        UpstreamQueue first = UpstreamQueue.get(arr, count, counter);
+        UpstreamQueue second = UpstreamQueue.get(arr, count, counter);
+
+        assertSame(first, second);
+        assertEquals(1, counter.get());
+    }
+
+    @Test
+    void shouldRequestFromOneUpstreamsWhenAtOrBelow32() {
+        TestUpstreamHandle first = new TestUpstreamHandle();
+        TestUpstreamHandle second = new TestUpstreamHandle();
+
+        handles.offer(first);
+        handles.offer(second);
+        count.getAndAdd(2);
+
+        queue.request(32);
+
+        assertEquals(32, first.requested);
+        assertEquals(0, second.requested);
+    }
+
+    @Test
+    void shouldRequestEvenlyAcrossUpstreamsWhenAbove1024() {
+        TestUpstreamHandle first = new TestUpstreamHandle();
+        TestUpstreamHandle second = new TestUpstreamHandle();
+
+        handles.offer(first);
+        handles.offer(second);
+        count.getAndAdd(2);
+
+        queue.request(2048);
+
+        assertEquals(1024, first.requested);
+        assertEquals(1024, second.requested);
+    }
+
+    @Test
+    void shouldRequestWithoutBuffer() {
+        TestUpstreamHandle upstream = new TestUpstreamHandle();
+
+        handles.offer(upstream);
+        count.incrementAndGet();
+
+        queue.pull(null, 64);
+
+        assertEquals(64, upstream.requested);
+        assertEquals(0, upstream.pulled);
+    }
+
+    @Test
+    void shouldPullWithConsumer() {
+        TestUpstreamHandle upstream = new TestUpstreamHandle();
+
+        handles.offer(upstream);
+        count.incrementAndGet();
+
+        queue.pull(frame -> {}, 64);
+
+        assertEquals(0, upstream.requested);
+        assertEquals(64, upstream.pulled);
+    }
+
+    @Test
+    void shouldIgnoreZeroDemand() {
+        TestUpstreamHandle upstream = new TestUpstreamHandle();
+
+        handles.offer(upstream);
+
+        queue.request(0);
+
+        assertEquals(0, upstream.requested);
+        assertEquals(0, upstream.pulled);
+    }
+
+    @Test
+    void shouldRemoveCompletedUpstreams() {
+        TestUpstreamHandle upstream = new TestUpstreamHandle();
+
+        upstream.complete = true;
+
+        handles.offer(upstream);
+
+        queue.request(10);
+
+        assertEquals(0, queue.getTrueUpstreamCount());
+    }
 
     @Test
     void shouldCalculateSingleBucketForSmallDemand() {
         queue.cachedUpCount = 64;
 
-        queue.calculatePullBuckets(32);
-
-        assertEquals(1, queue.pullBucket[0]);
+        assertEquals(32, queue.calculatePullBuckets(32));
     }
 
     @Test
     void shouldCalculateDistributedBucketsForLargeDemand() {
         queue.cachedUpCount = 8;
 
-        queue.calculatePullBuckets(8192);
-
-        assertEquals(8, queue.pullBucket[0]);
-        assertEquals(8192 >> 3, queue.pullBucket[1]);
+        assertEquals(8192 >> 3, queue.calculatePullBuckets(8192));
     }
 
     @Test
