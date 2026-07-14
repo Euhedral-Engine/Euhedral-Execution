@@ -6,7 +6,7 @@ import io.euhedral_execution.hardware_utils.common.SystemUtilization.SystemSnaps
 import io.euhedral_execution.hardware_utils.common.UnmodifiableBitSet;
 import io.euhedral_execution.hardware_utils.linux.CgroupV2Resources;
 import io.euhedral_execution.hardware_utils.linux.LinuxSystemLayout;
-import io.euhedral_execution.hardware_utils.macOS.OSXResources;
+import io.euhedral_execution.hardware_utils.osx.OSXResources;
 import io.euhedral_execution.hardware_utils.windows.WindowsResources;
 import io.euhedral_execution.hardware_utils.windows.WindowsSystemLayout;
 import it.unimi.dsi.fastutil.ints.Int2ObjectArrayMap;

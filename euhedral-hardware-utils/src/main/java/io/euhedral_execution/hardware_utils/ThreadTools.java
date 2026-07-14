@@ -4,7 +4,7 @@ import io.euhedral_execution.hardware_utils.SystemInfo.CpuInfo;
 import io.euhedral_execution.hardware_utils.common.OSName;
 import io.euhedral_execution.hardware_utils.internal.ThreadPinner;
 import io.euhedral_execution.hardware_utils.linux.LinuxAffinity;
-import io.euhedral_execution.hardware_utils.macOS.OSXAffinity;
+import io.euhedral_execution.hardware_utils.osx.OSXAffinity;
 import io.euhedral_execution.hardware_utils.windows.WindowsAffinity;
 import java.util.BitSet;
 import org.slf4j.Logger;

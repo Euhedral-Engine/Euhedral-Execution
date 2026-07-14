@@ -1,4 +1,4 @@
-package io.euhedral_execution.hardware_utils.macOS;
+package io.euhedral_execution.hardware_utils.osx;
 
 import io.euhedral_execution.hardware_utils.common.OSName;
 import io.euhedral_execution.hardware_utils.internal.JNIClassLoader;
