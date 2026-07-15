@@ -115,7 +115,7 @@ public final class EuhedralScheduler implements Scheduler {
     public void ingest(@NonNull EuhedralSubscriber subscriber) {
         Objects.requireNonNull(subscriber);
         if (subscriber.hasSubscription()) {
-            subscriber.startUFlowWith(this.controlPlane);
+            this.controlPlane.addUpstream(subscriber);
         }
         throw new IllegalStateException(
                 "The subscriber must have a subscription before calling ingest");

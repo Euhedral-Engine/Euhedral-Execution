@@ -5,6 +5,8 @@ import io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServ
 import io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage;
 import io.grpc.ManagedChannel;
 import java.util.concurrent.TimeUnit;
+
+import io.grpc.stub.StreamObserver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Flux;
