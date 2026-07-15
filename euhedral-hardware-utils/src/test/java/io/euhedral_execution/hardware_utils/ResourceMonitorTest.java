@@ -6,6 +6,7 @@ import com.github.dockerjava.api.command.ExecCreateCmdResponse;
 import io.euhedral_execution.hardware_utils.common.SystemUtilization.HardwareUtilization;
 import java.io.File;
 import java.time.Duration;
+import java.util.concurrent.locks.LockSupport;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.containers.BindMode;
@@ -20,7 +21,7 @@ class ResourceMonitorTest {
     private static GenericContainer<?> container;
 
     @BeforeAll
-    public static void buildContainer() {
+    static void buildContainer() {
 
         File testJar = new File("target/testing/test-container.jar");
 
@@ -38,7 +39,7 @@ class ResourceMonitorTest {
     }
 
     @Test
-    public void testDynamicScaling() throws Exception {
+    void testDynamicScaling() {
         StringBuffer execOutput = new StringBuffer();
         String containerId = container.getContainerId();
 
@@ -65,7 +66,7 @@ class ResourceMonitorTest {
         long start = System.currentTimeMillis();
         while (!execOutput.toString().contains("QUOTA=1.5")
                 && (System.currentTimeMillis() - start) < 5000) {
-            Thread.sleep(50);
+            LockSupport.parkNanos(50_000_000);
         }
         assertTrue(execOutput.toString().contains("QUOTA=1.5"));
         System.out.println("\nDetected initial quota: 1.5");
@@ -80,7 +81,7 @@ class ResourceMonitorTest {
         start = System.currentTimeMillis();
         while (!execOutput.substring(markIndex).contains("QUOTA=2.0")
                 && (System.currentTimeMillis() - start) < 5000) {
-            Thread.sleep(50);
+            LockSupport.parkNanos(50_000_000);
         }
 
         assertTrue(execOutput.toString().contains("QUOTA=2.0"));
@@ -99,7 +100,7 @@ class ResourceMonitorTest {
                     HardwareUtilization utilization = monitor.getUtilization();
                     System.out.printf("SNAPSHOT:QUOTA=%.1f\n", utilization.quotaCpus());
                     System.out.flush();
-                    Thread.sleep(200);
+                    LockSupport.parkNanos(200_000_000);
                 }
             } catch (Throwable t) {
                 System.err.println("Error: \n" + t);

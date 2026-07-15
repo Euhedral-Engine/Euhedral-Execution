@@ -113,8 +113,10 @@ public final class PinnedThreadExecutor extends AbstractExecutorService implemen
 
     public void start(String name, int priority, boolean daemon) {
         if (!isShutdown.compareAndSet(true, false)) {
-            LOGGER.debug("PinnedThreadExecutor: [{}] is already started\n{}.", this.name,
-                    Arrays.toString(Thread.currentThread().getStackTrace()));
+            if(LOGGER.isDebugEnabled()) {
+                LOGGER.debug("PinnedThreadExecutor: [{}] is already started\n{}.", this.name,
+                        Arrays.toString(Thread.currentThread().getStackTrace()));
+            }
             return;
         }
         this.name = name;
@@ -134,8 +136,8 @@ public final class PinnedThreadExecutor extends AbstractExecutorService implemen
                 LockSupport.unpark(thread);
                 thread.interrupt();
                 thread.join(500);
-            } catch (Throwable ignored) {
-
+            } catch (Exception ignored) {
+                // Ignore interrupt on close.
             }
         }
         threadPool.clear();

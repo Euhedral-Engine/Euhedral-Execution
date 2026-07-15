@@ -49,7 +49,7 @@ public final class ArrayIngestSink extends AbstractIngestSink {
         @Override
         public long hookOnPull(Consumer<AbstractFrame> consumer, long demand) {
             if(start >= array.length) {
-                complete();
+                super.complete();
                 return 0;
             }
 
@@ -64,7 +64,7 @@ public final class ArrayIngestSink extends AbstractIngestSink {
             }
             VarHandle.releaseFence();
             if (start >= array.length) {
-                complete();
+                super.complete();
             }
             return total;
         }
@@ -72,7 +72,7 @@ public final class ArrayIngestSink extends AbstractIngestSink {
         @Override
         public void hookOnRequest(LatticeReceiver terminal, long demand) {
             if(start >= array.length) {
-                complete();
+                super.complete();
                 return;
             }
 
@@ -88,7 +88,7 @@ public final class ArrayIngestSink extends AbstractIngestSink {
             addAndGetDemand(-count);
             VarHandle.releaseFence();
             if (start >= array.length) {
-                complete();
+                super.complete();
             }
         }
     }

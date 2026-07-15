@@ -1,7 +1,7 @@
 package io.euhedral_execution.hardware_utils.common;
 
 import java.util.Arrays;
-import java.util.function.Consumer;
+import java.util.function.DoubleConsumer;
 
 public final class UnmodifiableDoubleArray {
     private final double[] delegate;
@@ -24,7 +24,7 @@ public final class UnmodifiableDoubleArray {
         }
     }
 
-    public void iterate(int start, int end, Consumer<Double> consumer) {
+    public void iterate(int start, int end, DoubleConsumer consumer) {
         while(start < end) {
             consumer.accept(this.delegate[start++]);
         }

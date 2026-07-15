@@ -83,13 +83,15 @@ public final class JNIClassLoader {
                 System.load(tempFile.toAbsolutePath().toString());
                 break;
 
-            } catch (Throwable t) {
-                errors.add(t);
-                LOGGER.debug("Failed to load JNI library from {}", base, t);
+            } catch (Exception e) {
+                errors.add(e);
+                LOGGER.debug("Failed to load JNI library from {}", base, e);
 
                 try {
                     Files.deleteIfExists(tempFile);
-                } catch (Throwable ignored) {}
+                } catch (Exception ignored) {
+                    // We can ignore temp file deletion errors.
+                }
                 tempFile = null;
             }
         }
@@ -98,7 +100,6 @@ public final class JNIClassLoader {
             LOGGER.error("[CRITICAL] Unable to load JNI binary {}. Dumping errors.", fileName);
             for (Throwable cause : errors) {
                 LOGGER.error(cause.getMessage(), cause);
-                cause.printStackTrace();
             }
             throw new ExceptionInInitializerError("Failed to load the JNI library for OS: " + OSName.CURRENT_OS);
         }
@@ -108,12 +109,14 @@ public final class JNIClassLoader {
         CLEANER.register(JNIClassLoader.class, () -> {
             try {
                 Files.deleteIfExists(finalLoaded);
-            } catch (Throwable ignored) {}
+            } catch (Exception ignored) {
+                // We can ignore temp file deletion errors.
+            }
         });
     }
 
     public static void load() {
-
+        // Intentionally empty to trigger static initializer block
     }
 
     private static String format(String prefix) {
@@ -128,4 +131,7 @@ public final class JNIClassLoader {
         return String.format(FILE_TEMPLATE, prefix, arch, suffix);
     }
 
+    private JNIClassLoader() {
+
+    }
 }

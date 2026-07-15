@@ -167,9 +167,9 @@ public final class BaseCloneableObject implements CloneableObject {
 
         try {
             retVal = allocated.get();
-        } catch (Throwable t) {
+        } catch (Exception e) {
             throw new RuntimeException(
-                    "Failed to construct the BaseCloneableObject.", t);
+                    "Failed to construct the BaseCloneableObject.", e);
         }
 
         if (createdExecutor) {
@@ -181,22 +181,18 @@ public final class BaseCloneableObject implements CloneableObject {
     @Override
     public void close() {
         try {
-            try {
-                if (this.fragment != null) {
-                    this.fragment.close();
-                }
-            } catch (Exception e) {
-                this.logger.error("Failed to close {}", this.fragment.getClass(), e);
-            }
-            try {
-                if (this.executor != null) {
-                    this.executor.close();
-                }
-            } catch (Exception e) {
-                this.logger.error("Failed to close {}", this.executor.getClass(), e);
+            if (this.fragment != null) {
+                this.fragment.close();
             }
         } catch (Exception e) {
-            this.logger.error("Failed to close pipeline properly", e);
+            this.logger.error("Failed to close {}", this.fragment.getClass(), e);
+        }
+        try {
+            if (this.executor != null) {
+                this.executor.close();
+            }
+        } catch (Exception e) {
+            this.logger.error("Failed to close {}", this.executor.getClass(), e);
         }
     }
 }

@@ -1,37 +1,53 @@
 package io.euhedral_execution.spring.core.transport.kafka;
 
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
+
 import io.euhedral_execution.spring.core.frames.KafkaFrame;
 import it.unimi.dsi.fastutil.longs.Long2ObjectArrayMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongHeapPriorityQueue;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicReference;
-import lombok.Setter;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class OffsetCollector {
+@SuppressWarnings("unused")
+public final class OffsetCollector {
+
+    private static final VarHandle COMMIT;
+
+    static {
+        try {
+            COMMIT = MethodHandles.lookup()
+                    .findVarHandle(OffsetCollector.class, "commitPolicy", CommitPolicy.class);
+        } catch (Exception e) {
+            throw new ExceptionInInitializerError(e);
+        }
+    }
 
     private final Logger logger = LoggerFactory.getLogger(OffsetCollector.class);
     private final long ingestPassword;
 
     private final AtomicReference<KafkaConsumer<?, ?>> kafkaConsumer;
-    private final Long2ObjectArrayMap<PartitionCollector> collectors = new Long2ObjectArrayMap<>(
-            128);
+    private final Long2ObjectArrayMap<PartitionCollector> collectors =
+            new Long2ObjectArrayMap<>(128);
 
-    @Setter
-    private volatile CommitPolicy commitPolicy;
+    private CommitPolicy commitPolicy;
 
     public OffsetCollector(AtomicReference<KafkaConsumer<?, ?>> kafkaConsumer,
-            CommitPolicy commitPolicy,
-            long ingestPassword) {
+            CommitPolicy commitPolicy, long ingestPassword) {
         this.ingestPassword = ingestPassword;
         this.commitPolicy = commitPolicy;
         this.kafkaConsumer = kafkaConsumer;
+    }
+
+    public void setCommitPolicy(CommitPolicy policy) {
+        COMMIT.setRelease(this, policy);
     }
 
     public void registerFrame(TopicPartition partition, KafkaFrame frame, long ingestPassword) {
@@ -39,10 +55,7 @@ public class OffsetCollector {
             long key = partition.hashCode();
 
             PartitionCollector collector = collectors.get(key);
-            if (collector == null) {
-                collector = new PartitionCollector(partition);
-                collectors.put(key, collector);
-            }
+            collectors.computeIfAbsent(key, k -> new PartitionCollector(partition));
             collector.register(frame);
         }
     }
@@ -58,7 +71,7 @@ public class OffsetCollector {
 
         Map<TopicPartition, OffsetAndMetadata> offsetMap = new HashMap<>();
         for (var collector : collectors.values()) {
-            long nextOffset = collector.collect(now, commitPolicy);
+            long nextOffset = collector.collect(now, (CommitPolicy) COMMIT.getAcquire(this));
             if (nextOffset > 0) {
                 offsetMap.put(collector.partition, new OffsetAndMetadata(nextOffset));
             }
@@ -94,8 +107,8 @@ public class OffsetCollector {
 
         public final TopicPartition partition;
 
-        private final Long2ObjectOpenHashMap<Offset> offsets = new Long2ObjectOpenHashMap<>(
-                8_096);
+        private final Long2ObjectOpenHashMap<OffsetMd> offsets =
+                new Long2ObjectOpenHashMap<>(8_096);
         private final LongHeapPriorityQueue offsetHeap = new LongHeapPriorityQueue(8_096);
         private long lastCollect = System.nanoTime();
         private long minOffset = Long.MAX_VALUE;
@@ -110,7 +123,7 @@ public class OffsetCollector {
         }
 
         public void register(KafkaFrame frame) {
-            Offset ack = frame.getAck();
+            OffsetMd ack = frame.getAck();
             if (this.offsetHeap.isEmpty()) {
                 this.minOffset = ack.offset;
             }
@@ -140,7 +153,7 @@ public class OffsetCollector {
         private void drain() {
             while (!this.offsetHeap.isEmpty()) {
                 long minOffset = this.offsetHeap.firstLong();
-                Offset ack = this.offsets.get(minOffset);
+                OffsetMd ack = this.offsets.get(minOffset);
 
                 if (ack == null) {
                     this.offsetHeap.dequeueLong();
@@ -155,18 +168,31 @@ public class OffsetCollector {
         }
     }
 
-    public static class Offset implements Comparable<Offset> {
+    public static class OffsetMd implements Comparable<OffsetMd> {
 
         public final long offset;
         public volatile boolean ready;
 
-        public Offset(long offset) {
+        public OffsetMd(long offset) {
             this.offset = offset;
         }
 
         @Override
-        public int compareTo(Offset o) {
-            return Long.compare(offset, o.offset);
+        public int compareTo(OffsetMd o) {
+            return Long.compare(this.offset, o.offset);
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (obj instanceof OffsetMd other) {
+                return this.offset == other.offset;
+            }
+            return false;
+        }
+
+        @Override
+        public int hashCode() {
+            return Long.hashCode(this.offset);
         }
     }
 

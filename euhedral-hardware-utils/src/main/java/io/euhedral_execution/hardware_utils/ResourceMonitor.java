@@ -106,8 +106,8 @@ public class ResourceMonitor implements AutoCloseable {
                     t.interrupt();
                     LockSupport.unpark(t);
                     t.join(500);
-                } catch (Throwable ignored) {
-
+                } catch (Exception ignored) {
+                    // Ignore interrupt on close
                 } finally {
                     this.pollingThread = null;
                 }
@@ -134,8 +134,8 @@ public class ResourceMonitor implements AutoCloseable {
             for (MonitorListener listener : this.listeners) {
                 try {
                     listener.update(utilization);
-                } catch (Throwable ignored) {
-
+                } catch (Exception ignored) {
+                    // Errors in listeners are ignored
                 }
             }
             this.listenerGuard.set(false);

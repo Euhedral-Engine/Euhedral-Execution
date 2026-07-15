@@ -138,8 +138,6 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
             return false;
         }
 
-        LatticeEdge prev = null;
-        LatticeEdge curr = null;
         int mIdx = 0;
         int[] mappings = new int[active.cardinality()];
         for (int i = 0; i < this.downstreams.length; i++) {
@@ -151,16 +149,6 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
                 if (this.hasCache) {
                     this.remoteCache[i] = new BoundedMpmcQueue<>(
                             Math.max(4, this.cachePool / active.cardinality()));
-                }
-
-                if (curr == null) {
-                    curr = handles[i];
-                } else if (prev == null) {
-                    prev = curr;
-                    curr = handles[i];
-                } else {
-                    prev = curr;
-                    curr = handles[i];
                 }
             } else if (this.hasCache && this.remoteCache[i] != null) {
                 this.remoteCache[i].clear();

@@ -33,36 +33,32 @@ public class TaskFrame extends AbstractFrame implements Disposable {
 
         long delayNs = unit.toNanos(delay);
 
-        if(delayNs <= 0 && periodNs <= 0) {
+        LockSupport.parkNanos(delayNs);
+        if(periodNs <= 0) {
             sink.submit(this);
         } else {
             this.thread = Thread.ofVirtual().start(() -> {
-                if (delay > 0) {
-                    LockSupport.parkNanos(delayNs);
-                }
-                if (periodNs > 0) {
-                    while (!Thread.interrupted() && isAlive()) {
-                        if(sink.isDisposed()) {
-                            break;
-                        }
-
-                        sink.submit(this);
-
-                        long now = System.nanoTime();
-                        LockSupport.park();
-
-                        long delta = System.nanoTime() - now;
-                        delta = periodNs - delta;
-                        if(delta > 0) {
-                            LockSupport.parkNanos(delta);
-                        }
-                        randomizeHash(this.seed++);
-                    }
-                    kill();
-                } else {
-                    sink.submit(this);
-                }
+                cycle(sink);
+                kill();
             });
+        }
+    }
+
+    private void cycle(EuhedralWorker sink) {
+        while (!Thread.interrupted() && isAlive()) {
+            if(sink.isDisposed()) {
+                break;
+            }
+
+            randomizeHash(this.seed++);
+            sink.submit(this);
+
+            long now = System.nanoTime();
+            // doFinally() will unpark
+            LockSupport.park();
+            long delta = System.nanoTime() - now;
+
+            LockSupport.parkNanos(this.periodNs - delta);
         }
     }
 

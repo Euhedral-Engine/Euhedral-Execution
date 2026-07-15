@@ -102,4 +102,8 @@ public class MetricsAggregator {
 
         return registry.find(metricName(prefix, suffix)).summaries();
     }
+
+    private MetricsAggregator() {
+
+    }
 }

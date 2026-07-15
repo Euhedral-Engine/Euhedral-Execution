@@ -4,12 +4,13 @@ import io.euhedral_execution.hardware_utils.SystemInfo.CpuInfo;
 import io.euhedral_execution.hardware_utils.common.OSName;
 import io.euhedral_execution.hardware_utils.internal.ThreadPinner;
 import io.euhedral_execution.hardware_utils.linux.LinuxAffinity;
-import io.euhedral_execution.hardware_utils.macOS.OSXAffinity;
+import io.euhedral_execution.hardware_utils.osx.OSXAffinity;
 import io.euhedral_execution.hardware_utils.windows.WindowsAffinity;
 import java.util.BitSet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+@SuppressWarnings("unused")
 public final class ThreadTools {
     private static final Logger LOGGER = LoggerFactory.getLogger(ThreadTools.class);
 
@@ -36,7 +37,9 @@ public final class ThreadTools {
         BASE_AFFINITY = baseMask.toLongArray();
         releaseAffinity();
 
-        LOGGER.debug("Base Affinity Mask: {} 0x{}", baseMask, SystemInfo.toHexMask(baseMask));
+        if(LOGGER.isDebugEnabled()) {
+            LOGGER.debug("Base Affinity Mask: {} 0x{}", baseMask, SystemInfo.toHexMask(baseMask));
+        }
     }
 
     /// Gets the cpu of the calling thread.
@@ -110,7 +113,7 @@ public final class ThreadTools {
         boolean success;
         try {
             success = PINNER.setAffinity(cpuMasks);
-        } catch (Throwable ignored) {
+        } catch (Exception ignored) {
             return false;
         }
         return success;
@@ -126,5 +129,9 @@ public final class ThreadTools {
     /// @return success
     public static boolean setTimerResolution(long nanos) {
         return PINNER.setTimerResolution(nanos);
+    }
+
+    private ThreadTools() {
+
     }
 }

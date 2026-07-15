@@ -23,7 +23,7 @@ public class MathFunctions {
     }
 
     public static long log2(long num) {
-        return 63 - Long.numberOfLeadingZeros(Math.max(num, 1));
+        return 63L - Long.numberOfLeadingZeros(Math.max(num, 1));
     }
 
     public static double ewma(double curr, double next, double alpha) {
@@ -32,5 +32,9 @@ public class MathFunctions {
 
     public static long ewma(long curr, long next, double alpha) {
         return (long) ewma((double) curr, (double) next, alpha);
+    }
+
+    private MathFunctions() {
+
     }
 }

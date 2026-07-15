@@ -86,8 +86,8 @@ public final class EuhedralWorker extends AbstractIngestSink implements Worker {
             try {
                 COMPLETE = MethodHandles.lookup()
                         .findVarHandle(Delegate.class, "complete", boolean.class);
-            } catch (Throwable t) {
-                throw new ExceptionInInitializerError(t);
+            } catch (Exception e) {
+                throw new ExceptionInInitializerError(e);
             }
         }
 

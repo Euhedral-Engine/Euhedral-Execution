@@ -18,10 +18,10 @@ import org.jspecify.annotations.Nullable;
 /// the end of execution, the frames are returned to this manager for reuse. If none are available,
 /// they are created. Consumption is password protected by the creator.
 ///
-/// @param <DATA>  The data type to use to replace fields in the frame
-/// @param <FRAME> The frame type to recycle
+/// @param <D>  The data type to use to replace fields in the frame
+/// @param <F> The frame type to recycle
 @SuppressWarnings({"unchecked", "unused"})
-public final class FrameManager<DATA, FRAME extends AbstractFrame> implements AutoCloseable {
+public final class FrameManager<D, F extends AbstractFrame> {
 
     @Getter
     private final BatchableQueue<AbstractFrame> recycleQueue;
@@ -29,7 +29,7 @@ public final class FrameManager<DATA, FRAME extends AbstractFrame> implements Au
     private final AbstractFrame[] buffer;
 
     @Setter
-    private FrameFactory<DATA, FRAME> factory;
+    private FrameFactory<D, F> factory;
     @Getter
     private long totalRecycled = 0;
 
@@ -61,7 +61,7 @@ public final class FrameManager<DATA, FRAME extends AbstractFrame> implements Au
     }
 
     /// Attempts to reuse an old frame if available. Creates one if not using the passed in data.
-    public @NonNull FRAME getOrCreate(DATA data, long password) {
+    public @NonNull F getOrCreate(D data, long password) {
         if (password != this.password) {
             throw new RuntimeException("Incorrect password for this FrameFactory.");
         }
@@ -69,7 +69,7 @@ public final class FrameManager<DATA, FRAME extends AbstractFrame> implements Au
             throw new RuntimeException("Cannot generate frames with a null FrameFactory.");
         }
 
-        FRAME frame = get();
+        F frame = get();
         if (frame == null) {
             return factory.create(data);
         }
@@ -81,20 +81,20 @@ public final class FrameManager<DATA, FRAME extends AbstractFrame> implements Au
     ///
     /// @param password Password set during instantiation
     /// @return The next frame or `null` if empty
-    public @Nullable FRAME get(long password) {
+    public @Nullable F get(long password) {
         if (password != this.password) {
             return null;
         }
         return get();
     }
 
-    private @Nullable FRAME get() {
+    private @Nullable F get() {
         if (idx == 0) {
             idx = (int) recycleQueue.drain(this::drain, buffer.length);
             totalRecycled += idx;
         }
         if (idx > 0) {
-            FRAME frame = (FRAME) buffer[--idx];
+            F frame = (F) buffer[--idx];
             buffer[idx + 1] = null;
             return frame;
         }
@@ -109,7 +109,7 @@ public final class FrameManager<DATA, FRAME extends AbstractFrame> implements Au
     ///
     /// @param frame Frame to recycle
     /// @return `true` if frame was enqueued, `false` otherwise
-    public boolean recycle(FRAME frame) {
+    public boolean recycle(F frame) {
         return recycleQueue.offer(frame);
     }
 
@@ -149,7 +149,6 @@ public final class FrameManager<DATA, FRAME extends AbstractFrame> implements Au
         return total;
     }
 
-    @Override
     public void close() {
         recycleQueue.clear();
     }

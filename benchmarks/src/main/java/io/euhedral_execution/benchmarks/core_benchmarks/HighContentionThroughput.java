@@ -24,6 +24,8 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
 import org.openjdk.jmh.infra.Blackhole;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @BenchmarkMode({Mode.Throughput, Mode.SampleTime})
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
@@ -33,6 +35,7 @@ import org.openjdk.jmh.infra.Blackhole;
 @Fork(1)
 public class HighContentionThroughput {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(HighContentionThroughput.class);
     private static final int PRODUCERS = SystemInfo.CPU_COUNT;
     private static final int TASKS = 32_000_000;
 
@@ -45,7 +48,7 @@ public class HighContentionThroughput {
             if ((spin++ & 31) == 0) {
                 long sum = counters.sum();
                 if (now - log >= 3_000_000_000L) {
-                    System.out.println("Progress: " + sum);
+                    LOGGER.info("Progress: {}", sum);
                     log = now;
                 }
                 if (sum >= TASKS) {
@@ -64,6 +67,10 @@ public class HighContentionThroughput {
             new PaddedLongAdder(Runtime.getRuntime().availableProcessors(), true, true);
     private final RepeatingSink[] sinks = new RepeatingSink[PRODUCERS];
     private ControlPlaneLattice controlPlane;
+
+    public HighContentionThroughput() {
+        // Required for JMH
+    }
 
     @Setup(Level.Trial)
     public void setup(Blackhole blackhole) {

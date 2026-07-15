@@ -80,16 +80,16 @@ public abstract class AbstractFrame {
     @Setter
     private RoutingPolicy routingPolicy;
 
-    public AbstractFrame(long idHash) {
+    protected AbstractFrame(long idHash) {
         this(idHash, null, null);
     }
 
-    public AbstractFrame(long idHash, @Nullable FrameManager recycler,
+    protected AbstractFrame(long idHash, @Nullable FrameManager recycler,
             @Nullable AtomicBoolean killSwitch) {
-        this(idHash, null, null, null);
+        this(idHash, null, recycler, killSwitch);
     }
 
-    public AbstractFrame(long idHash, @Nullable FramePusher responseReceiver,
+    protected AbstractFrame(long idHash, @Nullable FramePusher responseReceiver,
             @Nullable FrameManager recycler, @Nullable AtomicBoolean killSwitch) {
         this.idHash = idHash;
         this.recycler = recycler;
@@ -110,8 +110,7 @@ public abstract class AbstractFrame {
 
     /// Sets the routingHash by mixing the idHash with the seed.
     public final void randomizeHash(long seed) {
-        seed = HasherApi.mix(seed);
-        this.routingHash = this.idHash ^ seed;
+        this.routingHash = this.idHash ^ HasherApi.mix(seed);
     }
 
     /// Liveness check.

@@ -86,8 +86,8 @@ public final class QueueIngestSink extends AbstractIngestSink {
         static {
             try {
                 FINISH = MethodHandles.lookup().findVarHandle(Delegate.class, "finish", boolean.class);
-            } catch (Throwable t) {
-                throw new ExceptionInInitializerError(t);
+            } catch (Exception e) {
+                throw new ExceptionInInitializerError(e);
             }
         }
 
@@ -103,7 +103,7 @@ public final class QueueIngestSink extends AbstractIngestSink {
         public long hookOnPull(Consumer<AbstractFrame> consumer, long demand) {
             long count = this.queue.drain(consumer, demand);
             if(count == 0 && (boolean) FINISH.getOpaque(this)) {
-                complete();
+                super.complete();
             }
             return count;
         }
@@ -114,7 +114,7 @@ public final class QueueIngestSink extends AbstractIngestSink {
             if (count > 0) {
                 addAndGetDemand(-count);
             } else if((boolean) FINISH.getOpaque(this)) {
-                complete();
+                super.complete();
             }
         }
 

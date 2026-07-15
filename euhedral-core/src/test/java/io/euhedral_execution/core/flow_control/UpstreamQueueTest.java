@@ -233,10 +233,12 @@ class UpstreamQueueTest {
 
         @Override
         public void push(AbstractFrame frame) {
+            // Test
         }
 
         @Override
         public void onError(Throwable throwable) {
+            // Test
         }
 
     }

@@ -48,4 +48,8 @@ public class GlobalState {
     public static double maxThroughput(int socket) {
         return GLOBAL_THROUGHPUT[socket].max();
     }
+
+    private GlobalState() {
+
+    }
 }

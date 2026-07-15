@@ -11,7 +11,6 @@ import io.euhedral_execution.hardware_utils.windows.win32.CacheRelationship;
 import io.euhedral_execution.hardware_utils.windows.win32.CacheRelationship.CacheType;
 import io.euhedral_execution.hardware_utils.windows.win32.GroupAffinity;
 import io.euhedral_execution.hardware_utils.windows.win32.ProcessorRelationship;
-import io.euhedral_execution.hardware_utils.windows.win32.Relationship;
 import io.euhedral_execution.hardware_utils.windows.win32.SystemLogicalProcessorInformation;
 import it.unimi.dsi.fastutil.ints.Int2BooleanArrayMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectArrayMap;
@@ -19,7 +18,7 @@ import java.util.BitSet;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Consumer;
+import java.util.function.IntConsumer;
 
 public final class WindowsSystemLayout {
 
@@ -61,41 +60,26 @@ public final class WindowsSystemLayout {
         int[] socketId = {0};
         int[] coreId = {0};
         for(var i : info) {
-            if(i instanceof ProcessorRelationship pr) {
-                if(pr.relationship == Relationship.PROCESSOR_PACKAGE) {
-                    for(GroupAffinity affinity : pr.groupAffinities) {
+            switch (i.relationship) {
+                case PROCESSOR_PACKAGE -> processorPackage(socketId[0]++, ((ProcessorRelationship) i).groupAffinities);
+                case PROCESSOR_CORE -> processorCore(coreId[0]++, (ProcessorRelationship) i);
+                case CACHE -> {
+                    CacheRelationship cr = (CacheRelationship) i;
+                    if(cr.type == CacheType.INSTRUCTION) {
+                        continue;
+                    }
+                    for(GroupAffinity affinity : cr.groupAffinities) {
                         processMask(affinity.mask(), affinity.group(), cpuId -> {
-                            BitSet c2s = cpuToSocket.computeIfAbsent(cpuId, k -> new BitSet());
-                            c2s.set(socketId[0]);
+                            long[][] cache = cpuCacheVals.computeIfAbsent(cpuId, k -> new long[3][4]);
+                            cache[cr.level - 1][0] = cr.cacheSizeBytes;
+                            cache[cr.level - 1][1] = affinity.mask();
+                            cache[cr.level - 1][2] = cr.lineSize;
+                            cache[cr.level - 1][3] = cr.groupAffinities.size();
                         });
                     }
-                    socketId[0]++;
-                } else if(pr.relationship == Relationship.PROCESSOR_CORE) {
-                    for(GroupAffinity affinity : pr.groupAffinities) {
-                        processMask(affinity.mask(), affinity.group(), cpuId -> {
-                            BitSet cpu2core = cpuToCore.computeIfAbsent(cpuId, k -> new BitSet());
-                            cpu2core.set(coreId[0]);
-
-                            isPCore.compute(cpuId, (k, v) -> Boolean.TRUE.equals(v) | pr.pCore);
-
-                            BitSet core2cpu = coreToCpu.computeIfAbsent(coreId[0], k -> new BitSet());
-                            core2cpu.set(cpuId);
-                        });
-                    }
-                    coreId[0]++;
                 }
-            } else if(i instanceof CacheRelationship cr) {
-                if(cr.type == CacheType.INSTRUCTION) {
-                    continue;
-                }
-                for(GroupAffinity affinity : cr.groupAffinities) {
-                    processMask(affinity.mask(), affinity.group(), cpuId -> {
-                        long[][] cache = cpuCacheVals.computeIfAbsent(cpuId, k -> new long[3][4]);
-                        cache[cr.level - 1][0] = cr.cacheSizeBytes;
-                        cache[cr.level - 1][1] = affinity.mask();
-                        cache[cr.level - 1][2] = cr.lineSize;
-                        cache[cr.level - 1][3] = cr.groupAffinities.size();
-                    });
+                default -> {
+                    // Do nothing with other relation types.
                 }
             }
         }
@@ -109,7 +93,30 @@ public final class WindowsSystemLayout {
         isPCore = null;
     }
 
-    private void processMask(long mask, int group, Consumer<Integer> action) {
+    private void processorPackage(int socketId, List<GroupAffinity> group) {
+        for(GroupAffinity affinity : group) {
+            processMask(affinity.mask(), affinity.group(), cpuId -> {
+                BitSet c2s = cpuToSocket.computeIfAbsent(cpuId, k -> new BitSet());
+                c2s.set(socketId);
+            });
+        }
+    }
+
+    private void processorCore(int coreId, ProcessorRelationship pr) {
+        for(GroupAffinity affinity : pr.groupAffinities) {
+            processMask(affinity.mask(), affinity.group(), cpuId -> {
+                BitSet cpu2core = cpuToCore.computeIfAbsent(cpuId, k -> new BitSet());
+                cpu2core.set(coreId);
+
+                isPCore.compute(cpuId, (k, v) -> Boolean.TRUE.equals(v) || pr.pCore);
+
+                BitSet core2cpu = coreToCpu.computeIfAbsent(coreId, k -> new BitSet());
+                core2cpu.set(cpuId);
+            });
+        }
+    }
+
+    private void processMask(long mask, int group, IntConsumer action) {
         int bits = 0;
         while (mask > 0) {
             int curr = Long.numberOfTrailingZeros(mask) + 1;

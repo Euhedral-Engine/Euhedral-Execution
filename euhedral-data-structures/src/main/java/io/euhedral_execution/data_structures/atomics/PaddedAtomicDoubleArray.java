@@ -32,7 +32,7 @@ public sealed class PaddedAtomicDoubleArray permits PaddedDoubleAdder {
         double padded;
         do {
             padding--;
-            padded = (length + 1L) * padding + length;
+            padded = (length + 1.0) * padding + length;
         } while (padded > Integer.MAX_VALUE);
 
         this.padding = padding;

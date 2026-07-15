@@ -25,4 +25,8 @@ public class BackpressureHandler {
         }
         return result;
     }
+
+    private BackpressureHandler() {
+
+    }
 }

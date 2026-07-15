@@ -28,7 +28,7 @@ class PartitionedSpmcQueueTest {
         }
 
         final int[] drained = new int[] {0};
-        Consumer<Integer> consumer = (val) -> {
+        Consumer<Integer> consumer = val -> {
             if (val != ++drained[0]) {
                 fail("Corruption! Last Value: " + drained[0] + " Current: " + val);
             }
@@ -54,7 +54,7 @@ class PartitionedSpmcQueueTest {
         int batch = 100_000;
         int consumers = 8;
 
-        Consumer<Long> consumer = (val) -> {
+        Consumer<Long> consumer = val -> {
         };
         ExecutorService exec = Executors.newFixedThreadPool(consumers + 1);
         for (int x = 0; x < 20; x++) {
@@ -87,7 +87,7 @@ class PartitionedSpmcQueueTest {
             end.await(5, TimeUnit.SECONDS);
 
             assertEquals(batch, drained.sum(),
-                    String.format("Iteration: %d Consumed: %d Offered: %d\n%s", x, drained.sum(),
+                    String.format("Iteration: %d Consumed: %d Offered: %d%n%s", x, drained.sum(),
                             offered.sum(), q));
         }
     }

@@ -12,16 +12,11 @@ public class TestFrame extends AbstractFrame {
 
     @Override
     public void execute() {
-
+        // No-op
     }
 
     @Override
     public boolean isAlive() {
         return false;
-    }
-
-    @Override
-    public void kill() {
-
     }
 }

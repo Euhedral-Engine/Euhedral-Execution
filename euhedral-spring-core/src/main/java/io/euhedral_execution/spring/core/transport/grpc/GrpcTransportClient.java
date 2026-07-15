@@ -16,7 +16,7 @@ public abstract class GrpcTransportClient {
 
     private final GrpcTransportServiceGrpc.GrpcTransportServiceStub stub;
 
-    public GrpcTransportClient(GrpcTransportServiceGrpc.GrpcTransportServiceStub stub) {
+    protected GrpcTransportClient(GrpcTransportServiceGrpc.GrpcTransportServiceStub stub) {
         this.stub = stub;
     }
 
@@ -35,8 +35,7 @@ public abstract class GrpcTransportClient {
     }
 
     public Mono<GrpcMessage> sendStreamRespondSingle(Flux<GrpcMessage> messageFlux) {
-        GrpcClientHandler interceptor = new GrpcClientHandler(
-                CommunicationMethod.CLIENT_STREAM);
+        GrpcClientHandler interceptor = new GrpcClientHandler(CommunicationMethod.CLIENT_STREAM);
         return Mono.from(interceptor).doOnSubscribe(sub -> stub.clientStreamMethod(interceptor));
     }
 
@@ -60,6 +59,7 @@ public abstract class GrpcTransportClient {
                     channel.shutdownNow();
                 }
             } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
                 LOGGER.error("GrpcTransportClient improperly shut down!", e);
             }
         }

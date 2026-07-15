@@ -94,8 +94,8 @@ public final class WindowsResources implements SystemSnapshotProvider {
                     this.buffer,
                     ioBytes
             );
-        } catch (Throwable t) {
-            LOGGER.error("Error generating SystemSnapshot.", t);
+        } catch (Exception e) {
+            LOGGER.error("Error generating SystemSnapshot.", e);
         } finally {
             this.snapshot.set(snapshot);
             this.wip.set(false);

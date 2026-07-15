@@ -120,7 +120,7 @@ abstract sealed class AbstractPartitionedQueue<T> extends AbstractQueue<T> imple
 
     /// Use `sizeLong()` for an accurate count
     @Override
-    @Deprecated
+    @Deprecated(since="0.0.1")
     public final int size() {
         return (int) sizeLong();
     }

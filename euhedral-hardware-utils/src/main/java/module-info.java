@@ -10,6 +10,6 @@ module euhedral.hardware_utils {
     exports io.euhedral_execution.hardware_utils;
     exports io.euhedral_execution.hardware_utils.common;
     exports io.euhedral_execution.hardware_utils.linux;
-    exports io.euhedral_execution.hardware_utils.macOS;
+    exports io.euhedral_execution.hardware_utils.osx;
     exports io.euhedral_execution.hardware_utils.windows;
 }
