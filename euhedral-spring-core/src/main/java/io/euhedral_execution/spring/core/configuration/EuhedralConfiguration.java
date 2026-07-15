@@ -9,8 +9,10 @@ import io.euhedral_execution.reactor.EuhedralOperator;
 import io.euhedral_execution.reactor.EuhedralScheduler;
 import io.euhedral_execution.spring.core.transport.kafka.EuhedralKafkaBinder;
 import io.micrometer.core.instrument.MeterRegistry;
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.kafka.autoconfigure.KafkaProperties;
@@ -32,8 +34,10 @@ public class EuhedralConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public ControlPlaneLattice controlPlaneLattice(AbstractExecutor executor, MeterRegistry registry) {
-        LatticeConfig config = LatticeConfig.ofDefaults(new BaseCloneableObject("euhedral", registry, executor));
+    public ControlPlaneLattice controlPlaneLattice(AbstractExecutor executor,
+            @Nullable MeterRegistry registry) {
+        LatticeConfig config = LatticeConfig.ofDefaults(
+                new BaseCloneableObject("euhedral", registry, executor));
         return ControlPlaneLattice.getOrCreate(config);
     }
 
@@ -50,8 +54,15 @@ public class EuhedralConfiguration {
     }
 
     @Bean
-    @ConditionalOnClass(KafkaMessageChannelBinder.class)
     @ConditionalOnMissingBean
+    @ConditionalOnClass(name = {
+            "org.springframework.cloud.stream.binder.BinderFactory",
+            "org.springframework.cloud.stream.binder.kafka.KafkaMessageChannelBinder"
+    })
+    @ConditionalOnBean(type = {
+            "org.springframework.cloud.stream.binder.BinderFactory",
+            "org.springframework.cloud.stream.binder.kafka.KafkaMessageChannelBinder"
+    })
     public EuhedralKafkaBinder euhedralKafkaBinder(
             ControlPlaneLattice controlPlane,
             KafkaMessageChannelBinder kafkaBinder,

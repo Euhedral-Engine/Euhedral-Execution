@@ -17,7 +17,6 @@ module euhedral.spring.core {
     requires kafka.clients;
     requires micrometer.core;
     requires org.apache.commons.lang3;
-    requires org.jctools.core;
     requires org.jspecify;
     requires org.reactivestreams;
     requires org.slf4j;
@@ -34,6 +33,7 @@ module euhedral.spring.core {
     requires spring.integration.core;
     requires spring.messaging;
 
+    exports io.euhedral_execution.spring.core.configuration;
     exports io.euhedral_execution.spring.core.frames;
     exports io.euhedral_execution.spring.core.utils;
     exports io.euhedral_execution.spring.core.transport.grpc.protos;

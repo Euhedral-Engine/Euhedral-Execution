@@ -1,7 +1,7 @@
 package io.euhedral_execution.spring.core.utils;
 
+import io.euhedral_execution.data_structures.queues.MpscQueue;
 import lombok.Getter;
-import org.jctools.queues.MpscUnboundedArrayQueue;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Sinks;
 
@@ -9,7 +9,7 @@ import reactor.core.publisher.Sinks;
 public class KillSwitch {
 
     private final Sinks.Many<Void> goners = Sinks.many().multicast().onBackpressureBuffer();
-    private final MpscUnboundedArrayQueue<Runnable> moreGoners = new MpscUnboundedArrayQueue<>(64);
+    private final MpscQueue<Runnable> moreGoners = new MpscQueue<>(64);
 
     @Getter
     private volatile boolean booped = false;
