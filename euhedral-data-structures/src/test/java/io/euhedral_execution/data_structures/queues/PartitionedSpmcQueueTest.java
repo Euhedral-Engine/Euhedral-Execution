@@ -87,7 +87,7 @@ class PartitionedSpmcQueueTest {
             end.await(5, TimeUnit.SECONDS);
 
             assertEquals(batch, drained.sum(),
-                    String.format("Iteration: %d Consumed: %d Offered: %d\n%s", x, drained.sum(),
+                    String.format("Iteration: %d Consumed: %d Offered: %d%n%s", x, drained.sum(),
                             offered.sum(), q));
         }
     }

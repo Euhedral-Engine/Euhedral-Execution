@@ -71,7 +71,8 @@ public class MPSCBenchmarks {
                                 Thread.onSpinWait();
                             }
                         }
-                    } catch (Throwable e) {
+                    } catch (Exception e) {
+                        Thread.currentThread().interrupt();
                         throw new RuntimeException(e);
                     }
                 });
@@ -97,7 +98,8 @@ public class MPSCBenchmarks {
                                 Thread.onSpinWait();
                             }
                         }
-                    } catch (Throwable e) {
+                    } catch (Exception e) {
+                        Thread.currentThread().interrupt();
                         throw new RuntimeException(e);
                     }
                 });
@@ -165,7 +167,8 @@ public class MPSCBenchmarks {
                             }
                         }
                         end17.await();
-                    } catch (Throwable e) {
+                    } catch (Exception e) {
+                        Thread.currentThread().interrupt();
                         throw new RuntimeException(e);
                     }
                 });
@@ -186,7 +189,8 @@ public class MPSCBenchmarks {
                             }
                         }
                         end17.await();
-                    } catch (Throwable e) {
+                    } catch (Exception e) {
+                        Thread.currentThread().interrupt();
                         throw new RuntimeException(e);
                     }
                 });
@@ -205,7 +209,8 @@ public class MPSCBenchmarks {
                             Thread.onSpinWait();
                         }
                     }
-                } catch (Throwable e) {
+                } catch (Exception e) {
+                    Thread.currentThread().interrupt();
                     throw new RuntimeException(e);
                 }
             });
@@ -228,7 +233,8 @@ public class MPSCBenchmarks {
                             Thread.onSpinWait();
                         }
                     }
-                } catch (Throwable e) {
+                } catch (Exception e) {
+                    Thread.currentThread().interrupt();
                     throw new RuntimeException(e);
                 }
             });

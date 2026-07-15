@@ -59,6 +59,7 @@ public abstract class GrpcTransportClient {
                     channel.shutdownNow();
                 }
             } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
                 LOGGER.error("GrpcTransportClient improperly shut down!", e);
             }
         }

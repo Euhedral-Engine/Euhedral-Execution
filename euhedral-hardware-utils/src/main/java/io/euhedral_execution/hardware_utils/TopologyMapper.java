@@ -14,6 +14,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import lombok.Getter;
 import org.jspecify.annotations.NonNull;
 
+@SuppressWarnings("unused")
 public final class TopologyMapper {
 
     private final AtomicInteger globalVersion = new AtomicInteger(0);
@@ -22,7 +23,7 @@ public final class TopologyMapper {
     private final BitSet allowedCpus;
 
     @Getter
-    private volatile EffectiveSystemTopology effectiveTopology;
+    private EffectiveSystemTopology effectiveTopology;
 
     public TopologyMapper() {
         this(SystemInfo.getCpuSet());
@@ -59,77 +60,20 @@ public final class TopologyMapper {
             }
             globalEffectiveCpus.and(this.allowedCpus);
 
-            BitSet globalEffectiveCores = new BitSet(SystemInfo.MAX_CORE_ID);
-            for (int cpu = globalEffectiveCpus.nextSetBit(0); cpu >= 0;
-                    cpu = globalEffectiveCpus.nextSetBit(cpu + 1)) {
-                int core = SystemInfo.getCpuInfo(cpu).core();
-                globalEffectiveCores.set(core);
-            }
 
+            BitSet globalEffectiveCores = new BitSet(SystemInfo.MAX_CORE_ID);
             BitSet globalEffectiveSockets = new BitSet(SystemInfo.MAX_SOCKET_ID);
-            BitSet socketUpdated = new BitSet(SystemInfo.MAX_SOCKET_ID);
+            buildGlobalEffective(globalEffectiveCpus, globalEffectiveCores, globalEffectiveSockets);
 
             EffectiveSystemTopology effectiveTopology = this.effectiveTopology;
-            for (int cpu = 0; cpu < SystemInfo.CPU_COUNT; cpu++) {
-                CpuInfo info = SystemInfo.getCpuInfo(cpu);
-                EffectiveSocketTopology topology = null;
 
-                if(SystemInfo.getSocketInfo(info.socket()) == null) {
-                    globalEffectiveSockets.clear(info.socket());
-                    continue;
-                }
+            BitSet socketUpdated = new BitSet(SystemInfo.MAX_SOCKET_ID);
+            socketUpdated.or(globalEffectiveSockets);
+            socketUpdated.xor(effectiveTopology.effectiveSockets);
 
-                if(info.socket() < effectiveTopology.socketTopologies.size()) {
-                    topology = effectiveTopology.socketTopologies.get(info.socket());
-                }
+            if (socketUpdated.cardinality() > 0) {
+                List<EffectiveSocketTopology> sTopologies = buildSocketTopologies(globalEffectiveCpus, globalEffectiveCores, socketUpdated);
 
-                if (topology == null) {
-                    socketUpdated.set(info.socket());
-                } else if (topology.effectiveCores.get(info.core()) != globalEffectiveCores.get(
-                        info.core())) {
-                    socketUpdated.set(info.socket());
-                } else if (topology.effectiveCpus.get(cpu) != globalEffectiveCpus.get(cpu)) {
-                    socketUpdated.set(info.socket());
-                }
-
-                if (globalEffectiveCores.get(info.core())) {
-                    globalEffectiveSockets.set(info.socket());
-                }
-            }
-
-            boolean globalUpdate = !effectiveTopology.effectiveSockets
-                    .equals(globalEffectiveSockets);
-
-            List<EffectiveSocketTopology> sTopologies = new ArrayList<>();
-            effectiveTopology.socketTopologies.forEach(t -> sTopologies.add(null));
-
-            for (int socket = socketUpdated.nextSetBit(0); socket >= 0;
-                    socket = socketUpdated.nextSetBit(socket + 1)) {
-
-                SocketInfo info = SystemInfo.getSocketInfo(socket);
-                BitSet effectiveCores = info.getCoreSet();
-                effectiveCores.and(globalEffectiveCores);
-
-                BitSet effectiveCpus = info.getCpuSet();
-                effectiveCpus.and(globalEffectiveCpus);
-
-                EffectiveSocketTopology socketTopology = null;
-                if(socket < effectiveTopology.socketTopologies.size()) {
-                    socketTopology = effectiveTopology.socketTopologies.get(socket);
-                }
-
-                while(socket >= sTopologies.size()) {
-                    sTopologies.add(null);
-                }
-
-                sTopologies.set(socket, new EffectiveSocketTopology(
-                        socketTopology == null ? 1 : socketTopology.version + 1, socket,
-                        new UnmodifiableBitSet(effectiveCores),
-                        new UnmodifiableBitSet(effectiveCpus),
-                        buildCoreToCpus(effectiveCpus)));
-            }
-
-            if (globalUpdate) {
                 int version = globalVersion.incrementAndGet();
                 this.effectiveTopology = new EffectiveSystemTopology(
                         new UnmodifiableBitSet(globalEffectiveSockets),
@@ -142,6 +86,45 @@ public final class TopologyMapper {
         } finally {
             wip.set(false);
         }
+    }
+
+    private void buildGlobalEffective(BitSet effectiveCpus, BitSet effectiveCores, BitSet effectiveSockets) {
+        for (int cpu = effectiveCpus.nextSetBit(0); cpu >= 0; cpu = effectiveCpus.nextSetBit(cpu + 1)) {
+            CpuInfo info = SystemInfo.getCpuInfo(cpu);
+            if(info != null) {
+                effectiveCores.set(info.core());
+                effectiveSockets.set(info.socket());
+            }
+        }
+    }
+
+    private List<EffectiveSocketTopology> buildSocketTopologies(BitSet globalEffectiveCpus, BitSet globalEffectiveCores, BitSet globalEffectiveSockets) {
+        EffectiveSystemTopology effectiveTopology = this.effectiveTopology;
+
+        List<EffectiveSocketTopology> sTopologies = new ArrayList<>();
+        effectiveTopology.socketTopologies.forEach(t -> sTopologies.add(null));
+
+        for(int socket = 0; socket <= SystemInfo.getMaxSocketId(); socket++) {
+            if(!globalEffectiveSockets.get(socket)) {
+                sTopologies.add(null);
+                continue;
+            }
+
+            SocketInfo info = SystemInfo.getSocketInfo(socket);
+            BitSet effectiveCores = info.getCoreSet();
+            effectiveCores.and(globalEffectiveCores);
+
+            BitSet effectiveCpus = info.getCpuSet();
+            effectiveCpus.and(globalEffectiveCpus);
+
+            EffectiveSocketTopology socketTopology = effectiveTopology.socketTopologies.size() > socket ? effectiveTopology.socketTopologies.get(socket) : null;
+            sTopologies.add(socket, new EffectiveSocketTopology(
+                    socketTopology == null ? 1 : socketTopology.version + 1, socket,
+                    new UnmodifiableBitSet(effectiveCores),
+                    new UnmodifiableBitSet(effectiveCpus),
+                    buildCoreToCpus(effectiveCpus)));
+        }
+        return sTopologies;
     }
 
     private List<BitSet> buildCoreToCpus(BitSet cpus) {

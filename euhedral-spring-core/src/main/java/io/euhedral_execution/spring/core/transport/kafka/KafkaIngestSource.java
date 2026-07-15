@@ -288,10 +288,6 @@ public class KafkaIngestSource implements LatticeSource {
     }
 
     private boolean updateInternal(Map<String, Object> properties) {
-        if (properties.equals(this.consumerProperties)) {
-            return false;
-        }
-
         boolean requiresFullUpdate = false;
         boolean requiresLightUpdate = false;
 
@@ -330,33 +326,37 @@ public class KafkaIngestSource implements LatticeSource {
         this.consumerProperties.putAll(properties);
 
         if (requiresFullUpdate) {
-            this.consumerProperties.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
-            this.consumerProperties.putIfAbsent(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 1024);
-
-            long heartbeatNs = Long.parseLong(
-                    this.consumerProperties.getOrDefault(
-                            ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "3000"
-                    ).toString()
-            ) * 1_000_000;
-
-            long sessionTimeoutNs = Long.parseLong(
-                    this.consumerProperties.getOrDefault(
-                            ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "45000"
-                    ).toString()
-            ) * 1_000_000;
-            HEARTBEAT.setRelease(this, Math.min(heartbeatNs, sessionTimeoutNs));
-
-            this.consumerProperties.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG,
-                    heartbeatNs / 1_000_000);
-            this.consumerProperties.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG,
-                    sessionTimeoutNs / 1_000_000);
-
-            this.offsetCollector.setCommitPolicy(getCommitPolicy(this.consumerProperties));
+            setDefaultProperties();
             return true;
         }
 
         this.offsetCollector.setCommitPolicy(getCommitPolicy(this.consumerProperties));
         return false;
+    }
+
+    private void setDefaultProperties() {
+        this.consumerProperties.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
+        this.consumerProperties.putIfAbsent(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 1024);
+
+        long heartbeatNs = Long.parseLong(
+                this.consumerProperties.getOrDefault(
+                        ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "3000"
+                ).toString()
+        ) * 1_000_000;
+
+        long sessionTimeoutNs = Long.parseLong(
+                this.consumerProperties.getOrDefault(
+                        ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "45000"
+                ).toString()
+        ) * 1_000_000;
+        HEARTBEAT.setRelease(this, Math.min(heartbeatNs, sessionTimeoutNs));
+
+        this.consumerProperties.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG,
+                heartbeatNs / 1_000_000);
+        this.consumerProperties.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG,
+                sessionTimeoutNs / 1_000_000);
+
+        this.offsetCollector.setCommitPolicy(getCommitPolicy(this.consumerProperties));
     }
 
     private void buildPartitionMap() {
@@ -429,6 +429,7 @@ public class KafkaIngestSource implements LatticeSource {
                 this.heartbeat.interrupt();
                 this.heartbeat.join(500);
             } catch (Exception ignored) {
+                Thread.currentThread().interrupt();
                 // Ignore interrupt on complete
             }
 

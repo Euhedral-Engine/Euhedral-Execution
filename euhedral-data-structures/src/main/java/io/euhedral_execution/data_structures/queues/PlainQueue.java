@@ -5,6 +5,7 @@ import io.euhedral_execution.data_structures.queues.common.QueueUtils;
 import java.util.AbstractQueue;
 import java.util.Collection;
 import java.util.Iterator;
+import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.function.Consumer;
 import org.jspecify.annotations.NonNull;
@@ -182,7 +183,12 @@ public class PlainQueue<T> extends AbstractQueue<T> implements BatchableQueue<T>
                 queue = (Object[]) queue[queue.length - 1];
             }
             pos += QueueUtils.INCREMENT;
-            return (T) queue[cIdx];
+            T obj = (T) queue[cIdx];
+
+            if(obj == null) {
+                throw new NoSuchElementException();
+            }
+            return obj;
         }
     }
 
