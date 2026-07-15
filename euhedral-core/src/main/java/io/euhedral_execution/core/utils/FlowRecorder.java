@@ -53,11 +53,11 @@ public class FlowRecorder {
         this.snapshot.updateSnapshot();
     }
 
-    public void record(long units) {
-        record(System.nanoTime(), units);
+    public void recordUnits(long units) {
+        recordUnits(System.nanoTime(), units);
     }
 
-    public void record(long now, long units) {
+    public void recordUnits(long now, long units) {
 
         long interval = (now - this.lastRecordingTime);
         if (now <= 0 || interval <= 0) {
@@ -89,7 +89,7 @@ public class FlowRecorder {
     }
 
     private void updateMetrics(long currentUnits, long currentInterval, double alpha) {
-        double unitsOverTime = (double) currentUnits / Math.max(currentInterval, 1e-9);
+        double unitsOverTime = currentUnits / Math.max(currentInterval, 1e-9);
 
         this.rollingSum = Math.round((1.0 - alpha) * this.rollingSum + currentUnits);
         if(this.averageInterval == 0) {

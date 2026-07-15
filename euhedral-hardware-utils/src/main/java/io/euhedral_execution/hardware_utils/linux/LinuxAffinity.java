@@ -40,8 +40,8 @@ public final class LinuxAffinity extends ThreadPinner {
                 LOGGER.error("Linux prctl failed with return code: {}", result);
                 return false;
             }
-        } catch (Throwable t) {
-            LOGGER.error("Failed to set Linux timer_slack.", t);
+        } catch (Exception e) {
+            LOGGER.error("Failed to set Linux timer_slack.", e);
             return false;
         }
         return true;

@@ -21,17 +21,18 @@ public class RebalanceListener implements ConsumerRebalanceListener {
 
     @Override
     public void onPartitionsRevoked(Collection<TopicPartition> collection) {
-        if (this.actualConsumer.getAcquire() != this.consumer) {
-            return;
-        }
-        eventHandler.add(Event.PARTITION_UPDATE);
+        sendUpdate();
     }
 
     @Override
     public void onPartitionsAssigned(Collection<TopicPartition> collection) {
+        sendUpdate();
+    }
+
+    private void sendUpdate() {
         if (this.actualConsumer.getAcquire() != this.consumer) {
             return;
         }
-        eventHandler.add(Event.PARTITION_UPDATE);
+        this.eventHandler.add(Event.PARTITION_UPDATE);
     }
 }

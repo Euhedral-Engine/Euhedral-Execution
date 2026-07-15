@@ -77,4 +77,8 @@ public class QueueUtils {
         long rounded = Long.highestOneBit((chunkSize - 1) << 1);
         return rounded > MAX_SIZE ? MAX_SIZE : rounded;
     }
+
+    private QueueUtils() {
+
+    }
 }

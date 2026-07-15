@@ -83,7 +83,7 @@ public class MandelbrotCanvas {
 
                     double globalIndex;
 
-                    double t = Math.pow(smoothCount / (double) 5_000, 0.5);
+                    double t = Math.pow(smoothCount / 5_000, 0.5);
                     double fastOutsideCycle = Math.sin(t * Math.PI * 0.5) * 2.5;
 
                     globalIndex = fastOutsideCycle * DEFAULT_PALETTE.length;

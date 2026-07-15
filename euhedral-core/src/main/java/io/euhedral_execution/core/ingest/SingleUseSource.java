@@ -1,14 +1,14 @@
 package io.euhedral_execution.core.ingest;
 
+import io.euhedral_execution.core.frames.AbstractFrame;
+import io.euhedral_execution.core.generics.LatticeReceiver;
+import io.euhedral_execution.core.generics.LatticeSource;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.Objects;
 import java.util.function.Consumer;
 
-import io.euhedral_execution.core.frames.AbstractFrame;
-import io.euhedral_execution.core.generics.LatticeReceiver;
-import io.euhedral_execution.core.generics.LatticeSource;
-
+@SuppressWarnings("unused")
 public class SingleUseSource implements LatticeSource {
     private static final VarHandle COMPLETE;
     private static final VarHandle RECEIVER;
@@ -17,8 +17,8 @@ public class SingleUseSource implements LatticeSource {
         try {
             COMPLETE = MethodHandles.lookup().findVarHandle(SingleUseSource.class, "complete", boolean.class);
             RECEIVER = MethodHandles.lookup().findVarHandle(SingleUseSource.class, "receiver", LatticeReceiver.class);
-        } catch (Throwable t) {
-            throw new ExceptionInInitializerError(t);
+        } catch (Exception e) {
+            throw new ExceptionInInitializerError(e);
         }
     }
 

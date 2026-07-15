@@ -27,7 +27,7 @@ public final class CacheMetrics implements AutoCloseable {
         }
 
         this.registry = config.registry();
-        if (registry != null) {
+        if (this.registry != null && config.cloneConfig() != null) {
             this.meters = new ArrayList<>();
             String tag = String.valueOf(config.cloneConfig().coreId());
 

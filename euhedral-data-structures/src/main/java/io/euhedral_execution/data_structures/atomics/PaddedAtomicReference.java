@@ -3,7 +3,7 @@ package io.euhedral_execution.data_structures.atomics;
 import io.euhedral_execution.data_structures.atomics.padding.PaddedReference;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
-import java.util.function.Function;
+import java.util.function.UnaryOperator;
 
 @SuppressWarnings({"unchecked","unused"})
 public final class PaddedAtomicReference<T> extends PaddedReference<T> {
@@ -14,8 +14,8 @@ public final class PaddedAtomicReference<T> extends PaddedReference<T> {
         try {
             HANDLE = MethodHandles.lookup()
                     .findVarHandle(PaddedAtomicReference.class, "ref", Object.class);
-        } catch (Throwable t) {
-            throw new ExceptionInInitializerError(t);
+        } catch (Exception e) {
+            throw new ExceptionInInitializerError(e);
         }
     }
 
@@ -71,7 +71,7 @@ public final class PaddedAtomicReference<T> extends PaddedReference<T> {
 
     // ----- CAS -----
 
-    public T getAndUpdate(Function<T, T> updateFunction) {
+    public T getAndUpdate(UnaryOperator<T> updateFunction) {
         T prev, next;
         do {
             prev = get();
@@ -80,7 +80,7 @@ public final class PaddedAtomicReference<T> extends PaddedReference<T> {
         return prev;
     }
 
-    public T updateAndGet(Function<T, T> updateFunction) {
+    public T updateAndGet(UnaryOperator<T> updateFunction) {
         T prev, next;
         do {
             prev = get();

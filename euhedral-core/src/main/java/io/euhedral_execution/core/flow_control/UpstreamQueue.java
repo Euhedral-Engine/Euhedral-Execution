@@ -134,11 +134,9 @@ public class UpstreamQueue {
     }
 
     /// A wrapper for an upstream source.
-    public static abstract class UpstreamHandle implements LatticeInterceptor {
+    public abstract static class UpstreamHandle implements LatticeInterceptor {
 
         public abstract long getId();
-
-        public abstract long pull(Consumer<AbstractFrame> consumer, long demand);
 
         public abstract boolean isComplete();
 

@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -44,9 +45,9 @@ class ControlPlaneShardTest {
     }
 
     @Test
-    public void testInitialization() {
+    void testInitialization() {
         TestClone clone = mock(TestClone.class);
-        LatticeEdge upstream = Mockito.spy(new LatticeEdge(new AtomicBoolean()));
+        LatticeEdge upstream = spy(new LatticeEdge(new AtomicBoolean()));
 
         doReturn(clone).when(clone).clone(any(CloneConfig.class));
 
@@ -78,8 +79,8 @@ class ControlPlaneShardTest {
     }
 
     @Test
-    public void testRebalanceOnTopologyChange() throws Exception {
-        LatticeEdge upstream = Mockito.spy(new LatticeEdge(new AtomicBoolean()));
+    void testRebalanceOnTopologyChange() throws Exception {
+        LatticeEdge upstream = spy(new LatticeEdge(new AtomicBoolean()));
         TestClone baseClone = mock(TestClone.class);
 
         TestClone[] clones = new TestClone[2];

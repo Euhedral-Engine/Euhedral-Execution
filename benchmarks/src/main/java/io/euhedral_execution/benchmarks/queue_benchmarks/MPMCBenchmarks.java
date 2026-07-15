@@ -77,7 +77,8 @@ public class MPMCBenchmarks {
                                 Thread.onSpinWait();
                             }
                         }
-                    } catch (Throwable e) {
+                    } catch (Exception e) {
+                        Thread.currentThread().interrupt();
                         throw new RuntimeException(e);
                     }
                 });
@@ -97,7 +98,8 @@ public class MPMCBenchmarks {
                             count += c;
                         }
                         end.await();
-                    } catch (Throwable e) {
+                    } catch (Exception e) {
+                        Thread.currentThread().interrupt();
                         throw new RuntimeException(e);
                     }
                 });
@@ -118,7 +120,8 @@ public class MPMCBenchmarks {
                             }
                         }
                         end.await();
-                    } catch (Throwable e) {
+                    } catch (Exception e) {
+                        Thread.currentThread().interrupt();
                         throw new RuntimeException(e);
                     }
                 });
@@ -137,7 +140,8 @@ public class MPMCBenchmarks {
                             }
                             count += c;
                         }
-                    } catch (Throwable e) {
+                    } catch (Exception e) {
+                        Thread.currentThread().interrupt();
                         throw new RuntimeException(e);
                     }
                 });

@@ -8,6 +8,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.LockSupport;
 import lombok.Getter;
+import org.jspecify.annotations.NonNull;
 import reactor.core.Disposable;
 
 public final class TaskFrame extends AbstractFrame implements Disposable {
@@ -19,10 +20,11 @@ public final class TaskFrame extends AbstractFrame implements Disposable {
     private final Runnable task;
     @Getter
     private final long periodNs;
+
     private Thread thread;
     private long seed;
 
-    private TaskFrame(long idHash, Runnable task, EuhedralWorker sink, long delay, long period, TimeUnit unit) {
+    private TaskFrame(long idHash, Runnable task, EuhedralWorker sink, long delay, long period, @NonNull TimeUnit unit) {
         super(idHash, null, new AtomicBoolean());
 
         this.task = task;
@@ -31,39 +33,33 @@ public final class TaskFrame extends AbstractFrame implements Disposable {
 
         randomizeHash(this.seed++);
 
-        long delayNs = unit.toNanos(delay);
-
-        if(delayNs <= 0 && periodNs <= 0) {
+        LockSupport.parkNanos(unit.toNanos(delay));
+        if(periodNs <= 0) {
             sink.submit(this);
         } else {
             CompletableFuture.runAsync(() -> {
                 this.thread = Thread.currentThread();
-                if (delay > 0) {
-                    LockSupport.parkNanos(delayNs);
-                }
-                if (periodNs > 0) {
-                    while (!Thread.interrupted() && isAlive()) {
-                        if(sink.isDisposed()) {
-                            break;
-                        }
-
-                        sink.submit(this);
-
-                        long now = System.nanoTime();
-                        LockSupport.park();
-
-                        long delta = System.nanoTime() - now;
-                        delta = periodNs - delta;
-                        if(delta > 0) {
-                            LockSupport.parkNanos(delta);
-                        }
-                        randomizeHash(this.seed++);
-                    }
-                    kill();
-                } else {
-                    sink.submit(this);
-                }
+                cycle(sink);
+                kill();
             });
+        }
+    }
+
+    private void cycle(EuhedralWorker sink) {
+        while (!Thread.interrupted() && isAlive()) {
+            if(sink.isDisposed()) {
+                break;
+            }
+
+            randomizeHash(this.seed++);
+            sink.submit(this);
+
+            long now = System.nanoTime();
+            // doFinally() will unpark
+            LockSupport.park();
+            long delta = System.nanoTime() - now;
+
+            LockSupport.parkNanos(this.periodNs - delta);
         }
     }
 

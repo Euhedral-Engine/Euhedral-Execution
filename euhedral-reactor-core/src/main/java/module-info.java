@@ -9,6 +9,7 @@ module euhedral.reactor.core {
     requires org.jspecify;
     requires org.reactivestreams;
     requires reactor.core;
+    requires org.slf4j;
 
     exports io.euhedral_execution.reactor;
     exports io.euhedral_execution.reactor.common;

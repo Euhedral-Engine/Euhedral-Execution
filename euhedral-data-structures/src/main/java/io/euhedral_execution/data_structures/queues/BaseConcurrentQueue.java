@@ -10,6 +10,7 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.Collection;
 import java.util.Iterator;
+import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.function.Consumer;
 import org.jspecify.annotations.NonNull;
@@ -18,6 +19,8 @@ import org.jspecify.annotations.NonNull;
 public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue<T> implements
         BatchableQueue<T> {
 
+    private static final String NULL_ELEMENTS_ERROR = "null elements cannot be inserted into this queue";
+
     private static void linkChunk(Object[] oldQueue, Object[] nextQueue, int cIdx) {
         oldQueue[oldQueue.length - 1] = nextQueue;
 
@@ -25,7 +28,7 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue<T> 
         QueueUtils.storeVolatile(oldQueue, cIdx, QueueUtils.SENTINEL);
     }
 
-    protected static boolean spEpochUpdate(BaseConcurrentQueue<?> impl, long tail, long epoch) {
+    protected static boolean spEpochUpdate(BaseConcurrentQueue<?> impl, long tail) {
         int cIdx = QueueUtils.chunkIndex(tail, impl.chunkMask);
         long head = getHeadAcquire(impl);
 
@@ -90,7 +93,7 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue<T> 
 
             // Slow Path
             if (claim == 0) {
-                if (!spEpochUpdate(this, tail, epoch)) {
+                if (!spEpochUpdate(this, tail)) {
                     break;
                 }
                 continue;
@@ -101,7 +104,7 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue<T> 
             // Fast Path
             while (claim > 0) {
                 Object obj = objs[start++];
-                Objects.requireNonNull(obj, "null elements cannot be inserted into this queue");
+                Objects.requireNonNull(obj, NULL_ELEMENTS_ERROR);
 
                 int cIdx = QueueUtils.chunkIndex(tail, this.chunkMask);
                 storeInTailQueuePlain(this, cIdx, obj);
@@ -130,7 +133,7 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue<T> 
 
             // Slow Path
             if (claim == 0) {
-                if (!spEpochUpdate(this, tail, epoch)) {
+                if (!spEpochUpdate(this, tail)) {
                     break;
                 }
                 continue;
@@ -141,7 +144,7 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue<T> 
             // Fast Path
             while (claim > 0 && iter.hasNext()) {
                 Object obj = iter.next();
-                Objects.requireNonNull(obj, "null elements cannot be inserted into this queue");
+                Objects.requireNonNull(obj, NULL_ELEMENTS_ERROR);
 
                 int cIdx = QueueUtils.chunkIndex(tail, this.chunkMask);
                 storeInTailQueuePlain(this, cIdx, obj);
@@ -310,7 +313,7 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue<T> 
 
             // Slow Path
             if (claim == 0) {
-                if (!spEpochUpdate(receiver, theirTail, theirEpoch)) {
+                if (!spEpochUpdate(receiver, theirTail)) {
                     break;
                 }
                 continue;
@@ -394,6 +397,7 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue<T> 
             if(!receiver.offer((T) obj)) {
                 break;
             }
+            total++;
             head += INCREMENT;
             size -= INCREMENT;
             if(sideEffect != null) {
@@ -438,7 +442,7 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue<T> 
                 size -= claim;
                 while (claim > 0) {
                     Object obj = objs[start++];
-                    Objects.requireNonNull(obj, "null elements cannot be inserted into this queue");
+                    Objects.requireNonNull(obj, NULL_ELEMENTS_ERROR);
 
                     int cIdx = QueueUtils.chunkIndex(tail, this.chunkMask);
                     storeInTailQueuePlain(this, cIdx, obj);
@@ -500,7 +504,7 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue<T> 
                 size -= claim;
                 while (claim > 0) {
                     Object obj = iter.next();
-                    Objects.requireNonNull(obj, "null elements cannot be inserted into this queue");
+                    Objects.requireNonNull(obj, NULL_ELEMENTS_ERROR);
 
                     int cIdx = QueueUtils.chunkIndex(tail, this.chunkMask);
                     storeInTailQueuePlain(this, cIdx, obj);
@@ -525,7 +529,7 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue<T> 
                 Object[] nextQueue = allocateChunk(queue.length);
                 nextQueue[cIdx] = iter.next();
                 Objects.requireNonNull(nextQueue[cIdx],
-                        "null elements cannot be inserted into this queue");
+                        NULL_ELEMENTS_ERROR);
                 setTailQueuePlain(this, nextQueue);
                 setTailEpochPlain(this, tail + this.chunkMask);
                 getAndAddTail(this, HALF_INCREMENT);
@@ -624,6 +628,7 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue<T> 
 
     // ----- Queue<T> Interface -----
 
+    @Override
     public final boolean add(T obj) {
         if (offer(obj)) {
             return true;
@@ -636,7 +641,7 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue<T> 
     }
 
     /// Use `sizeLong()` for an accurate count
-    @Deprecated
+    @Deprecated(since="0.0.1")
     public final int size() {
         return (int) Math.min(sizeLong(), Integer.MAX_VALUE);
     }
@@ -660,8 +665,8 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue<T> 
             try {
                 MC_FLAG = MethodHandles.lookup()
                         .findVarHandle(MCAccessFlag.class, "mcFlag", long.class);
-            } catch (Throwable t) {
-                throw new ExceptionInInitializerError(t);
+            } catch (Exception e) {
+                throw new ExceptionInInitializerError(e);
             }
         }
 
@@ -721,7 +726,12 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue<T> 
                 queue = (Object[]) queue[queue.length - 1];
             }
             pos += INCREMENT;
-            return (T) queue[cIdx];
+            T obj = (T) queue[cIdx];
+
+            if(obj == null) {
+                throw new NoSuchElementException();
+            }
+            return obj;
         }
     }
 }

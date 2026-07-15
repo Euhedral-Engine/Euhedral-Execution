@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.github.dockerjava.api.command.ExecCreateCmdResponse;
 import java.io.File;
 import java.util.BitSet;
+import java.util.concurrent.locks.LockSupport;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.containers.BindMode;
 import org.testcontainers.containers.GenericContainer;
@@ -15,7 +16,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @Testcontainers
 class ThreadToolsTest {
     @Test
-    public void testPinningToAll() throws Exception {
+    void testPinningToAll() {
         File testJar = new File("target/testing/test-container.jar");
 
         GenericContainer<?> container = new GenericContainer<>("eclipse-temurin:21-jre-alpine")
@@ -55,11 +56,11 @@ class ThreadToolsTest {
         validate(execOutput, expected.toString());
     }
 
-    private void validate(StringBuffer execOutput, String expected) throws Exception {
+    private void validate(StringBuffer execOutput, String expected) {
         long deadline = System.currentTimeMillis() + 5000;
         while (!execOutput.toString().contains("Base Affinity Mask:")
                 && System.currentTimeMillis() < deadline) {
-            Thread.sleep(50);
+            LockSupport.parkNanos(50_000_000);
         }
         assertTrue(System.currentTimeMillis() < deadline, "Timeout waiting for pinning.");
         String[] out = execOutput.toString().split("Base Affinity Mask:\\s*");

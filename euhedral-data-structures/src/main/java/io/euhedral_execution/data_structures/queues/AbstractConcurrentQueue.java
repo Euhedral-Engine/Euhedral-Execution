@@ -77,8 +77,8 @@ public abstract class AbstractConcurrentQueue<T> extends StartPad<T> {
             TAIL = MethodHandles.lookup().findVarHandle(AbstractConcurrentQueue.class, "tail", long.class);
             EPOCH = MethodHandles.lookup().findVarHandle(AbstractConcurrentQueue.class, "tailEpoch", long.class);
             TAIL_QUEUE = MethodHandles.lookup().findVarHandle(AbstractConcurrentQueue.class, "tailQueue", Object[].class);
-        } catch (Throwable t) {
-            throw new ExceptionInInitializerError(t);
+        } catch (Exception e) {
+            throw new ExceptionInInitializerError(e);
         }
     }
 

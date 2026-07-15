@@ -10,7 +10,7 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 @SuppressWarnings("unused")
-public final class CallbackFrame<T, R> extends ChainFrame<CallbackFrame<T, R>> {
+public final class CallbackFrame<T, R> extends AbstractFrame {
 
     private final Function<T, R> function;
 
@@ -22,8 +22,8 @@ public final class CallbackFrame<T, R> extends ChainFrame<CallbackFrame<T, R>> {
     public CallbackFrame(long idHash,
             T payload,
             @NonNull Function<T, R> function,
-            @NonNull FramePusher<ChainFrame<CallbackFrame<T, R>>> responseReceiver) {
-        super(idHash, responseReceiver);
+            @NonNull FramePusher<CallbackFrame<T, R>> responseReceiver) {
+        super(idHash, responseReceiver, null, null);
         Objects.requireNonNull(function);
         this.function = function;
         this.payload = payload;
@@ -32,7 +32,7 @@ public final class CallbackFrame<T, R> extends ChainFrame<CallbackFrame<T, R>> {
     public CallbackFrame(long idHash,
             T payload,
             @NonNull Function<T, R> function,
-            @NonNull FramePusher<ChainFrame<CallbackFrame<T, R>>> responseReceiver,
+            @NonNull FramePusher<CallbackFrame<T, R>> responseReceiver,
             @Nullable FrameManager<T, CallbackFrame<T, R>> recycler,
             @Nullable AtomicBoolean killSwitch) {
         super(idHash, responseReceiver, recycler, killSwitch);
@@ -47,10 +47,9 @@ public final class CallbackFrame<T, R> extends ChainFrame<CallbackFrame<T, R>> {
         giveToReceiver(this);
     }
 
-    /// Intentionally empty. recycle() must be called manually
     @Override
     public void doFinally() {
-
+        // Intentionally empty. recycle() must be called manually
     }
 
     public void replace(T payload) {

@@ -1,6 +1,5 @@
 package io.euhedral_execution.core.ingest;
 
-import io.euhedral_execution.core.control_plane.ControlPlaneLattice;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.generics.LatticeReceiver;
 import io.euhedral_execution.core.generics.LatticeSource;
@@ -11,14 +10,14 @@ import java.util.function.Consumer;
 
 public abstract class AbstractIngestSink {
 
-    /// Used by the [ControlPlaneLattice][ControlPlaneLattice] to connect to this sink.
+    /// Used by the [ControlPlaneLattice][io.euhedral_execution.core.control_plane.ControlPlaneLattice] to connect to this sink.
     public abstract LatticeSource getDelegate();
 
     /// Marks the sink as complete and disconnects it from the
-    /// [ControlPlaneLattice][ControlPlaneLattice].
+    /// [ControlPlaneLattice][io.euhedral_execution.core.control_plane.ControlPlaneLattice].
     public abstract void complete();
 
-    protected static abstract class Delegate implements LatticeSource {
+    protected abstract static class Delegate implements LatticeSource {
 
         protected static final VarHandle TERMINAL;
 
@@ -26,8 +25,8 @@ public abstract class AbstractIngestSink {
             try {
                 TERMINAL = MethodHandles.lookup()
                         .findVarHandle(Delegate.class, "terminal", LatticeReceiver.class);
-            } catch (Throwable t) {
-                throw new ExceptionInInitializerError(t);
+            } catch (Exception e) {
+                throw new ExceptionInInitializerError(e);
             }
         }
 
@@ -57,8 +56,8 @@ public abstract class AbstractIngestSink {
 
         @Override
         public final long pull(Consumer<AbstractFrame> consumer, long demand) {
-            var terminal = getTerminal();
-            if (terminal == null || demand <= 0) {
+            var receiver = getTerminal();
+            if (receiver == null || demand <= 0) {
                 return 0;
             }
             return hookOnPull(consumer, demand);
@@ -68,11 +67,11 @@ public abstract class AbstractIngestSink {
 
         @Override
         public final void request(long demand) {
-            var terminal = getTerminal();
-            if (terminal == null || demand <= 0) {
+            var receiver = getTerminal();
+            if (receiver == null || demand <= 0) {
                 return;
             }
-            hookOnRequest(terminal, addAndGetDemand(demand));
+            hookOnRequest(receiver, addAndGetDemand(demand));
         }
 
         public abstract void hookOnRequest(LatticeReceiver terminal, long demand);

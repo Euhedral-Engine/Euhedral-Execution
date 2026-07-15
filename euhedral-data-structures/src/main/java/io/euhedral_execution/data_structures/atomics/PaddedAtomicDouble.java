@@ -3,8 +3,8 @@ package io.euhedral_execution.data_structures.atomics;
 import io.euhedral_execution.data_structures.atomics.padding.PaddedDouble;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
-import java.util.function.BiFunction;
-import java.util.function.Function;
+import java.util.function.DoubleBinaryOperator;
+import java.util.function.DoubleUnaryOperator;
 
 @SuppressWarnings("unused")
 public class PaddedAtomicDouble extends PaddedDouble {
@@ -14,8 +14,8 @@ public class PaddedAtomicDouble extends PaddedDouble {
         try {
             HANDLE = MethodHandles.lookup()
                     .findVarHandle(PaddedAtomicDouble.class, "value", double.class);
-        } catch (Throwable t) {
-            throw new ExceptionInInitializerError(t);
+        } catch (Exception e) {
+            throw new ExceptionInInitializerError(e);
         }
     }
 
@@ -101,38 +101,38 @@ public class PaddedAtomicDouble extends PaddedDouble {
 
     // ----- CAS -----
 
-    public double getAndUpdate(Function<Double, Double> updateFunction) {
+    public double getAndUpdate(DoubleUnaryOperator updateFunction) {
         double prev, next;
         do {
             prev = get();
-            next = updateFunction.apply(prev);
+            next = updateFunction.applyAsDouble(prev);
         } while (!weakCompareAndSet(prev, next));
         return prev;
     }
 
-    public double updateAndGet(Function<Double, Double> updateFunction) {
+    public double updateAndGet(DoubleUnaryOperator updateFunction) {
         double prev, next;
         do {
             prev = get();
-            next = updateFunction.apply(prev);
+            next = updateFunction.applyAsDouble(prev);
         } while (!weakCompareAndSet(prev, next));
         return next;
     }
 
-    public double getAndAccumulate(double val, BiFunction<Double, Double, Double> accumulator) {
+    public double getAndAccumulate(double val, DoubleBinaryOperator accumulator) {
         double prev, next;
         do {
             prev = get();
-            next = accumulator.apply(prev, val);
+            next = accumulator.applyAsDouble(prev, val);
         } while (!compareAndSet(prev, next));
         return prev;
     }
 
-    public double accumulateAndGet(double val, BiFunction<Double, Double, Double> accumulator) {
+    public double accumulateAndGet(double val, DoubleBinaryOperator accumulator) {
         double prev, next;
         do {
             prev = get();
-            next = accumulator.apply(prev, val);
+            next = accumulator.applyAsDouble(prev, val);
         } while (!compareAndSet(prev, next));
         return next;
     }

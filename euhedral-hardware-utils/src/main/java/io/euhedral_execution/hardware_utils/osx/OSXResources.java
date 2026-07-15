@@ -1,4 +1,4 @@
-package io.euhedral_execution.hardware_utils.macOS;
+package io.euhedral_execution.hardware_utils.osx;
 
 import io.euhedral_execution.hardware_utils.common.OSName;
 import io.euhedral_execution.hardware_utils.common.SystemSnapshotProvider;
@@ -98,8 +98,8 @@ public final class OSXResources implements SystemSnapshotProvider {
                     getMemorySnapshot(),
                     ioBytes
             );
-        } catch (Throwable t) {
-            LOGGER.error("Error generating SystemSnapshot.", t);
+        } catch (Exception e) {
+            LOGGER.error("Error generating SystemSnapshot.", e);
         } finally {
             this.snapshot.set(snapshot);
             this.wip.set(false);

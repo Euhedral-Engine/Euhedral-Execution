@@ -34,17 +34,17 @@ public final class StringHasher extends AbstractHasher {
         h64 += byteLen;
 
         while (i <= charLen - 4) {
-            h64 = AbstractHasher.tail_1(h64, readLongFromChars(s, i));
+            h64 = AbstractHasher.tail1(h64, readLongFromChars(s, i));
             i += 4;
         }
         if (i <= charLen - 2) {
-            h64 = AbstractHasher.tail_2(h64, readIntFromChars(s, i));
+            h64 = AbstractHasher.tail2(h64, readIntFromChars(s, i));
             i += 2;
         }
         if (i < charLen) {
             int c = s.charAt(i);
-            h64 = AbstractHasher.tail_3(h64, c);
-            h64 = AbstractHasher.tail_3(h64, c >> 8);
+            h64 = AbstractHasher.tail3(h64, c);
+            h64 = AbstractHasher.tail3(h64, c >> 8);
         }
         return AbstractHasher.mix(h64);
     }
@@ -54,7 +54,7 @@ public final class StringHasher extends AbstractHasher {
     }
 
     private static long readLongFromChars(String s, int i) {
-        return (long) s.charAt(i) |
+        return s.charAt(i) |
                 ((long) s.charAt(i + 1) << 16) |
                 ((long) s.charAt(i + 2) << 32) |
                 ((long) s.charAt(i + 3) << 48);
@@ -62,5 +62,9 @@ public final class StringHasher extends AbstractHasher {
 
     private static int readIntFromChars(String s, int i) {
         return s.charAt(i) | (s.charAt(i + 1) << 16);
+    }
+
+    private StringHasher() {
+
     }
 }

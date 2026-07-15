@@ -30,11 +30,6 @@ public class BenchArrayFrame extends AbstractFrame {
     }
 
     @Override
-    public void kill() {
-
-    }
-
-    @Override
     public void doFinally() {
         this.counters.getAndAdd(cpu, 4L * this.frames.length);
     }

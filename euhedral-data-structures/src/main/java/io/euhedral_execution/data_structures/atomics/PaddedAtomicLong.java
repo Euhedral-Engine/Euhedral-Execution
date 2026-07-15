@@ -14,8 +14,8 @@ public class PaddedAtomicLong extends PaddedLong {
         try {
             HANDLE = MethodHandles.lookup()
                     .findVarHandle(PaddedAtomicLong.class, "value", long.class);
-        } catch (Throwable t) {
-            throw new ExceptionInInitializerError(t);
+        } catch (Exception e) {
+            throw new ExceptionInInitializerError(e);
         }
     }
 
