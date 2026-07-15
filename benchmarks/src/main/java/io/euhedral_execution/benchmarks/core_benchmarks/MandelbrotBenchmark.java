@@ -61,7 +61,7 @@ public class MandelbrotBenchmark {
     private static void shuffle(MandelbrotPixel[] pixels) {
         long seed = SEED;
         for (int i = CANVAS - 1; i > 0; i--) {
-            int j = (int) MathFunctions.unsignedMultiplyHigh(HasherApi.mix(seed++), i + 1);
+            int j = (int) MathFunctions.unsignedMultiplyHigh(HasherApi.mix(seed++), i + 1L);
             MandelbrotPixel temp = pixels[i];
             temp.randomizeHash(seed);
             pixels[j].randomizeHash(seed++);

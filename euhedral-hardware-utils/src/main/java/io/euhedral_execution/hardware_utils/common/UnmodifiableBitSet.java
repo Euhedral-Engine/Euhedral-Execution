@@ -182,7 +182,7 @@ public final class UnmodifiableBitSet extends BitSet {
 
     @Override
     public Object clone() {
-        return new UnmodifiableBitSet(this);
+        return this.delegate.clone();
     }
 
     @Override

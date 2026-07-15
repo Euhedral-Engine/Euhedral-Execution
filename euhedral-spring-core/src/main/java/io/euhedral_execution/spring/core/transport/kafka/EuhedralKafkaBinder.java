@@ -1,15 +1,16 @@
 package io.euhedral_execution.spring.core.transport.kafka;
 
-import io.euhedral_execution.core.control_plane.ControlPlaneLattice;
-import io.euhedral_execution.hashing.HasherApi;
-import it.unimi.dsi.fastutil.longs.LongArraySet;
-import jakarta.annotation.PreDestroy;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import io.euhedral_execution.core.control_plane.ControlPlaneLattice;
+import io.euhedral_execution.hashing.HasherApi;
+import it.unimi.dsi.fastutil.longs.LongArraySet;
+import jakarta.annotation.PreDestroy;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.jctools.maps.NonBlockingHashMapLong;
 import org.jctools.maps.NonBlockingHashSet;
@@ -58,15 +59,15 @@ public class EuhedralKafkaBinder extends
     private final NonBlockingHashSet<String> provisionedConsumers = new NonBlockingHashSet<>();
 
     private final AtomicBoolean wip = new AtomicBoolean(false);
-    private final NonBlockingHashMapLong<KafkaIngestSource> sources = new NonBlockingHashMapLong<>();
+    private final NonBlockingHashMapLong<KafkaIngestSource> sources =
+            new NonBlockingHashMapLong<>();
     private final ObjectProvider<BindingService> bindingService;
     private final ObjectProvider<KafkaProperties> kafkaProperties;
     private final ObjectProvider<KafkaBinderConfigurationProperties> binderConfig;
     private final ObjectProvider<KafkaExtendedBindingProperties> extendedBindingProperties;
 
     public EuhedralKafkaBinder(ControlPlaneLattice controlPlane,
-            KafkaMessageChannelBinder kafkaBinder,
-            KafkaTopicProvisioner kafkaProvisioner,
+            KafkaMessageChannelBinder kafkaBinder, KafkaTopicProvisioner kafkaProvisioner,
             ObjectProvider<BindingService> bindingService,
             ObjectProvider<KafkaProperties> kafkaProperties,
             ObjectProvider<KafkaBinderConfigurationProperties> binderConfig,
@@ -94,8 +95,8 @@ public class EuhedralKafkaBinder extends
             ExtendedProducerProperties<KafkaProducerProperties> properties,
             MessageChannel errorChannel) {
 
-        destination = kafkaProvisioner.provisionProducerDestination(destination.getName(),
-                properties);
+        destination =
+                kafkaProvisioner.provisionProducerDestination(destination.getName(), properties);
 
         DirectChannel channel = new DirectChannel();
         kafkaBinder.bindProducer(destination.getName(), channel, properties);
@@ -106,7 +107,7 @@ public class EuhedralKafkaBinder extends
     @Override
     protected MessageProducer createConsumerEndpoint(ConsumerDestination destination, String group,
             ExtendedConsumerProperties<KafkaConsumerProperties> properties) {
-        log.debug("Adding group: {}", group);
+        this.log.debug("Adding group: {}", group);
 
         Map<String, Object> props = buildConsumerProps(group, properties.getExtension());
         if (props.isEmpty()) {
@@ -114,33 +115,30 @@ public class EuhedralKafkaBinder extends
         }
 
         String rawName = destination.getName();
-        provisionedConsumers.add(rawName);
+        this.provisionedConsumers.add(rawName);
 
         destination =
-                kafkaProvisioner.provisionConsumerDestination(
-                        destination.getName(),
-                        group,
-                        properties
-                );
+                this.kafkaProvisioner.provisionConsumerDestination(destination.getName(), group,
+                        properties);
 
         String topic = destination.getName();
         long groupHash = HasherApi.getHash(group);
 
-        acquireLock();
-        boolean newSource = false;
         KafkaIngestSource source = this.sources.get(groupHash);
-        if (source == null) {
-            source = this.sources.put(groupHash,
-                    new KafkaIngestSource(group, props));
-            newSource = true;
+        acquireLock();
+        try {
+            if (source == null) {
+                source = this.sources.put(groupHash, new KafkaIngestSource(group, props));
+                source.addTopic(topic);
+                this.controlPlane.addUpstream(source);
+            } else {
+                source.addTopic(topic);
+                source.update(props);
+            }
+        } finally {
+            releaseLock();
         }
-        source.addTopic(topic);
-
-        if (!newSource) {
-            source.update(props);
-            this.controlPlane.addUpstream(source);
-        }
-        releaselock();
+        releaseLock();
 
         final KafkaIngestSource finalSource = source;
         return new MessageProducerSupport() {
@@ -154,16 +152,14 @@ public class EuhedralKafkaBinder extends
                         sources.remove(groupHash);
                     }
                 } finally {
-                    releaselock();
+                    releaseLock();
                 }
             }
         };
     }
 
-    private Map<String, Object> buildConsumerProps(
-            String group,
-            KafkaConsumerProperties properties
-    ) {
+    private Map<String, Object> buildConsumerProps(String group,
+            KafkaConsumerProperties properties) {
         Map<String, Object> props = getBaseKafkaConsumerProperties();
 
         if (properties != null && properties.getConfiguration() != null) {
@@ -195,13 +191,13 @@ public class EuhedralKafkaBinder extends
     }
 
     private void acquireLock() {
-        while (!wip.compareAndSet(false, true)) {
+        while (!this.wip.compareAndSet(false, true)) {
             Thread.onSpinWait();
         }
     }
 
-    private void releaselock() {
-        wip.set(false);
+    private void releaseLock() {
+        this.wip.set(false);
     }
 
     @SuppressWarnings("unchecked")
@@ -211,42 +207,38 @@ public class EuhedralKafkaBinder extends
 
         acquireLock();
         try {
-            KafkaExtendedBindingProperties extendedProps = extendedBindingProperties.getIfAvailable();
+            KafkaExtendedBindingProperties extendedProps =
+                    this.extendedBindingProperties.getIfAvailable();
             LongArraySet active = new LongArraySet(merged.size());
 
             for (var entry : merged.entrySet()) {
-                long groupHash = HasherApi.getHash(entry.getKey());
 
                 Map<String, Object> props = entry.getValue();
-                Set<String> binders = (Set<String>) props.remove(BINDER_NAMES);
-                Set<String> topics = (Set<String>) props.remove(TOPIC_NAMES);
+                Set<String> topics = (Set<String>) props.get(TOPIC_NAMES);
                 if (topics == null || topics.isEmpty()) {
                     continue;
                 }
-                active.add(groupHash);
 
-                KafkaIngestSource source = this.sources.get(groupHash);
-                if(source == null) {
-                    source = new KafkaIngestSource(entry.getKey(), props);
-                    final KafkaIngestSource finalSource = source;
-                    if(this.sources.computeIfAbsent(groupHash, ignored -> finalSource) != source) {
-                        finalSource.complete();
-                    }
-                } else {
-                    source.update(props);
+                String group = entry.getKey();
+                long groupHash = HasherApi.getHash(group);
+
+                active.add(groupHash);
+                createOrUpdateSource(group, groupHash, props);
+
+                if (extendedProps == null) {
+                    continue;
                 }
 
-                if (extendedProps != null) {
-                    for (String name : binders) {
-                        KafkaConsumerProperties consumerProps = extendedProps.getExtendedConsumerProperties(
-                                name);
-                        if (consumerProps != null && !provisionedConsumers.contains(name)) {
-                            provisionedConsumers.add(name);
-                            kafkaProvisioner.provisionConsumerDestination(name, entry.getKey(),
-                                    new ExtendedConsumerProperties<>(consumerProps));
-                        }
-
+                Set<String> binders = (Set<String>) props.get(BINDER_NAMES);
+                for (String name : binders) {
+                    KafkaConsumerProperties consumerProps =
+                            extendedProps.getExtendedConsumerProperties(name);
+                    if (consumerProps != null && !this.provisionedConsumers.contains(name)) {
+                        this.provisionedConsumers.add(name);
+                        this.kafkaProvisioner.provisionConsumerDestination(name, entry.getKey(),
+                                new ExtendedConsumerProperties<>(consumerProps));
                     }
+
                 }
             }
 
@@ -259,7 +251,7 @@ public class EuhedralKafkaBinder extends
             });
 
         } finally {
-            releaselock();
+            releaseLock();
         }
     }
 
@@ -277,53 +269,67 @@ public class EuhedralKafkaBinder extends
             return merged;
         }
 
-        KafkaExtendedBindingProperties extendedBindingProperties = this.extendedBindingProperties.getIfAvailable();
-        BindingServiceProperties bindingServiceProperties = bindingService.getBindingServiceProperties();
+        KafkaExtendedBindingProperties extendedBindingProperties =
+                this.extendedBindingProperties.getIfAvailable();
+        BindingServiceProperties bindingServiceProperties =
+                bindingService.getBindingServiceProperties();
 
         String defaultBinder = bindingServiceProperties.getDefaultBinder();
         Map<String, BindingProperties> bindings = bindingServiceProperties.getBindings();
         for (var entry : bindings.entrySet()) {
             BindingProperties bindingProps = entry.getValue();
-            String binder = bindingProps.getBinder();
-            binder = binder == null || binder.isBlank()
-                    ? defaultBinder
-                    : binder;
 
-            if (EUHEDRAL_BINDER.equals(binder)) {
-                String bindingName = entry.getKey();
-                Map<String, String> props;
-
-                if (extendedBindingProperties != null) {
-                    props = Optional.ofNullable(
-                            extendedBindingProperties.getExtendedConsumerProperties(
-                                    bindingName).getConfiguration()).orElse(Map.of());
-                } else {
-                    props = Map.of();
-                }
-
-                String group = entry.getValue().getGroup();
-                if (group == null || group.isBlank()) {
-                    continue;
-                }
-
-                String topic = bindingProps.getDestination();
-                if (topic != null && !topic.isBlank()) {
-                    Map<String, Object> groupProps = merged.computeIfAbsent(group,
-                            k -> new HashMap<>(base));
-                    Set<String> binderNames = (Set<String>) groupProps.computeIfAbsent(BINDER_NAMES,
-                            ignored -> new HashSet<String>());
-                    binderNames.add(bindingName);
-
-                    Set<String> topicNames = (Set<String>) groupProps.computeIfAbsent(TOPIC_NAMES,
-                            ignored -> new HashSet<String>());
-                    topicNames.add(topic);
-                    groupProps.putAll(props);
-                }
+            String topic = bindingProps.getDestination();
+            String group = bindingProps.getGroup();
+            if (group == null || group.isBlank() || topic == null || topic.isBlank()) {
+                continue;
             }
+
+            String binder = bindingProps.getBinder();
+            binder = binder == null || binder.isBlank() ? defaultBinder : binder;
+
+            if (!EUHEDRAL_BINDER.equals(binder)) {
+                continue;
+            }
+
+            String bindingName = entry.getKey();
+
+            Map<String, Object> groupProps =
+                    merged.computeIfAbsent(group, k -> new HashMap<>(base));
+
+            if (extendedBindingProperties != null) {
+                Map<String, String> props = Optional.ofNullable(
+                        extendedBindingProperties.getExtendedConsumerProperties(bindingName)
+                                .getConfiguration()).orElse(Map.of());
+                groupProps.putAll(props);
+            }
+
+            Set<String> binderNames = (Set<String>) groupProps.computeIfAbsent(BINDER_NAMES,
+                    ignored -> new HashSet<String>());
+            binderNames.add(bindingName);
+
+            Set<String> topicNames = (Set<String>) groupProps.computeIfAbsent(TOPIC_NAMES,
+                    ignored -> new HashSet<String>());
+            topicNames.add(topic);
         }
 
         merged.entrySet().removeIf(entry -> entry.getValue().isEmpty());
 
         return merged;
+    }
+
+    private void createOrUpdateSource(String group, long groupHash, Map<String, Object> props) {
+        KafkaIngestSource source = this.sources.get(groupHash);
+        if (source != null) {
+            source.update(props);
+            return;
+        }
+
+        final KafkaIngestSource finalSource = new KafkaIngestSource(group, props);
+        if (this.sources.computeIfAbsent(groupHash, ignored -> finalSource) != finalSource) {
+            finalSource.complete();
+        } else {
+            this.controlPlane.addUpstream(finalSource);
+        }
     }
 }

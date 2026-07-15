@@ -21,7 +21,7 @@ import org.jspecify.annotations.Nullable;
 /// @param <D>  The data type to use to replace fields in the frame
 /// @param <F> The frame type to recycle
 @SuppressWarnings({"unchecked", "unused"})
-public final class FrameManager<D, F extends AbstractFrame> implements AutoCloseable {
+public final class FrameManager<D, F extends AbstractFrame> {
 
     @Getter
     private final BatchableQueue<AbstractFrame> recycleQueue;
@@ -149,7 +149,6 @@ public final class FrameManager<D, F extends AbstractFrame> implements AutoClose
         return total;
     }
 
-    @Override
     public void close() {
         recycleQueue.clear();
     }

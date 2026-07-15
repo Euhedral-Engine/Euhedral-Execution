@@ -103,7 +103,7 @@ public final class QueueIngestSink extends AbstractIngestSink {
         public long hookOnPull(Consumer<AbstractFrame> consumer, long demand) {
             long count = this.queue.drain(consumer, demand);
             if(count == 0 && (boolean) FINISH.getOpaque(this)) {
-                complete();
+                super.complete();
             }
             return count;
         }
@@ -114,7 +114,7 @@ public final class QueueIngestSink extends AbstractIngestSink {
             if (count > 0) {
                 addAndGetDemand(-count);
             } else if((boolean) FINISH.getOpaque(this)) {
-                complete();
+                super.complete();
             }
         }
 

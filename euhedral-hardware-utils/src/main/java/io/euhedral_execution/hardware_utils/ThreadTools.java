@@ -37,7 +37,9 @@ public final class ThreadTools {
         BASE_AFFINITY = baseMask.toLongArray();
         releaseAffinity();
 
-        LOGGER.debug("Base Affinity Mask: {} 0x{}", baseMask, SystemInfo.toHexMask(baseMask));
+        if(LOGGER.isDebugEnabled()) {
+            LOGGER.debug("Base Affinity Mask: {} 0x{}", baseMask, SystemInfo.toHexMask(baseMask));
+        }
     }
 
     /// Gets the cpu of the calling thread.
@@ -111,7 +113,7 @@ public final class ThreadTools {
         boolean success;
         try {
             success = PINNER.setAffinity(cpuMasks);
-        } catch (Throwable ignored) {
+        } catch (Exception ignored) {
             return false;
         }
         return success;

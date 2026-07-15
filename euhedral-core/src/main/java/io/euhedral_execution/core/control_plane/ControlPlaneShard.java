@@ -8,6 +8,7 @@ import io.euhedral_execution.core.flow_control.LatticeVertex;
 import io.euhedral_execution.core.flow_control.RoutingPolicy;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.generics.CloneableObject;
+import io.euhedral_execution.core.utils.SpinWait;
 import io.euhedral_execution.data_structures.queues.common.QueueUtils;
 import io.euhedral_execution.hardware_utils.SystemInfo;
 import io.euhedral_execution.hardware_utils.SystemInfo.CpuInfo;
@@ -296,43 +297,22 @@ public class ControlPlaneShard {
         }
 
         clones.drain(clone -> CompletableFuture.runAsync(() -> {
-            Thread.currentThread().setName(this.shardName + "-" + clone.getCore());
+            int core = clone.getCore();
+
+            Thread.currentThread().setName(this.shardName + "-" + core);
             final long deadline =
                     System.nanoTime() + this.shutdownTimeout.toNanos();
 
-            while (!clone.isDrained()) {
-                LockSupport.parkNanos(10_000);
-                if (System.nanoTime() >= deadline) {
-                    break;
-                }
-            }
-            if (System.nanoTime() >= deadline) {
-                this.logger.error(
-                        "Failed to drain clone on core {}. Forcing shutdown and restarting if core is assigned.",
-                        clone.getCore());
-                try {
-                    clone.close();
-                } catch (Exception e) {
-                    this.logger.error("Forced shutdown failed for core {}", clone.getCore(), e);
-                } finally {
-                    clone.dumpLocks();
-                }
-                if (!deadClones.contains(clone.getCore())) {
-                    int core = clone.getCore();
+            SpinWait.await(() -> !clone.isDrained() && System.nanoTime() < deadline);
+
+            if(deadClones.contains(core) || System.nanoTime() >= deadline) {
+                tryCloseClone(clone);
+                if (!deadClones.contains(core)) {
                     this.logger.info("Restarting clone on core {}", core);
                     spawnClone(core, snapshot.coreSnapshots()[core], currClones);
                 }
-            } else if (deadClones.contains(clone.getCore())) {
-                int core = clone.getCore();
-                this.logger.info("Gracefully shutting down clone on core {}", core);
-                try {
-                    clone.close();
-                } catch (Exception e) {
-                    this.logger.error("Failed to shut down clone on core {}", core);
-                } finally {
-                    clone.dumpLocks();
-                }
             }
+
             int remaining = this.coresToDrain.decrementAndGet();
             clone.setDrainMode(false);
             if (remaining == 0) {
@@ -340,6 +320,16 @@ public class ControlPlaneShard {
             }
             tryRestartIngest();
         }, this.shardExecutor));
+    }
+
+    protected final void tryCloseClone(CloneableObject clone) {
+        try {
+            clone.close();
+        } catch (Exception e) {
+            this.logger.error("Failed to shut down clone on core {}", clone.getCore());
+        } finally {
+            clone.dumpLocks();
+        }
     }
 
     /// Restarts ingest if all cores are drained.
