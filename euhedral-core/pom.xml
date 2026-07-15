@@ -62,11 +62,6 @@
     </dependency>
 
     <dependency>
-      <groupId>org.jctools</groupId>
-      <artifactId>jctools-core-jdk11</artifactId>
-      <scope>compile</scope>
-    </dependency>
-    <dependency>
       <groupId>it.unimi.dsi</groupId>
       <artifactId>fastutil</artifactId>
       <scope>compile</scope>

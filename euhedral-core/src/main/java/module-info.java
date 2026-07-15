@@ -6,7 +6,6 @@ module euhedral.core {
     requires euhedral.hashing;
 
     requires micrometer.core;
-    requires org.jctools.core;
     requires org.jspecify;
     requires org.slf4j;
 

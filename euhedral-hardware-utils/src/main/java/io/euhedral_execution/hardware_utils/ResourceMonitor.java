@@ -64,7 +64,8 @@ public class ResourceMonitor implements AutoCloseable {
             this.smoothingFactor = clampDouble(smoothingFactor, 0.01, 1.0);
         }
 
-        start();
+        init();
+        poll();
     }
 
     public void start() {
