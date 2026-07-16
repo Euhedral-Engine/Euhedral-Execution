@@ -7,36 +7,33 @@ import io.euhedral_execution.core.impl.FrameFactory;
 import io.euhedral_execution.core.impl.FrameFactory.FrameCreate;
 import io.euhedral_execution.core.impl.FrameFactory.FrameReplace;
 import io.euhedral_execution.core.impl.FrameManager;
+import io.euhedral_execution.data_structures.queues.MpmcQueue;
 import io.euhedral_execution.hashing.HasherApi;
 import io.euhedral_execution.spring.core.frames.GrpcFrame;
 import io.euhedral_execution.spring.core.frames.GrpcFrame.CommunicationMethod;
 import io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage;
-import io.grpc.stub.ServerCallStreamObserver;
-import io.grpc.stub.StreamObserver;
+import io.grpc.stub.ClientCallStreamObserver;
+import io.grpc.stub.ClientResponseObserver;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
-import org.reactivestreams.Subscription;
 
 @SuppressWarnings("unused")
-public class GrpcServerHandler implements LatticeSource, StreamObserver<GrpcMessage>,
-        Subscription {
+public class EuhedralGrpcClientHandler implements LatticeSource,
+        ClientResponseObserver<GrpcMessage, GrpcMessage> {
 
-    private static final VarHandle CANCELLED;
     private static final VarHandle COMPLETE;
     private static final VarHandle DOWNSTREAM;
 
     static {
         try {
-            CANCELLED = MethodHandles.lookup()
-                    .findVarHandle(GrpcServerHandler.class, "cancelled", boolean.class);
             COMPLETE = MethodHandles.lookup()
-                    .findVarHandle(GrpcServerHandler.class, "complete", boolean.class);
+                    .findVarHandle(EuhedralGrpcClientHandler.class, "complete", boolean.class);
             DOWNSTREAM = MethodHandles.lookup()
-                    .findVarHandle(GrpcServerHandler.class, "downstream",
+                    .findVarHandle(EuhedralGrpcClientHandler.class, "downstream",
                             LatticeReceiver.class);
         } catch (Exception e) {
             throw new ExceptionInInitializerError(e);
@@ -47,70 +44,61 @@ public class GrpcServerHandler implements LatticeSource, StreamObserver<GrpcMess
         long sum = num1 + num2;
         return sum < 0 || sum > Integer.MAX_VALUE ? Integer.MAX_VALUE : sum;
     }
-    private final ServerCallStreamObserver<GrpcMessage> client;
-    private final CommunicationMethod method;
+
     private final FrameManager<GrpcMessage, GrpcFrame> manager;
+    private final MpmcQueue<GrpcMessage> sendQueue;
+    private final CommunicationMethod method;
     private final long ingestPassword;
+
     private final AtomicLong pending = new AtomicLong(0);
+
+    private ClientCallStreamObserver<GrpcMessage> upstream;
     private LatticeReceiver downstream = null;
     private boolean complete = false;
-    private boolean cancelled = false;
 
-    private long seed = ThreadLocalRandom.current().nextLong();
+    private long seed = HasherApi.mix(ThreadLocalRandom.current().nextLong());
 
-    public GrpcServerHandler(long idHash, ServerCallStreamObserver<GrpcMessage> client,
-            CommunicationMethod method) {
-        this.client = client;
+    public EuhedralGrpcClientHandler(CommunicationMethod method, int recycleCapacity,
+            int sendQueueChunkSize) {
+        this.ingestPassword = HasherApi.mix(ThreadLocalRandom.current().nextLong());
+        this.manager = new FrameManager<>(recycleCapacity, ingestPassword);
+        this.sendQueue = new MpmcQueue<>(sendQueueChunkSize);
         this.method = method;
-        this.ingestPassword = HasherApi.combine(ThreadLocalRandom.current().nextLong(), idHash);
-        this.manager = new FrameManager<>(8_192, ingestPassword);
+    }
+
+    @Override
+    public void beforeStart(ClientCallStreamObserver<GrpcMessage> stream) {
+        stream.disableAutoRequestWithInitial(0);
 
         AtomicBoolean killSwitch = new AtomicBoolean();
-        client.setOnCancelHandler(() -> {
-            killSwitch.setRelease(true);
-            complete();
-        });
-
+        stream.setOnReadyHandler(this::onReady);
 
         FrameCreate<GrpcMessage, GrpcFrame> create = (id, message) -> {
-            GrpcFrame frame = new GrpcFrame(id, message, method, client, this.manager, killSwitch);
-            if(!message.getIsOrdered()) {
+            GrpcFrame frame = new GrpcFrame(id, message, method, msg -> {
+                this.sendQueue.offer(msg);
+                onReady();
+            }, this.manager, killSwitch);
+            if (!message.getIsOrdered()) {
                 frame.randomizeHash(this.seed++);
             }
             return frame;
         };
         FrameReplace<GrpcMessage, GrpcFrame> replace = (message, frame) -> {
             frame.replace(message);
-            if(!message.getIsOrdered()) {
+            if (!message.getIsOrdered()) {
                 frame.randomizeHash(this.seed++);
             }
         };
-        manager.setFactory(new FrameFactory<>(create, replace));
+        this.manager.setFactory(new FrameFactory<>(create, replace));
+        this.upstream = stream;
     }
 
-    public boolean isOpen() {
-        return !(boolean) CANCELLED.getAcquire(this) && !(boolean) COMPLETE.getAcquire(this);
-    }
-
-    @Override
-    public void onNext(GrpcMessage message) {
-        if (!isOpen()) {
-            return;
+    private void onReady() {
+        while (this.upstream.isReady()) {
+            if(this.sendQueue.drain(this.upstream::onNext, 32) == 0) {
+                break;
+            }
         }
-
-        GrpcFrame frame = this.manager.getOrCreate(message, this.ingestPassword);
-        this.downstream.push(frame);
-
-        this.pending.decrementAndGet();
-        if (this.method == CommunicationMethod.SERVER_STREAM
-                || this.method == CommunicationMethod.SINGLE_RESPONSE) {
-            complete();
-        }
-    }
-
-    @Override
-    public void onError(Throwable throwable) {
-        this.downstream.onError(throwable);
     }
 
     @Override
@@ -122,8 +110,17 @@ public class GrpcServerHandler implements LatticeSource, StreamObserver<GrpcMess
 
         int request = (int) Math.min(demand, Integer.MAX_VALUE - pending);
         if (request > 0) {
-            this.pending.getAndAccumulate(demand, GrpcServerHandler::addPending);
-            this.client.request(request);
+            this.pending.getAndAccumulate(demand, EuhedralGrpcClientHandler::addPending);
+            this.upstream.request(request);
+        }
+    }
+
+    @Override
+    public void onNext(GrpcMessage message) {
+        LatticeReceiver receiver = (LatticeReceiver) DOWNSTREAM.getOpaque(this);
+        if (receiver != null) {
+            GrpcFrame frame = this.manager.getOrCreate(message, this.ingestPassword);
+            receiver.push(frame);
         }
     }
 
@@ -135,7 +132,10 @@ public class GrpcServerHandler implements LatticeSource, StreamObserver<GrpcMess
     @Override
     public void complete() {
         if (COMPLETE.compareAndSet(this, false, true)) {
-            downstream.onComplete();
+            LatticeReceiver receiver = (LatticeReceiver) DOWNSTREAM.getAndSetRelease(this, null);
+            if (receiver != null) {
+                receiver.onComplete();
+            }
         }
     }
 
@@ -146,15 +146,22 @@ public class GrpcServerHandler implements LatticeSource, StreamObserver<GrpcMess
         }
     }
 
+    public boolean isOpen() {
+        return !(boolean) COMPLETE.getAcquire(this);
+    }
+
     @Override
     public long pull(Consumer<AbstractFrame> consumer, long demand) {
         return 0;
     }
 
     @Override
-    public void cancel() {
-        if (isOpen() && CANCELLED.compareAndSet(this, false, true)) {
-            this.client.onError(new RuntimeException("Server has cancelled"));
+    public void onError(Throwable t) {
+        if (COMPLETE.compareAndSet(this, false, true)) {
+            LatticeReceiver receiver = (LatticeReceiver) DOWNSTREAM.getAndSetRelease(this, null);
+            if (receiver != null) {
+                receiver.onError(t);
+            }
         }
     }
 }

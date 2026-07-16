@@ -1,16 +1,8 @@
 package io.euhedral_execution.spring.core.transport.grpc;
 
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.VarHandle;
-import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Consumer;
-
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.generics.LatticeReceiver;
 import io.euhedral_execution.core.generics.LatticeSource;
-import io.euhedral_execution.core.generics.LatticeTerminal;
 import io.euhedral_execution.core.impl.FrameFactory;
 import io.euhedral_execution.core.impl.FrameFactory.FrameCreate;
 import io.euhedral_execution.core.impl.FrameFactory.FrameReplace;
@@ -20,23 +12,28 @@ import io.euhedral_execution.hashing.HasherApi;
 import io.euhedral_execution.spring.core.frames.GrpcFrame;
 import io.euhedral_execution.spring.core.frames.GrpcFrame.CommunicationMethod;
 import io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage;
+import io.grpc.stub.CallStreamObserver;
 import io.grpc.stub.ServerCallStreamObserver;
 import io.grpc.stub.StreamObserver;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 
 @SuppressWarnings("unused")
-public class EuhedralGrpcHandler implements LatticeSource, StreamObserver<GrpcMessage> {
-    private static final VarHandle CANCELLED;
+public class EuhedralGrpcServerHandler implements LatticeSource, StreamObserver<GrpcMessage> {
+
     private static final VarHandle COMPLETE;
     private static final VarHandle DOWNSTREAM;
 
     static {
         try {
-            CANCELLED = MethodHandles.lookup()
-                    .findVarHandle(EuhedralGrpcHandler.class, "cancelled", boolean.class);
             COMPLETE = MethodHandles.lookup()
-                    .findVarHandle(EuhedralGrpcHandler.class, "complete", boolean.class);
+                    .findVarHandle(EuhedralGrpcServerHandler.class, "complete", boolean.class);
             DOWNSTREAM = MethodHandles.lookup()
-                    .findVarHandle(EuhedralGrpcHandler.class, "downstream",
+                    .findVarHandle(EuhedralGrpcServerHandler.class, "downstream",
                             LatticeReceiver.class);
         } catch (Exception e) {
             throw new ExceptionInInitializerError(e);
@@ -48,7 +45,7 @@ public class EuhedralGrpcHandler implements LatticeSource, StreamObserver<GrpcMe
         return sum < 0 || sum > Integer.MAX_VALUE ? Integer.MAX_VALUE : sum;
     }
 
-    private final ServerCallStreamObserver<GrpcMessage> client;
+    private final CallStreamObserver<GrpcMessage> client;
     private final CommunicationMethod method;
     private final long ingestPassword;
     private final FrameManager<GrpcMessage, GrpcFrame> manager;
@@ -59,16 +56,15 @@ public class EuhedralGrpcHandler implements LatticeSource, StreamObserver<GrpcMe
 
     private LatticeReceiver downstream = null;
     private boolean complete = false;
-    private boolean cancelled = false;
 
     private long seed = HasherApi.mix(ThreadLocalRandom.current().nextLong());
 
-    public EuhedralGrpcHandler(long idHash, ServerCallStreamObserver<GrpcMessage> client,
-            CommunicationMethod method, int responseQueueChunkSize) {
+    public EuhedralGrpcServerHandler(ServerCallStreamObserver<GrpcMessage> client,
+            CommunicationMethod method, int recycleCapacity, int responseQueueChunkSize) {
         this.client = client;
         this.method = method;
-        this.ingestPassword = HasherApi.combine(ThreadLocalRandom.current().nextLong(), idHash);
-        this.manager = new FrameManager<>(8192, ingestPassword);
+        this.ingestPassword = HasherApi.mix(ThreadLocalRandom.current().nextLong());
+        this.manager = new FrameManager<>(recycleCapacity, ingestPassword);
         this.responseQueue = new MpmcQueue<>(responseQueueChunkSize);
 
         AtomicBoolean killSwitch = new AtomicBoolean();
@@ -76,19 +72,22 @@ public class EuhedralGrpcHandler implements LatticeSource, StreamObserver<GrpcMe
             killSwitch.setRelease(true);
             complete();
         });
-
+        client.setOnCloseHandler(this::complete);
         client.setOnReadyHandler(this::onReady);
 
         FrameCreate<GrpcMessage, GrpcFrame> create = (id, message) -> {
-            GrpcFrame frame = new GrpcFrame(id, message, method, client, this.manager, killSwitch);
-            if(!message.getIsOrdered()) {
+            GrpcFrame frame = new GrpcFrame(id, message, method, msg -> {
+                this.responseQueue.offer(msg);
+                onReady();
+            }, this.manager, killSwitch);
+            if (!message.getIsOrdered()) {
                 frame.randomizeHash(this.seed++);
             }
             return frame;
         };
         FrameReplace<GrpcMessage, GrpcFrame> replace = (message, frame) -> {
             frame.replace(message);
-            if(!message.getIsOrdered()) {
+            if (!message.getIsOrdered()) {
                 frame.randomizeHash(this.seed++);
             }
         };
@@ -112,13 +111,11 @@ public class EuhedralGrpcHandler implements LatticeSource, StreamObserver<GrpcMe
     }
 
     private void onReady() {
-        while(this.client.isReady() && drain(32) > 0) {
-            Thread.onSpinWait();
+        while (this.client.isReady()) {
+            if(this.responseQueue.drain(this.client::onNext, 32) == 0) {
+                break;
+            }
         }
-    }
-
-    private long drain(long limit) {
-        return this.responseQueue.drain(this.client::onNext, limit);
     }
 
     @Override
@@ -130,7 +127,7 @@ public class EuhedralGrpcHandler implements LatticeSource, StreamObserver<GrpcMe
 
         int request = (int) Math.min(demand, Integer.MAX_VALUE - pending);
         if (request > 0) {
-            this.pending.getAndAccumulate(demand, EuhedralGrpcHandler::addPending);
+            this.pending.getAndAccumulate(demand, EuhedralGrpcServerHandler::addPending);
             this.client.request(request);
         }
     }
@@ -144,7 +141,7 @@ public class EuhedralGrpcHandler implements LatticeSource, StreamObserver<GrpcMe
     public void complete() {
         if (COMPLETE.compareAndSet(this, false, true)) {
             LatticeReceiver receiver = (LatticeReceiver) DOWNSTREAM.getOpaque(this);
-            if(receiver != null) {
+            if (receiver != null) {
                 receiver.onComplete();
             }
         }
@@ -158,7 +155,7 @@ public class EuhedralGrpcHandler implements LatticeSource, StreamObserver<GrpcMe
     }
 
     public boolean isOpen() {
-        return !(boolean) CANCELLED.getAcquire(this) && !(boolean) COMPLETE.getAcquire(this);
+        return !(boolean) COMPLETE.getAcquire(this);
     }
 
     @Override
@@ -168,9 +165,11 @@ public class EuhedralGrpcHandler implements LatticeSource, StreamObserver<GrpcMe
 
     @Override
     public void onError(Throwable t) {
-        LatticeReceiver receiver = (LatticeReceiver) DOWNSTREAM.getOpaque(this);
-        if(receiver != null) {
-            receiver.onError(t);
+        if(COMPLETE.compareAndSet(this, false, true)) {
+            LatticeReceiver receiver = (LatticeReceiver) DOWNSTREAM.getOpaque(this);
+            if (receiver != null) {
+                receiver.onError(t);
+            }
         }
     }
 }
