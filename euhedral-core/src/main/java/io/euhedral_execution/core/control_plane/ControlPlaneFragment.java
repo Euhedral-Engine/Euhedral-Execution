@@ -351,7 +351,7 @@ public final class ControlPlaneFragment extends WorkRequester {
 
     private long idleSpin(FlowThread.FlowContext threadContext) {
         while (keepRunning()) {
-            long upCount = threadContext.upstream.getCachedUpCount();
+            long upCount = threadContext.upstream.getTrueUpstreamCount();
             if (upCount > 0) {
                 return upCount;
             }

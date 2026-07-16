@@ -65,7 +65,7 @@ public abstract class EuhedralGrpcServer extends GrpcTransportServiceImplBase {
 
         EuhedralGrpcServerHandler serverHandler =
                 new EuhedralGrpcServerHandler(serverCallObserver, CommunicationMethod.CLIENT_STREAM,
-                        this.recycleCapacity, this.responseQueueChunkSize);
+                        this.recycleCapacity, 4);
 
         processStream(serverHandler);
 
@@ -75,6 +75,7 @@ public abstract class EuhedralGrpcServer extends GrpcTransportServiceImplBase {
     @Override
     public void serverStreamMethod(GrpcMessage message,
             StreamObserver<GrpcMessage> responseObserver) {
+        System.out.println("Received " + message);
         long idHash = HasherApi.mix(ThreadLocalRandom.current().nextLong());
         ServerCallStreamObserver<GrpcMessage> serverCallObserver =
                 (ServerCallStreamObserver<GrpcMessage>) responseObserver;
