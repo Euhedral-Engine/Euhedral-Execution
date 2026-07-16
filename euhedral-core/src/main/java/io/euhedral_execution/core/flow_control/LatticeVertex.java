@@ -91,6 +91,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
     public void ingest(LatticeSource stream) {
         UpstreamInterceptor interceptor = new UpstreamInterceptor();
         stream.addDownstream(interceptor);
+        interceptor.addUpstream(stream);
     }
 
     @Override

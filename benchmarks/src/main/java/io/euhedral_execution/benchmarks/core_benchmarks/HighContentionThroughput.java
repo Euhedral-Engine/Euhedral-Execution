@@ -98,6 +98,9 @@ public class HighContentionThroughput {
 
     @TearDown(Level.Trial)
     public void tearDown() {
+        for(var sink : this.sinks) {
+            sink.complete();
+        }
         this.controlPlane.close();
     }
 }
