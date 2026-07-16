@@ -61,7 +61,6 @@ public class GrpcUtils {
             case NULL_VALUE -> value.getNullValue();
             case NUMBER_VALUE -> {
                 double num = value.getNumberValue();
-                long rounded = Math.round(num);
                 if(num == Math.rint(num)) {
                     yield (long) num;
                 }

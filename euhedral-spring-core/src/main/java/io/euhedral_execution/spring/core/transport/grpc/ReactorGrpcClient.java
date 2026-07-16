@@ -11,13 +11,15 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 @SuppressWarnings("unused")
-public abstract class ReactorGrpcTransportClient {
-    private static final Logger LOGGER = LoggerFactory.getLogger(ReactorGrpcTransportClient.class);
+public abstract class ReactorGrpcClient {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(ReactorGrpcClient.class);
 
     private final GrpcTransportServiceGrpc.GrpcTransportServiceStub stub;
     private final int sendQueueChunkSize;
 
-    protected ReactorGrpcTransportClient(GrpcTransportServiceGrpc.GrpcTransportServiceStub stub, int sendQueueChunkSize) {
+    protected ReactorGrpcClient(GrpcTransportServiceGrpc.GrpcTransportServiceStub stub,
+            int sendQueueChunkSize) {
         this.stub = stub;
         this.sendQueueChunkSize = sendQueueChunkSize;
     }
@@ -60,7 +62,7 @@ public abstract class ReactorGrpcTransportClient {
                 }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-                LOGGER.error("ReactorGrpcTransportClient improperly shut down!", e);
+                LOGGER.error("ReactorGrpcClient improperly shut down!", e);
             }
         }
     }

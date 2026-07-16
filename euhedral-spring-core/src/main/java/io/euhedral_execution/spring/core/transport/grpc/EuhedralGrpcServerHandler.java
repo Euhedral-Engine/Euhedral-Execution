@@ -81,7 +81,7 @@ public class EuhedralGrpcServerHandler implements LatticeSource, StreamObserver<
             GrpcFrame frame = new GrpcFrame(id, message, method, msg -> {
                 this.responseQueue.offer(msg);
                 onReady();
-            }, this::complete, this.manager, killSwitch);
+            }, this::complete, this::onError, this.manager, killSwitch);
             if (!message.getIsOrdered()) {
                 frame.randomizeHash(this.seed++);
             }
@@ -114,10 +114,11 @@ public class EuhedralGrpcServerHandler implements LatticeSource, StreamObserver<
 
     private void onReady() {
         while (this.client.isReady()) {
-            if(this.responseQueue.drain(this.client::onNext, 32) == 0) {
+            if (this.responseQueue.drain(this.client::onNext, 32) == 0) {
                 break;
             }
-            if(this.method == CommunicationMethod.CLIENT_STREAM || this.method == CommunicationMethod.SINGLE_RESPONSE) {
+            if (this.method == CommunicationMethod.CLIENT_STREAM
+                    || this.method == CommunicationMethod.SINGLE_RESPONSE) {
                 complete();
                 break;
             }
@@ -140,7 +141,7 @@ public class EuhedralGrpcServerHandler implements LatticeSource, StreamObserver<
 
     @Override
     public void onCompleted() {
-        if(this.onCompleteCallback != null) {
+        if (this.onCompleteCallback != null) {
             this.onCompleteCallback.run();
         }
     }
@@ -182,10 +183,16 @@ public class EuhedralGrpcServerHandler implements LatticeSource, StreamObserver<
 
     @Override
     public void onError(Throwable t) {
-        if(COMPLETE.compareAndSet(this, false, true)) {
+        if (COMPLETE.compareAndSet(this, false, true)) {
             LatticeReceiver receiver = (LatticeReceiver) DOWNSTREAM.getOpaque(this);
             if (receiver != null) {
                 receiver.onError(t);
+            }
+
+            try {
+                this.client.onError(t);
+            } catch (Exception ignored) {
+                // Try to propagate errors
             }
         }
     }
