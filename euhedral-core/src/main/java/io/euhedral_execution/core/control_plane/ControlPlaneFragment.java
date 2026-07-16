@@ -355,6 +355,9 @@ public final class ControlPlaneFragment extends WorkRequester {
             if (upCount > 0) {
                 return upCount;
             }
+            if(super.getLocalCacheCount() > 0 || super.getUpstreamCacheCount() > 0) {
+                break;
+            }
             LockSupport.parkNanos(20_000L);
         }
         return 0;

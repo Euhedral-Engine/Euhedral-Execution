@@ -6,6 +6,7 @@ import io.euhedral_execution.core.generics.LatticeSource;
 import io.euhedral_execution.core.ingest.AbstractIngestSink;
 import java.lang.invoke.VarHandle;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 public class RepeatingSink extends AbstractIngestSink {
@@ -33,6 +34,8 @@ public class RepeatingSink extends AbstractIngestSink {
         private final AbstractFrame[] array;
         int start;
 
+        final AtomicBoolean complete = new AtomicBoolean();
+
         public Delegate(AbstractFrame[] array) {
             this.array = array;
         }
@@ -40,7 +43,7 @@ public class RepeatingSink extends AbstractIngestSink {
         @Override
         public long hookOnPull(Consumer<AbstractFrame> consumer, long demand) {
             long total = 0;
-            while (total < demand) {
+            while (total < demand && !this.complete.getOpaque()) {
                 AbstractFrame frame = this.array[this.start++];
                 Objects.requireNonNull(frame);
                 consumer.accept(frame);
@@ -54,7 +57,7 @@ public class RepeatingSink extends AbstractIngestSink {
         @Override
         public void hookOnRequest(LatticeReceiver terminal, long demand) {
             int total = 0;
-            while (total < demand) {
+            while (total < demand && !this.complete.getOpaque()) {
                 AbstractFrame frame = this.array[this.start++];
                 Objects.requireNonNull(frame);
                 terminal.push(frame);
@@ -63,6 +66,12 @@ public class RepeatingSink extends AbstractIngestSink {
             }
             addAndGetDemand(-total);
             VarHandle.releaseFence();
+        }
+
+        @Override
+        public void complete() {
+            this.complete.setRelease(true);
+            super.complete();
         }
     }
 }
