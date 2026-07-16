@@ -54,6 +54,8 @@ public class EuhedralGrpcServerHandler implements LatticeSource, StreamObserver<
 
     private final AtomicLong pending = new AtomicLong(0);
 
+    private Runnable onCompleteCallback;
+
     private LatticeReceiver downstream = null;
     private boolean complete = false;
 
@@ -96,7 +98,7 @@ public class EuhedralGrpcServerHandler implements LatticeSource, StreamObserver<
 
     @Override
     public void onNext(GrpcMessage message) {
-        if (!isOpen()) {
+        if (!canSend()) {
             return;
         }
 
@@ -115,12 +117,16 @@ public class EuhedralGrpcServerHandler implements LatticeSource, StreamObserver<
             if(this.responseQueue.drain(this.client::onNext, 32) == 0) {
                 break;
             }
+            if(this.method == CommunicationMethod.CLIENT_STREAM || this.method == CommunicationMethod.SINGLE_RESPONSE) {
+                complete();
+                break;
+            }
         }
     }
 
     @Override
     public void request(long demand) {
-        if (demand <= 0 || !isOpen()) {
+        if (demand <= 0 || !canSend()) {
             return;
         }
         long pending = this.pending.getAcquire();
@@ -134,7 +140,13 @@ public class EuhedralGrpcServerHandler implements LatticeSource, StreamObserver<
 
     @Override
     public void onCompleted() {
-        complete();
+        if(this.onCompleteCallback != null) {
+            this.onCompleteCallback.run();
+        }
+    }
+
+    public void setOnCompleteHandler(Runnable runnable) {
+        this.onCompleteCallback = runnable;
     }
 
     @Override
@@ -144,17 +156,18 @@ public class EuhedralGrpcServerHandler implements LatticeSource, StreamObserver<
             if (receiver != null) {
                 receiver.onComplete();
             }
+            this.client.onCompleted();
         }
     }
 
     @Override
     public void addDownstream(LatticeReceiver downstream) {
-        if (isOpen() && !DOWNSTREAM.compareAndSet(this, null, downstream)) {
+        if (canSend() && !DOWNSTREAM.compareAndSet(this, null, downstream)) {
             downstream.onError(new IllegalAccessException("Only one downstream allowed."));
         }
     }
 
-    public boolean isOpen() {
+    private boolean canSend() {
         return !(boolean) COMPLETE.getAcquire(this);
     }
 

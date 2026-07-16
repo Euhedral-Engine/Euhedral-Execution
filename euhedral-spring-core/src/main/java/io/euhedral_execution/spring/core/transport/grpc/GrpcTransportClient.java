@@ -29,10 +29,10 @@ public abstract class GrpcTransportClient {
     public Mono<GrpcMessage> sendSingleRespondSingle(GrpcMessage message) {
         ReactorGrpcClientHandler handler = new ReactorGrpcClientHandler();
 
-        return Mono.from(handler).doOnSubscribe(sub -> {
+        return handler.doOnSubscribe(sub -> {
             stub.unaryMethod(message, handler);
             handler.request(1);
-        });
+        }).next();
     }
 
     public Mono<Void> sendStream(Flux<GrpcMessage> messageFlux) {
@@ -43,9 +43,9 @@ public abstract class GrpcTransportClient {
         ReactorGrpcClientHandler handler = new ReactorGrpcClientHandler(this.sendQueueChunkSize);
 
         stub.clientStreamMethod(handler);
-        messageFlux.subscribeWith(handler.getSubscriber());
+        messageFlux.subscribe(handler.getSubscriber());
 
-        return Mono.from(handler);
+        return handler.next();
     }
 
     public Flux<GrpcMessage> sendSingleRespondStream(GrpcMessage message) {
