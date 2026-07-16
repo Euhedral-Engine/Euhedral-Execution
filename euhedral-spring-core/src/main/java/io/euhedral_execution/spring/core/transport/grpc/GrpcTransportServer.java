@@ -14,16 +14,21 @@ import java.util.concurrent.ThreadLocalRandom;
 public abstract class GrpcTransportServer extends GrpcTransportServiceImplBase {
 
     private final ControlPlaneLattice controlPlane;
+    private final int recycleCapacity;
+    private final int responseQueueChunkSize;
 
-    protected GrpcTransportServer(ControlPlaneLattice controlPlane) {
+    protected GrpcTransportServer(ControlPlaneLattice controlPlane, int recycleCapacity,
+            int responseQueueChunkSize) {
         this.controlPlane = controlPlane;
+        this.recycleCapacity = recycleCapacity;
+        this.responseQueueChunkSize = responseQueueChunkSize;
     }
 
     protected void processSingle(GrpcFrame frame) {
         this.controlPlane.addUpstream(SingleUseSource.wrap(frame));
     }
 
-    protected void processStream(GrpcServerHandler serverHandler) {
+    protected void processStream(EuhedralGrpcServerHandler serverHandler) {
         this.controlPlane.addUpstream(serverHandler);
     }
 
@@ -34,19 +39,22 @@ public abstract class GrpcTransportServer extends GrpcTransportServiceImplBase {
         ServerCallStreamObserver<GrpcMessage> serverCallObserver = (ServerCallStreamObserver<GrpcMessage>) responseObserver;
 
         GrpcFrame frame = new GrpcFrame(idHash, message, CommunicationMethod.SINGLE_RESPONSE,
-                serverCallObserver, null, null);
+                msg -> {
+            System.out.println("Ready: {}" + serverCallObserver.isReady());
+            serverCallObserver.onNext(msg);
+                }, null, null);
         processSingle(frame);
     }
 
     @Override
     public StreamObserver<GrpcMessage> clientStreamMethod(
             StreamObserver<GrpcMessage> responseObserver) {
-        long idHash = HasherApi.mix(ThreadLocalRandom.current().nextLong());
         ServerCallStreamObserver<GrpcMessage> serverCallObserver = (ServerCallStreamObserver<GrpcMessage>) responseObserver;
         serverCallObserver.disableAutoInboundFlowControl();
 
-        GrpcServerHandler serverHandler = new GrpcServerHandler(
-                idHash, serverCallObserver, CommunicationMethod.CLIENT_STREAM);
+        EuhedralGrpcServerHandler serverHandler = new EuhedralGrpcServerHandler(
+                serverCallObserver, CommunicationMethod.CLIENT_STREAM, this.recycleCapacity,
+                this.responseQueueChunkSize);
 
         processStream(serverHandler);
 
@@ -56,12 +64,12 @@ public abstract class GrpcTransportServer extends GrpcTransportServiceImplBase {
     @Override
     public void serverStreamMethod(GrpcMessage request,
             StreamObserver<GrpcMessage> responseObserver) {
-        long idHash = HasherApi.mix(ThreadLocalRandom.current().nextLong());
         ServerCallStreamObserver<GrpcMessage> serverCallObserver = (ServerCallStreamObserver<GrpcMessage>) responseObserver;
         serverCallObserver.disableAutoInboundFlowControl();
 
-        GrpcServerHandler serverHandler = new GrpcServerHandler(
-                idHash, serverCallObserver, CommunicationMethod.SERVER_STREAM);
+        EuhedralGrpcServerHandler serverHandler = new EuhedralGrpcServerHandler(
+                serverCallObserver, CommunicationMethod.SERVER_STREAM, this.recycleCapacity,
+                this.responseQueueChunkSize);
 
         processStream(serverHandler);
     }
@@ -69,12 +77,12 @@ public abstract class GrpcTransportServer extends GrpcTransportServiceImplBase {
     @Override
     public StreamObserver<GrpcMessage> bidirectionalMethod(
             StreamObserver<GrpcMessage> responseObserver) {
-        long idHash = HasherApi.mix(ThreadLocalRandom.current().nextLong());
         ServerCallStreamObserver<GrpcMessage> serverCallObserver = (ServerCallStreamObserver<GrpcMessage>) responseObserver;
         serverCallObserver.disableAutoInboundFlowControl();
 
-        GrpcServerHandler serverHandler = new GrpcServerHandler(
-                idHash, serverCallObserver, CommunicationMethod.BIDI);
+        EuhedralGrpcServerHandler serverHandler = new EuhedralGrpcServerHandler(
+                serverCallObserver, CommunicationMethod.BIDI, this.recycleCapacity,
+                this.responseQueueChunkSize);
 
         processStream(serverHandler);
         return serverHandler;

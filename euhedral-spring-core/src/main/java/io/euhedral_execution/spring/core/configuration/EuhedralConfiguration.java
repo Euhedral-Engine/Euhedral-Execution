@@ -27,13 +27,13 @@ import org.springframework.context.annotation.Bean;
 public class EuhedralConfiguration {
 
     @Bean
-    @ConditionalOnMissingBean
+    @ConditionalOnMissingBean(AbstractExecutor.class)
     public AbstractExecutor euhedralExecutor() {
         return new DefaultExecutor();
     }
 
     @Bean
-    @ConditionalOnMissingBean
+    @ConditionalOnMissingBean(ControlPlaneLattice.class)
     public ControlPlaneLattice controlPlaneLattice(AbstractExecutor executor,
             @Nullable MeterRegistry registry) {
         LatticeConfig config = LatticeConfig.ofDefaults(
@@ -42,13 +42,13 @@ public class EuhedralConfiguration {
     }
 
     @Bean
-    @ConditionalOnMissingBean
+    @ConditionalOnMissingBean(EuhedralScheduler.class)
     public EuhedralScheduler euhedralScheduler(ControlPlaneLattice controlPlane) {
         return EuhedralScheduler.getOrCreate(controlPlane);
     }
 
     @Bean
-    @ConditionalOnMissingBean
+    @ConditionalOnMissingBean(EuhedralOperator.class)
     public EuhedralOperator euhedralOperator(EuhedralScheduler scheduler) {
         return new EuhedralOperator(scheduler);
     }

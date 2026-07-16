@@ -93,7 +93,7 @@ public class GrpcUtils {
                 .build();
     }
 
-    public static Message<byte[]> fromSpringGrpc(GrpcMessage message) {
+    public static Message<byte[]> toSpringMessage(GrpcMessage message) {
         if (!message.hasSpringMessage()) {
             throw new RuntimeException("Provided message does not contain a spring message");
         }
