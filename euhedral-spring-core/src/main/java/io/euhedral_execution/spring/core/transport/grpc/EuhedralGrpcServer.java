@@ -11,13 +11,13 @@ import io.grpc.stub.ServerCallStreamObserver;
 import io.grpc.stub.StreamObserver;
 import java.util.concurrent.ThreadLocalRandom;
 
-public abstract class GrpcTransportServer extends GrpcTransportServiceImplBase {
+public abstract class EuhedralGrpcServer extends GrpcTransportServiceImplBase {
 
     private final ControlPlaneLattice controlPlane;
     private final int recycleCapacity;
     private final int responseQueueChunkSize;
 
-    protected GrpcTransportServer(ControlPlaneLattice controlPlane, int recycleCapacity,
+    protected EuhedralGrpcServer(ControlPlaneLattice controlPlane, int recycleCapacity,
             int responseQueueChunkSize) {
         this.controlPlane = controlPlane;
         this.recycleCapacity = recycleCapacity;
@@ -44,7 +44,13 @@ public abstract class GrpcTransportServer extends GrpcTransportServiceImplBase {
                     try {
                         serverCallObserver.onCompleted();
                     } catch (Exception ignored) {
-                        // The frame response() auto completes for unary method. Ignore repeated complete attempts
+                        // Ignore repeated complete attempts.
+                    }
+                }, err -> {
+                    try {
+                        serverCallObserver.onError(err);
+                    } catch (Exception ignored) {
+                        // Sent error after complete
                     }
                 }, null, null);
         processSingle(frame);
@@ -79,7 +85,13 @@ public abstract class GrpcTransportServer extends GrpcTransportServiceImplBase {
                     try {
                         serverCallObserver.onCompleted();
                     } catch (Exception ignored) {
-                        // Ignore repeated complete attempts
+                        // Ignore repeated complete attempts.
+                    }
+                }, err -> {
+                    try {
+                        serverCallObserver.onError(err);
+                    } catch (Exception ignored) {
+                        // Sent error after complete
                     }
                 }, null, null);
 

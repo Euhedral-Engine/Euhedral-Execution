@@ -74,10 +74,8 @@ public class EuhedralGrpcClientHandler implements LatticeSource,
         stream.setOnReadyHandler(this::onReady);
 
         FrameCreate<GrpcMessage, GrpcFrame> create = (id, message) -> {
-            GrpcFrame frame = new GrpcFrame(id, message, method, msg -> {
-                this.sendQueue.offer(msg);
-                onReady();
-            }, this::complete, this.manager, killSwitch);
+            GrpcFrame frame = new GrpcFrame(id, message, method, this::send, this::complete,
+                    this::onError, this.manager, killSwitch);
             if (!message.getIsOrdered()) {
                 frame.randomizeHash(this.seed++);
             }
@@ -95,7 +93,7 @@ public class EuhedralGrpcClientHandler implements LatticeSource,
 
     @Override
     public void onNext(GrpcMessage message) {
-        if(!canReceive()) {
+        if (!canReceive()) {
             return;
         }
 
@@ -113,13 +111,24 @@ public class EuhedralGrpcClientHandler implements LatticeSource,
 
     private void onReady() {
         while (this.upstream.isReady()) {
-            if(this.sendQueue.drain(this.upstream::onNext, 32) == 0) {
+            if (this.sendQueue.drain(this.upstream::onNext, 32) == 0) {
                 break;
             }
-            if(this.method == CommunicationMethod.SERVER_STREAM || this.method == CommunicationMethod.SINGLE_RESPONSE) {
+            if (this.method == CommunicationMethod.SERVER_STREAM
+                    || this.method == CommunicationMethod.SINGLE_RESPONSE) {
                 complete();
             }
         }
+    }
+
+    public void send(GrpcMessage message) {
+        this.sendQueue.offer(message);
+        onReady();
+    }
+
+    public void cancel(String message, Throwable cause) {
+        this.upstream.cancel(message, cause);
+        complete();
     }
 
     @Override
@@ -178,6 +187,12 @@ public class EuhedralGrpcClientHandler implements LatticeSource,
             LatticeReceiver receiver = (LatticeReceiver) DOWNSTREAM.getAndSetRelease(this, null);
             if (receiver != null) {
                 receiver.onError(t);
+            }
+
+            try {
+                this.upstream.onError(t);
+            } catch (Exception ignored) {
+                // Try to propagate errors
             }
         }
     }
