@@ -13,6 +13,7 @@ open module euhedral.spring.core.test {
     requires spring.grpc.core;
     requires spring.messaging;
     requires reactor.core;
+    requires spring.beans;
 
     exports test_impl;
 }

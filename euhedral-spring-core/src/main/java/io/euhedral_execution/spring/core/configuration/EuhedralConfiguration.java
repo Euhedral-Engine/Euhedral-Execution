@@ -38,7 +38,9 @@ public class EuhedralConfiguration {
             @Nullable MeterRegistry registry) {
         LatticeConfig config = LatticeConfig.ofDefaults(
                 new BaseCloneableObject("euhedral", registry, executor));
-        return ControlPlaneLattice.getOrCreate(config);
+        ControlPlaneLattice controlPlane = ControlPlaneLattice.getOrCreate(config);
+        controlPlane.start();
+        return controlPlane;
     }
 
     @Bean
