@@ -59,7 +59,14 @@ public class GrpcUtils {
     public static Object fromValue(Value value) {
         return switch (value.getKindCase()) {
             case NULL_VALUE -> value.getNullValue();
-            case NUMBER_VALUE -> value.getNumberValue();
+            case NUMBER_VALUE -> {
+                double num = value.getNumberValue();
+                long rounded = Math.round(num);
+                if(num == Math.rint(num)) {
+                    yield (long) num;
+                }
+                yield num;
+            }
             case STRING_VALUE -> value.getStringValue();
             case BOOL_VALUE -> value.getBoolValue();
             case STRUCT_VALUE -> fromGrpcStruct(value.getStructValue());

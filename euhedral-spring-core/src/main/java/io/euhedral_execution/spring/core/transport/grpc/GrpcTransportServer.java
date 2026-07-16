@@ -1,5 +1,7 @@
 package io.euhedral_execution.spring.core.transport.grpc;
 
+import java.util.concurrent.ThreadLocalRandom;
+
 import io.euhedral_execution.core.control_plane.ControlPlaneLattice;
 import io.euhedral_execution.core.ingest.SingleUseSource;
 import io.euhedral_execution.hashing.HasherApi;
@@ -9,7 +11,6 @@ import io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServ
 import io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage;
 import io.grpc.stub.ServerCallStreamObserver;
 import io.grpc.stub.StreamObserver;
-import java.util.concurrent.ThreadLocalRandom;
 
 public abstract class GrpcTransportServer extends GrpcTransportServiceImplBase {
 
@@ -33,15 +34,15 @@ public abstract class GrpcTransportServer extends GrpcTransportServiceImplBase {
     }
 
     @Override
-    public void unaryMethod(GrpcMessage message,
-            StreamObserver<GrpcMessage> responseObserver) {
+    public void unaryMethod(GrpcMessage message, StreamObserver<GrpcMessage> responseObserver) {
         long idHash = HasherApi.mix(ThreadLocalRandom.current().nextLong());
-        ServerCallStreamObserver<GrpcMessage> serverCallObserver = (ServerCallStreamObserver<GrpcMessage>) responseObserver;
+        ServerCallStreamObserver<GrpcMessage> serverCallObserver =
+                (ServerCallStreamObserver<GrpcMessage>) responseObserver;
 
-        GrpcFrame frame = new GrpcFrame(idHash, message, CommunicationMethod.SINGLE_RESPONSE,
-                msg -> {
-            System.out.println("Ready: {}" + serverCallObserver.isReady());
-            serverCallObserver.onNext(msg);
+        GrpcFrame frame =
+                new GrpcFrame(idHash, message, CommunicationMethod.SINGLE_RESPONSE, msg -> {
+                    serverCallObserver.onNext(msg);
+                    serverCallObserver.onCompleted();
                 }, null, null);
         processSingle(frame);
     }
@@ -49,12 +50,13 @@ public abstract class GrpcTransportServer extends GrpcTransportServiceImplBase {
     @Override
     public StreamObserver<GrpcMessage> clientStreamMethod(
             StreamObserver<GrpcMessage> responseObserver) {
-        ServerCallStreamObserver<GrpcMessage> serverCallObserver = (ServerCallStreamObserver<GrpcMessage>) responseObserver;
-        serverCallObserver.disableAutoInboundFlowControl();
+        ServerCallStreamObserver<GrpcMessage> serverCallObserver =
+                (ServerCallStreamObserver<GrpcMessage>) responseObserver;
+        serverCallObserver.disableAutoRequest();
 
-        EuhedralGrpcServerHandler serverHandler = new EuhedralGrpcServerHandler(
-                serverCallObserver, CommunicationMethod.CLIENT_STREAM, this.recycleCapacity,
-                this.responseQueueChunkSize);
+        EuhedralGrpcServerHandler serverHandler =
+                new EuhedralGrpcServerHandler(serverCallObserver, CommunicationMethod.CLIENT_STREAM,
+                        this.recycleCapacity, this.responseQueueChunkSize);
 
         processStream(serverHandler);
 
@@ -64,12 +66,13 @@ public abstract class GrpcTransportServer extends GrpcTransportServiceImplBase {
     @Override
     public void serverStreamMethod(GrpcMessage request,
             StreamObserver<GrpcMessage> responseObserver) {
-        ServerCallStreamObserver<GrpcMessage> serverCallObserver = (ServerCallStreamObserver<GrpcMessage>) responseObserver;
-        serverCallObserver.disableAutoInboundFlowControl();
+        ServerCallStreamObserver<GrpcMessage> serverCallObserver =
+                (ServerCallStreamObserver<GrpcMessage>) responseObserver;
+        serverCallObserver.disableAutoRequest();
 
-        EuhedralGrpcServerHandler serverHandler = new EuhedralGrpcServerHandler(
-                serverCallObserver, CommunicationMethod.SERVER_STREAM, this.recycleCapacity,
-                this.responseQueueChunkSize);
+        EuhedralGrpcServerHandler serverHandler =
+                new EuhedralGrpcServerHandler(serverCallObserver, CommunicationMethod.SERVER_STREAM,
+                        this.recycleCapacity, this.responseQueueChunkSize);
 
         processStream(serverHandler);
     }
@@ -77,12 +80,13 @@ public abstract class GrpcTransportServer extends GrpcTransportServiceImplBase {
     @Override
     public StreamObserver<GrpcMessage> bidirectionalMethod(
             StreamObserver<GrpcMessage> responseObserver) {
-        ServerCallStreamObserver<GrpcMessage> serverCallObserver = (ServerCallStreamObserver<GrpcMessage>) responseObserver;
-        serverCallObserver.disableAutoInboundFlowControl();
+        ServerCallStreamObserver<GrpcMessage> serverCallObserver =
+                (ServerCallStreamObserver<GrpcMessage>) responseObserver;
+        serverCallObserver.disableAutoRequest();
 
-        EuhedralGrpcServerHandler serverHandler = new EuhedralGrpcServerHandler(
-                serverCallObserver, CommunicationMethod.BIDI, this.recycleCapacity,
-                this.responseQueueChunkSize);
+        EuhedralGrpcServerHandler serverHandler =
+                new EuhedralGrpcServerHandler(serverCallObserver, CommunicationMethod.BIDI,
+                        this.recycleCapacity, this.responseQueueChunkSize);
 
         processStream(serverHandler);
         return serverHandler;

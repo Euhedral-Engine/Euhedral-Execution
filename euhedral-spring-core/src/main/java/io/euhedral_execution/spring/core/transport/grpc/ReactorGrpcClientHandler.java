@@ -149,10 +149,23 @@ public class ReactorGrpcClientHandler extends Flux<GrpcMessage> implements Clien
 
     public static class GrpcSubscriber implements CoreSubscriber<GrpcMessage> {
 
+        private static final VarHandle COMPLETE;
+
+        static {
+            try {
+                COMPLETE = MethodHandles.lookup().findVarHandle(GrpcSubscriber.class, "complete", boolean.class);
+            } catch (Exception e) {
+                throw new ExceptionInInitializerError(e);
+            }
+        }
+
         private final ClientCallStreamObserver<GrpcMessage> upstream;
         private final SpmcQueue<GrpcMessage> sendQueue;
 
         private Subscription subscription;
+
+        private volatile boolean empty = false;
+        private boolean complete = false;
 
         public GrpcSubscriber(ClientCallStreamObserver<GrpcMessage> upstream, int sendQueueChunkSize) {
             this.upstream = upstream;
@@ -169,6 +182,9 @@ public class ReactorGrpcClientHandler extends Flux<GrpcMessage> implements Clien
                 if(this.sendQueue.drain(this.upstream::onNext, 32) == 0) {
                     break;
                 }
+            }
+            if(this.empty && COMPLETE.compareAndSet(this, false, true)) {
+                this.upstream.onCompleted();
             }
         }
 
@@ -194,7 +210,7 @@ public class ReactorGrpcClientHandler extends Flux<GrpcMessage> implements Clien
 
         @Override
         public void onComplete() {
-            this.upstream.onCompleted();
+            this.empty = true;
         }
     }
 }
