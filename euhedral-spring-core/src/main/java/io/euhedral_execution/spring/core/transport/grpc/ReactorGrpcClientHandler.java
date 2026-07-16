@@ -60,7 +60,7 @@ public class ReactorGrpcClientHandler extends Flux<GrpcMessage> implements Clien
 
     @Override
     public void beforeStart(ClientCallStreamObserver<GrpcMessage> stream) {
-        stream.disableAutoRequestWithInitial(1);
+        stream.disableAutoRequestWithInitial(0);
         this.upstream = stream;
 
         if(this.createSubscriber) {
@@ -184,7 +184,11 @@ public class ReactorGrpcClientHandler extends Flux<GrpcMessage> implements Clien
                 }
             }
             if(this.empty && COMPLETE.compareAndSet(this, false, true)) {
-                this.upstream.onCompleted();
+                try {
+                    this.upstream.onCompleted();
+                } catch (Exception e) {
+                    // Ignore complete() failures.
+                }
             }
         }
 

@@ -77,7 +77,7 @@ public class EuhedralGrpcClientHandler implements LatticeSource,
             GrpcFrame frame = new GrpcFrame(id, message, method, msg -> {
                 this.sendQueue.offer(msg);
                 onReady();
-            }, this.manager, killSwitch);
+            }, this::complete, this.manager, killSwitch);
             if (!message.getIsOrdered()) {
                 frame.randomizeHash(this.seed++);
             }
@@ -93,17 +93,38 @@ public class EuhedralGrpcClientHandler implements LatticeSource,
         this.upstream = stream;
     }
 
+    @Override
+    public void onNext(GrpcMessage message) {
+        if(!canReceive()) {
+            return;
+        }
+
+        LatticeReceiver receiver = (LatticeReceiver) DOWNSTREAM.getOpaque(this);
+        this.pending.decrementAndGet();
+        if (receiver != null) {
+            GrpcFrame frame = this.manager.getOrCreate(message, this.ingestPassword);
+            receiver.push(frame);
+        }
+        if (this.method == CommunicationMethod.CLIENT_STREAM
+                || this.method == CommunicationMethod.SINGLE_RESPONSE) {
+            complete();
+        }
+    }
+
     private void onReady() {
         while (this.upstream.isReady()) {
             if(this.sendQueue.drain(this.upstream::onNext, 32) == 0) {
                 break;
+            }
+            if(this.method == CommunicationMethod.SERVER_STREAM || this.method == CommunicationMethod.SINGLE_RESPONSE) {
+                complete();
             }
         }
     }
 
     @Override
     public void request(long demand) {
-        if (demand <= 0 || !isOpen()) {
+        if (demand <= 0 || !canReceive()) {
             return;
         }
         long pending = this.pending.getAcquire();
@@ -112,15 +133,6 @@ public class EuhedralGrpcClientHandler implements LatticeSource,
         if (request > 0) {
             this.pending.getAndAccumulate(demand, EuhedralGrpcClientHandler::addPending);
             this.upstream.request(request);
-        }
-    }
-
-    @Override
-    public void onNext(GrpcMessage message) {
-        LatticeReceiver receiver = (LatticeReceiver) DOWNSTREAM.getOpaque(this);
-        if (receiver != null) {
-            GrpcFrame frame = this.manager.getOrCreate(message, this.ingestPassword);
-            receiver.push(frame);
         }
     }
 
@@ -136,17 +148,22 @@ public class EuhedralGrpcClientHandler implements LatticeSource,
             if (receiver != null) {
                 receiver.onComplete();
             }
+            try {
+                this.upstream.onCompleted();
+            } catch (Exception ignored) {
+                // Ignore complete() failures
+            }
         }
     }
 
     @Override
     public void addDownstream(LatticeReceiver downstream) {
-        if (isOpen() && !DOWNSTREAM.compareAndSet(this, null, downstream)) {
+        if (canReceive() && !DOWNSTREAM.compareAndSet(this, null, downstream)) {
             downstream.onError(new IllegalAccessException("Only one downstream allowed."));
         }
     }
 
-    public boolean isOpen() {
+    public boolean canReceive() {
         return !(boolean) COMPLETE.getAcquire(this);
     }
 

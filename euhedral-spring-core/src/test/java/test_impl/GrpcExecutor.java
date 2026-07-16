@@ -1,17 +1,18 @@
 package test_impl;
 
-import java.util.concurrent.atomic.AtomicLong;
-
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.generics.AbstractExecutor;
 import io.euhedral_execution.spring.core.frames.GrpcFrame;
 import io.euhedral_execution.spring.core.transport.grpc.GrpcUtils;
+import java.util.concurrent.atomic.AtomicLong;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.support.MessageBuilder;
 
 public class GrpcExecutor extends AbstractExecutor {
     public static final String RECEIVED = "exec_received";
-    public static final String THRESHOLD = "threshold";
+    public static final String RESPOND_THRESHOLD = "threshold";
+    public static final String RESPOND_COUNT = "res_count";
+
     public static AtomicLong M_COUNT = new AtomicLong(0);
 
     public GrpcExecutor() {
@@ -25,11 +26,17 @@ public class GrpcExecutor extends AbstractExecutor {
     @Override
     public void execute(AbstractFrame frame) {
         if(frame instanceof GrpcFrame grpc) {
-            long count = M_COUNT.incrementAndGet();
             Message<byte[]> decoded = GrpcUtils.toSpringMessage(grpc.getGrpcMessage());
-            if(count >= decoded.getHeaders().get(THRESHOLD, Number.class).longValue()) {
+
+            long count = M_COUNT.incrementAndGet();
+            if(count >= decoded.getHeaders().get(RESPOND_THRESHOLD, Number.class).longValue()) {
+
+                long rLimit = decoded.getHeaders().get(RESPOND_COUNT, Number.class).longValue();
                 Message<byte[]> response = MessageBuilder.fromMessage(decoded).setHeader(RECEIVED, true).build();
-                grpc.respond(GrpcUtils.toGrpc(response, grpc.isOrdered()));
+                for(int i = 0; i < rLimit; i++) {
+                    grpc.respond(GrpcUtils.toGrpc(response, grpc.isOrdered()));
+                }
+                grpc.complete();
             }
 
         }

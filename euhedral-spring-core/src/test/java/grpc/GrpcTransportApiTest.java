@@ -51,10 +51,11 @@ class GrpcTransportApiTest {
         ControlPlaneLattice.getOrCreate().close();
     }
 
-    private static Message<byte[]> message(long id, byte[] payload, int threshold) {
+    private static Message<byte[]> message(long id, byte[] payload, int threshold, int responseCount) {
         return MessageBuilder.withPayload(payload)
                 .setHeader("TEST", id)
-                .setHeader(GrpcExecutor.THRESHOLD, threshold)
+                .setHeader(GrpcExecutor.RESPOND_THRESHOLD, threshold)
+                .setHeader(GrpcExecutor.RESPOND_COUNT, responseCount)
                 .build();
     }
 
@@ -71,28 +72,50 @@ class GrpcTransportApiTest {
 
     @Test
     void testUnary() {
-        Message<byte[]> single = message(1, new byte[] {1, 2, 3, 4}, 1);
+        Message<byte[]> single = message(1, new byte[] {1, 2, 3, 4}, 1, 1);
 
         GrpcMessage message = GrpcUtils.toGrpc(single, false);
-        GrpcMessage response = CLIENT.sendSingleRespondSingle(message).block();
+        GrpcMessage response = CLIENT.unaryRequest(message).block();
 
         Message<byte[]> retVal = GrpcUtils.toSpringMessage(response);
 
         assertMessage(single, retVal);
+        assertEquals(1, GrpcExecutor.M_COUNT.getAcquire());
     }
 
     @Test
     void testClientStream() {
-        Message<byte[]> last = message(3, new byte[] {5, 6, 7, 8}, 3);
-
         Flux<GrpcMessage> stream =
-                Flux.just(GrpcUtils.toGrpc(message(1, new byte[] {1, 2, 3}, 3), false),
-                        GrpcUtils.toGrpc(message(2, new byte[] {3, 4, 5}, 3), false),
-                        GrpcUtils.toGrpc(last, false));
+                Flux.just(GrpcUtils.toGrpc(message(1, new byte[] {1, 2, 3}, 3, 1), false),
+                        GrpcUtils.toGrpc(message(2, new byte[] {3, 4, 5}, 3, 1), false),
+                        GrpcUtils.toGrpc(message(3, new byte[] {6, 7, 8}, 3, 1), false));
 
-        GrpcMessage response = CLIENT.sendStreamRespondSingle(stream).block();
+        GrpcMessage response = CLIENT.clientStream(stream).block();
 
         assertNotNull(response);
+        assertEquals(3, GrpcExecutor.M_COUNT.getAcquire());
+    }
+
+    @Test
+    void testServerStream() {
+        Message<byte[]> single = message(1, new byte[] {1, 2, 3, 4}, 1, 3);
+
+        Long responses = CLIENT.serverStream(GrpcUtils.toGrpc(single, false)).take(3).count().block();
+
+        assertEquals(3, responses);
+        assertEquals(1, GrpcExecutor.M_COUNT.getAcquire());
+    }
+
+    @Test
+    void testBiDiStream() {
+        Flux<GrpcMessage> stream =
+                Flux.just(GrpcUtils.toGrpc(message(1, new byte[] {1, 2, 3}, 3, 3), false),
+                        GrpcUtils.toGrpc(message(2, new byte[] {3, 4, 5}, 3, 3), false),
+                        GrpcUtils.toGrpc(message(3, new byte[] {6, 7, 8}, 3, 3), false));
+
+        Long responses = CLIENT.bidirectionalStream(stream).take(3).count().block();
+
+        assertEquals(3, responses);
         assertEquals(3, GrpcExecutor.M_COUNT.getAcquire());
     }
 

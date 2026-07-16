@@ -465,6 +465,7 @@ public final class ControlPlaneLattice implements LatticeTerminal {
         } catch (Exception ignored) {
             // Executor pool errors can be ignored on shutdown.
         }
+        this.logger.info("Closed.");
     }
 
     /// Whether all queues are empty and all in-progress work is completed for all CPUs managed by
