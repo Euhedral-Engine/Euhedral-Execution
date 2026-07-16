@@ -81,7 +81,7 @@ public class EuhedralGrpcServerHandler implements LatticeSource, StreamObserver<
             GrpcFrame frame = new GrpcFrame(id, message, method, msg -> {
                 this.responseQueue.offer(msg);
                 onReady();
-            }, this.manager, killSwitch);
+            }, this::complete, this.manager, killSwitch);
             if (!message.getIsOrdered()) {
                 frame.randomizeHash(this.seed++);
             }
@@ -156,7 +156,11 @@ public class EuhedralGrpcServerHandler implements LatticeSource, StreamObserver<
             if (receiver != null) {
                 receiver.onComplete();
             }
-            this.client.onCompleted();
+            try {
+                this.client.onCompleted();
+            } catch (Exception ignored) {
+                // Ignore complete() failures
+            }
         }
     }
 

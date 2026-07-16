@@ -14,13 +14,16 @@ public class GrpcFrame extends AbstractFrame {
     @Getter
     private final CommunicationMethod method;
     private final Consumer<GrpcMessage> responseCallback;
+    private final Runnable completeCallback;
 
     @Getter
     @Setter
     private GrpcMessage grpcMessage;
 
     public GrpcFrame(long idHash, GrpcMessage grpcMessage,
-            CommunicationMethod method, Consumer<GrpcMessage> responseCallback,
+            CommunicationMethod method,
+            Consumer<GrpcMessage> responseCallback,
+            Runnable completeCallback,
             FrameManager<GrpcMessage, GrpcFrame> recycleSink,
             AtomicBoolean killSwitch) {
         super(idHash, recycleSink, killSwitch);
@@ -28,10 +31,18 @@ public class GrpcFrame extends AbstractFrame {
         this.grpcMessage = grpcMessage;
         this.method = method;
         this.responseCallback = responseCallback;
+        this.completeCallback = completeCallback;
     }
 
     public void respond(GrpcMessage response) {
         this.responseCallback.accept(response);
+        if(this.method == CommunicationMethod.CLIENT_STREAM || this.method == CommunicationMethod.SINGLE_RESPONSE) {
+            complete();
+        }
+    }
+
+    public void complete() {
+        this.completeCallback.run();
     }
 
     public void replace(GrpcMessage message) {

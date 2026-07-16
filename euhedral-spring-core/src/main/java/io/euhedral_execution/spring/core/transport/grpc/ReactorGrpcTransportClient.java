@@ -11,35 +11,24 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 @SuppressWarnings("unused")
-public abstract class GrpcTransportClient {
-    private static final Logger LOGGER = LoggerFactory.getLogger(GrpcTransportClient.class);
+public abstract class ReactorGrpcTransportClient {
+    private static final Logger LOGGER = LoggerFactory.getLogger(ReactorGrpcTransportClient.class);
 
     private final GrpcTransportServiceGrpc.GrpcTransportServiceStub stub;
     private final int sendQueueChunkSize;
 
-    protected GrpcTransportClient(GrpcTransportServiceGrpc.GrpcTransportServiceStub stub, int sendQueueChunkSize) {
+    protected ReactorGrpcTransportClient(GrpcTransportServiceGrpc.GrpcTransportServiceStub stub, int sendQueueChunkSize) {
         this.stub = stub;
         this.sendQueueChunkSize = sendQueueChunkSize;
     }
 
-    public void sendSingle(GrpcMessage message) {
-        sendSingleRespondSingle(message).then().subscribe();
-    }
-
-    public Mono<GrpcMessage> sendSingleRespondSingle(GrpcMessage message) {
+    public Mono<GrpcMessage> unaryRequest(GrpcMessage message) {
         ReactorGrpcClientHandler handler = new ReactorGrpcClientHandler();
 
-        return handler.doOnSubscribe(sub -> {
-            stub.unaryMethod(message, handler);
-            handler.request(1);
-        }).next();
+        return handler.doOnSubscribe(sub -> stub.unaryMethod(message, handler)).next();
     }
 
-    public Mono<Void> sendStream(Flux<GrpcMessage> messageFlux) {
-        return sendStreamRespondSingle(messageFlux).then();
-    }
-
-    public Mono<GrpcMessage> sendStreamRespondSingle(Flux<GrpcMessage> messageFlux) {
+    public Mono<GrpcMessage> clientStream(Flux<GrpcMessage> messageFlux) {
         ReactorGrpcClientHandler handler = new ReactorGrpcClientHandler(this.sendQueueChunkSize);
 
         stub.clientStreamMethod(handler);
@@ -48,16 +37,16 @@ public abstract class GrpcTransportClient {
         return handler.next();
     }
 
-    public Flux<GrpcMessage> sendSingleRespondStream(GrpcMessage message) {
-        ReactorGrpcClientHandler interceptor = new ReactorGrpcClientHandler();
-        return interceptor.doOnSubscribe(sub -> stub.serverStreamMethod(message, interceptor));
+    public Flux<GrpcMessage> serverStream(GrpcMessage message) {
+        ReactorGrpcClientHandler handler = new ReactorGrpcClientHandler();
+        return handler.doOnSubscribe(sub -> stub.serverStreamMethod(message, handler));
     }
 
-    public Flux<GrpcMessage> sendStreamRespondStream(Flux<GrpcMessage> messageFlux) {
+    public Flux<GrpcMessage> bidirectionalStream(Flux<GrpcMessage> messageFlux) {
         ReactorGrpcClientHandler handler = new ReactorGrpcClientHandler(this.sendQueueChunkSize);
 
         stub.bidirectionalMethod(handler);
-        messageFlux.subscribeWith(handler.getSubscriber());
+        messageFlux.subscribe(handler.getSubscriber());
         return handler;
     }
 
@@ -71,7 +60,7 @@ public abstract class GrpcTransportClient {
                 }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-                LOGGER.error("GrpcTransportClient improperly shut down!", e);
+                LOGGER.error("ReactorGrpcTransportClient improperly shut down!", e);
             }
         }
     }

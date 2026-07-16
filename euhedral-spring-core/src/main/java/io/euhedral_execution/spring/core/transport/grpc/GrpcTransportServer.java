@@ -1,7 +1,5 @@
 package io.euhedral_execution.spring.core.transport.grpc;
 
-import java.util.concurrent.ThreadLocalRandom;
-
 import io.euhedral_execution.core.control_plane.ControlPlaneLattice;
 import io.euhedral_execution.core.ingest.SingleUseSource;
 import io.euhedral_execution.hashing.HasherApi;
@@ -11,6 +9,7 @@ import io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServ
 import io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage;
 import io.grpc.stub.ServerCallStreamObserver;
 import io.grpc.stub.StreamObserver;
+import java.util.concurrent.ThreadLocalRandom;
 
 public abstract class GrpcTransportServer extends GrpcTransportServiceImplBase {
 
@@ -40,9 +39,13 @@ public abstract class GrpcTransportServer extends GrpcTransportServiceImplBase {
                 (ServerCallStreamObserver<GrpcMessage>) responseObserver;
 
         GrpcFrame frame =
-                new GrpcFrame(idHash, message, CommunicationMethod.SINGLE_RESPONSE, msg -> {
-                    serverCallObserver.onNext(msg);
-                    serverCallObserver.onCompleted();
+                new GrpcFrame(idHash, message, CommunicationMethod.SINGLE_RESPONSE,
+                        serverCallObserver::onNext, () -> {
+                    try {
+                        serverCallObserver.onCompleted();
+                    } catch (Exception ignored) {
+                        // The frame response() auto completes for unary method. Ignore repeated complete attempts
+                    }
                 }, null, null);
         processSingle(frame);
     }
@@ -64,17 +67,23 @@ public abstract class GrpcTransportServer extends GrpcTransportServiceImplBase {
     }
 
     @Override
-    public void serverStreamMethod(GrpcMessage request,
+    public void serverStreamMethod(GrpcMessage message,
             StreamObserver<GrpcMessage> responseObserver) {
+        long idHash = HasherApi.mix(ThreadLocalRandom.current().nextLong());
         ServerCallStreamObserver<GrpcMessage> serverCallObserver =
                 (ServerCallStreamObserver<GrpcMessage>) responseObserver;
-        serverCallObserver.disableAutoRequest();
 
-        EuhedralGrpcServerHandler serverHandler =
-                new EuhedralGrpcServerHandler(serverCallObserver, CommunicationMethod.SERVER_STREAM,
-                        this.recycleCapacity, this.responseQueueChunkSize);
+        GrpcFrame frame =
+                new GrpcFrame(idHash, message, CommunicationMethod.SERVER_STREAM,
+                        serverCallObserver::onNext, () -> {
+                    try {
+                        serverCallObserver.onCompleted();
+                    } catch (Exception ignored) {
+                        // Ignore repeated complete attempts
+                    }
+                }, null, null);
 
-        processStream(serverHandler);
+        processSingle(frame);
     }
 
     @Override
