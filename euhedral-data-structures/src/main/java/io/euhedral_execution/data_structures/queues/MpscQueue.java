@@ -6,7 +6,7 @@ import java.util.function.Consumer;
 import lombok.Getter;
 
 @SuppressWarnings({"unchecked", "unused"})
-public sealed class MpscQueue<T> extends BaseConcurrentQueue<T> permits BoundedMpscQueue {
+public class MpscQueue<T> extends BaseConcurrentQueue<T> {
 
     private final ChunkAllocator allocator;
 
@@ -79,11 +79,11 @@ public sealed class MpscQueue<T> extends BaseConcurrentQueue<T> permits BoundedM
     }
 
     public final long drain(BaseConcurrentQueue<T> receiver, Consumer<T> sideEffect, long limit) {
-        if(receiver instanceof SpscQueue<T> spsc) {
-            return scToSpTransfer(spsc, sideEffect, limit);
+        if(receiver instanceof SpscQueue) {
+            return scToSpTransfer(receiver, sideEffect, limit);
         }
-        if(receiver instanceof SpmcQueue<T> spmc) {
-            return scToSpTransfer(spmc, sideEffect, limit);
+        if(receiver instanceof SpmcQueue) {
+            return scToSpTransfer(receiver, sideEffect, limit);
         }
         return scToMpTransfer(receiver, sideEffect, limit);
     }
