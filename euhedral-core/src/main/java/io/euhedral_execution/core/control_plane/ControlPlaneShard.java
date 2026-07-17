@@ -9,6 +9,7 @@ import io.euhedral_execution.core.flow_control.RoutingPolicy;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.generics.CloneableObject;
 import io.euhedral_execution.core.utils.SpinWait;
+import io.euhedral_execution.data_structures.queues.SpscQueue;
 import io.euhedral_execution.data_structures.queues.common.QueueUtils;
 import io.euhedral_execution.hardware_utils.SystemInfo;
 import io.euhedral_execution.hardware_utils.SystemInfo.CpuInfo;
@@ -34,7 +35,6 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.LockSupport;
 import lombok.Getter;
-import org.jctools.queues.SpscArrayQueue;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -279,7 +279,7 @@ public class ControlPlaneShard {
         CloneableObject[] currClones = this.clones.getOpaque();
 
         Set<Integer> deadClones = new HashSet<>();
-        SpscArrayQueue<CloneableObject> clones = new SpscArrayQueue<>(currClones.length);
+        SpscQueue<CloneableObject> clones = new SpscQueue<>(currClones.length);
         for (int i = 0; i < oldClones.length; i++) {
             CloneableObject clone = oldClones[i];
             if (clone != null && (i >= currClones.length || currClones[i] == null)) {
@@ -287,7 +287,7 @@ public class ControlPlaneShard {
                 this.coreHandles[i] = null;
                 clone.setDrainMode(true);
                 deadClones.add(i);
-                clones.relaxedOffer(clone);
+                clones.offer(clone);
             }
         }
 

@@ -65,6 +65,10 @@ public class UpstreamQueue {
         this.upstreamCount = upstreamCount;
     }
 
+    public boolean inSync() {
+        return getTrueUpstreamCount() <= this.upstreams.sizeLong();
+    }
+
     public long getCachedUpCount() {
         if(this.cachedUpCount == 0L) {
             return getTrueUpstreamCount();
@@ -85,7 +89,7 @@ public class UpstreamQueue {
     public long pull(Consumer<AbstractFrame> consumer, long demand) {
         getTrueUpstreamCount();
 
-        if (demand == 0 || this.cachedUpCount == 0) {
+        if (demand <= 0 || this.cachedUpCount == 0) {
             return 0;
         }
 

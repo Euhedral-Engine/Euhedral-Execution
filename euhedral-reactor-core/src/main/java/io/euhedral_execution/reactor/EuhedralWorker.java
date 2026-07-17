@@ -130,10 +130,11 @@ public final class EuhedralWorker extends AbstractIngestSink implements Worker {
 
         @Override
         public void addDownstream(LatticeReceiver downstream) {
-            if (!TERMINAL.compareAndSet(this, null, terminal)) {
-                terminal.onError(new IllegalStateException("Already Subscribed"));
+            if (!TERMINAL.compareAndSet(this, null, downstream)) {
+                downstream.onError(new IllegalStateException("Already Subscribed"));
+            } else {
+                downstream.addUpstream(this);
             }
-            terminal.addUpstream(this);
         }
 
         public boolean isComplete() {

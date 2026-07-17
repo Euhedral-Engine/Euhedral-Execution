@@ -10,13 +10,16 @@ import java.util.function.Consumer;
 
 @SuppressWarnings("unused")
 public class SingleUseSource implements LatticeSource {
+
     private static final VarHandle COMPLETE;
     private static final VarHandle RECEIVER;
 
     static {
         try {
-            COMPLETE = MethodHandles.lookup().findVarHandle(SingleUseSource.class, "complete", boolean.class);
-            RECEIVER = MethodHandles.lookup().findVarHandle(SingleUseSource.class, "receiver", LatticeReceiver.class);
+            COMPLETE = MethodHandles.lookup()
+                    .findVarHandle(SingleUseSource.class, "complete", boolean.class);
+            RECEIVER = MethodHandles.lookup()
+                    .findVarHandle(SingleUseSource.class, "receiver", LatticeReceiver.class);
         } catch (Exception e) {
             throw new ExceptionInInitializerError(e);
         }
@@ -38,10 +41,11 @@ public class SingleUseSource implements LatticeSource {
 
     @Override
     public long pull(Consumer<AbstractFrame> consumer, long demand) {
-        if(demand <= 0) {
+        if (demand <= 0) {
             return 0;
         }
-        if(COMPLETE.compareAndSet(this, false, true)) {
+
+        if (COMPLETE.compareAndSet(this, false, true)) {
             consumer.accept(frame);
             complete();
             return 1;
@@ -51,11 +55,11 @@ public class SingleUseSource implements LatticeSource {
 
     @Override
     public void request(long demand) {
-        if(demand <= 0) {
+        if (demand <= 0) {
             return;
         }
 
-        if(COMPLETE.compareAndSet(this, false, true)) {
+        if (COMPLETE.compareAndSet(this, false, true)) {
             this.receiver.push(this.frame);
             complete();
         }
@@ -64,15 +68,16 @@ public class SingleUseSource implements LatticeSource {
     @Override
     public void addDownstream(LatticeReceiver downstream) {
         Objects.requireNonNull(downstream);
-        if(!RECEIVER.compareAndSet(this, null, downstream)) {
-            downstream.onError(new IllegalStateException("This class can only have one downstream"));
+        if (!RECEIVER.compareAndSet(this, null, downstream)) {
+            downstream.onError(
+                    new IllegalStateException("This class can only have one downstream"));
         }
     }
 
     @Override
     public void complete() {
         LatticeReceiver receiver = (LatticeReceiver) RECEIVER.getAndSetRelease(this, null);
-        if(receiver != null) {
+        if (receiver != null) {
             receiver.onComplete();
         }
     }

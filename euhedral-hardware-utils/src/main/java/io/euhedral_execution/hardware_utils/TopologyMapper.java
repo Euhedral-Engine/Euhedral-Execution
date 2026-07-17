@@ -56,7 +56,12 @@ public final class TopologyMapper {
             BitSet globalEffectiveCpus = (BitSet) utilization.globalEffectiveCpus().clone();
             CoreInfo coreInfo = SystemInfo.getCoreInfo(0);
             if (coreInfo != null) {
-                globalEffectiveCpus.andNot(coreInfo.getCpuSet());
+                BitSet zeroCpus = coreInfo.getCpuSet();
+                globalEffectiveCpus.andNot(zeroCpus);
+
+                if(globalEffectiveCpus.cardinality() == 0) {
+                    globalEffectiveCpus.or(zeroCpus);
+                }
             }
             globalEffectiveCpus.and(this.allowedCpus);
 

@@ -3,10 +3,10 @@ package io.euhedral_execution.spring.core.frames;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.impl.FrameManager;
 import io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage;
-import io.grpc.stub.ServerCallStreamObserver;
-import java.util.Objects;
+import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.locks.LockSupport;
+import java.util.function.Consumer;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -14,40 +14,50 @@ import lombok.Setter;
 public class GrpcFrame extends AbstractFrame {
 
     @Getter
-    private final ServerCallStreamObserver<GrpcMessage> client;
-    @Getter
     private final CommunicationMethod method;
+    private final Consumer<GrpcMessage> responseCallback;
+    private final Runnable completeCallback;
+    private final Consumer<Throwable> errorCallback;
+
     @Getter
     @Setter
     private GrpcMessage grpcMessage;
 
     public GrpcFrame(long idHash, GrpcMessage grpcMessage,
             CommunicationMethod method,
-            ServerCallStreamObserver<GrpcMessage> client, FrameManager<GrpcMessage, GrpcFrame> recycleSink,
+            Consumer<GrpcMessage> responseCallback,
+            Runnable completeCallback,
+            Consumer<Throwable> errorCallback,
+            FrameManager<GrpcMessage, GrpcFrame> recycleSink,
             AtomicBoolean killSwitch) {
         super(idHash, recycleSink, killSwitch);
 
         this.grpcMessage = grpcMessage;
         this.method = method;
-        this.client = client;
+        this.responseCallback = responseCallback;
+        this.completeCallback = completeCallback;
+        this.errorCallback = errorCallback;
     }
 
     public void respond(GrpcMessage response) {
-        if (this.client != null) {
-            Objects.requireNonNull(response);
-
-            long cycles = 0;
-            while(!this.client.isReady()) {
-                if((cycles++ & 127) == 0) {
-                    Thread.onSpinWait();
-                } else if (cycles < 512) {
-                    Thread.yield();
-                } else {
-                    LockSupport.parkNanos(10_000L);
-                }
-            }
-            this.client.onNext(response);
+        this.responseCallback.accept(response);
+        if (this.method == CommunicationMethod.CLIENT_STREAM
+                || this.method == CommunicationMethod.SINGLE_RESPONSE) {
+            complete();
         }
+    }
+
+    public void complete() {
+        this.completeCallback.run();
+    }
+
+    public void sendError(StatusRuntimeException status) {
+        this.errorCallback.accept(status);
+    }
+
+    @Override
+    public void doFinallyWithError(Throwable t) {
+        sendError(new StatusRuntimeException(Status.fromThrowable(t)));
     }
 
     public void replace(GrpcMessage message) {
