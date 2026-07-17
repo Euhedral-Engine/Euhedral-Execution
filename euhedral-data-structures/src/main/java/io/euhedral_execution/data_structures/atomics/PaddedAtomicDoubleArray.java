@@ -10,7 +10,7 @@ import java.util.function.DoubleUnaryOperator;
 import org.jspecify.annotations.NonNull;
 
 @SuppressWarnings("unused")
-public sealed class PaddedAtomicDoubleArray permits PaddedDoubleAdder {
+public class PaddedAtomicDoubleArray {
     private static final VarHandle HANDLE = MethodHandles.arrayElementVarHandle(double[].class);
 
     private static final int MAX_PADDING = 7;

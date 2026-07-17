@@ -7,8 +7,7 @@ import java.util.function.Consumer;
 import lombok.Getter;
 
 @SuppressWarnings({"unchecked", "unused"})
-public sealed class SpmcQueue<T> extends BaseConcurrentQueue.MultiConsumer<T> permits
-        BoundedSpmcQueue {
+public class SpmcQueue<T> extends BaseConcurrentQueue.MultiConsumer<T> {
 
     private final ChunkAllocator allocator;
     @Getter
