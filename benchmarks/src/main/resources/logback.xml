@@ -9,6 +9,5 @@
     <appender-ref ref="STDOUT"/>
   </root>
 
-  <logger name="io.euhedral_execution"
-    level="${EuhedralLogLevel:-INFO}"/>
+  <logger name="euhedral.core" level="${EuhedralCoreLog:-INFO}"/>
 </configuration>

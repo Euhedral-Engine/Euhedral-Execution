@@ -31,10 +31,6 @@ import test_impl.GrpcExecutor;
 import test_impl.TestApplication;
 import test_impl.TestGrpcClient;
 
-//@DisabledIfEnvironmentVariable(
-//        named = "GITHUB_ACTIONS",
-//        matches = "true"
-//)
 @SpringBootTest(classes = TestApplication.class, webEnvironment = SpringBootTest.WebEnvironment.NONE, properties = {
         "spring.grpc.server.port=0", "spring.cloud.config.enabled=false",
         "spring.main.lazy-initialization=true"
