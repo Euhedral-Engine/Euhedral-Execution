@@ -98,5 +98,10 @@ class DefaultExecutorTest {
         public void complete() {
             // Test
         }
+
+        @Override
+        public boolean isComplete() {
+            return false;
+        }
     }
 }

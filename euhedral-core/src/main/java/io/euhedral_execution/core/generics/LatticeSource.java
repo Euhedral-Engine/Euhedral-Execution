@@ -30,4 +30,6 @@ public interface LatticeSource {
     void request(long demand);
 
     void complete();
+
+    boolean isComplete();
 }

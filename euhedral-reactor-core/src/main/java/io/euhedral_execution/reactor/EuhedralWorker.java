@@ -7,8 +7,6 @@ import io.euhedral_execution.core.ingest.AbstractIngestSink;
 import io.euhedral_execution.data_structures.queues.PartitionedMpscQueue;
 import io.euhedral_execution.hashing.HasherApi;
 import io.euhedral_execution.reactor.common.TaskFrame;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.VarHandle;
 import java.util.Objects;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
@@ -80,20 +78,8 @@ public final class EuhedralWorker extends AbstractIngestSink implements Worker {
 
     private static class Delegate extends AbstractIngestSink.Delegate {
 
-        private static final VarHandle COMPLETE;
-
-        static {
-            try {
-                COMPLETE = MethodHandles.lookup()
-                        .findVarHandle(Delegate.class, "complete", boolean.class);
-            } catch (Exception e) {
-                throw new ExceptionInInitializerError(e);
-            }
-        }
-
         private final PartitionedMpscQueue<TaskFrame> queue;
 
-        private boolean complete;
 
         Delegate(int chunkSize, int maxPooledChunks) {
             this.queue = new PartitionedMpscQueue<>(1, chunkSize, maxPooledChunks);
@@ -106,10 +92,6 @@ public final class EuhedralWorker extends AbstractIngestSink implements Worker {
 
         @Override
         public void hookOnRequest(LatticeReceiver terminal, long demand) {
-            if (complete) {
-                return;
-            }
-
             long count = this.queue.drain(0, this::drain, demand);
             if (count > 0) {
                 addAndGetDemand(-count);
@@ -117,39 +99,12 @@ public final class EuhedralWorker extends AbstractIngestSink implements Worker {
         }
 
         private void drain(TaskFrame frame) {
-            LatticeReceiver terminal = this.terminal;
-            if (terminal == null) {
-                terminal = (LatticeReceiver) TERMINAL.getOpaque(this);
-            }
+            LatticeReceiver downstream = super.getDownstream();
 
-            if (terminal == null) {
+            if (downstream == null) {
                 return;
             }
-            terminal.push(frame);
-        }
-
-        @Override
-        public void addDownstream(LatticeReceiver downstream) {
-            if (!TERMINAL.compareAndSet(this, null, downstream)) {
-                downstream.onError(new IllegalStateException("Already Subscribed"));
-            } else {
-                downstream.addUpstream(this);
-            }
-        }
-
-        public boolean isComplete() {
-            return (boolean) COMPLETE.getOpaque(this);
-        }
-
-        @Override
-        public void complete() {
-            if (COMPLETE.compareAndSet(this, false, true)) {
-                var t = (LatticeReceiver) TERMINAL.getAndSet(this, null);
-                this.demand.lazySet(0);
-                if (t != null) {
-                    t.onComplete();
-                }
-            }
+            downstream.push(frame);
         }
     }
 }

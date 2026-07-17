@@ -84,7 +84,7 @@ class ArrayIngestSinkTest {
 
         assertNotNull(second.error);
         assertInstanceOf(IllegalStateException.class, second.error);
-        assertEquals("Already Subscribed", second.error.getMessage());
+        assertEquals("Already has a downstream", second.error.getMessage());
     }
 
     @Test

@@ -4,6 +4,7 @@ import io.euhedral_execution.core.flow_control.UpstreamQueue.UpstreamHandle;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.generics.LatticeInterceptor;
 import io.euhedral_execution.core.generics.LatticeReceiver;
+import io.euhedral_execution.core.utils.CommonVarHandles;
 import io.euhedral_execution.core.utils.SpinWait;
 import io.euhedral_execution.data_structures.atomics.PaddedAtomicLong;
 import io.euhedral_execution.data_structures.atomics.PaddedAtomicLongArray;
@@ -12,7 +13,6 @@ import io.euhedral_execution.hardware_utils.SystemInfo;
 import io.euhedral_execution.hardware_utils.SystemInfo.CoreInfo;
 import io.euhedral_execution.hardware_utils.ThreadTools;
 import io.euhedral_execution.hashing.HasherApi;
-import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.WeakHashMap;
 import java.util.concurrent.ThreadLocalRandom;
@@ -37,8 +37,8 @@ import lombok.Getter;
 @SuppressWarnings({"unchecked", "unused"})
 public class LatticeEdge extends UpstreamHandle {
 
-    protected static final VarHandle DOWNSTREAM;
-    protected static final VarHandle PARENT;
+    protected static final VarHandle DOWNSTREAM = CommonVarHandles.downstream(LatticeEdge.class);
+    protected static final VarHandle PARENT = CommonVarHandles.makeHandle(LatticeEdge.class, "parent", LatticeEdge.class);
 
     protected static final MpscQueue<UpstreamHandle>[] UPSTREAMS;
     protected static final PaddedAtomicLongArray ACTIVE_PARTITIONS;
@@ -46,17 +46,10 @@ public class LatticeEdge extends UpstreamHandle {
     protected static final WeakHashMap<UpstreamHandle, Boolean> HANDLES = new WeakHashMap<>(128);
     protected static final PaddedAtomicLong HANDLE_LOCK = new PaddedAtomicLong();
 
-    private static final VarHandle CLOSED;
+    private static final VarHandle CLOSED = CommonVarHandles.closed(LatticeEdge.class);
 
     static {
         try {
-            CLOSED = MethodHandles.lookup()
-                    .findVarHandle(LatticeEdge.class, "closed", boolean.class);
-            DOWNSTREAM = MethodHandles.lookup()
-                    .findVarHandle(LatticeEdge.class, "downstream", LatticeReceiver.class);
-            PARENT = MethodHandles.lookup()
-                    .findVarHandle(LatticeEdge.class, "parent", LatticeEdge.class);
-
             UPSTREAMS = new MpscQueue[SystemInfo.getMaxCoreId() + 1];
             ACTIVE_PARTITIONS = new PaddedAtomicLongArray(UPSTREAMS.length);
             for (int i = 0; i < UPSTREAMS.length; i++) {
@@ -77,7 +70,7 @@ public class LatticeEdge extends UpstreamHandle {
 
     protected final PaddedAtomicLong upstreamCount = new PaddedAtomicLong(0);
     protected final AtomicLong threadCount = new AtomicLong(0);
-    public LatticeReceiver downstream = null;
+    protected LatticeReceiver downstream = null;
     protected LatticeEdge parent = null;
 
     private boolean closed = false;
@@ -260,7 +253,7 @@ public class LatticeEdge extends UpstreamHandle {
 
     @Override
     public boolean isComplete() {
-        return false;
+        return isClosed();
     }
 
     /// Clears the state and permanently closes.
@@ -274,6 +267,10 @@ public class LatticeEdge extends UpstreamHandle {
             downstream.onComplete();
             DOWNSTREAM.setRelease(this, null);
         }
+    }
+
+    public boolean isClosed() {
+        return (boolean) CLOSED.getOpaque(this);
     }
 
     public void removeUpstream(UpstreamHandle handle) {

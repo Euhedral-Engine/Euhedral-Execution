@@ -6,31 +6,22 @@ import io.euhedral_execution.core.impl.FrameFactory;
 import io.euhedral_execution.core.impl.FrameFactory.FrameCreate;
 import io.euhedral_execution.core.impl.FrameFactory.FrameReplace;
 import io.euhedral_execution.core.impl.FrameManager;
+import io.euhedral_execution.core.utils.CommonVarHandles;
+import io.euhedral_execution.core.utils.SpinWait;
 import io.euhedral_execution.hashing.HasherApi;
-import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.Objects;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.locks.LockSupport;
 import java.util.function.Consumer;
 import org.jspecify.annotations.NonNull;
 
 @SuppressWarnings("unused")
 public final class ConsumerIngestSink<T> extends AbstractIngestSink {
 
-    private static final VarHandle COMPLETE;
-
-    static {
-        try {
-            COMPLETE = MethodHandles.lookup()
-                    .findVarHandle(ConsumerIngestSink.class, "complete", boolean.class);
-        } catch (Exception e) {
-            throw new ExceptionInInitializerError(e);
-        }
-    }
+    private static final VarHandle COMPLETE = CommonVarHandles.complete(ConsumerIngestSink.class);
 
     private final FrameManager<T, ConsumerFrame<T>> frameManager;
     private final QueueIngestSink sink;
@@ -81,20 +72,20 @@ public final class ConsumerIngestSink<T> extends AbstractIngestSink {
 
     public void push(T data) {
         ConsumerFrame<T> frame = this.frameManager.getOrCreate(data, this.password);
-        offerInternal(frame);
+        SpinWait.await(() -> !this.sink.offer(frame));
     }
 
     public void push(Collection<T> collection) {
         for (T data : collection) {
             ConsumerFrame<T> frame = this.frameManager.getOrCreate(data, this.password);
-            offerInternal(frame);
+            SpinWait.await(() -> !this.sink.offer(frame));
         }
     }
 
     public void push(Iterator<T> iter) {
         while (iter.hasNext()) {
             ConsumerFrame<T> frame = this.frameManager.getOrCreate(iter.next(), this.password);
-            offerInternal(frame);
+            SpinWait.await(() -> !this.sink.offer(frame));
         }
     }
 
@@ -109,19 +100,6 @@ public final class ConsumerIngestSink<T> extends AbstractIngestSink {
     public void completeGracefully() {
         if (COMPLETE.compareAndSet(this, false, true)) {
             this.sink.completeGracefully();
-        }
-    }
-
-    private void offerInternal(ConsumerFrame<T> frame) {
-        int cycles = 0;
-        while (!sink.offer(frame)) {
-            if ((cycles++ & 127) == 0) {
-                Thread.onSpinWait();
-            } else if (cycles < 512) {
-                Thread.yield();
-            } else {
-                LockSupport.parkNanos(10_000L);
-            }
         }
     }
 }

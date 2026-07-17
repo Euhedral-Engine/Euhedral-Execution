@@ -3,6 +3,7 @@ package io.euhedral_execution.reactor.common;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.generics.LatticeReceiver;
 import io.euhedral_execution.core.generics.LatticeSource;
+import io.euhedral_execution.core.utils.CommonVarHandles;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.function.Consumer;
@@ -24,23 +25,13 @@ import org.reactivestreams.Subscription;
 /// ```
 @SuppressWarnings("unused")
 public final class EuhedralSubscriber implements Subscriber<AbstractFrame>, LatticeSource {
-    private static final VarHandle COMPLETE;
-    private static final VarHandle SUBSCRIBER;
-    private static final VarHandle TERMINAL;
-
-    static {
-        try {
-            COMPLETE = MethodHandles.lookup().findVarHandle(EuhedralSubscriber.class, "complete", boolean.class);
-            SUBSCRIBER = MethodHandles.lookup().findVarHandle(EuhedralSubscriber.class, "subscription", Subscription.class);
-            TERMINAL = MethodHandles.lookup().findVarHandle(EuhedralSubscriber.class, "terminal", LatticeReceiver.class);
-        } catch (Exception e) {
-            throw new ExceptionInInitializerError(e);
-        }
-    }
+    private static final VarHandle COMPLETE = CommonVarHandles.complete(MethodHandles.lookup(), EuhedralSubscriber.class);
+    private static final VarHandle DOWNSTREAM = CommonVarHandles.downstream(MethodHandles.lookup(), EuhedralSubscriber.class);
+    private static final VarHandle SUBSCRIBER = CommonVarHandles.makeHandle(MethodHandles.lookup(), EuhedralSubscriber.class, "subscription", Subscription.class);
 
     private boolean complete;
     private Subscription subscription;
-    private LatticeReceiver terminal;
+    private LatticeReceiver downstream;
 
     public boolean hasSubscription() {
         return SUBSCRIBER.getOpaque(this) != null;
@@ -55,7 +46,7 @@ public final class EuhedralSubscriber implements Subscriber<AbstractFrame>, Latt
 
     @Override
     public void onNext(AbstractFrame frame) {
-        LatticeReceiver terminal = (LatticeReceiver) TERMINAL.getOpaque(this);
+        LatticeReceiver terminal = (LatticeReceiver) DOWNSTREAM.getOpaque(this);
         if(terminal != null) {
             terminal.push(frame);
         }
@@ -63,7 +54,7 @@ public final class EuhedralSubscriber implements Subscriber<AbstractFrame>, Latt
 
     @Override
     public void onError(Throwable t) {
-        LatticeReceiver terminal = (LatticeReceiver) TERMINAL.getOpaque(this);
+        LatticeReceiver terminal = (LatticeReceiver) DOWNSTREAM.getOpaque(this);
         if(terminal != null) {
             terminal.onError(t);
         }
@@ -71,18 +62,17 @@ public final class EuhedralSubscriber implements Subscriber<AbstractFrame>, Latt
 
     @Override
     public void onComplete() {
-        if(COMPLETE.compareAndSet(this, false, true)) {
-            SUBSCRIBER.set(this, null);
-            LatticeReceiver terminal = (LatticeReceiver) TERMINAL.getOpaque(this);
-            if(terminal != null) {
-                terminal.onComplete();
-            }
-        }
+        complete();
+    }
+
+    @Override
+    public boolean isComplete() {
+        return (boolean) COMPLETE.getOpaque(this);
     }
 
     @Override
     public void addDownstream(LatticeReceiver downstream) {
-        if(!TERMINAL.compareAndSet(this, null, downstream)) {
+        if(!DOWNSTREAM.compareAndSet(this, null, downstream)) {
             downstream.onError(new IllegalStateException("Already has a downstream."));
         }
         downstream.addUpstream(this);
@@ -107,10 +97,12 @@ public final class EuhedralSubscriber implements Subscriber<AbstractFrame>, Latt
 
     @Override
     public void complete() {
-        COMPLETE.setRelease(this, true);
-        Subscription sub = (Subscription) SUBSCRIBER.getAndSet(this, null);
-        if(sub != null) {
-            sub.cancel();
+        if(COMPLETE.compareAndSet(this, false, true)) {
+            SUBSCRIBER.set(this, null);
+            LatticeReceiver terminal = (LatticeReceiver) DOWNSTREAM.getOpaque(this);
+            if(terminal != null) {
+                terminal.onComplete();
+            }
         }
     }
 }
