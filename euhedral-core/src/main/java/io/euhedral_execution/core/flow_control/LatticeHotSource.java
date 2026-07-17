@@ -3,7 +3,7 @@ package io.euhedral_execution.core.flow_control;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.generics.LatticeReceiver;
 import io.euhedral_execution.core.generics.LatticeSource;
-import java.lang.invoke.MethodHandles;
+import io.euhedral_execution.core.utils.CommonVarHandles;
 import java.lang.invoke.VarHandle;
 import java.util.function.Consumer;
 
@@ -12,24 +12,13 @@ import java.util.function.Consumer;
 @SuppressWarnings("unused")
 public final class LatticeHotSource implements LatticeSource, Consumer<AbstractFrame> {
 
-    private static final VarHandle COMPLETE;
-    private static final VarHandle TERMINAL;
-
-    static {
-        try {
-            COMPLETE = MethodHandles.lookup()
-                    .findVarHandle(LatticeHotSource.class, "complete", boolean.class);
-            TERMINAL = MethodHandles.lookup()
-                    .findVarHandle(LatticeHotSource.class, "terminal", LatticeReceiver.class);
-        } catch (Exception e) {
-            throw new ExceptionInInitializerError(e);
-        }
-    }
+    private static final VarHandle COMPLETE = CommonVarHandles.complete(LatticeHotSource.class);
+    private static final VarHandle DOWNSTREAM = CommonVarHandles.downstream(LatticeHotSource.class);
 
     private final Consumer<AbstractFrame> applyToEach;
 
     boolean complete = false;
-    LatticeReceiver terminal = null;
+    LatticeReceiver downstream = null;
 
     public LatticeHotSource() {
         this.applyToEach = null;
@@ -47,7 +36,7 @@ public final class LatticeHotSource implements LatticeSource, Consumer<AbstractF
 
     @Override
     public void accept(AbstractFrame frame) {
-        if (TERMINAL.getOpaque(this) == null || (boolean) COMPLETE.getOpaque(this)) {
+        if (DOWNSTREAM.getOpaque(this) == null || (boolean) COMPLETE.getOpaque(this)) {
             return;
         }
 
@@ -55,7 +44,7 @@ public final class LatticeHotSource implements LatticeSource, Consumer<AbstractF
             this.applyToEach.accept(frame);
         }
 
-        LatticeReceiver terminal = (LatticeReceiver) TERMINAL.getOpaque(this);
+        LatticeReceiver terminal = (LatticeReceiver) DOWNSTREAM.getOpaque(this);
         if (terminal != null) {
             terminal.push(frame);
         }
@@ -63,13 +52,13 @@ public final class LatticeHotSource implements LatticeSource, Consumer<AbstractF
 
     @Override
     public void addDownstream(LatticeReceiver terminal) {
-        if (!COMPLETE.compareAndSet(this, true, false) && !TERMINAL.compareAndSet(this, null,
+        if (!COMPLETE.compareAndSet(this, true, false) && !DOWNSTREAM.compareAndSet(this, null,
                 terminal)) {
             terminal.onError(new IllegalAccessException("This class already has a terminal"));
             return;
         }
-        LatticeReceiver observed = (LatticeReceiver) TERMINAL.getOpaque(this);
-        if (!TERMINAL.compareAndSet(this, observed, terminal)) {
+        LatticeReceiver observed = (LatticeReceiver) DOWNSTREAM.getOpaque(this);
+        if (!DOWNSTREAM.compareAndSet(this, observed, terminal)) {
             terminal.onError(new IllegalAccessException("This class already has a terminal"));
             return;
         }
@@ -84,7 +73,12 @@ public final class LatticeHotSource implements LatticeSource, Consumer<AbstractF
     @Override
     public void complete() {
         COMPLETE.setVolatile(this, true);
-        TERMINAL.setVolatile(this, null);
+        DOWNSTREAM.setVolatile(this, null);
+    }
+
+    @Override
+    public boolean isComplete() {
+        return (boolean) COMPLETE.getOpaque(this);
     }
 }
 

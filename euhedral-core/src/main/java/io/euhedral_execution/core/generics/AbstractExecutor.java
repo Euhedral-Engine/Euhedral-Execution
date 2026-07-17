@@ -8,16 +8,16 @@ import org.slf4j.LoggerFactory;
 
 /// ## The terminal execution sink of Euhedral Core
 ///
-/// `AbstractExecutor` is the final execution boundary for frames. It receives,
-/// executes, and forwards completed frames to the completion channel.
+/// `AbstractExecutor` is the final execution boundary for frames. It receives, executes, and
+/// forwards completed frames to the completion channel.
 ///
 /// Execution is intentionally minimal and without side effects. Completed frames are always pushed
 /// into the completion sink, which decouples execution from downstream acknowledgment.
 public abstract class AbstractExecutor implements CloneableObject {
 
-    private final Logger logger = LoggerFactory.getLogger(this.getClass());
-
     protected final int cpu;
+    private final Logger logger = LoggerFactory.getLogger(
+            "euhedral.core" + this.getClass().getSimpleName());
 
     protected AbstractExecutor(int cpu) {
         this.cpu = cpu;

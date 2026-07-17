@@ -367,7 +367,7 @@ class LatticeVertexTest {
 
         verify(upstream).complete();
 
-        assertTrue(interceptor.isComplete.get());
+        assertTrue(interceptor.isComplete());
     }
 
     @Test
@@ -377,7 +377,7 @@ class LatticeVertexTest {
 
         interceptor.onComplete();
 
-        assertTrue(interceptor.isComplete.get());
+        assertTrue(interceptor.isComplete());
     }
 
     @Test
@@ -387,7 +387,7 @@ class LatticeVertexTest {
 
         interceptor.onError(new RuntimeException("boom"));
 
-        assertTrue(interceptor.isComplete.get());
+        assertTrue(interceptor.isComplete());
     }
 
     @Test

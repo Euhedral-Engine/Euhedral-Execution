@@ -142,8 +142,6 @@ public class UpstreamQueue {
 
         public abstract long getId();
 
-        public abstract boolean isComplete();
-
         public void addUpstream(LatticeSource upstream) {
             upstream.complete();
         }

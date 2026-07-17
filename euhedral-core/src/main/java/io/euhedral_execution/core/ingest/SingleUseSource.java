@@ -3,7 +3,7 @@ package io.euhedral_execution.core.ingest;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.generics.LatticeReceiver;
 import io.euhedral_execution.core.generics.LatticeSource;
-import java.lang.invoke.MethodHandles;
+import io.euhedral_execution.core.utils.CommonVarHandles;
 import java.lang.invoke.VarHandle;
 import java.util.Objects;
 import java.util.function.Consumer;
@@ -11,19 +11,8 @@ import java.util.function.Consumer;
 @SuppressWarnings("unused")
 public class SingleUseSource implements LatticeSource {
 
-    private static final VarHandle COMPLETE;
-    private static final VarHandle RECEIVER;
-
-    static {
-        try {
-            COMPLETE = MethodHandles.lookup()
-                    .findVarHandle(SingleUseSource.class, "complete", boolean.class);
-            RECEIVER = MethodHandles.lookup()
-                    .findVarHandle(SingleUseSource.class, "receiver", LatticeReceiver.class);
-        } catch (Exception e) {
-            throw new ExceptionInInitializerError(e);
-        }
-    }
+    private static final VarHandle COMPLETE = CommonVarHandles.complete(SingleUseSource.class);
+    private static final VarHandle DOWNSTREAM = CommonVarHandles.downstream(SingleUseSource.class);
 
     public static SingleUseSource wrap(AbstractFrame frame) {
         Objects.requireNonNull(frame);
@@ -32,7 +21,7 @@ public class SingleUseSource implements LatticeSource {
 
     private final AbstractFrame frame;
 
-    private LatticeReceiver receiver;
+    private LatticeReceiver downstream;
     private boolean complete;
 
     private SingleUseSource(AbstractFrame frame) {
@@ -60,7 +49,7 @@ public class SingleUseSource implements LatticeSource {
         }
 
         if (COMPLETE.compareAndSet(this, false, true)) {
-            this.receiver.push(this.frame);
+            this.downstream.push(this.frame);
             complete();
         }
     }
@@ -68,7 +57,7 @@ public class SingleUseSource implements LatticeSource {
     @Override
     public void addDownstream(LatticeReceiver downstream) {
         Objects.requireNonNull(downstream);
-        if (!RECEIVER.compareAndSet(this, null, downstream)) {
+        if (!DOWNSTREAM.compareAndSet(this, null, downstream)) {
             downstream.onError(
                     new IllegalStateException("This class can only have one downstream"));
         }
@@ -76,9 +65,14 @@ public class SingleUseSource implements LatticeSource {
 
     @Override
     public void complete() {
-        LatticeReceiver receiver = (LatticeReceiver) RECEIVER.getAndSetRelease(this, null);
+        LatticeReceiver receiver = (LatticeReceiver) DOWNSTREAM.getAndSetRelease(this, null);
         if (receiver != null) {
             receiver.onComplete();
         }
+    }
+
+    @Override
+    public boolean isComplete() {
+        return (boolean) COMPLETE.getOpaque(this);
     }
 }
