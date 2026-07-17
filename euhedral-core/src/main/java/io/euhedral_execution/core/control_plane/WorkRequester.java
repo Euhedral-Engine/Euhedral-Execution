@@ -20,7 +20,7 @@ public abstract class WorkRequester extends ControlPlaneCache {
         } else {
             int cores = SystemInfo.getSocketInfo(SystemInfo.getCoreInfo(cacheConfig.getCore()).socket()).getCoreSet()
                     .cardinality();
-            this.pullMultiplier = (cores * 3L) >> 3; // 37.5% of the core count
+            this.pullMultiplier = Math.max((cores * 3L) >> 3, 2); // 37.5% of the core count
             this.safetyFactor = Math.max(this.pullMultiplier >> 1, 2);
         }
     }

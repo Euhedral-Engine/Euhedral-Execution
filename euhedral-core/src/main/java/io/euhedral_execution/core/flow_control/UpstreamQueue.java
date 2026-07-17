@@ -89,7 +89,7 @@ public class UpstreamQueue {
     public long pull(Consumer<AbstractFrame> consumer, long demand) {
         getTrueUpstreamCount();
 
-        if (demand == 0 || this.cachedUpCount == 0) {
+        if (demand <= 0 || this.cachedUpCount == 0) {
             return 0;
         }
 
