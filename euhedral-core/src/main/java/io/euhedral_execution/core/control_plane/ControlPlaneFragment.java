@@ -193,6 +193,11 @@ public final class ControlPlaneFragment extends WorkRequester {
 
                 throughput =
                         throughput == 0 ? instantT : MathFunctions.ewma(throughput, instantT, 0.10);
+
+                if(!context.upstream.inSync()) {
+                    super.syncUpstreamQueue();
+                }
+
                 if (!(boolean) DRAIN.getOpaque(this)) {
                     breakoutSpin(this.cpu, throughput);
                 }
@@ -351,9 +356,12 @@ public final class ControlPlaneFragment extends WorkRequester {
 
     private long idleSpin(FlowThread.FlowContext threadContext) {
         while (keepRunning()) {
-            long upCount = threadContext.upstream.getCachedUpCount();
+            long upCount = threadContext.upstream.getTrueUpstreamCount();
             if (upCount > 0) {
                 return upCount;
+            }
+            if(super.getLocalCacheCount() > 0 || super.getUpstreamCacheCount() > 0) {
+                break;
             }
             LockSupport.parkNanos(20_000L);
         }

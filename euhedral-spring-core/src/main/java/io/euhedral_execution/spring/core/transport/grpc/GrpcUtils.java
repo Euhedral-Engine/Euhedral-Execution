@@ -59,7 +59,13 @@ public class GrpcUtils {
     public static Object fromValue(Value value) {
         return switch (value.getKindCase()) {
             case NULL_VALUE -> value.getNullValue();
-            case NUMBER_VALUE -> value.getNumberValue();
+            case NUMBER_VALUE -> {
+                double num = value.getNumberValue();
+                if(num == Math.rint(num)) {
+                    yield (long) num;
+                }
+                yield num;
+            }
             case STRING_VALUE -> value.getStringValue();
             case BOOL_VALUE -> value.getBoolValue();
             case STRUCT_VALUE -> fromGrpcStruct(value.getStructValue());
@@ -93,7 +99,7 @@ public class GrpcUtils {
                 .build();
     }
 
-    public static Message<byte[]> fromSpringGrpc(GrpcMessage message) {
+    public static Message<byte[]> toSpringMessage(GrpcMessage message) {
         if (!message.hasSpringMessage()) {
             throw new RuntimeException("Provided message does not contain a spring message");
         }

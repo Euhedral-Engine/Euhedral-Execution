@@ -1,19 +1,18 @@
 package io.euhedral_execution.spring.core.transport.kafka;
 
+import io.euhedral_execution.core.control_plane.ControlPlaneLattice;
+import io.euhedral_execution.hashing.HasherApi;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.longs.LongArraySet;
+import it.unimi.dsi.fastutil.objects.ObjectOpenHashSet;
+import jakarta.annotation.PreDestroy;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
-
-import io.euhedral_execution.core.control_plane.ControlPlaneLattice;
-import io.euhedral_execution.hashing.HasherApi;
-import it.unimi.dsi.fastutil.longs.LongArraySet;
-import jakarta.annotation.PreDestroy;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.jctools.maps.NonBlockingHashMapLong;
-import org.jctools.maps.NonBlockingHashSet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
@@ -56,11 +55,10 @@ public class EuhedralKafkaBinder extends
     private final KafkaMessageChannelBinder kafkaBinder;
     private final KafkaTopicProvisioner kafkaProvisioner;
 
-    private final NonBlockingHashSet<String> provisionedConsumers = new NonBlockingHashSet<>();
+    private final ObjectOpenHashSet<String> provisionedConsumers = new ObjectOpenHashSet<>();
 
     private final AtomicBoolean wip = new AtomicBoolean(false);
-    private final NonBlockingHashMapLong<KafkaIngestSource> sources =
-            new NonBlockingHashMapLong<>();
+    private final Long2ObjectOpenHashMap<KafkaIngestSource> sources = new Long2ObjectOpenHashMap<>();
     private final ObjectProvider<BindingService> bindingService;
     private final ObjectProvider<KafkaProperties> kafkaProperties;
     private final ObjectProvider<KafkaBinderConfigurationProperties> binderConfig;
@@ -84,10 +82,15 @@ public class EuhedralKafkaBinder extends
 
     @PreDestroy
     public void stopAllConsumers() {
-        for (KafkaIngestSource consumer : sources.values()) {
-            consumer.complete();
+        acquireLock();
+        try {
+            for (KafkaIngestSource consumer : this.sources.values()) {
+                consumer.complete();
+            }
+            this.sources.clear();
+        } finally {
+            releaseLock();
         }
-        sources.clear();
     }
 
     @Override
@@ -114,19 +117,22 @@ public class EuhedralKafkaBinder extends
             return null;
         }
 
-        String rawName = destination.getName();
-        this.provisionedConsumers.add(rawName);
-
-        destination =
-                this.kafkaProvisioner.provisionConsumerDestination(destination.getName(), group,
-                        properties);
-
-        String topic = destination.getName();
-        long groupHash = HasherApi.getHash(group);
-
-        KafkaIngestSource source = this.sources.get(groupHash);
         acquireLock();
         try {
+            String rawName = destination.getName();
+
+            this.provisionedConsumers.add(rawName);
+
+            destination =
+                    this.kafkaProvisioner.provisionConsumerDestination(destination.getName(), group,
+                            properties);
+
+            String topic = destination.getName();
+            long groupHash = HasherApi.getHash(group);
+
+            acquireLock();
+            KafkaIngestSource source = this.sources.get(groupHash);
+
             if (source == null) {
                 source = this.sources.put(groupHash, new KafkaIngestSource(group, props));
                 source.addTopic(topic);
@@ -135,27 +141,27 @@ public class EuhedralKafkaBinder extends
                 source.addTopic(topic);
                 source.update(props);
             }
+
+            final KafkaIngestSource finalSource = source;
+            return new MessageProducerSupport() {
+                @Override
+                protected void doStop() {
+                    finalSource.removeTopic(topic);
+                    provisionedConsumers.remove(rawName);
+                    acquireLock();
+                    try {
+                        if (finalSource.isComplete()) {
+                            sources.remove(groupHash);
+                        }
+                    } finally {
+                        releaseLock();
+                    }
+                }
+            };
         } finally {
             releaseLock();
         }
-        releaseLock();
 
-        final KafkaIngestSource finalSource = source;
-        return new MessageProducerSupport() {
-            @Override
-            protected void doStop() {
-                finalSource.removeTopic(topic);
-                provisionedConsumers.remove(rawName);
-                acquireLock();
-                try {
-                    if (finalSource.isComplete()) {
-                        sources.remove(groupHash);
-                    }
-                } finally {
-                    releaseLock();
-                }
-            }
-        };
     }
 
     private Map<String, Object> buildConsumerProps(String group,
@@ -242,8 +248,8 @@ public class EuhedralKafkaBinder extends
                 }
             }
 
-            this.sources.entrySet().removeIf(entry -> {
-                boolean isActive = active.contains(entry.getKey().longValue());
+            this.sources.long2ObjectEntrySet().removeIf(entry -> {
+                boolean isActive = active.contains(entry.getLongKey());
                 if (!isActive) {
                     entry.getValue().complete();
                 }

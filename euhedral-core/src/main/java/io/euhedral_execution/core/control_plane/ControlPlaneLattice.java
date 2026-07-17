@@ -92,7 +92,8 @@ import org.slf4j.LoggerFactory;
 public final class ControlPlaneLattice implements LatticeTerminal {
 
     private static final AtomicReference<ControlPlaneLattice> INSTANCE = new AtomicReference<>();
-    private static final VarHandle HANDLES = MethodHandles.arrayElementVarHandle(LatticeEdge[].class);
+    private static final VarHandle HANDLES = MethodHandles.arrayElementVarHandle(
+            LatticeEdge[].class);
 
     public static ControlPlaneLattice getOrCreate() {
         return getOrCreate("EuhedralLattice", "EuhedralShard");
@@ -143,14 +144,17 @@ public final class ControlPlaneLattice implements LatticeTerminal {
     volatile EffectiveSystemTopology effectiveTopology;
 
     ControlPlaneLattice(LatticeConfig config) {
-        this.name = config.name() == null || config.name().isBlank() ? this.getClass().getSimpleName() : config.name();
+        this.name =
+                config.name() == null || config.name().isBlank() ? this.getClass().getSimpleName()
+                        : config.name();
         this.logger = LoggerFactory.getLogger(this.name);
         this.config = config;
 
         this.topology = new TopologyMapper(config.allowedCpus());
         this.resourceMonitor = new ResourceMonitor(this.topology, Duration.ofMillis(200));
         this.controlPlaneExecutor =
-                Executors.newFixedThreadPool(SystemInfo.getMaxSocketId() + 1, r -> new Thread(r, this.name));
+                Executors.newFixedThreadPool(SystemInfo.getMaxSocketId() + 1,
+                        r -> new Thread(r, this.name));
         this.shutdownHook = new Thread(this::close);
 
         this.shards = new ControlPlaneShard[SystemInfo.getMaxSocketId() + 1];
@@ -213,7 +217,8 @@ public final class ControlPlaneLattice implements LatticeTerminal {
             if (info == null) {
                 continue;
             }
-            this.shards[i] = this.config.baseShard().clone(i, this.name, this.config.shutdownTimeout());
+            this.shards[i] = this.config.baseShard()
+                    .clone(i, this.name, this.config.shutdownTimeout());
             this.logger.info("Created ControlPlaneShard on socket: {}", i);
         }
 
@@ -296,11 +301,12 @@ public final class ControlPlaneLattice implements LatticeTerminal {
         for (int socket = newShards.nextSetBit(0); socket >= 0;
                 socket = newShards.nextSetBit(socket + 1)) {
             if (this.shardHandles[socket] == null) {
-                HANDLES.setRelease(this.shardHandles, socket, new LatticeEdge(controller.getDrainFlag()));
+                HANDLES.setRelease(this.shardHandles, socket,
+                        new LatticeEdge(controller.getDrainFlag()));
             }
         }
-        for(int i = 0; i < this.shardHandles.length; i++) {
-            if(!newShards.get(i)) {
+        for (int i = 0; i < this.shardHandles.length; i++) {
+            if (!newShards.get(i)) {
                 HANDLES.setRelease(this.shardHandles, i, null);
             }
         }
@@ -428,7 +434,9 @@ public final class ControlPlaneLattice implements LatticeTerminal {
         LatticeVertex controller = this.ingestController.getAndSet(null);
 
         try {
-            controller.close();
+            if (controller != null) {
+                controller.close();
+            }
         } catch (Exception e) {
             this.logger.error("Error closing ControlPlaneIngestController.", e);
         }
@@ -449,7 +457,6 @@ public final class ControlPlaneLattice implements LatticeTerminal {
         }
         this.activeShardIds.set(null);
 
-
         INSTANCE.set(null);
 
         try {
@@ -458,6 +465,7 @@ public final class ControlPlaneLattice implements LatticeTerminal {
         } catch (Exception ignored) {
             // Executor pool errors can be ignored on shutdown.
         }
+        this.logger.info("Closed.");
     }
 
     /// Whether all queues are empty and all in-progress work is completed for all CPUs managed by
