@@ -396,7 +396,6 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
 
         @Override
         public void request(long num) {
-            logger.info("Demand: {}", num);
             if (num <= 0 || (boolean) CLOSED.getOpaque(LatticeVertex.this)
                     || LatticeVertex.this.drain.getOpaque() || this.isComplete.getOpaque()) {
                 return;

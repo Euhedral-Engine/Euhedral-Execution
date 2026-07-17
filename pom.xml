@@ -256,10 +256,9 @@
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-surefire-plugin</artifactId>
-          <version>3.5.4</version>
+          <version>3.5.6</version>
           <configuration>
             <argLine>
-              -javaagent:${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar
               -XX:+EnableDynamicAgentLoading
               --add-opens java.base/java.util=euhedral.hardware_utils,org.mockito,ALL-UNNAMED
               -Xshare:off

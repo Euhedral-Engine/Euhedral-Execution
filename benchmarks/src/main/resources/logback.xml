@@ -5,7 +5,10 @@
     </encoder>
   </appender>
 
-  <root level="${EuhedralLogLevel:-INFO}">
-    <appender-ref ref="STDOUT" />
+  <root level="INFO">
+    <appender-ref ref="STDOUT"/>
   </root>
+
+  <logger name="io.euhedral_execution"
+    level="${EuhedralLogLevel:-INFO}"/>
 </configuration>

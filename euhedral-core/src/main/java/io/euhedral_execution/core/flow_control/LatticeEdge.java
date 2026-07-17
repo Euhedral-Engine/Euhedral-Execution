@@ -141,6 +141,21 @@ public class LatticeEdge extends UpstreamHandle {
         }
     }
 
+    public void syncUpstreamQueue() {
+        UpstreamQueue queue = UpstreamQueue.UP_QUEUE.get();
+        if(queue == null) {
+            return;
+        }
+
+        UPSTREAMS[queue.core].clear();
+        SpinWait.await(() -> !HANDLE_LOCK.compareAndSet(0, 1));
+        try {
+            UPSTREAMS[queue.core].fill(HANDLES.keySet());
+        } finally {
+            HANDLE_LOCK.set(0);
+        }
+    }
+
     public long getUpstreamCacheCapacity() {
         LatticeEdge parent = (LatticeEdge) PARENT.getOpaque(this);
         if (parent != null) {
