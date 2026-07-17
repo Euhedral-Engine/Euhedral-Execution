@@ -193,6 +193,11 @@ public final class ControlPlaneFragment extends WorkRequester {
 
                 throughput =
                         throughput == 0 ? instantT : MathFunctions.ewma(throughput, instantT, 0.10);
+
+                if(!context.upstream.inSync()) {
+                    super.syncUpstreamQueue();
+                }
+
                 if (!(boolean) DRAIN.getOpaque(this)) {
                     breakoutSpin(this.cpu, throughput);
                 }

@@ -65,6 +65,10 @@ public class UpstreamQueue {
         this.upstreamCount = upstreamCount;
     }
 
+    public boolean inSync() {
+        return getTrueUpstreamCount() <= this.upstreams.sizeLong();
+    }
+
     public long getCachedUpCount() {
         if(this.cachedUpCount == 0L) {
             return getTrueUpstreamCount();
@@ -114,7 +118,6 @@ public class UpstreamQueue {
 
             this.upstreams.offer(handle);
         }
-        System.out.println("Pull: " + totalPull);
         return totalPull;
     }
 
