@@ -210,8 +210,8 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
             }
 
             SpinWait.await(super.drain::getOpaque);
-
             SpinWait.await(() -> !HANDLE_LOCK.compareAndSet(0, 1));
+
             try {
                 HANDLES.put(upstream, Boolean.TRUE);
             } finally {
@@ -224,6 +224,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
                     queue.offer(upstream);
                 }
             }
+
             super.upstreamCount.incrementAndGet();
         }
     }
@@ -370,6 +371,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
             long sum = num1 + num2;
             return sum < 0 ? Long.MAX_VALUE : sum;
         }
+
         public final AtomicBoolean isComplete = new AtomicBoolean(false);
         @Getter
         private final long id = HasherApi.mix(ThreadLocalRandom.current().nextLong());
@@ -394,6 +396,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
 
         @Override
         public void request(long num) {
+            logger.info("Demand: {}", num);
             if (num <= 0 || (boolean) CLOSED.getOpaque(LatticeVertex.this)
                     || LatticeVertex.this.drain.getOpaque() || this.isComplete.getOpaque()) {
                 return;

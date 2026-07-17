@@ -3,14 +3,13 @@ package io.euhedral_execution.reactor.common;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.hashing.HasherApi;
 import io.euhedral_execution.reactor.EuhedralWorker;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.LockSupport;
 import lombok.Getter;
-import org.jspecify.annotations.NonNull;
 import reactor.core.Disposable;
 
+@SuppressWarnings("unused")
 public final class TaskFrame extends AbstractFrame implements Disposable {
 
     public static TaskFrame create(long idHash, Runnable task, EuhedralWorker sink, long delay, long period, TimeUnit unit) {
@@ -24,7 +23,7 @@ public final class TaskFrame extends AbstractFrame implements Disposable {
     private Thread thread;
     private long seed;
 
-    private TaskFrame(long idHash, Runnable task, EuhedralWorker sink, long delay, long period, @NonNull TimeUnit unit) {
+    private TaskFrame(long idHash, Runnable task, EuhedralWorker sink, long delay, long period, TimeUnit unit) {
         super(idHash, null, new AtomicBoolean());
 
         this.task = task;
@@ -33,12 +32,13 @@ public final class TaskFrame extends AbstractFrame implements Disposable {
 
         randomizeHash(this.seed++);
 
-        LockSupport.parkNanos(unit.toNanos(delay));
+        long delayNs = unit.toNanos(delay);
+
+        LockSupport.parkNanos(delayNs);
         if(periodNs <= 0) {
             sink.submit(this);
         } else {
-            CompletableFuture.runAsync(() -> {
-                this.thread = Thread.currentThread();
+            this.thread = Thread.ofVirtual().start(() -> {
                 cycle(sink);
                 kill();
             });
