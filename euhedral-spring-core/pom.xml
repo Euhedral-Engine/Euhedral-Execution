@@ -12,8 +12,7 @@
   <artifactId>euhedral-spring-core</artifactId>
 
   <properties>
-    <maven.compiler.source>17</maven.compiler.source>
-    <maven.compiler.target>17</maven.compiler.target>
+    <maven.compiler.release>21</maven.compiler.release>
     <maven.deploy.skip>false</maven.deploy.skip>
     <central.deployment.skip>false</central.deployment.skip>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>

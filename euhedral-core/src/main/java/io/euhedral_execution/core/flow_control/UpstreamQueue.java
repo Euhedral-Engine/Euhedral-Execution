@@ -114,6 +114,7 @@ public class UpstreamQueue {
 
             this.upstreams.offer(handle);
         }
+        System.out.println("Pull: " + totalPull);
         return totalPull;
     }
 
