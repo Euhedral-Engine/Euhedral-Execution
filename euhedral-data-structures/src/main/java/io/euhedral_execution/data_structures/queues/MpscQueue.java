@@ -3,6 +3,7 @@ package io.euhedral_execution.data_structures.queues;
 import io.euhedral_execution.data_structures.queues.common.QueueUtils;
 import java.util.Collection;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import lombok.Getter;
 
 @SuppressWarnings({"unchecked", "unused"})
@@ -72,6 +73,11 @@ public class MpscQueue<T> extends BaseConcurrentQueue<T> {
     @Override
     public final long drain(Consumer<T> consumer, long limit) {
         return scDrain((Consumer<Object>) consumer, limit);
+    }
+
+    @Override
+    public final long drain(Consumer<T> consumer, Function<T, Boolean> stopCondition, long limit) {
+        return scDrain((Consumer<Object>) consumer, (Function<Object, Boolean>) stopCondition, limit);
     }
 
     public final long drain(BaseConcurrentQueue<T> receiver, long limit) {

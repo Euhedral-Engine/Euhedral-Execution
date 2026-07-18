@@ -1,6 +1,7 @@
 package io.euhedral_execution.data_structures.queues;
 
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 /// ## An unbounded MPMC array queue with partitions.
 ///
@@ -44,6 +45,12 @@ public final class PartitionedMpmcQueue<T> extends AbstractPartitionedQueue<T> {
     @Override
     public long drain(int partition, Consumer<T> consumer, long limit) {
         return this.queues[partition].drain(consumer, limit);
+    }
+
+    @Override
+    public long drain(int partition, Consumer<T> consumer, Function<T, Boolean> stopCondition,
+            long limit) {
+        return this.queues[partition].drain(consumer, stopCondition, limit);
     }
 
     @Override

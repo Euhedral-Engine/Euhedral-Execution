@@ -3,6 +3,7 @@ package io.euhedral_execution.data_structures.queues.common;
 import java.util.Queue;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 @SuppressWarnings("unused")
 public interface PartitionedQueue<T> extends Queue<T> {
@@ -35,9 +36,13 @@ public interface PartitionedQueue<T> extends Queue<T> {
 
     long drain(Consumer<T> consumer, long limit);
 
+    long drain(Consumer<T> consumer, Function<T, Boolean> stopCondition, long limit);
+
     long drain(Consumer<T> consumer, long limit, int startingPartition);
 
     long drain(int partition, Consumer<T> consumer, long limit);
+
+    long drain(int partition, Consumer<T> consumer, Function<T, Boolean> stopCondition, long limit);
 
     boolean isEmpty();
 
