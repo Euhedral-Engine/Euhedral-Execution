@@ -322,7 +322,6 @@ public final class ControlPlaneLattice implements LatticeTerminal {
             }
         }
 
-        this.logger.trace("Remapping ingest controller.");
         remapIngestController();
 
         // Divide the quota proportionally based on cpu count
@@ -387,6 +386,7 @@ public final class ControlPlaneLattice implements LatticeTerminal {
     /// Cuts ingest by setting the ingest controller to drain mode and changes the mappings to the
     /// next shards. Does not reactivate ingest in here.
     private void remapIngestController() {
+        this.logger.trace("Remapping ingest controller.");
         this.ingestController.get().setDrain(true);
         BitSet effectiveSockets = this.effectiveTopology.effectiveSockets();
         BitSet effectiveCpus = this.effectiveTopology.effectiveCpus();
