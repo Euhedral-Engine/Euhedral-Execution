@@ -7,6 +7,7 @@ import io.euhedral_execution.core.utils.CommonVarHandles;
 import java.lang.invoke.VarHandle;
 import java.util.Objects;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 @SuppressWarnings("unused")
 public class SingleUseSource implements LatticeSource {
@@ -29,7 +30,8 @@ public class SingleUseSource implements LatticeSource {
     }
 
     @Override
-    public long pull(Consumer<AbstractFrame> consumer, long demand) {
+    public long pull(Consumer<AbstractFrame> consumer,
+            Function<AbstractFrame, Boolean> stopCondition, long demand) {
         if (demand <= 0) {
             return 0;
         }

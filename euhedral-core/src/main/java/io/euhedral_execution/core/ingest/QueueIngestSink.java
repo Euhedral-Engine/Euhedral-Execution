@@ -10,6 +10,7 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.Objects;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import org.jspecify.annotations.NonNull;
 
 /// Wraps a partitioned queue to allow it to be fed into the
@@ -68,8 +69,7 @@ public final class QueueIngestSink extends AbstractIngestSink {
         return this.delegate.demand.getAcquire();
     }
 
-    /// Disconnects from the [ControlPlaneLattice] immediately. Does not clear
-    /// the queue.
+    /// Disconnects from the [ControlPlaneLattice] immediately. Does not clear the queue.
     @Override
     public void complete() {
         this.delegate.complete();
@@ -81,11 +81,13 @@ public final class QueueIngestSink extends AbstractIngestSink {
     }
 
     protected static final class Delegate extends AbstractIngestSink.Delegate {
+
         static final VarHandle FINISH;
 
         static {
             try {
-                FINISH = MethodHandles.lookup().findVarHandle(Delegate.class, "finish", boolean.class);
+                FINISH = MethodHandles.lookup()
+                        .findVarHandle(Delegate.class, "finish", boolean.class);
             } catch (Exception e) {
                 throw new ExceptionInInitializerError(e);
             }
@@ -100,9 +102,10 @@ public final class QueueIngestSink extends AbstractIngestSink {
         }
 
         @Override
-        public long hookOnPull(Consumer<AbstractFrame> consumer, long demand) {
-            long count = this.queue.drain(consumer, demand);
-            if(count == 0 && (boolean) FINISH.getOpaque(this)) {
+        public long hookOnPull(Consumer<AbstractFrame> consumer,
+                Function<AbstractFrame, Boolean> stopCondition, long demand) {
+            long count = this.queue.drain(consumer, stopCondition, demand);
+            if (count == 0 && (boolean) FINISH.getOpaque(this)) {
                 super.complete();
             }
             return count;
@@ -113,7 +116,7 @@ public final class QueueIngestSink extends AbstractIngestSink {
             long count = this.queue.drain(terminal::push, demand);
             if (count > 0) {
                 addAndGetDemand(-count);
-            } else if((boolean) FINISH.getOpaque(this)) {
+            } else if ((boolean) FINISH.getOpaque(this)) {
                 super.complete();
             }
         }

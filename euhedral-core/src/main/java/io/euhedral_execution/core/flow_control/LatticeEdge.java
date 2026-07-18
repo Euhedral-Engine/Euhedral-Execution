@@ -20,6 +20,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicLongArray;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,7 +42,8 @@ import org.slf4j.LoggerFactory;
 public class LatticeEdge extends UpstreamHandle {
 
     protected static final VarHandle DOWNSTREAM = CommonVarHandles.downstream(LatticeEdge.class);
-    protected static final VarHandle PARENT = CommonVarHandles.makeHandle(LatticeEdge.class, "parent", LatticeEdge.class);
+    protected static final VarHandle PARENT = CommonVarHandles.makeHandle(LatticeEdge.class,
+            "parent", LatticeEdge.class);
 
     protected static final MpscQueue<UpstreamHandle>[] UPSTREAMS;
     protected static final AtomicLongArray ACTIVE_PARTITIONS;
@@ -52,7 +54,8 @@ public class LatticeEdge extends UpstreamHandle {
     protected static final PaddedAtomicLong UPSTREAM_COUNT = new PaddedAtomicLong(0);
 
     private static final VarHandle CLOSED = CommonVarHandles.closed(LatticeEdge.class);
-    private static final Logger LOGGER = LoggerFactory.getLogger(Constants.getLoggerName(LatticeEdge.class));
+    private static final Logger LOGGER = LoggerFactory.getLogger(
+            Constants.getLoggerName(LatticeEdge.class));
 
 
     static {
@@ -69,6 +72,7 @@ public class LatticeEdge extends UpstreamHandle {
             throw new ExceptionInInitializerError(e);
         }
     }
+
     @Getter
     protected final long id = HasherApi.mix(ThreadLocalRandom.current().nextLong());
 
@@ -142,7 +146,7 @@ public class LatticeEdge extends UpstreamHandle {
 
     public void syncUpstreamQueue() {
         UpstreamQueue queue = UpstreamQueue.UP_QUEUE.get();
-        if(queue == null) {
+        if (queue == null) {
             return;
         }
 
@@ -218,17 +222,18 @@ public class LatticeEdge extends UpstreamHandle {
     /// Pulls available work from the [UpstreamHandles][UpstreamHandle] without requesting more
     /// work.
     @Override
-    public long pull(Consumer<AbstractFrame> consumer, long demand) {
+    public long pull(Consumer<AbstractFrame> consumer,
+            Function<AbstractFrame, Boolean> stopCondition, long demand) {
         if ((boolean) CLOSED.getOpaque(this) || this.drain.getOpaque()) {
             return 0;
         }
 
         LatticeEdge parent = (LatticeEdge) PARENT.getOpaque(this);
         if (parent != null) {
-            return parent.pull(consumer, demand);
+            return parent.pull(consumer, stopCondition, demand);
         }
         UpstreamQueue queue = UpstreamQueue.get(UPSTREAMS, UPSTREAM_COUNT, THREAD_COUNT);
-        return queue.pull(consumer, demand);
+        return queue.pull(consumer, stopCondition, demand);
     }
 
     @Override

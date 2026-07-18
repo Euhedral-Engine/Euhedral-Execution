@@ -12,6 +12,7 @@ import io.euhedral_execution.hardware_utils.ThreadTools;
 
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 /// ## The upstream aggregation and scheduling layer
 ///
@@ -32,7 +33,8 @@ public class UpstreamQueue {
 
     public static final ThreadLocal<UpstreamQueue> UP_QUEUE = new ThreadLocal<>();
 
-    public static UpstreamQueue get(MpscQueue<UpstreamHandle>[] upstreams, PaddedAtomicLong upstreamCount, AtomicLong counter) {
+    public static UpstreamQueue get(MpscQueue<UpstreamHandle>[] upstreams,
+            PaddedAtomicLong upstreamCount, AtomicLong counter) {
         UpstreamQueue queue = UP_QUEUE.get();
         if (queue == null) {
             int core = SystemInfo.getCpuInfo(ThreadTools.getCpu()).core();
@@ -44,9 +46,10 @@ public class UpstreamQueue {
     }
 
     protected static long drain(UpstreamHandle handle, Consumer<AbstractFrame> consumer,
+            Function<AbstractFrame, Boolean> stopCondition,
             long demand) {
         if (consumer != null) {
-            return handle.pull(consumer, demand);
+            return handle.pull(consumer, stopCondition, demand);
         }
         handle.request(demand);
         return 0;
@@ -59,7 +62,8 @@ public class UpstreamQueue {
 
     long cachedUpCount = 0L;
 
-    public UpstreamQueue(int core, MpscQueue<UpstreamHandle> upstreams, PaddedAtomicLong upstreamCount) {
+    public UpstreamQueue(int core, MpscQueue<UpstreamHandle> upstreams,
+            PaddedAtomicLong upstreamCount) {
         this.core = core;
         this.upstreams = upstreams;
         this.upstreamCount = upstreamCount;
@@ -70,23 +74,25 @@ public class UpstreamQueue {
     }
 
     public long getCachedUpCount() {
-        if(this.cachedUpCount == 0L) {
+        if (this.cachedUpCount == 0L) {
             return getTrueUpstreamCount();
         }
         return this.cachedUpCount;
     }
+
     public long getTrueUpstreamCount() {
         this.cachedUpCount = this.upstreamCount.getAcquire();
         return this.cachedUpCount;
     }
 
     public void request(long demand) {
-        pull(null, demand);
+        pull(null, null, demand);
     }
 
     /// Pulls work without requesting from the [UpstreamHandles][UpstreamHandle]. If the consumer is
     /// `null`, it will **request** the work.
-    public long pull(Consumer<AbstractFrame> consumer, long demand) {
+    public long pull(Consumer<AbstractFrame> consumer,
+            Function<AbstractFrame, Boolean> stopCondition, long demand) {
         getTrueUpstreamCount();
 
         if (demand <= 0 || this.cachedUpCount == 0) {
@@ -96,24 +102,23 @@ public class UpstreamQueue {
         long totalPull = 0;
         long bucketSize = calculatePullBuckets(demand);
 
-
         int cycles = 0;
         // Cycle through the queue and pull round-robin style.
         while (cycles < this.cachedUpCount && demand > 0) {
             UpstreamHandle handle = this.upstreams.poll();
 
-            if(handle == null) {
+            if (handle == null) {
                 cycles++;
                 continue;
             }
-            if(handle.isComplete()) {
+            if (handle.isComplete()) {
                 this.cachedUpCount--;
                 continue;
             }
 
             long request = Math.min(demand, bucketSize);
             demand -= request;
-            totalPull += drain(handle, consumer, request);
+            totalPull += drain(handle, consumer, stopCondition, request);
             cycles = 0;
 
             this.upstreams.offer(handle);

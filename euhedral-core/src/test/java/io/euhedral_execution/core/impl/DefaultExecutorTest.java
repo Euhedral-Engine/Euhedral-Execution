@@ -14,6 +14,7 @@ import io.euhedral_execution.core.generics.LatticeSource;
 import io.euhedral_execution.hardware_utils.PinnedThreadExecutor;
 import java.util.BitSet;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import test_utils.TestFrame;
@@ -85,7 +86,8 @@ class DefaultExecutorTest {
         }
 
         @Override
-        public long pull(Consumer<AbstractFrame> consumer, long demand) {
+        public long pull(Consumer<AbstractFrame> consumer,
+                Function<AbstractFrame, Boolean> stopCondition, long demand) {
             return demand;
         }
 
