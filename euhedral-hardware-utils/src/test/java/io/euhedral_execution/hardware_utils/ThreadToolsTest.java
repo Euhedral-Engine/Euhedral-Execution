@@ -71,6 +71,7 @@ class ThreadToolsTest {
 
     public static final class TestRunner {
         public static void main(String[] args) {
+            System.out.println("Base Affinity Mask: " + ThreadTools.BASE_MASK);
             ThreadTools.setTimerResolution(1);
             ThreadTools.releaseAffinity();
         }

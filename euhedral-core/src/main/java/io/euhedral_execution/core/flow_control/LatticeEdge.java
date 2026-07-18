@@ -253,7 +253,7 @@ public class LatticeEdge extends UpstreamHandle {
         return (boolean) CLOSED.getOpaque(this);
     }
 
-    public void removeUpstream(UpstreamHandle handle) {
+    protected void removeUpstream() {
         UPSTREAM_COUNT.decrementAndGet();
     }
 

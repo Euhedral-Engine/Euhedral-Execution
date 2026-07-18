@@ -229,6 +229,7 @@ class LatticeVertexTest {
         node.addUpstream(upstream);
 
         verify(upstream).addDownstream(node);
+        node.removeUpstream();
     }
 
     @Test

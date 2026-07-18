@@ -2,6 +2,7 @@ package io.euhedral_execution.hardware_utils;
 
 import io.euhedral_execution.hardware_utils.SystemInfo.CpuInfo;
 import io.euhedral_execution.hardware_utils.common.OSName;
+import io.euhedral_execution.hardware_utils.common.UnmodifiableBitSet;
 import io.euhedral_execution.hardware_utils.internal.Constants;
 import io.euhedral_execution.hardware_utils.internal.ThreadPinner;
 import io.euhedral_execution.hardware_utils.linux.LinuxAffinity;
@@ -14,6 +15,8 @@ import org.slf4j.LoggerFactory;
 @SuppressWarnings("unused")
 public final class ThreadTools {
     private static final Logger LOGGER = LoggerFactory.getLogger(Constants.getLoggerName(ThreadTools.class));
+
+    public static final UnmodifiableBitSet BASE_MASK;
 
     private static final long[] BASE_AFFINITY;
     private static final ThreadPinner PINNER;
@@ -34,6 +37,7 @@ public final class ThreadTools {
         while(test[0] < SystemInfo.getCpuCount()) {
             baseMask.set((int) test[0]++, setAffinity(test));
         }
+        BASE_MASK = UnmodifiableBitSet.wrap(baseMask);
 
         BASE_AFFINITY = baseMask.toLongArray();
         releaseAffinity();

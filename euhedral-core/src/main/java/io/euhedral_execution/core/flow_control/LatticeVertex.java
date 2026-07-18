@@ -431,7 +431,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
         public void onError(Throwable throwable) {
             if (COMPLETE.compareAndSet(this, false, true)) {
                 logger.error("UpstreamHandle Error", throwable);
-                removeUpstream(this);
+                removeUpstream();
             }
         }
 
@@ -439,7 +439,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
         public void onComplete() {
             if (COMPLETE.compareAndSet(this, false, true)) {
                 logger.trace("UpstreamHandle Complete");
-                removeUpstream(this);
+                removeUpstream();
             }
         }
 
@@ -448,7 +448,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
             if (COMPLETE.compareAndSet(this, false, true)) {
                 logger.trace("Closing UpstreamHandle");
                 this.upstream.complete();
-                removeUpstream(this);
+                removeUpstream();
             }
         }
 
