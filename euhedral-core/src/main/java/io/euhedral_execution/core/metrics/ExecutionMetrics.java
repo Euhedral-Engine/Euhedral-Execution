@@ -5,11 +5,11 @@ import static io.euhedral_execution.core.metrics.MetricsAggregator.DEFAULT_PREFI
 import static io.euhedral_execution.core.metrics.MetricsAggregator.metricName;
 
 import io.euhedral_execution.core.config.FragmentConfig;
+import io.euhedral_execution.core.utils.CommonVarHandles;
 import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.MeterRegistry;
-import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.ArrayList;
 import java.util.List;
@@ -20,16 +20,7 @@ public final class ExecutionMetrics implements AutoCloseable {
 
     private static final long OP_NS_TO_OP_SEC = TimeUnit.SECONDS.toNanos(1);
 
-    private static final VarHandle IN_PROGRESS;
-
-    static {
-        try {
-            IN_PROGRESS = MethodHandles.lookup()
-                    .findVarHandle(ExecutionMetrics.class, "inProgress", long.class);
-        } catch (Exception e) {
-            throw new ExceptionInInitializerError(e);
-        }
-    }
+    private static final VarHandle IN_PROGRESS = CommonVarHandles.makeHandle(ExecutionMetrics.class, "inProgress", long.class);
 
     private final MeterRegistry registry;
 

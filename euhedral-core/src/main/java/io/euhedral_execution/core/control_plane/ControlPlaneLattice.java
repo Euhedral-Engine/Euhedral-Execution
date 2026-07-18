@@ -10,6 +10,7 @@ import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.generics.LatticeSource;
 import io.euhedral_execution.core.generics.LatticeTerminal;
 import io.euhedral_execution.core.ingest.AbstractIngestSink;
+import io.euhedral_execution.core.internal.Constants;
 import io.euhedral_execution.hardware_utils.PinnedThreadExecutor;
 import io.euhedral_execution.hardware_utils.ResourceMonitor;
 import io.euhedral_execution.hardware_utils.SystemInfo;
@@ -147,7 +148,7 @@ public final class ControlPlaneLattice implements LatticeTerminal {
         this.name =
                 config.name() == null || config.name().isBlank() ? this.getClass().getSimpleName()
                         : config.name();
-        this.logger = LoggerFactory.getLogger(this.name);
+        this.logger = LoggerFactory.getLogger(Constants.getLoggerName(this.name));
         this.config = config;
 
         this.topology = new TopologyMapper(config.allowedCpus());

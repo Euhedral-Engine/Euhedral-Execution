@@ -8,6 +8,7 @@ import io.euhedral_execution.core.flow_control.LatticeVertex;
 import io.euhedral_execution.core.flow_control.RoutingPolicy;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.generics.CloneableObject;
+import io.euhedral_execution.core.internal.Constants;
 import io.euhedral_execution.core.utils.SpinWait;
 import io.euhedral_execution.data_structures.queues.SpscQueue;
 import io.euhedral_execution.data_structures.queues.common.QueueUtils;
@@ -84,7 +85,7 @@ public class ControlPlaneShard {
 
     protected ControlPlaneShard(int socket, String shardName,
             CloneableObject obj, Duration shutdownTimeout) {
-        this.logger = LoggerFactory.getLogger(shardName);
+        this.logger = LoggerFactory.getLogger(Constants.getLoggerName(shardName));
         this.shutdownTimeout = shutdownTimeout;
         this.socket = socket;
         this.shardName = shardName;

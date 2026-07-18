@@ -24,8 +24,6 @@ import org.jspecify.annotations.NonNull;
 public record LatticeConfig(String name, @NonNull BitSet allowedCpus,
                             @NonNull Duration shutdownTimeout,
                             @NonNull ControlPlaneShard baseShard) {
-    public static final String LOGGER_PREFIX = "euhedral.core.";
-
     public static final String DEFAULT_NAME = "EuhedralLattice";
     public static final String DEFAULT_SHARD_NAME = "EuhedralShard";
 
@@ -78,8 +76,8 @@ public record LatticeConfig(String name, @NonNull BitSet allowedCpus,
     /// [BaseCloneableObject]
     public static LatticeConfig ofDefaults(String name, String shardName,
             @NonNull CloneableObject cloneableObject) {
-        return new LatticeConfig(LOGGER_PREFIX + name, SystemInfo.getCpuSet(), Duration.ofMinutes(1),
-                ControlPlaneShard.createBaseShard(LOGGER_PREFIX + shardName, cloneableObject));
+        return new LatticeConfig(name, SystemInfo.getCpuSet(), Duration.ofMinutes(1),
+                ControlPlaneShard.createBaseShard(shardName, cloneableObject));
     }
 
     /// @param cloneableObject Object to be replicated and assigned a core. See

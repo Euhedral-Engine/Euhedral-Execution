@@ -9,6 +9,6 @@
     <appender-ref ref="STDOUT"/>
   </root>
 
-  <logger name="euhedral.core" level="${AllEuhedralLogs:-${EuhedralCoreLog:-INFO}}"/>
+  <logger name="euhedral.hardware_utils" level="${AllEuhedralLogs:-${EuhedralHardwareUtilsLog:-INFO}}"/>
 
 </configuration>

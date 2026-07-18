@@ -1,6 +1,7 @@
 package io.euhedral_execution.hardware_utils.linux;
 
 import io.euhedral_execution.hardware_utils.common.OSName;
+import io.euhedral_execution.hardware_utils.internal.Constants;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -12,8 +13,8 @@ import org.slf4j.LoggerFactory;
 
 public final class LinuxPaths {
 
-    public static final Path CGROUP_V2_ROOT_PATH = Paths.get("/sys/fs/cgroup/");
     // cgroupV2
+    public static final Path CGROUP_V2_ROOT_PATH = Paths.get("/sys/fs/cgroup/");
     public static final Path CGROUP_V2_USR_PATH;
     public static final Path CPU_MAX;
     public static final Path CPU_STAT;
@@ -24,10 +25,11 @@ public final class LinuxPaths {
     public static final Path MEMORY_STAT;
     public static final Path IO_STAT;
     public static final Path CPU_INFO_BASE = Paths.get("/sys/devices/system/cpu/");
-
     // Misc
     public static final Path PROC_STAT = Paths.get("/proc/stat");
-    private static final Logger LOGGER = LoggerFactory.getLogger(LinuxPaths.class);
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(
+            Constants.getLoggerName(LinuxPaths.class));
 
     static {
         if (OSName.isLinux()) {

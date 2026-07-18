@@ -7,6 +7,7 @@ import io.euhedral_execution.core.config.FragmentConfig;
 import io.euhedral_execution.core.flow_control.LatticeHotSource;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.generics.LatticeSource;
+import io.euhedral_execution.core.internal.Constants;
 import io.euhedral_execution.core.metrics.ExecutionMetrics;
 import io.euhedral_execution.core.utils.FlowRecorder;
 import io.euhedral_execution.core.utils.FlowThread;
@@ -76,7 +77,7 @@ public final class ControlPlaneFragment extends WorkRequester {
             this.socket = -1;
             this.core = -1;
             this.cpu = -1;
-            this.logger = LoggerFactory.getLogger(ControlPlaneFragment.class);
+            this.logger = LoggerFactory.getLogger(Constants.getLoggerName(ControlPlaneFragment.class));
             this.state = null;
             this.mainExecutor = null;
             this.isPCore = false;
@@ -85,7 +86,7 @@ public final class ControlPlaneFragment extends WorkRequester {
         } else {
             String name =
                     config.cloneConfig().shardName() + "-Worker-" + config.cloneConfig().coreId();
-            this.logger = LoggerFactory.getLogger(name);
+            this.logger = LoggerFactory.getLogger(Constants.getLoggerName(name));
 
             int[] cpus = config.cloneConfig().getCpuSet();
             this.cpu = cpus[0];
@@ -412,7 +413,7 @@ public final class ControlPlaneFragment extends WorkRequester {
             this.metrics.close();
         }
         super.close();
-        this.logger.trace("Closed");
+        this.logger.debug("Closed");
     }
 
     @Override

@@ -3,6 +3,7 @@ package io.euhedral_execution.hardware_utils;
 import io.euhedral_execution.hardware_utils.common.SystemUtilization.HardwareUtilization;
 import io.euhedral_execution.hardware_utils.common.SystemUtilization.SystemSnapshot;
 import io.euhedral_execution.hardware_utils.common.UnmodifiableBitSet;
+import io.euhedral_execution.hardware_utils.internal.Constants;
 import it.unimi.dsi.fastutil.objects.ObjectArraySet;
 import java.time.Duration;
 import java.util.BitSet;
@@ -26,7 +27,7 @@ public class ResourceMonitor implements AutoCloseable {
         return Math.min(max, Math.max(min, val));
     }
 
-    private final Logger logger = LoggerFactory.getLogger(this.getClass());
+    private final Logger logger = LoggerFactory.getLogger(Constants.getLoggerName(this.getClass()));
     private final TopologyMapper topology;
 
     private final long sampleRateNs;

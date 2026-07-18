@@ -1,6 +1,7 @@
 package io.euhedral_execution.hardware_utils.linux;
 
 import io.euhedral_execution.hardware_utils.common.OSName;
+import io.euhedral_execution.hardware_utils.internal.Constants;
 import io.euhedral_execution.hardware_utils.internal.JNIClassLoader;
 import io.euhedral_execution.hardware_utils.internal.ThreadPinner;
 import org.slf4j.Logger;
@@ -9,7 +10,7 @@ import org.slf4j.LoggerFactory;
 public final class LinuxAffinity extends ThreadPinner {
 
     public static final LinuxAffinity INSTANCE;
-    private static final Logger LOGGER = LoggerFactory.getLogger(LinuxAffinity.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(Constants.getLoggerName(LinuxAffinity.class));
 
     static {
         JNIClassLoader.load();

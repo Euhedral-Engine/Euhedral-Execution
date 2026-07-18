@@ -2,6 +2,7 @@ package io.euhedral_execution.spring.core.transport.grpc;
 
 import io.euhedral_execution.core.control_plane.ControlPlaneLattice;
 import io.euhedral_execution.spring.core.frames.GrpcFrame.CommunicationMethod;
+import io.euhedral_execution.spring.core.internal.Constants;
 import io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceGrpc;
 import io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage;
 import io.grpc.ManagedChannel;
@@ -14,7 +15,7 @@ import org.slf4j.LoggerFactory;
 @SuppressWarnings("unused")
 public class EuhedralGrpcClient {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(EuhedralGrpcClient.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(Constants.getLoggerName(EuhedralGrpcClient.class));
 
     private final GrpcTransportServiceGrpc.GrpcTransportServiceStub stub;
     private final int recycleCapacity;

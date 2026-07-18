@@ -6,6 +6,7 @@ import io.euhedral_execution.core.flow_control.UpstreamQueue.UpstreamHandle;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.generics.LatticeInterceptor;
 import io.euhedral_execution.core.generics.LatticeSource;
+import io.euhedral_execution.core.internal.Constants;
 import io.euhedral_execution.core.utils.CommonVarHandles;
 import io.euhedral_execution.core.utils.FlowThread;
 import io.euhedral_execution.core.utils.SpinWait;
@@ -43,18 +44,22 @@ import org.slf4j.LoggerFactory;
 @SuppressWarnings({"unchecked", "unused"})
 public class LatticeVertex extends LatticeEdge implements AutoCloseable {
 
+    protected static final VarHandle ROUTING_STATE = CommonVarHandles.makeHandle(
+            LatticeVertex.class, "routingState", RoutingState.class);
     private static final VarHandle CLOSED = CommonVarHandles.closed(LatticeVertex.class);
-    protected static final VarHandle ROUTING_STATE = CommonVarHandles.makeHandle(LatticeVertex.class, "routingState", RoutingState.class);
 
-    protected final boolean hasCache;
     protected final LatticeEdge[] downstreams;
     protected final RoutingFunction routingFunction;
+
+    protected final boolean hasCache;
     protected final BoundedMpmcQueue<AbstractFrame>[] remoteCache;
     protected final int cachePool;
     protected final RoutingPolicy cachePolicy;
+
     private final Logger logger;
     private final PaddedLongAdder cacheCount;
     private final ThreadLocal<CacheHead> cacheHead = new ThreadLocal<>();
+
     protected RoutingState routingState = new RoutingState(new int[0]);
     private boolean closed = false;
 
@@ -65,7 +70,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
     public LatticeVertex(String name, int downstreamCount, RoutingFunction routingFunction,
             int cachePool, RoutingPolicy cachePolicy) {
         super(new AtomicBoolean(false));
-        this.logger = LoggerFactory.getLogger(name);
+        this.logger = LoggerFactory.getLogger(Constants.getLoggerName(name));
         this.downstreams = new LatticeEdge[downstreamCount];
         this.routingFunction = routingFunction;
 

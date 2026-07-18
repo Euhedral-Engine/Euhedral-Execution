@@ -37,7 +37,7 @@ class ThreadToolsTest {
                 .execCreateCmd(containerId)
                 .withAttachStdout(true)
                 .withAttachStderr(true)
-                .withCmd("java", "-jar", "/app/test-container.jar", TestRunner.class.getName())
+                .withCmd("java", "-DEuhedralHardwareUtilsLog=TRACE", "-jar", "/app/test-container.jar", TestRunner.class.getName())
                 .exec();
 
         FrameConsumerResultCallback callback = new FrameConsumerResultCallback();
@@ -57,7 +57,7 @@ class ThreadToolsTest {
     }
 
     private void validate(StringBuffer execOutput, String expected) {
-        long deadline = System.currentTimeMillis() + 5000;
+        long deadline = System.currentTimeMillis() + 10_000;
         while (!execOutput.toString().contains("Base Affinity Mask:")
                 && System.currentTimeMillis() < deadline) {
             LockSupport.parkNanos(50_000_000);

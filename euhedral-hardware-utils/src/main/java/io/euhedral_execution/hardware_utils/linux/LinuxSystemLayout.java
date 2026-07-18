@@ -10,6 +10,7 @@ import io.euhedral_execution.hardware_utils.SystemInfo.CpuCacheLayout;
 import io.euhedral_execution.hardware_utils.SystemInfo.CpuInfo;
 import io.euhedral_execution.hardware_utils.SystemInfo.SocketInfo;
 import io.euhedral_execution.hardware_utils.common.OSName;
+import io.euhedral_execution.hardware_utils.internal.Constants;
 import it.unimi.dsi.fastutil.ints.Int2BooleanArrayMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectArrayMap;
 import java.io.IOException;
@@ -26,7 +27,7 @@ import org.slf4j.LoggerFactory;
 public final class LinuxSystemLayout {
 
     public static final LinuxSystemLayout INSTANCE;
-    private static final Logger LOGGER = LoggerFactory.getLogger(LinuxSystemLayout.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(Constants.getLoggerName(LinuxSystemLayout.class));
 
     static {
         if (OSName.isLinux()) {
