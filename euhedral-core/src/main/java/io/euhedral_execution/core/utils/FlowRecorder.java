@@ -108,7 +108,7 @@ public class FlowRecorder {
         }
 
         double delta = Math.abs(currentInterval - this.averageInterval);
-        if(this.windowStartNs + delta > this.windowStartNs + this.measurementWindowNs) {
+        if(delta > this.measurementWindowNs) {
             reset();
             return;
         }
@@ -142,26 +142,26 @@ public class FlowRecorder {
     private void tryDecayMaxima() {
         double stdDev = unitStandardDeviation() * 3;
         if(this.minUnits < this.averageUnits - stdDev) {
-            this.minUnits = Long.MAX_VALUE;
+            this.minUnits = (long) Math.floor(this.averageUnits - stdDev);
         }
         if(this.maxUnits > this.averageUnits + stdDev) {
-            this.maxUnits = Long.MIN_VALUE;
+            this.maxUnits = (long) Math.ceil(this.averageUnits + stdDev);
         }
 
         stdDev = intervalStandardDeviation() * 3;
         if(this.minInterval < this.averageInterval - stdDev) {
-            this.minInterval = Long.MAX_VALUE;
+            this.minInterval = (long) Math.floor(this.averageInterval - stdDev);
         }
         if(this.maxInterval > this.averageInterval + stdDev) {
-            this.maxInterval = Long.MIN_VALUE;
+            this.maxInterval = (long) Math.ceil(this.averageInterval + stdDev);
         }
 
         stdDev = uotStandardDeviation() * 3;
         if(this.minUoT < this.averageUnitsOverTime - stdDev) {
-            this.minUoT = Double.MAX_VALUE;
+            this.minUoT = this.averageUnitsOverTime - stdDev;
         }
         if(this.maxUoT > this.averageUnitsOverTime + stdDev) {
-            this.maxUoT = Double.MIN_VALUE;
+            this.maxUoT = this.averageUnitsOverTime + stdDev;
         }
     }
 
