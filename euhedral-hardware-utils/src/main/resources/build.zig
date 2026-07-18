@@ -84,6 +84,26 @@ pub fn build(b: *std.Build) void {
         break :blk b.allocator.dupe(u8, "/opt/MacOSX.sdk") catch "/opt/MacOSX.sdk";
     };
 
+    const macos_frameworks = b.pathJoin(&.{
+        macos_sdk,
+        "System/Library/Frameworks",
+    });
+
+    const macos_usr_include = b.pathJoin(&.{
+        macos_sdk,
+        "usr/include",
+    });
+
+    const macos_usr_lib = b.pathJoin(&.{
+        macos_sdk,
+        "usr/lib",
+    });
+
+    const sign_macos = b.option(
+        bool,
+        "sign-macos",
+        "Sign macOS binaries",
+    ) orelse false;
 
     const common_flags = [_][]const u8{
         "-O3",
@@ -194,7 +214,10 @@ pub fn build(b: *std.Build) void {
                         jni_linux,
                         jni_win32,
                         jni_darwin,
-                        macos_sdk,
+                        macos_frameworks,
+                        macos_usr_include,
+                        macos_usr_lib,
+                        sign_macos,
                     );
                 }
             } else {
@@ -211,7 +234,10 @@ pub fn build(b: *std.Build) void {
                     jni_linux,
                     jni_win32,
                     jni_darwin,
-                    macos_sdk,
+                    macos_frameworks,
+                    macos_usr_include,
+                    macos_usr_lib,
+                    sign_macos,
                 );
             }
         }
@@ -231,7 +257,10 @@ fn buildNative(
     jni_linux: []const u8,
     jni_win32: []const u8,
     jni_darwin: []const u8,
-    macos_sdk: []const u8,
+    macos_frameworks: []const u8,
+    macos_usr_include: []const u8,
+    macos_usr_lib: []const u8,
+    sign_macos: bool,
 ) void {
     const is_linux = std.mem.eql(u8, os.name, "linux");
     const is_windows = std.mem.eql(u8, os.name, "windows");
@@ -322,27 +351,16 @@ fn buildNative(
             .cwd_relative = jni_darwin,
         });
 
-        const fw_path = b.pathJoin(&.{
-            macos_sdk,
-            "System/Library/Frameworks",
-        });
-
         lib.root_module.addFrameworkPath(.{
-            .cwd_relative = fw_path,
+            .cwd_relative = macos_frameworks,
         });
 
         lib.root_module.addSystemIncludePath(.{
-            .cwd_relative = b.pathJoin(&.{
-                macos_sdk,
-                "usr/include",
-            }),
+            .cwd_relative = macos_usr_include,
         });
 
         lib.root_module.addLibraryPath(.{
-            .cwd_relative = b.pathJoin(&.{
-                macos_sdk,
-                "usr/lib",
-            }),
+            .cwd_relative = macos_usr_lib,
         });
 
         lib.root_module.linkFramework(
@@ -380,7 +398,7 @@ fn buildNative(
         }),
     );
 
-    if (is_osx) {
+    if (is_osx and sign_macos) {
         const sign_cmd = b.addSystemCommand(&.{
             "rcodesign",
             "sign",
@@ -388,9 +406,11 @@ fn buildNative(
 
         sign_cmd.addFileArg(lib.getEmittedBin());
 
-        sign_cmd.step.dependOn(&lib.step);
-        install.step.dependOn(&sign_cmd.step);
+        install.step.dependOn(&lib.step);
+        sign_cmd.step.dependOn(&install.step);
+        b.getInstallStep().dependOn(&sign_cmd.step);
+    } else {
+        b.getInstallStep().dependOn(&install.step);
     }
 
-    b.getInstallStep().dependOn(&install.step);
 }
