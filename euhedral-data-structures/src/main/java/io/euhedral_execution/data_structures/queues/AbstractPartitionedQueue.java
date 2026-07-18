@@ -5,6 +5,7 @@ import io.euhedral_execution.data_structures.queues.common.QueueUtils;
 import java.util.AbstractQueue;
 import java.util.Iterator;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import org.jspecify.annotations.NonNull;
 
 abstract class AbstractPartitionedQueue<T> extends AbstractQueue<T> implements
@@ -61,6 +62,18 @@ abstract class AbstractPartitionedQueue<T> extends AbstractQueue<T> implements
         long total = 0;
         for (int i = 0; i < partitions; i++) {
             total += drain(i, consumer, limit - total);
+            if (total == limit) {
+                break;
+            }
+        }
+        return total;
+    }
+
+    @Override
+    public long drain(Consumer<T> consumer, Function<T, Boolean> stopCondition, long limit) {
+        long total = 0;
+        for (int i = 0; i < partitions; i++) {
+            total += drain(i, consumer, stopCondition, limit - total);
             if (total == limit) {
                 break;
             }

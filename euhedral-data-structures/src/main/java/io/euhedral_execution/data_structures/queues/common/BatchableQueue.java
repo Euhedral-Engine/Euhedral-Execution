@@ -2,6 +2,7 @@ package io.euhedral_execution.data_structures.queues.common;
 
 import java.util.Collection;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 public interface BatchableQueue<T> {
 
@@ -18,6 +19,8 @@ public interface BatchableQueue<T> {
     }
 
     long drain(Consumer<T> consumer, long limit);
+
+    long drain(Consumer<T> consumer, Function<T, Boolean> stopCondition, long limit);
 
     T poll();
 
