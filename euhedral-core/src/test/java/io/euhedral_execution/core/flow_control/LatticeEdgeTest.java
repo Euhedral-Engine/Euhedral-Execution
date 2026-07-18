@@ -61,7 +61,7 @@ class LatticeEdgeTest {
 
     @AfterEach
     void cleanup() {
-        UpstreamQueue.UP_QUEUE.remove();
+        edge.removeThread();
         mockSysInfo.close();
         mockThreadTools.close();
     }
@@ -256,6 +256,7 @@ class LatticeEdgeTest {
         edge.addUpstream(upstream);
 
         assertEquals(1, edge.getUpstreamHandleCount());
+        edge.removeUpstream();
     }
 
     @Test
@@ -269,6 +270,7 @@ class LatticeEdgeTest {
         edge.register();
 
         assertEquals(1, edge.getThreadCount());
+        edge.removeUpstream();
     }
 
     @Test
@@ -287,6 +289,7 @@ class LatticeEdgeTest {
 
         assertTrue(parent.getUpstreamHandleCount() > 0);
         assertTrue(parent.getThreadCount() > 0);
+        edge.removeUpstream();
     }
 
     @Test

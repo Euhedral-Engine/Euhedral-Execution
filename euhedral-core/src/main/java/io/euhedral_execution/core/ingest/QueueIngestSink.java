@@ -77,7 +77,7 @@ public final class QueueIngestSink extends AbstractIngestSink {
 
     /// Disconnects from the [ControlPlaneLattice] when the queue is finished being drained.
     public void completeGracefully() {
-        this.delegate.gracefulComplete();
+        this.delegate.completeGracefully();
     }
 
     protected static final class Delegate extends AbstractIngestSink.Delegate {
@@ -118,7 +118,7 @@ public final class QueueIngestSink extends AbstractIngestSink {
             }
         }
 
-        public void gracefulComplete() {
+        public void completeGracefully() {
             FINISH.setRelease(this, true);
         }
     }

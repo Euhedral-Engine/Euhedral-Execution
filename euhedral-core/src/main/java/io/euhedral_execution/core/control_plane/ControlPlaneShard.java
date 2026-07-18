@@ -8,8 +8,9 @@ import io.euhedral_execution.core.flow_control.LatticeVertex;
 import io.euhedral_execution.core.flow_control.RoutingPolicy;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.generics.CloneableObject;
+import io.euhedral_execution.core.internal.Constants;
 import io.euhedral_execution.core.utils.SpinWait;
-import io.euhedral_execution.data_structures.queues.SpscQueue;
+import io.euhedral_execution.data_structures.queues.PlainQueue;
 import io.euhedral_execution.data_structures.queues.common.QueueUtils;
 import io.euhedral_execution.hardware_utils.SystemInfo;
 import io.euhedral_execution.hardware_utils.SystemInfo.CpuInfo;
@@ -33,7 +34,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.concurrent.locks.LockSupport;
 import lombok.Getter;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
@@ -84,7 +84,7 @@ public class ControlPlaneShard {
 
     protected ControlPlaneShard(int socket, String shardName,
             CloneableObject obj, Duration shutdownTimeout) {
-        this.logger = LoggerFactory.getLogger(shardName);
+        this.logger = LoggerFactory.getLogger(Constants.getLoggerName(shardName));
         this.shutdownTimeout = shutdownTimeout;
         this.socket = socket;
         this.shardName = shardName;
@@ -182,13 +182,8 @@ public class ControlPlaneShard {
         }
         this.currentVersion.setRelease(topology.version());
 
-        // Cut ingest
-        LatticeVertex distributor = this.coreDistributor.get();
-        distributor.setDrain(true);
-
         BitSet newCores = topology.effectiveCores();
-        createHandles(newCores, distributor);
-        distributor.setDownstreamMapping(newCores, this.coreHandles);
+        remapIngestController(newCores);
 
         CloneableObject[] oldClones = this.clones.getPlain();
         createNextClones(snapshot, topology);
@@ -208,7 +203,10 @@ public class ControlPlaneShard {
         }
     }
 
-    protected void createHandles(BitSet newCores, LatticeVertex distributor) {
+    protected void remapIngestController(BitSet newCores) {
+        this.logger.trace("Remapping ingest controller.");
+        LatticeVertex distributor = this.coreDistributor.get();
+        distributor.setDrain(true);
         for (int i = newCores.nextSetBit(0); i >= 0; i = newCores.nextSetBit(i + 1)) {
             LatticeEdge handle = this.coreHandles[i];
             if (handle == null) {
@@ -217,10 +215,12 @@ public class ControlPlaneShard {
                 HANDLE.setRelease(this.coreHandles, i, handle);
             }
         }
+        distributor.setDownstreamMapping(newCores, this.coreHandles);
     }
 
     protected void createNextClones(SocketSnapshot snapshot,
             EffectiveSocketTopology topology) {
+        this.logger.info("Creating new clones");
         CloneableObject[] clones = this.clones.getOpaque();
         BitSet newCores = topology.effectiveCores();
 
@@ -258,6 +258,7 @@ public class ControlPlaneShard {
     /// Creates a clone on the core, links it to the core distributor, starts it, and updates it.
     protected CloneableObject spawnClone(int coreId, CoreSnapshot snapshot,
             CloneableObject[] nextClones) {
+        this.logger.trace("Spawning clone on core {}", snapshot.coreId());
         CloneConfig config = new CloneConfig(this.shardName, coreId, snapshot.effectiveCpus());
 
         CloneableObject clone = this.cloneableObject.clone(config);
@@ -266,7 +267,6 @@ public class ControlPlaneShard {
         clone.input(this.coreHandles[coreId]);
 
         clone.setDrainMode(this.rebalancing.get());
-        this.logger.trace("Starting clone on core {}", snapshot.coreId());
         clone.start();
         clone.update(snapshot);
         return clone;
@@ -279,21 +279,21 @@ public class ControlPlaneShard {
         CloneableObject[] currClones = this.clones.getOpaque();
 
         Set<Integer> deadClones = new HashSet<>();
-        SpscQueue<CloneableObject> clones = new SpscQueue<>(currClones.length);
-        for (int i = 0; i < oldClones.length; i++) {
-            CloneableObject clone = oldClones[i];
-            if (clone != null && (i >= currClones.length || currClones[i] == null)) {
-                this.coresToDrain.incrementAndGet();
-                this.coreHandles[i] = null;
-                clone.setDrainMode(true);
-                deadClones.add(i);
-                clones.offer(clone);
+        PlainQueue<CloneableObject> clones = new PlainQueue<>(currClones.length);
+        for (int core = 0; core < oldClones.length; core++) {
+            CloneableObject clone = oldClones[core];
+            if(clone == null) {
+                continue;
             }
-        }
 
-        if (deadClones.isEmpty()) {
-            tryRestartIngest();
-            return;
+            this.coresToDrain.incrementAndGet();
+            clone.setDrainMode(true);
+            clones.offer(clone);
+            if (core >= currClones.length || currClones[core] == null) {
+                this.logger.info("Removing clone on core {}", core);
+                this.coreHandles[core] = null;
+                deadClones.add(core);
+            }
         }
 
         clones.drain(clone -> CompletableFuture.runAsync(() -> {
@@ -306,7 +306,7 @@ public class ControlPlaneShard {
             SpinWait.await(() -> !clone.isDrained() && System.nanoTime() < deadline);
 
             if(deadClones.contains(core) || System.nanoTime() >= deadline) {
-                tryCloseClone(clone);
+                closeClone(clone);
                 if (!deadClones.contains(core)) {
                     this.logger.info("Restarting clone on core {}", core);
                     spawnClone(core, snapshot.coreSnapshots()[core], currClones);
@@ -322,7 +322,7 @@ public class ControlPlaneShard {
         }, this.shardExecutor));
     }
 
-    protected final void tryCloseClone(CloneableObject clone) {
+    protected final void closeClone(CloneableObject clone) {
         try {
             clone.close();
         } catch (Exception e) {
@@ -346,7 +346,7 @@ public class ControlPlaneShard {
             return;
         }
 
-        this.logger.info("Shutting down.");
+        this.logger.info("Shutting down...");
 
         int[] active = this.activeCoreIds.getAcquire();
         CloneableObject[] clones = this.clones.getAcquire();
@@ -368,34 +368,32 @@ public class ControlPlaneShard {
         this.shardExecutor.shutdown();
         this.shardExecutor = null;
         this.primed.set(false);
+        this.logger.info("Shutdown complete.");
     }
 
     /// Attempts to gracefully shut down a core. Forcefully shuts them down if they time out.
     private void shutdownCore(int coreId, CloneableObject oldClone,
             AtomicInteger drainSignal, AtomicInteger shutDownCounter) {
-        this.logger.info("Shutting down clone on core {}", coreId);
+        this.logger.trace("Shutting down clone on core {}", coreId);
         oldClone.setDrainMode(true);
 
         CompletableFuture.runAsync(() -> {
             Thread.currentThread().setName(this.shardName + "-" + coreId);
             long deadline = System.nanoTime() + this.shutdownTimeout.toNanos();
             try {
-                while (!oldClone.isDrained()) {
-                    LockSupport.parkNanos(5_000);
-                    if (System.nanoTime() >= deadline) {
-                        this.logger.error("Clone on core {} timed out. Forcing shutdown.", coreId);
-                        oldClone.close();
-                        break;
-                    }
+                SpinWait.await(() -> !oldClone.isDrained() && System.nanoTime() < deadline);
+                if(!oldClone.isDrained() && System.nanoTime() >= deadline) {
+                    this.logger.error("Clone on core {} timed out. Forcing shutdown.", coreId);
+                    oldClone.close();
                 }
             } catch (Exception e) {
                 this.logger.error("Shutdown cleanup failed for Core {}", coreId, e);
             } finally {
                 try {
+                    oldClone.dumpLocks();
                     oldClone.close();
                 } catch (Exception e) {
                     this.logger.error("CRITICAL: Worker on core {} failed to close.", coreId, e);
-                    oldClone.dumpLocks();
                 } finally {
                     drainSignal.decrementAndGet();
                     if (drainSignal.get() == 0) {
@@ -456,7 +454,7 @@ public class ControlPlaneShard {
                 try {
                     distributor.close();
                 } catch (Exception e) {
-                    this.logger.error("CRITICAL: Failed to close the LatticeVertex.", e);
+                    this.logger.error("CRITICAL: Failed to close the ingest controller.", e);
                 }
             }
             return null;

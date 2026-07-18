@@ -7,6 +7,7 @@ import io.euhedral_execution.core.impl.FrameFactory;
 import io.euhedral_execution.core.impl.FrameFactory.FrameCreate;
 import io.euhedral_execution.core.impl.FrameFactory.FrameReplace;
 import io.euhedral_execution.core.impl.FrameManager;
+import io.euhedral_execution.core.utils.CommonVarHandles;
 import io.euhedral_execution.data_structures.queues.MpmcQueue;
 import io.euhedral_execution.hashing.HasherApi;
 import io.euhedral_execution.spring.core.frames.GrpcFrame;
@@ -25,20 +26,8 @@ import java.util.function.Consumer;
 public class EuhedralGrpcClientHandler implements LatticeSource,
         ClientResponseObserver<GrpcMessage, GrpcMessage> {
 
-    private static final VarHandle COMPLETE;
-    private static final VarHandle DOWNSTREAM;
-
-    static {
-        try {
-            COMPLETE = MethodHandles.lookup()
-                    .findVarHandle(EuhedralGrpcClientHandler.class, "complete", boolean.class);
-            DOWNSTREAM = MethodHandles.lookup()
-                    .findVarHandle(EuhedralGrpcClientHandler.class, "downstream",
-                            LatticeReceiver.class);
-        } catch (Exception e) {
-            throw new ExceptionInInitializerError(e);
-        }
-    }
+    private static final VarHandle COMPLETE = CommonVarHandles.complete(MethodHandles.lookup(), EuhedralGrpcClientHandler.class);
+    private static final VarHandle DOWNSTREAM = CommonVarHandles.downstream(MethodHandles.lookup(), EuhedralGrpcClientHandler.class);
 
     private static long addPending(long num1, long num2) {
         long sum = num1 + num2;
@@ -163,6 +152,11 @@ public class EuhedralGrpcClientHandler implements LatticeSource,
                 // Ignore complete() failures
             }
         }
+    }
+
+    @Override
+    public boolean isComplete() {
+        return (boolean) COMPLETE.getOpaque(this);
     }
 
     @Override

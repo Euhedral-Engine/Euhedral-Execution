@@ -5,6 +5,7 @@ import io.euhedral_execution.hardware_utils.common.OSName;
 import io.euhedral_execution.hardware_utils.common.SystemSnapshotProvider;
 import io.euhedral_execution.hardware_utils.common.SystemUtilization.SystemSnapshot;
 import io.euhedral_execution.hardware_utils.common.UnmodifiableBitSet;
+import io.euhedral_execution.hardware_utils.internal.Constants;
 import io.euhedral_execution.hardware_utils.internal.JNIClassLoader;
 import java.util.Arrays;
 import java.util.BitSet;
@@ -16,7 +17,7 @@ import org.slf4j.LoggerFactory;
 public final class WindowsResources implements SystemSnapshotProvider {
 
     public static final WindowsResources INSTANCE;
-    private static final Logger LOGGER = LoggerFactory.getLogger(WindowsResources.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(Constants.getLoggerName(WindowsResources.class));
 
     static {
         JNIClassLoader.load();

@@ -13,6 +13,7 @@ import io.euhedral_execution.core.frames.DummyFrame;
 import io.euhedral_execution.core.generics.CloneableObject;
 import io.euhedral_execution.core.generics.LatticeReceiver;
 import io.euhedral_execution.core.generics.LatticeSource;
+import io.euhedral_execution.core.internal.Constants;
 import io.euhedral_execution.core.metrics.CacheMetrics;
 import io.euhedral_execution.core.utils.FlowThread;
 import io.euhedral_execution.data_structures.queues.PartitionedMpscQueue;
@@ -120,7 +121,7 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
             this.frameQuota = 0;
             this.core = -1;
         } else {
-            this.logger = LoggerFactory.getLogger(getName(cacheConfig));
+            this.logger = LoggerFactory.getLogger(Constants.getLoggerName(getName(cacheConfig)));
             this.metrics = new CacheMetrics(cacheConfig, () -> (long) TOTAL_COUNT.getAcquire(this));
             this.chunkSize = getChunkSize(cacheConfig, partitions);
             this.frameQuota = (long) this.chunkSize * partitions;

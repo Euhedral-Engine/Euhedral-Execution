@@ -6,6 +6,8 @@ import io.euhedral_execution.core.flow_control.UpstreamQueue.UpstreamHandle;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.generics.LatticeInterceptor;
 import io.euhedral_execution.core.generics.LatticeSource;
+import io.euhedral_execution.core.internal.Constants;
+import io.euhedral_execution.core.utils.CommonVarHandles;
 import io.euhedral_execution.core.utils.FlowThread;
 import io.euhedral_execution.core.utils.SpinWait;
 import io.euhedral_execution.data_structures.atomics.PaddedAtomicLong;
@@ -15,7 +17,6 @@ import io.euhedral_execution.data_structures.queues.MpscQueue;
 import io.euhedral_execution.hardware_utils.SystemInfo;
 import io.euhedral_execution.hardware_utils.ThreadTools;
 import io.euhedral_execution.hashing.HasherApi;
-import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.BitSet;
 import java.util.concurrent.ThreadLocalRandom;
@@ -43,29 +44,22 @@ import org.slf4j.LoggerFactory;
 @SuppressWarnings({"unchecked", "unused"})
 public class LatticeVertex extends LatticeEdge implements AutoCloseable {
 
-    protected static final VarHandle ROUTING_STATE;
-    private static final VarHandle CLOSED;
+    protected static final VarHandle ROUTING_STATE = CommonVarHandles.makeHandle(
+            LatticeVertex.class, "routingState", RoutingState.class);
+    private static final VarHandle CLOSED = CommonVarHandles.closed(LatticeVertex.class);
 
-    static {
-        try {
-            CLOSED = MethodHandles.lookup()
-                    .findVarHandle(LatticeVertex.class, "closed", boolean.class);
-            ROUTING_STATE = MethodHandles.lookup()
-                    .findVarHandle(LatticeVertex.class, "routingState", RoutingState.class);
-        } catch (Exception e) {
-            throw new ExceptionInInitializerError(e);
-        }
-    }
-
-    protected final boolean hasCache;
     protected final LatticeEdge[] downstreams;
     protected final RoutingFunction routingFunction;
+
+    protected final boolean hasCache;
     protected final BoundedMpmcQueue<AbstractFrame>[] remoteCache;
     protected final int cachePool;
     protected final RoutingPolicy cachePolicy;
+
     private final Logger logger;
     private final PaddedLongAdder cacheCount;
     private final ThreadLocal<CacheHead> cacheHead = new ThreadLocal<>();
+
     protected RoutingState routingState = new RoutingState(new int[0]);
     private boolean closed = false;
 
@@ -76,7 +70,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
     public LatticeVertex(String name, int downstreamCount, RoutingFunction routingFunction,
             int cachePool, RoutingPolicy cachePolicy) {
         super(new AtomicBoolean(false));
-        this.logger = LoggerFactory.getLogger(name);
+        this.logger = LoggerFactory.getLogger(Constants.getLoggerName(name));
         this.downstreams = new LatticeEdge[downstreamCount];
         this.routingFunction = routingFunction;
 
@@ -190,7 +184,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
     @Override
     public void addUpstream(LatticeInterceptor interceptor) {
         if ((boolean) CLOSED.getOpaque(this)) {
-            throw new RuntimeException("Cannot add upstream after closed.");
+            throw new RuntimeException("Cannot add upstream after closing.");
         }
 
         if (interceptor instanceof LatticeEdge edge) {
@@ -203,12 +197,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
                 }
             }
         } else if (interceptor instanceof UpstreamHandle upstream) {
-            LatticeEdge parent = (LatticeEdge) PARENT.getOpaque(this);
-            if (parent != null) {
-                parent.addUpstream(upstream);
-                return;
-            }
-
+            this.logger.trace("Adding upstream handle...");
             SpinWait.await(super.drain::getOpaque);
             SpinWait.await(() -> !HANDLE_LOCK.compareAndSet(0, 1));
 
@@ -225,7 +214,8 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
                 }
             }
 
-            super.upstreamCount.incrementAndGet();
+            UPSTREAM_COUNT.incrementAndGet();
+            this.logger.trace("Added upstream handle.");
         }
     }
 
@@ -315,6 +305,11 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
     }
 
     @Override
+    public boolean isClosed() {
+        return (boolean) CLOSED.getOpaque(this);
+    }
+
+    @Override
     public void close() {
         if (!CLOSED.compareAndSet(this, false, true)) {
             return;
@@ -367,16 +362,20 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
     /// pulls are guaranteed to be made by 1 thread at a time.
     public class UpstreamInterceptor extends UpstreamHandle {
 
+        private static final VarHandle COMPLETE = CommonVarHandles.complete(
+                UpstreamInterceptor.class);
+
         private static long addCap(long num1, long num2) {
             long sum = num1 + num2;
             return sum < 0 ? Long.MAX_VALUE : sum;
         }
 
-        public final AtomicBoolean isComplete = new AtomicBoolean(false);
         @Getter
         private final long id = HasherApi.mix(ThreadLocalRandom.current().nextLong());
         private final PaddedAtomicLong wip = new PaddedAtomicLong(0);
         public LatticeSource upstream;
+
+        public boolean complete = false;
 
         @Override
         public void addUpstream(@NonNull LatticeSource upstream) {
@@ -391,13 +390,28 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
 
         @Override
         public long pull(Consumer<AbstractFrame> consumer, long demand) {
-            return LatticeVertex.this.pull(consumer, demand);
+            if (demand <= 0 || LatticeVertex.this.isClosed() || LatticeVertex.this.drain.getOpaque()
+                    || isComplete()) {
+                return 0;
+            }
+
+            if (this.wip.getAndIncrement() == 0) {
+                try {
+                    return this.upstream.pull(consumer, demand);
+                } catch (Throwable t) {
+                    logger.error("Upstream threw an exception during a pull", t);
+                    this.complete();
+                } finally {
+                    this.wip.lazySet(0);
+                }
+            }
+            return 0;
         }
 
         @Override
         public void request(long num) {
-            if (num <= 0 || (boolean) CLOSED.getOpaque(LatticeVertex.this)
-                    || LatticeVertex.this.drain.getOpaque() || this.isComplete.getOpaque()) {
+            if (num <= 0 || LatticeVertex.this.isClosed() || LatticeVertex.this.drain.getOpaque()
+                    || isComplete()) {
                 return;
             }
 
@@ -415,32 +429,32 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
 
         @Override
         public void onError(Throwable throwable) {
-            if (this.isComplete.compareAndSet(false, true)) {
+            if (COMPLETE.compareAndSet(this, false, true)) {
                 logger.error("UpstreamHandle Error", throwable);
-                removeUpstream(this);
+                removeUpstream();
             }
         }
 
         @Override
         public void onComplete() {
-            if (this.isComplete.compareAndSet(false, true)) {
+            if (COMPLETE.compareAndSet(this, false, true)) {
                 logger.trace("UpstreamHandle Complete");
-                removeUpstream(this);
+                removeUpstream();
             }
         }
 
         @Override
         public void complete() {
-            if (this.isComplete.compareAndSet(false, true)) {
+            if (COMPLETE.compareAndSet(this, false, true)) {
                 logger.trace("Closing UpstreamHandle");
                 this.upstream.complete();
-                removeUpstream(this);
+                removeUpstream();
             }
         }
 
         @Override
         public boolean isComplete() {
-            return this.isComplete.getOpaque();
+            return (boolean) COMPLETE.getOpaque(this);
         }
     }
 }

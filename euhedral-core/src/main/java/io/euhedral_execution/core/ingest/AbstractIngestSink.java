@@ -3,8 +3,8 @@ package io.euhedral_execution.core.ingest;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.generics.LatticeReceiver;
 import io.euhedral_execution.core.generics.LatticeSource;
+import io.euhedral_execution.core.utils.CommonVarHandles;
 import io.euhedral_execution.data_structures.atomics.PaddedAtomicLong;
-import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.function.Consumer;
 
@@ -19,16 +19,8 @@ public abstract class AbstractIngestSink {
 
     protected abstract static class Delegate implements LatticeSource {
 
-        protected static final VarHandle TERMINAL;
-
-        static {
-            try {
-                TERMINAL = MethodHandles.lookup()
-                        .findVarHandle(Delegate.class, "terminal", LatticeReceiver.class);
-            } catch (Exception e) {
-                throw new ExceptionInInitializerError(e);
-            }
-        }
+        protected static final VarHandle COMPLETE = CommonVarHandles.complete(Delegate.class);
+        protected static final VarHandle DOWNSTREAM = CommonVarHandles.downstream(Delegate.class);
 
         protected static long accumulate(long curr, long next) {
             long sum = curr + next;
@@ -36,18 +28,19 @@ public abstract class AbstractIngestSink {
         }
 
         protected final PaddedAtomicLong demand = new PaddedAtomicLong(0);
-        protected LatticeReceiver terminal;
+        protected boolean complete;
+        protected LatticeReceiver downstream;
 
         @Override
         public void addDownstream(LatticeReceiver terminal) {
-            if (!TERMINAL.compareAndSet(this, null, terminal)) {
-                terminal.onError(new IllegalStateException("Already Subscribed"));
+            if (!DOWNSTREAM.compareAndSet(this, null, terminal)) {
+                terminal.onError(new IllegalStateException("Already has a downstream"));
             }
             terminal.addUpstream(this);
         }
 
-        protected LatticeReceiver getTerminal() {
-            return (LatticeReceiver) TERMINAL.getOpaque(this);
+        protected LatticeReceiver getDownstream() {
+            return (LatticeReceiver) DOWNSTREAM.getOpaque(this);
         }
 
         protected long addAndGetDemand(long demand) {
@@ -56,8 +49,8 @@ public abstract class AbstractIngestSink {
 
         @Override
         public final long pull(Consumer<AbstractFrame> consumer, long demand) {
-            var receiver = getTerminal();
-            if (receiver == null || demand <= 0) {
+            var receiver = getDownstream();
+            if (isComplete() || receiver == null || demand <= 0) {
                 return 0;
             }
             return hookOnPull(consumer, demand);
@@ -67,8 +60,8 @@ public abstract class AbstractIngestSink {
 
         @Override
         public final void request(long demand) {
-            var receiver = getTerminal();
-            if (receiver == null || demand <= 0) {
+            var receiver = getDownstream();
+            if (isComplete() || receiver == null || demand <= 0) {
                 return;
             }
             hookOnRequest(receiver, addAndGetDemand(demand));
@@ -78,11 +71,18 @@ public abstract class AbstractIngestSink {
 
         @Override
         public void complete() {
-            var t = (LatticeReceiver) TERMINAL.getAndSet(this, null);
-            this.demand.lazySet(0);
-            if (t != null) {
-                t.onComplete();
+            if(COMPLETE.compareAndSet(this, false, true)) {
+                var t = (LatticeReceiver) DOWNSTREAM.getAndSet(this, null);
+                this.demand.lazySet(0);
+                if (t != null) {
+                    t.onComplete();
+                }
             }
+        }
+
+        @Override
+        public boolean isComplete() {
+            return (boolean) COMPLETE.getOpaque(this);
         }
     }
 }
