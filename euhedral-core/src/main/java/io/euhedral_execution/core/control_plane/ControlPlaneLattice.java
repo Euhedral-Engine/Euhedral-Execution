@@ -169,17 +169,20 @@ public final class ControlPlaneLattice implements LatticeTerminal {
 
     public void start() {
         if (this.started.compareAndSet(false, true)) {
+            this.logger.info("Starting...");
             init();
 
             HardwareUtilization utilization = this.resourceMonitor.getUtilization();
             this.topology.update(utilization);
             update(utilization);
 
+            this.logger.trace("Awaiting readiness...");
             while (this.rebalancing.getAcquire() || !this.ready()) {
                 LockSupport.parkNanos(5_000L);
             }
             this.resourceMonitor.start();
             this.ready.setRelease(true);
+            this.logger.info("Startup complete!");
         }
     }
 
@@ -195,6 +198,8 @@ public final class ControlPlaneLattice implements LatticeTerminal {
 
     /// Takes a [LatticeSource] and adds it as a global input source.
     public void addUpstream(@NonNull LatticeSource stream) {
+        this.logger.trace("Adding upstream...");
+
         Objects.requireNonNull(stream);
         if (this.closed.getOpaque()) {
             throw new RuntimeException(
@@ -209,10 +214,13 @@ public final class ControlPlaneLattice implements LatticeTerminal {
 
         LatticeVertex controller = this.ingestController.get();
         controller.ingest(stream);
+
+        this.logger.trace("Added upstream.");
     }
 
     /// Constructs the [ControlPlaneShards][ControlPlaneShard] and the ingest controller.
     private void init() {
+        this.logger.trace("Initializing...");
         for (int i = 0; i < this.shards.length; i++) {
             SocketInfo info = SystemInfo.getSocketInfo(i);
             if (info == null) {
@@ -277,7 +285,7 @@ public final class ControlPlaneLattice implements LatticeTerminal {
                                 getShardQuota(socketId, quotaPool));
                 CompletableFuture.runAsync(() -> {
                     if (!shard.isStarted()) {
-                        this.logger.trace("Starting shard");
+                        this.logger.info("Starting shard");
                         startShard(socketId, snapshot, topology);
                     } else {
                         shard.update(snapshot, topology);
@@ -306,16 +314,20 @@ public final class ControlPlaneLattice implements LatticeTerminal {
                         new LatticeEdge(controller.getDrainFlag()));
             }
         }
+        AtomicInteger shutDown = new AtomicInteger(0);
         for (int i = 0; i < this.shardHandles.length; i++) {
             if (!newShards.get(i)) {
                 HANDLES.setRelease(this.shardHandles, i, null);
+                shutDown.incrementAndGet();
             }
         }
 
+        this.logger.trace("Remapping ingest controller.");
         remapIngestController();
 
         // Divide the quota proportionally based on cpu count
         double quotaPool = utilization.quotaCpus();
+        this.logger.trace("Dividing quota pool of {} quota cpus", quotaPool);
         for (int socket = newShards.nextSetBit(0); socket >= 0;
                 socket = newShards.nextSetBit(socket + 1)) {
             if (this.shards[socket] == null) {
@@ -324,10 +336,13 @@ public final class ControlPlaneLattice implements LatticeTerminal {
 
             EffectiveSocketTopology topology =
                     this.effectiveTopology.socketTopologies().get(socket);
+
+            double shardQuota = getShardQuota(socket, quotaPool);
             SocketSnapshot snapshot =
                     utilization.getSocketSnapshot(socket, topology.effectiveCoreToCpu(),
-                            getShardQuota(socket, quotaPool));
+                            shardQuota);
 
+            this.logger.trace("Shard {} has been allocated {} quota cpus", socket, shardQuota);
             if (!this.shards[socket].isStarted()) {
                 startShard(socket, snapshot, topology);
             } else {
@@ -342,13 +357,6 @@ public final class ControlPlaneLattice implements LatticeTerminal {
             nextSockets[idx++] = i;
         }
 
-        AtomicInteger shutDown = new AtomicInteger(0);
-        for (int i : this.activeShardIds.getOpaque()) {
-            if (!newShards.get(i)) {
-                shutDown.incrementAndGet();
-            }
-        }
-
         this.activeShardIds.lazySet(nextSockets);
 
         this.ingestController.get().setDrain(false);
@@ -359,18 +367,21 @@ public final class ControlPlaneLattice implements LatticeTerminal {
         }
 
         // Shutdown decommissioned shards and restart ingest on complete.
-        CompletableFuture.runAsync(() -> {
-            for (int i = 0; i < this.shards.length; i++) {
-                if (!newShards.get(i)) {
-                    shutDown.decrementAndGet();
-                    this.shards[i].shutDownShard(shutDown);
+        if (shutDown.getPlain() > 0) {
+            this.logger.info("Shutting down {} old shards.", shutDown.getPlain());
+            CompletableFuture.runAsync(() -> {
+                for (int i = 0; i < this.shards.length; i++) {
+                    if (!newShards.get(i)) {
+                        shutDown.decrementAndGet();
+                        this.shards[i].shutDownShard(shutDown);
+                    }
                 }
-            }
-            while (shutDown.get() != 0) {
-                LockSupport.parkNanos(1_000);
-            }
-            this.rebalancing.lazySet(false);
-        }, this.controlPlaneExecutor);
+                while (shutDown.get() != 0) {
+                    LockSupport.parkNanos(1_000);
+                }
+                this.rebalancing.lazySet(false);
+            }, this.controlPlaneExecutor);
+        }
     }
 
     /// Cuts ingest by setting the ingest controller to drain mode and changes the mappings to the
@@ -380,6 +391,7 @@ public final class ControlPlaneLattice implements LatticeTerminal {
         BitSet effectiveSockets = this.effectiveTopology.effectiveSockets();
         BitSet effectiveCpus = this.effectiveTopology.effectiveCpus();
 
+        this.logger.trace("Building shard map weighted by cpu count.");
         int idx = 0;
         int[] weightedShardMap = new int[this.effectiveTopology.effectiveCpus().cardinality()];
         for (int i = effectiveCpus.nextSetBit(0); i >= 0; i = effectiveCpus.nextSetBit(i + 1)) {
