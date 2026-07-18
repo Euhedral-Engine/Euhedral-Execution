@@ -41,6 +41,16 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-maven-
 
+      - name: Cache Zig
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/zig
+            .zig-cache
+          key: ${{ runner.os }}-zig-${{ hashFiles('mise.toml', '**/build.zig') }}
+          restore-keys: |
+            ${{ runner.os }}-zig-
+
       - name: Download macOS SDK headers for Zig
         if: ${{ !env.ACT && steps.cache-macos-sdk.outputs.cache-hit != 'true' }}
         run: |
