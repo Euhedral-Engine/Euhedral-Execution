@@ -7,6 +7,7 @@ import io.euhedral_execution.core.impl.FrameFactory;
 import io.euhedral_execution.core.impl.FrameFactory.FrameCreate;
 import io.euhedral_execution.core.impl.FrameFactory.FrameReplace;
 import io.euhedral_execution.core.impl.FrameManager;
+import io.euhedral_execution.core.utils.CommonVarHandles;
 import io.euhedral_execution.data_structures.queues.SpscQueue;
 import io.euhedral_execution.hashing.HasherApi;
 import io.euhedral_execution.spring.core.frames.KafkaFrame;
@@ -42,29 +43,19 @@ public class KafkaIngestSource implements LatticeSource {
     public static final String MAX_COMMIT_BATCH = "max.commit.batch";
     public static final String MIN_COMMIT_INTERVAL = "min.commit.interval.micros";
     public static final String MAX_COMMIT_INTERVAL = "max.commit.interval.micros";
+
     private static final Set<String> HOT_SWAPPABLE = Set.of(MIN_COMMIT_BATCH, MAX_COMMIT_BATCH,
             MIN_COMMIT_INTERVAL, MAX_COMMIT_INTERVAL);
-    private static final VarHandle COMPLETE;
-    private static final VarHandle DOWNSTREAM;
-    private static final VarHandle HEARTBEAT;
-    private static final VarHandle LAST_POLL;
-    private static final VarHandle LOCK;
-
-    static {
-        try {
-            COMPLETE = MethodHandles.lookup()
-                    .findVarHandle(KafkaIngestSource.class, "complete", boolean.class);
-            DOWNSTREAM = MethodHandles.lookup()
-                    .findVarHandle(KafkaIngestSource.class, "downstream", LatticeReceiver.class);
-            HEARTBEAT = MethodHandles.lookup().findVarHandle(KafkaIngestSource.class, "heartbeatNs", long.class);
-            LAST_POLL = MethodHandles.lookup()
-                    .findVarHandle(KafkaIngestSource.class, "lastPollNs", long.class);
-            LOCK = MethodHandles.lookup()
-                    .findVarHandle(KafkaIngestSource.class, "lock", boolean.class);
-        } catch (Exception e) {
-            throw new ExceptionInInitializerError(e);
-        }
-    }
+    private static final VarHandle COMPLETE = CommonVarHandles.complete(MethodHandles.lookup(),
+            KafkaIngestSource.class);
+    private static final VarHandle DOWNSTREAM = CommonVarHandles.downstream(MethodHandles.lookup(),
+            KafkaIngestSource.class);
+    private static final VarHandle HEARTBEAT = CommonVarHandles.makeHandle(MethodHandles.lookup(),
+            KafkaIngestSource.class, "heartbeatNs", long.class);
+    private static final VarHandle LAST_POLL = CommonVarHandles.makeHandle(MethodHandles.lookup(),
+            KafkaIngestSource.class, "lastPoll", long.class);
+    private static final VarHandle LOCK = CommonVarHandles.makeHandle(MethodHandles.lookup(),
+            KafkaIngestSource.class, "lock", boolean.class);
 
     public static long getPartitionHash(TopicPartition partition) {
         return HasherApi.getHash(partition.topic(), partition.partition());
@@ -124,12 +115,12 @@ public class KafkaIngestSource implements LatticeSource {
         subscribe();
 
         this.heartbeat = new Thread(() -> {
-            while(!Thread.currentThread().isInterrupted()) {
+            while (!Thread.currentThread().isInterrupted()) {
                 long now = System.nanoTime();
 
                 long diff = now - (long) LAST_POLL.getAcquire(this);
                 long heartbeat = (long) HEARTBEAT.getAcquire(this);
-                if(diff >= heartbeat * 0.75 && LOCK.compareAndSet(this, false, true)) {
+                if (diff >= heartbeat * 0.75 && LOCK.compareAndSet(this, false, true)) {
                     try {
                         KafkaConsumer<?, ?> consumer = this.kafkaConsumer.getAcquire();
                         consumer.pause(consumer.assignment());
@@ -156,7 +147,7 @@ public class KafkaIngestSource implements LatticeSource {
         if ((boolean) COMPLETE.getOpaque(this) || demand <= 0) {
             return;
         }
-        if(!LOCK.compareAndSet(this, false, true)) {
+        if (!LOCK.compareAndSet(this, false, true)) {
             return;
         }
 

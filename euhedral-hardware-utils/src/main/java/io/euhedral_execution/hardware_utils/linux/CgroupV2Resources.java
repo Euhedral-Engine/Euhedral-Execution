@@ -5,6 +5,7 @@ import io.euhedral_execution.hardware_utils.common.SystemSnapshotProvider;
 import io.euhedral_execution.hardware_utils.common.SystemUtilization.MemorySnapshotIdx;
 import io.euhedral_execution.hardware_utils.common.SystemUtilization.SystemSnapshot;
 import io.euhedral_execution.hardware_utils.common.UnmodifiableBitSet;
+import io.euhedral_execution.hardware_utils.internal.Constants;
 import it.unimi.dsi.fastutil.longs.LongArraySet;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import java.nio.ByteBuffer;
@@ -27,7 +28,7 @@ import org.slf4j.LoggerFactory;
 /// This class is thread-safe.
 public class CgroupV2Resources implements SystemSnapshotProvider {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(CgroupV2Resources.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(Constants.getLoggerName(CgroupV2Resources.class));
 
     private static final byte[] MAX_KEY = "max".getBytes(StandardCharsets.US_ASCII);
     private static final byte[] CPU_KEY = "cpu".getBytes(StandardCharsets.US_ASCII);

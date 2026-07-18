@@ -6,6 +6,7 @@ import io.euhedral_execution.core.control_plane.ControlPlaneFragment;
 import io.euhedral_execution.core.generics.AbstractExecutor;
 import io.euhedral_execution.core.generics.CloneableObject;
 import io.euhedral_execution.core.generics.LatticeSource;
+import io.euhedral_execution.core.internal.Constants;
 import io.euhedral_execution.core.utils.FlowThread;
 import io.euhedral_execution.hardware_utils.PinnedThreadExecutor;
 import io.euhedral_execution.hardware_utils.common.SystemUtilization.CoreSnapshot;
@@ -55,12 +56,13 @@ public final class BaseCloneableObject implements CloneableObject {
 
     private BaseCloneableObject(CloneConfig config,
             ControlPlaneFragment fragment, AbstractExecutor executor) {
+        String name;
         if (config != null) {
-            this.logger = LoggerFactory.getLogger(
-                    config.shardName() + "-pipeline-" + config.coreId());
+            name = config.shardName() + "-pipeline-" + config.coreId();
         } else {
-            this.logger = LoggerFactory.getLogger(this.getClass().getSimpleName());
+            name = BaseCloneableObject.class.getSimpleName();
         }
+        this.logger = LoggerFactory.getLogger(Constants.getLoggerName(name));
         this.config = config;
         this.fragment = fragment;
         this.executor = executor;

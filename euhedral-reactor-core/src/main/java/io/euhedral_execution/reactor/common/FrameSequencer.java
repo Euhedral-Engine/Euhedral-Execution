@@ -1,16 +1,17 @@
 package io.euhedral_execution.reactor.common;
 
-import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Function;
-
 import io.euhedral_execution.core.impl.FrameFactory;
 import io.euhedral_execution.core.impl.FrameFactory.FrameCreate;
 import io.euhedral_execution.core.impl.FrameFactory.FrameReplace;
 import io.euhedral_execution.core.impl.FrameManager;
+import io.euhedral_execution.core.utils.SpinWait;
 import io.euhedral_execution.data_structures.atomics.PaddedAtomicLong;
 import io.euhedral_execution.data_structures.queues.PartitionedSpscQueue;
 import io.euhedral_execution.hashing.HasherApi;
+import io.euhedral_execution.reactor.internal.Constants;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
 import org.reactivestreams.Publisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,7 +21,7 @@ import reactor.core.publisher.Sinks.EmitResult;
 
 public class FrameSequencer<T, R> {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(FrameSequencer.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(Constants.getLoggerName(FrameSequencer.class));
 
     private final long ingestPassword;
     private final long sequencePassword;
@@ -97,14 +98,21 @@ public class FrameSequencer<T, R> {
 
                     this.sequence.poll();
 
-                    EmitResult result = BackpressureHandler.push(frame.getRetVal(), output);
-                    if (result == EmitResult.FAIL_CANCELLED || result == EmitResult.FAIL_TERMINATED
-                            || result == EmitResult.FAIL_ZERO_SUBSCRIBER) {
-                        frame.kill();
-                        this.sequence.clear();
-                        this.output.tryEmitComplete();
-                        return;
-                    }
+                    final SequencedFrame<T, R> finFrame = frame;
+                    SpinWait.await(() -> {
+                        EmitResult result = this.output.tryEmitNext(finFrame.getRetVal());
+
+                        return switch (EuhedralSink.toResponse(result)) {
+                            case OK -> false;
+                            case RETRY -> true;
+                            default -> {
+                                finFrame.kill();
+                                this.sequence.clear();
+                                this.output.tryEmitComplete();
+                                yield false;
+                            }
+                        };
+                    });
                     frame = this.sequence.peek();
                 }
             } while (this.wip.decrementAndGet() != 0);

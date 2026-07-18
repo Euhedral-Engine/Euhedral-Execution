@@ -10,6 +10,7 @@ import io.euhedral_execution.hardware_utils.SystemInfo.CpuCacheLayout;
 import io.euhedral_execution.hardware_utils.SystemInfo.CpuInfo;
 import io.euhedral_execution.hardware_utils.SystemInfo.SocketInfo;
 import io.euhedral_execution.hardware_utils.common.OSName;
+import io.euhedral_execution.hardware_utils.internal.Constants;
 import it.unimi.dsi.fastutil.ints.Int2BooleanArrayMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectArrayMap;
 import java.io.IOException;
@@ -26,7 +27,7 @@ import org.slf4j.LoggerFactory;
 public final class LinuxSystemLayout {
 
     public static final LinuxSystemLayout INSTANCE;
-    private static final Logger LOGGER = LoggerFactory.getLogger(LinuxSystemLayout.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(Constants.getLoggerName(LinuxSystemLayout.class));
 
     static {
         if (OSName.isLinux()) {
@@ -45,7 +46,7 @@ public final class LinuxSystemLayout {
 
     private LinuxSystemLayout() {
         init();
-        cpuRankings = null;
+        this.cpuRankings = null;
     }
 
     private void init() {
@@ -58,12 +59,13 @@ public final class LinuxSystemLayout {
                         int cpu = parseCpu(cpuDir.getFileName().toString());
                         initCacheLayout(cpu, cpuDir.resolve("cache"));
                         try {
-                            cpuRankings.get(cpu).capacity[0] *= Long.parseLong(
+                            this.cpuRankings.get(cpu).capacity[0] *= Long.parseLong(
                                     read(cpuDir.resolve("cpufreq/cpuinfo_max_freq")));
                         } catch (Throwable ignored) {
                             // Not all info is supported
                         }
                     }).toList();
+            LOGGER.trace("Detected {} cpus", list.size());
             Int2BooleanArrayMap pCpu = rankCpus();
             list.forEach(cpuDir -> {
                 Path topology = cpuDir.resolve("topology");
@@ -81,19 +83,21 @@ public final class LinuxSystemLayout {
                 } catch (IOException e) {
                     LOGGER.error("Failed to read topology for CPU: {}", cpu, e);
                 }
-                cpuInfo.put(cpu, new CpuInfo(cpu, core, socket));
-                coreInfo.put(core, new CoreInfo(coreCpuSet, pCpu.get(cpu), core, socket));
+                this.cpuInfo.put(cpu, new CpuInfo(cpu, core, socket));
+                this.coreInfo.put(core, new CoreInfo(coreCpuSet, pCpu.get(cpu), core, socket));
 
                 BitSet cpuSet = socketToCpu.computeIfAbsent(socket, k -> new BitSet());
                 BitSet coreSet = socketToCore.computeIfAbsent(socket, k -> new BitSet());
                 cpuSet.set(cpu);
                 coreSet.set(core);
             });
+            LOGGER.trace("Detected {} cores", this.coreInfo.size());
             for (var entry : socketToCore.entrySet()) {
                 int socket = entry.getKey();
                 socketInfo.put(socket, new SocketInfo(SystemInfo.toHexMask(socketToCpu.get(socket)),
                         SystemInfo.toHexMask(entry.getValue()), socket));
             }
+            LOGGER.trace("Detected {} sockets", this.socketInfo.size());
         } catch (IOException e) {
             LOGGER.error("Failed to list cpus.", e);
         }
@@ -152,8 +156,8 @@ public final class LinuxSystemLayout {
                     masks[2] == null ? "" : masks[2],
                     cacheLineBytes[0]
             );
-            cpuCache.put(cpu, layout);
-            cpuRankings.compute(cpu, (k, curr) -> {
+            this.cpuCache.put(cpu, layout);
+            this.cpuRankings.compute(cpu, (k, curr) -> {
                 if (curr == null) {
                     curr = new Ranking(cpu, new long[2]);
                 }
@@ -167,9 +171,10 @@ public final class LinuxSystemLayout {
     }
 
     private Int2BooleanArrayMap rankCpus() {
-        Int2BooleanArrayMap pCpu = new Int2BooleanArrayMap(cpuRankings.size());
+        LOGGER.trace("Ranking cpus...");
+        Int2BooleanArrayMap pCpu = new Int2BooleanArrayMap(this.cpuRankings.size());
 
-        Ranking[] sorted = cpuRankings.values().toArray(Ranking[]::new);
+        Ranking[] sorted = this.cpuRankings.values().toArray(Ranking[]::new);
         Arrays.sort(sorted);
 
         int splitIndex = -1;

@@ -1,6 +1,7 @@
 package io.euhedral_execution.hardware_utils.windows;
 
 import io.euhedral_execution.hardware_utils.common.OSName;
+import io.euhedral_execution.hardware_utils.internal.Constants;
 import io.euhedral_execution.hardware_utils.internal.JNIClassLoader;
 import io.euhedral_execution.hardware_utils.internal.ThreadPinner;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -11,7 +12,7 @@ import org.slf4j.LoggerFactory;
 public final class WindowsAffinity extends ThreadPinner {
 
     public static final WindowsAffinity INSTANCE;
-    private static final Logger LOGGER = LoggerFactory.getLogger(WindowsAffinity.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(Constants.getLoggerName(WindowsAffinity.class));
     private static final AtomicBoolean WIN_RES_SET = new AtomicBoolean(false);
     private final AtomicInteger windowsResolution100ns = new AtomicInteger(-1);
 

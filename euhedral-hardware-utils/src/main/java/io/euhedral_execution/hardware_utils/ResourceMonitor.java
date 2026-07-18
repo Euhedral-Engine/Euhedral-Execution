@@ -3,6 +3,7 @@ package io.euhedral_execution.hardware_utils;
 import io.euhedral_execution.hardware_utils.common.SystemUtilization.HardwareUtilization;
 import io.euhedral_execution.hardware_utils.common.SystemUtilization.SystemSnapshot;
 import io.euhedral_execution.hardware_utils.common.UnmodifiableBitSet;
+import io.euhedral_execution.hardware_utils.internal.Constants;
 import it.unimi.dsi.fastutil.objects.ObjectArraySet;
 import java.time.Duration;
 import java.util.BitSet;
@@ -12,6 +13,7 @@ import java.util.concurrent.locks.LockSupport;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+@SuppressWarnings("unused")
 public class ResourceMonitor implements AutoCloseable {
 
     // 1M GB to represent unlimited memory limit.
@@ -26,7 +28,7 @@ public class ResourceMonitor implements AutoCloseable {
         return Math.min(max, Math.max(min, val));
     }
 
-    private final Logger logger = LoggerFactory.getLogger(this.getClass());
+    private final Logger logger = LoggerFactory.getLogger(Constants.getLoggerName(this.getClass()));
     private final TopologyMapper topology;
 
     private final long sampleRateNs;
@@ -73,19 +75,20 @@ public class ResourceMonitor implements AutoCloseable {
             throw new RuntimeException(
                     "Resource monitoring not available on this platform. Monitor will not start.");
         }
-        while (closing.get()) {
+        while (this.closing.getAcquire()) {
             Thread.onSpinWait();
         }
 
-        if (!running.compareAndSet(false, true)) {
+        if (!this.running.compareAndSet(false, true)) {
             return;
         }
+        this.logger.trace("Starting...");
 
         init();
         poll();
 
-        pollingThread = new Thread(this::runLoop);
-        pollingThread.start();
+        this.pollingThread = new Thread(this::runLoop);
+        this.pollingThread.start();
     }
 
     private void init() {
@@ -144,7 +147,7 @@ public class ResourceMonitor implements AutoCloseable {
     }
 
     public final HardwareUtilization getUtilization() {
-        if(!this.running.getAcquire()) {
+        if (!this.running.getAcquire()) {
             poll();
         }
         return this.hardwareUtilization;
@@ -179,7 +182,7 @@ public class ResourceMonitor implements AutoCloseable {
             this.readings.lastWallClockNs = snapshot.timeNs();
 
             long memoryLimit = clampMemory(snapshot.memoryLimit());
-            hardwareUtilization = HardwareUtilization.create(this.readings.lastWallClockNs,
+            this.hardwareUtilization = HardwareUtilization.create(this.readings.lastWallClockNs,
                     this.readings.quotaCpus,
                     this.readings.cpuUsageRatio,
                     snapshot.period(),
@@ -196,7 +199,7 @@ public class ResourceMonitor implements AutoCloseable {
             );
             this.topology.update(this.hardwareUtilization);
         } catch (Exception e) {
-            logger.error("Failed to update utilization", e);
+            this.logger.error("Failed to update utilization", e);
         }
     }
 
@@ -291,7 +294,7 @@ public class ResourceMonitor implements AutoCloseable {
             double deltaTimeSec = deltaTimeNs * NS_TO_SEC;
 
             // Calculate raw Bytes Per Second
-            long deltaBytes = (lastDiskIOBytes == 0) ? 0 : snapshot.diskIOBytes() - lastDiskIOBytes;
+            long deltaBytes = (this.lastDiskIOBytes == 0) ? 0 : snapshot.diskIOBytes() - this.lastDiskIOBytes;
             double rawBps = deltaBytes / deltaTimeSec;
 
             this.readings.diskIOBytesPerSecond = ewma(this.readings.diskIOBytesPerSecond, rawBps);
@@ -313,7 +316,7 @@ public class ResourceMonitor implements AutoCloseable {
             return clampedNew;
         }
 
-        return (smoothingFactor * clampedNew) + (1 - smoothingFactor) * oldVal;
+        return (this.smoothingFactor * clampedNew) + (1 - this.smoothingFactor) * oldVal;
     }
 
     @FunctionalInterface

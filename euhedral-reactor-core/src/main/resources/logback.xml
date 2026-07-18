@@ -1,0 +1,5 @@
+<configuration>
+
+  <logger name="euhedral.reactor.core" level="${AllEuhedralLogs:-${EuhedralReactorCoreLog:-INFO}}"/>
+
+</configuration>

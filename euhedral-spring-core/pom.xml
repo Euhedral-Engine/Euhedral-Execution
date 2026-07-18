@@ -111,32 +111,30 @@
         </executions>
       </plugin>
       <plugin>
-        <groupId>org.xolstice.maven.plugins</groupId>
+        <groupId>io.github.ascopes</groupId>
         <artifactId>protobuf-maven-plugin</artifactId>
+        <version>4.1.3</version>
         <configuration>
-          <pluginId>grpc-java</pluginId>
-          <protocArtifact>
-            com.google.protobuf:protoc:3.25.8:exe:${os.detected.classifier}
-          </protocArtifact>
-          <pluginArtifact>
-            io.grpc:protoc-gen-grpc-java:1.76.2:exe:${os.detected.classifier}
-          </pluginArtifact>
+          <protocVersion>3.25.8</protocVersion>
+
+          <sourceDirectories>
+            <sourceDirectory>${project.basedir}/src/main/java</sourceDirectory>
+          </sourceDirectories>
           <outputDirectory>${project.basedir}/src/main/java</outputDirectory>
-          <clearOutputDirectory>false</clearOutputDirectory>
+
+          <plugins>
+            <plugin kind="binary-maven">
+              <groupId>io.grpc</groupId>
+              <artifactId>protoc-gen-grpc-java</artifactId>
+              <version>1.76.2</version>
+            </plugin>
+          </plugins>
         </configuration>
         <executions>
           <execution>
             <goals>
-              <goal>test-compile</goal>
-              <goal>compile</goal>
-              <goal>compile-custom</goal>
+              <goal>generate</goal>
             </goals>
-            <configuration>
-              <protoSourceRoot>${project.basedir}/src/main/java</protoSourceRoot>
-              <includes>
-                <include>**/*.proto</include>
-              </includes>
-            </configuration>
           </execution>
         </executions>
       </plugin>

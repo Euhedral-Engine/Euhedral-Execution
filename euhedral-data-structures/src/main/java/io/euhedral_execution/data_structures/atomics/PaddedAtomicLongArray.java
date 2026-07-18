@@ -10,7 +10,7 @@ import java.util.function.LongUnaryOperator;
 import org.jspecify.annotations.NonNull;
 
 @SuppressWarnings("unused")
-public sealed class PaddedAtomicLongArray permits PaddedLongAdder {
+public class PaddedAtomicLongArray {
 
     private static final VarHandle HANDLE = MethodHandles.arrayElementVarHandle(long[].class);
 

@@ -7,9 +7,8 @@ import java.util.Iterator;
 import java.util.function.Consumer;
 import org.jspecify.annotations.NonNull;
 
-abstract sealed class AbstractPartitionedQueue<T> extends AbstractQueue<T> implements
-        ConcurrentPartitionedQueue<T> permits PartitionedMpmcQueue, PartitionedMpscQueue,
-        PartitionedSpmcQueue, PartitionedSpscQueue {
+abstract class AbstractPartitionedQueue<T> extends AbstractQueue<T> implements
+        ConcurrentPartitionedQueue<T> {
 
     protected final int partitions;
 
@@ -49,7 +48,7 @@ abstract sealed class AbstractPartitionedQueue<T> extends AbstractQueue<T> imple
     public long drain(Consumer<T> consumer, long limit, int startingPartition) {
         long total = 0;
         int cycles = 0;
-        while(cycles < this.partitions && total < limit) {
+        while (cycles < this.partitions && total < limit) {
             int idx = startingPartition++ % this.partitions;
             total += drain(idx, consumer, limit - total);
             cycles++;
@@ -120,7 +119,7 @@ abstract sealed class AbstractPartitionedQueue<T> extends AbstractQueue<T> imple
 
     /// Use `sizeLong()` for an accurate count
     @Override
-    @Deprecated(since="0.0.1")
+    @Deprecated(since = "0.0.1")
     public final int size() {
         return (int) sizeLong();
     }
