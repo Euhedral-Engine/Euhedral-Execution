@@ -394,7 +394,22 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
 
         @Override
         public long pull(Consumer<AbstractFrame> consumer, long demand) {
-            return LatticeVertex.this.pull(consumer, demand);
+            if (demand <= 0 || LatticeVertex.this.isClosed() || LatticeVertex.this.drain.getOpaque()
+                    || isComplete()) {
+                return 0;
+            }
+
+            if (this.wip.getAndIncrement() == 0) {
+                try {
+                    return this.upstream.pull(consumer, demand);
+                } catch (Throwable t) {
+                    logger.error("Upstream threw an exception during a pull", t);
+                    this.complete();
+                } finally {
+                    this.wip.lazySet(0);
+                }
+            }
+            return 0;
         }
 
         @Override
