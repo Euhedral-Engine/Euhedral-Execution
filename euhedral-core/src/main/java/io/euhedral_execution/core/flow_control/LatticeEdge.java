@@ -4,10 +4,10 @@ import io.euhedral_execution.core.flow_control.UpstreamQueue.UpstreamHandle;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.generics.LatticeInterceptor;
 import io.euhedral_execution.core.generics.LatticeReceiver;
+import io.euhedral_execution.core.internal.Constants;
 import io.euhedral_execution.core.utils.CommonVarHandles;
 import io.euhedral_execution.core.utils.SpinWait;
 import io.euhedral_execution.data_structures.atomics.PaddedAtomicLong;
-import io.euhedral_execution.data_structures.atomics.PaddedAtomicLongArray;
 import io.euhedral_execution.data_structures.queues.MpscQueue;
 import io.euhedral_execution.hardware_utils.SystemInfo;
 import io.euhedral_execution.hardware_utils.SystemInfo.CoreInfo;
@@ -18,8 +18,11 @@ import java.util.WeakHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicLongArray;
 import java.util.function.Consumer;
 import lombok.Getter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /// ## The main infrastructure class of Euhedral Core
 ///
@@ -41,17 +44,21 @@ public class LatticeEdge extends UpstreamHandle {
     protected static final VarHandle PARENT = CommonVarHandles.makeHandle(LatticeEdge.class, "parent", LatticeEdge.class);
 
     protected static final MpscQueue<UpstreamHandle>[] UPSTREAMS;
-    protected static final PaddedAtomicLongArray ACTIVE_PARTITIONS;
+    protected static final AtomicLongArray ACTIVE_PARTITIONS;
+    protected static final AtomicLong THREAD_COUNT = new AtomicLong(0);
 
     protected static final WeakHashMap<UpstreamHandle, Boolean> HANDLES = new WeakHashMap<>(128);
     protected static final PaddedAtomicLong HANDLE_LOCK = new PaddedAtomicLong();
+    protected static final PaddedAtomicLong UPSTREAM_COUNT = new PaddedAtomicLong(0);
 
     private static final VarHandle CLOSED = CommonVarHandles.closed(LatticeEdge.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(Constants.getLoggerName(LatticeEdge.class));
+
 
     static {
         try {
             UPSTREAMS = new MpscQueue[SystemInfo.getMaxCoreId() + 1];
-            ACTIVE_PARTITIONS = new PaddedAtomicLongArray(UPSTREAMS.length);
+            ACTIVE_PARTITIONS = new AtomicLongArray(UPSTREAMS.length);
             for (int i = 0; i < UPSTREAMS.length; i++) {
                 CoreInfo info = SystemInfo.getCoreInfo(i);
                 if (info != null) {
@@ -62,14 +69,11 @@ public class LatticeEdge extends UpstreamHandle {
             throw new ExceptionInInitializerError(e);
         }
     }
-
     @Getter
     protected final long id = HasherApi.mix(ThreadLocalRandom.current().nextLong());
 
     protected final AtomicBoolean drain;
 
-    protected final PaddedAtomicLong upstreamCount = new PaddedAtomicLong(0);
-    protected final AtomicLong threadCount = new AtomicLong(0);
     protected LatticeReceiver downstream = null;
     protected LatticeEdge parent = null;
 
@@ -98,6 +102,7 @@ public class LatticeEdge extends UpstreamHandle {
             } finally {
                 HANDLE_LOCK.set(0);
             }
+            LOGGER.trace("Registered thread on core {}", core);
         }
     }
 
@@ -109,7 +114,7 @@ public class LatticeEdge extends UpstreamHandle {
             return parent.getThreadUpstreamQueue();
         }
 
-        UpstreamQueue queue = UpstreamQueue.get(UPSTREAMS, this.upstreamCount, this.threadCount);
+        UpstreamQueue queue = UpstreamQueue.get(UPSTREAMS, UPSTREAM_COUNT, THREAD_COUNT);
         queue.getTrueUpstreamCount();
 
         return queue;
@@ -126,11 +131,12 @@ public class LatticeEdge extends UpstreamHandle {
 
         UpstreamQueue queue = UpstreamQueue.UP_QUEUE.get();
         if (queue != null) {
-            this.threadCount.decrementAndGet();
+            THREAD_COUNT.decrementAndGet();
             UpstreamQueue.UP_QUEUE.remove();
             int core = SystemInfo.getCpuInfo(ThreadTools.getCpu()).core();
             ACTIVE_PARTITIONS.setRelease(core, 0);
             UPSTREAMS[core].clear();
+            LOGGER.trace("Removed entry for thread on core {}", core);
         }
     }
 
@@ -140,9 +146,9 @@ public class LatticeEdge extends UpstreamHandle {
             return;
         }
 
-        UPSTREAMS[queue.core].clear();
         SpinWait.await(() -> !HANDLE_LOCK.compareAndSet(0, 1));
         try {
+            UPSTREAMS[queue.core].clear();
             UPSTREAMS[queue.core].fill(HANDLES.keySet());
         } finally {
             HANDLE_LOCK.set(0);
@@ -167,32 +173,17 @@ public class LatticeEdge extends UpstreamHandle {
 
     /// Returns the number of [UpstreamHandles][UpstreamHandle]
     public long getUpstreamHandleCount() {
-        LatticeEdge parent = (LatticeEdge) PARENT.getOpaque(this);
-        if (parent != null) {
-            return parent.getUpstreamHandleCount();
-        }
-        return this.upstreamCount.getOpaque();
+        return UPSTREAM_COUNT.getOpaque();
     }
 
     /// Returns the number of threads registered with this LatticeEdge.
     public int getThreadCount() {
-        LatticeEdge parent = (LatticeEdge) PARENT.getOpaque(this);
-        if (parent != null) {
-            return parent.getThreadCount();
-        }
-        return this.threadCount.intValue();
+        return THREAD_COUNT.intValue();
     }
 
-    /// Sets the parent LatticeEdge and transfers all [UpstreamHandles][UpstreamHandle] and
-    /// [UpstreamQueues][UpstreamQueue] to it.
+    /// Sets the parent LatticeEdge.
     public void setParent(LatticeEdge parent) {
-        if (parent == null) {
-            PARENT.setRelease(this, null);
-            return;
-        }
-
         PARENT.setRelease(this, parent);
-        transferToParent();
     }
 
     /// Sends work downstream.
@@ -220,7 +211,7 @@ public class LatticeEdge extends UpstreamHandle {
             return;
         }
 
-        UpstreamQueue queue = UpstreamQueue.get(UPSTREAMS, this.upstreamCount, this.threadCount);
+        UpstreamQueue queue = UpstreamQueue.get(UPSTREAMS, UPSTREAM_COUNT, THREAD_COUNT);
         queue.request(num);
     }
 
@@ -236,19 +227,8 @@ public class LatticeEdge extends UpstreamHandle {
         if (parent != null) {
             return parent.pull(consumer, demand);
         }
-        UpstreamQueue queue = UpstreamQueue.get(UPSTREAMS, this.upstreamCount, this.threadCount);
+        UpstreamQueue queue = UpstreamQueue.get(UPSTREAMS, UPSTREAM_COUNT, THREAD_COUNT);
         return queue.pull(consumer, demand);
-    }
-
-    /// Transfers this edge's state to its parent.
-    protected void transferToParent() {
-        LatticeEdge parent = (LatticeEdge) PARENT.getOpaque(this);
-        if (parent == null) {
-            return;
-        }
-        parent.upstreamCount.addAndGet(this.upstreamCount.get());
-        parent.threadCount.addAndGet(this.threadCount.get());
-        parent.transferToParent();
     }
 
     @Override
@@ -274,12 +254,7 @@ public class LatticeEdge extends UpstreamHandle {
     }
 
     public void removeUpstream(UpstreamHandle handle) {
-        LatticeEdge parent = (LatticeEdge) PARENT.getOpaque(this);
-        if (parent != null) {
-            removeUpstream(handle);
-            return;
-        }
-        this.upstreamCount.decrementAndGet();
+        UPSTREAM_COUNT.decrementAndGet();
     }
 
     /// If the parameter is a LatticeEdge, it sets it as its parent or bubbles it up the chain. If
@@ -290,13 +265,7 @@ public class LatticeEdge extends UpstreamHandle {
         if (up instanceof LatticeEdge dh) {
             setParent(dh);
         } else if (up instanceof UpstreamHandle upstream) {
-
-            LatticeEdge parent = (LatticeEdge) PARENT.getOpaque(this);
-            if (parent != null) {
-                parent.addUpstream(upstream);
-                return;
-            }
-
+            LOGGER.trace("Adding upstream handle...");
             SpinWait.await(this.drain::getOpaque);
 
             SpinWait.await(() -> !HANDLE_LOCK.compareAndSet(0, 1));
@@ -312,7 +281,8 @@ public class LatticeEdge extends UpstreamHandle {
                     queue.offer(upstream);
                 }
             }
-            this.upstreamCount.incrementAndGet();
+            UPSTREAM_COUNT.incrementAndGet();
+            LOGGER.trace("Added upstream handle.");
         }
     }
 
