@@ -6,6 +6,7 @@ import io.euhedral_execution.core.generics.LatticeSource;
 import io.euhedral_execution.core.utils.CommonVarHandles;
 import java.lang.invoke.VarHandle;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 /// Used for pushing frames from one stage to the next. Assumes that only one thread will control
 /// the push side. This class can only have one downstream.
@@ -30,7 +31,8 @@ public final class LatticeHotSource implements LatticeSource, Consumer<AbstractF
     }
 
     @Override
-    public long pull(Consumer<AbstractFrame> consumer, long demand) {
+    public long pull(Consumer<AbstractFrame> consumer,
+            Function<AbstractFrame, Boolean> stopCondition, long demand) {
         return 0;
     }
 

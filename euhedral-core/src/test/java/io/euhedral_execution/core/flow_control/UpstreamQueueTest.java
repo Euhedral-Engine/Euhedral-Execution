@@ -16,6 +16,7 @@ import io.euhedral_execution.hardware_utils.SystemInfo;
 import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import lombok.Getter;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -105,7 +106,7 @@ class UpstreamQueueTest {
         handles.offer(upstream);
         count.incrementAndGet();
 
-        queue.pull(null, 64);
+        queue.pull(null, frame -> false, 64);
 
         assertEquals(64, upstream.requested);
         assertEquals(0, upstream.pulled);
@@ -118,7 +119,8 @@ class UpstreamQueueTest {
         handles.offer(upstream);
         count.incrementAndGet();
 
-        queue.pull(frame -> {}, 64);
+        queue.pull(frame -> {
+        }, frame -> false, 64);
 
         assertEquals(0, upstream.requested);
         assertEquals(64, upstream.pulled);
@@ -167,7 +169,7 @@ class UpstreamQueueTest {
     void shouldRequestFromHandleWithoutBuffer() {
         TestUpstreamHandle upstream = new TestUpstreamHandle();
 
-        UpstreamQueue.drain(upstream, null, 123);
+        UpstreamQueue.drain(upstream, null, null, 123);
 
         assertEquals(123, upstream.requested);
         assertEquals(0, upstream.pulled);
@@ -216,7 +218,8 @@ class UpstreamQueueTest {
         boolean complete;
 
         @Override
-        public long pull(Consumer<AbstractFrame> consumer, long demand) {
+        public long pull(Consumer<AbstractFrame> consumer,
+                Function<AbstractFrame, Boolean> stopCondition, long demand) {
             this.pulled += demand;
             return demand;
         }

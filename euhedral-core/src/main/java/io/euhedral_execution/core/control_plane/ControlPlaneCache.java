@@ -152,10 +152,10 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
         }
 
         this.cacheTerminal.reset();
-        long added = super.pull(this.cacheTerminal, limit);
+        long added = super.pull(this.cacheTerminal, NO_STOP, limit);
         if(added < limit) {
             FlowThread.FlowContext context = FlowThread.getContext();
-            added += context == null ? 0 : context.upstream.pull(this.cacheTerminal, limit - added);
+            added += context == null ? 0 : context.upstream.pull(this.cacheTerminal, AbstractFrame::isOrdered, limit - added);
         }
         if (added > 0) {
             TOTAL_COUNT.getAndAdd(ControlPlaneCache.this, this.cacheTerminal.framesAdded);
