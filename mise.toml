@@ -1,7 +1,7 @@
 [tools]
 apple-codesign = "latest"
 java = "25"
-maven = "latest"
+maven = "3.9.6"
 zig = "0.16.0"
 
 [tool_alias]
