@@ -39,6 +39,7 @@
     <spring-cloud.version>2025.1.2</spring-cloud.version>
 
     <skip.central.publish>true</skip.central.publish>
+    <zig.sign>false</zig.sign>
   </properties>
 
   <modules>
@@ -284,6 +285,9 @@
   <profiles>
     <profile>
       <id>release</id>
+      <properties>
+        <zig.sign>true</zig.sign>
+      </properties>
       <build>
         <plugins>
           <plugin>

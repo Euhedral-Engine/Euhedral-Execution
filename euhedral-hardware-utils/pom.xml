@@ -106,6 +106,7 @@
               <workingDirectory>${project.basedir}/src/main/resources</workingDirectory>
               <arguments>
                 <argument>build</argument>
+                <argument>-Dsign-macos=${zig.sign}</argument>
                 <argument>--prefix</argument>
                 <argument>.</argument>
               </arguments>
