@@ -1,10 +1,10 @@
 package io.euhedral_execution.spring.core.transport.grpc;
 
+import io.euhedral_execution.spring.core.internal.Constants;
 import io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceGrpc;
 import io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage;
 import io.grpc.ManagedChannel;
 import java.util.concurrent.TimeUnit;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Flux;
@@ -13,7 +13,7 @@ import reactor.core.publisher.Mono;
 @SuppressWarnings("unused")
 public abstract class ReactorGrpcClient {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(ReactorGrpcClient.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(Constants.getLoggerName(ReactorGrpcClient.class));
 
     private final GrpcTransportServiceGrpc.GrpcTransportServiceStub stub;
     private final int sendQueueChunkSize;

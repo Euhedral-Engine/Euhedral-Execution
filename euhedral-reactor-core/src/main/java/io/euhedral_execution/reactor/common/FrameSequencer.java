@@ -8,6 +8,7 @@ import io.euhedral_execution.core.utils.SpinWait;
 import io.euhedral_execution.data_structures.atomics.PaddedAtomicLong;
 import io.euhedral_execution.data_structures.queues.PartitionedSpscQueue;
 import io.euhedral_execution.hashing.HasherApi;
+import io.euhedral_execution.reactor.internal.Constants;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
@@ -20,7 +21,7 @@ import reactor.core.publisher.Sinks.EmitResult;
 
 public class FrameSequencer<T, R> {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(FrameSequencer.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(Constants.getLoggerName(FrameSequencer.class));
 
     private final long ingestPassword;
     private final long sequencePassword;

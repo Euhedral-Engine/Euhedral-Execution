@@ -4,6 +4,7 @@ import io.euhedral_execution.hardware_utils.common.OSName;
 import io.euhedral_execution.hardware_utils.common.SystemSnapshotProvider;
 import io.euhedral_execution.hardware_utils.common.SystemUtilization.SystemSnapshot;
 import io.euhedral_execution.hardware_utils.common.UnmodifiableBitSet;
+import io.euhedral_execution.hardware_utils.internal.Constants;
 import io.euhedral_execution.hardware_utils.internal.JNIClassLoader;
 import java.util.Arrays;
 import java.util.BitSet;
@@ -15,7 +16,7 @@ import org.slf4j.LoggerFactory;
 public final class OSXResources implements SystemSnapshotProvider {
 
     public static final OSXResources INSTANCE;
-    private static final Logger LOGGER = LoggerFactory.getLogger(OSXResources.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(Constants.getLoggerName(OSXResources.class));
 
     static {
         JNIClassLoader.load();

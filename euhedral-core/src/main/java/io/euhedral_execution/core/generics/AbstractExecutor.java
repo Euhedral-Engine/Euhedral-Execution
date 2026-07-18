@@ -2,6 +2,7 @@ package io.euhedral_execution.core.generics;
 
 import io.euhedral_execution.core.config.CloneConfig;
 import io.euhedral_execution.core.frames.AbstractFrame;
+import io.euhedral_execution.core.internal.Constants;
 import io.euhedral_execution.hardware_utils.PinnedThreadExecutor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,8 +17,7 @@ import org.slf4j.LoggerFactory;
 public abstract class AbstractExecutor implements CloneableObject {
 
     protected final int cpu;
-    private final Logger logger = LoggerFactory.getLogger(
-            "euhedral.core" + this.getClass().getSimpleName());
+    private final Logger logger = LoggerFactory.getLogger(Constants.getLoggerName(this.getClass().getSimpleName()));
 
     protected AbstractExecutor(int cpu) {
         this.cpu = cpu;

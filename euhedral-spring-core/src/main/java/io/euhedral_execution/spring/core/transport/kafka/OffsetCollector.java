@@ -1,15 +1,16 @@
 package io.euhedral_execution.spring.core.transport.kafka;
 
+import io.euhedral_execution.core.utils.CommonVarHandles;
+import io.euhedral_execution.spring.core.frames.KafkaFrame;
+import io.euhedral_execution.spring.core.internal.Constants;
+import it.unimi.dsi.fastutil.longs.Long2ObjectArrayMap;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.longs.LongHeapPriorityQueue;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
-
-import io.euhedral_execution.spring.core.frames.KafkaFrame;
-import it.unimi.dsi.fastutil.longs.Long2ObjectArrayMap;
-import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
-import it.unimi.dsi.fastutil.longs.LongHeapPriorityQueue;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
@@ -19,18 +20,10 @@ import org.slf4j.LoggerFactory;
 @SuppressWarnings("unused")
 public final class OffsetCollector {
 
-    private static final VarHandle COMMIT;
+    private static final VarHandle COMMIT = CommonVarHandles.makeHandle(MethodHandles.lookup(),
+            OffsetCollector.class, "commitPolicy", CommitPolicy.class);
 
-    static {
-        try {
-            COMMIT = MethodHandles.lookup()
-                    .findVarHandle(OffsetCollector.class, "commitPolicy", CommitPolicy.class);
-        } catch (Exception e) {
-            throw new ExceptionInInitializerError(e);
-        }
-    }
-
-    private final Logger logger = LoggerFactory.getLogger(OffsetCollector.class);
+    private final Logger logger = LoggerFactory.getLogger(Constants.getLoggerName(OffsetCollector.class));
     private final long ingestPassword;
 
     private final AtomicReference<KafkaConsumer<?, ?>> kafkaConsumer;

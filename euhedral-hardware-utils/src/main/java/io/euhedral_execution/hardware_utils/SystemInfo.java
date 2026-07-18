@@ -4,6 +4,7 @@ import io.euhedral_execution.hardware_utils.common.OSName;
 import io.euhedral_execution.hardware_utils.common.SystemSnapshotProvider;
 import io.euhedral_execution.hardware_utils.common.SystemUtilization.SystemSnapshot;
 import io.euhedral_execution.hardware_utils.common.UnmodifiableBitSet;
+import io.euhedral_execution.hardware_utils.internal.Constants;
 import io.euhedral_execution.hardware_utils.linux.CgroupV2Resources;
 import io.euhedral_execution.hardware_utils.linux.LinuxSystemLayout;
 import io.euhedral_execution.hardware_utils.osx.OSXResources;
@@ -35,7 +36,7 @@ public final class SystemInfo {
 
     public static final SystemSnapshotProvider SNAPSHOTTER;
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(SystemInfo.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(Constants.getLoggerName(SystemInfo.class));
     private static final UnmodifiableBitSet CPU_SET;
     private static final UnmodifiableBitSet P_CORE_SET;
     private static final UnmodifiableBitSet E_CORE_SET;

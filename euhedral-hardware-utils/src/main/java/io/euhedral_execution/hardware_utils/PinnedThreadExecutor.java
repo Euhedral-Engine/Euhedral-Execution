@@ -1,5 +1,6 @@
 package io.euhedral_execution.hardware_utils;
 
+import io.euhedral_execution.hardware_utils.internal.Constants;
 import java.lang.ref.Cleaner;
 import java.lang.ref.WeakReference;
 import java.util.Arrays;
@@ -20,7 +21,7 @@ import org.slf4j.LoggerFactory;
 
 public final class PinnedThreadExecutor extends AbstractExecutorService implements AutoCloseable {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(PinnedThreadExecutor.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(Constants.getLoggerName(PinnedThreadExecutor.class));
 
     private static final Cleaner CLEANER = Cleaner.create();
     private static final ConcurrentHashMap<Long, WeakReference<PinnedThreadExecutor>> PINNED_EXECUTORS = new ConcurrentHashMap<>(

@@ -2,6 +2,7 @@ package io.euhedral_execution.spring.core.transport.kafka;
 
 import io.euhedral_execution.core.control_plane.ControlPlaneLattice;
 import io.euhedral_execution.hashing.HasherApi;
+import io.euhedral_execution.spring.core.internal.Constants;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongArraySet;
 import it.unimi.dsi.fastutil.objects.ObjectOpenHashSet;
@@ -48,7 +49,7 @@ public class EuhedralKafkaBinder extends
     private static final String BINDER_NAMES = "binder-names";
     private static final String TOPIC_NAMES = "topic-names";
 
-    private final Logger log = LoggerFactory.getLogger(EuhedralKafkaBinder.class);
+    private final Logger log = LoggerFactory.getLogger(Constants.getLoggerName(EuhedralKafkaBinder.class));
 
     private final ControlPlaneLattice controlPlane;
 

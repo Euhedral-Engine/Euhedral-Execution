@@ -1,5 +1,6 @@
 package io.euhedral_execution.spring.core.transport.grpc;
 
+import io.euhedral_execution.core.utils.CommonVarHandles;
 import io.euhedral_execution.data_structures.queues.SpmcQueue;
 import io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage;
 import io.grpc.stub.ClientCallStreamObserver;
@@ -13,20 +14,17 @@ import org.reactivestreams.Subscription;
 import reactor.core.CoreSubscriber;
 import reactor.core.publisher.Flux;
 
-@SuppressWarnings({"unchecked","unused"})
-public class ReactorGrpcClientHandler extends Flux<GrpcMessage> implements ClientResponseObserver<GrpcMessage, GrpcMessage>, Subscription {
-    private static final VarHandle COMPLETE;
-    private static final VarHandle DOWNSTREAM;
+@SuppressWarnings({"unchecked", "unused"})
+public class ReactorGrpcClientHandler extends Flux<GrpcMessage> implements
+        ClientResponseObserver<GrpcMessage, GrpcMessage>, Subscription {
 
-    static {
-        try {
-            COMPLETE = MethodHandles.lookup()
-                    .findVarHandle(ReactorGrpcClientHandler.class, "complete", boolean.class);
-            DOWNSTREAM = MethodHandles.lookup().findVarHandle(ReactorGrpcClientHandler.class, "downstream", CoreSubscriber.class);
-        } catch (Exception e) {
-            throw new ExceptionInInitializerError(e);
-        }
-    }
+    private static final VarHandle COMPLETE = CommonVarHandles.complete(MethodHandles.lookup(),
+            ReactorGrpcClientHandler.class);
+    private static final VarHandle DOWNSTREAM = CommonVarHandles.makeHandle(MethodHandles.lookup(),
+            ReactorGrpcClientHandler.class, "downstream", CoreSubscriber.class);
+    private static final VarHandle UNLIMITED = CommonVarHandles.makeHandle(MethodHandles.lookup(),
+            ReactorGrpcClientHandler.class, "unlimited", boolean.class);
+
     private static long addCap(long num1, long num2) {
         long sum = num1 + num2;
         return sum < 0 || sum > Integer.MAX_VALUE ? Integer.MAX_VALUE : sum;
@@ -40,7 +38,7 @@ public class ReactorGrpcClientHandler extends Flux<GrpcMessage> implements Clien
     private ClientCallStreamObserver<GrpcMessage> upstream;
     private CoreSubscriber<? super GrpcMessage> downstream;
     private boolean complete = false;
-    private volatile boolean unlimited = false;
+    private boolean unlimited = false;
 
     @Getter
     private GrpcSubscriber subscriber;
@@ -63,14 +61,14 @@ public class ReactorGrpcClientHandler extends Flux<GrpcMessage> implements Clien
         stream.disableAutoRequestWithInitial(0);
         this.upstream = stream;
 
-        if(this.createSubscriber) {
+        if (this.createSubscriber) {
             this.subscriber = new GrpcSubscriber(stream, this.sendQueueChunkSize);
         }
     }
 
     @Override
     public void subscribe(@NonNull CoreSubscriber<? super GrpcMessage> downstream) {
-        if(!DOWNSTREAM.compareAndSet(this, null, downstream)) {
+        if (!DOWNSTREAM.compareAndSet(this, null, downstream)) {
             downstream.onError(new IllegalAccessException("This instance has a subscriber."));
         } else {
             downstream.onSubscribe(this);
@@ -79,12 +77,13 @@ public class ReactorGrpcClientHandler extends Flux<GrpcMessage> implements Clien
 
     @Override
     public void onNext(GrpcMessage message) {
-        CoreSubscriber<? super GrpcMessage> downstream = (CoreSubscriber<? super GrpcMessage>) DOWNSTREAM.getAcquire(this);
-        if(downstream != null) {
+        CoreSubscriber<? super GrpcMessage> downstream = (CoreSubscriber<? super GrpcMessage>) DOWNSTREAM.getAcquire(
+                this);
+        if (downstream != null) {
             downstream.onNext(message);
 
             long demand = this.demand.decrementAndGet();
-            if(demand < 8_192 && this.unlimited) {
+            if (demand < 8_192 && (boolean) UNLIMITED.getOpaque(this)) {
                 request(Integer.MAX_VALUE);
             }
         }
@@ -95,8 +94,8 @@ public class ReactorGrpcClientHandler extends Flux<GrpcMessage> implements Clien
         if (demand <= 0 || !isOpen()) {
             return;
         }
-        if(demand == Long.MAX_VALUE) {
-            this.unlimited = true;
+        if (demand == Long.MAX_VALUE) {
+            UNLIMITED.setVolatile(this, true);
         }
 
         long pending = this.demand.getAcquire();
@@ -104,10 +103,10 @@ public class ReactorGrpcClientHandler extends Flux<GrpcMessage> implements Clien
         int request = (int) Math.min(demand, Integer.MAX_VALUE - pending);
         if (request > 0) {
             this.demand.getAndAccumulate(demand, ReactorGrpcClientHandler::addCap);
-            if(this.upstream != null) {
+            if (this.upstream != null) {
                 this.upstream.request(request);
             }
-            if(this.subscriber != null) {
+            if (this.subscriber != null) {
                 this.subscriber.request(demand);
             }
         }
@@ -119,9 +118,10 @@ public class ReactorGrpcClientHandler extends Flux<GrpcMessage> implements Clien
 
     @Override
     public void onCompleted() {
-        if(COMPLETE.compareAndSet(this, false, true)) {
-            CoreSubscriber<? super GrpcMessage> downstream = (CoreSubscriber<? super GrpcMessage>) DOWNSTREAM.getAndSetRelease(this, null);
-            if(downstream != null) {
+        if (COMPLETE.compareAndSet(this, false, true)) {
+            CoreSubscriber<? super GrpcMessage> downstream = (CoreSubscriber<? super GrpcMessage>) DOWNSTREAM.getAndSetRelease(
+                    this, null);
+            if (downstream != null) {
                 downstream.onComplete();
             }
         }
@@ -129,9 +129,10 @@ public class ReactorGrpcClientHandler extends Flux<GrpcMessage> implements Clien
 
     @Override
     public void onError(Throwable t) {
-        if(COMPLETE.compareAndSet(this, false, true)) {
-            CoreSubscriber<? super GrpcMessage> downstream = (CoreSubscriber<? super GrpcMessage>) DOWNSTREAM.getAndSetRelease(this, null);
-            if(downstream != null) {
+        if (COMPLETE.compareAndSet(this, false, true)) {
+            CoreSubscriber<? super GrpcMessage> downstream = (CoreSubscriber<? super GrpcMessage>) DOWNSTREAM.getAndSetRelease(
+                    this, null);
+            if (downstream != null) {
                 downstream.onError(t);
             }
         }
@@ -139,9 +140,10 @@ public class ReactorGrpcClientHandler extends Flux<GrpcMessage> implements Clien
 
     @Override
     public void cancel() {
-        if(COMPLETE.compareAndSet(this, false, true)) {
-            CoreSubscriber<? super GrpcMessage> downstream = (CoreSubscriber<? super GrpcMessage>) DOWNSTREAM.getAndSetRelease(this, null);
-            if(downstream != null) {
+        if (COMPLETE.compareAndSet(this, false, true)) {
+            CoreSubscriber<? super GrpcMessage> downstream = (CoreSubscriber<? super GrpcMessage>) DOWNSTREAM.getAndSetRelease(
+                    this, null);
+            if (downstream != null) {
                 downstream.onComplete();
             }
         }
@@ -149,25 +151,19 @@ public class ReactorGrpcClientHandler extends Flux<GrpcMessage> implements Clien
 
     public static class GrpcSubscriber implements CoreSubscriber<GrpcMessage> {
 
-        private static final VarHandle COMPLETE;
-
-        static {
-            try {
-                COMPLETE = MethodHandles.lookup().findVarHandle(GrpcSubscriber.class, "complete", boolean.class);
-            } catch (Exception e) {
-                throw new ExceptionInInitializerError(e);
-            }
-        }
+        private static final VarHandle COMPLETE = CommonVarHandles.complete(MethodHandles.lookup(), GrpcSubscriber.class);
+        private static final VarHandle EMPTY = CommonVarHandles.makeHandle(MethodHandles.lookup(), GrpcSubscriber.class, "empty", boolean.class);
 
         private final ClientCallStreamObserver<GrpcMessage> upstream;
         private final SpmcQueue<GrpcMessage> sendQueue;
 
         private Subscription subscription;
 
-        private volatile boolean empty = false;
+        private boolean empty = false;
         private boolean complete = false;
 
-        public GrpcSubscriber(ClientCallStreamObserver<GrpcMessage> upstream, int sendQueueChunkSize) {
+        public GrpcSubscriber(ClientCallStreamObserver<GrpcMessage> upstream,
+                int sendQueueChunkSize) {
             this.upstream = upstream;
             this.sendQueue = new SpmcQueue<>(sendQueueChunkSize);
             this.upstream.setOnReadyHandler(this::onReady);
@@ -178,12 +174,12 @@ public class ReactorGrpcClientHandler extends Flux<GrpcMessage> implements Clien
         }
 
         void onReady() {
-            while(this.upstream.isReady()) {
-                if(this.sendQueue.drain(this.upstream::onNext, 32) == 0) {
+            while (this.upstream.isReady()) {
+                if (this.sendQueue.drain(this.upstream::onNext, 32) == 0) {
                     break;
                 }
             }
-            if(this.empty && COMPLETE.compareAndSet(this, false, true)) {
+            if ((boolean) EMPTY.getOpaque(this) && COMPLETE.compareAndSet(this, false, true)) {
                 try {
                     this.upstream.onCompleted();
                 } catch (Exception e) {
@@ -194,7 +190,7 @@ public class ReactorGrpcClientHandler extends Flux<GrpcMessage> implements Clien
 
         @Override
         public void onSubscribe(@NonNull Subscription sub) {
-            if(this.subscription != null) {
+            if (this.subscription != null) {
                 sub.cancel();
             } else {
                 this.subscription = sub;
@@ -214,7 +210,7 @@ public class ReactorGrpcClientHandler extends Flux<GrpcMessage> implements Clien
 
         @Override
         public void onComplete() {
-            this.empty = true;
+            EMPTY.setVolatile(this, true);
         }
     }
 }
