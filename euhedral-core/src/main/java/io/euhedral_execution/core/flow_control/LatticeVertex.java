@@ -184,7 +184,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
     @Override
     public void addUpstream(LatticeInterceptor interceptor) {
         if ((boolean) CLOSED.getOpaque(this)) {
-            throw new RuntimeException("Cannot add upstream after closed.");
+            throw new RuntimeException("Cannot add upstream after closing.");
         }
 
         if (interceptor instanceof LatticeEdge edge) {
@@ -197,12 +197,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
                 }
             }
         } else if (interceptor instanceof UpstreamHandle upstream) {
-            LatticeEdge parent = (LatticeEdge) PARENT.getOpaque(this);
-            if (parent != null) {
-                parent.addUpstream(upstream);
-                return;
-            }
-
+            this.logger.trace("Adding upstream handle...");
             SpinWait.await(super.drain::getOpaque);
             SpinWait.await(() -> !HANDLE_LOCK.compareAndSet(0, 1));
 
@@ -219,7 +214,8 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
                 }
             }
 
-            super.upstreamCount.incrementAndGet();
+            UPSTREAM_COUNT.incrementAndGet();
+            this.logger.trace("Added upstream handle.");
         }
     }
 
