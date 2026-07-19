@@ -159,16 +159,12 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
         return added;
     }
 
-    public final long upstreamPull(UpstreamQueue queue, long limit) {
+    public final long upstreamPull(UpstreamQueue queue, Consumer<AbstractFrame> consumer, long limit) {
         if(limit <= 0) {
             return 0;
         }
 
-        long added = queue.pull(this.cacheTerminal, AbstractFrame::isOrdered, limit);
-        if(added > 0) {
-            TOTAL_COUNT.getAndAdd(ControlPlaneCache.this, added);
-        }
-        return added;
+        return queue.pull(consumer, AbstractFrame::isOrdered, limit);
     }
 
     public final long drain(Consumer<AbstractFrame> consumer, long limit) {

@@ -212,23 +212,39 @@ public final class ControlPlaneFragment extends WorkRequester {
         long total = 0;
         while (keepRunning()) {
             while (keepRunning()) {
-                requestAndPull(context, this.state.batchSize);
+                long upstreamCount = context.upstream.getCachedUpCount();
+                int workers = super.getThreadCount();
+
+                double availability = (double) upstreamCount / Math.max(1, workers);
+                if(availability < 0.5) {
+                    requestAndPull(context, this.state.batchSize);
+                }
 
                 long cacheCount = super.getLocalCacheCount();
-                if (cacheCount == 0) {
+                if (cacheCount == 0 && availability <= 0.25) {
                     this.state.batchEfficiency.recordUnits(0);
                     break;
                 }
 
+                double efficiency;
+                long start, end;
                 long limit = this.state.batchSize - this.state.completed;
-                limit = Math.min(limit, cacheCount);
-                this.metrics.addInProgress(limit);
+                if(cacheCount == 0 && availability > 0.25) {
+                    start = System.nanoTime();
+                    long processed = super.upstreamPull(context.upstream, this::accept, limit);
+                    end = System.nanoTime();
 
-                double efficiency = (double) limit / this.state.batchSize;
+                    efficiency = (double) processed / this.state.batchSize;
+                    this.state.completed += processed;
+                } else {
+                    limit = Math.min(limit, cacheCount);
+                    this.metrics.addInProgress(limit);
+                    efficiency = (double) limit / this.state.batchSize;
 
-                long start = System.nanoTime();
-                this.state.completed += super.drain(limit);
-                long end = System.nanoTime();
+                    start = System.nanoTime();
+                    this.state.completed += super.drain(limit);
+                    end = System.nanoTime();
+                }
 
                 this.metrics.addInProgress(-limit);
                 this.state.throughputRecorder.recordUnits(end, (end - start) / limit);

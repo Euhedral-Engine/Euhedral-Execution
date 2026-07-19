@@ -396,40 +396,34 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
         @Override
         public long pull(Consumer<AbstractFrame> consumer,
                 Function<AbstractFrame, Boolean> stopCondition, long demand) {
-            if (demand <= 0 || LatticeVertex.this.isClosed() || LatticeVertex.this.drain.getOpaque()
+            if (demand <= 0 || this.wip.getOpaque() == 0 || LatticeVertex.this.isClosed()
+                    || LatticeVertex.this.drain.getOpaque()
                     || isComplete()) {
                 return 0;
             }
 
-            if (this.wip.getAndIncrement() == 0) {
-                try {
-                    return this.upstream.pull(consumer, stopCondition, demand);
-                } catch (Throwable t) {
-                    logger.error("Upstream threw an exception during a pull", t);
-                    this.complete();
-                } finally {
-                    this.wip.lazySet(0);
-                }
+            try {
+                return this.upstream.pull(consumer, stopCondition, demand);
+            } catch (Throwable t) {
+                logger.error("Upstream threw an exception during a pull", t);
+                this.complete();
             }
             return 0;
         }
 
         @Override
         public void request(long num) {
-            if (num <= 0 || LatticeVertex.this.isClosed() || LatticeVertex.this.drain.getOpaque()
+            if (num <= 0 || this.wip.getOpaque() == 0 || LatticeVertex.this.isClosed()
+                    || LatticeVertex.this.drain.getOpaque()
                     || isComplete()) {
                 return;
             }
 
-            if (this.wip.getAndIncrement() == 0) {
-                try {
-                    this.upstream.request(num);
-                } catch (Throwable t) {
-                    logger.error("Upstream threw an exception during request", t);
-                    this.complete();
-                } finally {
-                    this.wip.lazySet(0);
-                }
+            try {
+                this.upstream.request(num);
+            } catch (Throwable t) {
+                logger.error("Upstream threw an exception during request", t);
+                this.complete();
             }
         }
 
@@ -461,6 +455,16 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
         @Override
         public boolean isComplete() {
             return (boolean) COMPLETE.getOpaque(this);
+        }
+
+        @Override
+        public boolean acquireLock() {
+            return this.wip.getAndIncrement() == 0;
+        }
+
+        @Override
+        public void releaseLock() {
+            this.wip.setRelease(0);
         }
     }
 }
