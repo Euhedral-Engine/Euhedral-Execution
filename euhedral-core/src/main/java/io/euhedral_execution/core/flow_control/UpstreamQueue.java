@@ -102,9 +102,10 @@ public class UpstreamQueue {
         long totalPull = 0;
         long bucketSize = calculatePullBuckets(demand);
 
+        long limit = demand;
         int cycles = 0;
         // Cycle through the queue and pull round-robin style.
-        while (cycles < this.cachedUpCount && demand > 0) {
+        while (cycles < this.cachedUpCount && limit > 0) {
             UpstreamHandle handle = this.upstreams.poll();
 
             if (handle == null) {
@@ -116,9 +117,19 @@ public class UpstreamQueue {
                 continue;
             }
 
-            long request = Math.min(demand, bucketSize);
-            demand -= request;
-            totalPull += drain(handle, consumer, stopCondition, request);
+            if(!handle.acquireLock()) {
+                misses++;
+                cycles++;
+                continue;
+            }
+
+            try {
+                long request = Math.min(limit, bucketSize);
+                limit -= request;
+                totalPull += drain(handle, consumer, stopCondition, request);
+            } finally {
+                handle.releaseLock();
+            }
             cycles = 0;
 
             this.upstreams.offer(handle);
@@ -153,6 +164,14 @@ public class UpstreamQueue {
 
         public void addDownstream(LatticeReceiver terminal) {
             terminal.onError(new IllegalStateException("Not supported"));
+        }
+
+        public boolean acquireLock() {
+            return true;
+        }
+
+        public void releaseLock() {
+
         }
     }
 }

@@ -18,7 +18,8 @@ public abstract class WorkRequester extends ControlPlaneCache {
             this.safetyFactor = 0;
             this.pullMultiplier = 0;
         } else {
-            int cores = SystemInfo.getSocketInfo(SystemInfo.getCoreInfo(cacheConfig.getCore()).socket()).getCoreSet()
+            int cores = SystemInfo.getSocketInfo(
+                            SystemInfo.getCoreInfo(cacheConfig.getCore()).socket()).getCoreSet()
                     .cardinality();
             this.pullMultiplier = Math.max((cores * 3L) >> 3, 2); // 37.5% of the core count
             this.safetyFactor = Math.max(this.pullMultiplier >> 1, 2);
@@ -67,19 +68,16 @@ public abstract class WorkRequester extends ControlPlaneCache {
         context.originalPull = pull;
 
         long remoteCache = super.getUpstreamCacheCount();
-        if(remoteCache > 0) {
+        if (remoteCache > 0) {
             context.satisfiedPull = super.pull(pull);
         }
 
         long upstreamCount = context.upstream.getCachedUpCount();
         int workers = super.getThreadCount();
 
-        double availability = (double) upstreamCount / Math.max(1, workers);
-        if(availability > 0.25) {
-            super.upstreamPull(context.upstream, pull - context.satisfiedPull);
-        }
-
-        if(availability < 0.50 || context.satisfiedPull == 0) {
+        boolean canDemand = workers <= 1;
+        canDemand |= upstreamCount <= (workers >>> 1);
+        if (canDemand) {
             long demand = batchSize * this.pullMultiplier;
 
             if ((remoteCache + localCache) < demand) {
