@@ -77,7 +77,8 @@ public final class ControlPlaneFragment extends WorkRequester {
             this.socket = -1;
             this.core = -1;
             this.cpu = -1;
-            this.logger = LoggerFactory.getLogger(Constants.getLoggerName(ControlPlaneFragment.class));
+            this.logger = LoggerFactory.getLogger(
+                    Constants.getLoggerName(ControlPlaneFragment.class));
             this.state = null;
             this.mainExecutor = null;
             this.isPCore = false;
@@ -357,7 +358,7 @@ public final class ControlPlaneFragment extends WorkRequester {
             if (upCount > 0) {
                 return upCount;
             }
-            if(super.getLocalCacheCount() > 0 || super.getUpstreamCacheCount() > 0) {
+            if (super.getLocalCacheCount() > 0 || super.getUpstreamCacheCount() > 0) {
                 break;
             }
             LockSupport.parkNanos(20_000L);

@@ -8,6 +8,7 @@ import io.euhedral_execution.core.config.CloneConfig;
 import io.euhedral_execution.core.flow_control.LatticeEdge;
 import io.euhedral_execution.core.flow_control.LatticeVertex;
 import io.euhedral_execution.core.flow_control.RoutingPolicy;
+import io.euhedral_execution.core.flow_control.UpstreamQueue;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.frames.DummyFrame;
 import io.euhedral_execution.core.generics.CloneableObject;
@@ -15,7 +16,6 @@ import io.euhedral_execution.core.generics.LatticeReceiver;
 import io.euhedral_execution.core.generics.LatticeSource;
 import io.euhedral_execution.core.internal.Constants;
 import io.euhedral_execution.core.metrics.CacheMetrics;
-import io.euhedral_execution.core.utils.FlowThread;
 import io.euhedral_execution.data_structures.queues.PartitionedMpscQueue;
 import io.euhedral_execution.data_structures.queues.common.QueueUtils;
 import io.euhedral_execution.hardware_utils.SystemInfo;
@@ -153,12 +153,20 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
 
         this.cacheTerminal.reset();
         long added = super.pull(this.cacheTerminal, NO_STOP, limit);
-        if(added < limit) {
-            FlowThread.FlowContext context = FlowThread.getContext();
-            added += context == null ? 0 : context.upstream.pull(this.cacheTerminal, AbstractFrame::isOrdered, limit - added);
-        }
         if (added > 0) {
             TOTAL_COUNT.getAndAdd(ControlPlaneCache.this, this.cacheTerminal.framesAdded);
+        }
+        return added;
+    }
+
+    public final long upstreamPull(UpstreamQueue queue, long limit) {
+        if(limit <= 0) {
+            return 0;
+        }
+
+        long added = queue.pull(this.cacheTerminal, AbstractFrame::isOrdered, limit);
+        if(added > 0) {
+            TOTAL_COUNT.getAndAdd(ControlPlaneCache.this, added);
         }
         return added;
     }
