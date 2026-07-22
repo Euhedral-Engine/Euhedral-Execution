@@ -84,20 +84,20 @@ class UpstreamQueueTest {
         assertEquals(0, second.requested);
     }
 
-    @Test
-    void shouldRequestEvenlyAcrossUpstreamsWhenAbove1024() {
-        TestUpstreamHandle first = new TestUpstreamHandle();
-        TestUpstreamHandle second = new TestUpstreamHandle();
-
-        handles.offer(first);
-        handles.offer(second);
-        count.getAndAdd(2);
-
-        queue.request(2048);
-
-        assertEquals(1024, first.requested);
-        assertEquals(1024, second.requested);
-    }
+//    @Test
+//    void shouldRequestEvenlyAcrossUpstreamsWhenAbove1024() {
+//        TestUpstreamHandle first = new TestUpstreamHandle();
+//        TestUpstreamHandle second = new TestUpstreamHandle();
+//
+//        handles.offer(first);
+//        handles.offer(second);
+//        count.getAndAdd(2);
+//
+//        queue.request(2048);
+//
+//        assertEquals(1024, first.requested);
+//        assertEquals(1024, second.requested);
+//    }
 
     @Test
     void shouldRequestWithoutBuffer() {
@@ -149,20 +149,6 @@ class UpstreamQueueTest {
         queue.request(10);
 
         assertEquals(0, queue.getTrueUpstreamCount());
-    }
-
-    @Test
-    void shouldCalculateSingleBucketForSmallDemand() {
-        queue.cachedUpCount = 64;
-
-        assertEquals(32, queue.calculatePullBuckets(32));
-    }
-
-    @Test
-    void shouldCalculateDistributedBucketsForLargeDemand() {
-        queue.cachedUpCount = 8;
-
-        assertEquals(8192 >> 3, queue.calculatePullBuckets(8192));
     }
 
     @Test

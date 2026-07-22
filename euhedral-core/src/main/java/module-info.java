@@ -1,7 +1,7 @@
 module euhedral.core {
     requires static lombok;
 
-    requires euhedral.data.structures;
+    requires euhedral.data_structures;
     requires euhedral.hardware_utils;
     requires euhedral.hashing;
 

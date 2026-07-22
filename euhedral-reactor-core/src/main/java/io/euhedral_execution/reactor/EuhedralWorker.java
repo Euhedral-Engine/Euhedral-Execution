@@ -79,6 +79,11 @@ public final class EuhedralWorker extends AbstractIngestSink implements Worker {
         this.delegate.complete();
     }
 
+    @Override
+    public boolean isComplete() {
+        return this.delegate.isComplete();
+    }
+
     private static class Delegate extends AbstractIngestSink.Delegate {
 
         private final PartitionedMpscQueue<TaskFrame> queue;

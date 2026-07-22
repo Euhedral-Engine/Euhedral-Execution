@@ -9,7 +9,6 @@ import io.euhedral_execution.data_structures.atomics.PaddedAtomicLong;
 import io.euhedral_execution.data_structures.queues.MpscQueue;
 import io.euhedral_execution.hardware_utils.SystemInfo;
 import io.euhedral_execution.hardware_utils.ThreadTools;
-
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -58,7 +57,6 @@ public class UpstreamQueue {
     public final int core;
     private final MpscQueue<UpstreamHandle> upstreams;
     private final PaddedAtomicLong upstreamCount;
-
 
     long cachedUpCount = 0L;
 
@@ -118,7 +116,6 @@ public class UpstreamQueue {
             }
 
             if(!handle.acquireLock()) {
-                misses++;
                 cycles++;
                 continue;
             }
@@ -143,11 +140,11 @@ public class UpstreamQueue {
     /// pullBucket[1] = Size of each bucket
     /// ```
     protected long calculatePullBuckets(long demand) {
-        if (demand <= 32 || this.cachedUpCount < 2) {
+        if (demand <= 2048 || this.cachedUpCount < 2) {
             return demand;
         }
 
-        int buckets = (int) MathFunctions.clampLong(demand / 32, 1L, this.cachedUpCount);
+        int buckets = (int) MathFunctions.clampLong(demand / 2048, 1L, this.cachedUpCount);
         buckets = Math.max(buckets, 1);
 
         return (demand + buckets - 1) / buckets;

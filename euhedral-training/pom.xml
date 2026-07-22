@@ -3,22 +3,18 @@
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
-
   <parent>
     <groupId>io.euhedral-execution</groupId>
     <artifactId>euhedral-execution</artifactId>
     <version>0.0.7-SNAPSHOT</version>
   </parent>
 
-  <name>Euhedral Benchmarks</name>
-  <artifactId>benchmarks</artifactId>
+  <name>Euhedral Training</name>
+  <artifactId>euhedral-training</artifactId>
 
   <properties>
-    <maven.compiler.source>25</maven.compiler.source>
-    <maven.compiler.target>25</maven.compiler.target>
-
+    <maven.compiler.release>21</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <skip.central.publish>true</skip.central.publish>
   </properties>
 
   <dependencies>
@@ -34,64 +30,36 @@
       <version>${project.version}</version>
       <scope>compile</scope>
     </dependency>
-    <dependency>
-      <groupId>io.euhedral-execution</groupId>
-      <artifactId>euhedral-hardware-utils</artifactId>
-      <version>${project.version}</version>
-      <scope>compile</scope>
-    </dependency>
-    <dependency>
-      <groupId>io.euhedral-execution</groupId>
-      <artifactId>euhedral-hashing</artifactId>
-      <version>${project.version}</version>
-      <scope>compile</scope>
-    </dependency>
-    <dependency>
-      <groupId>io.euhedral-execution</groupId>
-      <artifactId>euhedral-reactor-core</artifactId>
-      <version>${project.version}</version>
-      <scope>compile</scope>
-    </dependency>
 
     <dependency>
-      <groupId>io.projectreactor</groupId>
-      <artifactId>reactor-core</artifactId>
-      <scope>compile</scope>
+      <groupId>org.apache.commons</groupId>
+      <artifactId>commons-math4-legacy</artifactId>
+      <version>4.0-beta1</version>
     </dependency>
-
-    <dependency>
-      <groupId>org.jctools</groupId>
-      <artifactId>jctools-core-jdk11</artifactId>
-      <scope>compile</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.openjdk.jmh</groupId>
-      <artifactId>jmh-core</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.openjdk.jmh</groupId>
-      <artifactId>jmh-generator-annprocess</artifactId>
-      <scope>provided</scope>
-    </dependency>
-
-    <dependency>
-      <groupId>org.hdrhistogram</groupId>
-      <artifactId>HdrHistogram</artifactId>
-    </dependency>
-
     <dependency>
       <groupId>org.projectlombok</groupId>
       <artifactId>lombok</artifactId>
       <scope>provided</scope>
     </dependency>
+
   </dependencies>
 
   <build>
-    <finalName>original-${project.artifactId}</finalName>
     <plugins>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-jar-plugin</artifactId>
+        <configuration>
+          <archive>
+            <manifest>
+              <addClasspath>true</addClasspath>
+              <mainClass>io.euhedral_execution.training.Runner</mainClass>
+            </manifest>
+            <manifestEntries>
+              <Add-Opens>java.base/java.util</Add-Opens>
+            </manifestEntries>
+          </archive>
+        </configuration>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
@@ -99,7 +67,7 @@
         <configuration>
           <shadedArtifactAttached>false</shadedArtifactAttached>
           <createDependencyReducedPom>false</createDependencyReducedPom>
-          <outputFile>${project.build.directory}/euhedral-benchmark.jar</outputFile>
+          <outputFile>${project.build.directory}/euhedral-trainer.jar</outputFile>
 
           <filters>
             <filter>
@@ -124,7 +92,7 @@
         </configuration>
         <executions>
           <execution>
-            <id>package-benchmarks</id>
+            <id>package-trainer</id>
             <phase>package</phase>
             <goals>
               <goal>shade</goal>
@@ -141,7 +109,7 @@
                 </transformer>
 
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                  <mainClass>io.euhedral_execution.benchmarks.BenchRunner</mainClass>
+                  <mainClass>io.euhedral_execution.training.Runner</mainClass>
                   <manifestEntries>
                     <entry>
                       <key>Add-Opens</key>

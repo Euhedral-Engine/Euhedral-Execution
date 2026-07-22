@@ -97,6 +97,11 @@ public final class ConsumerIngestSink<T> extends AbstractIngestSink {
         }
     }
 
+    @Override
+    public boolean isComplete() {
+        return this.sink.isComplete();
+    }
+
     public void completeGracefully() {
         if (COMPLETE.compareAndSet(this, false, true)) {
             this.sink.completeGracefully();

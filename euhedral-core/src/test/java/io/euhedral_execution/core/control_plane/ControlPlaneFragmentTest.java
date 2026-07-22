@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import io.euhedral_execution.core.config.CacheConfig;
 import io.euhedral_execution.core.config.CloneConfig;
+import io.euhedral_execution.core.config.FragmentActionPicker;
 import io.euhedral_execution.core.config.FragmentConfig;
 import org.junit.jupiter.api.Test;
 
@@ -34,9 +35,10 @@ class ControlPlaneFragmentTest {
         return new FragmentConfig(
                 cloneConfig(),
                 cConfig(),
+                FragmentActionPicker.ofDefaults(),
                 4096,
                 null,
-                null
+                null, null
         );
     }
 

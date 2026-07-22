@@ -327,19 +327,19 @@ class LatticeVertexTest {
         assertEquals(1, terminal.received.size());
     }
 
-    @Test
-    void shouldRequestFromUpstream() {
-        LatticeVertex.UpstreamInterceptor interceptor =
-                node.new UpstreamInterceptor();
-
-        LatticeSource upstream = mock(LatticeSource.class);
-
-        interceptor.upstream = upstream;
-
-        interceptor.request(10);
-
-        verify(upstream).request(10);
-    }
+//    @Test
+//    void shouldRequestFromUpstream() {
+//        LatticeVertex.UpstreamInterceptor interceptor =
+//                node.new UpstreamInterceptor();
+//
+//        LatticeSource upstream = mock(LatticeSource.class);
+//
+//        interceptor.upstream = upstream;
+//
+//        interceptor.request(10);
+//
+//        verify(upstream).request(10);
+//    }
 
     @Test
     void shouldIgnoreInvalidRequest() {

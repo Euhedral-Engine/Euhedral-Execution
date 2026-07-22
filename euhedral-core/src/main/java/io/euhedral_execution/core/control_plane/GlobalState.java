@@ -41,6 +41,10 @@ public class GlobalState {
         return GLOBAL_THROUGHPUT[socket].min();
     }
 
+    public static double sumThroughput(int socket) {
+        return GLOBAL_THROUGHPUT[socket].sum();
+    }
+
     public static double meanThroughput(int socket) {
         return GLOBAL_THROUGHPUT[socket].mean();
     }

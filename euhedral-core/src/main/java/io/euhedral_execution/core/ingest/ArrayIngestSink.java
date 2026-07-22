@@ -37,6 +37,11 @@ public final class ArrayIngestSink extends AbstractIngestSink {
         delegate.complete();
     }
 
+    @Override
+    public boolean isComplete() {
+        return this.delegate.isComplete();
+    }
+
     protected static final class Delegate extends AbstractIngestSink.Delegate {
 
         private final AbstractFrame[] array;
