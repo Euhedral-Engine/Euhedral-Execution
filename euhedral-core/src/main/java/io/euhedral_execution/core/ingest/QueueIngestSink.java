@@ -75,6 +75,11 @@ public final class QueueIngestSink extends AbstractIngestSink {
         this.delegate.complete();
     }
 
+    @Override
+    public boolean isComplete() {
+        return this.delegate.isComplete();
+    }
+
     /// Disconnects from the [ControlPlaneLattice] when the queue is finished being drained.
     public void completeGracefully() {
         this.delegate.completeGracefully();

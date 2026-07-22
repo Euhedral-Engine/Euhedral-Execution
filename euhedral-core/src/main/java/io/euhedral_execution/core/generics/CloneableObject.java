@@ -33,6 +33,10 @@ public interface CloneableObject {
         return true;
     }
 
+    default boolean ready() {
+        return true;
+    }
+
     default void update(CoreSnapshot coreSnapshot) {
     }
 

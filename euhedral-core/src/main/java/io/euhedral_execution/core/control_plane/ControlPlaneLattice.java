@@ -181,14 +181,19 @@ public final class ControlPlaneLattice implements LatticeTerminal {
                 LockSupport.parkNanos(5_000L);
             }
             this.resourceMonitor.start();
-            this.ready.setRelease(true);
+            this.ready.set(true);
             this.logger.info("Startup complete!");
         }
     }
 
     private boolean ready() {
         int count = this.ingestController.getOpaque().getThreadCount();
-        return count >= getActiveWorkers();
+        for(ControlPlaneShard shard : this.shards) {
+            if(shard != null && !shard.isStarted()) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /// Takes an [AbstractIngestSink] and adds it as a global input source.

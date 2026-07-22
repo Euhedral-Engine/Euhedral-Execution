@@ -1,5 +1,6 @@
 package io.euhedral_execution.data_structures.queues;
 
+import io.euhedral_execution.data_structures.queues.common.ConcurrentQueue;
 import io.euhedral_execution.data_structures.queues.common.QueueUtils;
 import java.util.Collection;
 import java.util.function.Consumer;
@@ -7,7 +8,7 @@ import java.util.function.Function;
 import lombok.Getter;
 
 @SuppressWarnings({"unchecked", "unused"})
-public class MpscQueue<T> extends BaseConcurrentQueue<T> {
+public class MpscQueue<T> extends BaseConcurrentQueue<T> implements ConcurrentQueue<T> {
 
     private final ChunkAllocator allocator;
 

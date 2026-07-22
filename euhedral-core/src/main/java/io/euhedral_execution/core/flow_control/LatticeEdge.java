@@ -14,7 +14,6 @@ import io.euhedral_execution.hardware_utils.SystemInfo.CoreInfo;
 import io.euhedral_execution.hardware_utils.ThreadTools;
 import io.euhedral_execution.hashing.HasherApi;
 import java.lang.invoke.VarHandle;
-import java.util.WeakHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -49,8 +48,6 @@ public class LatticeEdge extends UpstreamHandle {
     protected static final AtomicLongArray ACTIVE_PARTITIONS;
     protected static final AtomicLong THREAD_COUNT = new AtomicLong(0);
 
-    protected static final WeakHashMap<UpstreamHandle, Boolean> HANDLES = new WeakHashMap<>(128);
-    protected static final PaddedAtomicLong HANDLE_LOCK = new PaddedAtomicLong();
     protected static final PaddedAtomicLong UPSTREAM_COUNT = new PaddedAtomicLong(0);
 
     private static final VarHandle CLOSED = CommonVarHandles.closed(LatticeEdge.class);
@@ -99,13 +96,6 @@ public class LatticeEdge extends UpstreamHandle {
             UpstreamQueue queue = getThreadUpstreamQueue();
             int core = queue.core;
             ACTIVE_PARTITIONS.setRelease(core, 1);
-
-            SpinWait.await(() -> !HANDLE_LOCK.compareAndSet(0, 1));
-            try {
-                UPSTREAMS[core].fill(HANDLES.keySet());
-            } finally {
-                HANDLE_LOCK.set(0);
-            }
             LOGGER.trace("Registered thread on core {}", core);
         }
     }
@@ -141,21 +131,6 @@ public class LatticeEdge extends UpstreamHandle {
             ACTIVE_PARTITIONS.setRelease(core, 0);
             UPSTREAMS[core].clear();
             LOGGER.trace("Removed entry for thread on core {}", core);
-        }
-    }
-
-    public void syncUpstreamQueue() {
-        UpstreamQueue queue = UpstreamQueue.UP_QUEUE.get();
-        if (queue == null) {
-            return;
-        }
-
-        SpinWait.await(() -> !HANDLE_LOCK.compareAndSet(0, 1));
-        try {
-            UPSTREAMS[queue.core].clear();
-            UPSTREAMS[queue.core].fill(HANDLES.keySet());
-        } finally {
-            HANDLE_LOCK.set(0);
         }
     }
 
@@ -272,13 +247,6 @@ public class LatticeEdge extends UpstreamHandle {
         } else if (up instanceof UpstreamHandle upstream) {
             LOGGER.trace("Adding upstream handle...");
             SpinWait.await(this.drain::getOpaque);
-
-            SpinWait.await(() -> !HANDLE_LOCK.compareAndSet(0, 1));
-            try {
-                HANDLES.put(upstream, Boolean.TRUE);
-            } finally {
-                HANDLE_LOCK.set(0);
-            }
 
             for (int i = 0; i < UPSTREAMS.length; i++) {
                 MpscQueue<UpstreamHandle> queue = UPSTREAMS[i];

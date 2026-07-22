@@ -31,6 +31,11 @@ public class RepeatingSink extends AbstractIngestSink {
         delegate.complete();
     }
 
+    @Override
+    public boolean isComplete() {
+        return this.delegate.isComplete();
+    }
+
     protected static final class Delegate extends AbstractIngestSink.Delegate {
 
         final AtomicBoolean complete = new AtomicBoolean();

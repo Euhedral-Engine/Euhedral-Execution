@@ -50,6 +50,7 @@
     <module>euhedral-hashing</module>
     <module>euhedral-reactor-core</module>
     <module>euhedral-spring-core</module>
+    <module>euhedral-training</module>
   </modules>
 
   <repositories>

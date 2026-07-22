@@ -20,6 +20,8 @@ public abstract class AbstractIngestSink {
     /// [ControlPlaneLattice][io.euhedral_execution.core.control_plane.ControlPlaneLattice].
     public abstract void complete();
 
+    public abstract boolean isComplete();
+
     protected abstract static class Delegate implements LatticeSource {
 
         protected static final VarHandle COMPLETE = CommonVarHandles.complete(Delegate.class);
@@ -39,7 +41,6 @@ public abstract class AbstractIngestSink {
             if (!DOWNSTREAM.compareAndSet(this, null, terminal)) {
                 terminal.onError(new IllegalStateException("Already has a downstream"));
             }
-            terminal.addUpstream(this);
         }
 
         protected LatticeReceiver getDownstream() {

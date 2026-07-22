@@ -4,7 +4,7 @@ module euhedral.spring.core {
     requires euhedral.core;
     requires euhedral.hashing;
 
-    requires euhedral.data.structures;
+    requires euhedral.data_structures;
     requires euhedral.reactor.core;
 
     requires com.google.common;

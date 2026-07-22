@@ -405,7 +405,16 @@ public class ControlPlaneShard {
     }
 
     public boolean isStarted() {
-        return this.started.get();
+        if(!this.started.getAcquire()) {
+            return false;
+        }
+        CloneableObject[] clones = this.clones.getAcquire();
+        for(var clone : clones) {
+            if(clone != null && !clone.ready()) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /// Whether the shard is rebalancing. Rebalancing shards do not accept incoming work.
