@@ -201,7 +201,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
             }
         } else if (interceptor instanceof UpstreamHandle upstream) {
             this.logger.trace("Adding upstream handle...");
-            SpinWait.await(super.drain::getOpaque);
+            SpinWait.awaitWhile(super.drain::getOpaque);
 
             for (int i = 0; i < UPSTREAMS.length; i++) {
                 MpscQueue<UpstreamHandle> queue = UPSTREAMS[i];
