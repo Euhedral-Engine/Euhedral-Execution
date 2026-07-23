@@ -1,4 +1,4 @@
-package io.euhedral_execution.training;
+package io.euhedral_execution.training.networks;
 
 import io.euhedral_execution.core.utils.MathFunctions;
 import java.io.BufferedReader;
@@ -10,43 +10,43 @@ import java.util.Random;
 import java.util.StringJoiner;
 import lombok.Getter;
 
-public class ActionLearner {
+public abstract class AbstractNeuralNetwork {
 
-    private final int[] layers;
-    private final double learningRate;
-    private final double alpha;
-    private final double momentum;
+    protected static String arrayToString(double[] arr) {
+        StringJoiner sj = new StringJoiner(" ");
 
+        for (double d : arr) {
+            sj.add(new BigDecimal(d).toPlainString());
+        }
+        return sj.toString();
+    }
+    protected final int[] layers;
+    protected final double learningRate;
+    protected final double alpha;
+    protected final double momentum;
     // Weights & Biases
-    private final double[][][] weights;
-    private final double[][] bias;
-
+    protected final double[][][] weights;
+    protected final double[][] bias;
     // Velocity arrays for momentum
-    private final double[][][] vWeights;
-    private final double[][] vBias;
-
+    protected final double[][][] vWeights;
+    protected final double[][] vBias;
     // Internal buffers
-    private final double[][] layerActivations;
-    private final double[][] deltas;
-
+    protected final double[][] layerActivations;
+    protected final double[][] deltas;
     @Getter
-    private double MSE = Double.NaN;
-
+    protected double MSE = Double.NaN;
     @Getter
-    private double MAE = 0;
-    private double count = 0;
+    protected double MAE = 0;
+    protected double count = 0;
 
-    public ActionLearner(String importPath) throws Exception {
+    public AbstractNeuralNetwork(String importPath) throws Exception {
         try (BufferedReader reader = Files.newBufferedReader(Paths.get(importPath))) {
 
             String[] layerTokens = reader.readLine().trim().split("\\s+");
-            int[] hiddenLayers = new int[layerTokens.length];
+            this.layers = new int[layerTokens.length];
             for (int i = 0; i < layerTokens.length; i++) {
-                hiddenLayers[i] = Integer.parseInt(layerTokens[i]);
+                this.layers[i] = Integer.parseInt(layerTokens[i]);
             }
-
-            this.layers = Arrays.copyOf(hiddenLayers, hiddenLayers.length + 1);
-            this.layers[this.layers.length - 1] = 1;
 
             int layerCount = this.layers.length;
 
@@ -97,11 +97,8 @@ public class ActionLearner {
         }
     }
 
-    public ActionLearner(int[] layers, double learningRate, double alpha, double momentum) {
-
-        this.layers = Arrays.copyOf(layers, layers.length + 1);
-        this.layers[this.layers.length - 1] = 1;
-
+    public AbstractNeuralNetwork(int[] layers, double learningRate, double alpha, double momentum) {
+        this.layers = Arrays.copyOf(layers, layers.length);
         int layerCount = this.layers.length;
 
         weights = new double[layerCount - 1][][];
@@ -114,7 +111,6 @@ public class ActionLearner {
         deltas = new double[layerCount - 1][];
 
         for (int l = 0; l < layerCount - 1; l++) {
-
             int in = this.layers[l];
             int out = this.layers[l + 1];
 
@@ -150,95 +146,109 @@ public class ActionLearner {
         }
     }
 
-    public double predict(double[] input) {
+    public double[] predict(double[] input) {
         double[] current = input;
 
-        for (int l = 0; l < weights.length; l++) {
-            double[] next = layerActivations[l];
+        for (int l = 0; l < this.weights.length; l++) {
+            double[] next = this.layerActivations[l];
 
             for (int o = 0; o < next.length; o++) {
-                double sum = bias[l][o];
+                double sum = this.bias[l][o];
 
                 for (int i = 0; i < current.length; i++) {
                     sum += current[i] * weights[l][o][i];
                 }
 
-                if (l == weights.length - 1) {
+                if (l == this.weights.length - 1) {
                     next[o] = sum;
                 } else {
-                    next[o] = relu(sum);
+                    next[o] = activate(sum);
                 }
             }
 
             current = next;
         }
 
-        return current[0];
+        return current;
     }
 
-    private double relu(double x) {
-        return x > 0.0 ? x : this.alpha * x;
+    protected abstract double activate(double x);
+
+    protected abstract double derivative(double activatedValue);
+
+    public void train(double[] rawInputs, double[] target) {
+        double[] predicted = predict(rawInputs);
+
+        calculateError(predicted, target);
+
+        backwardPass();
+
+        adjustWeightsAndBiases(rawInputs);
     }
 
-    private double reluDerivative(double activatedValue) {
-        return activatedValue > 0.0 ? 1.0 : this.alpha;
-    }
+    protected void calculateError(double[] predicted, double[] target) {
+        int outputDim = predicted.length;
+        int lastIndex = this.deltas.length - 1;
 
-    public void train(double[] rawInputs, double reward) {
-        double predicted = predict(rawInputs);
+        double sumSquared = 0.0;
+        double sumAbs = 0.0;
 
-        double error = predicted - reward;
+        for (int i = 0; i < outputDim; i++) {
+            double e = predicted[i] - target[i];
+            this.deltas[lastIndex][i] = e;
+            sumSquared += e * e;
+            sumAbs += Math.abs(e);
+        }
 
-        this.MSE = !Double.isFinite(this.MSE) ? error * error : MathFunctions.ewma(this.MSE, error * error, this.alpha);
+        double mseSample = sumSquared / outputDim;
+        double maeSample = sumAbs / outputDim;
 
-        double absError = Math.abs(error);
+        this.MSE = !Double.isFinite(this.MSE)
+                ? mseSample
+                : MathFunctions.ewma(this.MSE, mseSample, this.alpha);
 
         if (this.count == 0) {
-            this.MAE = absError;
+            this.MAE = maeSample;
             this.count = 1;
         } else {
             this.count++;
-            this.MAE = this.MAE + (absError - this.MAE) / this.count;
+            this.MAE += (maeSample - this.MAE) / this.count;
         }
+    }
 
-
-        // Output delta (linear output)
-        deltas[deltas.length - 1][0] = error;
-
-        // Hidden deltas
-        for (int layer = deltas.length - 2; layer >= 0; layer--) {
-            for (int neuron = 0; neuron < deltas[layer].length; neuron++) {
+    protected void backwardPass() {
+        for (int layer = this.deltas.length - 2; layer >= 0; layer--) {
+            for (int neuron = 0; neuron < this.deltas[layer].length; neuron++) {
                 double sum = 0.0;
-
-                for (int next = 0; next < deltas[layer + 1].length; next++) {
-                    sum += weights[layer + 1][next][neuron]
-                            * deltas[layer + 1][next];
+                for (int next = 0; next < this.deltas[layer + 1].length; next++) {
+                    sum += this.weights[layer + 1][next][neuron] * this.deltas[layer + 1][next];
                 }
-
-                deltas[layer][neuron] = sum * reluDerivative(layerActivations[layer][neuron]);
+                this.deltas[layer][neuron] =
+                        sum * derivative(this.layerActivations[layer][neuron]);
             }
         }
+    }
 
-        // Weight updates
-        for (int layer = 0; layer < weights.length; layer++) {
-            double[] previous = (layer == 0) ? rawInputs : layerActivations[layer - 1];
+    protected void adjustWeightsAndBiases(double[] rawInputs) {
+        for (int layer = 0; layer < this.weights.length; layer++) {
+            double[] previous = (layer == 0) ? rawInputs : this.layerActivations[layer - 1];
 
-            for (int out = 0; out < weights[layer].length; out++) {
+            for (int out = 0; out < this.weights[layer].length; out++) {
+                for (int in = 0; in < this.weights[layer][out].length; in++) {
+                    double gradient = this.deltas[layer][out] * previous[in];
 
-                for (int in = 0; in < weights[layer][out].length; in++) {
+                    this.vWeights[layer][out][in] =
+                            this.momentum * this.vWeights[layer][out][in]
+                                    - this.learningRate * gradient;
 
-                    double gradient = deltas[layer][out] * previous[in];
-
-                    vWeights[layer][out][in] =
-                            momentum * vWeights[layer][out][in] - learningRate * gradient;
-
-                    weights[layer][out][in] += vWeights[layer][out][in];
+                    this.weights[layer][out][in] += this.vWeights[layer][out][in];
                 }
 
-                vBias[layer][out] =
-                        momentum * vBias[layer][out] - learningRate * deltas[layer][out];
+                this.vBias[layer][out] =
+                        this.momentum * this.vBias[layer][out]
+                                - this.learningRate * this.deltas[layer][out];
 
-                bias[layer][out] += vBias[layer][out];
+                this.bias[layer][out] += this.vBias[layer][out];
             }
         }
     }
@@ -246,33 +256,25 @@ public class ActionLearner {
     public String export() {
         StringJoiner sj = new StringJoiner("\n");
 
-        sj.add(Arrays.toString(Arrays.copyOfRange(this.layers, 0, this.layers.length - 1)).replace("[", "").replace("]", "").replace(",", ""));
+        sj.add(Arrays.toString(this.layers)
+                .replace("[", "")
+                .replace("]", "")
+                .replace(",", ""));
         sj.add(Double.toString(this.learningRate));
         sj.add(Double.toString(this.alpha));
         sj.add(Double.toString(this.momentum));
 
         for (double[][] layer : this.weights) {
             for (double[] neuronWeights : layer) {
-                sj.add(toPlainStringSpaceSeparated(neuronWeights));
+                sj.add(arrayToString(neuronWeights));
             }
         }
 
         for (double[] layerBiases : this.bias) {
-            sj.add(toPlainStringSpaceSeparated(layerBiases));
+            sj.add(arrayToString(layerBiases));
         }
 
         return sj.toString();
-    }
-
-    private static String toPlainStringSpaceSeparated(double[] vector) {
-        StringBuilder sb = new StringBuilder(512);
-        for (int i = 0; i < vector.length; i++) {
-            sb.append(new BigDecimal(Double.toString(vector[i])).toPlainString());
-            if (i < vector.length - 1) {
-                sb.append(" ");
-            }
-        }
-        return sb.toString();
     }
 }
 
