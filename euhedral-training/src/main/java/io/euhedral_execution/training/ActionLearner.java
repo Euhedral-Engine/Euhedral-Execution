@@ -1,8 +1,13 @@
 package io.euhedral_execution.training;
 
 import io.euhedral_execution.core.utils.MathFunctions;
+import java.io.BufferedReader;
+import java.math.BigDecimal;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Random;
+import java.util.StringJoiner;
 import lombok.Getter;
 
 public class ActionLearner {
@@ -26,6 +31,71 @@ public class ActionLearner {
 
     @Getter
     private double loss = Double.NaN;
+
+    @Getter
+    private double MAE = 0;
+    private double count = 0;
+
+    public ActionLearner(String importPath) throws Exception {
+        try (BufferedReader reader = Files.newBufferedReader(Paths.get(importPath))) {
+
+            String[] layerTokens = reader.readLine().trim().split("\\s+");
+            int[] hiddenLayers = new int[layerTokens.length];
+            for (int i = 0; i < layerTokens.length; i++) {
+                hiddenLayers[i] = Integer.parseInt(layerTokens[i]);
+            }
+
+            this.layers = Arrays.copyOf(hiddenLayers, hiddenLayers.length + 1);
+            this.layers[this.layers.length - 1] = 1;
+
+            int layerCount = this.layers.length;
+
+            this.weights = new double[layerCount - 1][][];
+            this.vWeights = new double[layerCount - 1][][];
+
+            this.bias = new double[layerCount - 1][];
+            this.vBias = new double[layerCount - 1][];
+
+            this.layerActivations = new double[layerCount - 1][];
+            this.deltas = new double[layerCount - 1][];
+
+            this.learningRate = Double.parseDouble(reader.readLine());
+            this.alpha = Double.parseDouble(reader.readLine());
+            this.momentum = Double.parseDouble(reader.readLine());
+
+            for (int l = 0; l < layerCount - 1; l++) {
+                int in = this.layers[l];
+                int out = this.layers[l + 1];
+
+                this.weights[l] = new double[out][in];
+                this.vWeights[l] = new double[out][in];
+
+                this.bias[l] = new double[out];
+                this.vBias[l] = new double[out];
+
+                this.layerActivations[l] = new double[out];
+                this.deltas[l] = new double[out];
+
+                for (int j = 0; j < out; j++) {
+                    String[] weightTokens = reader.readLine().trim().split("\\s+");
+                    for (int k = 0; k < in; k++) {
+                        this.weights[l][j][k] = Double.parseDouble(weightTokens[k]);
+                    }
+                }
+            }
+
+            for (int l = 0; l < layerCount - 1; l++) {
+                int out = this.layers[l + 1];
+                String[] biasTokens = reader.readLine().trim().split("\\s+");
+                for (int j = 0; j < out; j++) {
+                    this.bias[l][j] = Double.parseDouble(biasTokens[j]);
+                }
+            }
+
+            this.MAE = 0.0;
+            this.count = 0;
+        }
+    }
 
     public ActionLearner(int[] layers, double learningRate, double alpha, double momentum) {
 
@@ -117,10 +187,23 @@ public class ActionLearner {
     public void train(double[] rawInputs, double reward) {
         double predicted = predict(rawInputs);
 
-        this.loss = !Double.isFinite(this.loss) ? predicted - reward : MathFunctions.ewma(this.loss, predicted - reward, this.alpha);
+        double error = predicted - reward;
+
+        this.loss = !Double.isFinite(this.loss) ? error : MathFunctions.ewma(this.loss, error, this.alpha);
+
+        double absError = Math.abs(error);
+
+        if (this.count == 0) {
+            this.MAE = absError;
+            this.count = 1;
+        } else {
+            this.count++;
+            this.MAE = this.MAE + (absError - this.MAE) / this.count;
+        }
+
 
         // Output delta (linear output)
-        deltas[deltas.length - 1][0] = predicted - reward;
+        deltas[deltas.length - 1][0] = error;
 
         // Hidden deltas
         for (int layer = deltas.length - 2; layer >= 0; layer--) {
@@ -158,6 +241,38 @@ public class ActionLearner {
                 bias[layer][out] += vBias[layer][out];
             }
         }
+    }
+
+    public String export() {
+        StringJoiner sj = new StringJoiner("\n");
+
+        sj.add(Arrays.toString(Arrays.copyOfRange(this.layers, 0, this.layers.length - 1)).replace("[", "").replace("]", "").replace(",", ""));
+        sj.add(Double.toString(this.learningRate));
+        sj.add(Double.toString(this.alpha));
+        sj.add(Double.toString(this.momentum));
+
+        for (double[][] layer : this.weights) {
+            for (double[] neuronWeights : layer) {
+                sj.add(toPlainStringSpaceSeparated(neuronWeights));
+            }
+        }
+
+        for (double[] layerBiases : this.bias) {
+            sj.add(toPlainStringSpaceSeparated(layerBiases));
+        }
+
+        return sj.toString();
+    }
+
+    private static String toPlainStringSpaceSeparated(double[] vector) {
+        StringBuilder sb = new StringBuilder(512);
+        for (int i = 0; i < vector.length; i++) {
+            sb.append(new BigDecimal(Double.toString(vector[i])).toPlainString());
+            if (i < vector.length - 1) {
+                sb.append(" ");
+            }
+        }
+        return sb.toString();
     }
 }
 
