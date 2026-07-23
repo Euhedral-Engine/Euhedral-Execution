@@ -12,9 +12,11 @@ import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.PriorityQueue;
+import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import org.apache.commons.math4.legacy.random.SobolSequenceGenerator;
@@ -76,6 +78,14 @@ public class SequenceFinder {
     }
 
     public void generate() throws Exception {
+        int kClusters = 28;
+        int maxClusterIterations = 500;
+        Path historicalData = Paths.get("output/raw_data.txt");
+
+        VectorGrouper grouper = new VectorGrouper(kClusters, maxClusterIterations, historicalData);
+        List<VectorGrouper.ClusterScore> rankedClusters = grouper.getClusters();
+        double[] bestClusterCentroid = rankedClusters.get(0).cluster.centroid().getPoint();
+
         SobolSequenceGenerator generator = new SobolSequenceGenerator(28);
         generator.skipTo(1024);
 
@@ -83,44 +93,65 @@ public class SequenceFinder {
         if (out.getParent() != null) {
             Files.createDirectories(out.getParent());
         }
+
+        int cap = 16_384 - 2048;
+        PriorityQueue<Candidate> topCandidates = new PriorityQueue<>(cap + 1,
+                Comparator.comparingDouble(a -> a.score[0])
+        );
+
+        System.out.println("Screening 2^20 vectors using surrogate model...");
+        for (int i = 2048; i < Math.pow(2, 20); i++) {
+            double[] vector = generator.get();
+
+            normalize(vector);
+
+            Candidate candidate = new Candidate(vector, this.learner.predict(vector));
+            topCandidates.add(candidate);
+            if (topCandidates.size() > cap) {
+                topCandidates.poll();
+            }
+        }
+
         try (BufferedWriter writer = Files.newBufferedWriter(out, StandardOpenOption.CREATE,
                 StandardOpenOption.TRUNCATE_EXISTING)) {
 
-            int cap = 16_384 - 2048;
-            PriorityQueue<Candidate> topCandidates = new PriorityQueue<>(cap + 1);
-
-            // 1. Exploitation Pass: Screen 2^20 vectors using the surrogate neural network
-            for (int i = 2048; i < Math.pow(2, 20); i++) {
-                double[] vector = generator.get();
-                normalize(vector, -1, 1);
-                Candidate candidate = new Candidate(vector, this.learner.predict(vector));
-                topCandidates.add(candidate);
-                if (topCandidates.size() > cap) {
-                    topCandidates.poll();
-                }
-            }
-
-            // 2. Write the best exploitation vectors to file without scientific notation
             while (!topCandidates.isEmpty()) {
                 String plainVector = toPlainStringSpaceSeparated(topCandidates.poll().vector);
                 writer.write(plainVector);
-                writer.newLine(); // Ensure every vector sits on its own line
+                writer.newLine();
             }
 
-            // 3. Exploration Pass: Append 2,048 purely new Sobol vectors to guard against local optima
-            for (int i = 0; i < 2048; i++) {
+            int pureExplorationCount = 1024;
+            int localExploitationCount = 1024;
+
+            System.out.println("Injecting 1,024 global exploration vectors.");
+            for (int i = 0; i < pureExplorationCount; i++) {
                 double[] vector = generator.get();
-                normalize(vector, -1, 1);
+                normalize(vector);
 
                 String plainVector = toPlainStringSpaceSeparated(vector);
                 writer.write(plainVector);
                 writer.newLine();
             }
 
-            // Single safe flush happens implicitly when try-with-resources closes the block
+            System.out.println("Injecting 1,024 cluster-targeted exploitation vectors.");
+            Random noiseGenerator = new Random();
+            for (int i = 0; i < localExploitationCount; i++) {
+                double[] explorationVector = new double[28];
+                for (int j = 0; j < 28; j++) {
+                    double noise = noiseGenerator.nextGaussian() * 0.05;
+                    explorationVector[j] = bestClusterCentroid[j] + noise;
+                }
+                normalize(explorationVector);
+
+                String plainVector = toPlainStringSpaceSeparated(explorationVector);
+                writer.write(plainVector);
+                writer.newLine();
+            }
         }
-        System.out.println("Successfully generated the next 16,384 vectors for active learning loop.");
+        System.out.println("Successfully generated 16,384 vectors for the next active learning execution loop.");
     }
+
 
     private static String toPlainStringSpaceSeparated(double[] vector) {
         StringBuilder sb = new StringBuilder(512);
@@ -133,9 +164,9 @@ public class SequenceFinder {
         return sb.toString();
     }
 
-    private static void normalize(double[] vector, double min, double max) {
+    private static void normalize(double[] vector) {
         for (int d = 0; d < vector.length; d++) {
-            vector[d] = min + (max - min) * vector[d];
+            vector[d] = -1 + 2 * vector[d];
         }
 
         int count = 0;
