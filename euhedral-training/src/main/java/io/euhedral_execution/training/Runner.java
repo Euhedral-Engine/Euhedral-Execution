@@ -12,7 +12,6 @@ import io.euhedral_execution.data_structures.queues.MpscQueue;
 import io.euhedral_execution.hardware_utils.SystemInfo;
 import io.euhedral_execution.training.VectorGrouper.ClusterScore;
 import java.io.BufferedReader;
-import java.io.BufferedWriter;
 import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -81,9 +80,7 @@ public class Runner {
         }
 
         List<ArrayIngestSink> sinks = new ArrayList<>();
-        try (BufferedWriter writer = Files.newBufferedWriter(output,
-                StandardOpenOption.CREATE,
-                StandardOpenOption.TRUNCATE_EXISTING)) {
+        try (FileWriter writer = new FileWriter(output)) {
             int iteration = 1;
             double[] vector;
             while((vector = generator.get()) != null) {
@@ -128,16 +125,14 @@ public class Runner {
                 for(int i = 0; i < 5; i++) {
                     DISTRIBUTION.quantiles[i] /= samples;
                 }
-                writer.append(arrayToString(DISTRIBUTION.vector));
-                writer.newLine();
-                writer.append(arrayToString(DISTRIBUTION.quantiles) + " " + DISTRIBUTION.aggregateMean);
-                writer.newLine();
+                writer.printlnArraySpaceSeparated(DISTRIBUTION.vector);
+                writer.printlnArraySpaceSeparated(DISTRIBUTION.quantiles);
+                writer.println(Double.doubleToLongBits(DISTRIBUTION.aggregateMean));
                 TOP_SCORES.add(DISTRIBUTION);
                 if (TOP_SCORES.size() > 10) {
                     TOP_SCORES.poll();
                 }
                 iteration++;
-                writer.flush();
             }
         }
     }
@@ -189,21 +184,16 @@ public class Runner {
             results.add(TOP_SCORES.poll());
         }
 
-        try (BufferedWriter writer = Files.newBufferedWriter(path,
-                StandardOpenOption.CREATE,
-                StandardOpenOption.TRUNCATE_EXISTING)) {
-            writer.append("Top Throughput:\n");
+        try (FileWriter writer = new FileWriter(path)) {
+            writer.println("Top Throughput:");
             for (var d : results) {
-                writer.append(String.format("Quantiles: P10: %.8f P25: %.8f P50: %.8f P75: %.8f P90: %.8f AggregateMean: %.8f\n", d.quantiles[0], d.quantiles[1], d.quantiles[2], d.quantiles[3], d.quantiles[4], d.aggregateMean));
+                writer.println(String.format("Quantiles: P10: %.8f P25: %.8f P50: %.8f P75: %.8f P90: %.8f AggregateMean: %.8f", d.quantiles[0], d.quantiles[1], d.quantiles[2], d.quantiles[3], d.quantiles[4], d.aggregateMean));
             }
-            writer.append("\n\nTop Weights:\n");
+            writer.println("\n\nTop Weights:");
             for (var d : results) {
-                StringBuilder sb = new StringBuilder();
-                sb.append(weightsToCode(d.vector));
-                sb.append("\n");
-                writer.append(sb);
+                writer.println(weightsToCode(d.vector));
             }
-            writer.append("\n\nBounds:\n");
+            writer.println("\n\nBounds:");
             for (var d : results) {
                 double min = Double.MAX_VALUE;
                 double max = -min;
@@ -211,7 +201,7 @@ public class Runner {
                     min = Math.min(min, q);
                     max = Math.max(max, q);
                 }
-                writer.append("[" + min + ", " + max + "]\n");
+                writer.println("[" + min + ", " + max + "]");
             }
         }
     }
@@ -220,7 +210,7 @@ public class Runner {
         StringJoiner sj = new StringJoiner(" ");
 
         for(double d : arr) {
-            sj.add(new BigDecimal(d).toPlainString());
+            sj.add(Long.toString(Double.doubleToLongBits(d)));
         }
         return sj.toString();
     }
@@ -301,7 +291,7 @@ public class Runner {
 
         double[] get() {
             if(this.generator != null) {
-                if(this.count++ >= 16_384) {
+                if(this.count++ >= 16) {
                     return null;
                 }
                 double[] vector = this.generator.get();
@@ -316,7 +306,7 @@ public class Runner {
                 String[] tokens = raw.split("\\s+");
                 double[] vector = new double[tokens.length];
                 for(int i = 0; i < tokens.length; i++) {
-                    vector[i] = Double.parseDouble(tokens[i]);
+                    vector[i] = Double.longBitsToDouble(Long.parseLong(tokens[i]));
                 }
                 return vector;
             } catch (Exception e) {

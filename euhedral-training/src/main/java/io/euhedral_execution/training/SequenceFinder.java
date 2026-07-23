@@ -1,6 +1,8 @@
 package io.euhedral_execution.training;
 
 import io.euhedral_execution.hashing.HasherApi;
+import io.euhedral_execution.training.networks.AbstractNeuralNetwork;
+import io.euhedral_execution.training.networks.LeakyReluNetwork;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.nio.file.Files;
@@ -19,20 +21,20 @@ import org.apache.commons.math4.legacy.random.SobolSequenceGenerator;
 
 public class SequenceFinder {
 
-    private final ActionLearner learner;
+    private final AbstractNeuralNetwork learner;
     private final List<double[][]> trainingSet = new ArrayList<>();
     private final List<double[][]> validationSet = new ArrayList<>();
     private final List<double[][]> testSet = new ArrayList<>();
 
     public SequenceFinder(String[] args) throws Exception {
         if (args.length > 2) {
-            this.learner = new ActionLearner(args[2]);
+            this.learner = new LeakyReluNetwork(args[2]);
         }
         else if(args.length == 2 && args[0].equals("generate")) {
-            this.learner = new ActionLearner(args[1]);
+            this.learner = new LeakyReluNetwork(args[1]);
             return;
         } else {
-            this.learner = new ActionLearner(new int[]{28, 128, 128}, 0.001, 0.01, 0.9);
+            this.learner = new LeakyReluNetwork(new int[]{28, 128, 128, 1}, 0.001, 0.01, 0.9);
         }
 
         Path path = Path.of(args[1]);
@@ -162,7 +164,7 @@ public class SequenceFinder {
             Collections.shuffle(this.trainingSet);
 
             for (var v : this.trainingSet) {
-                this.learner.train(v[0], v[1][0]);
+                this.learner.train(v[0], v[1]);
             }
 
             double mse = evaluateSetLoss(this.validationSet);
@@ -197,7 +199,7 @@ public class SequenceFinder {
     private double evaluateSetLoss(List<double[][]> dataset) {
         double totalLoss = 0;
         for (var v : dataset) {
-            double prediction = this.learner.predict(v[0]);
+            double prediction = this.learner.predict(v[0])[0];
             double error = v[1][0] - prediction;
             totalLoss += (error * error);
         }
@@ -211,15 +213,15 @@ public class SequenceFinder {
 
         for (var v : this.testSet) {
             double actual = v[1][0];
-            double prediction = this.learner.predict(v[0]);
-            totalAbsoluteError += Math.abs(actual - prediction);
+            double[] prediction = this.learner.predict(v[0]);
+            totalAbsoluteError += Math.abs(actual - prediction[0]);
 
-            actualRanked.add(new DataResult(v[0], actual));
+            actualRanked.add(new DataResult(v[0], v[1]));
             predictedRanked.add(new DataResult(v[0], prediction));
         }
 
-        actualRanked.sort((a, b) -> Double.compare(b.score, a.score));
-        predictedRanked.sort((a, b) -> Double.compare(b.score, a.score));
+        actualRanked.sort((a, b) -> Double.compare(b.score[0], a.score[0]));
+        predictedRanked.sort((a, b) -> Double.compare(b.score[0], a.score[0]));
 
         // Quantify Top 10% configuration ranking accuracy
         int topK = Math.max(1, this.testSet.size() / 10);
@@ -244,26 +246,26 @@ public class SequenceFinder {
         System.out.println("===================================================\n\n");
     }
 
-    private record DataResult(double[] vector, double score) {
+    private record DataResult(double[] vector, double[] score) {
         @Override
         public boolean equals(Object o) {
-            if(o instanceof DataResult(double[] vector1, double score1)) {
-                return Arrays.equals(vector, vector1) && score == score1;
+            if(o instanceof DataResult(double[] vector1, double[] score1)) {
+                return Arrays.equals(vector, vector1) && Arrays.equals(score, score1);
             }
             return false;
         }
 
         @Override
         public int hashCode() {
-            return Arrays.hashCode(vector) ^ Double.hashCode(score);
+            return Arrays.hashCode(vector) ^ Arrays.hashCode(score);
         }
     }
 
-    private record Candidate(double[] vector, double score) implements Comparable<Candidate> {
+    private record Candidate(double[] vector, double[] score) implements Comparable<Candidate> {
 
         @Override
         public int compareTo(Candidate o) {
-            return Double.compare(this.score, o.score);
+            return Double.compare(this.score[0], o.score[0]);
         }
     }
 }
