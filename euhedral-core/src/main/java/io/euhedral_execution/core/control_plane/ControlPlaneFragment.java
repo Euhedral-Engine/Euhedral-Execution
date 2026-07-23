@@ -220,7 +220,6 @@ public final class ControlPlaneFragment extends WorkRequester {
                     processed += count;
                     limit -= count;
                 }
-                this.state.actionInputs[4] = (double) context.upstream.getTrueUpstreamCount() / super.getThreadCount();
                 act = this.actionPicker.performAction(Action.REMOTE_EXECUTE, this.state.actionInputs);
                 if(limit > 0 && act) {
                     long count = remoteExecute(context, limit);

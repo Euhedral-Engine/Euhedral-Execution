@@ -74,20 +74,20 @@ public final class FunctionIngestSink<T, R> extends AbstractIngestSink {
 
     public void push(T data) {
         FunctionFrame<T, R> frame = this.frameManager.getOrCreate(data, this.password);
-        SpinWait.await(() -> !this.sink.offer(frame));
+        SpinWait.awaitWhile(() -> !this.sink.offer(frame));
     }
 
     public void push(Collection<T> collection) {
         for (T data : collection) {
             FunctionFrame<T, R> frame = this.frameManager.getOrCreate(data, this.password);
-            SpinWait.await(() -> !this.sink.offer(frame));
+            SpinWait.awaitWhile(() -> !this.sink.offer(frame));
         }
     }
 
     public void push(Iterator<T> iter) {
         while (iter.hasNext()) {
             FunctionFrame<T, R> frame = this.frameManager.getOrCreate(iter.next(), this.password);
-            SpinWait.await(() -> !this.sink.offer(frame));
+            SpinWait.awaitWhile(() -> !this.sink.offer(frame));
         }
     }
 

@@ -30,7 +30,7 @@ public class ActionLearner {
     private final double[][] deltas;
 
     @Getter
-    private double loss = Double.NaN;
+    private double MSE = Double.NaN;
 
     @Getter
     private double MAE = 0;
@@ -189,7 +189,7 @@ public class ActionLearner {
 
         double error = predicted - reward;
 
-        this.loss = !Double.isFinite(this.loss) ? error : MathFunctions.ewma(this.loss, error, this.alpha);
+        this.MSE = !Double.isFinite(this.MSE) ? error * error : MathFunctions.ewma(this.MSE, error * error, this.alpha);
 
         double absError = Math.abs(error);
 

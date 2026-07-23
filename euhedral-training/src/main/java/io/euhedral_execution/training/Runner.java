@@ -7,12 +7,13 @@ import io.euhedral_execution.core.control_plane.ControlPlaneLattice;
 import io.euhedral_execution.core.frames.BenchmarkFrame;
 import io.euhedral_execution.core.ingest.ArrayIngestSink;
 import io.euhedral_execution.core.utils.FlowDistribution;
-import io.euhedral_execution.core.utils.P2Quantile;
+import io.euhedral_execution.core.utils.SpinWait;
 import io.euhedral_execution.data_structures.queues.MpscQueue;
 import io.euhedral_execution.hardware_utils.SystemInfo;
 import io.euhedral_execution.training.VectorGrouper.ClusterScore;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -22,6 +23,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.PriorityQueue;
+import java.util.StringJoiner;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.LockSupport;
@@ -77,8 +79,6 @@ public class Runner {
         if (output.getParent() != null) {
             Files.createDirectories(output.getParent());
         }
-        Files.writeString(output, "", StandardOpenOption.CREATE,
-                StandardOpenOption.TRUNCATE_EXISTING);
 
         List<ArrayIngestSink> sinks = new ArrayList<>();
         try (BufferedWriter writer = Files.newBufferedWriter(output,
@@ -90,11 +90,11 @@ public class Runner {
                 DISTRIBUTION = new Distribution(vector);
 
                 System.out.println("Iteration: " + iteration);
-                int iterations = 0;
                 LatticeConfig config = LatticeConfig.benchmarkConfig(
                         new BenchmarkConfig(1_000_000L, EVAL_QUEUE, new FragmentActionPicker(vector),
                                 Thread.currentThread()));
 
+                long samples = 0;
                 for (int j = 0; j < 5; j++) {
                     ControlPlaneLattice controlPlane = ControlPlaneLattice.getOrCreate(config);
                     controlPlane.start();
@@ -105,7 +105,7 @@ public class Runner {
                         sinks.add(sink);
                         controlPlane.addUpstream(sink);
                     }
-                    long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(100);
+                    long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(50);
                     long now = 0;
                     while (now < deadline) {
                         now = System.nanoTime();
@@ -120,22 +120,23 @@ public class Runner {
                         sink.complete();
                     }
                     sinks.clear();
-                    while (EVAL_QUEUE.sizeLong() < workers) {
-                        Thread.yield();
-                    }
+                    SpinWait.awaitWhile(() -> EVAL_QUEUE.sizeLong() < workers);
                     addAll();
-                    iterations++;
+                    samples++;
                 }
-                if (iterations == 5) {
-                    writer.append(Arrays.toString(vector).replace("[", "").replace("]", "").replace(",", ""));
-                    writer.newLine();
-                    writer.append(String.format("%f %f %f %f %f", DISTRIBUTION.P10.value(), DISTRIBUTION.P25.value(), DISTRIBUTION.P50.value(), DISTRIBUTION.P75.value(), DISTRIBUTION.P90.value()));
-                    writer.newLine();
-                    TOP_SCORES.add(DISTRIBUTION);
+                DISTRIBUTION.aggregateMean /= 5;
+                for(int i = 0; i < 5; i++) {
+                    DISTRIBUTION.quantiles[i] /= samples;
                 }
+                writer.append(arrayToString(DISTRIBUTION.vector));
+                writer.newLine();
+                writer.append(arrayToString(DISTRIBUTION.quantiles) + " " + DISTRIBUTION.aggregateMean);
+                writer.newLine();
+                TOP_SCORES.add(DISTRIBUTION);
                 if (TOP_SCORES.size() > 10) {
                     TOP_SCORES.poll();
                 }
+                iteration++;
                 writer.flush();
             }
         }
@@ -151,29 +152,28 @@ public class Runner {
     }
 
     private static void addAll() {
-        double[] quantiles = new double[5];
-        EVAL_QUEUE.drain(dist -> {
+        double[] totalMean = new double[]{0};
+        long count = EVAL_QUEUE.drain(dist -> {
             if (Double.isFinite(dist.p10())) {
-                quantiles[0] += dist.p10();
+                DISTRIBUTION.quantiles[0] += dist.p10();
             }
             if (Double.isFinite(dist.p25())) {
-                quantiles[1] += dist.p25();
+                DISTRIBUTION.quantiles[1] += dist.p25();
             }
             if (Double.isFinite(dist.p50())) {
-                quantiles[2] += dist.p50();
+                DISTRIBUTION.quantiles[2] += dist.p50();
             }
             if (Double.isFinite(dist.p75())) {
-                quantiles[3] += dist.p75();
+                DISTRIBUTION.quantiles[3] += dist.p75();
             }
             if (Double.isFinite(dist.p90())) {
-                quantiles[4] += dist.p90();
+                DISTRIBUTION.quantiles[4] += dist.p90();
+            }
+            if (Double.isFinite(dist.mean())) {
+                totalMean[0] += dist.mean();
             }
         }, Long.MAX_VALUE);
-        DISTRIBUTION.P10.add(quantiles[0]);
-        DISTRIBUTION.P25.add(quantiles[1]);
-        DISTRIBUTION.P50.add(quantiles[2]);
-        DISTRIBUTION.P75.add(quantiles[3]);
-        DISTRIBUTION.P90.add(quantiles[4]);
+        DISTRIBUTION.aggregateMean += totalMean[0] / Math.max(1, count);
     }
 
     private static void printResults() throws Exception {
@@ -194,13 +194,12 @@ public class Runner {
                 StandardOpenOption.TRUNCATE_EXISTING)) {
             writer.append("Top Throughput:\n");
             for (var d : results) {
-                writer.append(d.P50.value() + "\n");
+                writer.append(String.format("Quantiles: P10: %.8f P25: %.8f P50: %.8f P75: %.8f P90: %.8f AggregateMean: %.8f\n", d.quantiles[0], d.quantiles[1], d.quantiles[2], d.quantiles[3], d.quantiles[4], d.aggregateMean));
             }
             writer.append("\n\nTop Weights:\n");
             for (var d : results) {
                 StringBuilder sb = new StringBuilder();
-                sb.append("double[] weights = new double");
-                sb.append(Arrays.toString(d.vector).replace("[", "{").replace("]", "}"));
+                sb.append(weightsToCode(d.vector));
                 sb.append("\n");
                 writer.append(sb);
             }
@@ -217,18 +216,34 @@ public class Runner {
         }
     }
 
+    private static String arrayToString(double[] arr) {
+        StringJoiner sj = new StringJoiner(" ");
+
+        for(double d : arr) {
+            sj.add(new BigDecimal(d).toPlainString());
+        }
+        return sj.toString();
+    }
+
+    private static String weightsToCode(double[] arr) {
+        StringJoiner sj = new StringJoiner(", ");
+
+        for(double d : arr) {
+            sj.add(new BigDecimal(d).toPlainString());
+        }
+
+        return String.format("double[] weights = new double[]{%s}", sj);
+    }
+
     private static class Distribution implements Comparable<Distribution> {
 
-        static double round(P2Quantile quantile) {
-            return Math.round(quantile.value() * 10_000) / 10_000.0;
+        static double round(double quantile) {
+            return Math.round(quantile * 10_000) / 10_000.0;
         }
 
         final double[] vector;
-        private final P2Quantile P10 = new P2Quantile(0.5);
-        private final P2Quantile P25 = new P2Quantile(0.5);
-        private final P2Quantile P50 = new P2Quantile(0.5);
-        private final P2Quantile P75 = new P2Quantile(0.5);
-        private final P2Quantile P90 = new P2Quantile(0.5);
+        final double[] quantiles = new double[5];
+        double aggregateMean = 0;
 
         Distribution(double[] vector) {
             this.vector = vector;
@@ -237,11 +252,7 @@ public class Runner {
         @Override
         public boolean equals(Object o) {
             if (o instanceof Distribution other) {
-                return P10.value() == other.P10.value() &&
-                        P25.value() == other.P25.value() &&
-                        P50.value() == other.P50.value() &&
-                        P75.value() == other.P75.value() &&
-                        P90.value() == other.P90.value();
+                return Arrays.equals(vector, other.vector) && Arrays.equals(quantiles, other.quantiles);
             }
             return false;
         }
@@ -253,20 +264,20 @@ public class Runner {
                 return 0;
             }
 
-            int p50Compare = Double.compare(round(this.P50), round(other.P50));
+            int p50Compare = Double.compare(round(quantiles[2]), round(other.quantiles[2]));
             if (p50Compare != 0) {
                 return p50Compare;
             }
 
-            double thisIQR = round(this.P75) - round(this.P25);
-            double otherIQR = round(other.P75) - round(other.P25);
+            double thisIQR = round(quantiles[3]) - round(quantiles[1]);
+            double otherIQR = round(other.quantiles[3]) - round(other.quantiles[1]);
             int iqrCompare = Double.compare(otherIQR, thisIQR);
             if (iqrCompare != 0) {
                 return iqrCompare;
             }
 
-            double thisTailRange = round(this.P90) - round(this.P10);
-            double otherTailRange = round(other.P90) - round(other.P10);
+            double thisTailRange = round(quantiles[4]) - round(quantiles[0]);
+            double otherTailRange = round(other.quantiles[4]) - round(other.quantiles[0]);
             return Double.compare(otherTailRange, thisTailRange);
         }
     }
@@ -290,11 +301,12 @@ public class Runner {
 
         double[] get() {
             if(this.generator != null) {
-                if(this.count >= 16_384) {
+                if(this.count++ >= 16_384) {
                     return null;
                 }
                 double[] vector = this.generator.get();
                 normalize(vector, -1, 1);
+                return vector;
             }
             try {
                 String raw = this.reader.readLine();

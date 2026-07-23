@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -31,7 +32,7 @@ public class SequenceFinder {
             this.learner = new ActionLearner(args[1]);
             return;
         } else {
-            this.learner = new ActionLearner(new int[]{28, 64, 64}, 0.001, 0.01, 0.9);
+            this.learner = new ActionLearner(new int[]{28, 128, 128}, 0.001, 0.01, 0.9);
         }
 
         Path path = Path.of(args[1]);
@@ -152,7 +153,7 @@ public class SequenceFinder {
 
     public void train() throws Exception {
         String bestModel = this.learner.export();
-        double bestValLoss = evaluateSetLoss(this.validationSet);
+        double bestMSE = evaluateSetLoss(this.validationSet);
         int epochsWithoutImprovement = 0;
         int patience = 15;
 
@@ -164,13 +165,13 @@ public class SequenceFinder {
                 this.learner.train(v[0], v[1][0]);
             }
 
-            double currentValLoss = evaluateSetLoss(this.validationSet);
+            double mse = evaluateSetLoss(this.validationSet);
 
-            System.out.printf("Epoch: %d | Train MAE: %.5f | Train Loss: %.5f | Val Loss: %.5f\n",
-                    i, this.learner.getMAE(), this.learner.getLoss(), currentValLoss);
+            System.out.printf("Epoch: %d | Train MAE: %.5f | Train MSE: %.5f | Validation MSE: %.5f\n",
+                    i, this.learner.getMAE(), this.learner.getMSE(), mse);
 
-            if (currentValLoss < bestValLoss) {
-                bestValLoss = currentValLoss;
+            if (mse < bestMSE) {
+                bestMSE = mse;
                 epochsWithoutImprovement = 0;
                 bestModel = this.learner.export();
             } else {
@@ -178,7 +179,7 @@ public class SequenceFinder {
                 if (epochsWithoutImprovement >= patience) {
                     System.out.printf(
                             "Early stopping triggered at Epoch %d. Best Validation Loss: %.5f\n", i,
-                            bestValLoss);
+                            bestMSE);
                     break;
                 }
             }
@@ -222,14 +223,14 @@ public class SequenceFinder {
 
         // Quantify Top 10% configuration ranking accuracy
         int topK = Math.max(1, this.testSet.size() / 10);
-        Set<double[]> topActualVectors = new HashSet<>();
+        Set<DataResult> topActualVectors = new HashSet<>();
         for (int i = 0; i < topK; i++) {
-            topActualVectors.add(actualRanked.get(i).vector);
+            topActualVectors.add(actualRanked.get(i));
         }
 
         int matches = 0;
         for (int i = 0; i < topK; i++) {
-            if (topActualVectors.contains(predictedRanked.get(i).vector)) {
+            if (topActualVectors.contains(predictedRanked.get(i))) {
                 matches++;
             }
         }
@@ -244,7 +245,18 @@ public class SequenceFinder {
     }
 
     private record DataResult(double[] vector, double score) {
+        @Override
+        public boolean equals(Object o) {
+            if(o instanceof DataResult(double[] vector1, double score1)) {
+                return Arrays.equals(vector, vector1) && score == score1;
+            }
+            return false;
+        }
 
+        @Override
+        public int hashCode() {
+            return Arrays.hashCode(vector) ^ Double.hashCode(score);
+        }
     }
 
     private record Candidate(double[] vector, double score) implements Comparable<Candidate> {

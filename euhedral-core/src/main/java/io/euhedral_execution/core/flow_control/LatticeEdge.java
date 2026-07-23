@@ -246,7 +246,7 @@ public class LatticeEdge extends UpstreamHandle {
             setParent(dh);
         } else if (up instanceof UpstreamHandle upstream) {
             LOGGER.trace("Adding upstream handle...");
-            SpinWait.await(this.drain::getOpaque);
+            SpinWait.awaitWhile(this.drain::getOpaque);
 
             for (int i = 0; i < UPSTREAMS.length; i++) {
                 MpscQueue<UpstreamHandle> queue = UPSTREAMS[i];

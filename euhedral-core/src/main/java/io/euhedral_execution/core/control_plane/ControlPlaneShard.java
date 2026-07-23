@@ -303,7 +303,7 @@ public class ControlPlaneShard {
             final long deadline =
                     System.nanoTime() + this.shutdownTimeout.toNanos();
 
-            SpinWait.await(() -> !clone.isDrained() && System.nanoTime() < deadline);
+            SpinWait.awaitWhile(() -> !clone.isDrained() && System.nanoTime() < deadline);
 
             if(deadClones.contains(core) || System.nanoTime() >= deadline) {
                 closeClone(clone);
@@ -381,7 +381,7 @@ public class ControlPlaneShard {
             Thread.currentThread().setName(this.shardName + "-" + coreId);
             long deadline = System.nanoTime() + this.shutdownTimeout.toNanos();
             try {
-                SpinWait.await(() -> !oldClone.isDrained() && System.nanoTime() < deadline);
+                SpinWait.awaitWhile(() -> !oldClone.isDrained() && System.nanoTime() < deadline);
                 if(!oldClone.isDrained() && System.nanoTime() >= deadline) {
                     this.logger.error("Clone on core {} timed out. Forcing shutdown.", coreId);
                     oldClone.close();

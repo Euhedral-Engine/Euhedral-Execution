@@ -99,7 +99,7 @@ public class FrameSequencer<T, R> {
                     this.sequence.poll();
 
                     final SequencedFrame<T, R> finFrame = frame;
-                    SpinWait.await(() -> {
+                    SpinWait.awaitWhile(() -> {
                         EmitResult result = this.output.tryEmitNext(finFrame.getRetVal());
 
                         return switch (EuhedralSink.toResponse(result)) {

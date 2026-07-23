@@ -44,7 +44,7 @@ public class FragmentActionPicker {
     public void normalize(double[] inputs) {
         double sum = 0;
         for(double d : inputs) {
-            sum = d * d;
+            sum += d * d;
         }
         double length = Math.max(Math.sqrt(sum), 1e-9);
         for(int i = 0; i < inputs.length; i++) {
