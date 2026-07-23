@@ -5,4 +5,5 @@ module euhedral.training {
     requires euhedral.hardware_utils;
     requires org.jspecify;
     requires static lombok;
+    requires euhedral.hashing;
 }

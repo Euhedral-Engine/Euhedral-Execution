@@ -10,13 +10,17 @@ import io.euhedral_execution.core.utils.FlowDistribution;
 import io.euhedral_execution.core.utils.P2Quantile;
 import io.euhedral_execution.data_structures.queues.MpscQueue;
 import io.euhedral_execution.hardware_utils.SystemInfo;
+import io.euhedral_execution.training.VectorGrouper.ClusterScore;
+import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.util.PriorityQueue;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
@@ -33,12 +37,23 @@ public class Runner {
     private static Distribution DISTRIBUTION;
 
     public static void main(String[] args) throws Exception {
-        Path path = Path.of("output/raw_data.txt");
-        if (path.getParent() != null) {
-            Files.createDirectories(path.getParent());
+        if(Objects.equals(args[0], "group")) {
+            group();
+            return;
         }
-        Files.writeString(path, "", StandardOpenOption.CREATE,
-                StandardOpenOption.TRUNCATE_EXISTING);
+        if(Objects.equals(args[0], "train-vector-finder")) {
+            SequenceFinder finder = new SequenceFinder(args);
+            finder.train();
+            return;
+        }
+        if(Objects.equals(args[0], "generate") && args.length > 1) {
+            SequenceFinder finder = new SequenceFinder(args);
+            finder.generate();
+            return;
+        }
+        if(!Objects.equals(args[0], "benchmark")) {
+            return;
+        }
 
         BenchmarkFrame[][] frames = new BenchmarkFrame[SystemInfo.getCoreCount()][];
 
@@ -47,25 +62,34 @@ public class Runner {
                     ThreadLocalRandom.current().nextLong());
         }
 
-        int features = 6;
-        int bias = 1;
-        int actions = 4;
-        SobolSequenceGenerator generator = new SobolSequenceGenerator((features + bias) * actions);
-        generator.skipTo(1024);
+        VectorProducer generator;
+        if(args.length > 1) {
+            generator = new VectorProducer(Paths.get(args[1]));
+        } else {
+            generator = new VectorProducer();
+        }
+        run(frames, generator);
+        printResults();
+    }
 
-//        LEARNER = new ActionLearner(new int[]{(features + bias) * actions, 64, 64}, 0.001, 0.01, 0.9);
+    private static void run(BenchmarkFrame[][] frames, VectorProducer generator) throws Exception {
+        Path output = Path.of("output/raw_data.txt");
+        if (output.getParent() != null) {
+            Files.createDirectories(output.getParent());
+        }
+        Files.writeString(output, "", StandardOpenOption.CREATE,
+                StandardOpenOption.TRUNCATE_EXISTING);
+
         List<ArrayIngestSink> sinks = new ArrayList<>();
-        try (BufferedWriter writer = Files.newBufferedWriter(path,
+        try (BufferedWriter writer = Files.newBufferedWriter(output,
                 StandardOpenOption.CREATE,
                 StandardOpenOption.TRUNCATE_EXISTING)) {
-
-            for (int i = 16_384; i > 0; i--) {
-                double[] vector = generator.get();
-                normalize(vector, -1, 1, features + bias);
-
+            int iteration = 1;
+            double[] vector;
+            while((vector = generator.get()) != null) {
                 DISTRIBUTION = new Distribution(vector);
 
-                System.out.println("Countdown: " + i);
+                System.out.println("Iteration: " + iteration);
                 int iterations = 0;
                 LatticeConfig config = LatticeConfig.benchmarkConfig(
                         new BenchmarkConfig(1_000_000L, EVAL_QUEUE, new FragmentActionPicker(vector),
@@ -112,28 +136,17 @@ public class Runner {
                 if (TOP_SCORES.size() > 10) {
                     TOP_SCORES.poll();
                 }
+                writer.flush();
             }
         }
-        printResults();
     }
 
-    private static void normalize(double[] vector, double min, double max, int groupSize) {
-        for (int d = 0; d < vector.length; d++) {
-            vector[d] = min + (max - min) * vector[d];
-        }
-
-        int count = 0;
-        while (count < vector.length) {
-            double squareSum = 0.0;
-            for (int i = count; i < count + groupSize; i++) {
-                squareSum += vector[i] * vector[i];
-            }
-
-            double length = Math.sqrt(squareSum);
-            for (int i = count; i < count + groupSize; i++) {
-                vector[i] /= length;
-            }
-            count += groupSize;
+    private static void group() throws Exception {
+        Path path = Path.of("output/raw_data.txt");
+        VectorGrouper grouper = new VectorGrouper(28, 100, path);
+        List<ClusterScore> groups = grouper.getClusters();
+        for(int i = 0; i < groups.size(); i++) {
+            System.out.println((i + 1) + ". " + "Size: " + groups.get(i).cluster.getPoints().size() + " Quantiles: " + groups.get(i) + " Bounds: [" + groups.get(i).min + ", " + groups.get(i).max + "]");
         }
     }
 
@@ -256,9 +269,74 @@ public class Runner {
             double otherTailRange = round(other.P90) - round(other.P10);
             return Double.compare(otherTailRange, thisTailRange);
         }
+    }
 
-        public double score() {
-            return P50.value() - (P75.value() - P25.value());
+    private static class VectorProducer implements AutoCloseable {
+        final SobolSequenceGenerator generator;
+        final BufferedReader reader;
+
+        int count = 0;
+
+        public VectorProducer() {
+            this.generator = new SobolSequenceGenerator(28);
+            this.generator.skipTo(1024);
+            this.reader = null;
+        }
+
+        public VectorProducer(Path path) throws  Exception {
+            this.generator = null;
+            this.reader = Files.newBufferedReader(path);
+        }
+
+        double[] get() {
+            if(this.generator != null) {
+                if(this.count >= 16_384) {
+                    return null;
+                }
+                double[] vector = this.generator.get();
+                normalize(vector, -1, 1);
+            }
+            try {
+                String raw = this.reader.readLine();
+                if(raw == null) {
+                    return null;
+                }
+                String[] tokens = raw.split("\\s+");
+                double[] vector = new double[tokens.length];
+                for(int i = 0; i < tokens.length; i++) {
+                    vector[i] = Double.parseDouble(tokens[i]);
+                }
+                return vector;
+            } catch (Exception e) {
+                return null;
+            }
+        }
+
+        private static void normalize(double[] vector, double min, double max) {
+            for (int d = 0; d < vector.length; d++) {
+                vector[d] = min + (max - min) * vector[d];
+            }
+
+            int count = 0;
+            while (count < vector.length) {
+                double squareSum = 0.0;
+                for (int i = count; i < count + 7; i++) {
+                    squareSum += vector[i] * vector[i];
+                }
+
+                double length = Math.sqrt(squareSum);
+                for (int i = count; i < count + 7; i++) {
+                    vector[i] /= length;
+                }
+                count += 7;
+            }
+        }
+
+        @Override
+        public void close() throws Exception {
+            if(reader != null) {
+                reader.close();
+            }
         }
     }
 }
