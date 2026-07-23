@@ -27,7 +27,7 @@ public class FileWriter implements  AutoCloseable {
     public void println(long num) throws Exception {
         this.buffer.clear();
         writeLongToBuffer(num);
-        this.buffer.putChar('\n');
+        this.buffer.put((byte)'\n');
         this.buffer.flip();
         this.channel.write(this.buffer);
     }
@@ -40,13 +40,31 @@ public class FileWriter implements  AutoCloseable {
 
         this.buffer.clear();
         for(int i = 0; i < string.length(); i++) {
-            this.buffer.putChar(string.charAt(i));
+            this.buffer.put((byte) string.charAt(i));
             if(i == buffer.limit() - 1) {
                 this.channel.write(buffer);
                 buffer.clear();
             }
         }
-        this.buffer.putChar('\n');
+        this.buffer.put((byte) '\n');
+        this.buffer.flip();
+        this.channel.write(this.buffer);
+    }
+
+    public void print(String string) throws Exception {
+        Objects.requireNonNull(string);
+        if(string.isBlank()) {
+            return;
+        }
+
+        this.buffer.clear();
+        for(int i = 0; i < string.length(); i++) {
+            this.buffer.put((byte) string.charAt(i));
+            if(i == buffer.limit() - 1) {
+                this.channel.write(buffer);
+                buffer.clear();
+            }
+        }
         this.buffer.flip();
         this.channel.write(this.buffer);
     }
@@ -61,10 +79,10 @@ public class FileWriter implements  AutoCloseable {
         for(int i = 0; i < array.length; i++) {
             writeLongToBuffer(Double.doubleToLongBits(array[i]));
             if(i < array.length - 1) {
-                this.buffer.putChar(' ');
+                this.buffer.put((byte) ' ');
             }
         }
-        this.buffer.putChar('\n');
+        this.buffer.put((byte) '\n');
         this.buffer.flip();
         this.channel.write(this.buffer);
     }
@@ -79,8 +97,8 @@ public class FileWriter implements  AutoCloseable {
         for(int i = 0; i < array.length; i++) {
             writeLongToBuffer(Double.doubleToLongBits(array[i]));
             if(i < array.length - 1) {
-                this.buffer.putChar(',');
-                this.buffer.putChar(' ');
+                this.buffer.put((byte) ',');
+                this.buffer.put((byte) ' ');
             }
         }
         this.buffer.putChar('\n');

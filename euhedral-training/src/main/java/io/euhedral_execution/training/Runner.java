@@ -81,17 +81,17 @@ public class Runner {
 
         List<ArrayIngestSink> sinks = new ArrayList<>();
         try (FileWriter writer = new FileWriter(output)) {
-            int iteration = 1;
+            int index = 1;
             double[] vector;
             while((vector = generator.get()) != null) {
                 DISTRIBUTION = new Distribution(vector);
 
-                System.out.println("Iteration: " + iteration);
+                System.out.println("Vector: " + index++);
                 LatticeConfig config = LatticeConfig.benchmarkConfig(
                         new BenchmarkConfig(1_000_000L, EVAL_QUEUE, new FragmentActionPicker(vector),
                                 Thread.currentThread()));
 
-                long samples = 0;
+                long distributions = 0;
                 for (int j = 0; j < 5; j++) {
                     ControlPlaneLattice controlPlane = ControlPlaneLattice.getOrCreate(config);
                     controlPlane.start();
@@ -118,12 +118,12 @@ public class Runner {
                     }
                     sinks.clear();
                     SpinWait.awaitWhile(() -> EVAL_QUEUE.sizeLong() < workers);
+                    distributions += EVAL_QUEUE.sizeLong();
                     addAll();
-                    samples++;
                 }
                 DISTRIBUTION.aggregateMean /= 5;
                 for(int i = 0; i < 5; i++) {
-                    DISTRIBUTION.quantiles[i] /= samples;
+                    DISTRIBUTION.quantiles[i] /= distributions;
                 }
                 writer.printlnArraySpaceSeparated(DISTRIBUTION.vector);
                 writer.printlnArraySpaceSeparated(DISTRIBUTION.quantiles);
@@ -132,7 +132,6 @@ public class Runner {
                 if (TOP_SCORES.size() > 10) {
                     TOP_SCORES.poll();
                 }
-                iteration++;
             }
         }
     }

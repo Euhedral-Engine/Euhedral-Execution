@@ -67,15 +67,7 @@ public class VectorGrouper {
         return scores;
     }
 
-    private static class Node implements Clusterable {
-
-        private final double[] vector;
-        private final double[] quantiles;
-
-        public Node(double[] vector, double[] quantiles) {
-            this.vector = vector;
-            this.quantiles = quantiles;
-        }
+    public record Node(double[] vector, double[] quantiles) implements Clusterable {
 
         @Override
         public double[] getPoint() {
@@ -88,6 +80,11 @@ public class VectorGrouper {
                 return false;
             }
             return Arrays.equals(vector, ((Node) other).vector);
+        }
+
+        @Override
+        public int hashCode() {
+            return Arrays.hashCode(vector);
         }
     }
 
