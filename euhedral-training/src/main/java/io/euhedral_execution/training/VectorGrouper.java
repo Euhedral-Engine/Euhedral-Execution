@@ -115,17 +115,17 @@ public class VectorGrouper {
 
         @Override
         public int compareTo(@NonNull ClusterScore other) {
-            return -Double.compare(round(distribution.p50()), round(other.distribution.p50()));
+            return -1;//-Double.compare(round(distribution.p50()), round(other.distribution.p50()));
         }
 
         @Override
         public String toString() {
             StringJoiner sb = new StringJoiner(", ");
-            sb.add(distribution.p10() + "");
-            sb.add(distribution.p25() + "");
-            sb.add(distribution.p50() + "");
-            sb.add(distribution.p75() + "");
-            sb.add(distribution.p90() + "");
+//            sb.add(distribution.p10() + "");
+//            sb.add(distribution.p25() + "");
+//            sb.add(distribution.p50() + "");
+//            sb.add(distribution.p75() + "");
+//            sb.add(distribution.p90() + "");
             return sb.toString();
         }
     }

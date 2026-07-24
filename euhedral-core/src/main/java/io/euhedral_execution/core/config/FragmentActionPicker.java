@@ -1,11 +1,17 @@
 package io.euhedral_execution.core.config;
 
+import io.euhedral_execution.core.utils.CommonVarHandles;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import java.util.Arrays;
 
 @SuppressWarnings("unused")
 public class FragmentActionPicker {
 
-    private final double[][] actionWeights;
+    private static final VarHandle WEIGHTS = CommonVarHandles.makeHandle(MethodHandles.lookup(), FragmentActionPicker.class, "actionWeights", double[][].class);
+    private double[][] actionWeights;
+
+    boolean halt = true;
 
     public static FragmentActionPicker ofDefaults() {
         double[] weights = new double[28];
@@ -18,6 +24,13 @@ public class FragmentActionPicker {
             throw new IllegalArgumentException("Weights length must be 28");
         }
         this.actionWeights = new double[4][7];
+
+        for(double w : weights) {
+            if (w > 0) {
+                this.halt = false;
+                break;
+            }
+        }
 
         int w = 0;
         for (int i = 0; i < this.actionWeights.length; i++) {
@@ -32,13 +45,14 @@ public class FragmentActionPicker {
     }
 
     public double predict(Action action, double[] inputs) {
-        return this.actionWeights[action.index][0] * inputs[0] +
-                this.actionWeights[action.index][1] * inputs[1] +
-                this.actionWeights[action.index][2] * inputs[2] +
-                this.actionWeights[action.index][3] * inputs[3] +
-                this.actionWeights[action.index][4] * inputs[4] +
-                this.actionWeights[action.index][5] * inputs[5] +
-                this.actionWeights[action.index][6];
+        double[][] actionWeights = (double[][]) WEIGHTS.getOpaque(this);
+        return actionWeights[action.index][0] * inputs[0] +
+                actionWeights[action.index][1] * inputs[1] +
+                actionWeights[action.index][2] * inputs[2] +
+                actionWeights[action.index][3] * inputs[3] +
+                actionWeights[action.index][4] * inputs[4] +
+                actionWeights[action.index][5] * inputs[5] +
+                actionWeights[action.index][6];
     }
 
     public void normalize(double[] inputs) {
@@ -50,6 +64,35 @@ public class FragmentActionPicker {
         for(int i = 0; i < inputs.length; i++) {
             inputs[i] /= length;
         }
+    }
+
+    public boolean halted() {
+        VarHandle.acquireFence();
+        return this.halt;
+    }
+
+    public void setWeights(double[] weights) {
+        if(weights.length != 28) {
+            throw new IllegalArgumentException("Weights length must be 28");
+        }
+
+        for(double w : weights) {
+            if (w > 0) {
+                this.halt = false;
+                VarHandle.releaseFence();
+                break;
+            }
+        }
+
+        double[][] actionWeights = new double[4][7];
+
+        int w = 0;
+        for (int i = 0; i < actionWeights.length; i++) {
+            for (int j = 0; j < actionWeights[i].length; j++) {
+                actionWeights[i][j] = weights[w++];
+            }
+        }
+        WEIGHTS.setVolatile(this, actionWeights);
     }
 
     public enum Input {
