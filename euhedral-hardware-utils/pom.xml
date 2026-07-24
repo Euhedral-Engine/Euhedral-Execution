@@ -47,6 +47,11 @@
       <groupId>ch.qos.logback</groupId>
       <artifactId>logback-core</artifactId>
     </dependency>
+    <dependency>
+      <groupId>com.tdunning</groupId>
+      <artifactId>t-digest</artifactId>
+      <version>3.3</version>
+    </dependency>
 
     <!--    Testing   -->
     <dependency>

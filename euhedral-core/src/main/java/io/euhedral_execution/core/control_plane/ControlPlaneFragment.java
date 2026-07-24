@@ -11,7 +11,6 @@ import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.generics.LatticeSource;
 import io.euhedral_execution.core.internal.Constants;
 import io.euhedral_execution.core.metrics.ExecutionMetrics;
-import io.euhedral_execution.core.utils.FlowDistribution;
 import io.euhedral_execution.core.utils.FlowRecorder;
 import io.euhedral_execution.core.utils.FlowThread;
 import io.euhedral_execution.core.utils.MathFunctions;
@@ -225,6 +224,12 @@ public final class ControlPlaneFragment extends WorkRequester {
                     long count = remoteExecute(context, limit);
                     processed += count;
                 }
+                if(this.benchmarkMode && this.actionPicker.halted()) {
+                    this.state.reset();
+                    Thread.onSpinWait();
+                    continue;
+                }
+
                 this.state.completed += processed;
                 this.state.totalExecutions += processed;
                 long end = System.nanoTime();
@@ -235,17 +240,15 @@ public final class ControlPlaneFragment extends WorkRequester {
                 this.state.actionInputs[0] = this.state.completed;
                 if(this.actionPicker.performAction(Action.SLEEP, this.state.actionInputs)) {
                     LockSupport.parkNanos(20_000);
+                } else {
+                    Thread.onSpinWait();
                 }
-                Thread.onSpinWait();
             }
         } catch (Exception e) {
             this.logger.error("[CRITICAL] Terminal error encountered in the main loop. Exiting.",
                     e);
         } finally {
             this.running.set(false);
-            if(this.benchmarkMode) {
-                this.config.benchmarkConfig().evaluationQueue().offer(this.state.throughputDistribution);
-            }
         }
     }
 
@@ -263,9 +266,6 @@ public final class ControlPlaneFragment extends WorkRequester {
 
     private void updateLimits(long nowNs, long lastLatency) {
         this.state.latencyRecorder.recordUnits(nowNs, lastLatency);
-        if(this.benchmarkMode) {
-            this.state.throughputDistribution.record(this.state.latencyRecorder.averageUnitsOverTime());
-        }
 
         if (this.state.completed < this.state.batchSize) {
             return;
@@ -400,7 +400,6 @@ public final class ControlPlaneFragment extends WorkRequester {
 
         final FlowRecorder batchRecorder = new FlowRecorder();
         final FlowRecorder latencyRecorder = new FlowRecorder();
-        final FlowDistribution throughputDistribution = new FlowDistribution();
         final double[] actionInputs = new double[6];
 
         long batchStart = 0;

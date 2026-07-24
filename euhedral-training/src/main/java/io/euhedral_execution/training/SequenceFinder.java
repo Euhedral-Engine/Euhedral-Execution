@@ -3,7 +3,6 @@ package io.euhedral_execution.training;
 import io.euhedral_execution.hashing.HasherApi;
 import io.euhedral_execution.training.networks.AbstractNeuralNetwork;
 import io.euhedral_execution.training.networks.LeakyReluNetwork;
-import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -36,34 +35,29 @@ public class SequenceFinder {
             this.learner = new LeakyReluNetwork(args[1]);
             return;
         } else {
-            this.learner = new LeakyReluNetwork(new int[]{28, 128, 128, 1}, 0.001, 0.01, 0.9);
+            this.learner = new LeakyReluNetwork(new int[]{28, 128, 128, 6}, 0.001, 0.01, 0.9);
         }
 
         Path path = Path.of(args[1]);
-        try (BufferedReader reader = Files.newBufferedReader(path)) {
-            List<String> lines = reader.lines().toList();
-            if (lines.isEmpty()) {
-                throw new Exception("Empty file");
-            }
-
+        try (BenchmarkRawDataReader reader = new BenchmarkRawDataReader(path)) {
             int[] choice = new int[10]; // 80% Train
             choice[8] = 1;                             // 10% Validation
             choice[9] = 2;                             // 10% Test
             long seed = ThreadLocalRandom.current().nextLong();
 
-            for (int i = 0; i < lines.size(); i += 2) {
-                String[] v = lines.get(i).split("\\s");
-                double[] vector = new double[v.length];
-                for (int j = 0; j < vector.length; j++) {
-                    vector[j] = Double.parseDouble(v[j]);
+            while(true) {
+                double[] vector = reader.readDoubleArray();
+                if(vector == null) {
+                    break;
                 }
 
-                String[] q = lines.get(i + 1).split("\\s");
-                double p50 = Double.parseDouble(q[2]);
+                double[] results = reader.readDoubleArray();
+
+                System.out.println(Arrays.toString(results));
 
                 // Uniform hash bucketing using xxHash64 high bits
                 int bucket = choice[(int) Math.unsignedMultiplyHigh(HasherApi.mix(seed++), 10)];
-                double[][] dataPair = new double[][]{vector, {p50}};
+                double[][] dataPair = new double[][]{vector, results};
 
                 // Distribute data points while keeping outliers proportionally split
                 if (bucket == 1) {

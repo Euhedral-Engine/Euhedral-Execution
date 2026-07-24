@@ -6,4 +6,5 @@ module euhedral.training {
     requires org.jspecify;
     requires static lombok;
     requires euhedral.hashing;
+    requires t.digest;
 }

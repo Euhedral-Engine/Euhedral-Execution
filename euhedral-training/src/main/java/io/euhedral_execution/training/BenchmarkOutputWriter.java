@@ -8,7 +8,7 @@ import java.nio.file.StandardOpenOption;
 import java.util.Objects;
 
 @SuppressWarnings("unused")
-public class FileWriter implements  AutoCloseable {
+public class BenchmarkOutputWriter implements AutoCloseable {
     private static final byte[] DIGITS = {
             '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'
     };
@@ -17,26 +17,39 @@ public class FileWriter implements  AutoCloseable {
 
     private final ByteBuffer buffer = ByteBuffer.allocateDirect(4096);
 
-    public FileWriter(Path path) throws Exception {
+    public BenchmarkOutputWriter(Path path) throws Exception {
         if(path.getParent() != null) {
             Files.createDirectories(path.getParent());
         }
         channel = FileChannel.open(path, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
     }
 
-    public void println(long num) throws Exception {
+    public void writeLine() throws Exception {
+        this.buffer.clear();
+        this.buffer.put((byte) '\n');
+        flush();
+    }
+
+    public void writeLine(long num) throws Exception {
         this.buffer.clear();
         writeLongToBuffer(num);
         this.buffer.put((byte)'\n');
-        this.buffer.flip();
-        this.channel.write(this.buffer);
+        flush();
     }
 
-    public void println(String string) throws Exception {
+    public void write(long num) throws Exception {
+        this.buffer.clear();
+        writeLongToBuffer(num);
+        flush();
+    }
+
+    public void writeLine(String string) throws Exception {
+        write(string);
+        writeLine();
+    }
+
+    public void write(String string) throws Exception {
         Objects.requireNonNull(string);
-        if(string.isBlank()) {
-            return;
-        }
 
         this.buffer.clear();
         for(int i = 0; i < string.length(); i++) {
@@ -46,30 +59,15 @@ public class FileWriter implements  AutoCloseable {
                 buffer.clear();
             }
         }
-        this.buffer.put((byte) '\n');
-        this.buffer.flip();
-        this.channel.write(this.buffer);
+        flush();
     }
 
-    public void print(String string) throws Exception {
-        Objects.requireNonNull(string);
-        if(string.isBlank()) {
-            return;
-        }
-
-        this.buffer.clear();
-        for(int i = 0; i < string.length(); i++) {
-            this.buffer.put((byte) string.charAt(i));
-            if(i == buffer.limit() - 1) {
-                this.channel.write(buffer);
-                buffer.clear();
-            }
-        }
-        this.buffer.flip();
-        this.channel.write(this.buffer);
+    public void spaceSeparatedWriteLine(double[] array) throws Exception {
+        spaceSeparatedWrite(array);
+        writeLine();
     }
 
-    public void printlnArraySpaceSeparated(double[] array) throws Exception {
+    public void spaceSeparatedWrite(double[] array) throws Exception {
         Objects.requireNonNull(array);
         if(array.length == 0) {
             return;
@@ -82,15 +80,18 @@ public class FileWriter implements  AutoCloseable {
                 this.buffer.put((byte) ' ');
             }
         }
-        this.buffer.put((byte) '\n');
-        this.buffer.flip();
-        this.channel.write(this.buffer);
+        flush();
     }
 
-    public void printlnArrayCommaSeparated(double[] array) throws Exception {
+    public void commaSeparatedWriteLine(double[] array) throws Exception {
+        commaSeparatedWrite(array);
+        writeLine();
+    }
+
+    public void commaSeparatedWrite(double[] array) throws Exception {
         Objects.requireNonNull(array);
         if(array.length == 0) {
-            return;
+            throw new RuntimeException("Empty Array");
         }
 
         this.buffer.clear();
@@ -101,7 +102,10 @@ public class FileWriter implements  AutoCloseable {
                 this.buffer.put((byte) ' ');
             }
         }
-        this.buffer.putChar('\n');
+        flush();
+    }
+
+    private void flush() throws Exception {
         this.buffer.flip();
         this.channel.write(this.buffer);
     }
