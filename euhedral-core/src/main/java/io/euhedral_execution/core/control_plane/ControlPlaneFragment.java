@@ -75,7 +75,7 @@ public final class ControlPlaneFragment extends WorkRequester {
     public ControlPlaneFragment(@NonNull FragmentConfig config) {
         super(config.cacheConfig());
         this.config = config;
-        this.benchmarkMode = config.benchmarkConfig() != null;
+        this.benchmarkMode = config.benchmarkMode();
         this.actionPicker = config.actionPicker();
 
         if (config.cloneConfig() == null) {
@@ -176,9 +176,6 @@ public final class ControlPlaneFragment extends WorkRequester {
             Objects.requireNonNull(context);
             context.upstream = getThreadUpstreamQueue();
 
-            if(this.benchmarkMode) {
-                Objects.requireNonNull(this.config.benchmarkConfig());
-            }
             while (keepRunning()) {
                 long newUpCount = context.upstream.getCachedUpCount();
                 if (this.state.upstreamCount != newUpCount && newUpCount > 0) {

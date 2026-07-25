@@ -37,8 +37,9 @@ class ControlPlaneFragmentTest {
                 cConfig(),
                 FragmentActionPicker.ofDefaults(),
                 4096,
+                false,
                 null,
-                null, null
+                null
         );
     }
 

@@ -1,4 +1,4 @@
-package io.euhedral_execution.training;
+package io.euhedral_execution.training.utils;
 
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
@@ -9,6 +9,7 @@ import java.util.Objects;
 
 @SuppressWarnings("unused")
 public class BenchmarkOutputWriter implements AutoCloseable {
+
     private static final byte[] DIGITS = {
             '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'
     };
@@ -18,10 +19,11 @@ public class BenchmarkOutputWriter implements AutoCloseable {
     private final ByteBuffer buffer = ByteBuffer.allocateDirect(4096);
 
     public BenchmarkOutputWriter(Path path) throws Exception {
-        if(path.getParent() != null) {
+        if (path.getParent() != null) {
             Files.createDirectories(path.getParent());
         }
-        channel = FileChannel.open(path, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
+        channel = FileChannel.open(path, StandardOpenOption.CREATE,
+                StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
     }
 
     public void writeLine() throws Exception {
@@ -33,7 +35,7 @@ public class BenchmarkOutputWriter implements AutoCloseable {
     public void writeLine(long num) throws Exception {
         this.buffer.clear();
         writeLongToBuffer(num);
-        this.buffer.put((byte)'\n');
+        this.buffer.put((byte) '\n');
         flush();
     }
 
@@ -52,9 +54,9 @@ public class BenchmarkOutputWriter implements AutoCloseable {
         Objects.requireNonNull(string);
 
         this.buffer.clear();
-        for(int i = 0; i < string.length(); i++) {
+        for (int i = 0; i < string.length(); i++) {
             this.buffer.put((byte) string.charAt(i));
-            if(i == buffer.limit() - 1) {
+            if (i == buffer.limit() - 1) {
                 this.channel.write(buffer);
                 buffer.clear();
             }
@@ -69,14 +71,14 @@ public class BenchmarkOutputWriter implements AutoCloseable {
 
     public void spaceSeparatedWrite(double[] array) throws Exception {
         Objects.requireNonNull(array);
-        if(array.length == 0) {
+        if (array.length == 0) {
             return;
         }
 
         this.buffer.clear();
-        for(int i = 0; i < array.length; i++) {
+        for (int i = 0; i < array.length; i++) {
             writeLongToBuffer(Double.doubleToLongBits(array[i]));
-            if(i < array.length - 1) {
+            if (i < array.length - 1) {
                 this.buffer.put((byte) ' ');
             }
         }
@@ -90,14 +92,14 @@ public class BenchmarkOutputWriter implements AutoCloseable {
 
     public void commaSeparatedWrite(double[] array) throws Exception {
         Objects.requireNonNull(array);
-        if(array.length == 0) {
+        if (array.length == 0) {
             throw new RuntimeException("Empty Array");
         }
 
         this.buffer.clear();
-        for(int i = 0; i < array.length; i++) {
+        for (int i = 0; i < array.length; i++) {
             writeLongToBuffer(Double.doubleToLongBits(array[i]));
-            if(i < array.length - 1) {
+            if (i < array.length - 1) {
                 this.buffer.put((byte) ',');
                 this.buffer.put((byte) ' ');
             }
@@ -156,8 +158,13 @@ public class BenchmarkOutputWriter implements AutoCloseable {
         buffer.position(currentPosition + length);
     }
 
+    public void force() throws Exception {
+        this.channel.force(true);
+    }
+
     @Override
     public void close() throws Exception {
+        force();
         this.channel.close();
         this.buffer.clear();
     }

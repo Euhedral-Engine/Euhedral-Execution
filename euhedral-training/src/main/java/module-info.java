@@ -7,4 +7,7 @@ module euhedral.training {
     requires static lombok;
     requires euhedral.hashing;
     requires t.digest;
+    requires deeplearning4j.nn;
+    requires nd4j.api;
+    requires deeplearning4j.utility.iterators;
 }
