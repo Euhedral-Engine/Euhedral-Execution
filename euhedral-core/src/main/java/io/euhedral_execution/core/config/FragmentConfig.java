@@ -2,8 +2,6 @@ package io.euhedral_execution.core.config;
 
 import io.euhedral_execution.core.control_plane.ControlPlaneFragment;
 import io.euhedral_execution.core.generics.CloneableObject;
-import io.euhedral_execution.core.utils.FlowDistribution;
-import io.euhedral_execution.data_structures.queues.common.ConcurrentQueue;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.Objects;
 import org.jspecify.annotations.NonNull;
@@ -21,9 +19,9 @@ public record FragmentConfig(@Nullable CloneConfig cloneConfig,
                              @NonNull CacheConfig cacheConfig,
                              @NonNull FragmentActionPicker actionPicker,
                              long maxBatchSize,
+                             boolean benchmarkMode,
                              @Nullable String metricPrefix,
-                             @Nullable MeterRegistry registry,
-                             @Nullable BenchmarkConfig benchmarkConfig)
+                             @Nullable MeterRegistry registry)
         implements CloneableObject {
 
     public static FragmentConfig ofDefaults() {
@@ -32,12 +30,11 @@ public record FragmentConfig(@Nullable CloneConfig cloneConfig,
 
     public static FragmentConfig ofDefaults(String metricPrefix, MeterRegistry meterRegistry) {
         return new FragmentConfig(null, CacheConfig.ofDefaults(metricPrefix, meterRegistry),
-                FragmentActionPicker.ofDefaults(), 4_096, metricPrefix, meterRegistry, null);
+                FragmentActionPicker.ofDefaults(), 4_096, false, metricPrefix, meterRegistry);
     }
 
-    public static FragmentConfig ofBenchmark(BenchmarkConfig benchmarkConfig) {
-        return new FragmentConfig(null, CacheConfig.ofDefaults(), benchmarkConfig.actionPicker,
-                4_096, null, null, benchmarkConfig);
+    public static FragmentConfig ofBenchmark(FragmentActionPicker actionPicker) {
+        return new FragmentConfig(null, CacheConfig.ofDefaults(), actionPicker, 4_096, true, null, null);
     }
 
     public FragmentConfig {
@@ -52,8 +49,7 @@ public record FragmentConfig(@Nullable CloneConfig cloneConfig,
     @Override
     public FragmentConfig clone(CloneConfig cloneConfig) {
         return new FragmentConfig(cloneConfig, this.cacheConfig.clone(cloneConfig),
-                this.actionPicker, this.maxBatchSize, this.metricPrefix, this.registry,
-                this.benchmarkConfig);
+                this.actionPicker, this.maxBatchSize, this.benchmarkMode, this.metricPrefix, this.registry);
     }
 
     @Override
@@ -62,11 +58,5 @@ public record FragmentConfig(@Nullable CloneConfig cloneConfig,
             return this.cloneConfig.coreId();
         }
         return -1;
-    }
-
-    public record BenchmarkConfig(long executionsPerCore,
-                                  ConcurrentQueue<FlowDistribution> evaluationQueue,
-                                  FragmentActionPicker actionPicker, Thread thread) {
-
     }
 }

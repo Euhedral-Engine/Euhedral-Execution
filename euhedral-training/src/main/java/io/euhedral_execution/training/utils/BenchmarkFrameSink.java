@@ -1,4 +1,4 @@
-package io.euhedral_execution.training;
+package io.euhedral_execution.training.utils;
 
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.generics.LatticeReceiver;
@@ -10,11 +10,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
-public class BenchmarkSink extends AbstractIngestSink {
+public class BenchmarkFrameSink extends AbstractIngestSink {
 
     private final Delegate delegate;
 
-    public BenchmarkSink(AbstractFrame[] frames) {
+    public BenchmarkFrameSink(AbstractFrame[] frames) {
         Objects.requireNonNull(frames);
         this.delegate = new Delegate(frames);
         VarHandle.fullFence();

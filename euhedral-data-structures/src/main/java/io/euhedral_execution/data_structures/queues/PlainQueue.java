@@ -67,7 +67,7 @@ public class PlainQueue<T> extends AbstractQueue<T> implements BatchableQueue<T>
 
     @Override
     public int size() {
-        return 0;
+        return (int) sizeLong();
     }
 
     @Override

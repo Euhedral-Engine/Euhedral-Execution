@@ -1,9 +1,14 @@
 package io.euhedral_execution.training;
 
+import static io.euhedral_execution.training.utils.CommonFunctions.round;
+
 import io.euhedral_execution.hashing.HasherApi;
 import io.euhedral_execution.training.networks.AbstractNeuralNetwork;
 import io.euhedral_execution.training.networks.LeakyReluNetwork;
-import java.io.BufferedWriter;
+import io.euhedral_execution.training.utils.BenchmarkOutputReader;
+import io.euhedral_execution.training.utils.BenchmarkOutputWriter;
+import io.euhedral_execution.training.utils.CommonFunctions;
+import io.euhedral_execution.training.utils.VectorGrouper;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -11,7 +16,6 @@ import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.PriorityQueue;
@@ -28,38 +32,38 @@ public class SequenceFinder {
     private final List<double[][]> testSet = new ArrayList<>();
 
     public SequenceFinder(String[] args) throws Exception {
-        if (args.length > 2) {
-            this.learner = new LeakyReluNetwork(args[2]);
-        }
-        else if(args.length == 2 && args[0].equals("generate")) {
-            this.learner = new LeakyReluNetwork(args[1]);
-            return;
+        boolean gen = System.getProperty("generate") != null;
+        String loadModel = System.getProperty("model");
+
+        if (loadModel != null && !loadModel.isBlank()) {
+            this.learner = new LeakyReluNetwork(loadModel);
         } else {
-            this.learner = new LeakyReluNetwork(new int[]{28, 128, 128, 6}, 0.001, 0.01, 0.9);
+            this.learner = new LeakyReluNetwork(new int[]{28, 128, 128, 64, 5}, 0.001, 0.01, 0.1);
+        }
+        if(gen) {
+            generate();
+            return;
         }
 
         Path path = Path.of(args[1]);
-        try (BenchmarkRawDataReader reader = new BenchmarkRawDataReader(path)) {
+        try (BenchmarkOutputReader reader = new BenchmarkOutputReader(path)) {
             int[] choice = new int[10]; // 80% Train
-            choice[8] = 1;                             // 10% Validation
-            choice[9] = 2;                             // 10% Test
+            choice[8] = 1;              // 10% Validation
+            choice[9] = 2;              // 10% Test
             long seed = ThreadLocalRandom.current().nextLong();
 
-            while(true) {
+            while (true) {
                 double[] vector = reader.readDoubleArray();
-                if(vector == null) {
+                if (vector == null) {
                     break;
                 }
 
                 double[] results = reader.readDoubleArray();
 
-                System.out.println(Arrays.toString(results));
-
-                // Uniform hash bucketing using xxHash64 high bits
+                // Uniform bucketing using xxHash64
                 int bucket = choice[(int) Math.unsignedMultiplyHigh(HasherApi.mix(seed++), 10)];
                 double[][] dataPair = new double[][]{vector, results};
 
-                // Distribute data points while keeping outliers proportionally split
                 if (bucket == 1) {
                     this.validationSet.add(dataPair);
                 } else if (bucket == 2) {
@@ -69,16 +73,17 @@ public class SequenceFinder {
                 }
             }
         }
+        train();
     }
 
     public void generate() throws Exception {
         int kClusters = 28;
         int maxClusterIterations = 500;
-        Path historicalData = Paths.get("output/raw_data.txt");
+        Path historicalData = Path.of(System.getProperty("data"));
 
         VectorGrouper grouper = new VectorGrouper(kClusters, maxClusterIterations, historicalData);
         List<VectorGrouper.ClusterScore> rankedClusters = grouper.getClusters();
-        double[] bestClusterCentroid = rankedClusters.get(0).cluster.centroid().getPoint();
+        double[] bestClusterCentroid = rankedClusters.getLast().cluster.centroid().getPoint();
 
         SobolSequenceGenerator generator = new SobolSequenceGenerator(28);
         generator.skipTo(1024);
@@ -88,16 +93,14 @@ public class SequenceFinder {
             Files.createDirectories(out.getParent());
         }
 
-        int cap = 16_384 - 2048;
-        PriorityQueue<Candidate> topCandidates = new PriorityQueue<>(cap + 1,
-                Comparator.comparingDouble(a -> a.score[0])
-        );
+        int cap = 32_768 - 4096;
+        PriorityQueue<Candidate> topCandidates = new PriorityQueue<>(cap + 1);
 
-        System.out.println("Screening 2^20 vectors using surrogate model...");
-        for (int i = 2048; i < Math.pow(2, 20); i++) {
+        System.out.println("Screening vectors...");
+        for (int i = 4096; i < Math.pow(2, 21); i++) {
             double[] vector = generator.get();
 
-            normalize(vector);
+            CommonFunctions.normalizeSobolVector(vector);
 
             Candidate candidate = new Candidate(vector, this.learner.predict(vector));
             topCandidates.add(candidate);
@@ -106,29 +109,23 @@ public class SequenceFinder {
             }
         }
 
-        try (BufferedWriter writer = Files.newBufferedWriter(out, StandardOpenOption.CREATE,
-                StandardOpenOption.TRUNCATE_EXISTING)) {
+        try (BenchmarkOutputWriter writer = new BenchmarkOutputWriter(out)) {
 
             while (!topCandidates.isEmpty()) {
-                String plainVector = toPlainStringSpaceSeparated(topCandidates.poll().vector);
-                writer.write(plainVector);
-                writer.newLine();
+                writer.spaceSeparatedWriteLine(topCandidates.poll().vector);
             }
 
-            int pureExplorationCount = 1024;
-            int localExploitationCount = 1024;
+            int pureExplorationCount = 2048;
+            int localExploitationCount = 2048;
 
-            System.out.println("Injecting 1,024 global exploration vectors.");
+            System.out.println("Injecting global exploration vectors.");
             for (int i = 0; i < pureExplorationCount; i++) {
                 double[] vector = generator.get();
-                normalize(vector);
-
-                String plainVector = toPlainStringSpaceSeparated(vector);
-                writer.write(plainVector);
-                writer.newLine();
+                CommonFunctions.normalizeSobolVector(vector);
+                writer.spaceSeparatedWriteLine(vector);
             }
 
-            System.out.println("Injecting 1,024 cluster-targeted exploitation vectors.");
+            System.out.println("Injecting cluster-targeted exploitation vectors.");
             Random noiseGenerator = new Random();
             for (int i = 0; i < localExploitationCount; i++) {
                 double[] explorationVector = new double[28];
@@ -136,46 +133,13 @@ public class SequenceFinder {
                     double noise = noiseGenerator.nextGaussian() * 0.05;
                     explorationVector[j] = bestClusterCentroid[j] + noise;
                 }
-                normalize(explorationVector);
+                CommonFunctions.normalizeSobolVector(explorationVector);
 
-                String plainVector = toPlainStringSpaceSeparated(explorationVector);
-                writer.write(plainVector);
-                writer.newLine();
+                writer.spaceSeparatedWriteLine(explorationVector);
             }
         }
-        System.out.println("Successfully generated 16,384 vectors for the next active learning execution loop.");
-    }
-
-
-    private static String toPlainStringSpaceSeparated(double[] vector) {
-        StringBuilder sb = new StringBuilder(512);
-        for (int i = 0; i < vector.length; i++) {
-            sb.append(new java.math.BigDecimal(Double.toString(vector[i])).toPlainString());
-            if (i < vector.length - 1) {
-                sb.append(" ");
-            }
-        }
-        return sb.toString();
-    }
-
-    private static void normalize(double[] vector) {
-        for (int d = 0; d < vector.length; d++) {
-            vector[d] = -1 + 2 * vector[d];
-        }
-
-        int count = 0;
-        while (count < vector.length) {
-            double squareSum = 0.0;
-            for (int i = count; i < count + 7; i++) {
-                squareSum += vector[i] * vector[i];
-            }
-
-            double length = Math.sqrt(squareSum);
-            for (int i = count; i < count + 7; i++) {
-                vector[i] /= length;
-            }
-            count += 7;
-        }
+        System.out.println(
+                "Successfully generated 32,768 vectors for the next active learning execution loop.");
     }
 
     public void train() throws Exception {
@@ -184,7 +148,7 @@ public class SequenceFinder {
         int epochsWithoutImprovement = 0;
         int patience = 15;
 
-        System.out.println("Starting training on L2-normalized vector space...");
+        System.out.println("Starting training on normalized vector space...");
         for (int i = 0; i < 500; i++) {
             Collections.shuffle(this.trainingSet);
 
@@ -194,7 +158,8 @@ public class SequenceFinder {
 
             double mse = evaluateSetLoss(this.validationSet);
 
-            System.out.printf("Epoch: %d | Train MAE: %.5f | Train MSE: %.5f | Validation MSE: %.5f\n",
+            System.out.printf(
+                    "Epoch: %d | Train MAE: %.5f | Train MSE: %.5f | Validation MSE: %.5f\n",
                     i, this.learner.getMAE(), this.learner.getMSE(), mse);
 
             if (mse < bestMSE) {
@@ -224,39 +189,49 @@ public class SequenceFinder {
     private double evaluateSetLoss(List<double[][]> dataset) {
         double totalLoss = 0;
         for (var v : dataset) {
-            double prediction = this.learner.predict(v[0])[0];
-            double error = v[1][0] - prediction;
-            totalLoss += (error * error);
+            double loss = 0;
+            double[] prediction = this.learner.predict(v[0]);
+            for(int i = 0; i < prediction.length; i++) {
+                double error = v[1][i] - prediction[i];
+                loss += (error * error);
+            }
+            totalLoss += loss / prediction.length;
         }
         return totalLoss / dataset.size();
     }
 
     private void runFinalEvaluation() {
         double totalAbsoluteError = 0;
-        List<DataResult> actualRanked = new ArrayList<>();
-        List<DataResult> predictedRanked = new ArrayList<>();
+        List<Candidate> actualRanked = new ArrayList<>();
+        List<Candidate> predictedRanked = new ArrayList<>();
 
         for (var v : this.testSet) {
-            double actual = v[1][0];
+            double[] actual = v[1];
             double[] prediction = this.learner.predict(v[0]);
-            totalAbsoluteError += Math.abs(actual - prediction[0]);
 
-            actualRanked.add(new DataResult(v[0], v[1]));
-            predictedRanked.add(new DataResult(v[0], prediction));
+            double mae = 0;
+            for(int i = 0; i < actual.length; i++) {
+                double error = Math.abs(actual[i] - prediction[i]);
+                mae += error;
+            }
+            totalAbsoluteError += mae / actual.length;
+
+            actualRanked.add(new Candidate(v[0], v[1]));
+            predictedRanked.add(new Candidate(v[0], prediction));
         }
 
-        actualRanked.sort((a, b) -> Double.compare(b.score[0], a.score[0]));
-        predictedRanked.sort((a, b) -> Double.compare(b.score[0], a.score[0]));
+        Collections.sort(actualRanked);
+        Collections.sort(predictedRanked);
 
         // Quantify Top 10% configuration ranking accuracy
         int topK = Math.max(1, this.testSet.size() / 10);
-        Set<DataResult> topActualVectors = new HashSet<>();
-        for (int i = 0; i < topK; i++) {
+        Set<Candidate> topActualVectors = new HashSet<>();
+        for (int i = actualRanked.size() - 1; i > actualRanked.size() - topK; i--) {
             topActualVectors.add(actualRanked.get(i));
         }
 
         int matches = 0;
-        for (int i = 0; i < topK; i++) {
+        for (int i = predictedRanked.size() - 1; i > predictedRanked.size() - topK; i--) {
             if (topActualVectors.contains(predictedRanked.get(i))) {
                 matches++;
             }
@@ -264,33 +239,45 @@ public class SequenceFinder {
 
         double matchPercentage = ((double) matches / topK) * 100.0;
         System.out.println("\n============ FINAL TEST SET EVALUATION ============");
-        System.out.printf("Test Set Mean Absolute Error (MAE): %.6f total ops/ns\n",
+        System.out.printf("Test Set Mean Absolute Error (MAE): %.6f%%\n",
                 (totalAbsoluteError / this.testSet.size()));
         System.out.printf("Top-%d Candidate Ranking Match Accuracy: %.2f%%\n", topK,
                 matchPercentage);
         System.out.println("===================================================\n\n");
     }
 
-    private record DataResult(double[] vector, double[] score) {
+    private record Candidate(double[] vector, double[] quantiles) implements Comparable<Candidate> {
+
         @Override
         public boolean equals(Object o) {
-            if(o instanceof DataResult(double[] vector1, double[] score1)) {
-                return Arrays.equals(vector, vector1) && Arrays.equals(score, score1);
+            if (o instanceof Candidate(double[] vector1, double[] q1)) {
+                return Arrays.equals(vector, vector1);
             }
             return false;
         }
 
         @Override
         public int hashCode() {
-            return Arrays.hashCode(vector) ^ Arrays.hashCode(score);
+            return Arrays.hashCode(vector);
         }
-    }
-
-    private record Candidate(double[] vector, double[] score) implements Comparable<Candidate> {
 
         @Override
         public int compareTo(Candidate o) {
-            return Double.compare(this.score[0], o.score[0]);
+            int p50 = Double.compare(round(this.quantiles[0]), round(o.quantiles[0]));
+            if(p50 != 0) {
+                return p50;
+            }
+
+            double myIqr = round(this.quantiles[3]) - round(this.quantiles[1]);
+            double otherIqr = round(o.quantiles[3]) - round(o.quantiles[1]);
+            int iqr = Double.compare(otherIqr, myIqr);
+            if(iqr != 0) {
+                return iqr;
+            }
+
+            double myTails = round(this.quantiles[4]) - round(this.quantiles[0]);
+            double otherTails = round(o.quantiles[4]) - round(o.quantiles[0]);
+            return Double.compare(otherTails, myTails);
         }
     }
 }

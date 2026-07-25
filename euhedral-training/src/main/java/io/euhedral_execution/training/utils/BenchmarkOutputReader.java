@@ -1,17 +1,17 @@
-package io.euhedral_execution.training;
+package io.euhedral_execution.training.utils;
 
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 
-public class BenchmarkRawDataReader implements AutoCloseable {
+public class BenchmarkOutputReader implements AutoCloseable {
 
     private final FileChannel channel;
 
     private final ByteBuffer buffer = ByteBuffer.allocateDirect(4096);
 
-    public BenchmarkRawDataReader(Path path) throws Exception {
+    public BenchmarkOutputReader(Path path) throws Exception {
         this.channel = FileChannel.open(path, StandardOpenOption.READ);
         this.buffer.limit(0);
     }
