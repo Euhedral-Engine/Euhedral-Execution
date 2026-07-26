@@ -4,6 +4,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import lombok.Getter;
 
 public class BenchmarkOutputReader implements AutoCloseable {
 
@@ -11,8 +12,24 @@ public class BenchmarkOutputReader implements AutoCloseable {
 
     private final ByteBuffer buffer = ByteBuffer.allocateDirect(4096);
 
+    @Getter
+    final long lines;
+
     public BenchmarkOutputReader(Path path) throws Exception {
         this.channel = FileChannel.open(path, StandardOpenOption.READ);
+        this.buffer.limit(0);
+
+        long lines = 0;
+        int b;
+        while((b = peek()) != -1) {
+            if (b == '\n') {
+                lines++;
+            }
+            next();
+        }
+        this.lines = lines;
+        this.channel.position(0);
+        this.buffer.clear();
         this.buffer.limit(0);
     }
 

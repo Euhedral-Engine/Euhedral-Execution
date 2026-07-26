@@ -24,7 +24,34 @@ import java.util.concurrent.atomic.AtomicInteger;
 @SuppressWarnings("unchecked")
 public class DataMerger {
 
-    public static void run() throws Exception {
+    public static void mergeVectors() throws Exception {
+        Files.createDirectories(Path.of("output/merger"));
+
+        System.out.println("Merging...");
+        try(BenchmarkOutputWriter writer = new BenchmarkOutputWriter(Path.of("output/merger/merged-vectors"))) {
+            Set<Integer> added = new HashSet<>(32_768);
+            Files.list(Path.of("input/merger")).forEach(p -> {
+                try(BenchmarkOutputReader reader = new BenchmarkOutputReader(p)) {
+                    double[] vector = reader.readDoubleArray();
+                    while(vector != null) {
+                        if(vector.length == 28) {
+                            int hash = Arrays.hashCode(vector);
+                            if(!added.contains(hash)) {
+                                writer.spaceSeparatedWriteLine(vector);
+                                added.add(hash);
+                            }
+                        }
+                        vector = reader.readDoubleArray();
+                    }
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            });
+            System.out.println("Merged " + added.size() + " vectors.");
+        }
+    }
+
+    public static void mergeQuentiles() throws Exception {
         File input = new File("input/merger");
         Files.createDirectories(Path.of("output/merger/temp"));
         Files.createDirectories(input.toPath());

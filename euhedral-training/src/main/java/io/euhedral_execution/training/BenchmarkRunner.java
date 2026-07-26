@@ -101,11 +101,7 @@ public class BenchmarkRunner {
                 Distribution distribution = new Distribution(vector);
                 Arrays.fill(means, 0);
 
-                if(generator.limit == Integer.MAX_VALUE) {
-                    System.out.println("Vector: " + index++);
-                } else {
-                    System.out.printf("Vector: (%d / %d)%n", index++, generator.limit);
-                }
+                System.out.printf("Vector: (%d / %d)%n", index++, generator.limit);
 
                 double[] state = new double[]{0, 0, 0};
                 actionPicker.setWeights(vector);
@@ -221,7 +217,7 @@ public class BenchmarkRunner {
 
         final SobolSequenceGenerator generator;
         final BenchmarkOutputReader reader;
-        final int limit;
+        final long limit;
 
         int count = 0;
 
@@ -233,9 +229,9 @@ public class BenchmarkRunner {
         }
 
         public VectorProducer(Path path) throws Exception {
-            this.limit = Integer.MAX_VALUE;
             this.generator = null;
             this.reader = new BenchmarkOutputReader(path);
+            this.limit = this.reader.getLines();
         }
 
         double[] get() {
