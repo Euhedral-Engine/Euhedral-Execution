@@ -2,9 +2,9 @@ package io.euhedral_execution.training;
 
 import static io.euhedral_execution.training.utils.CommonFunctions.round;
 
+import io.euhedral_execution.data_structures.queues.PlainQueue;
 import io.euhedral_execution.hashing.HasherApi;
-import io.euhedral_execution.training.networks.AbstractNeuralNetwork;
-import io.euhedral_execution.training.networks.LeakyReluNetwork;
+import io.euhedral_execution.training.networks.DL4JVectorScoringNetwork;
 import io.euhedral_execution.training.utils.BenchmarkOutputReader;
 import io.euhedral_execution.training.utils.BenchmarkOutputWriter;
 import io.euhedral_execution.training.utils.CommonFunctions;
@@ -13,6 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -23,10 +24,14 @@ import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import org.apache.commons.math4.legacy.random.SobolSequenceGenerator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class SequenceFinder {
 
-    private final AbstractNeuralNetwork learner;
+    private static final Logger LOGGER = LoggerFactory.getLogger(SequenceFinder.class);
+
+    private DL4JVectorScoringNetwork learner;
     private final List<double[][]> trainingSet = new ArrayList<>();
     private final List<double[][]> validationSet = new ArrayList<>();
     private final List<double[][]> testSet = new ArrayList<>();
@@ -36,16 +41,17 @@ public class SequenceFinder {
         String loadModel = System.getProperty("model");
 
         if (loadModel != null && !loadModel.isBlank()) {
-            this.learner = new LeakyReluNetwork(loadModel);
+            this.learner = new DL4JVectorScoringNetwork(loadModel);
         } else {
-            this.learner = new LeakyReluNetwork(new int[]{28, 128, 128, 64, 5}, 0.001, 0.01, 0.1);
+            // Use DL4J-backed network; keep a similar capacity to the legacy network
+            this.learner = new DL4JVectorScoringNetwork(new long[]{28, 128, 128, 64, 5});
         }
         if(gen) {
             generate();
             return;
         }
 
-        Path path = Path.of(args[1]);
+        Path path = Path.of(System.getProperty("data"));
         try (BenchmarkOutputReader reader = new BenchmarkOutputReader(path)) {
             int[] choice = new int[10]; // 80% Train
             choice[8] = 1;              // 10% Validation
@@ -86,7 +92,7 @@ public class SequenceFinder {
         double[] bestClusterCentroid = rankedClusters.getLast().cluster.centroid().getPoint();
 
         SobolSequenceGenerator generator = new SobolSequenceGenerator(28);
-        generator.skipTo(1024);
+        generator.skipTo(131_072);
 
         Path out = Paths.get("output/temp_data");
         if (out.getParent() != null) {
@@ -96,16 +102,31 @@ public class SequenceFinder {
         int cap = 32_768 - 4096;
         PriorityQueue<Candidate> topCandidates = new PriorityQueue<>(cap + 1);
 
-        System.out.println("Screening vectors...");
-        for (int i = 4096; i < Math.pow(2, 21); i++) {
-            double[] vector = generator.get();
+        LOGGER.info("Screening vectors...");
 
-            CommonFunctions.normalizeSobolVector(vector);
+        double[][] batch = new double[16_384][];
+        PlainQueue<Candidate> recycle = new PlainQueue<>(16_384);
+        NumberFormat format = NumberFormat.getNumberInstance();
+        for (int i = 4096; i < Math.pow(2, 21); i += 16_384) {
+            LOGGER.info("Progress: {} / {}", format.format(i), format.format((int) Math.pow(2, 21)));
+            for(int j = 0; j < 16_384; j++) {
+                batch[j] = generator.get();
+                CommonFunctions.normalizeSobolVector(batch[j]);
+            }
+            double[][] predictions = this.learner.predict(batch);
+            for(int j = 0; j < 16_384; j++) {
+                Candidate candidate = recycle.poll();
+                if(candidate == null) {
+                    candidate = new Candidate(batch[j], predictions[j]);
+                } else {
+                    System.arraycopy(batch[j], 0, candidate.vector, 0, batch[j].length);
+                    System.arraycopy(predictions[j], 0, candidate.quantiles, 0, predictions[j].length);
+                }
+                topCandidates.add(candidate);
+            }
 
-            Candidate candidate = new Candidate(vector, this.learner.predict(vector));
-            topCandidates.add(candidate);
-            if (topCandidates.size() > cap) {
-                topCandidates.poll();
+            while (topCandidates.size() > cap) {
+                recycle.offer(topCandidates.poll());
             }
         }
 
@@ -118,14 +139,14 @@ public class SequenceFinder {
             int pureExplorationCount = 2048;
             int localExploitationCount = 2048;
 
-            System.out.println("Injecting global exploration vectors.");
+            LOGGER.info("Injecting global exploration vectors.");
             for (int i = 0; i < pureExplorationCount; i++) {
                 double[] vector = generator.get();
                 CommonFunctions.normalizeSobolVector(vector);
                 writer.spaceSeparatedWriteLine(vector);
             }
 
-            System.out.println("Injecting cluster-targeted exploitation vectors.");
+            LOGGER.info("Injecting cluster-targeted exploitation vectors.");
             Random noiseGenerator = new Random();
             for (int i = 0; i < localExploitationCount; i++) {
                 double[] explorationVector = new double[28];
@@ -138,51 +159,52 @@ public class SequenceFinder {
                 writer.spaceSeparatedWriteLine(explorationVector);
             }
         }
-        System.out.println(
+        LOGGER.info(
                 "Successfully generated 32,768 vectors for the next active learning execution loop.");
     }
 
     public void train() throws Exception {
-        String bestModel = this.learner.export();
-        double bestMSE = evaluateSetLoss(this.validationSet);
-        int epochsWithoutImprovement = 0;
-        int patience = 15;
-
-        System.out.println("Starting training on normalized vector space...");
-        for (int i = 0; i < 500; i++) {
-            Collections.shuffle(this.trainingSet);
-
-            for (var v : this.trainingSet) {
-                this.learner.train(v[0], v[1]);
-            }
-
-            double mse = evaluateSetLoss(this.validationSet);
-
-            System.out.printf(
-                    "Epoch: %d | Train MAE: %.5f | Train MSE: %.5f | Validation MSE: %.5f\n",
-                    i, this.learner.getMAE(), this.learner.getMSE(), mse);
-
-            if (mse < bestMSE) {
-                bestMSE = mse;
-                epochsWithoutImprovement = 0;
-                bestModel = this.learner.export();
-            } else {
-                epochsWithoutImprovement++;
-                if (epochsWithoutImprovement >= patience) {
-                    System.out.printf(
-                            "Early stopping triggered at Epoch %d. Best Validation Loss: %.5f\n", i,
-                            bestMSE);
-                    break;
-                }
-            }
-        }
-
-        runFinalEvaluation();
-        Path modelPath = Paths.get("output/model/latest");
+        Path modelPath = Paths.get("output/model/best.bin");
         if (modelPath.getParent() != null) {
             Files.createDirectories(modelPath.getParent());
         }
-        Files.writeString(modelPath, bestModel, StandardOpenOption.CREATE,
+
+        // Convert training/validation sets to double arrays for batch training
+        int trainSize = this.trainingSet.size();
+        int valSize = this.validationSet.size();
+
+        double[][] trainInputs = new double[trainSize][];
+        double[][] trainTargets = new double[trainSize][];
+        for (int i = 0; i < trainSize; i++) {
+            trainInputs[i] = this.trainingSet.get(i)[0];
+            trainTargets[i] = this.trainingSet.get(i)[1];
+        }
+
+        double[][] valInputs = new double[valSize][];
+        double[][] valTargets = new double[valSize][];
+        for (int i = 0; i < valSize; i++) {
+            valInputs[i] = this.validationSet.get(i)[0];
+            valTargets[i] = this.validationSet.get(i)[1];
+        }
+
+        // Train with early stopping and automatic model checkpointing
+        this.learner = this.learner.trainWithEarlyStopping(
+                trainInputs, trainTargets,
+                valInputs, valTargets,
+                modelPath.toString(),
+                500,    // maxEpochs
+                15,     // patience
+                64      // batchSize
+        );
+
+        runFinalEvaluation();
+
+        // Write marker file for compatibility
+        Path latestMarker = Paths.get("output/model/latest");
+        if (latestMarker.getParent() != null) {
+            Files.createDirectories(latestMarker.getParent());
+        }
+        Files.writeString(latestMarker, modelPath.toString(), StandardOpenOption.CREATE,
                 StandardOpenOption.TRUNCATE_EXISTING);
     }
 
@@ -238,12 +260,10 @@ public class SequenceFinder {
         }
 
         double matchPercentage = ((double) matches / topK) * 100.0;
-        System.out.println("\n============ FINAL TEST SET EVALUATION ============");
-        System.out.printf("Test Set Mean Absolute Error (MAE): %.6f%%\n",
-                (totalAbsoluteError / this.testSet.size()));
-        System.out.printf("Top-%d Candidate Ranking Match Accuracy: %.2f%%\n", topK,
-                matchPercentage);
-        System.out.println("===================================================\n\n");
+        LOGGER.info("============ FINAL TEST SET EVALUATION ============");
+        LOGGER.info("Test Set Mean Absolute Error (MAE): {}", (totalAbsoluteError / this.testSet.size()));
+        LOGGER.info("Top-10% Candidate Ranking Match Accuracy: {}", matchPercentage);
+        LOGGER.info("===================================================\n\n");
     }
 
     private record Candidate(double[] vector, double[] quantiles) implements Comparable<Candidate> {
