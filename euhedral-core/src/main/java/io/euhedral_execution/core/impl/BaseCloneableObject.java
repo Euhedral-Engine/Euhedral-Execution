@@ -122,6 +122,18 @@ public final class BaseCloneableObject implements CloneableObject {
     }
 
     @Override
+    public long resetForNextTrial(long deadlineNanos) {
+        long cleared = 0;
+        if (this.fragment != null) {
+            cleared += this.fragment.resetForNextTrial(deadlineNanos);
+        }
+        if (this.executor != null) {
+            cleared += this.executor.resetForNextTrial(deadlineNanos);
+        }
+        return cleared;
+    }
+
+    @Override
     public int getCore() {
         return this.config == null ? -1 : this.config.coreId();
     }
