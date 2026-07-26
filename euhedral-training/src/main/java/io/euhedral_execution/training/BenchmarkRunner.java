@@ -34,13 +34,25 @@ import org.apache.commons.math4.legacy.random.SobolSequenceGenerator;
 public class BenchmarkRunner {
     private static final PriorityQueue<Distribution> TOP_SCORES = new PriorityQueue<>(11);
 
-    public static void run(String[] args) throws Exception {
-        BenchmarkFrame[][] frames = new BenchmarkFrame[SystemInfo.getCoreCount()][];
+    private static BenchmarkFrame[][] generateFrames() {
+        String sourceRatio = System.getProperty("sourceRatio");
 
+        int sources = SystemInfo.getCoreCount();
+        if(sourceRatio != null && !sourceRatio.isBlank()) {
+            double ratio = Double.parseDouble(sourceRatio);
+            sources = (int) Math.round(SystemInfo.getCoreCount() * ratio);
+            sources = Math.max(sources, 1);
+        }
+
+        BenchmarkFrame[][] frames = new BenchmarkFrame[sources][];
         for (int i = 0; i < frames.length; i++) {
-            frames[i] = BenchmarkFrame.generate(1_000_000, false,
+            frames[i] = BenchmarkFrame.generate(100_000, false,
                     ThreadLocalRandom.current().nextLong());
         }
+        return frames;
+    }
+    public static void run(String[] args) throws Exception {
+        BenchmarkFrame[][] frames = generateFrames();
 
         VectorProducer generator;
         if (args.length > 1) {
