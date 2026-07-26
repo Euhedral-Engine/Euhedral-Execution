@@ -147,6 +147,17 @@ Training:
 - `training.topDecileWeight=2.0`
 - `training.labelSmoothing=0.02`
 
+Candidate generation now combines three sources:
+
+- a two-pass low-discrepancy Sobol screen, sampled from every empirical classifier-score decile
+- multi-island, full-covariance CMA-ES proposals seeded by measured historical winners
+- direct unscreened Sobol vectors that bypass the classifier completely
+
+The score-band budget is intentionally top-heavy but nonzero in every band. Candidate order is
+shuffled after selection so classifier score does not line up with thermal or temporal benchmark
+drift. CMA-ES normalizes each seven-weight action chunk after sampling while retaining a full 28x28
+covariance matrix, so it can learn both within-action and cross-action relationships.
+
 Candidate generation:
 
 - `candidate.screenLimit=2097152`
@@ -161,6 +172,18 @@ Candidate generation:
 Each closed-loop iteration advances by `candidate.sobolStride`, so it screens a new deterministic
 Sobol region rather than rescoring the same population. Model-selected candidates are written in
 best-first order before global and local exploration vectors.
+
+Source-count coverage:
+
+- `benchmark.sourceCounts=1,2,4,8` sets explicit absolute source counts
+- `benchmark.sourceRatios=0.25,0.5,1.0` derives counts from available cores
+- `benchmark.sourceConfigurationsPerIteration=2` controls the rotating subset per iteration
+
+Each source count is benchmarked in a newly constructed lattice and written to a separate raw file.
+The merger normalizes those files independently before combining equal policy vectors, preventing
+high-source-count raw throughput from dominating the universal policy objective. Between policy
+trials, sources are paused behind an in-flight callback barrier and the lattice explicitly resets all
+socket and fragment caches.
 
 Benchmarking:
 
