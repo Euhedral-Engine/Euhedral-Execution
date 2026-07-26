@@ -23,8 +23,10 @@ import io.euhedral_execution.hardware_utils.common.SystemUtilization.CoreSnapsho
 import io.euhedral_execution.hardware_utils.common.SystemUtilization.CpuSnapshot;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
+import java.util.Arrays;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.LockSupport;
 import lombok.Getter;
 import org.jspecify.annotations.NonNull;
@@ -65,6 +67,9 @@ public final class ControlPlaneFragment extends WorkRequester {
     @Getter
     private final FragmentConfig config;
     private final AtomicBoolean running = new AtomicBoolean(false);
+    private final AtomicLong resetRequested = new AtomicLong();
+    private final AtomicLong resetCompleted = new AtomicLong();
+    private final AtomicLong resetCleared = new AtomicLong();
     private final PinnedThreadExecutor mainExecutor;
     private final CycleState state;
     boolean drainMode = false;
@@ -177,6 +182,12 @@ public final class ControlPlaneFragment extends WorkRequester {
             context.upstream = getThreadUpstreamQueue();
 
             while (keepRunning()) {
+                serviceResetRequest();
+                if (this.benchmarkMode && this.actionPicker.halted()) {
+                    Thread.onSpinWait();
+                    continue;
+                }
+
                 long newUpCount = context.upstream.getCachedUpCount();
                 if (this.state.upstreamCount != newUpCount && newUpCount > 0) {
                     this.state.upstreamCount = newUpCount;
@@ -221,12 +232,6 @@ public final class ControlPlaneFragment extends WorkRequester {
                     long count = remoteExecute(context, limit);
                     processed += count;
                 }
-                if(this.benchmarkMode && this.actionPicker.halted()) {
-                    this.state.reset();
-                    Thread.onSpinWait();
-                    continue;
-                }
-
                 this.state.completed += processed;
                 this.state.totalExecutions += processed;
                 long end = System.nanoTime();
@@ -327,6 +332,10 @@ public final class ControlPlaneFragment extends WorkRequester {
 
     private long idleSpin(FlowThread.FlowContext threadContext) {
         while (keepRunning()) {
+            serviceResetRequest();
+            if (this.benchmarkMode && this.actionPicker.halted()) {
+                return 0;
+            }
             long upCount = threadContext.upstream.getTrueUpstreamCount();
             if (upCount > 0) {
                 return upCount;
@@ -347,6 +356,45 @@ public final class ControlPlaneFragment extends WorkRequester {
 
     private boolean keepRunning() {
         return this.running.getOpaque() && !Thread.currentThread().isInterrupted();
+    }
+
+    private void serviceResetRequest() {
+        long requested = this.resetRequested.getAcquire();
+        if (requested <= this.resetCompleted.getOpaque() || this.state == null) {
+            return;
+        }
+
+        long cleared = super.clearLocalCacheOnOwnerThread();
+        this.state.reset();
+        this.resetCleared.setRelease(cleared);
+        this.resetCompleted.setRelease(requested);
+    }
+
+    @Override
+    public long resetForNextTrial(long deadlineNanos) {
+        if (this.state == null) {
+            return 0;
+        }
+        if (!this.running.getAcquire()) {
+            long cleared = super.clearLocalCacheOnOwnerThread();
+            this.state.reset();
+            return cleared;
+        }
+
+        long request = this.resetRequested.incrementAndGet();
+        Thread owner = this.mainThread;
+        if (owner != null) {
+            LockSupport.unpark(owner);
+        }
+        while (this.resetCompleted.getAcquire() < request
+                && this.running.getAcquire() && System.nanoTime() < deadlineNanos) {
+            LockSupport.parkNanos(5_000L);
+        }
+        if (this.resetCompleted.getAcquire() < request) {
+            throw new IllegalStateException(
+                    "Timed out resetting fragment cache on core " + this.core);
+        }
+        return this.resetCleared.getAcquire();
     }
 
     @Override
@@ -415,6 +463,9 @@ public final class ControlPlaneFragment extends WorkRequester {
             this.batchStart = 0;
             this.batchSize = 2;
             this.completed = 0;
+            this.upstreamCount = 0;
+            this.totalExecutions = 0;
+            Arrays.fill(this.actionInputs, 0.0);
         }
     }
 }
