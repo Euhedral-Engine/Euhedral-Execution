@@ -72,12 +72,11 @@ public final class TopologyMapper {
 
             EffectiveSystemTopology effectiveTopology = this.effectiveTopology;
 
-            BitSet socketUpdated = new BitSet(SystemInfo.MAX_SOCKET_ID);
-            socketUpdated.or(globalEffectiveSockets);
-            socketUpdated.xor(effectiveTopology.effectiveSockets);
-
-            if (socketUpdated.cardinality() > 0) {
-                List<EffectiveSocketTopology> sTopologies = buildSocketTopologies(globalEffectiveCpus, globalEffectiveCores, socketUpdated);
+            if (!globalEffectiveSockets.equals(effectiveTopology.effectiveSockets)
+                    || !globalEffectiveCores.equals(effectiveTopology.effectiveCores)
+                    || !globalEffectiveCpus.equals(effectiveTopology.effectiveCpus)) {
+                List<EffectiveSocketTopology> sTopologies = buildSocketTopologies(
+                        globalEffectiveCpus, globalEffectiveCores, globalEffectiveSockets);
 
                 int version = globalVersion.incrementAndGet();
                 this.effectiveTopology = new EffectiveSystemTopology(
@@ -106,12 +105,11 @@ public final class TopologyMapper {
     private List<EffectiveSocketTopology> buildSocketTopologies(BitSet globalEffectiveCpus, BitSet globalEffectiveCores, BitSet globalEffectiveSockets) {
         EffectiveSystemTopology effectiveTopology = this.effectiveTopology;
 
-        List<EffectiveSocketTopology> sTopologies = new ArrayList<>();
-        effectiveTopology.socketTopologies.forEach(t -> sTopologies.add(null));
+        List<EffectiveSocketTopology> sTopologies = new ArrayList<>(
+                Collections.nCopies(SystemInfo.getMaxSocketId() + 1, null));
 
         for(int socket = 0; socket <= SystemInfo.getMaxSocketId(); socket++) {
             if(!globalEffectiveSockets.get(socket)) {
-                sTopologies.add(null);
                 continue;
             }
 
@@ -123,7 +121,7 @@ public final class TopologyMapper {
             effectiveCpus.and(globalEffectiveCpus);
 
             EffectiveSocketTopology socketTopology = effectiveTopology.socketTopologies.size() > socket ? effectiveTopology.socketTopologies.get(socket) : null;
-            sTopologies.add(socket, new EffectiveSocketTopology(
+            sTopologies.set(socket, new EffectiveSocketTopology(
                     socketTopology == null ? 1 : socketTopology.version + 1, socket,
                     new UnmodifiableBitSet(effectiveCores),
                     new UnmodifiableBitSet(effectiveCpus),

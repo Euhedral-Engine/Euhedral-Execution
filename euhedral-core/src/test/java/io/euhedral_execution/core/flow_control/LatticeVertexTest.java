@@ -77,6 +77,18 @@ class LatticeVertexTest {
     }
 
     @Test
+    void shouldReportUpstreamCacheCapacityInsteadOfOccupancy() {
+        LatticeVertex upstream = new LatticeVertex(
+                "upstream", 1, RoutingFunction.DEFAULT, 256, RoutingPolicy.ANYWHERE);
+        LatticeEdge edge = new LatticeEdge(new AtomicBoolean());
+        edge.setParent(upstream);
+        node.setParent(edge);
+
+        assertEquals(288, node.getUpstreamCacheCapacity());
+        assertEquals(0, node.getUpstreamCacheCount());
+    }
+
+    @Test
     void shouldSetDrainFlag() {
         node.setDrain(true);
 
