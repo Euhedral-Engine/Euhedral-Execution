@@ -1,0 +1,30 @@
+name: Agent tree capture
+
+on:
+  pull_request:
+    branches:
+      - ml-training
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Capture branch tree
+        shell: bash
+        run: |
+          HEAD_SHA='${{ github.event.pull_request.head.sha }}'
+          {
+            echo "head_sha=$HEAD_SHA"
+            echo "head_tree=$(git rev-parse "$HEAD_SHA^{tree}")"
+            echo "base_sha=${{ github.event.pull_request.base.sha }}"
+          } > tree.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tree
+          path: tree.txt
