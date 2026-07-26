@@ -1,4 +1,4 @@
-name: Agent tree capture
+name: Agent patch application
 
 on:
   pull_request:
@@ -6,25 +6,29 @@ on:
       - ml-training
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  capture:
+  apply:
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
-      - name: Capture branch tree
+      - name: Apply pending patch
         shell: bash
         run: |
-          HEAD_SHA='${{ github.event.pull_request.head.sha }}'
-          {
-            echo "head_sha=$HEAD_SHA"
-            echo "head_tree=$(git rev-parse "$HEAD_SHA^{tree}")"
-            echo "base_sha=${{ github.event.pull_request.base.sha }}"
-          } > tree.txt
-      - uses: actions/upload-artifact@v4
-        with:
-          name: tree
-          path: tree.txt
+          if [[ ! -f .agent/pending.patch ]]; then
+            echo 'No pending patch.'
+            exit 0
+          fi
+          git apply --check .agent/pending.patch
+          git apply --index .agent/pending.patch
+          git rm .agent/pending.patch
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Apply agent implementation patch'
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
