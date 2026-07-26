@@ -109,7 +109,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
         if (this.hasCache) {
             total += this.cachePool;
         }
-        total += super.getUpstreamCacheCount();
+        total += super.getUpstreamCacheCapacity();
         return total < 0 ? Long.MAX_VALUE : total;
     }
 

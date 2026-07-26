@@ -325,7 +325,7 @@ public final class ControlPlaneLattice implements LatticeTerminal {
         }
         AtomicInteger shutDown = new AtomicInteger(0);
         for (int i = 0; i < this.shardHandles.length; i++) {
-            if (!newShards.get(i)) {
+            if (!newShards.get(i) && this.shardHandles[i] != null) {
                 HANDLES.setRelease(this.shardHandles, i, null);
                 shutDown.incrementAndGet();
             }
@@ -389,6 +389,8 @@ public final class ControlPlaneLattice implements LatticeTerminal {
                 }
                 this.rebalancing.lazySet(false);
             }, this.controlPlaneExecutor);
+        } else {
+            this.rebalancing.lazySet(false);
         }
     }
 

@@ -24,7 +24,6 @@ import io.euhedral_execution.hardware_utils.common.SystemUtilization.CpuSnapshot
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.Arrays;
-import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.LockSupport;
@@ -109,8 +108,8 @@ public final class ControlPlaneFragment extends WorkRequester {
             this.state = new CycleState();
 
             this.mainExecutor =
-                    PinnedThreadExecutor.getOrSetIfAbsent(this.cpu, name, Thread.MAX_PRIORITY,
-                            false);
+                    PinnedThreadExecutor.getOrSetIfAbsent(FlowThread.getFactory(), this.cpu, name,
+                            Thread.MAX_PRIORITY, false);
 
             CpuCacheLayout layout = SystemInfo.getCacheLayout(this.cpu);
             this.isPCore =
@@ -124,7 +123,12 @@ public final class ControlPlaneFragment extends WorkRequester {
 
     @Override
     protected void accept(AbstractFrame frame) {
-        this.outputStream.accept(frame);
+        this.metrics.addInProgress(1);
+        try {
+            this.outputStream.accept(frame);
+        } finally {
+            this.metrics.addInProgress(-1);
+        }
     }
 
     @Override
@@ -168,17 +172,23 @@ public final class ControlPlaneFragment extends WorkRequester {
                 super.register();
                 this.mainThread = Thread.currentThread();
 
-                cycle();
-                super.removeThread();
-                this.mainThread = null;
+                try {
+                    cycle();
+                } finally {
+                    try {
+                        super.removeThread();
+                    } finally {
+                        FlowThread.clearContext();
+                        this.mainThread = null;
+                    }
+                }
             });
         }
     }
 
     private void cycle() {
         try {
-            FlowThread.FlowContext context = FlowThread.getContext();
-            Objects.requireNonNull(context);
+            FlowThread.FlowContext context = FlowThread.initializeContext();
             context.upstream = getThreadUpstreamQueue();
 
             while (keepRunning()) {
@@ -208,7 +218,7 @@ public final class ControlPlaneFragment extends WorkRequester {
                 this.state.actionInputs[2] = this.state.latencyRecorder.averageUnitsOverTime();
                 this.state.actionInputs[3] = this.state.latencyRecorder.unitsOverTimeCV();
                 this.state.actionInputs[4] = (double) context.upstream.getTrueUpstreamCount() / Math.max(1, super.getThreadCount());
-                this.state.actionInputs[5] = (super.getUpstreamCacheCount() - localCache) * maxCacheInv;
+                this.state.actionInputs[5] = super.getUpstreamCacheCount() * maxCacheInv;
                 this.actionPicker.normalize(this.state.actionInputs);
 
                 long start = System.nanoTime();

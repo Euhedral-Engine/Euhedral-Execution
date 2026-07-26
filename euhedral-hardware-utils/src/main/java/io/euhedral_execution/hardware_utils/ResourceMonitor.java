@@ -223,7 +223,7 @@ public class ResourceMonitor implements AutoCloseable {
         this.lastThrottleNs = snapshot.cpuThrottle();
         this.readings.cpuUsageRatio = ewma(this.readings.cpuUsageRatio,
                 !Double.isFinite(rawCpuUtil) ? 0.0 : rawCpuUtil);
-        this.readings.cpuThrottleRatio = ewma(this.readings.cpuUsageRatio,
+        this.readings.cpuThrottleRatio = ewma(this.readings.cpuThrottleRatio,
                 !Double.isFinite(rawThrottle) ? 0.0 : rawThrottle);
         this.readings.quotaCpus = snapshot.quotaCpus();
     }
