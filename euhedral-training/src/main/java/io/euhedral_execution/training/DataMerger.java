@@ -7,114 +7,156 @@ import io.euhedral_execution.core.utils.SpinWait;
 import io.euhedral_execution.data_structures.queues.PlainQueue;
 import io.euhedral_execution.hardware_utils.PinnedThreadExecutor;
 import io.euhedral_execution.hardware_utils.SystemInfo;
+import io.euhedral_execution.hashing.HasherApi;
 import io.euhedral_execution.training.utils.BenchmarkOutputReader;
 import io.euhedral_execution.training.utils.BenchmarkOutputWriter;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
-import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Stream;
 
 @SuppressWarnings("unchecked")
 public class DataMerger {
 
-    public static void mergeVectors() throws Exception {
-        Files.createDirectories(Path.of("output/merger"));
-
-        System.out.println("Merging...");
-        try(BenchmarkOutputWriter writer = new BenchmarkOutputWriter(Path.of("output/merger/merged-vectors"))) {
-            Set<Integer> added = new HashSet<>(32_768);
-            Files.list(Path.of("input/merger")).forEach(p -> {
-                try(BenchmarkOutputReader reader = new BenchmarkOutputReader(p)) {
-                    double[] vector = reader.readDoubleArray();
-                    while(vector != null) {
-                        if(vector.length == 28) {
-                            int hash = Arrays.hashCode(vector);
-                            if(!added.contains(hash)) {
-                                writer.spaceSeparatedWriteLine(vector);
-                                added.add(hash);
-                            }
-                        }
-                        vector = reader.readDoubleArray();
-                    }
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
-            });
-            System.out.println("Merged " + added.size() + " vectors.");
-        }
+    public static Path mergeVectors() throws Exception {
+        Path input = Path.of(System.getProperty("merger.input", "input/merger"));
+        Path output = Path.of(System.getProperty("merger.vectors.output",
+                "output/merger/merged-vectors"));
+        return mergeVectors(input, output);
     }
 
-    public static void mergeQuentiles() throws Exception {
-        File input = new File("input/merger");
-        Files.createDirectories(Path.of("output/merger/temp"));
-        Files.createDirectories(input.toPath());
+    public static Path mergeVectors(Path inputDirectory, Path output) throws Exception {
+        Files.createDirectories(inputDirectory);
+        if (output.getParent() != null) {
+            Files.createDirectories(output.getParent());
+        }
 
-        Files.list(Path.of("output/merger/temp")).forEach(p -> p.toFile().delete());
-        File[] files = input.listFiles();
+        System.out.println("Merging vectors...");
+        try (BenchmarkOutputWriter writer = new BenchmarkOutputWriter(output)) {
+            Set<Long> added = new HashSet<>(131_072);
+            for (Path path : listRegularFiles(inputDirectory)) {
+                try (BenchmarkOutputReader reader = new BenchmarkOutputReader(path)) {
+                    double[] vector;
+                    while ((vector = reader.readDoubleArray()) != null) {
+                        if (vector.length != 28) {
+                            continue;
+                        }
+                        long hash = HasherApi.getHash(vector);
+                        if (added.add(hash)) {
+                            writer.spaceSeparatedWriteLine(vector);
+                        }
+                    }
+                }
+            }
+            System.out.println("Merged " + added.size() + " vectors.");
+        }
+        return output;
+    }
 
-        if (files == null || files.length == 0) {
-            System.out.println("Place files under input/merger at the sources root");
+    /**
+     * Backwards-compatible entry point retaining the original misspelling.
+     */
+    public static Path mergeQuentiles() throws Exception {
+        Path input = Path.of(System.getProperty("merger.input", "input/merger"));
+        Path outputDirectory = Path.of(System.getProperty("merger.output", "output/merger"));
+        return mergeQuantiles(input, outputDirectory,
+                "merged-quantiles-" + System.currentTimeMillis() + ".txt");
+    }
+
+    public static Path mergeQuantiles(Path inputDirectory, Path outputDirectory,
+            String outputName) throws Exception {
+        Files.createDirectories(inputDirectory);
+        Files.createDirectories(outputDirectory);
+
+        List<Path> paths = listRegularFiles(inputDirectory);
+        if (paths.isEmpty()) {
+            System.out.println("Place benchmark files under " + inputDirectory.toAbsolutePath());
             throw new Cancel();
         }
 
-        System.out.println("Starting Data Merge...");
-        long now = System.nanoTime();
+        Path tempDirectory = outputDirectory.resolve(".merge-temp");
+        deleteRecursively(tempDirectory);
+        Files.createDirectories(tempDirectory);
 
-        Set<Integer> workers = new HashSet<>();
-        PlainQueue<File>[] normalizeQueue = new PlainQueue[SystemInfo.getMaxCoreId() + 1];
-        int index = 0;
-        for (var file : files) {
-            while (SystemInfo.getCoreInfo(index) == null) {
+        System.out.println("Starting data merge...");
+        long now = System.nanoTime();
+        try {
+            Set<Integer> workers = new HashSet<>();
+            PlainQueue<File>[] normalizeQueue =
+                    new PlainQueue[SystemInfo.getMaxCoreId() + 1];
+            int index = 0;
+            for (Path path : paths) {
+                while (SystemInfo.getCoreInfo(index) == null) {
+                    index = (index + 1) % normalizeQueue.length;
+                }
+                if (normalizeQueue[index] == null) {
+                    normalizeQueue[index] = new PlainQueue<>(16);
+                }
+
+                normalizeQueue[index].add(path.toFile());
+                workers.add(index);
                 index = (index + 1) % normalizeQueue.length;
             }
-            if (normalizeQueue[index] == null) {
-                normalizeQueue[index] = new PlainQueue<>(16);
+
+            System.out.println("Normalizing...");
+            AtomicInteger countdown = new AtomicInteger(workers.size());
+            AtomicReference<Throwable> failure = new AtomicReference<>();
+            normalize(normalizeQueue, countdown, failure, tempDirectory);
+            SpinWait.awaitWhile(() -> countdown.getOpaque() > 0);
+
+            Throwable error = failure.getAcquire();
+            if (error != null) {
+                throw new RuntimeException("Failed to normalize benchmark data", error);
             }
 
-            normalizeQueue[index].add(file);
-            workers.add(index);
-            index = (index + 1) % normalizeQueue.length;
+            Path output = outputDirectory.resolve(outputName);
+            System.out.println("Merging into quantiles (P10, P25, P50, P75, P90)");
+            merge(tempDirectory, output);
+
+            Duration elapsed = Duration.ofNanos(System.nanoTime() - now);
+            System.out.printf("Complete.%nTime: %s%n", timeFormat(elapsed));
+            return output;
+        } finally {
+            deleteRecursively(tempDirectory);
         }
-
-        System.out.println("Normalizing...");
-        AtomicInteger countdown = new AtomicInteger(workers.size());
-        normalize(normalizeQueue, countdown);
-
-        SpinWait.awaitWhile(() -> countdown.getOpaque() > 0);
-
-        System.out.println("Merging Into Quantiles (P10, P25, P50, P75, P90)");
-        merge();
-
-        Files.list(Path.of("output/merger/temp")).forEach(p -> p.toFile().delete());
-        Files.deleteIfExists(Path.of("output/merger/temp"));
-        Duration elapsed = Duration.ofNanos(System.nanoTime() - now);
-
-        System.out.printf("Complete.\nTime: %s%n", timeFormat(elapsed));
     }
 
-    private static void normalize(PlainQueue<File>[] normalizeQueue, AtomicInteger countdown) {
+    private static List<Path> listRegularFiles(Path directory) throws Exception {
+        try (Stream<Path> stream = Files.list(directory)) {
+            return stream.filter(Files::isRegularFile)
+                    .sorted(Comparator.comparing(Path::toString))
+                    .toList();
+        }
+    }
+
+    private static void normalize(PlainQueue<File>[] normalizeQueue, AtomicInteger countdown,
+            AtomicReference<Throwable> failure, Path tempDirectory) {
         int index = 0;
         for (PlainQueue<File> queue : normalizeQueue) {
             if (queue == null || queue.isEmpty()) {
                 index++;
                 continue;
             }
-            PinnedThreadExecutor executor = PinnedThreadExecutor.getOrSetIfAbsent(index++,
-                    "DataMerger-" + index, Thread.NORM_PRIORITY, true);
+            int core = index++;
+            PinnedThreadExecutor executor = PinnedThreadExecutor.getOrSetIfAbsent(core,
+                    "DataMerger-" + core, Thread.NORM_PRIORITY, true);
 
             executor.execute(() -> {
                 try {
-                    normalize(queue);
-                } catch (Exception e) {
-                    System.err.println(e);
-                    throw new RuntimeException(e);
+                    normalize(queue, tempDirectory);
+                } catch (Throwable e) {
+                    failure.compareAndSet(null, e);
                 } finally {
                     countdown.decrementAndGet();
                 }
@@ -122,30 +164,41 @@ public class DataMerger {
         }
     }
 
-    private static void normalize(PlainQueue<File> normalizeQueue) throws Exception {
+    private static void normalize(PlainQueue<File> normalizeQueue, Path tempDirectory)
+            throws Exception {
         while (!normalizeQueue.isEmpty()) {
             File file = normalizeQueue.poll();
             Objects.requireNonNull(file);
 
-            TDigest meanMean = mergeMeans(file);
-            double maxMean = meanMean.quantile(0.99);
+            TDigest meanDigest = mergeMeans(file);
+            double maxMean = meanDigest.quantile(0.99);
+            if (!Double.isFinite(maxMean) || maxMean <= 0) {
+                maxMean = 1.0;
+            }
 
-            try (BenchmarkOutputReader reader = new BenchmarkOutputReader(file.toPath())) {
-                try (BenchmarkOutputWriter writer = new BenchmarkOutputWriter(
-                        Path.of("output/merger/temp/", "temp-" + file.getName()))) {
-                    double[] arr;
-                    while ((arr = reader.readDoubleArray()) != null) {
-                        writer.spaceSeparatedWriteLine(arr);
-                        arr = reader.readDoubleArray();
-
-                        for (int i = 0; i < arr.length; i++) {
-                            arr[i] /= maxMean;
-                            arr[i] = Math.min(arr[i], 1.0);
-                        }
-                        writer.spaceSeparatedWriteLine(arr);
+            try (BenchmarkOutputReader reader = new BenchmarkOutputReader(file.toPath());
+                    BenchmarkOutputWriter writer = new BenchmarkOutputWriter(
+                            tempDirectory.resolve("normalized-" + file.getName()))) {
+                double[] vector;
+                while ((vector = reader.readDoubleArray()) != null) {
+                    double[] means = reader.readDoubleArray();
+                    if (means == null) {
+                        throw new IllegalStateException(
+                                "Missing benchmark measurements after vector in " + file);
                     }
-                    writer.force();
+                    if (vector.length != 28) {
+                        throw new IllegalStateException(
+                                "Expected 28 policy weights in " + file + " but found "
+                                        + vector.length);
+                    }
+
+                    writer.spaceSeparatedWriteLine(vector);
+                    for (int i = 0; i < means.length; i++) {
+                        means[i] = Math.min(Math.max(means[i] / maxMean, 0.0), 1.0);
+                    }
+                    writer.spaceSeparatedWriteLine(means);
                 }
+                writer.force();
             }
         }
     }
@@ -153,21 +206,26 @@ public class DataMerger {
     private static TDigest mergeMeans(File file) throws Exception {
         TDigest digest = new MergingDigest(1024);
         try (BenchmarkOutputReader reader = new BenchmarkOutputReader(file.toPath())) {
-            double[] arr;
-            while ((arr = reader.readDoubleArray()) != null) {
-                arr = reader.readDoubleArray();
-
-                for (double mean : arr) {
-                    digest.add(mean);
+            double[] vector;
+            while ((vector = reader.readDoubleArray()) != null) {
+                double[] means = reader.readDoubleArray();
+                if (means == null) {
+                    throw new IllegalStateException(
+                            "Missing benchmark measurements after vector in " + file);
+                }
+                for (double mean : means) {
+                    if (Double.isFinite(mean)) {
+                        digest.add(mean);
+                    }
                 }
             }
         }
         return digest;
     }
 
-    private static void merge() throws Exception {
-        Map<Integer, MergedResult> merged = new LinkedHashMap<>(32_768);
-        Files.list(Path.of("output/merger/temp")).forEach(path -> {
+    private static void merge(Path tempDirectory, Path output) throws Exception {
+        Map<Long, MergedResult> merged = new LinkedHashMap<>(131_072);
+        for (Path path : listRegularFiles(tempDirectory)) {
             try (BenchmarkOutputReader reader = new BenchmarkOutputReader(path)) {
                 while (true) {
                     double[] vector = reader.readDoubleArray();
@@ -175,29 +233,42 @@ public class DataMerger {
                         break;
                     }
                     double[] means = reader.readDoubleArray();
+                    if (means == null) {
+                        throw new IllegalStateException(
+                                "Missing normalized measurements after vector in " + path);
+                    }
 
-                    int hash = Arrays.hashCode(vector);
-                    MergedResult result = merged.computeIfAbsent(hash, (key) -> {
+                    long hash = HasherApi.getHash(vector);
+                    MergedResult result = merged.computeIfAbsent(hash, key -> {
                         TDigest digest = new MergingDigest(100);
                         digest.setScaleFunction(ScaleFunction.K_1);
-
                         return new MergedResult(vector, digest);
                     });
 
-                    for (double m : means) {
-                        result.digest.add(m);
+                    for (double mean : means) {
+                        result.digest.add(mean);
                     }
                 }
-            } catch (Exception e) {
-                throw new RuntimeException(e);
             }
-        });
+        }
+
         System.out.printf("Found %d separate vector distributions.%n", merged.size());
-        try (BenchmarkOutputWriter writer = new BenchmarkOutputWriter(
-                Path.of("output/merger/merged-quantiles-" + System.currentTimeMillis() + ".txt"))) {
-            for(MergedResult result : merged.values()) {
+        try (BenchmarkOutputWriter writer = new BenchmarkOutputWriter(output)) {
+            for (MergedResult result : merged.values()) {
                 writer.spaceSeparatedWriteLine(result.vector);
                 writer.writeLine(result.quantiles());
+            }
+        }
+    }
+
+    private static void deleteRecursively(Path root) throws Exception {
+        if (!Files.exists(root)) {
+            return;
+        }
+        try (Stream<Path> stream = Files.walk(root)) {
+            List<Path> paths = new ArrayList<>(stream.sorted(Comparator.reverseOrder()).toList());
+            for (Path path : paths) {
+                Files.deleteIfExists(path);
             }
         }
     }
@@ -233,14 +304,9 @@ public class DataMerger {
                     Double.doubleToLongBits(p25), Double.doubleToLongBits(p50),
                     Double.doubleToLongBits(p75), Double.doubleToLongBits(p90));
         }
-
-        @Override
-        public int hashCode() {
-            return Arrays.hashCode(vector);
-        }
     }
 
-    public DataMerger() {
+    private DataMerger() {
 
     }
 

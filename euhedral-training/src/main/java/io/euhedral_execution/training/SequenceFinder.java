@@ -1,13 +1,12 @@
 package io.euhedral_execution.training;
 
-import static io.euhedral_execution.training.utils.CommonFunctions.round;
-
 import io.euhedral_execution.data_structures.queues.PlainQueue;
 import io.euhedral_execution.hashing.HasherApi;
-import io.euhedral_execution.training.networks.DL4JVectorScoringNetwork;
+import io.euhedral_execution.training.networks.PolicyOrdinalNetwork;
 import io.euhedral_execution.training.utils.BenchmarkOutputReader;
 import io.euhedral_execution.training.utils.BenchmarkOutputWriter;
 import io.euhedral_execution.training.utils.CommonFunctions;
+import io.euhedral_execution.training.utils.PolicyRanking;
 import io.euhedral_execution.training.utils.VectorGrouper;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -17,287 +16,399 @@ import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.PriorityQueue;
 import java.util.Random;
 import java.util.Set;
-import java.util.concurrent.ThreadLocalRandom;
 import org.apache.commons.math4.legacy.random.SobolSequenceGenerator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class SequenceFinder {
+public class SequenceFinder implements AutoCloseable {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(SequenceFinder.class);
+    private static final int VECTOR_SIZE = PolicyOrdinalNetwork.INPUT_SIZE;
 
-    private DL4JVectorScoringNetwork learner;
-    private final List<double[][]> trainingSet = new ArrayList<>();
-    private final List<double[][]> validationSet = new ArrayList<>();
-    private final List<double[][]> testSet = new ArrayList<>();
+    private PolicyOrdinalNetwork learner;
+    private final List<Sample> trainingSet = new ArrayList<>();
+    private final List<Sample> validationSet = new ArrayList<>();
+    private final List<Sample> testSet = new ArrayList<>();
+    private double[][] ordinalThresholds;
 
     public SequenceFinder(String[] args) throws Exception {
-        boolean gen = System.getProperty("generate") != null;
-        String loadModel = System.getProperty("model");
+        Path data = requiredPathProperty("data");
+        Path model = optionalPathProperty("model");
+        this.learner = loadOrCreate(model);
 
-        if (loadModel != null && !loadModel.isBlank()) {
-            this.learner = new DL4JVectorScoringNetwork(loadModel);
-        } else {
-            // Use DL4J-backed network; keep a similar capacity to the legacy network
-            this.learner = new DL4JVectorScoringNetwork(new long[]{28, 128, 128, 64, 5});
-        }
-        if(gen) {
-            generate();
+        if (System.getProperty("generate") != null) {
+            Path output = Path.of(System.getProperty("candidate.output", "output/temp_data"));
+            int count = Integer.getInteger("candidate.count", 32_768);
+            int sobolSkip = Integer.getInteger("candidate.sobolSkip", 131_072);
+            generate(data, output, count, sobolSkip);
             return;
         }
 
-        Path path = Path.of(System.getProperty("data"));
-        try (BenchmarkOutputReader reader = new BenchmarkOutputReader(path)) {
-            int[] choice = new int[10]; // 80% Train
-            choice[8] = 1;              // 10% Validation
-            choice[9] = 2;              // 10% Test
-            long seed = ThreadLocalRandom.current().nextLong();
+        loadTrainingData(data);
+        Path modelOutput = Path.of(System.getProperty("model.output", "output/model/best"));
+        train(modelOutput);
+    }
 
+    private SequenceFinder(Path model) throws Exception {
+        this.learner = loadOrCreate(model);
+    }
+
+    public static Path train(Path data, Path startingModel, Path modelOutput) throws Exception {
+        try (SequenceFinder finder = new SequenceFinder(startingModel)) {
+            finder.loadTrainingData(data);
+            finder.train(modelOutput);
+        }
+        return modelOutput;
+    }
+
+    public static Path generateCandidates(Path historicalData, Path model, Path output,
+            int candidateCount) throws Exception {
+        return generateCandidates(historicalData, model, output, candidateCount,
+                Integer.getInteger("candidate.sobolSkip", 131_072));
+    }
+
+    public static Path generateCandidates(Path historicalData, Path model, Path output,
+            int candidateCount, int sobolSkip) throws Exception {
+        try (SequenceFinder finder = new SequenceFinder(model)) {
+            finder.generate(historicalData, output, candidateCount, sobolSkip);
+        }
+        return output;
+    }
+
+    private static PolicyOrdinalNetwork loadOrCreate(Path model) throws Exception {
+        if (model == null || !Files.exists(model)) {
+            return new PolicyOrdinalNetwork();
+        }
+        if (!Files.isDirectory(model)) {
+            throw new IllegalArgumentException(
+                    "Expected a DJL ordinal model directory, not a legacy DL4J .bin file: " + model);
+        }
+        return new PolicyOrdinalNetwork(model);
+    }
+
+    private static Path requiredPathProperty(String name) {
+        String value = System.getProperty(name);
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException("Missing required system property -D" + name);
+        }
+        return Path.of(value);
+    }
+
+    private static Path optionalPathProperty(String name) {
+        String value = System.getProperty(name);
+        return value == null || value.isBlank() ? null : Path.of(value);
+    }
+
+    private void loadTrainingData(Path path) throws Exception {
+        this.trainingSet.clear();
+        this.validationSet.clear();
+        this.testSet.clear();
+
+        int[] choice = new int[10];
+        choice[8] = 1;
+        choice[9] = 2;
+        long splitSeed = Long.getLong("training.seed", 123L);
+
+        try (BenchmarkOutputReader reader = new BenchmarkOutputReader(path)) {
             while (true) {
                 double[] vector = reader.readDoubleArray();
                 if (vector == null) {
                     break;
                 }
-
                 double[] results = reader.readDoubleArray();
+                if (results == null) {
+                    throw new IllegalStateException("Missing labels after vector in " + path);
+                }
+                if (vector.length != VECTOR_SIZE
+                        || results.length != PolicyRanking.QUANTILE_COUNT) {
+                    throw new IllegalStateException(
+                            "Expected a 28-weight vector followed by five quantiles in " + path);
+                }
 
-                // Uniform bucketing using xxHash64
-                int bucket = choice[(int) Math.unsignedMultiplyHigh(HasherApi.mix(seed++), 10)];
-                double[][] dataPair = new double[][]{vector, results};
+                long hash = HasherApi.getHash(vector, splitSeed);
+                int bucket = choice[(int) Math.unsignedMultiplyHigh(hash, 10)];
+                Sample sample = new Sample(vector, results, hash);
 
                 if (bucket == 1) {
-                    this.validationSet.add(dataPair);
+                    this.validationSet.add(sample);
                 } else if (bucket == 2) {
-                    this.testSet.add(dataPair);
+                    this.testSet.add(sample);
                 } else {
-                    this.trainingSet.add(dataPair);
+                    this.trainingSet.add(sample);
                 }
             }
         }
-        train();
+
+        if (this.trainingSet.size() < 10 || this.validationSet.isEmpty()
+                || this.testSet.isEmpty()) {
+            throw new IllegalStateException(
+                    "Training data must produce non-empty train, validation, and test partitions");
+        }
+
+        List<double[]> trainingQuantiles = new ArrayList<>(this.trainingSet.size());
+        for (Sample sample : this.trainingSet) {
+            trainingQuantiles.add(sample.quantiles());
+        }
+        this.ordinalThresholds = PolicyRanking.buildDecileThresholds(trainingQuantiles);
+
+        LOGGER.info("Loaded {} training, {} validation, and {} test vectors",
+                this.trainingSet.size(), this.validationSet.size(), this.testSet.size());
+        LOGGER.info("Ordinal labels calibrated from the training partition; top-decile threshold={}",
+                Arrays.toString(this.ordinalThresholds[PolicyRanking.ORDINAL_OUTPUTS - 1]));
     }
 
     public void generate() throws Exception {
-        int kClusters = 28;
-        int maxClusterIterations = 500;
-        Path historicalData = Path.of(System.getProperty("data"));
+        generate(requiredPathProperty("data"),
+                Path.of(System.getProperty("candidate.output", "output/temp_data")),
+                Integer.getInteger("candidate.count", 32_768),
+                Integer.getInteger("candidate.sobolSkip", 131_072));
+    }
 
-        VectorGrouper grouper = new VectorGrouper(kClusters, maxClusterIterations, historicalData);
-        List<VectorGrouper.ClusterScore> rankedClusters = grouper.getClusters();
-        double[] bestClusterCentroid = rankedClusters.getLast().cluster.centroid().getPoint();
+    public void generate(Path historicalData, Path output, int candidateCount) throws Exception {
+        generate(historicalData, output, candidateCount,
+                Integer.getInteger("candidate.sobolSkip", 131_072));
+    }
 
-        SobolSequenceGenerator generator = new SobolSequenceGenerator(28);
-        generator.skipTo(131_072);
-
-        Path out = Paths.get("output/temp_data");
-        if (out.getParent() != null) {
-            Files.createDirectories(out.getParent());
+    public void generate(Path historicalData, Path output, int candidateCount, int sobolSkip)
+            throws Exception {
+        if (candidateCount < 3) {
+            throw new IllegalArgumentException("candidateCount must be at least 3");
+        }
+        if (sobolSkip < 0) {
+            throw new IllegalArgumentException("sobolSkip must not be negative");
         }
 
-        int cap = 32_768 - 4096;
-        PriorityQueue<Candidate> topCandidates = new PriorityQueue<>(cap + 1);
+        int kClusters = Integer.getInteger("candidate.clusters", 28);
+        int maxClusterIterations = Integer.getInteger("candidate.clusterIterations", 500);
+        VectorGrouper grouper = new VectorGrouper(kClusters, maxClusterIterations, historicalData);
+        List<VectorGrouper.ClusterScore> rankedClusters = grouper.getClusters();
+        double[] bestClusterCentroid = rankedClusters.isEmpty()
+                ? null
+                : rankedClusters.getLast().cluster.centroid().getPoint();
 
-        LOGGER.info("Screening vectors...");
+        SobolSequenceGenerator generator = new SobolSequenceGenerator(VECTOR_SIZE);
+        generator.skipTo(sobolSkip);
 
-        double[][] batch = new double[16_384][];
-        PlainQueue<Candidate> recycle = new PlainQueue<>(16_384);
+        if (output.getParent() != null) {
+            Files.createDirectories(output.getParent());
+        }
+
+        int pureExplorationCount = Math.max(1, candidateCount / 16);
+        int localExploitationCount = Math.max(1, candidateCount / 16);
+        int screenedCandidateCount = candidateCount - pureExplorationCount - localExploitationCount;
+
+        PriorityQueue<Candidate> topCandidates =
+                new PriorityQueue<>(screenedCandidateCount + 1);
+        int batchSize = Integer.getInteger("candidate.batchSize",
+                this.learner.recommendedInferenceBatchSize());
+        long screenLimit = Long.getLong("candidate.screenLimit", 1L << 21);
+        if (batchSize <= 0 || screenLimit <= 0) {
+            throw new IllegalArgumentException("candidate batch and screen limits must be positive");
+        }
+
+        LOGGER.info(
+                "Screening {} vectors from Sobol index {} for {} model-selected candidates on {}",
+                screenLimit, sobolSkip, screenedCandidateCount, this.learner.getDevice());
+        PlainQueue<Candidate> recycle = new PlainQueue<>(batchSize);
         NumberFormat format = NumberFormat.getNumberInstance();
-        for (int i = 4096; i < Math.pow(2, 21); i += 16_384) {
-            LOGGER.info("Progress: {} / {}", format.format(i), format.format((int) Math.pow(2, 21)));
-            for(int j = 0; j < 16_384; j++) {
-                batch[j] = generator.get();
-                CommonFunctions.normalizeSobolVector(batch[j]);
+        float[] featureBatch = new float[batchSize * VECTOR_SIZE];
+        float[] scoreBatch = new float[batchSize];
+        double[][] vectorBatch = new double[batchSize][];
+
+        long screened = 0;
+        while (screened < screenLimit) {
+            int currentBatch = (int) Math.min(batchSize, screenLimit - screened);
+            for (int row = 0; row < currentBatch; row++) {
+                double[] vector = generator.get();
+                CommonFunctions.normalizeSobolVector(vector);
+                vectorBatch[row] = vector;
+                copyVectorToFloat(vector, featureBatch, row * VECTOR_SIZE);
             }
-            double[][] predictions = this.learner.predict(batch);
-            for(int j = 0; j < 16_384; j++) {
+
+            this.learner.predictScores(featureBatch, currentBatch, scoreBatch);
+            for (int row = 0; row < currentBatch; row++) {
                 Candidate candidate = recycle.poll();
-                if(candidate == null) {
-                    candidate = new Candidate(batch[j], predictions[j]);
+                if (candidate == null) {
+                    candidate = new Candidate(vectorBatch[row], scoreBatch[row]);
                 } else {
-                    System.arraycopy(batch[j], 0, candidate.vector, 0, batch[j].length);
-                    System.arraycopy(predictions[j], 0, candidate.quantiles, 0, predictions[j].length);
+                    System.arraycopy(vectorBatch[row], 0, candidate.vector, 0, VECTOR_SIZE);
+                    candidate.score = scoreBatch[row];
                 }
                 topCandidates.add(candidate);
             }
 
-            while (topCandidates.size() > cap) {
+            while (topCandidates.size() > screenedCandidateCount) {
                 recycle.offer(topCandidates.poll());
             }
+            screened += currentBatch;
+            LOGGER.info("Screening progress: {} / {}", format.format(screened),
+                    format.format(screenLimit));
         }
 
-        try (BenchmarkOutputWriter writer = new BenchmarkOutputWriter(out)) {
+        List<Candidate> rankedCandidates = new ArrayList<>(topCandidates.size());
+        while (!topCandidates.isEmpty()) {
+            rankedCandidates.add(topCandidates.poll());
+        }
+        Collections.reverse(rankedCandidates);
 
-            while (!topCandidates.isEmpty()) {
-                writer.spaceSeparatedWriteLine(topCandidates.poll().vector);
+        try (BenchmarkOutputWriter writer = new BenchmarkOutputWriter(output)) {
+            for (Candidate candidate : rankedCandidates) {
+                writer.spaceSeparatedWriteLine(candidate.vector);
             }
 
-            int pureExplorationCount = 2048;
-            int localExploitationCount = 2048;
-
-            LOGGER.info("Injecting global exploration vectors.");
+            LOGGER.info("Injecting {} global exploration vectors", pureExplorationCount);
             for (int i = 0; i < pureExplorationCount; i++) {
                 double[] vector = generator.get();
                 CommonFunctions.normalizeSobolVector(vector);
                 writer.spaceSeparatedWriteLine(vector);
             }
 
-            LOGGER.info("Injecting cluster-targeted exploitation vectors.");
-            Random noiseGenerator = new Random();
+            LOGGER.info("Injecting {} local exploitation vectors", localExploitationCount);
+            Random noiseGenerator = new Random(Long.getLong("candidate.seed", 123L) ^ sobolSkip);
             for (int i = 0; i < localExploitationCount; i++) {
-                double[] explorationVector = new double[28];
-                for (int j = 0; j < 28; j++) {
-                    double noise = noiseGenerator.nextGaussian() * 0.05;
-                    explorationVector[j] = bestClusterCentroid[j] + noise;
+                double[] explorationVector;
+                if (bestClusterCentroid == null) {
+                    explorationVector = generator.get();
+                    CommonFunctions.normalizeSobolVector(explorationVector);
+                } else {
+                    explorationVector = Arrays.copyOf(bestClusterCentroid, VECTOR_SIZE);
+                    double sigma = Double.parseDouble(
+                            System.getProperty("candidate.localSigma", "0.05"));
+                    for (int j = 0; j < VECTOR_SIZE; j++) {
+                        explorationVector[j] += noiseGenerator.nextGaussian() * sigma;
+                    }
+                    CommonFunctions.normalizePolicyVector(explorationVector);
                 }
-                CommonFunctions.normalizeSobolVector(explorationVector);
-
                 writer.spaceSeparatedWriteLine(explorationVector);
             }
         }
-        LOGGER.info(
-                "Successfully generated 32,768 vectors for the next active learning execution loop.");
+        LOGGER.info("Generated {} vectors at {}", candidateCount, output.toAbsolutePath());
     }
 
     public void train() throws Exception {
-        Path modelPath = Paths.get("output/model/best.bin");
-        if (modelPath.getParent() != null) {
-            Files.createDirectories(modelPath.getParent());
+        train(Path.of(System.getProperty("model.output", "output/model/best")));
+    }
+
+    public void train(Path modelPath) throws Exception {
+        if (Files.exists(modelPath) && !Files.isDirectory(modelPath)) {
+            throw new IllegalArgumentException("model.output must be a directory: " + modelPath);
         }
+        Files.createDirectories(modelPath);
 
-        // Convert training/validation sets to double arrays for batch training
-        int trainSize = this.trainingSet.size();
-        int valSize = this.validationSet.size();
+        TrainingMatrix train = matrix(this.trainingSet);
+        TrainingMatrix validation = matrix(this.validationSet);
+        int batchSize = Integer.getInteger("training.batchSize",
+                this.learner.recommendedTrainingBatchSize());
 
-        double[][] trainInputs = new double[trainSize][];
-        double[][] trainTargets = new double[trainSize][];
-        for (int i = 0; i < trainSize; i++) {
-            trainInputs[i] = this.trainingSet.get(i)[0];
-            trainTargets[i] = this.trainingSet.get(i)[1];
-        }
-
-        double[][] valInputs = new double[valSize][];
-        double[][] valTargets = new double[valSize][];
-        for (int i = 0; i < valSize; i++) {
-            valInputs[i] = this.validationSet.get(i)[0];
-            valTargets[i] = this.validationSet.get(i)[1];
-        }
-
-        // Train with early stopping and automatic model checkpointing
         this.learner = this.learner.trainWithEarlyStopping(
-                trainInputs, trainTargets,
-                valInputs, valTargets,
-                modelPath.toString(),
-                500,    // maxEpochs
-                15,     // patience
-                64      // batchSize
-        );
+                train.features(), train.labels(), train.rows(),
+                validation.features(), validation.labels(), validation.rows(),
+                modelPath,
+                Integer.getInteger("training.maxEpochs", 250),
+                Integer.getInteger("training.patience", 20),
+                batchSize);
 
         runFinalEvaluation();
 
-        // Write marker file for compatibility
-        Path latestMarker = Paths.get("output/model/latest");
-        if (latestMarker.getParent() != null) {
-            Files.createDirectories(latestMarker.getParent());
-        }
-        Files.writeString(latestMarker, modelPath.toString(), StandardOpenOption.CREATE,
-                StandardOpenOption.TRUNCATE_EXISTING);
+        Path latestMarker = modelPath.getParent() == null
+                ? Paths.get("latest")
+                : modelPath.getParent().resolve("latest");
+        Files.writeString(latestMarker, modelPath.toAbsolutePath().toString(),
+                StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
     }
 
-    private double evaluateSetLoss(List<double[][]> dataset) {
-        double totalLoss = 0;
-        for (var v : dataset) {
-            double loss = 0;
-            double[] prediction = this.learner.predict(v[0]);
-            for(int i = 0; i < prediction.length; i++) {
-                double error = v[1][i] - prediction[i];
-                loss += (error * error);
-            }
-            totalLoss += loss / prediction.length;
+    private TrainingMatrix matrix(List<Sample> samples) {
+        float[] features = new float[samples.size() * VECTOR_SIZE];
+        float[] labels = new float[samples.size() * PolicyRanking.ORDINAL_OUTPUTS];
+        for (int row = 0; row < samples.size(); row++) {
+            Sample sample = samples.get(row);
+            copyVectorToFloat(sample.vector(), features, row * VECTOR_SIZE);
+            PolicyRanking.encodeOrdinal(sample.quantiles(), this.ordinalThresholds, labels,
+                    row * PolicyRanking.ORDINAL_OUTPUTS);
         }
-        return totalLoss / dataset.size();
+        return new TrainingMatrix(features, labels, samples.size());
     }
 
     private void runFinalEvaluation() {
-        double totalAbsoluteError = 0;
-        List<Candidate> actualRanked = new ArrayList<>();
-        List<Candidate> predictedRanked = new ArrayList<>();
-
-        for (var v : this.testSet) {
-            double[] actual = v[1];
-            double[] prediction = this.learner.predict(v[0]);
-
-            double mae = 0;
-            for(int i = 0; i < actual.length; i++) {
-                double error = Math.abs(actual[i] - prediction[i]);
-                mae += error;
-            }
-            totalAbsoluteError += mae / actual.length;
-
-            actualRanked.add(new Candidate(v[0], v[1]));
-            predictedRanked.add(new Candidate(v[0], prediction));
+        float[] features = new float[this.testSet.size() * VECTOR_SIZE];
+        float[] scores = new float[this.testSet.size()];
+        for (int row = 0; row < this.testSet.size(); row++) {
+            copyVectorToFloat(this.testSet.get(row).vector(), features, row * VECTOR_SIZE);
         }
+        this.learner.predictScores(features, this.testSet.size(), scores);
 
-        Collections.sort(actualRanked);
-        Collections.sort(predictedRanked);
+        List<Sample> actualRanked = new ArrayList<>(this.testSet);
+        actualRanked.sort((first, second) ->
+                PolicyRanking.compare(first.quantiles(), second.quantiles()));
 
-        // Quantify Top 10% configuration ranking accuracy
+        List<ScoredSample> predictedRanked = new ArrayList<>(this.testSet.size());
+        for (int row = 0; row < this.testSet.size(); row++) {
+            predictedRanked.add(new ScoredSample(this.testSet.get(row), scores[row]));
+        }
+        predictedRanked.sort(Comparator.comparingDouble(ScoredSample::score));
+
         int topK = Math.max(1, this.testSet.size() / 10);
-        Set<Candidate> topActualVectors = new HashSet<>();
-        for (int i = actualRanked.size() - 1; i > actualRanked.size() - topK; i--) {
-            topActualVectors.add(actualRanked.get(i));
+        Set<Long> topActualHashes = new HashSet<>(topK * 2);
+        for (int i = actualRanked.size() - topK; i < actualRanked.size(); i++) {
+            topActualHashes.add(actualRanked.get(i).hash());
         }
 
         int matches = 0;
-        for (int i = predictedRanked.size() - 1; i > predictedRanked.size() - topK; i--) {
-            if (topActualVectors.contains(predictedRanked.get(i))) {
+        for (int i = predictedRanked.size() - topK; i < predictedRanked.size(); i++) {
+            if (topActualHashes.contains(predictedRanked.get(i).sample().hash())) {
                 matches++;
             }
         }
 
         double matchPercentage = ((double) matches / topK) * 100.0;
         LOGGER.info("============ FINAL TEST SET EVALUATION ============");
-        LOGGER.info("Test Set Mean Absolute Error (MAE): {}", (totalAbsoluteError / this.testSet.size()));
-        LOGGER.info("Top-10% Candidate Ranking Match Accuracy: {}", matchPercentage);
-        LOGGER.info("===================================================\n\n");
+        LOGGER.info("Top-10% Candidate Ranking Precision: {}%", matchPercentage);
+        LOGGER.info("Selected {} of the actual top {} policies", matches, topK);
+        LOGGER.info("====================================================");
     }
 
-    private record Candidate(double[] vector, double[] quantiles) implements Comparable<Candidate> {
+    private static void copyVectorToFloat(double[] source, float[] destination, int offset) {
+        for (int feature = 0; feature < VECTOR_SIZE; feature++) {
+            destination[offset + feature] = (float) source[feature];
+        }
+    }
 
-        @Override
-        public boolean equals(Object o) {
-            if (o instanceof Candidate(double[] vector1, double[] q1)) {
-                return Arrays.equals(vector, vector1);
-            }
-            return false;
+    @Override
+    public void close() {
+        if (this.learner != null) {
+            this.learner.close();
+            this.learner = null;
+        }
+    }
+
+    private record Sample(double[] vector, double[] quantiles, long hash) {
+    }
+
+    private record TrainingMatrix(float[] features, float[] labels, int rows) {
+    }
+
+    private record ScoredSample(Sample sample, float score) {
+    }
+
+    private static final class Candidate implements Comparable<Candidate> {
+
+        private final double[] vector;
+        private float score;
+
+        private Candidate(double[] vector, float score) {
+            this.vector = vector;
+            this.score = score;
         }
 
         @Override
-        public int hashCode() {
-            return Arrays.hashCode(vector);
-        }
-
-        @Override
-        public int compareTo(Candidate o) {
-            int p50 = Double.compare(round(this.quantiles[0]), round(o.quantiles[0]));
-            if(p50 != 0) {
-                return p50;
-            }
-
-            double myIqr = round(this.quantiles[3]) - round(this.quantiles[1]);
-            double otherIqr = round(o.quantiles[3]) - round(o.quantiles[1]);
-            int iqr = Double.compare(otherIqr, myIqr);
-            if(iqr != 0) {
-                return iqr;
-            }
-
-            double myTails = round(this.quantiles[4]) - round(this.quantiles[0]);
-            double otherTails = round(o.quantiles[4]) - round(o.quantiles[0]);
-            return Double.compare(otherTails, myTails);
+        public int compareTo(Candidate other) {
+            return Float.compare(this.score, other.score);
         }
     }
 }

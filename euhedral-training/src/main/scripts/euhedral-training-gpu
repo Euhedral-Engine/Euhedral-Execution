@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+DIST_DIR=$(cd -- "$SCRIPT_DIR/.." && pwd)
+PYTHON_BIN=${PYTHON_BIN:-python3}
+TRAINING_DEVICE=${TRAINING_DEVICE:-gpu0}
+
+TORCH_INFO=$(
+  "$PYTHON_BIN" - <<'PY'
+import pathlib
+
+try:
+    import torch
+except ImportError as error:
+    raise SystemExit(
+        "PyTorch is not installed. Install torch 2.7.1 from the CUDA 12.8 index first."
+    ) from error
+
+if torch.__version__.split("+")[0] != "2.7.1":
+    raise SystemExit(f"Expected PyTorch 2.7.1, found {torch.__version__}")
+if torch.version.cuda != "12.8":
+    raise SystemExit(f"Expected a CUDA 12.8 PyTorch wheel, found CUDA {torch.version.cuda}")
+if not torch.cuda.is_available():
+    raise SystemExit("PyTorch cannot access CUDA. Check the NVIDIA driver and nvidia-smi.")
+
+library_path = pathlib.Path(torch.__file__).resolve().parent / "lib"
+print(library_path)
+PY
+)
+
+export PYTORCH_LIBRARY_PATH=${PYTORCH_LIBRARY_PATH:-$TORCH_INFO}
+export PYTORCH_VERSION=${PYTORCH_VERSION:-2.7.1}
+export PYTORCH_FLAVOR=${PYTORCH_FLAVOR:-cu128}
+
+JAR=$(find "$DIST_DIR" -maxdepth 1 -type f -name 'euhedral-training-*.jar' -print -quit)
+if [[ -z "$JAR" ]]; then
+  echo "Unable to find the Euhedral trainer jar under $DIST_DIR" >&2
+  exit 1
+fi
+
+JAVA_ARGS=()
+if [[ -n ${JAVA_OPTS:-} ]]; then
+  # JAVA_OPTS is intentionally shell-split to support normal JVM option strings.
+  read -r -a JAVA_ARGS <<< "$JAVA_OPTS"
+fi
+
+# Leading JVM options are convenient for trainer properties:
+#   euhedral-training-gpu -Ddata=... -Dmodel.output=... train-vector-finder
+FORWARDED_JVM_ARGS=()
+APPLICATION_ARGS=()
+READING_JVM_ARGS=true
+for argument in "$@"; do
+  if $READING_JVM_ARGS && [[ "$argument" == -D* || "$argument" == -X* \
+      || "$argument" == --add-opens=* || "$argument" == --enable-preview ]]; then
+    FORWARDED_JVM_ARGS+=("$argument")
+  else
+    READING_JVM_ARGS=false
+    APPLICATION_ARGS+=("$argument")
+  fi
+done
+
+exec java "${JAVA_ARGS[@]}" "${FORWARDED_JVM_ARGS[@]}" \
+  -Dai.djl.default_engine=PyTorch \
+  -Dtraining.device="$TRAINING_DEVICE" \
+  -jar "$JAR" "${APPLICATION_ARGS[@]}"
