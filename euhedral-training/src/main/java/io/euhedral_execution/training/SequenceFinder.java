@@ -2,7 +2,12 @@ package io.euhedral_execution.training;
 
 import io.euhedral_execution.data_structures.queues.PlainQueue;
 import io.euhedral_execution.hashing.HasherApi;
+import com.tdunning.math.stats.MergingDigest;
 import io.euhedral_execution.training.networks.PolicyOrdinalNetwork;
+import io.euhedral_execution.training.optimization.CmaEsOptimizer;
+import io.euhedral_execution.training.optimization.CmaEsOptimizer.MeasuredPolicy;
+import io.euhedral_execution.training.optimization.CmaEsOptimizer.ScoredVector;
+import io.euhedral_execution.training.optimization.ScoreBandSampler;
 import io.euhedral_execution.training.utils.BenchmarkOutputReader;
 import io.euhedral_execution.training.utils.BenchmarkOutputWriter;
 import io.euhedral_execution.training.utils.CommonFunctions;
@@ -177,49 +182,115 @@ public class SequenceFinder implements AutoCloseable {
 
     public void generate(Path historicalData, Path output, int candidateCount, int sobolSkip)
             throws Exception {
-        if (candidateCount < 3) {
-            throw new IllegalArgumentException("candidateCount must be at least 3");
+        if (candidateCount < 10) {
+            throw new IllegalArgumentException("candidateCount must be at least 10");
         }
         if (sobolSkip < 0) {
             throw new IllegalArgumentException("sobolSkip must not be negative");
         }
-
-        int kClusters = Integer.getInteger("candidate.clusters", 28);
-        int maxClusterIterations = Integer.getInteger("candidate.clusterIterations", 500);
-        VectorGrouper grouper = new VectorGrouper(kClusters, maxClusterIterations, historicalData);
-        List<VectorGrouper.ClusterScore> rankedClusters = grouper.getClusters();
-        double[] bestClusterCentroid = rankedClusters.isEmpty()
-                ? null
-                : rankedClusters.getLast().cluster.centroid().getPoint();
-
-        SobolSequenceGenerator generator = new SobolSequenceGenerator(VECTOR_SIZE);
-        generator.skipTo(sobolSkip);
-
         if (output.getParent() != null) {
             Files.createDirectories(output.getParent());
         }
 
-        int pureExplorationCount = Math.max(1, candidateCount / 16);
-        int localExploitationCount = Math.max(1, candidateCount / 16);
-        int screenedCandidateCount = candidateCount - pureExplorationCount - localExploitationCount;
-
-        PriorityQueue<Candidate> topCandidates =
-                new PriorityQueue<>(screenedCandidateCount + 1);
         int batchSize = Integer.getInteger("candidate.batchSize",
                 this.learner.recommendedInferenceBatchSize());
         long screenLimit = Long.getLong("candidate.screenLimit", 1L << 21);
-        if (batchSize <= 0 || screenLimit <= 0) {
-            throw new IllegalArgumentException("candidate batch and screen limits must be positive");
+        if (batchSize <= 0 || screenLimit <= 0
+                || (long) sobolSkip + screenLimit > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException(
+                    "candidate batch/screen limits must be positive and fit the Sobol index range");
         }
 
-        LOGGER.info(
-                "Screening {} vectors from Sobol index {} for {} model-selected candidates on {}",
-                screenLimit, sobolSkip, screenedCandidateCount, this.learner.getDevice());
-        PlainQueue<Candidate> recycle = new PlainQueue<>(batchSize);
-        NumberFormat format = NumberFormat.getNumberInstance();
+        double directFraction = Double.parseDouble(
+                System.getProperty("candidate.directSobolFraction", "0.0625"));
+        if (!Double.isFinite(directFraction) || directFraction <= 0 || directFraction >= 1) {
+            throw new IllegalArgumentException("candidate.directSobolFraction must be in (0, 1)");
+        }
+        int directCount = Math.max(1, (int) Math.round(candidateCount * directFraction));
+        int bandSelectedCount = candidateCount - directCount;
+        long candidateSeed = Long.getLong("candidate.seed", 123L) ^ sobolSkip;
+
+        List<MeasuredPolicy> measured = readMeasuredPolicies(historicalData);
+        CmaEsOptimizer optimizer = new CmaEsOptimizer();
+        List<ScoredVector> cmaCandidates = optimizer.optimize(measured,
+                this.learner::predictScores, candidateSeed);
+        LOGGER.info("CMA-ES generated {} classifier-scored candidates", cmaCandidates.size());
+
+        MergingDigest scoreDistribution = new MergingDigest(200);
+        for (ScoredVector candidate : cmaCandidates) {
+            scoreDistribution.add(candidate.score());
+        }
+        screenSobol(sobolSkip, screenLimit, batchSize,
+                (vector, score) -> scoreDistribution.add(score), true);
+
+        double[] thresholds = new double[9];
+        for (int quantile = 1; quantile <= thresholds.length; quantile++) {
+            thresholds[quantile - 1] = scoreDistribution.quantile(quantile / 10.0);
+        }
+        ScoreBandSampler sampler = new ScoreBandSampler(thresholds,
+                ScoreBandSampler.topHeavyCapacities(bandSelectedCount), candidateSeed);
+        for (ScoredVector candidate : cmaCandidates) {
+            sampler.accept(candidate.vector(), candidate.score());
+        }
+        screenSobol(sobolSkip, screenLimit, batchSize, sampler::accept, false);
+
+        List<ScoredVector> selected = sampler.finish();
+        List<double[]> outputVectors = new ArrayList<>(candidateCount);
+        Set<Long> hashes = new HashSet<>(candidateCount * 2);
+        for (ScoredVector candidate : selected) {
+            if (hashes.add(HasherApi.getHash(candidate.vector()))) {
+                outputVectors.add(candidate.vector());
+            }
+        }
+
+        SobolSequenceGenerator exploration = new SobolSequenceGenerator(VECTOR_SIZE);
+        exploration.skipTo(Math.toIntExact((long) sobolSkip + screenLimit));
+        while (outputVectors.size() < candidateCount) {
+            double[] vector = exploration.get();
+            CommonFunctions.normalizeSobolVector(vector);
+            if (hashes.add(HasherApi.getHash(vector))) {
+                outputVectors.add(vector);
+            }
+        }
+        Collections.shuffle(outputVectors, new Random(candidateSeed));
+
+        try (BenchmarkOutputWriter writer = new BenchmarkOutputWriter(output)) {
+            for (double[] vector : outputVectors) {
+                writer.spaceSeparatedWriteLine(vector);
+            }
+        }
+        LOGGER.info("Generated {} vectors using CMA-ES, score-band audits, and direct Sobol "
+                        + "exploration at {}", outputVectors.size(), output.toAbsolutePath());
+    }
+
+    private List<MeasuredPolicy> readMeasuredPolicies(Path historicalData) throws Exception {
+        List<MeasuredPolicy> measured = new ArrayList<>();
+        try (BenchmarkOutputReader reader = new BenchmarkOutputReader(historicalData)) {
+            while (true) {
+                double[] vector = reader.readDoubleArray();
+                if (vector == null) {
+                    break;
+                }
+                double[] quantiles = reader.readDoubleArray();
+                if (quantiles == null) {
+                    throw new IllegalStateException("Missing quantiles in " + historicalData);
+                }
+                measured.add(new MeasuredPolicy(vector, quantiles));
+            }
+        }
+        return measured;
+    }
+
+    private void screenSobol(int sobolSkip, long screenLimit, int batchSize,
+            ScoredVectorConsumer consumer, boolean logProgress) {
+        SobolSequenceGenerator generator = new SobolSequenceGenerator(VECTOR_SIZE);
+        generator.skipTo(sobolSkip);
         float[] featureBatch = new float[batchSize * VECTOR_SIZE];
         float[] scoreBatch = new float[batchSize];
         double[][] vectorBatch = new double[batchSize][];
+        NumberFormat format = NumberFormat.getNumberInstance();
+        long progressStep = Math.max(batchSize, screenLimit / 20);
+        long nextProgress = progressStep;
 
         long screened = 0;
         while (screened < screenLimit) {
@@ -230,65 +301,22 @@ public class SequenceFinder implements AutoCloseable {
                 vectorBatch[row] = vector;
                 copyVectorToFloat(vector, featureBatch, row * VECTOR_SIZE);
             }
-
             this.learner.predictScores(featureBatch, currentBatch, scoreBatch);
             for (int row = 0; row < currentBatch; row++) {
-                Candidate candidate = recycle.poll();
-                if (candidate == null) {
-                    candidate = new Candidate(vectorBatch[row], scoreBatch[row]);
-                } else {
-                    System.arraycopy(vectorBatch[row], 0, candidate.vector, 0, VECTOR_SIZE);
-                    candidate.score = scoreBatch[row];
-                }
-                topCandidates.add(candidate);
-            }
-
-            while (topCandidates.size() > screenedCandidateCount) {
-                recycle.offer(topCandidates.poll());
+                consumer.accept(vectorBatch[row], scoreBatch[row]);
             }
             screened += currentBatch;
-            LOGGER.info("Screening progress: {} / {}", format.format(screened),
-                    format.format(screenLimit));
-        }
-
-        List<Candidate> rankedCandidates = new ArrayList<>(topCandidates.size());
-        while (!topCandidates.isEmpty()) {
-            rankedCandidates.add(topCandidates.poll());
-        }
-        Collections.reverse(rankedCandidates);
-
-        try (BenchmarkOutputWriter writer = new BenchmarkOutputWriter(output)) {
-            for (Candidate candidate : rankedCandidates) {
-                writer.spaceSeparatedWriteLine(candidate.vector);
-            }
-
-            LOGGER.info("Injecting {} global exploration vectors", pureExplorationCount);
-            for (int i = 0; i < pureExplorationCount; i++) {
-                double[] vector = generator.get();
-                CommonFunctions.normalizeSobolVector(vector);
-                writer.spaceSeparatedWriteLine(vector);
-            }
-
-            LOGGER.info("Injecting {} local exploitation vectors", localExploitationCount);
-            Random noiseGenerator = new Random(Long.getLong("candidate.seed", 123L) ^ sobolSkip);
-            for (int i = 0; i < localExploitationCount; i++) {
-                double[] explorationVector;
-                if (bestClusterCentroid == null) {
-                    explorationVector = generator.get();
-                    CommonFunctions.normalizeSobolVector(explorationVector);
-                } else {
-                    explorationVector = Arrays.copyOf(bestClusterCentroid, VECTOR_SIZE);
-                    double sigma = Double.parseDouble(
-                            System.getProperty("candidate.localSigma", "0.05"));
-                    for (int j = 0; j < VECTOR_SIZE; j++) {
-                        explorationVector[j] += noiseGenerator.nextGaussian() * sigma;
-                    }
-                    CommonFunctions.normalizePolicyVector(explorationVector);
-                }
-                writer.spaceSeparatedWriteLine(explorationVector);
+            if (logProgress && screened >= nextProgress) {
+                LOGGER.info("Sobol score-distribution pass: {} / {}", format.format(screened),
+                        format.format(screenLimit));
+                nextProgress += progressStep;
             }
         }
-        LOGGER.info("Generated {} vectors at {}", candidateCount, output.toAbsolutePath());
+    }
+
+    @FunctionalInterface
+    private interface ScoredVectorConsumer {
+        void accept(double[] vector, float score);
     }
 
     public void train() throws Exception {

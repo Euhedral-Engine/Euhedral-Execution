@@ -1,8 +1,12 @@
 package io.euhedral_execution.training;
 
 import io.euhedral_execution.training.networks.PolicyOrdinalNetwork;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class Runner {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(Runner.class);
 
     public static void main(String[] args) throws Exception {
         if (args.length == 0) {
@@ -24,7 +28,7 @@ public class Runner {
                 try {
                     ClosedLoopRunner.run(args);
                 } catch (ClosedLoopRunner.StopRequested ignored) {
-                    System.out.println(
+                    LOGGER.info(
                             "Closed-loop stop requested; current partial iteration was not promoted.");
                 }
             }
@@ -33,13 +37,14 @@ public class Runner {
     }
 
     private static void printUsage() {
-        System.out.println("Usage: Runner <command>");
-        System.out.println("  merge-quantiles     Normalize and merge benchmark corpus");
-        System.out.println("  merge-vectors       Deduplicate vectors from merger input");
-        System.out.println("  training-info       Print DJL, CUDA, GPU, and compute-capability details");
-        System.out.println("  train-vector-finder Train or generate candidates using -D properties");
-        System.out.println("  benchmark [file]    Benchmark Sobol or file-backed candidates");
-        System.out.println("  closed-loop         Merge -> train -> generate -> benchmark -> corpus");
+        LOGGER.info("""
+                Usage: Runner <command>
+                  merge-quantiles     Normalize and merge benchmark corpus
+                  merge-vectors       Deduplicate vectors from merger input
+                  training-info       Print DJL, CUDA, GPU, and compute-capability details
+                  train-vector-finder Train or generate candidates using -D properties
+                  benchmark [file]    Benchmark Sobol or file-backed candidates
+                  closed-loop         Merge -> train -> generate -> benchmark -> corpus""");
     }
 
     private Runner() {

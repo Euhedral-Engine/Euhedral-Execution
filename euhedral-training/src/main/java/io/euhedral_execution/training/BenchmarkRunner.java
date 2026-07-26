@@ -185,7 +185,7 @@ public final class BenchmarkRunner {
             while ((vector = generator.get()) != null) {
                 Distribution distribution = new Distribution(vector);
                 Arrays.fill(means, 0);
-                System.out.printf("Sources: %d Vector: (%d / %d)%n", sourceCount, index++,
+                LOGGER.info("Sources: {} Vector: ({} / {})", sourceCount, index++,
                         generator.limit);
 
                 actionPicker.setWeights(halt);

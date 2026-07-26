@@ -25,9 +25,13 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @SuppressWarnings("unchecked")
 public class DataMerger {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(DataMerger.class);
 
     public static Path mergeVectors() throws Exception {
         Path input = Path.of(System.getProperty("merger.input", "input/merger"));
@@ -42,7 +46,7 @@ public class DataMerger {
             Files.createDirectories(output.getParent());
         }
 
-        System.out.println("Merging vectors...");
+        LOGGER.info("Merging vectors...");
         try (BenchmarkOutputWriter writer = new BenchmarkOutputWriter(output)) {
             Set<Long> added = new HashSet<>(131_072);
             for (Path path : listRegularFiles(inputDirectory)) {
@@ -59,7 +63,7 @@ public class DataMerger {
                     }
                 }
             }
-            System.out.println("Merged " + added.size() + " vectors.");
+            LOGGER.info("Merged {} vectors.", added.size());
         }
         return output;
     }
@@ -81,7 +85,7 @@ public class DataMerger {
 
         List<Path> paths = listRegularFiles(inputDirectory);
         if (paths.isEmpty()) {
-            System.out.println("Place benchmark files under " + inputDirectory.toAbsolutePath());
+            LOGGER.info("Place benchmark files under {}", inputDirectory.toAbsolutePath());
             throw new Cancel();
         }
 
@@ -89,7 +93,7 @@ public class DataMerger {
         deleteRecursively(tempDirectory);
         Files.createDirectories(tempDirectory);
 
-        System.out.println("Starting data merge...");
+        LOGGER.info("Starting data merge...");
         long now = System.nanoTime();
         try {
             Set<Integer> workers = new HashSet<>();
@@ -109,7 +113,7 @@ public class DataMerger {
                 index = (index + 1) % normalizeQueue.length;
             }
 
-            System.out.println("Normalizing...");
+            LOGGER.info("Normalizing...");
             AtomicInteger countdown = new AtomicInteger(workers.size());
             AtomicReference<Throwable> failure = new AtomicReference<>();
             normalize(normalizeQueue, countdown, failure, tempDirectory);
@@ -121,11 +125,11 @@ public class DataMerger {
             }
 
             Path output = outputDirectory.resolve(outputName);
-            System.out.println("Merging into quantiles (P10, P25, P50, P75, P90)");
+            LOGGER.info("Merging into quantiles (P10, P25, P50, P75, P90)");
             merge(tempDirectory, output);
 
             Duration elapsed = Duration.ofNanos(System.nanoTime() - now);
-            System.out.printf("Complete.%nTime: %s%n", timeFormat(elapsed));
+            LOGGER.info("Complete.\nTime: {}", timeFormat(elapsed));
             return output;
         } finally {
             deleteRecursively(tempDirectory);
@@ -252,7 +256,7 @@ public class DataMerger {
             }
         }
 
-        System.out.printf("Found %d separate vector distributions.%n", merged.size());
+        LOGGER.info("Found {} separate vector distributions.", merged.size());
         try (BenchmarkOutputWriter writer = new BenchmarkOutputWriter(output)) {
             for (MergedResult result : merged.values()) {
                 writer.spaceSeparatedWriteLine(result.vector);

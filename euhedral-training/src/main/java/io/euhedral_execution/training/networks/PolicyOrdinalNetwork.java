@@ -354,20 +354,19 @@ public final class PolicyOrdinalNetwork implements AutoCloseable {
     public static void printEnvironment() {
         Engine engine = Engine.getEngine(ENGINE);
         int gpuCount = engine.getGpuCount();
-        System.out.println("DJL engine: " + ENGINE + " " + engine.getVersion());
-        System.out.println("GPU count: " + gpuCount);
+        LOGGER.info("DJL engine: {} {}", ENGINE, engine.getVersion());
+        LOGGER.info("GPU count: {}", gpuCount);
         if (gpuCount == 0) {
-            System.out.println("Default training device: CPU");
+            LOGGER.info("Default training device: CPU");
             return;
         }
 
-        System.out.println("CUDA runtime: " + CudaUtils.getCudaVersionString());
+        LOGGER.info("CUDA runtime: {}", CudaUtils.getCudaVersionString());
         for (int gpu = 0; gpu < gpuCount; gpu++) {
             MemoryUsage memory = CudaUtils.getGpuMemory(Device.gpu(gpu));
-            System.out.println("GPU " + gpu + " compute capability: "
-                    + CudaUtils.getComputeCapability(gpu));
-            System.out.println("GPU " + gpu + " memory committed/max: "
-                    + memory.getCommitted() + "/" + memory.getMax());
+            LOGGER.info("GPU {} compute capability: {}", gpu, CudaUtils.getComputeCapability(gpu));
+            LOGGER.info("GPU {} memory committed/max: {}/{}", gpu, memory.getCommitted(),
+                    memory.getMax());
         }
     }
 
