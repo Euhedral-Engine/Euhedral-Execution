@@ -47,17 +47,18 @@ public final class ClosedLoopRunner {
                     String.format("iteration-%04d", iteration));
             Path complete = iterationDirectory.resolve("COMPLETE");
             Path model = iterationDirectory.resolve("model/best");
-            Path rawBenchmark = iterationDirectory.resolve("benchmark/raw-data.txt");
-            Path corpusFile = corpus.resolve(String.format("iteration-%04d.txt", iteration));
+            Path rawBenchmarkDirectory = iterationDirectory.resolve("benchmark/raw");
+            Path benchmarkResultsDirectory = iterationDirectory.resolve("benchmark/results");
+            List<Path> corpusFiles = iterationCorpusFiles(corpus, iteration);
 
             if (config.resume() && Files.isRegularFile(complete) && Files.isDirectory(model)) {
-                if (!Files.isRegularFile(corpusFile)) {
-                    if (!Files.isRegularFile(rawBenchmark)) {
+                if (corpusFiles.isEmpty()) {
+                    if (listRegularFiles(rawBenchmarkDirectory).isEmpty()) {
                         throw new IllegalStateException(
                                 "Completed iteration is missing both corpus and raw benchmark data: "
                                         + iterationDirectory);
                     }
-                    promote(rawBenchmark, corpusFile);
+                    promoteBenchmarks(rawBenchmarkDirectory, corpus, iteration);
                 }
                 publishLatest(config.workspace(), model,
                         iterationDirectory.resolve("merge/training-data.txt"));
@@ -87,22 +88,23 @@ public final class ClosedLoopRunner {
             checkStop(config);
 
             writeState(iterationDirectory, iteration, "BENCHMARKING", candidates);
-            rawBenchmark = BenchmarkRunner.run(candidates, rawBenchmark,
-                    iterationDirectory.resolve("benchmark/results.txt"));
+            List<BenchmarkRunner.BenchmarkRun> benchmarkRuns =
+                    BenchmarkRunner.runAcrossSourceCounts(candidates, rawBenchmarkDirectory,
+                            benchmarkResultsDirectory, iteration);
             checkStop(config);
 
             publishLatest(config.workspace(), model, mergedData);
-            writeState(iterationDirectory, iteration, "COMPLETE", corpusFile);
+            writeState(iterationDirectory, iteration, "COMPLETE", rawBenchmarkDirectory);
             Files.writeString(complete, Instant.now().toString(), StandardOpenOption.CREATE,
                     StandardOpenOption.TRUNCATE_EXISTING);
 
             // The atomic move is the corpus commit point. If it fails after COMPLETE is written,
             // resume repairs the promotion from the retained raw benchmark.
-            promote(rawBenchmark, corpusFile);
+            promoteBenchmarks(rawBenchmarkDirectory, corpus, iteration);
 
             previousModel = model;
-            LOGGER.info("Closed-loop iteration {} complete; promoted {} into the corpus", iteration,
-                    corpusFile);
+            LOGGER.info("Closed-loop iteration {} complete; promoted {} source configurations into "
+                            + "the corpus", iteration, benchmarkRuns.size());
         }
     }
 
@@ -140,6 +142,25 @@ public final class ClosedLoopRunner {
                             StandardCopyOption.COPY_ATTRIBUTES);
                 }
             }
+        }
+    }
+
+    private static List<Path> iterationCorpusFiles(Path corpus, int iteration) throws Exception {
+        String prefix = String.format("iteration-%04d-source-", iteration);
+        try (Stream<Path> stream = Files.list(corpus)) {
+            return stream.filter(Files::isRegularFile)
+                    .filter(path -> path.getFileName().toString().startsWith(prefix))
+                    .sorted(Comparator.comparing(Path::toString))
+                    .toList();
+        }
+    }
+
+    private static void promoteBenchmarks(Path rawDirectory, Path corpus, int iteration)
+            throws Exception {
+        for (Path raw : listRegularFiles(rawDirectory)) {
+            String name = raw.getFileName().toString();
+            Path destination = corpus.resolve(String.format("iteration-%04d-%s", iteration, name));
+            promote(raw, destination);
         }
     }
 
