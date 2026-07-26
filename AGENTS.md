@@ -1,330 +1,290 @@
-# AGENTS.md - Euhedral Engine Development Guide
+# Working on Euhedral
 
-## Project Overview
+This file is the practical guide for making changes in this repository. Read
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) when a task touches routing, worker lifecycle,
+topology, or frame semantics. The implementation and tests remain the final authority when a
+document and the code disagree.
 
-Euhedral is a low-latency, adaptive execution system (Java 21+) designed for CPU-topology-aware work distribution. It treats work (frames) as pull-based streams routed through a three-tier hierarchical control plane aligned with hardware topology: **Lattice** (global) → **Shard** (socket) → **Fragment** (core).
+Euhedral is a pull-driven execution engine. Persistent workers are pinned to CPUs and ask upstream
+sources for frames. Work moves down through a socket and core routing graph; demand moves back up.
+Most performance and correctness constraints follow from that shape.
 
-## Architecture & Design Patterns
+## Before changing anything
 
-### Three-Tier Control Plane Architecture
+1. Run `git status --short` and preserve unrelated changes, generated data, and local benchmark
+   output.
+2. Identify the owning module and inspect its `pom.xml` and `module-info.java`.
+3. Read the nearest tests before changing a concurrency or lifecycle contract.
+4. Use the repository toolchain from [`mise.toml`](mise.toml).
+5. Do not commit, push, delete user data, or rewrite unrelated files unless the task explicitly asks
+   for it.
 
-Work flows through a hierarchy mirroring CPU topology:
+Several directories under `euhedral-training/input`, `euhedral-training/output`, and `data` may
+contain expensive local runs. Treat them as user-owned even when they are untracked.
 
-1. **ControlPlaneLattice** (`euhedral-core`) - System-wide coordinator
-   - Manages all ControlPlaneShards (one per socket)
-   - Discovers hardware topology using `euhedral-hardware-utils`
-   - Handles global rebalancing and topology changes
-   - Entry point: `ControlPlaneLattice.getOrCreate()` / `.start()`
+## Modules and language levels
 
-2. **ControlPlaneShard** - Per-socket manager
-   - Manages ControlPlaneFragments for its cores
-   - Distributes ingress across fragments
-   - Implements `CloneableObject` pattern for per-core variants
+Run the repository with the JDK selected by `mise`, currently Java 25. Individual artifacts retain
+lower release targets where possible.
 
-3. **ControlPlaneFragment** - Per-core execution loop
-   - Pinned to single CPU core via `euhedral-hardware-utils/ThreadPinner`
-   - Adaptive scheduling: adjusts concurrency/dispatch rate based on queue pressure
-   - Transitions idle: spin → yield → park
+| Module | Release | Main responsibility |
+| --- | ---: | --- |
+| `euhedral-hashing` | 11 | xxHash64-based hashing and mixing |
+| `euhedral-data-structures` | 11 | Concurrent queues and padded atomics |
+| `euhedral-hardware-utils` | 17 | Topology, resource monitoring, affinity, and JNI |
+| `euhedral-core` | 21 | Control plane, frames, routing, ingest, and execution |
+| `euhedral-spring-core` | 21 | Spring Boot, Kafka, and gRPC integration |
+| `euhedral-training` | 21 | Offline policy tuning and candidate benchmarking |
+| `euhedral-reactor-core` | 25 | Reactor scheduler and operators |
+| `benchmarks` | 25 | JMH benchmarks |
 
-### Hash-Based Deterministic Routing
+The dependency direction is broadly:
 
-- Every frame carries `idHash` (stable identity) and mutable `routingHash` (placement)
-- LatticeVertex uses unsigned multiply-high: `unsignedMultiplyHigh(frame.routingHash, mapSize)` for consistent fan-out
-- Frames with same routingHash execute sequentially; different hashes execute in parallel
-- Preserve ordering: keep idHash; parallelize: randomize routingHash via `frame.randomizeHash(seed++)`
+```text
+hashing + data-structures + hardware-utils
+                  -> core
+                  -> reactor-core
+                  -> spring-core
 
-### CloneableObject Protocol
-
-All distributed components implement lifecycle:
-- `clone(CloneConfig)` - Create per-core variant
-- `firstTouch()` - Initialize thread-local state
-- `start()` - Begin operation
-- `ingestNext(frame)` - Accept work
-- `getOutput()` - Retrieve results
-
-See: `/euhedral-core/src/main/java/io/euhedral_execution/core/generics/CloneableObject.java`
-
-### Frame Model
-
-- **AbstractFrame** - Recyclable work unit (extends CloneableObject)
-  - Executes: `execute()` method (user-defined)
-  - Lifecycle: `isAlive()` → `execute()` → `doFinally()` / `doFinallyWithError()`
-  - Cancelable: `throwCancelSignal()` throws internal `CancelSignal` exception
-  - Origin tracked: carries `CpuInfo` of creation point
-
-- **Built-in implementations**: FunctionFrame, ConsumerFrame, RunnableFrame, ArrayFrame, CollectionFrame
-- **Recycling**: FrameManager reduces GC; resets routingHash after execution (must re-randomize in replace() if parallel needed)
-
-## Coding Conventions
-
-### Memory Semantics - VarHandle Usage
-
-This codebase uses precise JMM control via VarHandle for lock-free concurrency:
-
-```java
-// PaddedAtomicLong.java pattern
-private static final VarHandle VH_VALUE = ...;
-
-// Access levels: opaque (no ordering) → acquire/release (partial) → volatile
-value.get();              // Opaque read
-value.getAcquire();       // Acquire semantics
-value.setRelease(newVal); // Release semantics
+core + supporting modules -> training and benchmarks
 ```
 
-Never use `AtomicLong` directly; use `PaddedAtomicLong` from `euhedral-data-structures` to prevent false sharing in high-contention scenarios.
+Keep lower-level modules independent of `euhedral-core`. Integration code belongs in the Reactor or
+Spring modules, not in the queue, hashing, or hardware layers.
 
-See: `/euhedral-data-structures/src/main/java/io/euhedral_execution/data_structures/atomics/`
+## Build and test
 
-### Padded Data Structures
-
-Cache-line padding (128 bytes) to isolate hot fields:
-- `PaddedAtomicLong`, `PaddedLong` base classes
-- Prevents false-sharing in shared-memory contention
-
-Use for any field accessed from multiple cores in tight loops.
-
-### Hardware Abstraction - Cross-Platform Native Layer
-
-Euhedral abstracts Linux/Windows/macOS topology via JNI (built with Zig):
-
-- `SystemInfo` - Full topology discovery (sockets, cores, cache hierarchy, NUMA)
-- `ThreadPinner` - CPU affinity control (linker: `-Xbootclasspath/a:...`)
-- `PinnedThreadExecutor` - Executor pinned to specific cores
-- `ResourceMonitor` - Per-core hardware telemetry
-
-**Build requirement**: `zig 0.16.0` (via `mise`); produces `.so`/`.dll`/`.dylib` for x64/arm64.
-
-See: `/euhedral-hardware-utils/src/main/resources/build.sh`
-
-### Naming Conventions
-
-| Term | Meaning |
-|------|---------|
-| **Fragment** | Per-core execution unit (ControlPlaneFragment, FragmentConfig) |
-| **Lattice** | Routing graph structure (LatticeVertex, LatticeEdge, LatticeSource) |
-| **Clone** | Per-core variant of CloneableObject (via clone(CloneConfig)) |
-| **Shard** | Socket-scoped manager (ControlPlaneShard: manages N cores) |
-| **Frame** | Recyclable work unit (AbstractFrame subclass) |
-| **Sink** | Ingress entry point (FunctionIngestSink, QueueIngestSink, ArrayIngestSink) |
-
-## Common Workflows
-
-### 1. Basic Setup & Execution
-
-```java
-// VM flags required:
-// -XX:+UseThreadPriorities --add-opens java.base/java.util=ALL-UNNAMED
-
-ControlPlaneLattice lattice = ControlPlaneLattice.getOrCreate();
-lattice.start();
-
-// Level 1: Built-in sinks
-Function<Integer, Integer> square = x -> x * x;
-FunctionIngestSink<Integer, Integer> sink = new FunctionIngestSink<>(square, System.out::println, false);
-lattice.addUpstream(sink);
-sink.push(Arrays.asList(2, 4, 8));
-sink.completeGracefully(); // Graceful drain
-```
-
-### 2. Parallel Execution with Hash Randomization
-
-```java
-long idHash = HasherApi.mix(123);
-long seed = HasherApi.mix(456);
-
-for (int i = 0; i < 1000; i++) {
-    FunctionFrame<Data, Result> frame = new FunctionFrame<>(idHash, fn, consumer, data);
-    frame.randomizeHash(seed++); // Varies routing → parallel execution
-    sink.push(frame);
-}
-```
-
-### 3. Custom Frames with Recycling
-
-```java
-public class MyCustomFrame extends AbstractFrame {
-    private AtomicBoolean killSwitch;
-    private MyData payload;
-    
-    public MyCustomFrame(long idHash, MyData payload, FrameManager<MyData, MyCustomFrame> mgr) {
-        super(idHash, mgr);
-        this.payload = payload;
-    }
-    
-    @Override
-    public void execute() {
-        // User logic; can call throwCancelSignal() to cancel
-    }
-    
-    @Override
-    public boolean isAlive() {
-        return !killSwitch.getOpaque(); // Memory semantics
-    }
-    
-    @Override
-    public void doFinally() {
-        super.recycle(); // Returns to pool
-    }
-}
-
-// Usage with recycler:
-FrameManager<MyData, MyCustomFrame> manager = new FrameManager<>(password);
-manager.setFactory(new FrameFactory<>(
-    (idHash, data) -> new MyCustomFrame(idHash, data, manager),
-    (data, frame) -> { frame.replace(data); frame.randomizeHash(seed++); }
-));
-```
-
-### 4. Reactor Integration
-
-```java
-// euhedral-reactor-core provides Euhedral-backed Scheduler
-scheduler = EuhedralSchedulers.fromExecutor(executor);
-Mono.just(data)
-    .publishOn(scheduler)
-    .subscribe(...);
-```
-
-### 5. Spring Integration
-
-```java
-// euhedral-spring-core integrates with Spring async/scheduling
-@Configuration
-@EnableAsync
-public class EuhedralConfig {
-    @Bean
-    public Executor euhedralExecutor() {
-        return new EuhedralExecutor(lattice);
-    }
-}
-```
-
-## Build & Testing
-
-### Multi-Module Maven Project
+Install and activate the pinned tools:
 
 ```bash
-# Java 21+ required; managed via mise.toml
-mvn clean compile          # Compile all modules
-mvn test                   # Run unit tests (JUnit 5 + Mockito)
-mvn install                # Package locally
-
-# Individual modules
-mvn -f euhedral-core -DskipTests clean package
-mvn -f euhedral-hardware-utils clean compile
+mise install
+mise exec -- java -version
+mise exec -- mvn -version
 ```
 
-### Key Dependencies
+The normal repository check is the same one used by CI:
 
-- **Core framework**: Lombok (annotation processing), SLF4J/Logback (logging), Micrometer (metrics)
-- **Concurrency**: Custom internal lock-free queues (SPSC/SPMC/MPSC/MPMC), fastutil (primitive collections), jctools (benchmarking only)
-- **Testing**: JUnit 5, Mockito, Awaitility (async verification), Reactor-test
-- **Native**: JNI, Zig (cross-platform compilation)
-
-### Test Pattern
-
-```java
-// Location: /euhedral-core/src/test/java/io/euhedral_execution/core/.../ModuleTest.java
-public class LatticeVertexTest {
-    private LatticeVertex vertex;
-    private FrameRecorder recorder;
-    
-    @BeforeEach
-    void setup() {
-        vertex = new LatticeVertex(3); // 3-way fan-out
-    }
-    
-    @Test
-    void testRoutingDistribution() {
-        TestFrame frame = new TestFrame(42);
-        vertex.onNext(frame);
-        assertEquals(1, recorder.recordedFrames().size());
-    }
-}
+```bash
+mise exec -- mvn -B verify
 ```
 
-Use `TestFrame` helper from `test_utils/` package; spy/verify with Mockito.
+For a focused Java change, select the module and include its required upstream modules:
 
-## Module Overview
-
-### euhedral-core
-The execution engine and primary entry point. Contains ControlPlaneLattice, ControlPlaneShard, ControlPlaneFragment, AbstractFrame, and routing infrastructure (LatticeVertex, LatticeEdge).
-
-### euhedral-data-structures
-**Custom internal lock-free queue implementations**: SPSC, SPMC, MPSC, MPMC queues in partitioned, bounded, and unbounded variants. Optimized for batch consumption in high-contention scenarios. Also includes PaddedAtomicLong and other padded atomic types for cache-line isolation. (jctools is used only for comparative benchmarking, not as the primary data structure dependency.)
-
-### euhedral-hardware-utils
-Cross-platform JNI bridge (Linux, Windows, macOS; x64, arm64). Provides SystemInfo for topology discovery, ThreadPinner for CPU affinity, ResourceMonitor for per-core telemetry. Native code built with Zig 0.16.0.
-
-### euhedral-hashing
-xxHash64-based deterministic hashing for frame routing and load distribution.
-
-### euhedral-reactor-core
-Reactor Project integration layer. Provides PublisherAdapter and EuhedralScheduler for Reactive Streams compatibility (publishOn/subscribeOn support).
-
-### euhedral-spring-core
-Spring Framework integration. Provides EuhedralExecutor implementing Spring's Executor interface for @Async and Spring Task scheduling.
-
-### euhedral-training
-Benchmarking and training examples. Includes JMH microbenchmarks and workload demonstrations.
-
-## Critical Considerations
-
-### Performance & Tuning
-
-1. **Concurrency**: System adapts via TCP Vegas-style latency estimation (observe queue pressure, backpressure)
-2. **Dispatch rate**: Automatically adjusted; watch `euhedral.metrics.fragment.dispatch_rate`
-3. **Memory layout**: Padded atomics essential for > 10M frames/sec
-4. **GC pressure**: Use FrameManager recycling for sustained workloads
-
-### Topology Awareness
-
-- RoutingPolicy enum: ANYWHERE > SOCKET_LOCAL > CACHE_LOCAL
-- System rebalances automatically on topology changes (CPU hotplug, NUMA reconfiguration)
-- Monitor via `SystemInfo.current()` for live topology
-
-### Error Handling
-
-- Frames must catch `AbstractFrame.CancelSignal` and rethrow if custom cancel logic needed
-- `doFinallyWithError(Throwable t)` called on execution exception
-- Use frame.isAlive() guards to implement cancellation windows
-
-### Integration Points
-
-- **Reactor**: `PublisherAdapter` wraps ingest sinks as Publishers
-- **Spring**: `EuhedralExecutor` implements Spring `Executor` interface
-- **gRPC**: Spring-gRPC integration available (config in parent pom)
-- **Monitoring**: Micrometer integration with `ControlPlaneConfig` constructor
-
-## Directory Structure
-
-```
-euhedral-engine/
-├── euhedral-core/             # Execution engine (Lattice, Shard, Fragment, Frames)
-├── euhedral-data-structures/  # Lock-free queues, padded atomics
-├── euhedral-hardware-utils/   # Topology, pinning, monitoring (JNI bridge)
-├── euhedral-hashing/          # xxHash64-based routing (deterministic)
-├── euhedral-reactor-core/     # Reactor scheduler integration
-├── euhedral-spring-core/      # Spring async executor integration
-├── euhedral-training/         # Benchmarks & training examples
-└── benchmarks/                # JMH benchmark suite
+```bash
+mise exec -- mvn -B -pl euhedral-core -am test
+mise exec -- mvn -B -pl euhedral-data-structures -am test
+mise exec -- mvn -B -pl euhedral-spring-core -am test
 ```
 
-## Key Files to Study
+Use `verify`, not only `test`, when the change affects native packaging, generated protobuf code, or
+integration-test lifecycle bindings:
 
-1. **ARCHITECTURE.md** - Deep dive into control plane hierarchy and design decisions
-2. **QUICK_START.md** - 5 usage levels (Lattice setup → custom frames → recycling)
-3. `euhedral-core/.../ControlPlaneLattice.java` - System lifecycle
-4. `euhedral-core/.../AbstractFrame.java` - Frame contract & lifecycle
-5. `euhedral-data-structures/.../PaddedAtomicLong.java` - Memory semantics pattern
-6. `euhedral-hardware-utils/.../SystemInfo.java` - Topology discovery
+```bash
+mise exec -- mvn -B -pl euhedral-hardware-utils -am verify
+mise exec -- mvn -B -pl euhedral-spring-core -am verify
+```
 
-## Debugging Tips
+The hardware module invokes Zig during Maven's `initialize` phase, even for an ordinary compile. It
+cross-builds native libraries for Linux, Windows, and macOS. A missing `zig`, JNI platform header,
+or macOS SDK can fail the build before Java compilation begins. Use
+[`.github/workflows/build.yaml`](.github/workflows/build.yaml) as the reference setup; it prepares
+the cross-target JNI headers and macOS SDK before running `mvn verify`.
 
-- Enable `-XX:+UnlockDiagnosticVMOptions -XX:+PrintCompilation` for JIT diagnostics
-- Watch `euhedral.metrics.*` gauges for per-core pressure signals
-- Use `ThreadTools.getCurrentCore()` to verify pinning
-- Frame execution happens asynchronously; use `sink.completeGracefully()` with timeout for controlled shutdown
+Hardware resource tests use Testcontainers and need a working Docker daemon. Affinity tests also
+depend on the CPUs exposed by the host or container. Report those environmental limits separately
+from Java compilation failures.
 
+For focused trainer work, the documented sequence installs upstream artifacts without compiling
+their tests, then runs trainer tests:
 
+```bash
+mise exec -- mvn -B -pl euhedral-training -am install -Dmaven.test.skip=true
+mise exec -- mvn -B -pl euhedral-training test
+```
 
+See [`euhedral-training/CLOSED_LOOP.md`](euhedral-training/CLOSED_LOOP.md) for packaging and runtime
+properties. CUDA is not needed for ordinary compilation or CPU tests. The packaged GPU launcher
+expects the exact PyTorch and CUDA versions described in
+[`euhedral-training/GPU_SETUP_UBUNTU.md`](euhedral-training/GPU_SETUP_UBUNTU.md).
+
+## Runtime invariants
+
+### Control plane ownership
+
+[`ControlPlaneLattice`](euhedral-core/src/main/java/io/euhedral_execution/core/control_plane/ControlPlaneLattice.java)
+is a JVM-wide singleton. It owns the resource monitor, global socket distributor, and shard
+lifecycle. Tests and applications that create it must close it.
+
+Each
+[`ControlPlaneShard`](euhedral-core/src/main/java/io/euhedral_execution/core/control_plane/ControlPlaneShard.java)
+owns one socket and clones one worker pipeline per active physical core. The default
+[`BaseCloneableObject`](euhedral-core/src/main/java/io/euhedral_execution/core/impl/BaseCloneableObject.java)
+connects a `ControlPlaneFragment` to an `AbstractExecutor`.
+
+Do not change a routing table while work is flowing. The established sequence is:
+
+1. Enter drain mode.
+2. Prepare handles or clones.
+3. Publish the complete new mapping.
+4. Drain and close removed workers.
+5. Resume ingest.
+
+Keep socket changes in the lattice and core changes in the shard. Do not make fragments discover or
+rebuild global topology themselves.
+
+### Pull graph
+
+[`LatticeEdge`](euhedral-core/src/main/java/io/euhedral_execution/core/flow_control/LatticeEdge.java)
+links sources and receivers. Frames move downstream; `request` and `pull` travel upstream.
+[`LatticeVertex`](euhedral-core/src/main/java/io/euhedral_execution/core/flow_control/LatticeVertex.java)
+adds fan-out and optional remote caches.
+
+Worker-local `UpstreamQueue` objects serialize access to each upstream handle. Preserve that
+single-owner handoff when adding a new `LatticeSource`. A source must:
+
+- ignore non-positive demand;
+- stop after its requested limit;
+- honor the pull stop condition;
+- complete its downstream once;
+- avoid generating work from `pull`, which may only consume work already available.
+
+Use the existing ingest implementations and
+[`LatticeEdgeTest`](euhedral-core/src/test/java/io/euhedral_execution/core/flow_control/LatticeEdgeTest.java)
+as templates.
+
+### Routing and frame identity
+
+Every `AbstractFrame` has an immutable `idHash` and a mutable `routingHash`.
+
+- `idHash == routingHash` means ordered routing.
+- `randomizeHash(seed)` marks the frame for parallel placement.
+- Equal routing hashes use the same active socket and core mapping.
+- Ordering is scoped to one source and routing lane, not to the whole process.
+- Routing metadata and payload must not change after ingestion.
+
+`SOCKET_LOCAL` and `CACHE_LOCAL` depend on `frame.origin`. `FrameFactory` captures an origin for
+managed frames. A manually constructed frame has no origin unless the caller sets one.
+
+Recycled frames pass through `FrameFactory.replace()`, which first restores `routingHash` to
+`idHash`. A parallel replacement callback must make the frame unordered again. Test both the fresh
+and recycled paths when changing frame creation.
+
+### Frame lifecycle
+
+The normal terminal path in
+[`AbstractExecutor`](euhedral-core/src/main/java/io/euhedral_execution/core/generics/AbstractExecutor.java)
+is:
+
+```text
+isAlive -> execute -> doFinally
+                   -> doFinallyWithError on an uncaught execution error
+```
+
+`AbstractFrame.CancelSignal` is a stackless internal control signal. If frame code catches broad
+exceptions, it must not turn cancellation into an application error. `kill()` prevents future work;
+`throwCancelSignal()` exits work already running.
+
+Most frame implementations recycle in `doFinally()`. `CallbackFrame` deliberately does not, because
+its response owner decides when reuse is safe. Preserve that distinction.
+
+### Per-core policy and caches
+
+`ControlPlaneFragment` is the hot per-core loop. Through its base classes it owns local cache
+draining, remote pulls, direct upstream pulls, and demand generation. Its
+`FragmentActionPicker` evaluates four actions from six normalized measurements plus a bias. That is
+four groups of seven weights, or 28 values.
+
+The runtime evaluates fixed weights only. Neural-network training belongs in `euhedral-training`.
+Do not add DJL, PyTorch, corpus handling, or candidate search dependencies to `euhedral-core`.
+
+Local fragment caches are MPSC structures with an owner consumer. A reset that clears one must run
+on the owner thread and acknowledge completion. The `resetForNextTrial` path demonstrates this
+handoff.
+
+## Concurrency rules
+
+Memory access modes are part of the design, not style:
+
+- Plain access is for thread-confined or externally ordered state.
+- Opaque access is for weakly ordered polling where freshness is enough.
+- Acquire and release form publication boundaries.
+- Volatile access and CAS are for state transitions that need total visibility.
+
+Do not replace a VarHandle access with a stronger or weaker operation without explaining the
+happens-before argument. Stronger is not automatically harmless in a hot loop.
+
+Use normal JDK atomics for lifecycle and low-frequency coordination. Use the padded atomic types from
+`euhedral-data-structures` for hot shared counters where false sharing matters. The repository uses
+both intentionally.
+
+Choose a queue from the actual producer and consumer topology:
+
+| Producers | Consumers | Queue family |
+| ---: | ---: | --- |
+| 1 | 1 | SPSC |
+| 1 | many | SPMC |
+| many | 1 | MPSC |
+| many | many | MPMC |
+
+Use bounded variants when backpressure is part of the contract, chunked variants when growth is
+allowed, and partitioned variants when contention should be spread across lanes. Prefer batch
+`drain` and `fill` operations on hot paths. Do not rely on unsupported collection behavior such as
+iteration on partitioned queues, and use `sizeLong()` when the exact type provides it.
+
+Avoid allocations, streams, blocking I/O, string formatting, and info-level logging inside:
+
+- `ControlPlaneFragment.cycle()`;
+- `LatticeVertex.push()` and `pull()`;
+- queue offer, poll, fill, and drain methods;
+- per-frame `execute()` and completion paths.
+
+Use `SpinWait`, `Thread.onSpinWait()`, bounded `LockSupport.parkNanos()`, or Awaitility in tests
+according to the existing ownership pattern. Never add an unbounded busy wait without a shutdown or
+timeout condition.
+
+CPU affinity must go through `PinnedThreadExecutor` or `ThreadTools`. New per-core state that
+allocates arrays or queues should participate in `firstTouch()` so its pages are touched near the
+CPU that will own them.
+
+## Source conventions
+
+- Use four-space Java indentation and follow the surrounding file's layout.
+- Use SLF4J parameter placeholders. Pass a throwable as the final logging argument.
+- Use JSpecify annotations on public nullness contracts where the module already does so.
+- Validate record and constructor invariants at the boundary.
+- Keep comments focused on ownership, ordering, memory semantics, or a non-obvious performance
+  reason.
+- If a public package is added or removed, update the module's `module-info.java`.
+- Add tests in the owning module and name them after observable behavior.
+
+The generated gRPC classes
+`GrpcTransportServiceGrpc.java` and `GrpcTransportServiceMd.java` come from
+[`GrpcTransportService.proto`](euhedral-spring-core/src/main/java/io/euhedral_execution/spring/core/transport/grpc/protos/GrpcTransportService.proto).
+Edit the proto, run the Spring module's generation phase, and review the generated diff. Do not hand
+edit generated Java.
+
+Native binaries under `euhedral-hardware-utils/src/main/resources/bin`, Zig caches, Maven `target`
+directories, training outputs, and benchmark output are build or run artifacts. Do not add or
+remove them as part of an unrelated source change.
+
+## Testing changes well
+
+- Routing changes need stable-hash, randomized-hash, inactive-target, and remap coverage.
+- Source changes need request, pull, completion, zero-demand, and concurrent-handle coverage.
+- Frame changes need success, cancellation, error, and recycling coverage.
+- Queue changes need the matching producer-consumer test and boundary cases around chunk rollover.
+- Topology changes need startup, add/remove, drain timeout, and close coverage.
+- Spring transport changes should cover unary and streaming behavior or Kafka partition and commit
+  behavior as appropriate.
+- Performance claims require JMH. Do not infer throughput from a unit test or one wall-clock run.
+
+Prefer deterministic synchronization to arbitrary sleeps. Close lattices, pinned executors, native
+monitors, channels, and containers in teardown so static state does not leak into the next test.
+
+Before handing work back:
+
+1. Search for stale names and references.
+2. Run the narrowest meaningful tests, then `mvn verify` for cross-module or native changes.
+3. Inspect `git diff --check`.
+4. Inspect `git status --short` and confirm only intended files changed.
+5. Report tests that could not run and the exact environmental reason.
