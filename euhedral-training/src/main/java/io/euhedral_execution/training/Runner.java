@@ -6,7 +6,11 @@ public class Runner {
 
     public static void main(String[] args) throws Exception {
         if (Objects.equals(args[0], "merge-data")) {
-            DataMerger.run();
+            DataMerger.mergeQuentiles();
+            return;
+        }
+        if(Objects.equals(args[0], "merge-vectors")) {
+            DataMerger.mergeVectors();
             return;
         }
         if (Objects.equals(args[0], "train-vector-finder")) {
