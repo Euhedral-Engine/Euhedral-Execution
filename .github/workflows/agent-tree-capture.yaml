@@ -18,16 +18,21 @@ jobs:
           ref: ${{ github.event.pull_request.head.ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
-      - name: Apply pending patch
+      - name: Apply pending edit
         shell: bash
         run: |
-          if [[ ! -f .agent/pending.patch ]]; then
-            echo 'No pending patch.'
+          if [[ -f .agent/apply.py ]]; then
+            python3 .agent/apply.py
+            rm .agent/apply.py
+          elif [[ -f .agent/pending.patch ]]; then
+            git apply --check .agent/pending.patch
+            git apply .agent/pending.patch
+            rm .agent/pending.patch
+          else
+            echo 'No pending edit.'
             exit 0
           fi
-          git apply --check .agent/pending.patch
-          git apply --index .agent/pending.patch
-          git rm .agent/pending.patch
+          git add -A
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git commit -m 'Apply agent implementation patch'
