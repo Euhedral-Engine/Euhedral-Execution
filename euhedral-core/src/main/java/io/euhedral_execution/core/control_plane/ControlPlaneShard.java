@@ -404,6 +404,49 @@ public class ControlPlaneShard {
         }, this.shardExecutor);
     }
 
+    long resetForNextTrial(long deadlineNanos) {
+        if (!this.started.getAcquire()) {
+            return 0;
+        }
+        while (this.rebalancing.getAcquire() && System.nanoTime() < deadlineNanos) {
+            Thread.onSpinWait();
+        }
+        if (this.rebalancing.getAcquire()) {
+            throw new IllegalStateException(
+                    "Timed out waiting for shard rebalance before trial reset: " + this.shardName);
+        }
+
+        LatticeVertex distributor = this.coreDistributor.getAcquire();
+        if (distributor == null) {
+            return 0;
+        }
+
+        distributor.setDrain(true);
+        CloneableObject[] activeClones = this.clones.getAcquire();
+        for (CloneableObject clone : activeClones) {
+            if (clone != null) {
+                clone.setDrainMode(true);
+            }
+        }
+
+        long cleared = distributor.clearCachedFrames();
+        try {
+            for (CloneableObject clone : activeClones) {
+                if (clone != null) {
+                    cleared += clone.resetForNextTrial(deadlineNanos);
+                }
+            }
+            return cleared;
+        } finally {
+            for (CloneableObject clone : activeClones) {
+                if (clone != null) {
+                    clone.setDrainMode(false);
+                }
+            }
+            distributor.setDrain(false);
+        }
+    }
+
     public boolean isStarted() {
         if(!this.started.getAcquire()) {
             return false;

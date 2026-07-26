@@ -181,6 +181,27 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
         return true;
     }
 
+    /**
+     * Forcefully clears this vertex's remote routing caches. The caller must first stop ingress or
+     * place the owning graph in drain mode so producers cannot race the reset.
+     *
+     * @return the estimated number of cached frames removed
+     */
+    public long clearCachedFrames() {
+        if (!this.hasCache) {
+            return 0;
+        }
+
+        long cleared = Math.max(0, this.cacheCount.sumAndReset());
+        for (var queue : this.remoteCache) {
+            if (queue != null) {
+                queue.clear();
+            }
+        }
+        this.cacheHead.remove();
+        return cleared;
+    }
+
     /// Adds the interceptor to the upstream. If it is a [LatticeEdge], it bubbles it up and sets
     /// its downstream links' parents to the edge. If it is an [UpstreamHandle][UpstreamHandle], it
     /// defaults to the logic in LatticeEdge.

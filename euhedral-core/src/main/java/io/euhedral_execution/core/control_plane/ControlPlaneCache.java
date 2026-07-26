@@ -237,6 +237,22 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
         return (long) TOTAL_COUNT.getOpaque(this);
     }
 
+    /**
+     * Clears the fragment-local MPSC cache. This must be invoked by the fragment's pinned consumer
+     * thread after ingress has been frozen.
+     */
+    protected final long clearLocalCacheOnOwnerThread() {
+        if (this.localCache == null) {
+            return 0;
+        }
+
+        long cleared = Math.max(0, (long) TOTAL_COUNT.getOpaque(this));
+        this.localCache.clear();
+        this.cacheTerminal.reset();
+        TOTAL_COUNT.setRelease(this, 0L);
+        return cleared;
+    }
+
     public final long getMaxLocalCacheCount() {
         double cap = (double) CAP_FACTOR.getAcquire(this);
         return (long) (this.frameQuota * cap);
