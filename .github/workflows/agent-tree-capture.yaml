@@ -19,21 +19,40 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
       - name: Apply pending edit
+        id: apply
         shell: bash
         run: |
+          set +e
+          status=0
           if [[ -f .agent/apply.py ]]; then
-            python3 .agent/apply.py
-            rm .agent/apply.py
+            python3 .agent/apply.py >agent-edit.log 2>&1
+            status=$?
+            if [[ $status -eq 0 ]]; then
+              rm .agent/apply.py
+            fi
           elif [[ -f .agent/pending.patch ]]; then
-            git apply --check .agent/pending.patch
-            git apply .agent/pending.patch
-            rm .agent/pending.patch
+            git apply --check .agent/pending.patch >agent-edit.log 2>&1 && \
+              git apply .agent/pending.patch >>agent-edit.log 2>&1
+            status=$?
+            if [[ $status -eq 0 ]]; then
+              rm .agent/pending.patch
+            fi
           else
-            echo 'No pending edit.'
-            exit 0
+            echo 'No pending edit.' >agent-edit.log
           fi
-          git add -A
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -m 'Apply agent implementation patch'
-          git push origin HEAD:${{ github.event.pull_request.head.ref }}
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          if [[ $status -eq 0 && ( -n "$(git status --porcelain)" ) ]]; then
+            git add -A
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git commit -m 'Apply agent implementation patch' >>agent-edit.log 2>&1
+            git push origin HEAD:${{ github.event.pull_request.head.ref }} >>agent-edit.log 2>&1
+          fi
+          exit 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: agent-edit-diagnostics
+          path: agent-edit.log
+      - name: Fail on edit error
+        if: steps.apply.outputs.status != '0'
+        run: exit 1
