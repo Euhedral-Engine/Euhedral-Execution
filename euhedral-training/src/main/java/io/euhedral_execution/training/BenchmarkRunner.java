@@ -7,7 +7,6 @@ import io.euhedral_execution.core.control_plane.ControlPlaneLattice;
 import io.euhedral_execution.core.control_plane.ControlPlaneShard;
 import io.euhedral_execution.core.frames.BenchmarkFrame;
 import io.euhedral_execution.core.impl.BaseCloneableObject;
-import io.euhedral_execution.core.utils.SpinWait;
 import io.euhedral_execution.hardware_utils.SystemInfo;
 import io.euhedral_execution.hardware_utils.ThreadTools;
 import io.euhedral_execution.training.utils.BenchmarkFrameSink;
@@ -24,36 +23,22 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.PriorityQueue;
+import java.util.Set;
 import java.util.StringJoiner;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.LockSupport;
 import org.apache.commons.math4.legacy.random.SobolSequenceGenerator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-public class BenchmarkRunner {
+public final class BenchmarkRunner {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(BenchmarkRunner.class);
     private static final PriorityQueue<Distribution> TOP_SCORES = new PriorityQueue<>(11);
-
-    private static BenchmarkFrame[][] generateFrames() {
-        String sourceRatio = System.getProperty("sourceRatio");
-
-        int sources = SystemInfo.getCoreCount();
-        if (sourceRatio != null && !sourceRatio.isBlank()) {
-            double ratio = Double.parseDouble(sourceRatio);
-            sources = (int) Math.round(SystemInfo.getCoreCount() * ratio);
-            sources = Math.max(sources, 1);
-        }
-
-        int framesPerSource = Integer.getInteger("benchmark.framesPerSource", 100_000);
-        BenchmarkFrame[][] frames = new BenchmarkFrame[sources][];
-        for (int i = 0; i < frames.length; i++) {
-            frames[i] = BenchmarkFrame.generate(framesPerSource, false,
-                    ThreadLocalRandom.current().nextLong());
-        }
-        return frames;
-    }
 
     public static Path run(String[] args) throws Exception {
         Path rawOutput = Path.of(System.getProperty("benchmark.output",
@@ -68,19 +53,100 @@ public class BenchmarkRunner {
         return run(limit, rawOutput, resultsOutput);
     }
 
+    /** Legacy single-configuration entry point. */
     public static Path run(Path candidates, Path rawOutput, Path resultsOutput) throws Exception {
-        try (VectorProducer producer = new VectorProducer(candidates)) {
-            return run(generateFrames(), producer, rawOutput, resultsOutput);
-        }
+        return runConfiguration(legacySourceCount(), candidates, rawOutput, resultsOutput);
     }
 
+    /** Legacy single-configuration Sobol entry point. */
     public static Path run(int sobolCount, Path rawOutput, Path resultsOutput) throws Exception {
+        int sourceCount = legacySourceCount();
         try (VectorProducer producer = new VectorProducer(sobolCount)) {
-            return run(generateFrames(), producer, rawOutput, resultsOutput);
+            return runConfiguration(sourceCount, producer, rawOutput, resultsOutput);
         }
     }
 
-    private static Path run(BenchmarkFrame[][] frames, VectorProducer generator, Path rawOutput,
+    /**
+     * Benchmarks the same policy set under a deterministic rotating subset of configured source
+     * counts. Every configuration is written separately so DataMerger normalizes it independently.
+     */
+    public static List<BenchmarkRun> runAcrossSourceCounts(Path candidates, Path rawDirectory,
+            Path resultsDirectory, int iteration) throws Exception {
+        Files.createDirectories(rawDirectory);
+        Files.createDirectories(resultsDirectory);
+
+        int[] selected = selectedSourceCounts(iteration);
+        List<BenchmarkRun> runs = new ArrayList<>(selected.length);
+        for (int sourceCount : selected) {
+            Path raw = rawDirectory.resolve(String.format("source-%04d.txt", sourceCount));
+            Path results = resultsDirectory.resolve(String.format("source-%04d.txt", sourceCount));
+            runConfiguration(sourceCount, candidates, raw, results);
+            runs.add(new BenchmarkRun(sourceCount, raw, results));
+        }
+        return List.copyOf(runs);
+    }
+
+    public static int[] selectedSourceCounts(int iteration) {
+        if (iteration <= 0) {
+            throw new IllegalArgumentException("iteration must be positive");
+        }
+        int[] configured = configuredSourceCounts();
+        int perIteration = Integer.getInteger("benchmark.sourceConfigurationsPerIteration",
+                Math.min(2, configured.length));
+        perIteration = Math.max(1, Math.min(perIteration, configured.length));
+
+        int[] selected = new int[perIteration];
+        int start = Math.floorMod((iteration - 1) * perIteration, configured.length);
+        for (int i = 0; i < selected.length; i++) {
+            selected[i] = configured[(start + i) % configured.length];
+        }
+        return selected;
+    }
+
+    public static int[] configuredSourceCounts() {
+        int cores = Math.max(1, SystemInfo.getCoreCount());
+        Set<Integer> counts = new LinkedHashSet<>();
+        String explicit = System.getProperty("benchmark.sourceCounts");
+        if (explicit != null && !explicit.isBlank()) {
+            for (String value : explicit.split(",")) {
+                int count = Integer.parseInt(value.trim());
+                counts.add(Math.max(1, Math.min(count, cores)));
+            }
+        } else {
+            String ratios = System.getProperty("benchmark.sourceRatios", "0.25,0.5,1.0");
+            for (String value : ratios.split(",")) {
+                double ratio = Double.parseDouble(value.trim());
+                if (!Double.isFinite(ratio) || ratio <= 0) {
+                    throw new IllegalArgumentException(
+                            "benchmark.sourceRatios values must be positive and finite");
+                }
+                counts.add(Math.max(1, Math.min((int) Math.round(cores * ratio), cores)));
+            }
+        }
+        if (counts.isEmpty()) {
+            counts.add(cores);
+        }
+        return counts.stream().mapToInt(Integer::intValue).sorted().toArray();
+    }
+
+    private static int legacySourceCount() {
+        String sourceRatio = System.getProperty("sourceRatio");
+        if (sourceRatio == null || sourceRatio.isBlank()) {
+            return SystemInfo.getCoreCount();
+        }
+        double ratio = Double.parseDouble(sourceRatio);
+        return Math.max(1, Math.min((int) Math.round(SystemInfo.getCoreCount() * ratio),
+                SystemInfo.getCoreCount()));
+    }
+
+    private static Path runConfiguration(int sourceCount, Path candidates, Path rawOutput,
+            Path resultsOutput) throws Exception {
+        try (VectorProducer producer = new VectorProducer(candidates)) {
+            return runConfiguration(sourceCount, producer, rawOutput, resultsOutput);
+        }
+    }
+
+    private static Path runConfiguration(int sourceCount, VectorProducer generator, Path rawOutput,
             Path resultsOutput) throws Exception {
         if (rawOutput.getParent() != null) {
             Files.createDirectories(rawOutput.getParent());
@@ -90,18 +156,18 @@ public class BenchmarkRunner {
 
         double[] halt = new double[28];
         FragmentActionPicker actionPicker = new FragmentActionPicker(halt);
-        LatticeConfig config = new LatticeConfig("Benchmark", SystemInfo.getCpuSet(),
-                Duration.ofSeconds(1), ControlPlaneShard.createBaseShard("Shard",
-                new BaseCloneableObject(FragmentConfig.ofBenchmark(actionPicker))));
+        LatticeConfig config = new LatticeConfig("Benchmark-" + sourceCount,
+                SystemInfo.getCpuSet(), Duration.ofSeconds(1),
+                ControlPlaneShard.createBaseShard("Shard",
+                        new BaseCloneableObject(FragmentConfig.ofBenchmark(actionPicker))));
         ControlPlaneLattice controlPlane = ControlPlaneLattice.getOrCreate(config);
+        Duration resetTimeout = Duration.ofMillis(
+                Long.getLong("benchmark.resetTimeoutMillis", 2_000L));
 
+        List<BenchmarkFrameSink> sinks = createSinks(sourceCount);
         try (BenchmarkOutputWriter writer = new BenchmarkOutputWriter(rawOutput)) {
             controlPlane.start();
-
-            List<BenchmarkFrameSink> sinks = new ArrayList<>();
-            for (var frameSet : frames) {
-                BenchmarkFrameSink sink = new BenchmarkFrameSink(frameSet);
-                sinks.add(sink);
+            for (BenchmarkFrameSink sink : sinks) {
                 controlPlane.addUpstream(sink);
             }
 
@@ -114,15 +180,30 @@ public class BenchmarkRunner {
             double[] means = new double[repetitions];
             double[] vector;
 
+            LOGGER.info("Benchmarking {} policies with {} frame sources", generator.limit,
+                    sourceCount);
             while ((vector = generator.get()) != null) {
                 Distribution distribution = new Distribution(vector);
                 Arrays.fill(means, 0);
-                System.out.printf("Vector: (%d / %d)%n", index++, generator.limit);
+                System.out.printf("Sources: %d Vector: (%d / %d)%n", sourceCount, index++,
+                        generator.limit);
+
+                actionPicker.setWeights(halt);
+                pauseAll(sinks, resetTimeout);
+                ControlPlaneLattice.CacheReset reset = controlPlane.resetForNextTrial(resetTimeout);
+                if (reset.clearedFrames() > 0) {
+                    LOGGER.debug("Cleared {} buffered frames before the next policy trial",
+                            reset.clearedFrames());
+                }
+                for (BenchmarkFrameSink sink : sinks) {
+                    sink.resetCounter();
+                }
 
                 actionPicker.setWeights(vector);
+                resumeAll(sinks);
                 try {
                     for (int repetition = 0; repetition < repetitions; repetition++) {
-                        for (var sink : sinks) {
+                        for (BenchmarkFrameSink sink : sinks) {
                             sink.resetCounter();
                         }
 
@@ -159,6 +240,7 @@ public class BenchmarkRunner {
                     }
                 } finally {
                     actionPicker.setWeights(halt);
+                    pauseAll(sinks, resetTimeout);
                 }
 
                 writer.spaceSeparatedWriteLine(distribution.vector);
@@ -167,11 +249,16 @@ public class BenchmarkRunner {
                 if (TOP_SCORES.size() > 10) {
                     TOP_SCORES.poll();
                 }
-
-                awaitQuiescence(sinks);
             }
         } finally {
             actionPicker.setWeights(halt);
+            for (BenchmarkFrameSink sink : sinks) {
+                try {
+                    sink.hardStop(resetTimeout);
+                } catch (Exception error) {
+                    LOGGER.warn("Failed to hard-stop benchmark source", error);
+                }
+            }
             controlPlane.close();
         }
 
@@ -179,23 +266,35 @@ public class BenchmarkRunner {
         return rawOutput;
     }
 
+    private static List<BenchmarkFrameSink> createSinks(int sources) {
+        int framesPerSource = Integer.getInteger("benchmark.framesPerSource", 100_000);
+        List<BenchmarkFrameSink> sinks = new ArrayList<>(sources);
+        for (int i = 0; i < sources; i++) {
+            BenchmarkFrame[] frames = BenchmarkFrame.generate(framesPerSource, false,
+                    ThreadLocalRandom.current().nextLong());
+            sinks.add(new BenchmarkFrameSink(frames));
+        }
+        return sinks;
+    }
+
+    private static void pauseAll(List<BenchmarkFrameSink> sinks, Duration timeout) {
+        for (BenchmarkFrameSink sink : sinks) {
+            sink.pause(timeout);
+        }
+    }
+
+    private static void resumeAll(List<BenchmarkFrameSink> sinks) {
+        for (BenchmarkFrameSink sink : sinks) {
+            sink.resume();
+        }
+    }
+
     private static long consumed(List<BenchmarkFrameSink> sinks) {
         long current = 0;
-        for (var sink : sinks) {
+        for (BenchmarkFrameSink sink : sinks) {
             current += sink.getConsumed();
         }
         return current;
-    }
-
-    private static void awaitQuiescence(List<BenchmarkFrameSink> sinks) {
-        SpinWait.awaitWhile(() -> {
-            long count = 0;
-            for (var sink : sinks) {
-                count += sink.getConsumed();
-                sink.resetCounter();
-            }
-            return count > 0;
-        });
     }
 
     private static void printResults(Path path) throws Exception {
@@ -213,7 +312,7 @@ public class BenchmarkRunner {
 
         try (BenchmarkOutputWriter writer = new BenchmarkOutputWriter(path)) {
             writer.writeLine("Top Throughput:");
-            for (var distribution : results) {
+            for (Distribution distribution : results) {
                 writer.writeLine(String.format(
                         "Quantiles: P10: %.8f P25: %.8f P50: %.8f P75: %.8f P90: %.8f AggregateMean: %.8f",
                         distribution.digest.quantile(0.1), distribution.digest.quantile(0.25),
@@ -221,18 +320,8 @@ public class BenchmarkRunner {
                         distribution.digest.quantile(0.9), distribution.mean));
             }
             writer.writeLine("\n\nTop Weights:");
-            for (var distribution : results) {
+            for (Distribution distribution : results) {
                 writer.writeLine(weightsToCode(distribution.vector));
-            }
-            writer.writeLine("\n\nBounds:");
-            for (var distribution : results) {
-                double min = Double.MAX_VALUE;
-                double max = -min;
-                for (double value : distribution.vector) {
-                    min = Math.min(min, value);
-                    max = Math.max(max, value);
-                }
-                writer.writeLine("[" + min + ", " + max + "]");
             }
         }
     }
@@ -245,11 +334,10 @@ public class BenchmarkRunner {
         return String.format("double[] weights = new double[]{%s}", joiner);
     }
 
-    private BenchmarkRunner() {
-
+    public record BenchmarkRun(int sourceCount, Path rawOutput, Path resultsOutput) {
     }
 
-    private static class VectorProducer implements AutoCloseable {
+    private static final class VectorProducer implements AutoCloseable {
 
         final SobolSequenceGenerator generator;
         final BenchmarkOutputReader reader;
@@ -280,8 +368,8 @@ public class BenchmarkRunner {
             }
             try {
                 return this.reader.readDoubleArray();
-            } catch (Exception e) {
-                throw new RuntimeException("Failed to read candidate vector", e);
+            } catch (Exception error) {
+                throw new RuntimeException("Failed to read candidate vector", error);
             }
         }
 
@@ -291,5 +379,8 @@ public class BenchmarkRunner {
                 this.reader.close();
             }
         }
+    }
+
+    private BenchmarkRunner() {
     }
 }
