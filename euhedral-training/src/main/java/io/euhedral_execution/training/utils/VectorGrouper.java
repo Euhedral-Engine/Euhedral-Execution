@@ -4,7 +4,6 @@ import static io.euhedral_execution.training.utils.CommonFunctions.round;
 
 import com.tdunning.math.stats.MergingDigest;
 import com.tdunning.math.stats.TDigest;
-import io.euhedral_execution.core.utils.FlowDistribution;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -25,9 +24,9 @@ public class VectorGrouper {
         List<Node> vectors = new ArrayList<>();
 
         try (BenchmarkOutputReader reader = new BenchmarkOutputReader(file)) {
-            while(true) {
+            while (true) {
                 double[] vector = reader.readDoubleArray();
-                if(vector == null) {
+                if (vector == null) {
                     break;
                 }
 
@@ -40,24 +39,25 @@ public class VectorGrouper {
 
     private List<ClusterScore> rankAndSort(List<CentroidCluster<Node>> clusters) {
         List<ClusterScore> scores = new ArrayList<>();
-        for(var cluster : clusters) {
+        for (var cluster : clusters) {
             List<Node> points = cluster.getPoints();
-            if(points.isEmpty() || points.size() < 5) {
+            if (points.size() < 5) {
                 continue;
             }
-            FlowDistribution distribution = new FlowDistribution();
-            for(Node node : points) {
-                double p75 = node.quantiles[3];
-                distribution.record(p75);
-            }
+
             ClusterScore score = new ClusterScore(cluster);
+            for (Node node : points) {
+                // Rank policy families by the distribution of their observed median throughput.
+                score.digest.add(node.quantiles[2]);
+            }
             scores.add(score);
         }
         Collections.sort(scores);
         return scores;
     }
 
-    public record Node(double[] vector, double[] quantiles) implements Clusterable, Comparable<Node> {
+    public record Node(double[] vector, double[] quantiles)
+            implements Clusterable, Comparable<Node> {
 
         @Override
         public double[] getPoint() {
@@ -79,15 +79,15 @@ public class VectorGrouper {
 
         @Override
         public int compareTo(Node o) {
-            int p50 = Double.compare(round(this.quantiles[0]), round(o.quantiles[0]));
-            if(p50 != 0) {
+            int p50 = Double.compare(round(this.quantiles[2]), round(o.quantiles[2]));
+            if (p50 != 0) {
                 return p50;
             }
 
             double myIqr = round(this.quantiles[3]) - round(this.quantiles[1]);
             double otherIqr = round(o.quantiles[3]) - round(o.quantiles[1]);
             int iqr = Double.compare(otherIqr, myIqr);
-            if(iqr != 0) {
+            if (iqr != 0) {
                 return iqr;
             }
 
@@ -98,9 +98,6 @@ public class VectorGrouper {
     }
 
     public static class ClusterScore implements Comparable<ClusterScore> {
-        static double round(double quantile) {
-            return Math.round(quantile * 10_000) / 10_000.0;
-        }
 
         public final CentroidCluster<Node> cluster;
         final TDigest digest = new MergingDigest(4_096);
@@ -114,15 +111,15 @@ public class VectorGrouper {
             double myP50 = round(this.digest.quantile(0.5));
             double otherP50 = round(o.digest.quantile(0.5));
 
-            if(!Double.isFinite(myP50)) {
+            if (!Double.isFinite(myP50)) {
                 return -1;
             }
-            if(!Double.isFinite(otherP50)) {
+            if (!Double.isFinite(otherP50)) {
                 return 1;
             }
 
             int comp = Double.compare(myP50, otherP50);
-            if(comp != 0) {
+            if (comp != 0) {
                 return comp;
             }
 
@@ -130,7 +127,7 @@ public class VectorGrouper {
             double otherIqr = round(o.digest.quantile(0.75) - o.digest.quantile(0.25));
 
             comp = Double.compare(otherIqr, myIqr);
-            if(comp != 0) {
+            if (comp != 0) {
                 return comp;
             }
 

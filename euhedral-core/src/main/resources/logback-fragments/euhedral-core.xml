@@ -1,5 +1,3 @@
-<configuration>
-
+<included>
   <logger name="euhedral.core" level="${AllEuhedralLogs:-${EuhedralCoreLog:-INFO}}"/>
-
-</configuration>
+</included>

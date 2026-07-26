@@ -8,10 +8,11 @@ import java.util.Arrays;
 @SuppressWarnings("unused")
 public class FragmentActionPicker {
 
-    private static final VarHandle WEIGHTS = CommonVarHandles.makeHandle(MethodHandles.lookup(), FragmentActionPicker.class, "actionWeights", double[][].class);
-    private double[][] actionWeights;
+    private static final VarHandle WEIGHTS = CommonVarHandles.makeHandle(MethodHandles.lookup(),
+            FragmentActionPicker.class, "actionWeights", double[][].class);
 
-    boolean halt = true;
+    private double[][] actionWeights;
+    private volatile boolean halt;
 
     public static FragmentActionPicker ofDefaults() {
         double[] weights = new double[28];
@@ -20,24 +21,9 @@ public class FragmentActionPicker {
     }
 
     public FragmentActionPicker(double[] weights) {
-        if (weights.length != 28) {
-            throw new IllegalArgumentException("Weights length must be 28");
-        }
-        this.actionWeights = new double[4][7];
-
-        for(double w : weights) {
-            if (w > 0) {
-                this.halt = false;
-                break;
-            }
-        }
-
-        int w = 0;
-        for (int i = 0; i < this.actionWeights.length; i++) {
-            for (int j = 0; j < this.actionWeights[i].length; j++) {
-                this.actionWeights[i][j] = weights[w++];
-            }
-        }
+        validate(weights);
+        this.actionWeights = reshape(weights);
+        this.halt = isHaltVector(weights);
     }
 
     public boolean performAction(Action action, double[] inputs) {
@@ -45,54 +31,65 @@ public class FragmentActionPicker {
     }
 
     public double predict(Action action, double[] inputs) {
-        double[][] actionWeights = (double[][]) WEIGHTS.getOpaque(this);
-        return actionWeights[action.index][0] * inputs[0] +
-                actionWeights[action.index][1] * inputs[1] +
-                actionWeights[action.index][2] * inputs[2] +
-                actionWeights[action.index][3] * inputs[3] +
-                actionWeights[action.index][4] * inputs[4] +
-                actionWeights[action.index][5] * inputs[5] +
-                actionWeights[action.index][6];
+        double[][] weights = (double[][]) WEIGHTS.getOpaque(this);
+        return weights[action.index][0] * inputs[0]
+                + weights[action.index][1] * inputs[1]
+                + weights[action.index][2] * inputs[2]
+                + weights[action.index][3] * inputs[3]
+                + weights[action.index][4] * inputs[4]
+                + weights[action.index][5] * inputs[5]
+                + weights[action.index][6];
     }
 
     public void normalize(double[] inputs) {
         double sum = 0;
-        for(double d : inputs) {
+        for (double d : inputs) {
             sum += d * d;
         }
         double length = Math.max(Math.sqrt(sum), 1e-9);
-        for(int i = 0; i < inputs.length; i++) {
+        for (int i = 0; i < inputs.length; i++) {
             inputs[i] /= length;
         }
     }
 
     public boolean halted() {
-        VarHandle.acquireFence();
         return this.halt;
     }
 
     public void setWeights(double[] weights) {
-        if(weights.length != 28) {
+        validate(weights);
+        double[][] nextWeights = reshape(weights);
+        boolean nextHalt = isHaltVector(weights);
+
+        // Publish the complete immutable matrix before exposing the corresponding halt state.
+        WEIGHTS.setVolatile(this, nextWeights);
+        this.halt = nextHalt;
+    }
+
+    private static void validate(double[] weights) {
+        if (weights.length != 28) {
             throw new IllegalArgumentException("Weights length must be 28");
         }
+    }
 
-        for(double w : weights) {
-            if (w > 0) {
-                this.halt = false;
-                VarHandle.releaseFence();
-                break;
+    private static boolean isHaltVector(double[] weights) {
+        for (double weight : weights) {
+            if (weight != 0.0) {
+                return false;
             }
         }
+        return true;
+    }
 
-        double[][] actionWeights = new double[4][7];
-
-        int w = 0;
-        for (int i = 0; i < actionWeights.length; i++) {
-            for (int j = 0; j < actionWeights[i].length; j++) {
-                actionWeights[i][j] = weights[w++];
+    private static double[][] reshape(double[] weights) {
+        double[][] reshaped = new double[4][7];
+        int index = 0;
+        for (int action = 0; action < reshaped.length; action++) {
+            for (int input = 0; input < reshaped[action].length; input++) {
+                reshaped[action][input] = weights[index++];
             }
         }
-        WEIGHTS.setVolatile(this, actionWeights);
+        return reshaped;
     }
 
     public enum Input {
