@@ -1,294 +1,179 @@
-# ML Closed-Loop Architecture Review
+# Offline Policy-Training Architecture
 
-This review covers `euhedral-core`, `euhedral-data-structures`, `euhedral-hardware-utils`,
-`euhedral-hashing`, and `euhedral-training`. Spring, Reactor, and benchmark comparison modules are
-intentionally excluded.
+This document describes the slower feedback loop in `euhedral-training`: how benchmark results
+become training data, how the ordinal model selects new policies, and how successful measurements are
+committed back to the corpus.
 
-## Runtime architecture
+It does not duplicate the execution-engine design. The pull graph, routing, frame lifecycle,
+topology, queue ownership, and 28-weight runtime contract are documented in
+[`docs/ARCHITECTURE.md`](ARCHITECTURE.md). Commands, system properties, distribution layout, and
+GPU setup belong to [`euhedral-training/README.md`](../euhedral-training/README.md) and
+[`GPU_SETUP_UBUNTU.md`](../euhedral-training/GPU_SETUP_UBUNTU.md).
 
-Euhedral treats the machine as a hierarchy of independently controlled execution domains:
+## Boundary with the runtime
+
+The training module is an offline policy search tool. It produces vectors for the runtime to
+benchmark; it does not load a neural network into `euhedral-core`. At runtime,
+`ControlPlaneFragment` evaluates a selected 28-value policy with its fixed weighted action picker.
+The model and DJL dependencies remain in `euhedral-training`.
+
+The policy vector is the runtime's input contract:
 
 ```text
-ControlPlaneLattice       system / cross-socket ownership
-        ↓
-ControlPlaneShard         socket / NUMA ownership
-        ↓
-LatticeVertex + caches    topology-aware routing and shared-cache buffering
-        ↓
-ControlPlaneFragment      one pinned per-core feedback controller
-        ↓
-AbstractFrame.execute()   user work
+28 weights = 4 action groups x 7 values
 ```
 
-### ControlPlaneLattice
+The four action groups control requesting upstream work, executing remote cached work, executing
+directly from upstream, and sleeping. Their measurements and routing semantics are runtime concerns;
+this document only describes how candidate vectors are learned and selected.
 
-The lattice owns global topology, the resource monitor, socket-level routing, shard lifecycle, and
-system-wide rebalance. It is deliberately not the scheduler. It changes graph structure only when the
-hardware topology or available CPU set changes.
+## Closed-loop stages
 
-### ControlPlaneShard
-
-A shard owns one socket. It creates and drains per-core clones, maps the socket distributor to active
-cores, forwards hardware snapshots, and preserves the drain-before-remap invariant during topology
-changes.
-
-### LatticeEdge and LatticeVertex
-
-Demand travels upward while frames travel downward. `LatticeEdge` provides the pull chain and
-upstream-handle serialization. `LatticeVertex` adds deterministic fan-out, optional remote caches,
-and hash-based routing. The routing graph is structural; execution policy remains inside fragments.
-
-### ControlPlaneCache and WorkRequester
-
-`ControlPlaneCache` owns the fragment-local partitioned MPSC cache and its capacity controls.
-`WorkRequester` converts cache occupancy and socket capacity into pull/request demand. This keeps
-queue ownership local and prevents a central dispatcher from becoming a coherence hotspot.
-
-### ControlPlaneFragment
-
-Each fragment is pinned to one core and executes the online feedback loop. Its state vector is:
+`ClosedLoopRunner` owns orchestration but not model or benchmark internals:
 
 ```text
-completed
-batch size
-throughput
-throughput coefficient of variation
-upstream availability
-remote-cache occupancy
-bias
-```
-
-The 28 policy weights are four independently normalized seven-weight action vectors:
-
-```text
-request upstream work
-execute remote cached work
-execute directly from upstream
-sleep
-```
-
-The policy chooses whether each action is enabled; the fragment still owns batch accounting,
-cache-local execution, telemetry, pressure caps, and lifecycle. This is an important separation: the
-ML policy changes decisions inside a bounded control surface rather than replacing the execution
-engine.
-
-The shipped runtime does not load a neural network. It receives a selected 28-weight policy and
-inferences it with the existing dot products immediately. All expensive learning remains offline.
-
-## Frame and identity model
-
-`AbstractFrame` carries a stable `idHash` and mutable `routingHash`. Equal routing hashes preserve
-ordering; randomized routing hashes allow parallel placement. Frames are reusable and may return to a
-`FrameManager`, so the hot path avoids allocation and retains explicit lifecycle hooks for success,
-error, cancellation, and recycling.
-
-## Data-structure layer
-
-The data-structure module supplies padded atomics and specialized SPSC/SPMC/MPSC/MPMC queues,
-including partitioned and batch-drain variants. These are not generic implementation details: their
-partitioning and cache-line isolation are part of the runtime architecture. Queue counters are allowed
-to be eventually aggregated because the control loop consumes pressure signals, not transactional
-inventory.
-
-## Hardware layer
-
-`SystemInfo`, `TopologyMapper`, `ResourceMonitor`, `ThreadTools`, and `PinnedThreadExecutor` translate
-native topology into Java-level socket/core/cache ownership. The lattice receives topology and quota
-changes, shards receive socket snapshots, and fragments receive core snapshots. This preserves a
-single direction of hardware-state propagation and keeps native concerns out of routing and training.
-
-## Hashing layer
-
-`HasherApi` is the common deterministic identity and distribution primitive. The closed-loop work adds
-an allocation-free `double[]` xxHash64 path so policy vectors can be identified without constructing
-byte buffers. The same hash is used for corpus deduplication and deterministic dataset partitioning.
-
-At roughly 69,000 vectors, the previous 32-bit `Arrays.hashCode` identity had a meaningful collision
-risk. A 64-bit vector hash makes accidental corpus merging negligible while remaining faster than
-serialization-based identity.
-
-## Training architecture before the change
-
-The training module already contained every stage, but the stages were manually connected:
-
-```text
-DataMerger
-SequenceFinder.train
-SequenceFinder.generate
-BenchmarkRunner
-manual file movement back into input/merger
-```
-
-Paths were mostly hard-coded, model generation and training were constructor side effects, benchmark
-state was static, and a completed benchmark was not automatically promoted into the next corpus.
-This made the process an open pipeline rather than a feedback system.
-
-The original DL4J model also regressed all five benchmark quantiles with MSE. That objective spent
-capacity fitting noisy absolute values even though the downstream operation only needed a ranking of
-which policies should be benchmarked next.
-
-## Closed-loop architecture
-
-`ClosedLoopRunner` now owns only outer-loop orchestration:
-
-```text
-raw corpus
-   ↓
+seed benchmark files
+        |
+        v
+bootstrap corpus
+        |
+        v
 DataMerger.mergeQuantiles
-   ↓
+        |
+        v
 SequenceFinder.train
-   ↓
+        |
+        v
 SequenceFinder.generateCandidates
-   ↓
-BenchmarkRunner.run
-   ↓
-transactional promotion into raw corpus
-   └───────────────────────────────────────┘
+        |
+        v
+BenchmarkRunner.runAcrossSourceCounts
+        |
+        v
+atomic promotion into corpus
 ```
 
-The orchestrator does not reach into the lattice, shards, fragments, queues, or neural-network
-internals. Each stage exposes a path-based API and remains independently runnable.
+Each stage consumes paths and writes an explicit artifact:
 
-### Iteration commit point
+| Stage | Input | Output | Responsibility |
+| --- | --- | --- | --- |
+| Bootstrap | seed directory | `workspace/corpus/` | Copy seed benchmark files into the durable corpus when it is empty |
+| Merge | corpus benchmark files | `merge/training-data.txt` | Normalize measurements and combine equal policy vectors |
+| Train | merged vectors and quantiles | `model/best/` | Fit or continue the ordinal DJL model |
+| Generate | merged data and model | `candidates/vectors.txt` | Select a bounded candidate population for measurement |
+| Benchmark | candidate vectors | raw files and summaries | Measure candidates across configured source counts |
+| Promote | successful raw benchmark files | new corpus files | Publish the next training evidence atomically |
 
-The benchmark output is copied into `corpus/` only after merge, training, generation, and benchmarking
-all succeed. A partial iteration therefore cannot alter the next training set. `state.properties` and
-a `COMPLETE` marker make the workspace resumable.
+The same operations are independently available through `Runner`; the README is the source of truth
+for their command-line forms and properties.
 
-### Model continuity
+## Benchmark data contract
 
-The first iteration may start from an existing ordinal DJL model directory. Every later iteration
-trains from the previous best checkpoint against the expanded corpus, then uses that checkpoint to
-screen the next candidate population.
+Every benchmark record is a pair of arrays:
 
-The previous DL4J `.bin` checkpoints are intentionally not migrated. The raw and merged benchmark
-corpus is the durable artifact; one fresh ordinal training pass produces the new checkpoint format.
+```text
+[28 policy weights]
+[P10, P25, P50, P75, P90 measurements]
+```
 
-### Exploration and exploitation
+`DataMerger` processes each source file independently. It scales measurements by that file's 99th
+percentile of observed means and clamps them to `[0, 1]`, so machines and source configurations can
+contribute comparable evidence. Equal vectors are then grouped and their measurements merged into
+the five output quantiles. `merge-vectors` is the vector-only variant for deduplicating candidate
+files without measurements.
 
-Candidate generation retains three populations:
+Training rows remain path-based text artifacts rather than serialized model state. The merged corpus
+is therefore inspectable, portable between machines, and sufficient to rebuild a model.
 
-1. Model-selected candidates from a large Sobol screen.
-2. Global Sobol exploration candidates.
-3. Gaussian perturbations around the best historical cluster centroid.
+## Deterministic training split and ranking
 
-Local perturbations are normalized in the existing policy coordinate system. They are not remapped as
-though they were fresh `[0, 1]` Sobol coordinates.
+`SequenceFinder` hashes each 28-weight vector with a fixed seed before assigning it to partitions.
+The split is deterministic as the corpus grows: 80% of vectors are used for training, 10% for
+validation, and 10% for testing. Decile thresholds are calculated from the training partition only,
+so validation and test data cannot influence labels.
 
-## Neural-network objective
+Policies are ordered by the shared `PolicyRanking` comparator:
 
-The learning problem is ordinal policy classification, not scheduler inference and not raw throughput
-regression.
+1. higher P50 throughput;
+2. lower interquartile range, `P75 - P25`;
+3. lower tail range, `P90 - P10`.
 
-The training partition is sorted with the same policy ordering used by candidate selection:
+Nine cumulative labels indicate whether a policy reaches the 10th through 90th percentile of that
+training-only ordering. This is ordinal classification rather than regression: candidate selection
+needs a useful ranking and top-decile signal, not precise predictions of noisy absolute quantiles.
 
-1. maximize P50 throughput
-2. minimize P75-P25
-3. minimize P90-P10
+## Ordinal model
 
-Nine cumulative labels are then assigned from training-only decile thresholds. The outputs represent
-whether a policy clears the 10th, 20th, through 90th percentile of policy quality. This gives every
-sample dense supervision while retaining a dedicated top-decile decision.
-
-The network is deliberately small:
+The model is a compact DJL PyTorch multilayer perceptron:
 
 ```text
 28 policy weights
-      ↓
+      |
+      v
 128 GELU
-      ↓
+      |
+      v
 96 GELU
-      ↓
+      |
+      v
 48 GELU
-      ↓
+      |
+      v
 9 cumulative decile logits
 ```
 
-The hidden widths are sufficient for nonlinear interactions between the four action vectors while
-remaining cheap enough to screen millions of policies. GELU preserves information on both sides of
-zero, which matters because normalized policy weights are signed.
+Training uses contiguous row-major `float[]` matrices and batches the data on the selected device.
+The loss is class-balanced cumulative binary cross entropy, with additional weight on the top-decile
+output. AdamW, label smoothing, and early stopping provide regularization. Checkpoint selection
+prioritizes validation top-decile precision, then weighted validation loss.
 
-There is no batch normalization. The input coordinate system is already normalized, and persistent
-normalization statistics complicate continuation across an expanding corpus. There is no dropout:
-the model is small relative to the corpus and dropout adds training noise and cost to a ranking
-problem. AdamW, light label smoothing, and early stopping provide regularization instead.
+The nine outputs are scored independently by the network. Candidate scoring projects their sigmoid
+probabilities onto a monotonic sequence before combining expected ordinal quality and top-decile
+confidence.
 
-The loss is class-balanced cumulative binary cross entropy. The top-decile threshold receives extra
-weight. Checkpoint selection first maximizes validation top-10% precision and then minimizes weighted
-validation loss when precision ties.
+An existing ordinal DJL directory may seed the next iteration. Legacy DL4J `.bin` checkpoints are not
+loadable and are intentionally not migrated; the benchmark corpus is the durable input for a fresh
+ordinal model.
 
-Independent cumulative outputs can cross. Candidate scoring projects their sigmoid probabilities onto
-a monotonic sequence before combining expected decile and top-decile confidence.
+## Candidate generation
 
-## Training and screening data path
+Candidate generation balances exploitation and exploration rather than trusting one model-ranked
+list. It combines:
 
-Training matrices are contiguous row-major `float[]` buffers rather than nested `double[][]` values or
-one `DataSet` object per sample. The dataset is transferred to the selected device once and batched by
-DJL.
+1. CMA-ES proposals scored by the ordinal model;
+2. Sobol points screened in large inference batches and sampled across score bands, with capacity
+   weighted toward high bands;
+3. a direct Sobol exploration fraction that bypasses the classifier.
 
-Candidate screening reuses one feature buffer, one score buffer, one vector-reference batch, and a
-pool of retained candidate objects. Network output is copied once per large batch instead of producing
-a `double[]` for every candidate.
+Vectors are normalized in the policy coordinate system before hashing and deduplication. The Sobol
+offset advances between closed-loop iterations, preventing every iteration from replaying the same
+low-index sequence. The final candidate file contains only vectors; measurements are produced by the
+next benchmark stage.
 
-GPU defaults use batches of 4,096 for training and 65,536 for screening. CPU defaults are smaller.
-Both remain configurable because the best size depends on corpus size, JVM heap, PCIe behavior, and
-the particular machine.
+## Benchmark feedback and commit semantics
 
-## GPU and packaging boundary
+`BenchmarkRunner` measures each candidate across the configured source-count scenarios and writes raw
+measurements plus summaries under the iteration directory. It pauses and resets the lattice between
+policy trials so buffered work and controller state do not leak between candidates.
 
-The trainer moved from DL4J/ND4J platform artifacts to DJL's PyTorch engine because the RTX 5080 is a
-Blackwell GPU and requires a CUDA 12.8-capable runtime.
+The corpus commit point is after benchmarking succeeds:
 
-The Maven distribution contains only the Java-side runtime:
+1. write the iteration model, candidates, raw measurements, summaries, and `state.properties`;
+2. write `COMPLETE`;
+3. copy each raw benchmark file to a temporary sibling;
+4. atomically move the temporary file into `workspace/corpus/`.
 
-```text
-pytorch-engine 0.36.0
-pytorch-jni 2.7.1-0.36.0
-```
+If training, generation, benchmarking, or promotion stops early, the previous corpus remains the
+input for the next run. Resume can reuse a completed iteration, repair a promotion from retained raw
+files, and publish `latest-model` and `latest-training-data.txt` for inspection.
 
-CUDA-enabled PyTorch 2.7.1 is installed once from the official CUDA 12.8 pip index. The packaged GPU
-launcher discovers the virtual environment's `torch/lib` directory and exports
-`PYTORCH_LIBRARY_PATH`, `PYTORCH_VERSION=2.7.1`, and `PYTORCH_FLAVOR=cu128` before starting DJL.
-
-This is a stronger packaging boundary than a Linux-only native Maven artifact. No Maven Shade uber jar
-is built, no libtorch binaries are copied into the trainer, and Java rebuilds never recompress the
-multi-gigabyte CUDA runtime. The native runtime is isolated in one Ubuntu virtual environment and can
-be upgraded or replaced independently from the trainer jar.
-
-The trainer owns the only root `logback.xml`. Core and hardware-utils expose includeable Logback
-fragments, which Maven copies into the trainer resources. This produces one deterministic logging
-configuration without relying on shade-time resource collision behavior.
-
-## Correctness issues found during integration
-
-- The all-zero benchmark sentinel did not restore `FragmentActionPicker.halt` after an active policy.
-- Candidate and cluster comparisons used P10 as P50 even though labels are stored as
-  `[P10, P25, P50, P75, P90]`.
-- Cluster score digests were created but never populated, so centroid exploitation was ranked from
-  empty distributions.
-- Train/validation/test assignment depended on read order. It now hashes vector identity with a fixed
-  seed, keeping each vector in the same partition as the corpus grows.
-- `Arrays.hashCode(double[])` was used as corpus identity. The loop now uses 64-bit `HasherApi` vector
-  hashing.
-- Fresh DL4J networks declared the output layer input width from the wrong hidden-layer index.
-- The test-set top-decile overlap loops selected one fewer vector than requested.
-- The benchmark halt barrier now represents actual policy state and static top-score state is reset
-  between runs.
-- Decile thresholds account for inclusive comparison so a distinct 100-sample corpus labels exactly
-  ten policies as top-decile.
-
-## Resulting control hierarchy
-
-Euhedral now has two nested feedback systems with distinct time scales:
+The resulting two-level feedback system is intentional:
 
 ```text
-Fast loop, per core, continuously:
-state → fixed weighted actions → execution/cache effects → new state
-
-Slow loop, only while tuning:
-corpus → ordinal classifier → candidate policies → hardware measurements → expanded corpus
+Fast runtime loop:  state -> fixed policy actions -> execution effects -> new state
+Slow tuning loop:   corpus -> ordinal model -> candidate policies -> measurements -> corpus
 ```
 
-The fast loop remains deterministic, topology-aware, and allocation-conscious. The slow loop automates
-the experimental reasoning process without moving training dependencies or global optimization logic
-into the runtime engine.
+The runtime remains deterministic and topology-aware while the training module automates the
+experimental loop around it. For operational examples, property tables, workspace layout, and
+launcher behavior, use the training README rather than maintaining a second copy here.
