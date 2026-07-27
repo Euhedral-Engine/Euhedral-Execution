@@ -210,8 +210,12 @@ public class DataMerger {
     private static TDigest mergeMeans(File file) throws Exception {
         TDigest digest = new MergingDigest(1024);
         try (BenchmarkOutputReader reader = new BenchmarkOutputReader(file.toPath())) {
-            double[] vector;
-            while ((vector = reader.readDoubleArray()) != null) {
+            // Input files are formated as
+            // vectorA
+            // meansA
+            // vectorB
+            // meansB
+            while (reader.readDoubleArray() != null) {
                 double[] means = reader.readDoubleArray();
                 if (means == null) {
                     throw new IllegalStateException(

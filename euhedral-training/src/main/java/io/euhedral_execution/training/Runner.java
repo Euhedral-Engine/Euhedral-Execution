@@ -19,14 +19,14 @@ public class Runner {
             case "merge-vectors" -> DataMerger.mergeVectors();
             case "training-info" -> PolicyOrdinalNetwork.printEnvironment();
             case "train-vector-finder" -> {
-                try (SequenceFinder ignored = new SequenceFinder(args)) {
+                try (SequenceFinder ignored = new SequenceFinder()) {
                     // SequenceFinder executes the selected train or generate operation at construction.
                 }
             }
             case "benchmark" -> BenchmarkRunner.run(args);
             case "closed-loop" -> {
                 try {
-                    ClosedLoopRunner.run(args);
+                    ClosedLoopRunner.run();
                 } catch (ClosedLoopRunner.StopRequested ignored) {
                     LOGGER.info(
                             "Closed-loop stop requested; current partial iteration was not promoted.");
