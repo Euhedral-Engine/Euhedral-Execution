@@ -1,110 +1,73 @@
 package io.euhedral_execution.hardware_utils;
 
+import static java.util.concurrent.TimeUnit.SECONDS;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.github.dockerjava.api.command.ExecCreateCmdResponse;
+import io.euhedral_execution.hardware_utils.common.SystemSnapshotProvider;
 import io.euhedral_execution.hardware_utils.common.SystemUtilization.HardwareUtilization;
-import java.io.File;
+import io.euhedral_execution.hardware_utils.common.SystemUtilization.SystemSnapshot;
+import io.euhedral_execution.hardware_utils.common.UnmodifiableBitSet;
 import java.time.Duration;
-import java.util.concurrent.locks.LockSupport;
-import org.junit.jupiter.api.BeforeAll;
+import java.util.BitSet;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
-import org.testcontainers.containers.BindMode;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.containers.output.FrameConsumerResultCallback;
-import org.testcontainers.containers.output.OutputFrame.OutputType;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
-@Testcontainers
 class ResourceMonitorTest {
 
-    private static GenericContainer<?> container;
-
-    @BeforeAll
-    static void buildContainer() {
-
-        File testJar = new File("target/testing/test-container.jar");
-
-        container = new GenericContainer<>("eclipse-temurin:21-jre-alpine")
-                .withCreateContainerCmdModifier(cmd -> cmd.getHostConfig()
-                        .withCpuQuota(150_000L) // 1.5 CPUs (Quota over 100k Period)
-                        .withCpuPeriod(100_000L)
-                        .withMemory(512 * 1024 * 1024L) // 512MB
-                        .withCpusetCpus("0,1") // Pin to physical IDs 0 and 1
-                );
-        container.addFileSystemBind(testJar.getAbsolutePath(), "/app/test-container.jar",
-                BindMode.READ_ONLY);
-        container.withCommand("sleep", "3600");
-        container.start();
-    }
-
     @Test
-    void testDynamicScaling() {
-        StringBuffer execOutput = new StringBuffer();
-        String containerId = container.getContainerId();
+    void calculatesUtilizationFromInjectedSnapshots() {
+        IncrementingSnapshotProvider snapshots = new IncrementingSnapshotProvider();
+        ResourceMonitor monitor = new ResourceMonitor(
+                new TopologyMapper(new BitSet()), Duration.ofMillis(200), snapshots);
 
-        ExecCreateCmdResponse execCreateCmdResponse = container.getDockerClient()
-                .execCreateCmd(containerId)
-                .withAttachStdout(true)
-                .withAttachStderr(true)
-                .withCmd("java", "-jar", "/app/test-container.jar", TestRunner.class.getName())
-                .exec();
+        try {
+            HardwareUtilization utilization = monitor.getUtilization();
 
-        FrameConsumerResultCallback callback = new FrameConsumerResultCallback();
-        callback.addConsumer(OutputType.STDOUT, frame -> {
-            String s = frame.getUtf8String();
-            execOutput.append(s);
-            System.out.printf(s);
-        });
-        callback.addConsumer(OutputType.STDERR, frame -> {
-            String s = frame.getUtf8String();
-            System.err.printf(s);
-        });
-        container.getDockerClient().execStartCmd(execCreateCmdResponse.getId())
-                .exec(callback);
-
-        long start = System.currentTimeMillis();
-        while (!execOutput.toString().contains("QUOTA=1.5")
-                && (System.currentTimeMillis() - start) < 5000) {
-            LockSupport.parkNanos(50_000_000);
+            assertEquals(1.0, utilization.quotaCpus());
+            assertTrue(utilization.quotaCpuUsage() > 0.45);
+            assertTrue(utilization.quotaCpuUsage() < 0.55);
+            assertEquals(0.1, utilization.cpuThrottleRatio(), 0.01);
+            assertEquals(1_000, utilization.globalMemoryPool());
+            assertEquals(0.5, utilization.totalMemoryUtilization());
+            assertEquals(200.0, utilization.diskIOBytesPerSecond(), 0.01);
+            assertEquals(snapshots.effectiveCpus, utilization.globalEffectiveCpus());
+            assertEquals(3, snapshots.samples.get());
+        } finally {
+            monitor.close();
         }
-        assertTrue(execOutput.toString().contains("QUOTA=1.5"));
-        System.out.println("\nDetected initial quota: 1.5");
-
-        int markIndex = execOutput.length();
-
-        container.getDockerClient().updateContainerCmd(containerId)
-                .withCpuQuota(200_000L)
-                .withCpuPeriod(100_000L)
-                .exec();
-
-        start = System.currentTimeMillis();
-        while (!execOutput.substring(markIndex).contains("QUOTA=2.0")
-                && (System.currentTimeMillis() - start) < 5000) {
-            LockSupport.parkNanos(50_000_000);
-        }
-
-        assertTrue(execOutput.toString().contains("QUOTA=2.0"));
-        System.out.println("\nDetected final quota: 2.0");
     }
 
-    public static class TestRunner {
+    private static final class IncrementingSnapshotProvider implements SystemSnapshotProvider {
 
-        public static void main(String[] args) {
-            try {
-                ResourceMonitor monitor = new ResourceMonitor(new TopologyMapper(),
-                        Duration.ofMillis(50));
-                monitor.start();
+        private final long startTime = System.nanoTime();
+        private final int cpuCount = Math.max(SystemInfo.getCpuCount(), 1);
+        private final BitSet effectiveCpus = effectiveCpus();
+        private final AtomicInteger samples = new AtomicInteger();
 
-                for (int i = 0; i < 100; i++) {
-                    HardwareUtilization utilization = monitor.getUtilization();
-                    System.out.printf("SNAPSHOT:QUOTA=%.1f\n", utilization.quotaCpus());
-                    System.out.flush();
-                    LockSupport.parkNanos(200_000_000);
-                }
-            } catch (Throwable t) {
-                System.err.println("Error: \n" + t);
+        @Override
+        public SystemSnapshot getSnapshot() {
+            int sample = this.samples.getAndIncrement();
+            int pressureLength = Math.max(this.cpuCount, this.effectiveCpus.length());
+            return SystemSnapshot.create(
+                    this.startTime + SECONDS.toNanos(sample),
+                    this.cpuCount,
+                    1.0,
+                    100_000,
+                    SECONDS.toNanos(sample) / 2,
+                    SECONDS.toNanos(sample) / 10,
+                    UnmodifiableBitSet.wrap((BitSet) this.effectiveCpus.clone()),
+                    new double[pressureLength],
+                    new long[]{1_000, 600, 100},
+                    sample * 200L);
+        }
+
+        private static BitSet effectiveCpus() {
+            BitSet cpus = (BitSet) SystemInfo.getCpuSet().clone();
+            if (cpus.isEmpty()) {
+                cpus.set(0);
             }
+            return cpus;
         }
     }
 }
