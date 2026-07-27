@@ -1,8 +1,7 @@
 package io.euhedral_execution.hardware_utils.common;
 
-import java.lang.reflect.Field;
-import java.util.Arrays;
 import java.util.BitSet;
+import java.util.Objects;
 import java.util.stream.IntStream;
 import org.jspecify.annotations.NonNull;
 
@@ -15,29 +14,12 @@ public final class UnmodifiableBitSet extends BitSet {
     private final BitSet delegate;
 
     public UnmodifiableBitSet(BitSet delegate) {
-        this.delegate = delegate;
-
-        try {
-            Class<?> clazz = BitSet.class;
-            Field words = clazz.getDeclaredField("words");
-            Field wordsInUse = clazz.getDeclaredField("wordsInUse");
-            Field sizeIsSticky = clazz.getDeclaredField("sizeIsSticky");
-
-            words.setAccessible(true);
-            wordsInUse.setAccessible(true);
-            sizeIsSticky.setAccessible(true);
-
-            long[] w = (long[]) words.get(delegate);
-            words.set(this, Arrays.copyOf(w, w.length));
-            wordsInUse.set(this, w.length);
-            sizeIsSticky.set(this, sizeIsSticky.get(delegate));
-        } catch (Exception e) {
-            throw new ExceptionInInitializerError(e);
-        }
+        this.delegate = (BitSet) Objects.requireNonNull(delegate).clone();
+        super.or(this.delegate);
     }
 
     public UnmodifiableBitSet(UnmodifiableBitSet other) {
-        this.delegate = other.delegate;
+        this(other.delegate);
     }
 
     @Override
