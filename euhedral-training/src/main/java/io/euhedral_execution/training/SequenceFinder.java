@@ -1,8 +1,7 @@
 package io.euhedral_execution.training;
 
-import io.euhedral_execution.data_structures.queues.PlainQueue;
-import io.euhedral_execution.hashing.HasherApi;
 import com.tdunning.math.stats.MergingDigest;
+import io.euhedral_execution.hashing.HasherApi;
 import io.euhedral_execution.training.networks.PolicyOrdinalNetwork;
 import io.euhedral_execution.training.optimization.CmaEsOptimizer;
 import io.euhedral_execution.training.optimization.CmaEsOptimizer.MeasuredPolicy;
@@ -12,7 +11,6 @@ import io.euhedral_execution.training.utils.BenchmarkOutputReader;
 import io.euhedral_execution.training.utils.BenchmarkOutputWriter;
 import io.euhedral_execution.training.utils.CommonFunctions;
 import io.euhedral_execution.training.utils.PolicyRanking;
-import io.euhedral_execution.training.utils.VectorGrouper;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -24,7 +22,6 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
-import java.util.PriorityQueue;
 import java.util.Random;
 import java.util.Set;
 import org.apache.commons.math4.legacy.random.SobolSequenceGenerator;
@@ -42,7 +39,7 @@ public class SequenceFinder implements AutoCloseable {
     private final List<Sample> testSet = new ArrayList<>();
     private double[][] ordinalThresholds;
 
-    public SequenceFinder(String[] args) throws Exception {
+    public SequenceFinder() throws Exception {
         Path data = requiredPathProperty("data");
         Path model = optionalPathProperty("model");
         this.learner = loadOrCreate(model);
@@ -424,19 +421,4 @@ public class SequenceFinder implements AutoCloseable {
     private record ScoredSample(Sample sample, float score) {
     }
 
-    private static final class Candidate implements Comparable<Candidate> {
-
-        private final double[] vector;
-        private float score;
-
-        private Candidate(double[] vector, float score) {
-            this.vector = vector;
-            this.score = score;
-        }
-
-        @Override
-        public int compareTo(Candidate other) {
-            return Float.compare(this.score, other.score);
-        }
-    }
 }

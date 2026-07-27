@@ -29,7 +29,7 @@ public final class ClosedLoopRunner {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ClosedLoopRunner.class);
 
-    public static void run(String[] args) throws Exception {
+    public static void run() throws Exception {
         Config config = Config.fromSystemProperties();
         Files.createDirectories(config.workspace());
 

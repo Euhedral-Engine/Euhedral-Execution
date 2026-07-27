@@ -211,7 +211,6 @@ public final class ControlPlaneFragment extends WorkRequester {
 
                 long limit = this.state.batchSize - this.state.completed;
                 long processed = 0;
-                long localCache = super.getLocalCacheCount();
                 double maxCacheInv = 1.0 / Math.max(1.0, super.getUpstreamCacheCapacity());
                 this.state.actionInputs[0] = this.state.completed;
                 this.state.actionInputs[1] = this.state.batchSize;
