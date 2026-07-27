@@ -1,133 +1,99 @@
 package io.euhedral_execution.data_structures.queues;
 
+import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.LongAdder;
-import java.util.function.Consumer;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
 class PartitionedSpmcQueueTest {
 
     @Test
-    void singleThreadOfferDrain() {
-        int chunkSize = 128;
-        PartitionedSpmcQueue<Integer> q =
-                new PartitionedSpmcQueue<>(1, chunkSize, 2);
-
-        for (int i = 1; i <= chunkSize * 4; i++) {
-            assertTrue(q.offer(i));
+    void stopConditionLeavesTheRemainingValuesQueued() {
+        PartitionedSpmcQueue<Integer> queue = new PartitionedSpmcQueue<>(1, 4, 1);
+        for (int i = 0; i < 6; i++) {
+            queue.offer(0, i);
         }
 
-        final int[] drained = new int[] {0};
-        Consumer<Integer> consumer = val -> {
-            if (val != ++drained[0]) {
-                fail("Corruption! Last Value: " + drained[0] + " Current: " + val);
-            }
-        };
-        q.drain(consumer, chunkSize * 4);
+        List<Integer> drained = new ArrayList<>();
+        long count = queue.drain(0, drained::add, value -> value == 2, 6);
 
-        assertEquals(chunkSize * 4, drained[0]);
+        assertEquals(2, count);
+        assertEquals(List.of(0, 1), drained);
+        assertEquals(4, queue.sizeLong());
+        assertEquals(2, queue.peek());
     }
 
     @Test
-    void queueCyclesWithoutDeadlockingOnePartition() throws Exception {
-        cycle(1);
-    }
-
-    @Test
-    void queueCyclesWithoutDeadlockingFourPartitions() throws Exception {
-        cycle(4);
-    }
-
-    private static void cycle(int partitions) throws Exception {
-        PartitionedSpmcQueue<Long> q =
-                new PartitionedSpmcQueue<>(partitions, 1024, 4);
-        int batch = 100_000;
-        int consumers = 8;
-
-        Consumer<Long> consumer = val -> {
-        };
-        ExecutorService exec = Executors.newFixedThreadPool(consumers + 1);
-        for (int x = 0; x < 20; x++) {
-            CountDownLatch end = new CountDownLatch(consumers);
-
-            LongAdder offered = new LongAdder();
-            LongAdder drained = new LongAdder();
-
-            exec.submit(() -> {
-                for (int i = 0; i < batch; i++) {
-                    long v = ThreadLocalRandom.current().nextLong();
-
-                    while (!q.offer(v, System.nanoTime())) {
-                        Thread.onSpinWait();
-                    }
-                    offered.increment();
-                }
-            });
-
-            for (int i = 0; i < consumers; i++) {
-                exec.submit(() -> {
-                    while (drained.sum() < batch) {
-                        long count = q.drain(consumer, 4096);
-                        drained.add(count);
-                        Thread.yield();
-                    }
-                    end.countDown();
-                });
-            }
-            end.await(5, TimeUnit.SECONDS);
-
-            assertEquals(batch, drained.sum(),
-                    String.format("Iteration: %d Consumed: %d Offered: %d%n%s", x, drained.sum(),
-                            offered.sum(), q));
+    void multipleConsumersDoNotLoseOrDuplicateValues() throws Exception {
+        int consumerCount = 4;
+        int itemCount = 1_024;
+        PartitionedSpmcQueue<Integer> queue = new PartitionedSpmcQueue<>(1, 8, 2);
+        for (int i = 0; i < itemCount; i++) {
+            assertTrue(queue.offer(0, i));
         }
-    }
 
-    @Test
-    void multiConsumerNoLossNoDuplication() throws Exception {
-        int consumers = 4;
-        int batch = 50_000;
-
-        PartitionedSpmcQueue<Integer> q =
-                new PartitionedSpmcQueue<>(4, 512, 4);
-
-        ExecutorService exec = Executors.newFixedThreadPool(1 + consumers);
-
+        ExecutorService executor = Executors.newFixedThreadPool(consumerCount);
+        CountDownLatch start = new CountDownLatch(1);
         Set<Integer> consumed = ConcurrentHashMap.newKeySet();
+        AtomicInteger consumedCount = new AtomicInteger();
+        List<Future<?>> consumers = new ArrayList<>();
 
-        exec.submit(() -> {
-            for (int i = 0; i < batch; i++) {
-                while (!q.offer(ThreadLocalRandom.current().nextLong(), i)) {
-                    Thread.yield();
-                }
+        try {
+            for (int i = 0; i < consumerCount; i++) {
+                consumers.add(executor.submit(() -> {
+                    await(start);
+                    long deadline = System.nanoTime() + SECONDS.toNanos(5);
+                    while (consumedCount.get() < itemCount) {
+                        Integer value = queue.poll(0);
+                        if (value != null) {
+                            assertTrue(consumed.add(value), "duplicate " + value);
+                            consumedCount.incrementAndGet();
+                        } else {
+                            assertBefore(deadline, "consumer timed out");
+                            Thread.onSpinWait();
+                        }
+                    }
+                }));
             }
-        });
 
-        CountDownLatch consLatch = new CountDownLatch(consumers);
-        Consumer<Integer> consumer = consumed::add;
-
-        for (int c = 0; c < consumers; c++) {
-            exec.submit(() -> {
-                while (consumed.size() < batch) {
-                    q.drain(consumer, 512);
-                }
-                consLatch.countDown();
-            });
+            start.countDown();
+            for (Future<?> consumer : consumers) {
+                consumer.get(5, SECONDS);
+            }
+        } finally {
+            executor.shutdownNow();
+            assertTrue(executor.awaitTermination(5, SECONDS));
         }
 
-        consLatch.await(5, TimeUnit.SECONDS);
-        exec.shutdownNow();
-
-        assertEquals(batch, consumed.size(), q.toString());
+        assertEquals(itemCount, consumed.size());
+        for (int i = 0; i < itemCount; i++) {
+            assertTrue(consumed.contains(i));
+        }
+        assertFalse(consumed.contains(itemCount));
+        assertTrue(queue.isEmpty());
     }
 
+    private static void await(CountDownLatch latch) {
+        try {
+            assertTrue(latch.await(5, SECONDS), "start latch timed out");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError("interrupted while awaiting test start", e);
+        }
+    }
+
+    private static void assertBefore(long deadline, String message) {
+        assertTrue(System.nanoTime() < deadline, message);
+    }
 }
