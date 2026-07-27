@@ -1,279 +1,284 @@
-# Quick Start for Using Euhedral
+# Euhedral Core quick start
 
-Euhedral is a low-latency execution system designed for parallel execution with minimal coordination
-overhead.
+This guide builds a small asynchronous pipeline with `euhedral-core`, then introduces routing,
+metrics, direct frame ingestion, and recycling. For Reactor applications, start with the
+[Reactor quick start](./REACTOR_QUICK_START.md).
 
-- Work is represented as frames and routed through worker pipelines based on their hashes.
-- Euhedral is asynchronous and non-blocking
+## Prerequisites
 
----
+The full repository uses Java 21. Install the pinned Java, Maven, and native build tools with
+[mise](https://mise.jdx.dev/):
 
-## VM Flags
-
-These are required to run your program with Euhedral.
-
+```bash
+mise install
+mise exec -- java -version
 ```
+
+Build and install Core with its upstream modules:
+
+```bash
+mise exec -- mvn -B -pl euhedral-core -am install
+```
+
+The hardware module builds native libraries during Maven initialization. If target JNI headers or
+the macOS SDK are missing, follow the setup in
+[`.github/workflows/build.yaml`](./.github/workflows/build.yaml).
+
+For an application outside this repository, add the Core artifact:
+
+```xml
+<dependency>
+  <groupId>io.euhedral-execution</groupId>
+  <artifactId>euhedral-core</artifactId>
+  <version>0.0.7-SNAPSHOT</version>
+</dependency>
+```
+
+Run the application with:
+
+```text
 -XX:+UseThreadPriorities
 ```
 
-## Level 0 (Make the ControlPlaneLattice)
+Thread-priority and affinity behavior still depends on the host operating system and process
+permissions.
 
-The ControlPlaneLattice manages multiple workers; frames are distributed based on their routingHash
-and are processed independently by workers. Currently, only one ControlPlaneLattice instance may be
-active per JVM process.
+## Run a function pipeline
 
-Creating the ControlPlaneLattice
+`FunctionIngestSink` converts input values into recyclable frames, executes a function, and passes
+each result to a consumer. The following is a complete example:
 
 ```java
-ControlPlaneLattice controlPlane = ControlPlaneLattice.getOrCreate();
-controlPlane.start();
+import io.euhedral_execution.core.control_plane.ControlPlaneLattice;
+import io.euhedral_execution.core.ingest.FunctionIngestSink;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+
+public final class CoreExample {
+
+    public static void main(String[] args) throws InterruptedException {
+        ControlPlaneLattice lattice = ControlPlaneLattice.getOrCreate();
+        CountDownLatch finished = new CountDownLatch(4);
+
+        FunctionIngestSink<Integer, Integer> squares = new FunctionIngestSink<>(
+                value -> value * value,
+                result -> {
+                    System.out.println(result);
+                    finished.countDown();
+                },
+                false);
+
+        try {
+            lattice.addUpstream(squares);
+            squares.push(List.of(2, 4, 8, 16));
+            squares.completeGracefully();
+
+            if (!finished.await(10, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("Timed out waiting for Euhedral");
+            }
+        } finally {
+            squares.complete();
+            lattice.close();
+        }
+    }
+}
 ```
 
-If you want to collect the per-CPU metrics
+With `parallel` set to `false`, the results are emitted in input order:
 
-```java
-String name = "ThingDoer9000";
-String shardName = "ShardOfThingDoer";
-String metricPrefix = "euhedral.metrics";
-MeterRegistry registry; // Any implementation of io.micrometer.core.instrument.MeterRegistry
-
-ControlPlaneConfig config = ControlPlaneConfig.ofDefaults(name, shardName, metricPrefix, registry);
-ControlPlaneLattice controlPlane = ControlPlaneLattice.getOrCreate(config);
-controlPlane.start();
-```
-
-metricPrefix defaults to "euhedral" if you give it a registry but pass a blank or null prefix.
-
----
-
-## Level 1 (Executing work)
-
-The most straight-forward way to use Euhedral is with one of the default sinks.
-
-The following sinks will run your functions asynchronously when you give them data. You can give
-them data before or after you give the sink to the ControlPlaneLattice.
-
-Default Sinks:
-
-- FunctionIngestSink
-- ConsumerIngestSink
-
-_Assumes a running ControlPlaneLattice_
-
-```java
-Function<Integer, Integer> square = x -> x * x;
-Consumer<Integer> print = x -> System.out.println(x);
-
-// `false` = execute in order
-// `true` = execute in parallel
-FunctionIngestSink<Integer, Integer> sink = new FunctionIngestSink<>(square, print, false);
-
-controlPlane.addUpstream(sink);
-
-int x = 2;
-List<Integer> nums = List.of(4, 8, 16);
-
-sink.push(x);
-sink.push(nums);
-
---- Output ---
+```text
 4
 16
 64
 256
 ```
 
-Remember to complete the sink when you're done and it will disconnect from the ControlPlaneLattice.
+`addUpstream` starts the lattice lazily. Calling `lattice.start()` first is also valid when explicit
+startup better fits the application lifecycle.
+
+`ConsumerIngestSink` provides the same setup for a `Consumer<T>` that does not produce results.
+
+## Choose ordered or distributed execution
+
+The final `FunctionIngestSink` constructor argument controls routing:
 
 ```java
-sink.completeGracefully();
+new FunctionIngestSink<>(function, resultConsumer, false); // ordered lane
+new FunctionIngestSink<>(function, resultConsumer, true);  // distributed work
 ```
 
-## Level 2 (Manually make frames and send them in)
+- `false` leaves `routingHash` equal to `idHash`. Frames from this source share a stable routing
+  lane and execute in input order.
+- `true` randomizes the routing hash of every fresh and recycled frame. Work can spread across
+  active cores, so result order is not guaranteed.
 
-The routingHash defaults to the idHash provided at construction. Frames sharing a routingHash are
-routed to the same execution lane in order. Ordering is only guaranteed per input stream (sink), not
-across sinks.
+Ordering is scoped to one ingest source and routing lane. It is not a process-wide ordering
+guarantee.
 
-Default frames:
+Do not modify a frame's routing metadata or payload after ingestion.
 
-- ArrayFrame
-- CollectionFrame
-- FunctionFrame
-- ConsumerFrame
-- RunnableFrame
+## Configure names and metrics
+
+Euhedral supports one active `ControlPlaneLattice` per JVM. Use `LatticeConfig` to name it and
+publish per-CPU metrics:
 
 ```java
-long idHash = ThreadLocalRandom.current().nextLong();
+import io.euhedral_execution.core.config.LatticeConfig;
+import io.euhedral_execution.core.control_plane.ControlPlaneLattice;
+import io.micrometer.core.instrument.MeterRegistry;
 
-Function<Integer, Integer> square = x -> x * x;
-Consumer<Integer> print = x -> { System.out.println(x); };
+MeterRegistry registry = createRegistry();
 
-FunctionFrame<Integer, Integer> thing1 = new FunctionFrame<>(idHash, square, print, 2);
-FunctionFrame<Integer, Integer> thing2 = new FunctionFrame<>(idHash, square, print, 4);
+LatticeConfig config = LatticeConfig.ofDefaults(
+        "OrderEngine",
+        "OrderWorker",
+        "euhedral.orders",
+        registry);
+
+ControlPlaneLattice lattice = ControlPlaneLattice.getOrCreate(config);
 ```
 
-Create a QueueIngestSink or an ArrayIngestSink. For a QueueIngestSink, you can preload it or feed it
-while it is connected.
+The metric prefix defaults to `euhedral` when a registry is supplied with a blank prefix.
+
+## Ingest frames directly
+
+Use `QueueIngestSink` when you want to construct frames yourself. Frames with the same `idHash`
+start with the same `routingHash` and use the same ordered lane:
 
 ```java
-QueueIngestSink sink = new QueueIngestSink();
-sink.offer(thing1);
-sink.offer(thing2);
-```
+import io.euhedral_execution.core.frames.FunctionFrame;
+import io.euhedral_execution.core.ingest.QueueIngestSink;
+import io.euhedral_execution.hashing.HasherApi;
 
-Give it to the ControlPlaneLattice. Frames will be executed asynchronously.
-
-```java
-controlPlane.addUpstream(sink);
-
---- Output ---
-4
-16
---------------
-```
-
-Close the sink when you're done with it. This notifies the ControlPlaneLattice that no more frames
-will come through it and disconnect it.
-
-```java
-sink.completeGracefully();
-```
-
----
-
-## Level 3 (Make frames run in parallel)
-
-**Remember: The routingHash defaults to the idHash provided at construction.**
-
-Using the same setup as Level 2, only a slight change is needed to make frames execute in
-parallel. Modify the hash they use for routing.
-
-Every frame with the same idHash coming from the same ingest source will execute in the order they
-were received. Calling `randomizeHash(seed)` on the frame mixes its idHash with the seed to generate
-a new routingHash. This changes where each frame will be executed. It can only be safely done before
-ingestion.
-
-The seed only needs to be changed slightly for each frame.
-
-```java
 long idHash = HasherApi.mix(12345);
+
+FunctionFrame<Integer, Integer> first =
+        new FunctionFrame<>(idHash, value -> value * value, System.out::println, 2);
+FunctionFrame<Integer, Integer> second =
+        new FunctionFrame<>(idHash, value -> value * value, System.out::println, 4);
+
+QueueIngestSink sink = new QueueIngestSink();
+if (!sink.offer(first) || !sink.offer(second)) {
+    throw new IllegalStateException("Ingest queue is full");
+}
+
+lattice.addUpstream(sink);
+sink.completeGracefully();
+```
+
+Built-in frame types include `ArrayFrame`, `CollectionFrame`, `FunctionFrame`, `ConsumerFrame`, and
+`RunnableFrame`.
+
+To distribute independent frames, randomize each routing hash before offering the frame:
+
+```java
 long seed = HasherApi.mix(54321);
 
-FunctionFrame<Integer, Integer> thing1 = new FunctionFrame<>(idHash, square, print, 2);
-FunctionFrame<Integer, Integer> thing2 = new FunctionFrame<>(idHash, square, print, 4);
-
-thing1.randomizeHash(seed++);
-thing2.randomizeHash(seed++);
+first.randomizeHash(seed++);
+second.randomizeHash(seed++);
 ```
 
-**Performance Note:**
+Use a changing, well-mixed seed. `randomizeHash` mixes the seed with the frame identity; it does not
+change `idHash`.
 
-Euhedral performs parallel execution best when hashes are well mixed and evenly distributed. It
-relies on hash distribution to fan out work across the system. randomizeHash() uses HasherApi
-internally to mix what you pass it. Using HasherApi.mix() on a random number is recommended for
-creating ids and seeds because it uses a fast, high-quality hash function (xxHash64), but any
-equivalent hash function will work.
+## Recycle custom frames
 
----
-
-## Level 4 (Creating your own frames)
-
-Make a class that extends AbstractFrame.
-
-| Function                        | Description                                                                                                                                                                                                                                               |
-|---------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| execute()                       | What it does.                                                                                                                                                                                                                                             |
-| isAlive()                       | Checked by Euhedral. It will not execute it if it's false.                                                                                                                                                                                                |
-| kill()                          | Marks the frame as inactive and prevents the frame from being executed if it has not started yet.                                                                                                                                                         |
-| doFinally()                     | What Euhedral does with your frame after executing. Defaults to sending it to the recycler if you've set one.                                                                                                                                             |
-| doFinallyWithError(Throwable t) | If execute() throws an unexpected error, Euhedral will call this instead of doFinally()                                                                                                                                                                   |
-| throwCancelSignal()             | If you want to cancel a frame after it starts executing, call this and Euhedral will stop it. This will throw a specific RuntimeException (AbstractFrame.CancelSignal) that should be filtered out and thrown again if caught in your execute() function. |
+Recycling is useful for sustained, high-volume workloads where per-item allocation matters.
+`FrameManager` owns recycled frames and `FrameFactory` defines their fresh and replacement paths:
 
 ```java
-public class MyCustomFrame extends AbstractFrame {
+long password = HasherApi.mix(1234);
+long[] seed = {HasherApi.mix(5678)};
+AtomicBoolean killSwitch = new AtomicBoolean();
 
-    private final AtomicBoolean killSwitch;
-    private MyDataType payload;
-    
-    public MyFrame(long idHash, MyDataType payload, AtomicBoolean killSwitch, FrameManager<Void, MyFrame> manager) {
-        super(idHash, manager);
-        this.killSwitch = killSwitch;
-        this.payload = payload;
-    }
-    
-    @Override
-    public void execute() {
-        System.out.println(payload);
-    }
-    
-    @Override
-    public boolean isAlive() {
-        return !this.killSwitch.getOpaque();
-    }
-    
-    @Override
-    public void kill() {
-        this.killSwitch.setRelease(true);
-    }
-    
-    @Override
-    public void doFinallyWithError(Throwable t) {
-        System.err.println(t);
-        super.recycle();    
-    }
-    
-    @Override
-    public void doFinally() {
-        super.doFinally();
-    }
-    
-    public void replace(MyDataType payload) {
-        this.payload = payload;
-    }
-}
-```
+FrameManager<String, MessageFrame> manager = new FrameManager<>(2_048, password);
 
----
-
-## Level 5 (Using the frame recycler)
-
-Recycling frames reduces allocations and GC events. They are most useful for high-volume or
-long-running workloads.
-
-_Assumes an active ControlPlaneLattice_
-
-```java
-long password = 1234;
-
-FrameManager<MyDataType, MyCustomFrame> manager = new FrameManager<>(password);
-
-final long[] seed = {1234};
-AtomicBoolean killSwitch = new AtomicBoolean(false);
-
-// Randomized hash for parallel execution
-FrameCreate<MyDataType, MyCustomFrame> generate = (idHash, data) -> {
-    MyCustomFrame frame = new MyCustomFrame(idHash, data, killSwitch, manager);
+FrameFactory.FrameCreate<String, MessageFrame> create = (idHash, message) -> {
+    MessageFrame frame =
+            new MessageFrame(idHash, message, manager, killSwitch);
     frame.randomizeHash(seed[0]++);
     return frame;
 };
-FrameReplace<MyDataType, MyCustomFrame> replace = (data, oldFrame) -> {
-    oldFrame.replace(data);
-    oldFrame.randomizeHash(seed[0]++);
+
+FrameFactory.FrameReplace<String, MessageFrame> replace = (message, frame) -> {
+    frame.replace(message);
+    frame.randomizeHash(seed[0]++);
 };
 
-manager.setFactory(new FrameFactory<>(generate, replace));
+manager.setFactory(new FrameFactory<>(create, replace));
+```
 
+A minimal matching frame is:
+
+```java
+final class MessageFrame extends AbstractFrame {
+
+    private String message;
+
+    MessageFrame(long idHash, String message,
+            FrameManager<String, MessageFrame> manager,
+            AtomicBoolean killSwitch) {
+        super(idHash, manager, killSwitch);
+        this.message = message;
+    }
+
+    @Override
+    public void execute() {
+        System.out.println(message);
+    }
+
+    @Override
+    public void doFinallyWithError(Throwable error) {
+        try {
+            error.printStackTrace();
+        } finally {
+            recycle();
+        }
+    }
+
+    void replace(String message) {
+        this.message = message;
+    }
+}
+```
+
+`AbstractFrame` already implements the normal liveness, cancellation, and recycling behavior when
+it receives a manager and kill switch. Override those methods only when your frame needs a different
+contract.
+
+`FrameFactory.replace()` restores `routingHash` to `idHash` before invoking the replacement
+callback. A recycled parallel frame must therefore call `randomizeHash` again in that callback, as
+the example does.
+
+The manager can then feed a queue sink without allocating a new frame for every item:
+
+```java
 QueueIngestSink sink = new QueueIngestSink();
-controlPlane.addUpstream(sink);
+lattice.addUpstream(sink);
 
-for(int i = 0; i < 1_000_000; i++) {
-    sink.offer(manager.getOrCreate(i, password));
+for (int i = 0; i < 1_000_000; i++) {
+    while (!sink.offer(manager.getOrCreate("message-" + i, password))) {
+        Thread.onSpinWait();
+    }
 }
 
 sink.completeGracefully();
 ```
 
-**IMPORTANT NOTE: Frames are reset after execution whether if you use the FrameManager. This sets
-their routingHash back to their idHash. If you want them to continue executing in parallel,
-randomize the routing hash again in replace().**
+## Shut down cleanly
+
+Euhedral owns persistent workers and hardware monitoring resources. Application shutdown should:
+
+1. Stop producing new values.
+2. Call `completeGracefully()` on each source and wait for application-level completion.
+3. Call `ControlPlaneLattice.close()`.
+
+Use `complete()` when queued work should be cancelled instead of drained. Always close the lattice
+in tests as well; it is a JVM-wide singleton, and leaking it can affect the next test.
+
+## Next steps
+
+- [Reactor quick start](./REACTOR_QUICK_START.md)
+- [Architecture and runtime invariants](./docs/ARCHITECTURE.md)
+- [Module and contributor guidance](./AGENTS.md)
