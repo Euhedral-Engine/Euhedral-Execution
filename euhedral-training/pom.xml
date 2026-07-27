@@ -13,56 +13,40 @@
   <artifactId>euhedral-training</artifactId>
 
   <properties>
-    <maven.compiler.release>21</maven.compiler.release>
-    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <djl.version>0.36.0</djl.version>
     <pytorch.version>2.7.1</pytorch.version>
     <pytorch.jni.version>${pytorch.version}-${djl.version}</pytorch.jni.version>
     <trainer.distribution>${project.build.directory}/trainer</trainer.distribution>
   </properties>
 
-  <dependencyManagement>
-    <dependencies>
-      <dependency>
-        <groupId>ai.djl</groupId>
-        <artifactId>bom</artifactId>
-        <version>${djl.version}</version>
-        <type>pom</type>
-        <scope>import</scope>
-      </dependency>
-    </dependencies>
-  </dependencyManagement>
-
   <dependencies>
     <dependency>
       <groupId>io.euhedral-execution</groupId>
       <artifactId>euhedral-core</artifactId>
-      <version>${project.version}</version>
-      <scope>compile</scope>
     </dependency>
     <dependency>
       <groupId>io.euhedral-execution</groupId>
       <artifactId>euhedral-data-structures</artifactId>
-      <version>${project.version}</version>
-      <scope>compile</scope>
     </dependency>
     <dependency>
       <groupId>io.euhedral-execution</groupId>
       <artifactId>euhedral-hardware-utils</artifactId>
-      <version>${project.version}</version>
-      <scope>compile</scope>
     </dependency>
     <dependency>
       <groupId>io.euhedral-execution</groupId>
       <artifactId>euhedral-hashing</artifactId>
-      <version>${project.version}</version>
-      <scope>compile</scope>
     </dependency>
 
     <dependency>
       <groupId>org.apache.commons</groupId>
       <artifactId>commons-math4-legacy</artifactId>
-      <version>4.0-beta1</version>
+    </dependency>
+    <dependency>
+      <groupId>com.tdunning</groupId>
+      <artifactId>t-digest</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.jspecify</groupId>
+      <artifactId>jspecify</artifactId>
     </dependency>
     <dependency>
       <groupId>org.projectlombok</groupId>
@@ -97,10 +81,7 @@
     <dependency>
       <groupId>ch.qos.logback</groupId>
       <artifactId>logback-classic</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>ch.qos.logback</groupId>
-      <artifactId>logback-core</artifactId>
+      <scope>runtime</scope>
     </dependency>
 
     <dependency>
@@ -157,7 +138,6 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-dependency-plugin</artifactId>
-        <version>3.11.0</version>
         <executions>
           <execution>
             <id>copy-runtime</id>
@@ -180,7 +160,6 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-antrun-plugin</artifactId>
-        <version>3.2.0</version>
         <executions>
           <execution>
             <id>copy-gpu-launcher</id>

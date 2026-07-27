@@ -24,7 +24,7 @@ contain expensive local runs. Treat them as user-owned even when they are untrac
 
 ## Modules and language levels
 
-Run the repository with the JDK selected by `mise`, currently Java 25. Individual artifacts retain
+Run the repository with the JDK selected by `mise`, currently Java 21. Individual artifacts retain
 lower release targets where possible.
 
 | Module | Release | Main responsibility |

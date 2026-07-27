@@ -13,56 +13,36 @@
   <name>Euhedral Benchmarks</name>
   <artifactId>benchmarks</artifactId>
 
-  <properties>
-    <maven.compiler.source>25</maven.compiler.source>
-    <maven.compiler.target>25</maven.compiler.target>
-
-    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <skip.central.publish>true</skip.central.publish>
-  </properties>
-
   <dependencies>
     <dependency>
       <groupId>io.euhedral-execution</groupId>
       <artifactId>euhedral-core</artifactId>
-      <version>${project.version}</version>
-      <scope>compile</scope>
     </dependency>
     <dependency>
       <groupId>io.euhedral-execution</groupId>
       <artifactId>euhedral-data-structures</artifactId>
-      <version>${project.version}</version>
-      <scope>compile</scope>
     </dependency>
     <dependency>
       <groupId>io.euhedral-execution</groupId>
       <artifactId>euhedral-hardware-utils</artifactId>
-      <version>${project.version}</version>
-      <scope>compile</scope>
     </dependency>
     <dependency>
       <groupId>io.euhedral-execution</groupId>
       <artifactId>euhedral-hashing</artifactId>
-      <version>${project.version}</version>
-      <scope>compile</scope>
     </dependency>
     <dependency>
       <groupId>io.euhedral-execution</groupId>
       <artifactId>euhedral-reactor-core</artifactId>
-      <version>${project.version}</version>
-      <scope>compile</scope>
     </dependency>
 
     <dependency>
       <groupId>io.projectreactor</groupId>
       <artifactId>reactor-core</artifactId>
-      <scope>compile</scope>
     </dependency>
 
     <dependency>
       <groupId>org.jctools</groupId>
       <artifactId>jctools-core-jdk11</artifactId>
-      <scope>compile</scope>
     </dependency>
     <dependency>
       <groupId>org.openjdk.jmh</groupId>
@@ -78,78 +58,91 @@
       <groupId>org.hdrhistogram</groupId>
       <artifactId>HdrHistogram</artifactId>
     </dependency>
-
     <dependency>
-      <groupId>org.projectlombok</groupId>
-      <artifactId>lombok</artifactId>
-      <scope>provided</scope>
+      <groupId>org.jspecify</groupId>
+      <artifactId>jspecify</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-api</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-simple</artifactId>
+      <scope>runtime</scope>
     </dependency>
   </dependencies>
 
   <build>
-    <finalName>original-${project.artifactId}</finalName>
+    <finalName>euhedral-benchmark</finalName>
     <plugins>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-jar-plugin</artifactId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <configuration>
+          <annotationProcessorPaths combine.self="override">
+            <path>
+              <groupId>org.openjdk.jmh</groupId>
+              <artifactId>jmh-generator-annprocess</artifactId>
+              <version>${jmh.version}</version>
+            </path>
+          </annotationProcessorPaths>
+        </configuration>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-shade-plugin</artifactId>
+        <artifactId>maven-jar-plugin</artifactId>
         <configuration>
-          <shadedArtifactAttached>false</shadedArtifactAttached>
-          <createDependencyReducedPom>false</createDependencyReducedPom>
-          <outputFile>${project.build.directory}/euhedral-benchmark.jar</outputFile>
-
-          <filters>
-            <filter>
-              <artifact>*:*</artifact>
-              <excludes>
-                <exclude>META-INF/*.SF</exclude>
-                <exclude>META-INF/*.DSA</exclude>
-                <exclude>META-INF/*.RSA</exclude>
-
-                <exclude>META-INF/MANIFEST.MF</exclude>
-                <exclude>META-INF/INDEX.LIST</exclude>
-                <exclude>META-INF/DEPENDENCIES</exclude>
-                <exclude>META-INF/LICENSE*</exclude>
-                <exclude>META-INF/NOTICE*</exclude>
-                <exclude>META-INF/maven/**</exclude>
-                <exclude>META-INF/versions/9/module-info.class</exclude>
-
-                <exclude>module-info.class</exclude>
-              </excludes>
-            </filter>
-          </filters>
+          <archive>
+            <manifest>
+              <addClasspath>true</addClasspath>
+              <classpathPrefix>lib/</classpathPrefix>
+              <mainClass>io.euhedral_execution.benchmarks.BenchRunner</mainClass>
+            </manifest>
+            <manifestEntries>
+              <Add-Opens>java.base/java.util</Add-Opens>
+            </manifestEntries>
+          </archive>
         </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-dependency-plugin</artifactId>
         <executions>
           <execution>
-            <id>package-benchmarks</id>
+            <id>copy-runtime-dependencies</id>
             <phase>package</phase>
             <goals>
-              <goal>shade</goal>
+              <goal>copy-dependencies</goal>
             </goals>
             <configuration>
-
-              <transformers>
-                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
-                <transformer implementation="org.apache.maven.plugins.shade.resource.ApacheLicenseResourceTransformer"/>
-                <transformer implementation="org.apache.maven.plugins.shade.resource.ApacheNoticeResourceTransformer"/>
-
-                <transformer implementation="org.apache.maven.plugins.shade.resource.XmlAppendingTransformer">
-                  <resource>logback.xml</resource>
-                </transformer>
-
-                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                  <mainClass>io.euhedral_execution.benchmarks.BenchRunner</mainClass>
-                  <manifestEntries>
-                    <entry>
-                      <key>Add-Opens</key>
-                      <value>java.base/java.util</value>
-                    </entry>
-                  </manifestEntries>
-                </transformer>
-              </transformers>
+              <includeScope>runtime</includeScope>
+              <outputDirectory>${project.build.directory}/lib</outputDirectory>
+              <overWriteIfNewer>true</overWriteIfNewer>
+              <overWriteReleases>false</overWriteReleases>
+              <overWriteSnapshots>true</overWriteSnapshots>
+              <useRepositoryLayout>false</useRepositoryLayout>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-antrun-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>copy-launcher</id>
+            <phase>package</phase>
+            <goals>
+              <goal>run</goal>
+            </goals>
+            <configuration>
+              <target>
+                <mkdir dir="${project.build.directory}/bin"/>
+                <copy file="${project.basedir}/src/main/scripts/euhedral-benchmarks"
+                  tofile="${project.build.directory}/bin/euhedral-benchmarks"/>
+                <chmod file="${project.build.directory}/bin/euhedral-benchmarks" perm="755"/>
+              </target>
             </configuration>
           </execution>
         </executions>
