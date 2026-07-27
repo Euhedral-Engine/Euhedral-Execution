@@ -20,7 +20,7 @@ class PinnedThreadExecutorTest {
 
         PinnedThreadExecutor executor = PinnedThreadExecutor.getOrSetIfAbsent(
                 Thread::new, cpu, "pinned-unit-test", 42, true);
-        try {
+        try (executor) {
             assertSame(executor, PinnedThreadExecutor.getOrSetIfAbsent(
                     Thread::new, cpu, "ignored", Thread.MIN_PRIORITY, false));
 
@@ -32,8 +32,6 @@ class PinnedThreadExecutorTest {
             assertEquals(Thread.MAX_PRIORITY, thread.getPriority());
             assertTrue(thread.isDaemon());
             assertEquals(cpu, executor.getCpu());
-        } finally {
-            executor.close();
         }
 
         assertTrue(executor.isShutdown());
