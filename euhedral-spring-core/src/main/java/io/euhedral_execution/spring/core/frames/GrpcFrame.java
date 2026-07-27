@@ -57,7 +57,11 @@ public class GrpcFrame extends AbstractFrame {
 
     @Override
     public void doFinallyWithError(Throwable t) {
-        sendError(new StatusRuntimeException(Status.fromThrowable(t)));
+        try {
+            sendError(new StatusRuntimeException(Status.fromThrowable(t)));
+        } finally {
+            recycle();
+        }
     }
 
     public void replace(GrpcMessage message) {
