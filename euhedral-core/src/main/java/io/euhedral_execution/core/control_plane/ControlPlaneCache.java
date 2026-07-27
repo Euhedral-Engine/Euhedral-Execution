@@ -8,6 +8,7 @@ import io.euhedral_execution.core.config.CloneConfig;
 import io.euhedral_execution.core.flow_control.LatticeEdge;
 import io.euhedral_execution.core.flow_control.LatticeVertex;
 import io.euhedral_execution.core.flow_control.RoutingPolicy;
+import io.euhedral_execution.core.flow_control.UpstreamQueue;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.frames.DummyFrame;
 import io.euhedral_execution.core.generics.CloneableObject;
@@ -15,7 +16,6 @@ import io.euhedral_execution.core.generics.LatticeReceiver;
 import io.euhedral_execution.core.generics.LatticeSource;
 import io.euhedral_execution.core.internal.Constants;
 import io.euhedral_execution.core.metrics.CacheMetrics;
-import io.euhedral_execution.core.utils.FlowThread;
 import io.euhedral_execution.data_structures.queues.PartitionedMpscQueue;
 import io.euhedral_execution.data_structures.queues.common.QueueUtils;
 import io.euhedral_execution.hardware_utils.SystemInfo;
@@ -152,15 +152,19 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
         }
 
         this.cacheTerminal.reset();
-        long added = super.pull(this.cacheTerminal, limit);
-        if(added < limit) {
-            FlowThread.FlowContext context = FlowThread.getContext();
-            added += context == null ? 0 : context.upstream.pull(this.cacheTerminal, limit - added);
-        }
+        long added = super.pull(this.cacheTerminal, NO_STOP, limit);
         if (added > 0) {
             TOTAL_COUNT.getAndAdd(ControlPlaneCache.this, this.cacheTerminal.framesAdded);
         }
         return added;
+    }
+
+    public final long upstreamPull(UpstreamQueue queue, Consumer<AbstractFrame> consumer, long limit) {
+        if(limit <= 0) {
+            return 0;
+        }
+
+        return queue.pull(consumer, AbstractFrame::isOrdered, limit);
     }
 
     public final long drain(Consumer<AbstractFrame> consumer, long limit) {
@@ -231,6 +235,22 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
 
     public final long getLocalCacheCount() {
         return (long) TOTAL_COUNT.getOpaque(this);
+    }
+
+    /**
+     * Clears the fragment-local MPSC cache. This must be invoked by the fragment's pinned consumer
+     * thread after ingress has been frozen.
+     */
+    protected final long clearLocalCacheOnOwnerThread() {
+        if (this.localCache == null) {
+            return 0;
+        }
+
+        long cleared = Math.max(0, (long) TOTAL_COUNT.getOpaque(this));
+        this.localCache.clear();
+        this.cacheTerminal.reset();
+        TOTAL_COUNT.setRelease(this, 0L);
+        return cleared;
     }
 
     public final long getMaxLocalCacheCount() {

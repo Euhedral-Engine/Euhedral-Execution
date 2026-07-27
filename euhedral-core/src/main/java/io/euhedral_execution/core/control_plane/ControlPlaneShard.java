@@ -303,7 +303,7 @@ public class ControlPlaneShard {
             final long deadline =
                     System.nanoTime() + this.shutdownTimeout.toNanos();
 
-            SpinWait.await(() -> !clone.isDrained() && System.nanoTime() < deadline);
+            SpinWait.awaitWhile(() -> !clone.isDrained() && System.nanoTime() < deadline);
 
             if(deadClones.contains(core) || System.nanoTime() >= deadline) {
                 closeClone(clone);
@@ -381,7 +381,7 @@ public class ControlPlaneShard {
             Thread.currentThread().setName(this.shardName + "-" + coreId);
             long deadline = System.nanoTime() + this.shutdownTimeout.toNanos();
             try {
-                SpinWait.await(() -> !oldClone.isDrained() && System.nanoTime() < deadline);
+                SpinWait.awaitWhile(() -> !oldClone.isDrained() && System.nanoTime() < deadline);
                 if(!oldClone.isDrained() && System.nanoTime() >= deadline) {
                     this.logger.error("Clone on core {} timed out. Forcing shutdown.", coreId);
                     oldClone.close();
@@ -404,8 +404,60 @@ public class ControlPlaneShard {
         }, this.shardExecutor);
     }
 
+    long resetForNextTrial(long deadlineNanos) {
+        if (!this.started.getAcquire()) {
+            return 0;
+        }
+        while (this.rebalancing.getAcquire() && System.nanoTime() < deadlineNanos) {
+            Thread.onSpinWait();
+        }
+        if (this.rebalancing.getAcquire()) {
+            throw new IllegalStateException(
+                    "Timed out waiting for shard rebalance before trial reset: " + this.shardName);
+        }
+
+        LatticeVertex distributor = this.coreDistributor.getAcquire();
+        if (distributor == null) {
+            return 0;
+        }
+
+        distributor.setDrain(true);
+        CloneableObject[] activeClones = this.clones.getAcquire();
+        for (CloneableObject clone : activeClones) {
+            if (clone != null) {
+                clone.setDrainMode(true);
+            }
+        }
+
+        long cleared = distributor.clearCachedFrames();
+        try {
+            for (CloneableObject clone : activeClones) {
+                if (clone != null) {
+                    cleared += clone.resetForNextTrial(deadlineNanos);
+                }
+            }
+            return cleared;
+        } finally {
+            for (CloneableObject clone : activeClones) {
+                if (clone != null) {
+                    clone.setDrainMode(false);
+                }
+            }
+            distributor.setDrain(false);
+        }
+    }
+
     public boolean isStarted() {
-        return this.started.get();
+        if(!this.started.getAcquire()) {
+            return false;
+        }
+        CloneableObject[] clones = this.clones.getAcquire();
+        for(var clone : clones) {
+            if(clone != null && !clone.ready()) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /// Whether the shard is rebalancing. Rebalancing shards do not accept incoming work.

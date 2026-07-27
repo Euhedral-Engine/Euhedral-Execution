@@ -7,10 +7,10 @@ import io.euhedral_execution.core.generics.LatticeSource;
 import java.lang.invoke.VarHandle;
 import java.util.Objects;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import org.jspecify.annotations.NonNull;
 
-/// Wraps an array to allow it to be ingested by the
-/// [ControlPlaneLattice][ControlPlaneLattice]
+/// Wraps an array to allow it to be ingested by the [ControlPlaneLattice][ControlPlaneLattice]
 @SuppressWarnings("unused")
 public final class ArrayIngestSink extends AbstractIngestSink {
 
@@ -37,6 +37,11 @@ public final class ArrayIngestSink extends AbstractIngestSink {
         delegate.complete();
     }
 
+    @Override
+    public boolean isComplete() {
+        return this.delegate.isComplete();
+    }
+
     protected static final class Delegate extends AbstractIngestSink.Delegate {
 
         private final AbstractFrame[] array;
@@ -47,17 +52,23 @@ public final class ArrayIngestSink extends AbstractIngestSink {
         }
 
         @Override
-        public long hookOnPull(Consumer<AbstractFrame> consumer, long demand) {
-            if(start >= array.length) {
+        public long hookOnPull(Consumer<AbstractFrame> consumer,
+                Function<AbstractFrame, Boolean> stopCondition, long demand) {
+            if (this.start >= this.array.length) {
                 super.complete();
                 return 0;
             }
 
-            long end = start + demand;
+            long end = this.start + demand;
 
             long total = 0;
-            while (start < end && start < array.length) {
-                AbstractFrame frame = array[start++];
+            while (this.start < end && this.start < this.array.length) {
+                AbstractFrame frame = this.array[this.start];
+                if(stopCondition.apply(frame)) {
+                    break;
+                }
+                this.start++;
+
                 Objects.requireNonNull(frame);
                 consumer.accept(frame);
                 total++;
@@ -71,7 +82,7 @@ public final class ArrayIngestSink extends AbstractIngestSink {
 
         @Override
         public void hookOnRequest(LatticeReceiver terminal, long demand) {
-            if(start >= array.length) {
+            if (start >= array.length) {
                 super.complete();
                 return;
             }

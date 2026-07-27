@@ -36,7 +36,7 @@ public class FlowRecorder {
     @Getter
     private double minUoT = Double.MAX_VALUE;
     @Getter
-    private double maxUoT = Double.MIN_VALUE;
+    private double maxUoT = -Double.MAX_VALUE;
 
     private double unitVariance, intervalVariance, uotVariance;
     private double unitTrend, intervalTrend, uotTrend;
@@ -46,7 +46,7 @@ public class FlowRecorder {
     }
 
     public FlowRecorder(@NonNull Duration maxWindowSize, double alpha) {
-        this.measurementWindowNs = maxWindowSize.toNanos();
+        this.measurementWindowNs = maxWindowSize == Duration.ZERO ? Long.MAX_VALUE : maxWindowSize.toNanos();
         this.windowStartNs = System.nanoTime();
         this.lastRecordingTime = 0;
         this.alpha = alpha;
@@ -175,7 +175,7 @@ public class FlowRecorder {
 
         this.averageUnitsOverTime = 0;
         this.minUoT = Double.MAX_VALUE;
-        this.maxUoT = Double.MIN_VALUE;
+        this.maxUoT = -Double.MAX_VALUE;
 
         this.averageUnits = 0;
         this.minUnits = Long.MAX_VALUE;
@@ -221,6 +221,9 @@ public class FlowRecorder {
         long dynamicWindowNs = this.measurementWindowNs;
         long windowStartNs = this.windowStartNs;
 
+        if(dynamicWindowNs == Long.MAX_VALUE) {
+            return currWindowCount;
+        }
 
         if(windowStartNs + dynamicWindowNs < now) {
             return 0;

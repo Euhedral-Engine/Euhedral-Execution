@@ -8,6 +8,7 @@ import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import org.jspecify.annotations.NonNull;
 
 @SuppressWarnings({"unchecked", "unused"})
@@ -66,7 +67,7 @@ public class PlainQueue<T> extends AbstractQueue<T> implements BatchableQueue<T>
 
     @Override
     public int size() {
-        return 0;
+        return (int) sizeLong();
     }
 
     @Override
@@ -106,6 +107,11 @@ public class PlainQueue<T> extends AbstractQueue<T> implements BatchableQueue<T>
 
     @Override
     public final long drain(Consumer<T> consumer, long limit) {
+        return drain(consumer, (Function<T, Boolean>) QueueUtils.NO_STOP, limit);
+    }
+
+    @Override
+    public final long drain(Consumer<T> consumer, Function<T, Boolean> stopCondition, long limit) {
         long total = 0;
         for (long i = this.queue.head; i < this.queue.tail && total < limit;
                 i += QueueUtils.INCREMENT, total++) {

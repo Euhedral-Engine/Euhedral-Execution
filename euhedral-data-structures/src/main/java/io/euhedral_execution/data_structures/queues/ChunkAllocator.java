@@ -5,6 +5,7 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.Collection;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 @SuppressWarnings({"unchecked", "unused", "rawtypes"})
 final class ChunkAllocator extends BaseConcurrentQueue {
@@ -81,6 +82,11 @@ final class ChunkAllocator extends BaseConcurrentQueue {
 
     @Override
     public long drain(Consumer consumer, long limit) {
+        return 0;
+    }
+
+    @Override
+    public long drain(Consumer consumer, Function stopCondition, long limit) {
         return 0;
     }
 

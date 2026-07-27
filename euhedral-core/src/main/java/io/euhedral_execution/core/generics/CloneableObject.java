@@ -33,6 +33,10 @@ public interface CloneableObject {
         return true;
     }
 
+    default boolean ready() {
+        return true;
+    }
+
     default void update(CoreSnapshot coreSnapshot) {
     }
 
@@ -49,6 +53,17 @@ public interface CloneableObject {
 
     default void setDrainMode(boolean value) {
 
+    }
+
+    /**
+     * Clears trial-specific buffered work and controller state before another benchmark policy is
+     * activated. Implementations that own single-consumer queues must perform the reset on their
+     * owning thread and acknowledge it before {@code deadlineNanos}.
+     *
+     * @return the estimated number of buffered frames removed
+     */
+    default long resetForNextTrial(long deadlineNanos) {
+        return 0;
     }
 
     default void dumpLocks() {

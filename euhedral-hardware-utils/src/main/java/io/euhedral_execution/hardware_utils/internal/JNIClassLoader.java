@@ -30,7 +30,7 @@ import org.slf4j.LoggerFactory;
 /// - **Suffix**: x64 or arm64
 /// - **Relative path**: ./bin/osx/osx_jni_x64.dylib
 public final class JNIClassLoader {
-    private static final Logger LOGGER = LoggerFactory.getLogger(JNIClassLoader.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(Constants.getLoggerName(JNIClassLoader.class));
 
     private static final String X86_SUFFIX = "x64";
     private static final String ARM64_SUFFIX = "arm64";

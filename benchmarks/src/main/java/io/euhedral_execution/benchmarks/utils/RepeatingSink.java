@@ -8,8 +8,10 @@ import java.lang.invoke.VarHandle;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 public class RepeatingSink extends AbstractIngestSink {
+
     private final Delegate delegate;
 
     public RepeatingSink(AbstractFrame[] frames) {
@@ -29,22 +31,32 @@ public class RepeatingSink extends AbstractIngestSink {
         delegate.complete();
     }
 
+    @Override
+    public boolean isComplete() {
+        return this.delegate.isComplete();
+    }
+
     protected static final class Delegate extends AbstractIngestSink.Delegate {
 
+        final AtomicBoolean complete = new AtomicBoolean();
         private final AbstractFrame[] array;
         int start;
-
-        final AtomicBoolean complete = new AtomicBoolean();
 
         public Delegate(AbstractFrame[] array) {
             this.array = array;
         }
 
         @Override
-        public long hookOnPull(Consumer<AbstractFrame> consumer, long demand) {
+        public long hookOnPull(Consumer<AbstractFrame> consumer,
+                Function<AbstractFrame, Boolean> stopCondition, long demand) {
             long total = 0;
             while (total < demand && !this.complete.getOpaque()) {
-                AbstractFrame frame = this.array[this.start++];
+                AbstractFrame frame = this.array[this.start];
+                if(stopCondition.apply(frame)) {
+                    break;
+                }
+                this.start++;
+
                 Objects.requireNonNull(frame);
                 consumer.accept(frame);
                 total++;

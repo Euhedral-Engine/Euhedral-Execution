@@ -13,6 +13,7 @@ import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import org.jspecify.annotations.NonNull;
 
 @SuppressWarnings({"rawtypes", "unchecked", "unused"})
@@ -198,9 +199,14 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue<T> 
 
     // ----- Single Consumer -----
 
-    /// Queue drain logic for single-consumer queues
     protected final long scDrain(Consumer<Object> consumer, long limit) {
+        return scDrain(consumer, QueueUtils.NO_STOP, limit);
+    }
+
+    /// Queue drain logic for single-consumer queues
+    protected final long scDrain(Consumer<Object> consumer, Function<Object, Boolean> stopCondition, long limit) {
         Objects.requireNonNull(consumer);
+        Objects.requireNonNull(stopCondition);
         if (limit <= 0) {
             return 0;
         }
@@ -217,7 +223,7 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue<T> 
             int cIdx = QueueUtils.chunkIndex(head, this.chunkMask);
             Object obj = queue[cIdx];
 
-            if (obj == null) {
+            if (obj == null || stopCondition.apply(obj)) {
                 break;
             }
 

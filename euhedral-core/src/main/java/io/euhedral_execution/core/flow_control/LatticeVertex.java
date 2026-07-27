@@ -22,6 +22,7 @@ import java.util.BitSet;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import lombok.Getter;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
@@ -43,6 +44,8 @@ import org.slf4j.LoggerFactory;
 /// **Each frame is routed to exactly one downstream, ensuring stable partitioning under load.**
 @SuppressWarnings({"unchecked", "unused"})
 public class LatticeVertex extends LatticeEdge implements AutoCloseable {
+
+    public static final Function<AbstractFrame, Boolean> NO_STOP = frame -> false;
 
     protected static final VarHandle ROUTING_STATE = CommonVarHandles.makeHandle(
             LatticeVertex.class, "routingState", RoutingState.class);
@@ -106,7 +109,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
         if (this.hasCache) {
             total += this.cachePool;
         }
-        total += super.getUpstreamCacheCount();
+        total += super.getUpstreamCacheCapacity();
         return total < 0 ? Long.MAX_VALUE : total;
     }
 
@@ -178,6 +181,27 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
         return true;
     }
 
+    /**
+     * Forcefully clears this vertex's remote routing caches. The caller must first stop ingress or
+     * place the owning graph in drain mode so producers cannot race the reset.
+     *
+     * @return the estimated number of cached frames removed
+     */
+    public long clearCachedFrames() {
+        if (!this.hasCache) {
+            return 0;
+        }
+
+        long cleared = Math.max(0, this.cacheCount.sumAndReset());
+        for (var queue : this.remoteCache) {
+            if (queue != null) {
+                queue.clear();
+            }
+        }
+        this.cacheHead.remove();
+        return cleared;
+    }
+
     /// Adds the interceptor to the upstream. If it is a [LatticeEdge], it bubbles it up and sets
     /// its downstream links' parents to the edge. If it is an [UpstreamHandle][UpstreamHandle], it
     /// defaults to the logic in LatticeEdge.
@@ -198,14 +222,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
             }
         } else if (interceptor instanceof UpstreamHandle upstream) {
             this.logger.trace("Adding upstream handle...");
-            SpinWait.await(super.drain::getOpaque);
-            SpinWait.await(() -> !HANDLE_LOCK.compareAndSet(0, 1));
-
-            try {
-                HANDLES.put(upstream, Boolean.TRUE);
-            } finally {
-                HANDLE_LOCK.set(0);
-            }
+            SpinWait.awaitWhile(super.drain::getOpaque);
 
             for (int i = 0; i < UPSTREAMS.length; i++) {
                 MpscQueue<UpstreamHandle> queue = UPSTREAMS[i];
@@ -259,7 +276,8 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
     /// Pulls available work from the `parallelQueue` if it is not null. Recursively climbs the
     /// graph and does the same.
     @Override
-    public long pull(Consumer<AbstractFrame> consumer, long demand) {
+    public long pull(Consumer<AbstractFrame> consumer,
+            Function<AbstractFrame, Boolean> stopCondition, long demand) {
         if (demand <= 0 || consumer == null || (boolean) CLOSED.getOpaque(this)
                 || super.drain.getOpaque()) {
             return 0;
@@ -275,7 +293,8 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
                 int cycles = 0;
                 while (cycles < state.mappings.length && demand > 0) {
                     int idx = state.mappings[head.idx];
-                    long count = this.remoteCache[idx].drain(consumer, Math.min(bucket, demand));
+                    long count = this.remoteCache[idx].drain(consumer, stopCondition,
+                            Math.min(bucket, demand));
                     total += count;
                     demand -= count;
                     cycles++;
@@ -290,7 +309,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
 
         LatticeEdge parent = (LatticeEdge) PARENT.getOpaque(this);
         if (parent != null) {
-            total += parent.pull(consumer, demand);
+            total += parent.pull(consumer, stopCondition, demand);
         }
         return total;
     }
@@ -389,41 +408,36 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
         }
 
         @Override
-        public long pull(Consumer<AbstractFrame> consumer, long demand) {
-            if (demand <= 0 || LatticeVertex.this.isClosed() || LatticeVertex.this.drain.getOpaque()
+        public long pull(Consumer<AbstractFrame> consumer,
+                Function<AbstractFrame, Boolean> stopCondition, long demand) {
+            if (demand <= 0 || this.wip.getOpaque() == 0 || LatticeVertex.this.isClosed()
+                    || LatticeVertex.this.drain.getOpaque()
                     || isComplete()) {
                 return 0;
             }
 
-            if (this.wip.getAndIncrement() == 0) {
-                try {
-                    return this.upstream.pull(consumer, demand);
-                } catch (Throwable t) {
-                    logger.error("Upstream threw an exception during a pull", t);
-                    this.complete();
-                } finally {
-                    this.wip.lazySet(0);
-                }
+            try {
+                return this.upstream.pull(consumer, stopCondition, demand);
+            } catch (Throwable t) {
+                logger.error("Upstream threw an exception during a pull", t);
+                this.complete();
             }
             return 0;
         }
 
         @Override
         public void request(long num) {
-            if (num <= 0 || LatticeVertex.this.isClosed() || LatticeVertex.this.drain.getOpaque()
+            if (num <= 0 || this.wip.getOpaque() == 0 || LatticeVertex.this.isClosed()
+                    || LatticeVertex.this.drain.getOpaque()
                     || isComplete()) {
                 return;
             }
 
-            if (this.wip.getAndIncrement() == 0) {
-                try {
-                    this.upstream.request(num);
-                } catch (Throwable t) {
-                    logger.error("Upstream threw an exception during request", t);
-                    this.complete();
-                } finally {
-                    this.wip.lazySet(0);
-                }
+            try {
+                this.upstream.request(num);
+            } catch (Throwable t) {
+                logger.error("Upstream threw an exception during request", t);
+                this.complete();
             }
         }
 
@@ -455,6 +469,16 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
         @Override
         public boolean isComplete() {
             return (boolean) COMPLETE.getOpaque(this);
+        }
+
+        @Override
+        public boolean acquireLock() {
+            return this.wip.getAndIncrement() == 0;
+        }
+
+        @Override
+        public void releaseLock() {
+            this.wip.setRelease(0);
         }
     }
 }

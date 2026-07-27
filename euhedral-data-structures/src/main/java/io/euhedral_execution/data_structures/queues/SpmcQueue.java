@@ -1,13 +1,14 @@
 package io.euhedral_execution.data_structures.queues;
 
+import io.euhedral_execution.data_structures.queues.common.ConcurrentQueue;
 import io.euhedral_execution.data_structures.queues.common.QueueUtils;
 import java.util.Collection;
-import java.util.Objects;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import lombok.Getter;
 
 @SuppressWarnings({"unchecked", "unused"})
-public class SpmcQueue<T> extends BaseConcurrentQueue.MultiConsumer<T> {
+public class SpmcQueue<T> extends BaseConcurrentQueue.MultiConsumer<T> implements ConcurrentQueue<T> {
 
     private final ChunkAllocator allocator;
     @Getter
@@ -44,7 +45,7 @@ public class SpmcQueue<T> extends BaseConcurrentQueue.MultiConsumer<T> {
             this.allocator = null;
             this.maxPooledChunks = 0;
         }
-        if(bounded) {
+        if (bounded) {
             this.capacity = (QueueUtils.chunkMask(chunkSize) >>> QueueUtils.SHIFT);
         } else {
             this.capacity = Long.MAX_VALUE;
@@ -59,7 +60,7 @@ public class SpmcQueue<T> extends BaseConcurrentQueue.MultiConsumer<T> {
 
     @Override
     public final T peek() {
-        if(!acquireMcLock(this)) {
+        if (!acquireMcLock(this)) {
             return null;
         }
         try {
@@ -71,7 +72,7 @@ public class SpmcQueue<T> extends BaseConcurrentQueue.MultiConsumer<T> {
 
     @Override
     public final T poll() {
-        if(!acquireMcLock(this)) {
+        if (!acquireMcLock(this)) {
             return null;
         }
         try {
@@ -98,19 +99,44 @@ public class SpmcQueue<T> extends BaseConcurrentQueue.MultiConsumer<T> {
 
     @Override
     public final long drain(Consumer<T> consumer, long limit) {
-        Objects.requireNonNull(consumer);
         if (limit <= 0) {
             return 0;
         }
 
         long total = 0;
         while (total < limit) {
-            if(!acquireMcLock(this)) {
+            if (!acquireMcLock(this)) {
                 break;
             }
             try {
                 long batch = Math.min(limit - total, this.maxConsumeBatch);
                 long temp = scDrain((Consumer<Object>) consumer, batch);
+                if (temp == 0) {
+                    break;
+                }
+                total += temp;
+            } finally {
+                releaseMcLock(this);
+            }
+        }
+        return total;
+    }
+
+    @Override
+    public final long drain(Consumer<T> consumer, Function<T, Boolean> stopCondition, long limit) {
+        if (limit <= 0) {
+            return 0;
+        }
+
+        long total = 0;
+        while (total < limit) {
+            if (!acquireMcLock(this)) {
+                break;
+            }
+            try {
+                long batch = Math.min(limit - total, this.maxConsumeBatch);
+                long temp = scDrain((Consumer<Object>) consumer,
+                        (Function<Object, Boolean>) stopCondition, batch);
                 if (temp == 0) {
                     break;
                 }

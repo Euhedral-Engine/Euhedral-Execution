@@ -86,7 +86,6 @@ public record LatticeConfig(String name, @NonNull BitSet allowedCpus,
         return ofDefaults(DEFAULT_NAME, DEFAULT_SHARD_NAME, cloneableObject);
     }
 
-
     public LatticeConfig {
         Objects.requireNonNull(allowedCpus);
         Objects.requireNonNull(shutdownTimeout);

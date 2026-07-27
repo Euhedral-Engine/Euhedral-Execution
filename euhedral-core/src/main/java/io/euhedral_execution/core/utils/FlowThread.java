@@ -6,6 +6,8 @@ import java.util.function.Function;
 @SuppressWarnings("unused")
 public class FlowThread extends Thread {
 
+    private static final ThreadLocal<FlowContext> FALLBACK_CONTEXT = new ThreadLocal<>();
+
     public static Function<Runnable, FlowThread> getFactory() {
         return FlowThread::new;
     }
@@ -17,7 +19,24 @@ public class FlowThread extends Thread {
             }
             return ft.context;
         }
-        return null;
+        return FALLBACK_CONTEXT.get();
+    }
+
+    public static FlowContext initializeContext() {
+        FlowContext context = getContext();
+        if (context == null) {
+            context = new FlowContext();
+            FALLBACK_CONTEXT.set(context);
+        }
+        return context;
+    }
+
+    public static void clearContext() {
+        if (Thread.currentThread() instanceof FlowThread ft) {
+            ft.context = null;
+        } else {
+            FALLBACK_CONTEXT.remove();
+        }
     }
 
     private FlowContext context;

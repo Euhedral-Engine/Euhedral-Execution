@@ -22,12 +22,15 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 @SuppressWarnings("unused")
 public class EuhedralGrpcServerHandler implements LatticeSource, StreamObserver<GrpcMessage> {
 
-    private static final VarHandle COMPLETE = CommonVarHandles.complete(MethodHandles.lookup(), EuhedralGrpcServerHandler.class);
-    private static final VarHandle DOWNSTREAM = CommonVarHandles.downstream(MethodHandles.lookup(), EuhedralGrpcServerHandler.class);
+    private static final VarHandle COMPLETE = CommonVarHandles.complete(MethodHandles.lookup(),
+            EuhedralGrpcServerHandler.class);
+    private static final VarHandle DOWNSTREAM = CommonVarHandles.downstream(MethodHandles.lookup(),
+            EuhedralGrpcServerHandler.class);
 
     private static long addPending(long num1, long num2) {
         long sum = num1 + num2;
@@ -171,7 +174,8 @@ public class EuhedralGrpcServerHandler implements LatticeSource, StreamObserver<
     }
 
     @Override
-    public long pull(Consumer<AbstractFrame> consumer, long demand) {
+    public long pull(Consumer<AbstractFrame> consumer,
+            Function<AbstractFrame, Boolean> stopCondition, long demand) {
         return 0;
     }
 

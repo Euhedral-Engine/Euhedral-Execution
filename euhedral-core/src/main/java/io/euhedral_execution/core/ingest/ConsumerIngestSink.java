@@ -72,20 +72,20 @@ public final class ConsumerIngestSink<T> extends AbstractIngestSink {
 
     public void push(T data) {
         ConsumerFrame<T> frame = this.frameManager.getOrCreate(data, this.password);
-        SpinWait.await(() -> !this.sink.offer(frame));
+        SpinWait.awaitWhile(() -> !this.sink.offer(frame));
     }
 
     public void push(Collection<T> collection) {
         for (T data : collection) {
             ConsumerFrame<T> frame = this.frameManager.getOrCreate(data, this.password);
-            SpinWait.await(() -> !this.sink.offer(frame));
+            SpinWait.awaitWhile(() -> !this.sink.offer(frame));
         }
     }
 
     public void push(Iterator<T> iter) {
         while (iter.hasNext()) {
             ConsumerFrame<T> frame = this.frameManager.getOrCreate(iter.next(), this.password);
-            SpinWait.await(() -> !this.sink.offer(frame));
+            SpinWait.awaitWhile(() -> !this.sink.offer(frame));
         }
     }
 
@@ -95,6 +95,11 @@ public final class ConsumerIngestSink<T> extends AbstractIngestSink {
             this.killSwitch.setRelease(true);
             this.sink.complete();
         }
+    }
+
+    @Override
+    public boolean isComplete() {
+        return this.sink.isComplete();
     }
 
     public void completeGracefully() {

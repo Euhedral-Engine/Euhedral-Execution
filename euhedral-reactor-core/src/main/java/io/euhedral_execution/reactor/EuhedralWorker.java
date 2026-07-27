@@ -11,6 +11,7 @@ import java.util.Objects;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import org.jspecify.annotations.NonNull;
 import reactor.core.Disposable;
 import reactor.core.scheduler.Scheduler.Worker;
@@ -31,7 +32,7 @@ public final class EuhedralWorker extends AbstractIngestSink implements Worker {
     }
 
     public void submit(TaskFrame frame) {
-        while(!this.delegate.queue.offer(frame)) {
+        while (!this.delegate.queue.offer(frame)) {
             Thread.onSpinWait();
         }
     }
@@ -43,14 +44,16 @@ public final class EuhedralWorker extends AbstractIngestSink implements Worker {
     }
 
     @Override
-    public @NonNull Disposable schedule(@NonNull Runnable task, long delay, @NonNull TimeUnit unit) {
+    public @NonNull Disposable schedule(@NonNull Runnable task, long delay,
+            @NonNull TimeUnit unit) {
         Objects.requireNonNull(task);
         Objects.requireNonNull(unit);
         return schedulePeriodically(task, delay, 0, unit);
     }
 
     @Override
-    public @NonNull Disposable schedulePeriodically(@NonNull Runnable task, long delay, long period, @NonNull TimeUnit unit) {
+    public @NonNull Disposable schedulePeriodically(@NonNull Runnable task, long delay, long period,
+            @NonNull TimeUnit unit) {
         Objects.requireNonNull(task);
         Objects.requireNonNull(unit);
         return TaskFrame.create(this.idHash, task, this, delay, period, unit);
@@ -76,6 +79,11 @@ public final class EuhedralWorker extends AbstractIngestSink implements Worker {
         this.delegate.complete();
     }
 
+    @Override
+    public boolean isComplete() {
+        return this.delegate.isComplete();
+    }
+
     private static class Delegate extends AbstractIngestSink.Delegate {
 
         private final PartitionedMpscQueue<TaskFrame> queue;
@@ -86,7 +94,8 @@ public final class EuhedralWorker extends AbstractIngestSink implements Worker {
         }
 
         @Override
-        public long hookOnPull(Consumer<AbstractFrame> consumer, long demand) {
+        public long hookOnPull(Consumer<AbstractFrame> consumer,
+                Function<AbstractFrame, Boolean> stopCondition, long demand) {
             return 0;
         }
 

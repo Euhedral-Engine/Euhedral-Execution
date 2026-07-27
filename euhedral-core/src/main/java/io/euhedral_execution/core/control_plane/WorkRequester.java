@@ -18,7 +18,8 @@ public abstract class WorkRequester extends ControlPlaneCache {
             this.safetyFactor = 0;
             this.pullMultiplier = 0;
         } else {
-            int cores = SystemInfo.getSocketInfo(SystemInfo.getCoreInfo(cacheConfig.getCore()).socket()).getCoreSet()
+            int cores = SystemInfo.getSocketInfo(
+                            SystemInfo.getCoreInfo(cacheConfig.getCore()).socket()).getCoreSet()
                     .cardinality();
             this.pullMultiplier = Math.max((cores * 3L) >> 3, 2); // 37.5% of the core count
             this.safetyFactor = Math.max(this.pullMultiplier >> 1, 2);
@@ -64,16 +65,29 @@ public abstract class WorkRequester extends ControlPlaneCache {
         target = Math.max(target, 1);
 
         long pull = target - localCache;
+        context.originalPull = pull;
 
         long remoteCache = super.getUpstreamCacheCount();
+        if (remoteCache > 0) {
+            context.satisfiedPull = super.pull(pull);
+        }
+
         long demand = batchSize * this.pullMultiplier;
+
         if ((remoteCache + localCache) < demand) {
             demand *= SystemInfo.SOCKET_COUNT;
             context.originalRequest = demand;
             context.upstream.request(demand);
         }
+    }
 
-        context.originalPull = pull;
-        context.satisfiedPull = super.pull(pull);
+    protected void request(FlowThread.FlowContext context, long remoteCache, long localCache, long batchSize) {
+        long demand = batchSize * this.pullMultiplier;
+
+        if ((remoteCache + localCache) < demand) {
+            demand *= SystemInfo.SOCKET_COUNT;
+            context.originalRequest = demand;
+            context.upstream.request(demand);
+        }
     }
 }

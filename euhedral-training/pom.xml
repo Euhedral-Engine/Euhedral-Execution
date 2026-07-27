@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>io.euhedral-execution</groupId>
+    <artifactId>euhedral-execution</artifactId>
+    <version>0.0.7-SNAPSHOT</version>
+  </parent>
+
+  <name>Euhedral Training</name>
+  <artifactId>euhedral-training</artifactId>
+
+  <properties>
+    <pytorch.version>2.7.1</pytorch.version>
+    <pytorch.jni.version>${pytorch.version}-${djl.version}</pytorch.jni.version>
+    <trainer.distribution>${project.build.directory}/trainer</trainer.distribution>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>io.euhedral-execution</groupId>
+      <artifactId>euhedral-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.euhedral-execution</groupId>
+      <artifactId>euhedral-data-structures</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.euhedral-execution</groupId>
+      <artifactId>euhedral-hardware-utils</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.euhedral-execution</groupId>
+      <artifactId>euhedral-hashing</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.commons</groupId>
+      <artifactId>commons-math4-legacy</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.tdunning</groupId>
+      <artifactId>t-digest</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.jspecify</groupId>
+      <artifactId>jspecify</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.projectlombok</groupId>
+      <artifactId>lombok</artifactId>
+      <scope>provided</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>ai.djl</groupId>
+      <artifactId>api</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>ai.djl.pytorch</groupId>
+      <artifactId>pytorch-engine</artifactId>
+    </dependency>
+    <!--
+      The JNI bridge is small and portable. The CUDA-enabled PyTorch native libraries are loaded
+      from an Ubuntu Python environment through PYTORCH_LIBRARY_PATH instead of being repackaged by
+      Maven. This keeps the trainer distribution Linux-focused and avoids multi-gigabyte uber jars.
+    -->
+    <dependency>
+      <groupId>ai.djl.pytorch</groupId>
+      <artifactId>pytorch-jni</artifactId>
+      <version>${pytorch.jni.version}</version>
+      <scope>runtime</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-api</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>ch.qos.logback</groupId>
+      <artifactId>logback-classic</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.assertj</groupId>
+      <artifactId>assertj-core</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <resources>
+      <resource>
+        <directory>src/main/resources</directory>
+      </resource>
+      <resource>
+        <directory>${project.parent.basedir}/euhedral-core/src/main/resources</directory>
+        <includes>
+          <include>logback-fragments/**</include>
+        </includes>
+      </resource>
+      <resource>
+        <directory>${project.parent.basedir}/euhedral-hardware-utils/src/main/resources</directory>
+        <includes>
+          <include>logback-fragments/**</include>
+        </includes>
+      </resource>
+    </resources>
+
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <configuration>
+          <outputDirectory>${trainer.distribution}</outputDirectory>
+          <finalName>euhedral-training-${project.version}</finalName>
+          <archive>
+            <manifest>
+              <addClasspath>true</addClasspath>
+              <classpathPrefix>lib/</classpathPrefix>
+              <mainClass>io.euhedral_execution.training.Runner</mainClass>
+            </manifest>
+            <manifestEntries>
+              <Add-Opens>java.base/java.util</Add-Opens>
+            </manifestEntries>
+          </archive>
+        </configuration>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-dependency-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>copy-runtime</id>
+            <phase>package</phase>
+            <goals>
+              <goal>copy-dependencies</goal>
+            </goals>
+            <configuration>
+              <includeScope>runtime</includeScope>
+              <outputDirectory>${trainer.distribution}/lib</outputDirectory>
+              <overWriteIfNewer>true</overWriteIfNewer>
+              <overWriteReleases>false</overWriteReleases>
+              <overWriteSnapshots>true</overWriteSnapshots>
+              <useRepositoryLayout>false</useRepositoryLayout>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-antrun-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>copy-gpu-launcher</id>
+            <phase>package</phase>
+            <goals>
+              <goal>run</goal>
+            </goals>
+            <configuration>
+              <target>
+                <mkdir dir="${trainer.distribution}/bin"/>
+                <copy file="${project.basedir}/src/main/scripts/euhedral-training-gpu"
+                  tofile="${trainer.distribution}/bin/euhedral-training-gpu"/>
+                <chmod file="${trainer.distribution}/bin/euhedral-training-gpu" perm="755"/>
+              </target>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>
