@@ -12,6 +12,10 @@
   <name>Euhedral Core</name>
   <artifactId>euhedral-core</artifactId>
 
+  <properties>
+    <mockito.version>5.20.0</mockito.version>
+  </properties>
+
   <dependencies>
     <dependency>
       <groupId>io.euhedral-execution</groupId>
@@ -62,6 +66,7 @@
     <dependency>
       <groupId>org.mockito</groupId>
       <artifactId>mockito-core</artifactId>
+      <version>${mockito.version}</version>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -77,8 +82,13 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
         <configuration>
-          <forkCount>1C</forkCount>
-          <reuseForks>false</reuseForks>
+          <argLine>
+            @{argLine}
+            -javaagent:${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar
+            -Xshare:off
+          </argLine>
+          <forkCount>1</forkCount>
+          <reuseForks>true</reuseForks>
         </configuration>
       </plugin>
     </plugins>

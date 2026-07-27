@@ -1,17 +1,14 @@
 package io.euhedral_execution.core.control_plane;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 import io.euhedral_execution.core.config.CloneConfig;
 import io.euhedral_execution.core.flow_control.LatticeEdge;
 import io.euhedral_execution.core.generics.CloneableObject;
+import io.euhedral_execution.core.generics.LatticeSource;
 import io.euhedral_execution.hardware_utils.SystemInfo;
 import io.euhedral_execution.hardware_utils.SystemInfo.SocketInfo;
 import io.euhedral_execution.hardware_utils.TopologyMapper.EffectiveSocketTopology;
@@ -23,8 +20,10 @@ import java.util.BitSet;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
@@ -33,79 +32,82 @@ import org.mockito.Mockito;
 class ControlPlaneShardTest {
 
     private MockedStatic<SystemInfo> mockSysInfo;
+    private ControlPlaneShard shard;
+
+    @BeforeAll
+    static void initializeSharedRoutingStateFromTheRealTopology() {
+        new LatticeEdge(new AtomicBoolean());
+    }
 
     @BeforeEach
     void setUp() {
         mockSysInfo = Mockito.mockStatic(SystemInfo.class);
+        mockSysInfo.when(SystemInfo::getMaxCoreId).thenReturn(1);
+        BitSet cores = new BitSet(2);
+        cores.set(0, 2);
+        mockSysInfo.when(() -> SystemInfo.fromHexMask("3")).thenReturn(cores);
+        mockSysInfo.when(() -> SystemInfo.getSocketInfo(0))
+                .thenReturn(new SocketInfo("f", "3", 0));
+        mockSysInfo.when(() -> SystemInfo.socketL3Cache(0)).thenReturn(0L);
     }
 
     @AfterEach
     void tearDown() {
-        mockSysInfo.close();
+        try {
+            if (shard != null) {
+                shard.close();
+            }
+        } finally {
+            if (mockSysInfo != null) {
+                mockSysInfo.close();
+            }
+        }
     }
 
     @Test
-    void testInitialization() {
-        TestClone clone = mock(TestClone.class);
-        LatticeEdge upstream = spy(new LatticeEdge(new AtomicBoolean()));
-
-        doReturn(clone).when(clone).clone(any(CloneConfig.class));
-
-        mockSysInfo.when(SystemInfo::getMaxCoreId).thenReturn(1);
-        ControlPlaneShard shard = new ControlPlaneShard(1, "TestShard", clone, Duration.ZERO);
+    void startsAClonePerEffectiveCore() {
+        RecordingClone factory = new RecordingClone();
+        LatticeEdge upstream = new LatticeEdge(new AtomicBoolean());
+        shard = new ControlPlaneShard(0, "TestShard", factory, Duration.ZERO);
 
         EffectiveSocketTopology topology = getTopology();
         SocketSnapshot snapshot = getSocketSnapshot(topology);
-        SocketInfo info = mock(SocketInfo.class);
         CloneConfig[] configs = getConfigs(snapshot, topology);
-
-        mockSysInfo.when(() -> SystemInfo.getSocketInfo(snapshot.socketId())).thenReturn(info);
-        when(info.getCoreSet()).thenReturn(new BitSet());
 
         shard.start(snapshot, topology, upstream);
 
-        verify(clone, times(configs.length)).clone(any(CloneConfig.class));
-        verify(clone, times(configs.length)).input(any(LatticeEdge.class));
-        verify(clone, times(configs.length)).setDrainMode(true);
-        verify(clone, times(configs.length)).update(any(CoreSnapshot.class));
-        verify(clone, times(configs.length)).start();
+        assertEquals(configs.length, factory.created.size());
+        for (int i = 0; i < configs.length; i++) {
+            RecordingClone clone = factory.created.get(i);
+            CloneConfig config = configs[i];
 
-        for (CloneConfig config : configs) {
-            verify(clone).clone(config);
-            verify(clone).update(snapshot.coreSnapshots()[config.coreId()]);
+            assertEquals(config, clone.config);
+            assertTrue(clone.input instanceof LatticeEdge);
+            assertSame(snapshot.coreSnapshots()[config.coreId()], clone.snapshot);
+            assertTrue(clone.started);
+            assertFalse(clone.drainMode);
         }
 
         assertTrue(shard.isStarted(), "Expected the shard to be marked started");
     }
 
     @Test
-    void testRebalanceOnTopologyChange() throws Exception {
-        LatticeEdge upstream = spy(new LatticeEdge(new AtomicBoolean()));
-        TestClone baseClone = mock(TestClone.class);
-
-        TestClone[] clones = new TestClone[2];
-        clones[0] = mock(TestClone.class);
-        clones[1] = mock(TestClone.class);
-
-        final int[] idx = new int[]{0};
-        when(baseClone.clone(any(CloneConfig.class))).thenAnswer(c -> clones[idx[0]++]);
-        when(clones[0].isStarted()).thenReturn(true);
-        when(clones[1].isStarted()).thenReturn(true);
-
-        mockSysInfo.when(SystemInfo::getMaxCoreId).thenReturn(1);
-        ControlPlaneShard shard = new ControlPlaneShard(1, "TestShard", baseClone, Duration.ofMinutes(1));
+    void closesOnlyClonesRemovedByARebalance() {
+        LatticeEdge upstream = new LatticeEdge(new AtomicBoolean());
+        RecordingClone factory = new RecordingClone();
+        shard =
+                new ControlPlaneShard(0, "TestShard", factory, Duration.ofSeconds(1));
 
         EffectiveSocketTopology topo1 = getTopology(); // Version 0, Core 0 and 1 active
 
-        SocketInfo info = mock(SocketInfo.class);
         SocketSnapshot snapshot1 = getSocketSnapshot(topo1);
-        mockSysInfo.when(() -> SystemInfo.getSocketInfo(snapshot1.socketId())).thenReturn(info);
-        when(info.getCoreSet()).thenReturn(new BitSet());
 
-        shard.start(getSocketSnapshot(topo1), topo1, upstream);
+        shard.start(snapshot1, topo1, upstream);
 
-        verify(clones[0]).start();
-        verify(clones[1]).start();
+        RecordingClone first = factory.created.get(0);
+        RecordingClone second = factory.created.get(1);
+        assertTrue(first.started);
+        assertTrue(second.started);
 
         // Trigger Rebalance: Drop Core 0
         topo1.effectiveCores().clear(0);
@@ -117,24 +119,45 @@ class ControlPlaneShardTest {
 
         SocketSnapshot snap2 = getSocketSnapshot(topo2);
 
-        when(clones[0].isDrained()).thenReturn(true);
-        when(clones[0].getCore()).thenReturn(0);
-
-        when(clones[1].isDrained()).thenReturn(true);
-        when(clones[1].getCore()).thenReturn(1);
-
         shard.update(snap2, topo2);
 
-        verify(clones[0], times(2)).setDrainMode(true);
-
-        // Wait for Async logic in drainAndPruneClones
         Awaitility.await()
                 .atMost(2, TimeUnit.SECONDS)
                 .until(() -> !shard.isRebalancing());
 
-        // Old core should have been dropped
-        verify(clones[0], times(1)).close();
-        verify(clones[1], times(0)).close();
+        assertTrue(first.closed, "The removed core should be closed");
+        assertFalse(second.closed, "The retained core should stay open");
+        assertEquals(1, shard.getActiveCores());
+    }
+
+    @Test
+    void shutdownClosesEveryCloneAndAcknowledgesOnce() {
+        RecordingClone factory = new RecordingClone();
+        shard = new ControlPlaneShard(0, "TestShard", factory, Duration.ZERO);
+        EffectiveSocketTopology topology = getTopology();
+        shard.start(getSocketSnapshot(topology), topology,
+                new LatticeEdge(new AtomicBoolean()));
+        AtomicInteger shutdownsRemaining = new AtomicInteger(1);
+
+        shard.shutDownShard(shutdownsRemaining);
+
+        Awaitility.await()
+                .atMost(2, TimeUnit.SECONDS)
+                .until(() -> shutdownsRemaining.get() == 0);
+        assertFalse(shard.isStarted());
+        assertEquals(0, shard.getActiveCores());
+        assertTrue(factory.created.stream().allMatch(clone -> clone.closed));
+    }
+
+    @Test
+    void unstartedShardAcknowledgesShutdownImmediately() {
+        shard = new ControlPlaneShard(
+                0, "TestShard", new RecordingClone(), Duration.ZERO);
+        AtomicInteger shutdownsRemaining = new AtomicInteger(1);
+
+        shard.shutDownShard(shutdownsRemaining);
+
+        assertEquals(0, shutdownsRemaining.get());
     }
 
     private static EffectiveSocketTopology getTopology() {
@@ -172,11 +195,76 @@ class ControlPlaneShardTest {
         return configs;
     }
 
-    private static final class TestClone implements CloneableObject {
+    private static final class RecordingClone implements CloneableObject {
+
+        private final List<RecordingClone> created;
+        private final CloneConfig config;
+
+        private LatticeSource input;
+        private CoreSnapshot snapshot;
+        private volatile boolean drainMode;
+        private volatile boolean started;
+        private volatile boolean closed;
+
+        private RecordingClone() {
+            this(new ArrayList<>(), null);
+        }
+
+        private RecordingClone(List<RecordingClone> created, CloneConfig config) {
+            this.created = created;
+            this.config = config;
+        }
 
         @Override
-        public TestClone clone(CloneConfig cloneConfig) {
-            return new TestClone();
+        public RecordingClone clone(CloneConfig cloneConfig) {
+            RecordingClone clone = new RecordingClone(this.created, cloneConfig);
+            this.created.add(clone);
+            return clone;
+        }
+
+        @Override
+        public void input(LatticeSource stream) {
+            this.input = stream;
+        }
+
+        @Override
+        public void update(CoreSnapshot coreSnapshot) {
+            this.snapshot = coreSnapshot;
+        }
+
+        @Override
+        public void setDrainMode(boolean value) {
+            this.drainMode = value;
+        }
+
+        @Override
+        public void start() {
+            this.started = true;
+        }
+
+        @Override
+        public boolean isStarted() {
+            return this.started;
+        }
+
+        @Override
+        public boolean ready() {
+            return this.started;
+        }
+
+        @Override
+        public boolean isDrained() {
+            return true;
+        }
+
+        @Override
+        public int getCore() {
+            return this.config == null ? -1 : this.config.coreId();
+        }
+
+        @Override
+        public void close() {
+            this.closed = true;
         }
     }
 }
