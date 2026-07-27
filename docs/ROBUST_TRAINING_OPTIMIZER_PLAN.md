@@ -262,73 +262,214 @@ A failed packaging step must leave the original training outputs untouched.
 
 ## Implementation order and prompt sequence
 
-Run these prompts in order. The labels use the available reasoning range, but the sequence starts
-with the most reasoning-intensive architecture and statistical work so later implementation prompts
-inherit settled contracts.
+Run the phases in order. Each phase is deliberately split into:
 
-### Prompt 1 - MAX - data model, calibration, and robust objective
+1. a high-intelligence **reasoning-mode prompt** that investigates, makes the difficult decisions, and
+   writes a self-contained implementation blueprint; then
+2. a **LIGHT coding-mode prompt** that implements the settled blueprint without reopening architectural
+   or statistical choices.
 
-> Read AGENTS.md, docs/ML_CLOSED_LOOP_ARCHITECTURE.md, this plan, and the current training module.
-> Implement the versioned observation identity, fixed-anchor calibration model, hierarchical
-> aggregation records, scenario-relative percentile quality, and lexicographic robust comparator.
-> Preserve scenario rows. Do not change the predictor or CMA-ES yet. Add deterministic synthetic
-> tests for moving candidate cohorts, anchor drift, missing anchors, unequal repetitions, ties,
-> timeouts, incomplete coverage, and a policy that is consistently second-best beating a specialist
-> that wins one scenario and fails another. Document any plan deviation with evidence.
+The reasoning prompts are ordered from most to least demanding: `MAX`, then `HIGH`, then
+`MEDIUM`. The implementation prompts are all `LIGHT`. This front-loads context gathering and
+judgment so later agents do not need to reconstruct the system from the full conversation or repeat
+broad repository analysis.
 
-### Prompt 2 - MAX - scenario-conditioned learning and validation
+### Blueprint handoff contract
 
-> Read the completed data/merger contracts and implement the scenario-conditioned ordinal dataset,
-> predictor inputs, grouped-by-policy validation, and leave-one-source-scenario-out reporting.
-> Candidate inference must predict every configured scenario and expose uncertainty/disagreement.
-> Prevent train/validation leakage. Add ablation-friendly context configuration and tests proving
-> source context affects predictions while policy identity cannot leak through row splitting.
+Every reasoning-mode prompt must create or update a phase blueprint under
+`docs/robust-training-optimizer/blueprints/`. A blueprint is an implementation artifact, not a loose
+essay. It must contain:
 
-### Prompt 3 - HIGH - optimizer and scheduling integration
+- the exact scope and explicit non-goals;
+- settled mathematical definitions, invariants, defaults, and failure behavior;
+- current classes/files involved and the intended ownership after the change;
+- new or changed types, fields, method signatures, formats, and configuration keys;
+- data flow and dependency boundaries;
+- compatibility and deletion boundaries where applicable;
+- a file-by-file implementation checklist in dependency order;
+- deterministic test fixtures, assertions, and acceptance criteria;
+- validation commands;
+- risks or unresolved blockers that genuinely require another reasoning pass.
 
-> Upgrade SequenceFinder, CmaEsOptimizer, ScoreBandSampler, and ClosedLoopRunner to consume robust
-> summaries and per-scenario predictions. Add explicit budget partitions for exploration,
-> carry-forward coverage completion, fixed anchors, leader revalidation, and disagreement audits.
-> Persist the carry-forward queue in checkpoints. Keep incomplete policies out of robust-leader
-> promotion. Add restart, rotating-scenario, budget-accounting, and deterministic-selection tests.
+A reasoning pass must inspect enough current code to make the blueprint executable, but must not
+implement production code. It may add or edit only its blueprint and closely related planning
+documentation. It should reference prior blueprints instead of repeating their full analysis, and
+must keep stable decisions in the earliest applicable blueprint.
 
-### Prompt 4 - HIGH - final artifact packaging
+Every LIGHT coding pass must read `AGENTS.md`, this plan, its phase blueprint, and the completion
+notes from earlier phases. It should then implement only the checklist, run the specified tests, and
+append a concise completion record to the blueprint containing changed files, commands run, results,
+and deviations. If implementation reveals a decision that the blueprint did not settle, stop and
+record the question; do not invent a new architecture in LIGHT mode.
 
-> Implement atomic end-of-run packaging exactly as defined in this plan. Generate the manifest,
-> checksums, shallow directory layout, clearly named vector-only and measured datasets, readable
-> Markdown reports, model metadata, checkpoints, and raw-data index. Package recoverable partial
-> runs with an explicit incomplete status. Add tests for naming, semantic manifest types,
-> reproducibility metadata, collision avoidance, checksum validation, atomic publication, and
-> failure cleanup.
+Commit and push after each completed prompt so the next prompt can rely on the branch as its complete
+context. Use the existing feature branch for the sequence. Temporary workflows remain permitted
+under the restrictions at the end of this document.
 
-### Prompt 5 - MEDIUM - compatibility, CLI, and documentation
+### Phase 1 - foundational data, calibration, and robust ranking
 
-> Add the isolated, one-way temporary importer for relevant vectors and measurements from the
-> current pre-upgrade workspace layout. Do not carry over historical trained models, optimizer model
-> state, or old checkpoints, and do not build a general legacy migration framework. Convert accepted
-> files immediately to the new records, produce an accepted/skipped/rejected import report, and add
-> one searchable removal marker plus deletion instructions. Also add configuration properties for
-> anchors, robust ranking, budget partitions, and package location, plus CLI/help text and updates to
-> CLOSED_LOOP.md, the training README, and ML_CLOSED_LOOP_ARCHITECTURE.md. Include exact commands for
-> importing the current workspace once, resuming new-format runs, and locating final results. Keep
-> defaults safe and deterministic.
+#### Prompt 1A - REASONING MODE - MAX
 
-### Prompt 6 - MEDIUM - integration verification and statistical audit
+> Read AGENTS.md, docs/ML_CLOSED_LOOP_ARCHITECTURE.md, this plan, and all current trainer, merger,
+> ranking, serialization, and related test code. Do not implement production code. Write
+> `docs/robust-training-optimizer/blueprints/01-data-calibration-ranking.md` following the blueprint
+> handoff contract. Fully settle the versioned observation identity, scenario identity, fixed-anchor
+> selection and reference-run rules, weighted-median log calibration, confidence thresholds,
+> hierarchical aggregation, midrank percentile quality, lexicographic comparator, epsilon and
+> quantile conventions, timeout treatment, deterministic ordering, and migration boundary. Specify
+> exact Java types/APIs, ownership, file changes, synthetic fixtures, and compatibility seams.
+> Reconcile every choice with current code so Prompt 1B can implement without broad rediscovery.
+> Commit and push the blueprint only.
 
-> Run the focused training-module test sequence and create an end-to-end synthetic closed loop whose
-> known robust winner is not the winner of every individual scenario. Verify calibration invariance
-> when candidate cohorts change, restart equivalence, complete artifact packaging, and deterministic
-> reruns. Inspect every produced report as a user would. Fix defects within scope and report
-> environmental limitations separately.
+#### Prompt 1B - CODING MODE - LIGHT
 
-### Prompt 7 - LIGHT - cleanup and handoff
+> Read AGENTS.md, this plan, and
+> `docs/robust-training-optimizer/blueprints/01-data-calibration-ranking.md`. Implement that
+> blueprint exactly: versioned observation records, anchor calibration, hierarchical merger outputs,
+> scenario percentiles, and the authoritative robust comparator. Preserve scenario rows and do not
+> modify the predictor, CMA-ES, or scheduling beyond compile-safe adapters explicitly listed in the
+> blueprint. Add and run every specified deterministic test. If an unstated design choice appears,
+> stop and record it in the blueprint instead of redesigning. Append completion notes, commit, and
+> push.
 
-> Search for stale pooled-policy assumptions, per-file P99 normalization, ambiguous output names,
-> accidental legacy-format dependencies outside the temporary importer, temporary workflows, and
-> obsolete documentation. Verify the importer can be removed by deleting only the documented
-> temporary files, tests, command registration, and documentation block. Run formatting/diff checks, confirm only intended
-> files changed, summarize schema and behavior changes, and provide the final result-package path
-> and validation commands.
+### Phase 2 - scenario-conditioned learning
+
+#### Prompt 2A - REASONING MODE - MAX
+
+> Read the Phase 1 blueprint and completion notes, then inspect the current ordinal dataset,
+> predictor, training/evaluation split, inference, and model serialization code. Do not implement
+> production code. Write
+> `docs/robust-training-optimizer/blueprints/02-scenario-conditioned-learning.md`. Settle the exact
+> feature schema, normalization, scenario enumeration, targets, uncertainty/disagreement output,
+> grouped-by-policy validation, leave-one-source-scenario-out evaluation, model metadata/versioning,
+> ablation switches, deterministic seeds, and compatibility with Phase 1 records. Specify exact
+> APIs, tensor/table shapes, file edits, tests, and acceptance thresholds. Make the handoff sufficient
+> for LIGHT implementation without rereading unrelated trainer code. Commit and push the blueprint
+> only.
+
+#### Prompt 2B - CODING MODE - LIGHT
+
+> Read AGENTS.md, this plan, both completed phase blueprints, and especially
+> `02-scenario-conditioned-learning.md`. Implement only its checklist: scenario-conditioned ordinal
+> data, predictor inputs and outputs, grouped validation, leave-one-scenario-out reporting,
+> uncertainty/disagreement, metadata, and configured ablations. Run the blueprint's tests proving
+> that source context affects predictions and that policy rows cannot leak across splits. Record any
+> blocker rather than making a new modeling choice. Append completion notes, commit, and push.
+
+### Phase 3 - optimizer and closed-loop scheduling
+
+#### Prompt 3A - REASONING MODE - HIGH
+
+> Read the Phase 1 and 2 blueprints and completion notes, then inspect SequenceFinder,
+> CmaEsOptimizer, ScoreBandSampler, ClosedLoopRunner, checkpointing, and source-configuration
+> rotation. Do not implement production code. Write
+> `docs/robust-training-optimizer/blueprints/03-optimizer-scheduling.md`. Settle how robust predicted
+> curves are compared, how islands and bands are seeded, exact candidate-budget partitions and
+> rounding, carry-forward eligibility and prioritization, anchor and leader selection, disagreement
+> audits, deduplication, deterministic tie-breaking, checkpoint schema, restart behavior, and
+> incomplete-policy isolation. Include exact APIs, state transitions, file edits, fixtures, and
+> acceptance tests. Commit and push the blueprint only.
+
+#### Prompt 3B - CODING MODE - LIGHT
+
+> Read AGENTS.md, this plan, prior completion notes, and
+> `docs/robust-training-optimizer/blueprints/03-optimizer-scheduling.md`. Implement its settled
+> integration for SequenceFinder, CmaEsOptimizer, ScoreBandSampler, ClosedLoopRunner, and
+> checkpoints. Add the explicit budget partitions and carry-forward queue, and keep incomplete
+> policies out of robust-leader promotion. Run restart, rotating-scenario, budget-accounting,
+> deduplication, and deterministic-selection tests from the blueprint. Append completion notes,
+> commit, and push.
+
+### Phase 4 - final result packaging
+
+#### Prompt 4A - REASONING MODE - HIGH
+
+> Read all completed blueprints and outputs, then inspect current workspace paths, artifact writers,
+> checkpoint/model output, shutdown and partial-failure behavior, and user-facing reports. Do not
+> implement production code. Write
+> `docs/robust-training-optimizer/blueprints/04-final-packaging.md`. Map every current artifact to
+> the required shallow package, and settle manifest schemas and semantic types, filenames, checksums,
+> provenance, raw-data indexing versus copying, README/report contents, complete versus partial
+> status, atomic filesystem protocol, collision behavior, reproducibility command, deterministic
+> bytes, cleanup, and failure recovery. Specify exact classes/APIs, file edits, golden fixtures, and
+> acceptance tests. Make vector-only, vectors-with-measurements, machine-readable, and human-readable
+> files unmistakable without opening them. Commit and push the blueprint only.
+
+#### Prompt 4B - CODING MODE - LIGHT
+
+> Read AGENTS.md, this plan, prior completion notes, and
+> `docs/robust-training-optimizer/blueprints/04-final-packaging.md`. Implement the exact atomic
+> package layout, manifest and checksums, descriptive datasets and vector files, Markdown reports,
+> model metadata, checkpoint inclusion, raw-data index, partial-run status, and collision-safe
+> publication. Run every naming, schema, checksum, determinism, atomicity, and failure-cleanup test
+> specified by the blueprint. Append completion notes, commit, and push.
+
+### Phase 5 - temporary current-workspace importer and user interface
+
+#### Prompt 5A - REASONING MODE - MEDIUM
+
+> Read prior blueprints and inspect only the current pre-upgrade workspace structure plus current
+> CLI/configuration/documentation code. Do not implement production code. Write
+> `docs/robust-training-optimizer/blueprints/05-temporary-importer-cli.md`. Inventory the exact
+> useful current paths and file semantics that can be recognized without guessing. Settle the
+> one-way mapping into new records, accepted/skipped/rejected reasons, import report, explicit
+> off-by-default command or switch, searchable removal marker, package/module isolation, and exact
+> deletion recipe. Historical trained models, optimizer state, and old checkpoints must be skipped;
+> this must not become a general migration framework. Also specify final configuration keys,
+> validation rules, CLI help, and documentation changes for anchors, ranking, budgets, importing,
+> resuming, and locating packages. Commit and push the blueprint only.
+
+#### Prompt 5B - CODING MODE - LIGHT
+
+> Read AGENTS.md, this plan, prior completion notes, and
+> `docs/robust-training-optimizer/blueprints/05-temporary-importer-cli.md`. Implement the isolated
+> importer, import report, configuration, CLI/help, and documentation exactly as specified. Keep all
+> legacy-layout knowledge inside the removable boundary and immediately convert accepted inputs to
+> new immutable records. Do not import old models or checkpoints. Run focused acceptance, rejection,
+> disabled-path, and deletion-boundary tests. Append completion notes, commit, and push.
+
+### Phase 6 - end-to-end verification and audit
+
+#### Prompt 6A - REASONING MODE - MEDIUM
+
+> Read every blueprint and completion record. Inspect the resulting integrated test surface and
+> generated package, but do not change production code. Write
+> `docs/robust-training-optimizer/blueprints/06-verification-audit.md` as an executable audit plan.
+> Define the end-to-end synthetic experiment, exact known rankings, calibration transformations,
+> restart interruption point, deterministic seeds, expected package inventory/checksums, report
+> inspection checklist, full validation command sequence, and criteria separating code defects from
+> environment limitations. Include a targeted search list for stale pooled-policy and P99
+> assumptions. Commit and push the audit blueprint only.
+
+#### Prompt 6B - CODING MODE - LIGHT
+
+> Read AGENTS.md, this plan, and
+> `docs/robust-training-optimizer/blueprints/06-verification-audit.md`. Execute the audit exactly.
+> Add only the fixtures or test harness described there, run the focused and end-to-end suites,
+> inspect produced reports, and fix implementation defects that are already resolved by an existing
+> blueprint. Do not make new statistical or architectural decisions. Record results and any
+> environmental limitations in the audit blueprint. Commit and push all validated corrections.
+
+### Phase 7 - cleanup and handoff
+
+#### Prompt 7A - REASONING MODE - MEDIUM
+
+> Read all blueprints and completion records, then review the complete branch diff. Do not implement
+> cleanup yet. Write
+> `docs/robust-training-optimizer/blueprints/07-cleanup-handoff.md` with an exact deletion and
+> cleanup checklist: stale pooled-policy assumptions, per-file P99 normalization, ambiguous names,
+> accidental legacy dependencies outside the importer, temporary workflows, obsolete docs,
+> formatting, generated files, and importer removal proof. Identify each target by file and symbol,
+> list final validation commands, and define the final handoff summary and result-package evidence.
+> Commit and push the blueprint only.
+
+#### Prompt 7B - CODING MODE - LIGHT
+
+> Read AGENTS.md, this plan, and
+> `docs/robust-training-optimizer/blueprints/07-cleanup-handoff.md`. Perform only its enumerated
+> cleanup. Remove temporary workflows, verify the importer can be deleted using only the documented
+> boundary, run formatting and the final validation sequence, inspect the final diff, and record
+> exact commands and results. Do not broaden scope. Append final completion notes, commit, and push.
 
 ## Test strategy
 
