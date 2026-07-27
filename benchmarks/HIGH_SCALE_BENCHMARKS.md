@@ -49,7 +49,7 @@ The benchmark source is
 
 | | Intel system | AMD system | Arm system |
 | --- | --- | --- | --- |
-| Instance | AWS c8i.metal-48xl | AWS c8a.metal-24xl | AWS c9g.8xlarge |
+| Instance | AWS c8i.metal-48xl | AWS c8a.metal-24xl | AWS c9g.metal-48xl |
 | Operating system | Amazon Linux | Amazon Linux | Amazon Linux |
 | Processor | Intel Xeon 6 (Granite Rapids) | AMD EPYC 9R45 | AWS Graviton5 |
 | Architecture | x86_64 | x86_64 | arm64 |

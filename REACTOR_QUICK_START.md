@@ -110,8 +110,12 @@ Choose `flatMap` when values are independent and completion order does not matte
 `flatMapSequential` preserves the input order while still distributing computation.
 `concatMap` keeps the stream on an ordered Euhedral route.
 
-The mapper is synchronous and runs on a Euhedral worker. Do not block it on network or file I/O;
-compose asynchronous I/O with Reactor and use Euhedral for the CPU-bound stage.
+The mapper is synchronous and runs on a Euhedral worker. Blocking is supported, but a blocked
+Euhedral worker cannot execute other frames until the call returns. That is often an acceptable
+tradeoff: the blocked thread still occupies its assigned core, so moving unrelated work onto that
+worker would not make the core available to another thread. Use asynchronous Reactor composition
+when you want the worker to remain available while waiting, and block when the simpler execution
+model fits the workload.
 
 ## Use the Scheduler API
 
