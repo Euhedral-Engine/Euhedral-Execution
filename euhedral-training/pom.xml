@@ -128,9 +128,6 @@
               <classpathPrefix>lib/</classpathPrefix>
               <mainClass>io.euhedral_execution.training.Runner</mainClass>
             </manifest>
-            <manifestEntries>
-              <Add-Opens>java.base/java.util</Add-Opens>
-            </manifestEntries>
           </archive>
         </configuration>
       </plugin>

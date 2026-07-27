@@ -12,7 +12,7 @@ This avoids both failure modes of the previous packaging approach:
 ## Requirements
 
 - Ubuntu 22.04 or 24.04 x86_64
-- the repository toolchain from `mise.toml` (currently Java 25, Maven 3.9.6, and Zig 0.16.0)
+- the repository toolchain from `mise.toml` (currently Java 21, Maven 3.9.6, and Zig 0.16.0)
 - Python 3.9 or later with `venv`
 - NVIDIA GeForce RTX 5080
 - NVIDIA Linux driver 570.26 or newer

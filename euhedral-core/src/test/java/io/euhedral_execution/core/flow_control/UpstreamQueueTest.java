@@ -84,21 +84,6 @@ class UpstreamQueueTest {
         assertEquals(0, second.requested);
     }
 
-//    @Test
-//    void shouldRequestEvenlyAcrossUpstreamsWhenAbove1024() {
-//        TestUpstreamHandle first = new TestUpstreamHandle();
-//        TestUpstreamHandle second = new TestUpstreamHandle();
-//
-//        handles.offer(first);
-//        handles.offer(second);
-//        count.getAndAdd(2);
-//
-//        queue.request(2048);
-//
-//        assertEquals(1024, first.requested);
-//        assertEquals(1024, second.requested);
-//    }
-
     @Test
     void shouldRequestWithoutBuffer() {
         TestUpstreamHandle upstream = new TestUpstreamHandle();
