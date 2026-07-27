@@ -322,9 +322,10 @@ liveness, and commits offsets after frame completion.
 The production fragment evaluates a fixed 28-weight policy. Model training stays in
 [`euhedral-training`](../euhedral-training/). Its closed loop normalizes benchmark data, trains an
 ordinal policy ranker, generates candidates, benchmarks them, and promotes only completed runs back
-into the corpus. See
-[`CLOSED_LOOP.md`](../euhedral-training/CLOSED_LOOP.md) and
-[`ML_CLOSED_LOOP_ARCHITECTURE.md`](ML_CLOSED_LOOP_ARCHITECTURE.md) for that slower feedback loop.
+into the corpus. See the
+[`training README`](../euhedral-training/README.md) for commands and properties, and
+[`ML_CLOSED_LOOP_ARCHITECTURE.md`](ML_CLOSED_LOOP_ARCHITECTURE.md) for the slower feedback loop’s
+design.
 
 The separate [`benchmarks`](../benchmarks/) module packages JMH tests for end-to-end latency,
 throughput, irregular compute workloads, and queue comparisons. Benchmark code is evidence and

@@ -252,6 +252,9 @@ CPU that will own them.
 - Use SLF4J parameter placeholders. Pass a throwable as the final logging argument.
 - Use JSpecify annotations on public nullness contracts where the module already does so.
 - Validate record and constructor invariants at the boundary.
+- Use ordinary ASCII characters in comments and documentation; avoid uncommon Unicode symbols.
+  Represent data flows with ASCII art such as `->`, `|`, and `+--` unless the user explicitly asks
+  for another notation.
 - Keep comments focused on ownership, ordering, memory semantics, or a non-obvious performance
   reason.
 - If a public package is added or removed, update the module's `module-info.java`.
