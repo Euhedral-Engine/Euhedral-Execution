@@ -27,16 +27,16 @@ contain expensive local runs. Treat them as user-owned even when they are untrac
 Run the repository with the JDK selected by `mise`, currently Java 21. Individual artifacts retain
 lower release targets where possible.
 
-| Module | Release | Main responsibility |
-| --- | ---: | --- |
-| `euhedral-hashing` | 11 | xxHash64-based hashing and mixing |
-| `euhedral-data-structures` | 11 | Concurrent queues and padded atomics |
-| `euhedral-hardware-utils` | 17 | Topology, resource monitoring, affinity, and JNI |
-| `euhedral-core` | 21 | Control plane, frames, routing, ingest, and execution |
-| `euhedral-spring-core` | 21 | Spring Boot, Kafka, and gRPC integration |
-| `euhedral-training` | 21 | Offline policy tuning and candidate benchmarking |
-| `euhedral-reactor-core` | 25 | Reactor scheduler and operators |
-| `benchmarks` | 25 | JMH benchmarks |
+| Module                     | Release | Main responsibility                                   |
+|----------------------------|--------:|-------------------------------------------------------|
+| `euhedral-hashing`         |      11 | xxHash64-based hashing and mixing                     |
+| `euhedral-data-structures` |      11 | Concurrent queues and padded atomics                  |
+| `euhedral-hardware-utils`  |      17 | Topology, resource monitoring, affinity, and JNI      |
+| `euhedral-core`            |      21 | Control plane, frames, routing, ingest, and execution |
+| `euhedral-spring-core`     |      21 | Spring Boot, Kafka, and gRPC integration              |
+| `euhedral-training`        |      21 | Offline policy tuning and candidate benchmarking      |
+| `euhedral-reactor-core`    |      25 | Reactor scheduler and operators                       |
+| `benchmarks`               |      25 | JMH benchmarks                                        |
 
 The dependency direction is broadly:
 
@@ -122,18 +122,24 @@ branch. Temporary GitHub Actions workflows are permitted only when needed to tes
 unavailable environment; keep them narrow and remove them before handoff unless the user explicitly
 asks to retain them.
 
+All reasoning tasks must consider memory semantics, memory pollution, and mathematical precision
+requirements. They must explicitly state them in their blueprints for subsequent phases.
+
 ## Runtime invariants
 
 ### Control plane ownership
 
-[`ControlPlaneLattice`](euhedral-core/src/main/java/io/euhedral_execution/core/control_plane/ControlPlaneLattice.java)
+[
+`ControlPlaneLattice`](euhedral-core/src/main/java/io/euhedral_execution/core/control_plane/ControlPlaneLattice.java)
 is a JVM-wide singleton. It owns the resource monitor, global socket distributor, and shard
 lifecycle. Tests and applications that create it must close it.
 
 Each
-[`ControlPlaneShard`](euhedral-core/src/main/java/io/euhedral_execution/core/control_plane/ControlPlaneShard.java)
+[
+`ControlPlaneShard`](euhedral-core/src/main/java/io/euhedral_execution/core/control_plane/ControlPlaneShard.java)
 owns one socket and clones one worker pipeline per active physical core. The default
-[`BaseCloneableObject`](euhedral-core/src/main/java/io/euhedral_execution/core/impl/BaseCloneableObject.java)
+[
+`BaseCloneableObject`](euhedral-core/src/main/java/io/euhedral_execution/core/impl/BaseCloneableObject.java)
 connects a `ControlPlaneFragment` to an `AbstractExecutor`.
 
 Do not change a routing table while work is flowing. The established sequence is:
@@ -149,9 +155,11 @@ rebuild global topology themselves.
 
 ### Pull graph
 
-[`LatticeEdge`](euhedral-core/src/main/java/io/euhedral_execution/core/flow_control/LatticeEdge.java)
+[
+`LatticeEdge`](euhedral-core/src/main/java/io/euhedral_execution/core/flow_control/LatticeEdge.java)
 links sources and receivers. Frames move downstream; `request` and `pull` travel upstream.
-[`LatticeVertex`](euhedral-core/src/main/java/io/euhedral_execution/core/flow_control/LatticeVertex.java)
+[
+`LatticeVertex`](euhedral-core/src/main/java/io/euhedral_execution/core/flow_control/LatticeVertex.java)
 adds fan-out and optional remote caches.
 
 Worker-local `UpstreamQueue` objects serialize access to each upstream handle. Preserve that
@@ -164,7 +172,8 @@ single-owner handoff when adding a new `LatticeSource`. A source must:
 - avoid generating work from `pull`, which may only consume work already available.
 
 Use the existing ingest implementations and
-[`LatticeEdgeTest`](euhedral-core/src/test/java/io/euhedral_execution/core/flow_control/LatticeEdgeTest.java)
+[
+`LatticeEdgeTest`](euhedral-core/src/test/java/io/euhedral_execution/core/flow_control/LatticeEdgeTest.java)
 as templates.
 
 ### Routing and frame identity
@@ -187,7 +196,8 @@ and recycled paths when changing frame creation.
 ### Frame lifecycle
 
 The normal terminal path in
-[`AbstractExecutor`](euhedral-core/src/main/java/io/euhedral_execution/core/generics/AbstractExecutor.java)
+[
+`AbstractExecutor`](euhedral-core/src/main/java/io/euhedral_execution/core/generics/AbstractExecutor.java)
 is:
 
 ```text
@@ -228,18 +238,19 @@ Memory access modes are part of the design, not style:
 Do not replace a VarHandle access with a stronger or weaker operation without explaining the
 happens-before argument. Stronger is not automatically harmless in a hot loop.
 
-Use normal JDK atomics for lifecycle and low-frequency coordination. Use the padded atomic types from
+Use normal JDK atomics for lifecycle and low-frequency coordination. Use the padded atomic types
+from
 `euhedral-data-structures` for hot shared counters where false sharing matters. The repository uses
 both intentionally.
 
 Choose a queue from the actual producer and consumer topology:
 
 | Producers | Consumers | Queue family |
-| ---: | ---: | --- |
-| 1 | 1 | SPSC |
-| 1 | many | SPMC |
-| many | 1 | MPSC |
-| many | many | MPMC |
+|----------:|----------:|--------------|
+|         1 |         1 | SPSC         |
+|         1 |      many | SPMC         |
+|      many |         1 | MPSC         |
+|      many |      many | MPMC         |
 
 Use bounded variants when backpressure is part of the contract, chunked variants when growth is
 allowed, and partitioned variants when contention should be spread across lanes. Prefer batch
@@ -277,7 +288,8 @@ CPU that will own them.
 
 The generated gRPC classes
 `GrpcTransportServiceGrpc.java` and `GrpcTransportServiceMd.java` come from
-[`GrpcTransportService.proto`](euhedral-spring-core/src/main/java/io/euhedral_execution/spring/core/transport/grpc/protos/GrpcTransportService.proto).
+[
+`GrpcTransportService.proto`](euhedral-spring-core/src/main/java/io/euhedral_execution/spring/core/transport/grpc/protos/GrpcTransportService.proto).
 Edit the proto, run the Spring module's generation phase, and review the generated diff. Do not hand
 edit generated Java.
 
