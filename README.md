@@ -1,271 +1,182 @@
 # Euhedral Execution
 
-Welcome to **Euhedral**, an execution system designed to adapt to both the workloads it receives and
-the hardware it runs on.
+Euhedral is a pull-driven Java execution engine built around the machine it runs on.
 
-At it's core is **euhedral-core**, a pull-based execution engine that treats CPUs like a
-distributed system.
+Long-lived workers are pinned to CPUs and request work when they have capacity. Frames are routed
+through a graph shaped around socket, cache, and core boundaries, so the execution model follows the
+hardware instead of hiding it behind one central queue.
 
-Instead of assigning work from the top down, Euhedral lets execution emerge from demand. Persistent
-workers continuously pull, route, and redistribute work through a structure shaped around cache and
-NUMA boundaries.
+[Core quick start](./QUICK_START.md) |
+[Reactor quick start](./REACTOR_QUICK_START.md) |
+[Architecture](./docs/ARCHITECTURE.md) |
+[Benchmarks](./benchmarks/README.md)
 
-### What it does automatically
+## Why Euhedral?
 
-- Detects CPU, core, cache, and NUMA topology
-- Pins execution loops to specific CPUs
-- Routes work using deterministic partitioning
-- Rebalances as topology or load changes
-- Preserves ordering for related work streams
-- Tunes dispatch rate and concurrency based on observed runtime pressure
+- **Pull-driven execution.** Workers create demand; a central dispatcher does not push tasks at
+  threads.
+- **Topology-aware routing.** Euhedral discovers the available CPUs, sockets, NUMA nodes, and cache
+  groups, then pins persistent workers to that topology.
+- **Ordering when it matters.** Related frames can share a stable routing lane. Independent frames
+  can spread across the machine.
+- **Adaptive per-core control.** Each worker adjusts how it pulls, drains, and executes work from
+  current queue and system pressure.
+- **Low-allocation pipelines.** Frames and queues are designed for batching, reuse, and predictable
+  ownership.
 
----
+This is not a general-purpose replacement for every executor. It is aimed at sustained,
+fine-grained workloads where routing, locality, and coordination overhead are part of the problem.
 
-## [Quick Start](./QUICK_START.md)
+## The execution model
 
----
-
-## Benchmarks
-
-Euhedral was built by measuring execution behavior and creating adaptations to adjust to different
-workloads. The benchmarks below focus on end-to-end latency, throughput, and irregular workloads,
-with comparisons against existing schedulers where appropriate.
-
-### Amazon EC2 (server workloads)
-
-- [Graviton5 (32 vCPU)](./benchmarks/AMAZON_GRAVITON_5_BENCHMARKS.md)
-- [Comparison Benchmarks at High Scale](./benchmarks/HIGH_SCALE_BENCHMARKS.md)
-  - Intel Xeon 6 (96 Core)
-  - AMD EPYC 9R45 (96 Core)
-  - Graviton5 (192 Core)
-
----
-
-### Intel i9-14900K
-
-Setup:
-
-- Intel i9-14900K
-- 64GB DDR5
-- Ubuntu 24.04.4 LTS
-- Performance power mode
-- Stock BIOS settings
-- No overclocking
-
-All work items were pre-allocated to measure scheduler and routing overhead.
-
-JMH was used for all benchmarking.
-
-#### VM Flags
-
-All tests were ran with these same flags.
-
-```
--XX:+UseThreadPriorities
---enable-native-access=ALL-UNNAMED
---sun-misc-unsafe-memory-access=allow
---add-exports java.base/jdk.internal.platform=ALL-UNNAMED
---add-exports java.base/jdk.internal.vm.annotation=ALL-UNNAMED
+```text
+Frames:  Source -> Lattice -> Socket shard -> Core fragment -> Executor -> Frame.execute()
+Demand:  Source <- Lattice <- Socket shard <- Core fragment
 ```
 
-Euhedral only requires
+`ControlPlaneLattice` owns the process-wide topology and lifecycle. It creates a shard for each
+active socket and a worker pipeline for each active physical core. Those workers pull frames from
+upstream sources and execute them without a global task queue.
 
-```
--XX:+UseThreadPriorities
-```
-
-### Throughput (op/ns)
-
-32M no-op frames per invocation using all cores. This benchmarks the overhead of Euhedral without a
-workload.
-
-Throughput: 0.159 ops/ns = 159,000,000 ops/s
-
-Latency:
-
-| p0 | p50 | p90 | p95 |  p99 | p100 |
-|---:|----:|----:|----:|-----:|-----:|
-|  6 |   6 |   6 |   6 | 6.74 |    7 |
-
-### End to End Latency (ns/op)
-
-Each invocation executes 100K no-op frames and measures routing, scheduling, and dispatch overhead.
-
-|        | Cores | p0 | p50 | p90 | p95 | p99 | p100 |
-|--------|------:|---:|----:|----:|----:|----:|-----:|
-| P-Core |     2 | 16 |  21 |  23 |  23 |  25 |   34 |
-| E-Core |     4 | 18 |  28 |  33 |  35 |  37 |   46 |
-
-### Mandelbrot
-
-A deliberately chaotic workload designed to stress memory locality and adaptive behavior. Each pixel
-can take anywhere from a few nanoseconds to microseconds.
-
-Renders an 8K [Mandelbrot set](https://en.wikipedia.org/wiki/Mandelbrot_set) using:
-
-- 2X SSAA
-- 5,000 max iterations
-- randomized pixel ordering
-
-Workload:
-
-- 33,177,600 **frames**
-- 132,710,400 **total operations**
-
-| Average Time  | Alloc MB/s | B/op   |
-|---------------|------------|--------|
-| 337.378 ns/op | 67.099     | 24.051 |
-
----
-
-## Execution Flow
-
-```
-    SYSTEM VIEW                               HARDWARE ANALGOY
---------------------------------------------------------------------------------
-
-ControlPlaneLattice            ->        VCCSA / System Agent (global uncore)
-↓
-ControlPlaneShard              ->        Socket / NUMA Partition
-↓
-ControlPlaneCache              ->        L2/L3 Cache + Cache Controller
-↓
-WorkRequester                  ->        L1 Data Cache + Prefetcher + Cache Refill Logic
-↓
-ControlPlaneFragment           ->        Core Power & Demand Generation (the active execution loop)
-↓
-AbstractExecutor               ->        Execution Pipeline
-↓
-AbstractFrame.execute()        ->        Compute Kernel
-```
-
-There is no central scheduler assigning tasks to threads. Work is pulled through the system based on
-demand.
-
----
-
-## Core Model
-
-### Frames are the unit of execution
-
-Work is represented as lightweight reusable `AbstractFrame` instances:
+The basic unit of work is an `AbstractFrame`:
 
 ```java
 public abstract void execute();
 ```
 
-Frames are intentionally small and designed to move easily through the system. They are cheap to
-schedule, cache-friendly, and composable. When chained together, they naturally form pipelines
-without needing a central coordinator.
+Every frame has two hashes:
 
-### CPUs are treated as independent execution units
+- `idHash` is immutable and identifies the frame's ordered lane.
+- `routingHash` selects an active socket and core.
 
-Each CPU runs its own pinned execution loop. Work is routed deterministically so that ordering is
-preserved when needed and evenly distributed when it is not.
+They are equal by default, so frames from the same source with the same hash stay ordered on one
+lane. Call `randomizeHash(seed)` before ingestion when work can run independently and should be
+distributed. Ordering is scoped to a source and routing lane, not the entire JVM.
 
-### Scheduling is adaptive
+## A small Core pipeline
 
-The system adjusts execution behavior based on observed conditions:
+The built-in ingest sinks handle frame creation and recycling for common functions and consumers:
 
-- queue pressure
-- CPU load
-- memory pressure
-- backpressure
-- drain rates
-- topology changes
+```java
+ControlPlaneLattice lattice = ControlPlaneLattice.getOrCreate();
+CountDownLatch finished = new CountDownLatch(4);
 
-This happens continuously at runtime rather than through static configuration.
+FunctionIngestSink<Integer, Integer> squares = new FunctionIngestSink<>(
+        value -> value * value,
+        result -> {
+            System.out.println(result);
+            finished.countDown();
+        },
+        false); // false preserves input order; true distributes the work
 
-### Queues are topology-aware
+try {
+    lattice.addUpstream(squares);
+    squares.push(List.of(2, 4, 8, 16));
+    squares.completeGracefully();
 
-Queues are sized and partitioned around cache boundaries. Higher-level queues align with shared
-cache regions, while execution buffers are designed to stay close to L1.
+    if (!finished.await(10, TimeUnit.SECONDS)) {
+        throw new IllegalStateException("Timed out waiting for Euhedral");
+    }
+} finally {
+    squares.complete();
+    lattice.close();
+}
+```
 
-The goal is to keep contention low and keep data moving through the cache hierarchy efficiently.
+See the [Core quick start](./QUICK_START.md) for imports, setup, metrics, direct frame ingestion,
+custom frames, and recycling.
 
----
+## Reactor integration
 
-## Modules
+`euhedral-reactor-core` implements Reactor's `Scheduler` API and provides Euhedral-backed mapping
+operators:
 
-### euhedral-core
+```java
+EuhedralScheduler scheduler = EuhedralScheduler.getOrCreate(lattice);
+EuhedralOperator operator = new EuhedralOperator(scheduler);
 
-The execution engine. It manages how work moves through the system and how execution loops stay
-saturated without central scheduling.
+List<String> results = Flux.range(1, 100)
+        .transform(operator.flatMapSequential(value -> "item-" + value))
+        .collectList()
+        .block();
+```
 
-#### Major Components
+Use the scheduler with `publishOn` or `subscribeOn` when standard Reactor scheduling is the right
+fit. Use `EuhedralOperator` when you want Euhedral's frame routing and recycling with `flatMap`,
+`flatMapSequential`, or `concatMap`.
 
-| Component                                                     | Description                                    |
-|:--------------------------------------------------------------|:-----------------------------------------------|
-| <span style="white-space: nowrap">ControlPlaneLattice</span>  | Global orchestration and topology management   |
-| <span style="white-space: nowrap">ControlPlaneShard</span>    | Per-socket orchestration and worker management |
-| <span style="white-space: nowrap">ControlPlaneCache</span>    | Cache-local work distribution queue            |
-| <span style="white-space: nowrap">ControlPlaneFragment</span> | Adaptive pinned execution loop                 |
-| <span style="white-space: nowrap">AbstractExecutors</span>    | Thin execution wrapper                         |
-| <span style="white-space: nowrap">AbstractFrame</span>        | Base unit of work                              |
+The [Reactor quick start](./REACTOR_QUICK_START.md) covers setup, operator semantics, cancellation,
+and shutdown.
 
-### euhedral-data-structures
+## Choose an entry point
 
-Lock-free queues and padded atomics.
+| If you are building... | Start with... |
+| --- | --- |
+| A direct frame or function pipeline | [`euhedral-core`](./QUICK_START.md) |
+| A Reactor application | [`euhedral-reactor-core`](./REACTOR_QUICK_START.md) |
+| A Spring Boot service, Kafka consumer, or gRPC transport | [`euhedral-spring-core`](./euhedral-spring-core) |
+| A custom queue or atomic-heavy component | [`euhedral-data-structures`](./euhedral-data-structures) |
 
-Includes SPSC, SPMC, MPSC, and MPMC queues in partitioned, bounded, and unbounded variants.
+## Repository modules
 
-Optimized specifically for batch operations on the consumer side in high contention scenarios.
+| Module | Purpose |
+| --- | --- |
+| `euhedral-hashing` | xxHash64-based hashing and mixing used by routing |
+| `euhedral-data-structures` | SPSC, SPMC, MPSC, and MPMC queues plus padded atomics |
+| `euhedral-hardware-utils` | Topology discovery, resource monitoring, affinity, and JNI |
+| `euhedral-core` | Frames, ingest, routing, the control plane, and execution |
+| `euhedral-reactor-core` | Reactor scheduler and mapping operators |
+| `euhedral-spring-core` | Spring Boot, Kafka, and gRPC integration |
+| `euhedral-training` | Offline tuning of the fixed runtime scheduling policy |
+| `benchmarks` | JMH workloads and comparison harnesses |
 
-### euhedral-reactor-core
+The lower-level hashing, data structure, and hardware modules do not depend on the Core runtime.
+Reactor and Spring are integration layers above Core. Training and benchmarks remain outside the
+runtime path.
 
-Reactor integration layer.
+## Build from source
 
-Provides:
+Euhedral uses Java 21 for the full repository and [mise](https://mise.jdx.dev/) to pin its build
+tools:
 
-- publishOn() / subscribeOn() support
-- flatMap / flatMapSequential / concatMap compatibility
-- Euhedral-backed execution pipeline
+```bash
+mise install
+mise exec -- java -version
+mise exec -- mvn -B verify
+```
 
-### euhedral-hardware-utils
+Run applications with:
 
-Hardware topology and monitoring utilities.
+```text
+-XX:+UseThreadPriorities
+```
 
-Includes:
+The hardware module cross-builds native libraries during Maven initialization. A full build also
+needs Zig, target JNI headers, and a macOS SDK; the setup in
+[`.github/workflows/build.yaml`](./.github/workflows/build.yaml) is the reference configuration.
+Focused Core and Reactor builds are shown in their quick starts.
 
-| Feature                                                       | Description                      |
-|:--------------------------------------------------------------|:---------------------------------|
-| <span style="white-space: nowrap">PinnedThreadExecutor</span> | CPU-pinned executor.             |
-| <span style="white-space: nowrap">ResourceMonitor</span>      | Hardware telemetry aggregation   |
-| <span style="white-space: nowrap">SystemInfo</span>           | Full topology discovery          |
-| <span style="white-space: nowrap">ThreadTools</span>          | CPU affinity and timer utilities |
+Linux and Windows are supported on x64 and arm64. macOS support is in progress.
 
-Supports:
+## Architecture and benchmarks
 
-- Linux
-- Windows
-- macOS (WIP)
-- x64
-- arm64
+The [architecture guide](./docs/ARCHITECTURE.md) contains the topology, data-flow, routing, frame
+lifecycle, Reactor, and Spring diagrams. The
+[closed-loop architecture](./docs/ML_CLOSED_LOOP_ARCHITECTURE.md) explains how scheduling policies
+are trained offline and evaluated as fixed weights in the runtime.
 
-### euhedral-hashing
+Benchmark results and reproduction notes live with the benchmark suite:
 
-Fast deterministic hashing (xxHash64-based) used for routing, ordering, and load distribution.
+- [Benchmark guide](./benchmarks/README.md)
+- [Amazon Graviton5 results](./benchmarks/AMAZON_GRAVITON_5_BENCHMARKS.md)
+- [High-scale comparison results](./benchmarks/HIGH_SCALE_BENCHMARKS.md)
 
----
+Performance numbers are hardware- and workload-specific. Treat the published results as measured
+reference points and use the included JMH workloads to evaluate your own target system.
 
-## Architecture
+## Project status
 
-Architecture documentation:
+The Core runtime is stable and benchmarked, while the public APIs and integrations are still
+evolving. Current work is focused on real-world workload coverage and integration examples.
 
-- [Architecture.md](./docs/ARCHITECTURE.md)
-
-Architecture diagrams coming soon.
-
----
-
-## Project Status
-
-The core runtime is stable and benchmarked, but evolving.
-
-Current focus areas:
-
-- SMT features
-- Real-world workload testing
-- More integration examples
-- Dependency cleanup
-- Documentation
+Euhedral Execution is licensed under the [Apache License 2.0](./LICENSE).
