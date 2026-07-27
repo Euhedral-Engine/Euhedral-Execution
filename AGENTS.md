@@ -107,6 +107,21 @@ properties. CUDA is not needed for ordinary compilation or CPU tests. The packag
 expects the exact PyTorch and CUDA versions described in
 [`euhedral-training/GPU_SETUP_UBUNTU.md`](euhedral-training/GPU_SETUP_UBUNTU.md).
 
+## Active training optimizer implementation plan
+
+When a task implements robust cross-source training, optimizer/merger correlation, or end-of-run
+training artifact packaging, read and follow
+[`docs/ROBUST_TRAINING_OPTIMIZER_PLAN.md`](docs/ROBUST_TRAINING_OPTIMIZER_PLAN.md) before changing
+code. Its data identity, anchor calibration, hierarchical aggregation, robust comparator, coverage,
+packaging, temporary current-workspace data import, test, and prompt-order requirements are the
+working contract. Do not carry historical trained models or old checkpoints into the new format.
+Keep the current-workspace importer isolated and removable as specified by the plan.
+
+Implement that plan on a new `agent/...` branch. The user has authorized commits and pushes to the
+branch. Temporary GitHub Actions workflows are permitted only when needed to test an otherwise
+unavailable environment; keep them narrow and remove them before handoff unless the user explicitly
+asks to retain them.
+
 ## Runtime invariants
 
 ### Control plane ownership
