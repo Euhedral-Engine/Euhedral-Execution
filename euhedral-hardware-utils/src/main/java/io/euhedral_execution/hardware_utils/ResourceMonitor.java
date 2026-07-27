@@ -1,5 +1,6 @@
 package io.euhedral_execution.hardware_utils;
 
+import io.euhedral_execution.hardware_utils.common.SystemSnapshotProvider;
 import io.euhedral_execution.hardware_utils.common.SystemUtilization.HardwareUtilization;
 import io.euhedral_execution.hardware_utils.common.SystemUtilization.SystemSnapshot;
 import io.euhedral_execution.hardware_utils.common.UnmodifiableBitSet;
@@ -30,6 +31,7 @@ public class ResourceMonitor implements AutoCloseable {
 
     private final Logger logger = LoggerFactory.getLogger(Constants.getLoggerName(this.getClass()));
     private final TopologyMapper topology;
+    private final SystemSnapshotProvider snapshotProvider;
 
     private final long sampleRateNs;
     private final double smoothingFactor;
@@ -53,7 +55,13 @@ public class ResourceMonitor implements AutoCloseable {
     }
 
     public ResourceMonitor(TopologyMapper mapper, Duration sampleRate) {
+        this(mapper, sampleRate, SystemInfo.SNAPSHOTTER);
+    }
+
+    ResourceMonitor(TopologyMapper mapper, Duration sampleRate,
+            SystemSnapshotProvider snapshotProvider) {
         this.topology = mapper;
+        this.snapshotProvider = snapshotProvider;
         this.sampleRateNs = sampleRate.toNanos();
 
         double dt = Math.max(1, sampleRate.toMillis()) / 1000d;
@@ -71,7 +79,7 @@ public class ResourceMonitor implements AutoCloseable {
     }
 
     public void start() {
-        if (SystemInfo.SNAPSHOTTER == null) {
+        if (this.snapshotProvider == null) {
             throw new RuntimeException(
                     "Resource monitoring not available on this platform. Monitor will not start.");
         }
@@ -93,7 +101,7 @@ public class ResourceMonitor implements AutoCloseable {
 
     private void init() {
         this.readings.lastWallClockNs = System.nanoTime();
-        SystemSnapshot snapshot = SystemInfo.getSystemSnapshot();
+        SystemSnapshot snapshot = this.snapshotProvider.getSnapshot();
 
         this.lastCpuUsageNs = snapshot.cpuUsage();
 
@@ -174,7 +182,7 @@ public class ResourceMonitor implements AutoCloseable {
 
     private void poll() {
         try {
-            SystemSnapshot snapshot = SystemInfo.getSystemSnapshot();
+            SystemSnapshot snapshot = this.snapshotProvider.getSnapshot();
 
             updateCpu(snapshot);
             updateMemory(snapshot);
@@ -297,7 +305,8 @@ public class ResourceMonitor implements AutoCloseable {
             long deltaBytes = (this.lastDiskIOBytes == 0) ? 0 : snapshot.diskIOBytes() - this.lastDiskIOBytes;
             double rawBps = deltaBytes / deltaTimeSec;
 
-            this.readings.diskIOBytesPerSecond = ewma(this.readings.diskIOBytesPerSecond, rawBps);
+            this.readings.diskIOBytesPerSecond = ewmaUnbounded(
+                    this.readings.diskIOBytesPerSecond, rawBps);
 
             double currentPeak = Math.max(rawBps, this.readings.peakDiskIoBPS * 0.9999);
             double rawIoRatio =
@@ -317,6 +326,16 @@ public class ResourceMonitor implements AutoCloseable {
         }
 
         return (this.smoothingFactor * clampedNew) + (1 - this.smoothingFactor) * oldVal;
+    }
+
+    private double ewmaUnbounded(double oldVal, double newVal) {
+        double finiteNew = Double.isFinite(newVal) ? Math.max(0.0, newVal) : 0.0;
+
+        if (oldVal <= 0) {
+            return finiteNew;
+        }
+
+        return (this.smoothingFactor * finiteNew) + (1 - this.smoothingFactor) * oldVal;
     }
 
     @FunctionalInterface

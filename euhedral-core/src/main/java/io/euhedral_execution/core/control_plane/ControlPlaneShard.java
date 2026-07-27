@@ -343,15 +343,21 @@ public class ControlPlaneShard {
     /// Shuts down all cores under the shard's control.
     public void shutDownShard(AtomicInteger shutDownCounter) {
         if (!this.started.compareAndSet(true, false)) {
+            shutDownCounter.decrementAndGet();
             return;
         }
 
         this.logger.info("Shutting down...");
 
-        int[] active = this.activeCoreIds.getAcquire();
         CloneableObject[] clones = this.clones.getAcquire();
 
-        AtomicInteger drainCounter = new AtomicInteger(active.length);
+        int cloneCount = 0;
+        for (CloneableObject clone : clones) {
+            if (clone != null) {
+                cloneCount++;
+            }
+        }
+        AtomicInteger drainCounter = new AtomicInteger(cloneCount);
         for (int i = 0; i < clones.length; i++) {
             if (clones[i] == null) {
                 continue;
@@ -362,9 +368,17 @@ public class ControlPlaneShard {
 
             shutdownCore(i, clone, drainCounter, shutDownCounter);
         }
+        if (cloneCount == 0) {
+            shutDownCounter.decrementAndGet();
+        }
         this.activeCoreIds.setRelease(new int[0]);
         this.clones.setRelease(new CloneableObject[0]);
         Arrays.fill(this.coreHandles, null);
+
+        LatticeVertex distributor = this.coreDistributor.getAndSet(null);
+        if (distributor != null) {
+            distributor.close();
+        }
         this.shardExecutor.shutdown();
         this.shardExecutor = null;
         this.primed.set(false);
@@ -395,8 +409,7 @@ public class ControlPlaneShard {
                 } catch (Exception e) {
                     this.logger.error("CRITICAL: Worker on core {} failed to close.", coreId, e);
                 } finally {
-                    drainSignal.decrementAndGet();
-                    if (drainSignal.get() == 0) {
+                    if (drainSignal.decrementAndGet() == 0) {
                         shutDownCounter.decrementAndGet();
                     }
                 }

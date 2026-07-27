@@ -66,14 +66,12 @@ All tests were ran with these same flags.
 --sun-misc-unsafe-memory-access=allow
 --add-exports java.base/jdk.internal.platform=ALL-UNNAMED
 --add-exports java.base/jdk.internal.vm.annotation=ALL-UNNAMED
---add-opens java.base/java.util=ALL-UNNAMED
 ```
 
 Euhedral only requires
 
 ```
 -XX:+UseThreadPriorities
---add-opens java.base/java.util=ALL-UNNAMED
 ```
 
 ### Throughput (op/ns)

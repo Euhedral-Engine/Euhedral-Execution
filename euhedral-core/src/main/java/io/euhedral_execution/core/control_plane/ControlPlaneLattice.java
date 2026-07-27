@@ -323,13 +323,14 @@ public final class ControlPlaneLattice implements LatticeTerminal {
                         new LatticeEdge(controller.getDrainFlag()));
             }
         }
-        AtomicInteger shutDown = new AtomicInteger(0);
+        BitSet retiredShards = new BitSet(this.shardHandles.length);
         for (int i = 0; i < this.shardHandles.length; i++) {
             if (!newShards.get(i) && this.shardHandles[i] != null) {
                 HANDLES.setRelease(this.shardHandles, i, null);
-                shutDown.incrementAndGet();
+                retiredShards.set(i);
             }
         }
+        AtomicInteger shutDown = new AtomicInteger(retiredShards.cardinality());
 
         remapIngestController();
 
@@ -367,8 +368,8 @@ public final class ControlPlaneLattice implements LatticeTerminal {
 
         this.activeShardIds.lazySet(nextSockets);
 
-        this.ingestController.get().setDrain(false);
         if (!this.primed.getOpaque()) {
+            controller.setDrain(false);
             this.primed.lazySet(true);
             this.rebalancing.lazySet(false);
             return;
@@ -378,18 +379,25 @@ public final class ControlPlaneLattice implements LatticeTerminal {
         if (shutDown.getPlain() > 0) {
             this.logger.info("Shutting down {} old shards.", shutDown.getPlain());
             CompletableFuture.runAsync(() -> {
-                for (int i = 0; i < this.shards.length; i++) {
-                    if (!newShards.get(i)) {
+                for (int i = retiredShards.nextSetBit(0); i >= 0;
+                        i = retiredShards.nextSetBit(i + 1)) {
+                    ControlPlaneShard shard = this.shards[i];
+                    if (shard == null) {
                         shutDown.decrementAndGet();
-                        this.shards[i].shutDownShard(shutDown);
+                    } else {
+                        shard.shutDownShard(shutDown);
                     }
                 }
-                while (shutDown.get() != 0) {
+                while (shutDown.get() != 0 && !this.closed.getAcquire()) {
                     LockSupport.parkNanos(1_000);
+                }
+                if (!this.closed.getAcquire()) {
+                    controller.setDrain(false);
                 }
                 this.rebalancing.lazySet(false);
             }, this.controlPlaneExecutor);
         } else {
+            controller.setDrain(false);
             this.rebalancing.lazySet(false);
         }
     }

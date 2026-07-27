@@ -1,119 +1,130 @@
 package io.euhedral_execution.core.control_plane;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
-import io.euhedral_execution.core.config.CacheConfig;
 import io.euhedral_execution.core.config.CloneConfig;
-import io.euhedral_execution.core.config.FragmentActionPicker;
 import io.euhedral_execution.core.config.FragmentConfig;
+import io.euhedral_execution.hardware_utils.PinnedThreadExecutor;
+import io.euhedral_execution.hardware_utils.SystemInfo;
+import io.euhedral_execution.hardware_utils.SystemInfo.CpuInfo;
+import java.util.ArrayList;
+import java.util.BitSet;
+import java.util.List;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 class ControlPlaneFragmentTest {
 
-    private CloneConfig cloneConfig() {
-        CloneConfig clone = mock(CloneConfig.class);
+    private final List<ControlPlaneFragment> fragments = new ArrayList<>();
 
-        when(clone.shardName()).thenReturn("test");
-        when(clone.coreId()).thenReturn(0);
-        when(clone.getCpuSet()).thenReturn(new int[]{0});
-
-        return clone;
-    }
-
-    private CacheConfig cConfig() {
-        return new CacheConfig(cloneConfig(), 0.7, 4, 1, 4, null, null);
-    }
-
-    private FragmentConfig sConfig() {
-        return new FragmentConfig(
-                cloneConfig(),
-                cConfig(),
-                FragmentActionPicker.ofDefaults(),
-                4096,
-                false,
-                null,
-                null
-        );
+    @AfterEach
+    void closeFragments() {
+        for (ControlPlaneFragment fragment : this.fragments) {
+            fragment.close();
+        }
+        PinnedThreadExecutor.closeAll();
     }
 
     @Test
-    void shouldConstructWithoutCloneConfig() {
-        ControlPlaneFragment manager = new ControlPlaneFragment(sConfig());
+    void baseConfigurationCannotStartWithoutCpuOwnership() {
+        ControlPlaneFragment fragment = create(FragmentConfig.ofDefaults());
 
-        assertNotNull(manager);
-        assertFalse(manager.isStarted());
+        assertFalse(fragment.isStarted());
+        assertEquals(-1, fragment.core);
+        assertNull(fragment.output());
+        assertThrows(IllegalStateException.class, fragment::start);
     }
 
     @Test
-    void shouldCreateRequiredInfrastructure() {
-        ControlPlaneFragment manager = new ControlPlaneFragment(sConfig());
+    void clonedConfigurationCreatesWorkerInfrastructure() {
+        ControlPlaneFragment fragment = create(workerConfig());
 
-        assertNotNull(manager.output());
-
-        assertNotNull(manager.getLocalCache());
-        assertNotNull(manager.outputStream);
+        assertNotNull(fragment.output());
+        assertNotNull(fragment.getLocalCache());
+        assertNotNull(fragment.outputStream);
     }
 
     @Test
-    void shouldEnableDrainMode() {
-        ControlPlaneFragment manager = new ControlPlaneFragment(sConfig());
+    void drainModeIsPropagatedToTheWorkerCache() {
+        ControlPlaneFragment fragment = create(workerConfig());
 
-        manager.setDrainMode(true);
+        fragment.setDrainMode(true);
 
-        assertTrue(manager.drainMode);
+        assertTrue(fragment.drainMode);
     }
 
     @Test
-    void shouldFirstTouchWithoutFailure() {
-        ControlPlaneFragment manager = new ControlPlaneFragment(sConfig());
+    void firstTouchInitializesWorkerOwnedStructures() {
+        ControlPlaneFragment fragment = create(workerConfig());
 
-        assertDoesNotThrow(manager::firstTouch);
+        assertDoesNotThrow(fragment::firstTouch);
     }
 
     @Test
-    void shouldCloneManager() {
-        ControlPlaneFragment manager = new ControlPlaneFragment(sConfig());
-
+    void cloneCreatesAnIndependentWorkerWithTheRequestedOwnership() {
+        ControlPlaneFragment fragment = create(workerConfig());
         CloneConfig cloneConfig = cloneConfig();
 
-        ControlPlaneFragment cloned = manager.clone(cloneConfig);
+        ControlPlaneFragment cloned = fragment.clone(cloneConfig);
+        this.fragments.add(cloned);
 
-        assertNotNull(cloned);
-        assertNotSame(manager, cloned);
+        assertNotSame(fragment, cloned);
+        assertSame(cloneConfig, cloned.getConfig().cloneConfig());
     }
 
     @Test
-    void shouldPropagateCloneConfig() {
+    void fragmentConfigurationPropagatesCloneOwnership() {
         CloneConfig cloneConfig = cloneConfig();
 
-        FragmentConfig config = sConfig();
-
-        FragmentConfig cloned =
-                config.clone(cloneConfig);
+        FragmentConfig cloned = FragmentConfig.ofDefaults().clone(cloneConfig);
 
         assertSame(cloneConfig, cloned.cloneConfig());
+        assertSame(cloneConfig, cloned.cacheConfig().cloneConfig());
     }
 
     @Test
-    void shouldBeInitiallyDrained() {
-        ControlPlaneFragment manager = new ControlPlaneFragment(sConfig());
+    void stoppedWorkerIsDrainedAndCanResetSynchronously() {
+        ControlPlaneFragment fragment = create(workerConfig());
 
-        assertTrue(manager.isDrained());
+        assertTrue(fragment.isDrained());
+        assertEquals(0, fragment.resetForNextTrial(System.nanoTime()));
     }
 
     @Test
-    void shouldCloseSafely() {
-        ControlPlaneFragment manager = new ControlPlaneFragment(sConfig());
+    void closeIsIdempotentBeforeStart() {
+        ControlPlaneFragment fragment = create(workerConfig());
 
-        assertDoesNotThrow(manager::close);
+        fragment.close();
+
+        assertDoesNotThrow(fragment::close);
     }
 
+    private ControlPlaneFragment create(FragmentConfig config) {
+        ControlPlaneFragment fragment = new ControlPlaneFragment(config);
+        this.fragments.add(fragment);
+        return fragment;
+    }
 
+    private static FragmentConfig workerConfig() {
+        return FragmentConfig.ofDefaults().clone(cloneConfig());
+    }
+
+    private static CloneConfig cloneConfig() {
+        int cpu = SystemInfo.getCpuSet().nextSetBit(0);
+        if (cpu < 0) {
+            throw new IllegalStateException("No CPU is available for the unit test");
+        }
+        CpuInfo info = SystemInfo.getCpuInfo(cpu);
+        BitSet cpus = new BitSet();
+        cpus.set(cpu);
+        return new CloneConfig("test", info.core(), cpus);
+    }
 }

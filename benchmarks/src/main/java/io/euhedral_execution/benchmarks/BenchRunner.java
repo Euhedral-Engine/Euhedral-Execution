@@ -32,8 +32,7 @@ public class BenchRunner {
             List.of("-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED",
                     "--sun-misc-unsafe-memory-access=allow", "--add-exports",
                     "java.base/jdk.internal.platform=ALL-UNNAMED", "--add-exports",
-                    "java.base/jdk.internal.vm.annotation=ALL-UNNAMED", "--add-opens",
-                    "java.base/java.util=ALL-UNNAMED",
+                    "java.base/jdk.internal.vm.annotation=ALL-UNNAMED",
                     "-Dorg.slf4j.simpleLogger.defaultLogLevel=error");
 
     private static Set<String> getBenchmarks(String[] args) {

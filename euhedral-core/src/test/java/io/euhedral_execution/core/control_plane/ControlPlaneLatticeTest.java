@@ -2,16 +2,19 @@ package io.euhedral_execution.core.control_plane;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.euhedral_execution.core.config.LatticeConfig;
+import io.euhedral_execution.core.flow_control.LatticeEdge;
 import io.euhedral_execution.hardware_utils.ResourceMonitor;
 import io.euhedral_execution.hardware_utils.SystemInfo;
 import io.euhedral_execution.hardware_utils.SystemInfo.CpuInfo;
@@ -26,9 +29,12 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.List;
-import java.util.concurrent.locks.LockSupport;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedConstruction;
@@ -36,6 +42,11 @@ import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 
 class ControlPlaneLatticeTest {
+
+    @BeforeAll
+    static void initializeSharedRoutingStateFromTheRealTopology() {
+        new LatticeEdge(new AtomicBoolean());
+    }
 
     private static EffectiveSystemTopology getSystemTopology() {
         BitSet effectiveSockets = new BitSet(2);
@@ -50,7 +61,7 @@ class ControlPlaneLatticeTest {
         for (int i = 0; i < 2; i++) {
             BitSet cores = new BitSet(4);
             BitSet cpus = new BitSet(8);
-            cores.set(i * 2, i * 2 + 1);
+            cores.set(i * 2, i * 2 + 2);
             cpus.set(i * 4, i * 4 + 4);
             topologies.add(new EffectiveSocketTopology(0, i, cores, cpus, null));
         }
@@ -59,59 +70,89 @@ class ControlPlaneLatticeTest {
                 effectiveCores, effectiveCpus,
                 topologies, 0);
     }
-    private ControlPlaneShard mockShard;
+    private ControlPlaneShard baseShard;
+    private ControlPlaneShard[] mockShards;
+    private AtomicBoolean[] shardStarted;
     private MockedStatic<SystemInfo> mockSysInfo;
     private MockedConstruction<TopologyMapper> mockTopologyMapper;
     private MockedConstruction<ResourceMonitor> mockResourceMonitor;
     private HardwareUtilization mockUtilization;
     private EffectiveSystemTopology effectiveSystemTopology;
+    private ControlPlaneLattice controlPlane;
+    private AtomicBoolean deferShutdown;
+    private AtomicReference<AtomicInteger> shutdownCounter;
     private int version = 0;
 
     @BeforeEach
     void setup() {
+        effectiveSystemTopology = getSystemTopology();
+        mockUtilization = mock(HardwareUtilization.class);
+        baseShard = mock(ControlPlaneShard.class);
+        mockShards = new ControlPlaneShard[]{mock(ControlPlaneShard.class),
+                mock(ControlPlaneShard.class)};
+        shardStarted = new AtomicBoolean[]{new AtomicBoolean(), new AtomicBoolean()};
+        deferShutdown = new AtomicBoolean();
+        shutdownCounter = new AtomicReference<>();
+
         mockSysInfo = Mockito.mockStatic(SystemInfo.class);
         BitSet cpus = new BitSet();
         cpus.set(0, 8);
         mockSysInfo.when(SystemInfo::getCpuSet).thenReturn(UnmodifiableBitSet.wrap(cpus));
-        mockTopologyMapper = Mockito.mockConstructionWithAnswer(TopologyMapper.class,
-                invocation -> {
-                    Class<?> clazz = invocation.getMethod().getReturnType();
-                    if (clazz.equals(int.class)) {
-                        return version;
-                    }
-                    if (clazz.equals(void.class)) {
-                        return null;
-                    }
-                    if (clazz.equals(EffectiveSystemTopology.class)) {
-                        return effectiveSystemTopology;
-                    }
-                    return mock(EffectiveSystemTopology.class);
-                });
-        mockResourceMonitor = Mockito.mockConstructionWithAnswer(ResourceMonitor.class,
-                invocation -> {
-                    Class<?> clazz = invocation.getMethod().getReturnType();
-                    if (clazz.equals(Void.TYPE)) {
-                        return null;
-                    }
-                    if (clazz.equals(HardwareUtilization.class)) {
-                        return mockUtilization;
-                    }
-                    return mock(ResourceMonitor.class);
-                });
-        ControlPlaneLattice plane = ControlPlaneLattice.getOrCreate();
-        if (plane != null) {
-            plane.close();
+        mockSysInfo.when(SystemInfo::getMaxSocketId).thenReturn(1);
+        for (int socket = 0; socket < 2; socket++) {
+            int socketId = socket;
+            mockSysInfo.when(() -> SystemInfo.getSocketInfo(socketId))
+                    .thenReturn(mock(SocketInfo.class));
         }
-        mockShard = mock(ControlPlaneShard.class);
-        mockUtilization = mock(HardwareUtilization.class);
-        effectiveSystemTopology = getSystemTopology();
+        for (int cpu = 0; cpu < 8; cpu++) {
+            int cpuId = cpu;
+            mockSysInfo.when(() -> SystemInfo.getCpuInfo(cpuId))
+                    .thenReturn(new CpuInfo(cpuId, cpuId / 2, cpuId / 4));
+        }
+
+        mockTopologyMapper = Mockito.mockConstruction(TopologyMapper.class, (mock, context) -> {
+            when(mock.getGlobalVersion()).thenAnswer(invocation -> version);
+            when(mock.getEffectiveTopology()).thenAnswer(invocation -> effectiveSystemTopology);
+        });
+        mockResourceMonitor = Mockito.mockConstruction(ResourceMonitor.class, (mock, context) ->
+                when(mock.getUtilization()).thenReturn(mockUtilization));
+
+        for (int socket = 0; socket < mockShards.length; socket++) {
+            int socketId = socket;
+            when(baseShard.clone(eq(socketId), any(), any())).thenReturn(mockShards[socketId]);
+            when(mockShards[socketId].isStarted())
+                    .thenAnswer(invocation -> shardStarted[socketId].get());
+            doAnswer(invocation -> {
+                shardStarted[socketId].set(true);
+                return null;
+            }).when(mockShards[socketId]).start(any(), any(), any());
+        }
+
+        doAnswer(invocation -> {
+            shardStarted[0].set(false);
+            AtomicInteger counter = invocation.getArgument(0);
+            shutdownCounter.set(counter);
+            if (!deferShutdown.get()) {
+                counter.decrementAndGet();
+            }
+            return null;
+        }).when(mockShards[0]).shutDownShard(any());
     }
 
     @AfterEach
     void tearDown() {
-        mockSysInfo.close();
-        mockTopologyMapper.close();
-        mockResourceMonitor.close();
+        if (controlPlane != null) {
+            controlPlane.close();
+        }
+        if (mockResourceMonitor != null) {
+            mockResourceMonitor.close();
+        }
+        if (mockTopologyMapper != null) {
+            mockTopologyMapper.close();
+        }
+        if (mockSysInfo != null) {
+            mockSysInfo.close();
+        }
         version = 0;
     }
 
@@ -120,29 +161,26 @@ class ControlPlaneLatticeTest {
         SocketSnapshot[] snapshots = new SocketSnapshot[effectiveSystemTopology.effectiveSockets()
                 .cardinality()];
 
-        ControlPlaneLattice controlPlane = createControlPlaneWithMocks(snapshots);
+        controlPlane = createControlPlaneWithMocks(snapshots);
         controlPlane.start();
 
-        verify(mockShard, times(1)).clone(eq(0), any(), any());
-        verify(mockShard, times(1)).clone(eq(1), any(), any());
-        verify(mockShard, times(4)).isStarted();
-        verify(mockShard, times(1)).start(eq(snapshots[0]),
+        verify(baseShard).clone(eq(0), any(), any());
+        verify(baseShard).clone(eq(1), any(), any());
+        verify(mockShards[0]).start(eq(snapshots[0]),
                 eq(effectiveSystemTopology.socketTopologies().get(0)),
                 any());
-        verify(mockShard, times(1)).start(eq(snapshots[1]),
+        verify(mockShards[1]).start(eq(snapshots[1]),
                 eq(effectiveSystemTopology.socketTopologies().get(1)),
                 any());
 
         ResourceMonitor mockedRM = mockResourceMonitor.constructed().get(0);
-        verify(mockedRM, times(1)).addListener(any());
-        verify(mockedRM, times(1)).getUtilization();
-        verify(mockUtilization, times(1)).getSocketSnapshot(eq(0), any(), anyDouble());
-        verify(mockUtilization, times(1)).getSocketSnapshot(eq(1), any(), anyDouble());
+        verify(mockedRM).addListener(any());
+        verify(mockedRM).getUtilization();
 
         assertEquals(effectiveSystemTopology.globalVersion(), controlPlane.currentGlobalVersion);
         assertTrue(controlPlane.primed.get());
         Awaitility.await().atMost(Duration.ofSeconds(2)).untilFalse(controlPlane.rebalancing);
-        assertArrayEquals(new int[]{0, 1}, ControlPlaneLattice.getOrCreate().activeShardIds.get());
+        assertArrayEquals(new int[]{0, 1}, controlPlane.activeShardIds.get());
         assertEquals(2, controlPlane.shardHandles.length);
         assertEquals(2, controlPlane.shards.length);
         assertArrayEquals(new int[]{0, 0, 0, 0, 1, 1, 1, 1}, controlPlane.weightedShardMap.get());
@@ -153,7 +191,7 @@ class ControlPlaneLatticeTest {
         SocketSnapshot[] snapshots = new SocketSnapshot[effectiveSystemTopology.effectiveSockets()
                 .cardinality()];
 
-        ControlPlaneLattice controlPlane = createControlPlaneWithMocks(snapshots);
+        controlPlane = createControlPlaneWithMocks(snapshots);
         controlPlane.start();
 
         effectiveSystemTopology.effectiveSockets().clear(0);
@@ -166,35 +204,36 @@ class ControlPlaneLatticeTest {
                 effectiveSystemTopology.effectiveCores(),
                 effectiveSystemTopology.effectiveCpus(), effectiveSystemTopology.socketTopologies(),
                 version);
+        deferShutdown.set(true);
 
-        when(mockShard.isStarted()).thenReturn(true);
+        controlPlane.update(mockUtilization);
+        Awaitility.await().atMost(Duration.ofSeconds(2))
+                .until(() -> shutdownCounter.get() != null);
+        try {
+            assertTrue(controlPlane.rebalancing.get());
+            assertTrue(controlPlane.ingestController.get().getDrainFlag().get());
+        } finally {
+            shutdownCounter.get().decrementAndGet();
+        }
+        Awaitility.await().atMost(Duration.ofSeconds(2)).untilFalse(controlPlane.rebalancing);
+        assertFalse(controlPlane.ingestController.get().getDrainFlag().get());
 
-        ControlPlaneLattice.getOrCreate().update(mockUtilization);
-
-        LockSupport.parkNanos(100_000_000);
-
-        verify(mockShard, times(1)).clone(eq(0), any(), any());
-        verify(mockShard, times(1)).clone(eq(1), any(), any());
-        verify(mockShard, times(1)).start(eq(snapshots[0]),
+        verify(baseShard).clone(eq(0), any(), any());
+        verify(baseShard).clone(eq(1), any(), any());
+        verify(mockShards[0]).start(eq(snapshots[0]),
                 eq(effectiveSystemTopology.socketTopologies().get(0)),
                 any());
-        verify(mockShard, times(1)).start(eq(snapshots[1]),
+        verify(mockShards[1]).start(eq(snapshots[1]),
                 eq(effectiveSystemTopology.socketTopologies().get(1)),
                 any());
 
-        verify(mockShard, times(0)).update(snapshots[0],
-                effectiveSystemTopology.socketTopologies().get(0));
-        verify(mockShard, times(0)).close();
-        verify(mockShard, times(1)).shutDownShard(any());
-        verify(mockShard, times(1)).update(snapshots[1],
+        verify(mockShards[0], never()).update(any(), any());
+        verify(mockShards[0]).shutDownShard(any());
+        verify(mockShards[1]).update(snapshots[1],
                 effectiveSystemTopology.socketTopologies().get(1));
-
-        verify(mockUtilization, times(1)).getSocketSnapshot(eq(0), any(), anyDouble());
-        verify(mockUtilization, times(2)).getSocketSnapshot(eq(1), any(), anyDouble());
 
         assertEquals(effectiveSystemTopology.globalVersion(), controlPlane.currentGlobalVersion);
         assertTrue(controlPlane.primed.get());
-        Awaitility.await().atMost(Duration.ofSeconds(2)).untilFalse(controlPlane.rebalancing);
         assertArrayEquals(new int[]{1}, controlPlane.activeShardIds.get());
         assertArrayEquals(new int[]{1, 1, 1, 1}, controlPlane.weightedShardMap.get());
     }
@@ -207,22 +246,10 @@ class ControlPlaneLatticeTest {
             mockSysInfo.when(() -> SystemInfo.getSocketInfo(id)).thenReturn(socketInfo);
             when(mockUtilization.getSocketSnapshot(eq(i), any(), anyDouble())).thenReturn(
                     snapshots[i]);
-            when(mockShard.clone(eq(i), any(), any())).thenReturn(mockShard);
         }
 
-        for (int i = 0; i < 8; i += 2) {
-            CpuInfo fake1 = new CpuInfo(i, i * 2, i >> 2);
-            CpuInfo fake2 = new CpuInfo(i + 1, i * 2, i >> 2);
-
-            int id = i;
-            mockSysInfo.when(() -> SystemInfo.getCpuInfo(id)).thenReturn(fake1);
-            mockSysInfo.when(() -> SystemInfo.getCpuInfo(id + 1)).thenReturn(fake2);
-        }
-        mockSysInfo.when(SystemInfo::getMaxSocketId).thenReturn(1);
-
-        when(mockShard.isStarted()).thenReturn(false);
-
-        LatticeConfig config = new LatticeConfig("TestControlPlane", new BitSet(), Duration.ZERO, mockShard);
+        LatticeConfig config =
+                new LatticeConfig("TestControlPlane", new BitSet(), Duration.ZERO, baseShard);
         return ControlPlaneLattice.getOrCreate(config);
     }
 

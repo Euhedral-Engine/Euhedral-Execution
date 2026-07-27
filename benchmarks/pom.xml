@@ -99,9 +99,6 @@
               <classpathPrefix>lib/</classpathPrefix>
               <mainClass>io.euhedral_execution.benchmarks.BenchRunner</mainClass>
             </manifest>
-            <manifestEntries>
-              <Add-Opens>java.base/java.util</Add-Opens>
-            </manifestEntries>
           </archive>
         </configuration>
       </plugin>

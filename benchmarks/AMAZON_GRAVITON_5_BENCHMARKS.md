@@ -16,7 +16,6 @@
 --sun-misc-unsafe-memory-access=allow
 --add-exports java.base/jdk.internal.platform=ALL-UNNAMED
 --add-exports java.base/jdk.internal.vm.annotation=ALL-UNNAMED
---add-opens java.base/java.util=ALL-UNNAMED
 ```
 
 Work items were pre-allocated for all benchmarks to only measure scheduling overhead.

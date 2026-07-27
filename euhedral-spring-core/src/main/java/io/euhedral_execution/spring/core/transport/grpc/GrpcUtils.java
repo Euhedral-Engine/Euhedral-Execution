@@ -10,7 +10,6 @@ import io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServ
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.stream.Collectors;
 import org.apache.commons.lang3.SerializationUtils;
 import org.jspecify.annotations.Nullable;
 import org.springframework.messaging.Message;
@@ -49,16 +48,17 @@ public class GrpcUtils {
 
     /// Converts a gRPC Struct back into a Java Map.
     public static Map<String, Object> fromGrpcStruct(Struct struct) {
-        return struct.getFieldsMap().entrySet().stream().collect(
-                Collectors.toMap(Map.Entry::getKey, entry -> fromValue(entry.getValue()),
-                        (k, v) -> k, HashMap::new));
+        Map<String, Object> values = new HashMap<>(struct.getFieldsCount());
+        struct.getFieldsMap()
+                .forEach((key, value) -> values.put(key, fromValue(value)));
+        return values;
     }
 
     /// Recursively converts a gRPC Value back into a Java Object. If it cannot be converted, the
     /// original value is returned.
-    public static Object fromValue(Value value) {
+    public static @Nullable Object fromValue(Value value) {
         return switch (value.getKindCase()) {
-            case NULL_VALUE -> value.getNullValue();
+            case NULL_VALUE -> null;
             case NUMBER_VALUE -> {
                 double num = value.getNumberValue();
                 if(num == Math.rint(num)) {
@@ -101,7 +101,8 @@ public class GrpcUtils {
 
     public static Message<byte[]> toSpringMessage(GrpcMessage message) {
         if (!message.hasSpringMessage()) {
-            throw new RuntimeException("Provided message does not contain a spring message");
+            throw new IllegalArgumentException(
+                    "Provided message does not contain a Spring message");
         }
         GrpcSpringMessage springMessage = message.getSpringMessage();
 

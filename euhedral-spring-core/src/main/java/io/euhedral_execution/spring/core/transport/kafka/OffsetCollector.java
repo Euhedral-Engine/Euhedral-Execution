@@ -11,7 +11,7 @@ import java.lang.invoke.VarHandle;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
@@ -26,13 +26,13 @@ public final class OffsetCollector {
     private final Logger logger = LoggerFactory.getLogger(Constants.getLoggerName(OffsetCollector.class));
     private final long ingestPassword;
 
-    private final AtomicReference<KafkaConsumer<?, ?>> kafkaConsumer;
+    private final AtomicReference<? extends Consumer<?, ?>> kafkaConsumer;
     private final Long2ObjectArrayMap<PartitionCollector> collectors =
             new Long2ObjectArrayMap<>(128);
 
     private CommitPolicy commitPolicy;
 
-    public OffsetCollector(AtomicReference<KafkaConsumer<?, ?>> kafkaConsumer,
+    public OffsetCollector(AtomicReference<? extends Consumer<?, ?>> kafkaConsumer,
             CommitPolicy commitPolicy, long ingestPassword) {
         this.ingestPassword = ingestPassword;
         this.commitPolicy = commitPolicy;
@@ -45,10 +45,9 @@ public final class OffsetCollector {
 
     public void registerFrame(TopicPartition partition, KafkaFrame frame, long ingestPassword) {
         if (this.ingestPassword == ingestPassword) {
-            long key = partition.hashCode();
-
-            PartitionCollector collector = collectors.get(key);
-            collectors.computeIfAbsent(key, k -> new PartitionCollector(partition));
+            long key = KafkaIngestSource.getPartitionHash(partition);
+            PartitionCollector collector =
+                    collectors.computeIfAbsent(key, k -> new PartitionCollector(partition));
             collector.register(frame);
         }
     }
@@ -75,12 +74,17 @@ public final class OffsetCollector {
     }
 
     private void handleCommitFailure(Map<TopicPartition, OffsetAndMetadata> offsets, Exception ex) {
-        if (ex != null) {
-            logger.error("Failed to commit offsets. Retrying", ex);
-
+        if (ex == null) {
+            return;
         }
+
+        logger.error("Failed to commit offsets. Retrying", ex);
         kafkaConsumer.get().commitAsync(offsets,
-                (ignored, e) -> logger.error("Failed to commit offsets after retrying.", e));
+                (ignored, retryError) -> {
+                    if (retryError != null) {
+                        logger.error("Failed to commit offsets after retrying.", retryError);
+                    }
+                });
     }
 
     public boolean isEmpty() {

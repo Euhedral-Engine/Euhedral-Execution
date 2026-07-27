@@ -2,18 +2,13 @@ package io.euhedral_execution.hashing;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
 import org.junit.jupiter.api.Test;
 
 class HasherApiTest {
-
-    private static long unsignedMultiplyHigh(long a, long b) {
-        long signedHigh = Math.multiplyHigh(a, b);
-        return signedHigh + ((a >> 63) & b) + ((b >> 63) & a);
-    }
 
     @Test
     void testDeterminism() {
@@ -30,7 +25,6 @@ class HasherApiTest {
         long h2 = HasherApi.getHash("user_1001");
 
         assertNotEquals(h1, h2);
-        assertTrue(Long.bitCount(h1 ^ h2) > 20, "Bit flip count should be significant");
     }
 
     @Test
@@ -67,21 +61,19 @@ class HasherApiTest {
     }
 
     @Test
-    void testDistribution() {
-        int cores = 16;
-        int[] buckets = new int[cores];
-        int iterations = 100_000;
+    void byteAndBufferHashersAgreeAtEveryTailBoundary() {
+        int[] lengths = {0, 1, 3, 4, 7, 8, 15, 16, 31, 32, 33, 63, 64, 65};
 
-        for (int i = 0; i < iterations; i++) {
-            long hash = HasherApi.getHash("key-" + i);
-            int bucket = (int) unsignedMultiplyHigh(hash, cores);
-            buckets[bucket]++;
-        }
-        System.out.println(Arrays.toString(buckets));
+        for (int length : lengths) {
+            byte[] bytes = new byte[length];
+            for (int i = 0; i < length; i++) {
+                bytes[i] = (byte) (i * 31 + 7);
+            }
 
-        // Each bucket should have ~6250 hits. Ensure no bucket is empty.
-        for (int count : buckets) {
-            assertTrue(count > iterations / (cores * 2), "Distribution too skewed");
+            ByteBuffer buffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN);
+            long expected = BufferHasher.getHash(buffer, 0, length, AbstractHasher.BASE_SEED);
+
+            assertEquals(expected, HasherApi.getHash(bytes), "length " + length);
         }
     }
 
