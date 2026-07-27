@@ -22,6 +22,7 @@ import io.euhedral_execution.hardware_utils.SystemInfo.CpuInfo;
 import io.euhedral_execution.hardware_utils.ThreadTools;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -154,7 +155,7 @@ class LatticeEdgeTest {
         drain.set(true);
 
         assertDoesNotThrow(() -> edge.pull(frame -> {
-        }, 10));
+        }, frame -> false, 10));
     }
 
     @Test
@@ -197,9 +198,11 @@ class LatticeEdgeTest {
         Consumer<AbstractFrame> consumer = frame -> {
         };
 
-        edge.pull(consumer, 123);
+        Function<AbstractFrame, Boolean> stopCondition = frame -> false;
 
-        verify(parent).pull(consumer, 123);
+        edge.pull(consumer, stopCondition, 123);
+
+        verify(parent).pull(consumer, stopCondition, 123);
     }
 
     @Test

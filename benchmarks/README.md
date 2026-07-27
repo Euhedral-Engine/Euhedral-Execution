@@ -1,12 +1,31 @@
-# How to Use
+# Benchmarks
 
-### Benchmarks
+The benchmark runtime targets Java 21. Package it from the repository root:
+
+```bash
+mise exec -- mvn -B -pl benchmarks -am package -Dmaven.test.skip=true
+```
+
+This creates a thin distribution at `benchmarks/target`:
+
+- `euhedral-benchmark.jar` contains Euhedral's benchmark classes.
+- `lib/` contains the runtime dependencies.
+- `bin/euhedral-benchmarks` launches JMH with the complete class path required by forked JVMs.
+
+Run the launcher rather than relying on a shaded JAR:
+
+```bash
+benchmarks/target/bin/euhedral-benchmarks core-latency core-hc-throughput
+```
+
+## Benchmark selection
 
 | Benchmark            | Description                                                                                     |
 |----------------------|-------------------------------------------------------------------------------------------------|
 | all                  | Runs all benchmarks                                                                             |
 | core-latency         | Latency benchmarks for euhedral-core                                                            |
-| core-throughput      | Throughput benchmarks for euhedral-core                                                         |
+| core-hc-throughput   | High-contention throughput benchmarks for euhedral-core                                         |
+| core-lc-throughput   | Light-contention throughput benchmarks for euhedral-core                                        |
 | batched-mandelbrot   | Execution efficiency stress test for euhedral-core and Reactor                                  |
 | mandelbrot           | Mandelbrot stress test for euhedral-core and Reactor                                            |
 | core-high-scale      | Throughput benchmarks for euhedral-core meant to be ran on extremely large instances. 92+ cores |
@@ -15,7 +34,7 @@
 | queues-mpmc          | Runs the MPMC queue benchmarks comparing with JCTools                                           |
 
 
-### Flags
+## Flags
 
 | Flag                   | Description                                                                             |
 |------------------------|-----------------------------------------------------------------------------------------|
@@ -25,7 +44,8 @@
 | -DoutputFile=\<String> | Name of the output image for the Mandelbrot test. Does not create the image if not set. |
 | -DoutputDir=\<String>  | Output directory for the Mandelbrot image.                                              |
 
-### Example
+## Example
+
 ```
-java -Dgc=true -jar euhedral-benchmark.jar core-latency core-throughput
+JAVA_TOOL_OPTIONS=-Dgc=true benchmarks/target/bin/euhedral-benchmarks core-latency core-hc-throughput
 ```

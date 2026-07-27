@@ -4,7 +4,8 @@ import java.util.concurrent.locks.LockSupport;
 import java.util.function.BooleanSupplier;
 
 public class SpinWait {
-    public static void await(BooleanSupplier condition) {
+    /// Waits while the predicate is true
+    public static void awaitWhile(BooleanSupplier condition) {
         int cycles = 0;
         while(condition.getAsBoolean()) {
             if(cycles++ < 128) {

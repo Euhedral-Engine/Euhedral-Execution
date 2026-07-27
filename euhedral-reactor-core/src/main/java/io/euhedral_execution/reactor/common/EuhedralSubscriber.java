@@ -7,6 +7,7 @@ import io.euhedral_execution.core.utils.CommonVarHandles;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 
@@ -25,9 +26,13 @@ import org.reactivestreams.Subscription;
 /// ```
 @SuppressWarnings("unused")
 public final class EuhedralSubscriber implements Subscriber<AbstractFrame>, LatticeSource {
-    private static final VarHandle COMPLETE = CommonVarHandles.complete(MethodHandles.lookup(), EuhedralSubscriber.class);
-    private static final VarHandle DOWNSTREAM = CommonVarHandles.downstream(MethodHandles.lookup(), EuhedralSubscriber.class);
-    private static final VarHandle SUBSCRIBER = CommonVarHandles.makeHandle(MethodHandles.lookup(), EuhedralSubscriber.class, "subscription", Subscription.class);
+
+    private static final VarHandle COMPLETE = CommonVarHandles.complete(MethodHandles.lookup(),
+            EuhedralSubscriber.class);
+    private static final VarHandle DOWNSTREAM = CommonVarHandles.downstream(MethodHandles.lookup(),
+            EuhedralSubscriber.class);
+    private static final VarHandle SUBSCRIBER = CommonVarHandles.makeHandle(MethodHandles.lookup(),
+            EuhedralSubscriber.class, "subscription", Subscription.class);
 
     private boolean complete;
     private Subscription subscription;
@@ -39,7 +44,7 @@ public final class EuhedralSubscriber implements Subscriber<AbstractFrame>, Latt
 
     @Override
     public void onSubscribe(Subscription s) {
-        if(!SUBSCRIBER.compareAndSet(this, null, s)) {
+        if (!SUBSCRIBER.compareAndSet(this, null, s)) {
             s.cancel();
         }
     }
@@ -47,7 +52,7 @@ public final class EuhedralSubscriber implements Subscriber<AbstractFrame>, Latt
     @Override
     public void onNext(AbstractFrame frame) {
         LatticeReceiver terminal = (LatticeReceiver) DOWNSTREAM.getOpaque(this);
-        if(terminal != null) {
+        if (terminal != null) {
             terminal.push(frame);
         }
     }
@@ -55,7 +60,7 @@ public final class EuhedralSubscriber implements Subscriber<AbstractFrame>, Latt
     @Override
     public void onError(Throwable t) {
         LatticeReceiver terminal = (LatticeReceiver) DOWNSTREAM.getOpaque(this);
-        if(terminal != null) {
+        if (terminal != null) {
             terminal.onError(t);
         }
     }
@@ -72,35 +77,36 @@ public final class EuhedralSubscriber implements Subscriber<AbstractFrame>, Latt
 
     @Override
     public void addDownstream(LatticeReceiver downstream) {
-        if(!DOWNSTREAM.compareAndSet(this, null, downstream)) {
+        if (!DOWNSTREAM.compareAndSet(this, null, downstream)) {
             downstream.onError(new IllegalStateException("Already has a downstream."));
         }
         downstream.addUpstream(this);
     }
 
     @Override
-    public long pull(Consumer<AbstractFrame> consumer, long demand) {
+    public long pull(Consumer<AbstractFrame> consumer,
+            Function<AbstractFrame, Boolean> stopCondition, long demand) {
         return 0;
     }
 
     @Override
     public void request(long demand) {
-        if((boolean)  COMPLETE.getOpaque(this)) {
+        if ((boolean) COMPLETE.getOpaque(this)) {
             return;
         }
 
         Subscription sub = (Subscription) SUBSCRIBER.getOpaque(this);
-        if(sub != null) {
+        if (sub != null) {
             sub.request(demand);
         }
     }
 
     @Override
     public void complete() {
-        if(COMPLETE.compareAndSet(this, false, true)) {
+        if (COMPLETE.compareAndSet(this, false, true)) {
             SUBSCRIBER.set(this, null);
             LatticeReceiver terminal = (LatticeReceiver) DOWNSTREAM.getOpaque(this);
-            if(terminal != null) {
+            if (terminal != null) {
                 terminal.onComplete();
             }
         }

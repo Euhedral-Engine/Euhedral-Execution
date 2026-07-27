@@ -1,13 +1,14 @@
 module euhedral.core {
     requires static lombok;
 
-    requires euhedral.data.structures;
+    requires euhedral.data_structures;
     requires euhedral.hardware_utils;
     requires euhedral.hashing;
 
     requires micrometer.core;
     requires org.jspecify;
     requires org.slf4j;
+    requires t.digest;
 
     exports io.euhedral_execution.core.config;
     exports io.euhedral_execution.core.control_plane;

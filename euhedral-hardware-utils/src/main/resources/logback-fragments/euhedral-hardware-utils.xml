@@ -1,5 +1,3 @@
-<configuration>
-
+<included>
   <logger name="euhedral.hardware_utils" level="${AllEuhedralLogs:-${EuhedralHardwareUtilsLog:-INFO}}"/>
-
-</configuration>
+</included>

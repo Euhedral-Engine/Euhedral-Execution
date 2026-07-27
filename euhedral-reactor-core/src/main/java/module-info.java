@@ -2,7 +2,7 @@ module euhedral.reactor.core {
     requires static lombok;
 
     requires euhedral.core;
-    requires euhedral.data.structures;
+    requires euhedral.data_structures;
     requires euhedral.hashing;
 
     requires micrometer.core;

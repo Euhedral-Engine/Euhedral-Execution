@@ -7,15 +7,20 @@ import io.euhedral_execution.core.utils.CommonVarHandles;
 import io.euhedral_execution.data_structures.atomics.PaddedAtomicLong;
 import java.lang.invoke.VarHandle;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 public abstract class AbstractIngestSink {
 
-    /// Used by the [ControlPlaneLattice][io.euhedral_execution.core.control_plane.ControlPlaneLattice] to connect to this sink.
+    /// Used by the
+    /// [ControlPlaneLattice][io.euhedral_execution.core.control_plane.ControlPlaneLattice] to
+    /// connect to this sink.
     public abstract LatticeSource getDelegate();
 
     /// Marks the sink as complete and disconnects it from the
     /// [ControlPlaneLattice][io.euhedral_execution.core.control_plane.ControlPlaneLattice].
     public abstract void complete();
+
+    public abstract boolean isComplete();
 
     protected abstract static class Delegate implements LatticeSource {
 
@@ -36,7 +41,6 @@ public abstract class AbstractIngestSink {
             if (!DOWNSTREAM.compareAndSet(this, null, terminal)) {
                 terminal.onError(new IllegalStateException("Already has a downstream"));
             }
-            terminal.addUpstream(this);
         }
 
         protected LatticeReceiver getDownstream() {
@@ -48,15 +52,17 @@ public abstract class AbstractIngestSink {
         }
 
         @Override
-        public final long pull(Consumer<AbstractFrame> consumer, long demand) {
+        public final long pull(Consumer<AbstractFrame> consumer,
+                Function<AbstractFrame, Boolean> stopCondition, long demand) {
             var receiver = getDownstream();
             if (isComplete() || receiver == null || demand <= 0) {
                 return 0;
             }
-            return hookOnPull(consumer, demand);
+            return hookOnPull(consumer, stopCondition, demand);
         }
 
-        public abstract long hookOnPull(Consumer<AbstractFrame> consumer, long demand);
+        public abstract long hookOnPull(Consumer<AbstractFrame> consumer,
+                Function<AbstractFrame, Boolean> stopCondition, long demand);
 
         @Override
         public final void request(long demand) {
@@ -71,7 +77,7 @@ public abstract class AbstractIngestSink {
 
         @Override
         public void complete() {
-            if(COMPLETE.compareAndSet(this, false, true)) {
+            if (COMPLETE.compareAndSet(this, false, true)) {
                 var t = (LatticeReceiver) DOWNSTREAM.getAndSet(this, null);
                 this.demand.lazySet(0);
                 if (t != null) {

@@ -133,6 +133,7 @@ public final class ControlPlaneLattice implements LatticeTerminal {
     final AtomicBoolean ready = new AtomicBoolean(false);
     final AtomicBoolean primed = new AtomicBoolean(false);
     final AtomicBoolean rebalancing = new AtomicBoolean(false);
+    final AtomicBoolean resetting = new AtomicBoolean(false);
 
     final ControlPlaneShard[] shards;
     final LatticeEdge[] shardHandles;
@@ -181,14 +182,19 @@ public final class ControlPlaneLattice implements LatticeTerminal {
                 LockSupport.parkNanos(5_000L);
             }
             this.resourceMonitor.start();
-            this.ready.setRelease(true);
+            this.ready.set(true);
             this.logger.info("Startup complete!");
         }
     }
 
     private boolean ready() {
         int count = this.ingestController.getOpaque().getThreadCount();
-        return count >= getActiveWorkers();
+        for(ControlPlaneShard shard : this.shards) {
+            if(shard != null && !shard.isStarted()) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /// Takes an [AbstractIngestSink] and adds it as a global input source.
@@ -256,6 +262,9 @@ public final class ControlPlaneLattice implements LatticeTerminal {
     /// Hands out the shard-specific hardware utilization reports or initiates a rebalance on
     /// topology change.
     void update(HardwareUtilization utilization) {
+        if (this.resetting.getAcquire()) {
+            return;
+        }
         int nextVersion = this.topology.getGlobalVersion();
 
         if (this.currentGlobalVersion != nextVersion) {
@@ -316,7 +325,7 @@ public final class ControlPlaneLattice implements LatticeTerminal {
         }
         AtomicInteger shutDown = new AtomicInteger(0);
         for (int i = 0; i < this.shardHandles.length; i++) {
-            if (!newShards.get(i)) {
+            if (!newShards.get(i) && this.shardHandles[i] != null) {
                 HANDLES.setRelease(this.shardHandles, i, null);
                 shutDown.incrementAndGet();
             }
@@ -380,6 +389,8 @@ public final class ControlPlaneLattice implements LatticeTerminal {
                 }
                 this.rebalancing.lazySet(false);
             }, this.controlPlaneExecutor);
+        } else {
+            this.rebalancing.lazySet(false);
         }
     }
 
@@ -426,6 +437,54 @@ public final class ControlPlaneLattice implements LatticeTerminal {
                         .cardinality();
 
         return ((double) socketEffectiveCpus / Math.max(1, totalEffectiveCpus)) * systemQuotaPool;
+    }
+
+    /**
+     * Freezes ingest and clears all socket-distributor and fragment-local caches before another
+     * benchmark policy is activated. Ingest sources should be paused before calling this method.
+     */
+    public CacheReset resetForNextTrial(Duration timeout) {
+        Objects.requireNonNull(timeout);
+        if (timeout.isZero() || timeout.isNegative()) {
+            throw new IllegalArgumentException("Reset timeout must be positive");
+        }
+        if (this.closed.getAcquire()) {
+            throw new IllegalStateException("Cannot reset a closed ControlPlaneLattice");
+        }
+        if (!this.started.getAcquire()) {
+            return new CacheReset(0, 0);
+        }
+        if (!this.resetting.compareAndSet(false, true)) {
+            throw new IllegalStateException("A lattice reset is already in progress");
+        }
+
+        long deadline = System.nanoTime() + timeout.toNanos();
+        LatticeVertex controller = this.ingestController.getAcquire();
+        try {
+            while (this.rebalancing.getAcquire() && System.nanoTime() < deadline) {
+                LockSupport.parkNanos(5_000L);
+            }
+            if (this.rebalancing.getAcquire()) {
+                throw new IllegalStateException(
+                        "Timed out waiting for global rebalance before trial reset");
+            }
+
+            if (controller != null) {
+                controller.setDrain(true);
+            }
+            long cleared = controller == null ? 0 : controller.clearCachedFrames();
+            for (ControlPlaneShard shard : this.shards) {
+                if (shard != null) {
+                    cleared += shard.resetForNextTrial(deadline);
+                }
+            }
+            return new CacheReset(cleared, getActiveWorkers());
+        } finally {
+            if (controller != null) {
+                controller.setDrain(false);
+            }
+            this.resetting.setRelease(false);
+        }
     }
 
     public int getActiveWorkers() {
@@ -479,6 +538,9 @@ public final class ControlPlaneLattice implements LatticeTerminal {
             // Executor pool errors can be ignored on shutdown.
         }
         this.logger.info("Closed.");
+    }
+
+    public record CacheReset(long clearedFrames, int activeWorkers) {
     }
 
     /// Whether all queues are empty and all in-progress work is completed for all CPUs managed by

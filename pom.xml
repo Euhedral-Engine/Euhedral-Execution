@@ -4,13 +4,6 @@
   xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <parent>
-    <groupId>org.springframework.boot</groupId>
-    <artifactId>spring-boot-starter-parent</artifactId>
-    <version>4.0.1</version>
-    <relativePath/>
-  </parent>
-
   <url>https://github.com/Euhedral-Engine/Euhedral-Execution</url>
   <scm>
     <url>https://github.com/Euhedral-Engine/Euhedral-Execution</url>
@@ -27,16 +20,28 @@
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-    <maven.compiler.source>21</maven.compiler.source>
     <maven.compiler.release>21</maven.compiler.release>
     <maven.compiler.proc>full</maven.compiler.proc>
+    <maven.compiler.parameters>true</maven.compiler.parameters>
 
     <argLine/>
 
-    <lombok.version>1.18.42</lombok.version>
-    <reactor-test.version>3.7.12</reactor-test.version>
-    <spring-boot.version>4.1.0</spring-boot.version>
+    <spring-boot.version>4.0.7</spring-boot.version>
     <spring-cloud.version>2025.1.2</spring-cloud.version>
+    <spring-grpc.version>1.0.3</spring-grpc.version>
+    <djl.version>0.36.0</djl.version>
+    <guava.version>33.6.0-jre</guava.version>
+    <hdrhistogram.version>2.2.2</hdrhistogram.version>
+
+    <!-- Versions not managed by the imported BOMs. -->
+    <commons-math4.version>4.0-beta1</commons-math4.version>
+    <fastutil.version>8.5.19</fastutil.version>
+    <grpc.version>1.77.1</grpc.version>
+    <jctools.version>4.0.6</jctools.version>
+    <jmh.version>1.37</jmh.version>
+    <lombok.version>1.18.46</lombok.version>
+    <protobuf.version>4.33.4</protobuf.version>
+    <t-digest.version>3.3</t-digest.version>
 
     <skip.central.publish>true</skip.central.publish>
     <zig.sign>false</zig.sign>
@@ -50,21 +55,8 @@
     <module>euhedral-hashing</module>
     <module>euhedral-reactor-core</module>
     <module>euhedral-spring-core</module>
+    <module>euhedral-training</module>
   </modules>
-
-  <repositories>
-    <repository>
-      <id>central</id>
-      <name>Maven Central</name>
-      <url>https://repo.maven.apache.org/maven2</url>
-      <releases>
-        <enabled>true</enabled>
-      </releases>
-      <snapshots>
-        <enabled>false</enabled>
-      </snapshots>
-    </repository>
-  </repositories>
 
   <dependencyManagement>
     <dependencies>
@@ -85,198 +77,169 @@
       </dependency>
 
       <dependency>
-        <groupId>io.grpc</groupId>
-        <artifactId>grpc-bom</artifactId>
-        <version>1.76.2</version>
-        <type>pom</type>
-        <scope>import</scope>
-      </dependency>
-
-      <dependency>
         <groupId>org.springframework.grpc</groupId>
         <artifactId>spring-grpc-dependencies</artifactId>
-        <version>1.0.2</version>
+        <version>${spring-grpc.version}</version>
         <type>pom</type>
         <scope>import</scope>
       </dependency>
 
       <dependency>
         <groupId>com.google.guava</groupId>
-        <artifactId>guava</artifactId>
-        <version>33.3.0-jre</version>
+        <artifactId>guava-bom</artifactId>
+        <version>${guava.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
       </dependency>
 
       <dependency>
-        <groupId>org.apache.commons</groupId>
-        <artifactId>commons-lang3</artifactId>
-        <version>3.18.0</version>
+        <groupId>ai.djl</groupId>
+        <artifactId>bom</artifactId>
+        <version>${djl.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
       </dependency>
 
       <dependency>
-        <groupId>org.projectlombok</groupId>
-        <artifactId>lombok</artifactId>
-        <version>${lombok.version}</version>
-        <scope>provided</scope>
-      </dependency>
-
-
-      <dependency>
-        <groupId>ch.qos.logback</groupId>
-        <artifactId>logback-classic</artifactId>
-        <version>1.5.32</version>
+        <groupId>io.euhedral-execution</groupId>
+        <artifactId>euhedral-core</artifactId>
+        <version>${project.version}</version>
       </dependency>
       <dependency>
-        <groupId>ch.qos.logback</groupId>
-        <artifactId>logback-core</artifactId>
-        <version>1.5.32</version>
-      </dependency>
-
-      <dependency>
-        <groupId>net.java.dev.jna</groupId>
-        <artifactId>jna</artifactId>
-        <version>5.18.1</version>
+        <groupId>io.euhedral-execution</groupId>
+        <artifactId>euhedral-data-structures</artifactId>
+        <version>${project.version}</version>
       </dependency>
       <dependency>
-        <groupId>org.jspecify</groupId>
-        <artifactId>jspecify</artifactId>
-        <version>1.0.0</version>
+        <groupId>io.euhedral-execution</groupId>
+        <artifactId>euhedral-hardware-utils</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.euhedral-execution</groupId>
+        <artifactId>euhedral-hashing</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.euhedral-execution</groupId>
+        <artifactId>euhedral-reactor-core</artifactId>
+        <version>${project.version}</version>
       </dependency>
 
       <dependency>
-        <groupId>org.assertj</groupId>
-        <artifactId>assertj-core</artifactId>
-        <version>3.9.1</version>
-        <scope>test</scope>
-      </dependency>
-
-      <dependency>
-        <groupId>io.projectreactor</groupId>
-        <artifactId>reactor-test</artifactId>
-        <version>${reactor-test.version}</version>
-        <scope>test</scope>
-      </dependency>
-
-      <dependency>
-        <groupId>org.hdrhistogram</groupId>
-        <artifactId>HdrHistogram</artifactId>
-        <version>2.2.2</version>
-      </dependency>
-      <dependency>
-        <groupId>org.jctools</groupId>
-        <artifactId>jctools-core-jdk11</artifactId>
-        <version>4.0.6</version>
+        <groupId>com.tdunning</groupId>
+        <artifactId>t-digest</artifactId>
+        <version>${t-digest.version}</version>
       </dependency>
       <dependency>
         <groupId>it.unimi.dsi</groupId>
         <artifactId>fastutil</artifactId>
-        <version>8.5.18</version>
-      </dependency>
-
-      <dependency>
-        <groupId>org.testcontainers</groupId>
-        <artifactId>testcontainers</artifactId>
-        <version>2.0.3</version>
-        <scope>test</scope>
+        <version>${fastutil.version}</version>
       </dependency>
       <dependency>
-        <groupId>org.testcontainers</groupId>
-        <artifactId>junit-jupiter</artifactId>
-        <version>1.19.8</version>
-        <scope>test</scope>
+        <groupId>org.apache.commons</groupId>
+        <artifactId>commons-math4-legacy</artifactId>
+        <version>${commons-math4.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.jctools</groupId>
+        <artifactId>jctools-core-jdk11</artifactId>
+        <version>${jctools.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.hdrhistogram</groupId>
+        <artifactId>HdrHistogram</artifactId>
+        <version>${hdrhistogram.version}</version>
       </dependency>
       <dependency>
         <groupId>org.openjdk.jmh</groupId>
         <artifactId>jmh-core</artifactId>
-        <version>1.37</version>
+        <version>${jmh.version}</version>
       </dependency>
       <dependency>
         <groupId>org.openjdk.jmh</groupId>
         <artifactId>jmh-generator-annprocess</artifactId>
-        <version>1.37</version>
-        <scope>provided</scope>
+        <version>${jmh.version}</version>
       </dependency>
     </dependencies>
   </dependencyManagement>
 
   <build>
-    <extensions>
-      <extension>
-        <groupId>kr.motd.maven</groupId>
-        <artifactId>os-maven-plugin</artifactId>
-        <version>1.7.1</version>
-      </extension>
-    </extensions>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <configuration>
+          <parameters>${maven.compiler.parameters}</parameters>
+          <annotationProcessorPaths>
+            <path>
+              <groupId>org.projectlombok</groupId>
+              <artifactId>lombok</artifactId>
+              <version>${lombok.version}</version>
+            </path>
+          </annotationProcessorPaths>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <argLine>
+            @{argLine}
+            -XX:+EnableDynamicAgentLoading
+            --add-opens java.base/java.util=euhedral.hardware_utils,org.mockito,ALL-UNNAMED
+            -Xshare:off
+          </argLine>
+        </configuration>
+      </plugin>
+    </plugins>
 
     <pluginManagement>
       <plugins>
         <plugin>
           <groupId>org.codehaus.mojo</groupId>
           <artifactId>exec-maven-plugin</artifactId>
-          <version>3.1.0</version>
-        </plugin>
-        <plugin>
-          <groupId>org.apache.maven.plugins</groupId>
-          <artifactId>maven-assembly-plugin</artifactId>
-          <version>3.6.0</version>
+          <version>3.6.3</version>
         </plugin>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-shade-plugin</artifactId>
-          <version>3.6.0</version>
+          <version>3.6.2</version>
         </plugin>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-compiler-plugin</artifactId>
-          <version>3.13.0</version>
-          <configuration>
-            <compilerArgs combine.self="override"/>
-            <annotationProcessorPaths>
-              <path>
-                <groupId>org.projectlombok</groupId>
-                <artifactId>lombok</artifactId>
-                <version>${lombok.version}</version>
-              </path>
-              <path>
-                <groupId>org.openjdk.jmh</groupId>
-                <artifactId>jmh-generator-annprocess</artifactId>
-                <version>1.37</version>
-              </path>
-            </annotationProcessorPaths>
-          </configuration>
+          <version>3.15.0</version>
         </plugin>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-jar-plugin</artifactId>
+          <version>3.5.1</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-resources-plugin</artifactId>
           <version>3.5.0</version>
         </plugin>
         <plugin>
-          <groupId>org.xolstice.maven.plugins</groupId>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-dependency-plugin</artifactId>
+          <version>3.11.0</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-antrun-plugin</artifactId>
+          <version>3.2.0</version>
+        </plugin>
+        <plugin>
+          <groupId>io.github.ascopes</groupId>
           <artifactId>protobuf-maven-plugin</artifactId>
-          <version>0.6.1</version>
+          <version>5.1.7</version>
         </plugin>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-surefire-plugin</artifactId>
           <version>3.5.6</version>
-          <configuration>
-            <argLine>
-              -XX:+EnableDynamicAgentLoading
-              --add-opens java.base/java.util=euhedral.hardware_utils,org.mockito,ALL-UNNAMED
-              -Xshare:off
-            </argLine>
-          </configuration>
-        </plugin>
-        <plugin>
-          <groupId>org.apache.maven.plugins</groupId>
-          <artifactId>maven-failsafe-plugin</artifactId>
-          <version>3.5.4</version>
-          <configuration>
-            <argLine>
-              -javaagent:${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar
-              -XX:+EnableDynamicAgentLoading
-              --add-opens java.base/java.util=euhedral.hardware_utils,org.mockito,ALL-UNNAMED
-            </argLine>
-          </configuration>
         </plugin>
       </plugins>
     </pluginManagement>
@@ -293,7 +256,7 @@
           <plugin>
             <groupId>org.sonatype.central</groupId>
             <artifactId>central-publishing-maven-plugin</artifactId>
-            <version>0.7.0</version>
+            <version>0.11.0</version>
             <extensions>true</extensions>
             <configuration>
               <publishingServerId>central</publishingServerId>
@@ -310,7 +273,7 @@
           <plugin>
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-gpg-plugin</artifactId>
-            <version>3.2.4</version>
+            <version>3.2.8</version>
             <executions>
               <execution>
                 <id>sign-artifacts</id>
@@ -325,7 +288,7 @@
           <plugin>
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-source-plugin</artifactId>
-            <version>3.3.1</version>
+            <version>3.4.0</version>
             <executions>
               <execution>
                 <id>attach-sources</id>
@@ -339,7 +302,7 @@
           <plugin>
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-javadoc-plugin</artifactId>
-            <version>3.6.3</version>
+            <version>3.12.0</version>
             <executions>
               <execution>
                 <id>attach-javadocs</id>

@@ -5,6 +5,7 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.lang.management.ManagementFactory;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 public class QueueUtils {
     private static final VarHandle QUEUE = MethodHandles.arrayElementVarHandle(Object[].class);
@@ -16,6 +17,7 @@ public class QueueUtils {
 
     public static final Object SENTINEL = new Object();
     public static final Consumer<Object> NO_OP = o -> {};
+    public static final Function<Object, Boolean> NO_STOP = o -> false;
 
     public static final int REFERENCE_SIZE;
 
