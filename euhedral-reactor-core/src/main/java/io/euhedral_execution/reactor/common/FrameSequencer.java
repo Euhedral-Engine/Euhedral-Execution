@@ -21,17 +21,22 @@ import reactor.core.publisher.Sinks.EmitResult;
 
 public class FrameSequencer<T, R> {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(Constants.getLoggerName(FrameSequencer.class));
+    private static final Logger LOGGER =
+            LoggerFactory.getLogger(Constants.getLoggerName(FrameSequencer.class));
 
     private final long ingestPassword;
     private final long sequencePassword;
 
     private final PaddedAtomicLong wip = new PaddedAtomicLong(0);
+    private final AtomicBoolean inputComplete = new AtomicBoolean(false);
+    private final AtomicBoolean terminated = new AtomicBoolean(false);
     private final PartitionedSpscQueue<SequencedFrame<T, R>> sequence =
             new PartitionedSpscQueue<>(1, 32_768, 1);
 
     private final Sinks.Many<R> output =
             Sinks.unsafe().many().unicast().onBackpressureBuffer(new PartitionedSpscQueue<>(8_192));
+
+    private volatile FrameManager<T, SequencedFrame<T, R>> recycler;
 
     public FrameSequencer(long ingestPassword) {
         this.ingestPassword = ingestPassword;
@@ -57,6 +62,10 @@ public class FrameSequencer<T, R> {
         long[] seed = {ThreadLocalRandom.current().nextLong()};
         FrameManager<T, SequencedFrame<T, R>> recycler =
                 new FrameManager<>(recycleCapacity, ingestPassword);
+        if (this.recycler != null) {
+            throw new IllegalStateException("A FrameSequencer can only transform one Flux");
+        }
+        this.recycler = recycler;
         FrameCreate<T, SequencedFrame<T, R>> frameCreate = (idHash, data) -> {
             SequencedFrame<T, R> frame =
                     new SequencedFrame<>(idHash, data, function, killSwitch, this, recycler);
@@ -71,12 +80,21 @@ public class FrameSequencer<T, R> {
         };
         recycler.setFactory(new FrameFactory<>(frameCreate, frameReplace));
 
-        return flux.map(obj -> recycler.getOrCreate(obj, ingestPassword)).doFinally(sig -> {
-            killSwitch.set(true);
-            sequence.clear();
-            output.tryEmitComplete();
-            recycler.close();
-        });
+        return flux.map(obj -> recycler.getOrCreate(obj, ingestPassword))
+                .doOnComplete(() -> {
+                    this.inputComplete.setRelease(true);
+                    drain(this.sequencePassword);
+                })
+                .doOnError(error -> {
+                    killSwitch.setRelease(true);
+                    this.sequence.clear();
+                    terminate(error);
+                })
+                .doOnCancel(() -> {
+                    killSwitch.setRelease(true);
+                    this.sequence.clear();
+                    terminate(null);
+                });
     }
 
     public Flux<R> output() {
@@ -103,12 +121,15 @@ public class FrameSequencer<T, R> {
                         EmitResult result = this.output.tryEmitNext(finFrame.getRetVal());
 
                         return switch (EuhedralSink.toResponse(result)) {
-                            case OK -> false;
+                            case OK -> {
+                                finFrame.recycle();
+                                yield false;
+                            }
                             case RETRY -> true;
                             default -> {
                                 finFrame.kill();
                                 this.sequence.clear();
-                                this.output.tryEmitComplete();
+                                terminate(null);
                                 yield false;
                             }
                         };
@@ -116,6 +137,9 @@ public class FrameSequencer<T, R> {
                     frame = this.sequence.peek();
                 }
             } while (this.wip.decrementAndGet() != 0);
+            if (this.inputComplete.getAcquire() && this.sequence.isEmpty()) {
+                terminate(null);
+            }
         } catch (Exception e) {
             LOGGER.error("Uncaught Exception!", e);
         } finally {
@@ -127,6 +151,23 @@ public class FrameSequencer<T, R> {
         frame.setSequencerPassword(sequencePassword);
         while (!this.sequence.offer(frame)) {
             Thread.onSpinWait();
+        }
+    }
+
+    private void terminate(Throwable error) {
+        if (!this.terminated.compareAndSet(false, true)) {
+            return;
+        }
+
+        if (error == null) {
+            this.output.tryEmitComplete();
+        } else {
+            this.output.tryEmitError(error);
+        }
+
+        FrameManager<T, SequencedFrame<T, R>> manager = this.recycler;
+        if (manager != null) {
+            manager.close();
         }
     }
 }
