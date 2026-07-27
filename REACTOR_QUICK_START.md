@@ -4,6 +4,12 @@
 It provides a standard Reactor `Scheduler` and mapping operators that create, route, and recycle
 Euhedral frames for you.
 
+For measured context, the
+[high-scale scheduler comparison](./benchmarks/HIGH_SCALE_BENCHMARKS.md) runs an 8K Mandelbrot
+workload on 96-core Intel and AMD systems and a 192-core Graviton5 system. In that workload, Reactor
+Parallel took 4.7x to 5.8x as much time per operation as Euhedral Core. The report includes the
+feeding strategy, allocation results, hardware counters, and limitations.
+
 ## Prerequisites
 
 The full repository uses Java 21 and pins its build tools with

@@ -11,6 +11,16 @@ hardware instead of hiding it behind one central queue.
 [Architecture](./docs/ARCHITECTURE.md) |
 [Benchmarks](./benchmarks/README.md)
 
+## High-scale results
+
+On the 8K Mandelbrot benchmark, across 96-core Intel and AMD systems and a 192-core Graviton5
+system, **Reactor Parallel took 4.7x to 5.8x as much time per operation as Euhedral Core**, while
+**Reactor BoundedElastic took 6.5x to 7.4x as much**. The benchmark exercises 132.7 million
+pre-allocated operations per invocation and includes allocation, GC, CPU-time, and hardware-counter
+data.
+
+[Read the high-scale benchmark, methodology, and caveats.](./benchmarks/HIGH_SCALE_BENCHMARKS.md)
+
 ## Why Euhedral?
 
 - **Pull-driven execution.** Workers create demand; a central dispatcher does not push tasks at
@@ -167,9 +177,9 @@ are trained offline and evaluated as fixed weights in the runtime.
 
 Benchmark results and reproduction notes live with the benchmark suite:
 
+- [High-scale comparison: Intel Xeon 6, AMD EPYC, and AWS Graviton5](./benchmarks/HIGH_SCALE_BENCHMARKS.md)
 - [Benchmark guide](./benchmarks/README.md)
 - [Amazon Graviton5 results](./benchmarks/AMAZON_GRAVITON_5_BENCHMARKS.md)
-- [High-scale comparison results](./benchmarks/HIGH_SCALE_BENCHMARKS.md)
 
 Performance numbers are hardware- and workload-specific. Treat the published results as measured
 reference points and use the included JMH workloads to evaluate your own target system.
