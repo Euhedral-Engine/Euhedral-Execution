@@ -54,7 +54,7 @@ public class KafkaIngestSource implements LatticeSource {
     private static final VarHandle HEARTBEAT = CommonVarHandles.makeHandle(MethodHandles.lookup(),
             KafkaIngestSource.class, "heartbeatNs", long.class);
     private static final VarHandle LAST_POLL = CommonVarHandles.makeHandle(MethodHandles.lookup(),
-            KafkaIngestSource.class, "lastPoll", long.class);
+            KafkaIngestSource.class, "lastPollNs", long.class);
     private static final VarHandle LOCK = CommonVarHandles.makeHandle(MethodHandles.lookup(),
             KafkaIngestSource.class, "lock", boolean.class);
 
@@ -226,7 +226,7 @@ public class KafkaIngestSource implements LatticeSource {
 
     private void refresh() {
         this.logger.warn("Updating Kafka consumer.");
-        long drainDeadline = System.currentTimeMillis() + Duration.ofMillis(500).toNanos();
+        long drainDeadline = System.nanoTime() + Duration.ofMillis(500).toNanos();
         KafkaConsumer<?, ?> kafkaConsumer = this.kafkaConsumer.getPlain();
         kafkaConsumer.unsubscribe();
 

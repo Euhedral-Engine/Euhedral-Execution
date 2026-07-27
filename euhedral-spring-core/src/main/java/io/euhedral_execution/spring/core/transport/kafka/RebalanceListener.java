@@ -3,17 +3,18 @@ package io.euhedral_execution.spring.core.transport.kafka;
 import io.euhedral_execution.spring.core.transport.kafka.IngestEventHandler.Event;
 import java.util.Collection;
 import java.util.concurrent.atomic.AtomicReference;
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.TopicPartition;
 
 public class RebalanceListener implements ConsumerRebalanceListener {
 
-    private final AtomicReference<KafkaConsumer<?, ?>> actualConsumer;
-    private final KafkaConsumer<?, ?> consumer;
+    private final AtomicReference<? extends Consumer<?, ?>> actualConsumer;
+    private final Consumer<?, ?> consumer;
     private final IngestEventHandler eventHandler;
 
-    public RebalanceListener(AtomicReference<KafkaConsumer<?, ?>> actualConsumer, KafkaConsumer<?, ?> consumer, IngestEventHandler eventHandler) {
+    public RebalanceListener(AtomicReference<? extends Consumer<?, ?>> actualConsumer,
+            Consumer<?, ?> consumer, IngestEventHandler eventHandler) {
         this.actualConsumer = actualConsumer;
         this.consumer = consumer;
         this.eventHandler = eventHandler;
