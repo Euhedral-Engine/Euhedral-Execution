@@ -24,6 +24,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
@@ -37,6 +38,13 @@ class LatticeEdgeTest {
     private LatticeEdge edge;
     private MockedStatic<SystemInfo> mockSysInfo;
     private MockedStatic<ThreadTools> mockThreadTools;
+    private int threadCountBefore;
+    private long upstreamCountBefore;
+
+    @BeforeAll
+    static void initializeSharedRoutingStateFromTheRealTopology() {
+        new LatticeEdge(new AtomicBoolean());
+    }
 
     @BeforeEach
     void setup() {
@@ -58,20 +66,32 @@ class LatticeEdgeTest {
 
         drain = new AtomicBoolean(false);
         edge = new LatticeEdge(drain);
+        threadCountBefore = edge.getThreadCount();
+        upstreamCountBefore = edge.getUpstreamHandleCount();
     }
 
     @AfterEach
     void cleanup() {
-        edge.removeThread();
-        mockSysInfo.close();
-        mockThreadTools.close();
+        try {
+            if (edge != null) {
+                edge.removeThread();
+            }
+        } finally {
+            UpstreamQueue.UP_QUEUE.remove();
+            if (mockThreadTools != null) {
+                mockThreadTools.close();
+            }
+            if (mockSysInfo != null) {
+                mockSysInfo.close();
+            }
+        }
     }
 
     @Test
     void shouldCreateThreadQueueOnRegister() {
         edge.register();
 
-        assertEquals(1, edge.getThreadCount());
+        assertEquals(threadCountBefore + 1, edge.getThreadCount());
     }
 
     @Test
@@ -80,7 +100,7 @@ class LatticeEdgeTest {
         UpstreamQueue second = edge.getThreadUpstreamQueue();
 
         assertSame(first, second);
-        assertEquals(1, edge.getThreadCount());
+        assertEquals(threadCountBefore + 1, edge.getThreadCount());
     }
 
     @Test
@@ -135,10 +155,21 @@ class LatticeEdgeTest {
     }
 
     @Test
-    void shouldIgnoreNegativeRequest() {
+    void shouldIgnoreNonPositiveRequest() {
         edge.request(-1);
+        edge.request(0);
 
-        assertEquals(0, edge.getThreadCount());
+        assertEquals(threadCountBefore, edge.getThreadCount());
+    }
+
+    @Test
+    void shouldIgnoreNonPositivePull() {
+        Consumer<AbstractFrame> consumer = frame -> {
+        };
+
+        assertEquals(0, edge.pull(consumer, frame -> false, -1));
+        assertEquals(0, edge.pull(consumer, frame -> false, 0));
+        assertEquals(threadCountBefore, edge.getThreadCount());
     }
 
     @Test
@@ -147,7 +178,7 @@ class LatticeEdgeTest {
 
         edge.request(10);
 
-        assertEquals(0, edge.getThreadCount());
+        assertEquals(threadCountBefore, edge.getThreadCount());
     }
 
     @Test
@@ -258,7 +289,7 @@ class LatticeEdgeTest {
 
         edge.addUpstream(upstream);
 
-        assertEquals(1, edge.getUpstreamHandleCount());
+        assertEquals(upstreamCountBefore + 1, edge.getUpstreamHandleCount());
         edge.removeUpstream();
     }
 
@@ -272,7 +303,7 @@ class LatticeEdgeTest {
 
         edge.register();
 
-        assertEquals(1, edge.getThreadCount());
+        assertEquals(threadCountBefore + 1, edge.getThreadCount());
         edge.removeUpstream();
     }
 
@@ -290,8 +321,8 @@ class LatticeEdgeTest {
 
         edge.setParent(parent);
 
-        assertTrue(parent.getUpstreamHandleCount() > 0);
-        assertTrue(parent.getThreadCount() > 0);
+        assertEquals(upstreamCountBefore + 1, parent.getUpstreamHandleCount());
+        assertEquals(threadCountBefore + 1, parent.getThreadCount());
         edge.removeUpstream();
     }
 
@@ -299,11 +330,11 @@ class LatticeEdgeTest {
     void shouldRemoveThread() {
         edge.register();
 
-        assertEquals(1, edge.getThreadCount());
+        assertEquals(threadCountBefore + 1, edge.getThreadCount());
 
         edge.removeThread();
 
-        assertEquals(0, edge.getThreadCount());
+        assertEquals(threadCountBefore, edge.getThreadCount());
     }
 
     @Test
