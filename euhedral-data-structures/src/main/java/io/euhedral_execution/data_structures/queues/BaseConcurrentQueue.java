@@ -279,15 +279,17 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue<T> 
         }
 
         if (obj == QueueUtils.SENTINEL) {
-            Object[] temp = (Object[]) QueueUtils.loadAcquire(queue, this.linkIndex);
-            queue[cIdx] = null;
-            queue[this.linkIndex] = null;
+            Object[] retired = queue;
+            Object[] next = (Object[]) QueueUtils.loadAcquire(retired, this.linkIndex);
+            retired[cIdx] = null;
+            retired[this.linkIndex] = null;
 
-            freeChunk(queue);
-            setHeadQueuePlain(this, temp);
+            setHeadQueuePlain(this, next);
+            obj = QueueUtils.loadAcquire(next, cIdx);
 
-            obj = QueueUtils.loadAcquire(temp, cIdx);
-            QueueUtils.storeVolatile(queue, this.linkIndex, null);
+            // Do not access the retired chunk after publishing it to the allocator. A producer may
+            // immediately reuse it as another live chunk.
+            freeChunk(retired);
         }
 
         return obj;

@@ -14,7 +14,6 @@ These are required to run your program with Euhedral.
 
 ```
 -XX:+UseThreadPriorities
---add-opens java.base/java.util=ALL-UNNAMED
 ```
 
 ## Level 0 (Make the ControlPlaneLattice)

@@ -11,7 +11,6 @@ import io.euhedral_execution.data_structures.atomics.PaddedAtomicLong;
 import io.euhedral_execution.data_structures.queues.MpscQueue;
 import io.euhedral_execution.hardware_utils.SystemInfo;
 import io.euhedral_execution.hardware_utils.SystemInfo.CoreInfo;
-import io.euhedral_execution.hardware_utils.ThreadTools;
 import io.euhedral_execution.hashing.HasherApi;
 import java.lang.invoke.VarHandle;
 import java.util.concurrent.ThreadLocalRandom;
@@ -127,9 +126,14 @@ public class LatticeEdge extends UpstreamHandle {
         if (queue != null) {
             THREAD_COUNT.decrementAndGet();
             UpstreamQueue.UP_QUEUE.remove();
-            int core = SystemInfo.getCpuInfo(ThreadTools.getCpu()).core();
-            ACTIVE_PARTITIONS.setRelease(core, 0);
-            UPSTREAMS[core].clear();
+            int core = queue.core;
+            if (core >= 0 && core < UPSTREAMS.length) {
+                ACTIVE_PARTITIONS.setRelease(core, 0);
+                MpscQueue<UpstreamHandle> upstreams = UPSTREAMS[core];
+                if (upstreams != null) {
+                    upstreams.clear();
+                }
+            }
             LOGGER.trace("Removed entry for thread on core {}", core);
         }
     }
@@ -177,7 +181,7 @@ public class LatticeEdge extends UpstreamHandle {
     /// Requests work from the [UpstreamHandles][UpstreamHandle]
     @Override
     public void request(long num) {
-        if (num < 0) {
+        if (num <= 0) {
             return;
         }
         if ((boolean) CLOSED.getOpaque(this) || this.drain.getOpaque()) {
@@ -199,7 +203,7 @@ public class LatticeEdge extends UpstreamHandle {
     @Override
     public long pull(Consumer<AbstractFrame> consumer,
             Function<AbstractFrame, Boolean> stopCondition, long demand) {
-        if ((boolean) CLOSED.getOpaque(this) || this.drain.getOpaque()) {
+        if (demand <= 0 || (boolean) CLOSED.getOpaque(this) || this.drain.getOpaque()) {
             return 0;
         }
 

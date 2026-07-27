@@ -13,6 +13,7 @@ import org.jspecify.annotations.NonNull;
 import org.reactivestreams.Subscription;
 import reactor.core.CoreSubscriber;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Operators;
 
 @SuppressWarnings({"unchecked", "unused"})
 public class ReactorGrpcClientHandler extends Flux<GrpcMessage> implements
@@ -68,15 +69,28 @@ public class ReactorGrpcClientHandler extends Flux<GrpcMessage> implements
 
     @Override
     public void subscribe(@NonNull CoreSubscriber<? super GrpcMessage> downstream) {
+        if (!isOpen()) {
+            Operators.complete(downstream);
+            return;
+        }
+
+        downstream.onSubscribe(this);
         if (!DOWNSTREAM.compareAndSet(this, null, downstream)) {
             downstream.onError(new IllegalAccessException("This instance has a subscriber."));
-        } else {
-            downstream.onSubscribe(this);
+            return;
+        }
+
+        if (!isOpen() && DOWNSTREAM.compareAndSet(this, downstream, null)) {
+            downstream.onComplete();
         }
     }
 
     @Override
     public void onNext(GrpcMessage message) {
+        if (!isOpen()) {
+            return;
+        }
+
         CoreSubscriber<? super GrpcMessage> downstream = (CoreSubscriber<? super GrpcMessage>) DOWNSTREAM.getAcquire(
                 this);
         if (downstream != null) {
@@ -170,16 +184,22 @@ public class ReactorGrpcClientHandler extends Flux<GrpcMessage> implements
         }
 
         void request(long demand) {
-            this.subscription.request(demand);
+            Subscription current = this.subscription;
+            if (current != null) {
+                current.request(demand);
+            }
         }
 
         void onReady() {
+            boolean drained = false;
             while (this.upstream.isReady()) {
                 if (this.sendQueue.drain(this.upstream::onNext, 32) == 0) {
+                    drained = true;
                     break;
                 }
             }
-            if ((boolean) EMPTY.getOpaque(this) && COMPLETE.compareAndSet(this, false, true)) {
+            if (drained && (boolean) EMPTY.getAcquire(this)
+                    && COMPLETE.compareAndSet(this, false, true)) {
                 try {
                     this.upstream.onCompleted();
                 } catch (Exception e) {
@@ -199,18 +219,24 @@ public class ReactorGrpcClientHandler extends Flux<GrpcMessage> implements
 
         @Override
         public void onNext(GrpcMessage message) {
-            this.sendQueue.offer(message);
-            onReady();
+            if (!(boolean) COMPLETE.getAcquire(this)) {
+                this.sendQueue.offer(message);
+                onReady();
+            }
         }
 
         @Override
         public void onError(Throwable t) {
-            this.upstream.onError(t);
+            if (COMPLETE.compareAndSet(this, false, true)) {
+                this.sendQueue.clear();
+                this.upstream.onError(t);
+            }
         }
 
         @Override
         public void onComplete() {
-            EMPTY.setVolatile(this, true);
+            EMPTY.setRelease(this, true);
+            onReady();
         }
     }
 }

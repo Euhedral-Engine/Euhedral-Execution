@@ -7,21 +7,20 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 
 import io.euhedral_execution.core.flow_control.LatticeVertex.RoutingFunction;
 import io.euhedral_execution.core.frames.AbstractFrame;
+import io.euhedral_execution.core.generics.LatticeReceiver;
 import io.euhedral_execution.core.generics.LatticeSource;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -52,7 +51,11 @@ class LatticeVertexTest {
 
     @AfterEach
     void cleanup() {
-        UpstreamQueue.UP_QUEUE.remove();
+        if (node != null && UpstreamQueue.UP_QUEUE.get() != null) {
+            node.removeThread();
+        } else {
+            UpstreamQueue.UP_QUEUE.remove();
+        }
     }
 
     @Test
@@ -249,20 +252,22 @@ class LatticeVertexTest {
         LatticeVertex.UpstreamInterceptor interceptor =
                 node.new UpstreamInterceptor();
 
-        LatticeSource source = mock(LatticeSource.class);
+        RecordingSource source = new RecordingSource();
 
         interceptor.addUpstream(source);
 
         assertSame(source, interceptor.upstream);
+        interceptor.onComplete();
     }
 
     @Test
     void shouldIngestSource() {
-        LatticeSource source = mock(LatticeSource.class);
+        RecordingSource source = new RecordingSource();
 
         node.ingest(source);
 
-        verify(source).addDownstream(any(LatticeVertex.UpstreamInterceptor.class));
+        assertTrue(source.downstream instanceof LatticeVertex.UpstreamInterceptor);
+        source.downstream.onComplete();
     }
 
     @Test
@@ -358,13 +363,13 @@ class LatticeVertexTest {
         LatticeVertex.UpstreamInterceptor interceptor =
                 node.new UpstreamInterceptor();
 
-        LatticeSource upstream = mock(LatticeSource.class);
+        RecordingSource upstream = new RecordingSource();
 
         interceptor.upstream = upstream;
 
         interceptor.request(0);
 
-        verify(upstream, never()).request(anyLong());
+        assertEquals(0, upstream.requested);
     }
 
     @Test
@@ -372,14 +377,12 @@ class LatticeVertexTest {
         LatticeVertex.UpstreamInterceptor interceptor =
                 node.new UpstreamInterceptor();
 
-        LatticeSource upstream = mock(LatticeSource.class);
-
-        interceptor.upstream = upstream;
+        RecordingSource upstream = new RecordingSource();
+        interceptor.addUpstream(upstream);
 
         interceptor.complete();
 
-        verify(upstream).complete();
-
+        assertTrue(upstream.completed);
         assertTrue(interceptor.isComplete());
     }
 
@@ -387,6 +390,7 @@ class LatticeVertexTest {
     void shouldMarkCompleteOnCompletion() {
         LatticeVertex.UpstreamInterceptor interceptor =
                 node.new UpstreamInterceptor();
+        interceptor.addUpstream(new RecordingSource());
 
         interceptor.onComplete();
 
@@ -397,6 +401,7 @@ class LatticeVertexTest {
     void shouldMarkCompleteOnError() {
         LatticeVertex.UpstreamInterceptor interceptor =
                 node.new UpstreamInterceptor();
+        interceptor.addUpstream(new RecordingSource());
 
         interceptor.onError(new RuntimeException("boom"));
 
@@ -407,11 +412,45 @@ class LatticeVertexTest {
     void shouldReportInterceptorCompletionState() {
         LatticeVertex.UpstreamInterceptor interceptor =
                 node.new UpstreamInterceptor();
+        interceptor.addUpstream(new RecordingSource());
 
         assertFalse(interceptor.isComplete());
 
         interceptor.onComplete();
 
         assertTrue(interceptor.isComplete());
+    }
+
+    private static final class RecordingSource implements LatticeSource {
+
+        private LatticeReceiver downstream;
+        private long requested;
+        private boolean completed;
+
+        @Override
+        public void addDownstream(LatticeReceiver downstream) {
+            this.downstream = downstream;
+        }
+
+        @Override
+        public long pull(Consumer<AbstractFrame> consumer,
+                Function<AbstractFrame, Boolean> stopCondition, long demand) {
+            return 0;
+        }
+
+        @Override
+        public void request(long demand) {
+            this.requested += demand;
+        }
+
+        @Override
+        public void complete() {
+            this.completed = true;
+        }
+
+        @Override
+        public boolean isComplete() {
+            return this.completed;
+        }
     }
 }
