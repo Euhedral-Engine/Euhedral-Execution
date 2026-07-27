@@ -17,8 +17,8 @@ class UnmodifiableCollectionsTest {
         source.set(1);
         source.set(65);
         UnmodifiableBitSet set = UnmodifiableBitSet.wrap(source);
+        source.set(2);
 
-        assertEquals(source, set);
         assertEquals(2, set.cardinality());
         assertThrows(RuntimeException.class, () -> set.set(2));
         assertThrows(RuntimeException.class, () -> set.clear(1));
