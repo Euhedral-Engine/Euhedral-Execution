@@ -32,6 +32,38 @@ public final class CarryForwardQueue {
         return candidates.subList(0, Math.min(limit, candidates.size()));
     }
 
+    public static List<CarryForwardEntry> reconcile(List<CarryForwardEntry> previous,
+            OptimizationCorpusView corpus, IterationSchedule completedSchedule,
+            int completedIteration) {
+        return previous.stream()
+                .filter(entry -> {
+                    var summary = corpus.summaries().get(entry.policy().id());
+                    return summary == null || !summary.eligible();
+                })
+                .map(entry -> new CarryForwardEntry(entry.policy(), entry.firstSeenIteration(),
+                        entry.prediction(), entry.scenarioStates()))
+                .toList();
+    }
+
+    public static List<CarryForwardEntry> rescore(List<CarryForwardEntry> entries,
+            io.euhedral_execution.training.optimization.PolicyCurvePredictor predictor,
+            int iteration) {
+        java.util.Map<io.euhedral_execution.training.data.PolicyId,
+                io.euhedral_execution.training.optimization.PredictedPolicySummary> predictions =
+                predictor.predict(entries.stream().map(CarryForwardEntry::policy).toList())
+                        .stream().collect(java.util.stream.Collectors.toMap(
+                                summary -> summary.policy().id(),
+                                java.util.function.Function.identity()));
+        return entries.stream().map(entry -> new CarryForwardEntry(entry.policy(),
+                entry.firstSeenIteration(), predictions.get(entry.policy().id()),
+                entry.scenarioStates())).toList();
+    }
+
+    public static List<CarryForwardEntry> selectForScenario(List<CarryForwardEntry> entries,
+            SourceScenario scenario, int iteration, int limit) {
+        return new CarryForwardQueue(entries).selectFor(scenario, iteration, limit);
+    }
+
     private static Comparator<CarryForwardEntry> priority() {
         return Comparator.comparingInt(CarryForwardEntry::validScenarioCount).reversed()
                 .thenComparing((left, right) -> Double.compare(
