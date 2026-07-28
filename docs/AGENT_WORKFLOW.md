@@ -17,8 +17,7 @@ required capabilities rather than permanently binding a phase to one model name.
 | Blueprint with substantial integration, scheduling, packaging, or migration work | Frontier reasoning model | High |
 | Blueprint for verification, audit, cleanup, or bounded interface work | Strong reasoning model | Medium |
 | Implementation and iterative repair of an approved blueprint | Capability selected after the completed blueprint is assessed | Low only for bounded mechanical work; medium or high for broad systems integration |
-| Implementation verification | Strong coding or verification model, raised when the acceptance surface remains coupled | Low to high |
-| Blueprint-conformance audit | Dedicated audit model or frontier reasoning model | Medium to high |
+| Implementation verification and blueprint-conformance audit | Strong coding/audit model, raised when the acceptance surface remains coupled | Medium to high |
 
 The current mapping may be `gpt-5.6-sol` at `max` for planning and complex blueprints, a coding
 model selected from the completed blueprint's actual demands for implementation, and Terra or Sol
@@ -35,8 +34,7 @@ Each non-trivial feature proceeds in this order:
 1. Planning and prompt-sequence design
 2. Blueprint
 3. Implementation
-4. Implementation verification
-5. Blueprint-conformance audit and handoff, when the feature needs them
+4. Implementation verification, blueprint-conformance audit, and handoff, when the feature needs them
 
 A stage consumes the artifacts from earlier stages. It records newly discovered conclusions in its
 own artifact and does not repeat repository discovery already captured there.
@@ -47,6 +45,9 @@ the stage, stop and ask the developer for permission to resolve the conflict.
 
 Start every stage on a dedicated `agent/...` branch from the completed prior-stage branch. Do not
 merge, rebase, delete branches, commit, or push unless the developer has authorized that action.
+When authorized, a stage may include uncommitted changes carried from the current or immediately
+previous stage in its own commit, or amend the immediately previous stage commit, provided it first
+inspects the diff and does not include pre-existing user-owned changes.
 
 ## Stage 1: planning and prompt-sequence design
 
@@ -74,8 +75,8 @@ validation strategy, known risks, branch lineage, and all context later stages n
 At its end, provide the prompts the developer should issue, grouped by phase. Rank them from most
 to least reasoning-intensive, label every blueprint, verification, and audit prompt with its exact
 model and reasoning effort, and give each implementation prompt a clearly labeled provisional
-model and effort. Pair every blueprint with implementation, implementation-verification, and
-blueprint-conformance audit prompts. Each prompt must name its required input artifacts, allowed
+model and effort. Pair every blueprint with implementation and a combined
+implementation-verification/conformance-audit prompt. Each prompt must name its required input artifacts, allowed
 edits, prohibited work, output artifact, and handoff condition. The blueprint prompt must be
 required to replace the provisional implementation selection after completing the capability
 assessment below; implementation must not begin while its selection is still provisional.
@@ -143,25 +144,20 @@ relevant evidence, and the needed decision to the blueprint; return the work to 
 On success, append a concise completion record to the blueprint: changed files, commands run,
 results, acceptance-criteria evidence, known environmental limits, and any approved deviations.
 
-## Stage 4: implementation verification
+## Stage 4: implementation verification and blueprint-conformance audit
 
-Use a strong coding or verification model. Run the validation commands required by the blueprint,
-check its acceptance criteria, and confirm that implementation defects are fixed only where the
-blueprint already supplies the decision. This stage does not redesign architecture. Record commands,
-results, skipped checks, and environmental limits in the blueprint completion record.
+Use a strong coding/audit model. Run the validation commands required by the blueprint, check every
+acceptance criterion, then write `docs/audits/<PHASE>-<FEATURE>-conformance.md`, or the
+feature-specific audit path defined by the plan. Classify each requirement as satisfied, deviated,
+unverified, or ambiguous and include evidence, missing acceptance criteria, undocumented
+assumptions, and test limitations.
 
-## Stage 5: blueprint-conformance audit
-
-Use a dedicated audit model when available, or a frontier reasoning model otherwise. This is not an
-open-ended code review: it validates that the completed implementation matches the approved design.
-It may inspect code, tests, artifacts, and completion notes, but it must not propose architectural
-improvements unless the implementation violates the blueprint.
-
-Write `docs/audits/<PHASE>-<FEATURE>-conformance.md`, or the feature-specific audit directory
-defined by the plan. Report each requirement as satisfied, deviated, unverified, or ambiguous;
-include evidence, missing acceptance criteria, undocumented assumptions, and test limitations. A
-deviation returns work to the relevant blueprint prompt unless the developer explicitly approves a
-blueprint update.
+The combined step may make minor blueprint-settled corrections discovered during verification or
+audit, including missing deterministic test coverage, naming/formatting defects, and local
+validation omissions. It must not redesign architecture or introduce a decision the blueprint did
+not settle. Record commands, results, fixes, skipped checks, and environmental limits in the
+blueprint completion record. A remaining material deviation returns work to the relevant blueprint
+prompt unless the developer explicitly approves a blueprint update.
 
 ## Prompt templates
 
@@ -195,22 +191,15 @@ Use this skeleton for an implementation prompt:
 > decision is required, stop and append the exact conflict and evidence to the blueprint.
 > Otherwise, append completion notes with changed files and test results.
 
-Use this skeleton for an implementation-verification prompt:
+Use this skeleton for a combined verification-and-conformance-audit prompt:
 
-> Use the selected strong coding or verification model with `<low|medium|high>` reasoning effort. Read
-> AGENTS.md, the plan, `<BLUEPRINT_PATH>`, the implementation, and its completion notes. Run every
-> validation command and check every acceptance criterion. Fix only implementation defects whose
-> resolution is already settled by the blueprint. Append commands, results, skipped checks, and
-> environmental limits to the completion record.
-
-Use this skeleton for a blueprint-conformance audit prompt:
-
-> Use the selected dedicated audit model or frontier reasoning model with `<medium|high>` reasoning
-> effort. Read the approved blueprint for this branch, the implementation, and the completion
-> notes. Verify that every blueprint requirement is satisfied, identify any deviations,
-> undocumented assumptions, or missing acceptance criteria, and produce a report at
-> `<AUDIT_PATH>`. Do not propose architectural improvements unless the implementation violates the
-> blueprint.
+> Use the selected strong coding/audit model with `<medium|high>` reasoning effort. Read AGENTS.md,
+> the plan, `<BLUEPRINT_PATH>`, the implementation, and its completion notes. Run every validation
+> command and check every acceptance criterion. Make only minor blueprint-settled fixes, including
+> deterministic coverage, naming, formatting, or local validation corrections; do not redesign the
+> architecture. Then classify every blueprint requirement as satisfied, deviated, unverified, or
+> ambiguous in `<AUDIT_PATH>`, with evidence and limitations. Append commands, results, fixes, and
+> skipped checks to the completion record.
 
 ## Priority order
 

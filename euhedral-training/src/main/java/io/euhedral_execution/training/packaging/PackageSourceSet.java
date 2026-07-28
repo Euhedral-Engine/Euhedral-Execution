@@ -134,10 +134,7 @@ record PackageSourceSet(LoadedCheckpoint loaded, Path workspace, Path merge, Pat
             Path path = workspace.resolve("iterations/iteration-%06d/schedule"
                     .formatted(checkpoint.nextIteration() - 1));
             if (!Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) {
-                if (checkpoint.stage() == CheckpointStage.RUN_COMPLETE) {
-                    throw new IllegalArgumentException("Required final schedule is absent");
-                }
-                return null;
+                throw new IllegalArgumentException("Required prior schedule is absent");
             }
             return path;
         }
