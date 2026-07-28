@@ -61,3 +61,16 @@ No architectural change is proposed. Phase 4 remediation must implement the exis
 derived-view validation rules and add the already-specified deterministic fixture, lifecycle,
 tamper, collision, atomicity, streaming, and command-integration tests. Re-run this conformance
 audit after that blueprint-settled work is complete.
+
+## Re-audit after blueprint-settled remediation
+
+The implementation now rejects an absent prior schedule for every post-iteration checkpoint, and
+the package validator reconstructs the exact measurement-vector join and benchmark-ready vector
+rows. For a derived schedule it also requires every scheduled run to be present as checkpointed
+iteration evidence. `PackageDatasetWriterTest` covers valid joined measurements and a corrupted
+raw-bit vector; the focused package tests pass.
+
+The lifecycle matrix, golden package, failure-injection, comprehensive tamper, collision, and
+command-integration tests listed above still have not been added. Consequently, Phase 4 remains
+**unverified and not conformant** until that settled acceptance surface is implemented. This
+re-audit changes no architectural decision.

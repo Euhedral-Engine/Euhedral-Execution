@@ -1,6 +1,7 @@
 package io.euhedral_execution.training.packaging;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.euhedral_execution.training.data.io.CanonicalCsv;
 import io.euhedral_execution.training.scheduling.fixtures.SchedulingFixtures;
@@ -55,5 +56,21 @@ class PackageDatasetWriterTest {
         assertThat(rows.get(1).subList(8, 36)).containsExactlyElementsOf(
                 vector.subList(3, 31));
         assertThat(rows.get(1).get(43)).isEqualTo("10.00");
+
+        Path vectors = temp.resolve("vectors");
+        Files.createDirectory(vectors);
+        Files.move(temp.resolve("robust-leaders.vectors.csv"),
+                vectors.resolve("robust-leaders.vectors.csv"));
+        Files.move(temp.resolve("incomplete-policies.vectors.csv"),
+                vectors.resolve("incomplete-promising.vectors.csv"));
+        Files.move(output, temp.resolve("policy-scenario-measurements.csv"));
+        PackageDatasetWriter.validateMeasurements(temp);
+
+        List<String> corrupt = new ArrayList<>(rows.get(1));
+        corrupt.set(8, "ffffffffffffffff");
+        Files.writeString(temp.resolve("policy-scenario-measurements.csv"),
+                CanonicalCsv.row(rows.getFirst()) + CanonicalCsv.row(corrupt));
+        assertThatThrownBy(() -> PackageDatasetWriter.validateMeasurements(temp))
+                .isInstanceOf(java.io.IOException.class);
     }
 }

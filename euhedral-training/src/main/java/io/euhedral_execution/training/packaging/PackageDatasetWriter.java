@@ -2,6 +2,7 @@ package io.euhedral_execution.training.packaging;
 
 import io.euhedral_execution.training.data.PolicyVector;
 import io.euhedral_execution.training.data.io.CanonicalCsv;
+import io.euhedral_execution.training.scheduling.data.IterationSchedule;
 import io.euhedral_execution.training.scheduling.data.ScheduledRun;
 import java.io.IOException;
 import java.nio.file.Path;
@@ -61,6 +62,40 @@ final class PackageDatasetWriter {
         CanonicalFileSupport.write(target, out.toString());
     }
 
+    static void validateMeasurements(Path packageRoot) throws IOException {
+        Map<String, List<String>> vectors = vectors(
+                packageRoot.resolve("vectors/robust-leaders.vectors.csv"),
+                packageRoot.resolve("vectors/incomplete-promising.vectors.csv"));
+        if (!vectors.keySet().equals(rankingPolicies(packageRoot))) {
+            throw new IOException("Packaged vector/ranking policy set mismatch");
+        }
+        List<List<String>> source = CanonicalCsv.read(
+                packageRoot.resolve("scenario-results.csv"));
+        List<List<String>> joined = CanonicalCsv.read(
+                packageRoot.resolve("policy-scenario-measurements.csv"));
+        ArrayList<String> header = new ArrayList<>(SCENARIO_HEADER.subList(0, 8));
+        for (int index = 0; index < PolicyVector.WIDTH; index++) {
+            header.add("weight_%02d_bits".formatted(index));
+        }
+        header.addAll(SCENARIO_HEADER.subList(8, SCENARIO_HEADER.size()));
+        if (source.isEmpty() || !source.getFirst().equals(SCENARIO_HEADER)
+                || joined.size() != source.size() || !joined.getFirst().equals(header)) {
+            throw new IOException("Invalid packaged measurement view schema");
+        }
+        for (int index = 1; index < source.size(); index++) {
+            List<String> sourceRow = source.get(index);
+            List<String> joinedRow = joined.get(index);
+            if (joinedRow.size() != header.size()
+                    || !joinedRow.subList(0, 8).equals(sourceRow.subList(0, 8))
+                    || !joinedRow.subList(8, 8 + PolicyVector.WIDTH).equals(
+                    vectors.get(sourceRow.get(7)))
+                    || !joinedRow.subList(8 + PolicyVector.WIDTH, joinedRow.size()).equals(
+                    sourceRow.subList(8, sourceRow.size()))) {
+                throw new IOException("Packaged measurement view differs from source inputs");
+            }
+        }
+    }
+
     static void writeBenchmarkReady(PackageSourceSet source, Path target)
             throws IOException {
         ArrayList<String> header = new ArrayList<>(List.of("schema_version", "scenario_id",
@@ -86,6 +121,35 @@ final class PackageDatasetWriter {
         CanonicalFileSupport.write(target, out.toString());
     }
 
+    static void validateBenchmarkReady(Path path, IterationSchedule schedule)
+            throws IOException {
+        ArrayList<String> header = new ArrayList<>(List.of("schema_version", "scenario_id",
+                "benchmark_run_id", "schedule_position", "policy_id", "roles"));
+        for (int index = 0; index < PolicyVector.WIDTH; index++) {
+            header.add("weight_%02d_bits".formatted(index));
+        }
+        List<List<String>> actual = CanonicalCsv.read(path);
+        if (actual.isEmpty() || !actual.getFirst().equals(header)) {
+            throw new IOException("Invalid benchmark-ready vector schema");
+        }
+        ArrayList<List<String>> expected = new ArrayList<>();
+        for (ScheduledRun run : schedule.runs()) {
+            for (var policy : run.policies()) {
+                ArrayList<String> row = new ArrayList<>(List.of("1", run.scenario().canonical(),
+                        run.benchmarkRunId(), Integer.toString(policy.schedulePosition()),
+                        policy.policy().id().canonical(), policy.roles().stream().map(Enum::name)
+                        .sorted().reduce((left, right) -> left + ";" + right).orElseThrow()));
+                for (double weight : policy.policy().copyWeights()) {
+                    row.add("%016x".formatted(Double.doubleToRawLongBits(weight)));
+                }
+                expected.add(List.copyOf(row));
+            }
+        }
+        if (!actual.subList(1, actual.size()).equals(expected)) {
+            throw new IOException("Benchmark-ready vectors differ from schedule");
+        }
+    }
+
     static void writeRawIndex(PackageSourceSet source, Path target) throws IOException {
         StringBuilder out = new StringBuilder(CanonicalCsv.row(List.of("schema_version",
                 "benchmark_run_id", "closed_loop_iteration", "scenario_id",
@@ -108,9 +172,15 @@ final class PackageDatasetWriter {
     }
 
     private static Map<String, List<String>> vectors(Path merge) throws IOException {
+        return vectors(merge.resolve("robust-leaders.vectors.csv"),
+                merge.resolve("incomplete-policies.vectors.csv"));
+    }
+
+    private static Map<String, List<String>> vectors(Path leaders, Path incomplete)
+            throws IOException {
         HashMap<String, List<String>> result = new HashMap<>();
-        readVectors(merge.resolve("robust-leaders.vectors.csv"), result);
-        readVectors(merge.resolve("incomplete-policies.vectors.csv"), result);
+        readVectors(leaders, result);
+        readVectors(incomplete, result);
         return Map.copyOf(result);
     }
 

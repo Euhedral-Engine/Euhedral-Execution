@@ -4,6 +4,7 @@ import io.euhedral_execution.training.checkpoint.CheckpointSnapshotCodec;
 import io.euhedral_execution.training.checkpoint.data.ArtifactReference;
 import io.euhedral_execution.training.checkpoint.data.ClosedLoopCheckpoint;
 import io.euhedral_execution.training.checkpoint.enums.CheckpointStage;
+import io.euhedral_execution.training.checkpoint.enums.EvidenceSource;
 import io.euhedral_execution.training.data.BenchmarkObservation;
 import io.euhedral_execution.training.data.BenchmarkRunContext;
 import io.euhedral_execution.training.data.ScheduledPolicy;
@@ -157,9 +158,7 @@ public final class TrainingRunPackageValidator {
                 LinkOption.NOFOLLOW_LINKS);
         if (merge != checkpoint.latestMerge().isPresent()
                 || model != checkpoint.latestModel().isPresent()
-                || checkpoint.pendingSchedule().isPresent() && !schedule
-                || checkpoint.stage() == CheckpointStage.RUN_COMPLETE
-                && !schedule) {
+                || requiresSchedule(checkpoint) != schedule) {
             throw new IOException("Package lifecycle artifact presence mismatch");
         }
         ArrayList<PackageOmission> omissions = new ArrayList<>();
@@ -304,24 +303,7 @@ public final class TrainingRunPackageValidator {
     private static void validateMerge(Path root, ClosedLoopCheckpoint checkpoint)
             throws IOException {
         if (checkpoint.latestMerge().isEmpty()) return;
-        List<List<String>> ranking = CanonicalCsv.read(root.resolve("robust-ranking.csv"));
-        List<List<String>> measurements = CanonicalCsv.read(
-                root.resolve("policy-scenario-measurements.csv"));
-        List<List<String>> scenarios = CanonicalCsv.read(
-                root.resolve("scenario-results.csv"));
-        if (measurements.size() != scenarios.size()
-                || ranking.isEmpty() || scenarios.isEmpty()) {
-            throw new IOException("Invalid packaged merge views");
-        }
-        for (int index = 1; index < scenarios.size(); index++) {
-            List<String> source = scenarios.get(index);
-            List<String> joined = measurements.get(index);
-            if (!joined.subList(0, 8).equals(source.subList(0, 8))
-                    || !joined.subList(36, joined.size()).equals(
-                    source.subList(8, source.size()))) {
-                throw new IOException("Measurement join changed Phase 1 fields");
-            }
-        }
+        PackageDatasetWriter.validateMeasurements(root);
     }
 
     private static void validateSchedule(Path root, ClosedLoopCheckpoint checkpoint,
@@ -336,6 +318,19 @@ public final class TrainingRunPackageValidator {
         long expected = schedule.runs().stream().mapToLong(run -> run.policies().size()).sum();
         if (vectors.size() - 1L != expected) {
             throw new IOException("Benchmark-ready vector count mismatch");
+        }
+        PackageDatasetWriter.validateBenchmarkReady(
+                root.resolve("vectors/benchmark-ready.vectors.csv"), schedule);
+        if (checkpoint.pendingSchedule().isEmpty()) {
+            Set<String> completed = checkpoint.evidence().stream().filter(entry ->
+                    entry.source() == EvidenceSource.ITERATION)
+                    .map(entry -> entry.benchmarkRunId())
+                    .collect(java.util.stream.Collectors.toSet());
+            for (var run : schedule.runs()) {
+                if (!completed.contains(run.benchmarkRunId())) {
+                    throw new IOException("Derived schedule lacks checkpoint iteration evidence");
+                }
+            }
         }
     }
 
@@ -421,6 +416,15 @@ public final class TrainingRunPackageValidator {
         } catch (java.security.NoSuchAlgorithmException error) {
             throw new IllegalStateException(error);
         }
+    }
+
+    private static boolean requiresSchedule(ClosedLoopCheckpoint checkpoint) {
+        return checkpoint.pendingSchedule().isPresent()
+                || checkpoint.nextIteration() > 1
+                || switch (checkpoint.stage()) {
+                    case SCHEDULE_READY, BENCHMARKING, READY_TO_MERGE, RUN_COMPLETE -> true;
+                    default -> false;
+                };
     }
 
     private static final class Counter implements ObservationBundleReader.ObservationVisitor {
