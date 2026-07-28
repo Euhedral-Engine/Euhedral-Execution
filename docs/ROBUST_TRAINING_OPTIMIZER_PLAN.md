@@ -568,7 +568,7 @@ the restrictions at the end of this document.
 
 ### Phase 6 - end-to-end verification and audit
 
-#### Prompt 6A - BLUEPRINT - gpt-5.6-sol / medium
+#### Prompt 6A - BLUEPRINT - gpt-5.6-sol / high
 
 > Read every blueprint and completion record. Inspect the resulting integrated test surface and
 > generated package, but do not change production code. Write
@@ -581,15 +581,17 @@ the restrictions at the end of this document.
 > Before handoff, perform and record the post-blueprint implementation-model reassessment required
 > by docs/AGENT_WORKFLOW.md, then replace Prompt 6B's provisional model and effort.
 
-#### Prompt 6B - IMPLEMENTATION - PROVISIONAL gpt-5.5 / low; Prompt 6A must replace
+#### Prompt 6B - IMPLEMENTATION - gpt-5.6-sol / high
 
-> Do not execute while this prompt is labeled provisional. Use the model and effort selected and
-> written here by Prompt 6A. Read AGENTS.md, this plan, and
+> Use `gpt-5.6-sol` at `high` reasoning effort. Read AGENTS.md, docs/AGENT_WORKFLOW.md, this plan's
+> Phase 6 section, the Phase 3-5 conformance audits, and
 > `docs/robust-training-optimizer/blueprints/06-verification-audit.md`. Execute the audit exactly.
-> Add only the fixtures or test harness described there, run the focused and end-to-end suites,
-> inspect produced reports, and fix implementation defects that are already resolved by an existing
-> blueprint. Do not make new statistical or architectural decisions. Record results and any
-> environmental limitations in the audit blueprint. Commit and push all validated corrections.
+> Follow its exact minimal context envelope. Add only its fixtures, golden resources, and minimal
+> package-private test seams; run the focused, end-to-end, lifecycle, failure, and full regression
+> suites; inspect generated packages and reports; and fix implementation defects only where an
+> existing blueprint already settles the correct behavior. Do not make new statistical or
+> architectural decisions. Record exact results, package fingerprints, fixes, and environmental
+> limitations in the audit blueprint. Commit and push all validated corrections.
 
 #### Prompt 6C - IMPLEMENTATION VERIFICATION - gpt-5.5 / medium
 
