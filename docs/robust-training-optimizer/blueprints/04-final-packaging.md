@@ -1037,3 +1037,85 @@ to rediscover the mappings already settled here.
 If `gpt-5.6-sol / high` or an equivalent model is unavailable, stop and ask for an explicit model
 selection rather than silently falling back. Verification cannot compensate for knowingly
 under-provisioning the implementation pass.
+
+## Prompt 4B completion record
+
+Implemented on branch `agent/phase4b-final-packaging`.
+
+### Changed production and documentation files
+
+- `training/checkpoint/ArtifactFingerprint.java` now streams exact SHA-256 input through a
+  reusable 128 KiB buffer without changing Phase 3 directory framing.
+- `training/checkpoint/CheckpointSnapshotCodec.java` now loads an exact historical revision and
+  supports strict detached audit reads without dereferencing workspace artifacts.
+- New `training/packaging` types implement package inputs, canonical manifest JSON, streaming file
+  support and CSV metadata scans, checkpoint-governed source selection, derived datasets, reports,
+  validation, collision handling, owned staging cleanup, forced writes, and atomic publication.
+- `ClosedLoopResult`, `ClosedLoopRunner`, and `Runner` integrate packaging at the public lifecycle
+  boundary and expose the exact `package-run` command. The package-private state machine remains
+  packaging-free.
+- `euhedral-training/README.md` and `docs/ML_CLOSED_LOOP_ARCHITECTURE.md` document package identity,
+  artifact naming, provenance, streaming ownership, atomic publication, and reproduction.
+
+### Test additions and evidence
+
+- Added the eight named Phase 4 test classes and extended `ClosedLoopRunnerTest` with a real
+  checkpoint, Phase 1 merge, raw evidence, partial package publication, independent validation,
+  idempotent collision handling, unexpected-file tamper rejection, naming assertions, and
+  byte-identical reproduction into two distinct output roots.
+- Extended checkpoint tests for historical revision loading and detached reads.
+- The large-file hash test crosses the 128 KiB streaming boundary. Package generation and
+  validation count raw observations through the streaming visitor and streaming CSV metadata
+  scanner; no DJL model or parameter tensor is instantiated by packaging.
+
+Commands run:
+
+```text
+env JAVA_HOME=/home/bagotay/.local/share/mise/installs/java/21.0.2 \
+    PATH=/home/bagotay/.local/share/mise/installs/java/21.0.2/bin:/usr/bin:/bin \
+    /home/bagotay/.local/share/mise/installs/maven/3.9.16/apache-maven-3.9.16/bin/mvn \
+    -B -pl euhedral-training -am install -Dmaven.test.skip=true
+  BUILD SUCCESS (6 reactor modules)
+
+env JAVA_HOME=/home/bagotay/.local/share/mise/installs/java/21.0.2 \
+    PATH=/home/bagotay/.local/share/mise/installs/java/21.0.2/bin:/usr/bin:/bin \
+    /home/bagotay/.local/share/mise/installs/maven/3.9.16/apache-maven-3.9.16/bin/mvn \
+    -B -pl euhedral-training \
+    -Dtest=ArtifactFingerprintTest,CheckpointSnapshotCodecTest,TrainingRunPackageInputsCodecTest,PackageManifestCodecTest,PackageDatasetWriterTest,PackageReportWriterTest,TrainingRunPackagerTest,TrainingRunPackageValidatorTest,ClosedLoopRunnerTest \
+    test
+  BUILD SUCCESS; 13 tests, 0 failures, 0 errors, 0 skipped
+
+env JAVA_HOME=/home/bagotay/.local/share/mise/installs/java/21.0.2 \
+    PATH=/home/bagotay/.local/share/mise/installs/java/21.0.2/bin:/usr/bin:/bin \
+    /home/bagotay/.local/share/mise/installs/maven/3.9.16/apache-maven-3.9.16/bin/mvn \
+    -B -pl euhedral-training test
+  BUILD SUCCESS; 115 tests, 0 failures, 0 errors, 1 skipped
+
+git diff --check
+  no errors
+
+rg -n "input/merger|output/results|latest-model|latest-training-data|state\\.properties|euhedral-policy-ranker|\\.bin" \
+  euhedral-training/src/main/java/io/euhedral_execution/training/packaging \
+  euhedral-training/src/test/java/io/euhedral_execution/training/packaging
+  no matches
+```
+
+The one skipped test is the pre-existing opt-in
+`ScenarioOrdinalNetworkIntegrationTest`; packaging tests deliberately do not load DJL.
+
+### Lifecycle, failure, and workspace notes
+
+The exercised real package is a later `READY_TO_TRAIN` recoverable partial with merge and raw
+evidence present and model/schedule omissions. Production source selection and validator rules
+cover all checkpoint stages, including terminal model rejection and final schedule derivation.
+Staged validation failure, copy/generation failure, and atomic-move failure share one owned
+temporary-directory cleanup boundary; conflicting/unowned staging directories and final targets
+are never deleted. The focused test explicitly proves tampered inventory rejection, source
+immutability through deterministic reproduction, and idempotent identical-target behavior.
+
+The pre-existing staged and untracked files under `euhedral-training/input`,
+`euhedral-training/output`, and the unrelated untracked core utility test directory were not read
+as package inputs, edited, removed, or included in the Phase 4 commit.
+
+No package identity, lifecycle, manifest, provenance, artifact-selection, atomicity, collision, or
+deterministic-byte contract was intentionally changed from the approved blueprint.
