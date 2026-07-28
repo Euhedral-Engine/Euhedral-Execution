@@ -12,12 +12,24 @@ public class BenchmarkFrame extends AbstractFrame {
 
     public static BenchmarkFrame[] generate(int count, boolean ordered, long idHash, AtomicBoolean killSwitch) {
         long seed = ThreadLocalRandom.current().nextLong();
+        return generate(count, ordered, idHash, seed, killSwitch);
+    }
 
+    public static BenchmarkFrame[] generate(int count, boolean ordered, long idHash,
+            long routingSeed) {
+        return generate(count, ordered, idHash, routingSeed, null);
+    }
+
+    public static BenchmarkFrame[] generate(int count, boolean ordered, long idHash,
+            long routingSeed, AtomicBoolean killSwitch) {
+        if (count < 0) {
+            throw new IllegalArgumentException("count must not be negative");
+        }
         BenchmarkFrame[] frames = new BenchmarkFrame[count];
         for(int i = 0; i < count; i++) {
             frames[i] = new BenchmarkFrame(idHash, killSwitch);
             if(!ordered) {
-                frames[i].randomizeHash(seed++);
+                frames[i].randomizeHash(routingSeed + i);
             }
         }
         return frames;
