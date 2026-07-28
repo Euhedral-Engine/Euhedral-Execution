@@ -1,6 +1,5 @@
 package io.euhedral_execution.training.optimization;
 
-import io.euhedral_execution.training.data.PolicyVector;
 import io.euhedral_execution.training.data.SourceScenario;
 import io.euhedral_execution.training.learning.PolicyPredictionCurve;
 import io.euhedral_execution.training.learning.ScenarioPrediction;
@@ -10,7 +9,7 @@ import java.util.Objects;
 import java.util.SortedSet;
 import java.util.TreeSet;
 
-public record PredictedPolicySummary(PolicyVector policy, List<ScenarioPrediction> predictions,
+public record PredictedPolicySummary(PolicyPredictionCurve curve,
         double predictedWorstQuality, double predictedQualityP25,
         double predictedGeometricMeanQuality, double predictedQualityMad,
         double maximumEpistemicStdDev, double maximumDisagreementRange,
@@ -18,16 +17,7 @@ public record PredictedPolicySummary(PolicyVector policy, List<ScenarioPredictio
     private static final double EPSILON = 1.0e-12;
 
     public PredictedPolicySummary {
-        Objects.requireNonNull(policy);
-        predictions = List.copyOf(predictions);
-        if (predictions.isEmpty()) {
-            throw new IllegalArgumentException("Predicted summary requires scenarios");
-        }
-        for (int i = 1; i < predictions.size(); i++) {
-            if (predictions.get(i - 1).scenario().compareTo(predictions.get(i).scenario()) >= 0) {
-                throw new IllegalArgumentException("Predictions must be unique and sorted");
-            }
-        }
+        Objects.requireNonNull(curve);
         for (double value : new double[]{predictedWorstQuality, predictedQualityP25,
                 predictedGeometricMeanQuality, predictedQualityMad, maximumEpistemicStdDev,
                 maximumDisagreementRange, meanOrdinalStdDev, meanOrdinalEntropy,
@@ -50,8 +40,8 @@ public record PredictedPolicySummary(PolicyVector policy, List<ScenarioPredictio
         double worst = Double.POSITIVE_INFINITY;
         double maxEpistemic = 0.0;
         double maxDisagreement = 0.0;
-        double ordinalStdDevSum = 0.0;
-        double entropySum = 0.0;
+        double[] ordinalStdDevs = new double[curve.scenarios().size()];
+        double[] entropies = new double[curve.scenarios().size()];
         double pessimistic = Double.POSITIVE_INFINITY;
         for (SourceScenario scenario : expected) {
             ScenarioPrediction prediction = curve.scenarios().get(index);
@@ -59,22 +49,32 @@ public record PredictedPolicySummary(PolicyVector policy, List<ScenarioPredictio
                 throw new IllegalArgumentException("Prediction scenarios are missing or reordered");
             }
             double quality = prediction.predictedQuality();
-            qualities[index++] = quality;
+            qualities[index] = quality;
             worst = Math.min(worst, quality);
             maxEpistemic = Math.max(maxEpistemic, prediction.epistemicStdDev());
             maxDisagreement = Math.max(maxDisagreement, prediction.disagreementRange());
-            ordinalStdDevSum += prediction.ordinalStdDev();
-            entropySum += prediction.ordinalEntropy();
+            ordinalStdDevs[index] = prediction.ordinalStdDev();
+            entropies[index] = prediction.ordinalEntropy();
+            index++;
             pessimistic = Math.min(pessimistic, prediction.qualityIntervalLow());
         }
         double[] logs = new double[qualities.length];
         for (int i = 0; i < qualities.length; i++) {
             logs[i] = StrictMath.log(Math.max(qualities[i], EPSILON));
         }
-        return new PredictedPolicySummary(curve.policy(), curve.scenarios(), worst,
+        return new PredictedPolicySummary(curve, worst,
                 RobustStatistics.quantileType7(qualities, 0.25),
                 StrictMath.exp(RobustStatistics.compensatedMean(logs)),
                 RobustStatistics.mad(qualities), maxEpistemic, maxDisagreement,
-                ordinalStdDevSum / qualities.length, entropySum / qualities.length, pessimistic);
+                RobustStatistics.compensatedMean(ordinalStdDevs),
+                RobustStatistics.compensatedMean(entropies), pessimistic);
+    }
+
+    public io.euhedral_execution.training.data.PolicyVector policy() {
+        return curve.policy();
+    }
+
+    public List<ScenarioPrediction> predictions() {
+        return curve.scenarios();
     }
 }

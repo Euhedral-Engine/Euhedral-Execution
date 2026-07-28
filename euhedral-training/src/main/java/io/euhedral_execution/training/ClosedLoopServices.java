@@ -16,4 +16,11 @@ interface ClosedLoopServices {
     BenchmarkRunContext benchmark(NativeBenchmarkRunPlan plan, BooleanSupplier stopRequested)
             throws Exception;
     boolean stopRequested();
+    default int activeCoreCount() {
+        return io.euhedral_execution.hardware_utils.SystemInfo.getCoreCount();
+    }
+    default String activeCpuSetHex() {
+        return io.euhedral_execution.hardware_utils.SystemInfo.toHexMask(
+                io.euhedral_execution.hardware_utils.SystemInfo.getCpuSet());
+    }
 }

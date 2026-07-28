@@ -17,21 +17,28 @@ public final class BootstrapScheduler {
             policies.add(new ScheduledPolicy(i + 1, bootstrapPolicies.get(i),
                     Set.of(PolicyRole.EXPLORATION)));
         }
-        ArrayList<FrameSourceSeed> seeds = new ArrayList<>();
-        for (int i = 0; i < scenario.sourceCount(); i++) {
-            seeds.add(new FrameSourceSeed(i, SchedulerSeeds.hash("bootstrap-id" + i,
-                    schedulerSeed), SchedulerSeeds.hash("bootstrap-route" + i, schedulerSeed)));
-        }
+        List<BootstrapIdentity> identityPolicies = policies.stream().map(policy ->
+                new BootstrapIdentity(policy.policy().id(), PolicyRole.EXPLORATION)).toList();
+        String cohort = SchedulerSeeds.candidateCohortId(trainingRunId,
+                RunKind.BOOTSTRAP.name(), 0, scenario, identityPolicies, schedulerSeed);
+        BenchmarkParameters identityParameters = new BenchmarkParameters(
+                benchmarkConfig.expectedRepetitions(), benchmarkConfig.sampleDurationNanos(),
+                benchmarkConfig.livenessTimeoutNanos(), benchmarkConfig.framesPerSource(),
+                benchmarkConfig.resetTimeoutNanos(), benchmarkConfig.orderedFrames(), cpuSetHex,
+                java.util.stream.IntStream.range(0, scenario.sourceCount())
+                        .mapToObj(index -> new FrameSourceSeed(index, 0, 0)).toList());
+        String run = SchedulerSeeds.benchmarkRunId(trainingRunId, RunKind.BOOTSTRAP.name(), 0,
+                scenario, cohort, identityParameters, commitSha, dirtyWorkingTree, schedulerSeed);
+        List<FrameSourceSeed> seeds = java.util.stream.IntStream.range(0, scenario.sourceCount())
+                .mapToObj(index -> SchedulerSeeds.frameSourceSeed(run, index, schedulerSeed))
+                .toList();
         BenchmarkParameters parameters = new BenchmarkParameters(
                 benchmarkConfig.expectedRepetitions(), benchmarkConfig.sampleDurationNanos(),
                 benchmarkConfig.livenessTimeoutNanos(), benchmarkConfig.framesPerSource(),
                 benchmarkConfig.resetTimeoutNanos(), benchmarkConfig.orderedFrames(), cpuSetHex,
                 seeds);
-        String cohort = "c1-" + Long.toUnsignedString(SchedulerSeeds.hash("bootstrap-cohort\n"
-                + trainingRunId + "\n" + scenario.canonical() + "\n", schedulerSeed), 16);
-        String run = "r1-" + Long.toUnsignedString(SchedulerSeeds.hash("bootstrap-run\n"
-                + cohort + "\n" + commitSha + "\n" + dirtyWorkingTree + "\n", schedulerSeed), 16);
-        return new IterationSchedule(0, List.of(new ScheduledRun(RunKind.BOOTSTRAP, scenario,
+        return new IterationSchedule(trainingRunId, 0,
+                List.of(new ScheduledRun(RunKind.BOOTSTRAP, scenario,
                 run, cohort, parameters, policies)), List.of(), List.of(),
                 List.of(new ScenarioBudgetReport(scenario, policies.size(), 0, 0, 0, 0, 0, 0,
                         0, 0, policies.size(), policies.size(), 0, 0, 0, policies.size())),
@@ -39,5 +46,9 @@ public final class BootstrapScheduler {
     }
 
     private BootstrapScheduler() {
+    }
+
+    private record BootstrapIdentity(PolicyId policyId, PolicyRole role)
+            implements SchedulerSeeds.PolicyWithRole {
     }
 }

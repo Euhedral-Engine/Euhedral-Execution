@@ -3,17 +3,13 @@ package io.euhedral_execution.training.scheduling;
 import io.euhedral_execution.training.data.PolicyRegistry;
 import io.euhedral_execution.training.data.PolicyVector;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
 public final class BootstrapPolicyCsv {
     public static List<PolicyVector> read(Path path, int expectedPolicyCount) throws IOException {
-        List<List<String>> rows = Files.readAllLines(path).stream()
-                .filter(line -> !line.isEmpty())
-                .map(line -> List.of(line.split(",", -1)))
-                .toList();
+        List<List<String>> rows = Phase3Csv.read(path);
         if (rows.size() != expectedPolicyCount + 1) {
             throw new IllegalArgumentException("Unexpected bootstrap policy count");
         }
@@ -29,7 +25,8 @@ public final class BootstrapPolicyCsv {
         ArrayList<PolicyVector> policies = new ArrayList<>(expectedPolicyCount);
         for (int row = 1; row < rows.size(); row++) {
             List<String> fields = rows.get(row);
-            if (!fields.get(0).equals("1") || Integer.parseInt(fields.get(1)) != row) {
+            if (fields.size() != 31 || !fields.get(0).equals("1")
+                    || Integer.parseInt(fields.get(1)) != row) {
                 throw new IllegalArgumentException("Invalid bootstrap row");
             }
             double[] weights = new double[PolicyVector.WIDTH];
