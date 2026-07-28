@@ -1,6 +1,6 @@
 # Phase 4 Blueprint Conformance Audit
 
-Audited branch: `agent/phase4d-final-packaging-audit`, based on verified commit `0a1e342`.
+Audited branch: `agent/phase4d-final-packaging-audit`, based on verified commit `b9d54ac`.
 
 Blueprint:
 `docs/robust-training-optimizer/blueprints/04-final-packaging.md`.
@@ -74,3 +74,22 @@ The lifecycle matrix, golden package, failure-injection, comprehensive tamper, c
 command-integration tests listed above still have not been added. Consequently, Phase 4 remains
 **unverified and not conformant** until that settled acceptance surface is implemented. This
 re-audit changes no architectural decision.
+
+## Naming and package cleanup verification
+
+The 2026-07-29 naming-only cleanup preserves the audit findings above while updating their source
+locations:
+
+- public package inputs and requests are under `training.packaging.config`, the published result
+  is under `training.packaging.data`, public enums are under `training.packaging.enums`, and the
+  public inputs codec is under `training.packaging.io`;
+- operational and package-private collaborators, including `PackageReportWriter`, remain under
+  `training.packaging`;
+- shared CSV operations use `training.data.io.CanonicalCsv`; and
+- producing-stage values are the domain names `MERGE`, `LEARNING`, `SCHEDULING`, and `CHECKPOINT`.
+
+The full training test suite passed after the moves: 115 tests, 0 failures, 0 errors, and the one
+pre-existing opt-in DJL integration test skipped. The cleanup changes no concurrency ownership,
+memory-access mode, ranking/calibration arithmetic, or floating-point operation. Serialized
+manifest stage labels reflect the renamed enum values; the lifecycle and validation rules are
+unchanged.
