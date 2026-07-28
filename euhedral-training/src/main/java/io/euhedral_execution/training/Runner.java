@@ -1,6 +1,8 @@
 package io.euhedral_execution.training;
 
 import io.euhedral_execution.training.networks.PolicyOrdinalNetwork;
+import io.euhedral_execution.training.legacy.PooledBenchmarkRunner;
+import io.euhedral_execution.training.legacy.PooledSequenceFinder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -19,11 +21,11 @@ public class Runner {
             case "merge-vectors" -> DataMerger.mergeVectors();
             case "training-info" -> PolicyOrdinalNetwork.printEnvironment();
             case "train-vector-finder" -> {
-                try (SequenceFinder ignored = new SequenceFinder()) {
+                try (PooledSequenceFinder ignored = new PooledSequenceFinder()) {
                     // SequenceFinder executes the selected train or generate operation at construction.
                 }
             }
-            case "benchmark" -> BenchmarkRunner.run(args);
+            case "benchmark" -> PooledBenchmarkRunner.run(args);
             case "closed-loop" -> {
                 try {
                     ClosedLoopRunner.run();
