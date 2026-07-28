@@ -1,0 +1,323 @@
+{
+  "artifact_type": "euhedral-scenario-conditioned-ordinal-model",
+  "schema_version": 1,
+  "objective_version": "scenario-quality-ordinal-v1",
+  "phase1_schema_version": 1,
+  "policy_id_scheme": "p1",
+  "policy_width": 28,
+  "feature_schema_id": "policy-ratio-v1",
+  "feature_width": 29,
+  "feature_names": [
+    "policy_weight_00",
+    "policy_weight_01",
+    "policy_weight_02",
+    "policy_weight_03",
+    "policy_weight_04",
+    "policy_weight_05",
+    "policy_weight_06",
+    "policy_weight_07",
+    "policy_weight_08",
+    "policy_weight_09",
+    "policy_weight_10",
+    "policy_weight_11",
+    "policy_weight_12",
+    "policy_weight_13",
+    "policy_weight_14",
+    "policy_weight_15",
+    "policy_weight_16",
+    "policy_weight_17",
+    "policy_weight_18",
+    "policy_weight_19",
+    "policy_weight_20",
+    "policy_weight_21",
+    "policy_weight_22",
+    "policy_weight_23",
+    "policy_weight_24",
+    "policy_weight_25",
+    "policy_weight_26",
+    "policy_weight_27",
+    "source_core_ratio"
+  ],
+  "feature_mean_bits": [
+    "0000000000000000",
+    "0000000000000000",
+    "0000000000000000",
+    "0000000000000000",
+    "0000000000000000",
+    "0000000000000000",
+    "0000000000000000",
+    "0000000000000000",
+    "0000000000000000",
+    "0000000000000000",
+    "0000000000000000",
+    "0000000000000000",
+    "0000000000000000",
+    "0000000000000000",
+    "0000000000000000",
+    "0000000000000000",
+    "0000000000000000",
+    "0000000000000000",
+    "0000000000000000",
+    "0000000000000000",
+    "0000000000000000",
+    "0000000000000000",
+    "0000000000000000",
+    "0000000000000000",
+    "0000000000000000",
+    "0000000000000000",
+    "0000000000000000",
+    "0000000000000000",
+    "3fd0000000000000"
+  ],
+  "feature_scale_bits": [
+    "3ff0000000000000",
+    "3ff0000000000000",
+    "3ff0000000000000",
+    "3ff0000000000000",
+    "3ff0000000000000",
+    "3ff0000000000000",
+    "3ff0000000000000",
+    "3ff0000000000000",
+    "3ff0000000000000",
+    "3ff0000000000000",
+    "3ff0000000000000",
+    "3ff0000000000000",
+    "3ff0000000000000",
+    "3ff0000000000000",
+    "3ff0000000000000",
+    "3ff0000000000000",
+    "3ff0000000000000",
+    "3ff0000000000000",
+    "3ff0000000000000",
+    "3ff0000000000000",
+    "3ff0000000000000",
+    "3ff0000000000000",
+    "3ff0000000000000",
+    "3ff0000000000000",
+    "3ff0000000000000",
+    "3ff0000000000000",
+    "3ff0000000000000",
+    "3ff0000000000000",
+    "3ff0000000000000"
+  ],
+  "feature_constant": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true
+  ],
+  "output_width": 9,
+  "ordinal_threshold_bits": [
+    "3fb999999999999a",
+    "3fc999999999999a",
+    "3fd3333333333333",
+    "3fd999999999999a",
+    "3fe0000000000000",
+    "3fe3333333333333",
+    "3fe6666666666666",
+    "3fe999999999999a",
+    "3feccccccccccccd"
+  ],
+  "architecture": "F-128-96-48-9-gelu",
+  "ensemble_members": 3,
+  "member_model_name": "euhedral-scenario-ordinal",
+  "members": [
+    {
+      "index": 0,
+      "seed_hex": "c066c6f196ffe6d3",
+      "best_epoch": 1,
+      "path": "members/member-000/euhedral-scenario-ordinal-0000.params",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "index": 1,
+      "seed_hex": "9141c9205b7b043b",
+      "best_epoch": 1,
+      "path": "members/member-001/euhedral-scenario-ordinal-0000.params",
+      "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    {
+      "index": 2,
+      "seed_hex": "54445ee768f6d23b",
+      "best_epoch": 1,
+      "path": "members/member-002/euhedral-scenario-ordinal-0000.params",
+      "sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+    }
+  ],
+  "split_algorithm": "policy-hash-80-10-10-v1",
+  "split_seed_hex": "0000000000000001",
+  "model_seed_hex": "0000000000000002",
+  "dataset_fingerprint_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "include_weak_calibration_rows": false,
+  "required_scenarios": [
+    {
+      "scenario_id": "s1-host-a-src8-core32-r1of4",
+      "environment_id": "host-a",
+      "source_count": 8,
+      "available_physical_core_count": 32,
+      "source_ratio_numerator": 1,
+      "source_ratio_denominator": 4
+    }
+  ],
+  "training_scenarios": [
+    {
+      "scenario_id": "s1-host-a-src8-core32-r1of4",
+      "environment_id": "host-a",
+      "source_count": 8,
+      "available_physical_core_count": 32,
+      "source_ratio_numerator": 1,
+      "source_ratio_denominator": 4
+    }
+  ],
+  "partition_counts": {
+    "policy_counts": {
+      "ABLATION_EARLY_STOP": 1,
+      "ABLATION_SCORE": 1,
+      "TEST": 1,
+      "TRAIN": 1,
+      "VALIDATION": 2
+    },
+    "row_counts": {
+      "ABLATION_EARLY_STOP": 1,
+      "ABLATION_SCORE": 1,
+      "TEST": 1,
+      "TRAIN": 1,
+      "VALIDATION": 2
+    },
+    "scenario_row_counts": {
+      "ABLATION_EARLY_STOP": {
+        "s1-host-a-src8-core32-r1of4": 1
+      },
+      "ABLATION_SCORE": {
+        "s1-host-a-src8-core32-r1of4": 1
+      },
+      "TEST": {
+        "s1-host-a-src8-core32-r1of4": 1
+      },
+      "TRAIN": {
+        "s1-host-a-src8-core32-r1of4": 1
+      },
+      "VALIDATION": {
+        "s1-host-a-src8-core32-r1of4": 2
+      }
+    }
+  },
+  "training_config": {
+    "split_seed_hex": "0000000000000001",
+    "model_seed_hex": "0000000000000002",
+    "device": "cpu",
+    "ensemble_members": 3,
+    "loso_evaluation_members": 1,
+    "ablation_members": 3,
+    "max_epochs": 5,
+    "patience": 2,
+    "effective_batch_size": 16,
+    "learning_rate_bits": "3a83126f",
+    "weight_decay_bits": "38d1b717",
+    "label_smoothing_bits": "3ca3d70a",
+    "minimum_train_policy_groups": 1,
+    "minimum_validation_policy_groups": 2,
+    "minimum_test_policy_groups": 1,
+    "minimum_train_rows_per_scenario": 1,
+    "minimum_validation_rows_per_scenario": 1,
+    "minimum_test_rows_per_scenario": 1,
+    "include_weak_calibration_rows": false,
+    "feature_selection_mode": "RATIO_ONLY"
+  },
+  "evaluation_thresholds": {
+    "maximum_grouped_macro_mae": 0.2,
+    "minimum_grouped_macro_spearman": 0.5,
+    "minimum_grouped_macro_precision_at_ten": 0.2,
+    "maximum_loso_macro_mae": 0.25,
+    "minimum_loso_macro_spearman": 0.35,
+    "maximum_loso_worst_scenario_mae": 0.35,
+    "minimum_context_mae_improvement": 0.01,
+    "minimum_context_spearman_improvement": 0.05,
+    "maximum_context_mae_regression": 0.01,
+    "maximum_context_spearman_regression": 0.02,
+    "minimum_counts_cross_environment_mae_improvement": 0.01,
+    "maximum_counts_spearman_regression": 0.02,
+    "maximum_counts_worst_environment_mae_regression": 0.02
+  },
+  "feature_selection": {
+    "requested_mode": "RATIO_ONLY",
+    "selected_feature_set": "policy-ratio-v1",
+    "reason": "RATIO_ONLY_REQUESTED",
+    "metrics": [
+      {
+        "evaluation_kind": "VALIDATION_CONTEXT_GATE",
+        "fold_id": "all",
+        "feature_schema_id": "policy-ratio-v1",
+        "comparison_schema_id": "policy-only-v1",
+        "scenario_or_environment": "all",
+        "row_count": 10,
+        "mae": 0.19,
+        "spearman": 0.48,
+        "mae_delta": -0.01,
+        "spearman_delta": -0.02,
+        "selected": true,
+        "gate_status": "PASS",
+        "reason": "CONTEXT_VALIDATED"
+      }
+    ]
+  },
+  "evaluation_summary": {
+    "grouped_report": "grouped-evaluation.csv",
+    "loso_report": "loso-evaluation.csv",
+    "grouped_macro_mae": 0.1,
+    "grouped_macro_spearman": 0.8,
+    "grouped_macro_precision_at_ten": 0.5,
+    "loso_macro_mae": 0.1,
+    "loso_macro_spearman": 0.8,
+    "loso_worst_scenario_mae": 0.1
+  },
+  "acceptance_status": "ACCEPTED",
+  "acceptance_reasons": [],
+  "producer": {
+    "commit_sha": "0000000000000000000000000000000000000000",
+    "dirty_working_tree": false,
+    "djl_engine": "PyTorch",
+    "djl_engine_version": "2.7.1",
+    "training_device": "cpu"
+  },
+  "metadata_probe": {
+    "policy_id": "p1-08faf2bfbd873e50",
+    "scenario_id": "s1-host-a-src8-core32-r1of4",
+    "prediction_raw_bits": [
+      "0000000000000000",
+      "0000000000000000",
+      "0000000000000000",
+      "0000000000000000",
+      "0000000000000000",
+      "0000000000000000",
+      "0000000000000000",
+      "0000000000000000"
+    ],
+    "producing_device": "cpu"
+  }
+}

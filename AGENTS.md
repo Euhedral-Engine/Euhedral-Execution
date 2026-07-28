@@ -107,6 +107,42 @@ properties. CUDA is not needed for ordinary compilation or CPU tests. The packag
 expects the exact PyTorch and CUDA versions described in
 [`euhedral-training/GPU_SETUP_UBUNTU.md`](euhedral-training/GPU_SETUP_UBUNTU.md).
 
+### Toolchain fallbacks in restricted agent environments
+
+`mise` is the preferred toolchain selector, but an agent sandbox may not permit `mise install` or
+other writes outside the workspace. Do not bypass those restrictions with `sudo` or by writing to
+shared tool directories. First inspect the available tools without changing state:
+
+```bash
+command -v java
+command -v mvn
+java -version
+mvn -version
+```
+
+If the pinned JDK and Maven are already installed, invoke them directly instead of asking `mise` to
+install or activate anything. Supply the JDK home and Maven executable explicitly; this is the same
+form used by the focused trainer blueprints:
+
+```bash
+env JAVA_HOME=<jdk-21-home> \
+    PATH=<jdk-21-home>/bin:/usr/bin:/bin \
+    <maven-home>/bin/mvn -B -pl euhedral-training test
+```
+
+When a sandbox cannot write the default Maven local repository, use a workspace-local cache and
+report that dependency resolution may still require network access:
+
+```bash
+mvn -Dmaven.repo.local=.cache/m2 -B -pl euhedral-training test
+```
+
+The system `java` and `mvn` are acceptable only after confirming that their JDK satisfies the
+selected module's release level. If a Maven wrapper is added later, prefer its checked-in version
+over an unverified system Maven. If neither the pinned nor a compatible preinstalled toolchain is
+usable, report the exact limitation and use the CI workflow as the authoritative build recipe; do
+not change source or build configuration merely to accommodate the agent environment.
+
 ## Active training optimizer implementation plan
 
 When a task implements robust cross-source training, optimizer/merger correlation, or end-of-run
