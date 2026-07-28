@@ -1,6 +1,6 @@
 # Phase 2 Blueprint: Scenario-Conditioned Ordinal Learning
 
-Status: ready for Prompt 2B implementation
+Status: implementation complete; conformance recheck passed
 
 This blueprint settles the Phase 2 data, feature, target, validation, inference, uncertainty, and
 model-artifact contracts. Prompt 2B must implement these decisions without reopening the modeling
@@ -113,7 +113,11 @@ The reader first builds one `PolicyRegistry` from the vector files:
 - a policy may occur in exactly one of the files;
 - all 28 raw bit fields are parsed and passed to `PolicyVector.of`;
 - the recomputed `PolicyId` must equal the declared ID; and
-- unsigned policy-ID ordering and the rank/count fields are validated, but rank is not a target.
+- `robust-leaders.vectors.csv` rows are validated in contiguous Phase 1 robust-rank order;
+- `incomplete-policies.vectors.csv` rows are validated in Phase 1 valid-count descending,
+  observed-count descending, unsigned `PolicyId` tie-break order; and
+- after the Phase 1 vector files are validated and joined, the learner stores its registry in
+  unsigned `PolicyId` order. Rank and count fields are audited metadata, not learning targets.
 
 It then parses `scenario-results.csv`, reconstructs `SourceScenario`, verifies its canonical ID,
 joins `policy_id` to the registry, and constructs the Phase 1 `ScenarioResult` invariants before
@@ -1905,8 +1909,9 @@ Prompt 2B is complete only when:
   report bytes;
 - focused tests prove source context affects inference and policy rows cannot leak across splits;
   and
-- no scheduler, optimizer, benchmark, Phase 1, workspace-data, CLI, or documentation file is
-  changed.
+- no scheduler, optimizer, benchmark, Phase 1, workspace-data, CLI, or user-facing documentation
+  file is changed; this blueprint, its completion record, and its conformance report are the only
+  permitted planning-documentation changes.
 
 ## Validation commands for Prompt 2B
 
@@ -1992,4 +1997,105 @@ acceptance gates, model schema, or Phase 1 compatibility requires another reason
 
 ## Prompt 2B completion notes
 
-Not yet implemented.
+Implementation completed on 2026-07-27.
+
+Scope:
+
+- Added the Phase 2-only scenario-conditioned ordinal learning package under
+  `euhedral-training/src/main/java/io/euhedral_execution/training/learning/`.
+- Added deterministic Phase 2 tests and fixtures under
+  `euhedral-training/src/test/java/io/euhedral_execution/training/learning/`.
+- Added the golden metadata resource
+  `euhedral-training/src/test/resources/robust-training/v1/scenario-model-metadata.json`.
+- Updated this blueprint's Phase 1 compatibility text and completion notes.
+- Did not edit Phase 1 merger code/tests, optimizer, scheduler, benchmark, pooled-model,
+  workspace-data, POM, module descriptor, CLI, or runtime files.
+
+Phase 1 compatibility resolution:
+
+- The reader validates `robust-leaders.vectors.csv` in Phase 1 robust-rank order.
+- The reader validates `incomplete-policies.vectors.csv` in Phase 1 valid-count descending,
+  observed-count descending, unsigned `PolicyId` tie-break order.
+- After those persisted Phase 1 contracts are validated, Phase 2 stores the joined policy registry
+  in unsigned `PolicyId` order for deterministic learning. Rank and count fields are audited only;
+  `quality` remains the sole learning target.
+
+Implemented checklist:
+
+- Strict scenario-conditioned ordinal data ingestion from the three explicit Phase 1 CSV paths,
+  including schema/header/order/count/fingerprint checks and a fatal policy-scenario Cartesian-grid
+  requirement for required scenarios.
+- Predictor inputs include the 28 raw policy weights plus normalized scenario context features;
+  no environment ID feature or hardware one-hot is used.
+- Predictor outputs are monotonic ordinal distributions decoded to quality curves with ensemble
+  uncertainty and member-disagreement summaries.
+- Policy-grouped train/validation/test splits, grouped validation, and leave-one-scenario-out /
+  leave-one-environment-out fold reports prevent measured rows for one policy from crossing split
+  boundaries.
+- Metadata records producer/device/framework, config, seeds, feature schema, normalizer, scenario
+  catalog, partition counts, acceptance gates, ablations, fold reports, training history, and model
+  probes. Accepted metadata is fail-closed against the configured thresholds.
+- Configured ablations require paired fold identities for source context and exact scenario-count
+  coverage for the count ablation.
+
+Deterministic fixture acceptance:
+
+- The deterministic source-context test passes and verifies that changing source context changes
+  predictions for the same policy.
+- The grouped split tests pass and verify that policy rows cannot leak across primary splits,
+  validation-ablation halves, leave-one-scenario-out folds, or leave-one-environment-out folds.
+- Sparse curve evaluation now retains only measured rows before joining, so fold reports remain
+  strict without requiring synthetic predictions for unmeasured policy-scenario pairs.
+
+Commands run:
+
+```text
+env JAVA_HOME=/home/bagotay/.local/share/mise/installs/java/21.0.2 \
+    PATH=/home/bagotay/.local/share/mise/installs/java/21.0.2/bin:/usr/bin:/bin \
+    /home/bagotay/.local/share/mise/installs/maven/3.9.16/apache-maven-3.9.16/bin/mvn \
+    -B -pl euhedral-training -Dtest=ScenarioModelMetadataCodecTest,ScenarioConditionedModelTest,Phase1ScenarioLearningReaderTest test
+  -> BUILD SUCCESS; 16 tests, 0 failures, 0 errors
+
+env JAVA_HOME=/home/bagotay/.local/share/mise/installs/java/21.0.2 \
+    PATH=/home/bagotay/.local/share/mise/installs/java/21.0.2/bin:/usr/bin:/bin \
+    /home/bagotay/.local/share/mise/installs/maven/3.9.16/apache-maven-3.9.16/bin/mvn \
+    -B -pl euhedral-training -am install -Dmaven.test.skip=true
+  -> BUILD SUCCESS
+
+env JAVA_HOME=/home/bagotay/.local/share/mise/installs/java/21.0.2 \
+    PATH=/home/bagotay/.local/share/mise/installs/java/21.0.2/bin:/usr/bin:/bin \
+    /home/bagotay/.local/share/mise/installs/maven/3.9.16/apache-maven-3.9.16/bin/mvn \
+    -B -pl euhedral-training test
+  -> BUILD SUCCESS; 86 tests, 0 failures, 0 errors, 1 skipped
+
+env JAVA_HOME=/home/bagotay/.local/share/mise/installs/java/21.0.2 \
+    PATH=/home/bagotay/.local/share/mise/installs/java/21.0.2/bin:/usr/bin:/bin \
+    /home/bagotay/.local/share/mise/installs/maven/3.9.16/apache-maven-3.9.16/bin/mvn \
+    -B -pl euhedral-training -Dtraining.djlIntegration=true -Dtest=ScenarioOrdinalNetworkIntegrationTest test
+  -> BUILD SUCCESS; 1 test, 0 failures, 0 errors, 0 skipped
+```
+
+Stale-reference checks:
+
+- No Phase 2 learner/test references to `PolicyRanking`, `mergeQuantiles`,
+  `BenchmarkOutputReader`, `TDigest`, or `quantile(0.99)`.
+- No Phase 2 learner/test references to workspace `input/merger` or `output` paths, source-specific
+  host names, the pooled `euhedral-policy-ranker` artifact, or serialized `.bin` model files. The
+  `.bin` search only matched the in-memory `binMasses` method name.
+- No environment-ID feature or hardware one-hot feature is present; the remaining `one-hot` matches
+  describe ordinal bins and this validation command.
+
+Deviation/blocker status:
+
+- No unresolved blocker remains. The only compatibility issue discovered during implementation was
+  resolved within Phase 2 by validating native Phase 1 vector ordering before creating Phase 2's
+  unsigned-ID policy registry.
+
+### Conformance correction - 2026-07-27
+
+- Removed the non-atomic publication fallback from `ScenarioModelTrainer.publish`. A filesystem
+  that cannot provide `ATOMIC_MOVE` now fails publication; the existing failure path removes the
+  temporary artifact and leaves the target absent.
+- Clarified that the blueprint, completion record, and conformance report are permitted planning
+  documentation changes while user-facing documentation remains outside Phase 2 scope.
+- Updated the blueprint status after the repeated validation and conformance audit passed.
