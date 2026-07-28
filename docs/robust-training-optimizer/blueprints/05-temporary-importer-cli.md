@@ -1038,3 +1038,47 @@ in the Phase 5B implementation scope. No Phase 1-4 persisted schema, statistical
 scheduler/checkpoint schema, package manifest, POM, module descriptor, or generated artifact was
 changed. There were no approved deviations; the outstanding Phase 4 audit matrix remains
 out of scope and unresolved as required.
+
+## Prompt 5C/D verification and conformance record
+
+Completed on 2026-07-28 on `agent/phase5cd-temporary-importer-cli-audit`.
+
+### Verification evidence
+
+```text
+mvn -B -pl euhedral-training -am install -Dmaven.test.skip=true
+  BUILD SUCCESS (6 reactor modules)
+
+mvn -B -pl euhedral-training \
+  -Dtest=CurrentWorkspaceImporterTest,ClosedLoopConfigCodecTest,RunnerTest,ClosedLoopRunnerTest test
+  8 tests, 0 failures, 0 errors, 0 skipped
+
+mvn -B -pl euhedral-training test
+  122 tests, 0 failures, 0 errors, 1 skipped
+```
+
+The existing opt-in `ScenarioOrdinalNetworkIntegrationTest` remains skipped because its DJL runtime
+is not enabled; it is outside the deterministic importer, typed configuration, and CLI surface.
+`git diff --check` passed. The temporary-layout search found the exact mapping package and Runner
+dispatch, plus the explicitly retained Phase 7 pooled-v0 `output/temp_data` default. The forbidden
+Phase 1-4 importer dependency search and the configuration/importer system-property search returned
+no matches.
+
+### Blueprint-settled correction
+
+Malformed mapped files already retained their path, one-based line, and token in the parser
+diagnostic, but the importer discarded that diagnostic after emitting the stable report reason.
+The verifier now logs that existing diagnostic while preserving the required
+`MALFORMED_CURRENT_WORKSPACE_FILE` report reason and deterministic artifact bytes. No data schema,
+recognition rule, stop/resume state transition, or package behavior changed.
+
+### Conformance outcome
+
+`docs/robust-training-optimizer/audits/05-temporary-importer-cli-conformance.md` records the
+requirement classifications. The implementation satisfies the removable vector-only boundary and
+typed runtime path, but the phase is not fully conformant because several explicitly required
+deterministic importer/configuration/CLI test cases have not been implemented. This is an
+acceptance-surface gap, not an architectural redesign request.
+
+The 2026-07-29 naming pass subsequently moved the typed codec and its test to `training.config`;
+the verification and conformance outcome is unchanged.
