@@ -1,10 +1,10 @@
 # Euhedral Reactor quick start
 
 `euhedral-reactor-core` connects Reactor pipelines to Euhedral's topology-aware execution engine.
-It provides a standard Reactor `Scheduler` and mapping operators that create, route, and recycle
-Euhedral frames for you.
+It provides a standard Reactor `Scheduler` implementation and mapping operators that create, route,
+and recycle Euhedral frames for you.
 
-For measured context, the
+For context, the
 [high-scale scheduler comparison](./benchmarks/HIGH_SCALE_BENCHMARKS.md) runs an 8K Mandelbrot
 workload on 96-core Intel and AMD systems and a 192-core Graviton5 system. In that workload, Reactor
 Parallel took 4.7x to 5.8x as much time per operation as Euhedral Core. The report includes the
@@ -12,17 +12,7 @@ feeding strategy, allocation results, hardware counters, and limitations.
 
 ## Prerequisites
 
-The full repository uses Java 21 and pins its build tools with
-[mise](https://mise.jdx.dev/):
-
-```bash
-mise install
-mise exec -- mvn -B -pl euhedral-reactor-core -am install
-```
-
-The upstream hardware module builds native libraries during Maven initialization. The target JNI
-header and macOS SDK setup used by CI is documented in
-[`.github/workflows/build.yaml`](./.github/workflows/build.yaml).
+The full repository uses Java 21.
 
 Add the Reactor integration to an application:
 
@@ -45,7 +35,6 @@ Run the application with:
 Create the process-wide lattice, adapt it as a Reactor scheduler, and construct an operator:
 
 ```java
-import io.euhedral_execution.core.control_plane.ControlPlaneLattice;
 import io.euhedral_execution.reactor.EuhedralOperator;
 import io.euhedral_execution.reactor.EuhedralScheduler;
 import java.time.Duration;
@@ -55,8 +44,7 @@ import reactor.core.publisher.Flux;
 public final class ReactorExample {
 
     public static void main(String[] args) {
-        ControlPlaneLattice lattice = ControlPlaneLattice.getOrCreate();
-        EuhedralScheduler scheduler = EuhedralScheduler.getOrCreate(lattice);
+        EuhedralScheduler scheduler = EuhedralScheduler.getOrCreate();
         EuhedralOperator operator = new EuhedralOperator(scheduler);
 
         try {
@@ -69,7 +57,6 @@ public final class ReactorExample {
             System.out.println(results);
         } finally {
             scheduler.dispose();
-            lattice.close();
         }
     }
 
@@ -87,11 +74,11 @@ delivery, cancellation, and recycling.
 
 The transformer methods fit directly into `Flux.transform`:
 
-| Operator | Execution | Result order |
-| --- | --- | --- |
-| `flatMap` | Distributed across routing lanes | Completion order |
+| Operator            | Execution                        | Result order             |
+|---------------------|----------------------------------|--------------------------|
+| `flatMap`           | Distributed across routing lanes | Completion order         |
 | `flatMapSequential` | Distributed across routing lanes | Restored to source order |
-| `concatMap` | Kept on an ordered routing lane | Source order |
+| `concatMap`         | Kept on an ordered routing lane  | Source order             |
 
 Examples:
 
@@ -136,9 +123,9 @@ Flux<Integer> results = Flux.range(1, 100)
         .subscribeOn(scheduler);
 ```
 
-Use these familiar Reactor boundaries when scheduling `Runnable` tasks is enough. Prefer
-`EuhedralOperator` for mapping stages that should use Euhedral frame routing, ordered or distributed
-lanes, and frame recycling.
+Use `EuhedralScheduler` when you're executing low-volume `Runnable` tasks. Prefer
+`EuhedralOperator` for mapping workloads that use Euhedral frame routing, ordered or distributed
+lanes, and frame recycling. The operator is more memory efficient than the scheduler.
 
 ## Configure names and metrics
 
@@ -156,8 +143,8 @@ To share Core and Reactor work on one control plane, create the lattice yourself
 `getOrCreate`, as in the complete example.
 
 Both `ControlPlaneLattice` and `EuhedralScheduler` are JVM-wide singletons. Configure them once
-during application startup rather than creating one per pipeline. For explicit shutdown ownership,
-prefer creating the lattice yourself and passing it to the scheduler.
+during application startup rather than creating one per pipeline. Calling `dispose()` on
+`EuhedralScheduler` will terminate all of its ingest sources and shutdown the lattice.
 
 ## Tune operator buffers
 
@@ -196,11 +183,11 @@ At application shutdown:
 
 ```java
 scheduler.dispose();
-lattice.close();
 ```
 
-Disposing the scheduler completes its worker sources. Closing the lattice stops its pinned workers,
-resource monitor, and topology state.
+Disposing the scheduler completes its worker sources and closes the lattice. Closing the lattice
+stops its pinned workers, resource monitor, and topology state. The lattice adds automatic shutdown
+hooks to JVM runtime in the event a crash prevents a graceful shutdown.
 
 In Spring Boot applications, `euhedral-spring-core` auto-configures the lattice, scheduler, and
 operator. The application context owns the lattice lifecycle.
