@@ -47,7 +47,9 @@ import io.euhedral_execution.training.scheduling.io.BootstrapPolicyCsv;
 import io.euhedral_execution.training.scheduling.io.OptimizationCorpusReader;
 import io.euhedral_execution.training.scheduling.io.ScheduleCodec;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
@@ -70,7 +72,7 @@ public final class ClosedLoopRunner {
     }
 
     public static ClosedLoopResult run(ClosedLoopConfig config) throws Exception {
-        ClosedLoopResult result = run(config, ProductionServices.INSTANCE);
+        ClosedLoopResult result = run(config, new ProductionServices(config.stopFile()));
         int revision = Integer.parseInt(result.latestCheckpoint().getFileName().toString()
                 .substring("checkpoint-".length()));
         String packageId = result.stage() == CheckpointStage.RUN_COMPLETE
@@ -760,8 +762,12 @@ public final class ClosedLoopRunner {
     private ClosedLoopRunner() {
     }
 
-    private enum ProductionServices implements ClosedLoopServices {
-        INSTANCE;
+    private static final class ProductionServices implements ClosedLoopServices {
+        private final Path stopFile;
+
+        private ProductionServices(Path stopFile) {
+            this.stopFile = stopFile;
+        }
 
         @Override
         public CalibrationPlan bootstrapCalibration(
@@ -795,7 +801,15 @@ public final class ClosedLoopRunner {
 
         @Override
         public boolean stopRequested() {
-            return false;
+            try {
+                return Files.readAttributes(stopFile,
+                        java.nio.file.attribute.BasicFileAttributes.class,
+                        LinkOption.NOFOLLOW_LINKS).isRegularFile();
+            } catch (NoSuchFileException missing) {
+                return false;
+            } catch (IOException error) {
+                throw new UncheckedIOException("Unable to inspect stop file", error);
+            }
         }
     }
 
