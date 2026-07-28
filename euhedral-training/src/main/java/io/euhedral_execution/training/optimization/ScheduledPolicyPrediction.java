@@ -1,7 +1,7 @@
 package io.euhedral_execution.training.optimization;
 
-import io.euhedral_execution.training.data.ScheduledPolicy;
+import io.euhedral_execution.training.data.PolicyVector;
 
-public record ScheduledPolicyPrediction(ScheduledPolicy scheduledPolicy,
+public record ScheduledPolicyPrediction(PolicyVector policy,
         PredictedPolicySummary prediction, SchedulePolicyOrigin origin) {
 }

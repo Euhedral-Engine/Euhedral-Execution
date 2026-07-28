@@ -1,6 +1,7 @@
 package io.euhedral_execution.training.utils;
 
 import java.lang.invoke.VarHandle;
+import java.lang.invoke.MethodHandles;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -20,6 +21,16 @@ import io.euhedral_execution.core.ingest.AbstractIngestSink;
 public class BenchmarkFrameSink extends AbstractIngestSink {
 
     private static final Duration DEFAULT_STOP_TIMEOUT = Duration.ofSeconds(1);
+    private static final VarHandle CONSUMED;
+
+    static {
+        try {
+            CONSUMED = MethodHandles.lookup().findVarHandle(Delegate.class, "consumed",
+                    long.class);
+        } catch (ReflectiveOperationException e) {
+            throw new ExceptionInInitializerError(e);
+        }
+    }
 
     private final Delegate delegate;
 
@@ -69,13 +80,11 @@ public class BenchmarkFrameSink extends AbstractIngestSink {
     }
 
     public void resetCounter() {
-        this.delegate.consumed = 0;
-        VarHandle.releaseFence();
+        CONSUMED.setRelease(this.delegate, 0L);
     }
 
     public long getConsumed() {
-        VarHandle.acquireFence();
-        return this.delegate.consumed;
+        return (long) CONSUMED.getAcquire(this.delegate);
     }
 
     protected static final class Delegate extends AbstractIngestSink.Delegate {
@@ -155,8 +164,7 @@ public class BenchmarkFrameSink extends AbstractIngestSink {
         }
 
         private void record(long total) {
-            this.consumed += total;
-            VarHandle.releaseFence();
+            CONSUMED.setRelease(this, this.consumed + total);
         }
 
         void resume() {
