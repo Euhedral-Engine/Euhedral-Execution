@@ -32,6 +32,10 @@ import io.euhedral_execution.training.merge.data.CalibrationPlanCsv;
 import io.euhedral_execution.training.optimization.PolicyCurvePredictor;
 import io.euhedral_execution.training.optimization.PredictedPolicyRanker;
 import io.euhedral_execution.training.optimization.data.CandidateGenerationRequest;
+import io.euhedral_execution.training.packaging.TrainingRunPackage;
+import io.euhedral_execution.training.packaging.TrainingRunPackageInputs;
+import io.euhedral_execution.training.packaging.TrainingRunPackageRequest;
+import io.euhedral_execution.training.packaging.TrainingRunPackager;
 import io.euhedral_execution.training.scheduling.BootstrapScheduler;
 import io.euhedral_execution.training.scheduling.CandidateScheduler;
 import io.euhedral_execution.training.scheduling.CarryForwardQueue;
@@ -66,7 +70,22 @@ public final class ClosedLoopRunner {
     }
 
     public static ClosedLoopResult run(ClosedLoopConfig config) throws Exception {
-        return run(config, ProductionServices.INSTANCE);
+        ClosedLoopResult result = run(config, ProductionServices.INSTANCE);
+        int revision = Integer.parseInt(result.latestCheckpoint().getFileName().toString()
+                .substring("checkpoint-".length()));
+        String packageId = result.stage() == CheckpointStage.RUN_COMPLETE
+                ? config.trainingRunId()
+                : "%s.partial.r%08d".formatted(config.trainingRunId(), revision);
+        TrainingRunPackage packaged = TrainingRunPackager.publish(
+                new TrainingRunPackageRequest(config.workspace(),
+                        config.workspace().resolve("packages"),
+                        new TrainingRunPackageInputs(packageId, config.trainingRunId(),
+                                revision, config.schedulerSeed(), config.commitSha(),
+                                config.dirtyWorkingTree(), config.benchmarkConfig(),
+                                config.requiredScenarios())));
+        return new ClosedLoopResult(result.stage(), result.nextIteration(),
+                result.latestCheckpoint(), result.latestMerge(), result.latestModel(),
+                result.awaitingScenarios(), Optional.of(packaged.directory()));
     }
 
     static ClosedLoopResult run(ClosedLoopConfig config, ClosedLoopServices services)
@@ -637,7 +656,7 @@ public final class ClosedLoopRunner {
                         resolve(loaded.snapshotDirectory().getParent().getParent(), reference)),
                 checkpoint.latestModel().map(reference ->
                         resolve(loaded.snapshotDirectory().getParent().getParent(), reference)),
-                java.util.Collections.unmodifiableSortedSet(awaiting));
+                java.util.Collections.unmodifiableSortedSet(awaiting), Optional.empty());
     }
 
     private static List<Path> evidencePaths(Path workspace,

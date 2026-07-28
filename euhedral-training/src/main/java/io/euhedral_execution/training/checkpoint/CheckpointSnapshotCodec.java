@@ -97,6 +97,36 @@ public final class CheckpointSnapshotCodec {
         return Optional.of(new LoadedCheckpoint(latest, checkpoint));
     }
 
+    public static LoadedCheckpoint loadRevision(Path workspace, int requestedRevision)
+            throws IOException {
+        if (requestedRevision <= 0) {
+            throw new IllegalArgumentException("Checkpoint revision must be positive");
+        }
+        Path root = workspace.toAbsolutePath().normalize();
+        Path checkpoints = root.resolve("checkpoints");
+        if (!Files.isDirectory(checkpoints, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IllegalArgumentException("Checkpoint directory is absent");
+        }
+        List<Path> complete = completeCheckpoints(checkpoints);
+        if (complete.size() < requestedRevision) {
+            throw new IllegalArgumentException("Checkpoint revision is absent");
+        }
+        for (int index = 0; index < complete.size(); index++) {
+            if (revision(complete.get(index)) != index + 1) {
+                throw new IllegalArgumentException("Checkpoint revisions are not contiguous");
+            }
+        }
+        Path selected = complete.get(requestedRevision - 1);
+        return new LoadedCheckpoint(selected, read(root, selected));
+    }
+
+    public static ClosedLoopCheckpoint readDetachedForAudit(Path checkpointDirectory)
+            throws IOException {
+        Path directory = checkpointDirectory.toAbsolutePath().normalize();
+        return read(directory.getParent() == null ? directory : directory.getParent(),
+                directory, false);
+    }
+
     public static LoadedCheckpoint writeNext(Path workspace, ClosedLoopCheckpoint checkpoint)
             throws IOException {
         Path root = workspace.toAbsolutePath().normalize();
@@ -316,6 +346,11 @@ public final class CheckpointSnapshotCodec {
     }
 
     private static ClosedLoopCheckpoint read(Path workspace, Path directory) {
+        return read(workspace, directory, true);
+    }
+
+    private static ClosedLoopCheckpoint read(Path workspace, Path directory,
+            boolean dereferenceArtifacts) {
         try {
             validateInventory(directory);
             List<List<String>> stateRows = CanonicalCsv.read(directory.resolve("state.csv"));
@@ -339,14 +374,16 @@ public final class CheckpointSnapshotCodec {
             TreeMap<RotationGroup, Integer> cursors = readCursors(
                     directory.resolve("rotation-cursors.csv"));
             List<EvidenceIndexEntry> evidence = readEvidence(workspace,
-                    directory.resolve("evidence-index.csv"));
+                    directory.resolve("evidence-index.csv"), dereferenceArtifacts);
             List<CarryForwardEntry> carry = readCarry(directory.resolve("carry-forward.csv"),
                     directory.resolve("carry-forward-scenarios.csv"), scenarios);
             Optional<ArtifactReference> calibration = artifact(row.get(15), row.get(16));
             Optional<ArtifactReference> merge = artifact(row.get(17), row.get(18));
             Optional<ArtifactReference> model = artifact(row.get(19), row.get(20));
             Optional<ArtifactReference> schedule = artifact(row.get(21), row.get(22));
-            validateArtifacts(workspace, List.of(calibration, merge, model, schedule));
+            if (dereferenceArtifacts) {
+                validateArtifacts(workspace, List.of(calibration, merge, model, schedule));
+            }
             List<PendingBenchmarkRun> pending = readPending(
                     directory.resolve("pending-runs.csv"));
             int revision = integer(row.get(3));
@@ -407,7 +444,8 @@ public final class CheckpointSnapshotCodec {
         return result;
     }
 
-    private static List<EvidenceIndexEntry> readEvidence(Path workspace, Path file)
+    private static List<EvidenceIndexEntry> readEvidence(Path workspace, Path file,
+            boolean dereferenceArtifacts)
             throws IOException {
         List<List<String>> rows = CanonicalCsv.read(file);
         requireHeader(rows, List.of("schema_version", "benchmark_run_id", "scenario_id",
@@ -421,16 +459,18 @@ public final class CheckpointSnapshotCodec {
                 throw new IllegalArgumentException("Evidence index is not sorted");
             }
             ArtifactReference bundle = new ArtifactReference(row.get(3), row.get(4));
-            validateArtifact(workspace, bundle);
             Path bundlePath = workspace.resolve(bundle.relativePath()).normalize();
             if (!bundlePath.startsWith(workspace.resolve("evidence"))) {
                 throw new IllegalArgumentException("Evidence bundle is outside evidence/");
             }
-            ObservationBundle observationBundle = ObservationBundleReader.read(bundlePath);
             SourceScenario scenario = SourceScenario.parse(row.get(2));
-            if (!observationBundle.run().descriptor().benchmarkRunId().equals(row.get(1))
-                    || !observationBundle.run().descriptor().scenario().equals(scenario)) {
-                throw new IllegalArgumentException("Evidence bundle identity mismatch");
+            if (dereferenceArtifacts) {
+                validateArtifact(workspace, bundle);
+                ObservationBundle observationBundle = ObservationBundleReader.read(bundlePath);
+                if (!observationBundle.run().descriptor().benchmarkRunId().equals(row.get(1))
+                        || !observationBundle.run().descriptor().scenario().equals(scenario)) {
+                    throw new IllegalArgumentException("Evidence bundle identity mismatch");
+                }
             }
             result.add(new EvidenceIndexEntry(row.get(1), scenario, bundle,
                     EvidenceSource.valueOf(row.get(5))));
@@ -654,6 +694,16 @@ public final class CheckpointSnapshotCodec {
     private static int revision(Path directory) {
         return Integer.parseInt(directory.getFileName().toString()
                 .substring("checkpoint-".length()));
+    }
+
+    private static List<Path> completeCheckpoints(Path checkpoints) throws IOException {
+        try (var stream = Files.list(checkpoints)) {
+            return stream.filter(path -> path.getFileName().toString()
+                            .matches("checkpoint-[0-9]{8}"))
+                    .filter(path -> Files.isRegularFile(path.resolve("COMPLETE"),
+                            LinkOption.NOFOLLOW_LINKS))
+                    .sorted().toList();
+        }
     }
 
     private static void deleteTree(Path directory) {

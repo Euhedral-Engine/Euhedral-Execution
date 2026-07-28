@@ -8,5 +8,5 @@ import java.util.SortedSet;
 
 public record ClosedLoopResult(CheckpointStage stage, int nextIteration, Path latestCheckpoint,
         Optional<Path> latestMerge, Optional<Path> latestModel,
-        SortedSet<SourceScenario> awaitingScenarios) {
+        SortedSet<SourceScenario> awaitingScenarios, Optional<Path> packageDirectory) {
 }

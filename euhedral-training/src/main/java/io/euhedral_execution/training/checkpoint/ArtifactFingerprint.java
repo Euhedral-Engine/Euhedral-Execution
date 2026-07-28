@@ -1,6 +1,7 @@
 package io.euhedral_execution.training.checkpoint;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -9,6 +10,8 @@ import java.util.HexFormat;
 import java.util.List;
 
 public final class ArtifactFingerprint {
+    private static final int BUFFER_SIZE = 128 * 1024;
+
     public static String sha256(Path artifact) throws IOException {
         MessageDigest digest;
         try {
@@ -47,7 +50,7 @@ public final class ArtifactFingerprint {
                     java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
                 throw new IllegalArgumentException("Artifact must be a regular file");
             }
-            digest.update(Files.readAllBytes(artifact));
+            updateFromFile(digest, artifact);
         }
         return HexFormat.of().formatHex(digest.digest());
     }
@@ -59,8 +62,20 @@ public final class ArtifactFingerprint {
         } catch (java.security.NoSuchAlgorithmException e) {
             throw new IllegalStateException(e);
         }
-        digest.update(Files.readAllBytes(file));
+        updateFromFile(digest, file);
         return HexFormat.of().formatHex(digest.digest());
+    }
+
+    private static void updateFromFile(MessageDigest digest, Path file) throws IOException {
+        byte[] buffer = new byte[BUFFER_SIZE];
+        try (InputStream input = Files.newInputStream(file)) {
+            int read;
+            while ((read = input.read(buffer)) >= 0) {
+                if (read != 0) {
+                    digest.update(buffer, 0, read);
+                }
+            }
+        }
     }
 
     private ArtifactFingerprint() {
