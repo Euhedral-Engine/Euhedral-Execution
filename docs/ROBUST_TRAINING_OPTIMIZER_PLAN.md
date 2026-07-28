@@ -297,6 +297,17 @@ The blueprint prompts are ordered from most to least demanding: `max`, then `hig
 low-effort. A detailed blueprint removes ambiguity while the code change may still require
 frontier-level long-context systems reasoning.
 
+### Combined C/D prompt rule
+
+For every phase whose detailed prompt list still shows a `C` verification prompt followed by a
+`D` conformance-audit prompt, those two bodies are one combined step: run them in a single prompt,
+on one branch, with one completion record and one commit/push. The combined prompt first executes
+the C verification work, may make minor blueprint-settled fixes such as deterministic coverage,
+naming, formatting, or local validation corrections, and then performs the D classification and
+writes its audit report. It must not make an architectural decision. The Phase 4 wording below is
+the canonical merged form; later plan maintenance should fold the historical C/D text into that
+same form rather than reintroducing separate stages.
+
 ### Blueprint handoff contract
 
 Every blueprint prompt must create or update a phase blueprint under
