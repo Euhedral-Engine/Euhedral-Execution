@@ -16,15 +16,15 @@ import java.util.Optional;
 import java.util.SortedSet;
 
 public record ClosedLoopConfig(Path workspace, String trainingRunId, int iterations,
-                               int candidateBudget, SortedSet<SourceScenario> requiredScenarios,
-                               String activeEnvironmentId, int scenariosPerIteration, long schedulerSeed,
-                               long initialSobolCursor, Optional<Path> bootstrapPolicies,
-                               Optional<Path> initialCalibrationPlan, List<Path> initialObservationBundles,
-                               Map<SourceScenario, String> referenceOverrides, String commitSha, boolean dirtyWorkingTree,
-                               CandidateBudgetConfig budgetConfig, CandidateGenerationConfig generationConfig,
-                               BenchmarkExecutionConfig benchmarkConfig, AnchorSelectionConfig anchorSelectionConfig,
-                               CalibrationConfig calibrationConfig, AggregationConfig aggregationConfig,
-                               ScenarioTrainingConfig trainingConfig, boolean resume) {
+        int candidateBudget, SortedSet<SourceScenario> requiredScenarios,
+        String activeEnvironmentId, int scenariosPerIteration, long schedulerSeed,
+        long initialSobolCursor, Optional<Path> bootstrapPolicies,
+        Optional<Path> initialCalibrationPlan, List<Path> initialObservationBundles,
+        Map<SourceScenario, String> referenceOverrides, String commitSha, boolean dirtyWorkingTree,
+        CandidateBudgetConfig budgetConfig, CandidateGenerationConfig generationConfig,
+        BenchmarkExecutionConfig benchmarkConfig, AnchorSelectionConfig anchorSelectionConfig,
+        CalibrationConfig calibrationConfig, AggregationConfig aggregationConfig,
+        ScenarioTrainingConfig trainingConfig, boolean resume, Path stopFile) {
     public ClosedLoopConfig {
         Objects.requireNonNull(workspace);
         Objects.requireNonNull(trainingRunId);
@@ -42,7 +42,9 @@ public record ClosedLoopConfig(Path workspace, String trainingRunId, int iterati
         Objects.requireNonNull(calibrationConfig);
         Objects.requireNonNull(aggregationConfig);
         Objects.requireNonNull(trainingConfig);
+        Objects.requireNonNull(stopFile);
         workspace = workspace.toAbsolutePath().normalize();
+        stopFile = stopFile.toAbsolutePath().normalize();
         requiredScenarios = java.util.Collections.unmodifiableSortedSet(
                 new java.util.TreeSet<>(requiredScenarios));
         initialObservationBundles = List.copyOf(initialObservationBundles);
