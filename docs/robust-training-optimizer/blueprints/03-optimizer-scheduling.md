@@ -2282,4 +2282,140 @@ transitions, or restart behavior requires another reasoning pass.
 
 ## Prompt 3B completion notes
 
-Not yet implemented.
+Partial implementation attempt on 2026-07-28.
+
+Implemented:
+
+- Added deterministic `BenchmarkFrame.generate(..., routingSeed, ...)` overloads and focused
+  `BenchmarkFrameTest`.
+- Added Phase 3 predicted-policy primitives under `training/optimization`:
+  `PredictedPolicySummary`, `PredictedPolicyComparator`, `PolicyCurvePredictor`, candidate/origin
+  records, and `CmaEsConfig`.
+- Replaced `ScoreBandSampler` with fixed ten-band, Hamilton-capacity, hash-priority bottom-k
+  retention and best-first overflow backfill. Retained the pooled-v0 constructor/adapter so existing
+  transitional tests and callers still compile.
+- Added scheduler primitives under `training/scheduling`: checked integer `HamiltonAllocator`,
+  candidate budget records/allocator, coverage states, carry-forward row/queue priority with capped
+  backoff, and exact per-environment/core scenario rotation.
+
+Commands run:
+
+```text
+env JAVA_HOME=/home/bagotay/.local/share/mise/installs/java/21.0.2 \
+    PATH=/home/bagotay/.local/share/mise/installs/java/21.0.2/bin:/usr/bin:/bin \
+    /home/bagotay/.local/share/mise/installs/maven/3.9.16/apache-maven-3.9.16/bin/mvn \
+    -B -pl euhedral-training -DskipTests compile
+  -> first run failed on carry record constructor validation; fixed and reran successfully
+
+env JAVA_HOME=/home/bagotay/.local/share/mise/installs/java/21.0.2 \
+    PATH=/home/bagotay/.local/share/mise/installs/java/21.0.2/bin:/usr/bin:/bin \
+    /home/bagotay/.local/share/mise/installs/maven/3.9.16/apache-maven-3.9.16/bin/mvn \
+    -B -pl euhedral-core -Dtest=BenchmarkFrameTest test
+  -> success, 3 tests
+
+env JAVA_HOME=/home/bagotay/.local/share/mise/installs/java/21.0.2 \
+    PATH=/home/bagotay/.local/share/mise/installs/java/21.0.2/bin:/usr/bin:/bin \
+    /home/bagotay/.local/share/mise/installs/maven/3.9.16/apache-maven-3.9.16/bin/mvn \
+    -B -pl euhedral-training -Dtest=ScoreBandSamplerTest,CmaEsOptimizerTest test
+  -> success, 2 tests
+
+env JAVA_HOME=/home/bagotay/.local/share/mise/installs/java/21.0.2 \
+    PATH=/home/bagotay/.local/share/mise/installs/java/21.0.2/bin:/usr/bin:/bin \
+    /home/bagotay/.local/share/mise/installs/maven/3.9.16/apache-maven-3.9.16/bin/mvn \
+    -B -pl euhedral-training test
+  -> success, 86 tests, 1 skipped optional DJL integration test
+```
+
+Deviation/blocker:
+
+- Prompt 3B is not complete. The settled blueprint requires replacing `SequenceFinder`,
+  `CmaEsOptimizer`, `ClosedLoopRunner`, checkpoints, and `BenchmarkRunner` with the full
+  scenario-aware state machine and restart/adoption semantics. This pass implemented only the
+  comparator, budget, carry, rotation, score-band, config, and deterministic frame foundations.
+- Required blueprint tests for restart, rotating scenarios, budget accounting, deduplication, and
+  deterministic selection were not added or run beyond the existing optimizer tests and the new
+  frame test.
+- No commit or push was made from this partial state because the acceptance criteria are not met.
+
+## Prompt 3C verification notes
+
+Implementation verification performed on 2026-07-28.
+
+Result:
+
+- Prompt 3C could not verify the full Phase 3 acceptance surface because Prompt 3B remains a
+  partial implementation. The restart, checkpoint, schedule-codec, native-v1 benchmark,
+  closed-loop adoption, and final post-merge paths required by this blueprint are absent.
+- Fixed only blueprint-settled defects in the implemented subset:
+  - `ScoreBandSampler` now exposes the Phase 3 constructor shape with explicit iteration and
+    overflow capacity, and includes the iteration in the score-band sampling-key hash material.
+  - `ScoreBandSamplerTest` now asserts iteration-specific deterministic selection for the
+    implemented score-band sampler.
+  - `CarryForwardEntry` now rejects carry scenario maps whose key does not match the contained
+    scenario state.
+  - `BenchmarkOutputReader` now declares `getLines()` explicitly; relying on the Lombok-generated
+    accessor did not compile after a clean recompilation.
+
+Commands run:
+
+```text
+env JAVA_HOME=/home/bagotay/.local/share/mise/installs/java/21.0.2 \
+    PATH=/home/bagotay/.local/share/mise/installs/java/21.0.2/bin:/usr/bin:/bin \
+    /home/bagotay/.local/share/mise/installs/maven/3.9.16/apache-maven-3.9.16/bin/mvn \
+    -B -pl euhedral-training -am install -Dmaven.test.skip=true
+  -> success
+
+env JAVA_HOME=/home/bagotay/.local/share/mise/installs/java/21.0.2 \
+    PATH=/home/bagotay/.local/share/mise/installs/java/21.0.2/bin:/usr/bin:/bin \
+    /home/bagotay/.local/share/mise/installs/maven/3.9.16/apache-maven-3.9.16/bin/mvn \
+    -B -pl euhedral-core -Dtest=BenchmarkFrameTest test
+  -> success, 3 tests
+
+env JAVA_HOME=/home/bagotay/.local/share/mise/installs/java/21.0.2 \
+    PATH=/home/bagotay/.local/share/mise/installs/java/21.0.2/bin:/usr/bin:/bin \
+    /home/bagotay/.local/share/mise/installs/maven/3.9.16/apache-maven-3.9.16/bin/mvn \
+    -B -pl euhedral-training test
+  -> success, 87 tests, 1 skipped optional DJL integration test
+
+git diff --check
+  -> success
+
+git diff --cached --check
+  -> success
+```
+
+Stale-boundary search results:
+
+```text
+rg -n "PolicyRanking|PolicyOrdinalNetwork|BenchmarkOutputReader|BenchmarkOutputWriter|TDigest|quantile\(0\.99\)|mergeQuantiles" ...
+  -> failed: matches remain in BenchmarkRunner.java, ClosedLoopRunner.java, SequenceFinder.java,
+     and CmaEsOptimizer.java
+
+rg -n "input/merger|state\.properties|latest-model|latest-training-data|iteration-.*source|graviton|zen4|euhedral-policy-ranker|\.bin" ...
+  -> failed: matches remain in SequenceFinder.java and ClosedLoopRunner.java
+```
+
+Acceptance-criteria status:
+
+- Verified for the implemented subset:
+  - deterministic `BenchmarkFrame` routing overload;
+  - score-band fixed-band allocation and deterministic iteration-specific hash-priority selection;
+  - full training module regression suite after the subset fixes.
+- Not verifiable because required Phase 3 implementation is absent:
+  - restart equivalence;
+  - checkpoint snapshot schema, strict validation, and recovery/adoption;
+  - exact schedule codec and stable run/cohort/trial/source seed reconstruction;
+  - per-scenario budget reports from `CandidateScheduler`;
+  - carry-forward persistence across restart/model changes and reconciliation from post-merge
+    coverage;
+  - complete native-v1 benchmark bundle publication and paused evidence writes;
+  - final iteration post-merge and closed-loop rejection of pooled files/models/checkpoints.
+
+Environmental and workspace limits:
+
+- No native lattice smoke test was run; the blueprint requires deterministic fake benchmark tests
+  and full training unit tests for this phase, but the fake native-v1 benchmark tests are not
+  present in the partial implementation.
+- Pre-existing user-owned training input/output data remained untouched. Two staged input files
+  under `euhedral-training/input/merger/` were present before this verification and must not be
+  included in the Phase 3 verification commit.
