@@ -6,25 +6,9 @@ metrics, direct frame ingestion, and recycling. For Reactor applications, start 
 
 ## Prerequisites
 
-The full repository uses Java 21. Install the pinned Java, Maven, and native build tools with
-[mise](https://mise.jdx.dev/):
+The full repository uses Java 21.
 
-```bash
-mise install
-mise exec -- java -version
-```
-
-Build and install Core with its upstream modules:
-
-```bash
-mise exec -- mvn -B -pl euhedral-core -am install
-```
-
-The hardware module builds native libraries during Maven initialization. If target JNI headers or
-the macOS SDK are missing, follow the setup in
-[`.github/workflows/build.yaml`](./.github/workflows/build.yaml).
-
-For an application outside this repository, add the Core artifact:
+Add the Core artifact:
 
 ```xml
 <dependency>
@@ -34,7 +18,7 @@ For an application outside this repository, add the Core artifact:
 </dependency>
 ```
 
-Run the application with:
+Run your application with:
 
 ```text
 -XX:+UseThreadPriorities
@@ -94,10 +78,11 @@ With `parallel` set to `false`, the results are emitted in input order:
 256
 ```
 
-`addUpstream` starts the lattice lazily. Calling `lattice.start()` first is also valid when explicit
-startup better fits the application lifecycle.
+`addUpstream` starts the lattice lazily. Calling `lattice.start()` first is also an option when
+explicit startup is a better fit for your application lifecycle.
 
-`ConsumerIngestSink` provides the same setup for a `Consumer<T>` that does not produce results.
+`ConsumerIngestSink` provides the same setup for a `Consumer<T>` function that does not produce 
+results.
 
 ## Choose ordered or distributed execution
 
