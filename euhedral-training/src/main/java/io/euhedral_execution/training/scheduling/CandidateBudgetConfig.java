@@ -1,14 +1,21 @@
 package io.euhedral_execution.training.scheduling;
 
-public record CandidateBudgetConfig(int policyBudget, int newExplorationWeight,
-        int carryForwardWeight, int leaderRevalidationWeight, int disagreementAuditWeight) {
+public record CandidateBudgetConfig(int explorationWeight, int carryForwardWeight,
+        int leaderRevalidationWeight, int disagreementAuditWeight) {
     public CandidateBudgetConfig {
-        if (policyBudget <= 0) {
-            throw new IllegalArgumentException("Policy budget must be positive");
+        if (explorationWeight < 0 || carryForwardWeight < 0
+                || leaderRevalidationWeight < 0 || disagreementAuditWeight < 0) {
+            throw new IllegalArgumentException("Budget weights must not be negative");
+        }
+        Math.addExact(Math.addExact(explorationWeight, carryForwardWeight),
+                Math.addExact(leaderRevalidationWeight, disagreementAuditWeight));
+        if (explorationWeight + carryForwardWeight + leaderRevalidationWeight
+                + disagreementAuditWeight == 0) {
+            throw new IllegalArgumentException("At least one budget weight is required");
         }
     }
 
-    public static CandidateBudgetConfig defaults(int policyBudget) {
-        return new CandidateBudgetConfig(policyBudget, 68, 25, 2, 5);
+    public static CandidateBudgetConfig defaults() {
+        return new CandidateBudgetConfig(68, 25, 2, 5);
     }
 }

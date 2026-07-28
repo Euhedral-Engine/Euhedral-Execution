@@ -4,6 +4,8 @@ import io.euhedral_execution.hashing.HasherApi;
 import io.euhedral_execution.training.data.PolicyId;
 import io.euhedral_execution.training.data.PolicyRole;
 import io.euhedral_execution.training.data.SourceScenario;
+import io.euhedral_execution.training.data.BenchmarkParameters;
+import io.euhedral_execution.training.data.FrameSourceSeed;
 import java.util.List;
 
 public final class SchedulerSeeds {
@@ -19,6 +21,14 @@ public final class SchedulerSeeds {
                 + "policy=" + policyId.canonical() + "\n", seed);
     }
 
+    public static long cmaIslandSeed(long seed, int islandIndex) {
+        if (islandIndex < 0) {
+            throw new IllegalArgumentException("Island index must not be negative");
+        }
+        return hash("phase3-cma-island-v1\n"
+                + "island=" + islandIndex + "\n", seed);
+    }
+
     public static String candidateCohortId(String trainingRunId, String kind, int iteration,
             SourceScenario scenario, List<? extends PolicyWithRole> policies, long seed) {
         StringBuilder material = new StringBuilder("phase3-candidate-cohort-v1\n")
@@ -30,11 +40,51 @@ public final class SchedulerSeeds {
                 .forEach(policy -> material.append("policy=")
                         .append(policy.policyId().canonical()).append("|role=")
                         .append(policy.role().name()).append('\n'));
-        return "c1-" + Long.toUnsignedString(hash(material.toString(), seed), 16);
+        return "c1-" + "%016x".formatted(hash(material.toString(), seed));
     }
 
     public static String benchmarkRunId(String material, long seed) {
-        return "r1-" + Long.toUnsignedString(hash(material, seed), 16);
+        return "r1-" + "%016x".formatted(hash(material, seed));
+    }
+
+    public static String benchmarkRunId(String trainingRunId, String kind, int iteration,
+            SourceScenario scenario, String cohortId, BenchmarkParameters parameters,
+            String commitSha, boolean dirtyWorkingTree, long seed) {
+        return benchmarkRunId("phase3-benchmark-run-v1\n"
+                + "training_run=" + trainingRunId + "\n"
+                + "kind=" + kind + "\n"
+                + "iteration=" + iteration + "\n"
+                + "scenario=" + scenario.canonical() + "\n"
+                + "cohort=" + cohortId + "\n"
+                + "expected_repetitions=" + parameters.expectedRepetitions() + "\n"
+                + "sample_duration_nanos=" + parameters.sampleDurationNanos() + "\n"
+                + "liveness_timeout_nanos=" + parameters.livenessTimeoutNanos() + "\n"
+                + "frames_per_source=" + parameters.framesPerSource() + "\n"
+                + "reset_timeout_nanos=" + parameters.resetTimeoutNanos() + "\n"
+                + "ordered_frames=" + parameters.orderedFrames() + "\n"
+                + "cpu_set_hex=" + parameters.cpuSetHex() + "\n"
+                + "commit_sha=" + commitSha + "\n"
+                + "dirty_working_tree=" + dirtyWorkingTree + "\n", seed);
+    }
+
+    public static long trialOrderKey(String cohortId, PolicyId policyId, long seed) {
+        return hash("phase3-trial-order-v1\n"
+                + "cohort=" + cohortId + "\n"
+                + "policy=" + policyId.canonical() + "\n", seed);
+    }
+
+    public static FrameSourceSeed frameSourceSeed(String benchmarkRunId, int sourceIndex,
+            long seed) {
+        if (sourceIndex < 0) {
+            throw new IllegalArgumentException("Source index must not be negative");
+        }
+        long idHash = hash("phase3-frame-id-v1\n"
+                + "run=" + benchmarkRunId + "\n"
+                + "source=" + sourceIndex + "\n", seed);
+        long routingSeed = hash("phase3-frame-routing-v1\n"
+                + "run=" + benchmarkRunId + "\n"
+                + "source=" + sourceIndex + "\n", seed);
+        return new FrameSourceSeed(sourceIndex, idHash, routingSeed);
     }
 
     public interface PolicyWithRole {
