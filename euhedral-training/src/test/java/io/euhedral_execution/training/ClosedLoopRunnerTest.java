@@ -132,7 +132,8 @@ class ClosedLoopRunnerTest {
                         8, 7, 1, new CmaEsConfig(false, 1, 1, 8, 0.2, 2)),
                 new BenchmarkExecutionConfig(3, 100, 50, 8, 1_000, false),
                 AnchorSelectionConfig.defaults(), CalibrationConfig.defaults(),
-                AggregationConfig.defaults(), ScenarioTrainingConfig.defaults(), resume);
+                AggregationConfig.defaults(), ScenarioTrainingConfig.defaults(), resume,
+                temp.resolve("workspace/STOP"));
     }
 
     private static void writeBootstrap(Path file, int count) throws Exception {

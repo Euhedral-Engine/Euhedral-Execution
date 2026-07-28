@@ -971,3 +971,69 @@ existing `training.config` package beside `ClosedLoopConfig`. The temporary impo
 single isolated `training.importer.currentworkspace` subtree because that package is its explicit
 removal boundary. No importer mapping, configuration key, stop/resume rule, memory ownership,
 numeric parsing, or precision contract changes.
+
+## Prompt 5B completion record
+
+Completed on 2026-07-28 on `agent/phase5b-temporary-importer-cli`.
+
+### Changed files
+
+- Added the removable
+  `io.euhedral_execution.training.importer.currentworkspace` package with the sixteen exact
+  mappings, strict 128 KiB streaming signed-decimal reader, file-transactional vector conversion,
+  report/catalog/bootstrap writers, read-back validation, owned cleanup, and atomic-only
+  publication.
+- Added `ClosedLoopConfigCodec` with the complete typed key surface, exact defaults, strict
+  UTF-8/LF parsing, typed scalar/list/enum/seed validation, relative-path resolution, and
+  construction of all nested Phase 1-3 configuration records.
+- Added `ClosedLoopConfig.stopFile`, configured production stop polling, removed the no-argument
+  transitional runner adapter, and kept the operational path outside
+  `ClosedLoopConfigFingerprint`.
+- Updated `Runner` with exact import/config/package command forms, typed result logging, legacy
+  labels, and the removal marker.
+- Replaced the pooled-v0 operational README and ML architecture text with the implemented robust
+  flow, configuration, import limitation, resume/stop, package, and deletion documentation.
+- Added `CurrentWorkspaceImporterTest`, `ClosedLoopConfigCodecTest`, and `RunnerTest`, and updated
+  the existing `ClosedLoopRunnerTest` constructor call.
+
+### Validation evidence
+
+```text
+mvn -B -pl euhedral-training -am install -Dmaven.test.skip=true
+  BUILD SUCCESS (6 reactor modules)
+
+mvn -B -pl euhedral-training \
+  -Dtest=CurrentWorkspaceImporterTest,ClosedLoopConfigCodecTest,RunnerTest,ClosedLoopRunnerTest test
+  8 tests, 0 failures, 0 errors, 0 skipped
+
+mvn -B -pl euhedral-training test
+  122 tests, 0 failures, 0 errors, 1 skipped
+```
+
+The single skip is the existing opt-in `ScenarioOrdinalNetworkIntegrationTest`; it is outside the
+Phase 5 deterministic importer/config/CLI surface. `git diff --check` passed. The dependency-boundary
+and system-property searches returned no forbidden matches. The current-path search returned only
+the temporary package and Runner marker plus the pre-existing pooled-v0
+`legacy/PooledSequenceFinder` default `output/temp_data`; Phase 5's explicit non-goal preserves that
+legacy implementation for Phase 7 deletion.
+
+Fixture evidence covers bit-exact signed-zero vector preservation, duplicate counting,
+measurement rejection, summary skipping, unknown model/state rejection, mapped-file transactional
+failure, deterministic bytes across output parents, collision-safe target refusal, typed defaults,
+nested overrides, unsigned seed bits, strict malformed config rejection, and exact command flag
+ordering. The importer tests operate only on `@TempDir` fixtures.
+
+### Memory, precision, and filesystem evidence
+
+Legacy numeric input and CSV output use fixed 128 KiB streaming buffers. Measurement arrays are
+validated and discarded; only the current file's policies and the global registry survive parsing.
+All encoded lanes use signed-long parsing, `Double.longBitsToDouble`, and raw 16-digit lower-case
+hex output without normalization or rounding. Mutable parser/registry/report state remains
+thread-confined. Publication forces each member, writes `COMPLETE` last, validates the staged
+inventory and bootstrap artifact, and uses `ATOMIC_MOVE` with no fallback or overwrite.
+
+No current workspace input/output file or pre-existing user-owned change was modified or included
+in the Phase 5B implementation scope. No Phase 1-4 persisted schema, statistical comparator,
+scheduler/checkpoint schema, package manifest, POM, module descriptor, or generated artifact was
+changed. There were no approved deviations; the outstanding Phase 4 audit matrix remains
+out of scope and unresolved as required.
