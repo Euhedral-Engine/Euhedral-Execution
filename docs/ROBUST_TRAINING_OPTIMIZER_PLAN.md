@@ -538,15 +538,17 @@ the restrictions at the end of this document.
 > post-blueprint implementation-model reassessment required by docs/AGENT_WORKFLOW.md, then replace
 > Prompt 5B's provisional model and effort before handoff. Commit and push the blueprint only.
 
-#### Prompt 5B - IMPLEMENTATION - PROVISIONAL gpt-5.5 / low; Prompt 5A must replace
+#### Prompt 5B - IMPLEMENTATION - gpt-5.6-sol / medium
 
-> Do not execute while this prompt is labeled provisional. Use the model and effort selected and
-> written here by Prompt 5A. Read AGENTS.md, this plan, prior completion notes, and
-> `docs/robust-training-optimizer/blueprints/05-temporary-importer-cli.md`. Implement the isolated
-> importer, import report, configuration, CLI/help, and documentation exactly as specified. Keep all
-> legacy-layout knowledge inside the removable boundary and immediately convert accepted inputs to
-> new immutable records. Do not import old models or checkpoints. Run focused acceptance, rejection,
-> disabled-path, and deletion-boundary tests. Append completion notes, commit, and push.
+> Use `gpt-5.6-sol` at `medium` reasoning effort. Read AGENTS.md, docs/AGENT_WORKFLOW.md, this
+> plan's Phase 5 section, `docs/robust-training-optimizer/blueprints/05-temporary-importer-cli.md`,
+> and the blueprint's exact minimal context envelope. Implement the isolated vector-only importer,
+> import report, strict typed configuration, stop/resume integration, CLI/help, and documentation
+> exactly as specified. Keep all current-layout knowledge inside the removable boundary and
+> immediately convert accepted vector rows to immutable `PolicyVector` records. Reject legacy
+> measurements whose observation identity is unrecoverable; do not import old models, optimizer
+> state, or checkpoints. Run focused acceptance, rejection, disabled-path, atomicity,
+> configuration, command, and deletion-boundary tests. Append completion notes, commit, and push.
 
 #### Prompt 5C - IMPLEMENTATION VERIFICATION - gpt-5.5 / medium
 
