@@ -158,6 +158,7 @@ public final class EuhedralScheduler implements Scheduler {
             for (EuhedralWorker sink : sinks) {
                 sink.complete();
             }
+            this.controlPlane.close();
         }
     }
 
