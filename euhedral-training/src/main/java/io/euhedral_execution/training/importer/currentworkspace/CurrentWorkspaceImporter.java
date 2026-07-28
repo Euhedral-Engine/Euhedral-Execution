@@ -24,11 +24,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * TEMPORARY_CURRENT_WORKSPACE_IMPORT_REMOVAL: one-way vector import for the July 2026 workspace.
  */
 public final class CurrentWorkspaceImporter {
+    private static final Logger LOGGER = LoggerFactory.getLogger(CurrentWorkspaceImporter.class);
     private static final String CATALOG = "imported-policies.vectors.csv";
     private static final String BOOTSTRAP = "bootstrap-policies.vectors.csv";
     private static final String REPORT = "import-report.csv";
@@ -106,6 +109,7 @@ public final class CurrentWorkspaceImporter {
             try {
                 parsed = parse(item.path, item.relativePath, mapping.shape());
             } catch (MalformedCurrentWorkspaceFile malformed) {
+                LOGGER.warn("Rejected malformed current-workspace file: {}", malformed.getMessage());
                 report.add(new CurrentWorkspaceImportReportRow(item.relativePath,
                         CurrentWorkspaceSemanticType.UNKNOWN,
                         CurrentWorkspaceImportStatus.REJECTED, 1, 0, 0, 1,
