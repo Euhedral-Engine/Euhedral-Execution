@@ -1,15 +1,19 @@
 package io.euhedral_execution.training.optimization;
 
+import io.euhedral_execution.training.data.PolicyId;
+import io.euhedral_execution.training.data.PolicyVector;
+import io.euhedral_execution.training.merge.MergeRecords.RobustPolicySummary;
+import io.euhedral_execution.training.merge.RobustPolicyComparator;
 import io.euhedral_execution.training.utils.CommonFunctions;
-import io.euhedral_execution.training.utils.PolicyRanking;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
+import java.util.Set;
 
-/** Full-covariance CMA-ES over the four normalized seven-weight action chunks. */
+/** Deterministic Phase 3 CMA-style proposal generator over normalized 28-weight policies. */
 public final class CmaEsOptimizer {
 
     public static final int DIMENSIONS = 28;
@@ -19,6 +23,7 @@ public final class CmaEsOptimizer {
         void score(float[] features, int rows, float[] scores);
     }
 
+    /** ROBUST_OPTIMIZER_POOLED_V0_REMOVAL compatibility for legacy.PooledSequenceFinder. */
     public record MeasuredPolicy(double[] vector, double[] quantiles) {
         public MeasuredPolicy {
             vector = Arrays.copyOf(vector, vector.length);
@@ -26,433 +31,149 @@ public final class CmaEsOptimizer {
         }
     }
 
+    /** ROBUST_OPTIMIZER_POOLED_V0_REMOVAL compatibility for legacy.PooledSequenceFinder. */
     public record ScoredVector(double[] vector, float score) {
+        public ScoredVector {
+            vector = Arrays.copyOf(vector, vector.length);
+        }
     }
 
-    public List<ScoredVector> optimize(List<MeasuredPolicy> measured, BatchScorer scorer, long seed) {
+    public List<PredictedCandidate> optimize(List<RobustPolicySummary> measuredEligiblePolicies,
+            Set<PolicyId> fixedAnchorIds, PolicyCurvePredictor predictor, CmaEsConfig config,
+            long islandSeed) {
+        if (!config.enabled()) {
+            return List.of();
+        }
+        List<RobustPolicySummary> seeds = measuredEligiblePolicies.stream()
+                .filter(RobustPolicySummary::eligible)
+                .filter(summary -> !fixedAnchorIds.contains(summary.policy().id()))
+                .sorted(RobustPolicyComparator.BEST_FIRST)
+                .toList();
+        if (seeds.size() < config.minimumSeedPolicies()) {
+            return List.of();
+        }
+        int islandCount = Math.min(config.islands(), seeds.size());
+        List<PolicyVector> islandSeeds = islandSeeds(seeds, islandCount);
+        ArrayList<PolicyVector> proposals = new ArrayList<>(
+                islandCount * config.generations() * config.populationSize());
+        Set<PolicyId> emitted = new HashSet<>();
+        for (int island = 0; island < islandSeeds.size(); island++) {
+            Random random = new Random(islandSeed + 0x9E3779B97F4A7C15L * (island + 1L));
+            double[] mean = islandSeeds.get(island).copyWeights();
+            for (int generation = 0; generation < config.generations(); generation++) {
+                ArrayList<PolicyVector> population = new ArrayList<>(config.populationSize());
+                for (int row = 0; row < config.populationSize(); row++) {
+                    double[] vector = mean.clone();
+                    for (int i = 0; i < vector.length; i++) {
+                        vector[i] += random.nextGaussian() * config.initialSigma();
+                    }
+                    CommonFunctions.normalizePolicyVector(vector);
+                    PolicyVector policy = PolicyVector.of(vector);
+                    if (emitted.add(policy.id())) {
+                        population.add(policy);
+                    }
+                }
+                List<PredictedPolicySummary> predictions = predictor.predict(population);
+                predictions.stream().sorted(PredictedPolicyComparator.BEST_FIRST)
+                        .map(PredictedPolicySummary::policy).forEach(proposals::add);
+                if (!predictions.isEmpty()) {
+                    mean = predictions.stream().min(PredictedPolicyComparator.BEST_FIRST)
+                            .orElseThrow().policy().copyWeights();
+                }
+            }
+        }
+        return predictor.predict(proposals).stream()
+                .sorted(PredictedPolicyComparator.BEST_FIRST)
+                .map(summary -> new PredictedCandidate(summary.policy(), summary,
+                        CandidateOrigin.CMA_ES))
+                .toList();
+    }
+
+    /** ROBUST_OPTIMIZER_POOLED_V0_REMOVAL compatibility for legacy.PooledSequenceFinder. */
+    public List<ScoredVector> optimize(List<MeasuredPolicy> measured, BatchScorer scorer,
+            long seed) {
         if (!Boolean.parseBoolean(System.getProperty("candidate.cmaEnabled", "true"))
                 || measured.size() < 10) {
             return List.of();
         }
-
         List<MeasuredPolicy> ranked = new ArrayList<>(measured);
-        ranked.sort((first, second) ->
-                PolicyRanking.compare(second.quantiles(), first.quantiles()));
-
+        ranked.sort((left, right) -> compareQuantiles(right.quantiles(), left.quantiles()));
         int islands = Math.max(1, Integer.getInteger("candidate.cmaIslands", 4));
         int generations = Math.max(1, Integer.getInteger("candidate.cmaGenerations", 12));
-        int lambda = Math.max(8, Integer.getInteger("candidate.cmaPopulation", 96));
-        double initialSigma = propertyDouble("candidate.cmaSigma", 0.20, 0.005, 1.0);
-        double[][] initialCovariance = initialCovariance(ranked);
-        List<double[]> seeds = diverseSeeds(ranked, islands);
-
-        List<ScoredVector> generated = new ArrayList<>(islands * generations * lambda);
-        for (int island = 0; island < seeds.size(); island++) {
+        int population = Math.max(8, Integer.getInteger("candidate.cmaPopulation", 96));
+        double sigma = Math.max(0.005, Math.min(1.0,
+                Double.parseDouble(System.getProperty("candidate.cmaSigma", "0.20"))));
+        ArrayList<ScoredVector> generated = new ArrayList<>(islands * generations * population);
+        for (int island = 0; island < Math.min(islands, ranked.size()); island++) {
             Random random = new Random(seed + 0x9E3779B97F4A7C15L * (island + 1L));
-            runIsland(seeds.get(island), initialCovariance, initialSigma, generations, lambda,
-                    scorer, random, generated);
+            double[] base = ranked.get(island).vector();
+            for (int generation = 0; generation < generations; generation++) {
+                float[] features = new float[population * DIMENSIONS];
+                double[][] vectors = new double[population][DIMENSIONS];
+                for (int row = 0; row < population; row++) {
+                    vectors[row] = base.clone();
+                    for (int i = 0; i < DIMENSIONS; i++) {
+                        vectors[row][i] += random.nextGaussian() * sigma;
+                        features[row * DIMENSIONS + i] = (float) vectors[row][i];
+                    }
+                    CommonFunctions.normalizePolicyVector(vectors[row]);
+                }
+                float[] scores = new float[population];
+                scorer.score(features, population, scores);
+                for (int row = 0; row < population; row++) {
+                    generated.add(new ScoredVector(vectors[row], scores[row]));
+                }
+            }
         }
         return generated;
     }
 
-    private static void runIsland(double[] seed, double[][] initialCovariance, double initialSigma,
-            int generations, int lambda, BatchScorer scorer, Random random,
-            List<ScoredVector> output) {
-        int n = DIMENSIONS;
-        int mu = lambda / 2;
-        double[] weights = new double[mu];
-        double weightSum = 0;
-        for (int i = 0; i < mu; i++) {
-            weights[i] = Math.log(mu + 0.5) - Math.log(i + 1.0);
-            weightSum += weights[i];
-        }
-        double squaredWeightSum = 0;
-        for (int i = 0; i < mu; i++) {
-            weights[i] /= weightSum;
-            squaredWeightSum += weights[i] * weights[i];
-        }
-
-        double muEffective = 1.0 / squaredWeightSum;
-        double cc = (4.0 + muEffective / n) / (n + 4.0 + 2.0 * muEffective / n);
-        double cs = (muEffective + 2.0) / (n + muEffective + 5.0);
-        double c1 = 2.0 / (Math.pow(n + 1.3, 2.0) + muEffective);
-        double cmu = Math.min(1.0 - c1,
-                2.0 * (muEffective - 2.0 + 1.0 / muEffective)
-                        / (Math.pow(n + 2.0, 2.0) + muEffective));
-        double damping = 1.0 + 2.0 * Math.max(0.0,
-                Math.sqrt((muEffective - 1.0) / (n + 1.0)) - 1.0) + cs;
-        double chiN = Math.sqrt(n) * (1.0 - 1.0 / (4.0 * n) + 1.0 / (21.0 * n * n));
-
-        double[] mean = Arrays.copyOf(seed, n);
-        CommonFunctions.normalizePolicyVector(mean);
-        double[][] covariance = copyMatrix(initialCovariance);
-        double[] pathSigma = new double[n];
-        double[] pathCovariance = new double[n];
-        double sigma = initialSigma;
-        float bestScore = Float.NEGATIVE_INFINITY;
-        int stagnant = 0;
-
-        for (int generation = 0; generation < generations; generation++) {
-            EigenSystem eigen = decomposeAndStabilize(covariance);
-            PopulationMember[] population = new PopulationMember[lambda];
-            float[] features = new float[lambda * n];
-            float[] scores = new float[lambda];
-
-            for (int row = 0; row < lambda; row++) {
-                double[] z = new double[n];
-                for (int i = 0; i < n; i++) {
-                    z[i] = random.nextGaussian();
-                }
-                double[] step = eigen.sqrtMultiply(z);
-                double[] vector = new double[n];
-                for (int i = 0; i < n; i++) {
-                    vector[i] = mean[i] + sigma * step[i];
-                }
-                CommonFunctions.normalizePolicyVector(vector);
-                for (int i = 0; i < n; i++) {
-                    features[row * n + i] = (float) vector[i];
-                }
-                population[row] = new PopulationMember(vector);
-            }
-
-            scorer.score(features, lambda, scores);
-            for (int row = 0; row < lambda; row++) {
-                population[row].score = scores[row];
-                output.add(new ScoredVector(population[row].vector, scores[row]));
-            }
-            Arrays.sort(population, Comparator.comparingDouble(PopulationMember::score).reversed());
-
-            if (population[0].score > bestScore + 1.0e-6f) {
-                bestScore = population[0].score;
-                stagnant = 0;
-            } else {
-                stagnant++;
-            }
-
-            double[] oldMean = mean;
-            mean = new double[n];
-            for (int parent = 0; parent < mu; parent++) {
-                for (int i = 0; i < n; i++) {
-                    mean[i] += weights[parent] * population[parent].vector[i];
-                }
-            }
-            CommonFunctions.normalizePolicyVector(mean);
-
-            double[] meanStep = new double[n];
-            for (int i = 0; i < n; i++) {
-                meanStep[i] = (mean[i] - oldMean[i]) / sigma;
-            }
-            double[] whitened = eigen.inverseSqrtMultiply(meanStep);
-            double pathSigmaScale = Math.sqrt(cs * (2.0 - cs) * muEffective);
-            for (int i = 0; i < n; i++) {
-                pathSigma[i] = (1.0 - cs) * pathSigma[i] + pathSigmaScale * whitened[i];
-            }
-
-            double normalizedPath = norm(pathSigma)
-                    / Math.sqrt(1.0 - Math.pow(1.0 - cs, 2.0 * (generation + 1.0)));
-            boolean hSigma = normalizedPath / chiN < 1.4 + 2.0 / (n + 1.0);
-            double pathCovarianceScale = Math.sqrt(cc * (2.0 - cc) * muEffective);
-            for (int i = 0; i < n; i++) {
-                pathCovariance[i] = (1.0 - cc) * pathCovariance[i]
-                        + (hSigma ? pathCovarianceScale * meanStep[i] : 0.0);
-            }
-
-            double oldScale = 1.0 - c1 - cmu
-                    + (hSigma ? 0.0 : c1 * cc * (2.0 - cc));
-            double[][] nextCovariance = new double[n][n];
-            for (int i = 0; i < n; i++) {
-                for (int j = 0; j < n; j++) {
-                    nextCovariance[i][j] = oldScale * covariance[i][j]
-                            + c1 * pathCovariance[i] * pathCovariance[j];
-                }
-            }
-            for (int parent = 0; parent < mu; parent++) {
-                double[] parentStep = new double[n];
-                for (int i = 0; i < n; i++) {
-                    parentStep[i] = (population[parent].vector[i] - oldMean[i]) / sigma;
-                }
-                for (int i = 0; i < n; i++) {
-                    for (int j = 0; j < n; j++) {
-                        nextCovariance[i][j] += cmu * weights[parent]
-                                * parentStep[i] * parentStep[j];
-                    }
-                }
-            }
-            covariance = stabilize(nextCovariance);
-            sigma *= Math.exp((cs / damping) * (norm(pathSigma) / chiN - 1.0));
-            sigma = Math.max(0.005, Math.min(0.8, sigma));
-
-            if (stagnant >= 4) {
-                sigma = Math.min(0.8, sigma * 1.6);
-                blendIdentity(covariance, 0.20);
-                Arrays.fill(pathSigma, 0.0);
-                Arrays.fill(pathCovariance, 0.0);
-                stagnant = 0;
-            }
-        }
-    }
-
-    private static List<double[]> diverseSeeds(List<MeasuredPolicy> ranked, int requested) {
+    private static List<PolicyVector> islandSeeds(List<RobustPolicySummary> ranked, int requested) {
+        ArrayList<PolicyVector> selected = new ArrayList<>(requested);
+        selected.add(ranked.getFirst().policy());
         int poolSize = Math.min(ranked.size(), Math.max(requested * 32, 64));
-        List<double[]> selected = new ArrayList<>(requested);
-        selected.add(Arrays.copyOf(ranked.get(0).vector(), DIMENSIONS));
         while (selected.size() < requested && selected.size() < poolSize) {
-            double bestDistance = -1;
-            double[] best = null;
-            for (int candidate = 1; candidate < poolSize; candidate++) {
-                double[] vector = ranked.get(candidate).vector();
-                double minimum = Double.POSITIVE_INFINITY;
-                for (double[] chosen : selected) {
-                    minimum = Math.min(minimum, squaredDistance(vector, chosen));
+            RobustPolicySummary best = null;
+            double bestDistance = -1.0;
+            for (int i = 1; i < poolSize; i++) {
+                PolicyVector candidate = ranked.get(i).policy();
+                if (selected.stream().anyMatch(candidate::bitwiseEquals)) {
+                    continue;
                 }
-                if (minimum > bestDistance) {
-                    bestDistance = minimum;
-                    best = vector;
+                double distance = selected.stream()
+                        .mapToDouble(chosen -> squaredDistance(candidate, chosen))
+                        .min().orElse(0.0);
+                if (distance > bestDistance
+                        || Double.compare(distance, bestDistance) == 0
+                        && RobustPolicyComparator.BEST_FIRST.compare(ranked.get(i), best) < 0) {
+                    bestDistance = distance;
+                    best = ranked.get(i);
                 }
             }
             if (best == null) {
                 break;
             }
-            selected.add(Arrays.copyOf(best, DIMENSIONS));
+            selected.add(best.policy());
         }
-        return selected;
+        return List.copyOf(selected);
     }
 
-    private static double[][] initialCovariance(List<MeasuredPolicy> ranked) {
-        int count = Math.min(ranked.size(), Math.max(32, Math.min(512, ranked.size() / 5)));
-        double[] mean = new double[DIMENSIONS];
-        for (int row = 0; row < count; row++) {
-            for (int i = 0; i < DIMENSIONS; i++) {
-                mean[i] += ranked.get(row).vector()[i] / count;
-            }
-        }
-
-        double[][] covariance = new double[DIMENSIONS][DIMENSIONS];
-        for (int row = 0; row < count; row++) {
-            double[] vector = ranked.get(row).vector();
-            for (int i = 0; i < DIMENSIONS; i++) {
-                double left = vector[i] - mean[i];
-                for (int j = 0; j < DIMENSIONS; j++) {
-                    covariance[i][j] += left * (vector[j] - mean[j]) / Math.max(1, count - 1);
-                }
-            }
-        }
-
-        double trace = 0;
+    private static double squaredDistance(PolicyVector left, PolicyVector right) {
+        double distance = 0.0;
         for (int i = 0; i < DIMENSIONS; i++) {
-            trace += covariance[i][i];
+            double delta = left.weight(i) - right.weight(i);
+            distance += delta * delta;
         }
-        double scale = DIMENSIONS / Math.max(trace, 1.0e-12);
-        for (int i = 0; i < DIMENSIONS; i++) {
-            for (int j = 0; j < DIMENSIONS; j++) {
-                covariance[i][j] *= 0.75 * scale;
-            }
-            covariance[i][i] += 0.25;
-        }
-        return stabilize(covariance);
+        return distance;
     }
 
-    private static EigenSystem decomposeAndStabilize(double[][] covariance) {
-        return decompose(stabilize(covariance));
-    }
-
-    private static double[][] stabilize(double[][] matrix) {
-        int n = matrix.length;
-        for (int i = 0; i < n; i++) {
-            for (int j = i + 1; j < n; j++) {
-                double symmetric = 0.5 * (matrix[i][j] + matrix[j][i]);
-                matrix[i][j] = symmetric;
-                matrix[j][i] = symmetric;
+    private static int compareQuantiles(double[] left, double[] right) {
+        for (int i = Math.min(left.length, right.length) - 1; i >= 0; i--) {
+            int result = Double.compare(left[i], right[i]);
+            if (result != 0) {
+                return result;
             }
-            matrix[i][i] = Math.max(matrix[i][i], 1.0e-10);
         }
-        EigenSystem eigen = decompose(matrix);
-        double minimum = Math.max(1.0e-8, eigen.minimumPositive());
-        double maximum = minimum * 1.0e6;
-        for (int i = 0; i < eigen.values.length; i++) {
-            eigen.values[i] = Math.max(minimum, Math.min(eigen.values[i], maximum));
-        }
-        return eigen.reconstruct();
-    }
-
-    private static EigenSystem decompose(double[][] matrix) {
-        int n = matrix.length;
-        double[][] a = copyMatrix(matrix);
-        double[][] vectors = identity(n);
-        int iterations = n * n * 20;
-        for (int iteration = 0; iteration < iterations; iteration++) {
-            int p = 0;
-            int q = 1;
-            double largest = 0;
-            for (int i = 0; i < n; i++) {
-                for (int j = i + 1; j < n; j++) {
-                    double value = Math.abs(a[i][j]);
-                    if (value > largest) {
-                        largest = value;
-                        p = i;
-                        q = j;
-                    }
-                }
-            }
-            if (largest < 1.0e-12) {
-                break;
-            }
-
-            double angle = 0.5 * Math.atan2(2.0 * a[p][q], a[q][q] - a[p][p]);
-            double cosine = Math.cos(angle);
-            double sine = Math.sin(angle);
-            for (int i = 0; i < n; i++) {
-                if (i != p && i != q) {
-                    double aip = a[i][p];
-                    double aiq = a[i][q];
-                    a[i][p] = a[p][i] = cosine * aip - sine * aiq;
-                    a[i][q] = a[q][i] = sine * aip + cosine * aiq;
-                }
-                double vip = vectors[i][p];
-                double viq = vectors[i][q];
-                vectors[i][p] = cosine * vip - sine * viq;
-                vectors[i][q] = sine * vip + cosine * viq;
-            }
-            double app = a[p][p];
-            double aqq = a[q][q];
-            double apq = a[p][q];
-            a[p][p] = cosine * cosine * app - 2.0 * sine * cosine * apq
-                    + sine * sine * aqq;
-            a[q][q] = sine * sine * app + 2.0 * sine * cosine * apq
-                    + cosine * cosine * aqq;
-            a[p][q] = a[q][p] = 0.0;
-        }
-
-        double[] values = new double[n];
-        for (int i = 0; i < n; i++) {
-            values[i] = a[i][i];
-        }
-        return new EigenSystem(vectors, values);
-    }
-
-    private static void blendIdentity(double[][] covariance, double identityWeight) {
-        for (int i = 0; i < covariance.length; i++) {
-            for (int j = 0; j < covariance.length; j++) {
-                covariance[i][j] *= 1.0 - identityWeight;
-            }
-            covariance[i][i] += identityWeight;
-        }
-    }
-
-    private static double propertyDouble(String name, double defaultValue, double minimum,
-            double maximum) {
-        double value = Double.parseDouble(System.getProperty(name, Double.toString(defaultValue)));
-        if (!Double.isFinite(value) || value < minimum || value > maximum) {
-            throw new IllegalArgumentException(name + " must be in [" + minimum + ", " + maximum + "]");
-        }
-        return value;
-    }
-
-    private static double norm(double[] vector) {
-        double total = 0;
-        for (double value : vector) {
-            total += value * value;
-        }
-        return Math.sqrt(total);
-    }
-
-    private static double squaredDistance(double[] first, double[] second) {
-        double total = 0;
-        for (int i = 0; i < first.length; i++) {
-            double difference = first[i] - second[i];
-            total += difference * difference;
-        }
-        return total;
-    }
-
-    private static double[][] identity(int size) {
-        double[][] result = new double[size][size];
-        for (int i = 0; i < size; i++) {
-            result[i][i] = 1.0;
-        }
-        return result;
-    }
-
-    private static double[][] copyMatrix(double[][] source) {
-        double[][] copy = new double[source.length][];
-        for (int i = 0; i < source.length; i++) {
-            copy[i] = Arrays.copyOf(source[i], source[i].length);
-        }
-        return copy;
-    }
-
-    private static final class PopulationMember {
-        private final double[] vector;
-        private float score;
-
-        private PopulationMember(double[] vector) {
-            this.vector = vector;
-        }
-
-        private float score() {
-            return this.score;
-        }
-    }
-
-    private static final class EigenSystem {
-        private final double[][] vectors;
-        private final double[] values;
-
-        private EigenSystem(double[][] vectors, double[] values) {
-            this.vectors = vectors;
-            this.values = values;
-        }
-
-        private double[] sqrtMultiply(double[] input) {
-            double[] output = new double[input.length];
-            for (int eigen = 0; eigen < values.length; eigen++) {
-                double scaled = Math.sqrt(Math.max(values[eigen], 1.0e-12)) * input[eigen];
-                for (int row = 0; row < output.length; row++) {
-                    output[row] += vectors[row][eigen] * scaled;
-                }
-            }
-            return output;
-        }
-
-        private double[] inverseSqrtMultiply(double[] input) {
-            double[] projected = new double[input.length];
-            for (int eigen = 0; eigen < values.length; eigen++) {
-                double dot = 0;
-                for (int row = 0; row < input.length; row++) {
-                    dot += vectors[row][eigen] * input[row];
-                }
-                projected[eigen] = dot / Math.sqrt(Math.max(values[eigen], 1.0e-12));
-            }
-            double[] output = new double[input.length];
-            for (int eigen = 0; eigen < values.length; eigen++) {
-                for (int row = 0; row < input.length; row++) {
-                    output[row] += vectors[row][eigen] * projected[eigen];
-                }
-            }
-            return output;
-        }
-
-        private double minimumPositive() {
-            double minimum = Double.POSITIVE_INFINITY;
-            for (double value : values) {
-                if (value > 0) {
-                    minimum = Math.min(minimum, value);
-                }
-            }
-            return Double.isFinite(minimum) ? minimum : 1.0e-8;
-        }
-
-        private double[][] reconstruct() {
-            int n = values.length;
-            double[][] result = new double[n][n];
-            for (int eigen = 0; eigen < n; eigen++) {
-                for (int i = 0; i < n; i++) {
-                    for (int j = 0; j < n; j++) {
-                        result[i][j] += vectors[i][eigen] * values[eigen] * vectors[j][eigen];
-                    }
-                }
-            }
-            return result;
-        }
+        return Integer.compare(left.length, right.length);
     }
 }

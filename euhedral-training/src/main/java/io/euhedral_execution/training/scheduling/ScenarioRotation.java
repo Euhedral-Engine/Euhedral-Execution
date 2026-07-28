@@ -6,6 +6,35 @@ import java.util.List;
 import java.util.SortedSet;
 
 public final class ScenarioRotation {
+    public static List<SourceScenario> select(SortedSet<SourceScenario> requiredScenarios,
+            java.util.SortedMap<RotationGroup, Integer> cursors, String activeEnvironmentId,
+            int activeCoreCount, int scenariosPerIteration) {
+        RotationGroup group = new RotationGroup(activeEnvironmentId, activeCoreCount);
+        return new ScenarioRotation().select(requiredScenarios, group,
+                cursors.getOrDefault(group, 0), scenariosPerIteration);
+    }
+
+    public static java.util.SortedMap<RotationGroup, Integer> advance(
+            SortedSet<SourceScenario> requiredScenarios,
+            java.util.SortedMap<RotationGroup, Integer> cursors,
+            List<SourceScenario> completedSelection) {
+        java.util.TreeMap<RotationGroup, Integer> next = new java.util.TreeMap<>(cursors);
+        if (completedSelection.isEmpty()) {
+            return next;
+        }
+        SourceScenario first = completedSelection.getFirst();
+        RotationGroup group = new RotationGroup(first.environmentId(),
+                first.availablePhysicalCoreCount());
+        long runnable = requiredScenarios.stream()
+                .filter(scenario -> scenario.environmentId().equals(group.environmentId()))
+                .filter(scenario -> scenario.availablePhysicalCoreCount()
+                        == group.availablePhysicalCoreCount())
+                .count();
+        next.put(group, new ScenarioRotation().advance(cursors.getOrDefault(group, 0),
+                completedSelection.size(), Math.toIntExact(runnable)));
+        return java.util.Collections.unmodifiableSortedMap(next);
+    }
+
     public List<SourceScenario> select(SortedSet<SourceScenario> required, RotationGroup group,
             int nextIndex, int scenariosPerIteration) {
         if (nextIndex < 0 || scenariosPerIteration <= 0) {

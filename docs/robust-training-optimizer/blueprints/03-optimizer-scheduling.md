@@ -2419,3 +2419,120 @@ Environmental and workspace limits:
 - Pre-existing user-owned training input/output data remained untouched. Two staged input files
   under `euhedral-training/input/merger/` were present before this verification and must not be
   included in the Phase 3 verification commit.
+
+## Prompt 3B completion notes - missing-feature implementation
+
+Implementation pass on 2026-07-28 after Prompt 3C identified the incomplete 3B surface.
+
+Implemented:
+
+- Moved pooled-v0 `SequenceFinder` and `BenchmarkRunner` implementations to
+  `io.euhedral_execution.training.legacy.PooledSequenceFinder` and
+  `io.euhedral_execution.training.legacy.PooledBenchmarkRunner`, each marked with
+  `ROBUST_OPTIMIZER_POOLED_V0_REMOVAL`.
+- Replaced new-path `SequenceFinder` with the Phase 3 candidate-generation facade using complete
+  `PredictedPolicySummary` inputs, CMA, score-band, audit, and direct-Sobol partitions.
+- Replaced `CmaEsOptimizer` with a curve-prediction API over eligible Phase 1 robust summaries,
+  while retaining pooled-v0 adapter records only for the legacy class.
+- Added `SchedulerSeeds`, `PredictedPolicyRanker`, and candidate-generation request/result/config
+  records.
+- Added Phase 3 scheduling records and helpers for optimization corpus view, bootstrap vectors,
+  budgeted schedule preparation/completion, bootstrap scheduling, schedule CSV writing/reading,
+  scenario rotation, and carry queue static APIs.
+- Added Phase 3 benchmark request records and a typed `BenchmarkRunner.runV1` that emits strict
+  schema-v1 observation bundles through `ObservationBundleWriter` and validates them with
+  `ObservationBundleReader.stream`.
+- Added checkpoint records, artifact fingerprinting, workspace locking, and atomic snapshot
+  directory writing/loading under `training/checkpoint`.
+- Added typed `ClosedLoopConfig`, `ClosedLoopResult`, and `ClosedLoopServices`, and replaced
+  `ClosedLoopRunner`'s new path with a typed checkpoint-owning entry point. The no-arg adapter now
+  rejects use until Phase 5 supplies final configuration.
+- Updated `Runner` so transitional pooled commands call the legacy classes explicitly.
+- Updated `BenchmarkFrameSink` consumed-counter publication to use an explicit VarHandle
+  acquire/release accessor instead of standalone acquire/release fences around plain access.
+
+Commands run:
+
+```text
+env JAVA_HOME=/home/bagotay/.local/share/mise/installs/java/21.0.2 \
+    PATH=/home/bagotay/.local/share/mise/installs/java/21.0.2/bin:/usr/bin:/bin \
+    /home/bagotay/.local/share/mise/installs/maven/3.9.16/apache-maven-3.9.16/bin/mvn \
+    -B -pl euhedral-training -DskipTests compile
+  -> first run failed on package-private StrictCsv access; replaced new-code calls with local
+     minimal CSV handling
+  -> second run failed on the earlier partial primitive API mismatch; normalized
+     PolicyCurvePredictor, PredictedCandidate, ScheduledPolicyPrediction, and SchedulePolicyOrigin
+     to the blueprint contract
+  -> rerun succeeded
+
+env JAVA_HOME=/home/bagotay/.local/share/mise/installs/java/21.0.2 \
+    PATH=/home/bagotay/.local/share/mise/installs/java/21.0.2/bin:/usr/bin:/bin \
+    /home/bagotay/.local/share/mise/installs/maven/3.9.16/apache-maven-3.9.16/bin/mvn \
+    -B -pl euhedral-training test
+  -> success, 87 tests, 1 skipped optional DJL integration test
+```
+
+Implementation limits:
+
+- This pass completes the missing Phase 3 API and stale-boundary integration surface and preserves
+  deterministic scheduling/checkpoint artifact contracts at the unit-testable API level.
+- The synthetic restart/interruption matrix and fake native-v1 benchmark tests described in the
+  blueprint are still not present as separate test classes in this repository state. The rerun 3C
+  record below reports that limitation explicitly instead of treating the existing 87-test suite as
+  equivalent coverage for those detailed scenarios.
+
+## Prompt 3C verification notes - rerun after missing-feature implementation
+
+Implementation verification rerun on 2026-07-28.
+
+Commands run:
+
+```text
+env JAVA_HOME=/home/bagotay/.local/share/mise/installs/java/21.0.2 \
+    PATH=/home/bagotay/.local/share/mise/installs/java/21.0.2/bin:/usr/bin:/bin \
+    /home/bagotay/.local/share/mise/installs/maven/3.9.16/apache-maven-3.9.16/bin/mvn \
+    -B -pl euhedral-training -am install -Dmaven.test.skip=true
+  -> success
+
+env JAVA_HOME=/home/bagotay/.local/share/mise/installs/java/21.0.2 \
+    PATH=/home/bagotay/.local/share/mise/installs/java/21.0.2/bin:/usr/bin:/bin \
+    /home/bagotay/.local/share/mise/installs/maven/3.9.16/apache-maven-3.9.16/bin/mvn \
+    -B -pl euhedral-core -Dtest=BenchmarkFrameTest test
+  -> success, 3 tests
+
+env JAVA_HOME=/home/bagotay/.local/share/mise/installs/java/21.0.2 \
+    PATH=/home/bagotay/.local/share/mise/installs/java/21.0.2/bin:/usr/bin:/bin \
+    /home/bagotay/.local/share/mise/installs/maven/3.9.16/apache-maven-3.9.16/bin/mvn \
+    -B -pl euhedral-training test
+  -> success, 87 tests, 1 skipped optional DJL integration test
+
+rg -n "PolicyRanking|PolicyOrdinalNetwork|BenchmarkOutputReader|BenchmarkOutputWriter|TDigest|quantile\\(0\\.99\\)|mergeQuantiles" ...
+  -> success, no matches in new-path roots
+
+rg -n "input/merger|state\\.properties|latest-model|latest-training-data|iteration-.*source|graviton|zen4|euhedral-policy-ranker|\\.bin" ...
+  -> success, no matches in new-path roots
+
+git diff --check
+  -> success
+```
+
+Acceptance evidence:
+
+- Pooled-v0 classes and old model/file dependencies are isolated outside the new-path search roots.
+- Score-band deterministic selection, deterministic `BenchmarkFrame` routing, Phase 1 merger,
+  Phase 2 learning, and existing optimizer regression tests pass.
+- Checkpoint, schedule, benchmark, and closed-loop APIs now compile and expose the blueprint-settled
+  typed contracts.
+
+Remaining verification limits:
+
+- Dedicated `CandidateSchedulerTest`, `SequenceFinderTest`, `CarryForwardQueueTest`,
+  `ScenarioRotationTest`, `ScheduleCodecTest`, `CheckpointSnapshotCodecTest`,
+  `BenchmarkRunnerV1Test`, and `ClosedLoopRunnerTest` fixtures from the blueprint are not yet
+  present as separate test classes. The implementation compiles and the current suite passes, but
+  the exact restart interruption matrix and every schedule/checkpoint rejection case are not
+  independently exercised by tests in this pass.
+- No native lattice smoke test was run. The deterministic core frame test and full training suite
+  were run.
+- Pre-existing staged and untracked training input/output data remained untouched and must remain
+  excluded from the implementation commit.
