@@ -1145,3 +1145,47 @@ The 2026-07-29 cleanup changed organization and terminology only:
 No ranking, calibration, scheduling, checkpoint, packaging, concurrency, memory-access, or
 floating-point behavior changed. Package manifest bytes change only where the renamed producing
 stage enum is serialized; the identity and validation rules are otherwise unchanged.
+
+## Prompt 4C verification record
+
+Verification ran on branch `agent/phase4c-packaging-verification` against the completed Phase 4B
+implementation. No blueprint-settled defect was found, so this pass made no production-code change.
+
+Commands and results:
+
+```text
+env JAVA_HOME=/home/bagotay/.local/share/mise/installs/java/21.0.2 \
+    PATH=/home/bagotay/.local/share/mise/installs/java/21.0.2/bin:/usr/bin:/bin \
+    /home/bagotay/.local/share/mise/installs/maven/3.9.16/apache-maven-3.9.16/bin/mvn \
+    -B -pl euhedral-training -am install -Dmaven.test.skip=true
+  BUILD SUCCESS (6 reactor modules)
+
+env JAVA_HOME=/home/bagotay/.local/share/mise/installs/java/21.0.2 \
+    PATH=/home/bagotay/.local/share/mise/installs/java/21.0.2/bin:/usr/bin:/bin \
+    /home/bagotay/.local/share/mise/installs/maven/3.9.16/apache-maven-3.9.16/bin/mvn \
+    -B -pl euhedral-training \
+    -Dtest=ArtifactFingerprintTest,CheckpointSnapshotCodecTest,TrainingRunPackageInputsCodecTest,PackageManifestCodecTest,PackageDatasetWriterTest,PackageReportWriterTest,TrainingRunPackagerTest,TrainingRunPackageValidatorTest,ClosedLoopRunnerTest \
+    test
+  BUILD SUCCESS; 13 tests, 0 failures, 0 errors, 0 skipped
+
+env JAVA_HOME=/home/bagotay/.local/share/mise/installs/java/21.0.2 \
+    PATH=/home/bagotay/.local/share/mise/installs/java/21.0.2/bin:/usr/bin:/bin \
+    /home/bagotay/.local/share/mise/installs/maven/3.9.16/apache-maven-3.9.16/bin/mvn \
+    -B -pl euhedral-training test
+  BUILD SUCCESS; 115 tests, 0 failures, 0 errors, 1 skipped
+
+git diff --check
+  no errors
+
+rg -n "input/merger|output/results|latest-model|latest-training-data|state\\.properties|euhedral-policy-ranker|\\.bin" \
+  euhedral-training/src/main/java/io/euhedral_execution/training/packaging \
+  euhedral-training/src/test/java/io/euhedral_execution/training/packaging
+  no matches
+```
+
+The skipped test is the existing opt-in `ScenarioOrdinalNetworkIntegrationTest`; it is outside
+the packaging surface and requires a DJL runtime. The focused package tests cover schema and
+naming, streamed checksums and memory-sensitive paths, deterministic output, collision handling,
+partial-run lifecycle classification, report contents, cleanup, and tamper rejection. The
+pre-existing staged/untracked training data, outputs, and unrelated core test directory remained
+untouched and excluded from this record's commit.
