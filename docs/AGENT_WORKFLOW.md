@@ -16,14 +16,17 @@ required capabilities rather than permanently binding a phase to one model name.
 | Blueprint with data contracts, concurrency, mathematics, topology, or lifecycle changes | Frontier reasoning model | Maximum available |
 | Blueprint with substantial integration, scheduling, packaging, or migration work | Frontier reasoning model | High |
 | Blueprint for verification, audit, cleanup, or bounded interface work | Strong reasoning model | Medium |
-| Implementation and iterative repair of an approved blueprint | Strong coding model | Low unless a blueprint conflict requires a new reasoning pass |
-| Implementation verification | Strong coding or verification model | Low to medium |
+| Implementation and iterative repair of an approved blueprint | Capability selected after the completed blueprint is assessed | Low only for bounded mechanical work; medium or high for broad systems integration |
+| Implementation verification | Strong coding or verification model, raised when the acceptance surface remains coupled | Low to high |
 | Blueprint-conformance audit | Dedicated audit model or frontier reasoning model | Medium to high |
 
-The current mapping may be `gpt-5.6-sol` at `max` for planning and complex blueprints,
-`gpt-5.5` at `low` for implementation, and Terra or Sol for a conformance audit. It is an example,
-not a workflow requirement. Do not use a lower effort to make an architectural decision, and do not
-use an implementation prompt to reopen a decision that belongs in planning or a blueprint.
+The current mapping may be `gpt-5.6-sol` at `max` for planning and complex blueprints, a coding
+model selected from the completed blueprint's actual demands for implementation, and Terra or Sol
+for a conformance audit. These are examples, not permanent workflow requirements. A
+`gpt-5.5 / low` implementation pass is appropriate only when the finished blueprint proves that
+the work is bounded and mechanical. Do not use a lower effort to make an architectural decision,
+and do not use an implementation prompt to reopen a decision that belongs in planning or a
+blueprint.
 
 ## Pipeline
 
@@ -69,11 +72,13 @@ developer requirements, scope, non-goals, constraints, affected components, succ
 validation strategy, known risks, branch lineage, and all context later stages need.
 
 At its end, provide the prompts the developer should issue, grouped by phase. Rank them from most
-to least reasoning-intensive, label every prompt with its exact model and reasoning effort, and
-pair each blueprint prompt with a low-effort strong-coding-model implementation prompt, an
-implementation-verification prompt, and a blueprint-conformance audit prompt. Each prompt must name
-its required input artifacts, allowed edits, prohibited work, output artifact, and handoff
-condition.
+to least reasoning-intensive, label every blueprint, verification, and audit prompt with its exact
+model and reasoning effort, and give each implementation prompt a clearly labeled provisional
+model and effort. Pair every blueprint with implementation, implementation-verification, and
+blueprint-conformance audit prompts. Each prompt must name its required input artifacts, allowed
+edits, prohibited work, output artifact, and handoff condition. The blueprint prompt must be
+required to replace the provisional implementation selection after completing the capability
+assessment below; implementation must not begin while its selection is still provisional.
 
 ## Stage 2: blueprint
 
@@ -96,12 +101,40 @@ blueprint directory. A complete blueprint specifies:
 An implementation must be able to execute directly from the blueprint. If it would need a design
 choice, the blueprint is incomplete.
 
+### Post-blueprint implementation-model gate
+
+Model selection for implementation is a required blueprint output, not a planning-time constant.
+After the blueprint is complete, reassess the implementation pass before committing the blueprint.
+Record an `Implementation model reassessment` section that evaluates:
+
+- the number of modules, ownership boundaries, source files, schemas, and lifecycle states that
+  must be held together;
+- whether the work combines concurrency or memory semantics, mathematical precision, filesystem
+  safety, topology, recovery, migration, or deterministic serialization;
+- how much prior context the implementation model must read and whether the blueprint provides a
+  smaller exact context envelope;
+- the breadth of compile repair, failure handling, and acceptance-test interactions; and
+- evidence from earlier attempts with the proposed model or a lower-capability model.
+
+Then select the implementation model and reasoning effort from those demands. `low` effort is only
+for a bounded, mechanical translation with local failure modes. Use `medium` or `high`, and upgrade
+the model capability as well as effort, when the implementation must preserve coupled systems
+invariants across a broad context. A more detailed blueprint reduces design ambiguity; it does not
+automatically reduce implementation complexity or context load.
+
+Update the plan's implementation prompt label and body with the final selection before handoff. If
+the selected model is unavailable, stop and request an explicit alternative instead of silently
+downgrading. Do not assume that implementation verification can repair a knowingly under-capable
+implementation pass.
+
 ## Stage 3: implementation
 
-Run every implementation prompt with a strong coding model at `low` reasoning effort. Read
-`AGENTS.md`, the plan, the applicable blueprint, and all earlier completion notes. Modify only the
-files and contracts enumerated by the blueprint, compile, run the specified tests, fix defects
-within the settled design, and validate acceptance criteria and architectural consistency.
+Run every implementation prompt with the model and effort selected by the completed blueprint's
+implementation-model gate. Confirm that the plan prompt is no longer labeled provisional. Read
+`AGENTS.md`, the plan, the applicable blueprint, and the completion notes and exact context envelope
+named by that blueprint. Modify only the files and contracts enumerated by the blueprint, compile,
+run the specified tests, fix defects within the settled design, and validate acceptance criteria
+and architectural consistency.
 
 Implementation must not introduce architecture. If it finds an unstated design decision or an
 incompatible blueprint requirement, stop without deleting in-progress work. Append the conflict,
@@ -138,7 +171,8 @@ Use this skeleton for a planning prompt:
 > workflow, the relevant architecture and CI documentation, and affected README files. First
 > resolve material requirements with me; then write `docs/plans/<PLAN_NAME>.md`. Do not modify
 > production code. Produce a ranked, phased blueprint/implementation/verification/audit prompt
-> sequence with explicit selected model and reasoning effort.
+> sequence with exact blueprint/verification/audit selections and clearly provisional
+> implementation selections that each blueprint must finalize.
 
 Use this skeleton for a blueprint prompt:
 
@@ -147,19 +181,23 @@ Use this skeleton for a blueprint prompt:
 > tests. Do not modify production code. Write `<BLUEPRINT_PATH>` as an implementation-ready
 > blueprint: settle all design decisions, identify every file, specify contracts, algorithms,
 > invariants, precision, memory semantics, deterministic ordering, failures, tests, and acceptance
-> criteria. If a material ambiguity remains, ask before finalizing the blueprint.
+> criteria. After the blueprint is complete, assess its implementation context, systems coupling,
+> repair/test breadth, and prior model evidence; record the selected implementation model and
+> effort, then update the plan's implementation prompt before handoff. If a material ambiguity
+> remains, ask before finalizing the blueprint.
 
 Use this skeleton for an implementation prompt:
 
-> Use the selected strong coding model with `low` reasoning effort. Read AGENTS.md, `<PLAN_PATH>`,
-> `<BLUEPRINT_PATH>`, and prior completion notes. Implement only the enumerated checklist. Do not
+> Use `<MODEL>` with `<low|medium|high>` reasoning effort as selected by the completed blueprint's
+> implementation-model reassessment. Read AGENTS.md, `<PLAN_PATH>`, `<BLUEPRINT_PATH>`, and the
+> exact prior context named by the blueprint. Implement only the enumerated checklist. Do not
 > redesign the architecture. Run the required tests and validate acceptance criteria. If a new
-> decision is required, stop and append the exact conflict and evidence to the blueprint. Otherwise,
-> append completion notes with changed files and test results.
+> decision is required, stop and append the exact conflict and evidence to the blueprint.
+> Otherwise, append completion notes with changed files and test results.
 
 Use this skeleton for an implementation-verification prompt:
 
-> Use the selected strong coding or verification model with `<low|medium>` reasoning effort. Read
+> Use the selected strong coding or verification model with `<low|medium|high>` reasoning effort. Read
 > AGENTS.md, the plan, `<BLUEPRINT_PATH>`, the implementation, and its completion notes. Run every
 > validation command and check every acceptance criterion. Fix only implementation defects whose
 > resolution is already settled by the blueprint. Append commands, results, skipped checks, and
