@@ -3,10 +3,8 @@ package io.euhedral_execution.training.legacy;
 import com.tdunning.math.stats.MergingDigest;
 import io.euhedral_execution.hashing.HasherApi;
 import io.euhedral_execution.training.networks.PolicyOrdinalNetwork;
-import io.euhedral_execution.training.optimization.CmaEsOptimizer;
-import io.euhedral_execution.training.optimization.CmaEsOptimizer.MeasuredPolicy;
-import io.euhedral_execution.training.optimization.CmaEsOptimizer.ScoredVector;
-import io.euhedral_execution.training.optimization.ScoreBandSampler;
+import io.euhedral_execution.training.legacy.LegacyCmaEsOptimizer.MeasuredPolicy;
+import io.euhedral_execution.training.legacy.LegacyCmaEsOptimizer.ScoredVector;
 import io.euhedral_execution.training.utils.BenchmarkOutputReader;
 import io.euhedral_execution.training.utils.BenchmarkOutputWriter;
 import io.euhedral_execution.training.utils.CommonFunctions;
@@ -209,7 +207,7 @@ public class PooledSequenceFinder implements AutoCloseable {
         long candidateSeed = Long.getLong("candidate.seed", 123L) ^ sobolSkip;
 
         List<MeasuredPolicy> measured = readMeasuredPolicies(historicalData);
-        CmaEsOptimizer optimizer = new CmaEsOptimizer();
+        LegacyCmaEsOptimizer optimizer = new LegacyCmaEsOptimizer();
         List<ScoredVector> cmaCandidates = optimizer.optimize(measured,
                 this.learner::predictScores, candidateSeed);
         LOGGER.info("CMA-ES generated {} classifier-scored candidates", cmaCandidates.size());
@@ -225,8 +223,8 @@ public class PooledSequenceFinder implements AutoCloseable {
         for (int quantile = 1; quantile <= thresholds.length; quantile++) {
             thresholds[quantile - 1] = scoreDistribution.quantile(quantile / 10.0);
         }
-        ScoreBandSampler sampler = new ScoreBandSampler(thresholds,
-                ScoreBandSampler.topHeavyCapacities(bandSelectedCount), candidateSeed);
+        LegacyScoreBandSampler sampler = new LegacyScoreBandSampler(thresholds,
+                LegacyScoreBandSampler.topHeavyCapacities(bandSelectedCount), candidateSeed);
         for (ScoredVector candidate : cmaCandidates) {
             sampler.accept(candidate.vector(), candidate.score());
         }

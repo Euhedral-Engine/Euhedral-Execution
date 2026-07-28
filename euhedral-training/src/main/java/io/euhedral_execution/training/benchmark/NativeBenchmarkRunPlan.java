@@ -9,7 +9,7 @@ import java.util.List;
 public record NativeBenchmarkRunPlan(String trainingRunId, int iteration, String benchmarkRunId,
         String candidateCohortId, SourceScenario scenario, List<ScheduledPolicy> policies,
         BenchmarkExecutionConfig executionConfig, BenchmarkParameters parameters,
-        String commitSha, boolean dirtyWorkingTree, Path outputBundle) {
+        long schedulerSeed, String commitSha, boolean dirtyWorkingTree, Path outputBundle) {
     public NativeBenchmarkRunPlan {
         policies = List.copyOf(policies);
         outputBundle = outputBundle.toAbsolutePath().normalize();

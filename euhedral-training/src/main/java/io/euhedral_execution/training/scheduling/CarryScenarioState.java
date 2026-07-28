@@ -1,25 +1,38 @@
 package io.euhedral_execution.training.scheduling;
 
 import io.euhedral_execution.training.data.SourceScenario;
+import io.euhedral_execution.training.learning.ScenarioPrediction;
+import java.util.Objects;
+import java.util.OptionalInt;
 
-public record CarryScenarioState(SourceScenario scenario, CoverageState state, int attemptCount,
-        long lastAttemptIteration, long nextEligibleIteration) {
+public record CarryScenarioState(SourceScenario scenario, CoverageState coverage, int attemptCount,
+        OptionalInt lastAttemptIteration, int nextEligibleIteration,
+        ScenarioPrediction prediction) {
     public CarryScenarioState {
-        if (attemptCount < 0 || lastAttemptIteration < 0 || nextEligibleIteration < 0) {
+        Objects.requireNonNull(scenario);
+        Objects.requireNonNull(coverage);
+        Objects.requireNonNull(lastAttemptIteration);
+        Objects.requireNonNull(prediction);
+        if (!scenario.equals(prediction.scenario()) || attemptCount < 0
+                || nextEligibleIteration < 0
+                || lastAttemptIteration.isPresent() != (attemptCount > 0)
+                || lastAttemptIteration.isPresent() && lastAttemptIteration.getAsInt() < 0) {
             throw new IllegalArgumentException("Invalid carry attempt state");
         }
-        if (state == CoverageState.VALID && nextEligibleIteration != 0) {
+        if (coverage == CoverageState.VALID) {
             nextEligibleIteration = 0;
         }
     }
 
-    public CarryScenarioState attempted(long iteration, CoverageState nextState) {
+    public CarryScenarioState attempted(int iteration, CoverageState nextState) {
         int nextAttemptCount = Math.addExact(attemptCount, 1);
         if (nextState == CoverageState.VALID) {
-            return new CarryScenarioState(scenario, nextState, nextAttemptCount, iteration, 0);
+            return new CarryScenarioState(scenario, nextState, nextAttemptCount,
+                    OptionalInt.of(iteration), 0, prediction);
         }
         long delay = 1L << Math.min(nextAttemptCount - 1, 3);
-        return new CarryScenarioState(scenario, nextState, nextAttemptCount, iteration,
-                Math.addExact(iteration, Math.min(delay, 8L)));
+        return new CarryScenarioState(scenario, nextState, nextAttemptCount,
+                OptionalInt.of(iteration),
+                Math.toIntExact(Math.addExact(iteration, Math.min(delay, 8L))), prediction);
     }
 }

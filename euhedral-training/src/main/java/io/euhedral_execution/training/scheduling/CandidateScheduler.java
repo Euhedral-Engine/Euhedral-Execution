@@ -14,8 +14,8 @@ public final class CandidateScheduler {
             CalibrationPlan calibrationPlan, OptimizationCorpusView corpus,
             List<CarryForwardEntry> rescoredQueue, List<SourceScenario> selectedScenarios,
             CandidateBudgetConfig budgetConfig, PolicyCurvePredictor predictor) {
-        BudgetAllocation allocation = new BudgetAllocator().allocate(budgetConfig,
-                calibrationPlan.anchors().fixedAnchors().size());
+        BudgetAllocation allocation = BudgetAllocator.allocate(candidateBudget,
+                calibrationPlan.anchors().fixedAnchors().size(), budgetConfig);
         List<PolicyVector> anchors = calibrationPlan.anchors().fixedAnchors();
         Set<PolicyId> anchorIds = anchors.stream().map(PolicyVector::id)
                 .collect(java.util.stream.Collectors.toSet());
@@ -30,15 +30,29 @@ public final class CandidateScheduler {
         for (SourceScenario scenario : selectedScenarios) {
             carry.put(scenario, queue.selectFor(scenario, iteration, allocation.carryForward()));
         }
-        ArrayList<PolicyVector> measured = new ArrayList<>();
-        leaders.forEach(leader -> measured.add(leader.policy()));
-        carry.values().forEach(rows -> rows.forEach(row -> measured.add(row.policy())));
-        List<ScheduledPolicyPrediction> predictions = predictor.predict(measured).stream()
-                .map(summary -> new ScheduledPolicyPrediction(summary.policy(), summary,
-                        SchedulePolicyOrigin.MEASURED_LEADER))
-                .toList();
+        List<PredictedPolicySummary> leaderPredictions = predictor.predict(
+                leaders.stream().map(RobustPolicySummary::policy).toList());
+        ArrayList<ScheduledPolicyPrediction> predictions = new ArrayList<>();
+        leaderPredictions.forEach(summary -> predictions.add(new ScheduledPolicyPrediction(
+                summary.policy(), summary, SchedulePolicyOrigin.MEASURED_LEADER)));
+        TreeMap<PolicyId, CarryForwardEntry> uniqueCarry = new TreeMap<>();
+        carry.values().forEach(rows -> rows.forEach(entry ->
+                uniqueCarry.put(entry.policy().id(), entry)));
+        for (CarryForwardEntry entry : uniqueCarry.values()) {
+            var curve = new io.euhedral_execution.training.learning.PolicyPredictionCurve(
+                    entry.policy(), entry.scenarios().values().stream()
+                    .map(CarryScenarioState::prediction).toList());
+            predictions.add(new ScheduledPolicyPrediction(entry.policy(),
+                    PredictedPolicyRanker.summarize(curve,
+                            new TreeSet<>(entry.scenarios().keySet())),
+                    SchedulePolicyOrigin.MEASURED_CARRY));
+        }
+        int maximumKnownShortfall = selectedScenarios.stream().mapToInt(scenario ->
+                allocation.carryForward() - carry.get(scenario).size()
+                        + allocation.leaderRevalidation() - leaders.size()).max().orElse(0);
         return new SchedulePreparation(iteration, candidateBudget, allocation, selectedScenarios,
-                anchors, carry, leaders, predictions, allocation.newExploration(), 0,
+                anchors, carry, leaders, predictions, allocation.exploration(),
+                maximumKnownShortfall,
                 allocation.disagreementAudit());
     }
 
@@ -52,7 +66,7 @@ public final class CandidateScheduler {
                 preparation.measuredPredictions());
         generated.disagreementAudits().forEach(candidate -> predictions.add(
                 new ScheduledPolicyPrediction(candidate.policy(), candidate.prediction(),
-                        SchedulePolicyOrigin.SCORE_BAND)));
+                        scheduleOrigin(candidate.origin()))));
         generated.baseExploration().forEach(candidate -> predictions.add(
                 new ScheduledPolicyPrediction(candidate.policy(), candidate.prediction(),
                         scheduleOrigin(candidate.origin()))));
@@ -68,43 +82,48 @@ public final class CandidateScheduler {
                 .map(prediction -> prediction.policy().id())
                 .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
         for (SourceScenario scenario : preparation.scenarios()) {
-            List<ScheduledPolicy> policies = policiesForScenario(preparation, generated, scenario);
-            String cohort = "c1-" + Long.toUnsignedString(SchedulerSeeds.hash(
-                    "cohort\n" + trainingRunId + "\n" + preparation.iteration() + "\n"
-                            + scenario.canonical() + "\n", schedulerSeed), 16);
-            List<FrameSourceSeed> seeds = new ArrayList<>();
-            for (int i = 0; i < scenario.sourceCount(); i++) {
-                seeds.add(new FrameSourceSeed(i, SchedulerSeeds.hash("id\n" + cohort + i,
-                        schedulerSeed), SchedulerSeeds.hash("route\n" + cohort + i,
-                        schedulerSeed)));
-            }
+            List<RolePolicy> rolePolicies = policiesForScenario(preparation, generated, scenario);
+            String cohort = SchedulerSeeds.candidateCohortId(trainingRunId, RunKind.NORMAL.name(),
+                    preparation.iteration(), scenario, rolePolicies, schedulerSeed);
+            BenchmarkParameters identityParameters = new BenchmarkParameters(
+                    benchmarkConfig.expectedRepetitions(), benchmarkConfig.sampleDurationNanos(),
+                    benchmarkConfig.livenessTimeoutNanos(), benchmarkConfig.framesPerSource(),
+                    benchmarkConfig.resetTimeoutNanos(), benchmarkConfig.orderedFrames(), cpuSetHex,
+                    java.util.stream.IntStream.range(0, scenario.sourceCount())
+                            .mapToObj(index -> new FrameSourceSeed(index, 0, 0)).toList());
+            String runId = SchedulerSeeds.benchmarkRunId(trainingRunId, RunKind.NORMAL.name(),
+                    preparation.iteration(), scenario, cohort, identityParameters, commitSha,
+                    dirtyWorkingTree, schedulerSeed);
+            List<FrameSourceSeed> seeds = java.util.stream.IntStream.range(0,
+                    scenario.sourceCount()).mapToObj(index ->
+                    SchedulerSeeds.frameSourceSeed(runId, index, schedulerSeed)).toList();
             BenchmarkParameters parameters = new BenchmarkParameters(
                     benchmarkConfig.expectedRepetitions(), benchmarkConfig.sampleDurationNanos(),
                     benchmarkConfig.livenessTimeoutNanos(), benchmarkConfig.framesPerSource(),
                     benchmarkConfig.resetTimeoutNanos(), benchmarkConfig.orderedFrames(), cpuSetHex,
                     seeds);
-            String runId = "r1-" + Long.toUnsignedString(SchedulerSeeds.hash(
-                    "run\n" + cohort + "\n" + commitSha + "\n" + dirtyWorkingTree + "\n",
-                    schedulerSeed), 16);
+            List<ScheduledPolicy> policies = orderPolicies(rolePolicies, preparation.fixedAnchors(),
+                    cohort, schedulerSeed, preparation.candidateBudget());
             runs.add(new ScheduledRun(RunKind.NORMAL, scenario, runId, cohort, parameters,
                     policies));
             BudgetAllocation a = preparation.requestedAllocation();
+            int carryAssigned = count(policies, PolicyRole.CARRY_FORWARD);
+            int leaderAssigned = count(policies, PolicyRole.LEADER_REVALIDATION);
+            int auditAssigned = count(policies, PolicyRole.DISAGREEMENT_AUDIT);
+            int explorationAssigned = count(policies, PolicyRole.EXPLORATION);
             reports.add(new ScenarioBudgetReport(scenario, preparation.candidateBudget(),
                     a.fixedAnchors(), a.fixedAnchors(), a.carryForward(),
-                    (int) policies.stream().filter(p -> p.roles().contains(PolicyRole.CARRY_FORWARD)).count(),
-                    a.leaderRevalidation(),
-                    (int) policies.stream().filter(p -> p.roles().contains(PolicyRole.LEADER_REVALIDATION)).count(),
-                    a.disagreementAudit(),
-                    (int) policies.stream().filter(p -> p.roles().contains(PolicyRole.DISAGREEMENT_AUDIT)).count(),
-                    a.newExploration(),
-                    (int) policies.stream().filter(p -> p.roles().contains(PolicyRole.EXPLORATION)).count(),
-                    0, 0, 0, policies.size()));
+                    carryAssigned, a.leaderRevalidation(), leaderAssigned,
+                    a.disagreementAudit(), auditAssigned, a.exploration(), explorationAssigned,
+                    a.carryForward() - carryAssigned,
+                    a.leaderRevalidation() - leaderAssigned,
+                    a.disagreementAudit() - auditAssigned, policies.size()));
         }
-        return new IterationSchedule(preparation.iteration(), runs, predictions, admissions,
-                reports, generated.nextSobolCursor());
+        return new IterationSchedule(trainingRunId, preparation.iteration(), runs, predictions,
+                admissions, reports, generated.nextSobolCursor());
     }
 
-    private static List<ScheduledPolicy> policiesForScenario(SchedulePreparation preparation,
+    private static List<RolePolicy> policiesForScenario(SchedulePreparation preparation,
             CandidateGenerationResult generated, SourceScenario scenario) {
         ArrayList<RolePolicy> rows = new ArrayList<>();
         preparation.fixedAnchors().forEach(policy -> rows.add(new RolePolicy(policy,
@@ -117,26 +136,74 @@ public final class CandidateScheduler {
                 candidate.policy(), PolicyRole.DISAGREEMENT_AUDIT)));
         generated.baseExploration().forEach(candidate -> rows.add(new RolePolicy(candidate.policy(),
                 PolicyRole.EXPLORATION)));
-        generated.overflowExploration().forEach(candidate -> rows.add(new RolePolicy(
-                candidate.policy(), PolicyRole.EXPLORATION)));
+        int carryShortfall = preparation.requestedAllocation().carryForward()
+                - preparation.carryByScenario().getOrDefault(scenario, List.of()).size();
+        int leaderShortfall = preparation.requestedAllocation().leaderRevalidation()
+                - preparation.leaders().size();
+        int overflowNeeded = carryShortfall + leaderShortfall + generated.auditShortfall();
+        generated.overflowExploration().stream().limit(overflowNeeded).forEach(candidate ->
+                rows.add(new RolePolicy(candidate.policy(), PolicyRole.EXPLORATION)));
         LinkedHashMap<PolicyId, RolePolicy> unique = new LinkedHashMap<>();
         rows.forEach(row -> {
             if (unique.putIfAbsent(row.policy().id(), row) != null) {
                 throw new IllegalArgumentException("Duplicate scheduled policy role");
             }
         });
-        ArrayList<ScheduledPolicy> scheduled = new ArrayList<>();
-        int position = 1;
-        for (RolePolicy row : unique.values()) {
-            scheduled.add(new ScheduledPolicy(position++, row.policy(), Set.of(row.role())));
-        }
-        if (scheduled.size() != preparation.candidateBudget()) {
+        if (unique.size() != preparation.candidateBudget()) {
             throw new IllegalStateException("Schedule does not fill policy budget");
         }
-        return scheduled;
+        return List.copyOf(unique.values());
     }
 
-    private record RolePolicy(PolicyVector policy, PolicyRole role) {
+    private static List<ScheduledPolicy> orderPolicies(List<RolePolicy> policies,
+            List<PolicyVector> anchors, String cohort, long schedulerSeed, int budget) {
+        Set<PolicyId> anchorIds = anchors.stream().map(PolicyVector::id)
+                .collect(java.util.stream.Collectors.toSet());
+        List<RolePolicy> nonAnchors = policies.stream()
+                .filter(row -> !anchorIds.contains(row.policy().id()))
+                .sorted((left, right) -> {
+                    int result = Long.compareUnsigned(
+                            SchedulerSeeds.trialOrderKey(cohort, left.policy().id(),
+                                    schedulerSeed),
+                            SchedulerSeeds.trialOrderKey(cohort, right.policy().id(),
+                                    schedulerSeed));
+                    return result != 0 ? result : left.policyId().compareTo(right.policyId());
+                })
+                .toList();
+        RolePolicy[] ordered = new RolePolicy[budget];
+        List<RolePolicy> sortedAnchors = policies.stream()
+                .filter(row -> anchorIds.contains(row.policy().id()))
+                .sorted(Comparator.comparing(RolePolicy::policyId)).toList();
+        for (int i = 0; i < sortedAnchors.size(); i++) {
+            int position = Math.toIntExact(Math.floorDiv(
+                    Math.multiplyExact(2L * i + 1L, budget), 2L * sortedAnchors.size()));
+            ordered[position] = sortedAnchors.get(i);
+        }
+        Iterator<RolePolicy> iterator = nonAnchors.iterator();
+        for (int i = 0; i < ordered.length; i++) {
+            if (ordered[i] == null) {
+                ordered[i] = iterator.next();
+            }
+        }
+        ArrayList<ScheduledPolicy> result = new ArrayList<>(budget);
+        for (int i = 0; i < budget; i++) {
+            result.add(new ScheduledPolicy(i + 1, ordered[i].policy(),
+                    Set.of(ordered[i].role())));
+        }
+        return List.copyOf(result);
+    }
+
+    private static int count(List<ScheduledPolicy> policies, PolicyRole role) {
+        return Math.toIntExact(policies.stream().filter(policy ->
+                policy.roles().contains(role)).count());
+    }
+
+    private record RolePolicy(PolicyVector policy, PolicyRole role)
+            implements SchedulerSeeds.PolicyWithRole {
+        @Override
+        public PolicyId policyId() {
+            return policy.id();
+        }
     }
 
     private static SchedulePolicyOrigin scheduleOrigin(CandidateOrigin origin) {
