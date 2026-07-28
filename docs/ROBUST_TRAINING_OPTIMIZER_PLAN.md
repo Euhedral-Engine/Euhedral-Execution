@@ -272,8 +272,7 @@ reassessment:
 | Complex blueprint | `gpt-5.6-sol` | `max` or `high`, as labeled |
 | Bounded blueprint | `gpt-5.6-sol` | `medium` |
 | Implementation | Blueprint-selected coding model | `low`, `medium`, or `high` from the completed blueprint |
-| Implementation verification | Phase-selected coding/verification model | `medium` or `high`, as labeled |
-| Blueprint-conformance audit | `gpt-5.6-terra` | `high` |
+| Implementation verification and blueprint-conformance audit | Phase-selected coding/audit model | `high`, as labeled |
 
 The model names are this plan's current selections, not permanent workflow requirements. The
 completed Phase 3 history demonstrates why implementation is not fixed at `gpt-5.5 / low`: the
@@ -288,9 +287,9 @@ Run the phases in order. Each phase is deliberately split into:
    writes a self-contained implementation blueprint;
 2. an **implementation prompt** whose model and effort are finalized after the blueprint evaluates
    its actual context load, systems coupling, repair breadth, test matrix, and prior model evidence;
-3. a phase-selected **implementation-verification prompt** at the labeled effort that executes
-   tests and checks acceptance criteria without redesign; and
-4. a `gpt-5.6-terra` **blueprint-conformance audit** at `high` effort that checks the blueprint,
+3. a phase-selected **implementation-verification and blueprint-conformance-audit prompt** at
+   `high` effort that executes tests, makes minor blueprint-settled fixes (including deterministic
+   coverage, naming, formatting, and local validation corrections), then checks the blueprint,
    implementation, and completion record and writes a phase audit report.
 
 The blueprint prompts are ordered from most to least demanding: `max`, then `high`, then
@@ -331,17 +330,19 @@ concise completion record to the blueprint containing changed files, commands ru
 deviations. If implementation reveals a decision that the blueprint did not settle, stop and
 record the question; do not invent a new architecture in implementation mode.
 
-Every implementation-verification pass must rerun the blueprint's validation commands, check each
-acceptance criterion, fix only defects whose resolution is already determined by the blueprint, and
-append its evidence to the completion record. Every conformance-audit pass must write
+Every combined verification-and-conformance pass must rerun the blueprint's validation commands,
+check each acceptance criterion, fix only minor defects whose resolution is already determined by
+the blueprint, and append its evidence to the completion record. It must write
 `docs/robust-training-optimizer/audits/<PHASE>-<FEATURE>-conformance.md`, classify requirements as
 satisfied, deviated, unverified, or ambiguous, and avoid architectural suggestions unless the
 implementation violates the approved blueprint.
 
 Start each prompt on a dedicated `agent/...` branch from the completed previous prompt's branch.
-Commit and push after each completed prompt so the next prompt can rely on that branch as its
-complete context. Temporary workflows remain permitted under the restrictions at the end of this
-document.
+When authorized, uncommitted changes from the current or immediately previous prompt may be added
+to that prompt's commit or amend the immediately previous commit after inspecting the diff; never
+include pre-existing user-owned changes. Commit and push after each completed prompt so the next
+prompt can rely on that branch as its complete context. Temporary workflows remain permitted under
+the restrictions at the end of this document.
 
 ### Phase 1 - foundational data, calibration, and robust ranking
 
@@ -498,22 +499,16 @@ document.
 > determinism, atomicity, and failure-cleanup test specified by the blueprint. Append completion
 > notes, commit, and push.
 
-#### Prompt 4C - IMPLEMENTATION VERIFICATION - gpt-5.6-tera / high
+#### Prompt 4C - IMPLEMENTATION VERIFICATION AND BLUEPRINT-CONFORMANCE AUDIT - gpt-5.6-terra / high
 
-> Use `gpt-5.6-tera` at `high` reasoning effort. Read docs/AGENT_WORKFLOW.md, AGENTS.md, this plan,
+> Use `gpt-5.6-terra` at `high` reasoning effort. Read docs/AGENT_WORKFLOW.md, AGENTS.md, this plan,
 > the Phase 4 blueprint, and completion notes. Execute every packaging validation command and
 > check schema, naming, checksum, determinism, atomicity, collision, partial-run, memory-pollution,
-> and cleanup acceptance criteria. Fix only blueprint-settled defects. Append evidence and
+> and cleanup acceptance criteria. Fix minor blueprint-settled defects, including deterministic
+> test coverage, naming, formatting, and local validation omissions. Then write
+> `docs/robust-training-optimizer/audits/04-final-packaging-conformance.md`, classifying every
+> requirement as satisfied, deviated, unverified, or ambiguous. Append evidence, fixes, and
 > environmental limitations, commit, and push.
-
-#### Prompt 4D - BLUEPRINT CONFORMANCE AUDIT - gpt-5.6-terra / high
-
-> Read the approved Phase 4 blueprint, implementation, completion notes, and verification record.
-> Verify every requirement and write
-> `docs/robust-training-optimizer/audits/04-final-packaging-conformance.md`. Identify deviations,
-> undocumented assumptions, and ambiguous or missing acceptance criteria. Do not propose
-> architectural improvements unless implementation violates the blueprint. Commit and push the
-> audit report only.
 
 ### Phase 5 - temporary current-workspace importer and user interface
 
