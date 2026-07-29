@@ -1,19 +1,26 @@
 package io.euhedral_execution.training.packaging;
 
-import io.euhedral_execution.training.checkpoint.ArtifactReference;
 import io.euhedral_execution.training.checkpoint.CheckpointSnapshotCodec;
-import io.euhedral_execution.training.checkpoint.ClosedLoopCheckpoint;
+import io.euhedral_execution.training.checkpoint.data.ArtifactReference;
+import io.euhedral_execution.training.checkpoint.data.ClosedLoopCheckpoint;
+import io.euhedral_execution.training.checkpoint.enums.CheckpointStage;
 import io.euhedral_execution.training.data.BenchmarkObservation;
 import io.euhedral_execution.training.data.BenchmarkRunContext;
-import io.euhedral_execution.training.data.EvidenceOrigin;
 import io.euhedral_execution.training.data.ScheduledPolicy;
+import io.euhedral_execution.training.data.enums.EvidenceOrigin;
+import io.euhedral_execution.training.data.io.CanonicalCsv;
 import io.euhedral_execution.training.data.io.ObservationBundleReader;
-import io.euhedral_execution.training.learning.MemberMetadata;
-import io.euhedral_execution.training.learning.ScenarioModelMetadata;
-import io.euhedral_execution.training.learning.ScenarioModelMetadataCodec;
-import io.euhedral_execution.training.merge.CalibrationAcceptance;
-import io.euhedral_execution.training.scheduling.Phase3Csv;
-import io.euhedral_execution.training.scheduling.ScheduleCodec;
+import io.euhedral_execution.training.learning.metadata.MemberMetadata;
+import io.euhedral_execution.training.learning.metadata.ScenarioModelMetadata;
+import io.euhedral_execution.training.learning.metadata.ScenarioModelMetadataCodec;
+import io.euhedral_execution.training.merge.enums.CalibrationAcceptance;
+import io.euhedral_execution.training.packaging.config.TrainingRunPackageInputs;
+import io.euhedral_execution.training.packaging.data.TrainingRunPackage;
+import io.euhedral_execution.training.packaging.enums.ArtifactOrigin;
+import io.euhedral_execution.training.packaging.enums.ArtifactSemanticType;
+import io.euhedral_execution.training.packaging.enums.TrainingRunPackageStatus;
+import io.euhedral_execution.training.packaging.io.TrainingRunPackageInputsCodec;
+import io.euhedral_execution.training.scheduling.io.ScheduleCodec;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -21,13 +28,11 @@ import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 public final class TrainingRunPackageValidator {
     public static TrainingRunPackage validate(Path packageDirectory) throws IOException {
@@ -153,7 +158,7 @@ public final class TrainingRunPackageValidator {
         if (merge != checkpoint.latestMerge().isPresent()
                 || model != checkpoint.latestModel().isPresent()
                 || checkpoint.pendingSchedule().isPresent() && !schedule
-                || checkpoint.stage() == io.euhedral_execution.training.checkpoint.CheckpointStage.RUN_COMPLETE
+                || checkpoint.stage() == CheckpointStage.RUN_COMPLETE
                 && !schedule) {
             throw new IOException("Package lifecycle artifact presence mismatch");
         }
@@ -161,15 +166,15 @@ public final class TrainingRunPackageValidator {
         if (!merge) omissions.add(new PackageOmission("MERGE", "NOT_YET_CALIBRATED", true));
         if (!model) omissions.add(new PackageOmission("MODEL", "NOT_YET_TRAINED", true));
         if (!schedule) omissions.add(new PackageOmission("SCHEDULE",
-                checkpoint.stage()
-                        == io.euhedral_execution.training.checkpoint.CheckpointStage.MODEL_REJECTED
+                checkpoint.stage() == CheckpointStage.MODEL_REJECTED
                         ? "MODEL_REJECTED_BEFORE_SCHEDULING"
                         : "NO_NORMAL_ITERATION_SCHEDULE_AT_CHECKPOINT", true));
         if (!manifest.omissions().equals(omissions.stream().sorted().toList())) {
             throw new IOException("Manifest omissions do not match lifecycle");
         }
         if (merge) {
-            List<List<String>> ranking = Phase3Csv.read(root.resolve("robust-ranking.csv"));
+            List<List<String>> ranking = CanonicalCsv.read(
+                    root.resolve("robust-ranking.csv"));
             ArrayList<String> winners = new ArrayList<>();
             for (int index = 1; index < ranking.size() && winners.size() < 10; index++) {
                 if (ranking.get(index).get(3).equals("true")) {
@@ -179,7 +184,7 @@ public final class TrainingRunPackageValidator {
             if (!manifest.winningPolicyIds().equals(winners)) {
                 throw new IOException("Manifest winners disagree with robust ranking");
             }
-            List<List<String>> calibration = Phase3Csv.read(
+            List<List<String>> calibration = CanonicalCsv.read(
                     root.resolve("calibration-report.csv"));
             CalibrationAcceptance acceptance = CalibrationAcceptance.valueOf(
                     calibration.get(1).get(1));
@@ -206,7 +211,8 @@ public final class TrainingRunPackageValidator {
 
     private static void validateRawData(Path root, TrainingRunManifest manifest,
             ClosedLoopCheckpoint checkpoint) throws IOException {
-        List<List<String>> indexRows = Phase3Csv.read(root.resolve("raw-data/index.csv"));
+        List<List<String>> indexRows = CanonicalCsv.read(
+                root.resolve("raw-data/index.csv"));
         if (indexRows.size() != checkpoint.evidence().size() + 1) {
             throw new IOException("Raw index/checkpoint evidence count mismatch");
         }
@@ -298,10 +304,11 @@ public final class TrainingRunPackageValidator {
     private static void validateMerge(Path root, ClosedLoopCheckpoint checkpoint)
             throws IOException {
         if (checkpoint.latestMerge().isEmpty()) return;
-        List<List<String>> ranking = Phase3Csv.read(root.resolve("robust-ranking.csv"));
-        List<List<String>> measurements = Phase3Csv.read(
+        List<List<String>> ranking = CanonicalCsv.read(root.resolve("robust-ranking.csv"));
+        List<List<String>> measurements = CanonicalCsv.read(
                 root.resolve("policy-scenario-measurements.csv"));
-        List<List<String>> scenarios = Phase3Csv.read(root.resolve("scenario-results.csv"));
+        List<List<String>> scenarios = CanonicalCsv.read(
+                root.resolve("scenario-results.csv"));
         if (measurements.size() != scenarios.size()
                 || ranking.isEmpty() || scenarios.isEmpty()) {
             throw new IOException("Invalid packaged merge views");
@@ -324,7 +331,7 @@ public final class TrainingRunPackageValidator {
                 checkpoint.requiredScenarios(), checkpoint.trainingRunId(),
                 inputs.schedulerSeed(), inputs.commitSha(), inputs.dirtyWorkingTree(),
                 inputs.benchmarkConfig());
-        List<List<String>> vectors = Phase3Csv.read(
+        List<List<String>> vectors = CanonicalCsv.read(
                 root.resolve("vectors/benchmark-ready.vectors.csv"));
         long expected = schedule.runs().stream().mapToLong(run -> run.policies().size()).sum();
         if (vectors.size() - 1L != expected) {
@@ -367,7 +374,7 @@ public final class TrainingRunPackageValidator {
     private static void validateOrigins(Path root, TrainingRunManifest manifest)
             throws IOException {
         Map<String, EvidenceOrigin> origins = new HashMap<>();
-        List<List<String>> index = Phase3Csv.read(root.resolve("raw-data/index.csv"));
+        List<List<String>> index = CanonicalCsv.read(root.resolve("raw-data/index.csv"));
         for (List<String> row : index.subList(1, index.size())) {
             origins.put(row.get(1), EvidenceOrigin.valueOf(row.get(5)));
         }
@@ -394,7 +401,7 @@ public final class TrainingRunPackageValidator {
     private static String virtualFingerprint(Map<String, Path> files) throws IOException {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            digest.update("phase3-directory-artifact-v1\n".getBytes(StandardCharsets.UTF_8));
+            digest.update("directory-artifact-v1\n".getBytes(StandardCharsets.UTF_8));
             for (var entry : files.entrySet().stream()
                     .sorted(Map.Entry.comparingByKey()).toList()) {
                 if (!Files.isRegularFile(entry.getValue(), LinkOption.NOFOLLOW_LINKS)

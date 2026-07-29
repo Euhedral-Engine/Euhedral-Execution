@@ -1,5 +1,8 @@
 package io.euhedral_execution.training.packaging;
 
+import io.euhedral_execution.training.packaging.enums.ArtifactOrigin;
+import io.euhedral_execution.training.packaging.enums.ArtifactSemanticType;
+import io.euhedral_execution.training.packaging.enums.ProducingStage;
 import java.util.List;
 import java.util.Objects;
 

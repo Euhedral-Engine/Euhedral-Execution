@@ -2,7 +2,8 @@ package io.euhedral_execution.training.packaging;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.euhedral_execution.training.checkpoint.CheckpointStage;
+import io.euhedral_execution.training.checkpoint.enums.CheckpointStage;
+import io.euhedral_execution.training.packaging.enums.TrainingRunPackageStatus;
 import org.junit.jupiter.api.Test;
 
 class TrainingRunPackagerTest {

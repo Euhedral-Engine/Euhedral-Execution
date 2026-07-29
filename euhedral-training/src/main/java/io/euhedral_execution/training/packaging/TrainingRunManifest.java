@@ -1,16 +1,17 @@
 package io.euhedral_execution.training.packaging;
 
-import io.euhedral_execution.training.checkpoint.CheckpointStage;
+import io.euhedral_execution.training.checkpoint.enums.CheckpointStage;
 import io.euhedral_execution.training.data.SourceScenario;
-import io.euhedral_execution.training.merge.CalibrationAcceptance;
+import io.euhedral_execution.training.merge.enums.CalibrationAcceptance;
+import io.euhedral_execution.training.packaging.enums.TrainingRunPackageStatus;
 import java.util.List;
 
 record TrainingRunManifest(String packageId, String trainingRunId, int checkpointRevision,
-        CheckpointStage checkpointStage, TrainingRunPackageStatus status, boolean runComplete,
-        String configSha256, String checkpointSha256, String commitSha,
-        boolean dirtyWorkingTree, List<SourceScenario> requiredScenarios,
-        CalibrationAcceptance calibrationAcceptance, List<String> winningPolicyIds,
-        List<PackageFile> files, List<PackageOmission> omissions) {
+                           CheckpointStage checkpointStage, TrainingRunPackageStatus status, boolean runComplete,
+                           String configSha256, String checkpointSha256, String commitSha,
+                           boolean dirtyWorkingTree, List<SourceScenario> requiredScenarios,
+                           CalibrationAcceptance calibrationAcceptance, List<String> winningPolicyIds,
+                           List<PackageFile> files, List<PackageOmission> omissions) {
     TrainingRunManifest {
         requiredScenarios = List.copyOf(requiredScenarios);
         winningPolicyIds = List.copyOf(winningPolicyIds);

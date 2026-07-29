@@ -1,4 +1,4 @@
-package io.euhedral_execution.training.packaging;
+package io.euhedral_execution.training.packaging.enums;
 
 public enum ArtifactOrigin {
     UPGRADED_RUN,

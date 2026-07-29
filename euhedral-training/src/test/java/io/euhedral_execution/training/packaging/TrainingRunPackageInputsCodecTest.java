@@ -3,8 +3,10 @@ package io.euhedral_execution.training.packaging;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.euhedral_execution.training.benchmark.BenchmarkExecutionConfig;
+import io.euhedral_execution.training.benchmark.config.BenchmarkExecutionConfig;
 import io.euhedral_execution.training.data.SourceScenario;
+import io.euhedral_execution.training.packaging.config.TrainingRunPackageInputs;
+import io.euhedral_execution.training.packaging.io.TrainingRunPackageInputsCodec;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.TreeSet;

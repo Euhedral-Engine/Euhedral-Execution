@@ -3,35 +3,37 @@ package io.euhedral_execution.training.packaging;
 import io.euhedral_execution.training.DataMerger;
 import io.euhedral_execution.training.checkpoint.ArtifactFingerprint;
 import io.euhedral_execution.training.checkpoint.CheckpointSnapshotCodec;
-import io.euhedral_execution.training.checkpoint.CheckpointStage;
-import io.euhedral_execution.training.checkpoint.ClosedLoopCheckpoint;
-import io.euhedral_execution.training.checkpoint.EvidenceIndexEntry;
-import io.euhedral_execution.training.checkpoint.LoadedCheckpoint;
+import io.euhedral_execution.training.checkpoint.data.ClosedLoopCheckpoint;
+import io.euhedral_execution.training.checkpoint.data.EvidenceIndexEntry;
+import io.euhedral_execution.training.checkpoint.data.LoadedCheckpoint;
+import io.euhedral_execution.training.checkpoint.enums.CheckpointStage;
+import io.euhedral_execution.training.checkpoint.enums.EvidenceSource;
 import io.euhedral_execution.training.data.BenchmarkRunContext;
-import io.euhedral_execution.training.data.EvidenceOrigin;
 import io.euhedral_execution.training.data.ScheduledPolicy;
+import io.euhedral_execution.training.data.enums.EvidenceOrigin;
+import io.euhedral_execution.training.data.io.CanonicalCsv;
 import io.euhedral_execution.training.data.io.ObservationBundleReader;
-import io.euhedral_execution.training.learning.ScenarioModelMetadata;
-import io.euhedral_execution.training.learning.ScenarioModelMetadataCodec;
-import io.euhedral_execution.training.merge.CalibrationAcceptance;
-import io.euhedral_execution.training.scheduling.IterationSchedule;
-import io.euhedral_execution.training.scheduling.OptimizationCorpusReader;
-import io.euhedral_execution.training.scheduling.Phase3Csv;
-import io.euhedral_execution.training.scheduling.ScheduleCodec;
+import io.euhedral_execution.training.learning.metadata.ScenarioModelMetadata;
+import io.euhedral_execution.training.learning.metadata.ScenarioModelMetadataCodec;
+import io.euhedral_execution.training.merge.enums.CalibrationAcceptance;
+import io.euhedral_execution.training.packaging.config.TrainingRunPackageRequest;
+import io.euhedral_execution.training.packaging.enums.TrainingRunPackageStatus;
+import io.euhedral_execution.training.scheduling.data.IterationSchedule;
+import io.euhedral_execution.training.scheduling.io.OptimizationCorpusReader;
+import io.euhedral_execution.training.scheduling.io.ScheduleCodec;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.TreeSet;
 
 record PackageSourceSet(LoadedCheckpoint loaded, Path workspace, Path merge, Path model,
-        Path schedule, IterationSchedule scheduleData, ScenarioModelMetadata modelMetadata,
-        List<EvidenceInfo> evidence, TrainingRunPackageStatus status,
-        CalibrationAcceptance calibrationAcceptance, List<String> winners,
-        List<PackageOmission> omissions) {
+                        Path schedule, IterationSchedule scheduleData, ScenarioModelMetadata modelMetadata,
+                        List<EvidenceInfo> evidence, TrainingRunPackageStatus status,
+                        CalibrationAcceptance calibrationAcceptance, List<String> winners,
+                        List<PackageOmission> omissions) {
     private static final List<String> MERGE_FILES = List.of("fixed-anchors.csv",
             "reference-runs.csv", "calibration-report.csv", "scenario-results.csv",
             "robust-ranking.csv", "coverage-report.csv", "robust-leaders.vectors.csv",
@@ -98,8 +100,7 @@ record PackageSourceSet(LoadedCheckpoint loaded, Path workspace, Path merge, Pat
         }
         if (scheduleData != null && checkpoint.pendingSchedule().isEmpty()) {
             TreeSet<String> evidenceRuns = checkpoint.evidence().stream()
-                    .filter(item -> item.source()
-                            == io.euhedral_execution.training.checkpoint.EvidenceSource.ITERATION)
+                    .filter(item -> item.source() == EvidenceSource.ITERATION)
                     .map(EvidenceIndexEntry::benchmarkRunId)
                     .collect(java.util.stream.Collectors.toCollection(TreeSet::new));
             if (!evidenceRuns.containsAll(scheduleData.runs().stream()
@@ -167,7 +168,8 @@ record PackageSourceSet(LoadedCheckpoint loaded, Path workspace, Path merge, Pat
     }
 
     private static CalibrationAcceptance calibrationAcceptance(Path merge) throws IOException {
-        List<List<String>> rows = Phase3Csv.read(merge.resolve("calibration-report.csv"));
+        List<List<String>> rows = CanonicalCsv.read(
+                merge.resolve("calibration-report.csv"));
         if (rows.size() < 2 || rows.getFirst().size() < 2
                 || !rows.getFirst().get(1).equals("calibration_acceptance")) {
             throw new IllegalArgumentException("Invalid calibration report");
@@ -180,7 +182,7 @@ record PackageSourceSet(LoadedCheckpoint loaded, Path workspace, Path merge, Pat
     }
 
     private static List<String> winners(Path merge) throws IOException {
-        List<List<String>> rows = Phase3Csv.read(merge.resolve("robust-ranking.csv"));
+        List<List<String>> rows = CanonicalCsv.read(merge.resolve("robust-ranking.csv"));
         if (rows.isEmpty() || !rows.getFirst().equals(List.of("schema_version",
                 "published_rank", "policy_id", "eligible", "required_scenario_count",
                 "observed_required_scenario_count", "valid_required_scenario_count",

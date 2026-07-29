@@ -1,6 +1,6 @@
-package io.euhedral_execution.training.packaging;
+package io.euhedral_execution.training.packaging.config;
 
-import io.euhedral_execution.training.benchmark.BenchmarkExecutionConfig;
+import io.euhedral_execution.training.benchmark.config.BenchmarkExecutionConfig;
 import io.euhedral_execution.training.data.SourceScenario;
 import java.util.Collections;
 import java.util.Objects;
