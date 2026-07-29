@@ -114,7 +114,7 @@ public class DataMerger {
         deleteRecursively(tempDirectory);
         Files.createDirectories(tempDirectory);
 
-        LOGGER.info("Starting data merge...");
+        LOGGER.info("Starting metadata merge...");
         long now = System.nanoTime();
         try {
             Set<Integer> workers = new HashSet<>();
@@ -142,7 +142,7 @@ public class DataMerger {
 
             Throwable error = failure.getAcquire();
             if (error != null) {
-                throw new RuntimeException("Failed to normalize benchmark data", error);
+                throw new RuntimeException("Failed to normalize benchmark metadata", error);
             }
 
             Path output = outputDirectory.resolve(outputName);

@@ -1,11 +1,18 @@
 package io.euhedral_execution.training.learning;
 
-import static io.euhedral_execution.training.learning.fixtures.ScenarioLearningFixtures.*;
-import static org.assertj.core.api.Assertions.*;
+import static io.euhedral_execution.training.learning.fixtures.ScenarioLearningFixtures.learningRows;
+import static io.euhedral_execution.training.learning.fixtures.ScenarioLearningFixtures.policies;
+import static io.euhedral_execution.training.learning.fixtures.ScenarioLearningFixtures.scenarios;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import io.euhedral_execution.training.data.PolicyVector;
 import io.euhedral_execution.training.data.SourceScenario;
-import io.euhedral_execution.training.merge.MergeRecords.ScenarioResultStatus;
+import io.euhedral_execution.training.learning.data.ScenarioLearningMatrix;
+import io.euhedral_execution.training.learning.enums.ScenarioFeatureSet;
+import io.euhedral_execution.training.learning.inputs.ScenarioLearningRow;
+import io.euhedral_execution.training.learning.metadata.FeatureNormalizer;
+import io.euhedral_execution.training.learning.utils.ScenarioFeatureEncoder;
+import io.euhedral_execution.training.merge.data.MergeRecords.ScenarioResultStatus;
 import java.util.Arrays;
 import java.util.List;
 import java.util.TreeSet;

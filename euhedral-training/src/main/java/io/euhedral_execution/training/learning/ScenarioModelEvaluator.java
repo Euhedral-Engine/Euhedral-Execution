@@ -1,10 +1,28 @@
 package io.euhedral_execution.training.learning;
 
-import io.euhedral_execution.training.data.*;
-import java.util.*;
+import io.euhedral_execution.training.data.PolicyId;
+import io.euhedral_execution.training.data.SourceScenario;
+import io.euhedral_execution.training.learning.data.PolicyPredictionCurve;
+import io.euhedral_execution.training.learning.data.ScenarioLearningMatrix;
+import io.euhedral_execution.training.learning.data.ScenarioPrediction;
+import io.euhedral_execution.training.learning.enums.EvaluationStatus;
+import io.euhedral_execution.training.learning.enums.ScenarioFeatureSet;
+import io.euhedral_execution.training.learning.inputs.ScenarioLearningRow;
+import io.euhedral_execution.training.learning.output.EvaluationSummary;
+import io.euhedral_execution.training.learning.statistics.EnsembleOrdinalDistribution;
+import io.euhedral_execution.training.learning.statistics.ScenarioEvaluationMetrics;
+import io.euhedral_execution.training.learning.utils.ScenarioOrdinalTargets;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.OptionalDouble;
+import java.util.TreeMap;
 
 public final class ScenarioModelEvaluator {
-    private ScenarioModelEvaluator() {}
+
     public static EvaluationSummary evaluate(String kind, ScenarioFeatureSet set,
             List<ScenarioLearningRow> rows, List<PolicyPredictionCurve> curves) {
         return evaluate(kind, "all", set, rows, curves, false);
@@ -18,63 +36,115 @@ public final class ScenarioModelEvaluator {
         Objects.requireNonNull(set);
         Objects.requireNonNull(rows);
         Objects.requireNonNull(curves);
-        if (rows.isEmpty()) throw new IllegalArgumentException("Evaluation rows are empty");
-        record Key(PolicyId policy, SourceScenario scenario) {}
+        if (rows.isEmpty()) {
+            throw new IllegalArgumentException("Evaluation rows are empty");
+        }
+        record Key(PolicyId policy, SourceScenario scenario) {
+
+        }
         TreeMap<Key, ScenarioPrediction> predictions = new TreeMap<>(Comparator
-                .comparing((Key k)->k.policy).thenComparing(k->k.scenario));
-        for(var curve:curves) for(var prediction:curve.scenarios())
-            if(predictions.put(new Key(curve.policy().id(),prediction.scenario()),prediction)!=null)
-                throw new IllegalArgumentException("Duplicate prediction");
-        TreeMap<SourceScenario,List<ScenarioLearningRow>> groups=new TreeMap<>();
-        for(var row:rows) groups.computeIfAbsent(row.scenario(),x->new ArrayList<>()).add(row);
-        ArrayList<ScenarioEvaluationMetrics> metrics=new ArrayList<>();
+                .comparing((Key k) -> k.policy).thenComparing(k -> k.scenario));
+        for (var curve : curves) {
+            for (var prediction : curve.scenarios()) {
+                if (predictions.put(new Key(curve.policy().id(), prediction.scenario()), prediction)
+                        != null) {
+                    throw new IllegalArgumentException("Duplicate prediction");
+                }
+            }
+        }
+        TreeMap<SourceScenario, List<ScenarioLearningRow>> groups = new TreeMap<>();
+        for (var row : rows) {
+            groups.computeIfAbsent(row.scenario(), x -> new ArrayList<>()).add(row);
+        }
+        ArrayList<ScenarioEvaluationMetrics> metrics = new ArrayList<>();
         CompensatedSum microError = new CompensatedSum();
-        int total=0;
-        for(var entry:groups.entrySet()) {
-            List<ScenarioLearningRow> group=entry.getValue().stream().sorted().toList();
-            ArrayList<ScenarioPrediction> ps=new ArrayList<>();
-            for(var row:group) { var p=predictions.remove(new Key(row.policy().id(),row.scenario()));
-                if(p==null) throw new IllegalArgumentException("Missing prediction"); ps.add(p); }
-            int n=group.size(), top=0;
+        int total = 0;
+        for (var entry : groups.entrySet()) {
+            List<ScenarioLearningRow> group = entry.getValue().stream().sorted().toList();
+            ArrayList<ScenarioPrediction> ps = new ArrayList<>();
+            for (var row : group) {
+                var p = predictions.remove(new Key(row.policy().id(), row.scenario()));
+                if (p == null) {
+                    throw new IllegalArgumentException("Missing prediction");
+                }
+                ps.add(p);
+            }
+            int n = group.size(), top = 0;
             CompensatedSum ae = new CompensatedSum(), se = new CompensatedSum();
             CompensatedSum bias = new CompensatedSum(), width = new CompensatedSum();
             CompensatedSum epi = new CompensatedSum(), range = new CompensatedSum();
-            int coverage=0;
-            double[] actual=new double[n], predicted=new double[n];
-            for(int i=0;i<n;i++){double a=group.get(i).quality(),p=ps.get(i).predictedQuality(),e=p-a;
-                actual[i]=a;predicted[i]=p;ae.add(StrictMath.abs(e));se.add(e*e);bias.add(e);
-                width.add(ps.get(i).qualityIntervalHigh()-ps.get(i).qualityIntervalLow());
-                if(ps.get(i).qualityIntervalLow()<=a&&a<=ps.get(i).qualityIntervalHigh())coverage++;
+            int coverage = 0;
+            double[] actual = new double[n], predicted = new double[n];
+            for (int i = 0; i < n; i++) {
+                double a = group.get(i).quality(), p = ps.get(i).predictedQuality(), e = p - a;
+                actual[i] = a;
+                predicted[i] = p;
+                ae.add(StrictMath.abs(e));
+                se.add(e * e);
+                bias.add(e);
+                width.add(ps.get(i).qualityIntervalHigh() - ps.get(i).qualityIntervalLow());
+                if (ps.get(i).qualityIntervalLow() <= a && a <= ps.get(i).qualityIntervalHigh()) {
+                    coverage++;
+                }
                 epi.add(ps.get(i).epistemicStdDev());
                 range.add(ps.get(i).disagreementRange());
-                if(a>=.9)top++;}
-            int k=StrictMath.max(1,(int)StrictMath.ceil(.1*n));
-            ArrayList<Integer> order=new ArrayList<>();for(int i=0;i<n;i++)order.add(i);
-            order.sort(Comparator.<Integer>comparingDouble(i->-predicted[i])
-                    .thenComparingDouble(i->ps.get(i).epistemicStdDev())
-                    .thenComparing(i->group.get(i).policy().id()));
-            int hits=0;for(int i=0;i<k;i++)if(actual[order.get(i)]>=.9)hits++;
-            OptionalDouble rho=spearman(actual,predicted);
-            EvaluationStatus status=n<2?EvaluationStatus.INSUFFICIENT_ROWS:
-                    insufficientContextVariation?EvaluationStatus.INSUFFICIENT_CONTEXT_VARIATION:
-                    top==0?EvaluationStatus.NO_TOP_DECILE_TARGET:
-                    rho.isEmpty()?EvaluationStatus.CONSTANT_RANK:EvaluationStatus.OK;
-            metrics.add(new ScenarioEvaluationMetrics(kind,foldId,set,entry.getKey(),n,
-                    (int)group.stream().map(r->r.policy().id()).distinct().count(),ae.value()/n,
-                    StrictMath.sqrt(se.value()/n),bias.value()/n,rho,top,k,
-                    OptionalDouble.of(hits/(double)k),
-                    top == 0 ? OptionalDouble.empty() : OptionalDouble.of(hits/(double)top),
-                    width.value()/n,coverage/(double)n,epi.value()/n,range.value()/n,status));
-            microError.add(ae.value());total+=n;
+                if (a >= .9) {
+                    top++;
+                }
+            }
+            int k = StrictMath.max(1, (int) StrictMath.ceil(.1 * n));
+            ArrayList<Integer> order = new ArrayList<>();
+            for (int i = 0; i < n; i++) {
+                order.add(i);
+            }
+            order.sort(Comparator.<Integer>comparingDouble(i -> -predicted[i])
+                    .thenComparingDouble(i -> ps.get(i).epistemicStdDev())
+                    .thenComparing(i -> group.get(i).policy().id()));
+            int hits = 0;
+            for (int i = 0; i < k; i++) {
+                if (actual[order.get(i)] >= .9) {
+                    hits++;
+                }
+            }
+            OptionalDouble rho = spearman(actual, predicted);
+            EvaluationStatus status = EvaluationStatus.OK;
+            if (n < 2) {
+                status = EvaluationStatus.INSUFFICIENT_ROWS;
+            } else if (insufficientContextVariation) {
+                status = EvaluationStatus.INSUFFICIENT_CONTEXT_VARIATION;
+            } else if (top == 0) {
+                status = EvaluationStatus.NO_TOP_DECILE_TARGET;
+            } else if (rho.isEmpty()) {
+                status = EvaluationStatus.CONSTANT_RANK;
+            }
+
+            metrics.add(new ScenarioEvaluationMetrics(kind, foldId, set, entry.getKey(), n,
+                    (int) group.stream().map(r -> r.policy().id()).distinct().count(),
+                    ae.value() / n,
+                    StrictMath.sqrt(se.value() / n), bias.value() / n, rho, top, k,
+                    OptionalDouble.of(hits / (double) k),
+                    top == 0 ? OptionalDouble.empty() : OptionalDouble.of(hits / (double) top),
+                    width.value() / n, coverage / (double) n, epi.value() / n, range.value() / n,
+                    status));
+            microError.add(ae.value());
+            total += n;
         }
-        if(!predictions.isEmpty())throw new IllegalArgumentException("Extra predictions");
-        List<ScenarioEvaluationMetrics> ok=metrics.stream().filter(m->m.status()==EvaluationStatus.OK).toList();
-        return new EvaluationSummary(kind,set,metrics,average(ok,ScenarioEvaluationMetrics::mae),
-                average(ok,ScenarioEvaluationMetrics::rmse),averageOptional(ok,ScenarioEvaluationMetrics::spearman),
-                averageOptional(ok,ScenarioEvaluationMetrics::precisionAtTen),
-                averageOptional(ok,ScenarioEvaluationMetrics::recallAtTen),
-                ok.isEmpty()?OptionalDouble.empty():OptionalDouble.of(ok.stream().mapToDouble(ScenarioEvaluationMetrics::mae).max().orElseThrow()),
-                total==0?OptionalDouble.empty():OptionalDouble.of(microError.value()/total));
+        if (!predictions.isEmpty()) {
+            throw new IllegalArgumentException("Extra predictions");
+        }
+        List<ScenarioEvaluationMetrics> ok = metrics.stream()
+                .filter(m -> m.status() == EvaluationStatus.OK).toList();
+        return new EvaluationSummary(kind, set, metrics,
+                average(ok, ScenarioEvaluationMetrics::mae),
+                average(ok, ScenarioEvaluationMetrics::rmse),
+                averageOptional(ok, ScenarioEvaluationMetrics::spearman),
+                averageOptional(ok, ScenarioEvaluationMetrics::precisionAtTen),
+                averageOptional(ok, ScenarioEvaluationMetrics::recallAtTen),
+                ok.isEmpty() ? OptionalDouble.empty() : OptionalDouble.of(
+                        ok.stream().mapToDouble(ScenarioEvaluationMetrics::mae).max()
+                                .orElseThrow()),
+                total == 0 ? OptionalDouble.empty()
+                        : OptionalDouble.of(microError.value() / total));
     }
 
     static EvaluationSummary evaluateMatrix(String kind, String foldId, ScenarioFeatureSet set,
@@ -176,26 +246,35 @@ public final class ScenarioModelEvaluator {
             se.add(error * error);
             bias.add(error);
             width.add(highs[index] - lows[index]);
-            if (lows[index] <= actual[index] && actual[index] <= highs[index]) coverage++;
+            if (lows[index] <= actual[index] && actual[index] <= highs[index]) {
+                coverage++;
+            }
             epistemicSum.add(epistemic[index]);
             rangeSum.add(ranges[index]);
-            if (actual[index] >= 0.9) top++;
+            if (actual[index] >= 0.9) {
+                top++;
+            }
         }
         int selected = StrictMath.max(1, (int) StrictMath.ceil(0.10 * count));
         ArrayList<Integer> order = new ArrayList<>();
-        for (int index = 0; index < count; index++) order.add(index);
+        for (int index = 0; index < count; index++) {
+            order.add(index);
+        }
         order.sort(Comparator.<Integer>comparingDouble(index -> -predicted[index])
                 .thenComparingDouble(index -> epistemic[index])
                 .thenComparing(index -> ids[index]));
         int hits = 0;
         for (int index = 0; index < selected; index++) {
-            if (actual[order.get(index)] >= 0.9) hits++;
+            if (actual[order.get(index)] >= 0.9) {
+                hits++;
+            }
         }
         OptionalDouble correlation = spearman(actual, predicted);
         EvaluationStatus status = count < 2 ? EvaluationStatus.INSUFFICIENT_ROWS
                 : insufficientContext ? EvaluationStatus.INSUFFICIENT_CONTEXT_VARIATION
-                : top == 0 ? EvaluationStatus.NO_TOP_DECILE_TARGET
-                : correlation.isEmpty() ? EvaluationStatus.CONSTANT_RANK : EvaluationStatus.OK;
+                        : top == 0 ? EvaluationStatus.NO_TOP_DECILE_TARGET
+                                : correlation.isEmpty() ? EvaluationStatus.CONSTANT_RANK
+                                        : EvaluationStatus.OK;
         return new ScenarioEvaluationMetrics(kind, foldId, set, scenario, count,
                 (int) Arrays.stream(ids).distinct().count(), ae.value() / count,
                 StrictMath.sqrt(se.value() / count), bias.value() / count, correlation, top,
@@ -204,41 +283,88 @@ public final class ScenarioModelEvaluator {
                 width.value() / count, coverage / (double) count,
                 epistemicSum.value() / count, rangeSum.value() / count, status);
     }
-    private static OptionalDouble spearman(double[] a,double[] b){
-        double[] ra=ranks(a),rb=ranks(b);
+
+    private static OptionalDouble spearman(double[] a, double[] b) {
+        double[] ra = ranks(a), rb = ranks(b);
         CompensatedSum sumA = new CompensatedSum(), sumB = new CompensatedSum();
-        for (int i = 0; i < ra.length; i++) { sumA.add(ra[i]); sumB.add(rb[i]); }
-        double ma=sumA.value()/ra.length, mb=sumB.value()/rb.length;
-        CompensatedSum cov=new CompensatedSum(),va=new CompensatedSum(),vb=new CompensatedSum();
-        for(int i=0;i<a.length;i++){double x=ra[i]-ma,y=rb[i]-mb;
-            cov.add(x*y);va.add(x*x);vb.add(y*y);}
-        return va.value()==0||vb.value()==0?OptionalDouble.empty():
-                OptionalDouble.of(cov.value()/StrictMath.sqrt(va.value()*vb.value()));
+        for (int i = 0; i < ra.length; i++) {
+            sumA.add(ra[i]);
+            sumB.add(rb[i]);
+        }
+        double ma = sumA.value() / ra.length, mb = sumB.value() / rb.length;
+        CompensatedSum cov = new CompensatedSum(), va = new CompensatedSum(), vb = new CompensatedSum();
+        for (int i = 0; i < a.length; i++) {
+            double x = ra[i] - ma, y = rb[i] - mb;
+            cov.add(x * y);
+            va.add(x * x);
+            vb.add(y * y);
+        }
+        return va.value() == 0 || vb.value() == 0 ? OptionalDouble.empty() :
+                OptionalDouble.of(cov.value() / StrictMath.sqrt(va.value() * vb.value()));
     }
-    private static double[] ranks(double[] values){Integer[] order=new Integer[values.length];
-        for(int i=0;i<order.length;i++)order[i]=i;Arrays.sort(order,Comparator.comparingDouble(i->values[i]));
-        double[] ranks=new double[values.length];for(int i=0;i<order.length;){int j=i+1;
-            while(j<order.length&&Double.compare(values[order[i]],values[order[j]])==0)j++;
-            double rank=(i+j-1)/2.0+1;for(int k=i;k<j;k++)ranks[order[k]]=rank;i=j;}return ranks;}
+
+    private static double[] ranks(double[] values) {
+        Integer[] order = new Integer[values.length];
+        for (int i = 0; i < order.length; i++) {
+            order[i] = i;
+        }
+        Arrays.sort(order, Comparator.comparingDouble(i -> values[i]));
+        double[] ranks = new double[values.length];
+        for (int i = 0; i < order.length; ) {
+            int j = i + 1;
+            while (j < order.length && Double.compare(values[order[i]], values[order[j]]) == 0) {
+                j++;
+            }
+            double rank = (i + j - 1) / 2.0 + 1;
+            for (int k = i; k < j; k++) {
+                ranks[order[k]] = rank;
+            }
+            i = j;
+        }
+        return ranks;
+    }
+
     private static OptionalDouble average(List<ScenarioEvaluationMetrics> rows,
-            java.util.function.ToDoubleFunction<ScenarioEvaluationMetrics> fn){
-        if(rows.isEmpty())return OptionalDouble.empty();CompensatedSum sum=new CompensatedSum();
-        rows.forEach(row->sum.add(fn.applyAsDouble(row)));return OptionalDouble.of(sum.value()/rows.size());}
+            java.util.function.ToDoubleFunction<ScenarioEvaluationMetrics> fn) {
+        if (rows.isEmpty()) {
+            return OptionalDouble.empty();
+        }
+        CompensatedSum sum = new CompensatedSum();
+        rows.forEach(row -> sum.add(fn.applyAsDouble(row)));
+        return OptionalDouble.of(sum.value() / rows.size());
+    }
+
     private static OptionalDouble averageOptional(List<ScenarioEvaluationMetrics> rows,
-            java.util.function.Function<ScenarioEvaluationMetrics,OptionalDouble> fn){
-        CompensatedSum sum=new CompensatedSum();int n=0;for(var r:rows){var x=fn.apply(r);
-            if(x.isPresent()){sum.add(x.getAsDouble());n++;}}
-        return n==0?OptionalDouble.empty():OptionalDouble.of(sum.value()/n);}
+            java.util.function.Function<ScenarioEvaluationMetrics, OptionalDouble> fn) {
+        CompensatedSum sum = new CompensatedSum();
+        int n = 0;
+        for (var r : rows) {
+            var x = fn.apply(r);
+            if (x.isPresent()) {
+                sum.add(x.getAsDouble());
+                n++;
+            }
+        }
+        return n == 0 ? OptionalDouble.empty() : OptionalDouble.of(sum.value() / n);
+    }
+
+    private ScenarioModelEvaluator() {
+    }
 
     private static final class CompensatedSum {
+
         private double sum;
         private double correction;
+
         void add(double value) {
-            double next=sum+value;
-            correction+=StrictMath.abs(sum)>=StrictMath.abs(value)
-                    ?(sum-next)+value:(value-next)+sum;
-            sum=next;
+            double next = sum + value;
+            correction += StrictMath.abs(sum) >= StrictMath.abs(value)
+                    ? (sum - next) + value : (value - next) + sum;
+            sum = next;
         }
-        double value(){return sum+correction;}
+
+        double value() {
+            return sum + correction;
+        }
     }
 }

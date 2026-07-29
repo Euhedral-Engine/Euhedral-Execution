@@ -12,7 +12,7 @@ import java.util.List;
  *
  * <p>Policies are ranked by high median throughput, then low inter-quartile range, then low tail
  * range. The classifier learns nine cumulative decile decisions derived only from the training
- * partition, which keeps validation and test data out of the label calibration step.</p>
+ * partition, which keeps validation and test metadata out of the label calibration step.</p>
  */
 public final class PolicyRanking {
 

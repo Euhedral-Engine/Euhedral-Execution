@@ -2,9 +2,39 @@ package io.euhedral_execution.training.learning;
 
 import ai.djl.Device;
 import ai.djl.engine.Engine;
+import io.euhedral_execution.training.data.PartitionCounts;
 import io.euhedral_execution.training.data.PolicyId;
 import io.euhedral_execution.training.data.PolicyVector;
 import io.euhedral_execution.training.data.SourceScenario;
+import io.euhedral_execution.training.learning.config.EvaluationThresholds;
+import io.euhedral_execution.training.learning.config.ScenarioTrainingConfig;
+import io.euhedral_execution.training.learning.data.PolicyGroupedSplit;
+import io.euhedral_execution.training.learning.data.PolicyGroupedSplitter;
+import io.euhedral_execution.training.learning.data.PolicyPredictionCurve;
+import io.euhedral_execution.training.learning.data.ScenarioLearningMatrix;
+import io.euhedral_execution.training.learning.data.ScenarioPrediction;
+import io.euhedral_execution.training.learning.enums.EvaluationStatus;
+import io.euhedral_execution.training.learning.enums.FeatureSelectionMode;
+import io.euhedral_execution.training.learning.enums.ModelAcceptanceStatus;
+import io.euhedral_execution.training.learning.enums.ScenarioFeatureSet;
+import io.euhedral_execution.training.learning.inputs.ScenarioLearningReader;
+import io.euhedral_execution.training.learning.inputs.ScenarioLearningRow;
+import io.euhedral_execution.training.learning.inputs.ScenarioLearningTable;
+import io.euhedral_execution.training.learning.inputs.ScenarioTrainingRequest;
+import io.euhedral_execution.training.learning.metadata.EvaluationSummaryMetadata;
+import io.euhedral_execution.training.learning.metadata.FeatureNormalizer;
+import io.euhedral_execution.training.learning.metadata.MemberMetadata;
+import io.euhedral_execution.training.learning.metadata.MetadataProbe;
+import io.euhedral_execution.training.learning.metadata.ProducerMetadata;
+import io.euhedral_execution.training.learning.metadata.ScenarioModelMetadata;
+import io.euhedral_execution.training.learning.metadata.ScenarioModelMetadataCodec;
+import io.euhedral_execution.training.learning.output.EvaluationSummary;
+import io.euhedral_execution.training.learning.output.ScenarioLearningReportWriter;
+import io.euhedral_execution.training.learning.output.ScenarioTrainingArtifacts;
+import io.euhedral_execution.training.learning.output.TrainingHistoryEntry;
+import io.euhedral_execution.training.learning.statistics.LosoEvaluationMetrics;
+import io.euhedral_execution.training.learning.statistics.ScenarioEvaluationMetrics;
+import io.euhedral_execution.training.learning.utils.ScenarioFeatureEncoder;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -21,8 +51,6 @@ import java.util.TreeSet;
 import java.util.UUID;
 
 public final class ScenarioModelTrainer {
-    private ScenarioModelTrainer() {
-    }
 
     public static ScenarioTrainingArtifacts train(ScenarioTrainingRequest request)
             throws Exception {
@@ -31,7 +59,9 @@ public final class ScenarioModelTrainer {
             throw new IllegalArgumentException("Model directory already exists: " + target);
         }
         Path parent = target.getParent();
-        if (parent == null) throw new IllegalArgumentException("Model directory has no parent");
+        if (parent == null) {
+            throw new IllegalArgumentException("Model directory has no parent");
+        }
         Files.createDirectories(parent);
         Path temporary = parent.resolve(target.getFileName() + ".tmp-" + UUID.randomUUID());
         Path foldWorkspace = parent.resolve(target.getFileName() + ".folds-" + UUID.randomUUID());
@@ -62,7 +92,7 @@ public final class ScenarioModelTrainer {
     private static ScenarioTrainingArtifacts trainInto(ScenarioTrainingRequest request,
             Path directory, Path foldWorkspace) throws Exception {
         ScenarioTrainingConfig requestedConfig = request.config();
-        ScenarioLearningTable table = Phase1ScenarioLearningReader.read(request.phase1Inputs(),
+        ScenarioLearningTable table = ScenarioLearningReader.read(request.inputs(),
                 request.requiredScenarios(), requestedConfig.includeWeakCalibrationRows());
         PolicyGroupedSplit split = PolicyGroupedSplitter.split(
                 table, requestedConfig.splitSeed(), requestedConfig);
@@ -188,7 +218,7 @@ public final class ScenarioModelTrainer {
                 PolicyVector probePolicy = table.policies().get(table.policies().firstKey());
                 SourceScenario probeScenario = table.requiredScenarios().first();
                 ScenarioPrediction prediction = model.predictCurves(List.of(probePolicy),
-                        new TreeSet<>(List.of(probeScenario)), 1).getFirst()
+                                new TreeSet<>(List.of(probeScenario)), 1).getFirst()
                         .scenarios().getFirst();
                 probe = MetadataProbe.from(probePolicy.id(), prediction, deviceName(device));
                 productionMembers.clear();
@@ -246,7 +276,9 @@ public final class ScenarioModelTrainer {
             return new ScenarioTrainingArtifacts(directory, metadataPath, groupedPath, losoPath,
                     ablationPath, historyPath, acceptance.status(), selectedFeatureSet);
         } finally {
-            for (OrdinalMember member : productionMembers) member.close();
+            for (OrdinalMember member : productionMembers) {
+                member.close();
+            }
         }
     }
 
@@ -349,7 +381,9 @@ public final class ScenarioModelTrainer {
     private static void addQualityReasons(List<String> reasons, String prefix,
             EvaluationSummary summary, double maximumMae, double minimumSpearman,
             double minimumPrecision, OptionalDouble maximumWorst) {
-        if (!allOk(summary)) reasons.add(prefix + "_NON_OK_SCENARIO");
+        if (!allOk(summary)) {
+            reasons.add(prefix + "_NON_OK_SCENARIO");
+        }
         if (!atMost(summary.macroMae(), maximumMae)) {
             reasons.add(prefix + "_MACRO_MAE_MAX_" + Double.toString(maximumMae));
         }
@@ -384,11 +418,13 @@ public final class ScenarioModelTrainer {
     private static void validateArtifact(Path directory, ScenarioModelMetadata metadata,
             ScenarioLearningTable table) throws Exception {
         PolicyVector probePolicy = table.policies().get(metadata.metadataProbe().policyId());
-        if (probePolicy == null) throw new IOException("Metadata probe policy is absent");
+        if (probePolicy == null) {
+            throw new IOException("Metadata probe policy is absent");
+        }
         try (ScenarioConditionedModel loaded = ScenarioConditionedModel.loadForAudit(
                 directory, metadata.producer().trainingDevice())) {
             ScenarioPrediction prediction = loaded.predictCurves(List.of(probePolicy),
-                    new TreeSet<>(List.of(metadata.metadataProbe().scenario())), 1)
+                            new TreeSet<>(List.of(metadata.metadataProbe().scenario())), 1)
                     .getFirst().scenarios().getFirst();
             MetadataProbe reproduced = MetadataProbe.from(probePolicy.id(), prediction,
                     metadata.producer().trainingDevice());
@@ -415,7 +451,9 @@ public final class ScenarioModelTrainer {
                     .map(row -> row.policy().id()).distinct().count());
             rows.put(entry.getKey(), entry.getValue().size());
             TreeMap<SourceScenario, Integer> counts = new TreeMap<>();
-            for (SourceScenario scenario : scenarios) counts.put(scenario, 0);
+            for (SourceScenario scenario : scenarios) {
+                counts.put(scenario, 0);
+            }
             for (ScenarioLearningRow row : entry.getValue()) {
                 counts.merge(row.scenario(), 1, Integer::sum);
             }
@@ -426,7 +464,9 @@ public final class ScenarioModelTrainer {
 
     private static List<PolicyVector> policies(List<ScenarioLearningRow> rows) {
         TreeMap<PolicyId, PolicyVector> policies = new TreeMap<>();
-        for (ScenarioLearningRow row : rows) policies.put(row.policy().id(), row.policy());
+        for (ScenarioLearningRow row : rows) {
+            policies.put(row.policy().id(), row.policy());
+        }
         return List.copyOf(policies.values());
     }
 
@@ -452,7 +492,9 @@ public final class ScenarioModelTrainer {
     }
 
     private static void deleteTree(Path directory) throws IOException {
-        if (directory == null || !Files.exists(directory)) return;
+        if (directory == null || !Files.exists(directory)) {
+            return;
+        }
         try (var paths = Files.walk(directory)) {
             for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) {
                 Files.deleteIfExists(path);
@@ -460,10 +502,15 @@ public final class ScenarioModelTrainer {
         }
     }
 
+    private ScenarioModelTrainer() {
+    }
+
     private record LosoResult(List<LosoEvaluationMetrics> rows, EvaluationSummary summary,
-            List<TrainingHistoryEntry> history) {
+                              List<TrainingHistoryEntry> history) {
+
     }
 
     record Acceptance(ModelAcceptanceStatus status, List<String> reasons) {
+
     }
 }

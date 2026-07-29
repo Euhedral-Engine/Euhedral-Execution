@@ -20,34 +20,30 @@ import ai.djl.training.dataset.Batch;
 import ai.djl.training.initializer.XavierInitializer;
 import ai.djl.training.optimizer.Optimizer;
 import ai.djl.training.tracker.Tracker;
+import io.euhedral_execution.training.learning.config.ScenarioMemberSeeds;
+import io.euhedral_execution.training.learning.config.ScenarioTrainingConfig;
+import io.euhedral_execution.training.learning.data.BalancedScenarioOrdinalLoss;
+import io.euhedral_execution.training.learning.data.ScenarioLearningMatrix;
+import io.euhedral_execution.training.learning.enums.ScenarioFeatureSet;
+import io.euhedral_execution.training.learning.metadata.MemberMetadata;
+import io.euhedral_execution.training.learning.metadata.ScenarioModelMetadata;
+import io.euhedral_execution.training.learning.output.EvaluationSummary;
+import io.euhedral_execution.training.learning.output.TrainingHistoryEntry;
+import io.euhedral_execution.training.learning.utils.DeterministicBatchSampler;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 final class ScenarioOrdinalNetwork implements OrdinalMember {
+
     static final String ENGINE_NAME = "PyTorch";
     private static final Object TRAINING_MONITOR = new Object();
 
     static {
         System.setProperty("ai.djl.default_engine",
                 System.getProperty("ai.djl.default_engine", ENGINE_NAME));
-    }
-
-    private final int featureWidth;
-    private final Device device;
-    private final Model model;
-    private final ParameterStore inferenceParameters;
-    private boolean closed;
-
-    private ScenarioOrdinalNetwork(int featureWidth, Device device) {
-        this.featureWidth = featureWidth;
-        this.device = device;
-        model = Model.newInstance(ScenarioModelMetadata.MEMBER_MODEL_NAME, device, ENGINE_NAME);
-        model.setBlock(buildBlock());
-        inferenceParameters = new ParameterStore(model.getNDManager(), false);
     }
 
     static Device resolveDevice(String requested) {
@@ -91,6 +87,30 @@ final class ScenarioOrdinalNetwork implements OrdinalMember {
                 throw error;
             }
         }
+    }
+
+    private static SequentialBlock buildBlock() {
+        return new SequentialBlock()
+                .add(Linear.builder().setUnits(128).build())
+                .add(Activation::gelu)
+                .add(Linear.builder().setUnits(96).build())
+                .add(Activation::gelu)
+                .add(Linear.builder().setUnits(48).build())
+                .add(Activation::gelu)
+                .add(Linear.builder().setUnits(9).build());
+    }
+    private final int featureWidth;
+    private final Device device;
+    private final Model model;
+    private final ParameterStore inferenceParameters;
+    private boolean closed;
+
+    private ScenarioOrdinalNetwork(int featureWidth, Device device) {
+        this.featureWidth = featureWidth;
+        this.device = device;
+        model = Model.newInstance(ScenarioModelMetadata.MEMBER_MODEL_NAME, device, ENGINE_NAME);
+        model.setBlock(buildBlock());
+        inferenceParameters = new ParameterStore(model.getNDManager(), false);
     }
 
     private TrainingResult fit(ScenarioLearningMatrix fitting,
@@ -170,7 +190,9 @@ final class ScenarioOrdinalNetwork implements OrdinalMember {
                 }
             }
         }
-        if (bestEpoch < 0) throw new IllegalStateException("No model epoch was selected");
+        if (bestEpoch < 0) {
+            throw new IllegalStateException("No model epoch was selected");
+        }
         close();
         ScenarioOrdinalNetwork best = load(memberDirectory, featureSet,
                 new MemberMetadata(memberIndex, memberSeed, bestEpoch,
@@ -252,17 +274,6 @@ final class ScenarioOrdinalNetwork implements OrdinalMember {
         }
     }
 
-    private static SequentialBlock buildBlock() {
-        return new SequentialBlock()
-                .add(Linear.builder().setUnits(128).build())
-                .add(Activation::gelu)
-                .add(Linear.builder().setUnits(96).build())
-                .add(Activation::gelu)
-                .add(Linear.builder().setUnits(48).build())
-                .add(Activation::gelu)
-                .add(Linear.builder().setUnits(9).build());
-    }
-
     @Override
     public int featureWidth() {
         return featureWidth;
@@ -275,7 +286,9 @@ final class ScenarioOrdinalNetwork implements OrdinalMember {
                 || destination.length != rows * 9) {
             throw new IllegalArgumentException("Invalid inference buffers");
         }
-        if (rows == 0) return;
+        if (rows == 0) {
+            return;
+        }
         try (NDManager manager = model.getNDManager().newSubManager(device)) {
             NDArray input = manager.create(features, new Shape(rows, featureWidth));
             NDArray output = model.getBlock()
@@ -286,7 +299,9 @@ final class ScenarioOrdinalNetwork implements OrdinalMember {
     }
 
     private void ensureOpen() {
-        if (closed) throw new IllegalStateException("Ordinal member is closed");
+        if (closed) {
+            throw new IllegalStateException("Ordinal member is closed");
+        }
     }
 
     @Override
@@ -298,6 +313,7 @@ final class ScenarioOrdinalNetwork implements OrdinalMember {
     }
 
     record TrainingResult(ScenarioOrdinalNetwork member, long seed, int bestEpoch,
-            List<TrainingHistoryEntry> history) {
+                          List<TrainingHistoryEntry> history) {
+
     }
 }

@@ -1,12 +1,38 @@
 package io.euhedral_execution.training.learning;
 
+import static io.euhedral_execution.training.learning.fixtures.ScenarioLearningFixtures.scenarioResults;
+import static io.euhedral_execution.training.learning.fixtures.ScenarioLearningFixtures.scenarios;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static io.euhedral_execution.training.learning.fixtures.ScenarioLearningFixtures.*;
-import io.euhedral_execution.training.data.*;
-import io.euhedral_execution.training.merge.MergeRecords.ScenarioResult;
-import io.euhedral_execution.training.merge.MergeRecords.ScenarioResultStatus;
-import java.util.*;
+
+import io.euhedral_execution.training.data.PolicyId;
+import io.euhedral_execution.training.data.PolicyVector;
+import io.euhedral_execution.training.data.SourceScenario;
+import io.euhedral_execution.training.learning.config.EvaluationThresholds;
+import io.euhedral_execution.training.learning.config.ScenarioTrainingConfig;
+import io.euhedral_execution.training.learning.data.PolicyGroupedSplit;
+import io.euhedral_execution.training.learning.data.PolicyGroupedSplitter;
+import io.euhedral_execution.training.learning.enums.FeatureSelectionMode;
+import io.euhedral_execution.training.learning.enums.LearningPartition;
+import io.euhedral_execution.training.learning.inputs.ScenarioDatasetAudit;
+import io.euhedral_execution.training.learning.inputs.ScenarioLearningReader;
+import io.euhedral_execution.training.learning.inputs.ScenarioLearningRow;
+import io.euhedral_execution.training.learning.inputs.ScenarioLearningTable;
+import io.euhedral_execution.training.merge.data.MergeRecords.ScenarioResult;
+import io.euhedral_execution.training.merge.data.MergeRecords.ScenarioResultStatus;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.OptionalDouble;
+import java.util.Random;
+import java.util.Set;
+import java.util.SortedMap;
+import java.util.SortedSet;
+import java.util.TreeMap;
+import java.util.TreeSet;
 import org.junit.jupiter.api.Test;
 
 class PolicyGroupedSplitterTest {
@@ -54,7 +80,7 @@ class PolicyGroupedSplitterTest {
 
     @Test
     void fixtureKeepsAllFourScenarioRowsAndAblationHalvesDisjoint() {
-        ScenarioLearningTable table = Phase1ScenarioLearningReader.fromScenarioResults(
+        ScenarioLearningTable table = ScenarioLearningReader.fromScenarioResults(
                 scenarioResults(), scenarios(), false);
         PolicyGroupedSplit split = PolicyGroupedSplitter.split(table,
                 ScenarioTrainingConfig.defaults().splitSeed(),
@@ -76,12 +102,12 @@ class PolicyGroupedSplitterTest {
 
     @Test
     void shuffledRowsAndAdditionalIdentitiesCannotMoveExistingPolicies() {
-        List<io.euhedral_execution.training.merge.MergeRecords.ScenarioResult> original =
+        List<ScenarioResult> original =
                 new ArrayList<>(scenarioResults());
-        ScenarioLearningTable first = Phase1ScenarioLearningReader.fromScenarioResults(
+        ScenarioLearningTable first = ScenarioLearningReader.fromScenarioResults(
                 original, scenarios(), false);
         Collections.shuffle(original, new Random(91));
-        ScenarioLearningTable shuffled = Phase1ScenarioLearningReader.fromScenarioResults(
+        ScenarioLearningTable shuffled = ScenarioLearningReader.fromScenarioResults(
                 original, scenarios(), false);
         ScenarioTrainingConfig config = ScenarioTrainingConfig.defaults();
         SortedMap<PolicyId, LearningPartition> assignments =
@@ -102,7 +128,7 @@ class PolicyGroupedSplitterTest {
 
     @Test
     void losoAndLoeoHelpersExcludeHeldContextWithoutMovingPolicies() {
-        ScenarioLearningTable table = Phase1ScenarioLearningReader.fromScenarioResults(
+        ScenarioLearningTable table = ScenarioLearningReader.fromScenarioResults(
                 scenarioResults(), scenarios(), false);
         PolicyGroupedSplit split = PolicyGroupedSplitter.split(table,
                 ScenarioTrainingConfig.defaults().splitSeed(),
@@ -135,7 +161,7 @@ class PolicyGroupedSplitterTest {
 
     @Test
     void rejectsMinimumsInsteadOfFallingBackToRows() {
-        ScenarioLearningTable table = Phase1ScenarioLearningReader.fromScenarioResults(
+        ScenarioLearningTable table = ScenarioLearningReader.fromScenarioResults(
                 scenarioResults(), scenarios(), false);
         ScenarioTrainingConfig impossible = new ScenarioTrainingConfig(
                 ScenarioTrainingConfig.defaults().splitSeed(), 1, "cpu", 3, 1, 3,
@@ -157,7 +183,7 @@ class PolicyGroupedSplitterTest {
                         == LearningPartition.VALIDATION
                         ? result.withQuality(0.5) : result).toList();
         assertThatThrownBy(() -> PolicyGroupedSplitter.split(
-                Phase1ScenarioLearningReader.fromScenarioResults(
+                ScenarioLearningReader.fromScenarioResults(
                         constant, scenarios(), false),
                 config.splitSeed(), config))
                 .isInstanceOf(InsufficientScenarioLearningDataException.class);
@@ -172,7 +198,7 @@ class PolicyGroupedSplitterTest {
                 belowTop.containsKey(result.policy().id())
                         ? result.withQuality(belowTop.get(result.policy().id())) : result).toList();
         assertThatThrownBy(() -> PolicyGroupedSplitter.split(
-                Phase1ScenarioLearningReader.fromScenarioResults(noTop, scenarios(), false),
+                ScenarioLearningReader.fromScenarioResults(noTop, scenarios(), false),
                 config.splitSeed(), config))
                 .isInstanceOf(InsufficientScenarioLearningDataException.class);
 
@@ -184,7 +210,7 @@ class PolicyGroupedSplitterTest {
                         == LearningPartition.VALIDATION
                         ? missing(result) : result).toList();
         assertThatThrownBy(() -> PolicyGroupedSplitter.split(
-                Phase1ScenarioLearningReader.fromScenarioResults(missing, scenarios(), false),
+                ScenarioLearningReader.fromScenarioResults(missing, scenarios(), false),
                 config.splitSeed(), config))
                 .isInstanceOf(InsufficientScenarioLearningDataException.class);
     }

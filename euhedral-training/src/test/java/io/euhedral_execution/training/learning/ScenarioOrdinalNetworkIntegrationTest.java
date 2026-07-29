@@ -1,9 +1,19 @@
 package io.euhedral_execution.training.learning;
 
-import static io.euhedral_execution.training.learning.fixtures.ScenarioLearningFixtures.*;
+import static io.euhedral_execution.training.learning.fixtures.ScenarioLearningFixtures.learningRows;
+import static io.euhedral_execution.training.learning.fixtures.ScenarioLearningFixtures.scenarios;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import ai.djl.Device;
+import io.euhedral_execution.training.learning.config.ScenarioTrainingConfig;
+import io.euhedral_execution.training.learning.data.ScenarioLearningMatrix;
+import io.euhedral_execution.training.learning.enums.FeatureSelectionMode;
+import io.euhedral_execution.training.learning.enums.ScenarioFeatureSet;
+import io.euhedral_execution.training.learning.inputs.ScenarioLearningRow;
+import io.euhedral_execution.training.learning.metadata.FeatureNormalizer;
+import io.euhedral_execution.training.learning.metadata.MemberMetadata;
+import io.euhedral_execution.training.learning.utils.ScenarioFeatureEncoder;
+import io.euhedral_execution.training.learning.utils.ScenarioOrdinalTargets;
 import java.nio.file.Path;
 import java.util.List;
 import org.junit.jupiter.api.Assumptions;
