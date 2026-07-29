@@ -1,11 +1,11 @@
 package io.euhedral_execution.training.optimization;
 
 import io.euhedral_execution.hashing.HasherApi;
-import io.euhedral_execution.training.data.PolicyId;
-import io.euhedral_execution.training.data.PolicyRole;
-import io.euhedral_execution.training.data.SourceScenario;
 import io.euhedral_execution.training.data.BenchmarkParameters;
 import io.euhedral_execution.training.data.FrameSourceSeed;
+import io.euhedral_execution.training.data.PolicyId;
+import io.euhedral_execution.training.data.SourceScenario;
+import io.euhedral_execution.training.data.enums.PolicyRole;
 import java.util.List;
 
 public final class SchedulerSeeds {
@@ -15,7 +15,7 @@ public final class SchedulerSeeds {
 
     public static long scoreBandSamplingKey(long seed, int iteration, int band,
             PolicyId policyId) {
-        return hash("phase3-score-band-v1\n"
+        return hash("score-band-v1\n"
                 + "iteration=" + iteration + "\n"
                 + "band=" + band + "\n"
                 + "policy=" + policyId.canonical() + "\n", seed);
@@ -25,13 +25,13 @@ public final class SchedulerSeeds {
         if (islandIndex < 0) {
             throw new IllegalArgumentException("Island index must not be negative");
         }
-        return hash("phase3-cma-island-v1\n"
+        return hash("cma-island-v1\n"
                 + "island=" + islandIndex + "\n", seed);
     }
 
     public static String candidateCohortId(String trainingRunId, String kind, int iteration,
             SourceScenario scenario, List<? extends PolicyWithRole> policies, long seed) {
-        StringBuilder material = new StringBuilder("phase3-candidate-cohort-v1\n")
+        StringBuilder material = new StringBuilder("candidate-cohort-v1\n")
                 .append("training_run=").append(trainingRunId).append('\n')
                 .append("kind=").append(kind).append('\n')
                 .append("iteration=").append(iteration).append('\n')
@@ -50,7 +50,7 @@ public final class SchedulerSeeds {
     public static String benchmarkRunId(String trainingRunId, String kind, int iteration,
             SourceScenario scenario, String cohortId, BenchmarkParameters parameters,
             String commitSha, boolean dirtyWorkingTree, long seed) {
-        return benchmarkRunId("phase3-benchmark-run-v1\n"
+        return benchmarkRunId("benchmark-run-v1\n"
                 + "training_run=" + trainingRunId + "\n"
                 + "kind=" + kind + "\n"
                 + "iteration=" + iteration + "\n"
@@ -68,7 +68,7 @@ public final class SchedulerSeeds {
     }
 
     public static long trialOrderKey(String cohortId, PolicyId policyId, long seed) {
-        return hash("phase3-trial-order-v1\n"
+        return hash("trial-order-v1\n"
                 + "cohort=" + cohortId + "\n"
                 + "policy=" + policyId.canonical() + "\n", seed);
     }
@@ -78,10 +78,10 @@ public final class SchedulerSeeds {
         if (sourceIndex < 0) {
             throw new IllegalArgumentException("Source index must not be negative");
         }
-        long idHash = hash("phase3-frame-id-v1\n"
+        long idHash = hash("frame-id-v1\n"
                 + "run=" + benchmarkRunId + "\n"
                 + "source=" + sourceIndex + "\n", seed);
-        long routingSeed = hash("phase3-frame-routing-v1\n"
+        long routingSeed = hash("frame-routing-v1\n"
                 + "run=" + benchmarkRunId + "\n"
                 + "source=" + sourceIndex + "\n", seed);
         return new FrameSourceSeed(sourceIndex, idHash, routingSeed);

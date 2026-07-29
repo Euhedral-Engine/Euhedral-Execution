@@ -1,11 +1,18 @@
 package io.euhedral_execution.training.scheduling;
 
-import io.euhedral_execution.training.data.SourceScenario;
 import io.euhedral_execution.training.data.PolicyId;
-import io.euhedral_execution.training.data.PolicyRole;
-import io.euhedral_execution.training.learning.ScenarioPrediction;
-import io.euhedral_execution.training.merge.MergeRecords.ScenarioResultStatus;
-import io.euhedral_execution.training.optimization.PredictedPolicySummary;
+import io.euhedral_execution.training.data.SourceScenario;
+import io.euhedral_execution.training.data.enums.PolicyRole;
+import io.euhedral_execution.training.learning.data.ScenarioPrediction;
+import io.euhedral_execution.training.merge.data.MergeRecords.ScenarioResultStatus;
+import io.euhedral_execution.training.optimization.data.PredictedPolicySummary;
+import io.euhedral_execution.training.optimization.data.ScheduledPolicyPrediction;
+import io.euhedral_execution.training.scheduling.data.CarryForwardEntry;
+import io.euhedral_execution.training.scheduling.data.CarryScenarioState;
+import io.euhedral_execution.training.scheduling.data.IterationSchedule;
+import io.euhedral_execution.training.scheduling.data.OptimizationCorpusView;
+import io.euhedral_execution.training.scheduling.data.ScheduledRun;
+import io.euhedral_execution.training.scheduling.enums.CoverageState;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -47,7 +54,7 @@ public final class CarryForwardQueue {
         Map<PolicyId, PredictedPolicySummary> predictions = completedSchedule.selectedPredictions()
                 .stream().collect(java.util.stream.Collectors.toMap(
                         prediction -> prediction.policy().id(),
-                        io.euhedral_execution.training.optimization.ScheduledPolicyPrediction::prediction,
+                        io.euhedral_execution.training.optimization.data.ScheduledPolicyPrediction::prediction,
                         (left, right) -> left));
         for (PolicyId admitted : completedSchedule.carryAdmissions()) {
             if (working.containsKey(admitted)) {
@@ -105,7 +112,7 @@ public final class CarryForwardQueue {
             io.euhedral_execution.training.optimization.PolicyCurvePredictor predictor,
             int iteration) {
         java.util.Map<io.euhedral_execution.training.data.PolicyId,
-                io.euhedral_execution.training.optimization.PredictedPolicySummary> predictions =
+                io.euhedral_execution.training.optimization.data.PredictedPolicySummary> predictions =
                 predictor.predict(entries.stream().map(CarryForwardEntry::policy).toList())
                         .stream().collect(java.util.stream.Collectors.toMap(
                                 summary -> summary.policy().id(),

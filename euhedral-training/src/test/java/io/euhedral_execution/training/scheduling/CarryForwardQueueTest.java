@@ -2,8 +2,12 @@ package io.euhedral_execution.training.scheduling;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.euhedral_execution.training.learning.ScenarioPrediction;
-import io.euhedral_execution.training.scheduling.fixtures.Phase3Fixtures;
+import io.euhedral_execution.training.learning.data.ScenarioPrediction;
+import io.euhedral_execution.training.scheduling.data.CarryForwardEntry;
+import io.euhedral_execution.training.scheduling.data.CarryScenarioState;
+import io.euhedral_execution.training.scheduling.data.IterationSchedule;
+import io.euhedral_execution.training.scheduling.enums.CoverageState;
+import io.euhedral_execution.training.scheduling.fixtures.SchedulingFixtures;
 import java.util.List;
 import java.util.OptionalInt;
 import java.util.TreeMap;
@@ -17,9 +21,9 @@ class CarryForwardQueueTest {
         CarryForwardEntry highCoverage = entry(2, CoverageState.VALID,
                 CoverageState.VALID, CoverageState.MISSING, 0.2);
         assertThat(CarryForwardQueue.selectForScenario(List.of(lowCoverage, highCoverage),
-                Phase3Fixtures.S3, 1, 2)).containsExactly(highCoverage, lowCoverage);
+                SchedulingFixtures.S3, 1, 2)).containsExactly(highCoverage, lowCoverage);
 
-        CarryScenarioState state = highCoverage.scenarios().get(Phase3Fixtures.S3);
+        CarryScenarioState state = highCoverage.scenarios().get(SchedulingFixtures.S3);
         int[] delays = {1, 2, 4, 8, 8};
         int iteration = 10;
         for (int delay : delays) {
@@ -33,11 +37,11 @@ class CarryForwardQueueTest {
     void rescoreRetainsEntryUntilCorpusMarksItEligible() {
         CarryForwardEntry entry = entry(3, CoverageState.VALID, CoverageState.MISSING,
                 CoverageState.MISSING, 0.4);
-        var rescored = CarryForwardQueue.rescore(List.of(entry), Phase3Fixtures.predictor(), 7);
+        var rescored = CarryForwardQueue.rescore(List.of(entry), SchedulingFixtures.predictor(), 7);
         assertThat(rescored).hasSize(1);
         assertThat(rescored.getFirst().lastUpdatedIteration()).isEqualTo(7);
-        var eligible = Phase3Fixtures.corpus(List.of(
-                Phase3Fixtures.eligible(entry.policy(), 0.5)));
+        var eligible = SchedulingFixtures.corpus(List.of(
+                SchedulingFixtures.eligible(entry.policy(), 0.5)));
         assertThat(CarryForwardQueue.reconcile(rescored, eligible,
                 new IterationSchedule("run", 7, List.of(), List.of(), List.of(), List.of(), 0),
                 7)).isEmpty();
@@ -45,11 +49,11 @@ class CarryForwardQueueTest {
 
     private static CarryForwardEntry entry(int seed, CoverageState first,
             CoverageState second, CoverageState third, double low) {
-        var policy = Phase3Fixtures.policy(seed);
+        var policy = SchedulingFixtures.policy(seed);
         TreeMap<io.euhedral_execution.training.data.SourceScenario, CarryScenarioState> states =
                 new TreeMap<>();
         int index = 0;
-        for (var scenario : Phase3Fixtures.SCENARIOS) {
+        for (var scenario : SchedulingFixtures.SCENARIOS) {
             CoverageState coverage = new CoverageState[]{first, second, third}[index++];
             ScenarioPrediction prediction = new ScenarioPrediction(scenario,
                     Math.min(0.9, low + 0.1), 0.1, low, Math.min(1, low + 0.2),

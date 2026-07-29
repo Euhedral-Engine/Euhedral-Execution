@@ -1,6 +1,7 @@
 package io.euhedral_execution.training.scheduling;
 
 import io.euhedral_execution.training.data.SourceScenario;
+import io.euhedral_execution.training.scheduling.data.RotationGroup;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.SortedSet;

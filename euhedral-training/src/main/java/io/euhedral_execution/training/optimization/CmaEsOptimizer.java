@@ -2,8 +2,12 @@ package io.euhedral_execution.training.optimization;
 
 import io.euhedral_execution.training.data.PolicyId;
 import io.euhedral_execution.training.data.PolicyVector;
-import io.euhedral_execution.training.merge.MergeRecords.RobustPolicySummary;
-import io.euhedral_execution.training.merge.RobustPolicyComparator;
+import io.euhedral_execution.training.merge.PolicyComparator;
+import io.euhedral_execution.training.merge.data.MergeRecords.RobustPolicySummary;
+import io.euhedral_execution.training.optimization.config.CmaEsConfig;
+import io.euhedral_execution.training.optimization.data.PredictedCandidate;
+import io.euhedral_execution.training.optimization.data.PredictedPolicySummary;
+import io.euhedral_execution.training.optimization.enums.CandidateOrigin;
 import io.euhedral_execution.training.utils.CommonFunctions;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -29,7 +33,7 @@ public final class CmaEsOptimizer {
         List<RobustPolicySummary> ranked = measuredEligiblePolicies.stream()
                 .filter(RobustPolicySummary::eligible)
                 .filter(summary -> !fixedAnchorIds.contains(summary.policy().id()))
-                .sorted(RobustPolicyComparator.BEST_FIRST)
+                .sorted(PolicyComparator.BEST_FIRST)
                 .toList();
         if (ranked.size() < config.minimumSeedPolicies()) {
             return List.of();

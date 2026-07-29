@@ -3,8 +3,11 @@ package io.euhedral_execution.training.checkpoint;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.euhedral_execution.training.scheduling.RotationGroup;
-import io.euhedral_execution.training.scheduling.fixtures.Phase3Fixtures;
+import io.euhedral_execution.training.checkpoint.data.ClosedLoopCheckpoint;
+import io.euhedral_execution.training.checkpoint.data.LoadedCheckpoint;
+import io.euhedral_execution.training.checkpoint.enums.CheckpointStage;
+import io.euhedral_execution.training.scheduling.data.RotationGroup;
+import io.euhedral_execution.training.scheduling.fixtures.SchedulingFixtures;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -23,7 +26,7 @@ class CheckpointSnapshotCodecTest {
         cursors.put(new RotationGroup("env-a", 4), 0);
         ClosedLoopCheckpoint checkpoint = new ClosedLoopCheckpoint(1, "training", 1,
                 CheckpointStage.BOOTSTRAP_PENDING, 1, 131_072, "a".repeat(64),
-                Phase3Fixtures.SCENARIOS, cursors, List.of(), List.of(), Optional.empty(),
+                SchedulingFixtures.SCENARIOS, cursors, List.of(), List.of(), Optional.empty(),
                 Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
                 List.of());
         LoadedCheckpoint written = CheckpointSnapshotCodec.writeNext(temp, checkpoint);

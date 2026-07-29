@@ -2,31 +2,33 @@ package io.euhedral_execution.training;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.euhedral_execution.training.benchmark.BenchmarkExecutionConfig;
-import io.euhedral_execution.training.benchmark.NativeBenchmarkRunPlan;
+import io.euhedral_execution.training.benchmark.config.BenchmarkExecutionConfig;
+import io.euhedral_execution.training.benchmark.data.NativeBenchmarkRunPlan;
+import io.euhedral_execution.training.checkpoint.enums.CheckpointStage;
+import io.euhedral_execution.training.config.ClosedLoopConfig;
 import io.euhedral_execution.training.data.BenchmarkObservation;
 import io.euhedral_execution.training.data.BenchmarkRunContext;
 import io.euhedral_execution.training.data.BenchmarkRunDescriptor;
-import io.euhedral_execution.training.data.EvidenceOrigin;
-import io.euhedral_execution.training.data.MeasurementEncoding;
+import io.euhedral_execution.training.data.ClosedLoopResult;
 import io.euhedral_execution.training.data.ObservationKey;
-import io.euhedral_execution.training.data.ObservationStatus;
 import io.euhedral_execution.training.data.SourceScenario;
+import io.euhedral_execution.training.data.enums.EvidenceOrigin;
+import io.euhedral_execution.training.data.enums.MeasurementEncoding;
+import io.euhedral_execution.training.data.enums.ObservationStatus;
+import io.euhedral_execution.training.data.io.CanonicalCsv;
 import io.euhedral_execution.training.data.io.ObservationBundleWriter;
 import io.euhedral_execution.training.learning.ScenarioConditionedModel;
-import io.euhedral_execution.training.learning.ScenarioModelTrainer;
-import io.euhedral_execution.training.learning.ScenarioTrainingArtifacts;
-import io.euhedral_execution.training.learning.ScenarioTrainingConfig;
-import io.euhedral_execution.training.learning.ScenarioTrainingRequest;
-import io.euhedral_execution.training.merge.AggregationConfig;
-import io.euhedral_execution.training.merge.AnchorSelectionConfig;
-import io.euhedral_execution.training.merge.CalibrationConfig;
-import io.euhedral_execution.training.merge.CalibrationPlan;
-import io.euhedral_execution.training.optimization.CandidateGenerationConfig;
-import io.euhedral_execution.training.optimization.CmaEsConfig;
-import io.euhedral_execution.training.scheduling.CandidateBudgetConfig;
-import io.euhedral_execution.training.scheduling.Phase3Csv;
-import io.euhedral_execution.training.scheduling.fixtures.Phase3Fixtures;
+import io.euhedral_execution.training.learning.config.ScenarioTrainingConfig;
+import io.euhedral_execution.training.learning.inputs.ScenarioTrainingRequest;
+import io.euhedral_execution.training.learning.output.ScenarioTrainingArtifacts;
+import io.euhedral_execution.training.merge.config.AggregationConfig;
+import io.euhedral_execution.training.merge.config.AnchorSelectionConfig;
+import io.euhedral_execution.training.merge.config.CalibrationConfig;
+import io.euhedral_execution.training.merge.data.CalibrationPlan;
+import io.euhedral_execution.training.optimization.config.CandidateGenerationConfig;
+import io.euhedral_execution.training.optimization.config.CmaEsConfig;
+import io.euhedral_execution.training.scheduling.config.CandidateBudgetConfig;
+import io.euhedral_execution.training.scheduling.fixtures.SchedulingFixtures;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -58,14 +60,14 @@ class ClosedLoopRunnerTest {
         ClosedLoopResult first = ClosedLoopRunner.run(config(bootstrap, required,
                 "env-a", false), firstServices);
         assertThat(first.stage()).isEqualTo(
-                io.euhedral_execution.training.checkpoint.CheckpointStage.BOOTSTRAP_PENDING);
+                io.euhedral_execution.training.checkpoint.enums.CheckpointStage.BOOTSTRAP_PENDING);
         assertThat(first.awaitingScenarios()).containsExactly(b);
 
         FakeServices secondServices = new FakeServices(true);
         ClosedLoopResult second = ClosedLoopRunner.run(config(bootstrap, required,
                 "env-b", true), secondServices);
         assertThat(second.stage()).isEqualTo(
-                io.euhedral_execution.training.checkpoint.CheckpointStage.READY_TO_TRAIN);
+                io.euhedral_execution.training.checkpoint.enums.CheckpointStage.READY_TO_TRAIN);
         assertThat(second.latestMerge()).isPresent();
         assertThat(second.awaitingScenarios()).isEmpty();
         assertThat(secondServices.mergeCalled).isTrue();
@@ -91,15 +93,15 @@ class ClosedLoopRunnerTest {
         for (int i = 0; i < 28; i++) {
             header.add("weight_%02d_bits".formatted(i));
         }
-        StringBuilder output = new StringBuilder(Phase3Csv.row(header));
+        StringBuilder output = new StringBuilder(CanonicalCsv.row(header));
         for (int i = 0; i < count; i++) {
-            var policy = Phase3Fixtures.policy(100 + i);
+            var policy = SchedulingFixtures.policy(100 + i);
             List<String> row = new ArrayList<>(List.of("1", Integer.toString(i + 1),
                     policy.id().canonical()));
             for (double weight : policy.copyWeights()) {
                 row.add("%016x".formatted(Double.doubleToRawLongBits(weight)));
             }
-            output.append(Phase3Csv.row(row));
+            output.append(CanonicalCsv.row(row));
         }
         Files.writeString(file, output, StandardCharsets.UTF_8);
     }

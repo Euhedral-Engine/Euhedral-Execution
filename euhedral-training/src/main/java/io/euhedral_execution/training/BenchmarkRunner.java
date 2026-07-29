@@ -9,19 +9,19 @@ import io.euhedral_execution.core.frames.BenchmarkFrame;
 import io.euhedral_execution.core.impl.BaseCloneableObject;
 import io.euhedral_execution.hardware_utils.SystemInfo;
 import io.euhedral_execution.hardware_utils.ThreadTools;
-import io.euhedral_execution.training.benchmark.NativeBenchmarkRunPlan;
+import io.euhedral_execution.training.benchmark.data.NativeBenchmarkRunPlan;
 import io.euhedral_execution.training.data.BenchmarkObservation;
 import io.euhedral_execution.training.data.BenchmarkParameters;
 import io.euhedral_execution.training.data.BenchmarkRunContext;
 import io.euhedral_execution.training.data.BenchmarkRunDescriptor;
-import io.euhedral_execution.training.data.EvidenceOrigin;
 import io.euhedral_execution.training.data.FrameSourceSeed;
-import io.euhedral_execution.training.data.MeasurementEncoding;
 import io.euhedral_execution.training.data.ObservationKey;
-import io.euhedral_execution.training.data.ObservationStatus;
 import io.euhedral_execution.training.data.PolicyId;
-import io.euhedral_execution.training.data.PolicyRole;
 import io.euhedral_execution.training.data.ScheduledPolicy;
+import io.euhedral_execution.training.data.enums.EvidenceOrigin;
+import io.euhedral_execution.training.data.enums.MeasurementEncoding;
+import io.euhedral_execution.training.data.enums.ObservationStatus;
+import io.euhedral_execution.training.data.enums.PolicyRole;
 import io.euhedral_execution.training.data.io.ObservationBundle;
 import io.euhedral_execution.training.data.io.ObservationBundleReader;
 import io.euhedral_execution.training.data.io.ObservationBundleWriter;
@@ -36,7 +36,6 @@ import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.OptionalDouble;
@@ -325,7 +324,7 @@ public final class BenchmarkRunner {
         static NativeBackend open(NativeBenchmarkRunPlan plan) {
             ThreadTools.setAffinity(SystemInfo.getCoreInfo(0).getCpuSet().nextSetBit(0));
             FragmentActionPicker picker = new FragmentActionPicker(new double[28]);
-            LatticeConfig config = new LatticeConfig("Phase3-" + plan.benchmarkRunId(),
+            LatticeConfig config = new LatticeConfig("Training-" + plan.benchmarkRunId(),
                     SystemInfo.getCpuSet(), Duration.ofSeconds(1),
                     ControlPlaneShard.createBaseShard("Shard",
                             new BaseCloneableObject(FragmentConfig.ofBenchmark(picker))));
