@@ -1,5 +1,6 @@
 package io.euhedral_execution.training;
 
+import io.euhedral_execution.training.config.ClosedLoopConfig;
 import io.euhedral_execution.training.config.ClosedLoopConfigCodec;
 import io.euhedral_execution.training.data.ClosedLoopResult;
 import io.euhedral_execution.training.importer.currentworkspace.CurrentWorkspaceImportRequest;
@@ -8,11 +9,11 @@ import io.euhedral_execution.training.importer.currentworkspace.CurrentWorkspace
 import io.euhedral_execution.training.legacy.PooledBenchmarkRunner;
 import io.euhedral_execution.training.legacy.PooledSequenceFinder;
 import io.euhedral_execution.training.networks.PolicyOrdinalNetwork;
+import io.euhedral_execution.training.packaging.TrainingRunPackager;
 import io.euhedral_execution.training.packaging.config.TrainingRunPackageInputs;
 import io.euhedral_execution.training.packaging.config.TrainingRunPackageRequest;
 import io.euhedral_execution.training.packaging.data.TrainingRunPackage;
 import io.euhedral_execution.training.packaging.io.TrainingRunPackageInputsCodec;
-import io.euhedral_execution.training.packaging.TrainingRunPackager;
 import java.nio.file.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,6 +23,10 @@ public class Runner {
     private static final Logger LOGGER = LoggerFactory.getLogger(Runner.class);
 
     public static void main(String[] args) throws Exception {
+        dispatch(args, ProductionCommandServices.INSTANCE);
+    }
+
+    static void dispatch(String[] args, CommandServices services) throws Exception {
         if (args.length == 0) {
             printUsage();
             return;
@@ -37,21 +42,26 @@ public class Runner {
                 }
             }
             case "benchmark" -> PooledBenchmarkRunner.run(args);
-            case "closed-loop" -> closedLoop(args);
+            case "closed-loop" -> closedLoop(args, services);
             // TEMPORARY_CURRENT_WORKSPACE_IMPORT_REMOVAL
-            case "import-current-workspace" -> importCurrentWorkspace(args);
-            case "package-run" -> packageRun(args);
+            case "import-current-workspace" -> importCurrentWorkspace(args, services);
+            case "package-run" -> packageRun(args, services);
             default -> throw new IllegalArgumentException("Unknown command: " + args[0]);
         }
     }
 
     static void closedLoop(String[] args) throws Exception {
-        if (args.length != 3 || !args[1].equals("--config")) {
+        closedLoop(args, ProductionCommandServices.INSTANCE);
+    }
+
+    private static void closedLoop(String[] args, CommandServices services) throws Exception {
+        if (args.length != 3 || !args[1].equals("--config")
+                || args[2].startsWith("--")) {
             throw new IllegalArgumentException(
                     "closed-loop requires --config <path> in that order");
         }
-        ClosedLoopResult result = ClosedLoopRunner.run(
-                ClosedLoopConfigCodec.read(Path.of(args[2])));
+        ClosedLoopResult result = services.runClosedLoop(
+                services.readConfig(Path.of(args[2])));
         LOGGER.info("stage={}", result.stage());
         LOGGER.info("checkpoint={}", result.latestCheckpoint().toAbsolutePath().normalize());
         LOGGER.info("package={}", result.packageDirectory().orElseThrow()
@@ -62,8 +72,15 @@ public class Runner {
 
     // TEMPORARY_CURRENT_WORKSPACE_IMPORT_REMOVAL
     static void importCurrentWorkspace(String[] args) throws Exception {
+        importCurrentWorkspace(args, ProductionCommandServices.INSTANCE);
+    }
+
+    private static void importCurrentWorkspace(String[] args, CommandServices services)
+            throws Exception {
         if (args.length != 7 || !args[1].equals("--source-root")
-                || !args[3].equals("--output") || !args[5].equals("--bootstrap-count")) {
+                || !args[3].equals("--output") || !args[5].equals("--bootstrap-count")
+                || args[2].startsWith("--") || args[4].startsWith("--")
+                || args[6].startsWith("--")) {
             throw new IllegalArgumentException("import-current-workspace requires "
                     + "--source-root <path> --output <path> --bootstrap-count <count> "
                     + "in that order");
@@ -78,7 +95,7 @@ public class Runner {
             throw new IllegalArgumentException("Bootstrap count must be a positive integer",
                     error);
         }
-        CurrentWorkspaceImportResult result = CurrentWorkspaceImporter.importWorkspace(
+        CurrentWorkspaceImportResult result = services.importWorkspace(
                 new CurrentWorkspaceImportRequest(Path.of(args[2]), Path.of(args[4]),
                         bootstrapCount));
         LOGGER.info("output={}", result.directory());
@@ -87,16 +104,22 @@ public class Runner {
     }
 
     static void packageRun(String[] args) throws Exception {
+        packageRun(args, ProductionCommandServices.INSTANCE);
+    }
+
+    private static void packageRun(String[] args, CommandServices services) throws Exception {
         if (args.length != 7 || !args[1].equals("--workspace")
-                || !args[3].equals("--inputs") || !args[5].equals("--output-root")) {
+                || !args[3].equals("--inputs") || !args[5].equals("--output-root")
+                || args[2].startsWith("--") || args[4].startsWith("--")
+                || args[6].startsWith("--")) {
             throw new IllegalArgumentException("package-run requires --workspace <path> "
                     + "--inputs <path> --output-root <path> in that order");
         }
         Path workspace = Path.of(args[2]);
         Path inputPath = Path.of(args[4]);
         Path outputRoot = Path.of(args[6]);
-        TrainingRunPackageInputs inputs = TrainingRunPackageInputsCodec.read(inputPath);
-        TrainingRunPackage result = TrainingRunPackager.publish(
+        TrainingRunPackageInputs inputs = services.readPackageInputs(inputPath);
+        TrainingRunPackage result = services.publishPackage(
                 new TrainingRunPackageRequest(workspace, outputRoot, inputs));
         LOGGER.info("{}", result.directory().toAbsolutePath().normalize());
     }
@@ -124,6 +147,50 @@ public class Runner {
                   train-vector-finder Train or generate candidates using -D properties
                   benchmark [file]    Benchmark Sobol or file-backed candidates
                 """);
+    }
+
+    interface CommandServices {
+        ClosedLoopConfig readConfig(Path path) throws Exception;
+
+        ClosedLoopResult runClosedLoop(ClosedLoopConfig config) throws Exception;
+
+        CurrentWorkspaceImportResult importWorkspace(CurrentWorkspaceImportRequest request)
+                throws Exception;
+
+        TrainingRunPackageInputs readPackageInputs(Path path) throws Exception;
+
+        TrainingRunPackage publishPackage(TrainingRunPackageRequest request) throws Exception;
+    }
+
+    private enum ProductionCommandServices implements CommandServices {
+        INSTANCE;
+
+        @Override
+        public ClosedLoopConfig readConfig(Path path) throws Exception {
+            return ClosedLoopConfigCodec.read(path);
+        }
+
+        @Override
+        public ClosedLoopResult runClosedLoop(ClosedLoopConfig config) throws Exception {
+            return ClosedLoopRunner.run(config);
+        }
+
+        @Override
+        public CurrentWorkspaceImportResult importWorkspace(
+                CurrentWorkspaceImportRequest request) throws Exception {
+            return CurrentWorkspaceImporter.importWorkspace(request);
+        }
+
+        @Override
+        public TrainingRunPackageInputs readPackageInputs(Path path) throws Exception {
+            return TrainingRunPackageInputsCodec.read(path);
+        }
+
+        @Override
+        public TrainingRunPackage publishPackage(TrainingRunPackageRequest request)
+                throws Exception {
+            return TrainingRunPackager.publish(request);
+        }
     }
 
     private Runner() {

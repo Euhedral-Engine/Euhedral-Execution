@@ -1,6 +1,7 @@
 package io.euhedral_execution.training.packaging;
 
 import io.euhedral_execution.training.data.PolicyVector;
+import io.euhedral_execution.training.data.SourceScenario;
 import io.euhedral_execution.training.data.io.CanonicalCsv;
 import io.euhedral_execution.training.scheduling.data.IterationSchedule;
 import io.euhedral_execution.training.scheduling.data.ScheduledRun;
@@ -63,12 +64,18 @@ final class PackageDatasetWriter {
     }
 
     static void validateMeasurements(Path packageRoot) throws IOException {
+        validateMeasurements(packageRoot, null);
+    }
+
+    static void validateMeasurements(Path packageRoot,
+            Set<SourceScenario> allowedScenarios) throws IOException {
         Map<String, List<String>> vectors = vectors(
                 packageRoot.resolve("vectors/robust-leaders.vectors.csv"),
                 packageRoot.resolve("vectors/incomplete-promising.vectors.csv"));
         if (!vectors.keySet().equals(rankingPolicies(packageRoot))) {
             throw new IOException("Packaged vector/ranking policy set mismatch");
         }
+        validateRankingVectorOrder(packageRoot);
         List<List<String>> source = CanonicalCsv.read(
                 packageRoot.resolve("scenario-results.csv"));
         List<List<String>> joined = CanonicalCsv.read(
@@ -82,16 +89,40 @@ final class PackageDatasetWriter {
                 || joined.size() != source.size() || !joined.getFirst().equals(header)) {
             throw new IOException("Invalid packaged measurement view schema");
         }
+        HashSet<String> identities = new HashSet<>();
         for (int index = 1; index < source.size(); index++) {
             List<String> sourceRow = source.get(index);
             List<String> joinedRow = joined.get(index);
-            if (joinedRow.size() != header.size()
+            if (sourceRow.size() != SCENARIO_HEADER.size()
+                    || joinedRow.size() != header.size()
                     || !joinedRow.subList(0, 8).equals(sourceRow.subList(0, 8))
                     || !joinedRow.subList(8, 8 + PolicyVector.WIDTH).equals(
                     vectors.get(sourceRow.get(7)))
                     || !joinedRow.subList(8 + PolicyVector.WIDTH, joinedRow.size()).equals(
                     sourceRow.subList(8, sourceRow.size()))) {
                 throw new IOException("Packaged measurement view differs from source inputs");
+            }
+            SourceScenario scenario;
+            try {
+                scenario = SourceScenario.parse(sourceRow.get(1));
+                if (!sourceRow.get(2).equals(scenario.environmentId())
+                        || !sourceRow.get(3).equals(
+                        Integer.toString(scenario.sourceCount()))
+                        || !sourceRow.get(4).equals(Integer.toString(
+                        scenario.availablePhysicalCoreCount()))
+                        || !sourceRow.get(5).equals(
+                        Integer.toString(scenario.ratio().numerator()))
+                        || !sourceRow.get(6).equals(
+                        Integer.toString(scenario.ratio().denominator()))
+                        || allowedScenarios != null
+                        && !allowedScenarios.contains(scenario)) {
+                    throw new IllegalArgumentException();
+                }
+            } catch (IllegalArgumentException error) {
+                throw new IOException("Unknown or inconsistent packaged scenario", error);
+            }
+            if (!identities.add(scenario.canonical() + "\0" + sourceRow.get(7))) {
+                throw new IOException("Duplicate packaged scenario policy");
             }
         }
     }
@@ -206,18 +237,78 @@ final class PackageDatasetWriter {
                     || result.put(row.get(policyColumn), weights) != null) {
                 throw new IllegalArgumentException("Duplicate or malformed vector");
             }
+            try {
+                double[] decoded = new double[PolicyVector.WIDTH];
+                for (int lane = 0; lane < decoded.length; lane++) {
+                    decoded[lane] = Double.longBitsToDouble(
+                            Long.parseUnsignedLong(weights.get(lane), 16));
+                }
+                if (!PolicyVector.of(decoded).id().canonical()
+                        .equals(row.get(policyColumn))) {
+                    throw new IllegalArgumentException("Vector identity mismatch");
+                }
+            } catch (IllegalArgumentException error) {
+                throw new IllegalArgumentException("Duplicate or malformed vector", error);
+            }
         }
     }
 
     private static Set<String> rankingPolicies(Path merge) throws IOException {
         List<List<String>> rows = CanonicalCsv.read(merge.resolve("robust-ranking.csv"));
+        if (rows.isEmpty() || rows.getFirst().size() != 16
+                || !rows.getFirst().get(1).equals("published_rank")
+                || !rows.getFirst().get(2).equals("policy_id")
+                || !rows.getFirst().get(3).equals("eligible")) {
+            throw new IllegalArgumentException("Invalid robust ranking");
+        }
         HashSet<String> result = new HashSet<>();
         for (int index = 1; index < rows.size(); index++) {
-            if (!result.add(rows.get(index).get(2))) {
+            if (rows.get(index).size() != rows.getFirst().size()
+                    || !rows.get(index).get(0).equals("1")
+                    || !result.add(rows.get(index).get(2))) {
                 throw new IllegalArgumentException("Duplicate ranked policy");
             }
         }
         return Set.copyOf(result);
+    }
+
+    private static void validateRankingVectorOrder(Path root) throws IOException {
+        List<List<String>> ranking = CanonicalCsv.read(
+                root.resolve("robust-ranking.csv"));
+        ArrayList<String> eligible = new ArrayList<>();
+        ArrayList<String> incomplete = new ArrayList<>();
+        boolean sawIncomplete = false;
+        for (int index = 1; index < ranking.size(); index++) {
+            List<String> row = ranking.get(index);
+            if (row.get(3).equals("true")) {
+                if (sawIncomplete || !row.get(1).equals(
+                        Integer.toString(eligible.size() + 1))) {
+                    throw new IOException("Published ranking order is invalid");
+                }
+                eligible.add(row.get(2));
+            } else if (row.get(3).equals("false")) {
+                sawIncomplete = true;
+                if (!row.get(1).isEmpty()) {
+                    throw new IOException("Incomplete policy has a published rank");
+                }
+                incomplete.add(row.get(2));
+            } else {
+                throw new IOException("Invalid ranking eligibility");
+            }
+        }
+        if (!eligible.equals(vectorPolicyOrder(
+                root.resolve("vectors/robust-leaders.vectors.csv")))
+                || !incomplete.equals(vectorPolicyOrder(
+                root.resolve("vectors/incomplete-promising.vectors.csv")))) {
+            throw new IOException("Ranking and vector order disagree");
+        }
+    }
+
+    private static List<String> vectorPolicyOrder(Path path) throws IOException {
+        List<List<String>> rows = CanonicalCsv.read(path);
+        int policyColumn = rows.getFirst().indexOf("policy_id");
+        return rows.subList(1, rows.size()).stream()
+                .map(row -> row.get(policyColumn)).toList();
     }
 
     private PackageDatasetWriter() {

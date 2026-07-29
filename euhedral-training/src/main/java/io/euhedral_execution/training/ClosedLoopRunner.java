@@ -79,7 +79,13 @@ public final class ClosedLoopRunner {
     }
 
     public static ClosedLoopResult run(ClosedLoopConfig config) throws Exception {
-        ClosedLoopResult result = run(config, new ProductionServices(config.stopFile()));
+        return runAndPackage(config, new ProductionServices(config.stopFile()),
+                config.workspace().resolve("packages"));
+    }
+
+    static ClosedLoopResult runAndPackage(ClosedLoopConfig config,
+            ClosedLoopServices services, Path outputRoot) throws Exception {
+        ClosedLoopResult result = run(config, services);
         int revision = Integer.parseInt(result.latestCheckpoint().getFileName().toString()
                 .substring("checkpoint-".length()));
         String packageId = result.stage() == CheckpointStage.RUN_COMPLETE
@@ -87,7 +93,7 @@ public final class ClosedLoopRunner {
                 : "%s.partial.r%08d".formatted(config.trainingRunId(), revision);
         TrainingRunPackage packaged = TrainingRunPackager.publish(
                 new TrainingRunPackageRequest(config.workspace(),
-                        config.workspace().resolve("packages"),
+                        outputRoot,
                         new TrainingRunPackageInputs(packageId, config.trainingRunId(),
                                 revision, config.schedulerSeed(), config.commitSha(),
                                 config.dirtyWorkingTree(), config.benchmarkConfig(),
@@ -95,6 +101,18 @@ public final class ClosedLoopRunner {
         return new ClosedLoopResult(result.stage(), result.nextIteration(),
                 result.latestCheckpoint(), result.latestMerge(), result.latestModel(),
                 result.awaitingScenarios(), Optional.of(packaged.directory()));
+    }
+
+    static boolean stopRequested(Path stopFile) {
+        try {
+            return Files.readAttributes(stopFile,
+                    java.nio.file.attribute.BasicFileAttributes.class,
+                    LinkOption.NOFOLLOW_LINKS).isRegularFile();
+        } catch (NoSuchFileException missing) {
+            return false;
+        } catch (IOException error) {
+            throw new UncheckedIOException("Unable to inspect stop file", error);
+        }
     }
 
     static ClosedLoopResult run(ClosedLoopConfig config, ClosedLoopServices services)
@@ -356,7 +374,8 @@ public final class ClosedLoopRunner {
         try (ScenarioConditionedModel model = services.loadAcceptedModel(modelDirectory,
                 metadata.producer().trainingDevice())) {
             PolicyCurvePredictor predictor = policies ->
-                    model.predictConfiguredCurves(policies).stream().map(curve ->
+                    policies.isEmpty() ? List.of()
+                            : model.predictConfiguredCurves(policies).stream().map(curve ->
                             PredictedPolicyRanker.summarize(curve,
                                     config.requiredScenarios())).toList();
             var rescored = CarryForwardQueue.rescore(checkpoint.carryForward(), predictor,
@@ -797,15 +816,7 @@ public final class ClosedLoopRunner {
 
         @Override
         public boolean stopRequested() {
-            try {
-                return Files.readAttributes(stopFile,
-                        java.nio.file.attribute.BasicFileAttributes.class,
-                        LinkOption.NOFOLLOW_LINKS).isRegularFile();
-            } catch (NoSuchFileException missing) {
-                return false;
-            } catch (IOException error) {
-                throw new UncheckedIOException("Unable to inspect stop file", error);
-            }
+            return ClosedLoopRunner.stopRequested(stopFile);
         }
     }
 

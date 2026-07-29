@@ -31,18 +31,23 @@ public final class TrainingRunPackager {
 
     public static TrainingRunPackage publish(TrainingRunPackageRequest request)
             throws IOException {
+        return publish(request, PublicationProbe.NO_OP);
+    }
+
+    static TrainingRunPackage publish(TrainingRunPackageRequest request,
+            PublicationProbe probe) throws IOException {
         Path outputRoot = request.outputRoot();
         Path target = outputRoot.resolve("training-run-" + request.inputs().packageId());
         CanonicalFileSupport.rejectSymlinkComponents(request.workspace());
         CanonicalFileSupport.rejectSymlinkComponents(outputRoot);
         if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
-            return validateCollision(target, request.inputs());
+            return validateCollision(target, request);
         }
         Files.createDirectories(outputRoot);
         Path staging = outputRoot.resolve("." + target.getFileName() + ".tmp-" + UUID.randomUUID());
         try (WorkspaceLock ignored = WorkspaceLock.acquire(request.workspace())) {
             if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
-                return validateCollision(target, request.inputs());
+                return validateCollision(target, request);
             }
             cleanupOwnedStaging(outputRoot, target.getFileName().toString(),
                     request.inputs().packageId(), null);
@@ -52,18 +57,22 @@ public final class TrainingRunPackager {
                     StandardCharsets.UTF_8);
             try {
                 PackageSourceSet source = PackageSourceSet.resolve(request);
-                stage(source, request.inputs(), staging);
+                probe.at(PublicationPoint.AFTER_SOURCE_VALIDATION);
+                stage(source, request.inputs(), staging, probe);
                 Files.delete(marker);
+                probe.at(PublicationPoint.BEFORE_MANIFEST);
                 TrainingRunManifest intended = manifest(source, request.inputs(), staging);
                 CanonicalFileSupport.write(staging.resolve("manifest.json"),
                         PackageManifestCodec.encode(intended));
                 CanonicalFileSupport.forceTree(staging);
+                probe.at(PublicationPoint.DURING_STAGED_VALIDATION);
                 TrainingRunPackage validated =
                         TrainingRunPackageValidator.validate(staging);
                 TrainingRunManifest actual = PackageManifestCodec.read(validated.manifest());
                 if (!actual.equals(intended)) {
                     throw new IOException("Staged package manifest differs from intent");
                 }
+                probe.at(PublicationPoint.ATOMIC_MOVE);
                 try {
                     Files.move(staging, target, StandardCopyOption.ATOMIC_MOVE);
                 } catch (AtomicMoveNotSupportedException error) {
@@ -79,7 +88,7 @@ public final class TrainingRunPackager {
     }
 
     private static void stage(PackageSourceSet source, TrainingRunPackageInputs inputs,
-            Path staging) throws IOException {
+            Path staging, PublicationProbe probe) throws IOException {
         Files.createDirectories(staging.resolve("vectors"));
         Files.createDirectories(staging.resolve("reports"));
         Files.createDirectories(staging.resolve("checkpoints/latest"));
@@ -87,6 +96,7 @@ public final class TrainingRunPackager {
         Files.createDirectories(staging.resolve("raw-data/bundles"));
         CanonicalFileSupport.copyDirectory(source.loaded().snapshotDirectory(),
                 staging.resolve("checkpoints/latest"));
+        probe.at(PublicationPoint.DURING_COPY);
         if (source.merge() != null) {
             for (String name : MERGE_COPIES) {
                 CanonicalFileSupport.copy(source.merge().resolve(name), staging.resolve(name));
@@ -271,17 +281,27 @@ public final class TrainingRunPackager {
     }
 
     private static TrainingRunPackage validateCollision(Path target,
-            TrainingRunPackageInputs inputs) throws IOException {
+            TrainingRunPackageRequest request) throws IOException {
+        TrainingRunPackageInputs inputs = request.inputs();
         TrainingRunPackage existing;
         try {
             existing = TrainingRunPackageValidator.validate(target);
             TrainingRunManifest manifest = PackageManifestCodec.read(existing.manifest());
             TrainingRunPackageInputs packaged = TrainingRunPackageInputsCodec.read(
                     target.resolve("provenance/package-inputs.properties"));
+            PackageSourceSet source = PackageSourceSet.resolve(request);
             if (!manifest.packageId().equals(inputs.packageId())
                     || !manifest.trainingRunId().equals(inputs.trainingRunId())
                     || manifest.checkpointRevision() != inputs.checkpointRevision()
-                    || !packaged.equals(inputs)) {
+                    || !packaged.equals(inputs)
+                    || !manifest.checkpointSha256().equals(
+                    ArtifactFingerprint.sha256(source.loaded().snapshotDirectory()))
+                    || manifest.checkpointStage() != source.loaded().checkpoint().stage()
+                    || manifest.status() != source.status()
+                    || !java.util.Objects.equals(manifest.calibrationAcceptance(),
+                    source.calibrationAcceptance())
+                    || !manifest.winningPolicyIds().equals(source.winners())
+                    || !manifest.omissions().equals(source.omissions())) {
                 throw new PackageCollisionException("Existing package identity differs");
             }
             return existing;
@@ -315,6 +335,22 @@ public final class TrainingRunPackager {
 
     record Classification(ArtifactSemanticType semanticType,
             ProducingStage producingStage) {
+    }
+
+    enum PublicationPoint {
+        AFTER_SOURCE_VALIDATION,
+        DURING_COPY,
+        BEFORE_MANIFEST,
+        DURING_STAGED_VALIDATION,
+        ATOMIC_MOVE
+    }
+
+    @FunctionalInterface
+    interface PublicationProbe {
+        PublicationProbe NO_OP = point -> {
+        };
+
+        void at(PublicationPoint point) throws IOException;
     }
 
     private TrainingRunPackager() {

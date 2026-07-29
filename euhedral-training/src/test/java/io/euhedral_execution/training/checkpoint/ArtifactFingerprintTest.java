@@ -19,7 +19,9 @@ class ArtifactFingerprintTest {
         for (int index = 0; index < bytes.length; index++) {
             bytes[index] = (byte) (index * 31);
         }
-        Path file = temp.resolve("large.bin");
+        Path file = temp.resolve(
+                "model/members/member-000/euhedral-scenario-ordinal-0000.params");
+        Files.createDirectories(file.getParent());
         Files.write(file, bytes);
         String expected = HexFormat.of().formatHex(
                 MessageDigest.getInstance("SHA-256").digest(bytes));

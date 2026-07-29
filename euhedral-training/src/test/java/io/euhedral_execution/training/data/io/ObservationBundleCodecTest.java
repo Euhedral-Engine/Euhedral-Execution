@@ -9,6 +9,7 @@ import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 
 import io.euhedral_execution.training.data.BenchmarkObservation;
+import io.euhedral_execution.training.data.BenchmarkRunContext;
 import io.euhedral_execution.training.data.BenchmarkRunDescriptor;
 import io.euhedral_execution.training.data.ObservationKey;
 import io.euhedral_execution.training.data.PolicyVector;
@@ -155,6 +156,55 @@ class ObservationBundleCodecTest {
             assertThatIllegalStateException().isThrownBy(
                     () -> writer.complete(START.plusSeconds(1)));
         }
+    }
+
+    @Test
+    void streamsObservationBundleLargerThanReusableBuffer() throws Exception {
+        SourceScenario scenario = SourceScenario.of("host-large", 4, 8);
+        BenchmarkRunDescriptor descriptor = run("large-raw-1", scenario, 5,
+                EvidenceOrigin.NATIVE, START);
+        Path directory = temporary.resolve("large-raw");
+        int policyCount = 400;
+        try (ObservationBundleWriter writer = ObservationBundleWriter.open(
+                directory, descriptor)) {
+            List<ScheduledPolicy> policies = new ArrayList<>();
+            for (int index = 0; index < policyCount; index++) {
+                ScheduledPolicy scheduled = new ScheduledPolicy(index + 1,
+                        policy(10_000 + index), Set.of(PolicyRole.EXPLORATION));
+                policies.add(scheduled);
+                writer.registerPolicy(scheduled);
+            }
+            for (ScheduledPolicy scheduled : policies) {
+                for (int repetition = 1; repetition <= 5; repetition++) {
+                    writer.write(success(descriptor, scheduled, repetition, START,
+                            100 + scheduled.schedulePosition()));
+                }
+            }
+            writer.complete(START.plusSeconds(1));
+        }
+        assertThat(Files.size(directory.resolve("observations.csv")))
+                .isGreaterThan(128L * 1024);
+
+        int[] starts = {0};
+        int[] policies = {0};
+        int[] observations = {0};
+        ObservationBundleReader.stream(directory,
+                new ObservationBundleReader.ObservationVisitor() {
+                    @Override
+                    public void onStart(BenchmarkRunContext run,
+                            List<ScheduledPolicy> scheduled) {
+                        starts[0]++;
+                        policies[0] = scheduled.size();
+                    }
+
+                    @Override
+                    public void onObservation(BenchmarkObservation observation) {
+                        observations[0]++;
+                    }
+                });
+        assertThat(starts[0]).isOne();
+        assertThat(policies[0]).isEqualTo(policyCount);
+        assertThat(observations[0]).isEqualTo(policyCount * 5);
     }
 
     private Path writeMixed(Path directory) {

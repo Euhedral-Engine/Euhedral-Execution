@@ -1,6 +1,6 @@
 # Phase 6 Blueprint: Executable End-to-End Verification and Audit
 
-Status: ready for Prompt 6B implementation
+Status: Prompt 6B completed on 2026-07-29
 
 This blueprint defines the Phase 6 executable audit. It does not change any statistical,
 scheduling, checkpoint, packaging, import, or CLI contract settled by Phases 1-5. Prompt 6B must
@@ -299,8 +299,9 @@ numeric denominator:
 - `R` is published rank 1;
 - `R` is second by calibrated throughput in every required scenario;
 - all four specialist policies remain eligible but rank below `R`;
-- every scenario row for `R` has equal quality, so its minimum, P25, and geometric mean equal that
-  row quality and its MAD is zero;
+- every scenario row for `R` has the independently calculated midrank quality among that
+  scenario's valid rows, and its minimum, type-7 P25, geometric mean, and type-7 MAD are
+  independently recalculated from those four persisted qualities;
 - the intentionally failed generated policy is ineligible with the exact rejected/missing
   scenarios; and
 - no incomplete policy has a published rank or leader-revalidation role.
@@ -919,3 +920,162 @@ required by this addendum.
 ## Prompt 6B completion record
 
 Prompt 6B appends evidence below this line.
+
+### Implementation
+
+Completed on branch `agent/phase6b-verification-audit`.
+
+The deterministic experiment is implemented by:
+
+- `AuditFixtures.java`, which creates the exact ten-policy/four-scenario corpus, imports it in
+  forward and reverse creation order, runs control/interrupted/resumed/reproduced/rejected
+  workspaces, and uses the real merger, schedulers, checkpoint codec, bundle codecs, and
+  packager;
+- `AuditScenarioModelFixture.java`, which writes and reopens the accepted/rejected Phase 2
+  metadata and report surface and supplies constant test members without loading DJL;
+- `EndToEndAuditTest.java`, which independently checks bootstrap and final ordering, raw-bit
+  calibration, type-7/midrank aggregates, the exact timeout/skipped grid, incomplete-role
+  exclusion, restart adoption, byte equivalence, and package counts; and
+- `PackageLifecycleAuditTest.java`, which checks all historical stages, the 70/58-file
+  inventories, 69/57 manifest-entry counts, reports, checksums, collisions, five publication
+  failures, staging ownership, semantic schedule/evidence mismatch, artifact-family mutation,
+  and the canonical manifest matrix.
+
+The three reviewed golden resources are:
+
+- `complete-inventory.txt`: 70 paths;
+- `interrupted-inventory.txt`: 58 paths; and
+- `complete-files.sha256`: 69 non-manifest payload digests.
+
+The Phase 5 matrices were completed in `CurrentWorkspaceImporterTest`,
+`ClosedLoopConfigCodecTest`, and `RunnerTest`. Phase 4 coverage was completed in
+`ArtifactFingerprintTest`, `ObservationBundleCodecTest`, `PackageDatasetWriterTest`, and
+`ScheduleCodecTest`. The importer fixture, model-member hash fixture, and raw observation fixture
+each cross the 128 KiB streaming boundary; the large fixtures are not read with
+`Files.readAllBytes` or `readAllLines`.
+
+Minimal package-private seams were added to `ClosedLoopRunner`, `Runner`,
+`CurrentWorkspaceImporter`, and `TrainingRunPackager`. The public paths always use production
+services and no-op publication probes. `TrainingRunPackageValidator.validateSchedule` is
+package-private so the semantic schedule/raw-evidence mismatch can be tested after bypassing the
+outer checksum gate.
+
+### Blueprint-settled corrections
+
+The audit exposed and fixed only behavior already settled by earlier phases:
+
+1. An empty carry-forward queue reached
+   `ScenarioConditionedModel.predictConfiguredCurves` and failed with `Inference inputs must be
+   non-empty`. Phase 3 explicitly permits an empty pre-admission queue, so
+   `ClosedLoopRunner` now returns an empty prediction list without invoking model inference.
+2. `OptimizationCorpusReader` incorrectly placed rejected required scenarios in
+   `measuredScenarios` and compared `observedRequiredScenarioCount` only to that set. Phase 1
+   defines observed as valid plus rejected, while measured contains valid estimates. The reader
+   now recomputes those fields separately.
+3. Phase 4 semantic validation gaps allowed vector identity/order, scenario identity,
+   duplicate scenario-policy, and schedule/raw-evidence inconsistencies to rely only on copied
+   checksums. `PackageDatasetWriter` and `TrainingRunPackageValidator` now enforce those settled
+   joins directly.
+4. A package collision with unchanged input properties but a different selected checkpoint could
+   be accepted as idempotent. Collision validation now resolves the requested source and compares
+   checkpoint hash/stage/status, calibration, winners, and omissions before returning the
+   existing target.
+5. The exact Phase 5 command grammar did not reject a flag token in an argument-value position.
+   `Runner` now rejects those malformed forms before invoking any service.
+
+The original final-oracle sentence saying all four final `R` qualities were equal conflicted with
+the Phase 1 valid-row population rule: the intentional rejected row changes one scenario's
+midrank denominator. The oracle above now requires independent scenario midranks and independent
+type-7/minimum/geometric-mean/MAD aggregation. This is a correction to an internally inconsistent
+fixture assertion, not a new statistical decision.
+
+No hot-loop, VarHandle, queue, affinity, frame, or runtime publication semantics changed. All
+fixture counters, probes, and buffers are single-threaded and thread-confined; the existing atomic
+filesystem moves remain the publication boundaries. All 28 vector lanes are checked by raw
+IEEE-754 bits, native throughput is derived from integer frames/nanoseconds, and calibration
+comparisons use raw bits of the prescribed `StrictMath` expressions.
+
+### Deterministic artifact evidence
+
+The fresh complete package has:
+
+```text
+package_id                   phase6-audit
+checkpoint_revision          24
+config_sha256                2b88841c805c63eb6a0495de2b983ab6c621f428f68e8541e3a1c3034e31dacf
+checkpoint_sha256            1a5562686a8dbfc7c68cff4a6ca0a969e2dde78591a586a21bd80bceb54d7b18
+manifest_file_sha256         03b2a91981e41a56ffa745852b71fa078086f2dd749f286d452f51b16755ff2d
+recursive_package_sha256     f1734475fd29f0abb2a95c181777e312713dd12363f8a627a020d06c6ebe2b44
+first_normal_bundle_sha256   852dc47e69bfdc8e0d57e3f17b2aa0b5389d5df11b87bb6c4c295777214601f6
+```
+
+The first normal bundle remains byte-identical across interruption and adoption. Control,
+resumed, and package-run reproduction directories have the same recursive fingerprint.
+
+Manual report inspection confirmed the ten README headings in order, `RUN_COMPLETE` revision 24,
+no omissions, `R` (`p1-4e8bd733c51b5dab`) at rank 1, all four exact scenarios, four reference and
+four strong calibrated runs, accepted model labeling, artifact guide, provenance, and exact
+`package-run` command. The ranking report preserves every CSV metric string and identifies
+`p1-4831d7dc86decb8d` as incomplete. The scenario report contains four naturally ordered
+headings and shows `R` at calibrated throughput 90 with exactly one faster policy in each
+scenario. The manifest canonically re-encodes and has 69 sorted file entries.
+
+### Validation
+
+The pinned command prefix was:
+
+```text
+env JAVA_HOME=/home/bagotay/.local/share/mise/installs/java/21.0.2 \
+    PATH=/home/bagotay/.local/share/mise/installs/java/21.0.2/bin:/usr/bin:/bin \
+    /home/bagotay/.local/share/mise/installs/maven/3.9.16/apache-maven-3.9.16/bin/mvn
+```
+
+It reports Maven 3.9.16 running on Oracle OpenJDK 21.0.2. The system defaults are
+`/usr/bin/java` 17.0.19 and `/usr/bin/mvn` 3.6.3 and were not used for builds.
+
+Commands and final results:
+
+```text
+-B -pl euhedral-training -am install -Dmaven.test.skip=true
+  BUILD SUCCESS; six selected reactor projects installed
+
+-B -pl euhedral-core -Dtest=BenchmarkFrameTest test
+  3 tests, 0 failures, 0 errors, 0 skipped
+
+-B -pl euhedral-training
+  -Dtest=PolicyIdentityTest,ObservationBundleCodecTest,RunCalibratorTest,AnchorBootstrapperTest,HierarchicalAggregatorTest,ScenarioQualityRankerTest,PolicyComparatorTest,DataMergerV1Test,PolicyGroupedSplitterTest,ScenarioConditionedModelTest,PredictedPolicyComparatorTest,BudgetAllocatorTest,CandidateSchedulerTest,SequenceFinderTest,CarryForwardQueueTest,ScenarioRotationTest,ScheduleCodecTest,CheckpointSnapshotCodecTest,BenchmarkRunnerV1Test,ClosedLoopRunnerTest
+  test
+  67 tests, 0 failures, 0 errors, 0 skipped
+
+-B -pl euhedral-training
+  -Dtest=ArtifactFingerprintTest,TrainingRunPackageInputsCodecTest,PackageManifestCodecTest,PackageDatasetWriterTest,PackageReportWriterTest,TrainingRunPackagerTest,TrainingRunPackageValidatorTest,PackageLifecycleAuditTest,CurrentWorkspaceImporterTest,ClosedLoopConfigCodecTest,RunnerTest,EndToEndAuditTest
+  test
+  35 tests, 0 failures, 0 errors, 0 skipped
+
+-B -pl euhedral-training test
+  143 tests, 0 failures, 0 errors, 1 skipped
+  (the only skip is the deliberately opt-in DJL integration test)
+
+-B -pl euhedral-training -Dtraining.djlIntegration=true
+  -Dtest=ScenarioOrdinalNetworkIntegrationTest test
+  1 test, 0 failures, 0 errors, 0 skipped
+
+-B -pl euhedral-training -am verify
+  BUILD SUCCESS for all six selected reactor projects
+```
+
+The new-path stale-assumption search returned only the permitted Phase 2 diagnostic rejecting a
+pooled 28-input artifact. The repository-wide search returned only the documented Phase 7 legacy
+boundary. Temporary-importer references remain confined to the importer, explicit Runner command,
+tests, and removal documentation. The lower-layer importer-dependency and
+system-property/environment searches returned no matches.
+
+Full-repository `mvn -B verify` was not attempted. JDK 25, Zig 0.16.0, merged JNI headers, and the
+macOS SDK are installed, but `docker info` cannot access
+`unix:///run/user/911603815/docker.sock` (`permission denied`). Hardware resource tests therefore
+lack their required Testcontainers daemon. No live native-lattice throughput result is claimed.
+
+`git diff --check` and `git diff --cached --check` are clean. The pre-existing untracked
+`euhedral-training/input`, `euhedral-training/output`, and
+`euhedral-core/src/test/java/io/euhedral_execution/core/utils` trees were neither read as audit
+evidence nor included in the Phase 6 change.
