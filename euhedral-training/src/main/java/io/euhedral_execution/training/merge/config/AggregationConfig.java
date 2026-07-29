@@ -1,5 +1,6 @@
-package io.euhedral_execution.training.merge;
+package io.euhedral_execution.training.merge.config;
 
+import io.euhedral_execution.training.merge.enums.CalibrationAcceptance;
 import java.util.Objects;
 
 public record AggregationConfig(int minimumSuccessfulRepetitions, double minimumSuccessFraction,

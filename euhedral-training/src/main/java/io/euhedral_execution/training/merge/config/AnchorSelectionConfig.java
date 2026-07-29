@@ -1,4 +1,4 @@
-package io.euhedral_execution.training.merge;
+package io.euhedral_execution.training.merge.config;
 
 public record AnchorSelectionConfig(double fixedFraction, int minimumFixedAnchors,
         double maximumBootstrapNonSuccessRate, double maximumBootstrapRelativeIqr,

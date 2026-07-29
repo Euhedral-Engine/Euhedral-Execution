@@ -1,4 +1,4 @@
-package io.euhedral_execution.training.merge;
+package io.euhedral_execution.training.merge.config;
 
 public record CalibrationConfig(int minimumStrongAnchors, int minimumWeakAnchors,
         double maximumStrongResidual, double maximumWeakResidual, double minimumLogSigma,

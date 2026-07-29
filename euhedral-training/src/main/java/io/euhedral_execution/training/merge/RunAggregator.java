@@ -9,8 +9,9 @@ import io.euhedral_execution.training.data.PolicyVector;
 import io.euhedral_execution.training.data.ScheduledPolicy;
 import io.euhedral_execution.training.data.enums.PolicyRole;
 import io.euhedral_execution.training.data.io.ObservationBundleReader;
-import io.euhedral_execution.training.merge.MergeRecords.RunAggregate;
-import io.euhedral_execution.training.merge.MergeRecords.RunAggregateStatus;
+import io.euhedral_execution.training.merge.config.AggregationConfig;
+import io.euhedral_execution.training.merge.data.MergeRecords.RunAggregate;
+import io.euhedral_execution.training.merge.data.MergeRecords.RunAggregateStatus;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -25,6 +26,7 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 
 public final class RunAggregator {
+
     public static List<RunAggregate> aggregate(List<Path> bundles, PolicyRegistry policies,
             AggregationConfig config) {
         List<Path> sorted = bundles.stream().map(path -> path.toAbsolutePath().normalize())
@@ -54,21 +56,25 @@ public final class RunAggregator {
         RunAggregateStatus status = successes.size() < config.minimumSuccessfulRepetitions()
                 ? RunAggregateStatus.INSUFFICIENT_SUCCESSES
                 : successRate < config.minimumSuccessFraction()
-                ? RunAggregateStatus.LOW_SUCCESS_FRACTION : RunAggregateStatus.VALID;
+                  ? RunAggregateStatus.LOW_SUCCESS_FRACTION : RunAggregateStatus.VALID;
         OptionalDouble p25 = OptionalDouble.empty(), median = OptionalDouble.empty();
         OptionalDouble p75 = OptionalDouble.empty(), iqr = OptionalDouble.empty();
         OptionalDouble logIqr = OptionalDouble.empty();
         if (!successes.isEmpty()) {
             double[] values = successes.stream().mapToDouble(Double::doubleValue).toArray();
-            double a = RobustStatistics.quantileType7(values, 0.25);
-            double b = RobustStatistics.median(values);
-            double c = RobustStatistics.quantileType7(values, 0.75);
-            if (!(b > 0) || !Double.isFinite(b)) status = RunAggregateStatus.NONPOSITIVE_THROUGHPUT;
-            p25 = OptionalDouble.of(a); median = OptionalDouble.of(b);
-            p75 = OptionalDouble.of(c); iqr = OptionalDouble.of(c - a);
+            double a = VectorStatistics.quantileType7(values, 0.25);
+            double b = VectorStatistics.median(values);
+            double c = VectorStatistics.quantileType7(values, 0.75);
+            if (!(b > 0) || !Double.isFinite(b)) {
+                status = RunAggregateStatus.NONPOSITIVE_THROUGHPUT;
+            }
+            p25 = OptionalDouble.of(a);
+            median = OptionalDouble.of(b);
+            p75 = OptionalDouble.of(c);
+            iqr = OptionalDouble.of(c - a);
             double[] logs = Arrays.stream(values).map(StrictMath::log).toArray();
-            logIqr = OptionalDouble.of(RobustStatistics.quantileType7(logs, 0.75)
-                    - RobustStatistics.quantileType7(logs, 0.25));
+            logIqr = OptionalDouble.of(VectorStatistics.quantileType7(logs, 0.75)
+                    - VectorStatistics.quantileType7(logs, 0.25));
         }
         return new RunAggregate(accumulator.policy, run, accumulator.roles,
                 planned, successes.size(), accumulator.timeout, accumulator.failed,
@@ -79,8 +85,12 @@ public final class RunAggregator {
                 p25, median, p75, iqr, logIqr);
     }
 
+    private RunAggregator() {
+    }
+
     private static final class BundleAccumulator
             implements ObservationBundleReader.ObservationVisitor {
+
         private final PolicyRegistry registry;
         private final AggregationConfig config;
         private final Set<ObservationKey> globalKeys;
@@ -121,11 +131,13 @@ public final class RunAggregator {
         }
 
         private List<RunAggregate> finish() {
-            return policies.values().stream().map(policy -> aggregate(policy, run, config)).toList();
+            return policies.values().stream().map(policy -> aggregate(policy, run, config))
+                    .toList();
         }
     }
 
     private static final class PolicyAccumulator {
+
         private final PolicyVector policy;
         private final SortedSet<PolicyRole> roles;
         private final List<Double> successes = new ArrayList<>();
@@ -137,7 +149,5 @@ public final class RunAggregator {
             this.policy = policy;
             this.roles = roles;
         }
-    }
-    private RunAggregator() {
     }
 }

@@ -1,4 +1,4 @@
-package io.euhedral_execution.training.merge;
+package io.euhedral_execution.training.merge.data;
 
 import io.euhedral_execution.training.data.SourceScenario;
 import java.util.Collections;
@@ -6,7 +6,8 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 
 public record ReferenceRunCatalog(int schemaVersion, String anchorSetId,
-        SortedMap<SourceScenario, String> referenceRunIds) {
+                                  SortedMap<SourceScenario, String> referenceRunIds) {
+
     public ReferenceRunCatalog {
         referenceRunIds = Collections.unmodifiableSortedMap(new TreeMap<>(referenceRunIds));
         if (schemaVersion != 1 || anchorSetId == null

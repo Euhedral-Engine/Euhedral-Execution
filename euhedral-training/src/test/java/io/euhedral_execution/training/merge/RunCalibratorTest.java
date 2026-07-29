@@ -1,12 +1,28 @@
 package io.euhedral_execution.training.merge;
 
-import static io.euhedral_execution.training.fixtures.SyntheticObservations.*;
-import static org.assertj.core.api.Assertions.*;
+import static io.euhedral_execution.training.fixtures.SyntheticObservations.CalibrationRole;
+import static io.euhedral_execution.training.fixtures.SyntheticObservations.START;
+import static io.euhedral_execution.training.fixtures.SyntheticObservations.aggregate;
+import static io.euhedral_execution.training.fixtures.SyntheticObservations.policy;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import io.euhedral_execution.training.data.PolicyVector;
 import io.euhedral_execution.training.data.SourceScenario;
-import io.euhedral_execution.training.merge.MergeRecords.RunAggregate;
-import java.util.*;
+import io.euhedral_execution.training.merge.config.AggregationConfig;
+import io.euhedral_execution.training.merge.config.CalibrationConfig;
+import io.euhedral_execution.training.merge.data.AnchorCatalog;
+import io.euhedral_execution.training.merge.data.CalibrationPlan;
+import io.euhedral_execution.training.merge.data.MergeRecords;
+import io.euhedral_execution.training.merge.data.MergeRecords.RunAggregate;
+import io.euhedral_execution.training.merge.data.ReferenceRunCatalog;
+import io.euhedral_execution.training.merge.enums.CalibrationStatus;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
 import org.junit.jupiter.api.Test;
 
 class RunCalibratorTest {

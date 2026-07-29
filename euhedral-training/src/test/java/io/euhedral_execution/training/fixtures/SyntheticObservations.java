@@ -15,9 +15,9 @@ import io.euhedral_execution.training.data.enums.MeasurementEncoding;
 import io.euhedral_execution.training.data.enums.ObservationStatus;
 import io.euhedral_execution.training.data.enums.PolicyRole;
 import io.euhedral_execution.training.data.io.ObservationBundleWriter;
-import io.euhedral_execution.training.merge.MergeRecords.RunAggregate;
-import io.euhedral_execution.training.merge.MergeRecords.RunAggregateStatus;
-import io.euhedral_execution.training.merge.RobustStatistics;
+import io.euhedral_execution.training.merge.VectorStatistics;
+import io.euhedral_execution.training.merge.data.MergeRecords.RunAggregate;
+import io.euhedral_execution.training.merge.data.MergeRecords.RunAggregateStatus;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -90,9 +90,9 @@ public final class SyntheticObservations {
             SourceScenario scenario, double[] successes, int planned, int timeouts, int failed,
             int skipped, CalibrationRole role, Instant start) {
         double[] sorted = successes.clone();
-        double p25 = RobustStatistics.quantileType7(sorted, 0.25);
-        double median = RobustStatistics.median(sorted);
-        double p75 = RobustStatistics.quantileType7(sorted, 0.75);
+        double p25 = VectorStatistics.quantileType7(sorted, 0.25);
+        double median = VectorStatistics.median(sorted);
+        double p75 = VectorStatistics.quantileType7(sorted, 0.75);
         double[] logs = Arrays.stream(sorted).map(StrictMath::log).toArray();
         int successCount = successes.length;
         double successRate = successCount / (double) planned;
@@ -110,8 +110,8 @@ public final class SyntheticObservations {
                         : RunAggregateStatus.LOW_SUCCESS_FRACTION,
                 OptionalDouble.of(p25), OptionalDouble.of(median), OptionalDouble.of(p75),
                 OptionalDouble.of(p75 - p25), OptionalDouble.of(
-                        RobustStatistics.quantileType7(logs, 0.75)
-                                - RobustStatistics.quantileType7(logs, 0.25)));
+                        VectorStatistics.quantileType7(logs, 0.75)
+                                - VectorStatistics.quantileType7(logs, 0.25)));
     }
 
     public enum CalibrationRole { ANCHOR, CANDIDATE }

@@ -2,8 +2,8 @@ package io.euhedral_execution.training.merge;
 
 import io.euhedral_execution.training.data.PolicyVector;
 import io.euhedral_execution.training.data.SourceScenario;
-import io.euhedral_execution.training.merge.MergeRecords.RobustPolicySummary;
-import io.euhedral_execution.training.merge.MergeRecords.ScenarioResult;
+import io.euhedral_execution.training.merge.data.MergeRecords.RobustPolicySummary;
+import io.euhedral_execution.training.merge.data.MergeRecords.ScenarioResult;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -15,6 +15,7 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 
 public final class ScenarioQualityRanker {
+
     public static final double QUALITY_EPSILON = 1.0e-12;
 
     public static List<ScenarioResult> assignQualities(List<ScenarioResult> scenarioResults) {
@@ -25,7 +26,8 @@ public final class ScenarioQualityRanker {
                 throw new IllegalArgumentException("Duplicate policy/scenario result");
             }
             if (result.throughputMedian().isPresent()) {
-                grouped.computeIfAbsent(result.scenario(), ignored -> new ArrayList<>()).add(result);
+                grouped.computeIfAbsent(result.scenario(), ignored -> new ArrayList<>())
+                        .add(result);
             }
         }
         Map<Key, Double> qualities = new HashMap<>();
@@ -36,7 +38,9 @@ public final class ScenarioQualityRanker {
                 int end = start;
                 while (end + 1 < rows.size() && Double.compare(
                         rows.get(start).throughputMedian().getAsDouble(),
-                        rows.get(end + 1).throughputMedian().getAsDouble()) == 0) end++;
+                        rows.get(end + 1).throughputMedian().getAsDouble()) == 0) {
+                    end++;
+                }
                 double quality = rows.size() == 1 ? 0.5
                         : (start + end) / (2.0 * (rows.size() - 1));
                 for (int i = start; i <= end; i++) {
@@ -57,7 +61,9 @@ public final class ScenarioQualityRanker {
 
     public static List<RobustPolicySummary> summarize(Collection<PolicyVector> policies,
             List<ScenarioResult> scenarioResults, SortedSet<SourceScenario> requiredScenarios) {
-        if (requiredScenarios.isEmpty()) throw new IllegalArgumentException("No required scenarios");
+        if (requiredScenarios.isEmpty()) {
+            throw new IllegalArgumentException("No required scenarios");
+        }
         Map<Key, ScenarioResult> rows = new HashMap<>();
         for (ScenarioResult row : scenarioResults) {
             if (rows.put(new Key(row.scenario(), row.policy()), row) != null) {
@@ -85,7 +91,9 @@ public final class ScenarioQualityRanker {
                     if (row.quality().isPresent()) {
                         valid.add(row);
                         measured.add(scenario);
-                    } else rejected.add(scenario);
+                    } else {
+                        rejected.add(scenario);
+                    }
                 }
             }
             boolean eligible = valid.size() == requiredScenarios.size();
@@ -106,25 +114,27 @@ public final class ScenarioQualityRanker {
                     timeouts[i] = valid.get(i).meanTimeoutRate().getAsDouble();
                 }
                 worst = OptionalDouble.of(java.util.Arrays.stream(qualities).min().orElseThrow());
-                p25 = OptionalDouble.of(RobustStatistics.quantileType7(qualities, 0.25));
-                geometric = OptionalDouble.of(StrictMath.exp(RobustStatistics.compensatedMean(logs)));
-                mad = OptionalDouble.of(RobustStatistics.mad(qualities));
-                relativeIqr = OptionalDouble.of(RobustStatistics.median(iqrs));
-                nonSuccess = OptionalDouble.of(RobustStatistics.compensatedMean(nonSuccesses));
-                timeout = OptionalDouble.of(RobustStatistics.compensatedMean(timeouts));
+                p25 = OptionalDouble.of(VectorStatistics.quantileType7(qualities, 0.25));
+                geometric = OptionalDouble.of(
+                        StrictMath.exp(VectorStatistics.compensatedMean(logs)));
+                mad = OptionalDouble.of(VectorStatistics.mad(qualities));
+                relativeIqr = OptionalDouble.of(VectorStatistics.median(iqrs));
+                nonSuccess = OptionalDouble.of(VectorStatistics.compensatedMean(nonSuccesses));
+                timeout = OptionalDouble.of(VectorStatistics.compensatedMean(timeouts));
             }
             summaries.add(new RobustPolicySummary(policy, eligible, requiredScenarios.size(),
                     observed, valid.size(), valid.size() / (double) requiredScenarios.size(),
                     worst, p25, geometric, mad, relativeIqr, nonSuccess, timeout,
                     measured, missing, rejected));
         }
-        summaries.sort(RobustPolicyComparator.PUBLISHED_ORDER);
+        summaries.sort(PolicyComparator.PUBLISHED_ORDER);
         return List.copyOf(summaries);
     }
 
-    private record Key(SourceScenario scenario, PolicyVector policy) {
+    private ScenarioQualityRanker() {
     }
 
-    private ScenarioQualityRanker() {
+    private record Key(SourceScenario scenario, PolicyVector policy) {
+
     }
 }

@@ -1,10 +1,11 @@
-package io.euhedral_execution.training.merge;
+package io.euhedral_execution.training.merge.data;
 
 import io.euhedral_execution.training.data.BenchmarkRunContext;
 import io.euhedral_execution.training.data.PolicyId;
 import io.euhedral_execution.training.data.PolicyVector;
 import io.euhedral_execution.training.data.SourceScenario;
 import io.euhedral_execution.training.data.enums.PolicyRole;
+import io.euhedral_execution.training.merge.enums.CalibrationStatus;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -15,19 +16,44 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 
 public final class MergeRecords {
+
+    private static boolean finitePositive(OptionalDouble value) {
+        return value.isPresent() && Double.isFinite(value.getAsDouble())
+                && value.getAsDouble() > 0;
+    }
+
+    private static boolean finiteNonNegative(OptionalDouble value) {
+        return value.isPresent() && Double.isFinite(value.getAsDouble())
+                && value.getAsDouble() >= 0;
+    }
+
+    private static boolean rate(OptionalDouble value) {
+        return value.isPresent() && Double.isFinite(value.getAsDouble())
+                && value.getAsDouble() >= 0 && value.getAsDouble() <= 1;
+    }
+
+    private MergeRecords() {
+    }
+
     public enum RunAggregateStatus {
         VALID, INSUFFICIENT_SUCCESSES, LOW_SUCCESS_FRACTION, NONPOSITIVE_THROUGHPUT
     }
+
     public enum ScenarioResultStatus {
         MISSING, NO_VALID_RUN, NO_ACCEPTED_CALIBRATION, VALID_STRONG, VALID_WEAK_OVERRIDE
     }
+
     public record RunAggregate(PolicyVector policy, BenchmarkRunContext run,
-            SortedSet<PolicyRole> roles,
-            int plannedRepetitionCount, int successfulRepetitionCount, int timeoutCount,
-            int failedCount, int skippedCount, double successRate, double timeoutRate,
-            double failureRate, double nonSuccessRate, RunAggregateStatus status,
-            OptionalDouble rawP25, OptionalDouble rawMedian, OptionalDouble rawP75,
-            OptionalDouble rawIqr, OptionalDouble rawLogIqr) {
+                               SortedSet<PolicyRole> roles,
+                               int plannedRepetitionCount, int successfulRepetitionCount,
+                               int timeoutCount,
+                               int failedCount, int skippedCount, double successRate,
+                               double timeoutRate,
+                               double failureRate, double nonSuccessRate, RunAggregateStatus status,
+                               OptionalDouble rawP25, OptionalDouble rawMedian,
+                               OptionalDouble rawP75,
+                               OptionalDouble rawIqr, OptionalDouble rawLogIqr) {
+
         public RunAggregate {
             Objects.requireNonNull(policy);
             Objects.requireNonNull(run);
@@ -64,21 +90,24 @@ public final class MergeRecords {
                     && rawP75.isPresent() && rawIqr.isPresent() && rawLogIqr.isPresent();
             if (successfulRepetitionCount == 0 ? statisticsPresent
                     : !statisticsPresent || !finitePositive(rawP25)
-                    || !finitePositive(rawMedian) || !finitePositive(rawP75)
-                    || !finiteNonNegative(rawIqr) || !finiteNonNegative(rawLogIqr)
-                    || rawP25.getAsDouble() > rawMedian.getAsDouble()
-                    || rawMedian.getAsDouble() > rawP75.getAsDouble()
-                    || Double.compare(rawIqr.getAsDouble(),
-                    rawP75.getAsDouble() - rawP25.getAsDouble()) != 0) {
+                      || !finitePositive(rawMedian) || !finitePositive(rawP75)
+                      || !finiteNonNegative(rawIqr) || !finiteNonNegative(rawLogIqr)
+                      || rawP25.getAsDouble() > rawMedian.getAsDouble()
+                      || rawMedian.getAsDouble() > rawP75.getAsDouble()
+                      || Double.compare(rawIqr.getAsDouble(),
+                            rawP75.getAsDouble() - rawP25.getAsDouble()) != 0) {
                 throw new IllegalArgumentException("Invalid run aggregate statistics");
             }
         }
     }
+
     public record RunCalibration(BenchmarkRunContext run, String referenceRunId,
-            String anchorSetId, int fixedAnchorCount, int sharedAnchorCount,
-            OptionalDouble deltaLog, OptionalDouble scaleFactor,
-            OptionalDouble weightedMedianAbsoluteResidual, CalibrationStatus status,
-            String reason, SortedMap<PolicyId, Double> cappedAnchorWeights) {
+                                 String anchorSetId, int fixedAnchorCount, int sharedAnchorCount,
+                                 OptionalDouble deltaLog, OptionalDouble scaleFactor,
+                                 OptionalDouble weightedMedianAbsoluteResidual,
+                                 CalibrationStatus status,
+                                 String reason, SortedMap<PolicyId, Double> cappedAnchorWeights) {
+
         public RunCalibration {
             Objects.requireNonNull(run);
             Objects.requireNonNull(referenceRunId);
@@ -93,7 +122,7 @@ public final class MergeRecords {
                     new TreeMap<>(cappedAnchorWeights));
             if (!anchorSetId.matches("a1-[0-9a-f]{16}") || fixedAnchorCount < 1
                     || sharedAnchorCount < 0 || sharedAnchorCount > fixedAnchorCount
-                    || reason.isEmpty() || cappedAnchorWeights.size() != 0
+                    || reason.isEmpty() || !cappedAnchorWeights.isEmpty()
                     && cappedAnchorWeights.size() != sharedAnchorCount
                     || cappedAnchorWeights.values().stream().anyMatch(weight ->
                     !Double.isFinite(weight) || weight <= 0)) {
@@ -101,15 +130,21 @@ public final class MergeRecords {
             }
         }
     }
+
     public record ScenarioResult(SourceScenario scenario, PolicyVector policy,
-            ScenarioResultStatus status, int totalRunCount, int acceptedRunCount,
-            int weakRunCount, int uncalibratedRunCount, int successfulRepetitionCount,
-            int plannedRepetitionCount, OptionalDouble throughputP25,
-            OptionalDouble throughputMedian, OptionalDouble throughputP75,
-            OptionalDouble throughputIqr, OptionalDouble medianWithinRunRelativeIqr,
-            OptionalDouble meanTimeoutRate, OptionalDouble meanFailureRate,
-            OptionalDouble meanNonSuccessRate, OptionalDouble bootstrapMedianCiLow,
-            OptionalDouble bootstrapMedianCiHigh, OptionalDouble quality) {
+                                 ScenarioResultStatus status, int totalRunCount,
+                                 int acceptedRunCount,
+                                 int weakRunCount, int uncalibratedRunCount,
+                                 int successfulRepetitionCount,
+                                 int plannedRepetitionCount, OptionalDouble throughputP25,
+                                 OptionalDouble throughputMedian, OptionalDouble throughputP75,
+                                 OptionalDouble throughputIqr,
+                                 OptionalDouble medianWithinRunRelativeIqr,
+                                 OptionalDouble meanTimeoutRate, OptionalDouble meanFailureRate,
+                                 OptionalDouble meanNonSuccessRate,
+                                 OptionalDouble bootstrapMedianCiLow,
+                                 OptionalDouble bootstrapMedianCiHigh, OptionalDouble quality) {
+
         public ScenarioResult {
             Objects.requireNonNull(scenario);
             Objects.requireNonNull(policy);
@@ -125,7 +160,7 @@ public final class MergeRecords {
             Objects.requireNonNull(bootstrapMedianCiLow);
             Objects.requireNonNull(bootstrapMedianCiHigh);
             Objects.requireNonNull(quality);
-            if (totalRunCount < 0 || acceptedRunCount < 0 || acceptedRunCount > totalRunCount
+            if (acceptedRunCount < 0 || acceptedRunCount > totalRunCount
                     || weakRunCount < 0 || uncalibratedRunCount < 0
                     || successfulRepetitionCount < 0 || plannedRepetitionCount < 0
                     || successfulRepetitionCount > plannedRepetitionCount) {
@@ -151,6 +186,7 @@ public final class MergeRecords {
                 throw new IllegalArgumentException("Invalid scenario numerics");
             }
         }
+
         public ScenarioResult withQuality(double newQuality) {
             return new ScenarioResult(scenario, policy, status, totalRunCount, acceptedRunCount,
                     weakRunCount, uncalibratedRunCount, successfulRepetitionCount,
@@ -160,15 +196,20 @@ public final class MergeRecords {
                     OptionalDouble.of(newQuality));
         }
     }
+
     public record RobustPolicySummary(PolicyVector policy, boolean eligible,
-            int requiredScenarioCount, int observedRequiredScenarioCount,
-            int validRequiredScenarioCount, double coverageFraction,
-            OptionalDouble worstQuality, OptionalDouble qualityP25,
-            OptionalDouble geometricMeanQuality, OptionalDouble crossScenarioQualityMad,
-            OptionalDouble medianRelativeIqr, OptionalDouble meanNonSuccessRate,
-            OptionalDouble meanTimeoutRate, SortedSet<SourceScenario> measuredScenarios,
-            SortedSet<SourceScenario> missingScenarios,
-            SortedSet<SourceScenario> rejectedScenarios) {
+                                      int requiredScenarioCount, int observedRequiredScenarioCount,
+                                      int validRequiredScenarioCount, double coverageFraction,
+                                      OptionalDouble worstQuality, OptionalDouble qualityP25,
+                                      OptionalDouble geometricMeanQuality,
+                                      OptionalDouble crossScenarioQualityMad,
+                                      OptionalDouble medianRelativeIqr,
+                                      OptionalDouble meanNonSuccessRate,
+                                      OptionalDouble meanTimeoutRate,
+                                      SortedSet<SourceScenario> measuredScenarios,
+                                      SortedSet<SourceScenario> missingScenarios,
+                                      SortedSet<SourceScenario> rejectedScenarios) {
+
         public RobustPolicySummary {
             Objects.requireNonNull(policy);
             Objects.requireNonNull(worstQuality);
@@ -188,8 +229,7 @@ public final class MergeRecords {
                     || coverageFraction < 0 || coverageFraction > 1) {
                 throw new IllegalArgumentException("Invalid coverage");
             }
-            if (observedRequiredScenarioCount < 0
-                    || validRequiredScenarioCount < 0
+            if (validRequiredScenarioCount < 0
                     || validRequiredScenarioCount > observedRequiredScenarioCount
                     || observedRequiredScenarioCount > requiredScenarioCount
                     || Double.compare(coverageFraction,
@@ -211,27 +251,16 @@ public final class MergeRecords {
             }
         }
     }
-    private static boolean finitePositive(OptionalDouble value) {
-        return value.isPresent() && Double.isFinite(value.getAsDouble())
-                && value.getAsDouble() > 0;
-    }
-    private static boolean finiteNonNegative(OptionalDouble value) {
-        return value.isPresent() && Double.isFinite(value.getAsDouble())
-                && value.getAsDouble() >= 0;
-    }
-    private static boolean rate(OptionalDouble value) {
-        return value.isPresent() && Double.isFinite(value.getAsDouble())
-                && value.getAsDouble() >= 0 && value.getAsDouble() <= 1;
-    }
+
     public record MergeResult(CalibrationPlan calibrationPlan,
-            List<RunCalibration> calibrations, List<ScenarioResult> scenarioResults,
-            List<RobustPolicySummary> robustSummaries) {
+                              List<RunCalibration> calibrations,
+                              List<ScenarioResult> scenarioResults,
+                              List<RobustPolicySummary> robustSummaries) {
+
         public MergeResult {
             calibrations = List.copyOf(calibrations);
             scenarioResults = List.copyOf(scenarioResults);
             robustSummaries = List.copyOf(robustSummaries);
         }
-    }
-    private MergeRecords() {
     }
 }
