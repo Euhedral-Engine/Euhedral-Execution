@@ -1082,3 +1082,13 @@ acceptance-surface gap, not an architectural redesign request.
 
 The 2026-07-29 naming pass subsequently moved the typed codec and its test to `training.config`;
 the verification and conformance outcome is unchanged.
+
+### Repackage compatibility addendum (2026-07-29)
+
+The Phase 5 names remain valid at their current boundaries:
+`ClosedLoopConfig` and `ClosedLoopConfigCodec` are in
+`io.euhedral_execution.training.config`; `CurrentWorkspaceImporter` and its focused test are in
+`io.euhedral_execution.training.importer.currentworkspace`; and `Runner`, `RunnerTest`, and
+`ClosedLoopRunner` remain in the root `io.euhedral_execution.training` package. The importer
+remains isolated from the Phase 1-4 package families. No parser, CLI, stop/resume, package, or
+temporary-import removal contract changed.

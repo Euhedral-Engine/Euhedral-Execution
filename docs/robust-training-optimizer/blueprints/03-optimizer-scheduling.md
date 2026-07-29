@@ -2577,3 +2577,15 @@ mvn -B -pl euhedral-training -DskipTests compile
 mvn -B -pl euhedral-training test
   BUILD SUCCESS; 105 tests, 0 failures, 0 errors, 1 skipped opt-in integration test
 ```
+
+### Repackage compatibility addendum (2026-07-29)
+
+The Phase 3 names remain valid at the locations stated by its cleanup record: algorithm classes
+are in `training.optimization`, `training.scheduling`, and `training.checkpoint`; their immutable
+records, configuration, enums, and codecs are in the corresponding `data`, `config`, `enums`, and
+`io` subpackages. `CanonicalCsv` is
+`io.euhedral_execution.training.data.io.CanonicalCsv`, `SchedulingFixtures` is
+`io.euhedral_execution.training.scheduling.fixtures.SchedulingFixtures`, and the package-private
+`ClosedLoopServices`, `ClosedLoopRunner`, `BenchmarkRunner`, and `SequenceFinder` remain in the
+root `io.euhedral_execution.training` package. No Phase 4-6 consumer should use pre-cleanup
+phase-prefixed imports.

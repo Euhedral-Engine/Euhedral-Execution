@@ -2099,3 +2099,17 @@ Deviation/blocker status:
 - Clarified that the blueprint, completion record, and conformance report are permitted planning
   documentation changes while user-facing documentation remains outside Phase 2 scope.
 - Updated the blueprint status after the repeated validation and conformance audit passed.
+
+### Repackage compatibility addendum (2026-07-29)
+
+The Phase 2 class names and contracts remain valid. The original flat `training.learning` checklist
+now resolves through these subpackages: `config`, `data`, `enums`, `inputs`, `metadata`, `output`,
+`statistics`, and `utils`. `ScenarioOrdinalNetwork`, `ScenarioConditionedModel`,
+`ScenarioModelEvaluator`, `ScenarioFoldRunner`, `ScenarioModelTrainer`, and `OrdinalMember` remain
+directly in `io.euhedral_execution.training.learning`; `PartitionCounts` is the shared
+`io.euhedral_execution.training.data.PartitionCounts` type. Test support remains at
+`io.euhedral_execution.training.learning.fixtures.ScenarioLearningFixtures`, and the opt-in
+`ScenarioOrdinalNetworkIntegrationTest` remains in `io.euhedral_execution.training.learning`.
+
+No learning feature, metadata, persistence, memory, or precision rule changed; later phases must
+use these package locations rather than recreating flat-package imports.
