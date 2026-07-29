@@ -1,14 +1,23 @@
 package io.euhedral_execution.training.merge;
 
-import io.euhedral_execution.training.data.EvidenceOrigin;
 import io.euhedral_execution.training.data.PolicyId;
 import io.euhedral_execution.training.data.PolicyVector;
 import io.euhedral_execution.training.data.SourceScenario;
+import io.euhedral_execution.training.data.enums.EvidenceOrigin;
 import io.euhedral_execution.training.merge.MergeRecords.RunAggregate;
 import io.euhedral_execution.training.merge.MergeRecords.RunAggregateStatus;
 import io.euhedral_execution.training.merge.MergeRecords.ScenarioResult;
 import io.euhedral_execution.training.merge.MergeRecords.ScenarioResultStatus;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.OptionalDouble;
+import java.util.SortedMap;
+import java.util.SortedSet;
+import java.util.TreeMap;
 
 public final class AnchorBootstrapper {
     public static CalibrationPlan bootstrap(List<RunAggregate> rawRunAggregates,

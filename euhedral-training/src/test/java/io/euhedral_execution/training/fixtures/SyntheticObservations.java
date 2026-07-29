@@ -1,13 +1,35 @@
 package io.euhedral_execution.training.fixtures;
 
-import io.euhedral_execution.training.data.*;
+import io.euhedral_execution.training.data.BenchmarkObservation;
+import io.euhedral_execution.training.data.BenchmarkParameters;
+import io.euhedral_execution.training.data.BenchmarkRunContext;
+import io.euhedral_execution.training.data.BenchmarkRunDescriptor;
+import io.euhedral_execution.training.data.FrameSourceSeed;
+import io.euhedral_execution.training.data.ObservationKey;
+import io.euhedral_execution.training.data.PolicyId;
+import io.euhedral_execution.training.data.PolicyVector;
+import io.euhedral_execution.training.data.ScheduledPolicy;
+import io.euhedral_execution.training.data.SourceScenario;
+import io.euhedral_execution.training.data.enums.EvidenceOrigin;
+import io.euhedral_execution.training.data.enums.MeasurementEncoding;
+import io.euhedral_execution.training.data.enums.ObservationStatus;
+import io.euhedral_execution.training.data.enums.PolicyRole;
 import io.euhedral_execution.training.data.io.ObservationBundleWriter;
 import io.euhedral_execution.training.merge.MergeRecords.RunAggregate;
 import io.euhedral_execution.training.merge.MergeRecords.RunAggregateStatus;
 import io.euhedral_execution.training.merge.RobustStatistics;
 import java.nio.file.Path;
 import java.time.Instant;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.OptionalDouble;
+import java.util.OptionalLong;
+import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
 
 public final class SyntheticObservations {
     public static final Instant START = Instant.parse("2026-01-02T03:04:05Z");

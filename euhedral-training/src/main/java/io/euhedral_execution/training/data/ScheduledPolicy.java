@@ -1,5 +1,6 @@
 package io.euhedral_execution.training.data;
 
+import io.euhedral_execution.training.data.enums.PolicyRole;
 import java.util.Objects;
 import java.util.Set;
 

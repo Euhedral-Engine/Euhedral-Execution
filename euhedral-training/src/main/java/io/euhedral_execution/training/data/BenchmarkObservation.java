@@ -1,5 +1,8 @@
 package io.euhedral_execution.training.data;
 
+import io.euhedral_execution.training.data.enums.EvidenceOrigin;
+import io.euhedral_execution.training.data.enums.MeasurementEncoding;
+import io.euhedral_execution.training.data.enums.ObservationStatus;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;

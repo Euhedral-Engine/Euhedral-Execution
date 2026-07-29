@@ -1,14 +1,33 @@
 package io.euhedral_execution.training.data.io;
 
-import static io.euhedral_execution.training.fixtures.SyntheticObservations.*;
-import static org.assertj.core.api.Assertions.*;
+import static io.euhedral_execution.training.fixtures.SyntheticObservations.SHA;
+import static io.euhedral_execution.training.fixtures.SyntheticObservations.START;
+import static io.euhedral_execution.training.fixtures.SyntheticObservations.policy;
+import static io.euhedral_execution.training.fixtures.SyntheticObservations.run;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 
-import io.euhedral_execution.training.data.*;
+import io.euhedral_execution.training.data.BenchmarkObservation;
+import io.euhedral_execution.training.data.BenchmarkRunDescriptor;
+import io.euhedral_execution.training.data.ObservationKey;
+import io.euhedral_execution.training.data.PolicyVector;
+import io.euhedral_execution.training.data.ScheduledPolicy;
+import io.euhedral_execution.training.data.SourceScenario;
+import io.euhedral_execution.training.data.enums.EvidenceOrigin;
+import io.euhedral_execution.training.data.enums.MeasurementEncoding;
+import io.euhedral_execution.training.data.enums.ObservationStatus;
+import io.euhedral_execution.training.data.enums.PolicyRole;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+import java.util.OptionalDouble;
+import java.util.OptionalLong;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
