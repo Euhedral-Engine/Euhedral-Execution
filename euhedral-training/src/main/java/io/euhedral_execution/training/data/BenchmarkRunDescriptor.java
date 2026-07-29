@@ -16,6 +16,10 @@ public record BenchmarkRunDescriptor(
         Instant startedAt,
         BenchmarkParameters parameters) {
 
+    private static boolean validId(String value) {
+        return value != null && value.matches("[a-z0-9][a-z0-9._-]{0,95}");
+    }
+
     public BenchmarkRunDescriptor {
         Objects.requireNonNull(scenario);
         Objects.requireNonNull(evidenceOrigin);
@@ -27,15 +31,11 @@ public record BenchmarkRunDescriptor(
             throw new IllegalArgumentException("Invalid run descriptor");
         }
         if (evidenceOrigin == EvidenceOrigin.NATIVE
-                && (commitSha == null || !commitSha.matches("(?:[0-9a-f]{40}|[0-9a-f]{64})"))) {
+                && (commitSha == null || !commitSha.matches("[0-9a-f]{40}|[0-9a-f]{64}"))) {
             throw new IllegalArgumentException("Native evidence requires a commit SHA");
         }
         if (commitSha == null || commitSha.isBlank()) {
             throw new IllegalArgumentException("Commit SHA is required");
         }
-    }
-
-    private static boolean validId(String value) {
-        return value != null && value.matches("[a-z0-9][a-z0-9._-]{0,95}");
     }
 }

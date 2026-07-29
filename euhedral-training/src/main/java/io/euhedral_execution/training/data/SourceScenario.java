@@ -1,6 +1,7 @@
 package io.euhedral_execution.training.data;
 
 import java.util.Objects;
+import org.jspecify.annotations.NonNull;
 
 public record SourceScenario(
         String environmentId,
@@ -47,7 +48,7 @@ public record SourceScenario(
     }
 
     @Override
-    public String toString() {
+    public @NonNull String toString() {
         return canonical();
     }
 }

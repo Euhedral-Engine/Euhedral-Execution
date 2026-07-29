@@ -36,6 +36,7 @@ import java.util.OptionalLong;
 import java.util.Set;
 
 public final class ObservationBundleReader {
+
     private static final List<String> RUN_HEADER = List.of(
             "schema_version", "benchmark_run_id", "closed_loop_iteration",
             "candidate_cohort_id", "scenario_id", "environment_id", "source_count",
@@ -57,18 +58,26 @@ public final class ObservationBundleReader {
             }
             List<List<String>> runRows = readCsv(directory.resolve("run.csv"));
             requireRows(runRows, 2, 23);
-            if (!runRows.getFirst().equals(RUN_HEADER)) throw new IllegalArgumentException("Run header");
+            if (!runRows.getFirst().equals(RUN_HEADER)) {
+                throw new IllegalArgumentException("Run header");
+            }
             List<String> r = runRows.get(1);
             requireVersion(r.get(0));
             SourceScenario scenario = new SourceScenario(r.get(5), integer(r.get(6)),
                     integer(r.get(7)), new SourceRatio(integer(r.get(8)), integer(r.get(9))));
-            if (!scenario.canonical().equals(r.get(4))) throw new IllegalArgumentException("Scenario ID mismatch");
+            if (!scenario.canonical().equals(r.get(4))) {
+                throw new IllegalArgumentException("Scenario ID mismatch");
+            }
             List<FrameSourceSeed> seeds = new ArrayList<>();
-            if (!r.get(22).isEmpty()) for (String item : r.get(22).split(";")) {
-                String[] parts = item.split(":");
-                if (parts.length != 3) throw new IllegalArgumentException("Malformed source seed");
-                seeds.add(new FrameSourceSeed(integer(parts[0]), unsignedHex(parts[1]),
-                        unsignedHex(parts[2])));
+            if (!r.get(22).isEmpty()) {
+                for (String item : r.get(22).split(";")) {
+                    String[] parts = item.split(":");
+                    if (parts.length != 3) {
+                        throw new IllegalArgumentException("Malformed source seed");
+                    }
+                    seeds.add(new FrameSourceSeed(integer(parts[0]), unsignedHex(parts[1]),
+                            unsignedHex(parts[2])));
+                }
             }
             BenchmarkParameters parameters = new BenchmarkParameters(integer(r.get(15)),
                     number(r.get(16)), number(r.get(17)), integer(r.get(18)), number(r.get(19)),
@@ -79,7 +88,7 @@ public final class ObservationBundleReader {
             BenchmarkRunContext context = new BenchmarkRunContext(descriptor, instant(r.get(14)));
 
             List<List<String>> policyRows = readCsv(directory.resolve("policies.csv"));
-            if (policyRows.size() < 2 || policyRows.get(0).size() != 32) {
+            if (policyRows.size() < 2 || policyRows.getFirst().size() != 32) {
                 throw new IllegalArgumentException("Invalid policies CSV");
             }
             List<String> policyHeader = new ArrayList<>(List.of("schema_version",
@@ -95,9 +104,13 @@ public final class ObservationBundleReader {
             Set<PolicyId> policyIds = new HashSet<>();
             for (int rowIndex = 1; rowIndex < policyRows.size(); rowIndex++) {
                 List<String> row = policyRows.get(rowIndex);
-                if (row.size() != 32) throw new IllegalArgumentException("Invalid policy row");
+                if (row.size() != 32) {
+                    throw new IllegalArgumentException("Invalid policy row");
+                }
                 requireVersion(row.get(0));
-                if (integer(row.get(1)) != rowIndex) throw new IllegalArgumentException("Schedule gap");
+                if (integer(row.get(1)) != rowIndex) {
+                    throw new IllegalArgumentException("Schedule gap");
+                }
                 double[] weights = new double[PolicyVector.WIDTH];
                 for (int i = 0; i < weights.length; i++) {
                     weights[i] = Double.longBitsToDouble(unsignedHex(row.get(i + 4)));
@@ -132,7 +145,9 @@ public final class ObservationBundleReader {
             Set<ObservationKey> keys = new HashSet<>();
             for (int rowIndex = 1; rowIndex < observationRows.size(); rowIndex++) {
                 List<String> row = observationRows.get(rowIndex);
-                if (row.size() != 12) throw new IllegalArgumentException("Invalid observation row");
+                if (row.size() != 12) {
+                    throw new IllegalArgumentException("Invalid observation row");
+                }
                 requireVersion(row.get(0));
                 PolicyId policyId = PolicyId.parse(row.get(2));
                 ScheduledPolicy policy = policies.stream().filter(
@@ -194,7 +209,9 @@ public final class ObservationBundleReader {
                 requireVersion(row.get(0));
                 PolicyId policyId = PolicyId.parse(row.get(2));
                 ScheduledPolicy policy = policyById.get(policyId);
-                if (policy == null) throw new IllegalArgumentException("Unknown observation policy");
+                if (policy == null) {
+                    throw new IllegalArgumentException("Unknown observation policy");
+                }
                 ObservationKey key = new ObservationKey(
                         metadata.run().descriptor().benchmarkRunId(),
                         metadata.run().descriptor().scenario(), policyId, integer(row.get(3)));
@@ -249,11 +266,15 @@ public final class ObservationBundleReader {
                 throw new IllegalArgumentException("Scenario ID mismatch");
             }
             List<FrameSourceSeed> seeds = new ArrayList<>();
-            if (!row.get(22).isEmpty()) for (String item : row.get(22).split(";")) {
-                String[] parts = item.split(":");
-                if (parts.length != 3) throw new IllegalArgumentException("Malformed source seed");
-                seeds.add(new FrameSourceSeed(integer(parts[0]), unsignedHex(parts[1]),
-                        unsignedHex(parts[2])));
+            if (!row.get(22).isEmpty()) {
+                for (String item : row.get(22).split(";")) {
+                    String[] parts = item.split(":");
+                    if (parts.length != 3) {
+                        throw new IllegalArgumentException("Malformed source seed");
+                    }
+                    seeds.add(new FrameSourceSeed(integer(parts[0]), unsignedHex(parts[1]),
+                            unsignedHex(parts[2])));
+                }
             }
             BenchmarkParameters parameters = new BenchmarkParameters(integer(row.get(15)),
                     number(row.get(16)), number(row.get(17)), integer(row.get(18)),
@@ -316,30 +337,50 @@ public final class ObservationBundleReader {
     private static List<List<String>> readCsv(Path path) throws IOException {
         return StrictCsv.parse(Files.readString(path, StandardCharsets.UTF_8));
     }
+
     private static void requireRows(List<List<String>> rows, int count, int width) {
         if (rows.size() != count || rows.stream().anyMatch(row -> row.size() != width)) {
             throw new IllegalArgumentException("Invalid CSV shape");
         }
     }
+
     private static void requireVersion(String value) {
-        if (!"1".equals(value)) throw new IllegalArgumentException("Unsupported schema");
+        if (!"1".equals(value)) {
+            throw new IllegalArgumentException("Unsupported schema");
+        }
     }
-    private static int integer(String value) { return Integer.parseInt(value); }
-    private static long number(String value) { return Long.parseLong(value); }
+
+    private static int integer(String value) {
+        return Integer.parseInt(value);
+    }
+
+    private static long number(String value) {
+        return Long.parseLong(value);
+    }
+
     private static boolean bool(String value) {
-        if (!value.equals("true") && !value.equals("false")) throw new IllegalArgumentException();
+        if (!value.equals("true") && !value.equals("false")) {
+            throw new IllegalArgumentException();
+        }
         return Boolean.parseBoolean(value);
     }
+
     private static long unsignedHex(String value) {
-        if (!value.matches("[0-9a-f]{16}")) throw new IllegalArgumentException("Malformed hex");
+        if (!value.matches("[0-9a-f]{16}")) {
+            throw new IllegalArgumentException("Malformed hex");
+        }
         return Long.parseUnsignedLong(value, 16);
     }
+
     private static OptionalLong optionalLong(String value) {
         return value.isEmpty() ? OptionalLong.empty() : OptionalLong.of(number(value));
     }
+
     private static OptionalDouble optionalDouble(String value) {
-        return value.isEmpty() ? OptionalDouble.empty() : OptionalDouble.of(Double.parseDouble(value));
+        return value.isEmpty() ? OptionalDouble.empty()
+                : OptionalDouble.of(Double.parseDouble(value));
     }
+
     private static Instant instant(String value) {
         Instant parsed = Instant.parse(value);
         if (!parsed.toString().equals(value)) {
@@ -347,6 +388,7 @@ public final class ObservationBundleReader {
         }
         return parsed;
     }
+
     private static void validateLfFile(Path path) {
         try (FileChannel channel = FileChannel.open(path, StandardOpenOption.READ)) {
             ByteBuffer buffer = ByteBuffer.allocate(4096);
@@ -374,12 +416,18 @@ public final class ObservationBundleReader {
             throw new IllegalStateException(error);
         }
     }
+
+    private ObservationBundleReader() {
+    }
+
     public interface ObservationVisitor {
+
         void onStart(BenchmarkRunContext run, List<ScheduledPolicy> policies);
+
         void onObservation(BenchmarkObservation observation);
     }
+
     private record ObservationMetadata(BenchmarkRunContext run, List<ScheduledPolicy> policies) {
-    }
-    private ObservationBundleReader() {
+
     }
 }

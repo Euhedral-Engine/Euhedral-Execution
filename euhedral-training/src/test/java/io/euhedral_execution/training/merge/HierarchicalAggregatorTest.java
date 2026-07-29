@@ -8,6 +8,7 @@ import static io.euhedral_execution.training.fixtures.SyntheticObservations.run;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
 
+import io.euhedral_execution.training.data.BenchmarkRunContext;
 import io.euhedral_execution.training.data.PolicyVector;
 import io.euhedral_execution.training.data.SourceScenario;
 import io.euhedral_execution.training.data.enums.EvidenceOrigin;
@@ -146,7 +147,7 @@ class HierarchicalAggregatorTest {
         SortedSet<PolicyRole> roles = new TreeSet<>(
                 Comparator.comparing(Enum::name));
         roles.add(PolicyRole.EXPLORATION);
-        return new RunAggregate(policy, new io.euhedral_execution.training.data.BenchmarkRunContext(
+        return new RunAggregate(policy, new BenchmarkRunContext(
                 run(runId, scenario, 5, EvidenceOrigin.NATIVE,
                         START), START.plusSeconds(6)), roles, 5, 0, timeout, failed, skipped,
                 0, timeout / 5.0, (failed + skipped) / 5.0,

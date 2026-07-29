@@ -72,7 +72,7 @@ public record BenchmarkObservation(
                         / elapsedNanos.getAsLong();
                 if (throughputFramesPerSecond.isEmpty()
                         || Double.doubleToRawLongBits(expected) != Double.doubleToRawLongBits(
-                                throughputFramesPerSecond.getAsDouble())) {
+                        throughputFramesPerSecond.getAsDouble())) {
                     throw new IllegalArgumentException("Throughput does not match counters");
                 }
             }
