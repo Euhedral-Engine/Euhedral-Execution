@@ -1,17 +1,25 @@
 package io.euhedral_execution.training.checkpoint;
 
+import io.euhedral_execution.training.checkpoint.data.ArtifactReference;
+import io.euhedral_execution.training.checkpoint.data.ClosedLoopCheckpoint;
+import io.euhedral_execution.training.checkpoint.data.EvidenceIndexEntry;
+import io.euhedral_execution.training.checkpoint.data.LoadedCheckpoint;
+import io.euhedral_execution.training.checkpoint.data.PendingBenchmarkRun;
+import io.euhedral_execution.training.checkpoint.enums.CheckpointStage;
+import io.euhedral_execution.training.checkpoint.enums.EvidenceSource;
+import io.euhedral_execution.training.checkpoint.enums.PendingRunStatus;
 import io.euhedral_execution.training.data.PolicyId;
 import io.euhedral_execution.training.data.PolicyVector;
 import io.euhedral_execution.training.data.SourceScenario;
+import io.euhedral_execution.training.data.io.CanonicalCsv;
 import io.euhedral_execution.training.data.io.ObservationBundle;
 import io.euhedral_execution.training.data.io.ObservationBundleReader;
-import io.euhedral_execution.training.learning.ScenarioPrediction;
-import io.euhedral_execution.training.scheduling.CarryForwardEntry;
-import io.euhedral_execution.training.scheduling.CarryScenarioState;
-import io.euhedral_execution.training.scheduling.CoverageState;
-import io.euhedral_execution.training.scheduling.Phase3Csv;
-import io.euhedral_execution.training.scheduling.RotationGroup;
-import io.euhedral_execution.training.scheduling.RunKind;
+import io.euhedral_execution.training.learning.data.ScenarioPrediction;
+import io.euhedral_execution.training.scheduling.data.CarryForwardEntry;
+import io.euhedral_execution.training.scheduling.data.CarryScenarioState;
+import io.euhedral_execution.training.scheduling.data.RotationGroup;
+import io.euhedral_execution.training.scheduling.enums.CoverageState;
+import io.euhedral_execution.training.scheduling.enums.RunKind;
 import java.io.IOException;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
@@ -196,16 +204,16 @@ public final class CheckpointSnapshotCodec {
         appendArtifact(row, checkpoint.latestMerge());
         appendArtifact(row, checkpoint.latestModel());
         appendArtifact(row, checkpoint.pendingSchedule());
-        return Phase3Csv.row(STATE_HEADER) + Phase3Csv.row(row);
+        return CanonicalCsv.row(STATE_HEADER) + CanonicalCsv.row(row);
     }
 
     private static String requiredScenarios(ClosedLoopCheckpoint checkpoint) {
-        StringBuilder out = new StringBuilder(Phase3Csv.row(List.of("schema_version",
+        StringBuilder out = new StringBuilder(CanonicalCsv.row(List.of("schema_version",
                 "scenario_id", "environment_id", "source_count",
                 "available_physical_core_count", "source_ratio_numerator",
                 "source_ratio_denominator")));
         for (SourceScenario scenario : checkpoint.requiredScenarios()) {
-            out.append(Phase3Csv.row(List.of("1", scenario.canonical(),
+            out.append(CanonicalCsv.row(List.of("1", scenario.canonical(),
                     scenario.environmentId(), Integer.toString(scenario.sourceCount()),
                     Integer.toString(scenario.availablePhysicalCoreCount()),
                     Integer.toString(scenario.ratio().numerator()),
@@ -215,9 +223,9 @@ public final class CheckpointSnapshotCodec {
     }
 
     private static String rotationCursors(ClosedLoopCheckpoint checkpoint) {
-        StringBuilder out = new StringBuilder(Phase3Csv.row(List.of("schema_version",
+        StringBuilder out = new StringBuilder(CanonicalCsv.row(List.of("schema_version",
                 "environment_id", "available_physical_core_count", "next_index")));
-        checkpoint.rotationCursors().forEach((group, index) -> out.append(Phase3Csv.row(List.of(
+        checkpoint.rotationCursors().forEach((group, index) -> out.append(CanonicalCsv.row(List.of(
                 "1", group.environmentId(),
                 Integer.toString(group.availablePhysicalCoreCount()),
                 Integer.toString(index)))));
@@ -225,11 +233,11 @@ public final class CheckpointSnapshotCodec {
     }
 
     private static String evidence(ClosedLoopCheckpoint checkpoint) {
-        StringBuilder out = new StringBuilder(Phase3Csv.row(List.of("schema_version",
+        StringBuilder out = new StringBuilder(CanonicalCsv.row(List.of("schema_version",
                 "benchmark_run_id", "scenario_id", "evidence_path", "evidence_sha256",
                 "source")));
         checkpoint.evidence().stream().sorted(Comparator.comparing(
-                EvidenceIndexEntry::benchmarkRunId)).forEach(row -> out.append(Phase3Csv.row(
+                EvidenceIndexEntry::benchmarkRunId)).forEach(row -> out.append(CanonicalCsv.row(
                 List.of("1", row.benchmarkRunId(), row.scenario().canonical(),
                         row.bundle().relativePath(), row.bundle().sha256(),
                         row.source().name()))));
@@ -245,7 +253,7 @@ public final class CheckpointSnapshotCodec {
         for (int i = 0; i < PolicyVector.WIDTH; i++) {
             header.add("weight_%02d_bits".formatted(i));
         }
-        StringBuilder out = new StringBuilder(Phase3Csv.row(header));
+        StringBuilder out = new StringBuilder(CanonicalCsv.row(header));
         checkpoint.carryForward().stream().sorted(Comparator.comparing(entry ->
                 entry.policy().id())).forEach(entry -> {
             List<String> row = new ArrayList<>(List.of("1", entry.policy().id().canonical(),
@@ -259,13 +267,13 @@ public final class CheckpointSnapshotCodec {
             for (double weight : entry.policy().copyWeights()) {
                 row.add("%016x".formatted(Double.doubleToRawLongBits(weight)));
             }
-            out.append(Phase3Csv.row(row));
+            out.append(CanonicalCsv.row(row));
         });
         return out.toString();
     }
 
     private static String carryScenarios(ClosedLoopCheckpoint checkpoint) {
-        StringBuilder out = new StringBuilder(Phase3Csv.row(List.of("schema_version",
+        StringBuilder out = new StringBuilder(CanonicalCsv.row(List.of("schema_version",
                 "policy_id", "scenario_id", "coverage_status", "attempt_count",
                 "last_attempt_iteration", "next_eligible_iteration", "predicted_quality",
                 "ordinal_stddev", "quality_interval_low", "quality_interval_high",
@@ -275,7 +283,7 @@ public final class CheckpointSnapshotCodec {
                 entry.policy().id())).forEach(entry -> entry.scenarios().forEach(
                 (scenario, state) -> {
                     ScenarioPrediction prediction = state.prediction();
-                    out.append(Phase3Csv.row(List.of("1", entry.policy().id().canonical(),
+                    out.append(CanonicalCsv.row(List.of("1", entry.policy().id().canonical(),
                             scenario.canonical(), state.coverage().name(),
                             Integer.toString(state.attemptCount()),
                             state.lastAttemptIteration().isPresent()
@@ -294,12 +302,12 @@ public final class CheckpointSnapshotCodec {
     }
 
     private static String pending(ClosedLoopCheckpoint checkpoint) {
-        StringBuilder out = new StringBuilder(Phase3Csv.row(List.of("schema_version",
+        StringBuilder out = new StringBuilder(CanonicalCsv.row(List.of("schema_version",
                 "iteration", "run_kind", "scenario_id", "benchmark_run_id",
                 "candidate_cohort_id", "schedule_path", "schedule_sha256", "evidence_path",
                 "status")));
         checkpoint.pendingRuns().stream().sorted(Comparator.comparing(
-                PendingBenchmarkRun::scenario)).forEach(row -> out.append(Phase3Csv.row(List.of(
+                PendingBenchmarkRun::scenario)).forEach(row -> out.append(CanonicalCsv.row(List.of(
                 "1", Integer.toString(row.iteration()), row.runKind().name(),
                 row.scenario().canonical(), row.benchmarkRunId(), row.candidateCohortId(),
                 row.schedule().relativePath(), row.schedule().sha256(),
@@ -310,7 +318,7 @@ public final class CheckpointSnapshotCodec {
     private static ClosedLoopCheckpoint read(Path workspace, Path directory) {
         try {
             validateInventory(directory);
-            List<List<String>> stateRows = Phase3Csv.read(directory.resolve("state.csv"));
+            List<List<String>> stateRows = CanonicalCsv.read(directory.resolve("state.csv"));
             if (stateRows.size() != 2 || !stateRows.getFirst().equals(STATE_HEADER)
                     || stateRows.get(1).size() != 23) {
                 throw new IllegalArgumentException("Invalid checkpoint state.csv");
@@ -357,7 +365,7 @@ public final class CheckpointSnapshotCodec {
     }
 
     private static TreeSet<SourceScenario> readScenarios(Path file) throws IOException {
-        List<List<String>> rows = Phase3Csv.read(file);
+        List<List<String>> rows = CanonicalCsv.read(file);
         requireHeader(rows, List.of("schema_version", "scenario_id", "environment_id",
                 "source_count", "available_physical_core_count", "source_ratio_numerator",
                 "source_ratio_denominator"));
@@ -381,7 +389,7 @@ public final class CheckpointSnapshotCodec {
     }
 
     private static TreeMap<RotationGroup, Integer> readCursors(Path file) throws IOException {
-        List<List<String>> rows = Phase3Csv.read(file);
+        List<List<String>> rows = CanonicalCsv.read(file);
         requireHeader(rows, List.of("schema_version", "environment_id",
                 "available_physical_core_count", "next_index"));
         TreeMap<RotationGroup, Integer> result = new TreeMap<>();
@@ -401,7 +409,7 @@ public final class CheckpointSnapshotCodec {
 
     private static List<EvidenceIndexEntry> readEvidence(Path workspace, Path file)
             throws IOException {
-        List<List<String>> rows = Phase3Csv.read(file);
+        List<List<String>> rows = CanonicalCsv.read(file);
         requireHeader(rows, List.of("schema_version", "benchmark_run_id", "scenario_id",
                 "evidence_path", "evidence_sha256", "source"));
         ArrayList<EvidenceIndexEntry> result = new ArrayList<>();
@@ -433,7 +441,7 @@ public final class CheckpointSnapshotCodec {
 
     private static List<CarryForwardEntry> readCarry(Path summaryFile, Path scenarioFile,
             Set<SourceScenario> required) throws IOException {
-        List<List<String>> summaries = Phase3Csv.read(summaryFile);
+        List<List<String>> summaries = CanonicalCsv.read(summaryFile);
         List<String> header = new ArrayList<>(List.of("schema_version", "policy_id",
                 "first_seen_iteration", "last_updated_iteration",
                 "valid_required_scenario_count", "observed_required_scenario_count",
@@ -462,7 +470,7 @@ public final class CheckpointSnapshotCodec {
             }
             previousPolicy = policy.id();
         }
-        List<List<String>> rows = Phase3Csv.read(scenarioFile);
+        List<List<String>> rows = CanonicalCsv.read(scenarioFile);
         requireHeader(rows, List.of("schema_version", "policy_id", "scenario_id",
                 "coverage_status", "attempt_count", "last_attempt_iteration",
                 "next_eligible_iteration", "predicted_quality", "ordinal_stddev",
@@ -524,7 +532,7 @@ public final class CheckpointSnapshotCodec {
     }
 
     private static List<PendingBenchmarkRun> readPending(Path file) throws IOException {
-        List<List<String>> rows = Phase3Csv.read(file);
+        List<List<String>> rows = CanonicalCsv.read(file);
         requireHeader(rows, List.of("schema_version", "iteration", "run_kind",
                 "scenario_id", "benchmark_run_id", "candidate_cohort_id", "schedule_path",
                 "schedule_sha256", "evidence_path", "status"));

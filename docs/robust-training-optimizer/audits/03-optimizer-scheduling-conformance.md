@@ -1,7 +1,7 @@
 # Phase 3 Blueprint Conformance Audit
 
-Audited branch: `agent/phase3a-optimizer-scheduling-blueprint`, including the remediation after
-audit commit `a643f18`.
+Audited branch: `agent/phase3a-optimizer-scheduling-blueprint`, including the remediation and
+subsequent naming/package cleanup.
 
 Blueprint:
 `docs/robust-training-optimizer/blueprints/03-optimizer-scheduling.md`.
@@ -11,7 +11,8 @@ Blueprint:
 **Conforms.** The deviations reported by the first Prompt 3D pass are resolved. The Phase 3 path
 now implements the scenario-aware optimizer, exact budget and scheduling rules, strict schedule and
 checkpoint artifacts, deterministic native-v1 benchmark contract, and typed closed-loop
-bootstrap/resume state machine. The blueprint was not edited.
+bootstrap/resume state machine. Blueprint type and file references were updated only to match the
+final domain-named package structure.
 
 ## Remediation verified
 
@@ -19,7 +20,7 @@ bootstrap/resume state machine. The blueprint was not edited.
   measured full covariance, complete curve predictions, the authoritative predicted robust
   comparator, exact stagnation detection, settled restart mechanics, deterministic island seeds,
   and deterministic island/generation/member production order.
-- `ScoreBandSampler` now exposes only the Phase 3 `PredictedCandidate` API. It uses ten fixed
+- `ScoreBandSampler` now exposes only the `PredictedCandidate` API. It uses ten fixed
   worst-quality bands, exact Hamilton capacities, unsigned hash-priority bottom-k retention, and a
   bounded exact-comparator overflow heap. Pooled scalar compatibility is isolated under
   `training.legacy`.
@@ -27,13 +28,14 @@ bootstrap/resume state machine. The blueprint was not edited.
   score-band selectors, reranks CMA proposals before admission, applies base and overflow
   tranches independently, transfers shortfalls to direct Sobol, and advances the cursor for every
   direct point consumed.
-- `OptimizationCorpusReader` strictly joins both Phase 1 vector files, robust ranking, coverage
+- `scheduling.io.OptimizationCorpusReader` strictly joins both Phase 1 vector files, robust ranking, coverage
   report, and full scenario-result grid. It reconstructs policy bits and identities, validates
   deterministic ordering, recomputes coverage, and rejects incomplete joins.
 - Budget allocation, carry admission/reconciliation, per-scenario attempt backoff, carry priority,
   exact scenario rotation, stable IDs/seeds, anchor midpoint placement, and unsigned non-anchor
   trial ordering implement the settled rules.
-- `ScheduleCodec` owns the exact five CSV files plus empty `COMPLETE`, uses canonical UTF-8/LF
+- `scheduling.io.ScheduleCodec` owns the exact five CSV files plus empty `COMPLETE`, uses
+  `data.io.CanonicalCsv` for canonical UTF-8/LF
   RFC 4180 parsing, rejects unexpected inventory and symlinks, recomputes run/cohort/frame
   identity, verifies anchor/trial order, validates prediction summaries and budget/admission
   semantics, and requires atomic directory publication.
@@ -52,6 +54,9 @@ bootstrap/resume state machine. The blueprint was not edited.
   A complete schedule published in the model-ready crash window is accepted only after
   deterministic reconstruction matches its persisted contents; its reconstructed next Sobol
   cursor is checkpointed without changing the exact schedule schema.
+- Configurations, immutable state, enums, and I/O codecs are separated into `config`, `data`,
+  `enums`, and `io` subpackages beneath benchmark, checkpoint, optimization, and scheduling.
+  Operational algorithms remain in their owning packages.
 
 ## Memory, concurrency, and mathematical semantics
 
@@ -109,7 +114,7 @@ Additional verification passed:
 - real `DataMerger` output is accepted by the strict Phase 3 optimization-corpus join;
 - both new-path stale-boundary searches returned no matches;
 - `git diff --check` returned no errors;
-- `git diff -- docs/robust-training-optimizer/blueprints/03-optimizer-scheduling.md` was empty.
+- the blueprint and this audit use the final domain names and package paths.
 
 ## Environmental limitation
 
@@ -123,3 +128,18 @@ environmental limitation does not affect the required deterministic verification
 The pre-existing staged training inputs, untracked current-workspace training data/output, and the
 unrelated untracked core utility test were not edited or removed. Only Phase 3 implementation,
 focused tests, and this audit report are included in the remediation commit.
+
+## Naming and package cleanup verification
+
+The 2026-07-29 cleanup is rename-only:
+
+- `CanonicalCsv` replaces the phase-numbered CSV helper in the shared `training.data.io` package.
+- `SchedulingFixtures` replaces the phase-numbered test fixture name.
+- Configurations, immutable data, enums, and I/O types now occupy their documented subpackages.
+- Seed/fingerprint material uses domain names without changing the settled fields or ordering.
+- No lifecycle, memory-ordering, queue, scheduling, comparator, floating-point, or benchmark
+  behavior was changed.
+
+`mvn -B -pl euhedral-training -DskipTests compile` and
+`mvn -B -pl euhedral-training test` both passed with 105 tests, no failures or errors, and the one
+pre-existing opt-in integration test skipped.

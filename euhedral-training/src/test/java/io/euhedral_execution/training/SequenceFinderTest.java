@@ -2,10 +2,10 @@ package io.euhedral_execution.training;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.euhedral_execution.training.optimization.CandidateGenerationConfig;
-import io.euhedral_execution.training.optimization.CandidateGenerationRequest;
-import io.euhedral_execution.training.optimization.CmaEsConfig;
-import io.euhedral_execution.training.scheduling.fixtures.Phase3Fixtures;
+import io.euhedral_execution.training.optimization.config.CandidateGenerationConfig;
+import io.euhedral_execution.training.optimization.config.CmaEsConfig;
+import io.euhedral_execution.training.optimization.data.CandidateGenerationRequest;
+import io.euhedral_execution.training.scheduling.fixtures.SchedulingFixtures;
 import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
@@ -16,9 +16,9 @@ class SequenceFinderTest {
         CandidateGenerationConfig config = new CandidateGenerationConfig(32, 7,
                 new int[]{1, 1, 1, 1, 2, 2, 3, 5, 8, 16},
                 8, 7, 1, new CmaEsConfig(false, 1, 1, 8, 0.2, 2));
-        var corpus = Phase3Fixtures.corpus(List.of());
+        var corpus = SchedulingFixtures.corpus(List.of());
         CandidateGenerationRequest request = new CandidateGenerationRequest(1, 16, 4, 3,
-                100, 77L, corpus, Set.of(), Phase3Fixtures.predictor(), config);
+                100, 77L, corpus, Set.of(), SchedulingFixtures.predictor(), config);
         var first = SequenceFinder.generate(request);
         var second = SequenceFinder.generate(request);
 

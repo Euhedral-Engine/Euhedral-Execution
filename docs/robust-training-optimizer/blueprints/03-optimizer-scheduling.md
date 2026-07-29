@@ -177,12 +177,12 @@ calculate:
 
 ```text
 predictedWorstQuality = min(q_s)
-predictedQualityP25 = RobustStatistics.quantileType7(q_s, 0.25)
+predictedQualityP25 = VectorStatistics.quantileType7(q_s, 0.25)
 predictedGeometricMeanQuality =
     StrictMath.exp(
-        RobustStatistics.compensatedMean(
+        VectorStatistics.compensatedMean(
             StrictMath.log(max(q_s, 1.0e-12))))
-predictedQualityMad = RobustStatistics.mad(q_s)
+predictedQualityMad = VectorStatistics.mad(q_s)
 
 maximumEpistemicStdDev = max(s.epistemicStdDev)
 maximumDisagreementRange = max(s.disagreementRange)
@@ -334,7 +334,7 @@ Read robust summaries from the latest complete Phase 1 merge. Filter to:
 - `eligible == true`; and
 - policy not in the fixed-anchor catalog.
 
-Sort with `RobustPolicyComparator.BEST_FIRST` and take the requested leader count. If fewer exist,
+Sort with `PolicyComparator.BEST_FIRST` and take the requested leader count. If fewer exist,
 take all and transfer the shortfall to exploration. Every selected leader is scheduled under
 `LEADER_REVALIDATION` in each scenario run in the iteration.
 
@@ -539,7 +539,7 @@ Validation retains the current ranges: at least one island/generation, populatio
 finite sigma in `[0.005, 1.0]`, and minimum seeds at least two.
 
 The seed pool is the latest Phase 1 eligible summaries in
-`RobustPolicyComparator.BEST_FIRST` order, excluding fixed anchors. If fewer than
+`PolicyComparator.BEST_FIRST` order, excluding fixed anchors. If fewer than
 `minimumSeedPolicies` remain, CMA-ES returns an empty list and its quota transfers.
 
 For `I = min(config.islands, seedPool.size())`:
@@ -587,7 +587,7 @@ higher-numbered band first. A band retains the policies with the smallest unsign
 
 ```text
 HasherApi.getHash(
-    "phase3-score-band-v1\n"
+    "score-band-v1\n"
     + "iteration=" + iteration + "\n"
     + "band=" + band + "\n"
     + "policy=" + policyId.canonical() + "\n",
@@ -641,7 +641,7 @@ Sort the scenario run's selected policies by unsigned policy ID for identity mat
 of trial order:
 
 ```text
-phase3-candidate-cohort-v1
+candidate-cohort-v1
 training_run=<trainingRunId>
 kind=<BOOTSTRAP|NORMAL>
 iteration=<decimal>
@@ -655,7 +655,7 @@ The ID is `c1-<hash>`. Recompute it when reading a schedule.
 ### Benchmark run ID
 
 ```text
-phase3-benchmark-run-v1
+benchmark-run-v1
 training_run=<trainingRunId>
 kind=<BOOTSTRAP|NORMAL>
 iteration=<decimal>
@@ -681,7 +681,7 @@ fields.
 For each non-anchor:
 
 ```text
-phase3-trial-order-v1
+trial-order-v1
 cohort=<candidateCohortId>
 policy=<policy-id>
 ```
@@ -694,7 +694,7 @@ positions. Assign contiguous one-based `schedulePosition` only after final order
 For source index `i`:
 
 ```text
-phase3-frame-id-v1
+frame-id-v1
 run=<benchmarkRunId>
 source=<i>
 ```
@@ -702,7 +702,7 @@ source=<i>
 and:
 
 ```text
-phase3-frame-routing-v1
+frame-routing-v1
 run=<benchmarkRunId>
 source=<i>
 ```
@@ -738,7 +738,9 @@ The deterministic overload creates frame `i` with the supplied `idHash`; when un
 
 ### Benchmark request API
 
-Under `io.euhedral_execution.training.benchmark`:
+`BenchmarkExecutionConfig` belongs to
+`io.euhedral_execution.training.benchmark.config`; `NativeBenchmarkRunPlan` belongs to
+`io.euhedral_execution.training.benchmark.data`:
 
 ```java
 public record BenchmarkExecutionConfig(
@@ -923,7 +925,7 @@ Old models, old checkpoints, and path-derived text benchmarks never satisfy boot
 
 Given latest post-merge `M_(i-1)`:
 
-1. Build `Phase1ScenarioInputs.from(M_(i-1))`.
+1. Build `ScenarioInputs.from(M_(i-1))`.
 2. Train a fresh Phase 2 artifact at `models/model-<six-digit-i>`.
 3. Require `ModelAcceptanceStatus.ACCEPTED`, deployment eligibility, exact scenario catalog, and
    a dataset fingerprint derived from `M_(i-1)`.
@@ -1153,7 +1155,7 @@ environments. All paths are workspace-relative.
 `config_sha256` hashes UTF-8 canonical material beginning with:
 
 ```text
-phase3-run-config-v1
+closed-loop-config-v1
 ```
 
 Then emit one `name=value\n` line in Java record-component order for:
@@ -1182,7 +1184,7 @@ For a regular file, use lower-case SHA-256 of its bytes. For an artifact directo
 symlinks and hash:
 
 ```text
-phase3-directory-artifact-v1
+directory-artifact-v1
 <relative-posix-path>\t<byte-count>\t<file-sha256>
 ...
 ```
@@ -1288,7 +1290,9 @@ produce identical bytes.
 
 ### Prediction and optimizer records
 
-Under `io.euhedral_execution.training.optimization`:
+Optimizer algorithms and the predictor interface remain under
+`io.euhedral_execution.training.optimization`. Configuration records belong to its `config`
+subpackage, candidate and prediction records to `data`, and origin enums to `enums`:
 
 ```java
 public record PredictedPolicySummary(
@@ -1434,7 +1438,9 @@ Move the current pooled `SequenceFinder` implementation to
 
 ### Merge output view
 
-Under `io.euhedral_execution.training.scheduling`:
+Scheduling algorithms remain under `io.euhedral_execution.training.scheduling`.
+`OptimizationCorpusView` belongs to `scheduling.data`, while `OptimizationCorpusReader` belongs to
+`scheduling.io`:
 
 ```java
 public record OptimizationCorpusView(
@@ -1457,6 +1463,11 @@ The reader strictly joins `robust-ranking.csv`, `coverage-report.csv`,
 their ordering and metrics. It does not define new ranking math or accept a partial join.
 
 ### Budget, queue, rotation, and schedule APIs
+
+Configuration records belong to `scheduling.config`, immutable schedule state belongs to
+`scheduling.data`, enums belong to `scheduling.enums`, and codecs/readers belong to
+`scheduling.io`. Allocation, queue, rotation, and scheduling algorithms remain in the owning
+`scheduling` package. The shared canonical CSV codec is `data.io.CanonicalCsv`.
 
 ```java
 public final class BootstrapPolicyCsv {
@@ -1713,7 +1724,9 @@ reject duplicate run identity, and atomically copy it to `evidence/<benchmarkRun
 sorted bundle fingerprints in the frozen configuration hash. This is a strict new-format seed
 path, not legacy import or format detection.
 
-Under `io.euhedral_execution.training.checkpoint`:
+Checkpoint operations remain under `io.euhedral_execution.training.checkpoint`. Immutable
+checkpoint state belongs to `checkpoint.data`, and lifecycle/source enums belong to
+`checkpoint.enums`:
 
 ```java
 public enum EvidenceSource { INITIAL, BOOTSTRAP, ITERATION }
@@ -1946,46 +1959,47 @@ Implement in this dependency order.
    `euhedral-core/src/main/java/io/euhedral_execution/core/frames/BenchmarkFrame.java` and focused
    `BenchmarkFrameTest`. Do not change other frame lifecycle or routing semantics.
 2. Add predicted summary, comparator, predictor interface, candidate/schedule origin records,
-   `SchedulerSeeds`, and `CmaEsConfig` under
-   `euhedral-training/src/main/java/io/euhedral_execution/training/optimization/` as
-   `PredictedPolicySummary.java`, `PredictedPolicyRanker.java`,
-   `PredictedPolicyComparator.java`, `PolicyCurvePredictor.java`, `CandidateOrigin.java`,
-   `SchedulePolicyOrigin.java`, `PredictedCandidate.java`, `ScheduledPolicyPrediction.java`,
-   `SchedulerSeeds.java`, and `CmaEsConfig.java`.
+   `SchedulerSeeds`, and `CmaEsConfig` under the `training/optimization` package family. Keep
+   algorithms and the predictor interface in the owning package, configuration in `config`,
+   immutable request/result and prediction records in `data`, and enums in `enums`.
 3. Rewrite `CmaEsOptimizer.java` around eligible Phase 1 seeds and exact predicted summaries.
    Preserve its full-covariance mechanics and settled restarts.
 4. Rewrite `ScoreBandSampler.java` with fixed robust bands, exact capacity allocation, hash-priority
    bottom-k reservoirs, and bounded best-first backfill.
-5. Add `CandidateGenerationConfig.java`, `CandidateGenerationRequest.java`, and
-   `CandidateGenerationResult.java`. Move the current pooled `SequenceFinder` implementation to
+5. Add `CandidateGenerationConfig.java` under `optimization/config` and
+   `CandidateGenerationRequest.java` and `CandidateGenerationResult.java` under
+   `optimization/data`. Move the current pooled `SequenceFinder` implementation to
    `training/legacy/PooledSequenceFinder.java`; replace `SequenceFinder.java` with the robust
    streaming CMA/Sobol/audit/exploration facade.
-6. Add `OptimizationCorpusView.java`, `OptimizationCorpusReader.java`, and
-   `BootstrapPolicyCsv.java` under `training/scheduling`. Strictly reconstruct the Phase 1 records
-   without changing Phase 1 files or mathematics.
-7. Add `CandidateBudgetConfig.java`, `BudgetAllocation.java`, and `BudgetAllocator.java`. Share one
-   package-private exact integer Hamilton helper with exploration and score-band allocation.
-8. Add `CoverageState.java`, `CarryScenarioState.java`, `CarryForwardEntry.java`, and
-   `CarryForwardQueue.java` under `training/scheduling` with admission, rescore, coverage
-   reconciliation, priority, attempts, and capped backoff.
+6. Add `OptimizationCorpusView.java` under `scheduling/data` and
+   `OptimizationCorpusReader.java` and `BootstrapPolicyCsv.java` under `scheduling/io`. Strictly
+   reconstruct the Phase 1 records without changing Phase 1 files or mathematics.
+7. Add `CandidateBudgetConfig.java` under `scheduling/config`, `BudgetAllocation.java` under
+   `scheduling/data`, and `BudgetAllocator.java` under `scheduling`. Share one package-private
+   exact integer Hamilton helper with exploration and score-band allocation.
+8. Add `CoverageState.java` under `scheduling/enums`, `CarryScenarioState.java` and
+   `CarryForwardEntry.java` under `scheduling/data`, and `CarryForwardQueue.java` under
+   `scheduling` with admission, rescore, coverage reconciliation, priority, attempts, and capped
+   backoff.
 9. Add `RotationGroup.java` and `ScenarioRotation.java`.
-10. Add `SchedulePreparation.java`, `RunKind.java`, `ScheduledRun.java`,
-    `ScenarioBudgetReport.java`, `IterationSchedule.java`, `CandidateScheduler.java`,
-    `BootstrapScheduler.java`, and `ScheduleCodec.java` under `training/scheduling`.
-11. Add `BenchmarkExecutionConfig.java` and `NativeBenchmarkRunPlan.java` under
-    `training/benchmark`.
+10. Add immutable schedule records under `scheduling/data`, `RunKind.java` under
+    `scheduling/enums`, `CandidateScheduler.java` and `BootstrapScheduler.java` under
+    `scheduling`, and `ScheduleCodec.java` under `scheduling/io`. Add the shared
+    `CanonicalCsv.java` under `training/data/io`.
+11. Add `BenchmarkExecutionConfig.java` under `benchmark/config` and
+    `NativeBenchmarkRunPlan.java` under `benchmark/data`.
 12. Update `BenchmarkFrameSink.java` with the documented consumed-counter acquire/release
     publication. Do not change its queue topology or pause protocol.
 13. Move the current `BenchmarkRunner` implementation to
     `training/legacy/PooledBenchmarkRunner.java`. Replace `BenchmarkRunner.java` with the v1 runner
     using deterministic frame seeds, monotonic counter deltas, stable statuses, paused evidence
     writes, strict read-back, and atomic bundle publication.
-14. Add `CheckpointStage.java`, `EvidenceSource.java`, `PendingRunStatus.java`,
-    `ArtifactReference.java`, `EvidenceIndexEntry.java`, `PendingBenchmarkRun.java`,
-    `ClosedLoopCheckpoint.java`, `LoadedCheckpoint.java`, `CheckpointSnapshotCodec.java`,
-    `ArtifactFingerprint.java`, and `WorkspaceLock.java` under `training/checkpoint`.
-15. Add top-level `ClosedLoopConfig.java`, `ClosedLoopResult.java`, and package-private
-    `ClosedLoopServices.java` under `training`. Replace `ClosedLoopRunner`'s pooled pipeline and
+14. Add checkpoint enums under `checkpoint/enums`, immutable checkpoint records under
+    `checkpoint/data`, and `CheckpointSnapshotCodec.java`, `ArtifactFingerprint.java`, and
+    `WorkspaceLock.java` under `training/checkpoint`.
+15. Add `ClosedLoopConfig.java` under `training/config`, `ClosedLoopResult.java` under
+    `training/data`, and package-private `ClosedLoopServices.java` under `training`. Replace
+    `ClosedLoopRunner`'s pooled pipeline and
     `state.properties` logic with the typed state machine, bootstrap, Phase 1/2 integration,
     scheduling, native benchmark execution, post-merge, carry reconciliation, and resume/adoption
     rules.
@@ -2288,15 +2302,15 @@ Implemented:
 
 - Added deterministic `BenchmarkFrame.generate(..., routingSeed, ...)` overloads and focused
   `BenchmarkFrameTest`.
-- Added Phase 3 predicted-policy primitives under `training/optimization`:
-  `PredictedPolicySummary`, `PredictedPolicyComparator`, `PolicyCurvePredictor`, candidate/origin
-  records, and `CmaEsConfig`.
+- Added predicted-policy algorithms and the predictor interface under `training/optimization`,
+  immutable candidate/prediction records under `optimization/data`, origins under
+  `optimization/enums`, and `CmaEsConfig` under `optimization/config`.
 - Replaced `ScoreBandSampler` with fixed ten-band, Hamilton-capacity, hash-priority bottom-k
   retention and best-first overflow backfill. Retained the pooled-v0 constructor/adapter so existing
   transitional tests and callers still compile.
-- Added scheduler primitives under `training/scheduling`: checked integer `HamiltonAllocator`,
-  candidate budget records/allocator, coverage states, carry-forward row/queue priority with capped
-  backoff, and exact per-environment/core scenario rotation.
+- Added scheduling algorithms under `training/scheduling`, configuration under
+  `scheduling/config`, immutable scheduling state under `scheduling/data`, lifecycle enums under
+  `scheduling/enums`, and codecs/readers under `scheduling/io`.
 
 Commands run:
 
@@ -2436,15 +2450,16 @@ Implemented:
   while retaining pooled-v0 adapter records only for the legacy class.
 - Added `SchedulerSeeds`, `PredictedPolicyRanker`, and candidate-generation request/result/config
   records.
-- Added Phase 3 scheduling records and helpers for optimization corpus view, bootstrap vectors,
+- Added scheduling records and helpers for optimization corpus view, bootstrap vectors,
   budgeted schedule preparation/completion, bootstrap scheduling, schedule CSV writing/reading,
   scenario rotation, and carry queue static APIs.
-- Added Phase 3 benchmark request records and a typed `BenchmarkRunner.runV1` that emits strict
+- Added benchmark configuration and request records and a typed `BenchmarkRunner.runV1` that emits strict
   schema-v1 observation bundles through `ObservationBundleWriter` and validates them with
   `ObservationBundleReader.stream`.
-- Added checkpoint records, artifact fingerprinting, workspace locking, and atomic snapshot
+- Added checkpoint state under `checkpoint/data`, lifecycle/source enums under
+  `checkpoint/enums`, and artifact fingerprinting, workspace locking, and atomic snapshot
   directory writing/loading under `training/checkpoint`.
-- Added typed `ClosedLoopConfig`, `ClosedLoopResult`, and `ClosedLoopServices`, and replaced
+- Added typed `config.ClosedLoopConfig`, `data.ClosedLoopResult`, and `ClosedLoopServices`, and replaced
   `ClosedLoopRunner`'s new path with a typed checkpoint-owning entry point. The no-arg adapter now
   rejects use until Phase 5 supplies final configuration.
 - Updated `Runner` so transitional pooled commands call the legacy classes explicitly.
@@ -2458,8 +2473,8 @@ env JAVA_HOME=/home/bagotay/.local/share/mise/installs/java/21.0.2 \
     PATH=/home/bagotay/.local/share/mise/installs/java/21.0.2/bin:/usr/bin:/bin \
     /home/bagotay/.local/share/mise/installs/maven/3.9.16/apache-maven-3.9.16/bin/mvn \
     -B -pl euhedral-training -DskipTests compile
-  -> first run failed on package-private StrictCsv access; replaced new-code calls with local
-     minimal CSV handling
+  -> first run failed on package-private `StrictCsv` access; the new path uses the public
+     `data.io.CanonicalCsv` codec
   -> second run failed on the earlier partial primitive API mismatch; normalized
      PolicyCurvePredictor, PredictedCandidate, ScheduledPolicyPrediction, and SchedulePolicyOrigin
      to the blueprint contract
@@ -2536,3 +2551,29 @@ Remaining verification limits:
   were run.
 - Pre-existing staged and untracked training input/output data remained untouched and must remain
   excluded from the implementation commit.
+
+## Naming and package cleanup record
+
+Rename-only cleanup performed on 2026-07-29:
+
+- Renamed `Phase3Csv` to `CanonicalCsv` and moved the shared codec to `training/data/io`.
+- Renamed the cross-component test helper `Phase3Fixtures` to `SchedulingFixtures`.
+- Removed phase-number prefixes from seed, identity, configuration-fingerprint, directory-
+  fingerprint, and benchmark lattice-name strings. The settled material and ordering are otherwise
+  unchanged.
+- Sorted configuration, immutable data, enums, and I/O types into the `config`, `data`, `enums`,
+  and `io` subpackages documented above. Algorithm ownership, visibility, memory behavior,
+  concurrency semantics, and mathematical precision are unchanged.
+- Updated this blueprint and the Phase 3 conformance audit to use the final Phase 1 and Phase 3
+  domain names, including `VectorStatistics`, `PolicyComparator`, `ScenarioInputs`,
+  `CanonicalCsv`, and `SchedulingFixtures`.
+
+Validation:
+
+```text
+mvn -B -pl euhedral-training -DskipTests compile
+  BUILD SUCCESS
+
+mvn -B -pl euhedral-training test
+  BUILD SUCCESS; 105 tests, 0 failures, 0 errors, 1 skipped opt-in integration test
+```

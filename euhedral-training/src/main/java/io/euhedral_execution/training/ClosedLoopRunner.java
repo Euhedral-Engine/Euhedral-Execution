@@ -1,45 +1,49 @@
 package io.euhedral_execution.training;
 
-import io.euhedral_execution.training.benchmark.NativeBenchmarkRunPlan;
+import io.euhedral_execution.training.benchmark.data.NativeBenchmarkRunPlan;
 import io.euhedral_execution.training.checkpoint.ArtifactFingerprint;
-import io.euhedral_execution.training.checkpoint.ArtifactReference;
 import io.euhedral_execution.training.checkpoint.CheckpointSnapshotCodec;
-import io.euhedral_execution.training.checkpoint.CheckpointStage;
-import io.euhedral_execution.training.checkpoint.ClosedLoopCheckpoint;
 import io.euhedral_execution.training.checkpoint.ClosedLoopConfigFingerprint;
-import io.euhedral_execution.training.checkpoint.EvidenceIndexEntry;
-import io.euhedral_execution.training.checkpoint.EvidenceSource;
-import io.euhedral_execution.training.checkpoint.LoadedCheckpoint;
-import io.euhedral_execution.training.checkpoint.PendingBenchmarkRun;
-import io.euhedral_execution.training.checkpoint.PendingRunStatus;
 import io.euhedral_execution.training.checkpoint.WorkspaceLock;
+import io.euhedral_execution.training.checkpoint.data.ArtifactReference;
+import io.euhedral_execution.training.checkpoint.data.ClosedLoopCheckpoint;
+import io.euhedral_execution.training.checkpoint.data.EvidenceIndexEntry;
+import io.euhedral_execution.training.checkpoint.data.LoadedCheckpoint;
+import io.euhedral_execution.training.checkpoint.data.PendingBenchmarkRun;
+import io.euhedral_execution.training.checkpoint.enums.CheckpointStage;
+import io.euhedral_execution.training.checkpoint.enums.EvidenceSource;
+import io.euhedral_execution.training.checkpoint.enums.PendingRunStatus;
+import io.euhedral_execution.training.config.ClosedLoopConfig;
 import io.euhedral_execution.training.data.BenchmarkRunContext;
+import io.euhedral_execution.training.data.ClosedLoopResult;
 import io.euhedral_execution.training.data.SourceScenario;
 import io.euhedral_execution.training.data.io.ObservationBundle;
 import io.euhedral_execution.training.data.io.ObservationBundleReader;
-import io.euhedral_execution.training.learning.ModelAcceptanceStatus;
-import io.euhedral_execution.training.learning.Phase1ScenarioInputs;
 import io.euhedral_execution.training.learning.ScenarioConditionedModel;
-import io.euhedral_execution.training.learning.ScenarioModelMetadata;
-import io.euhedral_execution.training.learning.ScenarioModelMetadataCodec;
 import io.euhedral_execution.training.learning.ScenarioModelTrainer;
-import io.euhedral_execution.training.learning.ScenarioTrainingArtifacts;
-import io.euhedral_execution.training.learning.ScenarioTrainingRequest;
-import io.euhedral_execution.training.merge.CalibrationPlan;
-import io.euhedral_execution.training.merge.CalibrationPlanCsv;
-import io.euhedral_execution.training.optimization.CandidateGenerationRequest;
+import io.euhedral_execution.training.learning.enums.ModelAcceptanceStatus;
+import io.euhedral_execution.training.learning.inputs.ScenarioInputs;
+import io.euhedral_execution.training.learning.inputs.ScenarioTrainingRequest;
+import io.euhedral_execution.training.learning.metadata.ScenarioModelMetadata;
+import io.euhedral_execution.training.learning.metadata.ScenarioModelMetadataCodec;
+import io.euhedral_execution.training.learning.output.ScenarioTrainingArtifacts;
+import io.euhedral_execution.training.merge.data.CalibrationPlan;
+import io.euhedral_execution.training.merge.data.CalibrationPlanCsv;
 import io.euhedral_execution.training.optimization.PolicyCurvePredictor;
 import io.euhedral_execution.training.optimization.PredictedPolicyRanker;
-import io.euhedral_execution.training.scheduling.BootstrapPolicyCsv;
+import io.euhedral_execution.training.optimization.data.CandidateGenerationRequest;
 import io.euhedral_execution.training.scheduling.BootstrapScheduler;
 import io.euhedral_execution.training.scheduling.CandidateScheduler;
 import io.euhedral_execution.training.scheduling.CarryForwardQueue;
-import io.euhedral_execution.training.scheduling.IterationSchedule;
-import io.euhedral_execution.training.scheduling.OptimizationCorpusReader;
-import io.euhedral_execution.training.scheduling.OptimizationCorpusView;
-import io.euhedral_execution.training.scheduling.RotationGroup;
 import io.euhedral_execution.training.scheduling.ScenarioRotation;
-import io.euhedral_execution.training.scheduling.ScheduleCodec;
+import io.euhedral_execution.training.scheduling.data.IterationSchedule;
+import io.euhedral_execution.training.scheduling.data.OptimizationCorpusView;
+import io.euhedral_execution.training.scheduling.data.RotationGroup;
+import io.euhedral_execution.training.scheduling.data.ScheduledRun;
+import io.euhedral_execution.training.scheduling.enums.RunKind;
+import io.euhedral_execution.training.scheduling.io.BootstrapPolicyCsv;
+import io.euhedral_execution.training.scheduling.io.OptimizationCorpusReader;
+import io.euhedral_execution.training.scheduling.io.ScheduleCodec;
 import java.io.IOException;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
@@ -203,7 +207,7 @@ public final class ClosedLoopRunner {
             }
             var run = schedule.runs().getFirst();
             PendingBenchmarkRun pending = new PendingBenchmarkRun(0,
-                    io.euhedral_execution.training.scheduling.RunKind.BOOTSTRAP, scenario,
+                    io.euhedral_execution.training.scheduling.enums.RunKind.BOOTSTRAP, scenario,
                     run.benchmarkRunId(), run.candidateCohortId(),
                     reference(config.workspace(), scheduleDirectory),
                     "evidence/" + run.benchmarkRunId(), PendingRunStatus.PENDING);
@@ -293,7 +297,7 @@ public final class ClosedLoopRunner {
                     metadata.featureSet());
         } else {
             trained = services.train(new ScenarioTrainingRequest(
-                    Phase1ScenarioInputs.from(merge), config.requiredScenarios(),
+                    ScenarioInputs.from(merge), config.requiredScenarios(),
                     modelDirectory, config.commitSha(), config.dirtyWorkingTree(),
                     config.trainingConfig()));
         }
@@ -374,7 +378,7 @@ public final class ClosedLoopRunner {
         ArtifactReference scheduleReference = reference(config.workspace(), scheduleDirectory);
         List<PendingBenchmarkRun> pending = iterationSchedule.runs().stream().map(run ->
                 new PendingBenchmarkRun(iteration,
-                        io.euhedral_execution.training.scheduling.RunKind.NORMAL,
+                        io.euhedral_execution.training.scheduling.enums.RunKind.NORMAL,
                         run.scenario(), run.benchmarkRunId(), run.candidateCohortId(),
                         scheduleReference, "evidence/" + run.benchmarkRunId(),
                         PendingRunStatus.PENDING)).toList();
@@ -512,7 +516,7 @@ public final class ClosedLoopRunner {
 
     private static NativeBenchmarkRunPlan plan(ClosedLoopConfig config,
             IterationSchedule schedule,
-            io.euhedral_execution.training.scheduling.ScheduledRun run, Path output) {
+            io.euhedral_execution.training.scheduling.data.ScheduledRun run, Path output) {
         return new NativeBenchmarkRunPlan(config.trainingRunId(), schedule.iteration(),
                 run.benchmarkRunId(), run.candidateCohortId(), run.scenario(), run.policies(),
                 config.benchmarkConfig(), run.parameters(), config.schedulerSeed(),

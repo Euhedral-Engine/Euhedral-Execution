@@ -3,14 +3,14 @@ package io.euhedral_execution.training;
 import io.euhedral_execution.training.data.PolicyId;
 import io.euhedral_execution.training.data.PolicyRegistry;
 import io.euhedral_execution.training.data.PolicyVector;
-import io.euhedral_execution.training.optimization.CandidateGenerationRequest;
-import io.euhedral_execution.training.optimization.CandidateGenerationResult;
-import io.euhedral_execution.training.optimization.CandidateOrigin;
 import io.euhedral_execution.training.optimization.CmaEsOptimizer;
-import io.euhedral_execution.training.optimization.PredictedCandidate;
 import io.euhedral_execution.training.optimization.PredictedPolicyComparator;
-import io.euhedral_execution.training.optimization.PredictedPolicySummary;
 import io.euhedral_execution.training.optimization.ScoreBandSampler;
+import io.euhedral_execution.training.optimization.data.CandidateGenerationRequest;
+import io.euhedral_execution.training.optimization.data.CandidateGenerationResult;
+import io.euhedral_execution.training.optimization.data.PredictedCandidate;
+import io.euhedral_execution.training.optimization.data.PredictedPolicySummary;
+import io.euhedral_execution.training.optimization.enums.CandidateOrigin;
 import io.euhedral_execution.training.scheduling.HamiltonAllocator;
 import io.euhedral_execution.training.utils.CommonFunctions;
 import java.util.ArrayList;
@@ -35,7 +35,7 @@ public final class SequenceFinder {
                 request.corpus().eligiblePolicies(), request.fixedAnchorIds(),
                 request.predictor(), request.config().cma(),
                 io.euhedral_execution.training.optimization.SchedulerSeeds.hash(
-                        "phase3-cma-islands-v1\niteration=" + request.iteration() + "\n",
+                        "cma-islands-v1\niteration=" + request.iteration() + "\n",
                         request.schedulerSeed()));
         List<PredictedCandidate> cma = cmaProposals.stream().sorted(
                 Comparator.comparing(PredictedCandidate::prediction,
