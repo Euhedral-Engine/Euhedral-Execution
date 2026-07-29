@@ -3,8 +3,11 @@ package io.euhedral_execution.training.optimization;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.euhedral_execution.training.data.PolicyVector;
-import io.euhedral_execution.training.merge.MergeRecords.RobustPolicySummary;
-import io.euhedral_execution.training.scheduling.fixtures.Phase3Fixtures;
+import io.euhedral_execution.training.merge.data.MergeRecords.RobustPolicySummary;
+import io.euhedral_execution.training.optimization.config.CmaEsConfig;
+import io.euhedral_execution.training.optimization.data.PredictedCandidate;
+import io.euhedral_execution.training.optimization.enums.CandidateOrigin;
+import io.euhedral_execution.training.scheduling.fixtures.SchedulingFixtures;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -17,17 +20,17 @@ class CmaEsOptimizerTest {
     void producesDeterministicNormalizedPoliciesInProductionOrder() {
         List<RobustPolicySummary> measured = new ArrayList<>();
         for (int row = 0; row < 80; row++) {
-            measured.add(Phase3Fixtures.eligible(Phase3Fixtures.policy(row),
+            measured.add(SchedulingFixtures.eligible(SchedulingFixtures.policy(row),
                     1.0 - row / 100.0));
         }
         CmaEsConfig config = new CmaEsConfig(true, 2, 3, 16, 0.20, 10);
         CmaEsOptimizer optimizer = new CmaEsOptimizer();
 
         List<PredictedCandidate> first = optimizer.optimize(measured, Set.of(),
-                Phase3Fixtures.predictor(), config, 99L);
+                SchedulingFixtures.predictor(), config, 99L);
         Collections.reverse(measured);
         List<PredictedCandidate> permuted = optimizer.optimize(measured, Set.of(),
-                Phase3Fixtures.predictor(), config, 99L);
+                SchedulingFixtures.predictor(), config, 99L);
 
         assertThat(first).hasSize(96);
         assertThat(first.stream().map(candidate -> candidate.policy().id()).toList())
@@ -52,13 +55,13 @@ class CmaEsOptimizerTest {
 
     @Test
     void excludesAnchorsAndRequiresTheConfiguredSeedMinimum() {
-        PolicyVector anchor = Phase3Fixtures.policy(0);
+        PolicyVector anchor = SchedulingFixtures.policy(0);
         List<RobustPolicySummary> measured = List.of(
-                Phase3Fixtures.eligible(anchor, 1.0),
-                Phase3Fixtures.eligible(Phase3Fixtures.policy(1), 0.9));
+                SchedulingFixtures.eligible(anchor, 1.0),
+                SchedulingFixtures.eligible(SchedulingFixtures.policy(1), 0.9));
         CmaEsConfig config = new CmaEsConfig(true, 1, 1, 8, 0.20, 2);
 
         assertThat(new CmaEsOptimizer().optimize(measured, Set.of(anchor.id()),
-                Phase3Fixtures.predictor(), config, 1L)).isEmpty();
+                SchedulingFixtures.predictor(), config, 1L)).isEmpty();
     }
 }

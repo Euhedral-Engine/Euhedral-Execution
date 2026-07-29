@@ -3,8 +3,10 @@ package io.euhedral_execution.training.scheduling;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.euhedral_execution.training.benchmark.BenchmarkExecutionConfig;
-import io.euhedral_execution.training.scheduling.fixtures.Phase3Fixtures;
+import io.euhedral_execution.training.benchmark.config.BenchmarkExecutionConfig;
+import io.euhedral_execution.training.scheduling.data.IterationSchedule;
+import io.euhedral_execution.training.scheduling.fixtures.SchedulingFixtures;
+import io.euhedral_execution.training.scheduling.io.ScheduleCodec;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -21,13 +23,13 @@ class ScheduleCodecTest {
         BenchmarkExecutionConfig config = new BenchmarkExecutionConfig(2, 100, 50, 8,
                 1_000, false);
         IterationSchedule schedule = BootstrapScheduler.create("training",
-                Phase3Fixtures.S1, List.of(Phase3Fixtures.policy(1),
-                        Phase3Fixtures.policy(2), Phase3Fixtures.policy(3)),
+                SchedulingFixtures.S1, List.of(SchedulingFixtures.policy(1),
+                        SchedulingFixtures.policy(2), SchedulingFixtures.policy(3)),
                 91L, 0, "0".repeat(40), false, "f", config);
         Path first = ScheduleCodec.write(temp.resolve("first"), schedule);
         Path second = ScheduleCodec.write(temp.resolve("second"), schedule);
         IterationSchedule read = ScheduleCodec.read(first,
-                new TreeSet<>(List.of(Phase3Fixtures.S1)), "training", 91L,
+                new TreeSet<>(List.of(SchedulingFixtures.S1)), "training", 91L,
                 "0".repeat(40), false, config);
 
         assertThat(read.trainingRunId()).isEqualTo("training");
@@ -44,12 +46,12 @@ class ScheduleCodecTest {
         BenchmarkExecutionConfig config = new BenchmarkExecutionConfig(1, 100, 50, 8,
                 1_000, false);
         IterationSchedule schedule = BootstrapScheduler.create("training",
-                Phase3Fixtures.S1, List.of(Phase3Fixtures.policy(1),
-                        Phase3Fixtures.policy(2)), 91L, 0, "0".repeat(40), false, "f", config);
+                SchedulingFixtures.S1, List.of(SchedulingFixtures.policy(1),
+                        SchedulingFixtures.policy(2)), 91L, 0, "0".repeat(40), false, "f", config);
         Path directory = ScheduleCodec.write(temp.resolve("schedule"), schedule);
         Files.writeString(directory.resolve("unexpected"), "x");
         assertThatThrownBy(() -> ScheduleCodec.read(directory,
-                new TreeSet<>(List.of(Phase3Fixtures.S1)), "training", 91L,
+                new TreeSet<>(List.of(SchedulingFixtures.S1)), "training", 91L,
                 "0".repeat(40), false, config)).isInstanceOf(IllegalArgumentException.class);
     }
 }

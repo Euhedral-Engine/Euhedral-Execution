@@ -1,6 +1,7 @@
 package io.euhedral_execution.training.optimization;
 
 import io.euhedral_execution.training.data.PolicyId;
+import io.euhedral_execution.training.optimization.data.PredictedCandidate;
 import io.euhedral_execution.training.scheduling.HamiltonAllocator;
 import java.util.ArrayList;
 import java.util.Comparator;

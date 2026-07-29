@@ -3,6 +3,8 @@ package io.euhedral_execution.training.scheduling;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.euhedral_execution.training.scheduling.config.CandidateBudgetConfig;
+import io.euhedral_execution.training.scheduling.data.BudgetAllocation;
 import org.junit.jupiter.api.Test;
 
 class BudgetAllocatorTest {

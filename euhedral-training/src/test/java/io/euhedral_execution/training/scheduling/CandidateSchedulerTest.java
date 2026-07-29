@@ -2,12 +2,15 @@ package io.euhedral_execution.training.scheduling;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.euhedral_execution.training.benchmark.BenchmarkExecutionConfig;
-import io.euhedral_execution.training.data.PolicyRole;
-import io.euhedral_execution.training.optimization.CandidateGenerationResult;
-import io.euhedral_execution.training.optimization.CandidateOrigin;
-import io.euhedral_execution.training.optimization.PredictedCandidate;
-import io.euhedral_execution.training.scheduling.fixtures.Phase3Fixtures;
+import io.euhedral_execution.training.benchmark.config.BenchmarkExecutionConfig;
+import io.euhedral_execution.training.data.enums.PolicyRole;
+import io.euhedral_execution.training.optimization.data.CandidateGenerationResult;
+import io.euhedral_execution.training.optimization.data.PredictedCandidate;
+import io.euhedral_execution.training.optimization.enums.CandidateOrigin;
+import io.euhedral_execution.training.scheduling.config.CandidateBudgetConfig;
+import io.euhedral_execution.training.scheduling.data.IterationSchedule;
+import io.euhedral_execution.training.scheduling.data.ScheduledRun;
+import io.euhedral_execution.training.scheduling.fixtures.SchedulingFixtures;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.TreeSet;
@@ -16,17 +19,17 @@ import org.junit.jupiter.api.Test;
 class CandidateSchedulerTest {
     @Test
     void fillsExactDisjointBudgetsAndSpreadsAnchors() {
-        var anchor1 = Phase3Fixtures.policy(1);
-        var anchor2 = Phase3Fixtures.policy(2);
-        var leader1 = Phase3Fixtures.eligible(Phase3Fixtures.policy(3), 0.8);
-        var leader2 = Phase3Fixtures.eligible(Phase3Fixtures.policy(4), 0.7);
-        var incomplete = Phase3Fixtures.incomplete(Phase3Fixtures.policy(5),
-                new TreeSet<>(List.of(Phase3Fixtures.S1)));
-        var corpus = Phase3Fixtures.corpus(List.of(leader2, incomplete, leader1));
+        var anchor1 = SchedulingFixtures.policy(1);
+        var anchor2 = SchedulingFixtures.policy(2);
+        var leader1 = SchedulingFixtures.eligible(SchedulingFixtures.policy(3), 0.8);
+        var leader2 = SchedulingFixtures.eligible(SchedulingFixtures.policy(4), 0.7);
+        var incomplete = SchedulingFixtures.incomplete(SchedulingFixtures.policy(5),
+                new TreeSet<>(List.of(SchedulingFixtures.S1)));
+        var corpus = SchedulingFixtures.corpus(List.of(leader2, incomplete, leader1));
         var preparation = CandidateScheduler.prepare(1, 10,
-                Phase3Fixtures.calibration(List.of(anchor1, anchor2)), corpus, List.of(),
-                List.of(Phase3Fixtures.S1, Phase3Fixtures.S2),
-                new CandidateBudgetConfig(1, 1, 1, 1), Phase3Fixtures.predictor());
+                SchedulingFixtures.calibration(List.of(anchor1, anchor2)), corpus, List.of(),
+                List.of(SchedulingFixtures.S1, SchedulingFixtures.S2),
+                new CandidateBudgetConfig(1, 1, 1, 1), SchedulingFixtures.predictor());
 
         List<PredictedCandidate> audits = candidates(10, 2, CandidateOrigin.SCORE_BAND);
         List<PredictedCandidate> base = candidates(20, 2, CandidateOrigin.DIRECT_SOBOL);
@@ -60,9 +63,9 @@ class CandidateSchedulerTest {
             CandidateOrigin origin) {
         ArrayList<PredictedCandidate> result = new ArrayList<>();
         for (int i = 0; i < count; i++) {
-            var policy = Phase3Fixtures.policy(start + i);
+            var policy = SchedulingFixtures.policy(start + i);
             result.add(new PredictedCandidate(policy,
-                    Phase3Fixtures.prediction(policy, 0.5 + i * 0.01,
+                    SchedulingFixtures.prediction(policy, 0.5 + i * 0.01,
                             0.6 + i * 0.01, 0.7 + i * 0.01), origin));
         }
         return result;

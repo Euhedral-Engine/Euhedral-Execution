@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.euhedral_execution.training.data.SourceScenario;
+import io.euhedral_execution.training.scheduling.data.RotationGroup;
 import java.util.List;
 import java.util.TreeMap;
 import java.util.TreeSet;

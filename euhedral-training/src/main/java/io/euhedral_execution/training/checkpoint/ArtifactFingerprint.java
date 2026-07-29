@@ -17,7 +17,7 @@ public final class ArtifactFingerprint {
             throw new IllegalStateException(e);
         }
         if (Files.isDirectory(artifact)) {
-            digest.update("phase3-directory-artifact-v1\n".getBytes(StandardCharsets.UTF_8));
+            digest.update("directory-artifact-v1\n".getBytes(StandardCharsets.UTF_8));
             try (var stream = Files.walk(artifact)) {
                 List<Path> paths = stream.sorted(java.util.Comparator.comparing(path ->
                         artifact.relativize(path).toString().replace('\\', '/'))).toList();

@@ -1,13 +1,44 @@
 package io.euhedral_execution.training.scheduling;
 
-import io.euhedral_execution.training.benchmark.BenchmarkExecutionConfig;
-import io.euhedral_execution.training.data.*;
-import io.euhedral_execution.training.merge.CalibrationPlan;
-import io.euhedral_execution.training.merge.MergeRecords.RobustPolicySummary;
-import io.euhedral_execution.training.merge.RobustPolicyComparator;
-import io.euhedral_execution.training.optimization.*;
+import io.euhedral_execution.training.benchmark.config.BenchmarkExecutionConfig;
+import io.euhedral_execution.training.data.BenchmarkParameters;
+import io.euhedral_execution.training.data.FrameSourceSeed;
+import io.euhedral_execution.training.data.PolicyId;
+import io.euhedral_execution.training.data.PolicyVector;
+import io.euhedral_execution.training.data.ScheduledPolicy;
+import io.euhedral_execution.training.data.SourceScenario;
+import io.euhedral_execution.training.data.enums.PolicyRole;
+import io.euhedral_execution.training.learning.data.PolicyPredictionCurve;
+import io.euhedral_execution.training.merge.PolicyComparator;
+import io.euhedral_execution.training.merge.data.CalibrationPlan;
+import io.euhedral_execution.training.merge.data.MergeRecords.RobustPolicySummary;
+import io.euhedral_execution.training.optimization.PolicyCurvePredictor;
+import io.euhedral_execution.training.optimization.PredictedPolicyComparator;
+import io.euhedral_execution.training.optimization.PredictedPolicyRanker;
 import io.euhedral_execution.training.optimization.SchedulerSeeds;
-import java.util.*;
+import io.euhedral_execution.training.optimization.data.CandidateGenerationResult;
+import io.euhedral_execution.training.optimization.data.PredictedPolicySummary;
+import io.euhedral_execution.training.optimization.data.ScheduledPolicyPrediction;
+import io.euhedral_execution.training.optimization.enums.CandidateOrigin;
+import io.euhedral_execution.training.optimization.enums.SchedulePolicyOrigin;
+import io.euhedral_execution.training.scheduling.config.CandidateBudgetConfig;
+import io.euhedral_execution.training.scheduling.data.BudgetAllocation;
+import io.euhedral_execution.training.scheduling.data.CarryForwardEntry;
+import io.euhedral_execution.training.scheduling.data.CarryScenarioState;
+import io.euhedral_execution.training.scheduling.data.IterationSchedule;
+import io.euhedral_execution.training.scheduling.data.OptimizationCorpusView;
+import io.euhedral_execution.training.scheduling.data.ScenarioBudgetReport;
+import io.euhedral_execution.training.scheduling.data.SchedulePreparation;
+import io.euhedral_execution.training.scheduling.data.ScheduledRun;
+import io.euhedral_execution.training.scheduling.enums.RunKind;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
 
 public final class CandidateScheduler {
     public static SchedulePreparation prepare(int iteration, int candidateBudget,
@@ -22,7 +53,7 @@ public final class CandidateScheduler {
         List<RobustPolicySummary> leaders = corpus.eligiblePolicies().stream()
                 .filter(RobustPolicySummary::eligible)
                 .filter(summary -> !anchorIds.contains(summary.policy().id()))
-                .sorted(RobustPolicyComparator.BEST_FIRST)
+                .sorted(PolicyComparator.BEST_FIRST)
                 .limit(allocation.leaderRevalidation())
                 .toList();
         TreeMap<SourceScenario, List<CarryForwardEntry>> carry = new TreeMap<>();
@@ -39,7 +70,7 @@ public final class CandidateScheduler {
         carry.values().forEach(rows -> rows.forEach(entry ->
                 uniqueCarry.put(entry.policy().id(), entry)));
         for (CarryForwardEntry entry : uniqueCarry.values()) {
-            var curve = new io.euhedral_execution.training.learning.PolicyPredictionCurve(
+            var curve = new PolicyPredictionCurve(
                     entry.policy(), entry.scenarios().values().stream()
                     .map(CarryScenarioState::prediction).toList());
             predictions.add(new ScheduledPolicyPrediction(entry.policy(),

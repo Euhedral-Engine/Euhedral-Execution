@@ -1,9 +1,11 @@
 package io.euhedral_execution.training;
 
-import io.euhedral_execution.training.benchmark.NativeBenchmarkRunPlan;
+import io.euhedral_execution.training.benchmark.data.NativeBenchmarkRunPlan;
 import io.euhedral_execution.training.data.BenchmarkRunContext;
-import io.euhedral_execution.training.learning.*;
-import io.euhedral_execution.training.merge.CalibrationPlan;
+import io.euhedral_execution.training.learning.ScenarioConditionedModel;
+import io.euhedral_execution.training.learning.inputs.ScenarioTrainingRequest;
+import io.euhedral_execution.training.learning.output.ScenarioTrainingArtifacts;
+import io.euhedral_execution.training.merge.data.CalibrationPlan;
 import java.util.function.BooleanSupplier;
 
 interface ClosedLoopServices {

@@ -86,9 +86,6 @@ final class ScenarioAblationPlanner {
         double countSpearmanDelta = countMetrics
                 ? countsEnvironment.spearman().getAsDouble()
                   - ratioEnvironment.spearman().getAsDouble() : Double.NaN;
-        double worstDelta = countMetrics
-                ? countsEnvironment.worstMae().getAsDouble()
-                  - ratioEnvironment.worstMae().getAsDouble() : Double.NaN;
         boolean countsPassed = countMetrics
                 && countsEnvironment.mae().getAsDouble()
                 <= ratioEnvironment.mae().getAsDouble()

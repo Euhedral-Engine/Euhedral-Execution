@@ -3,13 +3,13 @@ package io.euhedral_execution.training;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.euhedral_execution.training.benchmark.BenchmarkExecutionConfig;
-import io.euhedral_execution.training.benchmark.NativeBenchmarkRunPlan;
-import io.euhedral_execution.training.data.ObservationStatus;
+import io.euhedral_execution.training.benchmark.config.BenchmarkExecutionConfig;
+import io.euhedral_execution.training.benchmark.data.NativeBenchmarkRunPlan;
 import io.euhedral_execution.training.data.ScheduledPolicy;
+import io.euhedral_execution.training.data.enums.ObservationStatus;
 import io.euhedral_execution.training.data.io.ObservationBundleReader;
 import io.euhedral_execution.training.scheduling.BootstrapScheduler;
-import io.euhedral_execution.training.scheduling.fixtures.Phase3Fixtures;
+import io.euhedral_execution.training.scheduling.fixtures.SchedulingFixtures;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -27,8 +27,8 @@ class BenchmarkRunnerV1Test {
         long seed = 91L;
         BenchmarkExecutionConfig config = new BenchmarkExecutionConfig(2, 100, 50, 8,
                 1_000, false);
-        var schedule = BootstrapScheduler.create("training", Phase3Fixtures.S1,
-                List.of(Phase3Fixtures.policy(1), Phase3Fixtures.policy(2)), seed, 0,
+        var schedule = BootstrapScheduler.create("training", SchedulingFixtures.S1,
+                List.of(SchedulingFixtures.policy(1), SchedulingFixtures.policy(2)), seed, 0,
                 "0".repeat(40), false, "f", config);
         var run = schedule.runs().getFirst();
         Path output = temp.resolve("evidence").resolve(run.benchmarkRunId());
@@ -53,8 +53,8 @@ class BenchmarkRunnerV1Test {
         long seed = 91L;
         BenchmarkExecutionConfig config = new BenchmarkExecutionConfig(1, 100, 50, 8,
                 1_000, false);
-        var schedule = BootstrapScheduler.create("training", Phase3Fixtures.S1,
-                List.of(Phase3Fixtures.policy(1)), seed, 0, "0".repeat(40), false, "f",
+        var schedule = BootstrapScheduler.create("training", SchedulingFixtures.S1,
+                List.of(SchedulingFixtures.policy(1)), seed, 0, "0".repeat(40), false, "f",
                 config);
         var run = schedule.runs().getFirst();
         Path output = temp.resolve("evidence").resolve(run.benchmarkRunId());
