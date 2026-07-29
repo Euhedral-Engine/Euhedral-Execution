@@ -1,9 +1,10 @@
 package io.euhedral_execution.training.packaging;
 
-import io.euhedral_execution.training.checkpoint.CheckpointStage;
-import io.euhedral_execution.training.data.EvidenceOrigin;
-import io.euhedral_execution.training.learning.ModelAcceptanceStatus;
-import io.euhedral_execution.training.scheduling.Phase3Csv;
+import io.euhedral_execution.training.data.enums.EvidenceOrigin;
+import io.euhedral_execution.training.data.io.CanonicalCsv;
+import io.euhedral_execution.training.learning.enums.ModelAcceptanceStatus;
+import io.euhedral_execution.training.packaging.config.TrainingRunPackageInputs;
+import io.euhedral_execution.training.packaging.enums.TrainingRunPackageStatus;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.HashMap;
@@ -40,7 +41,7 @@ final class PackageReportWriter {
         if (source.merge() == null || source.winners().isEmpty()) {
             out.append("No fully eligible winning policy is available at this checkpoint.\n");
         } else {
-            List<List<String>> ranking = Phase3Csv.read(
+            List<List<String>> ranking = CanonicalCsv.read(
                     source.merge().resolve("robust-ranking.csv"));
             out.append("| Rank | Policy ID | Worst quality | Quality P25 | Geometric mean | "
                     + "Dispersion MAD | Mean non-success | Mean timeout |\n"
@@ -138,7 +139,8 @@ final class PackageReportWriter {
                 + "scenario quality, type-7 P25, geometric mean quality, lower cross-scenario "
                 + "MAD, then measurement stability.\n\n");
         if (source.merge() == null) return out.append("Ranking is unavailable.\n").toString();
-        List<List<String>> rows = Phase3Csv.read(source.merge().resolve("robust-ranking.csv"));
+        List<List<String>> rows = CanonicalCsv.read(
+                source.merge().resolve("robust-ranking.csv"));
         out.append("## Eligible policies\n\n"
                 + "| Rank | Policy ID | Worst | P25 | Geometric mean | MAD | Relative IQR | "
                 + "Non-success | Timeout |\n"
@@ -174,7 +176,8 @@ final class PackageReportWriter {
         StringBuilder out = new StringBuilder("# Source scenario comparison\n");
         if (source.merge() == null) return out.append("\nScenario results are unavailable.\n")
                 .toString();
-        List<List<String>> rows = Phase3Csv.read(source.merge().resolve("scenario-results.csv"));
+        List<List<String>> rows = CanonicalCsv.read(
+                source.merge().resolve("scenario-results.csv"));
         Map<String, List<String>> byIdentity = new HashMap<>();
         for (int index = 1; index < rows.size(); index++) {
             List<String> row = rows.get(index);
@@ -202,7 +205,8 @@ final class PackageReportWriter {
 
     private static Map<String, Integer> calibrationCounts(Path merge) throws IOException {
         Map<String, Integer> result = new HashMap<>();
-        List<List<String>> rows = Phase3Csv.read(merge.resolve("calibration-report.csv"));
+        List<List<String>> rows = CanonicalCsv.read(
+                merge.resolve("calibration-report.csv"));
         for (int index = 1; index < rows.size(); index++) {
             result.merge(rows.get(index).get(11), 1, Integer::sum);
         }

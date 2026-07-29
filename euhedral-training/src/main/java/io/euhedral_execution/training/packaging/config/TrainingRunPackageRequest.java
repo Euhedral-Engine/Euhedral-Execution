@@ -1,4 +1,4 @@
-package io.euhedral_execution.training.packaging;
+package io.euhedral_execution.training.packaging.config;
 
 import java.nio.file.Path;
 import java.util.Objects;
