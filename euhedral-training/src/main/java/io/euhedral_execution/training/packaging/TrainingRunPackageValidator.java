@@ -304,10 +304,13 @@ public final class TrainingRunPackageValidator {
     private static void validateMerge(Path root, ClosedLoopCheckpoint checkpoint)
             throws IOException {
         if (checkpoint.latestMerge().isEmpty()) return;
-        PackageDatasetWriter.validateMeasurements(root);
+        java.util.TreeSet<io.euhedral_execution.training.data.SourceScenario> scenarios =
+                new java.util.TreeSet<>(checkpoint.requiredScenarios());
+        checkpoint.evidence().forEach(entry -> scenarios.add(entry.scenario()));
+        PackageDatasetWriter.validateMeasurements(root, scenarios);
     }
 
-    private static void validateSchedule(Path root, ClosedLoopCheckpoint checkpoint,
+    static void validateSchedule(Path root, ClosedLoopCheckpoint checkpoint,
             TrainingRunPackageInputs inputs) throws IOException {
         if (!Files.isDirectory(root.resolve("scheduler"), LinkOption.NOFOLLOW_LINKS)) return;
         var schedule = ScheduleCodec.read(root.resolve("scheduler"),
@@ -322,14 +325,48 @@ public final class TrainingRunPackageValidator {
         }
         PackageDatasetWriter.validateBenchmarkReady(
                 root.resolve("vectors/benchmark-ready.vectors.csv"), schedule);
-        if (checkpoint.pendingSchedule().isEmpty()) {
-            Set<String> completed = checkpoint.evidence().stream().filter(entry ->
-                    entry.source() == EvidenceSource.ITERATION)
-                    .map(entry -> entry.benchmarkRunId())
-                    .collect(java.util.stream.Collectors.toSet());
-            for (var run : schedule.runs()) {
-                if (!completed.contains(run.benchmarkRunId())) {
-                    throw new IOException("Derived schedule lacks checkpoint iteration evidence");
+        Map<String, io.euhedral_execution.training.checkpoint.data.EvidenceIndexEntry> evidence =
+                checkpoint.evidence().stream().collect(java.util.stream.Collectors.toMap(
+                        item -> item.benchmarkRunId(), item -> item));
+        Map<String, io.euhedral_execution.training.checkpoint.data.PendingBenchmarkRun> pending =
+                checkpoint.pendingRuns().stream().collect(java.util.stream.Collectors.toMap(
+                        item -> item.benchmarkRunId(), item -> item));
+        if (checkpoint.pendingSchedule().isPresent()
+                && pending.size() != schedule.runs().size()) {
+            throw new IOException("Pending schedule/checkpoint run set mismatch");
+        }
+        for (var run : schedule.runs()) {
+            var pendingRun = pending.get(run.benchmarkRunId());
+            if (checkpoint.pendingSchedule().isPresent()
+                    && (pendingRun == null
+                    || pendingRun.iteration() != schedule.iteration()
+                    || pendingRun.runKind() != run.runKind()
+                    || !pendingRun.scenario().equals(run.scenario())
+                    || !pendingRun.candidateCohortId().equals(run.candidateCohortId()))) {
+                throw new IOException("Pending schedule/checkpoint identity mismatch");
+            }
+            var indexed = evidence.get(run.benchmarkRunId());
+            boolean expectedEvidence = checkpoint.pendingSchedule().isEmpty()
+                    || pendingRun.status()
+                    == io.euhedral_execution.training.checkpoint.enums.PendingRunStatus.COMPLETE;
+            if (expectedEvidence != (indexed != null)) {
+                throw new IOException("Schedule/evidence completion mismatch");
+            }
+            if (indexed != null) {
+                if (indexed.source() != EvidenceSource.ITERATION
+                        || !indexed.scenario().equals(run.scenario())) {
+                    throw new IOException("Schedule/evidence identity mismatch");
+                }
+                ScheduleEvidenceCounter counter = new ScheduleEvidenceCounter();
+                ObservationBundleReader.stream(root.resolve("raw-data/bundles")
+                        .resolve(run.benchmarkRunId()), counter);
+                if (counter.context.descriptor().closedLoopIteration()
+                        != schedule.iteration()
+                        || !counter.context.descriptor().scenario().equals(run.scenario())
+                        || !counter.context.descriptor().candidateCohortId()
+                        .equals(run.candidateCohortId())
+                        || !counter.policies.equals(run.policies())) {
+                    throw new IOException("Schedule/raw evidence mismatch");
                 }
             }
         }
@@ -440,6 +477,22 @@ public final class TrainingRunPackageValidator {
         @Override
         public void onObservation(BenchmarkObservation observation) {
             observationCount = Math.addExact(observationCount, 1);
+        }
+    }
+
+    private static final class ScheduleEvidenceCounter
+            implements ObservationBundleReader.ObservationVisitor {
+        private BenchmarkRunContext context;
+        private List<ScheduledPolicy> policies;
+
+        @Override
+        public void onStart(BenchmarkRunContext run, List<ScheduledPolicy> scheduled) {
+            context = run;
+            policies = List.copyOf(scheduled);
+        }
+
+        @Override
+        public void onObservation(BenchmarkObservation observation) {
         }
     }
 

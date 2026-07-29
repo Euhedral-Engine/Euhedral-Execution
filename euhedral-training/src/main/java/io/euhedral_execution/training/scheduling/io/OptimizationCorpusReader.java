@@ -172,18 +172,16 @@ public final class OptimizationCorpusReader {
             ScenarioResultStatus status = statuses.get(scenario);
             if (status == ScenarioResultStatus.MISSING) {
                 missing.add(scenario);
-            } else {
+            } else if (status == ScenarioResultStatus.VALID_STRONG
+                    || status == ScenarioResultStatus.VALID_WEAK_OVERRIDE) {
                 measured.add(scenario);
-                if (status == ScenarioResultStatus.VALID_STRONG
-                        || status == ScenarioResultStatus.VALID_WEAK_OVERRIDE) {
-                    valid++;
-                } else {
-                    rejected.add(scenario);
-                }
+                valid++;
+            } else {
+                rejected.add(scenario);
             }
         }
         if (declared.required() != required.size()
-                || declared.observed() != measured.size()
+                || declared.observed() != measured.size() + rejected.size()
                 || declared.valid() != valid
                 || !declared.measured().equals(measured)
                 || !declared.missing().equals(missing)

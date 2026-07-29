@@ -39,6 +39,11 @@ public final class CurrentWorkspaceImporter {
 
     public static CurrentWorkspaceImportResult importWorkspace(
             CurrentWorkspaceImportRequest request) throws IOException {
+        return importWorkspace(request, PublicationProbe.NO_OP);
+    }
+
+    static CurrentWorkspaceImportResult importWorkspace(
+            CurrentWorkspaceImportRequest request, PublicationProbe probe) throws IOException {
         Path target = request.outputDirectory();
         Path parent = target.getParent();
         if (parent == null) {
@@ -58,12 +63,15 @@ public final class CurrentWorkspaceImporter {
                 throw new IllegalArgumentException(
                         "Bootstrap count exceeds unique imported policy count");
             }
+            probe.at(PublicationPoint.WRITE);
             writeCatalog(temporary.resolve(CATALOG), policies);
             writeBootstrap(temporary.resolve(BOOTSTRAP),
                     policies.subList(0, request.bootstrapPolicyCount()));
             writeReport(temporary.resolve(REPORT), state.report);
             writeForced(temporary.resolve(COMPLETE), new byte[0]);
+            probe.at(PublicationPoint.STAGED_READ_BACK);
             validate(temporary, state.report, policies.size(), request.bootstrapPolicyCount());
+            probe.at(PublicationPoint.ATOMIC_MOVE);
             try {
                 Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE);
             } catch (AtomicMoveNotSupportedException error) {
@@ -392,6 +400,20 @@ public final class CurrentWorkspaceImporter {
 
     private record ImportState(PolicyRegistry registry,
             List<CurrentWorkspaceImportReportRow> report) {
+    }
+
+    enum PublicationPoint {
+        WRITE,
+        STAGED_READ_BACK,
+        ATOMIC_MOVE
+    }
+
+    @FunctionalInterface
+    interface PublicationProbe {
+        PublicationProbe NO_OP = point -> {
+        };
+
+        void at(PublicationPoint point) throws IOException;
     }
 
     @FunctionalInterface
