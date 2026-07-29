@@ -802,3 +802,106 @@ Prompt 7B appends:
 - environment limitations;
 - user-owned path confirmation; and
 - deviations or `none`.
+
+### Completion record (2026-07-29)
+
+#### Branch and implementation
+
+Implemented on `agent/phase7b-cleanup-handoff` from Phase 7A commit `2cc606a6`.
+
+Deleted the complete ten-file
+`training.importer.currentworkspace` production package and its focused test, the four-file
+`training.legacy` package, `PolicyOrdinalNetwork`, the five pooled-only utilities, and
+`PolicyRankingTest`. Removed the pooled merger API/helpers from `DataMerger` and the trainer's
+direct t-digest dependency. Added only
+`learning/TrainingEnvironment.java`, preserving the former DJL/PyTorch/CUDA environment
+diagnostic without retaining a pooled model.
+
+Edited `Runner`/`RunnerTest`, `AuditFixtures`, the GPU launcher, the trainer README and GPU guide,
+and `docs/ML_CLOSED_LOOP_ARCHITECTURE.md` exactly within the enumerated cleanup boundary. `Runner`
+now exposes only `closed-loop`, `training-info`, and `package-run`. The audit fixture writes and
+reopens the strict schema-v1 bootstrap CSV directly, checks natural policy-ID order and all 28 raw
+lanes, and uses that one path for control, resumed, and rejected runs.
+
+Importer output directories produced before this removal remain usable as strict bootstrap-vector
+artifacts and audit records, but no importer command or current-layout parser remains. Only strict
+schema-v1 bootstrap/native evidence and typed closed-loop configuration are supported.
+
+#### Validation and package evidence
+
+All commands used Oracle OpenJDK 21.0.2 and Maven 3.9.16 from the pinned explicit prefix.
+
+```text
+-B -pl euhedral-training -am install -Dmaven.test.skip=true
+  BUILD SUCCESS; six selected reactor projects
+
+-B -pl euhedral-core -Dtest=BenchmarkFrameTest test
+  3 tests, 0 failures, 0 errors, 0 skipped
+
+-B -pl euhedral-training -Dtest=<Phase 1-3 focused list> test
+  67 tests, 0 failures, 0 errors, 0 skipped
+
+-B -pl euhedral-training -Dtest=<Phase 4-7 package/CLI/audit list> test
+  26 tests, 0 failures, 0 errors, 0 skipped
+
+-B -pl euhedral-training test
+  132 tests, 0 failures, 0 errors, 1 skipped
+  (the deliberately opt-in DJL integration test)
+
+-B -pl euhedral-training -Dtraining.djlIntegration=true
+  -Dtest=ScenarioOrdinalNetworkIntegrationTest test
+  1 test, 0 failures, 0 errors, 0 skipped
+
+-B -pl euhedral-training -am verify
+  BUILD SUCCESS; six selected reactor projects
+```
+
+The first package/CLI/audit-list attempt exposed one fixture-only path setup defect:
+`writeBootstrap` had not created its `@TempDir` child parent when
+`PackageLifecycleAuditTest` supplied a not-yet-created `experiment` directory. Adding the
+blueprint-required parent creation fixed it; the complete command was rerun and passed as recorded
+above. No production or golden output changed.
+
+`EndToEndAuditTest` and `PackageLifecycleAuditTest` continue to prove winner `R`
+(`p1-4e8bd733c51b5dab`) at rank 1 across all four exact scenarios, `RUN_COMPLETE` revision 24,
+70 complete-package paths with 69 manifest entries, 58 interrupted-package paths with 57 manifest
+entries, byte-identical control/resumed/package-run reproduction, source/checksum joins, report
+contents, collision/cleanup/tamper behavior, and exclusion of the incomplete failed policy from
+robust leadership. The unchanged golden comparisons preserve:
+
+```text
+config_sha256            2b88841c805c63eb6a0495de2b983ab6c621f428f68e8541e3a1c3034e31dacf
+checkpoint_sha256        1a5562686a8dbfc7c68cff4a6ca0a969e2dde78591a586a21bd80bceb54d7b18
+manifest_file_sha256     03b2a91981e41a56ffa745852b71fa078086f2dd749f286d452f51b16755ff2d
+recursive_package_sha256 f1734475fd29f0abb2a95c181777e312713dd12363f8a627a020d06c6ebe2b44
+first_bundle_sha256      852dc47e69bfdc8e0d57e3f17b2aa0b5389d5df11b87bb6c4c295777214601f6
+```
+
+#### Static and repository review
+
+The importer/removal-marker, pooled implementation/name, stale P99/t-digest, trainer dependency,
+and obsolete GPU property searches are empty. The only live `pooled` matches are the required
+schema-v1 incompatible-artifact diagnostic and its focused test. Direct path checks prove all
+enumerated deleted files/directories are absent.
+
+Both permanent workflow diffs are empty. The tracked generated/build/training-artifact search is
+empty. `git diff --check` is clean. The Phase 7 diff contains only the enumerated source, test,
+POM, script, documentation, deletion, and completion-record paths. Ignored Maven/Zig/IDE outputs
+remain unstaged.
+
+`docker info` reports:
+
+```text
+permission denied while trying to connect to the docker API at
+unix:///run/user/911603815/docker.sock
+```
+
+The Docker/Testcontainers and full native repository verification path is therefore unavailable;
+the mandatory six-project `euhedral-training -am verify` passed. No live lattice throughput was
+measured or claimed.
+
+The pre-existing untracked `euhedral-training/input`, `euhedral-training/output`, and
+`euhedral-core/src/test/java/io/euhedral_execution/core/utils` trees were not inspected, edited,
+deleted, or staged.
+
+Deviations: none.

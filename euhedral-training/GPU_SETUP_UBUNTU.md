@@ -12,7 +12,7 @@ This avoids both failure modes of the previous packaging approach:
 ## Requirements
 
 - Ubuntu 22.04 or 24.04 x86_64
-- the repository toolchain from `mise.toml` (currently Java 21, Maven 3.9.6, and Zig 0.16.0)
+- the repository toolchain from `mise.toml` (currently Java 21, Maven 3.9.16, and Zig 0.16.0)
 - Python 3.9 or later with `venv`
 - NVIDIA GeForce RTX 5080
 - NVIDIA Linux driver 570.26 or newer
@@ -105,8 +105,8 @@ environment and are installed only once.
 
 ## Verify DJL on the RTX 5080
 
-The packaged launcher discovers `torch/lib`, exports the DJL environment variables, selects GPU 0,
-and starts the trainer:
+The packaged launcher discovers `torch/lib`, exports the DJL environment variables, and starts the
+trainer. `training-info` uses the `TrainingEnvironment` diagnostic:
 
 ```bash
 source ~/.venvs/euhedral-pytorch/bin/activate
@@ -128,14 +128,12 @@ PYTORCH_LIBRARY_PATH=<venv>/lib/python*/site-packages/torch/lib
 PYTORCH_VERSION=2.7.1
 PYTORCH_FLAVOR=cu128
 -Dai.djl.default_engine=PyTorch
--Dtraining.device=gpu0
 ```
 
 Override its defaults when needed:
 
 ```bash
 PYTHON_BIN=~/.venvs/euhedral-pytorch/bin/python \
-TRAINING_DEVICE=gpu0 \
 JAVA_OPTS="-Xms4g -Xmx16g" \
 euhedral-training/target/trainer/bin/euhedral-training-gpu training-info
 ```
@@ -149,17 +147,13 @@ euhedral-training/target/trainer/bin/euhedral-training-gpu training-info
 
 ## Run training
 
-All JVM and trainer system properties belong in `JAVA_OPTS`, because arguments after the jar are
-application commands and arguments:
+Application configuration belongs in the typed closed-loop configuration, not old `-D` trainer
+properties. Set `training.device=gpu0` and the other typed training keys in that file, then run:
 
 ```bash
 source ~/.venvs/euhedral-pytorch/bin/activate
-
-JAVA_OPTS="\
-  -Ddata=output/closed-loop/latest-training-data.txt \
-  -Dmodel.output=output/model/best \
-  -Dtraining.batchSize=8192" \
-euhedral-training/target/trainer/bin/euhedral-training-gpu train-vector-finder
+euhedral-training/target/trainer/bin/euhedral-training-gpu \
+  closed-loop --config closed-loop.conf
 ```
 
 GPU-oriented defaults are:
@@ -199,8 +193,8 @@ PYTHON_BIN=~/.venvs/euhedral-pytorch/bin/python \
 euhedral-training/target/trainer/bin/euhedral-training-gpu training-info
 ```
 
-### Old model cannot be loaded
+### Starting or resuming robust training
 
-The ordinal DJL model is intentionally incompatible with the previous DL4J `.bin` regressor. Retrain
-once from the existing merged benchmark corpus; later closed-loop iterations can continue from the
-saved DJL model directory.
+Start the robust closed loop from strict schema-v1 bootstrap vectors plus native exact-scenario
+evidence, or resume its checkpointed workspace. Old merged corpora, model artifacts, and trainer
+properties are not supported inputs.

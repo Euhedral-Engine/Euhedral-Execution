@@ -4,7 +4,6 @@ set -euo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 DIST_DIR=$(cd -- "$SCRIPT_DIR/.." && pwd)
 PYTHON_BIN=${PYTHON_BIN:-python3}
-TRAINING_DEVICE=${TRAINING_DEVICE:-gpu0}
 
 TORCH_INFO=$(
   "$PYTHON_BIN" - <<'PY'
@@ -45,8 +44,8 @@ if [[ -n ${JAVA_OPTS:-} ]]; then
   read -r -a JAVA_ARGS <<< "$JAVA_OPTS"
 fi
 
-# Leading JVM options are convenient for trainer properties:
-#   euhedral-training-gpu -Ddata=... -Dmodel.output=... train-vector-finder
+# Leading JVM options are for JVM concerns such as heap sizing and add-opens.
+# Select training.device in the typed closed-loop configuration.
 FORWARDED_JVM_ARGS=()
 APPLICATION_ARGS=()
 READING_JVM_ARGS=true
@@ -62,5 +61,4 @@ done
 
 exec java "${JAVA_ARGS[@]}" "${FORWARDED_JVM_ARGS[@]}" \
   -Dai.djl.default_engine=PyTorch \
-  -Dtraining.device="$TRAINING_DEVICE" \
   -jar "$JAR" "${APPLICATION_ARGS[@]}"

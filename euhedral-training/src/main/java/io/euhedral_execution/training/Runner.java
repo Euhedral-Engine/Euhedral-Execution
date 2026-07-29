@@ -3,12 +3,7 @@ package io.euhedral_execution.training;
 import io.euhedral_execution.training.config.ClosedLoopConfig;
 import io.euhedral_execution.training.config.ClosedLoopConfigCodec;
 import io.euhedral_execution.training.data.ClosedLoopResult;
-import io.euhedral_execution.training.importer.currentworkspace.CurrentWorkspaceImportRequest;
-import io.euhedral_execution.training.importer.currentworkspace.CurrentWorkspaceImportResult;
-import io.euhedral_execution.training.importer.currentworkspace.CurrentWorkspaceImporter;
-import io.euhedral_execution.training.legacy.PooledBenchmarkRunner;
-import io.euhedral_execution.training.legacy.PooledSequenceFinder;
-import io.euhedral_execution.training.networks.PolicyOrdinalNetwork;
+import io.euhedral_execution.training.learning.TrainingEnvironment;
 import io.euhedral_execution.training.packaging.TrainingRunPackager;
 import io.euhedral_execution.training.packaging.config.TrainingRunPackageInputs;
 import io.euhedral_execution.training.packaging.config.TrainingRunPackageRequest;
@@ -33,18 +28,8 @@ public class Runner {
         }
 
         switch (args[0]) {
-            case "merge-metadata", "merge-quantiles" -> DataMerger.mergeQuentiles();
-            case "merge-vectors" -> DataMerger.mergeVectors();
-            case "training-info" -> PolicyOrdinalNetwork.printEnvironment();
-            case "train-vector-finder" -> {
-                try (PooledSequenceFinder ignored = new PooledSequenceFinder()) {
-                    // SequenceFinder executes the selected train or generate operation at construction.
-                }
-            }
-            case "benchmark" -> PooledBenchmarkRunner.run(args);
             case "closed-loop" -> closedLoop(args, services);
-            // TEMPORARY_CURRENT_WORKSPACE_IMPORT_REMOVAL
-            case "import-current-workspace" -> importCurrentWorkspace(args, services);
+            case "training-info" -> trainingInfo(args, services);
             case "package-run" -> packageRun(args, services);
             default -> throw new IllegalArgumentException("Unknown command: " + args[0]);
         }
@@ -70,37 +55,11 @@ public class Runner {
                 LOGGER.info("awaiting_scenario={}", scenario.canonical()));
     }
 
-    // TEMPORARY_CURRENT_WORKSPACE_IMPORT_REMOVAL
-    static void importCurrentWorkspace(String[] args) throws Exception {
-        importCurrentWorkspace(args, ProductionCommandServices.INSTANCE);
-    }
-
-    private static void importCurrentWorkspace(String[] args, CommandServices services)
-            throws Exception {
-        if (args.length != 7 || !args[1].equals("--source-root")
-                || !args[3].equals("--output") || !args[5].equals("--bootstrap-count")
-                || args[2].startsWith("--") || args[4].startsWith("--")
-                || args[6].startsWith("--")) {
-            throw new IllegalArgumentException("import-current-workspace requires "
-                    + "--source-root <path> --output <path> --bootstrap-count <count> "
-                    + "in that order");
+    private static void trainingInfo(String[] args, CommandServices services) {
+        if (args.length != 1) {
+            throw new IllegalArgumentException("training-info does not accept arguments");
         }
-        int bootstrapCount;
-        try {
-            if (!args[6].matches("[1-9][0-9]*")) {
-                throw new NumberFormatException();
-            }
-            bootstrapCount = Integer.parseInt(args[6]);
-        } catch (NumberFormatException error) {
-            throw new IllegalArgumentException("Bootstrap count must be a positive integer",
-                    error);
-        }
-        CurrentWorkspaceImportResult result = services.importWorkspace(
-                new CurrentWorkspaceImportRequest(Path.of(args[2]), Path.of(args[4]),
-                        bootstrapCount));
-        LOGGER.info("output={}", result.directory());
-        LOGGER.info("unique_policies={}", result.uniquePolicyCount());
-        LOGGER.info("bootstrap_policies={}", result.bootstrapPolicyCount());
+        services.printTrainingEnvironment();
     }
 
     static void packageRun(String[] args) throws Exception {
@@ -131,21 +90,11 @@ public class Runner {
                                       Run the typed closed loop; no -Dcycle.* properties are read.
                                       run.resume controls resume, run.stop_file requests a
                                       checkpoint-safe stop, and the package path is printed.
-                  import-current-workspace --source-root <path> --output <path> \
-                --bootstrap-count <count>
-                                      Preserve current-workspace vectors only; legacy measurements
-                                      are rejected. Use bootstrap-policies.vectors.csv as
-                                      run.bootstrap_policies.
+                  training-info       Print scenario-model DJL, PyTorch, CUDA, and device details;
+                                      this does not train or benchmark.
                   package-run --workspace <path> --inputs <path> --output-root <path>
                                       Reproduce a checkpoint-backed package; this does not rerun
                                       the physical benchmark.
-
-                  Legacy compatibility:
-                  merge-quantiles     Normalize and merge pooled benchmark corpus
-                  merge-vectors       Deduplicate pooled vectors from merger input
-                  training-info       Print DJL, CUDA, GPU, and compute-capability details
-                  train-vector-finder Train or generate candidates using -D properties
-                  benchmark [file]    Benchmark Sobol or file-backed candidates
                 """);
     }
 
@@ -154,8 +103,7 @@ public class Runner {
 
         ClosedLoopResult runClosedLoop(ClosedLoopConfig config) throws Exception;
 
-        CurrentWorkspaceImportResult importWorkspace(CurrentWorkspaceImportRequest request)
-                throws Exception;
+        void printTrainingEnvironment();
 
         TrainingRunPackageInputs readPackageInputs(Path path) throws Exception;
 
@@ -176,9 +124,8 @@ public class Runner {
         }
 
         @Override
-        public CurrentWorkspaceImportResult importWorkspace(
-                CurrentWorkspaceImportRequest request) throws Exception {
-            return CurrentWorkspaceImporter.importWorkspace(request);
+        public void printTrainingEnvironment() {
+            TrainingEnvironment.print();
         }
 
         @Override
