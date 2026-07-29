@@ -3,8 +3,9 @@ package io.euhedral_execution.training.packaging;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.euhedral_execution.training.checkpoint.CheckpointStage;
+import io.euhedral_execution.training.checkpoint.enums.CheckpointStage;
 import io.euhedral_execution.training.data.SourceScenario;
+import io.euhedral_execution.training.packaging.enums.TrainingRunPackageStatus;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;

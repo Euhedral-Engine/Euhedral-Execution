@@ -1,7 +1,8 @@
-package io.euhedral_execution.training.packaging;
+package io.euhedral_execution.training.packaging.io;
 
-import io.euhedral_execution.training.benchmark.BenchmarkExecutionConfig;
+import io.euhedral_execution.training.benchmark.config.BenchmarkExecutionConfig;
 import io.euhedral_execution.training.data.SourceScenario;
+import io.euhedral_execution.training.packaging.config.TrainingRunPackageInputs;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;

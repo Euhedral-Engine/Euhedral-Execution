@@ -807,8 +807,11 @@ Implement in this dependency order.
 3. New `training/packaging/config`, `training/packaging/data`, and
    `training/packaging/enums` public types, with package-private manifest records retained under
    `training/packaging`
-   - status, semantic type, producing stage, origin, inputs, request, result, manifest entry,
-     omission, exception.
+   - inputs and request under `config`;
+   - the published package result under `data`;
+   - status, semantic type, producing stage, and origin under `enums`;
+   - manifest entry and omission remain package-private under `training/packaging`, while the
+     public collision exception remains beside the operational packager.
 4. New `training/packaging/io/TrainingRunPackageInputsCodec`
    - implement the exact property schema and canonical round trip.
 5. New `PackageManifestCodec`
@@ -1045,12 +1048,17 @@ Implemented on branch `agent/phase4b-final-packaging`.
 ### Changed production and documentation files
 
 - `training/checkpoint/ArtifactFingerprint.java` now streams exact SHA-256 input through a
-  reusable 128 KiB buffer without changing Phase 3 directory framing.
+  reusable 128 KiB buffer without changing directory-artifact framing.
 - `training/checkpoint/CheckpointSnapshotCodec.java` now loads an exact historical revision and
   supports strict detached audit reads without dereferencing workspace artifacts.
-- New `training/packaging` types implement package inputs, canonical manifest JSON, streaming file
-  support and CSV metadata scans, checkpoint-governed source selection, derived datasets, reports,
-  validation, collision handling, owned staging cleanup, forced writes, and atomic publication.
+- New `training/packaging/config`, `training/packaging/data`, `training/packaging/enums`, and
+  `training/packaging/io` types provide the public package inputs, request, result, lifecycle
+  vocabulary, and canonical inputs codec. Operational publication/validation classes and their
+  package-private helpers remain together under `training/packaging`; this includes
+  `PackageReportWriter`, whose package-private collaborators are intentionally not exposed.
+- The packaging implementation provides canonical manifest JSON, streaming file support and CSV
+  metadata scans, checkpoint-governed source selection, derived datasets, reports, validation,
+  collision handling, owned staging cleanup, forced writes, and atomic publication.
 - `ClosedLoopResult`, `ClosedLoopRunner`, and `Runner` integrate packaging at the public lifecycle
   boundary and expose the exact `package-run` command. The package-private state machine remains
   packaging-free.
@@ -1059,8 +1067,8 @@ Implemented on branch `agent/phase4b-final-packaging`.
 
 ### Test additions and evidence
 
-- Added the eight named Phase 4 test classes and extended `ClosedLoopRunnerTest` with a real
-  checkpoint, Phase 1 merge, raw evidence, partial package publication, independent validation,
+- Added the named Phase 4 test classes and extended `ClosedLoopRunnerTest` with a real checkpoint,
+  merge artifact, raw evidence, partial package publication, independent validation,
   idempotent collision handling, unexpected-file tamper rejection, naming assertions, and
   byte-identical reproduction into two distinct output roots.
 - Extended checkpoint tests for historical revision loading and detached reads.
@@ -1119,3 +1127,21 @@ as package inputs, edited, removed, or included in the Phase 4 commit.
 
 No package identity, lifecycle, manifest, provenance, artifact-selection, atomicity, collision, or
 deterministic-byte contract was intentionally changed from the approved blueprint.
+
+### Naming and package cleanup record
+
+The 2026-07-29 cleanup changed organization and terminology only:
+
+- public package inputs and requests live under `training.packaging.config`, the published result
+  under `training.packaging.data`, public enums under `training.packaging.enums`, and the public
+  inputs codec under `training.packaging.io`;
+- package-private operational collaborators, including `PackageReportWriter`, remain together
+  under `training.packaging` so no visibility or ownership contract changed;
+- the shared CSV helper is `training.data.io.CanonicalCsv`, and scheduling/checkpoint references
+  use their `data`, `enums`, and `io` packages from the Phase 3 cleanup; and
+- `ProducingStage` uses domain values `MERGE`, `LEARNING`, `SCHEDULING`, and `CHECKPOINT` in place
+  of phase-prefixed values.
+
+No ranking, calibration, scheduling, checkpoint, packaging, concurrency, memory-access, or
+floating-point behavior changed. Package manifest bytes change only where the renamed producing
+stage enum is serialized; the identity and validation rules are otherwise unchanged.

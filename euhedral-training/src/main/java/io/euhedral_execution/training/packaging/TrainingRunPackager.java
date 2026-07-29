@@ -2,8 +2,15 @@ package io.euhedral_execution.training.packaging;
 
 import io.euhedral_execution.training.checkpoint.ArtifactFingerprint;
 import io.euhedral_execution.training.checkpoint.WorkspaceLock;
-import io.euhedral_execution.training.data.EvidenceOrigin;
-import io.euhedral_execution.training.scheduling.Phase3Csv;
+import io.euhedral_execution.training.data.enums.EvidenceOrigin;
+import io.euhedral_execution.training.packaging.config.TrainingRunPackageInputs;
+import io.euhedral_execution.training.packaging.config.TrainingRunPackageRequest;
+import io.euhedral_execution.training.packaging.data.TrainingRunPackage;
+import io.euhedral_execution.training.packaging.enums.ArtifactOrigin;
+import io.euhedral_execution.training.packaging.enums.ArtifactSemanticType;
+import io.euhedral_execution.training.packaging.enums.ProducingStage;
+import io.euhedral_execution.training.packaging.enums.TrainingRunPackageStatus;
+import io.euhedral_execution.training.packaging.io.TrainingRunPackageInputsCodec;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
@@ -15,7 +22,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
-import java.util.TreeSet;
 import java.util.UUID;
 
 public final class TrainingRunPackager {
@@ -158,7 +164,7 @@ public final class TrainingRunPackager {
                 ArtifactSemanticType.VECTOR_WITH_MEASUREMENTS_DATASET, ProducingStage.PACKAGE);
         if (path.startsWith("vectors/")) return c(ArtifactSemanticType.VECTOR_ONLY_DATASET,
                 path.endsWith("benchmark-ready.vectors.csv")
-                        ? ProducingStage.PACKAGE : ProducingStage.PHASE_1_MERGE);
+                        ? ProducingStage.PACKAGE : ProducingStage.MERGE);
         if (path.equals("provenance/package-inputs.properties")) return c(
                 ArtifactSemanticType.PACKAGE_REPRODUCTION_INPUT, ProducingStage.PACKAGE);
         if (path.equals("raw-data/index.csv")) return c(ArtifactSemanticType.RAW_DATA_INDEX,
@@ -180,28 +186,28 @@ public final class TrainingRunPackager {
         if (path.startsWith("checkpoints/latest/")) {
             String name = path.substring(path.lastIndexOf('/') + 1);
             if (name.equals("COMPLETE")) return c(ArtifactSemanticType.COMPLETION_MARKER,
-                    ProducingStage.PHASE_3_CHECKPOINT);
+                    ProducingStage.CHECKPOINT);
             return c(name.equals("state.csv") ? ArtifactSemanticType.CHECKPOINT_STATE
                     : ArtifactSemanticType.CHECKPOINT_SIDECAR,
-                    ProducingStage.PHASE_3_CHECKPOINT);
+                    ProducingStage.CHECKPOINT);
         }
         if (path.startsWith("scheduler/")) {
             return c(path.endsWith("/COMPLETE") ? ArtifactSemanticType.COMPLETION_MARKER
                     : ArtifactSemanticType.SCHEDULE_DATASET,
-                    ProducingStage.PHASE_3_SCHEDULING);
+                    ProducingStage.SCHEDULING);
         }
         if (path.startsWith("model/")) {
             if (path.equals("model/model-metadata.json")) return c(
-                    ArtifactSemanticType.MODEL_METADATA, ProducingStage.PHASE_2_LEARNING);
+                    ArtifactSemanticType.MODEL_METADATA, ProducingStage.LEARNING);
             if (path.endsWith(".params")) return c(ArtifactSemanticType.MODEL_MEMBER_PARAMETERS,
-                    ProducingStage.PHASE_2_LEARNING);
+                    ProducingStage.LEARNING);
             return c(ArtifactSemanticType.MODEL_EVALUATION_DATASET,
-                    ProducingStage.PHASE_2_LEARNING);
+                    ProducingStage.LEARNING);
         }
         if (Set.of("fixed-anchors.csv", "reference-runs.csv", "robust-ranking.csv",
                 "scenario-results.csv", "calibration-report.csv", "coverage-report.csv")
                 .contains(path)) {
-            return c(ArtifactSemanticType.MERGE_DATASET, ProducingStage.PHASE_1_MERGE);
+            return c(ArtifactSemanticType.MERGE_DATASET, ProducingStage.MERGE);
         }
         throw new IllegalArgumentException("Unexpected package artifact " + path);
     }

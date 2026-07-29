@@ -1,8 +1,8 @@
 package io.euhedral_execution.training.packaging;
 
 import io.euhedral_execution.training.data.PolicyVector;
-import io.euhedral_execution.training.scheduling.Phase3Csv;
-import io.euhedral_execution.training.scheduling.ScheduledRun;
+import io.euhedral_execution.training.data.io.CanonicalCsv;
+import io.euhedral_execution.training.scheduling.data.ScheduledRun;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -30,7 +30,8 @@ final class PackageDatasetWriter {
         if (!vectors.keySet().equals(rankingPolicies)) {
             throw new IllegalArgumentException("Vector/ranking policy set mismatch");
         }
-        List<List<String>> rows = Phase3Csv.read(merge.resolve("scenario-results.csv"));
+        List<List<String>> rows = CanonicalCsv.read(
+                merge.resolve("scenario-results.csv"));
         if (rows.isEmpty() || !rows.getFirst().equals(SCENARIO_HEADER)) {
             throw new IllegalArgumentException("Unexpected scenario result schema");
         }
@@ -39,7 +40,7 @@ final class PackageDatasetWriter {
             header.add("weight_%02d_bits".formatted(index));
         }
         header.addAll(SCENARIO_HEADER.subList(8, SCENARIO_HEADER.size()));
-        StringBuilder out = new StringBuilder(Phase3Csv.row(header));
+        StringBuilder out = new StringBuilder(CanonicalCsv.row(header));
         Set<String> seenScenarioPolicies = new HashSet<>();
         for (int index = 1; index < rows.size(); index++) {
             List<String> row = rows.get(index);
@@ -55,7 +56,7 @@ final class PackageDatasetWriter {
             ArrayList<String> joined = new ArrayList<>(row.subList(0, 8));
             joined.addAll(weights);
             joined.addAll(row.subList(8, row.size()));
-            out.append(Phase3Csv.row(joined));
+            out.append(CanonicalCsv.row(joined));
         }
         CanonicalFileSupport.write(target, out.toString());
     }
@@ -67,7 +68,7 @@ final class PackageDatasetWriter {
         for (int index = 0; index < PolicyVector.WIDTH; index++) {
             header.add("weight_%02d_bits".formatted(index));
         }
-        StringBuilder out = new StringBuilder(Phase3Csv.row(header));
+        StringBuilder out = new StringBuilder(CanonicalCsv.row(header));
         for (ScheduledRun run : source.scheduleData().runs()) {
             run.policies().forEach(policy -> {
                 ArrayList<String> row = new ArrayList<>(List.of("1",
@@ -79,21 +80,21 @@ final class PackageDatasetWriter {
                 for (double weight : policy.policy().copyWeights()) {
                     row.add("%016x".formatted(Double.doubleToRawLongBits(weight)));
                 }
-                out.append(Phase3Csv.row(row));
+                out.append(CanonicalCsv.row(row));
             });
         }
         CanonicalFileSupport.write(target, out.toString());
     }
 
     static void writeRawIndex(PackageSourceSet source, Path target) throws IOException {
-        StringBuilder out = new StringBuilder(Phase3Csv.row(List.of("schema_version",
+        StringBuilder out = new StringBuilder(CanonicalCsv.row(List.of("schema_version",
                 "benchmark_run_id", "closed_loop_iteration", "scenario_id",
                 "evidence_source", "evidence_origin", "package_relative_path",
                 "artifact_sha256", "started_at", "completed_at", "policy_count",
                 "observation_count", "complete")));
         for (PackageSourceSet.EvidenceInfo evidence : source.evidence()) {
             var descriptor = evidence.context().descriptor();
-            out.append(Phase3Csv.row(List.of("1", evidence.index().benchmarkRunId(),
+            out.append(CanonicalCsv.row(List.of("1", evidence.index().benchmarkRunId(),
                     Integer.toString(descriptor.closedLoopIteration()),
                     descriptor.scenario().canonical(), evidence.index().source().name(),
                     descriptor.evidenceOrigin().name(),
@@ -115,7 +116,7 @@ final class PackageDatasetWriter {
 
     private static void readVectors(Path path, Map<String, List<String>> result)
             throws IOException {
-        List<List<String>> rows = Phase3Csv.read(path);
+        List<List<String>> rows = CanonicalCsv.read(path);
         if (rows.isEmpty()) {
             throw new IllegalArgumentException("Invalid vector file");
         }
@@ -139,7 +140,7 @@ final class PackageDatasetWriter {
     }
 
     private static Set<String> rankingPolicies(Path merge) throws IOException {
-        List<List<String>> rows = Phase3Csv.read(merge.resolve("robust-ranking.csv"));
+        List<List<String>> rows = CanonicalCsv.read(merge.resolve("robust-ranking.csv"));
         HashSet<String> result = new HashSet<>();
         for (int index = 1; index < rows.size(); index++) {
             if (!result.add(rows.get(index).get(2))) {

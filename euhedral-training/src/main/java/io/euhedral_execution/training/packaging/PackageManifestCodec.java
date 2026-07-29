@@ -1,9 +1,13 @@
 package io.euhedral_execution.training.packaging;
 
-import io.euhedral_execution.training.checkpoint.CheckpointStage;
+import io.euhedral_execution.training.checkpoint.enums.CheckpointStage;
 import io.euhedral_execution.training.data.SourceRatio;
 import io.euhedral_execution.training.data.SourceScenario;
-import io.euhedral_execution.training.merge.CalibrationAcceptance;
+import io.euhedral_execution.training.merge.enums.CalibrationAcceptance;
+import io.euhedral_execution.training.packaging.enums.ArtifactOrigin;
+import io.euhedral_execution.training.packaging.enums.ArtifactSemanticType;
+import io.euhedral_execution.training.packaging.enums.ProducingStage;
+import io.euhedral_execution.training.packaging.enums.TrainingRunPackageStatus;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
