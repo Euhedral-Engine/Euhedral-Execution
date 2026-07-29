@@ -1,9 +1,9 @@
 # Euhedral Execution
 
-Euhedral is a pull-driven Java execution engine built around the machine it runs on.
+Euhedral is a pull-driven Java execution engine that builds itself around the machine it runs on.
 
 Long-lived workers are pinned to CPUs and request work when they have capacity. Frames are routed
-through a graph shaped around socket, cache, and core boundaries, so the execution model follows the
+through a graph mapped to socket, cache, and core boundaries, so the execution model follows the
 hardware instead of hiding it behind one central queue.
 
 [Core quick start](./QUICK_START.md) |
@@ -23,16 +23,21 @@ data.
 
 ## Why Euhedral?
 
-- **Pull-driven execution.** Workers create demand; a central dispatcher does not push tasks at
-  threads.
-- **Topology-aware routing.** Euhedral discovers the available CPUs, sockets, NUMA nodes, and cache
-  groups, then pins persistent workers to that topology.
-- **Ordering when it matters.** Related frames can share a stable routing lane. Independent frames
-  can spread across the machine.
-- **Adaptive per-core control.** Each worker adjusts how it pulls, drains, and executes work from
-  current queue and system pressure.
-- **Low-allocation pipelines.** Frames and queues are designed for batching, reuse, and predictable
-  ownership.
+- **Pull-driven execution.** 
+  - Workers create demand; a central dispatcher does not push tasks at
+    threads.
+- **Topology-aware routing.** 
+  - Euhedral discovers the available CPUs, sockets, NUMA nodes, and cache
+    groups, then pins persistent workers to that topology.
+- **Ordering when it matters.** 
+  - Related frames can share a stable routing lane. Independent frames
+    can spread across the machine.
+- **Adaptive per-core control.** 
+  - Each worker adjusts how it pulls, drains, and executes work from
+    current queue and system pressure.
+- **Low-allocation pipelines.** 
+  - Frames and queues are designed for batching, reuse, and predictable
+    ownership.
 
 This is not a general-purpose replacement for every executor. It is aimed at sustained,
 fine-grained workloads where routing, locality, and coordination overhead are part of the problem.
