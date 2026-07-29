@@ -1,13 +1,16 @@
 package io.euhedral_execution.training.merge;
 
 import static io.euhedral_execution.training.fixtures.SyntheticObservations.policy;
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import io.euhedral_execution.training.data.PolicyVector;
 import io.euhedral_execution.training.data.SourceScenario;
-import io.euhedral_execution.training.merge.MergeRecords.ScenarioResult;
-import io.euhedral_execution.training.merge.MergeRecords.ScenarioResultStatus;
-import java.util.*;
+import io.euhedral_execution.training.merge.data.MergeRecords.ScenarioResult;
+import io.euhedral_execution.training.merge.data.MergeRecords.ScenarioResultStatus;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.OptionalDouble;
 import org.junit.jupiter.api.Test;
 
 class ScenarioQualityRankerTest {

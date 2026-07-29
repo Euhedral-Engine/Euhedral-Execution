@@ -1,12 +1,13 @@
 package io.euhedral_execution.training.merge;
 
 import io.euhedral_execution.training.data.PolicyId;
+import io.euhedral_execution.training.merge.data.WeightedValue;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 
-public final class RobustStatistics {
+public final class VectorStatistics {
 
     public static double quantileType7(double[] values, double probability) {
         if (values.length == 0 || !Double.isFinite(probability)
@@ -15,10 +16,14 @@ public final class RobustStatistics {
         }
         double[] sorted = values.clone();
         for (double value : sorted) {
-            if (!Double.isFinite(value)) throw new IllegalArgumentException("Non-finite value");
+            if (!Double.isFinite(value)) {
+                throw new IllegalArgumentException("Non-finite value");
+            }
         }
         Arrays.sort(sorted);
-        if (sorted.length == 1) return canonicalZero(sorted[0]);
+        if (sorted.length == 1) {
+            return canonicalZero(sorted[0]);
+        }
         double h = (sorted.length - 1) * probability;
         int index = (int) StrictMath.floor(h);
         double result = sorted[index] + (h - index)
@@ -36,16 +41,22 @@ public final class RobustStatistics {
     public static double mad(double[] values) {
         double median = median(values);
         double[] deviations = new double[values.length];
-        for (int i = 0; i < values.length; i++) deviations[i] = StrictMath.abs(values[i] - median);
+        for (int i = 0; i < values.length; i++) {
+            deviations[i] = StrictMath.abs(values[i] - median);
+        }
         return median(deviations);
     }
 
     public static double compensatedMean(double[] values) {
-        if (values.length == 0) throw new IllegalArgumentException("Empty values");
+        if (values.length == 0) {
+            throw new IllegalArgumentException("Empty values");
+        }
         double sum = 0;
         double correction = 0;
         for (double value : values) {
-            if (!Double.isFinite(value)) throw new IllegalArgumentException("Non-finite value");
+            if (!Double.isFinite(value)) {
+                throw new IllegalArgumentException("Non-finite value");
+            }
             double next = sum + value;
             correction += StrictMath.abs(sum) >= StrictMath.abs(value)
                     ? (sum - next) + value : (value - next) + sum;
@@ -59,7 +70,9 @@ public final class RobustStatistics {
     }
 
     public static double weightedMedian(List<WeightedValue<PolicyId>> values) {
-        if (values.isEmpty()) throw new IllegalArgumentException("Empty values");
+        if (values.isEmpty()) {
+            throw new IllegalArgumentException("Empty values");
+        }
         List<WeightedValue<PolicyId>> sorted = new ArrayList<>(values);
         sorted.sort(Comparator.comparingDouble(WeightedValue<PolicyId>::value)
                 .thenComparing(WeightedValue::tieBreaker));
@@ -71,7 +84,9 @@ public final class RobustStatistics {
             correction += StrictMath.abs(sum) >= StrictMath.abs(value.weight())
                     ? (sum - next) + value.weight() : (value.weight() - next) + sum;
             sum = next;
-            if (sum + correction >= total / 2) return value.value();
+            if (sum + correction >= total / 2) {
+                return value.value();
+            }
         }
         return sorted.getLast().value();
     }
@@ -91,7 +106,9 @@ public final class RobustStatistics {
                 if (!Double.isFinite(rawWeights[i]) || rawWeights[i] <= 0) {
                     throw new IllegalArgumentException("Weights must be finite and positive");
                 }
-                if (!capped[i]) activeSum += rawWeights[i];
+                if (!capped[i]) {
+                    activeSum += rawWeights[i];
+                }
             }
             List<Integer> newlyCapped = new ArrayList<>();
             for (int i = 0; i < rawWeights.length; i++) {
@@ -101,7 +118,9 @@ public final class RobustStatistics {
             }
             if (newlyCapped.isEmpty()) {
                 for (int i = 0; i < rawWeights.length; i++) {
-                    if (!capped[i]) result[i] = rawWeights[i] / activeSum * remaining;
+                    if (!capped[i]) {
+                        result[i] = rawWeights[i] / activeSum * remaining;
+                    }
                 }
                 break;
             }
@@ -143,6 +162,6 @@ public final class RobustStatistics {
         return value == 0 ? 0.0 : value;
     }
 
-    private RobustStatistics() {
+    private VectorStatistics() {
     }
 }

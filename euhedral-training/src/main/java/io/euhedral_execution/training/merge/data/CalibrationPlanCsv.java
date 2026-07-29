@@ -1,4 +1,4 @@
-package io.euhedral_execution.training.merge;
+package io.euhedral_execution.training.merge.data;
 
 import io.euhedral_execution.training.data.PolicyId;
 import io.euhedral_execution.training.data.PolicyVector;
@@ -7,9 +7,19 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.SortedMap;
+import java.util.TreeMap;
 
 public final class CalibrationPlanCsv {
+
     public static void write(Path directory, CalibrationPlan plan) throws IOException {
         Files.createDirectories(directory);
         if (Files.exists(directory.resolve("fixed-anchors.csv"))
@@ -17,14 +27,18 @@ public final class CalibrationPlanCsv {
             throw new IllegalArgumentException("Calibration plan already exists");
         }
         StringBuilder anchors = new StringBuilder("schema_version,anchor_set_id,policy_id");
-        for (int i = 0; i < PolicyVector.WIDTH; i++) anchors.append(String.format(",weight_%02d_bits", i));
+        for (int i = 0; i < PolicyVector.WIDTH; i++) {
+            anchors.append(String.format(",weight_%02d_bits", i));
+        }
         anchors.append('\n');
         for (PolicyVector policy : plan.anchors().fixedAnchors().stream()
                 .sorted(Comparator.comparing(PolicyVector::id)).toList()) {
             anchors.append("1,").append(plan.anchors().anchorSetId()).append(',')
                     .append(policy.id().canonical());
-            for (double weight : policy.copyWeights()) anchors.append(',')
-                    .append(String.format("%016x", Double.doubleToRawLongBits(weight)));
+            for (double weight : policy.copyWeights()) {
+                anchors.append(',')
+                        .append(String.format("%016x", Double.doubleToRawLongBits(weight)));
+            }
             anchors.append('\n');
         }
         StringBuilder references = new StringBuilder(
@@ -41,7 +55,9 @@ public final class CalibrationPlanCsv {
     public static CalibrationPlan read(Path directory, Collection<SourceScenario> knownScenarios)
             throws IOException {
         List<String> anchorLines = strictLines(directory.resolve("fixed-anchors.csv"));
-        if (anchorLines.size() < 2) throw new IllegalArgumentException("Empty anchor catalog");
+        if (anchorLines.size() < 2) {
+            throw new IllegalArgumentException("Empty anchor catalog");
+        }
         StringBuilder expectedAnchorHeader = new StringBuilder(
                 "schema_version,anchor_set_id,policy_id");
         for (int i = 0; i < PolicyVector.WIDTH; i++) {
@@ -55,14 +71,24 @@ public final class CalibrationPlanCsv {
         PolicyId previousPolicyId = null;
         for (int line = 1; line < anchorLines.size(); line++) {
             String[] fields = anchorLines.get(line).split(",", -1);
-            if (fields.length != 31 || !"1".equals(fields[0])) throw new IllegalArgumentException();
-            if (anchorSetId == null) anchorSetId = fields[1];
-            if (!anchorSetId.equals(fields[1])) throw new IllegalArgumentException("Mixed anchor set");
+            if (fields.length != 31 || !"1".equals(fields[0])) {
+                throw new IllegalArgumentException();
+            }
+            if (anchorSetId == null) {
+                anchorSetId = fields[1];
+            }
+            if (!anchorSetId.equals(fields[1])) {
+                throw new IllegalArgumentException("Mixed anchor set");
+            }
             double[] weights = new double[PolicyVector.WIDTH];
-            for (int i = 0; i < weights.length; i++) weights[i] = Double.longBitsToDouble(
-                    Long.parseUnsignedLong(fields[i + 3], 16));
+            for (int i = 0; i < weights.length; i++) {
+                weights[i] = Double.longBitsToDouble(
+                        Long.parseUnsignedLong(fields[i + 3], 16));
+            }
             PolicyVector policy = PolicyVector.of(weights);
-            if (!policy.id().equals(PolicyId.parse(fields[2]))) throw new IllegalArgumentException();
+            if (!policy.id().equals(PolicyId.parse(fields[2]))) {
+                throw new IllegalArgumentException();
+            }
             if (previousPolicyId != null && previousPolicyId.compareTo(policy.id()) >= 0) {
                 throw new IllegalArgumentException("Anchors are not in policy order");
             }
@@ -80,7 +106,8 @@ public final class CalibrationPlanCsv {
         SourceScenario previousScenario = null;
         for (int line = 1; line < referenceLines.size(); line++) {
             String[] fields = referenceLines.get(line).split(",", -1);
-            if (fields.length != 4 || !"1".equals(fields[0]) || !anchorSetId.equals(fields[1])) {
+            if (fields.length != 4 || !"1".equals(fields[0]) || !Objects.equals(anchorSetId,
+                    fields[1])) {
                 throw new IllegalArgumentException("Invalid reference catalog");
             }
             SourceScenario scenario = scenarioById.get(fields[2]);
@@ -95,6 +122,7 @@ public final class CalibrationPlanCsv {
         return new CalibrationPlan(new AnchorCatalog(1, anchorSetId, anchors),
                 new ReferenceRunCatalog(1, anchorSetId, references));
     }
+
     private static List<String> strictLines(Path path) throws IOException {
         String text = Files.readString(path, StandardCharsets.UTF_8);
         if (text.startsWith("\ufeff") || text.indexOf('\r') >= 0 || !text.endsWith("\n")) {
@@ -102,6 +130,7 @@ public final class CalibrationPlanCsv {
         }
         return Arrays.asList(text.substring(0, text.length() - 1).split("\n", -1));
     }
+
     private CalibrationPlanCsv() {
     }
 }

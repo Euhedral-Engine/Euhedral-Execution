@@ -10,18 +10,18 @@ import io.euhedral_execution.hardware_utils.SystemInfo;
 import io.euhedral_execution.hashing.HasherApi;
 import io.euhedral_execution.training.data.PolicyRegistry;
 import io.euhedral_execution.training.data.SourceScenario;
-import io.euhedral_execution.training.merge.AggregationConfig;
 import io.euhedral_execution.training.merge.AnchorBootstrapper;
-import io.euhedral_execution.training.merge.AnchorSelectionConfig;
-import io.euhedral_execution.training.merge.CalibrationConfig;
-import io.euhedral_execution.training.merge.CalibrationPlan;
-import io.euhedral_execution.training.merge.CalibrationPlanCsv;
 import io.euhedral_execution.training.merge.HierarchicalAggregator;
 import io.euhedral_execution.training.merge.MergeCsvWriter;
-import io.euhedral_execution.training.merge.MergeRecords.MergeResult;
 import io.euhedral_execution.training.merge.RunAggregator;
 import io.euhedral_execution.training.merge.RunCalibrator;
 import io.euhedral_execution.training.merge.ScenarioQualityRanker;
+import io.euhedral_execution.training.merge.config.AggregationConfig;
+import io.euhedral_execution.training.merge.config.AnchorSelectionConfig;
+import io.euhedral_execution.training.merge.config.CalibrationConfig;
+import io.euhedral_execution.training.merge.data.CalibrationPlan;
+import io.euhedral_execution.training.merge.data.CalibrationPlanCsv;
+import io.euhedral_execution.training.merge.data.MergeRecords.MergeResult;
 import io.euhedral_execution.training.utils.BenchmarkOutputReader;
 import io.euhedral_execution.training.utils.BenchmarkOutputWriter;
 import java.io.File;
@@ -219,7 +219,7 @@ public class DataMerger {
 
                     writer.spaceSeparatedWriteLine(vector);
                     for (int i = 0; i < means.length; i++) {
-                        means[i] = Math.min(Math.max(means[i] / maxMean, 0.0), 1.0);
+                        means[i] = Math.clamp(means[i] / maxMean, 0.0, 1.0);
                     }
                     writer.spaceSeparatedWriteLine(means);
                 }
@@ -380,7 +380,9 @@ public class DataMerger {
 
     private static Path temporarySibling(Path target) {
         Path parent = target.getParent();
-        if (parent == null) throw new IllegalArgumentException("Output requires a parent");
+        if (parent == null) {
+            throw new IllegalArgumentException("Output requires a parent");
+        }
         return parent.resolve("." + target.getFileName() + ".tmp-" + UUID.randomUUID());
     }
 
@@ -426,6 +428,10 @@ public class DataMerger {
                 directory.resolve("incomplete-policies.vectors.csv"));
     }
 
+    private DataMerger() {
+
+    }
+
     public record CalibrationBootstrapRequest(
             List<Path> observationBundles,
             SortedSet<SourceScenario> requiredScenarios,
@@ -434,6 +440,7 @@ public class DataMerger {
             Path planDirectory,
             AnchorSelectionConfig anchorSelection,
             AggregationConfig aggregation) {
+
         public CalibrationBootstrapRequest {
             observationBundles = List.copyOf(observationBundles);
             requiredScenarios = java.util.Collections.unmodifiableSortedSet(
@@ -452,6 +459,7 @@ public class DataMerger {
             Path outputDirectory,
             CalibrationConfig calibration,
             AggregationConfig aggregation) {
+
         public MergeRequest {
             observationBundles = List.copyOf(observationBundles);
             requiredScenarios = java.util.Collections.unmodifiableSortedSet(
@@ -472,6 +480,7 @@ public class DataMerger {
             Path coverageReport,
             Path robustLeaderVectors,
             Path incompleteVectors) {
+
     }
 
     private record MergedResult(double[] vector, TDigest digest) {
@@ -487,10 +496,6 @@ public class DataMerger {
                     Double.doubleToLongBits(p25), Double.doubleToLongBits(p50),
                     Double.doubleToLongBits(p75), Double.doubleToLongBits(p90));
         }
-    }
-
-    private DataMerger() {
-
     }
 
     public static final class Cancel extends RuntimeException {

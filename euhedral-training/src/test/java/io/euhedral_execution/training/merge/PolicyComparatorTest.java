@@ -2,15 +2,20 @@ package io.euhedral_execution.training.merge;
 
 import static io.euhedral_execution.training.fixtures.SyntheticObservations.policy;
 import static io.euhedral_execution.training.merge.ScenarioQualityRankerTest.row;
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 import io.euhedral_execution.training.data.PolicyVector;
 import io.euhedral_execution.training.data.SourceScenario;
-import io.euhedral_execution.training.merge.MergeRecords.RobustPolicySummary;
-import java.util.*;
+import io.euhedral_execution.training.merge.data.MergeRecords;
+import io.euhedral_execution.training.merge.data.MergeRecords.RobustPolicySummary;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.OptionalDouble;
+import java.util.TreeSet;
 import org.junit.jupiter.api.Test;
 
-class RobustPolicyComparatorTest {
+class PolicyComparatorTest {
     @Test
     void robustSecondBestEverywhereBeatsSpecialists() {
         List<PolicyVector> policies = List.of(policy(1), policy(2), policy(3), policy(4));
@@ -51,7 +56,7 @@ class RobustPolicyComparatorTest {
                 summary(second, .2, .3, .4, .1, .1, .2));
         RobustPolicySummary a = summary(first, .2, .3, .4, .1, .1, .1);
         RobustPolicySummary b = summary(second, .2, .3, .4, .1, .1, .1);
-        assertThat(Integer.signum(RobustPolicyComparator.BEST_FIRST.compare(a, b)))
+        assertThat(Integer.signum(PolicyComparator.BEST_FIRST.compare(a, b)))
                 .isEqualTo(Integer.signum(first.id().compareTo(second.id())));
     }
 
@@ -64,12 +69,12 @@ class RobustPolicyComparatorTest {
                 OptionalDouble.empty(), OptionalDouble.empty(), new TreeSet<>(),
                 new TreeSet<>(), new TreeSet<>());
         assertThatIllegalArgumentException().isThrownBy(
-                () -> RobustPolicyComparator.BEST_FIRST.compare(complete, incomplete));
-        assertThat(RobustPolicyComparator.PUBLISHED_ORDER.compare(complete, incomplete)).isNegative();
+                () -> PolicyComparator.BEST_FIRST.compare(complete, incomplete));
+        assertThat(PolicyComparator.PUBLISHED_ORDER.compare(complete, incomplete)).isNegative();
     }
 
     private static void assertBetter(RobustPolicySummary better, RobustPolicySummary worse) {
-        assertThat(RobustPolicyComparator.BEST_FIRST.compare(better, worse)).isNegative();
+        assertThat(PolicyComparator.BEST_FIRST.compare(better, worse)).isNegative();
     }
 
     private static RobustPolicySummary summary(PolicyVector policy, double worst, double p25,

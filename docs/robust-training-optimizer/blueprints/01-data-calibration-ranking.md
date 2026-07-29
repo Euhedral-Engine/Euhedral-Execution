@@ -58,7 +58,7 @@ The following current behavior is the reason for each new seam.
 | `BenchmarkRunner` throughput | Stores frames per nanosecond as a derived `double` | V1 stores completed frames and elapsed nanoseconds and derives frames per second. |
 | `BenchmarkRunner.createSinks` and `BenchmarkFrame.generate` | Use an outer random ID hash and an unrecorded inner routing seed | The v1 parameter model records both seeds for every source. Phase 3 must add/use a deterministic frame-generation overload before it emits native v1 evidence. |
 | `BenchmarkOutputReader` and `BenchmarkOutputWriter` | Headerless signed decimal encodings of `Double.doubleToLongBits` | They remain only for current vector and pooled-data compatibility. New evidence uses a strict UTF-8 CSV bundle with headers and raw-bit vector columns. |
-| `PolicyRanking` | Higher rounded P50, then lower rounded IQR, then lower rounded tail range | It remains temporarily for the current ordinal predictor. `RobustPolicyComparator` is separate and authoritative for v1 summaries. |
+| `PolicyRanking` | Higher rounded P50, then lower rounded IQR, then lower rounded tail range | It remains temporarily for the current ordinal predictor. `PolicyComparator` is separate and authoritative for v1 summaries. |
 | `Distribution` and `VectorGrouper` | Duplicate the rounded P50/IQR/tail ordering | They remain untouched in Phase 1 and are not used by the v1 merger. |
 | `SequenceFinder.loadTrainingData` | Requires alternating 28-value and five-quantile rows | Phase 1 does not emit a misleading adapter row. Phase 2 consumes `scenario-results.csv` directly. |
 | `CmaEsOptimizer.MeasuredPolicy` | Holds only a vector and five pooled quantiles | It remains untouched until Phase 3 supplies robust seeds and predicted curves. |
@@ -653,7 +653,7 @@ zero remains zero in `worstQuality` and `qualityP25`.
 
 ### Authoritative comparator
 
-`RobustPolicyComparator.BEST_FIRST` accepts eligible summaries only and compares:
+`PolicyComparator.BEST_FIRST` accepts eligible summaries only and compares:
 
 1. higher `worstQuality`;
 2. higher `qualityP25`;
@@ -1039,7 +1039,7 @@ public record WeightedValue<K extends Comparable<? super K>>(
         K tieBreaker) {
 }
 
-public final class RobustStatistics {
+public final class VectorStatistics {
     public static double quantileType7(double[] values, double probability);
     public static double median(double[] values);
     public static double mad(double[] values);
@@ -1092,7 +1092,7 @@ public final class ScenarioQualityRanker {
             SortedSet<SourceScenario> requiredScenarios);
 }
 
-public final class RobustPolicyComparator {
+public final class PolicyComparator {
     public static final Comparator<RobustPolicySummary> BEST_FIRST;
     public static final Comparator<RobustPolicySummary> PUBLISHED_ORDER;
 }
@@ -1342,7 +1342,7 @@ Implement in this dependency order.
    `BenchmarkRunContext.java`, `ScheduledPolicy.java`,
    `ObservationKey.java`, `BenchmarkObservation.java`, `PolicyRegistry.java`, and the focused
    identity exceptions.
-2. Add `RobustStatistics.java` under `training/merge`. Implement type-7 quantiles, compensated
+2. Add `VectorStatistics.java` under `training/merge`. Implement type-7 quantiles, compensated
    mean, lower weighted median, and deterministic water-filling before any calibration code.
 3. Add `StrictCsv.java`, `ObservationBundle.java`, `ObservationBundleReader.java`, and
    `ObservationBundleWriter.java` under `training/data/io`. Keep all CSV details in this package.
@@ -1358,7 +1358,7 @@ Implement in this dependency order.
    run, including failed confidence.
 8. Add `HierarchicalAggregator.java`. Apply acceptance policy, equal run voting, deterministic
    run bootstrap, missing scenario rows, and stability fields.
-9. Add `ScenarioQualityRanker.java` and `RobustPolicyComparator.java`. Keep the comparator
+9. Add `ScenarioQualityRanker.java` and `PolicyComparator.java`. Keep the comparator
    independent of CSV output and current `PolicyRanking`.
 10. Add `MergeCsvWriter.java` for all eight v1 artifacts and their exact ordering.
 11. Extend
@@ -1465,7 +1465,7 @@ five policies and five repetitions.
 - Uncertainty interval overlap does not change point midranks.
 - Equal ratios on different core counts or environments are ranked in separate populations.
 
-`RobustPolicyComparatorTest` uses four policies and three scenarios:
+`PolicyComparatorTest` uses four policies and three scenarios:
 
 ```text
              scenario-1  scenario-2  scenario-3
@@ -1667,7 +1667,7 @@ Added deterministic tests and resources:
 - `AnchorBootstrapperTest`
 - `HierarchicalAggregatorTest`
 - `ScenarioQualityRankerTest`
-- `RobustPolicyComparatorTest`
+- `PolicyComparatorTest`
 - `DataMergerV1Test`
 - `fixtures/SyntheticObservations`
 - `src/test/resources/robust-training/v1/golden-bundle/`

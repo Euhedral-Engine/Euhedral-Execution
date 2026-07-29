@@ -1,8 +1,9 @@
-package io.euhedral_execution.training.merge;
+package io.euhedral_execution.training.merge.data;
 
 import java.util.Objects;
 
 public record CalibrationPlan(AnchorCatalog anchors, ReferenceRunCatalog references) {
+
     public CalibrationPlan {
         Objects.requireNonNull(anchors);
         Objects.requireNonNull(references);
