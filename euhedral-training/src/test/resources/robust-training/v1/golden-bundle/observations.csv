@@ -1,0 +1,2 @@
+schema_version,observation_id,policy_id,repetition_number,status,measurement_encoding,started_at,ended_at,elapsed_nanos,completed_frames,throughput_frames_per_second,failure_code
+1,ob1/golden-run/s1-golden-host-src1-core8-r1of8/p1-aa6c38822d778c7c/rep-000001,p1-aa6c38822d778c7c,1,SUCCESS,COUNTER_DERIVED,2026-01-02T03:04:05Z,2026-01-02T03:04:06Z,1000000000,100,100.0,
