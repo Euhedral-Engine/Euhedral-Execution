@@ -1,5 +1,8 @@
 package io.euhedral_execution.training.scheduling;
 
+import io.euhedral_execution.training.scheduling.config.CandidateBudgetConfig;
+import io.euhedral_execution.training.scheduling.data.BudgetAllocation;
+
 public final class BudgetAllocator {
     private static final int NEW = 0;
     private static final int CARRY = 1;

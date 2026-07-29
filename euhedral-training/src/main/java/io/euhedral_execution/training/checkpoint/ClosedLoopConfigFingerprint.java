@@ -1,6 +1,6 @@
 package io.euhedral_execution.training.checkpoint;
 
-import io.euhedral_execution.training.ClosedLoopConfig;
+import io.euhedral_execution.training.config.ClosedLoopConfig;
 import io.euhedral_execution.training.data.SourceScenario;
 import io.euhedral_execution.training.data.io.ObservationBundleReader;
 import java.io.IOException;
@@ -12,7 +12,7 @@ import java.util.Map;
 
 public final class ClosedLoopConfigFingerprint {
     public static String sha256(ClosedLoopConfig config) throws IOException {
-        StringBuilder material = new StringBuilder("phase3-run-config-v1\n");
+        StringBuilder material = new StringBuilder("closed-loop-config-v1\n");
         append(material, "trainingRunId", config.trainingRunId());
         append(material, "iterations", config.iterations());
         append(material, "candidateBudget", config.candidateBudget());

@@ -6,9 +6,12 @@ import io.euhedral_execution.hashing.HasherApi;
 import io.euhedral_execution.training.data.PolicyId;
 import io.euhedral_execution.training.data.PolicyVector;
 import io.euhedral_execution.training.data.SourceScenario;
-import io.euhedral_execution.training.learning.ScenarioPrediction;
+import io.euhedral_execution.training.learning.data.PolicyPredictionCurve;
+import io.euhedral_execution.training.learning.data.ScenarioPrediction;
+import io.euhedral_execution.training.optimization.data.PredictedCandidate;
+import io.euhedral_execution.training.optimization.data.PredictedPolicySummary;
+import io.euhedral_execution.training.optimization.enums.CandidateOrigin;
 import io.euhedral_execution.training.utils.CommonFunctions;
-import java.util.Comparator;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -93,7 +96,7 @@ class ScoreBandSamplerTest {
     }
 
     private static long samplingKey(PolicyId policyId, int iteration) {
-        String material = "phase3-score-band-v1\n"
+        String material = "score-band-v1\n"
                 + "iteration=" + iteration + "\n"
                 + "band=9\n"
                 + "policy=" + policyId.canonical() + "\n";
@@ -115,7 +118,7 @@ class ScoreBandSamplerTest {
         ScenarioPrediction prediction = new ScenarioPrediction(scenario, quality, 0.0, quality,
                 quality, 0.0, 0.0, 0.0, 0.0);
         return new PredictedPolicySummary(
-                new io.euhedral_execution.training.learning.PolicyPredictionCurve(policy,
+                new PolicyPredictionCurve(policy,
                         List.of(prediction)), quality, quality, quality,
                 0.0, 0.0, 0.0, 0.0, 0.0, quality);
     }
