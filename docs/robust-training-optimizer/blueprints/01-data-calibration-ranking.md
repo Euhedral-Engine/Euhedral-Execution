@@ -58,7 +58,7 @@ The following current behavior is the reason for each new seam.
 | `BenchmarkRunner` throughput | Stores frames per nanosecond as a derived `double` | V1 stores completed frames and elapsed nanoseconds and derives frames per second. |
 | `BenchmarkRunner.createSinks` and `BenchmarkFrame.generate` | Use an outer random ID hash and an unrecorded inner routing seed | The v1 parameter model records both seeds for every source. Phase 3 must add/use a deterministic frame-generation overload before it emits native v1 evidence. |
 | `BenchmarkOutputReader` and `BenchmarkOutputWriter` | Headerless signed decimal encodings of `Double.doubleToLongBits` | They remain only for current vector and pooled-data compatibility. New evidence uses a strict UTF-8 CSV bundle with headers and raw-bit vector columns. |
-| `PolicyRanking` | Higher rounded P50, then lower rounded IQR, then lower rounded tail range | It remains temporarily for the current ordinal predictor. `RobustPolicyComparator` is separate and authoritative for v1 summaries. |
+| `PolicyRanking` | Higher rounded P50, then lower rounded IQR, then lower rounded tail range | It remains temporarily for the current ordinal predictor. `PolicyComparator` is separate and authoritative for v1 summaries. |
 | `Distribution` and `VectorGrouper` | Duplicate the rounded P50/IQR/tail ordering | They remain untouched in Phase 1 and are not used by the v1 merger. |
 | `SequenceFinder.loadTrainingData` | Requires alternating 28-value and five-quantile rows | Phase 1 does not emit a misleading adapter row. Phase 2 consumes `scenario-results.csv` directly. |
 | `CmaEsOptimizer.MeasuredPolicy` | Holds only a vector and five pooled quantiles | It remains untouched until Phase 3 supplies robust seeds and predicted curves. |
@@ -413,11 +413,18 @@ from receiving infinite weight.
 For anchor `a` shared by run `r` and reference `ref`:
 
 ```text
-d_a       = StrictMath.log(y_r,a) - StrictMath.log(y_ref,a)
+d_a       = StrictMath.log(y_r,a / y_ref,a)
 rawWeight = 1 / (medianSE_r,a^2 + medianSE_ref,a^2)
 ```
 
 Non-finite values are rejected from the shared set and reported.
+
+The log ratio is the required floating-point evaluation order. It is algebraically identical to
+subtracting the two logs, but produces the exact deterministic fixture values
+`deltaLog == StrictMath.log(2)`, `scaleFactor == 2`, and `1000 / scaleFactor == 500` for a global
+two-times run. Do not rewrite it as two separate `StrictMath.log` calls: that changes the result by
+one ulp for the settled fixture. A non-finite ratio is rejected by the existing non-finite
+calibration rule.
 
 ### Anchor weight cap
 
@@ -486,6 +493,12 @@ anchors leaves delta, scale, and residual blank.
 
 The calibration report contains the reference run, fixed-anchor count, qualifying shared count,
 delta, scale, weighted median absolute residual, status, and a stable reason code for every run.
+
+An observed non-required scenario may not yet have a frozen reference entry. Its runs are retained
+with empty `referenceRunId`, blank calibration numerics, status `UNCALIBRATED`, and reason
+`MISSING_SCENARIO_REFERENCE`. This is not an implicit reference-selection path: the scenario rows
+remain auditable but rejected, and the scenario can become calibratable only after the deliberate
+new-scenario reference procedure persists a catalog entry.
 
 The exact defaults are:
 
@@ -640,7 +653,7 @@ zero remains zero in `worstQuality` and `qualityP25`.
 
 ### Authoritative comparator
 
-`RobustPolicyComparator.BEST_FIRST` accepts eligible summaries only and compares:
+`PolicyComparator.BEST_FIRST` accepts eligible summaries only and compares:
 
 1. higher `worstQuality`;
 2. higher `qualityP25`;
@@ -807,6 +820,12 @@ public final class ObservationBundleWriter implements AutoCloseable {
 
 public final class ObservationBundleReader {
     public static ObservationBundle read(Path directory);
+    public static void stream(Path directory, ObservationVisitor visitor);
+
+    public interface ObservationVisitor {
+        void onStart(BenchmarkRunContext run, List<ScheduledPolicy> policies);
+        void onObservation(BenchmarkObservation observation);
+    }
 }
 
 public record ObservationBundle(
@@ -817,8 +836,10 @@ public record ObservationBundle(
 ```
 
 The public bundle object is appropriate for fixtures and a single benchmark run. `DataMerger`
-must use the reader's package-private streaming callback so it can discard observation objects
-after updating a compact accumulator. Do not retain all corpus observations in memory.
+must use the reader's streaming visitor so it can discard observation objects after updating a
+compact accumulator. Do not retain all corpus observations in memory. The visitor is public so
+Phase 3 can validate native bundles incrementally without adding a second codec; its callbacks are
+synchronous, single-owner, and valid only for the duration of the call.
 
 The public writer validates ascending schedule positions and observation order as it streams.
 The public reader preserves that stored schedule order. Deterministic merger output never depends
@@ -876,6 +897,7 @@ public record AnchorCatalog(
         int schemaVersion,
         String anchorSetId,
         List<PolicyVector> fixedAnchors) {
+    public static AnchorCatalog of(List<PolicyVector> fixedAnchors);
 }
 
 public record ReferenceRunCatalog(
@@ -908,6 +930,7 @@ public enum ScenarioResultStatus {
 public record RunAggregate(
         PolicyVector policy,
         BenchmarkRunContext run,
+        SortedSet<PolicyRole> roles,
         int plannedRepetitionCount,
         int successfulRepetitionCount,
         int timeoutCount,
@@ -994,6 +1017,19 @@ are sorted immutable copies. Missing numeric values are `OptionalDouble`; domain
 NaN as a missing sentinel. Scenario repetition counts and rates cover accepted runs only; total,
 weak, and uncalibrated run counts make rejected evidence explicit.
 
+`RunAggregate.roles` is the immutable per-run scheduling provenance copied from the bundle's
+`ScheduledPolicy`. It is sorted lexicographically by enum name, must be non-empty, and is not
+combined across runs. Keeping it on the Stage 1 aggregate is intentional: calibration can enforce
+that a non-reference catalog member was actually scheduled as `FIXED_ANCHOR` without reopening raw
+bundles or introducing a parallel metadata index. Future scheduling roles extend `PolicyRole` and
+flow through this set without changing the aggregation or calibrator signature; only consumers
+whose semantics depend on a new role need modification.
+
+`AnchorCatalog.of` is the canonical construction path: it sorts and deduplicates policies, computes
+the settled `a1` hash, and returns the validated record. The public record constructor recomputes
+and validates the supplied ID so persisted or manually assembled plans cannot claim an unrelated
+anchor-set identity.
+
 ### Statistical and pipeline services
 
 ```java
@@ -1003,7 +1039,7 @@ public record WeightedValue<K extends Comparable<? super K>>(
         K tieBreaker) {
 }
 
-public final class RobustStatistics {
+public final class VectorStatistics {
     public static double quantileType7(double[] values, double probability);
     public static double median(double[] values);
     public static double mad(double[] values);
@@ -1056,7 +1092,7 @@ public final class ScenarioQualityRanker {
             SortedSet<SourceScenario> requiredScenarios);
 }
 
-public final class RobustPolicyComparator {
+public final class PolicyComparator {
     public static final Comparator<RobustPolicySummary> BEST_FIRST;
     public static final Comparator<RobustPolicySummary> PUBLISHED_ORDER;
 }
@@ -1161,7 +1197,8 @@ schema_version,calibration_acceptance,scenario_id,benchmark_run_id,reference_run
 
 Stable reason values include `REFERENCE_RUN`, `STRONG`, `WEAK_ANCHOR_COUNT`,
 `WEAK_RESIDUAL`, `INSUFFICIENT_SHARED_ANCHORS`, `EXCESSIVE_RESIDUAL`, and
-`NONFINITE_SCALE`.
+`NONFINITE_SCALE`. `MISSING_SCENARIO_REFERENCE` is emitted only for an observed scenario absent
+from the frozen reference catalog.
 
 ### `scenario-results.csv`
 
@@ -1305,7 +1342,7 @@ Implement in this dependency order.
    `BenchmarkRunContext.java`, `ScheduledPolicy.java`,
    `ObservationKey.java`, `BenchmarkObservation.java`, `PolicyRegistry.java`, and the focused
    identity exceptions.
-2. Add `RobustStatistics.java` under `training/merge`. Implement type-7 quantiles, compensated
+2. Add `VectorStatistics.java` under `training/merge`. Implement type-7 quantiles, compensated
    mean, lower weighted median, and deterministic water-filling before any calibration code.
 3. Add `StrictCsv.java`, `ObservationBundle.java`, `ObservationBundleReader.java`, and
    `ObservationBundleWriter.java` under `training/data/io`. Keep all CSV details in this package.
@@ -1321,7 +1358,7 @@ Implement in this dependency order.
    run, including failed confidence.
 8. Add `HierarchicalAggregator.java`. Apply acceptance policy, equal run voting, deterministic
    run bootstrap, missing scenario rows, and stability fields.
-9. Add `ScenarioQualityRanker.java` and `RobustPolicyComparator.java`. Keep the comparator
+9. Add `ScenarioQualityRanker.java` and `PolicyComparator.java`. Keep the comparator
    independent of CSV output and current `PolicyRanking`.
 10. Add `MergeCsvWriter.java` for all eight v1 artifacts and their exact ordering.
 11. Extend
@@ -1428,7 +1465,7 @@ five policies and five repetitions.
 - Uncertainty interval overlap does not change point midranks.
 - Equal ratios on different core counts or environments are ranked in separate populations.
 
-`RobustPolicyComparatorTest` uses four policies and three scenarios:
+`PolicyComparatorTest` uses four policies and three scenarios:
 
 ```text
              scenario-1  scenario-2  scenario-3
@@ -1547,4 +1584,141 @@ migration semantics requires another reasoning pass.
 
 ## Prompt 1B completion notes
 
-Not yet implemented.
+Implementation stopped on 2026-07-27 because the original settled API could not enforce one of the
+settled calibration invariants:
+
+- The "Qualifying anchor estimate" section requires a fixed anchor in every non-reference run to
+  carry the `FIXED_ANCHOR` role.
+- `ScheduledPolicy` contains the roles, but the specified `MergeRecords.RunAggregate` contains only
+  the `PolicyVector` and run/statistical fields.
+- The specified `RunCalibrator.calibrate(List<RunAggregate>, CalibrationPlan,
+  CalibrationConfig)` receives neither observation bundles nor scheduled-policy metadata.
+- Consequently, after the required Stage 1 reduction, `RunCalibrator` cannot distinguish a policy
+  deliberately scheduled as a fixed anchor from the same catalog policy scheduled under another
+  role. Accepting every catalog member would violate the explicit role requirement; adding roles
+  to `RunAggregate`, adding a separate run/policy-role index, or changing the calibrator signature
+  would each reopen a settled public API.
+
+Reasoning decision made on 2026-07-27: `RunAggregate` owns an immutable, lexicographically sorted
+`SortedSet<PolicyRole>` copied from the corresponding `ScheduledPolicy`. This is the narrowest
+representation that preserves per-run provenance across the Stage 1 reduction. It avoids retaining
+observations, reopening bundles, or maintaining a second run-policy metadata map. It is extensible
+because later phases may add enum roles without changing the aggregate/calibrator API; calibration
+continues to inspect only `FIXED_ANCHOR`. `RunCalibrator` must reject a non-reference catalog policy
+from the shared-anchor set unless this set contains `FIXED_ANCHOR`. Reference runs remain exempt as
+already specified. Tests must include a catalog policy measured without that role and prove it does
+not increase shared-anchor count.
+
+Work performed before discovery:
+
+- Created branch `agent/phase1-data-calibration-ranking`.
+- Added partial identity, observation, strict bundle-codec, statistics, merge-record, quality, and
+  comparator implementation files under `euhedral-training`.
+- Began `RunAggregator` and `RunCalibrator`; the latter is intentionally not contract-complete
+  because it cannot enforce the missing role input.
+- The predictor, CMA-ES, scheduling, benchmark runner, and current workspace data were not changed.
+
+Commands run:
+
+```text
+mise exec -- mvn -B -pl euhedral-training -am install -Dmaven.test.skip=true
+  -> could not start because `mise` was not on PATH
+
+env JAVA_HOME=/home/bagotay/.local/share/mise/installs/java/21.0.2 \
+    PATH=/home/bagotay/.local/share/mise/installs/java/21.0.2/bin:/usr/bin:/bin \
+    /home/bagotay/.local/share/mise/installs/maven/3.9.16/apache-maven-3.9.16/bin/mvn \
+    -B -pl euhedral-training -am install -Dmaven.test.skip=true
+  -> first sandboxed run failed only because the local Maven repository was read-only
+  -> approved rerun succeeded; all six selected reactor modules compiled and installed
+```
+
+No completion commit or push was made at the original stop because the blueprint explicitly
+required implementation to stop rather than invent this design choice. Implementation resumed only
+after the user explicitly requested this reasoning amendment.
+
+### Final completion record - 2026-07-27
+
+Phase 1 is implemented.
+
+Changed production files:
+
+- Added the immutable identity, scenario, provenance, scheduling-role, run, observation, registry,
+  and validation types under
+  `euhedral-training/src/main/java/io/euhedral_execution/training/data/`.
+- Added the strict v1 CSV bundle reader/writer under `training/data/io`. The writer streams ordered
+  rows, forces evidence files, and writes an empty `COMPLETE` marker last. The merger uses the
+  synchronous streaming visitor and retains only per-run successful-throughput arrays and status
+  counts.
+- Added exact statistics, anchor bootstrap/catalog persistence, direct reference calibration,
+  hierarchical aggregation, scenario midranks, robust summaries/comparators, and deterministic CSV
+  output under `training/merge`.
+- Extended `DataMerger` with `bootstrapCalibrationV1` and `mergeV1`, atomic temporary-sibling
+  publication, output validation, and the nested request/artifact records. The pooled v0 entry
+  points remain as deprecated `ROBUST_OPTIMIZER_POOLED_V0_REMOVAL` seams.
+- Did not change `BenchmarkRunner`, `ClosedLoopRunner`, `Runner`, `SequenceFinder`,
+  `PolicyOrdinalNetwork`, `CmaEsOptimizer`, `ScoreBandSampler`, `Distribution`, `VectorGrouper`,
+  `PolicyRanking`, `pom.xml`, or any current workspace input/output data.
+
+Added deterministic tests and resources:
+
+- `PolicyIdentityTest`
+- `ObservationBundleCodecTest`
+- `RunCalibratorTest`
+- `AnchorBootstrapperTest`
+- `HierarchicalAggregatorTest`
+- `ScenarioQualityRankerTest`
+- `PolicyComparatorTest`
+- `DataMergerV1Test`
+- `fixtures/SyntheticObservations`
+- `src/test/resources/robust-training/v1/golden-bundle/`
+
+The suite contains 35 new Phase 1 tests and retains the four existing predictor/optimizer/ranking
+tests, for 39 passing tests total. It covers raw-bit identity, strict schemas and grids, direct
+imported throughput, role-aware anchors, reference selection and immutable persistence, log-ratio
+calibration, water-filling caps, weak/failed calibration, equal-run scenario voting, timeouts and
+skips, deterministic bootstraps, missing/rejected scenario rows, exact midranks, every robust
+comparator tier, atomic output failure, all eight headers, exact coverage, and byte-identical output
+under shuffled bundle order.
+
+Reasoning amendments made before or during implementation are incorporated into the normative
+sections above:
+
+- Stage 1 retains immutable per-run policy roles so non-reference anchors must actually carry
+  `FIXED_ANCHOR`.
+- The log scale uses the explicit log-ratio evaluation order required by the exact two-times
+  fixture.
+- `AnchorCatalog.of` is the canonical extensible construction path and constructors validate the
+  computed anchor-set ID.
+- The bundle streaming visitor is public for later native producer validation while remaining
+  synchronous and single-owner.
+- Observed scenarios absent from the frozen reference catalog remain explicit uncalibrated rows
+  with `MISSING_SCENARIO_REFERENCE`; no reference is inferred.
+
+Validation results:
+
+```text
+env JAVA_HOME=/home/bagotay/.local/share/mise/installs/java/21.0.2 \
+    PATH=/home/bagotay/.local/share/mise/installs/java/21.0.2/bin:/usr/bin:/bin \
+    /home/bagotay/.local/share/mise/installs/maven/3.9.16/apache-maven-3.9.16/bin/mvn \
+    -B -pl euhedral-training -am install -Dmaven.test.skip=true
+  -> BUILD SUCCESS; all six selected reactor modules succeeded
+
+env JAVA_HOME=/home/bagotay/.local/share/mise/installs/java/21.0.2 \
+    PATH=/home/bagotay/.local/share/mise/installs/java/21.0.2/bin:/usr/bin:/bin \
+    /home/bagotay/.local/share/mise/installs/maven/3.9.16/apache-maven-3.9.16/bin/mvn \
+    -B -pl euhedral-training test
+  -> BUILD SUCCESS; 39 tests, 0 failures, 0 errors, 0 skipped
+
+git diff --check
+  -> clean
+
+Both required targeted `rg` searches
+  -> no v1 implementation matches
+```
+
+The bare `mise` executable was not on the shell `PATH`. A later absolute `mise exec` attempt
+inherited a broad home-level tool configuration and began installing unrelated CLIs, so it was
+interrupted. Final validation used the already provisioned pinned Java and Maven installations
+directly. No repository files were changed by that environment attempt.
+
+There are no unresolved Phase 1 deviations or blockers.
