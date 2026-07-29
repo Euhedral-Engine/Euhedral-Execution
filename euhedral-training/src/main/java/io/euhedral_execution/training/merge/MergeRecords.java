@@ -2,17 +2,17 @@ package io.euhedral_execution.training.merge;
 
 import io.euhedral_execution.training.data.BenchmarkRunContext;
 import io.euhedral_execution.training.data.PolicyId;
-import io.euhedral_execution.training.data.PolicyRole;
 import io.euhedral_execution.training.data.PolicyVector;
 import io.euhedral_execution.training.data.SourceScenario;
+import io.euhedral_execution.training.data.enums.PolicyRole;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.OptionalDouble;
 import java.util.SortedMap;
 import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
-import java.util.Objects;
 
 public final class MergeRecords {
     public enum RunAggregateStatus {

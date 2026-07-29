@@ -1,12 +1,21 @@
 package io.euhedral_execution.training.merge;
 
 import io.euhedral_execution.training.data.PolicyId;
-import io.euhedral_execution.training.data.PolicyRole;
 import io.euhedral_execution.training.data.SourceScenario;
+import io.euhedral_execution.training.data.enums.PolicyRole;
 import io.euhedral_execution.training.merge.MergeRecords.RunAggregate;
 import io.euhedral_execution.training.merge.MergeRecords.RunAggregateStatus;
 import io.euhedral_execution.training.merge.MergeRecords.RunCalibration;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.OptionalDouble;
+import java.util.Set;
+import java.util.SortedMap;
+import java.util.TreeMap;
+import java.util.TreeSet;
 
 public final class RunCalibrator {
     public static List<RunCalibration> calibrate(List<RunAggregate> runs, CalibrationPlan plan,

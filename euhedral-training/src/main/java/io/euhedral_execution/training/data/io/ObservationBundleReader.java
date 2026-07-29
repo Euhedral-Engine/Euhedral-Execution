@@ -1,8 +1,23 @@
 package io.euhedral_execution.training.data.io;
 
-import io.euhedral_execution.training.data.*;
-import java.io.IOException;
+import io.euhedral_execution.training.data.BenchmarkObservation;
+import io.euhedral_execution.training.data.BenchmarkParameters;
+import io.euhedral_execution.training.data.BenchmarkRunContext;
+import io.euhedral_execution.training.data.BenchmarkRunDescriptor;
+import io.euhedral_execution.training.data.FrameSourceSeed;
+import io.euhedral_execution.training.data.ObservationKey;
+import io.euhedral_execution.training.data.PolicyId;
+import io.euhedral_execution.training.data.PolicyRegistry;
+import io.euhedral_execution.training.data.PolicyVector;
+import io.euhedral_execution.training.data.ScheduledPolicy;
+import io.euhedral_execution.training.data.SourceRatio;
+import io.euhedral_execution.training.data.SourceScenario;
+import io.euhedral_execution.training.data.enums.EvidenceOrigin;
+import io.euhedral_execution.training.data.enums.MeasurementEncoding;
+import io.euhedral_execution.training.data.enums.ObservationStatus;
+import io.euhedral_execution.training.data.enums.PolicyRole;
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;

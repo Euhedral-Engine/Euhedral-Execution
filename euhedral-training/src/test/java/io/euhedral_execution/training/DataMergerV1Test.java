@@ -1,14 +1,35 @@
 package io.euhedral_execution.training;
 
-import static io.euhedral_execution.training.fixtures.SyntheticObservations.*;
-import static org.assertj.core.api.Assertions.*;
+import static io.euhedral_execution.training.fixtures.SyntheticObservations.START;
+import static io.euhedral_execution.training.fixtures.SyntheticObservations.policy;
+import static io.euhedral_execution.training.fixtures.SyntheticObservations.run;
+import static io.euhedral_execution.training.fixtures.SyntheticObservations.writeSuccessBundle;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+import static org.assertj.core.api.Assertions.assertThatRuntimeException;
 
-import io.euhedral_execution.training.data.*;
-import io.euhedral_execution.training.merge.*;
+import io.euhedral_execution.training.data.PolicyId;
+import io.euhedral_execution.training.data.PolicyVector;
+import io.euhedral_execution.training.data.SourceScenario;
+import io.euhedral_execution.training.data.enums.EvidenceOrigin;
+import io.euhedral_execution.training.merge.AggregationConfig;
+import io.euhedral_execution.training.merge.AnchorCatalog;
+import io.euhedral_execution.training.merge.CalibrationConfig;
+import io.euhedral_execution.training.merge.CalibrationPlan;
+import io.euhedral_execution.training.merge.ReferenceRunCatalog;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Instant;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.SortedMap;
+import java.util.SortedSet;
+import java.util.TreeMap;
+import java.util.TreeSet;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

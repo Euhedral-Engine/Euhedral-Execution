@@ -1,12 +1,29 @@
 package io.euhedral_execution.training.merge;
 
-import static io.euhedral_execution.training.fixtures.SyntheticObservations.*;
-import static org.assertj.core.api.Assertions.*;
+import static io.euhedral_execution.training.fixtures.SyntheticObservations.CalibrationRole;
+import static io.euhedral_execution.training.fixtures.SyntheticObservations.START;
+import static io.euhedral_execution.training.fixtures.SyntheticObservations.aggregate;
+import static io.euhedral_execution.training.fixtures.SyntheticObservations.policy;
+import static io.euhedral_execution.training.fixtures.SyntheticObservations.run;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 
 import io.euhedral_execution.training.data.PolicyVector;
 import io.euhedral_execution.training.data.SourceScenario;
-import io.euhedral_execution.training.merge.MergeRecords.*;
-import java.util.*;
+import io.euhedral_execution.training.data.enums.EvidenceOrigin;
+import io.euhedral_execution.training.data.enums.PolicyRole;
+import io.euhedral_execution.training.merge.MergeRecords.RunAggregate;
+import io.euhedral_execution.training.merge.MergeRecords.RunAggregateStatus;
+import io.euhedral_execution.training.merge.MergeRecords.RunCalibration;
+import io.euhedral_execution.training.merge.MergeRecords.ScenarioResult;
+import io.euhedral_execution.training.merge.MergeRecords.ScenarioResultStatus;
+import java.util.Comparator;
+import java.util.List;
+import java.util.OptionalDouble;
+import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeMap;
+import java.util.TreeSet;
 import org.junit.jupiter.api.Test;
 
 class HierarchicalAggregatorTest {
@@ -126,11 +143,11 @@ class HierarchicalAggregatorTest {
     }
 
     private RunAggregate emptyAggregate(String runId, int timeout, int failed, int skipped) {
-        SortedSet<io.euhedral_execution.training.data.PolicyRole> roles = new TreeSet<>(
+        SortedSet<PolicyRole> roles = new TreeSet<>(
                 Comparator.comparing(Enum::name));
-        roles.add(io.euhedral_execution.training.data.PolicyRole.EXPLORATION);
+        roles.add(PolicyRole.EXPLORATION);
         return new RunAggregate(policy, new io.euhedral_execution.training.data.BenchmarkRunContext(
-                run(runId, scenario, 5, io.euhedral_execution.training.data.EvidenceOrigin.NATIVE,
+                run(runId, scenario, 5, EvidenceOrigin.NATIVE,
                         START), START.plusSeconds(6)), roles, 5, 0, timeout, failed, skipped,
                 0, timeout / 5.0, (failed + skipped) / 5.0,
                 (timeout + failed + skipped) / 5.0,
