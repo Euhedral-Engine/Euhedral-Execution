@@ -16,15 +16,15 @@ import java.util.Optional;
 import java.util.SortedSet;
 
 public record ClosedLoopConfig(Path workspace, String trainingRunId, int iterations,
-        int candidateBudget, SortedSet<SourceScenario> requiredScenarios,
-        String activeEnvironmentId, int scenariosPerIteration, long schedulerSeed,
-        long initialSobolCursor, Optional<Path> bootstrapPolicies,
-        Optional<Path> initialCalibrationPlan, List<Path> initialObservationBundles,
-        Map<SourceScenario, String> referenceOverrides, String commitSha, boolean dirtyWorkingTree,
-        CandidateBudgetConfig budgetConfig, CandidateGenerationConfig generationConfig,
-        BenchmarkExecutionConfig benchmarkConfig, AnchorSelectionConfig anchorSelectionConfig,
-        CalibrationConfig calibrationConfig, AggregationConfig aggregationConfig,
-        ScenarioTrainingConfig trainingConfig, boolean resume, Path stopFile) {
+                               int candidateBudget, SortedSet<SourceScenario> requiredScenarios,
+                               String activeEnvironmentId, int scenariosPerIteration, long schedulerSeed,
+                               long initialSobolCursor, Optional<Path> bootstrapPolicies,
+                               Optional<Path> initialCalibrationPlan, List<Path> initialObservationBundles,
+                               Map<SourceScenario, String> referenceOverrides, String commitSha, boolean dirtyWorkingTree,
+                               CandidateBudgetConfig budgetConfig, CandidateGenerationConfig generationConfig,
+                               BenchmarkExecutionConfig benchmarkConfig, AnchorSelectionConfig anchorSelectionConfig,
+                               CalibrationConfig calibrationConfig, AggregationConfig aggregationConfig,
+                               ScenarioTrainingConfig trainingConfig, boolean resume, Path stopFile) {
     public ClosedLoopConfig {
         Objects.requireNonNull(workspace);
         Objects.requireNonNull(trainingRunId);

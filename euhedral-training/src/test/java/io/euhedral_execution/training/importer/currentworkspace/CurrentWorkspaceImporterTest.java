@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.euhedral_execution.training.data.PolicyVector;
-import io.euhedral_execution.training.scheduling.BootstrapPolicyCsv;
+import io.euhedral_execution.training.scheduling.io.BootstrapPolicyCsv;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
