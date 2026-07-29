@@ -1189,3 +1189,13 @@ naming, streamed checksums and memory-sensitive paths, deterministic output, col
 partial-run lifecycle classification, report contents, cleanup, and tamper rejection. The
 pre-existing staged/untracked training data, outputs, and unrelated core test directory remained
 untouched and excluded from this record's commit.
+
+### Repackage compatibility addendum (2026-07-29)
+
+The Phase 4 package names and paths remain valid after the Phase 2-and-later repackage.
+`TrainingRunPackager`, `TrainingRunPackageValidator`, `PackageManifestCodec`,
+`PackageDatasetWriter`, and `PackageReportWriter` remain in
+`io.euhedral_execution.training.packaging`; public inputs/request types, result types, enums, and
+the inputs codec remain respectively in `packaging.config`, `packaging.data`, `packaging.enums`,
+and `packaging.io`. The listed packaging tests remain under the matching test package. No package
+layout, manifest, lifecycle, checksum, or publication contract changed.

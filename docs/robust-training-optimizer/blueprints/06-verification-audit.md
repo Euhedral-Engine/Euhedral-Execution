@@ -894,6 +894,28 @@ The fixtures remain in the owning packages required for package-private test bou
 scenario, expected artifact, validation command, memory/concurrency requirement, mathematical
 oracle, or precision rule changes.
 
+### Repackage compatibility addendum (2026-07-29)
+
+The Phase 2-and-later repackage changes package locations only; the Phase 6 contract and class
+names remain valid. Prompt 6B must use these current locations when adding imports or extending
+tests:
+
+- `io.euhedral_execution.training.scheduling.fixtures.SchedulingFixtures`
+  (`euhedral-training/src/test/java/io/euhedral_execution/training/scheduling/fixtures/SchedulingFixtures.java`);
+- `io.euhedral_execution.training.merge.PolicyComparatorTest`
+  (`euhedral-training/src/test/java/io/euhedral_execution/training/merge/PolicyComparatorTest.java`);
+- `io.euhedral_execution.training.config.ClosedLoopConfigCodec`;
+- `io.euhedral_execution.training.importer.currentworkspace.CurrentWorkspaceImporter`; and
+- `io.euhedral_execution.training.packaging.TrainingRunPackager`.
+
+`ScenarioOrdinalNetworkIntegrationTest` remains in
+`io.euhedral_execution.training.learning` at
+`euhedral-training/src/test/java/io/euhedral_execution/training/learning/ScenarioOrdinalNetworkIntegrationTest.java`.
+Keep `AuditFixtures` and `EndToEndAuditTest` in the root training test package, and keep
+`AuditScenarioModelFixture` in the learning test package so it can use the package-private
+`ScenarioConditionedModel.forTest` boundary. No production package move or functional change is
+required by this addendum.
+
 ## Prompt 6B completion record
 
 Prompt 6B appends evidence below this line.
