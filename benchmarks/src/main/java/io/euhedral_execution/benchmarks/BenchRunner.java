@@ -22,17 +22,19 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class BenchRunner {
+
     private static final Logger LOGGER = LoggerFactory.getLogger(BenchRunner.class);
 
     private static final Set<String> BENCHMARKS =
             new TreeSet<>(
-                    Set.of("all", "core-high-scale", "core-latency", "core-hc-throughput", "core-lc-throughput",
-                            "batched-mandelbrot", "mandelbrot", "queues-spsc", "queues-mpsc", "queues-mpmc"));
+                    Set.of("all", "core-high-scale", "core-latency", "core-hc-throughput",
+                            "core-lc-throughput",
+                            "batched-mandelbrot", "mandelbrot", "queues-spsc", "queues-mpsc",
+                            "queues-mpmc"));
     private static final List<String> FLAGS =
             List.of("-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED",
-                    "--sun-misc-unsafe-memory-access=allow", "--add-exports",
-                    "java.base/jdk.internal.platform=ALL-UNNAMED", "--add-exports",
-                    "java.base/jdk.internal.vm.annotation=ALL-UNNAMED",
+                    "--add-exports", "java.base/jdk.internal.platform=ALL-UNNAMED",
+                    "--add-exports", "java.base/jdk.internal.vm.annotation=ALL-UNNAMED",
                     "-Dorg.slf4j.simpleLogger.defaultLogLevel=error");
 
     private static Set<String> getBenchmarks(String[] args) {
@@ -99,7 +101,7 @@ public class BenchRunner {
         }
 
         Set<String> tasks = getBenchmarks(args);
-        if(tasks.isEmpty()) {
+        if (tasks.isEmpty()) {
             return;
         }
 
