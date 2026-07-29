@@ -623,14 +623,19 @@ the restrictions at the end of this document.
 > reassessment required by docs/AGENT_WORKFLOW.md, then replace Prompt 7B's provisional model and
 > effort. Commit and push the blueprint only.
 
-#### Prompt 7B - IMPLEMENTATION - PROVISIONAL gpt-5.5 / low; Prompt 7A must replace
+#### Prompt 7B - IMPLEMENTATION - gpt-5.6-sol / medium
 
-> Do not execute while this prompt is labeled provisional. Use the model and effort selected and
-> written here by Prompt 7A. Read AGENTS.md, this plan, and
-> `docs/robust-training-optimizer/blueprints/07-cleanup-handoff.md`. Perform only its enumerated
-> cleanup. Remove temporary workflows, verify the importer can be deleted using only the documented
-> boundary, run formatting and the final validation sequence, inspect the final diff, and record
-> exact commands and results. Do not broaden scope. Append final completion notes, commit, and push.
+> Use `gpt-5.6-sol` at `medium` reasoning effort. Read AGENTS.md, docs/AGENT_WORKFLOW.md, this
+> plan's Phase 7 section, `docs/robust-training-optimizer/audits/06-verification-audit-conformance.md`,
+> the Phase 6 completion/fingerprint and static-search sections, and
+> `docs/robust-training-optimizer/blueprints/07-cleanup-handoff.md`; follow the blueprint's exact
+> minimal context envelope. Perform only its enumerated cleanup: remove the temporary importer and
+> pooled-v0 boundary, preserve `training-info` through the scenario-learning diagnostic extraction,
+> translate the end-to-end fixture to the strict bootstrap contract without changing package bytes,
+> remove the trainer-only stale dependency, and update the exact CLI/script/docs surface. Prove
+> permanent workflows are unchanged and generated/user-owned files remain excluded. Run the full
+> final validation and package-evidence sequence, inspect both the Phase 7 and complete branch diffs,
+> append exact completion evidence, commit, and push. Do not broaden scope or update golden outputs.
 
 #### Prompt 7C - IMPLEMENTATION VERIFICATION - gpt-5.5 / medium
 
