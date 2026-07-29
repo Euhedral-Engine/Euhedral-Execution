@@ -1079,3 +1079,111 @@ lack their required Testcontainers daemon. No live native-lattice throughput res
 `euhedral-training/input`, `euhedral-training/output`, and
 `euhedral-core/src/test/java/io/euhedral_execution/core/utils` trees were neither read as audit
 evidence nor included in the Phase 6 change.
+
+## Prompt 6C verification record
+
+Prompt 6C completed on branch `agent/phase6c-verification-audit` on 2026-07-29.
+
+No production, fixture, resource, or test-code defect was found, and no blueprint-settled code fix
+was required. The pre-existing untracked
+`euhedral-core/src/test/java/io/euhedral_execution/core/utils`, `euhedral-training/input`, and
+`euhedral-training/output` paths remained excluded from the verification evidence and commit scope.
+
+The pinned build command prefix was:
+
+```text
+env JAVA_HOME=/home/bagotay/.local/share/mise/installs/java/21.0.2 \
+    PATH=/home/bagotay/.local/share/mise/installs/java/21.0.2/bin:/usr/bin:/bin \
+    /home/bagotay/.local/share/mise/installs/maven/3.9.16/apache-maven-3.9.16/bin/mvn
+```
+
+The system defaults were inspected and not used for builds: `/usr/bin/java` is OpenJDK 17.0.19 and
+`/usr/bin/mvn` is Maven 3.6.3. The pinned build prefix uses Oracle OpenJDK 21.0.2 and Maven 3.9.16.
+
+Commands and results:
+
+```text
+git status --short
+  Only pre-existing untracked user-owned paths were present before verification.
+
+java -version
+  openjdk version "17.0.19" 2026-04-21
+
+mvn -version
+  Apache Maven 3.6.3 on Java 17.0.19
+
+-B -pl euhedral-training -am install -Dmaven.test.skip=true
+  BUILD SUCCESS; six selected reactor projects installed/restored
+
+-B -pl euhedral-core -Dtest=BenchmarkFrameTest test
+  3 tests, 0 failures, 0 errors, 0 skipped
+
+-B -pl euhedral-training
+  -Dtest=PolicyIdentityTest,ObservationBundleCodecTest,RunCalibratorTest,AnchorBootstrapperTest,HierarchicalAggregatorTest,ScenarioQualityRankerTest,PolicyComparatorTest,DataMergerV1Test,PolicyGroupedSplitterTest,ScenarioConditionedModelTest,PredictedPolicyComparatorTest,BudgetAllocatorTest,CandidateSchedulerTest,SequenceFinderTest,CarryForwardQueueTest,ScenarioRotationTest,ScheduleCodecTest,CheckpointSnapshotCodecTest,BenchmarkRunnerV1Test,ClosedLoopRunnerTest
+  test
+  67 tests, 0 failures, 0 errors, 0 skipped
+
+-B -pl euhedral-training
+  -Dtest=ArtifactFingerprintTest,TrainingRunPackageInputsCodecTest,PackageManifestCodecTest,PackageDatasetWriterTest,PackageReportWriterTest,TrainingRunPackagerTest,TrainingRunPackageValidatorTest,PackageLifecycleAuditTest,CurrentWorkspaceImporterTest,ClosedLoopConfigCodecTest,RunnerTest,EndToEndAuditTest
+  test
+  35 tests, 0 failures, 0 errors, 0 skipped
+
+-B -pl euhedral-training test
+  143 tests, 0 failures, 0 errors, 1 skipped
+  The skipped test is the deliberately opt-in ScenarioOrdinalNetworkIntegrationTest.
+
+-B -pl euhedral-training -Dtraining.djlIntegration=true
+  -Dtest=ScenarioOrdinalNetworkIntegrationTest test
+  1 test, 0 failures, 0 errors, 0 skipped
+
+-B -pl euhedral-training -am verify
+  BUILD SUCCESS for all six selected reactor projects
+```
+
+The repeated Phase 6 deterministic audit surface revalidated the end-to-end synthetic experiment,
+bootstrap and final ranking oracles, raw-bit calibration checks, interruption/adoption behavior,
+partial and complete package inventories, report/manifest validation, collision/failure handling,
+current-workspace importer boundaries, typed configuration/fingerprint behavior, and Runner command
+dispatch. No memory-semantics-sensitive production code changed; the audit remains single-threaded
+above the production benchmark boundary, with package publication still through the existing atomic
+filesystem boundaries.
+
+Static boundary searches:
+
+```text
+rg -n -i "p99|quantile\(0\.99\)|TDigest|mergeQuantiles|mergeQuentiles|PolicyRanking|pooled" \
+  euhedral-training/src/main/java/io/euhedral_execution/training/data \
+  euhedral-training/src/main/java/io/euhedral_execution/training/merge \
+  euhedral-training/src/main/java/io/euhedral_execution/training/learning \
+  euhedral-training/src/main/java/io/euhedral_execution/training/optimization \
+  euhedral-training/src/main/java/io/euhedral_execution/training/scheduling \
+  euhedral-training/src/main/java/io/euhedral_execution/training/checkpoint \
+  euhedral-training/src/main/java/io/euhedral_execution/training/benchmark \
+  euhedral-training/src/main/java/io/euhedral_execution/training/packaging
+```
+
+returned only the permitted Phase 2 diagnostic in
+`ScenarioModelMetadataCodec` rejecting a pooled 28-input artifact.
+
+The repository-wide stale-assumption inventory returned only the documented Phase 7 legacy boundary:
+README removal notes, the Phase 2 rejection diagnostic/test, `training/legacy`,
+`training/utils`, the old `networks/PolicyOrdinalNetwork`, Runner's explicitly labeled legacy
+commands, and tests of those legacy classes.
+
+The temporary-importer marker search showed the importer package, explicit Runner command, tests,
+`AuditFixtures`, and removal documentation. The lower-layer
+`importer.currentworkspace` dependency search across data, merge, learning, optimization,
+scheduling, checkpoint, benchmark, and packaging returned no matches. The ambient-property search
+for `System.getProperty`, `Integer.getInteger`, and `Long.getLong` in
+`ClosedLoopConfigCodec` and the current-workspace importer returned no matches.
+
+Full-repository `mvn -B verify` was not attempted. `docker info` reports Docker Engine 29.2.1 client
+metadata, but the server is inaccessible:
+
+```text
+permission denied while trying to connect to the docker API at unix:///run/user/911603815/docker.sock
+```
+
+Hardware resource tests therefore lack the required Testcontainers daemon. This is classified as an
+environment limitation under the Phase 6 criteria. No live native-lattice throughput result is
+claimed.
