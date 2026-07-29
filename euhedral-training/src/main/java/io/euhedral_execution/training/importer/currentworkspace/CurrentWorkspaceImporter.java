@@ -2,7 +2,7 @@ package io.euhedral_execution.training.importer.currentworkspace;
 
 import io.euhedral_execution.training.data.PolicyRegistry;
 import io.euhedral_execution.training.data.PolicyVector;
-import io.euhedral_execution.training.scheduling.BootstrapPolicyCsv;
+import io.euhedral_execution.training.scheduling.io.BootstrapPolicyCsv;
 import java.io.IOException;
 import java.io.BufferedWriter;
 import java.nio.ByteBuffer;

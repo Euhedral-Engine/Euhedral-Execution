@@ -983,9 +983,10 @@ Completed on 2026-07-28 on `agent/phase5b-temporary-importer-cli`.
   mappings, strict 128 KiB streaming signed-decimal reader, file-transactional vector conversion,
   report/catalog/bootstrap writers, read-back validation, owned cleanup, and atomic-only
   publication.
-- Added `ClosedLoopConfigCodec` with the complete typed key surface, exact defaults, strict
-  UTF-8/LF parsing, typed scalar/list/enum/seed validation, relative-path resolution, and
-  construction of all nested Phase 1-3 configuration records.
+- Added `training.config.ClosedLoopConfigCodec` beside `ClosedLoopConfig`, with the complete typed
+  key surface, exact defaults, strict UTF-8/LF parsing, typed scalar/list/enum/seed validation,
+  relative-path resolution, and construction of all nested merge, learning, optimization, and
+  scheduling configuration records.
 - Added `ClosedLoopConfig.stopFile`, configured production stop polling, removed the no-argument
   transitional runner adapter, and kept the operational path outside
   `ClosedLoopConfigFingerprint`.

@@ -1,5 +1,7 @@
 package io.euhedral_execution.training;
 
+import io.euhedral_execution.training.config.ClosedLoopConfigCodec;
+import io.euhedral_execution.training.data.ClosedLoopResult;
 import io.euhedral_execution.training.importer.currentworkspace.CurrentWorkspaceImportRequest;
 import io.euhedral_execution.training.importer.currentworkspace.CurrentWorkspaceImportResult;
 import io.euhedral_execution.training.importer.currentworkspace.CurrentWorkspaceImporter;

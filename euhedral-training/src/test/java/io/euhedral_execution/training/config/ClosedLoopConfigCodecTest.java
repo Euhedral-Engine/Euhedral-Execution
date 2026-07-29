@@ -1,4 +1,4 @@
-package io.euhedral_execution.training;
+package io.euhedral_execution.training.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
