@@ -2,12 +2,26 @@ package io.euhedral_execution.training.learning;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import io.euhedral_execution.training.data.*;
-import io.euhedral_execution.training.merge.MergeRecords.ScenarioResultStatus;
-import java.util.*;
+
+import io.euhedral_execution.training.data.PolicyVector;
+import io.euhedral_execution.training.data.SourceScenario;
+import io.euhedral_execution.training.learning.data.PolicyPredictionCurve;
+import io.euhedral_execution.training.learning.data.ScenarioPrediction;
+import io.euhedral_execution.training.learning.enums.ModelAcceptanceStatus;
+import io.euhedral_execution.training.learning.enums.ScenarioFeatureSet;
+import io.euhedral_execution.training.learning.inputs.ScenarioLearningRow;
+import io.euhedral_execution.training.learning.metadata.FeatureNormalizer;
+import io.euhedral_execution.training.learning.metadata.MemberMetadata;
+import io.euhedral_execution.training.learning.metadata.ScenarioModelMetadata;
+import io.euhedral_execution.training.learning.metadata.ScenarioModelMetadataCodec;
+import io.euhedral_execution.training.merge.data.MergeRecords.ScenarioResultStatus;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.TreeSet;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

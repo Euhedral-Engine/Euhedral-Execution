@@ -1,7 +1,12 @@
 package io.euhedral_execution.training.learning;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.within;
 
+import io.euhedral_execution.training.learning.statistics.EnsembleOrdinalDistribution;
+import io.euhedral_execution.training.learning.statistics.OrdinalDistribution;
+import io.euhedral_execution.training.learning.utils.ScenarioOrdinalTargets;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 

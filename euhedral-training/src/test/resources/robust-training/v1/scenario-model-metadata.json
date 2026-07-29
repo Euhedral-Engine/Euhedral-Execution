@@ -2,7 +2,7 @@
   "artifact_type": "euhedral-scenario-conditioned-ordinal-model",
   "schema_version": 1,
   "objective_version": "scenario-quality-ordinal-v1",
-  "phase1_schema_version": 1,
+  "learning_schema_version": 1,
   "policy_id_scheme": "p1",
   "policy_width": 28,
   "feature_schema_id": "policy-ratio-v1",

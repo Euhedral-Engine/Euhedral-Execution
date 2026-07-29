@@ -40,7 +40,7 @@ public class SequenceFinder implements AutoCloseable {
     private double[][] ordinalThresholds;
 
     public SequenceFinder() throws Exception {
-        Path data = requiredPathProperty("data");
+        Path data = requiredPathProperty("metadata");
         Path model = optionalPathProperty("model");
         this.learner = loadOrCreate(model);
 
@@ -150,7 +150,7 @@ public class SequenceFinder implements AutoCloseable {
         if (this.trainingSet.size() < 10 || this.validationSet.isEmpty()
                 || this.testSet.isEmpty()) {
             throw new IllegalStateException(
-                    "Training data must produce non-empty train, validation, and test partitions");
+                    "Training metadata must produce non-empty train, validation, and test partitions");
         }
 
         List<double[]> trainingQuantiles = new ArrayList<>(this.trainingSet.size());
@@ -166,7 +166,7 @@ public class SequenceFinder implements AutoCloseable {
     }
 
     public void generate() throws Exception {
-        generate(requiredPathProperty("data"),
+        generate(requiredPathProperty("metadata"),
                 Path.of(System.getProperty("candidate.output", "output/temp_data")),
                 Integer.getInteger("candidate.count", 32_768),
                 Integer.getInteger("candidate.sobolSkip", 131_072));

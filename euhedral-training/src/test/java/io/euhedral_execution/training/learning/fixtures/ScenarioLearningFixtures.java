@@ -1,19 +1,19 @@
 package io.euhedral_execution.training.learning.fixtures;
 
+import io.euhedral_execution.hashing.HasherApi;
 import io.euhedral_execution.training.data.PolicyVector;
 import io.euhedral_execution.training.data.SourceScenario;
-import io.euhedral_execution.hashing.HasherApi;
-import io.euhedral_execution.training.learning.ScenarioLearningRow;
-import io.euhedral_execution.training.learning.ScenarioTrainingConfig;
-import io.euhedral_execution.training.merge.MergeRecords.ScenarioResult;
-import io.euhedral_execution.training.merge.MergeRecords.ScenarioResultStatus;
+import io.euhedral_execution.training.learning.config.ScenarioTrainingConfig;
+import io.euhedral_execution.training.learning.inputs.ScenarioLearningRow;
 import io.euhedral_execution.training.merge.ScenarioQualityRanker;
+import io.euhedral_execution.training.merge.data.MergeRecords.ScenarioResult;
+import io.euhedral_execution.training.merge.data.MergeRecords.ScenarioResultStatus;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.OptionalDouble;
 import java.util.Random;
-import java.util.HashSet;
 import java.util.SortedSet;
 import java.util.TreeSet;
 

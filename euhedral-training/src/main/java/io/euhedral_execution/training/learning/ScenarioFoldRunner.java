@@ -4,6 +4,16 @@ import ai.djl.Device;
 import io.euhedral_execution.training.data.PolicyId;
 import io.euhedral_execution.training.data.PolicyVector;
 import io.euhedral_execution.training.data.SourceScenario;
+import io.euhedral_execution.training.learning.config.ScenarioTrainingConfig;
+import io.euhedral_execution.training.learning.data.PolicyPredictionCurve;
+import io.euhedral_execution.training.learning.data.ScenarioLearningMatrix;
+import io.euhedral_execution.training.learning.data.ScenarioPrediction;
+import io.euhedral_execution.training.learning.enums.ScenarioFeatureSet;
+import io.euhedral_execution.training.learning.inputs.ScenarioLearningRow;
+import io.euhedral_execution.training.learning.metadata.FeatureNormalizer;
+import io.euhedral_execution.training.learning.output.EvaluationSummary;
+import io.euhedral_execution.training.learning.output.TrainingHistoryEntry;
+import io.euhedral_execution.training.learning.utils.ScenarioFeatureEncoder;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -13,8 +23,6 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 
 final class ScenarioFoldRunner {
-    private ScenarioFoldRunner() {
-    }
 
     static FoldResult run(String trainingKind, String evaluationKind, String foldId,
             ScenarioFeatureSet featureSet, List<ScenarioLearningRow> fittingRows,
@@ -57,13 +65,17 @@ final class ScenarioFoldRunner {
                         fittingScenarios, scoreScenarios);
             }
         } finally {
-            for (OrdinalMember member : members) member.close();
+            for (OrdinalMember member : members) {
+                member.close();
+            }
         }
     }
 
     static SortedSet<SourceScenario> scenarios(List<ScenarioLearningRow> rows) {
         TreeSet<SourceScenario> scenarios = new TreeSet<>();
-        for (ScenarioLearningRow row : rows) scenarios.add(row.scenario());
+        for (ScenarioLearningRow row : rows) {
+            scenarios.add(row.scenario());
+        }
         if (scenarios.isEmpty()) {
             throw new InsufficientScenarioLearningDataException("Fold row set is empty");
         }
@@ -132,12 +144,18 @@ final class ScenarioFoldRunner {
 
     private static HashSet<PolicyId> ids(List<ScenarioLearningRow> rows) {
         HashSet<PolicyId> result = new HashSet<>();
-        for (ScenarioLearningRow row : rows) result.add(row.policy().id());
+        for (ScenarioLearningRow row : rows) {
+            result.add(row.policy().id());
+        }
         return result;
     }
 
+    private ScenarioFoldRunner() {
+    }
+
     record FoldResult(EvaluationSummary evaluation, List<TrainingHistoryEntry> history,
-            FeatureNormalizer normalizer, SortedSet<SourceScenario> fittingScenarios,
-            SortedSet<SourceScenario> scoreScenarios) {
+                      FeatureNormalizer normalizer, SortedSet<SourceScenario> fittingScenarios,
+                      SortedSet<SourceScenario> scoreScenarios) {
+
     }
 }

@@ -1,15 +1,20 @@
 package io.euhedral_execution.training.learning;
 
+import io.euhedral_execution.training.learning.config.EvaluationThresholds;
+import io.euhedral_execution.training.learning.enums.EvaluationStatus;
+import io.euhedral_execution.training.learning.enums.FeatureSelectionMode;
+import io.euhedral_execution.training.learning.enums.ScenarioFeatureSet;
+import io.euhedral_execution.training.learning.metadata.FeatureSelectionDecision;
+import io.euhedral_execution.training.learning.output.EvaluationSummary;
+import io.euhedral_execution.training.learning.statistics.AblationMetric;
+import io.euhedral_execution.training.learning.statistics.ScenarioEvaluationMetrics;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalDouble;
 import java.util.TreeMap;
 
 final class ScenarioAblationPlanner {
-    private ScenarioAblationPlanner() {
-    }
 
     static Decision decide(FeatureSelectionMode mode,
             List<EvaluationSummary> policyContextFolds,
@@ -77,13 +82,13 @@ final class ScenarioAblationPlanner {
                 && countsEnvironment.worstMae().isPresent();
         double countMaeDelta = countMetrics
                 ? countsEnvironment.mae().getAsDouble()
-                - ratioEnvironment.mae().getAsDouble() : Double.NaN;
+                  - ratioEnvironment.mae().getAsDouble() : Double.NaN;
         double countSpearmanDelta = countMetrics
                 ? countsEnvironment.spearman().getAsDouble()
-                - ratioEnvironment.spearman().getAsDouble() : Double.NaN;
+                  - ratioEnvironment.spearman().getAsDouble() : Double.NaN;
         double worstDelta = countMetrics
                 ? countsEnvironment.worstMae().getAsDouble()
-                - ratioEnvironment.worstMae().getAsDouble() : Double.NaN;
+                  - ratioEnvironment.worstMae().getAsDouble() : Double.NaN;
         boolean countsPassed = countMetrics
                 && countsEnvironment.mae().getAsDouble()
                 <= ratioEnvironment.mae().getAsDouble()
@@ -104,7 +109,7 @@ final class ScenarioAblationPlanner {
                 ? ScenarioFeatureSet.RATIO_AND_COUNTS : ScenarioFeatureSet.RATIO_ONLY;
         String reason = countsPassed ? "COUNTS_CROSS_ENVIRONMENT_VALIDATED"
                 : mode == FeatureSelectionMode.REQUIRE_COUNTS
-                ? "REQUIRED_COUNTS_GATE_FAILED" : "COUNTS_GATE_FALLBACK_RATIO";
+                  ? "REQUIRED_COUNTS_GATE_FAILED" : "COUNTS_GATE_FALLBACK_RATIO";
         return new Decision(new FeatureSelectionDecision(mode, selected, metrics, reason),
                 contextPassed, countsPassed);
     }
@@ -117,14 +122,16 @@ final class ScenarioAblationPlanner {
         for (Map.Entry<String, EvaluationSummary> entry : baselines.entrySet()) {
             EvaluationSummary left = entry.getValue();
             EvaluationSummary right = candidates.get(entry.getKey());
-            if (right == null) continue;
+            if (right == null) {
+                continue;
+            }
             OptionalDouble maeDelta = delta(right.macroMae(), left.macroMae());
             OptionalDouble spearmanDelta =
                     delta(right.macroSpearman(), left.macroSpearman());
             int rows = right.scenarios().stream()
                     .mapToInt(ScenarioEvaluationMetrics::rowCount).sum();
             String target = right.scenarios().stream().map(metric ->
-                    metric.scenario().canonical()).sorted().reduce((a, b) -> a + ";" + b)
+                            metric.scenario().canonical()).sorted().reduce((a, b) -> a + ";" + b)
                     .orElse("");
             destination.add(new AblationMetric(kind, entry.getKey(), right.featureSet(),
                     left.featureSet(), target, rows, right.macroMae(), right.macroSpearman(),
@@ -161,7 +168,7 @@ final class ScenarioAblationPlanner {
                 average(folds.stream().map(EvaluationSummary::macroSpearman).toList());
         OptionalDouble worst = folds.stream().allMatch(fold -> fold.macroMae().isPresent())
                 ? OptionalDouble.of(folds.stream().mapToDouble(
-                        fold -> fold.macroMae().getAsDouble()).max().orElseThrow())
+                fold -> fold.macroMae().getAsDouble()).max().orElseThrow())
                 : OptionalDouble.empty();
         return new Aggregate(ok, rows, mae, spearman, worst);
     }
@@ -215,11 +222,16 @@ final class ScenarioAblationPlanner {
         return Double.isFinite(value) ? OptionalDouble.of(value) : OptionalDouble.empty();
     }
 
+    private ScenarioAblationPlanner() {
+    }
+
     record Decision(FeatureSelectionDecision selection, boolean contextPassed,
-            boolean countsPassed) {
+                    boolean countsPassed) {
+
     }
 
     private record Aggregate(boolean ok, int rows, OptionalDouble mae,
-            OptionalDouble spearman, OptionalDouble worstMae) {
+                             OptionalDouble spearman, OptionalDouble worstMae) {
+
     }
 }

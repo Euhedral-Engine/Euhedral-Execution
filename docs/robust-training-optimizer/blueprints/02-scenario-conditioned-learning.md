@@ -88,11 +88,11 @@ the old closed loop during Phase 2. No new Phase 2 class may import them. They r
 The persisted reader accepts exactly:
 
 ```java
-public record Phase1ScenarioInputs(
+public record ScenarioInputs(
         Path scenarioResults,
         Path robustLeaderVectors,
         Path incompletePolicyVectors) {
-    public static Phase1ScenarioInputs from(DataMerger.MergeArtifacts artifacts);
+    public static ScenarioInputs from(DataMerger.MergeArtifacts artifacts);
 }
 ```
 
@@ -170,9 +170,9 @@ features, label weights, or alternative targets.
 The in-memory and persisted paths converge:
 
 ```java
-public final class Phase1ScenarioLearningReader {
+public final class ScenarioLearningReader {
     public static ScenarioLearningTable read(
-            Phase1ScenarioInputs inputs,
+            ScenarioInputs inputs,
             SortedSet<SourceScenario> requiredScenarios,
             boolean includeWeakCalibrationRows) throws IOException;
 
@@ -198,7 +198,7 @@ public record ScenarioLearningTable(
 public record ScenarioDatasetAudit(
         int policyCount,
         int requiredScenarioCount,
-        int phase1RowCount,
+        int rowCount,
         int includedStrongRowCount,
         int includedWeakRowCount,
         int weakExcludedRowCount,
@@ -1263,14 +1263,14 @@ target and never overwrites another model.
 The exact identities are:
 
 ```text
-artifact_type       = euhedral-scenario-conditioned-ordinal-model
-schema_version      = 1
-objective_version   = scenario-quality-ordinal-v1
-policy_id_scheme    = p1
-phase1_schema       = 1
-member_model_name   = euhedral-scenario-ordinal
-architecture        = F-128-96-48-9-gelu
-ordinal_thresholds  = 0.1 through 0.9
+artifact_type                 = euhedral-scenario-conditioned-ordinal-model
+schema_version                = 1
+objective_version             = scenario-quality-ordinal-v1
+policy_id_scheme              = p1
+learning_schema_version       = 1
+member_model_name             = euhedral-scenario-ordinal
+architecture                  = F-128-96-48-9-gelu
+ordinal_thresholds            = 0.1 through 0.9
 ```
 
 The schema version covers directory layout, JSON fields, normalization encoding, member properties,
@@ -1289,7 +1289,7 @@ The top-level fields, in order, are:
 artifact_type                         string
 schema_version                        integer
 objective_version                     string
-phase1_schema_version                 integer
+learning_schema_version               integer
 policy_id_scheme                      string
 policy_width                          integer
 feature_schema_id                     string
@@ -1520,7 +1520,7 @@ on the new package.
 
 ```java
 public record ScenarioTrainingRequest(
-        Phase1ScenarioInputs phase1Inputs,
+        ScenarioInputs inputs,
         SortedSet<SourceScenario> requiredScenarios,
         Path modelDirectory,
         String commitSha,
@@ -1610,7 +1610,7 @@ Phase 1 MergeArtifacts
     +-- incomplete-policies.vectors.csv
     |
     v
-strict Phase1ScenarioLearningReader
+strict ScenarioLearningReader
     |
     v
 ScenarioLearningTable + audit + fingerprint
@@ -1694,7 +1694,7 @@ Implement in this dependency order.
 1. Add the immutable records and enums under
    `euhedral-training/src/main/java/io/euhedral_execution/training/learning/`:
    `ScenarioFeatureSet.java`, `FeatureSelectionMode.java`, `ModelAcceptanceStatus.java`,
-   `EvaluationStatus.java`, `LearningPartition.java`, `Phase1ScenarioInputs.java`,
+   `EvaluationStatus.java`, `LearningPartition.java`, `ScenarioInputs.java`,
    `ScenarioLearningRow.java`, `ScenarioDatasetAudit.java`, `ScenarioLearningTable.java`,
    `PolicyGroupedSplit.java`, `FeatureNormalizer.java`, `ScenarioLearningMatrix.java`,
    `OrdinalDistribution.java`, `EnsembleOrdinalDistribution.java`,
@@ -1703,7 +1703,7 @@ Implement in this dependency order.
    `ScenarioPrediction.java`, `PolicyPredictionCurve.java`,
    `ScenarioEvaluationMetrics.java`, `EvaluationSummary.java`,
    `InsufficientScenarioLearningDataException.java`, and `AblationMetric.java`.
-2. Add `Phase1ScenarioLearningReader.java` and package-private `Phase1LearningCsv.java`. Join both
+2. Add `ScenarioLearningReader.java` and package-private `LearningCsvReader.java`. Join both
    vector dictionaries before parsing scenario rows. Implement the in-memory overload and SHA-256
    table fingerprint in the same ownership boundary.
 3. Add `PolicyGroupedSplitter.java`. Implement stable 80/10/10 groups, the validation ablation
@@ -1763,7 +1763,7 @@ control. Fixed deterministic fake ordinal members may encode this formula for no
 
 ### Reader and Phase 1 compatibility tests
 
-`Phase1ScenarioLearningReaderTest` must:
+`ScenarioLearningReaderTest` must:
 
 - join eligible and incomplete vector dictionaries and recover all raw weight bits;
 - produce exactly one sorted included row per strong policy/required scenario;
@@ -2053,7 +2053,7 @@ Commands run:
 env JAVA_HOME=/home/bagotay/.local/share/mise/installs/java/21.0.2 \
     PATH=/home/bagotay/.local/share/mise/installs/java/21.0.2/bin:/usr/bin:/bin \
     /home/bagotay/.local/share/mise/installs/maven/3.9.16/apache-maven-3.9.16/bin/mvn \
-    -B -pl euhedral-training -Dtest=ScenarioModelMetadataCodecTest,ScenarioConditionedModelTest,Phase1ScenarioLearningReaderTest test
+    -B -pl euhedral-training -Dtest=ScenarioModelMetadataCodecTest,ScenarioConditionedModelTest,ScenarioLearningReaderTest test
   -> BUILD SUCCESS; 16 tests, 0 failures, 0 errors
 
 env JAVA_HOME=/home/bagotay/.local/share/mise/installs/java/21.0.2 \
