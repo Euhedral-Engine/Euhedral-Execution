@@ -1,5 +1,6 @@
 package io.euhedral_execution.training.merge;
 
+import io.euhedral_execution.training.data.BenchmarkRunContext;
 import io.euhedral_execution.training.data.PolicyId;
 import io.euhedral_execution.training.data.SourceScenario;
 import io.euhedral_execution.training.data.enums.PolicyRole;
@@ -21,7 +22,7 @@ public final class RunCalibrator {
     public static List<RunCalibration> calibrate(List<RunAggregate> runs, CalibrationPlan plan,
             CalibrationConfig config) {
         Map<Key, RunAggregate> byKey = new HashMap<>();
-        Map<String, io.euhedral_execution.training.data.BenchmarkRunContext> contexts
+        Map<String, BenchmarkRunContext> contexts
                 = new HashMap<>();
         for (RunAggregate run : runs) {
             if (byKey.put(new Key(run.run().descriptor().benchmarkRunId(),

@@ -26,8 +26,12 @@ public record ObservationKey(
     @Override
     public int compareTo(ObservationKey other) {
         int result = benchmarkRunId.compareTo(other.benchmarkRunId);
-        if (result == 0) result = scenario.compareTo(other.scenario);
-        if (result == 0) result = policyId.compareTo(other.policyId);
+        if (result == 0) {
+            result = scenario.compareTo(other.scenario);
+        }
+        if (result == 0) {
+            result = policyId.compareTo(other.policyId);
+        }
         return result != 0 ? result : Integer.compare(repetitionNumber, other.repetitionNumber);
     }
 }

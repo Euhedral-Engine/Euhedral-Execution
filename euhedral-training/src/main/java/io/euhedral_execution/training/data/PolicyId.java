@@ -1,6 +1,7 @@
 package io.euhedral_execution.training.data;
 
 import io.euhedral_execution.hashing.HasherApi;
+import org.jspecify.annotations.NonNull;
 
 public record PolicyId(long value) implements Comparable<PolicyId> {
 
@@ -33,7 +34,7 @@ public record PolicyId(long value) implements Comparable<PolicyId> {
     }
 
     @Override
-    public String toString() {
+    public @NonNull String toString() {
         return canonical();
     }
 }

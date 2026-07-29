@@ -6,6 +6,7 @@ import java.util.NavigableMap;
 import java.util.TreeMap;
 
 public final class PolicyRegistry {
+
     private final NavigableMap<PolicyId, PolicyVector> policies = new TreeMap<>();
 
     public PolicyVector register(PolicyVector policy) {

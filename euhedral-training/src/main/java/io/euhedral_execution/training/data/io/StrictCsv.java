@@ -4,15 +4,20 @@ import java.util.ArrayList;
 import java.util.List;
 
 final class StrictCsv {
+
     static String row(List<String> fields) {
         StringBuilder result = new StringBuilder();
         for (int i = 0; i < fields.size(); i++) {
-            if (i > 0) result.append(',');
+            if (i > 0) {
+                result.append(',');
+            }
             String field = fields.get(i);
             if (field.indexOf(',') >= 0 || field.indexOf('"') >= 0
                     || field.indexOf('\r') >= 0 || field.indexOf('\n') >= 0) {
                 result.append('"').append(field.replace("\"", "\"\"")).append('"');
-            } else result.append(field);
+            } else {
+                result.append(field);
+            }
         }
         return result.append('\n').toString();
     }
@@ -35,8 +40,9 @@ final class StrictCsv {
                 } else if (ch == '"') {
                     quoted = false;
                     quoteClosed = true;
+                } else {
+                    field.append(ch);
                 }
-                else field.append(ch);
             } else if (quoteClosed) {
                 if (ch == ',') {
                     row.add(field.toString());
@@ -51,9 +57,11 @@ final class StrictCsv {
                 } else {
                     throw new IllegalArgumentException("Characters after quoted CSV field");
                 }
-            } else if (ch == '"' && field.isEmpty()) quoted = true;
-            else if (ch == '"') throw new IllegalArgumentException("Quote in unquoted CSV field");
-            else if (ch == ',') {
+            } else if (ch == '"' && field.isEmpty()) {
+                quoted = true;
+            } else if (ch == '"') {
+                throw new IllegalArgumentException("Quote in unquoted CSV field");
+            } else if (ch == ',') {
                 row.add(field.toString());
                 field.setLength(0);
             } else if (ch == '\n') {
@@ -61,7 +69,9 @@ final class StrictCsv {
                 rows.add(List.copyOf(row));
                 row.clear();
                 field.setLength(0);
-            } else field.append(ch);
+            } else {
+                field.append(ch);
+            }
         }
         if (quoted || quoteClosed || !row.isEmpty() || !field.isEmpty()) {
             throw new IllegalArgumentException("Incomplete CSV");

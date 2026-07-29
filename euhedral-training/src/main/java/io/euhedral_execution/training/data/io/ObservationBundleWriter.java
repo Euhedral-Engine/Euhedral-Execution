@@ -1,6 +1,13 @@
 package io.euhedral_execution.training.data.io;
 
-import io.euhedral_execution.training.data.*;
+import io.euhedral_execution.training.data.BenchmarkObservation;
+import io.euhedral_execution.training.data.BenchmarkParameters;
+import io.euhedral_execution.training.data.BenchmarkRunContext;
+import io.euhedral_execution.training.data.BenchmarkRunDescriptor;
+import io.euhedral_execution.training.data.FrameSourceSeed;
+import io.euhedral_execution.training.data.PolicyId;
+import io.euhedral_execution.training.data.PolicyVector;
+import io.euhedral_execution.training.data.ScheduledPolicy;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
@@ -16,26 +23,9 @@ import java.util.List;
 import java.util.Set;
 
 public final class ObservationBundleWriter implements AutoCloseable {
+
     private static final String RUN_HEADER = "schema_version,benchmark_run_id,closed_loop_iteration,candidate_cohort_id,scenario_id,environment_id,source_count,available_physical_core_count,source_ratio_numerator,source_ratio_denominator,commit_sha,dirty_working_tree,evidence_origin,started_at,completed_at,expected_repetitions,sample_duration_nanos,liveness_timeout_nanos,frames_per_source,reset_timeout_nanos,ordered_frames,cpu_set_hex,frame_source_seeds\n";
     private static final String OBS_HEADER = "schema_version,observation_id,policy_id,repetition_number,status,measurement_encoding,started_at,ended_at,elapsed_nanos,completed_frames,throughput_frames_per_second,failure_code\n";
-    private final Path directory;
-    private final BenchmarkRunDescriptor run;
-    private final List<ScheduledPolicy> policies = new ArrayList<>();
-    private final Set<PolicyId> policyIds = new HashSet<>();
-    private final FileChannel policiesChannel;
-    private final FileChannel observationsChannel;
-    private int observationCount;
-    private Instant latestObservationEnd;
-    private boolean observationsStarted;
-    private boolean complete;
-
-    private ObservationBundleWriter(Path directory, BenchmarkRunDescriptor run,
-            FileChannel policiesChannel, FileChannel observationsChannel) {
-        this.directory = directory;
-        this.run = run;
-        this.policiesChannel = policiesChannel;
-        this.observationsChannel = observationsChannel;
-    }
 
     public static ObservationBundleWriter open(Path directory, BenchmarkRunDescriptor run) {
         try {
@@ -57,6 +47,24 @@ public final class ObservationBundleWriter implements AutoCloseable {
             throw new IllegalStateException(e);
         }
     }
+    private final Path directory;
+    private final BenchmarkRunDescriptor run;
+    private final List<ScheduledPolicy> policies = new ArrayList<>();
+    private final Set<PolicyId> policyIds = new HashSet<>();
+    private final FileChannel policiesChannel;
+    private final FileChannel observationsChannel;
+    private int observationCount;
+    private Instant latestObservationEnd;
+    private boolean observationsStarted;
+    private boolean complete;
+
+    private ObservationBundleWriter(Path directory, BenchmarkRunDescriptor run,
+            FileChannel policiesChannel, FileChannel observationsChannel) {
+        this.directory = directory;
+        this.run = run;
+        this.policiesChannel = policiesChannel;
+        this.observationsChannel = observationsChannel;
+    }
 
     public void registerPolicy(ScheduledPolicy policy) {
         if (complete || observationsStarted || policy.schedulePosition() != policies.size() + 1
@@ -72,7 +80,9 @@ public final class ObservationBundleWriter implements AutoCloseable {
             throw new IllegalStateException("Bundle is already complete");
         }
         observationsStarted = true;
-        if (!observation.run().equals(run)) throw new IllegalArgumentException("Run mismatch");
+        if (!observation.run().equals(run)) {
+            throw new IllegalArgumentException("Run mismatch");
+        }
         int position = observation.scheduledPolicy().schedulePosition();
         int repetition = observation.key().repetitionNumber();
         int expectedIndex = observationCount;
@@ -121,14 +131,16 @@ public final class ObservationBundleWriter implements AutoCloseable {
     private String policiesHeader() {
         List<String> header = new ArrayList<>(List.of("schema_version", "schedule_position",
                 "policy_id", "roles"));
-        for (int i = 0; i < PolicyVector.WIDTH; i++) header.add(String.format("weight_%02d_bits", i));
+        for (int i = 0; i < PolicyVector.WIDTH; i++) {
+            header.add(String.format("weight_%02d_bits", i));
+        }
         return StrictCsv.row(header);
     }
 
     private String policyRow(ScheduledPolicy policy) {
         List<String> row = new ArrayList<>(List.of("1", Integer.toString(policy.schedulePosition()),
                 policy.policy().id().canonical(), policy.roles().stream().map(Enum::name)
-                .sorted().reduce((a, b) -> a + ";" + b).orElseThrow()));
+                        .sorted().reduce((a, b) -> a + ";" + b).orElseThrow()));
         for (double weight : policy.policy().copyWeights()) {
             row.add(StrictCsv.hex(Double.doubleToRawLongBits(weight)));
         }
@@ -146,15 +158,16 @@ public final class ObservationBundleWriter implements AutoCloseable {
                 observation.completedFrames().isPresent()
                         ? Long.toString(observation.completedFrames().getAsLong()) : "",
                 observation.throughputFramesPerSecond().isPresent()
-                        ? Double.toString(observation.throughputFramesPerSecond().getAsDouble()) : "",
+                        ? Double.toString(observation.throughputFramesPerSecond().getAsDouble())
+                        : "",
                 observation.failureCode()));
     }
 
     private String runCsv(BenchmarkRunContext context) {
         BenchmarkParameters p = run.parameters();
         String seeds = p.frameSourceSeeds().stream().sorted(Comparator.comparingInt(
-                FrameSourceSeed::sourceIndex)).map(seed -> seed.sourceIndex() + ":"
-                + StrictCsv.hex(seed.idHash()) + ":" + StrictCsv.hex(seed.routingSeed()))
+                        FrameSourceSeed::sourceIndex)).map(seed -> seed.sourceIndex() + ":"
+                        + StrictCsv.hex(seed.idHash()) + ":" + StrictCsv.hex(seed.routingSeed()))
                 .reduce((a, b) -> a + ";" + b).orElse("");
         return RUN_HEADER + StrictCsv.row(List.of("1", run.benchmarkRunId(),
                 Integer.toString(run.closedLoopIteration()), run.candidateCohortId(),
@@ -182,20 +195,29 @@ public final class ObservationBundleWriter implements AutoCloseable {
         try {
             observationsChannel.force(true);
         } catch (IOException error) {
-            if (failure == null) failure = error;
-            else failure.addSuppressed(error);
+            if (failure == null) {
+                failure = error;
+            } else {
+                failure.addSuppressed(error);
+            }
         }
         try {
             policiesChannel.close();
         } catch (IOException error) {
-            if (failure == null) failure = error;
-            else failure.addSuppressed(error);
+            if (failure == null) {
+                failure = error;
+            } else {
+                failure.addSuppressed(error);
+            }
         }
         try {
             observationsChannel.close();
         } catch (IOException error) {
-            if (failure == null) failure = error;
-            else failure.addSuppressed(error);
+            if (failure == null) {
+                failure = error;
+            } else {
+                failure.addSuppressed(error);
+            }
         }
         if (failure != null) {
             throw new IllegalStateException(failure);
@@ -205,7 +227,9 @@ public final class ObservationBundleWriter implements AutoCloseable {
     private void writeChannel(FileChannel channel, String value) {
         try {
             ByteBuffer bytes = StandardCharsets.UTF_8.encode(value);
-            while (bytes.hasRemaining()) channel.write(bytes);
+            while (bytes.hasRemaining()) {
+                channel.write(bytes);
+            }
         } catch (IOException error) {
             throw new IllegalStateException(error);
         }

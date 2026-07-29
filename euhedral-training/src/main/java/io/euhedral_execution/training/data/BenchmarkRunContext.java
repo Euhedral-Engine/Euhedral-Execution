@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.Objects;
 
 public record BenchmarkRunContext(BenchmarkRunDescriptor descriptor, Instant completedAt) {
+
     public BenchmarkRunContext {
         Objects.requireNonNull(descriptor);
         Objects.requireNonNull(completedAt);

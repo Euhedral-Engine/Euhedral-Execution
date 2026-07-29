@@ -5,6 +5,11 @@ import java.util.Arrays;
 public final class PolicyVector {
 
     public static final int WIDTH = 28;
+
+    public static PolicyVector of(double[] weights) {
+        return new PolicyVector(weights);
+    }
+
     private final double[] weights;
     private final PolicyId id;
     private final int hashCode;
@@ -22,10 +27,6 @@ public final class PolicyVector {
         id = PolicyId.fromWeights(this.weights);
         hashCode = Arrays.hashCode(Arrays.stream(this.weights)
                 .mapToLong(Double::doubleToRawLongBits).toArray());
-    }
-
-    public static PolicyVector of(double[] weights) {
-        return new PolicyVector(weights);
     }
 
     public PolicyId id() {
