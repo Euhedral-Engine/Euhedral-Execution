@@ -7,10 +7,7 @@ import io.euhedral_execution.training.benchmark.config.BenchmarkExecutionConfig;
 import io.euhedral_execution.training.checkpoint.enums.CheckpointStage;
 import io.euhedral_execution.training.config.ClosedLoopConfig;
 import io.euhedral_execution.training.data.ClosedLoopResult;
-import io.euhedral_execution.training.data.PolicyVector;
 import io.euhedral_execution.training.data.SourceScenario;
-import io.euhedral_execution.training.importer.currentworkspace.CurrentWorkspaceImportRequest;
-import io.euhedral_execution.training.importer.currentworkspace.CurrentWorkspaceImportResult;
 import io.euhedral_execution.training.learning.config.ScenarioTrainingConfig;
 import io.euhedral_execution.training.merge.config.AggregationConfig;
 import io.euhedral_execution.training.merge.config.AnchorSelectionConfig;
@@ -22,7 +19,6 @@ import io.euhedral_execution.training.packaging.data.TrainingRunPackage;
 import io.euhedral_execution.training.packaging.enums.TrainingRunPackageStatus;
 import io.euhedral_execution.training.scheduling.config.CandidateBudgetConfig;
 import java.io.UncheckedIOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -39,35 +35,6 @@ class RunnerTest {
     Path temp;
 
     @Test
-    void importCommandRequiresExactFlagsAndDispatchesExplicitly() throws Exception {
-        Path source = temp.resolve("source");
-        Path vectors = source.resolve("euhedral-training/output/temp_data");
-        Files.createDirectories(vectors.getParent());
-        StringBuilder row = new StringBuilder();
-        for (int i = 0; i < PolicyVector.WIDTH; i++) {
-            if (i != 0) {
-                row.append(' ');
-            }
-            row.append(Double.doubleToRawLongBits(i / 10.0));
-        }
-        Files.writeString(vectors, row.append('\n'), StandardCharsets.US_ASCII);
-        Path output = temp.resolve("import");
-        Runner.importCurrentWorkspace(new String[]{"import-current-workspace",
-                "--source-root", source.toString(), "--output", output.toString(),
-                "--bootstrap-count", "1"});
-        assertThat(output.resolve("COMPLETE")).isRegularFile();
-
-        assertThatThrownBy(() -> Runner.importCurrentWorkspace(new String[]{
-                "import-current-workspace", "--output", output.toString(),
-                "--source-root", source.toString(), "--bootstrap-count", "1"}))
-                .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> Runner.closedLoop(new String[]{"closed-loop"}))
-                .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> Runner.packageRun(new String[]{"package-run"}))
-                .isInstanceOf(IllegalArgumentException.class);
-    }
-
-    @Test
     void dispatchesOnlyTheExplicitCommandAndLogsExactResults() throws Exception {
         RecordingServices services = services();
         List<String> closedLogs = captureLogs(() -> Runner.dispatch(new String[]{
@@ -75,7 +42,7 @@ class RunnerTest {
                 services));
         assertThat(services.configReads).isEqualTo(1);
         assertThat(services.closedLoopRuns).isEqualTo(1);
-        assertThat(services.imports).isZero();
+        assertThat(services.trainingDiagnostics).isZero();
         assertThat(services.packageInputReads).isZero();
         assertThat(closedLogs).containsExactly(
                 "stage=BOOTSTRAP_PENDING",
@@ -84,18 +51,8 @@ class RunnerTest {
                 "awaiting_scenario=s1-env-a-src1-core4-r1of4",
                 "awaiting_scenario=s1-env-b-src4-core4-r1of1");
 
-        Path source = temp.resolve("source");
-        Files.createDirectories(source);
-        Path imported = temp.resolve("imported");
-        List<String> importLogs = captureLogs(() -> Runner.dispatch(new String[]{
-                "import-current-workspace", "--source-root", source.toString(),
-                "--output", imported.toString(), "--bootstrap-count", "7"}, services));
-        assertThat(services.imports).isEqualTo(1);
-        assertThat(services.lastImport.sourceRoot()).isEqualTo(source);
-        assertThat(services.lastImport.outputDirectory()).isEqualTo(imported);
-        assertThat(services.lastImport.bootstrapPolicyCount()).isEqualTo(7);
-        assertThat(importLogs).containsExactly("output=" + imported,
-                "unique_policies=9", "bootstrap_policies=7");
+        Runner.dispatch(new String[]{"training-info"}, services);
+        assertThat(services.trainingDiagnostics).isEqualTo(1);
 
         Path workspace = temp.resolve("package-workspace");
         Path inputs = temp.resolve("package-inputs.properties");
@@ -110,7 +67,7 @@ class RunnerTest {
         assertThat(services.lastPackage.outputRoot()).isEqualTo(output);
         assertThat(packageLogs).containsExactly(
                 temp.resolve("published").toAbsolutePath().normalize().toString());
-        assertThat(services.imports).isEqualTo(1);
+        assertThat(services.trainingDiagnostics).isEqualTo(1);
     }
 
     @Test
@@ -123,18 +80,6 @@ class RunnerTest {
                 new String[]{"closed-loop", "x", "--config"},
                 new String[]{"closed-loop", "--config", "x", "extra"},
                 new String[]{"closed-loop", "--config", "--config"});
-        List<String[]> importer = List.of(
-                new String[]{"import-current-workspace"},
-                new String[]{"import-current-workspace", "--source-root", "a",
-                        "--bootstrap-count", "1", "--output", "b"},
-                new String[]{"import-current-workspace", "--source-root", "a",
-                        "--output", "b", "--bootstrap-count", "0"},
-                new String[]{"import-current-workspace", "--source-root", "a",
-                        "--output", "b", "--bootstrap-count", "+1"},
-                new String[]{"import-current-workspace", "--source-root", "a",
-                        "--output", "b", "--bootstrap-count", "1", "extra"},
-                new String[]{"import-current-workspace", "--source-root", "a",
-                        "--source-root", "b", "--bootstrap-count", "1"});
         List<String[]> packages = List.of(
                 new String[]{"package-run"},
                 new String[]{"package-run", "--workspace", "a", "--output-root", "c",
@@ -144,31 +89,53 @@ class RunnerTest {
                         "--output-root", "c", "extra"},
                 new String[]{"package-run", "--workspace", "a", "--workspace", "b",
                         "--output-root", "c"});
-        for (String[] args : concat(closed, importer, packages)) {
+        for (String[] args : concat(closed, packages)) {
             assertThatThrownBy(() -> Runner.dispatch(args, services))
                     .as(String.join(" ", args))
                     .isInstanceOf(IllegalArgumentException.class);
         }
         assertThat(services.configReads).isZero();
         assertThat(services.closedLoopRuns).isZero();
-        assertThat(services.imports).isZero();
+        assertThat(services.trainingDiagnostics).isZero();
         assertThat(services.packageInputReads).isZero();
         assertThat(services.packages).isZero();
     }
 
     @Test
-    void helpLabelsVectorOnlyImportAndPackageOnlyReproduction() throws Exception {
+    void rejectsTrainingInfoArgumentsAndRemovedCommands() {
+        RecordingServices services = services();
+        assertThatThrownBy(() -> Runner.dispatch(
+                new String[]{"training-info", "extra"}, services))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("training-info does not accept arguments");
+        for (String command : List.of("merge-" + "metadata", "merge-" + "quantiles",
+                "merge-" + "vectors", "train-vector-" + "finder", "benchmark",
+                "import-current-" + "workspace")) {
+            assertThatThrownBy(() -> Runner.dispatch(new String[]{command}, services))
+                    .as(command)
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessage("Unknown command: " + command);
+        }
+        assertThat(services.totalCalls()).isZero();
+    }
+
+    @Test
+    void helpListsOnlySupportedCommands() throws Exception {
         RecordingServices services = services();
         List<String> logs = captureLogs(() -> Runner.dispatch(new String[0], services));
         assertThat(logs).hasSize(1);
         assertThat(logs.getFirst()).contains(
                 "Usage: Runner <command>",
                 "closed-loop --config <path>",
-                "import-current-workspace --source-root <path> --output <path>",
-                "Preserve current-workspace vectors only; legacy measurements",
+                "training-info",
+                "scenario-model DJL, PyTorch, CUDA, and device details",
                 "package-run --workspace <path> --inputs <path> --output-root <path>",
-                "Reproduce a checkpoint-backed package; this does not rerun",
-                "Legacy compatibility:");
+                "Reproduce a checkpoint-backed package; this does not rerun")
+                .doesNotContain("merge-" + "metadata", "merge-" + "quantiles",
+                        "merge-" + "vectors", "train-vector-" + "finder",
+                        "benchmark [file]", "import-current-" + "workspace",
+                        "current-" + "workspace",
+                        "Legacy compatibility");
         assertThat(services.totalCalls()).isZero();
     }
 
@@ -213,11 +180,9 @@ class RunnerTest {
         return new RecordingServices(config, result, inputs);
     }
 
-    private static List<String[]> concat(List<String[]> first, List<String[]> second,
-            List<String[]> third) {
+    private static List<String[]> concat(List<String[]> first, List<String[]> second) {
         ArrayList<String[]> result = new ArrayList<>(first);
         result.addAll(second);
-        result.addAll(third);
         return result;
     }
 
@@ -259,10 +224,9 @@ class RunnerTest {
         private final TrainingRunPackageInputs inputs;
         private int configReads;
         private int closedLoopRuns;
-        private int imports;
+        private int trainingDiagnostics;
         private int packageInputReads;
         private int packages;
-        private CurrentWorkspaceImportRequest lastImport;
         private TrainingRunPackageRequest lastPackage;
 
         private RecordingServices(ClosedLoopConfig config, ClosedLoopResult result,
@@ -285,15 +249,8 @@ class RunnerTest {
         }
 
         @Override
-        public CurrentWorkspaceImportResult importWorkspace(
-                CurrentWorkspaceImportRequest request) {
-            imports++;
-            lastImport = request;
-            return new CurrentWorkspaceImportResult(request.outputDirectory(),
-                    request.outputDirectory().resolve("catalog.csv"),
-                    request.outputDirectory().resolve("bootstrap.csv"),
-                    request.outputDirectory().resolve("report.csv"), 9,
-                    request.bootstrapPolicyCount());
+        public void printTrainingEnvironment() {
+            trainingDiagnostics++;
         }
 
         @Override
@@ -312,7 +269,8 @@ class RunnerTest {
         }
 
         private int totalCalls() {
-            return configReads + closedLoopRuns + imports + packageInputReads + packages;
+            return configReads + closedLoopRuns + trainingDiagnostics
+                    + packageInputReads + packages;
         }
     }
 }

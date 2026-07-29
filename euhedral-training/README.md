@@ -25,70 +25,11 @@ The stable commands are:
 
 ```text
 closed-loop --config <path>
-import-current-workspace --source-root <path> --output <path> --bootstrap-count <count>
+training-info
 package-run --workspace <path> --inputs <path> --output-root <path>
 ```
 
 `closed-loop` reads only its typed configuration file. It does not read `-Dcycle.*` properties.
-
-## One-time current-workspace vector import
-
-The temporary importer preserves useful policy vectors from the workspace layout present before
-the robust optimizer upgrade:
-
-```bash
-java -jar euhedral-training/target/trainer/euhedral-training-0.0.7-SNAPSHOT.jar \
-  import-current-workspace \
-  --source-root . \
-  --output imported-current-workspace \
-  --bootstrap-count 1024
-```
-
-The only alternating vector/measurement files it recognizes are:
-
-```text
-euhedral-training/input/merger/graviton5-32core-1.txt
-euhedral-training/input/merger/graviton5-32core-2.txt
-euhedral-training/input/merger/graviton5-32core-3.txt
-euhedral-training/input/merger/laptop-1.txt
-euhedral-training/input/merger/raw_data.txt
-euhedral-training/input/merger/zen4-32core-1.txt
-euhedral-training/input/merger/zen4-32core-2.txt
-euhedral-training/input/merger/zen4-32core-3.txt
-euhedral-training/input/temp/laptop-1.txt
-euhedral-training/input/temp/laptop-2.txt
-```
-
-It also recognizes `euhedral-training/output/temp_data` as vector-only, and skips these derived
-human-readable summaries without parsing them:
-
-```text
-euhedral-training/input/temp/graviton5-32core-1.txt
-euhedral-training/input/temp/graviton5-32core-3.txt
-euhedral-training/input/temp/zen4-32core-1.txt
-euhedral-training/input/temp/zen4-32core-2.txt
-euhedral-training/output/results.txt
-```
-
-Every other file under `euhedral-training/input` or `euhedral-training/output` is rejected and
-reported. Filenames are never interpreted as machine, source-count, or run metadata. Legacy
-measurement rows lack the required observation identity and are always rejected; zero-filled
-repetitions are not guessed to mean success, failure, or timeout. Old models, optimizer state, and
-checkpoints are not opened or copied.
-
-The atomically published directory contains:
-
-```text
-imported-policies.vectors.csv
-bootstrap-policies.vectors.csv
-import-report.csv
-COMPLETE
-```
-
-The complete catalog preserves every unique bit-exact policy. The bootstrap file contains the
-requested number in unsigned policy-ID order and is supplied as `run.bootstrap_policies`.
-Preserve `import-report.csv`; it is the audit record for accepted, skipped, duplicate, and rejected
-content. This command is off by default and is intended to be run once per current workspace.
 
 ## Typed closed-loop operation
 
@@ -100,7 +41,7 @@ run.training_run_id=trial-2026-07
 run.iterations=3
 run.candidate_budget=1024
 run.active_environment_id=machine-a
-run.bootstrap_policies=imported-current-workspace/bootstrap-policies.vectors.csv
+run.bootstrap_policies=bootstrap/bootstrap-policies.vectors.csv
 run.commit_sha=0000000000000000000000000000000000000000
 run.dirty_working_tree=false
 run.resume=true
@@ -120,10 +61,19 @@ non-finite numbers, ambiguous bootstrap sources, and invalid scenario identities
 run. Booleans are exactly `true` or `false`; seeds are 16 lower-case hexadecimal digits. The file
 must have a final LF and no BOM or CR.
 
-Imported vectors are benchmarked natively in every exact required scenario before they can inform
-calibration or learning. For required environments on different machines, point each invocation at
-the same workspace, change only `run.active_environment_id`, and resume sequentially. The
-checkpoint waits until native bootstrap evidence exists for all required scenarios.
+`run.bootstrap_policies` is a strict schema-v1 vector file. Its policies carry no measurements and
+must be benchmarked natively in every exact required scenario before they can inform calibration
+or learning. For required environments on different machines, point each invocation at the same
+workspace, change only `run.active_environment_id`, and resume sequentially. The checkpoint waits
+until native bootstrap evidence exists for all required scenarios.
+
+To inspect the scenario-model hardware environment without training or benchmarking:
+
+```bash
+java -jar euhedral-training/target/trainer/euhedral-training-0.0.7-SNAPSHOT.jar training-info
+```
+
+This reports DJL, PyTorch, CUDA, and device visibility.
 
 Fixed anchors calibrate runs directly in log space. Strong calibration needs five shared anchors
 and residual at most `0.05`; weak calibration needs three and residual at most `0.15` by default.
@@ -236,34 +186,3 @@ java -jar euhedral-training/target/trainer/euhedral-training-0.0.7-SNAPSHOT.jar 
 
 Publication streams large artifacts, validates the staged package, and uses an atomic directory
 rename. Existing conflicting packages are never overwritten.
-
-## Legacy compatibility
-
-`merge-quantiles`, `merge-vectors`, `train-vector-finder`, and `benchmark` retain the pooled-v0
-property interface during Phase 5 only. They do not call the typed closed loop or the importer and
-must not be used as evidence for the robust ranking. Phase 7 removes these commands and the pooled
-normalization path.
-
-## Removing the temporary importer
-
-TEMPORARY_CURRENT_WORKSPACE_IMPORT_REMOVAL
-
-After all desired workspaces have complete import artifacts:
-
-1. preserve every `import-report.csv`;
-2. point configurations at generated bootstrap files or native Phase 3 checkpoints;
-3. delete `src/main/java/io/euhedral_execution/training/importer/currentworkspace/`;
-4. delete `src/test/java/io/euhedral_execution/training/importer/currentworkspace/`;
-5. remove the `import-current-workspace` dispatch, parser, and help from `Runner`;
-6. remove this current-workspace import and deletion section;
-7. remove importer-only assertions from `RunnerTest`;
-8. run the Phase 5 validation commands; and
-9. require the following search to return no matches:
-
-```bash
-rg -n "TEMPORARY_CURRENT_WORKSPACE_IMPORT_REMOVAL|importer\\.currentworkspace|import-current-workspace" \
-  euhedral-training docs
-```
-
-Deleting the importer changes no Phase 1-4 schema, comparator, model, scheduler, checkpoint, or
-package contract.

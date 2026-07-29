@@ -19,10 +19,8 @@ import io.euhedral_execution.training.data.enums.EvidenceOrigin;
 import io.euhedral_execution.training.data.enums.MeasurementEncoding;
 import io.euhedral_execution.training.data.enums.ObservationStatus;
 import io.euhedral_execution.training.data.enums.PolicyRole;
+import io.euhedral_execution.training.data.io.CanonicalCsv;
 import io.euhedral_execution.training.data.io.ObservationBundleWriter;
-import io.euhedral_execution.training.importer.currentworkspace.CurrentWorkspaceImportRequest;
-import io.euhedral_execution.training.importer.currentworkspace.CurrentWorkspaceImportResult;
-import io.euhedral_execution.training.importer.currentworkspace.CurrentWorkspaceImporter;
 import io.euhedral_execution.training.learning.AuditScenarioModelFixture;
 import io.euhedral_execution.training.learning.ScenarioConditionedModel;
 import io.euhedral_execution.training.learning.inputs.ScenarioTrainingRequest;
@@ -45,7 +43,6 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalDouble;
@@ -69,20 +66,7 @@ public final class AuditFixtures {
         assertIsolated(root);
         Corpus corpus = corpus();
 
-        Path sourceRoot = root.resolve("source-current-workspace");
-        Path forwardSource = sourceRoot.resolve("forward");
-        Path reverseSource = sourceRoot.resolve("reverse");
-        writeCurrentWorkspace(forwardSource, corpus, false);
-        writeCurrentWorkspace(reverseSource, corpus, true);
-        Path importedRoot = root.resolve("imported");
-        CurrentWorkspaceImportResult imported = CurrentWorkspaceImporter.importWorkspace(
-                new CurrentWorkspaceImportRequest(forwardSource,
-                        importedRoot.resolve("forward"), 10));
-        CurrentWorkspaceImportResult reverseImported =
-                CurrentWorkspaceImporter.importWorkspace(
-                        new CurrentWorkspaceImportRequest(reverseSource,
-                                importedRoot.resolve("reverse"), 10));
-        verifyImport(corpus, imported, reverseImported);
+        Path bootstrap = writeBootstrap(root.resolve("bootstrap-policies.vectors.csv"), corpus);
 
         Path controlWorkspace = root.resolve("control-workspace");
         Path resumedWorkspace = root.resolve("resumed-workspace");
@@ -93,21 +77,21 @@ public final class AuditFixtures {
         Path rejectedPackages = root.resolve("rejected-packages");
 
         ClosedLoopConfig controlAFirst = config(root, "control-a-first.conf",
-                controlWorkspace, imported.bootstrapPolicies(), "audit-a", false);
+                controlWorkspace, bootstrap, "audit-a", false);
         ClosedLoopConfig controlB = config(root, "control-b.conf",
-                controlWorkspace, imported.bootstrapPolicies(), "audit-b", true);
+                controlWorkspace, bootstrap, "audit-b", true);
         ClosedLoopConfig controlAFinal = config(root, "control-a-final.conf",
-                controlWorkspace, imported.bootstrapPolicies(), "audit-a", true);
+                controlWorkspace, bootstrap, "audit-a", true);
         ClosedLoopConfig resumedAFirst = config(root, "resumed-a-first.conf",
-                resumedWorkspace, imported.bootstrapPolicies(), "audit-a", false);
+                resumedWorkspace, bootstrap, "audit-a", false);
         ClosedLoopConfig resumedB = config(root, "resumed-b.conf",
-                resumedWorkspace, imported.bootstrapPolicies(), "audit-b", true);
+                resumedWorkspace, bootstrap, "audit-b", true);
         ClosedLoopConfig resumedAFinal = config(root, "resumed-a-final.conf",
-                resumedWorkspace, imported.bootstrapPolicies(), "audit-a", true);
+                resumedWorkspace, bootstrap, "audit-a", true);
         ClosedLoopConfig rejectedAFirst = config(root, "rejected-a-first.conf",
-                rejectedWorkspace, imported.bootstrapPolicies(), "audit-a", false);
+                rejectedWorkspace, bootstrap, "audit-a", false);
         ClosedLoopConfig rejectedB = config(root, "rejected-b.conf",
-                rejectedWorkspace, imported.bootstrapPolicies(), "audit-b", true);
+                rejectedWorkspace, bootstrap, "audit-b", true);
         String fingerprint = ClosedLoopConfigFingerprint.sha256(controlAFirst);
         for (ClosedLoopConfig item : List.of(controlB, controlAFinal, resumedAFirst,
                 resumedB, resumedAFinal, rejectedAFirst, rejectedB)) {
@@ -180,8 +164,8 @@ public final class AuditFixtures {
         requireStage(rejectedResult.stage(), CheckpointStage.MODEL_REJECTED);
         TrainingRunPackage rejectedPackage = packageFrom(rejectedResult);
 
-        return new Experiment(root, corpus, imported, reverseImported, controlWorkspace,
-                resumedWorkspace, rejectedWorkspace, controlPackages, resumedPackages,
+        return new Experiment(root, corpus, controlWorkspace, resumedWorkspace,
+                rejectedWorkspace, controlPackages, resumedPackages,
                 reproducedPackages, rejectedPackages, resumedAFinal, rejectedB,
                 controlBootstrapA, controlReady, controlComplete, resumedBootstrapA,
                 interrupted, resumedReady, resumedComplete, interruptedPackage,
@@ -249,93 +233,39 @@ public final class AuditFixtures {
         }
     }
 
-    private static void writeCurrentWorkspace(Path source, Corpus corpus,
-            boolean reverse) throws Exception {
-        List<PolicyMeaning> rows = new ArrayList<>(corpus.meanings().values());
-        rows.sort(Comparator.comparing(PolicyMeaning::symbol));
-        if (reverse) {
-            rows = rows.reversed();
+    private static Path writeBootstrap(Path path, Corpus corpus) throws Exception {
+        Files.createDirectories(path.getParent());
+        ArrayList<String> header = new ArrayList<>(List.of(
+                "schema_version", "bootstrap_position", "policy_id"));
+        for (int index = 0; index < PolicyVector.WIDTH; index++) {
+            header.add("weight_%02d_bits".formatted(index));
         }
-        LinkedHashMap<Path, String> files = new LinkedHashMap<>();
-        String vectors = rows.stream().map(row -> decimalRecord(row.policy()))
-                .collect(java.util.stream.Collectors.joining());
-        PolicyMeaning robust = corpus.bySymbol("R");
-        String measurement = java.util.stream.IntStream.range(0, 10)
-                .mapToObj(index -> Long.toString(
-                        Double.doubleToRawLongBits(index + 1.0)))
-                .collect(java.util.stream.Collectors.joining(" ")) + "\n";
-        files.put(source.resolve("euhedral-training/output/temp_data"), vectors);
-        files.put(source.resolve("euhedral-training/input/merger/raw_data.txt"),
-                decimalRecord(robust.policy()) + measurement);
-        files.put(source.resolve("euhedral-training/output/results.txt"),
-                "human-readable summary only\n");
-        files.put(source.resolve("euhedral-training/output/model.bin"), "legacy model\n");
-        files.put(source.resolve("euhedral-training/output/member.params"), "legacy member\n");
-        files.put(source.resolve("euhedral-training/input/state.properties"), "old=true\n");
-        files.put(source.resolve("euhedral-training/input/checkpoint-000001"),
-                "legacy checkpoint\n");
-        List<Map.Entry<Path, String>> entries = new ArrayList<>(files.entrySet());
-        if (reverse) {
-            entries = entries.reversed();
+        StringBuilder text = new StringBuilder(CanonicalCsv.row(header));
+        int position = 1;
+        for (PolicyMeaning meaning : corpus.meanings().values()) {
+            PolicyVector policy = meaning.policy();
+            ArrayList<String> fields = new ArrayList<>(PolicyVector.WIDTH + 3);
+            fields.add("1");
+            fields.add(Integer.toString(position++));
+            fields.add(policy.id().canonical());
+            for (int index = 0; index < PolicyVector.WIDTH; index++) {
+                fields.add("%016x".formatted(
+                        Double.doubleToRawLongBits(policy.weight(index))));
+            }
+            text.append(CanonicalCsv.row(fields));
         }
-        for (Map.Entry<Path, String> entry : entries) {
-            Files.createDirectories(entry.getKey().getParent());
-            Files.writeString(entry.getKey(), entry.getValue(), StandardCharsets.US_ASCII);
-        }
-    }
-
-    private static void verifyImport(Corpus corpus, CurrentWorkspaceImportResult first,
-            CurrentWorkspaceImportResult second) throws Exception {
-        if (first.uniquePolicyCount() != 10 || second.uniquePolicyCount() != 10) {
-            throw new IllegalStateException("Audit import did not recover ten policies");
-        }
-        List<PolicyVector> imported = BootstrapPolicyCsv.read(
-                first.bootstrapPolicies(), 10);
-        if (!imported.stream().map(PolicyVector::id).toList()
+        Files.writeString(path, text, StandardCharsets.UTF_8);
+        List<PolicyVector> decoded = BootstrapPolicyCsv.read(path, 10);
+        if (!decoded.stream().map(PolicyVector::id).toList()
                 .equals(List.copyOf(corpus.meanings().keySet()))) {
-            throw new IllegalStateException("Imported policy order differs");
+            throw new IllegalStateException("Bootstrap policy order differs");
         }
-        for (PolicyVector policy : imported) {
+        for (PolicyVector policy : decoded) {
             if (!policy.bitwiseEquals(corpus.meanings().get(policy.id()).policy())) {
-                throw new IllegalStateException("Imported raw policy lanes differ");
+                throw new IllegalStateException("Bootstrap raw policy lanes differ");
             }
         }
-        for (String name : List.of("imported-policies.vectors.csv",
-                "bootstrap-policies.vectors.csv", "import-report.csv", "COMPLETE")) {
-            if (Files.mismatch(first.directory().resolve(name),
-                    second.directory().resolve(name)) != -1L) {
-                throw new IllegalStateException("Import bytes depend on creation order");
-            }
-        }
-        String report = Files.readString(first.importReport(), StandardCharsets.UTF_8);
-        for (String required : List.of(
-                "LEGACY_MEASUREMENTS,REJECTED,1,0,0,1,"
-                        + "REQUIRED_OBSERVATION_IDENTITY_UNRECOVERABLE",
-                "HUMAN_READABLE_SUMMARY,SKIPPED,1,0,0,0,"
-                        + "DERIVED_SUMMARY_NOT_EVIDENCE",
-                "POLICY_VECTORS,ACCEPTED,10,9,1,0,POLICY_VECTORS_IMPORTED",
-                "model.bin,UNKNOWN,REJECTED,1,0,0,1,"
-                        + "UNMAPPED_CURRENT_WORKSPACE_PATH",
-                "member.params,UNKNOWN,REJECTED,1,0,0,1,"
-                        + "UNMAPPED_CURRENT_WORKSPACE_PATH",
-                "state.properties,UNKNOWN,REJECTED,1,0,0,1,"
-                        + "UNMAPPED_CURRENT_WORKSPACE_PATH",
-                "checkpoint-000001,UNKNOWN,REJECTED,1,0,0,1,"
-                        + "UNMAPPED_CURRENT_WORKSPACE_PATH")) {
-            if (!report.contains(required)) {
-                throw new IllegalStateException("Missing audit import report row " + required);
-            }
-        }
-        try (var stream = Files.walk(first.directory())) {
-            if (stream.anyMatch(path -> {
-                String name = path.getFileName().toString();
-                return name.endsWith(".params") || name.endsWith(".bin")
-                        || name.startsWith("checkpoint")
-                        || name.equals("observations.csv");
-            })) {
-                throw new IllegalStateException("Legacy artifact escaped the importer");
-            }
-        }
+        return path;
     }
 
     private static ClosedLoopConfig config(Path root, String name, Path workspace,
@@ -428,17 +358,6 @@ public final class AuditFixtures {
         text.append(key).append('=').append(value).append('\n');
     }
 
-    private static String decimalRecord(PolicyVector policy) {
-        StringBuilder row = new StringBuilder();
-        for (int index = 0; index < PolicyVector.WIDTH; index++) {
-            if (index > 0) {
-                row.append(' ');
-            }
-            row.append(Double.doubleToRawLongBits(policy.weight(index)));
-        }
-        return row.append('\n').toString();
-    }
-
     private static void assertIsolated(Path root) {
         Path repository = Path.of("").toAbsolutePath().normalize();
         for (Path forbidden : List.of(repository.resolve("euhedral-training/input"),
@@ -495,8 +414,6 @@ public final class AuditFixtures {
     }
 
     public record Experiment(Path root, Corpus corpus,
-                             CurrentWorkspaceImportResult imported,
-                             CurrentWorkspaceImportResult reverseImported,
                              Path controlWorkspace, Path resumedWorkspace,
                              Path rejectedWorkspace,
                              Path controlPackages, Path resumedPackages,

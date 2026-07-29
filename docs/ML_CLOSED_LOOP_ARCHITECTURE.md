@@ -18,11 +18,10 @@ ID. `SourceScenario` preserves environment, absolute source count, visible physi
 the reduced source/core ratio. Native observations additionally carry run, cohort, iteration,
 commit, benchmark parameters, repetition, timing, and status identity.
 
-The current-workspace importer is a removable, vector-only boundary. It recognizes exactly the
-pre-upgrade paths documented in the [training README](../euhedral-training/README.md), converts
-accepted rows immediately to immutable `PolicyVector` records, and rejects measurements whose
-observation identity cannot be recovered without guessing. No legacy layout knowledge enters data,
-merge, learning, scheduling, checkpoint, benchmark, or packaging code.
+The closed loop accepts either a strict schema-v1 bootstrap vector file or an explicit native
+calibration/evidence state. Bootstrap vectors carry no measurements and must be benchmarked
+natively. Current-layout names, alternating vector/measurement rows, old models, and old
+checkpoints are not live input formats.
 
 ## Implemented flow
 
@@ -72,7 +71,7 @@ leader revalidation, and disagreement audits. Fixed anchors are reserved before 
 
 `ClosedLoopRunner` owns the stage machine. Immutable records cross stage boundaries; mutable
 builders, parser buffers, model tensors, and filesystem staging state remain single-owner. Native
-benchmark counter publication retains its existing acquire/release semantics. Offline import,
+benchmark counter publication retains its existing acquire/release semantics. Offline
 configuration, merge, and packaging add no VarHandles or shared hot-loop state.
 
 Checkpoints publish complete snapshots and retain carry-forward state, evidence references,
