@@ -72,7 +72,7 @@ main (Phase 1 integrated)
   -> Phase 3
   -> Phase 4
   -> Phase 5
-  -> Phase 6D: agent/phase6d-verification-audit
+  -> Phase 6: agent/phase6d-verification-audit
   -> Phase 7A: agent/phase7a-cleanup-handoff-blueprint
   -> Phase 7B: new agent/phase7b-cleanup-handoff branch
 ```
@@ -903,5 +903,117 @@ measured or claimed.
 The pre-existing untracked `euhedral-training/input`, `euhedral-training/output`, and
 `euhedral-core/src/test/java/io/euhedral_execution/core/utils` trees were not inspected, edited,
 deleted, or staged.
+
+Deviations: none.
+
+### Verification record (2026-07-29, Prompt 7C)
+
+#### Branch and scope
+
+Verification ran on `agent/phase7c-cleanup-handoff-verification` from Phase 7B commit
+`8cc4f195`. No blueprint-settled implementation defect was found and no production, test, script,
+POM, package-resource, or user-facing documentation change was needed.
+
+At verification start the index already contained a one-line Phase 7 blueprint wording correction
+and an added `euhedral-core/src/test/java/io/euhedral_execution/core/utils/FlowThreadTest.java`.
+The core utils test file is outside the Phase 7 cleanup boundary and was not edited, deleted, or
+included as Phase 7 evidence. The Phase 7 verification commit stages only the Phase 7 blueprint
+file; it does not include the core utils test.
+
+#### Toolchain
+
+The pinned explicit toolchain reported:
+
+```text
+openjdk version "21.0.2" 2024-01-16
+OpenJDK Runtime Environment (build 21.0.2+13-58)
+OpenJDK 64-Bit Server VM (build 21.0.2+13-58, mixed mode, sharing)
+
+Apache Maven 3.9.16
+Java version: 21.0.2, vendor: Oracle Corporation
+```
+
+#### Validation commands
+
+All Maven commands used:
+
+```text
+env JAVA_HOME=/home/bagotay/.local/share/mise/installs/java/21.0.2 \
+    PATH=/home/bagotay/.local/share/mise/installs/java/21.0.2/bin:/usr/bin:/bin \
+    /home/bagotay/.local/share/mise/installs/maven/3.9.16/apache-maven-3.9.16/bin/mvn
+```
+
+Results:
+
+```text
+-B -pl euhedral-training -am install -Dmaven.test.skip=true
+  BUILD SUCCESS; six selected reactor projects
+
+-B -pl euhedral-core -Dtest=BenchmarkFrameTest test
+  3 tests, 0 failures, 0 errors, 0 skipped
+
+-B -pl euhedral-training -Dtest=<Phase 1-3 focused list> test
+  67 tests, 0 failures, 0 errors, 0 skipped
+
+-B -pl euhedral-training -Dtest=<Phase 4-7 package/CLI/audit list> test
+  26 tests, 0 failures, 0 errors, 0 skipped
+
+-B -pl euhedral-training test
+  132 tests, 0 failures, 0 errors, 1 skipped
+  (the deliberately opt-in DJL integration test)
+
+-B -pl euhedral-training -Dtraining.djlIntegration=true
+  -Dtest=ScenarioOrdinalNetworkIntegrationTest test
+  1 test, 0 failures, 0 errors, 0 skipped
+
+-B -pl euhedral-training -am verify
+  BUILD SUCCESS; six selected reactor projects
+```
+
+#### Static proofs and package evidence
+
+The importer/removal-marker search, pooled implementation/name search, stale P99/t-digest search,
+trainer dependency search, obsolete GPU property search, and tracked generated/build/training
+artifact search returned no prohibited matches. The direct path checks proved the deleted
+`Distribution`, `PolicyOrdinalNetwork`, `training.legacy`, and current-workspace importer
+production/test paths remain absent.
+
+The word-level `pooled` search returned only the required schema-v1 incompatible-artifact
+diagnostic in `ScenarioModelMetadataCodec` and its focused assertion in
+`ScenarioConditionedModelTest`.
+
+Workflow review was clean:
+
+```text
+git diff --name-only main...HEAD -- .github/workflows
+git diff -- .github/workflows
+```
+
+both returned no output. `git diff --check` and `git diff --cached --check` were clean.
+
+`EndToEndAuditTest` and `PackageLifecycleAuditTest` passed in both the focused package/CLI/audit
+list and the full `euhedral-training test` run. They continue to prove winner `R`
+(`p1-4e8bd733c51b5dab`) at rank 1 across all four exact scenarios, `RUN_COMPLETE` revision 24,
+70 complete-package paths with 69 manifest entries, 58 interrupted-package paths with 57 manifest
+entries, byte-identical control/resumed/package-run reproduction, source/checksum joins, report
+contents, collision/cleanup/tamper behavior, and exclusion of the incomplete failed policy from
+robust leadership. The unchanged golden comparisons preserve the recorded Phase 6 fingerprints.
+
+#### Repository and environment limits
+
+`git status --short --ignored` showed only the pre-existing staged blueprint/core-utils entries and
+ignored local IDE/Maven/Zig/build output. No generated, training input/output, or user-owned file
+was staged for the Phase 7 verification commit.
+
+`docker info` still cannot reach the rootless Docker server:
+
+```text
+permission denied while trying to connect to the docker API at
+unix:///run/user/911603815/docker.sock
+```
+
+The Docker/Testcontainers and full native repository verification path remains unavailable for this
+environment. The mandatory six-project `euhedral-training -am verify` passed. No live native
+throughput measurement was run or claimed.
 
 Deviations: none.
