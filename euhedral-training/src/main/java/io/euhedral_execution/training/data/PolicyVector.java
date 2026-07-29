@@ -25,8 +25,8 @@ public final class PolicyVector {
             }
         }
         id = PolicyId.fromWeights(this.weights);
-        hashCode = Arrays.hashCode(Arrays.stream(this.weights)
-                .mapToLong(Double::doubleToRawLongBits).toArray());
+        hashCode = Arrays.hashCode(
+                Arrays.stream(this.weights).mapToLong(Double::doubleToRawLongBits).toArray());
     }
 
     public PolicyId id() {
@@ -46,8 +46,8 @@ public final class PolicyVector {
             return false;
         }
         for (int i = 0; i < WIDTH; i++) {
-            if (Double.doubleToRawLongBits(weights[i])
-                    != Double.doubleToRawLongBits(other.weights[i])) {
+            if (Double.doubleToRawLongBits(weights[i]) != Double.doubleToRawLongBits(
+                    other.weights[i])) {
                 return false;
             }
         }

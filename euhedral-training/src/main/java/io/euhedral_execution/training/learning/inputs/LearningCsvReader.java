@@ -25,13 +25,14 @@ public final class LearningCsvReader {
                 throw new IOException("Blank Phase 1 CSV row at " + path + ':' + (line + 1));
             }
             if (lines[line].indexOf('"') >= 0 || lines[line].indexOf('\r') >= 0) {
-                throw new IOException("Unexpected quoting or CR in generated Phase 1 CSV at "
-                        + path + ':' + (line + 1));
+                throw new IOException(
+                        "Unexpected quoting or CR in generated Phase 1 CSV at " + path + ':' + (line
+                                + 1));
             }
             String[] fields = lines[line].split(",", -1);
             if (fields.length != expectedColumns) {
-                throw new IOException("Expected " + expectedColumns + " fields at "
-                        + path + ':' + (line + 1));
+                throw new IOException(
+                        "Expected " + expectedColumns + " fields at " + path + ':' + (line + 1));
             }
             rows.add(fields);
         }

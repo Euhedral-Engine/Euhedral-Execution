@@ -1,8 +1,5 @@
 package io.euhedral_execution.training.learning.data;
 
-import io.euhedral_execution.training.data.PolicyId;
-import io.euhedral_execution.training.learning.enums.LearningPartition;
-import io.euhedral_execution.training.learning.inputs.ScenarioLearningRow;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -11,6 +8,10 @@ import java.util.SortedMap;
 import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
+
+import io.euhedral_execution.training.data.PolicyId;
+import io.euhedral_execution.training.learning.enums.LearningPartition;
+import io.euhedral_execution.training.learning.inputs.ScenarioLearningRow;
 
 public record PolicyGroupedSplit(SortedMap<PolicyId, LearningPartition> policyPartitions,
                                  List<ScenarioLearningRow> trainingRows,
@@ -21,10 +22,8 @@ public record PolicyGroupedSplit(SortedMap<PolicyId, LearningPartition> policyPa
                                  List<ScenarioLearningRow> ablationEarlyStopRows,
                                  List<ScenarioLearningRow> ablationScoreRows) {
 
-    private static void validateRows(List<ScenarioLearningRow> rows,
-            LearningPartition expected,
-            SortedMap<PolicyId, LearningPartition> partitions,
-            Set<PolicyId> represented) {
+    private static void validateRows(List<ScenarioLearningRow> rows, LearningPartition expected,
+            SortedMap<PolicyId, LearningPartition> partitions, Set<PolicyId> represented) {
         for (int index = 0; index < rows.size(); index++) {
             ScenarioLearningRow row = rows.get(index);
             if (partitions.get(row.policy().id()) != expected
@@ -48,31 +47,29 @@ public record PolicyGroupedSplit(SortedMap<PolicyId, LearningPartition> policyPa
         trainingRows = List.copyOf(trainingRows);
         validationRows = List.copyOf(validationRows);
         testRows = List.copyOf(testRows);
-        ablationEarlyStopPolicies = Collections.unmodifiableSortedSet(
-                new TreeSet<>(ablationEarlyStopPolicies));
-        ablationScorePolicies = Collections.unmodifiableSortedSet(
-                new TreeSet<>(ablationScorePolicies));
+        ablationEarlyStopPolicies =
+                Collections.unmodifiableSortedSet(new TreeSet<>(ablationEarlyStopPolicies));
+        ablationScorePolicies =
+                Collections.unmodifiableSortedSet(new TreeSet<>(ablationScorePolicies));
         ablationEarlyStopRows = List.copyOf(ablationEarlyStopRows);
         ablationScoreRows = List.copyOf(ablationScoreRows);
         TreeSet<PolicyId> represented = new TreeSet<>();
         validateRows(trainingRows, LearningPartition.TRAIN, policyPartitions, represented);
-        validateRows(validationRows, LearningPartition.VALIDATION,
-                policyPartitions, represented);
+        validateRows(validationRows, LearningPartition.VALIDATION, policyPartitions, represented);
         validateRows(testRows, LearningPartition.TEST, policyPartitions, represented);
-        if (!represented.equals(policyPartitions.keySet())
-                || !Collections.disjoint(ablationEarlyStopPolicies, ablationScorePolicies)) {
+        if (!represented.equals(policyPartitions.keySet()) || !Collections.disjoint(
+                ablationEarlyStopPolicies, ablationScorePolicies)) {
             throw new IllegalArgumentException("Policy partition assignments disagree");
         }
         TreeSet<PolicyId> validationPolicies = ids(validationRows);
         TreeSet<PolicyId> ablationPolicies = new TreeSet<>(ablationEarlyStopPolicies);
         ablationPolicies.addAll(ablationScorePolicies);
-        if (!validationPolicies.equals(ablationPolicies)
-                || !ids(ablationEarlyStopRows).equals(ablationEarlyStopPolicies)
-                || !ids(ablationScoreRows).equals(ablationScorePolicies)) {
+        if (!validationPolicies.equals(ablationPolicies) || !ids(ablationEarlyStopRows).equals(
+                ablationEarlyStopPolicies) || !ids(ablationScoreRows).equals(
+                ablationScorePolicies)) {
             throw new IllegalArgumentException("Validation ablation assignments disagree");
         }
-        ArrayList<ScenarioLearningRow> ablationRows =
-                new ArrayList<>(ablationEarlyStopRows);
+        ArrayList<ScenarioLearningRow> ablationRows = new ArrayList<>(ablationEarlyStopRows);
         ablationRows.addAll(ablationScoreRows);
         ablationRows.sort(null);
         if (!ablationRows.equals(validationRows)) {

@@ -1,8 +1,9 @@
 package io.euhedral_execution.training.learning.data;
 
-import io.euhedral_execution.training.data.PolicyVector;
 import java.util.List;
 import java.util.Objects;
+
+import io.euhedral_execution.training.data.PolicyVector;
 
 public record PolicyPredictionCurve(PolicyVector policy, List<ScenarioPrediction> scenarios) {
 

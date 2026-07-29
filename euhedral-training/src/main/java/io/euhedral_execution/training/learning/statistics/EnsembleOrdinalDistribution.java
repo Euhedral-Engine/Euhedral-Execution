@@ -2,9 +2,8 @@ package io.euhedral_execution.training.learning.statistics;
 
 public record EnsembleOrdinalDistribution(double[] meanBinMasses, double predictedQuality,
                                           double ordinalStdDev, double qualityIntervalLow,
-                                          double qualityIntervalHigh,
-                                          double ordinalEntropy, double topDecileProbability,
-                                          double epistemicStdDev,
+                                          double qualityIntervalHigh, double ordinalEntropy,
+                                          double topDecileProbability, double epistemicStdDev,
                                           double disagreementRange) {
 
     private static boolean rate(double value) {
@@ -20,11 +19,11 @@ public record EnsembleOrdinalDistribution(double[] meanBinMasses, double predict
             throw new NullPointerException();
         }
         meanBinMasses = meanBinMasses.clone();
-        if (meanBinMasses.length != 10 || !rate(predictedQuality)
-                || !nonnegative(ordinalStdDev) || !rate(qualityIntervalLow)
-                || !rate(qualityIntervalHigh) || qualityIntervalLow > qualityIntervalHigh
-                || !rate(ordinalEntropy) || !rate(topDecileProbability)
-                || !nonnegative(epistemicStdDev) || !nonnegative(disagreementRange)) {
+        if (meanBinMasses.length != 10 || !rate(predictedQuality) || !nonnegative(ordinalStdDev)
+                || !rate(qualityIntervalLow) || !rate(qualityIntervalHigh)
+                || qualityIntervalLow > qualityIntervalHigh || !rate(ordinalEntropy) || !rate(
+                topDecileProbability) || !nonnegative(epistemicStdDev) || !nonnegative(
+                disagreementRange)) {
             throw new IllegalArgumentException("Invalid ensemble ordinal distribution");
         }
         double total = 0;

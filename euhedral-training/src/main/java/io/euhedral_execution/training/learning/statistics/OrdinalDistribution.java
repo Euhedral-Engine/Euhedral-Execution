@@ -18,16 +18,15 @@ public record OrdinalDistribution(double[] cumulativeProbabilities, double[] bin
         }
         cumulativeProbabilities = cumulativeProbabilities.clone();
         binMasses = binMasses.clone();
-        if (cumulativeProbabilities.length != 9 || binMasses.length != 10
-                || !rate(meanQuality) || !nonnegative(variance) || !rate(entropy)
-                || !rate(topDecileProbability)) {
+        if (cumulativeProbabilities.length != 9 || binMasses.length != 10 || !rate(meanQuality)
+                || !nonnegative(variance) || !rate(entropy) || !rate(topDecileProbability)) {
             throw new IllegalArgumentException("Invalid ordinal distribution");
         }
         double mass = 0;
         for (int i = 0; i < cumulativeProbabilities.length; i++) {
-            if (!rate(cumulativeProbabilities[i])
-                    || i > 0 && Double.compare(cumulativeProbabilities[i - 1],
-                    cumulativeProbabilities[i]) < 0) {
+            if (!rate(cumulativeProbabilities[i]) || i > 0
+                    && Double.compare(cumulativeProbabilities[i - 1], cumulativeProbabilities[i])
+                    < 0) {
                 throw new IllegalArgumentException("Cumulative probabilities are not monotonic");
             }
         }

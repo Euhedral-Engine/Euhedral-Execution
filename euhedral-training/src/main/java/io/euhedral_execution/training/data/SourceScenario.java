@@ -1,13 +1,11 @@
 package io.euhedral_execution.training.data;
 
 import java.util.Objects;
+
 import org.jspecify.annotations.NonNull;
 
-public record SourceScenario(
-        String environmentId,
-        int sourceCount,
-        int availablePhysicalCoreCount,
-        SourceRatio ratio) implements Comparable<SourceScenario> {
+public record SourceScenario(String environmentId, int sourceCount, int availablePhysicalCoreCount,
+                             SourceRatio ratio) implements Comparable<SourceScenario> {
 
     public SourceScenario {
         Objects.requireNonNull(environmentId);
@@ -15,8 +13,8 @@ public record SourceScenario(
         if (!environmentId.matches("[a-z0-9][a-z0-9._-]{0,63}")) {
             throw new IllegalArgumentException("Malformed environment ID");
         }
-        if (sourceCount <= 0 || availablePhysicalCoreCount <= 0
-                || !ratio.equals(SourceRatio.of(sourceCount, availablePhysicalCoreCount))) {
+        if (sourceCount <= 0 || availablePhysicalCoreCount <= 0 || !ratio.equals(
+                SourceRatio.of(sourceCount, availablePhysicalCoreCount))) {
             throw new IllegalArgumentException("Scenario counts and ratio disagree");
         }
     }
@@ -27,9 +25,8 @@ public record SourceScenario(
     }
 
     public String canonical() {
-        return "s1-" + environmentId + "-src" + sourceCount + "-core"
-                + availablePhysicalCoreCount + "-r" + ratio.numerator() + "of"
-                + ratio.denominator();
+        return "s1-" + environmentId + "-src" + sourceCount + "-core" + availablePhysicalCoreCount
+                + "-r" + ratio.numerator() + "of" + ratio.denominator();
     }
 
     @Override
@@ -44,7 +41,8 @@ public record SourceScenario(
         if (result == 0) {
             result = Integer.compare(ratio.numerator(), other.ratio.numerator());
         }
-        return result != 0 ? result : Integer.compare(ratio.denominator(), other.ratio.denominator());
+        return result != 0 ? result
+                : Integer.compare(ratio.denominator(), other.ratio.denominator());
     }
 
     @Override

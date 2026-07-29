@@ -11,8 +11,8 @@ public record PartitionCounts(SortedMap<String, Integer> policyCounts,
                               SortedMap<String, Integer> rowCounts,
                               SortedMap<String, SortedMap<SourceScenario, Integer>> scenarioRowCounts) {
 
-    private static final Set<String> PARTITIONS = Set.of(
-            "TRAIN", "VALIDATION", "TEST", "ABLATION_EARLY_STOP", "ABLATION_SCORE");
+    private static final Set<String> PARTITIONS =
+            Set.of("TRAIN", "VALIDATION", "TEST", "ABLATION_EARLY_STOP", "ABLATION_SCORE");
 
     private static SortedMap<String, Integer> immutableCounts(Map<String, Integer> source) {
         TreeMap<String, Integer> copy = new TreeMap<>(source);
@@ -29,8 +29,7 @@ public record PartitionCounts(SortedMap<String, Integer> policyCounts,
         policyCounts = immutableCounts(policyCounts);
         rowCounts = immutableCounts(rowCounts);
         TreeMap<String, SortedMap<SourceScenario, Integer>> nested = new TreeMap<>();
-        for (Map.Entry<String, SortedMap<SourceScenario, Integer>> entry
-                : scenarioRowCounts.entrySet()) {
+        for (Map.Entry<String, SortedMap<SourceScenario, Integer>> entry : scenarioRowCounts.entrySet()) {
             TreeMap<SourceScenario, Integer> values = new TreeMap<>(entry.getValue());
             if (values.values().stream().anyMatch(value -> value == null || value < 0)) {
                 throw new IllegalArgumentException("Invalid scenario partition count");
@@ -38,8 +37,7 @@ public record PartitionCounts(SortedMap<String, Integer> policyCounts,
             nested.put(entry.getKey(), Collections.unmodifiableSortedMap(values));
         }
         scenarioRowCounts = Collections.unmodifiableSortedMap(nested);
-        if (!policyCounts.keySet().equals(PARTITIONS)
-                || !rowCounts.keySet().equals(PARTITIONS)
+        if (!policyCounts.keySet().equals(PARTITIONS) || !rowCounts.keySet().equals(PARTITIONS)
                 || !scenarioRowCounts.keySet().equals(PARTITIONS)) {
             throw new IllegalArgumentException("Partition count keys disagree");
         }
@@ -57,19 +55,16 @@ public record PartitionCounts(SortedMap<String, Integer> policyCounts,
             }
         }
         if (policyCounts.get("VALIDATION")
-                != policyCounts.get("ABLATION_EARLY_STOP")
-                + policyCounts.get("ABLATION_SCORE")
+                != policyCounts.get("ABLATION_EARLY_STOP") + policyCounts.get("ABLATION_SCORE")
                 || rowCounts.get("VALIDATION")
-                != rowCounts.get("ABLATION_EARLY_STOP")
-                + rowCounts.get("ABLATION_SCORE")) {
+                != rowCounts.get("ABLATION_EARLY_STOP") + rowCounts.get("ABLATION_SCORE")) {
             throw new IllegalArgumentException("Validation ablation counts disagree");
         }
         for (SourceScenario scenario : scenarioCatalog) {
             if (scenarioRowCounts.get("VALIDATION").get(scenario)
                     != scenarioRowCounts.get("ABLATION_EARLY_STOP").get(scenario)
                     + scenarioRowCounts.get("ABLATION_SCORE").get(scenario)) {
-                throw new IllegalArgumentException(
-                        "Validation ablation scenario counts disagree");
+                throw new IllegalArgumentException("Validation ablation scenario counts disagree");
             }
         }
     }

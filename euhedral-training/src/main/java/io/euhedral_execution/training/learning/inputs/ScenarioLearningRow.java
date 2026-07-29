@@ -1,15 +1,15 @@
 package io.euhedral_execution.training.learning.inputs;
 
+import java.util.Objects;
+
 import io.euhedral_execution.training.data.PolicyVector;
 import io.euhedral_execution.training.data.SourceScenario;
 import io.euhedral_execution.training.merge.data.MergeRecords.ScenarioResultStatus;
-import java.util.Objects;
 
 public record ScenarioLearningRow(PolicyVector policy, SourceScenario scenario,
                                   ScenarioResultStatus sourceStatus, double quality,
-                                  double throughputMedian,
-                                  double bootstrapMedianCiLow, double bootstrapMedianCiHigh,
-                                  int acceptedRunCount,
+                                  double throughputMedian, double bootstrapMedianCiLow,
+                                  double bootstrapMedianCiHigh, int acceptedRunCount,
                                   double medianWithinRunRelativeIqr, double meanNonSuccessRate)
         implements Comparable<ScenarioLearningRow> {
 
@@ -35,8 +35,8 @@ public record ScenarioLearningRow(PolicyVector policy, SourceScenario scenario,
         }
         if (!rate(quality) || !positive(throughputMedian) || !positive(bootstrapMedianCiLow)
                 || !positive(bootstrapMedianCiHigh) || bootstrapMedianCiLow > bootstrapMedianCiHigh
-                || acceptedRunCount <= 0 || !nonnegative(medianWithinRunRelativeIqr)
-                || !rate(meanNonSuccessRate)) {
+                || acceptedRunCount <= 0 || !nonnegative(medianWithinRunRelativeIqr) || !rate(
+                meanNonSuccessRate)) {
             throw new IllegalArgumentException("Invalid scenario learning row");
         }
     }

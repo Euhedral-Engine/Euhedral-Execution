@@ -1,5 +1,9 @@
 package io.euhedral_execution.training.learning.utils;
 
+import java.util.List;
+import java.util.SortedSet;
+import java.util.TreeMap;
+
 import io.euhedral_execution.training.data.PolicyId;
 import io.euhedral_execution.training.data.SourceScenario;
 import io.euhedral_execution.training.learning.InsufficientScenarioLearningDataException;
@@ -7,9 +11,6 @@ import io.euhedral_execution.training.learning.data.ScenarioLearningMatrix;
 import io.euhedral_execution.training.learning.enums.ScenarioFeatureSet;
 import io.euhedral_execution.training.learning.inputs.ScenarioLearningRow;
 import io.euhedral_execution.training.learning.metadata.FeatureNormalizer;
-import java.util.List;
-import java.util.SortedSet;
-import java.util.TreeMap;
 
 public final class ScenarioFeatureEncoder {
 
@@ -19,8 +20,8 @@ public final class ScenarioFeatureEncoder {
 
     public static ScenarioLearningMatrix matrix(List<ScenarioLearningRow> source,
             SortedSet<SourceScenario> active, FeatureNormalizer normalizer) {
-        List<ScenarioLearningRow> rows = source.stream().filter(r -> active.contains(r.scenario()))
-                .sorted().toList();
+        List<ScenarioLearningRow> rows =
+                source.stream().filter(r -> active.contains(r.scenario())).sorted().toList();
         if (rows.isEmpty()) {
             throw new IllegalArgumentException("Matrix rows are empty");
         }

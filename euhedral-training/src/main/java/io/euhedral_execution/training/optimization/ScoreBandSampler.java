@@ -1,7 +1,5 @@
 package io.euhedral_execution.training.optimization;
 
-import io.euhedral_execution.hashing.HasherApi;
-import io.euhedral_execution.training.optimization.CmaEsOptimizer.ScoredVector;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -9,7 +7,12 @@ import java.util.List;
 import java.util.Random;
 import java.util.Set;
 
-/** Bounded reservoir sampling across empirical classifier-score bands. */
+import io.euhedral_execution.hashing.HasherApi;
+import io.euhedral_execution.training.optimization.CmaEsOptimizer.ScoredVector;
+
+/**
+ * Bounded reservoir sampling across empirical classifier-score bands.
+ */
 public final class ScoreBandSampler {
 
     private static final int[] DEFAULT_WEIGHTS = {1, 1, 1, 1, 2, 2, 3, 5, 8, 16};

@@ -1,5 +1,16 @@
 package io.euhedral_execution.training.merge;
 
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.OptionalDouble;
+import java.util.Set;
+import java.util.SortedMap;
+import java.util.TreeMap;
+import java.util.TreeSet;
+
 import io.euhedral_execution.training.data.BenchmarkRunContext;
 import io.euhedral_execution.training.data.PolicyId;
 import io.euhedral_execution.training.data.SourceScenario;
@@ -11,31 +22,20 @@ import io.euhedral_execution.training.merge.data.MergeRecords.RunAggregateStatus
 import io.euhedral_execution.training.merge.data.MergeRecords.RunCalibration;
 import io.euhedral_execution.training.merge.data.WeightedValue;
 import io.euhedral_execution.training.merge.enums.CalibrationStatus;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.OptionalDouble;
-import java.util.Set;
-import java.util.SortedMap;
-import java.util.TreeMap;
-import java.util.TreeSet;
 import org.jspecify.annotations.NonNull;
 
 public final class RunCalibrator {
 
     private static @NonNull Map<Key, RunAggregate> getRunAggregateMap(List<RunAggregate> runs) {
         Map<Key, RunAggregate> byKey = new HashMap<>();
-        Map<String, BenchmarkRunContext> contexts
-                = new HashMap<>();
+        Map<String, BenchmarkRunContext> contexts = new HashMap<>();
         for (RunAggregate run : runs) {
-            if (byKey.put(new Key(run.run().descriptor().benchmarkRunId(),
-                    run.policy().id()), run) != null) {
+            if (byKey.put(new Key(run.run().descriptor().benchmarkRunId(), run.policy().id()), run)
+                    != null) {
                 throw new IllegalArgumentException("Duplicate run/policy aggregate");
             }
-            var existingContext = contexts.putIfAbsent(
-                    run.run().descriptor().benchmarkRunId(), run.run());
+            var existingContext =
+                    contexts.putIfAbsent(run.run().descriptor().benchmarkRunId(), run.run());
             if (existingContext != null && !existingContext.equals(run.run())) {
                 throw new IllegalArgumentException("Ambiguous run context");
             }
@@ -46,14 +46,15 @@ public final class RunCalibrator {
     public static List<RunCalibration> calibrate(List<RunAggregate> runs, CalibrationPlan plan,
             CalibrationConfig config) {
         Map<Key, RunAggregate> byKey = getRunAggregateMap(runs);
-        for (Map.Entry<SourceScenario, String> reference
-                : plan.references().referenceRunIds().entrySet()) {
-            boolean present = runs.stream().anyMatch(run ->
-                    run.run().descriptor().benchmarkRunId().equals(reference.getValue())
+        for (Map.Entry<SourceScenario, String> reference : plan.references().referenceRunIds()
+                .entrySet()) {
+            boolean present = runs.stream().anyMatch(
+                    run -> run.run().descriptor().benchmarkRunId().equals(reference.getValue())
                             && run.run().descriptor().scenario().equals(reference.getKey()));
             if (!present) {
-                throw new IllegalArgumentException("Missing reference run "
-                        + reference.getValue() + " for " + reference.getKey().canonical());
+                throw new IllegalArgumentException(
+                        "Missing reference run " + reference.getValue() + " for "
+                                + reference.getKey().canonical());
             }
         }
         Set<PolicyId> anchorIds = new TreeSet<>();
@@ -76,25 +77,25 @@ public final class RunCalibrator {
                 continue;
             }
             if (first.run().descriptor().benchmarkRunId().equals(referenceId)) {
-                int qualifying = (int) group.stream().filter(run ->
-                        anchorIds.contains(run.policy().id()) && qualifies(run)).count();
+                int qualifying = (int) group.stream()
+                        .filter(run -> anchorIds.contains(run.policy().id()) && qualifies(run))
+                        .count();
                 if (qualifying < 5) {
-                    throw new IllegalArgumentException("Reference " + referenceId
-                            + " has only " + qualifying + " valid fixed anchors");
+                    throw new IllegalArgumentException(
+                            "Reference " + referenceId + " has only " + qualifying
+                                    + " valid fixed anchors");
                 }
                 result.add(
                         new RunCalibration(first.run(), referenceId, plan.anchors().anchorSetId(),
                                 anchorIds.size(), qualifying, OptionalDouble.of(0),
                                 OptionalDouble.of(1), OptionalDouble.of(0),
-                                CalibrationStatus.REFERENCE,
-                                "REFERENCE_RUN", new TreeMap<>()));
+                                CalibrationStatus.REFERENCE, "REFERENCE_RUN", new TreeMap<>()));
                 continue;
             }
             List<AnchorDifference> differences = new ArrayList<>();
             for (RunAggregate run : group) {
-                if (!anchorIds.contains(run.policy().id())
-                        || !run.roles().contains(PolicyRole.FIXED_ANCHOR)
-                        || !qualifies(run)) {
+                if (!anchorIds.contains(run.policy().id()) || !run.roles()
+                        .contains(PolicyRole.FIXED_ANCHOR) || !qualifies(run)) {
                     continue;
                 }
                 RunAggregate reference = byKey.get(new Key(referenceId, run.policy().id()));
@@ -103,8 +104,8 @@ public final class RunCalibrator {
                 }
                 double currentSe = medianSe(run, config);
                 double referenceSe = medianSe(reference, config);
-                double delta = StrictMath.log(run.rawMedian().getAsDouble()
-                        / reference.rawMedian().getAsDouble());
+                double delta = StrictMath.log(
+                        run.rawMedian().getAsDouble() / reference.rawMedian().getAsDouble());
                 double rawWeight = 1 / (currentSe * currentSe + referenceSe * referenceSe);
                 if (Double.isFinite(delta) && Double.isFinite(rawWeight) && rawWeight > 0) {
                     differences.add(new AnchorDifference(run.policy().id(), delta, rawWeight));
@@ -113,8 +114,8 @@ public final class RunCalibrator {
             result.add(calibration(first, referenceId, plan, differences, config));
         }
         result.sort(Comparator.comparing((RunCalibration row) -> row.run().descriptor().scenario())
-                .thenComparing(row -> row.status() == CalibrationStatus.REFERENCE ? "" :
-                        row.run().descriptor().benchmarkRunId()));
+                .thenComparing(row -> row.status() == CalibrationStatus.REFERENCE ? ""
+                        : row.run().descriptor().benchmarkRunId()));
         return List.copyOf(result);
     }
 
@@ -122,10 +123,10 @@ public final class RunCalibrator {
             CalibrationPlan plan, List<AnchorDifference> differences, CalibrationConfig config) {
         int count = differences.size();
         if (count < config.minimumWeakAnchors()) {
-            return new RunCalibration(first.run(), referenceId,
-                    plan.anchors().anchorSetId(), plan.anchors().fixedAnchors().size(), count,
-                    OptionalDouble.empty(), OptionalDouble.empty(), OptionalDouble.empty(),
-                    CalibrationStatus.UNCALIBRATED, "INSUFFICIENT_SHARED_ANCHORS", new TreeMap<>());
+            return new RunCalibration(first.run(), referenceId, plan.anchors().anchorSetId(),
+                    plan.anchors().fixedAnchors().size(), count, OptionalDouble.empty(),
+                    OptionalDouble.empty(), OptionalDouble.empty(), CalibrationStatus.UNCALIBRATED,
+                    "INSUFFICIENT_SHARED_ANCHORS", new TreeMap<>());
         }
         differences.sort(Comparator.comparing(AnchorDifference::id));
         double[] raw = differences.stream().mapToDouble(AnchorDifference::rawWeight).toArray();
@@ -139,8 +140,9 @@ public final class RunCalibrator {
             stored.put(differences.get(i).id(), weights[i]);
         }
         double delta = VectorStatistics.weightedMedian(values);
-        List<WeightedValue<PolicyId>> residuals = values.stream().map(item -> new WeightedValue<>(
-                StrictMath.abs(item.value() - delta), item.weight(), item.tieBreaker())).toList();
+        List<WeightedValue<PolicyId>> residuals = values.stream()
+                .map(item -> new WeightedValue<>(StrictMath.abs(item.value() - delta),
+                        item.weight(), item.tieBreaker())).toList();
         double residual = VectorStatistics.weightedMedian(residuals);
         double scale = StrictMath.exp(delta);
         CalibrationStatus status;
@@ -172,10 +174,9 @@ public final class RunCalibrator {
     }
 
     private static boolean qualifies(RunAggregate run) {
-        return run.status() == RunAggregateStatus.VALID
-                && run.successfulRepetitionCount() >= 3 && run.successRate() >= 0.5
-                && run.rawMedian().isPresent() && Double.isFinite(run.rawMedian().getAsDouble())
-                && run.rawMedian().getAsDouble() > 0;
+        return run.status() == RunAggregateStatus.VALID && run.successfulRepetitionCount() >= 3
+                && run.successRate() >= 0.5 && run.rawMedian().isPresent() && Double.isFinite(
+                run.rawMedian().getAsDouble()) && run.rawMedian().getAsDouble() > 0;
     }
 
     private RunCalibrator() {

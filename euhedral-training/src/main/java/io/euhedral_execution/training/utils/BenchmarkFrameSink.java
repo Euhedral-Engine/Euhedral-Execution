@@ -1,9 +1,5 @@
 package io.euhedral_execution.training.utils;
 
-import io.euhedral_execution.core.frames.AbstractFrame;
-import io.euhedral_execution.core.generics.LatticeReceiver;
-import io.euhedral_execution.core.generics.LatticeSource;
-import io.euhedral_execution.core.ingest.AbstractIngestSink;
 import java.lang.invoke.VarHandle;
 import java.time.Duration;
 import java.util.Objects;
@@ -13,7 +9,14 @@ import java.util.concurrent.locks.LockSupport;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
-/** A repeatable benchmark source with an explicit pause barrier and permanent hard stop. */
+import io.euhedral_execution.core.frames.AbstractFrame;
+import io.euhedral_execution.core.generics.LatticeReceiver;
+import io.euhedral_execution.core.generics.LatticeSource;
+import io.euhedral_execution.core.ingest.AbstractIngestSink;
+
+/**
+ * A repeatable benchmark source with an explicit pause barrier and permanent hard stop.
+ */
 public class BenchmarkFrameSink extends AbstractIngestSink {
 
     private static final Duration DEFAULT_STOP_TIMEOUT = Duration.ofSeconds(1);
@@ -34,17 +37,23 @@ public class BenchmarkFrameSink extends AbstractIngestSink {
         return this.delegate;
     }
 
-    /** Enables this source after a trial reset has completed. */
+    /**
+     * Enables this source after a trial reset has completed.
+     */
     public void resume() {
         this.delegate.resume();
     }
 
-    /** Stops new emissions and waits for any in-flight pull/request callback to leave. */
+    /**
+     * Stops new emissions and waits for any in-flight pull/request callback to leave.
+     */
     public void pause(Duration timeout) {
         this.delegate.pause(timeout);
     }
 
-    /** Permanently prevents workers from pulling any additional frames. */
+    /**
+     * Permanently prevents workers from pulling any additional frames.
+     */
     public void hardStop(Duration timeout) {
         this.delegate.hardStop(timeout);
     }

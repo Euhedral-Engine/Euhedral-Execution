@@ -12,8 +12,8 @@ final class StrictCsv {
                 result.append(',');
             }
             String field = fields.get(i);
-            if (field.indexOf(',') >= 0 || field.indexOf('"') >= 0
-                    || field.indexOf('\r') >= 0 || field.indexOf('\n') >= 0) {
+            if (field.indexOf(',') >= 0 || field.indexOf('"') >= 0 || field.indexOf('\r') >= 0
+                    || field.indexOf('\n') >= 0) {
                 result.append('"').append(field.replace("\"", "\"\"")).append('"');
             } else {
                 result.append(field);

@@ -1,7 +1,8 @@
 package io.euhedral_execution.training.merge;
 
-import io.euhedral_execution.training.merge.data.MergeRecords.RobustPolicySummary;
 import java.util.Comparator;
+
+import io.euhedral_execution.training.merge.data.MergeRecords.RobustPolicySummary;
 
 public final class PolicyComparator {
 

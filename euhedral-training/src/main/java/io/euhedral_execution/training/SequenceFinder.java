@@ -1,16 +1,5 @@
 package io.euhedral_execution.training;
 
-import com.tdunning.math.stats.MergingDigest;
-import io.euhedral_execution.hashing.HasherApi;
-import io.euhedral_execution.training.networks.PolicyOrdinalNetwork;
-import io.euhedral_execution.training.optimization.CmaEsOptimizer;
-import io.euhedral_execution.training.optimization.CmaEsOptimizer.MeasuredPolicy;
-import io.euhedral_execution.training.optimization.CmaEsOptimizer.ScoredVector;
-import io.euhedral_execution.training.optimization.ScoreBandSampler;
-import io.euhedral_execution.training.utils.BenchmarkOutputReader;
-import io.euhedral_execution.training.utils.BenchmarkOutputWriter;
-import io.euhedral_execution.training.utils.CommonFunctions;
-import io.euhedral_execution.training.utils.PolicyRanking;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -24,6 +13,18 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
+
+import com.tdunning.math.stats.MergingDigest;
+import io.euhedral_execution.hashing.HasherApi;
+import io.euhedral_execution.training.networks.PolicyOrdinalNetwork;
+import io.euhedral_execution.training.optimization.CmaEsOptimizer;
+import io.euhedral_execution.training.optimization.CmaEsOptimizer.MeasuredPolicy;
+import io.euhedral_execution.training.optimization.CmaEsOptimizer.ScoredVector;
+import io.euhedral_execution.training.optimization.ScoreBandSampler;
+import io.euhedral_execution.training.utils.BenchmarkOutputReader;
+import io.euhedral_execution.training.utils.BenchmarkOutputWriter;
+import io.euhedral_execution.training.utils.CommonFunctions;
+import io.euhedral_execution.training.utils.PolicyRanking;
 import org.apache.commons.math4.legacy.random.SobolSequenceGenerator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -89,7 +90,8 @@ public class SequenceFinder implements AutoCloseable {
         }
         if (!Files.isDirectory(model)) {
             throw new IllegalArgumentException(
-                    "Expected a DJL ordinal model directory, not a legacy DL4J .bin file: " + model);
+                    "Expected a DJL ordinal model directory, not a legacy DL4J .bin file: "
+                            + model);
         }
         return new PolicyOrdinalNetwork(model);
     }
@@ -161,7 +163,8 @@ public class SequenceFinder implements AutoCloseable {
 
         LOGGER.info("Loaded {} training, {} validation, and {} test vectors",
                 this.trainingSet.size(), this.validationSet.size(), this.testSet.size());
-        LOGGER.info("Ordinal labels calibrated from the training partition; top-decile threshold={}",
+        LOGGER.info(
+                "Ordinal labels calibrated from the training partition; top-decile threshold={}",
                 Arrays.toString(this.ordinalThresholds[PolicyRanking.ORDINAL_OUTPUTS - 1]));
     }
 
@@ -198,8 +201,8 @@ public class SequenceFinder implements AutoCloseable {
                     "candidate batch/screen limits must be positive and fit the Sobol index range");
         }
 
-        double directFraction = Double.parseDouble(
-                System.getProperty("candidate.directSobolFraction", "0.0625"));
+        double directFraction =
+                Double.parseDouble(System.getProperty("candidate.directSobolFraction", "0.0625"));
         if (!Double.isFinite(directFraction) || directFraction <= 0 || directFraction >= 1) {
             throw new IllegalArgumentException("candidate.directSobolFraction must be in (0, 1)");
         }
@@ -209,8 +212,8 @@ public class SequenceFinder implements AutoCloseable {
 
         List<MeasuredPolicy> measured = readMeasuredPolicies(historicalData);
         CmaEsOptimizer optimizer = new CmaEsOptimizer();
-        List<ScoredVector> cmaCandidates = optimizer.optimize(measured,
-                this.learner::predictScores, candidateSeed);
+        List<ScoredVector> cmaCandidates =
+                optimizer.optimize(measured, this.learner::predictScores, candidateSeed);
         LOGGER.info("CMA-ES generated {} classifier-scored candidates", cmaCandidates.size());
 
         MergingDigest scoreDistribution = new MergingDigest(200);
@@ -257,7 +260,7 @@ public class SequenceFinder implements AutoCloseable {
             }
         }
         LOGGER.info("Generated {} vectors using CMA-ES, score-band audits, and direct Sobol "
-                        + "exploration at {}", outputVectors.size(), output.toAbsolutePath());
+                + "exploration at {}", outputVectors.size(), output.toAbsolutePath());
     }
 
     private List<MeasuredPolicy> readMeasuredPolicies(Path historicalData) throws Exception {
@@ -313,6 +316,7 @@ public class SequenceFinder implements AutoCloseable {
 
     @FunctionalInterface
     private interface ScoredVectorConsumer {
+
         void accept(double[] vector, float score);
     }
 
@@ -331,18 +335,15 @@ public class SequenceFinder implements AutoCloseable {
         int batchSize = Integer.getInteger("training.batchSize",
                 this.learner.recommendedTrainingBatchSize());
 
-        this.learner = this.learner.trainWithEarlyStopping(
-                train.features(), train.labels(), train.rows(),
-                validation.features(), validation.labels(), validation.rows(),
-                modelPath,
-                Integer.getInteger("training.maxEpochs", 250),
-                Integer.getInteger("training.patience", 20),
-                batchSize);
+        this.learner =
+                this.learner.trainWithEarlyStopping(train.features(), train.labels(), train.rows(),
+                        validation.features(), validation.labels(), validation.rows(), modelPath,
+                        Integer.getInteger("training.maxEpochs", 250),
+                        Integer.getInteger("training.patience", 20), batchSize);
 
         runFinalEvaluation();
 
-        Path latestMarker = modelPath.getParent() == null
-                ? Paths.get("latest")
+        Path latestMarker = modelPath.getParent() == null ? Paths.get("latest")
                 : modelPath.getParent().resolve("latest");
         Files.writeString(latestMarker, modelPath.toAbsolutePath().toString(),
                 StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
@@ -369,8 +370,8 @@ public class SequenceFinder implements AutoCloseable {
         this.learner.predictScores(features, this.testSet.size(), scores);
 
         List<Sample> actualRanked = new ArrayList<>(this.testSet);
-        actualRanked.sort((first, second) ->
-                PolicyRanking.compare(first.quantiles(), second.quantiles()));
+        actualRanked.sort(
+                (first, second) -> PolicyRanking.compare(first.quantiles(), second.quantiles()));
 
         List<ScoredSample> predictedRanked = new ArrayList<>(this.testSet.size());
         for (int row = 0; row < this.testSet.size(); row++) {
@@ -412,13 +413,10 @@ public class SequenceFinder implements AutoCloseable {
         }
     }
 
-    private record Sample(double[] vector, double[] quantiles, long hash) {
-    }
+    private record Sample(double[] vector, double[] quantiles, long hash) {}
 
-    private record TrainingMatrix(float[] features, float[] labels, int rows) {
-    }
+    private record TrainingMatrix(float[] features, float[] labels, int rows) {}
 
-    private record ScoredSample(Sample sample, float score) {
-    }
+    private record ScoredSample(Sample sample, float score) {}
 
 }

@@ -1,11 +1,5 @@
 package io.euhedral_execution.training.learning.inputs;
 
-import io.euhedral_execution.training.data.PolicyId;
-import io.euhedral_execution.training.data.PolicyVector;
-import io.euhedral_execution.training.data.SourceScenario;
-import io.euhedral_execution.training.learning.InsufficientScenarioLearningDataException;
-import io.euhedral_execution.training.merge.data.MergeRecords.ScenarioResult;
-import io.euhedral_execution.training.merge.data.MergeRecords.ScenarioResultStatus;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -24,9 +18,17 @@ import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
+import io.euhedral_execution.training.data.PolicyId;
+import io.euhedral_execution.training.data.PolicyVector;
+import io.euhedral_execution.training.data.SourceScenario;
+import io.euhedral_execution.training.learning.InsufficientScenarioLearningDataException;
+import io.euhedral_execution.training.merge.data.MergeRecords.ScenarioResult;
+import io.euhedral_execution.training.merge.data.MergeRecords.ScenarioResultStatus;
+
 public final class ScenarioLearningReader {
 
-    private static final String SCENARIO_HEADER = "schema_version,scenario_id,environment_id,source_count,available_physical_core_count,source_ratio_numerator,source_ratio_denominator,policy_id,status,total_run_count,accepted_run_count,weak_run_count,uncalibrated_run_count,successful_repetition_count,planned_repetition_count,throughput_p25,throughput_median,throughput_p75,throughput_iqr,median_within_run_relative_iqr,mean_timeout_rate,mean_failure_rate,mean_non_success_rate,bootstrap_median_ci_low,bootstrap_median_ci_high,quality";
+    private static final String SCENARIO_HEADER =
+            "schema_version,scenario_id,environment_id,source_count,available_physical_core_count,source_ratio_numerator,source_ratio_denominator,policy_id,status,total_run_count,accepted_run_count,weak_run_count,uncalibrated_run_count,successful_repetition_count,planned_repetition_count,throughput_p25,throughput_median,throughput_p75,throughput_iqr,median_within_run_relative_iqr,mean_timeout_rate,mean_failure_rate,mean_non_success_rate,bootstrap_median_ci_low,bootstrap_median_ci_high,quality";
 
     public static ScenarioLearningTable read(ScenarioInputs inputs,
             SortedSet<SourceScenario> required, boolean includeWeak) throws IOException {
@@ -38,8 +40,8 @@ public final class ScenarioLearningReader {
         readLeaderVectors(inputs.robustLeaderVectors(), required.size(), policies, coverage);
         readIncompleteVectors(inputs.incompletePolicyVectors(), required.size(), policies,
                 coverage);
-        List<String[]> csvRows = LearningCsvReader.read(
-                inputs.scenarioResults(), SCENARIO_HEADER, 26);
+        List<String[]> csvRows =
+                LearningCsvReader.read(inputs.scenarioResults(), SCENARIO_HEADER, 26);
         ArrayList<ScenarioResult> results = new ArrayList<>();
         HashSet<PolicyScenarioKey> identities = new HashSet<>();
         HashSet<PolicyId> seenPolicies = new HashSet<>();
@@ -49,8 +51,8 @@ public final class ScenarioLearningReader {
                 throw new IOException("Unknown scenario schema at row " + (rowIndex + 2));
             }
             try {
-                SourceScenario scenario = SourceScenario.of(f[2], Integer.parseInt(f[3]),
-                        Integer.parseInt(f[4]));
+                SourceScenario scenario =
+                        SourceScenario.of(f[2], Integer.parseInt(f[3]), Integer.parseInt(f[4]));
                 if (!scenario.canonical().equals(f[1])
                         || scenario.ratio().numerator() != Integer.parseInt(f[5])
                         || scenario.ratio().denominator() != Integer.parseInt(f[6])) {
@@ -67,12 +69,10 @@ public final class ScenarioLearningReader {
                 seenPolicies.add(id);
                 results.add(new ScenarioResult(scenario, policy, ScenarioResultStatus.valueOf(f[8]),
                         integer(f[9]), integer(f[10]), integer(f[11]), integer(f[12]),
-                        integer(f[13]),
-                        integer(f[14]), optional(f[15]), optional(f[16]), optional(f[17]),
-                        optional(f[18]),
-                        optional(f[19]), optional(f[20]), optional(f[21]), optional(f[22]),
-                        optional(f[23]),
-                        optional(f[24]), optional(f[25])));
+                        integer(f[13]), integer(f[14]), optional(f[15]), optional(f[16]),
+                        optional(f[17]), optional(f[18]), optional(f[19]), optional(f[20]),
+                        optional(f[21]), optional(f[22]), optional(f[23]), optional(f[24]),
+                        optional(f[25])));
             } catch (RuntimeException error) {
                 throw new IOException("Invalid scenario row " + (rowIndex + 2), error);
             }
@@ -111,8 +111,7 @@ public final class ScenarioLearningReader {
         for (PolicyId id : policies.keySet()) {
             for (SourceScenario scenario : required) {
                 if (!identities.contains(new PolicyScenarioKey(id, scenario))) {
-                    throw new IllegalArgumentException(
-                            "Incomplete policy/scenario Cartesian grid");
+                    throw new IllegalArgumentException("Incomplete policy/scenario Cartesian grid");
                 }
             }
         }
@@ -123,8 +122,8 @@ public final class ScenarioLearningReader {
             SortedMap<PolicyId, PolicyVector> policies, SortedSet<SourceScenario> required,
             boolean includeWeak) {
         ArrayList<ScenarioLearningRow> rows = new ArrayList<>();
-        int strong = 0, weak = 0, excluded = 0,
-                missing = 0, noValid = 0, noCalibration = 0, nonRequired = 0;
+        int strong = 0, weak = 0, excluded = 0, missing = 0, noValid = 0, noCalibration = 0,
+                nonRequired = 0;
         HashSet<PolicyScenarioKey> identities = new HashSet<>();
         for (ScenarioResult r : source) {
             if (!identities.add(new PolicyScenarioKey(r.policy().id(), r.scenario()))) {
@@ -159,24 +158,24 @@ public final class ScenarioLearningReader {
                         "No included row for " + scenario);
             }
         }
-        ScenarioDatasetAudit audit = new ScenarioDatasetAudit(policies.size(), required.size(),
-                source.size(), strong, weak, excluded, missing, noValid, noCalibration,
-                nonRequired);
+        ScenarioDatasetAudit audit =
+                new ScenarioDatasetAudit(policies.size(), required.size(), source.size(), strong,
+                        weak, excluded, missing, noValid, noCalibration, nonRequired);
         return new ScenarioLearningTable(rows, policies, required, audit,
                 fingerprint(rows, policies, required));
     }
 
     private static ScenarioLearningRow row(ScenarioResult r) {
         return new ScenarioLearningRow(r.policy(), r.scenario(), r.status(),
-                r.quality().orElseThrow(),
-                r.throughputMedian().orElseThrow(), r.bootstrapMedianCiLow().orElseThrow(),
-                r.bootstrapMedianCiHigh().orElseThrow(), r.acceptedRunCount(),
-                r.medianWithinRunRelativeIqr().orElseThrow(), r.meanNonSuccessRate().orElseThrow());
+                r.quality().orElseThrow(), r.throughputMedian().orElseThrow(),
+                r.bootstrapMedianCiLow().orElseThrow(), r.bootstrapMedianCiHigh().orElseThrow(),
+                r.acceptedRunCount(), r.medianWithinRunRelativeIqr().orElseThrow(),
+                r.meanNonSuccessRate().orElseThrow());
     }
 
     private static void readLeaderVectors(java.nio.file.Path path, int requiredScenarioCount,
-            TreeMap<PolicyId, PolicyVector> policies,
-            TreeMap<PolicyId, DeclaredCoverage> coverage) throws IOException {
+            TreeMap<PolicyId, PolicyVector> policies, TreeMap<PolicyId, DeclaredCoverage> coverage)
+            throws IOException {
         String header = vectorHeader("schema_version,robust_rank,policy_id");
         List<String[]> rows = LearningCsvReader.read(path, header, 31);
         int expectedRank = 1;
@@ -187,8 +186,8 @@ public final class ScenarioLearningReader {
                     throw new IllegalArgumentException("Leader ranks must be contiguous");
                 }
                 PolicyId id = addVector(fields, 2, 3, policies);
-                coverage.put(id, new DeclaredCoverage(requiredScenarioCount,
-                        requiredScenarioCount));
+                coverage.put(id,
+                        new DeclaredCoverage(requiredScenarioCount, requiredScenarioCount));
             } catch (RuntimeException error) {
                 throw new IOException("Invalid leader vector row " + (row + 2), error);
             }
@@ -196,8 +195,8 @@ public final class ScenarioLearningReader {
     }
 
     private static void readIncompleteVectors(java.nio.file.Path path, int requiredScenarioCount,
-            TreeMap<PolicyId, PolicyVector> policies,
-            TreeMap<PolicyId, DeclaredCoverage> coverage) throws IOException {
+            TreeMap<PolicyId, PolicyVector> policies, TreeMap<PolicyId, DeclaredCoverage> coverage)
+            throws IOException {
         String header = vectorHeader("schema_version,valid_required_scenario_count,"
                 + "observed_required_scenario_count,policy_id");
         List<String[]> rows = LearningCsvReader.read(path, header, 32);
@@ -255,8 +254,8 @@ public final class ScenarioLearningReader {
     }
 
     private static void validateCoverage(List<ScenarioResult> results,
-            SortedSet<SourceScenario> required,
-            SortedMap<PolicyId, DeclaredCoverage> declared) throws IOException {
+            SortedSet<SourceScenario> required, SortedMap<PolicyId, DeclaredCoverage> declared)
+            throws IOException {
         TreeMap<PolicyId, int[]> actual = new TreeMap<>();
         for (PolicyId policy : declared.keySet()) {
             actual.put(policy, new int[2]);
@@ -275,8 +274,7 @@ public final class ScenarioLearningReader {
         }
         for (Map.Entry<PolicyId, DeclaredCoverage> entry : declared.entrySet()) {
             int[] counts = actual.get(entry.getKey());
-            if (counts[0] != entry.getValue().valid()
-                    || counts[1] != entry.getValue().observed()) {
+            if (counts[0] != entry.getValue().valid() || counts[1] != entry.getValue().observed()) {
                 throw new IOException("Vector coverage counts disagree for " + entry.getKey());
             }
         }
@@ -294,14 +292,13 @@ public final class ScenarioLearningReader {
             text.append('\n');
         });
         for (var r : rows) {
-            text.append("row:").append(r.policy().id()).append('|').append(r.scenario())
-                    .append('|').append(r.sourceStatus()).append('|').append(bits(r.quality()))
-                    .append('|')
+            text.append("row:").append(r.policy().id()).append('|').append(r.scenario()).append('|')
+                    .append(r.sourceStatus()).append('|').append(bits(r.quality())).append('|')
                     .append(bits(r.throughputMedian())).append('|')
-                    .append(bits(r.bootstrapMedianCiLow()))
-                    .append('|').append(bits(r.bootstrapMedianCiHigh())).append('|')
-                    .append(r.acceptedRunCount())
-                    .append('|').append(bits(r.medianWithinRunRelativeIqr())).append('|')
+                    .append(bits(r.bootstrapMedianCiLow())).append('|')
+                    .append(bits(r.bootstrapMedianCiHigh())).append('|')
+                    .append(r.acceptedRunCount()).append('|')
+                    .append(bits(r.medianWithinRunRelativeIqr())).append('|')
                     .append(bits(r.meanNonSuccessRate())).append('\n');
         }
         try {
@@ -324,8 +321,7 @@ public final class ScenarioLearningReader {
         return x.isEmpty() ? OptionalDouble.empty() : OptionalDouble.of(Double.parseDouble(x));
     }
 
-    private static SortedSet<SourceScenario> immutableRequired(
-            SortedSet<SourceScenario> required) {
+    private static SortedSet<SourceScenario> immutableRequired(SortedSet<SourceScenario> required) {
         Objects.requireNonNull(required);
         TreeSet<SourceScenario> copy = new TreeSet<>(required);
         if (copy.isEmpty()) {

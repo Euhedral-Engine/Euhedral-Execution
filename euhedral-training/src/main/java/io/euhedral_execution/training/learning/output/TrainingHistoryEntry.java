@@ -1,17 +1,16 @@
 package io.euhedral_execution.training.learning.output;
 
-import io.euhedral_execution.training.learning.enums.ScenarioFeatureSet;
 import java.util.Objects;
 import java.util.OptionalDouble;
 
+import io.euhedral_execution.training.learning.enums.ScenarioFeatureSet;
+
 public record TrainingHistoryEntry(String trainingKind, String foldId,
-                                   ScenarioFeatureSet featureSet,
-                                   int memberIndex, long memberSeed, int epoch,
-                                   double validationMacroMae,
+                                   ScenarioFeatureSet featureSet, int memberIndex, long memberSeed,
+                                   int epoch, double validationMacroMae,
                                    OptionalDouble validationMacroSpearman,
-                                   double validationWeightedBce,
-                                   boolean selectedEpoch) implements
-        Comparable<TrainingHistoryEntry> {
+                                   double validationWeightedBce, boolean selectedEpoch)
+        implements Comparable<TrainingHistoryEntry> {
 
     public TrainingHistoryEntry {
         Objects.requireNonNull(trainingKind);
@@ -20,11 +19,10 @@ public record TrainingHistoryEntry(String trainingKind, String foldId,
         Objects.requireNonNull(validationMacroSpearman);
         if (memberIndex < 0 || epoch < 0 || !Double.isFinite(validationMacroMae)
                 || validationMacroMae < 0 || !Double.isFinite(validationWeightedBce)
-                || validationWeightedBce < 0
-                || validationMacroSpearman.isPresent()
-                && (!Double.isFinite(validationMacroSpearman.getAsDouble())
-                || validationMacroSpearman.getAsDouble() < -1
-                || validationMacroSpearman.getAsDouble() > 1)) {
+                || validationWeightedBce < 0 || validationMacroSpearman.isPresent() && (
+                !Double.isFinite(validationMacroSpearman.getAsDouble())
+                        || validationMacroSpearman.getAsDouble() < -1
+                        || validationMacroSpearman.getAsDouble() > 1)) {
             throw new IllegalArgumentException("Invalid training history entry");
         }
     }

@@ -1,18 +1,19 @@
 package io.euhedral_execution.training.learning.metadata;
 
-import io.euhedral_execution.training.data.PolicyId;
-import io.euhedral_execution.training.data.PolicyVector;
-import io.euhedral_execution.training.data.SourceScenario;
-import io.euhedral_execution.training.learning.enums.ScenarioFeatureSet;
-import io.euhedral_execution.training.learning.inputs.ScenarioLearningRow;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
-public record FeatureNormalizer(String featureSchemaId, List<String> featureNames,
-                                double[] means, double[] scales, boolean[] constantFeatures) {
+import io.euhedral_execution.training.data.PolicyId;
+import io.euhedral_execution.training.data.PolicyVector;
+import io.euhedral_execution.training.data.SourceScenario;
+import io.euhedral_execution.training.learning.enums.ScenarioFeatureSet;
+import io.euhedral_execution.training.learning.inputs.ScenarioLearningRow;
+
+public record FeatureNormalizer(String featureSchemaId, List<String> featureNames, double[] means,
+                                double[] scales, boolean[] constantFeatures) {
 
     public static FeatureNormalizer fit(List<ScenarioLearningRow> rows, ScenarioFeatureSet set) {
         Objects.requireNonNull(rows);
@@ -73,8 +74,8 @@ public record FeatureNormalizer(String featureSchemaId, List<String> featureName
     private static double raw(SourceScenario scenario, int index) {
         return switch (index) {
             case 28 -> {
-                double ratio = scenario.sourceCount()
-                        / (double) scenario.availablePhysicalCoreCount();
+                double ratio =
+                        scenario.sourceCount() / (double) scenario.availablePhysicalCoreCount();
                 if (Double.compare(ratio, scenario.ratio().asDouble()) != 0) {
                     throw new IllegalArgumentException("Scenario ratio disagrees with counts");
                 }
@@ -90,8 +91,8 @@ public record FeatureNormalizer(String featureSchemaId, List<String> featureName
         double sum = 0, correction = 0;
         for (double value : values) {
             double t = sum + value;
-            correction += StrictMath.abs(sum) >= StrictMath.abs(value)
-                    ? (sum - t) + value : (value - t) + sum;
+            correction += StrictMath.abs(sum) >= StrictMath.abs(value) ? (sum - t) + value
+                    : (value - t) + sum;
             sum = t;
         }
         return sum + correction;
@@ -112,9 +113,9 @@ public record FeatureNormalizer(String featureSchemaId, List<String> featureName
             throw new IllegalArgumentException("Normalizer lengths disagree");
         }
         ScenarioFeatureSet featureSet = Arrays.stream(ScenarioFeatureSet.values())
-                .filter(value -> value.schemaId().equals(featureSchemaId))
-                .findFirst().orElseThrow(() ->
-                        new IllegalArgumentException("Unknown feature schema " + featureSchemaId));
+                .filter(value -> value.schemaId().equals(featureSchemaId)).findFirst().orElseThrow(
+                        () -> new IllegalArgumentException(
+                                "Unknown feature schema " + featureSchemaId));
         if (!featureNames.equals(featureSet.featureNames())) {
             throw new IllegalArgumentException("Feature names do not match schema");
         }

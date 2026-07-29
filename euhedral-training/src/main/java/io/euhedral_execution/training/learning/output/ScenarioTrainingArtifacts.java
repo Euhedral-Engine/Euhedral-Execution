@@ -1,13 +1,13 @@
 package io.euhedral_execution.training.learning.output;
 
-import io.euhedral_execution.training.learning.enums.ModelAcceptanceStatus;
-import io.euhedral_execution.training.learning.enums.ScenarioFeatureSet;
 import java.nio.file.Path;
 import java.util.Objects;
 
-public record ScenarioTrainingArtifacts(Path modelDirectory, Path metadata,
-                                        Path groupedEvaluation, Path losoEvaluation,
-                                        Path ablationEvaluation,
+import io.euhedral_execution.training.learning.enums.ModelAcceptanceStatus;
+import io.euhedral_execution.training.learning.enums.ScenarioFeatureSet;
+
+public record ScenarioTrainingArtifacts(Path modelDirectory, Path metadata, Path groupedEvaluation,
+                                        Path losoEvaluation, Path ablationEvaluation,
                                         Path trainingHistory,
                                         ModelAcceptanceStatus acceptanceStatus,
                                         ScenarioFeatureSet selectedFeatureSet) {

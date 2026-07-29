@@ -1,8 +1,5 @@
 package io.euhedral_execution.training.merge.data;
 
-import io.euhedral_execution.training.data.PolicyId;
-import io.euhedral_execution.training.data.PolicyVector;
-import io.euhedral_execution.training.data.SourceScenario;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -18,12 +15,16 @@ import java.util.Objects;
 import java.util.SortedMap;
 import java.util.TreeMap;
 
+import io.euhedral_execution.training.data.PolicyId;
+import io.euhedral_execution.training.data.PolicyVector;
+import io.euhedral_execution.training.data.SourceScenario;
+
 public final class CalibrationPlanCsv {
 
     public static void write(Path directory, CalibrationPlan plan) throws IOException {
         Files.createDirectories(directory);
-        if (Files.exists(directory.resolve("fixed-anchors.csv"))
-                || Files.exists(directory.resolve("reference-runs.csv"))) {
+        if (Files.exists(directory.resolve("fixed-anchors.csv")) || Files.exists(
+                directory.resolve("reference-runs.csv"))) {
             throw new IllegalArgumentException("Calibration plan already exists");
         }
         StringBuilder anchors = new StringBuilder("schema_version,anchor_set_id,policy_id");
@@ -41,11 +42,12 @@ public final class CalibrationPlanCsv {
             }
             anchors.append('\n');
         }
-        StringBuilder references = new StringBuilder(
-                "schema_version,anchor_set_id,scenario_id,benchmark_run_id\n");
-        plan.references().referenceRunIds().forEach((scenario, runId) -> references.append("1,")
-                .append(plan.anchors().anchorSetId()).append(',').append(scenario.canonical())
-                .append(',').append(runId).append('\n'));
+        StringBuilder references =
+                new StringBuilder("schema_version,anchor_set_id,scenario_id,benchmark_run_id\n");
+        plan.references().referenceRunIds().forEach(
+                (scenario, runId) -> references.append("1,").append(plan.anchors().anchorSetId())
+                        .append(',').append(scenario.canonical()).append(',').append(runId)
+                        .append('\n'));
         Files.writeString(directory.resolve("fixed-anchors.csv"), anchors, StandardCharsets.UTF_8,
                 java.nio.file.StandardOpenOption.CREATE_NEW);
         Files.writeString(directory.resolve("reference-runs.csv"), references,
@@ -58,8 +60,8 @@ public final class CalibrationPlanCsv {
         if (anchorLines.size() < 2) {
             throw new IllegalArgumentException("Empty anchor catalog");
         }
-        StringBuilder expectedAnchorHeader = new StringBuilder(
-                "schema_version,anchor_set_id,policy_id");
+        StringBuilder expectedAnchorHeader =
+                new StringBuilder("schema_version,anchor_set_id,policy_id");
         for (int i = 0; i < PolicyVector.WIDTH; i++) {
             expectedAnchorHeader.append(String.format(",weight_%02d_bits", i));
         }
@@ -82,8 +84,7 @@ public final class CalibrationPlanCsv {
             }
             double[] weights = new double[PolicyVector.WIDTH];
             for (int i = 0; i < weights.length; i++) {
-                weights[i] = Double.longBitsToDouble(
-                        Long.parseUnsignedLong(fields[i + 3], 16));
+                weights[i] = Double.longBitsToDouble(Long.parseUnsignedLong(fields[i + 3], 16));
             }
             PolicyVector policy = PolicyVector.of(weights);
             if (!policy.id().equals(PolicyId.parse(fields[2]))) {
@@ -99,8 +100,8 @@ public final class CalibrationPlanCsv {
         knownScenarios.forEach(item -> scenarioById.put(item.canonical(), item));
         SortedMap<SourceScenario, String> references = new TreeMap<>();
         List<String> referenceLines = strictLines(directory.resolve("reference-runs.csv"));
-        if (referenceLines.isEmpty() || !referenceLines.getFirst().equals(
-                "schema_version,anchor_set_id,scenario_id,benchmark_run_id")) {
+        if (referenceLines.isEmpty() || !referenceLines.getFirst()
+                .equals("schema_version,anchor_set_id,scenario_id,benchmark_run_id")) {
             throw new IllegalArgumentException("Invalid reference header");
         }
         SourceScenario previousScenario = null;

@@ -2,13 +2,14 @@ package io.euhedral_execution.training.utils;
 
 import static io.euhedral_execution.training.utils.CommonFunctions.round;
 
-import com.tdunning.math.stats.MergingDigest;
-import com.tdunning.math.stats.TDigest;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+
+import com.tdunning.math.stats.MergingDigest;
+import com.tdunning.math.stats.TDigest;
 import lombok.Getter;
 import org.apache.commons.math4.legacy.ml.clustering.CentroidCluster;
 import org.apache.commons.math4.legacy.ml.clustering.Clusterable;

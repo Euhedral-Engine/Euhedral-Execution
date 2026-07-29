@@ -1,5 +1,13 @@
 package io.euhedral_execution.training.networks;
 
+import java.io.IOException;
+import java.lang.management.MemoryUsage;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.Locale;
+import java.util.concurrent.TimeUnit;
+
 import ai.djl.Device;
 import ai.djl.Model;
 import ai.djl.engine.Engine;
@@ -23,13 +31,6 @@ import ai.djl.training.optimizer.Optimizer;
 import ai.djl.training.tracker.Tracker;
 import ai.djl.util.cuda.CudaUtils;
 import io.euhedral_execution.training.utils.PolicyRanking;
-import java.io.IOException;
-import java.lang.management.MemoryUsage;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.Arrays;
-import java.util.Locale;
-import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -84,22 +85,18 @@ public final class PolicyOrdinalNetwork implements AutoCloseable {
 
         this.inferenceParameters = new ParameterStore(this.model.getNDManager(), false);
         Engine engine = Engine.getEngine(ENGINE);
-        LOGGER.info("Policy classifier engine={} version={} device={}", ENGINE,
-                engine.getVersion(), device);
+        LOGGER.info("Policy classifier engine={} version={} device={}", ENGINE, engine.getVersion(),
+                device);
     }
 
     private static SequentialBlock buildBlock() {
         // The policy vector is only 28 values. A shallow tapered MLP has ample capacity without
         // wasting screening time or encouraging memorization of benchmark noise. Widths are aligned
         // to GPU-friendly multiples while the final layer remains the nine ordinal thresholds.
-        return new SequentialBlock()
-                .add(Linear.builder().setUnits(128).build())
-                .add(Activation::gelu)
-                .add(Linear.builder().setUnits(96).build())
-                .add(Activation::gelu)
-                .add(Linear.builder().setUnits(48).build())
-                .add(Activation::gelu)
-                .add(Linear.builder().setUnits(OUTPUT_SIZE).build());
+        return new SequentialBlock().add(Linear.builder().setUnits(128).build())
+                .add(Activation::gelu).add(Linear.builder().setUnits(96).build())
+                .add(Activation::gelu).add(Linear.builder().setUnits(48).build())
+                .add(Activation::gelu).add(Linear.builder().setUnits(OUTPUT_SIZE).build());
     }
 
     public Device getDevice() {
@@ -131,14 +128,12 @@ public final class PolicyOrdinalNetwork implements AutoCloseable {
         }
 
         int activeLength = rows * INPUT_SIZE;
-        float[] activeFeatures = features.length == activeLength
-                ? features
-                : Arrays.copyOf(features, activeLength);
+        float[] activeFeatures =
+                features.length == activeLength ? features : Arrays.copyOf(features, activeLength);
         try (NDManager scope = this.model.getNDManager().newSubManager()) {
             NDArray input = scope.create(activeFeatures, new Shape(rows, INPUT_SIZE));
             NDArray output = this.model.getBlock()
-                    .forward(this.inferenceParameters, new NDList(input), false)
-                    .singletonOrThrow();
+                    .forward(this.inferenceParameters, new NDList(input), false).singletonOrThrow();
             float[] logits = output.toFloatArray();
             for (int row = 0; row < rows; row++) {
                 destination[row] = rankingScore(logits, row * OUTPUT_SIZE);
@@ -146,9 +141,8 @@ public final class PolicyOrdinalNetwork implements AutoCloseable {
         }
     }
 
-    public PolicyOrdinalNetwork trainWithEarlyStopping(
-            float[] trainFeatures, float[] trainLabels, int trainRows,
-            float[] validationFeatures, float[] validationLabels, int validationRows,
+    public PolicyOrdinalNetwork trainWithEarlyStopping(float[] trainFeatures, float[] trainLabels,
+            int trainRows, float[] validationFeatures, float[] validationLabels, int validationRows,
             Path checkpointDirectory, int maxEpochs, int patience, int batchSize) throws Exception {
 
         validateMatrix(trainFeatures, trainLabels, trainRows);
@@ -158,14 +152,12 @@ public final class PolicyOrdinalNetwork implements AutoCloseable {
         }
 
         Files.createDirectories(checkpointDirectory);
-        float learningRate = Float.parseFloat(
-                System.getProperty("training.learningRate", "0.001"));
-        float weightDecay = Float.parseFloat(
-                System.getProperty("training.weightDecay", "0.0001"));
-        float topDecileWeight = Float.parseFloat(
-                System.getProperty("training.topDecileWeight", "2.0"));
-        float labelSmoothing = Float.parseFloat(
-                System.getProperty("training.labelSmoothing", "0.02"));
+        float learningRate = Float.parseFloat(System.getProperty("training.learningRate", "0.001"));
+        float weightDecay = Float.parseFloat(System.getProperty("training.weightDecay", "0.0001"));
+        float topDecileWeight =
+                Float.parseFloat(System.getProperty("training.topDecileWeight", "2.0"));
+        float labelSmoothing =
+                Float.parseFloat(System.getProperty("training.labelSmoothing", "0.02"));
         if (labelSmoothing < 0.0f || labelSmoothing >= 0.5f) {
             throw new IllegalArgumentException("training.labelSmoothing must be in [0, 0.5)");
         }
@@ -173,14 +165,10 @@ public final class PolicyOrdinalNetwork implements AutoCloseable {
         ClassWeights classWeights = classWeights(trainLabels, trainRows, topDecileWeight);
         NDManager manager = this.model.getNDManager();
         Loss loss = new BalancedOrdinalLoss(manager, classWeights, labelSmoothing);
-        Optimizer optimizer = Optimizer.adamW()
-                .optLearningRateTracker(Tracker.fixed(learningRate))
-                .optWeightDecays(weightDecay)
-                .optClipGrad(5.0f)
-                .build();
-        DefaultTrainingConfig config = new DefaultTrainingConfig(loss)
-                .optOptimizer(optimizer)
-                .optDevices(new Device[]{this.device})
+        Optimizer optimizer = Optimizer.adamW().optLearningRateTracker(Tracker.fixed(learningRate))
+                .optWeightDecays(weightDecay).optClipGrad(5.0f).build();
+        DefaultTrainingConfig config = new DefaultTrainingConfig(loss).optOptimizer(optimizer)
+                .optDevices(new Device[] {this.device})
                 .optInitializer(new XavierInitializer(), Parameter.Type.WEIGHT);
 
         double bestPrecision = Double.NEGATIVE_INFINITY;
@@ -190,16 +178,13 @@ public final class PolicyOrdinalNetwork implements AutoCloseable {
 
         NDArray trainInput = manager.create(trainFeatures, new Shape(trainRows, INPUT_SIZE));
         NDArray trainTarget = manager.create(trainLabels, new Shape(trainRows, OUTPUT_SIZE));
-        NDArray validationInput = manager.create(validationFeatures,
-                new Shape(validationRows, INPUT_SIZE));
+        NDArray validationInput =
+                manager.create(validationFeatures, new Shape(validationRows, INPUT_SIZE));
 
-        ArrayDataset trainingSet = new ArrayDataset.Builder()
-                .setData(trainInput)
-                .optLabels(trainTarget)
-                .setSampling(effectiveBatch, true)
-                .optPrefetchNumber(this.isGpu() ? 0 : 2)
-                .optDevice(this.device)
-                .build();
+        ArrayDataset trainingSet =
+                new ArrayDataset.Builder().setData(trainInput).optLabels(trainTarget)
+                        .setSampling(effectiveBatch, true).optPrefetchNumber(this.isGpu() ? 0 : 2)
+                        .optDevice(this.device).build();
 
         LOGGER.info(
                 "Training ordinal policy classifier: trainRows={} validationRows={} batch={} lr={} weightDecay={} topDecileWeight={} labelSmoothing={}",
@@ -222,8 +207,9 @@ public final class PolicyOrdinalNetwork implements AutoCloseable {
                     }
                 }
 
-                ValidationMetrics metrics = validationMetrics(trainer, validationInput,
-                        validationLabels, validationRows, classWeights);
+                ValidationMetrics metrics =
+                        validationMetrics(trainer, validationInput, validationLabels,
+                                validationRows, classWeights);
                 LOGGER.info(
                         "Epoch {} | batches={} | validation weighted BCE={} | validation top-10 precision={} | elapsed={} ms",
                         epoch, batches, metrics.loss(), metrics.precisionAtTen(),
@@ -277,10 +263,9 @@ public final class PolicyOrdinalNetwork implements AutoCloseable {
             for (int output = 0; output < OUTPUT_SIZE; output++) {
                 double logit = logits[offset + output];
                 double label = labels[offset + output];
-                double baseLoss = Math.max(logit, 0.0) - logit * label
-                        + Math.log1p(Math.exp(-Math.abs(logit)));
-                double weight = label > 0.5
-                        ? classWeights.positive()[output]
+                double baseLoss = Math.max(logit, 0.0) - logit * label + Math.log1p(
+                        Math.exp(-Math.abs(logit)));
+                double weight = label > 0.5 ? classWeights.positive()[output]
                         : classWeights.negative()[output];
                 total += baseLoss * weight;
             }
@@ -313,8 +298,8 @@ public final class PolicyOrdinalNetwork implements AutoCloseable {
         double expectedDecile = 0;
         double cumulativeProbability = 1.0;
         for (int output = 0; output < OUTPUT_SIZE; output++) {
-            cumulativeProbability = Math.min(cumulativeProbability,
-                    PolicyRanking.sigmoid(logits[offset + output]));
+            cumulativeProbability =
+                    Math.min(cumulativeProbability, PolicyRanking.sigmoid(logits[offset + output]));
             expectedDecile += cumulativeProbability;
         }
         return (float) (expectedDecile + 4.0 * cumulativeProbability);
@@ -372,8 +357,8 @@ public final class PolicyOrdinalNetwork implements AutoCloseable {
 
     private static Device resolveDevice() {
         Engine engine = Engine.getEngine(ENGINE);
-        String requested = System.getProperty("training.device", "auto")
-                .trim().toLowerCase(Locale.ROOT);
+        String requested =
+                System.getProperty("training.device", "auto").trim().toLowerCase(Locale.ROOT);
         if (requested.equals("auto")) {
             return engine.getGpuCount() > 0 ? Device.gpu(0) : Device.cpu();
         }
@@ -392,11 +377,9 @@ public final class PolicyOrdinalNetwork implements AutoCloseable {
         this.model.close();
     }
 
-    private record ValidationMetrics(double loss, double precisionAtTen) {
-    }
+    private record ValidationMetrics(double loss, double precisionAtTen) {}
 
-    private record ClassWeights(float[] positive, float[] negative, float[] positiveRates) {
-    }
+    private record ClassWeights(float[] positive, float[] negative, float[] positiveRates) {}
 
     private static final class BalancedOrdinalLoss extends Loss {
 
@@ -418,12 +401,9 @@ public final class PolicyOrdinalNetwork implements AutoCloseable {
             NDArray logit = predictions.singletonOrThrow();
             NDArray sampleWeight = hardLabel.mul(this.positiveWeights)
                     .add(hardLabel.neg().add(1.0f).mul(this.negativeWeights));
-            NDArray target = this.labelSmoothing == 0.0f
-                    ? hardLabel
-                    : hardLabel.mul(1.0f - 2.0f * this.labelSmoothing)
-                            .add(this.labelSmoothing);
-            NDArray stableBce = Activation.relu(logit)
-                    .sub(logit.mul(target))
+            NDArray target = this.labelSmoothing == 0.0f ? hardLabel
+                    : hardLabel.mul(1.0f - 2.0f * this.labelSmoothing).add(this.labelSmoothing);
+            NDArray stableBce = Activation.relu(logit).sub(logit.mul(target))
                     .add(Activation.softPlus(logit.abs().neg()));
             return stableBce.mul(sampleWeight).mean();
         }

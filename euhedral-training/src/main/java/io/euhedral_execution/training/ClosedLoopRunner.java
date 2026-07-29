@@ -11,6 +11,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Properties;
 import java.util.stream.Stream;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -20,7 +21,7 @@ import org.slf4j.LoggerFactory;
  * <pre>
  * benchmark corpus -> normalize/merge -> train -> screen/generate -> benchmark -> corpus
  * </pre>
- *
+ * <p>
  * Each iteration is committed to the corpus only after benchmarking finishes successfully. A
  * partially completed iteration is therefore safe to delete or resume without changing the next
  * training set.
@@ -43,8 +44,8 @@ public final class ClosedLoopRunner {
                 break;
             }
 
-            Path iterationDirectory = config.workspace().resolve(
-                    String.format("iteration-%04d", iteration));
+            Path iterationDirectory =
+                    config.workspace().resolve(String.format("iteration-%04d", iteration));
             Path complete = iterationDirectory.resolve("COMPLETE");
             Path model = iterationDirectory.resolve("model/best");
             Path rawBenchmarkDirectory = iterationDirectory.resolve("benchmark/raw");
@@ -71,8 +72,8 @@ public final class ClosedLoopRunner {
             Files.createDirectories(iterationDirectory);
             writeState(iterationDirectory, iteration, "MERGING", null);
 
-            Path mergedData = DataMerger.mergeQuantiles(corpus,
-                    iterationDirectory.resolve("merge"), "training-metadata.txt");
+            Path mergedData = DataMerger.mergeQuantiles(corpus, iterationDirectory.resolve("merge"),
+                    "training-metadata.txt");
             checkStop(config);
 
             writeState(iterationDirectory, iteration, "TRAINING", mergedData);
@@ -83,8 +84,8 @@ public final class ClosedLoopRunner {
             writeState(iterationDirectory, iteration, "GENERATING", model);
             int sobolSkip = sobolSkip(iteration, config.candidateCount());
             Path candidates = SequenceFinder.generateCandidates(mergedData, model,
-                    iterationDirectory.resolve("candidates/vectors.txt"),
-                    config.candidateCount(), sobolSkip);
+                    iterationDirectory.resolve("candidates/vectors.txt"), config.candidateCount(),
+                    sobolSkip);
             checkStop(config);
 
             writeState(iterationDirectory, iteration, "BENCHMARKING", candidates);
@@ -104,7 +105,7 @@ public final class ClosedLoopRunner {
 
             previousModel = model;
             LOGGER.info("Closed-loop iteration {} complete; promoted {} source configurations into "
-                            + "the corpus", iteration, benchmarkRuns.size());
+                    + "the corpus", iteration, benchmarkRuns.size());
         }
     }
 
@@ -121,7 +122,8 @@ public final class ClosedLoopRunner {
         return Math.toIntExact(skip);
     }
 
-    private static void publishLatest(Path workspace, Path model, Path mergedData) throws Exception {
+    private static void publishLatest(Path workspace, Path model, Path mergedData)
+            throws Exception {
         Path latestModel = workspace.resolve("latest-model");
         deleteRecursively(latestModel);
         copyRecursively(model, latestModel);
@@ -150,8 +152,7 @@ public final class ClosedLoopRunner {
         try (Stream<Path> stream = Files.list(corpus)) {
             return stream.filter(Files::isRegularFile)
                     .filter(path -> path.getFileName().toString().startsWith(prefix))
-                    .sorted(Comparator.comparing(Path::toString))
-                    .toList();
+                    .sorted(Comparator.comparing(Path::toString)).toList();
         }
     }
 
@@ -190,8 +191,8 @@ public final class ClosedLoopRunner {
 
         for (int index = 0; index < seeds.size(); index++) {
             Path seed = seeds.get(index);
-            Path destination = corpus.resolve(String.format("seed-%04d-%s", index,
-                    seed.getFileName()));
+            Path destination =
+                    corpus.resolve(String.format("seed-%04d-%s", index, seed.getFileName()));
             Files.copy(seed, destination, StandardCopyOption.REPLACE_EXISTING);
         }
         LOGGER.info("Bootstrapped closed-loop corpus with {} benchmark files", seeds.size());
@@ -222,8 +223,7 @@ public final class ClosedLoopRunner {
 
     private static List<Path> listRegularFiles(Path directory) throws Exception {
         try (Stream<Path> stream = Files.list(directory)) {
-            return stream.filter(Files::isRegularFile)
-                    .sorted(Comparator.comparing(Path::toString))
+            return stream.filter(Files::isRegularFile).sorted(Comparator.comparing(Path::toString))
                     .toList();
         }
     }

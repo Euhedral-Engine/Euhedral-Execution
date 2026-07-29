@@ -1,18 +1,18 @@
 package io.euhedral_execution.training.learning.data;
 
-import io.euhedral_execution.training.data.SourceScenario;
 import java.util.Objects;
+
+import io.euhedral_execution.training.data.SourceScenario;
 
 public record ScenarioPrediction(SourceScenario scenario, double predictedQuality,
                                  double ordinalStdDev, double qualityIntervalLow,
-                                 double qualityIntervalHigh,
-                                 double ordinalEntropy, double topDecileProbability,
-                                 double epistemicStdDev,
+                                 double qualityIntervalHigh, double ordinalEntropy,
+                                 double topDecileProbability, double epistemicStdDev,
                                  double disagreementRange) {
 
     public ScenarioPrediction {
         Objects.requireNonNull(scenario);
-        for (double x : new double[]{predictedQuality, ordinalStdDev, qualityIntervalLow,
+        for (double x : new double[] {predictedQuality, ordinalStdDev, qualityIntervalLow,
                 qualityIntervalHigh, ordinalEntropy, topDecileProbability, epistemicStdDev,
                 disagreementRange}) {
             if (!Double.isFinite(x)) {

@@ -1,9 +1,10 @@
 package io.euhedral_execution.training.learning.utils;
 
-import io.euhedral_execution.training.learning.statistics.EnsembleOrdinalDistribution;
-import io.euhedral_execution.training.learning.statistics.OrdinalDistribution;
 import java.util.List;
 import java.util.Objects;
+
+import io.euhedral_execution.training.learning.statistics.EnsembleOrdinalDistribution;
+import io.euhedral_execution.training.learning.statistics.OrdinalDistribution;
 
 public final class ScenarioOrdinalTargets {
 
@@ -78,9 +79,8 @@ public final class ScenarioOrdinalTargets {
         for (int b = 0; b < 10; b++) {
             variance.add(mass[b] * square(center(b) - mean));
         }
-        return new OrdinalDistribution(p, mass, mean,
-                nonnegativeVariance(variance.value()), entropySum.value() / StrictMath.log(10),
-                p[8]);
+        return new OrdinalDistribution(p, mass, mean, nonnegativeVariance(variance.value()),
+                entropySum.value() / StrictMath.log(10), p[8]);
     }
 
     public static EnsembleOrdinalDistribution combine(List<OrdinalDistribution> members) {
@@ -108,8 +108,8 @@ public final class ScenarioOrdinalTargets {
 
     public static EnsembleOrdinalDistribution combineAggregated(double[] meanMasses,
             double topDecileProbability, double[] memberMeans) {
-        if (meanMasses.length != 10 || memberMeans.length == 0
-                || !finiteRate(topDecileProbability)) {
+        if (meanMasses.length != 10 || memberMeans.length == 0 || !finiteRate(
+                topDecileProbability)) {
             throw new IllegalArgumentException("Invalid ensemble aggregates");
         }
         double[] mass = meanMasses.clone();
@@ -133,9 +133,8 @@ public final class ScenarioOrdinalTargets {
             min = StrictMath.min(min, x);
             max = StrictMath.max(max, x);
         }
-        double epistemic = memberMeans.length == 1 ? 0
-                : StrictMath.sqrt(nonnegativeVariance(
-                        disagreement.value() / (memberMeans.length - 1)));
+        double epistemic = memberMeans.length == 1 ? 0 : StrictMath.sqrt(
+                nonnegativeVariance(disagreement.value() / (memberMeans.length - 1)));
         return combineAggregatedUncertainty(mass, topDecileProbability, epistemic, max - min);
     }
 
@@ -155,10 +154,9 @@ public final class ScenarioOrdinalTargets {
                 entropy.add(-mass[b] * StrictMath.log(mass[b]));
             }
         }
-        if (StrictMath.abs(massTotal.value() - 1.0) > 1.0e-12
-                || !finiteRate(topDecileProbability)
-                || !Double.isFinite(epistemicStdDev) || epistemicStdDev < 0
-                || !Double.isFinite(disagreementRange) || disagreementRange < 0) {
+        if (StrictMath.abs(massTotal.value() - 1.0) > 1.0e-12 || !finiteRate(topDecileProbability)
+                || !Double.isFinite(epistemicStdDev) || epistemicStdDev < 0 || !Double.isFinite(
+                disagreementRange) || disagreementRange < 0) {
             throw new IllegalArgumentException("Invalid ensemble aggregates");
         }
         double mean = meanSum.value();
@@ -169,8 +167,8 @@ public final class ScenarioOrdinalTargets {
         double low = quantile(mass, .025), high = quantile(mass, .975);
         return new EnsembleOrdinalDistribution(mass, mean,
                 StrictMath.sqrt(nonnegativeVariance(variance.value())), low, high,
-                entropy.value() / StrictMath.log(10), topDecileProbability,
-                epistemicStdDev, disagreementRange);
+                entropy.value() / StrictMath.log(10), topDecileProbability, epistemicStdDev,
+                disagreementRange);
     }
 
     private static void pav(double[] p) {
@@ -183,8 +181,9 @@ public final class ScenarioOrdinalTargets {
             sizes[blocks++] = 1;
             while (blocks > 1 && Double.compare(means[blocks - 2], means[blocks - 1]) < 0) {
                 int n = sizes[blocks - 2] + sizes[blocks - 1];
-                means[blocks - 2] = (means[blocks - 2] * sizes[blocks - 2]
-                        + means[blocks - 1] * sizes[blocks - 1]) / n;
+                means[blocks - 2] =
+                        (means[blocks - 2] * sizes[blocks - 2] + means[blocks - 1] * sizes[blocks
+                                - 1]) / n;
                 sizes[blocks - 2] = n;
                 blocks--;
             }
@@ -235,8 +234,9 @@ public final class ScenarioOrdinalTargets {
     private static void neumaierAdd(double[] sums, double[] corrections, int index, double value) {
         double current = sums[index];
         double next = current + value;
-        corrections[index] += StrictMath.abs(current) >= StrictMath.abs(value)
-                ? (current - next) + value : (value - next) + current;
+        corrections[index] +=
+                StrictMath.abs(current) >= StrictMath.abs(value) ? (current - next) + value
+                        : (value - next) + current;
         sums[index] = next;
     }
 
@@ -250,8 +250,8 @@ public final class ScenarioOrdinalTargets {
 
         void add(double value) {
             double next = sum + value;
-            correction += StrictMath.abs(sum) >= StrictMath.abs(value)
-                    ? (sum - next) + value : (value - next) + sum;
+            correction += StrictMath.abs(sum) >= StrictMath.abs(value) ? (sum - next) + value
+                    : (value - next) + sum;
             sum = next;
         }
 

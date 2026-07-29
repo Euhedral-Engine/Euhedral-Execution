@@ -1,8 +1,5 @@
 package io.euhedral_execution.training.learning.inputs;
 
-import io.euhedral_execution.training.data.PolicyId;
-import io.euhedral_execution.training.data.PolicyVector;
-import io.euhedral_execution.training.data.SourceScenario;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -10,6 +7,10 @@ import java.util.SortedMap;
 import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
+
+import io.euhedral_execution.training.data.PolicyId;
+import io.euhedral_execution.training.data.PolicyVector;
+import io.euhedral_execution.training.data.SourceScenario;
 
 public record ScenarioLearningTable(List<ScenarioLearningRow> rows,
                                     SortedMap<PolicyId, PolicyVector> policies,
@@ -27,10 +28,10 @@ public record ScenarioLearningTable(List<ScenarioLearningRow> rows,
         if (audit.policyCount() != policies.size()
                 || audit.requiredScenarioCount() != requiredScenarios.size()
                 || audit.includedStrongRowCount() + audit.includedWeakRowCount() != rows.size()
-                || audit.rowCount() != audit.includedStrongRowCount()
-                + audit.includedWeakRowCount() + audit.weakExcludedRowCount()
-                + audit.missingRowCount() + audit.noValidRunRowCount()
-                + audit.noAcceptedCalibrationRowCount() + audit.nonRequiredRowCount()) {
+                || audit.rowCount() != audit.includedStrongRowCount() + audit.includedWeakRowCount()
+                + audit.weakExcludedRowCount() + audit.missingRowCount()
+                + audit.noValidRunRowCount() + audit.noAcceptedCalibrationRowCount()
+                + audit.nonRequiredRowCount()) {
             throw new IllegalArgumentException("Learning-table audit counts disagree");
         }
         TreeSet<SourceScenario> represented = new TreeSet<>();

@@ -1,19 +1,5 @@
 package io.euhedral_execution.training;
 
-import io.euhedral_execution.core.config.FragmentActionPicker;
-import io.euhedral_execution.core.config.FragmentConfig;
-import io.euhedral_execution.core.config.LatticeConfig;
-import io.euhedral_execution.core.control_plane.ControlPlaneLattice;
-import io.euhedral_execution.core.control_plane.ControlPlaneShard;
-import io.euhedral_execution.core.frames.BenchmarkFrame;
-import io.euhedral_execution.core.impl.BaseCloneableObject;
-import io.euhedral_execution.hardware_utils.SystemInfo;
-import io.euhedral_execution.hardware_utils.ThreadTools;
-import io.euhedral_execution.training.utils.BenchmarkFrameSink;
-import io.euhedral_execution.training.utils.BenchmarkOutputReader;
-import io.euhedral_execution.training.utils.BenchmarkOutputWriter;
-import io.euhedral_execution.training.utils.CommonFunctions;
-import io.euhedral_execution.training.utils.Distribution;
 import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -31,6 +17,21 @@ import java.util.StringJoiner;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.LockSupport;
+
+import io.euhedral_execution.core.config.FragmentActionPicker;
+import io.euhedral_execution.core.config.FragmentConfig;
+import io.euhedral_execution.core.config.LatticeConfig;
+import io.euhedral_execution.core.control_plane.ControlPlaneLattice;
+import io.euhedral_execution.core.control_plane.ControlPlaneShard;
+import io.euhedral_execution.core.frames.BenchmarkFrame;
+import io.euhedral_execution.core.impl.BaseCloneableObject;
+import io.euhedral_execution.hardware_utils.SystemInfo;
+import io.euhedral_execution.hardware_utils.ThreadTools;
+import io.euhedral_execution.training.utils.BenchmarkFrameSink;
+import io.euhedral_execution.training.utils.BenchmarkOutputReader;
+import io.euhedral_execution.training.utils.BenchmarkOutputWriter;
+import io.euhedral_execution.training.utils.CommonFunctions;
+import io.euhedral_execution.training.utils.Distribution;
 import org.apache.commons.math4.legacy.random.SobolSequenceGenerator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,8 +42,8 @@ public final class BenchmarkRunner {
     private static final PriorityQueue<Distribution> TOP_SCORES = new PriorityQueue<>(11);
 
     public static Path run(String[] args) throws Exception {
-        Path rawOutput = Path.of(System.getProperty("benchmark.output",
-                "output/benchmark/raw_data.txt"));
+        Path rawOutput =
+                Path.of(System.getProperty("benchmark.output", "output/benchmark/raw_data.txt"));
         Path resultsOutput = Path.of(System.getProperty("benchmark.results", "output/results.txt"));
 
         if (args.length > 1) {
@@ -53,12 +54,16 @@ public final class BenchmarkRunner {
         return run(limit, rawOutput, resultsOutput);
     }
 
-    /** Legacy single-configuration entry point. */
+    /**
+     * Legacy single-configuration entry point.
+     */
     public static Path run(Path candidates, Path rawOutput, Path resultsOutput) throws Exception {
         return runConfiguration(legacySourceCount(), candidates, rawOutput, resultsOutput);
     }
 
-    /** Legacy single-configuration Sobol entry point. */
+    /**
+     * Legacy single-configuration Sobol entry point.
+     */
     public static Path run(int sobolCount, Path rawOutput, Path resultsOutput) throws Exception {
         int sourceCount = legacySourceCount();
         try (VectorProducer producer = new VectorProducer(sobolCount)) {
@@ -156,13 +161,12 @@ public final class BenchmarkRunner {
 
         double[] halt = new double[28];
         FragmentActionPicker actionPicker = new FragmentActionPicker(halt);
-        LatticeConfig config = new LatticeConfig("Benchmark-" + sourceCount,
-                SystemInfo.getCpuSet(), Duration.ofSeconds(1),
-                ControlPlaneShard.createBaseShard("Shard",
-                        new BaseCloneableObject(FragmentConfig.ofBenchmark(actionPicker))));
+        LatticeConfig config = new LatticeConfig("Benchmark-" + sourceCount, SystemInfo.getCpuSet(),
+                Duration.ofSeconds(1), ControlPlaneShard.createBaseShard("Shard",
+                new BaseCloneableObject(FragmentConfig.ofBenchmark(actionPicker))));
         ControlPlaneLattice controlPlane = ControlPlaneLattice.getOrCreate(config);
-        Duration resetTimeout = Duration.ofMillis(
-                Long.getLong("benchmark.resetTimeoutMillis", 2_000L));
+        Duration resetTimeout =
+                Duration.ofMillis(Long.getLong("benchmark.resetTimeoutMillis", 2_000L));
 
         List<BenchmarkFrameSink> sinks = createSinks(sourceCount);
         try (BenchmarkOutputWriter writer = new BenchmarkOutputWriter(rawOutput)) {
@@ -173,10 +177,10 @@ public final class BenchmarkRunner {
 
             int index = 1;
             int repetitions = Integer.getInteger("benchmark.repetitions", 10);
-            long sampleNanos = TimeUnit.MILLISECONDS.toNanos(
-                    Long.getLong("benchmark.sampleMillis", 200L));
-            long livenessNanos = TimeUnit.MILLISECONDS.toNanos(
-                    Long.getLong("benchmark.livenessMillis", 50L));
+            long sampleNanos =
+                    TimeUnit.MILLISECONDS.toNanos(Long.getLong("benchmark.sampleMillis", 200L));
+            long livenessNanos =
+                    TimeUnit.MILLISECONDS.toNanos(Long.getLong("benchmark.livenessMillis", 50L));
             double[] means = new double[repetitions];
             double[] vector;
 
@@ -185,8 +189,7 @@ public final class BenchmarkRunner {
             while ((vector = generator.get()) != null) {
                 Distribution distribution = new Distribution(vector);
                 Arrays.fill(means, 0);
-                LOGGER.info("Sources: {} Vector: ({} / {})", sourceCount, index++,
-                        generator.limit);
+                LOGGER.info("Sources: {} Vector: ({} / {})", sourceCount, index++, generator.limit);
 
                 actionPicker.setWeights(halt);
                 pauseAll(sinks, resetTimeout);
@@ -232,8 +235,7 @@ public final class BenchmarkRunner {
                         double throughput = current / (double) (System.nanoTime() - start);
                         means[repetition] = throughput;
                         distribution.digest.add(throughput);
-                        distribution.mean +=
-                                (throughput - distribution.mean) / (repetition + 1);
+                        distribution.mean += (throughput - distribution.mean) / (repetition + 1);
                         if (timedOut) {
                             break;
                         }
@@ -334,8 +336,7 @@ public final class BenchmarkRunner {
         return String.format("double[] weights = new double[]{%s}", joiner);
     }
 
-    public record BenchmarkRun(int sourceCount, Path rawOutput, Path resultsOutput) {
-    }
+    public record BenchmarkRun(int sourceCount, Path rawOutput, Path resultsOutput) {}
 
     private static final class VectorProducer implements AutoCloseable {
 

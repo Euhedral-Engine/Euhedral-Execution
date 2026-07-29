@@ -1,5 +1,13 @@
 package io.euhedral_execution.training.learning;
 
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.SortedSet;
+import java.util.TreeMap;
+import java.util.TreeSet;
+
 import ai.djl.Device;
 import io.euhedral_execution.training.data.PolicyId;
 import io.euhedral_execution.training.data.PolicyVector;
@@ -14,13 +22,6 @@ import io.euhedral_execution.training.learning.metadata.FeatureNormalizer;
 import io.euhedral_execution.training.learning.output.EvaluationSummary;
 import io.euhedral_execution.training.learning.output.TrainingHistoryEntry;
 import io.euhedral_execution.training.learning.utils.ScenarioFeatureEncoder;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.SortedSet;
-import java.util.TreeMap;
-import java.util.TreeSet;
 
 final class ScenarioFoldRunner {
 
@@ -32,34 +33,32 @@ final class ScenarioFoldRunner {
         validateRowSets(fittingRows, earlyStopRows, scoreRows);
         SortedSet<SourceScenario> fittingScenarios = scenarios(fittingRows);
         SortedSet<SourceScenario> scoreScenarios = scenarios(scoreRows);
-        FeatureNormalizer normalizer =
-                ScenarioFeatureEncoder.fit(fittingRows, featureSet);
-        ScenarioLearningMatrix fitting = ScenarioFeatureEncoder.matrix(
-                fittingRows, fittingScenarios, normalizer);
-        ScenarioLearningMatrix validation = ScenarioFeatureEncoder.matrix(
-                earlyStopRows, fittingScenarios, normalizer);
+        FeatureNormalizer normalizer = ScenarioFeatureEncoder.fit(fittingRows, featureSet);
+        ScenarioLearningMatrix fitting =
+                ScenarioFeatureEncoder.matrix(fittingRows, fittingScenarios, normalizer);
+        ScenarioLearningMatrix validation =
+                ScenarioFeatureEncoder.matrix(earlyStopRows, fittingScenarios, normalizer);
         ArrayList<OrdinalMember> members = new ArrayList<>(memberCount);
         ArrayList<TrainingHistoryEntry> history = new ArrayList<>();
         try {
             for (int memberIndex = 0; memberIndex < memberCount; memberIndex++) {
-                Path memberDirectory = directory.resolve(
-                        "member-%03d".formatted(memberIndex));
-                ScenarioOrdinalNetwork.TrainingResult trained = ScenarioOrdinalNetwork.train(
-                        fitting, validation, featureSet, config, device, trainingKind, foldId,
-                        memberIndex, memberDirectory);
+                Path memberDirectory = directory.resolve("member-%03d".formatted(memberIndex));
+                ScenarioOrdinalNetwork.TrainingResult trained =
+                        ScenarioOrdinalNetwork.train(fitting, validation, featureSet, config,
+                                device, trainingKind, foldId, memberIndex, memberDirectory);
                 members.add(trained.member());
                 history.addAll(trained.history());
             }
             List<PolicyVector> policies = policies(scoreRows);
-            try (ScenarioConditionedModel model = ScenarioConditionedModel.forTest(
-                    normalizer, scoreScenarios, members)) {
+            try (ScenarioConditionedModel model = ScenarioConditionedModel.forTest(normalizer,
+                    scoreScenarios, members)) {
                 List<PolicyPredictionCurve> predictions =
                         model.predictCurves(policies, scoreScenarios,
                                 device.isGpu() ? 65_536 : 16_384);
-                EvaluationSummary evaluation = ScenarioModelEvaluator.evaluate(
-                        evaluationKind, foldId, featureSet, scoreRows,
-                        retainPredictionsForRows(predictions, scoreRows),
-                        insufficientContextVariation);
+                EvaluationSummary evaluation =
+                        ScenarioModelEvaluator.evaluate(evaluationKind, foldId, featureSet,
+                                scoreRows, retainPredictionsForRows(predictions, scoreRows),
+                                insufficientContextVariation);
                 members.clear(); // ownership moved to and closed by the model
                 return new FoldResult(evaluation, List.copyOf(history), normalizer,
                         fittingScenarios, scoreScenarios);
@@ -135,9 +134,8 @@ final class ScenarioFoldRunner {
         HashSet<PolicyId> fit = ids(fitting);
         HashSet<PolicyId> early = ids(earlyStop);
         HashSet<PolicyId> scoring = ids(score);
-        if (!java.util.Collections.disjoint(fit, early)
-                || !java.util.Collections.disjoint(fit, scoring)
-                || !java.util.Collections.disjoint(early, scoring)) {
+        if (!java.util.Collections.disjoint(fit, early) || !java.util.Collections.disjoint(fit,
+                scoring) || !java.util.Collections.disjoint(early, scoring)) {
             throw new IllegalArgumentException("Policy groups leak across fold row sets");
         }
     }

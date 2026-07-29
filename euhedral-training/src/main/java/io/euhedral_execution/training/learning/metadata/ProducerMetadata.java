@@ -10,9 +10,8 @@ public record ProducerMetadata(String commitSha, boolean dirtyWorkingTree, Strin
         Objects.requireNonNull(djlEngine);
         Objects.requireNonNull(djlEngineVersion);
         Objects.requireNonNull(trainingDevice);
-        if (!commitSha.matches("[0-9a-f]{40}|[0-9a-f]{64}")
-                || !djlEngine.equals("PyTorch") || djlEngineVersion.isBlank()
-                || !trainingDevice.matches("cpu|gpu[0-9]+")) {
+        if (!commitSha.matches("[0-9a-f]{40}|[0-9a-f]{64}") || !djlEngine.equals("PyTorch")
+                || djlEngineVersion.isBlank() || !trainingDevice.matches("cpu|gpu[0-9]+")) {
             throw new IllegalArgumentException("Invalid producer metadata");
         }
     }

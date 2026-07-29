@@ -67,8 +67,8 @@ public final class PolicyRanking {
         return thresholds;
     }
 
-    public static void encodeOrdinal(double[] quantiles, double[][] thresholds,
-            float[] destination, int offset) {
+    public static void encodeOrdinal(double[] quantiles, double[][] thresholds, float[] destination,
+            int offset) {
         requireQuantiles(quantiles);
         if (thresholds.length != ORDINAL_OUTPUTS) {
             throw new IllegalArgumentException("Expected nine ordinal thresholds");

@@ -27,8 +27,8 @@ public record EvaluationSummaryMetadata(String groupedReport, String losoReport,
         Objects.requireNonNull(losoMacroMae);
         Objects.requireNonNull(losoMacroSpearman);
         Objects.requireNonNull(losoWorstScenarioMae);
-        if (!groupedReport.equals("grouped-evaluation.csv")
-                || !losoReport.equals("loso-evaluation.csv")) {
+        if (!groupedReport.equals("grouped-evaluation.csv") || !losoReport.equals(
+                "loso-evaluation.csv")) {
             throw new IllegalArgumentException("Unexpected evaluation report name");
         }
         validate(groupedMacroMae, 0, 1);

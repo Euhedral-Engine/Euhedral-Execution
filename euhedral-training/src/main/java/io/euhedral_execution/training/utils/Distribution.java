@@ -2,9 +2,10 @@ package io.euhedral_execution.training.utils;
 
 import static io.euhedral_execution.training.utils.CommonFunctions.round;
 
+import java.util.Arrays;
+
 import com.tdunning.math.stats.MergingDigest;
 import com.tdunning.math.stats.TDigest;
-import java.util.Arrays;
 import org.jspecify.annotations.NonNull;
 
 public class Distribution implements Comparable<Distribution> {
@@ -34,15 +35,14 @@ public class Distribution implements Comparable<Distribution> {
             return 0;
         }
 
-        int p50Compare = Double.compare(round(digest.quantile(0.5)),
-                round(other.digest.quantile(0.5)));
+        int p50Compare =
+                Double.compare(round(digest.quantile(0.5)), round(other.digest.quantile(0.5)));
         if (p50Compare != 0) {
             return p50Compare;
         }
 
         double thisIQR = round(digest.quantile(0.75)) - round(digest.quantile(0.25));
-        double otherIQR =
-                round(other.digest.quantile(0.75)) - round(other.digest.quantile(0.25));
+        double otherIQR = round(other.digest.quantile(0.75)) - round(other.digest.quantile(0.25));
         int iqrCompare = Double.compare(otherIQR, thisIQR);
         if (iqrCompare != 0) {
             return iqrCompare;

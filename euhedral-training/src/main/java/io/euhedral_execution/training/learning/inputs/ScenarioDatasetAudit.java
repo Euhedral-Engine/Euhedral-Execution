@@ -2,9 +2,8 @@ package io.euhedral_execution.training.learning.inputs;
 
 public record ScenarioDatasetAudit(int policyCount, int requiredScenarioCount, int rowCount,
                                    int includedStrongRowCount, int includedWeakRowCount,
-                                   int weakExcludedRowCount,
-                                   int missingRowCount, int noValidRunRowCount,
-                                   int noAcceptedCalibrationRowCount,
+                                   int weakExcludedRowCount, int missingRowCount,
+                                   int noValidRunRowCount, int noAcceptedCalibrationRowCount,
                                    int nonRequiredRowCount) {
 
     public ScenarioDatasetAudit {

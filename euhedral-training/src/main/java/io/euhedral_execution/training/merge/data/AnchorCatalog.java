@@ -1,32 +1,33 @@
 package io.euhedral_execution.training.merge.data;
 
-import io.euhedral_execution.hashing.HasherApi;
-import io.euhedral_execution.training.data.PolicyVector;
 import java.nio.charset.StandardCharsets;
 import java.util.Comparator;
 import java.util.List;
+
+import io.euhedral_execution.hashing.HasherApi;
+import io.euhedral_execution.training.data.PolicyVector;
 
 public record AnchorCatalog(int schemaVersion, String anchorSetId,
                             List<PolicyVector> fixedAnchors) {
 
     public static AnchorCatalog of(List<PolicyVector> fixedAnchors) {
-        List<PolicyVector> sorted = fixedAnchors.stream().sorted(
-                Comparator.comparing(PolicyVector::id)).toList();
+        List<PolicyVector> sorted =
+                fixedAnchors.stream().sorted(Comparator.comparing(PolicyVector::id)).toList();
         return new AnchorCatalog(1, computedId(sorted), sorted);
     }
 
     private static String computedId(List<PolicyVector> anchors) {
         StringBuilder input = new StringBuilder("fixed-anchor-set-v1\n");
         anchors.forEach(policy -> input.append(policy.id().canonical()).append('\n'));
-        return "a1-" + String.format("%016x", HasherApi.getHash(
-                input.toString().getBytes(StandardCharsets.UTF_8)));
+        return "a1-" + String.format("%016x",
+                HasherApi.getHash(input.toString().getBytes(StandardCharsets.UTF_8)));
     }
 
     public AnchorCatalog {
-        fixedAnchors = fixedAnchors.stream().sorted(
-                Comparator.comparing(PolicyVector::id)).toList();
-        if (schemaVersion != 1 || anchorSetId == null
-                || !anchorSetId.matches("a1-[0-9a-f]{16}") || fixedAnchors.isEmpty()) {
+        fixedAnchors =
+                fixedAnchors.stream().sorted(Comparator.comparing(PolicyVector::id)).toList();
+        if (schemaVersion != 1 || anchorSetId == null || !anchorSetId.matches("a1-[0-9a-f]{16}")
+                || fixedAnchors.isEmpty()) {
             throw new IllegalArgumentException("Invalid anchor catalog");
         }
         if (fixedAnchors.stream().map(PolicyVector::id).distinct().count() != fixedAnchors.size()) {

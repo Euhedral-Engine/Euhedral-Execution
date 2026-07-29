@@ -1,17 +1,5 @@
 package io.euhedral_execution.training.merge;
 
-import io.euhedral_execution.training.data.BenchmarkObservation;
-import io.euhedral_execution.training.data.BenchmarkRunContext;
-import io.euhedral_execution.training.data.ObservationKey;
-import io.euhedral_execution.training.data.PolicyId;
-import io.euhedral_execution.training.data.PolicyRegistry;
-import io.euhedral_execution.training.data.PolicyVector;
-import io.euhedral_execution.training.data.ScheduledPolicy;
-import io.euhedral_execution.training.data.enums.PolicyRole;
-import io.euhedral_execution.training.data.io.ObservationBundleReader;
-import io.euhedral_execution.training.merge.config.AggregationConfig;
-import io.euhedral_execution.training.merge.data.MergeRecords.RunAggregate;
-import io.euhedral_execution.training.merge.data.MergeRecords.RunAggregateStatus;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -25,12 +13,25 @@ import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
+import io.euhedral_execution.training.data.BenchmarkObservation;
+import io.euhedral_execution.training.data.BenchmarkRunContext;
+import io.euhedral_execution.training.data.ObservationKey;
+import io.euhedral_execution.training.data.PolicyId;
+import io.euhedral_execution.training.data.PolicyRegistry;
+import io.euhedral_execution.training.data.PolicyVector;
+import io.euhedral_execution.training.data.ScheduledPolicy;
+import io.euhedral_execution.training.data.enums.PolicyRole;
+import io.euhedral_execution.training.data.io.ObservationBundleReader;
+import io.euhedral_execution.training.merge.config.AggregationConfig;
+import io.euhedral_execution.training.merge.data.MergeRecords.RunAggregate;
+import io.euhedral_execution.training.merge.data.MergeRecords.RunAggregateStatus;
+
 public final class RunAggregator {
 
     public static List<RunAggregate> aggregate(List<Path> bundles, PolicyRegistry policies,
             AggregationConfig config) {
-        List<Path> sorted = bundles.stream().map(path -> path.toAbsolutePath().normalize())
-                .sorted().toList();
+        List<Path> sorted =
+                bundles.stream().map(path -> path.toAbsolutePath().normalize()).sorted().toList();
         Set<String> runIds = new HashSet<>();
         Set<ObservationKey> keys = new HashSet<>();
         List<RunAggregate> result = new ArrayList<>();
@@ -48,15 +49,15 @@ public final class RunAggregator {
         return List.copyOf(result);
     }
 
-    private static RunAggregate aggregate(PolicyAccumulator accumulator,
-            BenchmarkRunContext run, AggregationConfig config) {
+    private static RunAggregate aggregate(PolicyAccumulator accumulator, BenchmarkRunContext run,
+            AggregationConfig config) {
         int planned = run.descriptor().parameters().expectedRepetitions();
         List<Double> successes = accumulator.successes;
         double successRate = successes.size() / (double) planned;
         RunAggregateStatus status = successes.size() < config.minimumSuccessfulRepetitions()
                 ? RunAggregateStatus.INSUFFICIENT_SUCCESSES
                 : successRate < config.minimumSuccessFraction()
-                  ? RunAggregateStatus.LOW_SUCCESS_FRACTION : RunAggregateStatus.VALID;
+                        ? RunAggregateStatus.LOW_SUCCESS_FRACTION : RunAggregateStatus.VALID;
         OptionalDouble p25 = OptionalDouble.empty(), median = OptionalDouble.empty();
         OptionalDouble p75 = OptionalDouble.empty(), iqr = OptionalDouble.empty();
         OptionalDouble logIqr = OptionalDouble.empty();
@@ -73,16 +74,16 @@ public final class RunAggregator {
             p75 = OptionalDouble.of(c);
             iqr = OptionalDouble.of(c - a);
             double[] logs = Arrays.stream(values).map(StrictMath::log).toArray();
-            logIqr = OptionalDouble.of(VectorStatistics.quantileType7(logs, 0.75)
-                    - VectorStatistics.quantileType7(logs, 0.25));
+            logIqr = OptionalDouble.of(
+                    VectorStatistics.quantileType7(logs, 0.75) - VectorStatistics.quantileType7(
+                            logs, 0.25));
         }
-        return new RunAggregate(accumulator.policy, run, accumulator.roles,
-                planned, successes.size(), accumulator.timeout, accumulator.failed,
-                accumulator.skipped, successRate, accumulator.timeout / (double) planned,
+        return new RunAggregate(accumulator.policy, run, accumulator.roles, planned,
+                successes.size(), accumulator.timeout, accumulator.failed, accumulator.skipped,
+                successRate, accumulator.timeout / (double) planned,
                 (accumulator.failed + accumulator.skipped) / (double) planned,
                 (accumulator.timeout + accumulator.failed + accumulator.skipped) / (double) planned,
-                status,
-                p25, median, p75, iqr, logIqr);
+                status, p25, median, p75, iqr, logIqr);
     }
 
     private RunAggregator() {

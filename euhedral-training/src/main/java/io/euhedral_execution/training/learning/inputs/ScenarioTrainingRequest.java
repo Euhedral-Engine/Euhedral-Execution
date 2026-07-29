@@ -1,12 +1,13 @@
 package io.euhedral_execution.training.learning.inputs;
 
-import io.euhedral_execution.training.data.SourceScenario;
-import io.euhedral_execution.training.learning.config.ScenarioTrainingConfig;
 import java.nio.file.Path;
 import java.util.Collections;
 import java.util.Objects;
 import java.util.SortedSet;
 import java.util.TreeSet;
+
+import io.euhedral_execution.training.data.SourceScenario;
+import io.euhedral_execution.training.learning.config.ScenarioTrainingConfig;
 
 public record ScenarioTrainingRequest(ScenarioInputs inputs,
                                       SortedSet<SourceScenario> requiredScenarios,

@@ -1,5 +1,11 @@
 package io.euhedral_execution.training.learning.data;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.SortedSet;
+import java.util.TreeMap;
+import java.util.TreeSet;
+
 import io.euhedral_execution.hashing.HasherApi;
 import io.euhedral_execution.training.data.PolicyId;
 import io.euhedral_execution.training.data.SourceScenario;
@@ -8,11 +14,6 @@ import io.euhedral_execution.training.learning.config.ScenarioTrainingConfig;
 import io.euhedral_execution.training.learning.enums.LearningPartition;
 import io.euhedral_execution.training.learning.inputs.ScenarioLearningRow;
 import io.euhedral_execution.training.learning.inputs.ScenarioLearningTable;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.SortedSet;
-import java.util.TreeMap;
-import java.util.TreeSet;
 
 public final class PolicyGroupedSplitter {
 
@@ -20,11 +21,11 @@ public final class PolicyGroupedSplitter {
             ScenarioTrainingConfig config) {
         TreeMap<PolicyId, LearningPartition> assignments = new TreeMap<>();
         for (ScenarioLearningRow row : table.rows()) {
-            assignments.computeIfAbsent(row.policy().id(),
-                    id -> partition(id, seed));
+            assignments.computeIfAbsent(row.policy().id(), id -> partition(id, seed));
         }
         ArrayList<ScenarioLearningRow> train = new ArrayList<>(), validation = new ArrayList<>(),
-                test = new ArrayList<>(), earlyRows = new ArrayList<>(), scoreRows = new ArrayList<>();
+                test = new ArrayList<>(), earlyRows = new ArrayList<>(), scoreRows =
+                new ArrayList<>();
         TreeSet<PolicyId> early = new TreeSet<>(), score = new TreeSet<>();
         for (var row : table.rows()) {
             switch (assignments.get(row.policy().id())) {
@@ -54,8 +55,8 @@ public final class PolicyGroupedSplitter {
         check("ablation early stop", earlyRows, table.requiredScenarios(), halfGroups, halfRows,
                 false);
         check("ablation score", scoreRows, table.requiredScenarios(), halfGroups, halfRows, true);
-        return new PolicyGroupedSplit(assignments, train, validation, test, early, score,
-                earlyRows, scoreRows);
+        return new PolicyGroupedSplit(assignments, train, validation, test, early, score, earlyRows,
+                scoreRows);
     }
 
     public static LearningPartition partition(PolicyId policyId, long seed) {
@@ -66,8 +67,7 @@ public final class PolicyGroupedSplitter {
     }
 
     static boolean usesAblationEarlyStop(PolicyId policyId, long seed) {
-        long hash = HasherApi.getHash(policyId.canonical(),
-                seed ^ 0x9e3779b97f4a7c15L);
+        long hash = HasherApi.getHash(policyId.canonical(), seed ^ 0x9e3779b97f4a7c15L);
         return (hash & 1) == 0;
     }
 
@@ -95,8 +95,8 @@ public final class PolicyGroupedSplitter {
             fail(name + " has too few policy groups");
         }
         for (var scenario : scenarios) {
-            List<ScenarioLearningRow> selected = rows.stream()
-                    .filter(r -> r.scenario().equals(scenario)).toList();
+            List<ScenarioLearningRow> selected =
+                    rows.stream().filter(r -> r.scenario().equals(scenario)).toList();
             if (selected.size() < minimumRows) {
                 fail(name + " lacks rows for " + scenario);
             }

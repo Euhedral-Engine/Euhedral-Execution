@@ -4,6 +4,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+
 import lombok.Getter;
 
 public class BenchmarkOutputReader implements AutoCloseable {
@@ -21,7 +22,7 @@ public class BenchmarkOutputReader implements AutoCloseable {
 
         long lines = 0;
         int b;
-        while((b = peek()) != -1) {
+        while ((b = peek()) != -1) {
             if (b == '\n') {
                 lines++;
             }

@@ -1,43 +1,47 @@
 package io.euhedral_execution.training.optimization;
 
-import io.euhedral_execution.training.utils.CommonFunctions;
-import io.euhedral_execution.training.utils.PolicyRanking;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Random;
 
-/** Full-covariance CMA-ES over the four normalized seven-weight action chunks. */
+import io.euhedral_execution.training.utils.CommonFunctions;
+import io.euhedral_execution.training.utils.PolicyRanking;
+
+/**
+ * Full-covariance CMA-ES over the four normalized seven-weight action chunks.
+ */
 public final class CmaEsOptimizer {
 
     public static final int DIMENSIONS = 28;
 
     @FunctionalInterface
     public interface BatchScorer {
+
         void score(float[] features, int rows, float[] scores);
     }
 
     public record MeasuredPolicy(double[] vector, double[] quantiles) {
+
         public MeasuredPolicy {
             vector = Arrays.copyOf(vector, vector.length);
             quantiles = Arrays.copyOf(quantiles, quantiles.length);
         }
     }
 
-    public record ScoredVector(double[] vector, float score) {
-    }
+    public record ScoredVector(double[] vector, float score) {}
 
-    public List<ScoredVector> optimize(List<MeasuredPolicy> measured, BatchScorer scorer, long seed) {
+    public List<ScoredVector> optimize(List<MeasuredPolicy> measured, BatchScorer scorer,
+            long seed) {
         if (!Boolean.parseBoolean(System.getProperty("candidate.cmaEnabled", "true"))
                 || measured.size() < 10) {
             return List.of();
         }
 
         List<MeasuredPolicy> ranked = new ArrayList<>(measured);
-        ranked.sort((first, second) ->
-                PolicyRanking.compare(second.quantiles(), first.quantiles()));
+        ranked.sort(
+                (first, second) -> PolicyRanking.compare(second.quantiles(), first.quantiles()));
 
         int islands = Math.max(1, Integer.getInteger("candidate.cmaIslands", 4));
         int generations = Math.max(1, Integer.getInteger("candidate.cmaGenerations", 12));
@@ -77,10 +81,10 @@ public final class CmaEsOptimizer {
         double cs = (muEffective + 2.0) / (n + muEffective + 5.0);
         double c1 = 2.0 / (Math.pow(n + 1.3, 2.0) + muEffective);
         double cmu = Math.min(1.0 - c1,
-                2.0 * (muEffective - 2.0 + 1.0 / muEffective)
-                        / (Math.pow(n + 2.0, 2.0) + muEffective));
-        double damping = 1.0 + 2.0 * Math.max(0.0,
-                Math.sqrt((muEffective - 1.0) / (n + 1.0)) - 1.0) + cs;
+                2.0 * (muEffective - 2.0 + 1.0 / muEffective) / (Math.pow(n + 2.0, 2.0)
+                        + muEffective));
+        double damping =
+                1.0 + 2.0 * Math.max(0.0, Math.sqrt((muEffective - 1.0) / (n + 1.0)) - 1.0) + cs;
         double chiN = Math.sqrt(n) * (1.0 - 1.0 / (4.0 * n) + 1.0 / (21.0 * n * n));
 
         double[] mean = Arrays.copyOf(seed, n);
@@ -148,17 +152,17 @@ public final class CmaEsOptimizer {
                 pathSigma[i] = (1.0 - cs) * pathSigma[i] + pathSigmaScale * whitened[i];
             }
 
-            double normalizedPath = norm(pathSigma)
-                    / Math.sqrt(1.0 - Math.pow(1.0 - cs, 2.0 * (generation + 1.0)));
+            double normalizedPath =
+                    norm(pathSigma) / Math.sqrt(1.0 - Math.pow(1.0 - cs, 2.0 * (generation + 1.0)));
             boolean hSigma = normalizedPath / chiN < 1.4 + 2.0 / (n + 1.0);
             double pathCovarianceScale = Math.sqrt(cc * (2.0 - cc) * muEffective);
             for (int i = 0; i < n; i++) {
-                pathCovariance[i] = (1.0 - cc) * pathCovariance[i]
-                        + (hSigma ? pathCovarianceScale * meanStep[i] : 0.0);
+                pathCovariance[i] =
+                        (1.0 - cc) * pathCovariance[i] + (hSigma ? pathCovarianceScale * meanStep[i]
+                                : 0.0);
             }
 
-            double oldScale = 1.0 - c1 - cmu
-                    + (hSigma ? 0.0 : c1 * cc * (2.0 - cc));
+            double oldScale = 1.0 - c1 - cmu + (hSigma ? 0.0 : c1 * cc * (2.0 - cc));
             double[][] nextCovariance = new double[n][n];
             for (int i = 0; i < n; i++) {
                 for (int j = 0; j < n; j++) {
@@ -173,8 +177,8 @@ public final class CmaEsOptimizer {
                 }
                 for (int i = 0; i < n; i++) {
                     for (int j = 0; j < n; j++) {
-                        nextCovariance[i][j] += cmu * weights[parent]
-                                * parentStep[i] * parentStep[j];
+                        nextCovariance[i][j] +=
+                                cmu * weights[parent] * parentStep[i] * parentStep[j];
                     }
                 }
             }
@@ -316,10 +320,8 @@ public final class CmaEsOptimizer {
             double app = a[p][p];
             double aqq = a[q][q];
             double apq = a[p][q];
-            a[p][p] = cosine * cosine * app - 2.0 * sine * cosine * apq
-                    + sine * sine * aqq;
-            a[q][q] = sine * sine * app + 2.0 * sine * cosine * apq
-                    + cosine * cosine * aqq;
+            a[p][p] = cosine * cosine * app - 2.0 * sine * cosine * apq + sine * sine * aqq;
+            a[q][q] = sine * sine * app + 2.0 * sine * cosine * apq + cosine * cosine * aqq;
             a[p][q] = a[q][p] = 0.0;
         }
 
@@ -343,7 +345,8 @@ public final class CmaEsOptimizer {
             double maximum) {
         double value = Double.parseDouble(System.getProperty(name, Double.toString(defaultValue)));
         if (!Double.isFinite(value) || value < minimum || value > maximum) {
-            throw new IllegalArgumentException(name + " must be in [" + minimum + ", " + maximum + "]");
+            throw new IllegalArgumentException(
+                    name + " must be in [" + minimum + ", " + maximum + "]");
         }
         return value;
     }
@@ -382,6 +385,7 @@ public final class CmaEsOptimizer {
     }
 
     private static final class PopulationMember {
+
         private final double[] vector;
         private float score;
 
@@ -395,6 +399,7 @@ public final class CmaEsOptimizer {
     }
 
     private static final class EigenSystem {
+
         private final double[][] vectors;
         private final double[] values;
 

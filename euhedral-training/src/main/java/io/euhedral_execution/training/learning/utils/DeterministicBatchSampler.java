@@ -1,7 +1,8 @@
 package io.euhedral_execution.training.learning.utils;
 
-import io.euhedral_execution.hashing.HasherApi;
 import java.util.Random;
+
+import io.euhedral_execution.hashing.HasherApi;
 
 public final class DeterministicBatchSampler {
 

@@ -10,9 +10,7 @@ import java.util.Objects;
 @SuppressWarnings("unused")
 public class BenchmarkOutputWriter implements AutoCloseable {
 
-    private static final byte[] DIGITS = {
-            '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'
-    };
+    private static final byte[] DIGITS = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9'};
 
     private final FileChannel channel;
 
@@ -119,11 +117,11 @@ public class BenchmarkOutputWriter implements AutoCloseable {
         }
 
         if (value == Long.MIN_VALUE) {
-            buffer.put((byte) '-').put((byte) '9').put((byte) '2').put((byte) '2')
-                    .put((byte) '3').put((byte) '3').put((byte) '7').put((byte) '2')
-                    .put((byte) '0').put((byte) '3').put((byte) '6').put((byte) '8')
-                    .put((byte) '5').put((byte) '4').put((byte) '7').put((byte) '7')
-                    .put((byte) '5').put((byte) '8').put((byte) '0').put((byte) '8');
+            buffer.put((byte) '-').put((byte) '9').put((byte) '2').put((byte) '2').put((byte) '3')
+                    .put((byte) '3').put((byte) '7').put((byte) '2').put((byte) '0').put((byte) '3')
+                    .put((byte) '6').put((byte) '8').put((byte) '5').put((byte) '4').put((byte) '7')
+                    .put((byte) '7').put((byte) '5').put((byte) '8').put((byte) '0')
+                    .put((byte) '8');
             return;
         }
 

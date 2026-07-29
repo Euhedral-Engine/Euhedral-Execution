@@ -1,8 +1,9 @@
 package io.euhedral_execution.training.data;
 
-import io.euhedral_execution.training.data.enums.PolicyRole;
 import java.util.Objects;
 import java.util.Set;
+
+import io.euhedral_execution.training.data.enums.PolicyRole;
 
 public record ScheduledPolicy(int schedulePosition, PolicyVector policy, Set<PolicyRole> roles) {
 

@@ -15,8 +15,7 @@ public record MemberMetadata(int index, long seed, int bestEpoch, String relativ
     public MemberMetadata {
         Objects.requireNonNull(relativePath);
         Objects.requireNonNull(sha256);
-        if (index < 0 || bestEpoch < 0
-                || !relativePath.equals(expectedPath(index))
+        if (index < 0 || bestEpoch < 0 || !relativePath.equals(expectedPath(index))
                 || !sha256.matches("[0-9a-f]{64}")) {
             throw new IllegalArgumentException("Invalid member metadata");
         }
