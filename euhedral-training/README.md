@@ -206,6 +206,33 @@ Set `cycle.model` to an existing ordinal model directory to start from that mode
 `cycle.resume=true`, completed iterations are skipped and the latest model is reused. Create the
 configured stop file, normally `output/closed-loop/STOP`, to stop before the next stage is promoted.
 
+### Training-run packages
+
+Every normal typed closed-loop return publishes an immutable checkpoint-backed directory under
+`<workspace>/packages/training-run-<package-id>`. A complete run uses its training-run ID as the
+package ID. Recoverable and terminal partial runs use
+`<training-run-id>.partial.r<checkpoint-revision>`, so later recovery never overwrites earlier
+evidence.
+
+The top-level `manifest.json` records every payload checksum, schema, row count, producing stage,
+source run, provenance, and omission. `vectors/*.vectors.csv` are vector-only datasets;
+`policy-scenario-measurements.csv` contains vectors with scenario measurements. CSV files are
+machine-readable datasets, while `README.md` and `reports/*.md` are human-readable.
+
+An existing checkpoint can be packaged again without running benchmarks or training:
+
+```bash
+java -jar euhedral-training/target/trainer/euhedral-training-0.0.7-SNAPSHOT.jar \
+  package-run \
+  --workspace output/closed-loop \
+  --inputs training-run-<package-id>/provenance/package-inputs.properties \
+  --output-root output/reproduced-packages
+```
+
+Publication streams large evidence and model files, validates the staged package, and uses one
+atomic directory rename. An identical existing package is returned unchanged; a conflicting target
+is rejected.
+
 ## Properties
 
 All properties are JVM system properties, passed with `-Dname=value` before the command.

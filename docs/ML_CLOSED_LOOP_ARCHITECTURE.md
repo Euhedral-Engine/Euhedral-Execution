@@ -177,3 +177,23 @@ Slow tuning loop:   corpus -> ordinal model -> candidate policies -> measurement
 The runtime remains deterministic and topology-aware while the training module automates the
 experimental loop around it. For operational examples, property tables, workspace layout, and
 launcher behavior, use the training README rather than maintaining a second copy here.
+
+## Checkpoint-backed final packaging
+
+The upgraded typed closed loop treats one validated `ClosedLoopCheckpoint` revision as the sole
+authority for final packaging. Its referenced Phase 1 merge, Phase 2 model, Phase 3 schedule, raw
+evidence, and checkpoint sidecars are streamed into a shallow `training-run-<package-id>`
+directory. Package-derived CSVs add a clearly named vectors-with-measurements view and a
+scenario/run-aware benchmark-ready vector view without changing source artifact bytes.
+
+The packager writes deterministic UTF-8/LF datasets, reports, reproduction inputs, and a canonical
+manifest. It validates checksums, logical row counts, provenance, lifecycle omissions, model
+members, schedule identity, raw bundles, and detached checkpoint references before publishing the
+directory with `ATOMIC_MOVE`. Mutable builders and digest buffers are confined to the packaging
+thread; the atomic rename is the publication boundary. Raw observations and model parameter files
+are streamed, so repetition-scale evidence and model members do not pollute the Java heap.
+
+Complete runs and recoverable or terminal partial checkpoints use distinct deterministic package
+IDs. Repeating an identical request is idempotent, while a conflicting target is never overwritten.
+The `package-run` command rebuilds the package from its recorded immutable checkpoint and
+`provenance/package-inputs.properties`; it does not rerun the physical experiment.

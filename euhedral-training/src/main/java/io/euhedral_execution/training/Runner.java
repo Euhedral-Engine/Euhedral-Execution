@@ -3,6 +3,12 @@ package io.euhedral_execution.training;
 import io.euhedral_execution.training.networks.PolicyOrdinalNetwork;
 import io.euhedral_execution.training.legacy.PooledBenchmarkRunner;
 import io.euhedral_execution.training.legacy.PooledSequenceFinder;
+import io.euhedral_execution.training.packaging.config.TrainingRunPackageInputs;
+import io.euhedral_execution.training.packaging.config.TrainingRunPackageRequest;
+import io.euhedral_execution.training.packaging.data.TrainingRunPackage;
+import io.euhedral_execution.training.packaging.io.TrainingRunPackageInputsCodec;
+import io.euhedral_execution.training.packaging.TrainingRunPackager;
+import java.nio.file.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,8 +40,24 @@ public class Runner {
                             "Closed-loop stop requested; current partial iteration was not promoted.");
                 }
             }
+            case "package-run" -> packageRun(args);
             default -> throw new IllegalArgumentException("Unknown command: " + args[0]);
         }
+    }
+
+    private static void packageRun(String[] args) throws Exception {
+        if (args.length != 7 || !args[1].equals("--workspace")
+                || !args[3].equals("--inputs") || !args[5].equals("--output-root")) {
+            throw new IllegalArgumentException("package-run requires --workspace <path> "
+                    + "--inputs <path> --output-root <path> in that order");
+        }
+        Path workspace = Path.of(args[2]);
+        Path inputPath = Path.of(args[4]);
+        Path outputRoot = Path.of(args[6]);
+        TrainingRunPackageInputs inputs = TrainingRunPackageInputsCodec.read(inputPath);
+        TrainingRunPackage result = TrainingRunPackager.publish(
+                new TrainingRunPackageRequest(workspace, outputRoot, inputs));
+        LOGGER.info("{}", result.directory().toAbsolutePath().normalize());
     }
 
     private static void printUsage() {
@@ -46,7 +68,9 @@ public class Runner {
                   training-info       Print DJL, CUDA, GPU, and compute-capability details
                   train-vector-finder Train or generate candidates using -D properties
                   benchmark [file]    Benchmark Sobol or file-backed candidates
-                  closed-loop         Merge -> train -> generate -> benchmark -> corpus""");
+                  closed-loop         Merge -> train -> generate -> benchmark -> package
+                  package-run --workspace <path> --inputs <path> --output-root <path>
+                                      Reproduce one checkpoint-backed package""");
     }
 
     private Runner() {

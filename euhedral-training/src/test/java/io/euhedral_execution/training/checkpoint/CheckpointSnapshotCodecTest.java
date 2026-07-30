@@ -55,4 +55,28 @@ class CheckpointSnapshotCodecTest {
         assertThat(ArtifactFingerprint.sha256(first))
                 .isNotEqualTo(ArtifactFingerprint.sha256(second));
     }
+
+    @Test
+    void loadsHistoricalRevisionAndReadsDetachedSnapshotWithoutWorkspaceDereference()
+            throws Exception {
+        TreeMap<RotationGroup, Integer> cursors = new TreeMap<>();
+        cursors.put(new RotationGroup("env-a", 4), 0);
+        ClosedLoopCheckpoint first = new ClosedLoopCheckpoint(1, "training", 1,
+                CheckpointStage.BOOTSTRAP_PENDING, 1, 100, "a".repeat(64),
+                SchedulingFixtures.SCENARIOS, cursors, List.of(), List.of(), Optional.empty(),
+                Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
+                List.of());
+        LoadedCheckpoint one = CheckpointSnapshotCodec.writeNext(temp, first);
+        ClosedLoopCheckpoint second = new ClosedLoopCheckpoint(1, "training", 2,
+                CheckpointStage.BOOTSTRAP_PENDING, 1, 100, "a".repeat(64),
+                SchedulingFixtures.SCENARIOS, cursors, List.of(), List.of(), Optional.empty(),
+                Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
+                List.of());
+        CheckpointSnapshotCodec.writeNext(temp, second);
+
+        assertThat(CheckpointSnapshotCodec.loadRevision(temp, 1).checkpoint())
+                .isEqualTo(first);
+        assertThat(CheckpointSnapshotCodec.readDetachedForAudit(one.snapshotDirectory()))
+                .isEqualTo(first);
+    }
 }

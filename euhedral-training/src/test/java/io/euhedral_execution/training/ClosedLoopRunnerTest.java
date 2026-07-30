@@ -1,9 +1,11 @@
 package io.euhedral_execution.training;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.euhedral_execution.training.benchmark.config.BenchmarkExecutionConfig;
 import io.euhedral_execution.training.benchmark.data.NativeBenchmarkRunPlan;
+import io.euhedral_execution.training.checkpoint.ArtifactFingerprint;
 import io.euhedral_execution.training.checkpoint.enums.CheckpointStage;
 import io.euhedral_execution.training.config.ClosedLoopConfig;
 import io.euhedral_execution.training.data.BenchmarkObservation;
@@ -27,6 +29,10 @@ import io.euhedral_execution.training.merge.config.CalibrationConfig;
 import io.euhedral_execution.training.merge.data.CalibrationPlan;
 import io.euhedral_execution.training.optimization.config.CandidateGenerationConfig;
 import io.euhedral_execution.training.optimization.config.CmaEsConfig;
+import io.euhedral_execution.training.packaging.TrainingRunPackageValidator;
+import io.euhedral_execution.training.packaging.TrainingRunPackager;
+import io.euhedral_execution.training.packaging.config.TrainingRunPackageInputs;
+import io.euhedral_execution.training.packaging.config.TrainingRunPackageRequest;
 import io.euhedral_execution.training.scheduling.config.CandidateBudgetConfig;
 import io.euhedral_execution.training.scheduling.fixtures.SchedulingFixtures;
 import java.nio.charset.StandardCharsets;
@@ -71,6 +77,48 @@ class ClosedLoopRunnerTest {
         assertThat(second.latestMerge()).isPresent();
         assertThat(second.awaitingScenarios()).isEmpty();
         assertThat(secondServices.mergeCalled).isTrue();
+        assertThat(second.packageDirectory()).isEmpty();
+
+        int revision = Integer.parseInt(second.latestCheckpoint().getFileName().toString()
+                .substring("checkpoint-".length()));
+        ClosedLoopConfig resumed = config(bootstrap, required, "env-b", true);
+        var packaged = TrainingRunPackager.publish(new TrainingRunPackageRequest(
+                resumed.workspace(), temp.resolve("packages"),
+                new TrainingRunPackageInputs("training.partial.r%08d".formatted(revision),
+                        "training", revision, resumed.schedulerSeed(), resumed.commitSha(),
+                        resumed.dirtyWorkingTree(), resumed.benchmarkConfig(), required)));
+        assertThat(packaged.directory()).isDirectory();
+        assertThat(packaged.directory().resolve("manifest.json")).isRegularFile();
+        assertThat(packaged.directory().resolve("policy-scenario-measurements.csv"))
+                .isRegularFile();
+        assertThat(TrainingRunPackager.publish(new TrainingRunPackageRequest(
+                resumed.workspace(), temp.resolve("packages"),
+                new TrainingRunPackageInputs("training.partial.r%08d".formatted(revision),
+                        "training", revision, resumed.schedulerSeed(), resumed.commitSha(),
+                        resumed.dirtyWorkingTree(), resumed.benchmarkConfig(), required)))
+                .directory()).isEqualTo(packaged.directory());
+        var reproduced = TrainingRunPackager.publish(new TrainingRunPackageRequest(
+                resumed.workspace(), temp.resolve("reproduced"),
+                new TrainingRunPackageInputs("training.partial.r%08d".formatted(revision),
+                        "training", revision, resumed.schedulerSeed(), resumed.commitSha(),
+                        resumed.dirtyWorkingTree(), resumed.benchmarkConfig(), required)));
+        assertThat(ArtifactFingerprint.sha256(reproduced.directory()))
+                .isEqualTo(ArtifactFingerprint.sha256(packaged.directory()));
+        assertThat(packaged.directory().resolve("vectors/robust-leaders.vectors.csv"))
+                .isRegularFile();
+        assertThat(packaged.directory().resolve(
+                "vectors/incomplete-promising.vectors.csv")).isRegularFile();
+        assertThat(packaged.directory().resolve("policy-scenario-measurements.csv"))
+                .isRegularFile();
+        assertThat(packaged.directory().resolve("reports/robust-ranking.md"))
+                .isRegularFile();
+        Path unexpected = reproduced.directory().resolve("unexpected.txt");
+        Files.writeString(unexpected, "tamper\n");
+        assertThatThrownBy(() -> TrainingRunPackageValidator.validate(reproduced.directory()))
+                .isInstanceOf(java.io.IOException.class);
+        Files.delete(unexpected);
+        assertThat(TrainingRunPackageValidator.validate(reproduced.directory()).directory())
+                .isEqualTo(reproduced.directory());
     }
 
     private ClosedLoopConfig config(Path bootstrap, TreeSet<SourceScenario> scenarios,
