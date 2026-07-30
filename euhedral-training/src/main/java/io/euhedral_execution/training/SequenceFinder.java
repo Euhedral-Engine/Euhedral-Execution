@@ -57,7 +57,7 @@ public final class SequenceFinder {
             }
         }
 
-        streamSobolScreen(request, historical, registry, candidate -> {
+        streamSobolScreen(request, historical, candidate -> {
             audits.accept(candidate);
             bands.accept(candidate);
         });
@@ -112,7 +112,7 @@ public final class SequenceFinder {
     }
 
     private static void streamSobolScreen(CandidateGenerationRequest request,
-            Set<PolicyId> historical, PolicyRegistry registry,
+            Set<PolicyId> historical,
             java.util.function.Consumer<PredictedCandidate> consumer) {
         long exclusiveEnd = Math.addExact(request.sobolCursor(),
                 request.config().screenRows());
