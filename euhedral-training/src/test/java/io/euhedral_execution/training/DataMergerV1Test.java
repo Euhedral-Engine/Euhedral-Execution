@@ -17,6 +17,7 @@ import io.euhedral_execution.training.merge.config.CalibrationConfig;
 import io.euhedral_execution.training.merge.data.AnchorCatalog;
 import io.euhedral_execution.training.merge.data.CalibrationPlan;
 import io.euhedral_execution.training.merge.data.ReferenceRunCatalog;
+import io.euhedral_execution.training.scheduling.io.OptimizationCorpusReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -93,6 +94,11 @@ class DataMergerV1Test {
                 .startsWith("schema_version,robust_rank,policy_id,weight_00_bits");
         assertThat(Files.readString(artifacts.incompleteVectors()))
                 .startsWith("schema_version,valid_required_scenario_count");
+        var optimizerCorpus = OptimizationCorpusReader.read(artifacts, corpus.scenarios);
+        assertThat(optimizerCorpus.eligiblePolicies().getFirst().policy().id())
+                .isEqualTo(corpus.robust.id());
+        assertThat(optimizerCorpus.policies()).containsKeys(corpus.robust.id(),
+                corpus.specialist.id(), corpus.incomplete.id());
     }
 
     @Test

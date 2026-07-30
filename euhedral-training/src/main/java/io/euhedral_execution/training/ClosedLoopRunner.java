@@ -1,280 +1,796 @@
 package io.euhedral_execution.training;
 
-import java.io.OutputStream;
+import io.euhedral_execution.training.benchmark.data.NativeBenchmarkRunPlan;
+import io.euhedral_execution.training.checkpoint.ArtifactFingerprint;
+import io.euhedral_execution.training.checkpoint.CheckpointSnapshotCodec;
+import io.euhedral_execution.training.checkpoint.ClosedLoopConfigFingerprint;
+import io.euhedral_execution.training.checkpoint.WorkspaceLock;
+import io.euhedral_execution.training.checkpoint.data.ArtifactReference;
+import io.euhedral_execution.training.checkpoint.data.ClosedLoopCheckpoint;
+import io.euhedral_execution.training.checkpoint.data.EvidenceIndexEntry;
+import io.euhedral_execution.training.checkpoint.data.LoadedCheckpoint;
+import io.euhedral_execution.training.checkpoint.data.PendingBenchmarkRun;
+import io.euhedral_execution.training.checkpoint.enums.CheckpointStage;
+import io.euhedral_execution.training.checkpoint.enums.EvidenceSource;
+import io.euhedral_execution.training.checkpoint.enums.PendingRunStatus;
+import io.euhedral_execution.training.config.ClosedLoopConfig;
+import io.euhedral_execution.training.data.BenchmarkRunContext;
+import io.euhedral_execution.training.data.ClosedLoopResult;
+import io.euhedral_execution.training.data.SourceScenario;
+import io.euhedral_execution.training.data.io.ObservationBundle;
+import io.euhedral_execution.training.data.io.ObservationBundleReader;
+import io.euhedral_execution.training.learning.ScenarioConditionedModel;
+import io.euhedral_execution.training.learning.ScenarioModelTrainer;
+import io.euhedral_execution.training.learning.enums.ModelAcceptanceStatus;
+import io.euhedral_execution.training.learning.inputs.ScenarioInputs;
+import io.euhedral_execution.training.learning.inputs.ScenarioTrainingRequest;
+import io.euhedral_execution.training.learning.metadata.ScenarioModelMetadata;
+import io.euhedral_execution.training.learning.metadata.ScenarioModelMetadataCodec;
+import io.euhedral_execution.training.learning.output.ScenarioTrainingArtifacts;
+import io.euhedral_execution.training.merge.data.CalibrationPlan;
+import io.euhedral_execution.training.merge.data.CalibrationPlanCsv;
+import io.euhedral_execution.training.optimization.PolicyCurvePredictor;
+import io.euhedral_execution.training.optimization.PredictedPolicyRanker;
+import io.euhedral_execution.training.optimization.data.CandidateGenerationRequest;
+import io.euhedral_execution.training.scheduling.BootstrapScheduler;
+import io.euhedral_execution.training.scheduling.CandidateScheduler;
+import io.euhedral_execution.training.scheduling.CarryForwardQueue;
+import io.euhedral_execution.training.scheduling.ScenarioRotation;
+import io.euhedral_execution.training.scheduling.data.IterationSchedule;
+import io.euhedral_execution.training.scheduling.data.OptimizationCorpusView;
+import io.euhedral_execution.training.scheduling.data.RotationGroup;
+import io.euhedral_execution.training.scheduling.io.BootstrapPolicyCsv;
+import io.euhedral_execution.training.scheduling.io.OptimizationCorpusReader;
+import io.euhedral_execution.training.scheduling.io.ScheduleCodec;
+import java.io.IOException;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.nio.file.StandardOpenOption;
-import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
-import java.util.Properties;
-import java.util.stream.Stream;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import java.util.Optional;
+import java.util.Set;
+import java.util.SortedMap;
+import java.util.TreeMap;
+import java.util.TreeSet;
+import java.util.UUID;
 
-/**
- * Runs the active-learning feedback loop:
- *
- * <pre>
- * benchmark corpus -> normalize/merge -> train -> screen/generate -> benchmark -> corpus
- * </pre>
- *
- * Each iteration is committed to the corpus only after benchmarking finishes successfully. A
- * partially completed iteration is therefore safe to delete or resume without changing the next
- * training set.
- */
 public final class ClosedLoopRunner {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(ClosedLoopRunner.class);
+    static StopRequested stopSignal() {
+        return new StopRequested();
+    }
 
-    public static void run() throws Exception {
-        Config config = Config.fromSystemProperties();
-        Files.createDirectories(config.workspace());
+    public static ClosedLoopResult run(ClosedLoopConfig config) throws Exception {
+        return run(config, ProductionServices.INSTANCE);
+    }
 
-        Path corpus = config.workspace().resolve("corpus");
-        bootstrapCorpus(config.seedDirectory(), corpus);
-
-        Path previousModel = config.initialModel();
-        for (int iteration = 1; iteration <= config.iterations(); iteration++) {
-            if (Files.exists(config.stopFile())) {
-                LOGGER.info("Closed-loop stop file detected at {}", config.stopFile());
-                break;
+    static ClosedLoopResult run(ClosedLoopConfig config, ClosedLoopServices services)
+            throws Exception {
+        try (WorkspaceLock ignored = WorkspaceLock.acquire(config.workspace())) {
+            String configHash = ClosedLoopConfigFingerprint.sha256(config);
+            Optional<LoadedCheckpoint> loaded = CheckpointSnapshotCodec.loadLatest(
+                    config.workspace(), config.trainingRunId(), configHash);
+            if (!config.resume() && loaded.isPresent()) {
+                throw new IllegalArgumentException("A complete Phase 3 checkpoint already exists");
             }
-
-            Path iterationDirectory = config.workspace().resolve(
-                    String.format("iteration-%04d", iteration));
-            Path complete = iterationDirectory.resolve("COMPLETE");
-            Path model = iterationDirectory.resolve("model/best");
-            Path rawBenchmarkDirectory = iterationDirectory.resolve("benchmark/raw");
-            Path benchmarkResultsDirectory = iterationDirectory.resolve("benchmark/results");
-            List<Path> corpusFiles = iterationCorpusFiles(corpus, iteration);
-
-            if (config.resume() && Files.isRegularFile(complete) && Files.isDirectory(model)) {
-                if (corpusFiles.isEmpty()) {
-                    if (listRegularFiles(rawBenchmarkDirectory).isEmpty()) {
-                        throw new IllegalStateException(
-                                "Completed iteration is missing both corpus and raw benchmark metadata: "
-                                        + iterationDirectory);
-                    }
-                    promoteBenchmarks(rawBenchmarkDirectory, corpus, iteration);
+            LoadedCheckpoint current = loaded.orElseGet(() -> {
+                try {
+                    return initialize(config, services, configHash);
+                } catch (Exception error) {
+                    throw new InitializationFailure(error);
                 }
-                publishLatest(config.workspace(), model,
-                        iterationDirectory.resolve("merge/training-metadata.txt"));
-                LOGGER.info("Iteration {} is already complete; resuming from its model", iteration);
-                previousModel = model;
+            });
+            validateResumeArtifacts(config, current.checkpoint());
+            rejectUnexpectedEvidence(config.workspace(), current.checkpoint());
+            if (current.checkpoint().stage() == CheckpointStage.BOOTSTRAP_PENDING) {
+                try {
+                    current = runBootstrap(config, services, current);
+                } catch (StopRequested stop) {
+                    return result(current, awaiting(config, current.checkpoint()));
+                }
+                if (current.checkpoint().stage() == CheckpointStage.BOOTSTRAP_PENDING) {
+                    return result(current, awaiting(config, current.checkpoint()));
+                }
+            }
+            while (current.checkpoint().stage() != CheckpointStage.RUN_COMPLETE
+                    && current.checkpoint().stage() != CheckpointStage.MODEL_REJECTED) {
+                if (services.stopRequested()) {
+                    return result(current, new TreeSet<>());
+                }
+                current = switch (current.checkpoint().stage()) {
+                    case READY_TO_TRAIN -> train(config, services, current);
+                    case MODEL_READY -> schedule(config, services, current);
+                    case SCHEDULE_READY -> transition(config,
+                            copy(current.checkpoint(), CheckpointStage.BENCHMARKING));
+                    case BENCHMARKING -> benchmark(config, services, current);
+                    case READY_TO_MERGE -> merge(config, services, current);
+                    default -> throw new IllegalStateException("Unexpected closed-loop stage "
+                            + current.checkpoint().stage());
+                };
+            }
+            return result(current, new TreeSet<>());
+        } catch (InitializationFailure failure) {
+            if (failure.getCause() instanceof Exception exception) {
+                throw exception;
+            }
+            throw failure;
+        }
+    }
+
+    private static LoadedCheckpoint initialize(ClosedLoopConfig config,
+            ClosedLoopServices services, String configHash) throws Exception {
+        Files.createDirectories(config.workspace());
+        SortedMap<RotationGroup, Integer> cursors = initialCursors(config);
+        List<EvidenceIndexEntry> initialEvidence = importInitialEvidence(config);
+        if (config.initialCalibrationPlan().isPresent()) {
+            Path planDirectory = config.workspace().resolve("calibration-plan");
+            copyDirectoryAtomically(config.initialCalibrationPlan().get(), planDirectory);
+            CalibrationPlan plan = CalibrationPlanCsv.read(planDirectory,
+                    config.requiredScenarios());
+            requireReferenceEvidence(plan, initialEvidence);
+            if (plan.anchors().fixedAnchors().size() >= config.candidateBudget()) {
+                throw new IllegalArgumentException("Anchor count must be below policy budget");
+            }
+            Path mergeDirectory = config.workspace().resolve("merges/merge-000000");
+            DataMerger.MergeArtifacts merge = services.merge(new DataMerger.MergeRequest(
+                    evidencePaths(config.workspace(), initialEvidence),
+                    config.requiredScenarios(), plan, mergeDirectory, config.calibrationConfig(),
+                    config.aggregationConfig()));
+            ClosedLoopCheckpoint checkpoint = new ClosedLoopCheckpoint(1,
+                    config.trainingRunId(), 1, CheckpointStage.READY_TO_TRAIN, 1,
+                    config.initialSobolCursor(), configHash, config.requiredScenarios(), cursors,
+                    initialEvidence, List.of(), Optional.of(plan.anchors().anchorSetId()),
+                    Optional.of(reference(config.workspace(), planDirectory)),
+                    Optional.of(reference(config.workspace(), merge.robustRanking().getParent())),
+                    Optional.empty(), Optional.empty(), List.of());
+            return CheckpointSnapshotCodec.writeNext(config.workspace(), checkpoint);
+        }
+        Path source = config.bootstrapPolicies().orElseThrow(() ->
+                new IllegalArgumentException("Bootstrap policies are required"));
+        List<io.euhedral_execution.training.data.PolicyVector> policies =
+                BootstrapPolicyCsv.read(source, config.candidateBudget());
+        int targetAnchors = config.anchorSelectionConfig().targetCount(config.candidateBudget());
+        if (policies.size() <= targetAnchors) {
+            throw new IllegalArgumentException("Bootstrap budget must exceed anchor target");
+        }
+        Path copied = config.workspace().resolve("bootstrap/bootstrap-policies.vectors.csv");
+        copyFileAtomically(source, copied);
+        ClosedLoopCheckpoint checkpoint = new ClosedLoopCheckpoint(1, config.trainingRunId(), 1,
+                CheckpointStage.BOOTSTRAP_PENDING, 1, config.initialSobolCursor(), configHash,
+                config.requiredScenarios(), cursors, initialEvidence, List.of(),
+                Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
+                Optional.empty(), List.of());
+        return CheckpointSnapshotCodec.writeNext(config.workspace(), checkpoint);
+    }
+
+    private static LoadedCheckpoint runBootstrap(ClosedLoopConfig config,
+            ClosedLoopServices services, LoadedCheckpoint loaded) throws Exception {
+        LoadedCheckpoint current = loaded;
+        ClosedLoopCheckpoint checkpoint = current.checkpoint();
+        List<SourceScenario> runnable = runnable(config, services);
+        List<io.euhedral_execution.training.data.PolicyVector> policies =
+                BootstrapPolicyCsv.read(config.workspace().resolve(
+                        "bootstrap/bootstrap-policies.vectors.csv"), config.candidateBudget());
+        Set<SourceScenario> completeScenarios = checkpoint.evidence().stream()
+                .filter(entry -> entry.source() == EvidenceSource.BOOTSTRAP)
+                .map(EvidenceIndexEntry::scenario)
+                .collect(java.util.stream.Collectors.toSet());
+        for (SourceScenario scenario : runnable) {
+            if (completeScenarios.contains(scenario)) {
                 continue;
             }
-
-            deleteRecursively(iterationDirectory);
-            Files.createDirectories(iterationDirectory);
-            writeState(iterationDirectory, iteration, "MERGING", null);
-
-            Path mergedData = DataMerger.mergeQuantiles(corpus,
-                    iterationDirectory.resolve("merge"), "training-metadata.txt");
-            checkStop(config);
-
-            writeState(iterationDirectory, iteration, "TRAINING", mergedData);
-            model = SequenceFinder.train(mergedData, previousModel,
-                    iterationDirectory.resolve("model/best"));
-            checkStop(config);
-
-            writeState(iterationDirectory, iteration, "GENERATING", model);
-            int sobolSkip = sobolSkip(iteration, config.candidateCount());
-            Path candidates = SequenceFinder.generateCandidates(mergedData, model,
-                    iterationDirectory.resolve("candidates/vectors.txt"),
-                    config.candidateCount(), sobolSkip);
-            checkStop(config);
-
-            writeState(iterationDirectory, iteration, "BENCHMARKING", candidates);
-            List<BenchmarkRunner.BenchmarkRun> benchmarkRuns =
-                    BenchmarkRunner.runAcrossSourceCounts(candidates, rawBenchmarkDirectory,
-                            benchmarkResultsDirectory, iteration);
-            checkStop(config);
-
-            publishLatest(config.workspace(), model, mergedData);
-            writeState(iterationDirectory, iteration, "COMPLETE", rawBenchmarkDirectory);
-            Files.writeString(complete, Instant.now().toString(), StandardOpenOption.CREATE,
-                    StandardOpenOption.TRUNCATE_EXISTING);
-
-            // The atomic move is the corpus commit point. If it fails after COMPLETE is written,
-            // resume repairs the promotion from the retained raw benchmark.
-            promoteBenchmarks(rawBenchmarkDirectory, corpus, iteration);
-
-            previousModel = model;
-            LOGGER.info("Closed-loop iteration {} complete; promoted {} source configurations into "
-                            + "the corpus", iteration, benchmarkRuns.size());
+            Path scheduleDirectory = config.workspace().resolve("bootstrap/schedules")
+                    .resolve(scenario.canonical());
+            IterationSchedule schedule;
+            if (Files.exists(scheduleDirectory.resolve("COMPLETE"))) {
+                schedule = ScheduleCodec.read(scheduleDirectory, config.requiredScenarios(),
+                        config.trainingRunId(), config.schedulerSeed(), config.commitSha(),
+                        config.dirtyWorkingTree(), config.benchmarkConfig());
+            } else {
+                schedule = BootstrapScheduler.create(config.trainingRunId(), scenario, policies,
+                        config.schedulerSeed(), checkpoint.sobolCursor(), config.commitSha(),
+                        config.dirtyWorkingTree(), services.activeCpuSetHex(),
+                        config.benchmarkConfig());
+                ScheduleCodec.write(scheduleDirectory, schedule);
+            }
+            var run = schedule.runs().getFirst();
+            PendingBenchmarkRun pending = new PendingBenchmarkRun(0,
+                    io.euhedral_execution.training.scheduling.enums.RunKind.BOOTSTRAP, scenario,
+                    run.benchmarkRunId(), run.candidateCohortId(),
+                    reference(config.workspace(), scheduleDirectory),
+                    "evidence/" + run.benchmarkRunId(), PendingRunStatus.PENDING);
+            ArrayList<PendingBenchmarkRun> pendingRows =
+                    new ArrayList<>(checkpoint.pendingRuns());
+            pendingRows.removeIf(row -> row.scenario().equals(scenario));
+            pendingRows.add(pending);
+            checkpoint = new ClosedLoopCheckpoint(1, checkpoint.trainingRunId(),
+                    checkpoint.revision() + 1, CheckpointStage.BOOTSTRAP_PENDING,
+                    checkpoint.nextIteration(), checkpoint.sobolCursor(),
+                    checkpoint.configSha256(), checkpoint.requiredScenarios(),
+                    checkpoint.rotationCursors(), checkpoint.evidence(),
+                    checkpoint.carryForward(), checkpoint.anchorSetId(),
+                    checkpoint.calibrationPlan(), checkpoint.latestMerge(),
+                    checkpoint.latestModel(), checkpoint.pendingSchedule(), pendingRows);
+            current = CheckpointSnapshotCodec.writeNext(config.workspace(), checkpoint);
+            Path output = config.workspace().resolve(pending.evidenceRelativePath());
+            BenchmarkRunContext context;
+            if (Files.isRegularFile(output.resolve("COMPLETE"))) {
+                context = adopt(output, pending);
+            } else {
+                context = services.benchmark(plan(config, schedule, run, output),
+                        services::stopRequested);
+            }
+            EvidenceIndexEntry evidence = new EvidenceIndexEntry(context.descriptor()
+                    .benchmarkRunId(), scenario, reference(config.workspace(), output),
+                    EvidenceSource.BOOTSTRAP);
+            checkpoint = completePending(checkpoint, pending, evidence,
+                    CheckpointStage.BOOTSTRAP_PENDING);
+            current = CheckpointSnapshotCodec.writeNext(config.workspace(), checkpoint);
         }
+        Set<SourceScenario> completed = checkpoint.evidence().stream()
+                .filter(entry -> entry.source() == EvidenceSource.BOOTSTRAP)
+                .map(EvidenceIndexEntry::scenario)
+                .collect(java.util.stream.Collectors.toSet());
+        if (!completed.containsAll(config.requiredScenarios())) {
+            return current;
+        }
+        Path planDirectory = config.workspace().resolve("calibration-plan");
+        CalibrationPlan plan;
+        if (Files.isDirectory(planDirectory)) {
+            plan = CalibrationPlanCsv.read(planDirectory, config.requiredScenarios());
+        } else {
+            plan = services.bootstrapCalibration(new DataMerger.CalibrationBootstrapRequest(
+                    evidencePaths(config.workspace(), checkpoint.evidence()),
+                    config.requiredScenarios(), config.candidateBudget(),
+                    config.referenceOverrides(), planDirectory, config.anchorSelectionConfig(),
+                    config.aggregationConfig()));
+        }
+        Path mergeDirectory = config.workspace().resolve("merges/merge-000000");
+        if (!Files.isDirectory(mergeDirectory)) {
+            services.merge(new DataMerger.MergeRequest(
+                    evidencePaths(config.workspace(), checkpoint.evidence()),
+                    config.requiredScenarios(), plan, mergeDirectory,
+                    config.calibrationConfig(), config.aggregationConfig()));
+        }
+        ClosedLoopCheckpoint ready = new ClosedLoopCheckpoint(1, checkpoint.trainingRunId(),
+                checkpoint.revision() + 1, CheckpointStage.READY_TO_TRAIN, 1,
+                checkpoint.sobolCursor(), checkpoint.configSha256(),
+                checkpoint.requiredScenarios(), checkpoint.rotationCursors(),
+                checkpoint.evidence(), List.of(),
+                Optional.of(plan.anchors().anchorSetId()),
+                Optional.of(reference(config.workspace(), planDirectory)),
+                Optional.of(reference(config.workspace(), mergeDirectory)), Optional.empty(),
+                Optional.empty(), List.of());
+        return CheckpointSnapshotCodec.writeNext(config.workspace(), ready);
     }
 
-    private static int sobolSkip(int iteration, int candidateCount) {
-        long base = Long.getLong("candidate.sobolSkip", 131_072L);
-        long screenLimit = Long.getLong("candidate.screenLimit", 1L << 21);
-        long stride = Long.getLong("candidate.sobolStride", screenLimit + candidateCount);
-        if (base < 0 || stride <= 0) {
-            throw new IllegalArgumentException(
-                    "candidate.sobolSkip must be non-negative and candidate.sobolStride positive");
+    private static LoadedCheckpoint train(ClosedLoopConfig config,
+            ClosedLoopServices services, LoadedCheckpoint loaded) throws Exception {
+        ClosedLoopCheckpoint checkpoint = loaded.checkpoint();
+        int iteration = checkpoint.nextIteration();
+        Path mergeDirectory = resolve(config.workspace(), checkpoint.latestMerge().orElseThrow());
+        DataMerger.MergeArtifacts merge = artifacts(mergeDirectory);
+        Path modelDirectory = config.workspace().resolve(
+                "models/model-%06d".formatted(iteration));
+        ScenarioTrainingArtifacts trained;
+        if (Files.isDirectory(modelDirectory)) {
+            ScenarioModelMetadata metadata = ScenarioModelMetadataCodec.read(
+                    modelDirectory.resolve(ScenarioModelMetadataCodec.FILE_NAME));
+            trained = new ScenarioTrainingArtifacts(modelDirectory,
+                    modelDirectory.resolve(ScenarioModelMetadataCodec.FILE_NAME),
+                    modelDirectory.resolve("grouped-evaluation.csv"),
+                    modelDirectory.resolve("loso-evaluation.csv"),
+                    modelDirectory.resolve("ablation-evaluation.csv"),
+                    modelDirectory.resolve("training-history.csv"), metadata.acceptanceStatus(),
+                    metadata.featureSet());
+        } else {
+            trained = services.train(new ScenarioTrainingRequest(
+                    ScenarioInputs.from(merge), config.requiredScenarios(),
+                    modelDirectory, config.commitSha(), config.dirtyWorkingTree(),
+                    config.trainingConfig()));
         }
-
-        long skip = base + (iteration - 1L) * stride;
-        return Math.toIntExact(skip);
+        CheckpointStage stage = trained.acceptanceStatus() == ModelAcceptanceStatus.ACCEPTED
+                ? CheckpointStage.MODEL_READY : CheckpointStage.MODEL_REJECTED;
+        ClosedLoopCheckpoint next = new ClosedLoopCheckpoint(1, checkpoint.trainingRunId(),
+                checkpoint.revision() + 1, stage, iteration, checkpoint.sobolCursor(),
+                checkpoint.configSha256(), checkpoint.requiredScenarios(),
+                checkpoint.rotationCursors(), checkpoint.evidence(),
+                checkpoint.carryForward(), checkpoint.anchorSetId(),
+                checkpoint.calibrationPlan(), checkpoint.latestMerge(),
+                Optional.of(reference(config.workspace(), modelDirectory)), Optional.empty(),
+                List.of());
+        return CheckpointSnapshotCodec.writeNext(config.workspace(), next);
     }
 
-    private static void publishLatest(Path workspace, Path model, Path mergedData) throws Exception {
-        Path latestModel = workspace.resolve("latest-model");
-        deleteRecursively(latestModel);
-        copyRecursively(model, latestModel);
-        if (Files.isRegularFile(mergedData)) {
-            Files.copy(mergedData, workspace.resolve("latest-training-metadata.txt"),
-                    StandardCopyOption.REPLACE_EXISTING);
+    private static LoadedCheckpoint schedule(ClosedLoopConfig config,
+            ClosedLoopServices services, LoadedCheckpoint loaded) throws Exception {
+        ClosedLoopCheckpoint checkpoint = loaded.checkpoint();
+        int iteration = checkpoint.nextIteration();
+        Path modelDirectory = resolve(config.workspace(), checkpoint.latestModel().orElseThrow());
+        ScenarioModelMetadata metadata = ScenarioModelMetadataCodec.read(
+                modelDirectory.resolve(ScenarioModelMetadataCodec.FILE_NAME));
+        if (!metadata.deploymentEligible()
+                || !metadata.requiredScenarios().equals(config.requiredScenarios())) {
+            throw new IllegalArgumentException("Accepted model scenario catalog mismatch");
         }
+        Path scheduleDirectory = config.workspace().resolve(
+                "iterations/iteration-%06d/schedule".formatted(iteration));
+        DataMerger.MergeArtifacts merge = artifacts(resolve(config.workspace(),
+                checkpoint.latestMerge().orElseThrow()));
+        OptimizationCorpusView corpus = OptimizationCorpusReader.read(merge,
+                config.requiredScenarios());
+        IterationSchedule expected;
+        try (ScenarioConditionedModel model = services.loadAcceptedModel(modelDirectory,
+                metadata.producer().trainingDevice())) {
+            PolicyCurvePredictor predictor = policies ->
+                    model.predictConfiguredCurves(policies).stream().map(curve ->
+                            PredictedPolicyRanker.summarize(curve,
+                                    config.requiredScenarios())).toList();
+            var rescored = CarryForwardQueue.rescore(checkpoint.carryForward(), predictor,
+                    iteration);
+            List<SourceScenario> selected = ScenarioRotation.select(
+                    config.requiredScenarios(), checkpoint.rotationCursors(),
+                    config.activeEnvironmentId(), services.activeCoreCount(),
+                    config.scenariosPerIteration());
+            CalibrationPlan calibration = CalibrationPlanCsv.read(resolve(config.workspace(),
+                    checkpoint.calibrationPlan().orElseThrow()), config.requiredScenarios());
+            var preparation = CandidateScheduler.prepare(iteration, config.candidateBudget(),
+                    calibration, corpus, rescored, selected, config.budgetConfig(), predictor);
+            var generated = SequenceFinder.generate(new CandidateGenerationRequest(iteration,
+                    preparation.baseExplorationCount(), preparation.preAuditOverflowCount(),
+                    preparation.disagreementAuditCount(), checkpoint.sobolCursor(),
+                    config.schedulerSeed(), corpus,
+                    calibration.anchors().fixedAnchors().stream()
+                            .map(policy -> policy.id()).collect(
+                                    java.util.stream.Collectors.toSet()),
+                    predictor, config.generationConfig()));
+            expected = CandidateScheduler.complete(config.trainingRunId(),
+                    config.schedulerSeed(), config.commitSha(), config.dirtyWorkingTree(),
+                    services.activeCpuSetHex(), config.benchmarkConfig(), preparation,
+                    generated);
+        }
+        IterationSchedule iterationSchedule;
+        if (Files.isRegularFile(scheduleDirectory.resolve("COMPLETE"))) {
+            IterationSchedule persisted = ScheduleCodec.read(scheduleDirectory,
+                    config.requiredScenarios(), config.trainingRunId(), config.schedulerSeed(),
+                    config.commitSha(), config.dirtyWorkingTree(), config.benchmarkConfig());
+            if (!samePersistedSchedule(persisted, expected)) {
+                throw new IllegalArgumentException(
+                        "Published schedule does not match deterministic inputs");
+            }
+            iterationSchedule = expected;
+        } else {
+            ScheduleCodec.write(scheduleDirectory, expected);
+            iterationSchedule = expected;
+        }
+        ArtifactReference scheduleReference = reference(config.workspace(), scheduleDirectory);
+        List<PendingBenchmarkRun> pending = iterationSchedule.runs().stream().map(run ->
+                new PendingBenchmarkRun(iteration,
+                        io.euhedral_execution.training.scheduling.enums.RunKind.NORMAL,
+                        run.scenario(), run.benchmarkRunId(), run.candidateCohortId(),
+                        scheduleReference, "evidence/" + run.benchmarkRunId(),
+                        PendingRunStatus.PENDING)).toList();
+        ClosedLoopCheckpoint next = new ClosedLoopCheckpoint(1, checkpoint.trainingRunId(),
+                checkpoint.revision() + 1, CheckpointStage.SCHEDULE_READY, iteration,
+                iterationSchedule.nextSobolCursor(), checkpoint.configSha256(),
+                checkpoint.requiredScenarios(), checkpoint.rotationCursors(),
+                checkpoint.evidence(), checkpoint.carryForward(), checkpoint.anchorSetId(),
+                checkpoint.calibrationPlan(), checkpoint.latestMerge(),
+                checkpoint.latestModel(), Optional.of(scheduleReference), pending);
+        return CheckpointSnapshotCodec.writeNext(config.workspace(), next);
     }
 
-    private static void copyRecursively(Path source, Path destination) throws Exception {
-        try (Stream<Path> stream = Files.walk(source)) {
-            for (Path path : stream.sorted(Comparator.comparingInt(Path::getNameCount)).toList()) {
-                Path target = destination.resolve(source.relativize(path));
-                if (Files.isDirectory(path)) {
-                    Files.createDirectories(target);
-                } else {
-                    Files.copy(path, target, StandardCopyOption.REPLACE_EXISTING,
-                            StandardCopyOption.COPY_ATTRIBUTES);
+    private static boolean samePersistedSchedule(IterationSchedule persisted,
+            IterationSchedule expected) {
+        return persisted.trainingRunId().equals(expected.trainingRunId())
+                && persisted.iteration() == expected.iteration()
+                && persisted.runs().equals(expected.runs())
+                && persisted.selectedPredictions().equals(expected.selectedPredictions())
+                && persisted.carryAdmissions().equals(expected.carryAdmissions())
+                && persisted.budgetReports().equals(expected.budgetReports());
+    }
+
+    private static LoadedCheckpoint benchmark(ClosedLoopConfig config,
+            ClosedLoopServices services, LoadedCheckpoint loaded) throws Exception {
+        LoadedCheckpoint current = loaded;
+        ClosedLoopCheckpoint checkpoint = current.checkpoint();
+        Path scheduleDirectory = resolve(config.workspace(),
+                checkpoint.pendingSchedule().orElseThrow());
+        IterationSchedule schedule = ScheduleCodec.read(scheduleDirectory,
+                config.requiredScenarios(), config.trainingRunId(), config.schedulerSeed(),
+                config.commitSha(), config.dirtyWorkingTree(), config.benchmarkConfig());
+        for (PendingBenchmarkRun pending : checkpoint.pendingRuns()) {
+            if (pending.status() == PendingRunStatus.COMPLETE) {
+                continue;
+            }
+            var run = schedule.runs().stream().filter(item ->
+                            item.benchmarkRunId().equals(pending.benchmarkRunId())).findFirst()
+                    .orElseThrow();
+            Path output = config.workspace().resolve(pending.evidenceRelativePath());
+            BenchmarkRunContext context;
+            try {
+                context = Files.isRegularFile(output.resolve("COMPLETE"))
+                        ? adopt(output, pending)
+                        : services.benchmark(plan(config, schedule, run, output),
+                                services::stopRequested);
+            } catch (StopRequested stop) {
+                return current;
+            }
+            EvidenceIndexEntry evidence = new EvidenceIndexEntry(context.descriptor()
+                    .benchmarkRunId(), pending.scenario(),
+                    reference(config.workspace(), output), EvidenceSource.ITERATION);
+            checkpoint = completePending(checkpoint, pending, evidence,
+                    CheckpointStage.BENCHMARKING);
+            current = CheckpointSnapshotCodec.writeNext(config.workspace(), checkpoint);
+        }
+        ClosedLoopCheckpoint ready = copy(checkpoint, CheckpointStage.READY_TO_MERGE);
+        return CheckpointSnapshotCodec.writeNext(config.workspace(), ready);
+    }
+
+    private static LoadedCheckpoint merge(ClosedLoopConfig config,
+            ClosedLoopServices services, LoadedCheckpoint loaded) throws Exception {
+        ClosedLoopCheckpoint checkpoint = loaded.checkpoint();
+        int iteration = checkpoint.nextIteration();
+        CalibrationPlan calibration = CalibrationPlanCsv.read(resolve(config.workspace(),
+                checkpoint.calibrationPlan().orElseThrow()), config.requiredScenarios());
+        Path mergeDirectory = config.workspace().resolve(
+                "merges/merge-%06d".formatted(iteration));
+        DataMerger.MergeArtifacts merge = Files.isDirectory(mergeDirectory)
+                ? artifacts(mergeDirectory)
+                : services.merge(new DataMerger.MergeRequest(
+                        evidencePaths(config.workspace(), checkpoint.evidence()),
+                        config.requiredScenarios(), calibration, mergeDirectory,
+                        config.calibrationConfig(), config.aggregationConfig()));
+        OptimizationCorpusView corpus = OptimizationCorpusReader.read(merge,
+                config.requiredScenarios());
+        IterationSchedule schedule = ScheduleCodec.read(resolve(config.workspace(),
+                        checkpoint.pendingSchedule().orElseThrow()), config.requiredScenarios(),
+                config.trainingRunId(), config.schedulerSeed(), config.commitSha(),
+                config.dirtyWorkingTree(), config.benchmarkConfig());
+        var carry = CarryForwardQueue.reconcile(checkpoint.carryForward(), corpus, schedule,
+                iteration);
+        SortedMap<RotationGroup, Integer> cursors = ScenarioRotation.advance(
+                config.requiredScenarios(), checkpoint.rotationCursors(),
+                schedule.runs().stream().map(run -> run.scenario()).toList());
+        CheckpointStage stage = iteration == config.iterations()
+                ? CheckpointStage.RUN_COMPLETE : CheckpointStage.READY_TO_TRAIN;
+        ClosedLoopCheckpoint next = new ClosedLoopCheckpoint(1, checkpoint.trainingRunId(),
+                checkpoint.revision() + 1, stage, iteration + 1, checkpoint.sobolCursor(),
+                checkpoint.configSha256(), checkpoint.requiredScenarios(), cursors,
+                checkpoint.evidence(), carry, checkpoint.anchorSetId(),
+                checkpoint.calibrationPlan(),
+                Optional.of(reference(config.workspace(), mergeDirectory)),
+                checkpoint.latestModel(), Optional.empty(), List.of());
+        return CheckpointSnapshotCodec.writeNext(config.workspace(), next);
+    }
+
+    private static ClosedLoopCheckpoint completePending(ClosedLoopCheckpoint checkpoint,
+            PendingBenchmarkRun completed, EvidenceIndexEntry evidence, CheckpointStage stage) {
+        ArrayList<EvidenceIndexEntry> evidenceRows = new ArrayList<>(checkpoint.evidence());
+        if (evidenceRows.stream().noneMatch(row ->
+                row.benchmarkRunId().equals(evidence.benchmarkRunId()))) {
+            evidenceRows.add(evidence);
+        }
+        List<PendingBenchmarkRun> pending = checkpoint.pendingRuns().stream().map(row ->
+                row.benchmarkRunId().equals(completed.benchmarkRunId())
+                        ? new PendingBenchmarkRun(row.iteration(), row.runKind(), row.scenario(),
+                        row.benchmarkRunId(), row.candidateCohortId(), row.schedule(),
+                        row.evidenceRelativePath(), PendingRunStatus.COMPLETE) : row).toList();
+        return new ClosedLoopCheckpoint(1, checkpoint.trainingRunId(),
+                checkpoint.revision() + 1, stage, checkpoint.nextIteration(),
+                checkpoint.sobolCursor(), checkpoint.configSha256(),
+                checkpoint.requiredScenarios(), checkpoint.rotationCursors(), evidenceRows,
+                checkpoint.carryForward(), checkpoint.anchorSetId(),
+                checkpoint.calibrationPlan(), checkpoint.latestMerge(),
+                checkpoint.latestModel(), checkpoint.pendingSchedule(), pending);
+    }
+
+    private static LoadedCheckpoint transition(ClosedLoopConfig config,
+            ClosedLoopCheckpoint next) throws IOException {
+        return CheckpointSnapshotCodec.writeNext(config.workspace(), next);
+    }
+
+    private static ClosedLoopCheckpoint copy(ClosedLoopCheckpoint checkpoint,
+            CheckpointStage stage) {
+        return new ClosedLoopCheckpoint(1, checkpoint.trainingRunId(),
+                checkpoint.revision() + 1, stage, checkpoint.nextIteration(),
+                checkpoint.sobolCursor(), checkpoint.configSha256(),
+                checkpoint.requiredScenarios(), checkpoint.rotationCursors(),
+                checkpoint.evidence(), checkpoint.carryForward(), checkpoint.anchorSetId(),
+                checkpoint.calibrationPlan(), checkpoint.latestMerge(),
+                checkpoint.latestModel(), checkpoint.pendingSchedule(),
+                checkpoint.pendingRuns());
+    }
+
+    private static NativeBenchmarkRunPlan plan(ClosedLoopConfig config,
+            IterationSchedule schedule,
+            io.euhedral_execution.training.scheduling.data.ScheduledRun run, Path output) {
+        return new NativeBenchmarkRunPlan(config.trainingRunId(), schedule.iteration(),
+                run.benchmarkRunId(), run.candidateCohortId(), run.scenario(), run.policies(),
+                config.benchmarkConfig(), run.parameters(), config.schedulerSeed(),
+                config.commitSha(), config.dirtyWorkingTree(), output);
+    }
+
+    private static BenchmarkRunContext adopt(Path output, PendingBenchmarkRun pending) {
+        ObservationBundle bundle = ObservationBundleReader.read(output);
+        if (!bundle.run().descriptor().benchmarkRunId().equals(pending.benchmarkRunId())
+                || !bundle.run().descriptor().candidateCohortId()
+                .equals(pending.candidateCohortId())
+                || !bundle.run().descriptor().scenario().equals(pending.scenario())) {
+            throw new IllegalArgumentException("Expected evidence bundle identity mismatch");
+        }
+        return bundle.run();
+    }
+
+    private static void rejectUnexpectedEvidence(Path workspace,
+            ClosedLoopCheckpoint checkpoint) throws IOException {
+        Path evidenceDirectory = workspace.resolve("evidence");
+        if (!Files.isDirectory(evidenceDirectory)) {
+            return;
+        }
+        Set<String> expected = new HashSet<>();
+        checkpoint.evidence().forEach(row -> expected.add(row.benchmarkRunId()));
+        checkpoint.pendingRuns().forEach(row -> expected.add(row.benchmarkRunId()));
+        try (var stream = Files.list(evidenceDirectory)) {
+            for (Path path : stream.filter(Files::isDirectory)
+                    .filter(path -> !path.getFileName().toString().startsWith("."))
+                    .filter(path -> Files.isRegularFile(path.resolve("COMPLETE"))).toList()) {
+                if (!expected.contains(path.getFileName().toString())) {
+                    throw new IllegalArgumentException("Unexpected complete evidence bundle "
+                            + path.getFileName());
                 }
             }
         }
     }
 
-    private static List<Path> iterationCorpusFiles(Path corpus, int iteration) throws Exception {
-        String prefix = String.format("iteration-%04d-source-", iteration);
-        try (Stream<Path> stream = Files.list(corpus)) {
-            return stream.filter(Files::isRegularFile)
-                    .filter(path -> path.getFileName().toString().startsWith(prefix))
-                    .sorted(Comparator.comparing(Path::toString))
-                    .toList();
+    private static void validateResumeArtifacts(ClosedLoopConfig config,
+            ClosedLoopCheckpoint checkpoint) throws IOException {
+        if (checkpoint.pendingSchedule().isPresent()) {
+            ScheduleCodec.read(resolve(config.workspace(),
+                            checkpoint.pendingSchedule().orElseThrow()),
+                    config.requiredScenarios(), config.trainingRunId(), config.schedulerSeed(),
+                    config.commitSha(), config.dirtyWorkingTree(), config.benchmarkConfig());
+        }
+        if (checkpoint.latestModel().isPresent()) {
+            ScenarioModelMetadata metadata = ScenarioModelMetadataCodec.read(
+                    resolve(config.workspace(), checkpoint.latestModel().orElseThrow())
+                            .resolve(ScenarioModelMetadataCodec.FILE_NAME));
+            boolean acceptedStage = checkpoint.stage() != CheckpointStage.MODEL_REJECTED;
+            if (metadata.deploymentEligible() != acceptedStage
+                    || !metadata.requiredScenarios().equals(config.requiredScenarios())) {
+                throw new IllegalArgumentException("Checkpoint model status mismatch");
+            }
         }
     }
 
-    private static void promoteBenchmarks(Path rawDirectory, Path corpus, int iteration)
+    private static List<EvidenceIndexEntry> importInitialEvidence(ClosedLoopConfig config)
             throws Exception {
-        for (Path raw : listRegularFiles(rawDirectory)) {
-            String name = raw.getFileName().toString();
-            Path destination = corpus.resolve(String.format("iteration-%04d-%s", iteration, name));
-            promote(raw, destination);
+        ArrayList<EvidenceIndexEntry> result = new ArrayList<>();
+        Set<String> runIds = new HashSet<>();
+        for (Path source : config.initialObservationBundles()) {
+            ObservationBundle bundle = ObservationBundleReader.read(source);
+            String runId = bundle.run().descriptor().benchmarkRunId();
+            if (!runIds.add(runId)) {
+                throw new IllegalArgumentException("Duplicate initial benchmark run");
+            }
+            Path target = config.workspace().resolve("evidence").resolve(runId);
+            copyDirectoryAtomically(source, target);
+            result.add(new EvidenceIndexEntry(runId, bundle.run().descriptor().scenario(),
+                    reference(config.workspace(), target), EvidenceSource.INITIAL));
+        }
+        return result.stream().sorted(Comparator.comparing(
+                EvidenceIndexEntry::benchmarkRunId)).toList();
+    }
+
+    private static void requireReferenceEvidence(CalibrationPlan plan,
+            List<EvidenceIndexEntry> evidence) {
+        Set<String> runIds = evidence.stream().map(EvidenceIndexEntry::benchmarkRunId)
+                .collect(java.util.stream.Collectors.toSet());
+        if (!runIds.containsAll(plan.references().referenceRunIds().values())) {
+            throw new IllegalArgumentException("Calibration references lack initial evidence");
         }
     }
 
-    private static void promote(Path rawBenchmark, Path corpusFile) throws Exception {
-        Path pending = corpusFile.resolveSibling(corpusFile.getFileName() + ".pending");
-        Files.copy(rawBenchmark, pending, StandardCopyOption.REPLACE_EXISTING);
+    private static SortedMap<RotationGroup, Integer> initialCursors(
+            ClosedLoopConfig config) {
+        TreeMap<RotationGroup, Integer> result = new TreeMap<>();
+        config.requiredScenarios().forEach(scenario -> result.put(new RotationGroup(
+                scenario.environmentId(), scenario.availablePhysicalCoreCount()), 0));
+        return result;
+    }
+
+    private static List<SourceScenario> runnable(ClosedLoopConfig config,
+            ClosedLoopServices services) {
+        List<SourceScenario> result = config.requiredScenarios().stream()
+                .filter(scenario -> scenario.environmentId().equals(
+                        config.activeEnvironmentId()))
+                .filter(scenario -> scenario.availablePhysicalCoreCount()
+                        == services.activeCoreCount()).toList();
+        if (result.isEmpty()) {
+            throw new IllegalArgumentException("No exact required scenario is runnable");
+        }
+        return result;
+    }
+
+    private static TreeSet<SourceScenario> awaiting(ClosedLoopConfig config,
+            ClosedLoopCheckpoint checkpoint) {
+        Set<SourceScenario> complete = checkpoint.evidence().stream()
+                .filter(entry -> entry.source() == EvidenceSource.BOOTSTRAP)
+                .map(EvidenceIndexEntry::scenario)
+                .collect(java.util.stream.Collectors.toSet());
+        TreeSet<SourceScenario> result = new TreeSet<>(config.requiredScenarios());
+        result.removeAll(complete);
+        return result;
+    }
+
+    private static ClosedLoopResult result(LoadedCheckpoint loaded,
+            TreeSet<SourceScenario> awaiting) {
+        ClosedLoopCheckpoint checkpoint = loaded.checkpoint();
+        return new ClosedLoopResult(checkpoint.stage(), checkpoint.nextIteration(),
+                loaded.snapshotDirectory(),
+                checkpoint.latestMerge().map(reference ->
+                        resolve(loaded.snapshotDirectory().getParent().getParent(), reference)),
+                checkpoint.latestModel().map(reference ->
+                        resolve(loaded.snapshotDirectory().getParent().getParent(), reference)),
+                java.util.Collections.unmodifiableSortedSet(awaiting));
+    }
+
+    private static List<Path> evidencePaths(Path workspace,
+            List<EvidenceIndexEntry> evidence) {
+        return evidence.stream().sorted(Comparator.comparing(
+                EvidenceIndexEntry::benchmarkRunId)).map(entry ->
+                resolve(workspace, entry.bundle())).toList();
+    }
+
+    private static ArtifactReference reference(Path workspace, Path artifact)
+            throws IOException {
+        Path root = workspace.toAbsolutePath().normalize();
+        Path target = artifact.toAbsolutePath().normalize();
+        if (!target.startsWith(root)) {
+            throw new IllegalArgumentException("Artifact is outside the closed-loop workspace");
+        }
+        return new ArtifactReference(root.relativize(target).toString().replace('\\', '/'),
+                ArtifactFingerprint.sha256(target));
+    }
+
+    private static Path resolve(Path workspace, ArtifactReference reference) {
+        Path result = workspace.toAbsolutePath().normalize()
+                .resolve(reference.relativePath()).normalize();
+        if (!result.startsWith(workspace.toAbsolutePath().normalize())) {
+            throw new IllegalArgumentException("Artifact path escapes workspace");
+        }
+        return result;
+    }
+
+    private static DataMerger.MergeArtifacts artifacts(Path directory) {
+        return new DataMerger.MergeArtifacts(directory.resolve("fixed-anchors.csv"),
+                directory.resolve("reference-runs.csv"),
+                directory.resolve("calibration-report.csv"),
+                directory.resolve("scenario-results.csv"),
+                directory.resolve("robust-ranking.csv"),
+                directory.resolve("coverage-report.csv"),
+                directory.resolve("robust-leaders.vectors.csv"),
+                directory.resolve("incomplete-policies.vectors.csv"));
+    }
+
+    private static void copyFileAtomically(Path source, Path target) throws IOException {
+        if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
+            if (!ArtifactFingerprint.sha256(source).equals(
+                    ArtifactFingerprint.sha256(target))) {
+                throw new IllegalArgumentException("Existing copied input differs");
+            }
+            return;
+        }
+        Files.createDirectories(target.getParent());
+        Path temp = target.getParent().resolve("." + target.getFileName() + ".tmp-"
+                + UUID.randomUUID());
+        Files.copy(source, temp);
         try {
-            Files.move(pending, corpusFile, StandardCopyOption.ATOMIC_MOVE,
-                    StandardCopyOption.REPLACE_EXISTING);
-        } catch (AtomicMoveNotSupportedException ignored) {
-            Files.move(pending, corpusFile, StandardCopyOption.REPLACE_EXISTING);
+            Files.move(temp, target, StandardCopyOption.ATOMIC_MOVE);
+        } catch (AtomicMoveNotSupportedException error) {
+            throw new IOException("Atomic input copy is required", error);
         }
     }
 
-    private static void bootstrapCorpus(Path seedDirectory, Path corpus) throws Exception {
-        Files.createDirectories(seedDirectory);
-        Files.createDirectories(corpus);
-        if (!listRegularFiles(corpus).isEmpty()) {
+    private static void copyDirectoryAtomically(Path source, Path target) throws IOException {
+        if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
+            if (!ArtifactFingerprint.sha256(source).equals(
+                    ArtifactFingerprint.sha256(target))) {
+                throw new IllegalArgumentException("Existing copied artifact differs");
+            }
             return;
         }
-
-        List<Path> seeds = listRegularFiles(seedDirectory);
-        if (seeds.isEmpty()) {
-            throw new IllegalArgumentException(
-                    "No seed benchmark metadata found under " + seedDirectory.toAbsolutePath());
-        }
-
-        for (int index = 0; index < seeds.size(); index++) {
-            Path seed = seeds.get(index);
-            Path destination = corpus.resolve(String.format("seed-%04d-%s", index,
-                    seed.getFileName()));
-            Files.copy(seed, destination, StandardCopyOption.REPLACE_EXISTING);
-        }
-        LOGGER.info("Bootstrapped closed-loop corpus with {} benchmark files", seeds.size());
-    }
-
-    private static void checkStop(Config config) {
-        if (Files.exists(config.stopFile())) {
-            throw new StopRequested(config.stopFile());
-        }
-    }
-
-    private static void writeState(Path iterationDirectory, int iteration, String stage,
-            Path artifact) throws Exception {
-        Properties state = new Properties();
-        state.setProperty("iteration", Integer.toString(iteration));
-        state.setProperty("stage", stage);
-        state.setProperty("updated", Instant.now().toString());
-        if (artifact != null) {
-            state.setProperty("artifact", artifact.toAbsolutePath().toString());
-        }
-
-        Path statePath = iterationDirectory.resolve("state.properties");
-        try (OutputStream output = Files.newOutputStream(statePath, StandardOpenOption.CREATE,
-                StandardOpenOption.TRUNCATE_EXISTING)) {
-            state.store(output, "Euhedral closed-loop state");
-        }
-    }
-
-    private static List<Path> listRegularFiles(Path directory) throws Exception {
-        try (Stream<Path> stream = Files.list(directory)) {
-            return stream.filter(Files::isRegularFile)
-                    .sorted(Comparator.comparing(Path::toString))
-                    .toList();
-        }
-    }
-
-    private static void deleteRecursively(Path root) throws Exception {
-        if (!Files.exists(root)) {
-            return;
-        }
-        try (Stream<Path> stream = Files.walk(root)) {
-            for (Path path : stream.sorted(Comparator.reverseOrder()).toList()) {
-                Files.deleteIfExists(path);
+        Files.createDirectories(target.getParent());
+        Path temp = target.getParent().resolve("." + target.getFileName() + ".tmp-"
+                + UUID.randomUUID());
+        Files.createDirectory(temp);
+        try (var stream = Files.walk(source)) {
+            for (Path path : stream.sorted().toList()) {
+                if (Files.isSymbolicLink(path)) {
+                    throw new IllegalArgumentException("Input artifacts must not contain symlinks");
+                }
+                Path relative = source.relativize(path);
+                Path destination = temp.resolve(relative.toString());
+                if (Files.isDirectory(path)) {
+                    Files.createDirectories(destination);
+                } else if (Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
+                    Files.copy(path, destination);
+                }
             }
         }
+        try {
+            Files.move(temp, target, StandardCopyOption.ATOMIC_MOVE);
+        } catch (AtomicMoveNotSupportedException error) {
+            throw new IOException("Atomic artifact copy is required", error);
+        }
     }
 
-    private record Config(Path seedDirectory, Path workspace, Path initialModel, Path stopFile,
-                          int iterations, int candidateCount, boolean resume) {
+    /**
+     * ROBUST_OPTIMIZER_PHASE5_CONFIG transitional adapter.
+     */
+    public static ClosedLoopResult run() {
+        throw new IllegalArgumentException(
+                "Phase 3 closed-loop requires a typed ClosedLoopConfig");
+    }
 
-        static Config fromSystemProperties() {
-            Path seedDirectory = Path.of(System.getProperty("cycle.seed", "input/merger"));
-            Path workspace = Path.of(System.getProperty("cycle.workspace", "output/closed-loop"));
-            Path initialModel = optionalPath("cycle.model");
-            Path stopFile = Path.of(System.getProperty("cycle.stopFile",
-                    workspace.resolve("STOP").toString()));
-            int iterations = Integer.getInteger("cycle.iterations", 1);
-            int candidates = Integer.getInteger("cycle.candidates", 32_768);
-            boolean resume = Boolean.parseBoolean(System.getProperty("cycle.resume", "true"));
+    private ClosedLoopRunner() {
+    }
 
-            if (iterations <= 0) {
-                throw new IllegalArgumentException("cycle.iterations must be positive");
-            }
-            if (candidates < 3) {
-                throw new IllegalArgumentException("cycle.candidates must be at least 3");
-            }
-            return new Config(seedDirectory, workspace, initialModel, stopFile, iterations,
-                    candidates, resume);
+    private enum ProductionServices implements ClosedLoopServices {
+        INSTANCE;
+
+        @Override
+        public CalibrationPlan bootstrapCalibration(
+                DataMerger.CalibrationBootstrapRequest request) throws Exception {
+            return DataMerger.bootstrapCalibrationV1(request);
         }
 
-        private static Path optionalPath(String property) {
-            String value = System.getProperty(property);
-            return value == null || value.isBlank() ? null : Path.of(value);
+        @Override
+        public DataMerger.MergeArtifacts merge(DataMerger.MergeRequest request)
+                throws Exception {
+            return DataMerger.mergeV1(request);
+        }
+
+        @Override
+        public ScenarioTrainingArtifacts train(ScenarioTrainingRequest request)
+                throws Exception {
+            return ScenarioModelTrainer.train(request);
+        }
+
+        @Override
+        public ScenarioConditionedModel loadAcceptedModel(Path modelDirectory,
+                String producingDevice) throws Exception {
+            return ScenarioConditionedModel.load(modelDirectory, producingDevice);
+        }
+
+        @Override
+        public BenchmarkRunContext benchmark(NativeBenchmarkRunPlan plan,
+                java.util.function.BooleanSupplier stopRequested) throws Exception {
+            return BenchmarkRunner.runV1(plan, stopRequested);
+        }
+
+        @Override
+        public boolean stopRequested() {
+            return false;
         }
     }
 
     public static final class StopRequested extends RuntimeException {
 
-        private StopRequested(Path stopFile) {
-            super("Closed-loop stop requested by " + stopFile.toAbsolutePath(), null, false, false);
+        private StopRequested() {
+            super(null, null, false, false);
         }
     }
 
-    private ClosedLoopRunner() {
+    private static final class InitializationFailure extends RuntimeException {
+
+        private InitializationFailure(Throwable cause) {
+            super(cause);
+        }
     }
 }

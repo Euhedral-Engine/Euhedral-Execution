@@ -9,376 +9,429 @@ import io.euhedral_execution.core.frames.BenchmarkFrame;
 import io.euhedral_execution.core.impl.BaseCloneableObject;
 import io.euhedral_execution.hardware_utils.SystemInfo;
 import io.euhedral_execution.hardware_utils.ThreadTools;
+import io.euhedral_execution.training.benchmark.data.NativeBenchmarkRunPlan;
+import io.euhedral_execution.training.data.BenchmarkObservation;
+import io.euhedral_execution.training.data.BenchmarkParameters;
+import io.euhedral_execution.training.data.BenchmarkRunContext;
+import io.euhedral_execution.training.data.BenchmarkRunDescriptor;
+import io.euhedral_execution.training.data.FrameSourceSeed;
+import io.euhedral_execution.training.data.ObservationKey;
+import io.euhedral_execution.training.data.PolicyId;
+import io.euhedral_execution.training.data.ScheduledPolicy;
+import io.euhedral_execution.training.data.enums.EvidenceOrigin;
+import io.euhedral_execution.training.data.enums.MeasurementEncoding;
+import io.euhedral_execution.training.data.enums.ObservationStatus;
+import io.euhedral_execution.training.data.enums.PolicyRole;
+import io.euhedral_execution.training.data.io.ObservationBundle;
+import io.euhedral_execution.training.data.io.ObservationBundleReader;
+import io.euhedral_execution.training.data.io.ObservationBundleWriter;
+import io.euhedral_execution.training.optimization.SchedulerSeeds;
 import io.euhedral_execution.training.utils.BenchmarkFrameSink;
-import io.euhedral_execution.training.utils.BenchmarkOutputReader;
-import io.euhedral_execution.training.utils.BenchmarkOutputWriter;
-import io.euhedral_execution.training.utils.CommonFunctions;
-import io.euhedral_execution.training.utils.Distribution;
-import java.math.BigDecimal;
+import java.io.IOException;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardOpenOption;
+import java.nio.file.StandardCopyOption;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.LinkedHashSet;
+import java.util.HashSet;
 import java.util.List;
-import java.util.PriorityQueue;
+import java.util.OptionalDouble;
+import java.util.OptionalLong;
 import java.util.Set;
-import java.util.StringJoiner;
-import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.LockSupport;
-import org.apache.commons.math4.legacy.random.SobolSequenceGenerator;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import java.util.function.BooleanSupplier;
 
 public final class BenchmarkRunner {
-
-    private static final Logger LOGGER = LoggerFactory.getLogger(BenchmarkRunner.class);
-    private static final PriorityQueue<Distribution> TOP_SCORES = new PriorityQueue<>(11);
-
-    public static Path run(String[] args) throws Exception {
-        Path rawOutput = Path.of(System.getProperty("benchmark.output",
-                "output/benchmark/raw_data.txt"));
-        Path resultsOutput = Path.of(System.getProperty("benchmark.results", "output/results.txt"));
-
-        if (args.length > 1) {
-            return run(Paths.get(args[1]), rawOutput, resultsOutput);
-        }
-
-        int limit = Integer.getInteger("limit", 16_384);
-        return run(limit, rawOutput, resultsOutput);
-    }
-
-    /** Legacy single-configuration entry point. */
-    public static Path run(Path candidates, Path rawOutput, Path resultsOutput) throws Exception {
-        return runConfiguration(legacySourceCount(), candidates, rawOutput, resultsOutput);
-    }
-
-    /** Legacy single-configuration Sobol entry point. */
-    public static Path run(int sobolCount, Path rawOutput, Path resultsOutput) throws Exception {
-        int sourceCount = legacySourceCount();
-        try (VectorProducer producer = new VectorProducer(sobolCount)) {
-            return runConfiguration(sourceCount, producer, rawOutput, resultsOutput);
+    public static BenchmarkRunContext runV1(NativeBenchmarkRunPlan plan,
+            BooleanSupplier stopRequested) throws Exception {
+        validatePlan(plan, true);
+        try (BenchmarkBackend backend = NativeBackend.open(plan)) {
+            return runV1(plan, stopRequested, backend, SystemTime.INSTANCE);
         }
     }
 
-    /**
-     * Benchmarks the same policy set under a deterministic rotating subset of configured source
-     * counts. Every configuration is written separately so DataMerger normalizes it independently.
-     */
-    public static List<BenchmarkRun> runAcrossSourceCounts(Path candidates, Path rawDirectory,
-            Path resultsDirectory, int iteration) throws Exception {
-        Files.createDirectories(rawDirectory);
-        Files.createDirectories(resultsDirectory);
-
-        int[] selected = selectedSourceCounts(iteration);
-        List<BenchmarkRun> runs = new ArrayList<>(selected.length);
-        for (int sourceCount : selected) {
-            Path raw = rawDirectory.resolve(String.format("source-%04d.txt", sourceCount));
-            Path results = resultsDirectory.resolve(String.format("source-%04d.txt", sourceCount));
-            runConfiguration(sourceCount, candidates, raw, results);
-            runs.add(new BenchmarkRun(sourceCount, raw, results));
+    static BenchmarkRunContext runV1(NativeBenchmarkRunPlan plan,
+            BooleanSupplier stopRequested, BenchmarkBackend backend, TimeSource time)
+            throws Exception {
+        validatePlan(plan, false);
+        Path finalBundle = plan.outputBundle();
+        int attempt = nextAttempt(finalBundle);
+        Path attemptDirectory = finalBundle.getParent().resolve("." + plan.benchmarkRunId()
+                + ".attempt-" + attempt);
+        if (Files.exists(attemptDirectory, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IllegalStateException("Attempt directory already exists");
         }
-        return List.copyOf(runs);
-    }
-
-    public static int[] selectedSourceCounts(int iteration) {
-        if (iteration <= 0) {
-            throw new IllegalArgumentException("iteration must be positive");
-        }
-        int[] configured = configuredSourceCounts();
-        int perIteration = Integer.getInteger("benchmark.sourceConfigurationsPerIteration",
-                Math.min(2, configured.length));
-        perIteration = Math.max(1, Math.min(perIteration, configured.length));
-
-        int[] selected = new int[perIteration];
-        int start = Math.floorMod((iteration - 1) * perIteration, configured.length);
-        for (int i = 0; i < selected.length; i++) {
-            selected[i] = configured[(start + i) % configured.length];
-        }
-        return selected;
-    }
-
-    public static int[] configuredSourceCounts() {
-        int cores = Math.max(1, SystemInfo.getCoreCount());
-        Set<Integer> counts = new LinkedHashSet<>();
-        String explicit = System.getProperty("benchmark.sourceCounts");
-        if (explicit != null && !explicit.isBlank()) {
-            for (String value : explicit.split(",")) {
-                int count = Integer.parseInt(value.trim());
-                counts.add(Math.max(1, Math.min(count, cores)));
+        Instant runStart = time.instant();
+        BenchmarkRunDescriptor descriptor = new BenchmarkRunDescriptor(1,
+                plan.benchmarkRunId(), plan.iteration(), plan.candidateCohortId(),
+                plan.scenario(), plan.commitSha(), plan.dirtyWorkingTree(),
+                EvidenceOrigin.NATIVE, runStart, plan.parameters());
+        BenchmarkRunContext context;
+        try (ObservationBundleWriter writer = ObservationBundleWriter.open(attemptDirectory,
+                descriptor)) {
+            for (ScheduledPolicy policy : plan.policies()) {
+                writer.registerPolicy(policy);
             }
-        } else {
-            String ratios = System.getProperty("benchmark.sourceRatios", "0.25,0.5,1.0");
-            for (String value : ratios.split(",")) {
-                double ratio = Double.parseDouble(value.trim());
-                if (!Double.isFinite(ratio) || ratio <= 0) {
-                    throw new IllegalArgumentException(
-                            "benchmark.sourceRatios values must be positive and finite");
+            boolean paused = true;
+            for (ScheduledPolicy policy : plan.policies()) {
+                if (!paused) {
+                    throw new IllegalStateException("Benchmark policy boundary is not paused");
                 }
-                counts.add(Math.max(1, Math.min((int) Math.round(cores * ratio), cores)));
-            }
-        }
-        if (counts.isEmpty()) {
-            counts.add(cores);
-        }
-        return counts.stream().mapToInt(Integer::intValue).sorted().toArray();
-    }
-
-    private static int legacySourceCount() {
-        String sourceRatio = System.getProperty("sourceRatio");
-        if (sourceRatio == null || sourceRatio.isBlank()) {
-            return SystemInfo.getCoreCount();
-        }
-        double ratio = Double.parseDouble(sourceRatio);
-        return Math.max(1, Math.min((int) Math.round(SystemInfo.getCoreCount() * ratio),
-                SystemInfo.getCoreCount()));
-    }
-
-    private static Path runConfiguration(int sourceCount, Path candidates, Path rawOutput,
-            Path resultsOutput) throws Exception {
-        try (VectorProducer producer = new VectorProducer(candidates)) {
-            return runConfiguration(sourceCount, producer, rawOutput, resultsOutput);
-        }
-    }
-
-    private static Path runConfiguration(int sourceCount, VectorProducer generator, Path rawOutput,
-            Path resultsOutput) throws Exception {
-        if (rawOutput.getParent() != null) {
-            Files.createDirectories(rawOutput.getParent());
-        }
-        TOP_SCORES.clear();
-        ThreadTools.setAffinity(SystemInfo.getCoreInfo(0).getCpuSet().nextSetBit(0));
-
-        double[] halt = new double[28];
-        FragmentActionPicker actionPicker = new FragmentActionPicker(halt);
-        LatticeConfig config = new LatticeConfig("Benchmark-" + sourceCount,
-                SystemInfo.getCpuSet(), Duration.ofSeconds(1),
-                ControlPlaneShard.createBaseShard("Shard",
-                        new BaseCloneableObject(FragmentConfig.ofBenchmark(actionPicker))));
-        ControlPlaneLattice controlPlane = ControlPlaneLattice.getOrCreate(config);
-        Duration resetTimeout = Duration.ofMillis(
-                Long.getLong("benchmark.resetTimeoutMillis", 2_000L));
-
-        List<BenchmarkFrameSink> sinks = createSinks(sourceCount);
-        try (BenchmarkOutputWriter writer = new BenchmarkOutputWriter(rawOutput)) {
-            controlPlane.start();
-            for (BenchmarkFrameSink sink : sinks) {
-                controlPlane.addUpstream(sink);
-            }
-
-            int index = 1;
-            int repetitions = Integer.getInteger("benchmark.repetitions", 10);
-            long sampleNanos = TimeUnit.MILLISECONDS.toNanos(
-                    Long.getLong("benchmark.sampleMillis", 200L));
-            long livenessNanos = TimeUnit.MILLISECONDS.toNanos(
-                    Long.getLong("benchmark.livenessMillis", 50L));
-            double[] means = new double[repetitions];
-            double[] vector;
-
-            LOGGER.info("Benchmarking {} policies with {} frame sources", generator.limit,
-                    sourceCount);
-            while ((vector = generator.get()) != null) {
-                Distribution distribution = new Distribution(vector);
-                Arrays.fill(means, 0);
-                LOGGER.info("Sources: {} Vector: ({} / {})", sourceCount, index++,
-                        generator.limit);
-
-                actionPicker.setWeights(halt);
-                pauseAll(sinks, resetTimeout);
-                ControlPlaneLattice.CacheReset reset = controlPlane.resetForNextTrial(resetTimeout);
-                if (reset.clearedFrames() > 0) {
-                    LOGGER.debug("Cleared {} buffered frames before the next policy trial",
-                            reset.clearedFrames());
+                if (stopRequested.getAsBoolean()) {
+                    throw ClosedLoopRunner.stopSignal();
                 }
-                for (BenchmarkFrameSink sink : sinks) {
-                    sink.resetCounter();
-                }
-
-                actionPicker.setWeights(vector);
-                resumeAll(sinks);
+                backend.beginPolicy(policy);
+                paused = false;
+                ArrayList<Measurement> measurements = new ArrayList<>(
+                        plan.executionConfig().expectedRepetitions());
+                boolean previousTimeout = false;
+                boolean previousFailure = false;
                 try {
-                    for (int repetition = 0; repetition < repetitions; repetition++) {
-                        for (BenchmarkFrameSink sink : sinks) {
-                            sink.resetCounter();
-                        }
-
-                        long start = System.nanoTime();
-                        long livenessDeadline = start + livenessNanos;
-                        long runDeadline = start + sampleNanos;
-                        long previous = 0;
-                        long current;
-                        boolean timedOut = false;
-
-                        while (true) {
-                            LockSupport.parkNanos(livenessNanos);
-                            long now = System.nanoTime();
-                            current = consumed(sinks);
-                            if (now >= runDeadline) {
-                                break;
+                    for (int repetition = 1;
+                            repetition <= plan.executionConfig().expectedRepetitions();
+                            repetition++) {
+                        if (previousTimeout) {
+                            measurements.add(Measurement.skipped("PREVIOUS_TIMEOUT",
+                                    time.instant()));
+                        } else if (previousFailure) {
+                            measurements.add(Measurement.skipped("PREVIOUS_FAILURE",
+                                    time.instant()));
+                        } else {
+                            try {
+                                Measurement measurement = backend.measure(
+                                        plan.executionConfig().sampleDurationNanos(),
+                                        plan.executionConfig().livenessTimeoutNanos(), time);
+                                measurements.add(measurement);
+                                previousTimeout = measurement.status()
+                                        == ObservationStatus.TIMEOUT;
+                            } catch (PolicyMeasurementException error) {
+                                measurements.add(Measurement.failed("MEASUREMENT_ERROR",
+                                        time.instant()));
+                                previousFailure = true;
                             }
-                            if (current == previous && now > livenessDeadline) {
-                                timedOut = true;
-                                break;
-                            }
-                            previous = current;
-                            livenessDeadline = now + livenessNanos;
-                        }
-
-                        double throughput = current / (double) (System.nanoTime() - start);
-                        means[repetition] = throughput;
-                        distribution.digest.add(throughput);
-                        distribution.mean +=
-                                (throughput - distribution.mean) / (repetition + 1);
-                        if (timedOut) {
-                            break;
                         }
                     }
                 } finally {
-                    actionPicker.setWeights(halt);
-                    pauseAll(sinks, resetTimeout);
+                    backend.pause();
+                    paused = true;
                 }
-
-                writer.spaceSeparatedWriteLine(distribution.vector);
-                writer.spaceSeparatedWriteLine(means);
-                TOP_SCORES.add(distribution);
-                if (TOP_SCORES.size() > 10) {
-                    TOP_SCORES.poll();
+                if (!backend.paused()) {
+                    throw new IllegalStateException("Evidence write requires paused sources");
                 }
-            }
-        } finally {
-            actionPicker.setWeights(halt);
-            for (BenchmarkFrameSink sink : sinks) {
-                try {
-                    sink.hardStop(resetTimeout);
-                } catch (Exception error) {
-                    LOGGER.warn("Failed to hard-stop benchmark source", error);
+                for (int repetition = 0; repetition < measurements.size(); repetition++) {
+                    writer.write(observation(descriptor, policy, repetition + 1,
+                            measurements.get(repetition)));
                 }
             }
-            controlPlane.close();
+            context = writer.complete(time.instant());
+        } catch (Throwable failure) {
+            // The unique attempt directory is intentionally retained for diagnosis/retry.
+            throw failure;
         }
-
-        printResults(resultsOutput);
-        return rawOutput;
+        ObservationBundle validated = ObservationBundleReader.read(attemptDirectory);
+        validateBundle(plan, validated);
+        try {
+            Files.move(attemptDirectory, finalBundle, StandardCopyOption.ATOMIC_MOVE);
+        } catch (AtomicMoveNotSupportedException error) {
+            throw new IOException("Atomic benchmark bundle publication is required", error);
+        }
+        return context;
     }
 
-    private static List<BenchmarkFrameSink> createSinks(int sources) {
-        int framesPerSource = Integer.getInteger("benchmark.framesPerSource", 100_000);
-        List<BenchmarkFrameSink> sinks = new ArrayList<>(sources);
-        for (int i = 0; i < sources; i++) {
-            BenchmarkFrame[] frames = BenchmarkFrame.generate(framesPerSource, false,
-                    ThreadLocalRandom.current().nextLong());
-            sinks.add(new BenchmarkFrameSink(frames));
-        }
-        return sinks;
+    private static BenchmarkObservation observation(BenchmarkRunDescriptor descriptor,
+            ScheduledPolicy policy, int repetition, Measurement measurement) {
+        OptionalLong elapsed = OptionalLong.of(measurement.elapsedNanos());
+        OptionalLong frames = OptionalLong.of(measurement.completedFrames());
+        OptionalDouble throughput = measurement.elapsedNanos() == 0
+                ? OptionalDouble.empty() : OptionalDouble.of(
+                measurement.completedFrames() * 1_000_000_000.0
+                        / measurement.elapsedNanos());
+        return new BenchmarkObservation(new ObservationKey(descriptor.benchmarkRunId(),
+                descriptor.scenario(), policy.policy().id(), repetition), descriptor, policy,
+                measurement.status(), MeasurementEncoding.COUNTER_DERIVED,
+                measurement.startedAt(), measurement.startedAt().plusNanos(
+                measurement.elapsedNanos()), elapsed, frames, throughput,
+                measurement.failureCode());
     }
 
-    private static void pauseAll(List<BenchmarkFrameSink> sinks, Duration timeout) {
-        for (BenchmarkFrameSink sink : sinks) {
-            sink.pause(timeout);
+    private static void validatePlan(NativeBenchmarkRunPlan plan, boolean nativeEnvironment) {
+        if (Files.exists(plan.outputBundle(), LinkOption.NOFOLLOW_LINKS)
+                || plan.outputBundle().getParent() == null
+                || !plan.outputBundle().getParent().getFileName().toString().equals("evidence")
+                || !plan.commitSha().matches("(?:[0-9a-f]{40}|[0-9a-f]{64})")
+                || plan.policies().isEmpty()) {
+            throw new IllegalArgumentException("Invalid native benchmark plan");
         }
-    }
-
-    private static void resumeAll(List<BenchmarkFrameSink> sinks) {
-        for (BenchmarkFrameSink sink : sinks) {
-            sink.resume();
-        }
-    }
-
-    private static long consumed(List<BenchmarkFrameSink> sinks) {
-        long current = 0;
-        for (BenchmarkFrameSink sink : sinks) {
-            current += sink.getConsumed();
-        }
-        return current;
-    }
-
-    private static void printResults(Path path) throws Exception {
-        if (path.getParent() != null) {
-            Files.createDirectories(path.getParent());
-        }
-        Files.writeString(path, "", StandardOpenOption.CREATE,
-                StandardOpenOption.TRUNCATE_EXISTING);
-
-        List<Distribution> results = new ArrayList<>();
-        while (!TOP_SCORES.isEmpty()) {
-            results.add(TOP_SCORES.poll());
-        }
-        Collections.reverse(results);
-
-        try (BenchmarkOutputWriter writer = new BenchmarkOutputWriter(path)) {
-            writer.writeLine("Top Throughput:");
-            for (Distribution distribution : results) {
-                writer.writeLine(String.format(
-                        "Quantiles: P10: %.8f P25: %.8f P50: %.8f P75: %.8f P90: %.8f AggregateMean: %.8f",
-                        distribution.digest.quantile(0.1), distribution.digest.quantile(0.25),
-                        distribution.digest.quantile(0.5), distribution.digest.quantile(0.75),
-                        distribution.digest.quantile(0.9), distribution.mean));
+        Set<PolicyId> ids = new HashSet<>();
+        List<SchedulerSeeds.PolicyWithRole> identities = new ArrayList<>();
+        for (int i = 0; i < plan.policies().size(); i++) {
+            ScheduledPolicy policy = plan.policies().get(i);
+            if (policy.schedulePosition() != i + 1 || policy.roles().size() != 1
+                    || !ids.add(policy.policy().id())) {
+                throw new IllegalArgumentException("Invalid scheduled policy identity");
             }
-            writer.writeLine("\n\nTop Weights:");
-            for (Distribution distribution : results) {
-                writer.writeLine(weightsToCode(distribution.vector));
+            PolicyRole role = policy.roles().iterator().next();
+            identities.add(new RoleIdentity(policy.policy().id(), role));
+        }
+        String cohort = SchedulerSeeds.candidateCohortId(plan.trainingRunId(),
+                plan.iteration() == 0 ? "BOOTSTRAP" : "NORMAL", plan.iteration(),
+                plan.scenario(), identities, planSchedulerSeed(plan));
+        if (!cohort.equals(plan.candidateCohortId())) {
+            throw new IllegalArgumentException("Candidate cohort mismatch");
+        }
+        BenchmarkParameters parameters = plan.parameters();
+        if (parameters.expectedRepetitions() != plan.executionConfig().expectedRepetitions()
+                || parameters.sampleDurationNanos()
+                != plan.executionConfig().sampleDurationNanos()
+                || parameters.livenessTimeoutNanos()
+                != plan.executionConfig().livenessTimeoutNanos()
+                || parameters.framesPerSource() != plan.executionConfig().framesPerSource()
+                || parameters.resetTimeoutNanos() != plan.executionConfig().resetTimeoutNanos()
+                || parameters.orderedFrames() != plan.executionConfig().orderedFrames()
+                || parameters.frameSourceSeeds().size() != plan.scenario().sourceCount()) {
+            throw new IllegalArgumentException("Benchmark parameters disagree with plan");
+        }
+        String run = SchedulerSeeds.benchmarkRunId(plan.trainingRunId(),
+                plan.iteration() == 0 ? "BOOTSTRAP" : "NORMAL", plan.iteration(),
+                plan.scenario(), cohort, parameters, plan.commitSha(),
+                plan.dirtyWorkingTree(), planSchedulerSeed(plan));
+        if (!run.equals(plan.benchmarkRunId())) {
+            throw new IllegalArgumentException("Benchmark run ID mismatch");
+        }
+        for (int i = 0; i < parameters.frameSourceSeeds().size(); i++) {
+            if (!SchedulerSeeds.frameSourceSeed(run, i, planSchedulerSeed(plan))
+                    .equals(parameters.frameSourceSeeds().get(i))) {
+                throw new IllegalArgumentException("Hidden or changed frame source seed");
             }
         }
+        if (nativeEnvironment && (SystemInfo.getCoreCount()
+                != plan.scenario().availablePhysicalCoreCount()
+                || !SystemInfo.toHexMask(SystemInfo.getCpuSet())
+                .equals(parameters.cpuSetHex()))) {
+            throw new IllegalArgumentException("Active topology does not match exact scenario");
+        }
     }
 
-    private static String weightsToCode(double[] array) {
-        StringJoiner joiner = new StringJoiner(", ");
-        for (double value : array) {
-            joiner.add(new BigDecimal(value).toPlainString());
-        }
-        return String.format("double[] weights = new double[]{%s}", joiner);
+    private static long planSchedulerSeed(NativeBenchmarkRunPlan plan) {
+        return plan.schedulerSeed();
     }
 
-    public record BenchmarkRun(int sourceCount, Path rawOutput, Path resultsOutput) {
+    private static void validateBundle(NativeBenchmarkRunPlan plan,
+            ObservationBundle bundle) {
+        if (!bundle.run().descriptor().benchmarkRunId().equals(plan.benchmarkRunId())
+                || !bundle.run().descriptor().candidateCohortId()
+                .equals(plan.candidateCohortId())
+                || !bundle.run().descriptor().scenario().equals(plan.scenario())
+                || !bundle.policies().equals(plan.policies())) {
+            throw new IllegalStateException("Published bundle identity mismatch");
+        }
     }
 
-    private static final class VectorProducer implements AutoCloseable {
-
-        final SobolSequenceGenerator generator;
-        final BenchmarkOutputReader reader;
-        final long limit;
-        int count;
-
-        VectorProducer(int limit) {
-            this.limit = limit;
-            this.generator = new SobolSequenceGenerator(28);
-            this.generator.skipTo(Integer.getInteger("benchmark.sobolSkip", 1024));
-            this.reader = null;
+    private static int nextAttempt(Path finalBundle) throws IOException {
+        Files.createDirectories(finalBundle.getParent());
+        String prefix = "." + finalBundle.getFileName() + ".attempt-";
+        try (var stream = Files.list(finalBundle.getParent())) {
+            return stream.map(path -> path.getFileName().toString())
+                    .filter(name -> name.startsWith(prefix))
+                    .mapToInt(name -> Integer.parseInt(name.substring(prefix.length())))
+                    .max().orElse(0) + 1;
         }
+    }
 
-        VectorProducer(Path path) throws Exception {
-            this.generator = null;
-            this.reader = new BenchmarkOutputReader(path);
-            this.limit = this.reader.getLines();
-        }
+    interface BenchmarkBackend extends AutoCloseable {
+        void beginPolicy(ScheduledPolicy policy) throws Exception;
 
-        double[] get() {
-            if (this.generator != null) {
-                if (this.count++ >= this.limit) {
-                    return null;
-                }
-                double[] vector = this.generator.get();
-                CommonFunctions.normalizeSobolVector(vector);
-                return vector;
+        Measurement measure(long sampleNanos, long livenessNanos, TimeSource time)
+                throws PolicyMeasurementException;
+
+        void pause() throws Exception;
+
+        boolean paused();
+
+        @Override
+        void close() throws Exception;
+    }
+
+    interface TimeSource {
+        Instant instant();
+
+        long nanoTime();
+
+        void parkNanos(long nanos);
+    }
+
+    record Measurement(ObservationStatus status, long elapsedNanos, long completedFrames,
+            Instant startedAt, String failureCode) {
+        Measurement {
+            if (status == null || elapsedNanos < 0 || completedFrames < 0
+                    || startedAt == null || failureCode == null) {
+                throw new IllegalArgumentException("Invalid benchmark measurement");
             }
+        }
+
+        static Measurement skipped(String reason, Instant instant) {
+            return new Measurement(ObservationStatus.SKIPPED, 0, 0, instant, reason);
+        }
+
+        static Measurement failed(String reason, Instant instant) {
+            return new Measurement(ObservationStatus.FAILED, 0, 0, instant, reason);
+        }
+    }
+
+    static final class PolicyMeasurementException extends Exception {
+        PolicyMeasurementException(Throwable cause) {
+            super(cause);
+        }
+    }
+
+    private enum SystemTime implements TimeSource {
+        INSTANCE;
+
+        @Override
+        public Instant instant() {
+            return Instant.now();
+        }
+
+        @Override
+        public long nanoTime() {
+            return System.nanoTime();
+        }
+
+        @Override
+        public void parkNanos(long nanos) {
+            LockSupport.parkNanos(nanos);
+        }
+    }
+
+    private static final class NativeBackend implements BenchmarkBackend {
+        private final FragmentActionPicker picker;
+        private final ControlPlaneLattice lattice;
+        private final List<BenchmarkFrameSink> sinks;
+        private final Duration resetTimeout;
+        private boolean paused = true;
+
+        private NativeBackend(FragmentActionPicker picker, ControlPlaneLattice lattice,
+                List<BenchmarkFrameSink> sinks, Duration resetTimeout) {
+            this.picker = picker;
+            this.lattice = lattice;
+            this.sinks = sinks;
+            this.resetTimeout = resetTimeout;
+        }
+
+        static NativeBackend open(NativeBenchmarkRunPlan plan) {
+            ThreadTools.setAffinity(SystemInfo.getCoreInfo(0).getCpuSet().nextSetBit(0));
+            FragmentActionPicker picker = new FragmentActionPicker(new double[28]);
+            LatticeConfig config = new LatticeConfig("Training-" + plan.benchmarkRunId(),
+                    SystemInfo.getCpuSet(), Duration.ofSeconds(1),
+                    ControlPlaneShard.createBaseShard("Shard",
+                            new BaseCloneableObject(FragmentConfig.ofBenchmark(picker))));
+            ControlPlaneLattice lattice = ControlPlaneLattice.getOrCreate(config);
+            ArrayList<BenchmarkFrameSink> sinks = new ArrayList<>();
+            for (FrameSourceSeed seed : plan.parameters().frameSourceSeeds()) {
+                BenchmarkFrame[] frames = BenchmarkFrame.generate(
+                        plan.parameters().framesPerSource(),
+                        plan.parameters().orderedFrames(), seed.idHash(), seed.routingSeed());
+                sinks.add(new BenchmarkFrameSink(frames));
+            }
+            lattice.start();
+            sinks.forEach(lattice::addUpstream);
+            return new NativeBackend(picker, lattice, sinks,
+                    Duration.ofNanos(plan.parameters().resetTimeoutNanos()));
+        }
+
+        @Override
+        public void beginPolicy(ScheduledPolicy policy) {
+            picker.setWeights(new double[28]);
+            pauseAll();
+            lattice.resetForNextTrial(resetTimeout);
+            sinks.forEach(BenchmarkFrameSink::resetCounter);
+            picker.setWeights(policy.policy().copyWeights());
+            sinks.forEach(BenchmarkFrameSink::resume);
+            paused = false;
+        }
+
+        @Override
+        public Measurement measure(long sampleNanos, long livenessNanos, TimeSource time)
+                throws PolicyMeasurementException {
+            Instant started = time.instant();
             try {
-                return this.reader.readDoubleArray();
-            } catch (Exception error) {
-                throw new RuntimeException("Failed to read candidate vector", error);
+                long baseline = consumed();
+                long previous = baseline;
+                long start = time.nanoTime();
+                long lastProgress = start;
+                while (true) {
+                    time.parkNanos(Math.min(livenessNanos, 100_000L));
+                    long now = time.nanoTime();
+                    long current = consumed();
+                    if (current < baseline) {
+                        throw new ArithmeticException("Negative counter delta");
+                    }
+                    if (current != previous) {
+                        previous = current;
+                        lastProgress = now;
+                    }
+                    long elapsed = now - start;
+                    long frames = current - baseline;
+                    if (elapsed >= sampleNanos) {
+                        return new Measurement(frames > 0 ? ObservationStatus.SUCCESS
+                                : ObservationStatus.TIMEOUT, elapsed, frames, started,
+                                frames > 0 ? "" : "ZERO_COMPLETED_FRAMES");
+                    }
+                    if (now - lastProgress >= livenessNanos) {
+                        return new Measurement(ObservationStatus.TIMEOUT, elapsed, frames,
+                                started, "NO_PROGRESS");
+                    }
+                }
+            } catch (RuntimeException error) {
+                throw new PolicyMeasurementException(error);
             }
         }
 
         @Override
-        public void close() throws Exception {
-            if (this.reader != null) {
-                this.reader.close();
+        public void pause() {
+            picker.setWeights(new double[28]);
+            pauseAll();
+            paused = true;
+        }
+
+        @Override
+        public boolean paused() {
+            return paused;
+        }
+
+        @Override
+        public void close() {
+            picker.setWeights(new double[28]);
+            for (BenchmarkFrameSink sink : sinks) {
+                try {
+                    sink.hardStop(resetTimeout);
+                } catch (RuntimeException ignored) {
+                    // Close the remaining owners, then surface through lattice close if needed.
+                }
+            }
+            lattice.close();
+        }
+
+        private void pauseAll() {
+            for (BenchmarkFrameSink sink : sinks) {
+                sink.pause(resetTimeout);
             }
         }
+
+        private long consumed() {
+            long total = 0;
+            for (BenchmarkFrameSink sink : sinks) {
+                total = Math.addExact(total, sink.getConsumed());
+            }
+            return total;
+        }
+    }
+
+    private record RoleIdentity(PolicyId policyId, PolicyRole role)
+            implements SchedulerSeeds.PolicyWithRole {
     }
 
     private BenchmarkRunner() {

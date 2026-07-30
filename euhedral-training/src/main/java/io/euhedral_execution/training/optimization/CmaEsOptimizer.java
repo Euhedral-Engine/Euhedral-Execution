@@ -1,72 +1,69 @@
 package io.euhedral_execution.training.optimization;
 
+import io.euhedral_execution.training.data.PolicyId;
+import io.euhedral_execution.training.data.PolicyVector;
+import io.euhedral_execution.training.merge.PolicyComparator;
+import io.euhedral_execution.training.merge.data.MergeRecords.RobustPolicySummary;
+import io.euhedral_execution.training.optimization.config.CmaEsConfig;
+import io.euhedral_execution.training.optimization.data.PredictedCandidate;
+import io.euhedral_execution.training.optimization.data.PredictedPolicySummary;
+import io.euhedral_execution.training.optimization.enums.CandidateOrigin;
 import io.euhedral_execution.training.utils.CommonFunctions;
-import io.euhedral_execution.training.utils.PolicyRanking;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
+import java.util.Set;
+import java.util.TreeMap;
 
 /** Full-covariance CMA-ES over the four normalized seven-weight action chunks. */
 public final class CmaEsOptimizer {
 
     public static final int DIMENSIONS = 28;
 
-    @FunctionalInterface
-    public interface BatchScorer {
-        void score(float[] features, int rows, float[] scores);
-    }
-
-    public record MeasuredPolicy(double[] vector, double[] quantiles) {
-        public MeasuredPolicy {
-            vector = Arrays.copyOf(vector, vector.length);
-            quantiles = Arrays.copyOf(quantiles, quantiles.length);
+    public List<PredictedCandidate> optimize(List<RobustPolicySummary> measuredEligiblePolicies,
+            Set<PolicyId> fixedAnchorIds, PolicyCurvePredictor predictor, CmaEsConfig config,
+            long islandSeed) {
+        if (!config.enabled()) {
+            return List.of();
         }
-    }
-
-    public record ScoredVector(double[] vector, float score) {
-    }
-
-    public List<ScoredVector> optimize(List<MeasuredPolicy> measured, BatchScorer scorer, long seed) {
-        if (!Boolean.parseBoolean(System.getProperty("candidate.cmaEnabled", "true"))
-                || measured.size() < 10) {
+        List<RobustPolicySummary> ranked = measuredEligiblePolicies.stream()
+                .filter(RobustPolicySummary::eligible)
+                .filter(summary -> !fixedAnchorIds.contains(summary.policy().id()))
+                .sorted(PolicyComparator.BEST_FIRST)
+                .toList();
+        if (ranked.size() < config.minimumSeedPolicies()) {
             return List.of();
         }
 
-        List<MeasuredPolicy> ranked = new ArrayList<>(measured);
-        ranked.sort((first, second) ->
-                PolicyRanking.compare(second.quantiles(), first.quantiles()));
-
-        int islands = Math.max(1, Integer.getInteger("candidate.cmaIslands", 4));
-        int generations = Math.max(1, Integer.getInteger("candidate.cmaGenerations", 12));
-        int lambda = Math.max(8, Integer.getInteger("candidate.cmaPopulation", 96));
-        double initialSigma = propertyDouble("candidate.cmaSigma", 0.20, 0.005, 1.0);
+        int islandCount = Math.min(config.islands(), ranked.size());
+        List<PolicyVector> seeds = diverseSeeds(ranked, islandCount);
         double[][] initialCovariance = initialCovariance(ranked);
-        List<double[]> seeds = diverseSeeds(ranked, islands);
-
-        List<ScoredVector> generated = new ArrayList<>(islands * generations * lambda);
+        ArrayList<PredictedCandidate> generated = new ArrayList<>(
+                seeds.size() * config.generations() * config.populationSize());
         for (int island = 0; island < seeds.size(); island++) {
-            Random random = new Random(seed + 0x9E3779B97F4A7C15L * (island + 1L));
-            runIsland(seeds.get(island), initialCovariance, initialSigma, generations, lambda,
-                    scorer, random, generated);
+            Random random = new Random(SchedulerSeeds.cmaIslandSeed(islandSeed, island));
+            runIsland(seeds.get(island), initialCovariance, config, predictor, random, generated);
         }
-        return generated;
+        return List.copyOf(generated);
     }
 
-    private static void runIsland(double[] seed, double[][] initialCovariance, double initialSigma,
-            int generations, int lambda, BatchScorer scorer, Random random,
-            List<ScoredVector> output) {
+    private static void runIsland(PolicyVector seed, double[][] initialCovariance,
+            CmaEsConfig config, PolicyCurvePredictor predictor, Random random,
+            List<PredictedCandidate> output) {
         int n = DIMENSIONS;
+        int lambda = config.populationSize();
         int mu = lambda / 2;
         double[] weights = new double[mu];
-        double weightSum = 0;
+        double weightSum = 0.0;
         for (int i = 0; i < mu; i++) {
-            weights[i] = Math.log(mu + 0.5) - Math.log(i + 1.0);
+            weights[i] = StrictMath.log(mu + 0.5) - StrictMath.log(i + 1.0);
             weightSum += weights[i];
         }
-        double squaredWeightSum = 0;
+        double squaredWeightSum = 0.0;
         for (int i = 0; i < mu; i++) {
             weights[i] /= weightSum;
             squaredWeightSum += weights[i] * weights[i];
@@ -75,29 +72,28 @@ public final class CmaEsOptimizer {
         double muEffective = 1.0 / squaredWeightSum;
         double cc = (4.0 + muEffective / n) / (n + 4.0 + 2.0 * muEffective / n);
         double cs = (muEffective + 2.0) / (n + muEffective + 5.0);
-        double c1 = 2.0 / (Math.pow(n + 1.3, 2.0) + muEffective);
+        double c1 = 2.0 / (StrictMath.pow(n + 1.3, 2.0) + muEffective);
         double cmu = Math.min(1.0 - c1,
                 2.0 * (muEffective - 2.0 + 1.0 / muEffective)
-                        / (Math.pow(n + 2.0, 2.0) + muEffective));
+                        / (StrictMath.pow(n + 2.0, 2.0) + muEffective));
         double damping = 1.0 + 2.0 * Math.max(0.0,
-                Math.sqrt((muEffective - 1.0) / (n + 1.0)) - 1.0) + cs;
-        double chiN = Math.sqrt(n) * (1.0 - 1.0 / (4.0 * n) + 1.0 / (21.0 * n * n));
+                StrictMath.sqrt((muEffective - 1.0) / (n + 1.0)) - 1.0) + cs;
+        double chiN = StrictMath.sqrt(n)
+                * (1.0 - 1.0 / (4.0 * n) + 1.0 / (21.0 * n * n));
 
-        double[] mean = Arrays.copyOf(seed, n);
+        double[] mean = seed.copyWeights();
         CommonFunctions.normalizePolicyVector(mean);
         double[][] covariance = copyMatrix(initialCovariance);
         double[] pathSigma = new double[n];
         double[] pathCovariance = new double[n];
-        double sigma = initialSigma;
-        float bestScore = Float.NEGATIVE_INFINITY;
+        double sigma = config.initialSigma();
+        PredictedPolicySummary best = null;
         int stagnant = 0;
 
-        for (int generation = 0; generation < generations; generation++) {
+        for (int generation = 0; generation < config.generations(); generation++) {
             EigenSystem eigen = decomposeAndStabilize(covariance);
             PopulationMember[] population = new PopulationMember[lambda];
-            float[] features = new float[lambda * n];
-            float[] scores = new float[lambda];
-
+            ArrayList<PolicyVector> policies = new ArrayList<>(lambda);
             for (int row = 0; row < lambda; row++) {
                 double[] z = new double[n];
                 for (int i = 0; i < n; i++) {
@@ -109,21 +105,29 @@ public final class CmaEsOptimizer {
                     vector[i] = mean[i] + sigma * step[i];
                 }
                 CommonFunctions.normalizePolicyVector(vector);
-                for (int i = 0; i < n; i++) {
-                    features[row * n + i] = (float) vector[i];
-                }
-                population[row] = new PopulationMember(vector);
+                PolicyVector policy = PolicyVector.of(vector);
+                policies.add(policy);
+                population[row] = new PopulationMember(policy);
             }
 
-            scorer.score(features, lambda, scores);
-            for (int row = 0; row < lambda; row++) {
-                population[row].score = scores[row];
-                output.add(new ScoredVector(population[row].vector, scores[row]));
+            List<PolicyVector> distinctPolicies = List.copyOf(policies.stream().collect(
+                    java.util.stream.Collectors.toMap(PolicyVector::id,
+                            java.util.function.Function.identity(), (first, ignored) -> first,
+                            LinkedHashMap::new)).values());
+            Map<PolicyId, PredictedPolicySummary> summaries = predictionMap(
+                    predictor.predict(distinctPolicies), distinctPolicies);
+            for (PopulationMember member : population) {
+                member.prediction = summaries.get(member.policy.id());
+                output.add(new PredictedCandidate(member.policy, member.prediction,
+                        CandidateOrigin.CMA_ES));
             }
-            Arrays.sort(population, Comparator.comparingDouble(PopulationMember::score).reversed());
+            Arrays.sort(population, Comparator.comparing(PopulationMember::prediction,
+                    PredictedPolicyComparator.BEST_FIRST));
 
-            if (population[0].score > bestScore + 1.0e-6f) {
-                bestScore = population[0].score;
+            if (best == null
+                    || PredictedPolicyComparator.BEST_FIRST.compare(population[0].prediction,
+                            best) < 0) {
+                best = population[0].prediction;
                 stagnant = 0;
             } else {
                 stagnant++;
@@ -133,7 +137,7 @@ public final class CmaEsOptimizer {
             mean = new double[n];
             for (int parent = 0; parent < mu; parent++) {
                 for (int i = 0; i < n; i++) {
-                    mean[i] += weights[parent] * population[parent].vector[i];
+                    mean[i] += weights[parent] * population[parent].policy.weight(i);
                 }
             }
             CommonFunctions.normalizePolicyVector(mean);
@@ -143,15 +147,16 @@ public final class CmaEsOptimizer {
                 meanStep[i] = (mean[i] - oldMean[i]) / sigma;
             }
             double[] whitened = eigen.inverseSqrtMultiply(meanStep);
-            double pathSigmaScale = Math.sqrt(cs * (2.0 - cs) * muEffective);
+            double pathSigmaScale = StrictMath.sqrt(cs * (2.0 - cs) * muEffective);
             for (int i = 0; i < n; i++) {
                 pathSigma[i] = (1.0 - cs) * pathSigma[i] + pathSigmaScale * whitened[i];
             }
 
             double normalizedPath = norm(pathSigma)
-                    / Math.sqrt(1.0 - Math.pow(1.0 - cs, 2.0 * (generation + 1.0)));
+                    / StrictMath.sqrt(1.0 - StrictMath.pow(1.0 - cs,
+                            2.0 * (generation + 1.0)));
             boolean hSigma = normalizedPath / chiN < 1.4 + 2.0 / (n + 1.0);
-            double pathCovarianceScale = Math.sqrt(cc * (2.0 - cc) * muEffective);
+            double pathCovarianceScale = StrictMath.sqrt(cc * (2.0 - cc) * muEffective);
             for (int i = 0; i < n; i++) {
                 pathCovariance[i] = (1.0 - cc) * pathCovariance[i]
                         + (hSigma ? pathCovarianceScale * meanStep[i] : 0.0);
@@ -169,7 +174,7 @@ public final class CmaEsOptimizer {
             for (int parent = 0; parent < mu; parent++) {
                 double[] parentStep = new double[n];
                 for (int i = 0; i < n; i++) {
-                    parentStep[i] = (population[parent].vector[i] - oldMean[i]) / sigma;
+                    parentStep[i] = (population[parent].policy.weight(i) - oldMean[i]) / sigma;
                 }
                 for (int i = 0; i < n; i++) {
                     for (int j = 0; j < n; j++) {
@@ -179,7 +184,7 @@ public final class CmaEsOptimizer {
                 }
             }
             covariance = stabilize(nextCovariance);
-            sigma *= Math.exp((cs / damping) * (norm(pathSigma) / chiN - 1.0));
+            sigma *= StrictMath.exp((cs / damping) * (norm(pathSigma) / chiN - 1.0));
             sigma = Math.max(0.005, Math.min(0.8, sigma));
 
             if (stagnant >= 4) {
@@ -192,17 +197,41 @@ public final class CmaEsOptimizer {
         }
     }
 
-    private static List<double[]> diverseSeeds(List<MeasuredPolicy> ranked, int requested) {
+    private static Map<PolicyId, PredictedPolicySummary> predictionMap(
+            List<PredictedPolicySummary> predictions, List<PolicyVector> policies) {
+        TreeMap<PolicyId, PredictedPolicySummary> result = new TreeMap<>();
+        for (PredictedPolicySummary prediction : predictions) {
+            if (result.put(prediction.policy().id(), prediction) != null) {
+                throw new IllegalArgumentException("Predictor returned duplicate policy");
+            }
+        }
+        for (PolicyVector policy : policies) {
+            PredictedPolicySummary prediction = result.get(policy.id());
+            if (prediction == null || !prediction.policy().bitwiseEquals(policy)) {
+                throw new IllegalArgumentException("Predictor did not return the requested curve");
+            }
+        }
+        if (result.size() != policies.stream().map(PolicyVector::id).distinct().count()) {
+            throw new IllegalArgumentException("Predictor returned an unexpected policy");
+        }
+        return result;
+    }
+
+    private static List<PolicyVector> diverseSeeds(List<RobustPolicySummary> ranked,
+            int requested) {
         int poolSize = Math.min(ranked.size(), Math.max(requested * 32, 64));
-        List<double[]> selected = new ArrayList<>(requested);
-        selected.add(Arrays.copyOf(ranked.get(0).vector(), DIMENSIONS));
+        ArrayList<PolicyVector> selected = new ArrayList<>(requested);
+        selected.add(ranked.getFirst().policy());
         while (selected.size() < requested && selected.size() < poolSize) {
-            double bestDistance = -1;
-            double[] best = null;
+            double bestDistance = -1.0;
+            PolicyVector best = null;
             for (int candidate = 1; candidate < poolSize; candidate++) {
-                double[] vector = ranked.get(candidate).vector();
+                PolicyVector vector = ranked.get(candidate).policy();
+                if (selected.stream().anyMatch(vector::bitwiseEquals)) {
+                    continue;
+                }
                 double minimum = Double.POSITIVE_INFINITY;
-                for (double[] chosen : selected) {
+                for (PolicyVector chosen : selected) {
                     minimum = Math.min(minimum, squaredDistance(vector, chosen));
                 }
                 if (minimum > bestDistance) {
@@ -213,32 +242,34 @@ public final class CmaEsOptimizer {
             if (best == null) {
                 break;
             }
-            selected.add(Arrays.copyOf(best, DIMENSIONS));
+            selected.add(best);
         }
-        return selected;
+        return List.copyOf(selected);
     }
 
-    private static double[][] initialCovariance(List<MeasuredPolicy> ranked) {
+    private static double[][] initialCovariance(List<RobustPolicySummary> ranked) {
         int count = Math.min(ranked.size(), Math.max(32, Math.min(512, ranked.size() / 5)));
+        double[][] vectors = new double[count][];
         double[] mean = new double[DIMENSIONS];
         for (int row = 0; row < count; row++) {
+            vectors[row] = ranked.get(row).policy().copyWeights();
             for (int i = 0; i < DIMENSIONS; i++) {
-                mean[i] += ranked.get(row).vector()[i] / count;
+                mean[i] += vectors[row][i] / count;
             }
         }
 
         double[][] covariance = new double[DIMENSIONS][DIMENSIONS];
-        for (int row = 0; row < count; row++) {
-            double[] vector = ranked.get(row).vector();
+        for (double[] vector : vectors) {
             for (int i = 0; i < DIMENSIONS; i++) {
                 double left = vector[i] - mean[i];
                 for (int j = 0; j < DIMENSIONS; j++) {
-                    covariance[i][j] += left * (vector[j] - mean[j]) / Math.max(1, count - 1);
+                    covariance[i][j] += left * (vector[j] - mean[j])
+                            / Math.max(1, count - 1);
                 }
             }
         }
 
-        double trace = 0;
+        double trace = 0.0;
         for (int i = 0; i < DIMENSIONS; i++) {
             trace += covariance[i][i];
         }
@@ -283,10 +314,10 @@ public final class CmaEsOptimizer {
         for (int iteration = 0; iteration < iterations; iteration++) {
             int p = 0;
             int q = 1;
-            double largest = 0;
+            double largest = 0.0;
             for (int i = 0; i < n; i++) {
                 for (int j = i + 1; j < n; j++) {
-                    double value = Math.abs(a[i][j]);
+                    double value = StrictMath.abs(a[i][j]);
                     if (value > largest) {
                         largest = value;
                         p = i;
@@ -298,9 +329,9 @@ public final class CmaEsOptimizer {
                 break;
             }
 
-            double angle = 0.5 * Math.atan2(2.0 * a[p][q], a[q][q] - a[p][p]);
-            double cosine = Math.cos(angle);
-            double sine = Math.sin(angle);
+            double angle = 0.5 * StrictMath.atan2(2.0 * a[p][q], a[q][q] - a[p][p]);
+            double cosine = StrictMath.cos(angle);
+            double sine = StrictMath.sin(angle);
             for (int i = 0; i < n; i++) {
                 if (i != p && i != q) {
                     double aip = a[i][p];
@@ -339,27 +370,18 @@ public final class CmaEsOptimizer {
         }
     }
 
-    private static double propertyDouble(String name, double defaultValue, double minimum,
-            double maximum) {
-        double value = Double.parseDouble(System.getProperty(name, Double.toString(defaultValue)));
-        if (!Double.isFinite(value) || value < minimum || value > maximum) {
-            throw new IllegalArgumentException(name + " must be in [" + minimum + ", " + maximum + "]");
-        }
-        return value;
-    }
-
     private static double norm(double[] vector) {
-        double total = 0;
+        double total = 0.0;
         for (double value : vector) {
             total += value * value;
         }
-        return Math.sqrt(total);
+        return StrictMath.sqrt(total);
     }
 
-    private static double squaredDistance(double[] first, double[] second) {
-        double total = 0;
-        for (int i = 0; i < first.length; i++) {
-            double difference = first[i] - second[i];
+    private static double squaredDistance(PolicyVector first, PolicyVector second) {
+        double total = 0.0;
+        for (int i = 0; i < DIMENSIONS; i++) {
+            double difference = first.weight(i) - second.weight(i);
             total += difference * difference;
         }
         return total;
@@ -382,15 +404,15 @@ public final class CmaEsOptimizer {
     }
 
     private static final class PopulationMember {
-        private final double[] vector;
-        private float score;
+        private final PolicyVector policy;
+        private PredictedPolicySummary prediction;
 
-        private PopulationMember(double[] vector) {
-            this.vector = vector;
+        private PopulationMember(PolicyVector policy) {
+            this.policy = policy;
         }
 
-        private float score() {
-            return this.score;
+        private PredictedPolicySummary prediction() {
+            return prediction;
         }
     }
 
@@ -406,7 +428,8 @@ public final class CmaEsOptimizer {
         private double[] sqrtMultiply(double[] input) {
             double[] output = new double[input.length];
             for (int eigen = 0; eigen < values.length; eigen++) {
-                double scaled = Math.sqrt(Math.max(values[eigen], 1.0e-12)) * input[eigen];
+                double scaled = StrictMath.sqrt(Math.max(values[eigen], 1.0e-12))
+                        * input[eigen];
                 for (int row = 0; row < output.length; row++) {
                     output[row] += vectors[row][eigen] * scaled;
                 }
@@ -417,11 +440,12 @@ public final class CmaEsOptimizer {
         private double[] inverseSqrtMultiply(double[] input) {
             double[] projected = new double[input.length];
             for (int eigen = 0; eigen < values.length; eigen++) {
-                double dot = 0;
+                double dot = 0.0;
                 for (int row = 0; row < input.length; row++) {
                     dot += vectors[row][eigen] * input[row];
                 }
-                projected[eigen] = dot / Math.sqrt(Math.max(values[eigen], 1.0e-12));
+                projected[eigen] = dot
+                        / StrictMath.sqrt(Math.max(values[eigen], 1.0e-12));
             }
             double[] output = new double[input.length];
             for (int eigen = 0; eigen < values.length; eigen++) {
@@ -435,7 +459,7 @@ public final class CmaEsOptimizer {
         private double minimumPositive() {
             double minimum = Double.POSITIVE_INFINITY;
             for (double value : values) {
-                if (value > 0) {
+                if (value > 0.0) {
                     minimum = Math.min(minimum, value);
                 }
             }
@@ -448,7 +472,8 @@ public final class CmaEsOptimizer {
             for (int eigen = 0; eigen < n; eigen++) {
                 for (int i = 0; i < n; i++) {
                     for (int j = 0; j < n; j++) {
-                        result[i][j] += vectors[i][eigen] * values[eigen] * vectors[j][eigen];
+                        result[i][j] += vectors[i][eigen] * values[eigen]
+                                * vectors[j][eigen];
                     }
                 }
             }
