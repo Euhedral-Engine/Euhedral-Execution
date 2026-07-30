@@ -55,13 +55,13 @@ public final class ClosedLoopRunner {
                 if (corpusFiles.isEmpty()) {
                     if (listRegularFiles(rawBenchmarkDirectory).isEmpty()) {
                         throw new IllegalStateException(
-                                "Completed iteration is missing both corpus and raw benchmark data: "
+                                "Completed iteration is missing both corpus and raw benchmark metadata: "
                                         + iterationDirectory);
                     }
                     promoteBenchmarks(rawBenchmarkDirectory, corpus, iteration);
                 }
                 publishLatest(config.workspace(), model,
-                        iterationDirectory.resolve("merge/training-data.txt"));
+                        iterationDirectory.resolve("merge/training-metadata.txt"));
                 LOGGER.info("Iteration {} is already complete; resuming from its model", iteration);
                 previousModel = model;
                 continue;
@@ -72,7 +72,7 @@ public final class ClosedLoopRunner {
             writeState(iterationDirectory, iteration, "MERGING", null);
 
             Path mergedData = DataMerger.mergeQuantiles(corpus,
-                    iterationDirectory.resolve("merge"), "training-data.txt");
+                    iterationDirectory.resolve("merge"), "training-metadata.txt");
             checkStop(config);
 
             writeState(iterationDirectory, iteration, "TRAINING", mergedData);
@@ -126,7 +126,7 @@ public final class ClosedLoopRunner {
         deleteRecursively(latestModel);
         copyRecursively(model, latestModel);
         if (Files.isRegularFile(mergedData)) {
-            Files.copy(mergedData, workspace.resolve("latest-training-data.txt"),
+            Files.copy(mergedData, workspace.resolve("latest-training-metadata.txt"),
                     StandardCopyOption.REPLACE_EXISTING);
         }
     }
@@ -185,7 +185,7 @@ public final class ClosedLoopRunner {
         List<Path> seeds = listRegularFiles(seedDirectory);
         if (seeds.isEmpty()) {
             throw new IllegalArgumentException(
-                    "No seed benchmark data found under " + seedDirectory.toAbsolutePath());
+                    "No seed benchmark metadata found under " + seedDirectory.toAbsolutePath());
         }
 
         for (int index = 0; index < seeds.size(); index++) {

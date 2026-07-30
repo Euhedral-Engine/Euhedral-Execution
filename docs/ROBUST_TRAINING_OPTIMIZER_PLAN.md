@@ -262,21 +262,39 @@ A failed packaging step must leave the original training outputs untouched.
 
 ## Implementation order and prompt sequence
 
+This plan follows the reusable [staged agent workflow](AGENT_WORKFLOW.md). It selects an exact model
+and reasoning effort for every prompt while using the capability appropriate to that stage:
+
+| Stage | Selected model | Reasoning effort |
+| --- | --- | --- |
+| Complex blueprint | `gpt-5.6-sol` | `max` or `high`, as labeled |
+| Bounded blueprint | `gpt-5.6-sol` | `medium` |
+| Implementation | `gpt-5.5` | `low` |
+| Implementation verification | `gpt-5.5` | `medium` |
+| Blueprint-conformance audit | `gpt-5.6-terra` | `high` |
+
+The model names are this plan's current selections, not permanent workflow requirements. Planning
+and blueprint prompts may make design decisions. Implementation and verification may only execute
+settled decisions. Conformance audits report drift without reopening the architecture.
+
 Run the phases in order. Each phase is deliberately split into:
 
-1. a high-intelligence **reasoning-mode prompt** that investigates, makes the difficult decisions, and
-   writes a self-contained implementation blueprint; then
-2. a **LIGHT coding-mode prompt** that implements the settled blueprint without reopening architectural
-   or statistical choices.
+1. a `gpt-5.6-sol` **blueprint prompt** at the stated reasoning effort that investigates, makes the difficult decisions, and
+   writes a self-contained implementation blueprint;
+2. a `gpt-5.5` **implementation prompt** at `low` effort that translates the settled blueprint;
+3. a `gpt-5.5` **implementation-verification prompt** at `medium` effort that executes tests and
+   checks acceptance criteria without redesign; and
+4. a `gpt-5.6-terra` **blueprint-conformance audit** at `high` effort that checks the blueprint,
+   implementation, and completion record and writes a phase audit report.
 
-The reasoning prompts are ordered from most to least demanding: `MAX`, then `HIGH`, then
-`MEDIUM`. The implementation prompts are all `LIGHT`. This front-loads context gathering and
+The blueprint prompts are ordered from most to least demanding: `max`, then `high`, then
+`medium`. This front-loads context gathering and
 judgment so later agents do not need to reconstruct the system from the full conversation or repeat
 broad repository analysis.
 
 ### Blueprint handoff contract
 
-Every reasoning-mode prompt must create or update a phase blueprint under
+Every blueprint prompt must create or update a phase blueprint under
 `docs/robust-training-optimizer/blueprints/`. A blueprint is an implementation artifact, not a loose
 essay. It must contain:
 
@@ -291,24 +309,32 @@ essay. It must contain:
 - validation commands;
 - risks or unresolved blockers that genuinely require another reasoning pass.
 
-A reasoning pass must inspect enough current code to make the blueprint executable, but must not
+A blueprint pass must inspect enough current code to make the blueprint executable, but must not
 implement production code. It may add or edit only its blueprint and closely related planning
 documentation. It should reference prior blueprints instead of repeating their full analysis, and
 must keep stable decisions in the earliest applicable blueprint.
 
-Every LIGHT coding pass must read `AGENTS.md`, this plan, its phase blueprint, and the completion
+Every `gpt-5.5` / `low` implementation pass must read `AGENTS.md`, this plan, its phase blueprint, and the completion
 notes from earlier phases. It should then implement only the checklist, run the specified tests, and
 append a concise completion record to the blueprint containing changed files, commands run, results,
 and deviations. If implementation reveals a decision that the blueprint did not settle, stop and
-record the question; do not invent a new architecture in LIGHT mode.
+record the question; do not invent a new architecture in implementation mode.
 
-Commit and push after each completed prompt so the next prompt can rely on the branch as its complete
-context. Use the existing feature branch for the sequence. Temporary workflows remain permitted
-under the restrictions at the end of this document.
+Every implementation-verification pass must rerun the blueprint's validation commands, check each
+acceptance criterion, fix only defects whose resolution is already determined by the blueprint, and
+append its evidence to the completion record. Every conformance-audit pass must write
+`docs/robust-training-optimizer/audits/<PHASE>-<FEATURE>-conformance.md`, classify requirements as
+satisfied, deviated, unverified, or ambiguous, and avoid architectural suggestions unless the
+implementation violates the approved blueprint.
+
+Start each prompt on a dedicated `agent/...` branch from the completed previous prompt's branch.
+Commit and push after each completed prompt so the next prompt can rely on that branch as its
+complete context. Temporary workflows remain permitted under the restrictions at the end of this
+document.
 
 ### Phase 1 - foundational data, calibration, and robust ranking
 
-#### Prompt 1A - REASONING MODE - MAX
+#### Prompt 1A - BLUEPRINT - gpt-5.6-sol / max
 
 > Read AGENTS.md, docs/ML_CLOSED_LOOP_ARCHITECTURE.md, this plan, and all current trainer, merger,
 > ranking, serialization, and related test code. Do not implement production code. Write
@@ -321,7 +347,7 @@ under the restrictions at the end of this document.
 > Reconcile every choice with current code so Prompt 1B can implement without broad rediscovery.
 > Commit and push the blueprint only.
 
-#### Prompt 1B - CODING MODE - LIGHT
+#### Prompt 1B - IMPLEMENTATION - gpt-5.5 / low
 
 > Read AGENTS.md, this plan, and
 > `docs/robust-training-optimizer/blueprints/01-data-calibration-ranking.md`. Implement that
@@ -332,9 +358,26 @@ under the restrictions at the end of this document.
 > stop and record it in the blueprint instead of redesigning. Append completion notes, commit, and
 > push.
 
+#### Prompt 1C - IMPLEMENTATION VERIFICATION - gpt-5.5 / medium
+
+> Read docs/AGENT_WORKFLOW.md, AGENTS.md, this plan, the Phase 1 blueprint, and its completion notes.
+> Execute every Phase 1 validation command and check every acceptance criterion. Fix only defects
+> whose resolution is already settled by the blueprint; do not redesign data identity, calibration,
+> aggregation, or ranking. Append verification commands, results, skipped checks, and environmental
+> limits to the Phase 1 completion record. Commit and push the verified corrections.
+
+#### Prompt 1D - BLUEPRINT CONFORMANCE AUDIT - gpt-5.6-terra / high
+
+> Read the approved Phase 1 blueprint, its implementation, completion notes, and verification
+> record. Verify every blueprint requirement, identify deviations, undocumented assumptions,
+> ambiguous or missing acceptance criteria, and write
+> `docs/robust-training-optimizer/audits/01-data-calibration-ranking-conformance.md`. Do not propose
+> architectural improvements unless the implementation violates the blueprint. If it does, report
+> the violation and stop. Commit and push the audit report only.
+
 ### Phase 2 - scenario-conditioned learning
 
-#### Prompt 2A - REASONING MODE - MAX
+#### Prompt 2A - BLUEPRINT - gpt-5.6-sol / max
 
 > Read the Phase 1 blueprint and completion notes, then inspect the current ordinal dataset,
 > predictor, training/evaluation split, inference, and model serialization code. Do not implement
@@ -344,10 +387,10 @@ under the restrictions at the end of this document.
 > grouped-by-policy validation, leave-one-source-scenario-out evaluation, model metadata/versioning,
 > ablation switches, deterministic seeds, and compatibility with Phase 1 records. Specify exact
 > APIs, tensor/table shapes, file edits, tests, and acceptance thresholds. Make the handoff sufficient
-> for LIGHT implementation without rereading unrelated trainer code. Commit and push the blueprint
+> for `low`-effort implementation without rereading unrelated trainer code. Commit and push the blueprint
 > only.
 
-#### Prompt 2B - CODING MODE - LIGHT
+#### Prompt 2B - IMPLEMENTATION - gpt-5.5 / low
 
 > Read AGENTS.md, this plan, both completed phase blueprints, and especially
 > `02-scenario-conditioned-learning.md`. Implement only its checklist: scenario-conditioned ordinal
@@ -356,9 +399,26 @@ under the restrictions at the end of this document.
 > that source context affects predictions and that policy rows cannot leak across splits. Record any
 > blocker rather than making a new modeling choice. Append completion notes, commit, and push.
 
+#### Prompt 2C - IMPLEMENTATION VERIFICATION - gpt-5.5 / medium
+
+> Read docs/AGENT_WORKFLOW.md, AGENTS.md, this plan, both completed blueprints, and the Phase 2 completion
+> notes. Execute every Phase 2 validation command, including the opt-in DJL integration smoke when
+> its environment is available, and check every acceptance criterion. Fix only implementation
+> defects already settled by the blueprint. Append exact evidence and environmental limitations to
+> the completion record. Commit and push the verified corrections.
+
+#### Prompt 2D - BLUEPRINT CONFORMANCE AUDIT - gpt-5.6-terra / high
+
+> Read the approved Phase 2 blueprint, its implementation, completion notes, and verification
+> record. Verify every blueprint requirement, identify deviations, undocumented assumptions,
+> ambiguous or missing acceptance criteria, and write
+> `docs/robust-training-optimizer/audits/02-scenario-conditioned-learning-conformance.md`. Do not
+> propose architectural improvements unless the implementation violates the blueprint. If it does,
+> report the violation and stop. Commit and push the audit report only.
+
 ### Phase 3 - optimizer and closed-loop scheduling
 
-#### Prompt 3A - REASONING MODE - HIGH
+#### Prompt 3A - BLUEPRINT - gpt-5.6-sol / high
 
 > Read the Phase 1 and 2 blueprints and completion notes, then inspect SequenceFinder,
 > CmaEsOptimizer, ScoreBandSampler, ClosedLoopRunner, checkpointing, and source-configuration
@@ -370,7 +430,7 @@ under the restrictions at the end of this document.
 > incomplete-policy isolation. Include exact APIs, state transitions, file edits, fixtures, and
 > acceptance tests. Commit and push the blueprint only.
 
-#### Prompt 3B - CODING MODE - LIGHT
+#### Prompt 3B - IMPLEMENTATION - gpt-5.5 / low
 
 > Read AGENTS.md, this plan, prior completion notes, and
 > `docs/robust-training-optimizer/blueprints/03-optimizer-scheduling.md`. Implement its settled
@@ -380,9 +440,25 @@ under the restrictions at the end of this document.
 > deduplication, and deterministic-selection tests from the blueprint. Append completion notes,
 > commit, and push.
 
+#### Prompt 3C - IMPLEMENTATION VERIFICATION - gpt-5.5 / medium
+
+> Read docs/AGENT_WORKFLOW.md, AGENTS.md, this plan, the completed Phase 3 blueprint, and its completion
+> notes. Execute its validation commands and check restart, rotation, budget, carry-forward,
+> deduplication, checkpoint, and deterministic-selection acceptance criteria. Fix only defects with
+> blueprint-settled resolutions. Append evidence and limitations, commit, and push.
+
+#### Prompt 3D - BLUEPRINT CONFORMANCE AUDIT - gpt-5.6-terra / high
+
+> Read the approved Phase 3 blueprint, implementation, completion notes, and verification record.
+> Verify every requirement and write
+> `docs/robust-training-optimizer/audits/03-optimizer-scheduling-conformance.md`, identifying all
+> deviations, undocumented assumptions, and ambiguous or missing acceptance criteria. Do not
+> propose architectural improvements unless implementation violates the blueprint. Commit and push
+> the audit report only.
+
 ### Phase 4 - final result packaging
 
-#### Prompt 4A - REASONING MODE - HIGH
+#### Prompt 4A - BLUEPRINT - gpt-5.6-sol / high
 
 > Read all completed blueprints and outputs, then inspect current workspace paths, artifact writers,
 > checkpoint/model output, shutdown and partial-failure behavior, and user-facing reports. Do not
@@ -395,7 +471,7 @@ under the restrictions at the end of this document.
 > acceptance tests. Make vector-only, vectors-with-measurements, machine-readable, and human-readable
 > files unmistakable without opening them. Commit and push the blueprint only.
 
-#### Prompt 4B - CODING MODE - LIGHT
+#### Prompt 4B - IMPLEMENTATION - gpt-5.5 / low
 
 > Read AGENTS.md, this plan, prior completion notes, and
 > `docs/robust-training-optimizer/blueprints/04-final-packaging.md`. Implement the exact atomic
@@ -404,9 +480,25 @@ under the restrictions at the end of this document.
 > publication. Run every naming, schema, checksum, determinism, atomicity, and failure-cleanup test
 > specified by the blueprint. Append completion notes, commit, and push.
 
+#### Prompt 4C - IMPLEMENTATION VERIFICATION - gpt-5.5 / medium
+
+> Read docs/AGENT_WORKFLOW.md, AGENTS.md, this plan, the Phase 4 blueprint, and completion notes. Execute
+> every packaging validation command and check schema, naming, checksum, determinism, atomicity,
+> collision, partial-run, and cleanup acceptance criteria. Fix only blueprint-settled defects.
+> Append evidence and environmental limitations, commit, and push.
+
+#### Prompt 4D - BLUEPRINT CONFORMANCE AUDIT - gpt-5.6-terra / high
+
+> Read the approved Phase 4 blueprint, implementation, completion notes, and verification record.
+> Verify every requirement and write
+> `docs/robust-training-optimizer/audits/04-final-packaging-conformance.md`. Identify deviations,
+> undocumented assumptions, and ambiguous or missing acceptance criteria. Do not propose
+> architectural improvements unless implementation violates the blueprint. Commit and push the
+> audit report only.
+
 ### Phase 5 - temporary current-workspace importer and user interface
 
-#### Prompt 5A - REASONING MODE - MEDIUM
+#### Prompt 5A - BLUEPRINT - gpt-5.6-sol / medium
 
 > Read prior blueprints and inspect only the current pre-upgrade workspace structure plus current
 > CLI/configuration/documentation code. Do not implement production code. Write
@@ -419,7 +511,7 @@ under the restrictions at the end of this document.
 > validation rules, CLI help, and documentation changes for anchors, ranking, budgets, importing,
 > resuming, and locating packages. Commit and push the blueprint only.
 
-#### Prompt 5B - CODING MODE - LIGHT
+#### Prompt 5B - IMPLEMENTATION - gpt-5.5 / low
 
 > Read AGENTS.md, this plan, prior completion notes, and
 > `docs/robust-training-optimizer/blueprints/05-temporary-importer-cli.md`. Implement the isolated
@@ -428,9 +520,25 @@ under the restrictions at the end of this document.
 > new immutable records. Do not import old models or checkpoints. Run focused acceptance, rejection,
 > disabled-path, and deletion-boundary tests. Append completion notes, commit, and push.
 
+#### Prompt 5C - IMPLEMENTATION VERIFICATION - gpt-5.5 / medium
+
+> Read docs/AGENT_WORKFLOW.md, AGENTS.md, this plan, the Phase 5 blueprint, and completion notes. Execute
+> every importer, CLI, configuration, documentation, rejection, disabled-path, and deletion-boundary
+> validation. Fix only blueprint-settled implementation defects. Append evidence and environmental
+> limitations, commit, and push.
+
+#### Prompt 5D - BLUEPRINT CONFORMANCE AUDIT - gpt-5.6-terra / high
+
+> Read the approved Phase 5 blueprint, implementation, completion notes, and verification record.
+> Verify every requirement and write
+> `docs/robust-training-optimizer/audits/05-temporary-importer-cli-conformance.md`. Identify
+> deviations, undocumented assumptions, and ambiguous or missing acceptance criteria. Do not
+> propose architectural improvements unless implementation violates the blueprint. Commit and push
+> the audit report only.
+
 ### Phase 6 - end-to-end verification and audit
 
-#### Prompt 6A - REASONING MODE - MEDIUM
+#### Prompt 6A - BLUEPRINT - gpt-5.6-sol / medium
 
 > Read every blueprint and completion record. Inspect the resulting integrated test surface and
 > generated package, but do not change production code. Write
@@ -441,7 +549,7 @@ under the restrictions at the end of this document.
 > environment limitations. Include a targeted search list for stale pooled-policy and P99
 > assumptions. Commit and push the audit blueprint only.
 
-#### Prompt 6B - CODING MODE - LIGHT
+#### Prompt 6B - IMPLEMENTATION - gpt-5.5 / low
 
 > Read AGENTS.md, this plan, and
 > `docs/robust-training-optimizer/blueprints/06-verification-audit.md`. Execute the audit exactly.
@@ -450,9 +558,24 @@ under the restrictions at the end of this document.
 > blueprint. Do not make new statistical or architectural decisions. Record results and any
 > environmental limitations in the audit blueprint. Commit and push all validated corrections.
 
+#### Prompt 6C - IMPLEMENTATION VERIFICATION - gpt-5.5 / medium
+
+> Read docs/AGENT_WORKFLOW.md, AGENTS.md, this plan, the Phase 6 executable audit blueprint, and its
+> recorded results. Repeat its focused and end-to-end validation sequence, inspect the package and
+> reports, and check every audit acceptance criterion. Fix only defects already settled by a prior
+> blueprint. Append exact evidence and limitations, commit, and push.
+
+#### Prompt 6D - BLUEPRINT CONFORMANCE AUDIT - gpt-5.6-terra / high
+
+> Read the approved Phase 6 blueprint, test harness, recorded results, and verification record.
+> Verify that the executable audit was performed exactly as specified and write
+> `docs/robust-training-optimizer/audits/06-verification-audit-conformance.md`. Identify deviations,
+> undocumented assumptions, and ambiguous or missing acceptance criteria without proposing new
+> architecture. Commit and push the audit report only.
+
 ### Phase 7 - cleanup and handoff
 
-#### Prompt 7A - REASONING MODE - MEDIUM
+#### Prompt 7A - BLUEPRINT - gpt-5.6-sol / medium
 
 > Read all blueprints and completion records, then review the complete branch diff. Do not implement
 > cleanup yet. Write
@@ -463,13 +586,29 @@ under the restrictions at the end of this document.
 > list final validation commands, and define the final handoff summary and result-package evidence.
 > Commit and push the blueprint only.
 
-#### Prompt 7B - CODING MODE - LIGHT
+#### Prompt 7B - IMPLEMENTATION - gpt-5.5 / low
 
 > Read AGENTS.md, this plan, and
 > `docs/robust-training-optimizer/blueprints/07-cleanup-handoff.md`. Perform only its enumerated
 > cleanup. Remove temporary workflows, verify the importer can be deleted using only the documented
 > boundary, run formatting and the final validation sequence, inspect the final diff, and record
 > exact commands and results. Do not broaden scope. Append final completion notes, commit, and push.
+
+#### Prompt 7C - IMPLEMENTATION VERIFICATION - gpt-5.5 / medium
+
+> Read docs/AGENT_WORKFLOW.md, AGENTS.md, this plan, the Phase 7 blueprint, and final completion notes.
+> Execute the final validation sequence, inspect the full diff and package evidence, and confirm
+> every enumerated cleanup without broadening scope. Fix only blueprint-settled defects. Append
+> exact evidence and limitations, commit, and push.
+
+#### Prompt 7D - BLUEPRINT CONFORMANCE AUDIT - gpt-5.6-terra / high
+
+> Read every approved blueprint, completion note, conformance report, the final implementation, and
+> the Phase 7 verification record. Verify final conformance and write
+> `docs/robust-training-optimizer/audits/07-cleanup-handoff-conformance.md`. Identify deviations,
+> undocumented assumptions, and ambiguous or missing acceptance criteria. Do not propose
+> architectural improvements unless the implementation violates an approved blueprint. Commit and
+> push the final audit report only.
 
 ## Test strategy
 

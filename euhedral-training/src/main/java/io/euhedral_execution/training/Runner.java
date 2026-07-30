@@ -15,7 +15,7 @@ public class Runner {
         }
 
         switch (args[0]) {
-            case "merge-data", "merge-quantiles" -> DataMerger.mergeQuentiles();
+            case "merge-metadata", "merge-quantiles" -> DataMerger.mergeQuentiles();
             case "merge-vectors" -> DataMerger.mergeVectors();
             case "training-info" -> PolicyOrdinalNetwork.printEnvironment();
             case "train-vector-finder" -> {
