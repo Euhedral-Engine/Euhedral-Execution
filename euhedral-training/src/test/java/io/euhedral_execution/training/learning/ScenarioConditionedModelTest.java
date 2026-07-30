@@ -189,22 +189,28 @@ class ScenarioConditionedModelTest {
     }
 
     private static final class PolicyMember implements OrdinalMember {
+        @Override
         public int featureWidth() { return 28; }
+        @Override
         public void predictLogits(float[] features, int rows, float[] out) {
             for (int row = 0; row < rows; row++) {
                 Arrays.fill(out, row * 9, row * 9 + 9, features[row * 28]);
             }
         }
+        @Override
         public void close() {}
     }
 
     private static final class OffsetMember implements OrdinalMember {
+        @Override
         public int featureWidth() { return 29; }
+        @Override
         public void predictLogits(float[] features, int rows, float[] out) {
             for (int row = 0; row < rows; row++) {
                 Arrays.fill(out, row * 9, row * 9 + 9, features[row * 29 + 28] + 0.5f);
             }
         }
+        @Override
         public void close() {}
     }
 
