@@ -14,7 +14,7 @@
   <version>0.0.7-SNAPSHOT</version>
   <packaging>pom</packaging>
 
-  <name>euhedral-execution</name>
+  <name>Euhedral Execution</name>
   <description>Sources for the Euhedral Execution project</description>
 
   <properties>

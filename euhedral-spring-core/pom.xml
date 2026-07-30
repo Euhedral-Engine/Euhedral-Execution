@@ -9,6 +9,7 @@
     <version>0.0.7-SNAPSHOT</version>
   </parent>
 
+  <name>Euhedral Spring Core</name>
   <artifactId>euhedral-spring-core</artifactId>
 
   <properties>
