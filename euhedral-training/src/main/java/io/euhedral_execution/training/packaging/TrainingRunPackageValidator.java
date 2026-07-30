@@ -110,7 +110,7 @@ public final class TrainingRunPackageValidator {
         }
         validateStatus(manifest, checkpoint);
         validateLifecycleArtifacts(root, manifest, checkpoint);
-        validateRawData(root, manifest, checkpoint);
+        validateRawData(root, checkpoint);
         validateReferences(root, checkpoint);
         validateMerge(root, checkpoint);
         validateSchedule(root, checkpoint, inputs);
@@ -209,8 +209,7 @@ public final class TrainingRunPackageValidator {
         }
     }
 
-    private static void validateRawData(Path root, TrainingRunManifest manifest,
-            ClosedLoopCheckpoint checkpoint) throws IOException {
+    private static void validateRawData(Path root, ClosedLoopCheckpoint checkpoint) throws IOException {
         List<List<String>> indexRows = CanonicalCsv.read(
                 root.resolve("raw-data/index.csv"));
         if (indexRows.size() != checkpoint.evidence().size() + 1) {
