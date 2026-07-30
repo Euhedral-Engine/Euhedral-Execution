@@ -236,6 +236,16 @@ evidence and use the accepted glibc 2.17 plus musl fallback. It must not silentl
 - Missing optional sensors degrade capability; malformed required topology or ABI input fails with
   an actionable diagnostic.
 
+Zig 0.16.0 is pinned, and Zig's build-system API (`build.zig`, `std.Build`, module/step wiring) has
+changed materially across recent releases. Whichever model executes P1 (blueprint or
+implementation), it should not rely on memorized Zig syntax from training data — training data for
+any current model is likely to contain a mix of pre-0.16 API shapes that will silently fail to
+compile or, worse, compile with different semantics than intended. Before writing or reviewing any
+`build.zig` manifest logic, the agent should pull current Zig 0.16 documentation/source (or run
+`zig build --help` / inspect the pinned toolchain directly in the environment) to confirm the
+actual API surface, rather than trust pattern-matched recall. This applies equally to the
+OpenAI and Anthropic options above — it's a model-agnostic risk, not one the vendor choice fixes.
+
 ## Current-state findings
 
 The audits found that only Linux glibc x86-64/AArch64 is effectively usable today. Linux musl
