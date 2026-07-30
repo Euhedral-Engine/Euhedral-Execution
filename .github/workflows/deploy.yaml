@@ -77,9 +77,6 @@ jobs:
           echo "Final JNI Include Directory Layout:"
           ls -R "$INCLUDE_DIR"
 
-      - name: Resolve Dependencies
-        run: |
-          mise exec -- mvn dependency:go-offline -B --file pom.xml
 
       - name: Install GPG Private Key
         uses: crazy-max/ghaction-import-gpg@v6
@@ -114,10 +111,10 @@ jobs:
             echo "Version $TARGET_TAG is unique. Proceeding."
           fi
 
-      - name: Build and Verify
-        if: ${{ steps.check_version.outputs.is_snapshot == 'true' }}
+      - name: Resolve Dependencies
+        if: ${{ steps.check_version.outputs.is_snapshot == 'false' }}
         run: |
-          mise exec -- mvn -B verify --file pom.xml
+          mise exec -- mvn dependency:go-offline -B --file pom.xml
 
       - name: Build and Deploy to Apache Maven Central
         if: ${{ steps.check_version.outputs.is_snapshot == 'false' }}
@@ -130,6 +127,7 @@ jobs:
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
 
       - name: Configure Git
+        if: ${{ steps.check_version.outputs.is_snapshot == 'false' }}
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.GIT_SIGNING_KEY }}" > ~/.ssh/id_signing
