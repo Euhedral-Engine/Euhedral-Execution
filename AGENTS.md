@@ -143,25 +143,6 @@ over an unverified system Maven. If neither the pinned nor a compatible preinsta
 usable, report the exact limitation and use the CI workflow as the authoritative build recipe; do
 not change source or build configuration merely to accommodate the agent environment.
 
-## Active training optimizer implementation plan
-
-When a task implements robust cross-source training, optimizer/merger correlation, or end-of-run
-training artifact packaging, read and follow
-[`docs/ROBUST_TRAINING_OPTIMIZER_PLAN.md`](docs/ROBUST_TRAINING_OPTIMIZER_PLAN.md) before changing
-code. Its data identity, anchor calibration, hierarchical aggregation, robust comparator, coverage,
-packaging, temporary current-workspace data import, test, and prompt-order requirements are the
-working contract. Do not carry historical trained models or old checkpoints into the new format.
-Keep the current-workspace importer isolated and removable as specified by the plan.
-
-Implement that plan using the phase-branch format in
-[`docs/AGENT_WORKFLOW.md`](docs/AGENT_WORKFLOW.md). The user has authorized commits and pushes to
-the branch. Temporary GitHub Actions workflows are permitted only when needed to test an otherwise
-unavailable environment; keep them narrow and remove them before handoff unless the user explicitly
-asks to retain them.
-
-All reasoning tasks must consider memory semantics, memory pollution, and mathematical precision
-requirements. They must explicitly state them in their blueprints for subsequent phases.
-
 ## Runtime invariants
 
 ### Control plane ownership
