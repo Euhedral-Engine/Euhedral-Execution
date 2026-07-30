@@ -39,8 +39,6 @@ import io.euhedral_execution.training.scheduling.ScenarioRotation;
 import io.euhedral_execution.training.scheduling.data.IterationSchedule;
 import io.euhedral_execution.training.scheduling.data.OptimizationCorpusView;
 import io.euhedral_execution.training.scheduling.data.RotationGroup;
-import io.euhedral_execution.training.scheduling.data.ScheduledRun;
-import io.euhedral_execution.training.scheduling.enums.RunKind;
 import io.euhedral_execution.training.scheduling.io.BootstrapPolicyCsv;
 import io.euhedral_execution.training.scheduling.io.OptimizationCorpusReader;
 import io.euhedral_execution.training.scheduling.io.ScheduleCodec;
@@ -62,11 +60,6 @@ import java.util.TreeSet;
 import java.util.UUID;
 
 public final class ClosedLoopRunner {
-    public static final class StopRequested extends RuntimeException {
-        private StopRequested() {
-            super(null, null, false, false);
-        }
-    }
 
     static StopRequested stopSignal() {
         return new StopRequested();
@@ -112,7 +105,7 @@ public final class ClosedLoopRunner {
                 current = switch (current.checkpoint().stage()) {
                     case READY_TO_TRAIN -> train(config, services, current);
                     case MODEL_READY -> schedule(config, services, current);
-                    case SCHEDULE_READY -> transition(config, current,
+                    case SCHEDULE_READY -> transition(config,
                             copy(current.checkpoint(), CheckpointStage.BENCHMARKING));
                     case BENCHMARKING -> benchmark(config, services, current);
                     case READY_TO_MERGE -> merge(config, services, current);
@@ -258,12 +251,12 @@ public final class ClosedLoopRunner {
                     config.aggregationConfig()));
         }
         Path mergeDirectory = config.workspace().resolve("merges/merge-000000");
-        DataMerger.MergeArtifacts merge = Files.isDirectory(mergeDirectory)
-                ? artifacts(mergeDirectory)
-                : services.merge(new DataMerger.MergeRequest(
-                evidencePaths(config.workspace(), checkpoint.evidence()),
-                config.requiredScenarios(), plan, mergeDirectory, config.calibrationConfig(),
-                config.aggregationConfig()));
+        if (!Files.isDirectory(mergeDirectory)) {
+            services.merge(new DataMerger.MergeRequest(
+                    evidencePaths(config.workspace(), checkpoint.evidence()),
+                    config.requiredScenarios(), plan, mergeDirectory,
+                    config.calibrationConfig(), config.aggregationConfig()));
+        }
         ClosedLoopCheckpoint ready = new ClosedLoopCheckpoint(1, checkpoint.trainingRunId(),
                 checkpoint.revision() + 1, CheckpointStage.READY_TO_TRAIN, 1,
                 checkpoint.sobolCursor(), checkpoint.configSha256(),
@@ -416,7 +409,7 @@ public final class ClosedLoopRunner {
                 continue;
             }
             var run = schedule.runs().stream().filter(item ->
-                    item.benchmarkRunId().equals(pending.benchmarkRunId())).findFirst()
+                            item.benchmarkRunId().equals(pending.benchmarkRunId())).findFirst()
                     .orElseThrow();
             Path output = config.workspace().resolve(pending.evidenceRelativePath());
             BenchmarkRunContext context;
@@ -424,7 +417,7 @@ public final class ClosedLoopRunner {
                 context = Files.isRegularFile(output.resolve("COMPLETE"))
                         ? adopt(output, pending)
                         : services.benchmark(plan(config, schedule, run, output),
-                        services::stopRequested);
+                                services::stopRequested);
             } catch (StopRequested stop) {
                 return current;
             }
@@ -450,13 +443,13 @@ public final class ClosedLoopRunner {
         DataMerger.MergeArtifacts merge = Files.isDirectory(mergeDirectory)
                 ? artifacts(mergeDirectory)
                 : services.merge(new DataMerger.MergeRequest(
-                evidencePaths(config.workspace(), checkpoint.evidence()),
-                config.requiredScenarios(), calibration, mergeDirectory,
-                config.calibrationConfig(), config.aggregationConfig()));
+                        evidencePaths(config.workspace(), checkpoint.evidence()),
+                        config.requiredScenarios(), calibration, mergeDirectory,
+                        config.calibrationConfig(), config.aggregationConfig()));
         OptimizationCorpusView corpus = OptimizationCorpusReader.read(merge,
                 config.requiredScenarios());
         IterationSchedule schedule = ScheduleCodec.read(resolve(config.workspace(),
-                checkpoint.pendingSchedule().orElseThrow()), config.requiredScenarios(),
+                        checkpoint.pendingSchedule().orElseThrow()), config.requiredScenarios(),
                 config.trainingRunId(), config.schedulerSeed(), config.commitSha(),
                 config.dirtyWorkingTree(), config.benchmarkConfig());
         var carry = CarryForwardQueue.reconcile(checkpoint.carryForward(), corpus, schedule,
@@ -498,7 +491,7 @@ public final class ClosedLoopRunner {
     }
 
     private static LoadedCheckpoint transition(ClosedLoopConfig config,
-            LoadedCheckpoint previous, ClosedLoopCheckpoint next) throws IOException {
+            ClosedLoopCheckpoint next) throws IOException {
         return CheckpointSnapshotCodec.writeNext(config.workspace(), next);
     }
 
@@ -737,10 +730,15 @@ public final class ClosedLoopRunner {
         }
     }
 
-    /** ROBUST_OPTIMIZER_PHASE5_CONFIG transitional adapter. */
+    /**
+     * ROBUST_OPTIMIZER_PHASE5_CONFIG transitional adapter.
+     */
     public static ClosedLoopResult run() {
         throw new IllegalArgumentException(
                 "Phase 3 closed-loop requires a typed ClosedLoopConfig");
+    }
+
+    private ClosedLoopRunner() {
     }
 
     private enum ProductionServices implements ClosedLoopServices {
@@ -782,12 +780,17 @@ public final class ClosedLoopRunner {
         }
     }
 
-    private static final class InitializationFailure extends RuntimeException {
-        private InitializationFailure(Throwable cause) {
-            super(cause);
+    public static final class StopRequested extends RuntimeException {
+
+        private StopRequested() {
+            super(null, null, false, false);
         }
     }
 
-    private ClosedLoopRunner() {
+    private static final class InitializationFailure extends RuntimeException {
+
+        private InitializationFailure(Throwable cause) {
+            super(cause);
+        }
     }
 }
