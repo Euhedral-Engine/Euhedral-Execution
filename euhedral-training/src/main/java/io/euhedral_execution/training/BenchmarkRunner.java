@@ -345,7 +345,7 @@ public final class BenchmarkRunner {
         public void beginPolicy(ScheduledPolicy policy) {
             picker.setWeights(new double[28]);
             pauseAll();
-            lattice.resetForNextTrial(resetTimeout);
+            lattice.clear(resetTimeout);
             sinks.forEach(BenchmarkFrameSink::resetCounter);
             picker.setWeights(policy.policy().copyWeights());
             sinks.forEach(BenchmarkFrameSink::resume);
