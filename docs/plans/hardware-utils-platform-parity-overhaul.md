@@ -1248,8 +1248,9 @@ independently classified all 16 acceptance criteria as `satisfied`, reran the di
 compatibility suite with 17 tests passing, and confirmed the `PASS` compatibility report hash,
 source/resource non-contamination, and clean diff checks. No approved deviations or environmental
 limits remain. The developer authorized closeout on 2026-07-30; the audit child merge is
-`ed839216`, and closeout commit `03ff2060` tracks the audit report and removes the temporary status
-block. P1 root and parent blueprint branches inherit exactly `03ff2060`.
+`ed839216`, and the subsequent P0 closeout commit tracks the audit report and removes the temporary
+status block. P1 must branch from that completed root; its blueprint records the exact inherited
+commit.
 
 ### P1 - universal Zig build, JNI ABI, loader, and packaging
 
