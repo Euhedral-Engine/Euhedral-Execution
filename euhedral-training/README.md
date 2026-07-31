@@ -108,60 +108,219 @@ Repeated keys are allowed only for `scenario.required`, `run.initial_observation
 `calibration.reference_override`. A reference override is
 `<canonical-scenario>|<benchmark-run-id>`.
 
-| Lifecycle key | Default |
+### Config syntax and value formats
+
+| Rule | Requirement |
 | --- | --- |
-| `run.workspace`, `run.training_run_id`, `run.iterations`, `run.candidate_budget` | required |
-| `run.active_environment_id`, `run.commit_sha`, `run.dirty_working_tree` | required |
-| `scenario.required` | required, repeated |
-| `run.scenarios_per_iteration` | `2` |
-| `run.scheduler_seed_hex` | `6a09e667f3bcc909` |
-| `run.initial_sobol_cursor` | `131072` |
-| `run.resume` | `true` |
-| `run.stop_file` | `<workspace>/STOP` |
-| `run.bootstrap_policies` / `run.initial_calibration_plan` | exactly one required |
-| `run.initial_observation_bundle`, `calibration.reference_override` | repeated, empty |
+| Comments | A line is a comment when its first non-whitespace character is `#` |
+| Duplicate singleton keys | Rejected |
+| Escapes | Values may not contain NUL or backslash characters |
+| File encoding | Valid UTF-8 |
+| Line endings | LF only; final LF required; no CR and no BOM |
+| Line shape | One `key=value` pair per nonblank line |
+| Unknown keys | Rejected |
+| Whitespace | Keys and values are trimmed before validation |
 
-| Budget and generation key | Default |
+| Key | Expected type | Format / validation rule |
+| --- | --- | --- |
+| `aggregation.bootstrap_replicates` | decimal integer | Parsed from `-?[0-9]+`; leading `+` is not allowed |
+| `aggregation.bootstrap_seed_hex` | unsigned 64-bit seed | Exactly 16 lower-case hexadecimal digits; preserved as raw bits |
+| `aggregation.calibration_acceptance` | enum constant | Exact Java enum name, case-sensitive |
+| `aggregation.minimum_success_fraction` | finite decimal (`double`) | Java decimal syntax with optional sign and exponent; must parse to a finite value |
+| `aggregation.minimum_successful_repetitions` | decimal integer | Parsed from `-?[0-9]+`; leading `+` is not allowed |
+| `anchors.allow_imported_bootstrap` | boolean | Exactly `true` or `false` |
+| `anchors.fixed_fraction` | finite decimal (`double`) | Java decimal syntax with optional sign and exponent; must parse to a finite value |
+| `anchors.maximum_bootstrap_non_success_rate` | finite decimal (`double`) | Java decimal syntax with optional sign and exponent; must parse to a finite value |
+| `anchors.maximum_bootstrap_relative_iqr` | finite decimal (`double`) | Java decimal syntax with optional sign and exponent; must parse to a finite value |
+| `anchors.minimum_fixed_anchors` | decimal integer | Parsed from `-?[0-9]+`; leading `+` is not allowed |
+| `benchmark.expected_repetitions` | decimal integer | Parsed from `-?[0-9]+`; leading `+` is not allowed |
+| `benchmark.frames_per_source` | decimal integer | Parsed from `-?[0-9]+`; leading `+` is not allowed |
+| `benchmark.liveness_timeout_nanos` | decimal integer (`long`) | Parsed from `-?[0-9]+` as a signed 64-bit decimal |
+| `benchmark.ordered_frames` | boolean | Exactly `true` or `false` |
+| `benchmark.reset_timeout_nanos` | decimal integer (`long`) | Parsed from `-?[0-9]+` as a signed 64-bit decimal |
+| `benchmark.sample_duration_nanos` | decimal integer (`long`) | Parsed from `-?[0-9]+` as a signed 64-bit decimal |
+| `budget.carry_forward_weight` | decimal integer | Parsed from `-?[0-9]+`; leading `+` is not allowed |
+| `budget.disagreement_audit_weight` | decimal integer | Parsed from `-?[0-9]+`; leading `+` is not allowed |
+| `budget.exploration_weight` | decimal integer | Parsed from `-?[0-9]+`; leading `+` is not allowed |
+| `budget.leader_revalidation_weight` | decimal integer | Parsed from `-?[0-9]+`; leading `+` is not allowed |
+| `calibration.maximum_anchor_weight_share` | finite decimal (`double`) | Java decimal syntax with optional sign and exponent; must parse to a finite value |
+| `calibration.maximum_strong_residual` | finite decimal (`double`) | Java decimal syntax with optional sign and exponent; must parse to a finite value |
+| `calibration.maximum_weak_residual` | finite decimal (`double`) | Java decimal syntax with optional sign and exponent; must parse to a finite value |
+| `calibration.minimum_log_sigma` | finite decimal (`double`) | Java decimal syntax with optional sign and exponent; must parse to a finite value |
+| `calibration.minimum_strong_anchors` | decimal integer | Parsed from `-?[0-9]+`; leading `+` is not allowed |
+| `calibration.minimum_weak_anchors` | decimal integer | Parsed from `-?[0-9]+`; leading `+` is not allowed |
+| `calibration.reference_override` | scenario/run mapping | Must be `<canonical-scenario>|<benchmark-run-id>`, where the run ID matches `[a-z0-9][a-z0-9._-]{0,95}` |
+| `candidate.cma.enabled` | boolean | Exactly `true` or `false` |
+| `candidate.cma.generations` | decimal integer | Parsed from `-?[0-9]+`; leading `+` is not allowed |
+| `candidate.cma.initial_sigma` | finite decimal (`double`) | Java decimal syntax with optional sign and exponent; must parse to a finite value |
+| `candidate.cma.islands` | decimal integer | Parsed from `-?[0-9]+`; leading `+` is not allowed |
+| `candidate.cma.minimum_seed_policies` | decimal integer | Parsed from `-?[0-9]+`; leading `+` is not allowed |
+| `candidate.cma.population_size` | decimal integer | Parsed from `-?[0-9]+`; leading `+` is not allowed |
+| `candidate.cma_weight` | decimal integer | Parsed from `-?[0-9]+`; leading `+` is not allowed |
+| `candidate.direct_sobol_weight` | decimal integer | Parsed from `-?[0-9]+`; leading `+` is not allowed |
+| `candidate.maximum_prediction_rows` | decimal integer | Parsed from `-?[0-9]+`; leading `+` is not allowed |
+| `candidate.score_band_weight` | decimal integer | Parsed from `-?[0-9]+`; leading `+` is not allowed |
+| `candidate.score_band_weights` | comma-separated integer list | Comma-separated decimal integers with no empty elements, for example `1,1,1,1,2,2,3,5,8,16` |
+| `candidate.screen_rows` | decimal integer | Parsed from `-?[0-9]+`; leading `+` is not allowed |
+| `evaluation.maximum_context_mae_regression` | finite decimal (`double`) | Java decimal syntax with optional sign and exponent; must parse to a finite value |
+| `evaluation.maximum_context_spearman_regression` | finite decimal (`double`) | Java decimal syntax with optional sign and exponent; must parse to a finite value |
+| `evaluation.maximum_counts_spearman_regression` | finite decimal (`double`) | Java decimal syntax with optional sign and exponent; must parse to a finite value |
+| `evaluation.maximum_counts_worst_environment_mae_regression` | finite decimal (`double`) | Java decimal syntax with optional sign and exponent; must parse to a finite value |
+| `evaluation.maximum_grouped_macro_mae` | finite decimal (`double`) | Java decimal syntax with optional sign and exponent; must parse to a finite value |
+| `evaluation.maximum_loso_macro_mae` | finite decimal (`double`) | Java decimal syntax with optional sign and exponent; must parse to a finite value |
+| `evaluation.maximum_loso_worst_scenario_mae` | finite decimal (`double`) | Java decimal syntax with optional sign and exponent; must parse to a finite value |
+| `evaluation.minimum_context_mae_improvement` | finite decimal (`double`) | Java decimal syntax with optional sign and exponent; must parse to a finite value |
+| `evaluation.minimum_context_spearman_improvement` | finite decimal (`double`) | Java decimal syntax with optional sign and exponent; must parse to a finite value |
+| `evaluation.minimum_counts_cross_environment_mae_improvement` | finite decimal (`double`) | Java decimal syntax with optional sign and exponent; must parse to a finite value |
+| `evaluation.minimum_grouped_macro_precision_at_ten` | finite decimal (`double`) | Java decimal syntax with optional sign and exponent; must parse to a finite value |
+| `evaluation.minimum_grouped_macro_spearman` | finite decimal (`double`) | Java decimal syntax with optional sign and exponent; must parse to a finite value |
+| `evaluation.minimum_loso_macro_spearman` | finite decimal (`double`) | Java decimal syntax with optional sign and exponent; must parse to a finite value |
+| `run.active_environment_id` | environment identifier | Must match `[a-z0-9][a-z0-9._-]{0,63}` |
+| `run.bootstrap_policies` | path | Path text with no NUL or `\`; relative paths resolve against the config file parent and are normalized to absolute paths |
+| `run.candidate_budget` | decimal integer | Parsed from `-?[0-9]+`; leading `+` is not allowed |
+| `run.commit_sha` | commit hash | Exactly 40 or 64 lower-case hexadecimal digits |
+| `run.dirty_working_tree` | boolean | Exactly `true` or `false` |
+| `run.initial_calibration_plan` | path | Path text with no NUL or `\`; relative paths resolve against the config file parent and are normalized to absolute paths |
+| `run.initial_observation_bundle` | path | Path text with no NUL or `\`; relative paths resolve against the config file parent and are normalized to absolute paths |
+| `run.initial_sobol_cursor` | decimal integer (`long`) | Parsed from `-?[0-9]+` as a signed 64-bit decimal |
+| `run.iterations` | decimal integer | Parsed from `-?[0-9]+`; leading `+` is not allowed |
+| `run.resume` | boolean | Exactly `true` or `false` |
+| `run.scheduler_seed_hex` | unsigned 64-bit seed | Exactly 16 lower-case hexadecimal digits; preserved as raw bits |
+| `run.scenarios_per_iteration` | decimal integer | Parsed from `-?[0-9]+`; leading `+` is not allowed |
+| `run.stop_file` | path | Path text with no NUL or `\`; relative paths resolve against the config file parent and are normalized to absolute paths |
+| `run.training_run_id` | identifier | Must match `[a-z0-9][a-z0-9._-]{0,95}` |
+| `run.workspace` | path | Path text with no NUL or `\`; relative paths resolve against the config file parent and are normalized to absolute paths |
+| `scenario.required` | canonical scenario ID | Must be `s1-<environmentId>-src<positive-int>-core<positive-int>-r<numerator>of<denominator>` and the ratio suffix must exactly match the reduced `sourceCount/coreCount` |
+| `training.ablation_members` | decimal integer | Parsed from `-?[0-9]+`; leading `+` is not allowed |
+| `training.batch_size` | decimal integer | Parsed from `-?[0-9]+`; leading `+` is not allowed |
+| `training.device` | string | Free-form string; default is `auto` |
+| `training.ensemble_members` | decimal integer | Parsed from `-?[0-9]+`; leading `+` is not allowed |
+| `training.feature_selection_mode` | enum constant | Exact Java enum name, case-sensitive |
+| `training.include_weak_calibration_rows` | boolean | Exactly `true` or `false` |
+| `training.label_smoothing` | finite decimal (`float`) | Java decimal syntax with optional sign and exponent; must parse to a finite `float` |
+| `training.learning_rate` | finite decimal (`float`) | Java decimal syntax with optional sign and exponent; must parse to a finite `float` |
+| `training.loso_evaluation_members` | decimal integer | Parsed from `-?[0-9]+`; leading `+` is not allowed |
+| `training.max_epochs` | decimal integer | Parsed from `-?[0-9]+`; leading `+` is not allowed |
+| `training.minimum_test_policy_groups` | decimal integer | Parsed from `-?[0-9]+`; leading `+` is not allowed |
+| `training.minimum_test_rows_per_scenario` | decimal integer | Parsed from `-?[0-9]+`; leading `+` is not allowed |
+| `training.minimum_train_policy_groups` | decimal integer | Parsed from `-?[0-9]+`; leading `+` is not allowed |
+| `training.minimum_train_rows_per_scenario` | decimal integer | Parsed from `-?[0-9]+`; leading `+` is not allowed |
+| `training.minimum_validation_policy_groups` | decimal integer | Parsed from `-?[0-9]+`; leading `+` is not allowed |
+| `training.minimum_validation_rows_per_scenario` | decimal integer | Parsed from `-?[0-9]+`; leading `+` is not allowed |
+| `training.model_seed_hex` | unsigned 64-bit seed | Exactly 16 lower-case hexadecimal digits; preserved as raw bits |
+| `training.patience` | decimal integer | Parsed from `-?[0-9]+`; leading `+` is not allowed |
+| `training.split_seed_hex` | unsigned 64-bit seed | Exactly 16 lower-case hexadecimal digits; preserved as raw bits |
+| `training.weight_decay` | finite decimal (`float`) | Java decimal syntax with optional sign and exponent; must parse to a finite `float` |
+
+| Cross-key rule | Requirement |
 | --- | --- |
-| `budget.exploration_weight`, `budget.carry_forward_weight` | `68`, `25` |
-| `budget.leader_revalidation_weight`, `budget.disagreement_audit_weight` | `2`, `5` |
-| `candidate.screen_rows`, `candidate.maximum_prediction_rows` | `2097152`, `16384` |
-| `candidate.score_band_weights` | `1,1,1,1,2,2,3,5,8,16` |
-| `candidate.cma_weight`, `candidate.score_band_weight`, `candidate.direct_sobol_weight` | `8`, `7`, `1` |
-| `candidate.cma.enabled`, `.islands`, `.generations`, `.population_size` | `true`, `4`, `12`, `96` |
-| `candidate.cma.initial_sigma`, `.minimum_seed_policies` | `0.20`, `10` |
+| Bootstrap source | Exactly one of `run.bootstrap_policies` and `run.initial_calibration_plan` is required |
+| Observation bundles | `run.initial_observation_bundle` is allowed only with `run.initial_calibration_plan` |
+| Reference overrides | Every override scenario must already appear in `scenario.required` |
+| Scenario coverage | At least one `scenario.required` entry must match `run.active_environment_id` |
 
-| Evidence key | Default |
-| --- | --- |
-| `benchmark.expected_repetitions` | `10` |
-| `benchmark.sample_duration_nanos`, `benchmark.liveness_timeout_nanos` | `200000000`, `50000000` |
-| `benchmark.frames_per_source`, `benchmark.reset_timeout_nanos` | `100000`, `2000000000` |
-| `benchmark.ordered_frames` | `false` |
-| `anchors.fixed_fraction`, `anchors.minimum_fixed_anchors` | `0.02`, `5` |
-| `anchors.maximum_bootstrap_non_success_rate`, `anchors.maximum_bootstrap_relative_iqr` | `0.10`, `0.25` |
-| `anchors.allow_imported_bootstrap` | `false` |
-| `calibration.minimum_strong_anchors`, `calibration.minimum_weak_anchors` | `5`, `3` |
-| `calibration.maximum_strong_residual`, `calibration.maximum_weak_residual` | `0.05`, `0.15` |
-| `calibration.minimum_log_sigma`, `calibration.maximum_anchor_weight_share` | `0.01`, `0.25` |
-| `aggregation.minimum_successful_repetitions`, `aggregation.minimum_success_fraction` | `3`, `0.5` |
-| `aggregation.bootstrap_replicates`, `aggregation.bootstrap_seed_hex` | `1000`, `6a09e667f3bcc909` |
-| `aggregation.calibration_acceptance` | `STRONG_ONLY` |
+| Lifecycle key | Expected type | Default |
+| --- | --- | --- |
+| `calibration.reference_override` | repeated scenario/run mapping | empty |
+| `run.active_environment_id` | environment identifier | required |
+| `run.bootstrap_policies` | path | required when `run.initial_calibration_plan` is absent |
+| `run.candidate_budget` | decimal integer | required |
+| `run.commit_sha` | commit hash | required |
+| `run.dirty_working_tree` | boolean | required |
+| `run.initial_calibration_plan` | path | required when `run.bootstrap_policies` is absent |
+| `run.initial_observation_bundle` | repeated path | empty |
+| `run.initial_sobol_cursor` | decimal integer (`long`) | `131072` |
+| `run.iterations` | decimal integer | required |
+| `run.resume` | boolean | `true` |
+| `run.scenarios_per_iteration` | decimal integer | `2` |
+| `run.scheduler_seed_hex` | unsigned 64-bit seed | `6a09e667f3bcc909` |
+| `run.stop_file` | path | `<workspace>/STOP` |
+| `run.training_run_id` | identifier | required |
+| `run.workspace` | path | required |
+| `scenario.required` | canonical scenario ID | required, repeated |
 
-Training keys are `training.split_seed_hex`, `training.model_seed_hex`, `training.device`,
-`training.ensemble_members`, `training.loso_evaluation_members`, `training.ablation_members`,
-`training.max_epochs`, `training.patience`, `training.batch_size`, `training.learning_rate`,
-`training.weight_decay`, `training.label_smoothing`, the six
-`training.minimum_{train,validation,test}_{policy_groups,rows_per_scenario}` keys,
-`training.include_weak_calibration_rows`, and `training.feature_selection_mode`. Their defaults are
-respectively `243f6a8885a308d3`, `13198a2e03707344`, `auto`, `5`, `1`, `3`, `250`, `20`, `0`,
-`0.001`, `0.0001`, `0.02`, `40/10/10`, `30/5/5`, `false`, and `RATIO_ONLY`.
+| Budget and generation key | Expected type | Default |
+| --- | --- | --- |
+| `budget.carry_forward_weight` | decimal integer | `25` |
+| `budget.disagreement_audit_weight` | decimal integer | `5` |
+| `budget.exploration_weight` | decimal integer | `68` |
+| `budget.leader_revalidation_weight` | decimal integer | `2` |
+| `candidate.cma.enabled` | boolean | `true` |
+| `candidate.cma.generations` | decimal integer | `12` |
+| `candidate.cma.initial_sigma` | finite decimal (`double`) | `0.20` |
+| `candidate.cma.islands` | decimal integer | `4` |
+| `candidate.cma.minimum_seed_policies` | decimal integer | `10` |
+| `candidate.cma.population_size` | decimal integer | `96` |
+| `candidate.cma_weight` | decimal integer | `8` |
+| `candidate.direct_sobol_weight` | decimal integer | `1` |
+| `candidate.maximum_prediction_rows` | decimal integer | `16384` |
+| `candidate.score_band_weight` | decimal integer | `7` |
+| `candidate.score_band_weights` | comma-separated integer list | `1,1,1,1,2,2,3,5,8,16` |
+| `candidate.screen_rows` | decimal integer | `2097152` |
 
-Evaluation keys map directly to the immutable thresholds:
-`maximum_grouped_macro_mae` (`0.20`), `minimum_grouped_macro_spearman` (`0.50`),
-`minimum_grouped_macro_precision_at_ten` (`0.20`), `maximum_loso_macro_mae` (`0.25`),
-`minimum_loso_macro_spearman` (`0.35`), `maximum_loso_worst_scenario_mae` (`0.35`),
-the four context improvement/regression thresholds (`0.01/0.05/0.01/0.02`), and the three counts
-cross-environment thresholds (`0.01/0.02/0.02`). Prefix each with `evaluation.`.
+| Evidence key | Expected type | Default |
+| --- | --- | --- |
+| `aggregation.bootstrap_replicates` | decimal integer | `1000` |
+| `aggregation.bootstrap_seed_hex` | unsigned 64-bit seed | `6a09e667f3bcc909` |
+| `aggregation.calibration_acceptance` | enum constant | `STRONG_ONLY` |
+| `aggregation.minimum_success_fraction` | finite decimal (`double`) | `0.5` |
+| `aggregation.minimum_successful_repetitions` | decimal integer | `3` |
+| `anchors.allow_imported_bootstrap` | boolean | `false` |
+| `anchors.fixed_fraction` | finite decimal (`double`) | `0.02` |
+| `anchors.maximum_bootstrap_non_success_rate` | finite decimal (`double`) | `0.10` |
+| `anchors.maximum_bootstrap_relative_iqr` | finite decimal (`double`) | `0.25` |
+| `anchors.minimum_fixed_anchors` | decimal integer | `5` |
+| `benchmark.expected_repetitions` | decimal integer | `10` |
+| `benchmark.frames_per_source` | decimal integer | `100000` |
+| `benchmark.liveness_timeout_nanos` | decimal integer (`long`) | `50000000` |
+| `benchmark.ordered_frames` | boolean | `false` |
+| `benchmark.reset_timeout_nanos` | decimal integer (`long`) | `2000000000` |
+| `benchmark.sample_duration_nanos` | decimal integer (`long`) | `200000000` |
+| `calibration.maximum_anchor_weight_share` | finite decimal (`double`) | `0.25` |
+| `calibration.maximum_strong_residual` | finite decimal (`double`) | `0.05` |
+| `calibration.maximum_weak_residual` | finite decimal (`double`) | `0.15` |
+| `calibration.minimum_log_sigma` | finite decimal (`double`) | `0.01` |
+| `calibration.minimum_strong_anchors` | decimal integer | `5` |
+| `calibration.minimum_weak_anchors` | decimal integer | `3` |
+
+| Training key | Expected type | Default |
+| --- | --- | --- |
+| `training.ablation_members` | decimal integer | `3` |
+| `training.batch_size` | decimal integer | `0` |
+| `training.device` | string | `auto` |
+| `training.ensemble_members` | decimal integer | `5` |
+| `training.feature_selection_mode` | enum constant | `RATIO_ONLY` |
+| `training.include_weak_calibration_rows` | boolean | `false` |
+| `training.label_smoothing` | finite decimal (`float`) | `0.02` |
+| `training.learning_rate` | finite decimal (`float`) | `0.001` |
+| `training.loso_evaluation_members` | decimal integer | `1` |
+| `training.max_epochs` | decimal integer | `250` |
+| `training.minimum_test_policy_groups` | decimal integer | `10` |
+| `training.minimum_test_rows_per_scenario` | decimal integer | `5` |
+| `training.minimum_train_policy_groups` | decimal integer | `40` |
+| `training.minimum_train_rows_per_scenario` | decimal integer | `30` |
+| `training.minimum_validation_policy_groups` | decimal integer | `10` |
+| `training.minimum_validation_rows_per_scenario` | decimal integer | `5` |
+| `training.model_seed_hex` | unsigned 64-bit seed | `13198a2e03707344` |
+| `training.patience` | decimal integer | `20` |
+| `training.split_seed_hex` | unsigned 64-bit seed | `243f6a8885a308d3` |
+| `training.weight_decay` | finite decimal (`float`) | `0.0001` |
+
+| Evaluation key | Expected type | Default |
+| --- | --- | --- |
+| `evaluation.maximum_context_mae_regression` | finite decimal (`double`) | `0.01` |
+| `evaluation.maximum_context_spearman_regression` | finite decimal (`double`) | `0.02` |
+| `evaluation.maximum_counts_spearman_regression` | finite decimal (`double`) | `0.02` |
+| `evaluation.maximum_counts_worst_environment_mae_regression` | finite decimal (`double`) | `0.02` |
+| `evaluation.maximum_grouped_macro_mae` | finite decimal (`double`) | `0.20` |
+| `evaluation.maximum_loso_macro_mae` | finite decimal (`double`) | `0.25` |
+| `evaluation.maximum_loso_worst_scenario_mae` | finite decimal (`double`) | `0.35` |
+| `evaluation.minimum_context_mae_improvement` | finite decimal (`double`) | `0.01` |
+| `evaluation.minimum_context_spearman_improvement` | finite decimal (`double`) | `0.05` |
+| `evaluation.minimum_counts_cross_environment_mae_improvement` | finite decimal (`double`) | `0.01` |
+| `evaluation.minimum_grouped_macro_precision_at_ten` | finite decimal (`double`) | `0.20` |
+| `evaluation.minimum_grouped_macro_spearman` | finite decimal (`double`) | `0.50` |
+| `evaluation.minimum_loso_macro_spearman` | finite decimal (`double`) | `0.35` |
 
 ## Training-run packages
 
