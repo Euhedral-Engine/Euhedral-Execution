@@ -175,8 +175,9 @@ public final class ClosedLoopConfigCodec {
         }
         Optional<Path> bootstrap = parser.optionalPath("run.bootstrap_policies");
         Optional<Path> calibrationPlan = parser.optionalPath("run.initial_calibration_plan");
-        if (bootstrap.isPresent() == calibrationPlan.isPresent()) {
-            throw new IllegalArgumentException("Exactly one bootstrap source is required");
+        if (bootstrap.isPresent() && calibrationPlan.isPresent()) {
+            throw new IllegalArgumentException(
+                    "run.bootstrap_policies and run.initial_calibration_plan are mutually exclusive");
         }
         List<Path> bundles = parser.paths("run.initial_observation_bundle");
         if (!bundles.isEmpty() && calibrationPlan.isEmpty()) {
