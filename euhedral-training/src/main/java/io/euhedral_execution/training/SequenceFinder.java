@@ -205,8 +205,7 @@ public final class SequenceFinder {
                 if (cursor > Integer.MAX_VALUE) {
                     throw new IllegalStateException("Sobol cursor exhausted");
                 }
-                PolicyVector policy = sobol(Math.toIntExact(cursor++));
-                registry.register(policy);
+                PolicyVector policy = registry.register(sobol(Math.toIntExact(cursor++)));
                 if (excluded.add(policy.id())) {
                     policies.add(policy);
                 }
