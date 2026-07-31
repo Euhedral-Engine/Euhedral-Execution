@@ -999,7 +999,7 @@ split, and implementation-model reassessments.
 | 15 | P2 provisional implementation | `gpt-5.6-sol`, `high` |
 | 16 | P1 provisional implementation | `gpt-5.6-sol`, `high` |
 | 17 | P8 provisional implementation | `gpt-5.6-sol`, `high` |
-| 18 | P0 provisional implementation | `gpt-5.6-sol`, `medium` |
+| 18 | P0 implementation - compiled compatibility/test baseline | `gpt-5.6-sol`, `medium` |
 | 19 | P8 validation | `gpt-5.6-sol`, `high` |
 | 20 | P4 validation | `gpt-5.6-sol`, `high` |
 | 21 | P7 validation | `gpt-5.6-sol`, `high` |
@@ -1084,43 +1084,79 @@ split, and implementation-model reassessments.
 > implement the baseline without selecting a tool, deciding what compatibility means, or encoding
 > a known bug as required behavior. Do not start implementation until this child is merged.
 
-#### P0 implementation prompt - PROVISIONAL, DO NOT RUN
+#### P0 developer-review summary
 
-**Provisional model: `gpt-5.6-sol`; provisional reasoning effort: `medium`. The P0 blueprint must
-replace this selection and prompt body before implementation.**
+- Purpose: create one deterministic compiled Java/native-name/behavior compatibility gate against
+  `900d8c50` without running or publishing the native build.
+- Ownership: hardware-module test-scoped ASM configuration, the
+  `io.euhedral_execution.hardware_utils.compatibility` test package, three compatibility resources,
+  and the blueprint completion record. Production, downstream modules, CI, benchmarks, and
+  training remain read-only/prohibited.
+- Key contracts: exact complete module descriptor; baseline public/protected classfile surface as a
+  required subset with additive members allowed; typed constants, Lombok-generated members,
+  descriptors/generics/exceptions, records/nested/sealed metadata; eight intended aggregate native
+  paths and Java-owned JNI names; exact mask text and 200,000,000 ns default; latch-proven
+  concurrent fresh threads; core-zero reservation; and a strict exact-subject defect ledger.
+- Child blueprints: none. The sizing gate found one bounded, cohesive module-local test
+  responsibility.
+- Implementation selection: `gpt-5.6-sol`, `medium`.
+- Principal risks: subtle classfile normalization, JPMS test compilation, accidentally loading
+  hardware classes during extraction, host cleanup in the executor test, and accidentally
+  triggering the bound Zig lifecycle. The blueprint fixes each boundary and uses direct Maven
+  plugin goals plus source/resource fingerprints.
+- Unresolved decisions: none.
+
+#### P0 implementation prompt
+
+**Model: `gpt-5.6-sol`; reasoning effort: `medium`.**
 
 > After the P0 blueprint child is reviewed and merged, start
-> `hardware-utils-overhaul/phase-0-compatibility-baseline-implementation` from the P0 root. The
-> parent artifact is
-> `docs/blueprints/hardware-utils/phase-0-compatibility-test-baseline.md`; ownership is limited to
-> its compatibility test/configuration envelope, while production sources and downstream modules
-> remain read-only. Inspect `git status --short`. Read `AGENTS.md`, `docs/AGENT_WORKFLOW.md`, the
-> plan, the parent blueprint, and only its bounded public-source/test context. Confirm this prompt
-> is no longer marked provisional.
+> `hardware-utils-overhaul/phase-0-compatibility-baseline-implementation` from the updated P0 root.
+> The parent artifact is
+> `docs/blueprints/hardware-utils/phase-0-compatibility-test-baseline.md`. Inspect
+> `git status --short` first and preserve the pre-existing benchmark image and training output
+> without inspecting training. Read `AGENTS.md`, `docs/AGENT_WORKFLOW.md`, the P0 requirements and
+> review summary in this plan, the complete parent blueprint, and only its bounded implementation
+> context envelope. Confirm this prompt has no provisional label.
 >
-> Implement only the approved signature/behavior baseline, test resources/helpers, defect-ledger
-> mapping, and narrowly required hardware-module test/build configuration. Root POM/plugin changes,
-> production Java/native/Zig behavior, core, CI beyond the approved baseline, benchmarks, and
-> every `euhedral-training` path or command are prohibited. Do not characterize a known invalid
-> numeric result as compatibility. Allowed edits are the blueprint-owned test/configuration
-> artifacts, its completion record, and the compact temporary phase-status block in `AGENTS.md`;
-> no other `AGENTS.md` content may change.
+> Implement the blueprint exactly: add only the hardware POM's test-scoped ASM dependency or
+> narrowly necessary module-local test configuration; the
+> `io.euhedral_execution.hardware_utils.compatibility` ASM surface reader/comparator/report,
+> native-name check, ledger parser, and focused behavior tests; the three checked-in compatibility
+> resources; the completion record; and the temporary P0 `AGENTS.md` status block. Production
+> Java/native/header/Zig/resources, root POM/plugins, CI, core, Reactor, Spring, benchmarks, and
+> every training path/command are prohibited.
 >
-> Run the blueprint's deterministic commands and fix defects within its settled design. If a new
-> design choice is required, stop, preserve work, and append the conflict/evidence to the
-> blueprint. Otherwise append completion notes listing changed files, commands, results,
-> acceptance-criteria evidence, approved deviations, and environmental limits. Add or update the
-> workflow-required temporary
-> `AGENTS.md` phase-status block with the completed planning context
-> `agent/hardware-utils-overhaul-plan`, the active P0 root, completed blueprint child, active
-> implementation child, and links to the blueprint and completion record.
+> Generate `api-900d8c50.tsv` only from an isolated `git archive` containing the root POM and
+> hardware module at `900d8c50`. Use the blueprint's direct `resources`, `compiler`, `surefire`,
+> and `exec:java` plugin goals; do not run Maven `initialize`, `test`, `verify`, `package`,
+> `install`, a root reactor, or Zig in the active worktree. Fingerprint every active main Java and
+> resource file, including ignored binaries, before and after generation. The ASM tool must not
+> load production classes. Preserve the exact complete module descriptor and baseline
+> public/protected surface, allow only additive declarations, and prove deliberate descriptor and
+> record-order changes fail. Preserve only the eight intended aggregate native paths and Java-owned
+> JNI names; map current native mismatches through exact N01/N02 records rather than blessing them.
 >
-> The output artifact is the implemented baseline plus its completion record appended to
-> `docs/blueprints/hardware-utils/phase-0-compatibility-test-baseline.md`.
+> Add the complete exact-subject B01-B07, T01-T06, A01-A04, R01-R14, N01-N02, and C01-C02 ledger
+> mapping and its later regression IDs. Do not assert a current invalid numeric/topology/pressure/
+> lifecycle/affinity/native/core-policy result as compatible. Add exact mask-format, 200,000,000 ns
+> default, latch-controlled concurrent fresh-thread, and core-zero reservation tests. Run
+> baseline generation twice, the complete direct-goal P0 test command twice, byte-compare fixtures
+> and reports, and perform every non-contamination/scope check in the blueprint.
 >
-> Handoff only when the baseline is green, detects a deliberate descriptor/record-shape change,
-> requires no published artifact, leaves the active native resource tree unchanged, and maps every
-> known defect to a later phase. Merge this child into the P0 root before validation.
+> If JPMS/ASM integration, the baseline source, or a native contract requires a production module
+> edit, a new exception category, or another unsettled choice, stop and append the conflict and
+> evidence to the blueprint. Do not redesign around it. Otherwise append completion notes listing
+> changed files, commands/results, fixture hashes, every acceptance-criterion result, approved
+> deviations, and exact environmental limits. Add/update only the workflow-required temporary
+> `AGENTS.md` block with completed planning context `agent/hardware-utils-overhaul-plan`, active P0
+> root, completed blueprint child, active implementation child, and blueprint/completion links.
+>
+> The output artifact is the green deterministic compatibility baseline plus the completion record
+> appended to the blueprint. Handoff only when deliberate descriptor/record mutations fail, no
+> artifact is published, the active Java/native resource fingerprint is unchanged, every known
+> defect maps to a later exact regression, and only blueprint-owned files changed. Merge this child
+> into the P0 root before validation.
 
 #### P0 validation prompt
 
