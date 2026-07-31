@@ -1,4 +1,4 @@
-package io.euhedral_execution.hardware_utils.compatibility;
+package io.euhedral_execution.hardware_utils.compatibility.helpers;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
 
-final class DefectLedger {
+public final class DefectLedger {
 
     private static final String HEADER =
             "defect_id\towner_phase\tsubject\told_behavior\tnew_invariant\tregression_test_id";
@@ -18,7 +18,7 @@ final class DefectLedger {
     private static final Pattern TEST_ID = Pattern.compile(
             "[a-zA-Z_$][\\w$]*(\\.[a-zA-Z_$][\\w$]*)+#[a-zA-Z_$][\\w$]*");
 
-    static DefectLedger read(Path path) throws IOException {
+    public static DefectLedger read(Path path) throws IOException {
         String text = Files.readString(path, StandardCharsets.UTF_8);
         if (text.indexOf('\r') >= 0) {
             throw new IOException(path + ": CRLF is not canonical");
@@ -81,15 +81,15 @@ final class DefectLedger {
         this.defects = List.copyOf(defects);
     }
 
-    List<Defect> defects() {
+    public List<Defect> defects() {
         return this.defects;
     }
 
-    boolean hasSubject(String subject) {
+    public boolean hasSubject(String subject) {
         return this.defects.stream().anyMatch(defect -> defect.subject().equals(subject));
     }
 
-    record Defect(String id, String ownerPhases, String subject, String oldBehavior,
+    public record Defect(String id, String ownerPhases, String subject, String oldBehavior,
                   String newInvariant, String regressionTestId) {
 
     }

@@ -1,4 +1,4 @@
-package io.euhedral_execution.hardware_utils.compatibility;
+package io.euhedral_execution.hardware_utils.compatibility.helpers;
 
 import static org.objectweb.asm.Opcodes.ACC_ABSTRACT;
 import static org.objectweb.asm.Opcodes.ACC_ANNOTATION;
@@ -25,6 +25,7 @@ import static org.objectweb.asm.Opcodes.ACC_TRANSITIVE;
 import static org.objectweb.asm.Opcodes.ACC_VARARGS;
 import static org.objectweb.asm.Opcodes.ACC_VOLATILE;
 
+import io.euhedral_execution.hardware_utils.compatibility.ApiSurface;
 import io.euhedral_execution.hardware_utils.compatibility.ApiSurface.Entry;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -47,9 +48,9 @@ import org.objectweb.asm.ModuleVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.RecordComponentVisitor;
 
-final class ApiSurfaceReader {
+public final class ApiSurfaceReader {
 
-    static ApiSurface read(Path classesDirectory) throws IOException {
+    public static ApiSurface read(Path classesDirectory) throws IOException {
         if (!Files.isDirectory(classesDirectory) || !Files.isReadable(classesDirectory)) {
             throw new IOException(
                     "classes directory is missing or unreadable: " + classesDirectory);
@@ -137,7 +138,7 @@ final class ApiSurfaceReader {
         return new ApiSurface(entries);
     }
 
-    static List<Entry> readNativeDeclarations(Path classesDirectory) throws IOException {
+    public static List<Entry> readNativeDeclarations(Path classesDirectory) throws IOException {
         List<Entry> entries = new ArrayList<>();
         try (Stream<Path> files = Files.walk(classesDirectory)) {
             for (Path path : files.filter(file -> file.toString().endsWith(".class")).toList()) {

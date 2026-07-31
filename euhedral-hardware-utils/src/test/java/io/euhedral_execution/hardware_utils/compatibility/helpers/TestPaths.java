@@ -1,22 +1,22 @@
-package io.euhedral_execution.hardware_utils.compatibility;
+package io.euhedral_execution.hardware_utils.compatibility.helpers;
 
 import java.nio.file.Path;
 
-final class TestPaths {
+public final class TestPaths {
 
-    static Path projectDirectory() {
+    public static Path projectDirectory() {
         return requiredPath("p0.project.basedir");
     }
 
-    static Path classesDirectory() {
+    public static Path classesDirectory() {
         return requiredPath("p0.classes.directory");
     }
 
-    static Path buildDirectory() {
+    public static Path buildDirectory() {
         return requiredPath("p0.build.directory");
     }
 
-    static Path resource(String name) {
+    public static Path resource(String name) {
         return projectDirectory().resolve("src/test/resources/compatibility").resolve(name);
     }
 

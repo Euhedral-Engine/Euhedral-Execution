@@ -4,6 +4,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.euhedral_execution.hardware_utils.compatibility.ApiSurface.Entry;
+import io.euhedral_execution.hardware_utils.compatibility.helpers.ApiSurfaceComparator;
+import io.euhedral_execution.hardware_utils.compatibility.helpers.ApiSurfaceReader;
+import io.euhedral_execution.hardware_utils.compatibility.helpers.DefectLedger;
+import io.euhedral_execution.hardware_utils.compatibility.helpers.TestPaths;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
