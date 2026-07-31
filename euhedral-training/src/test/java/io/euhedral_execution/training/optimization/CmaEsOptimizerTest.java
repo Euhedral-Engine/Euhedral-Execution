@@ -54,6 +54,23 @@ class CmaEsOptimizerTest {
     }
 
     @Test
+    void doesNotRequirePredictorSupportForEmptyInputs() {
+        List<RobustPolicySummary> measured = new ArrayList<>();
+        for (int row = 0; row < 80; row++) {
+            measured.add(SchedulingFixtures.eligible(SchedulingFixtures.policy(row),
+                    1.0 - row / 100.0));
+        }
+        PolicyCurvePredictor predictor = policies -> policies.isEmpty()
+                ? List.of()
+                : SchedulingFixtures.predictor().predict(policies);
+
+        List<PredictedCandidate> candidates = new CmaEsOptimizer().optimize(measured, Set.of(),
+                predictor, new CmaEsConfig(true, 1, 1, 8, 0.20, 10), 7L);
+
+        assertThat(candidates).isNotEmpty();
+    }
+
+    @Test
     void excludesAnchorsAndRequiresTheConfiguredSeedMinimum() {
         PolicyVector anchor = SchedulingFixtures.policy(0);
         List<RobustPolicySummary> measured = List.of(

@@ -19,6 +19,7 @@ import io.euhedral_execution.training.data.enums.MeasurementEncoding;
 import io.euhedral_execution.training.data.enums.ObservationStatus;
 import io.euhedral_execution.training.data.io.CanonicalCsv;
 import io.euhedral_execution.training.data.io.ObservationBundleWriter;
+import io.euhedral_execution.training.learning.InsufficientScenarioLearningDataException;
 import io.euhedral_execution.training.learning.ScenarioConditionedModel;
 import io.euhedral_execution.training.learning.config.ScenarioTrainingConfig;
 import io.euhedral_execution.training.learning.inputs.ScenarioTrainingRequest;
@@ -121,10 +122,130 @@ class ClosedLoopRunnerTest {
                 .isEqualTo(reproduced.directory());
     }
 
+    @Test
+    void generatedBootstrapVectorsArePersistedBeforeBenchmarking() throws Exception {
+        SourceScenario scenario = SourceScenario.of("env-a", 1, 4);
+        TreeSet<SourceScenario> required = new TreeSet<>(List.of(scenario));
+
+        ClosedLoopRunner.run(config(null, required, "env-a", false),
+                new BootstrapOnlyServices());
+
+        Path persisted = temp.resolve(
+                "workspace/bootstrap/bootstrap-policies.vectors.csv");
+        assertThat(persisted).isRegularFile();
+        assertThat(io.euhedral_execution.training.scheduling.io.BootstrapPolicyCsv.read(
+                persisted, 6)).containsExactlyInAnyOrderElementsOf(
+                SequenceFinder.bootstrapVectors(1024, 6));
+    }
+
+    @Test
+    void trainingFallsBackToColdStartAfterSparseStrictFailure() throws Exception {
+        Path bootstrap = temp.resolve("bootstrap.csv");
+        writeBootstrap(bootstrap, 6);
+        SourceScenario scenario = SourceScenario.of("env-a", 1, 4);
+        TreeSet<SourceScenario> required = new TreeSet<>(List.of(scenario));
+
+        ClosedLoopRunner.run(config(bootstrap, required, "env-a", false),
+                new BootstrapOnlyServices());
+
+        FallbackTrainingServices services = new FallbackTrainingServices();
+        ClosedLoopResult result = ClosedLoopRunner.run(config(bootstrap, required,
+                "env-a", true, 1), services);
+
+        assertThat(result.stage()).isEqualTo(CheckpointStage.MODEL_REJECTED);
+        assertThat(services.seenConfigs).hasSize(1);
+        assertThat(services.seenConfigs.getFirst().requireTargetVariation()).isFalse();
+        assertThat(services.seenConfigs.getFirst().minimumValidationPolicyGroups()).isEqualTo(1);
+    }
+
+    @Test
+    void bootstrapColdStartRejectionContinuesOnlyForFirstIteration() throws Exception {
+        Path bootstrap = temp.resolve("bootstrap.csv");
+        writeBootstrap(bootstrap, 6);
+        SourceScenario scenario = SourceScenario.of("env-a", 1, 4);
+        TreeSet<SourceScenario> required = new TreeSet<>(List.of(scenario));
+
+        ClosedLoopRunner.run(config(bootstrap, required, "env-a", false, 2),
+                new BootstrapOnlyServices());
+
+        RejectingTrainingServices firstPass = new RejectingTrainingServices(true);
+        ClosedLoopResult readyForSecondIteration = ClosedLoopRunner.run(
+                config(bootstrap, required, "env-a", true, 2), firstPass);
+
+        assertThat(readyForSecondIteration.stage()).isEqualTo(CheckpointStage.READY_TO_TRAIN);
+        assertThat(firstPass.seenConfigs).hasSize(1);
+        assertThat(firstPass.seenConfigs.getFirst().requireTargetVariation()).isFalse();
+        assertThat(firstPass.seenConfigs.getFirst().minimumValidationPolicyGroups())
+                .isEqualTo(1);
+
+        RejectingTrainingServices secondPass = new RejectingTrainingServices(false);
+        ClosedLoopResult terminal = ClosedLoopRunner.run(
+                config(bootstrap, required, "env-a", true, 2), secondPass);
+
+        assertThat(terminal.stage()).isEqualTo(CheckpointStage.MODEL_REJECTED);
+        assertThat(secondPass.seenConfigs).hasSize(1);
+        assertThat(secondPass.seenConfigs.getFirst().requireTargetVariation()).isTrue();
+        assertThat(secondPass.seenConfigs.getFirst().minimumValidationPolicyGroups())
+                .isEqualTo(10);
+    }
+
+    @Test
+    void bootstrapColdStartRejectionCompletesTheSingleConfiguredIteration() throws Exception {
+        Path bootstrap = temp.resolve("bootstrap.csv");
+        writeBootstrap(bootstrap, 6);
+        SourceScenario scenario = SourceScenario.of("env-a", 1, 4);
+        TreeSet<SourceScenario> required = new TreeSet<>(List.of(scenario));
+
+        ClosedLoopRunner.run(config(bootstrap, required, "env-a", false, 1),
+                new BootstrapOnlyServices());
+
+        RejectingTrainingServices services = new RejectingTrainingServices(false);
+        ClosedLoopResult result = ClosedLoopRunner.run(
+                config(bootstrap, required, "env-a", true, 1), services);
+
+        assertThat(result.stage()).isEqualTo(CheckpointStage.RUN_COMPLETE);
+        assertThat(services.seenConfigs).singleElement().satisfies(training -> {
+            assertThat(training.requireTargetVariation()).isFalse();
+            assertThat(training.minimumValidationPolicyGroups()).isEqualTo(1);
+        });
+    }
+
+    @Test
+    void sparseSecondIterationRetriesColdStartAndContinuesWithNeutralScheduling()
+            throws Exception {
+        Path bootstrap = temp.resolve("bootstrap.csv");
+        writeBootstrap(bootstrap, 6);
+        SourceScenario scenario = SourceScenario.of("env-a", 1, 4);
+        TreeSet<SourceScenario> required = new TreeSet<>(List.of(scenario));
+
+        ClosedLoopRunner.run(config(bootstrap, required, "env-a", false, 2),
+                new BootstrapOnlyServices());
+        ClosedLoopResult readyForSecondIteration = ClosedLoopRunner.run(
+                config(bootstrap, required, "env-a", true, 2),
+                new RejectingTrainingServices(true));
+        assertThat(readyForSecondIteration.stage()).isEqualTo(CheckpointStage.READY_TO_TRAIN);
+
+        RejectingTrainingServices sparseSecondIteration =
+                new RejectingTrainingServices(false, true);
+        ClosedLoopResult completed = ClosedLoopRunner.run(
+                config(bootstrap, required, "env-a", true, 2), sparseSecondIteration);
+
+        assertThat(completed.stage()).isEqualTo(CheckpointStage.RUN_COMPLETE);
+        assertThat(sparseSecondIteration.seenConfigs).hasSize(2);
+        assertThat(sparseSecondIteration.seenConfigs.getFirst().requireTargetVariation()).isTrue();
+        assertThat(sparseSecondIteration.seenConfigs.getLast().requireTargetVariation()).isFalse();
+    }
+
     private ClosedLoopConfig config(Path bootstrap, TreeSet<SourceScenario> scenarios,
             String environment, boolean resume) {
-        return new ClosedLoopConfig(temp.resolve("workspace"), "training", 1, 6, scenarios,
-                environment, 1, 77L, 100, Optional.of(bootstrap), Optional.empty(),
+        return config(bootstrap, scenarios, environment, resume, 1);
+    }
+
+    private ClosedLoopConfig config(Path bootstrap, TreeSet<SourceScenario> scenarios,
+            String environment, boolean resume, int iterations) {
+        return new ClosedLoopConfig(temp.resolve("workspace"), "training", iterations, 6,
+                scenarios, environment, 1, 77L, 100, Optional.ofNullable(bootstrap),
+                Optional.empty(),
                 List.of(), Map.of(), "0".repeat(40), false,
                 CandidateBudgetConfig.defaults(),
                 new CandidateGenerationConfig(32, 8,
@@ -235,5 +356,253 @@ class ClosedLoopRunnerTest {
         public String activeCpuSetHex() {
             return "f";
         }
+    }
+
+    private static final class BootstrapOnlyServices implements ClosedLoopServices {
+        private boolean mergeCalled;
+
+        @Override
+        public CalibrationPlan bootstrapCalibration(
+                DataMerger.CalibrationBootstrapRequest request) throws Exception {
+            return DataMerger.bootstrapCalibrationV1(request);
+        }
+
+        @Override
+        public DataMerger.MergeArtifacts merge(DataMerger.MergeRequest request)
+                throws Exception {
+            DataMerger.MergeArtifacts result = DataMerger.mergeV1(request);
+            mergeCalled = true;
+            return result;
+        }
+
+        @Override
+        public ScenarioTrainingArtifacts train(ScenarioTrainingRequest request) {
+            throw new AssertionError("Training should not run during bootstrap-only pass");
+        }
+
+        @Override
+        public ScenarioConditionedModel loadAcceptedModel(Path modelDirectory,
+                String producingDevice) {
+            throw new AssertionError();
+        }
+
+        @Override
+        public BenchmarkRunContext benchmark(NativeBenchmarkRunPlan plan,
+                java.util.function.BooleanSupplier stopRequested) {
+            Instant start = Instant.EPOCH;
+            BenchmarkRunDescriptor descriptor = new BenchmarkRunDescriptor(1,
+                    plan.benchmarkRunId(), plan.iteration(), plan.candidateCohortId(),
+                    plan.scenario(), plan.commitSha(), plan.dirtyWorkingTree(),
+                    EvidenceOrigin.NATIVE, start, plan.parameters());
+            try (ObservationBundleWriter writer = ObservationBundleWriter.open(
+                    plan.outputBundle(), descriptor)) {
+                plan.policies().forEach(writer::registerPolicy);
+                long offset = 0;
+                for (var policy : plan.policies()) {
+                    for (int repetition = 1;
+                            repetition <= plan.executionConfig().expectedRepetitions();
+                            repetition++) {
+                        Instant observationStart = start.plusNanos(offset);
+                        long elapsed = 100;
+                        long frames = 100;
+                        writer.write(new BenchmarkObservation(new ObservationKey(
+                                plan.benchmarkRunId(), plan.scenario(), policy.policy().id(),
+                                repetition), descriptor, policy, ObservationStatus.SUCCESS,
+                                MeasurementEncoding.COUNTER_DERIVED, observationStart,
+                                observationStart.plusNanos(elapsed), OptionalLong.of(elapsed),
+                                OptionalLong.of(frames), OptionalDouble.of(
+                                frames * 1_000_000_000.0 / elapsed), ""));
+                        offset += elapsed;
+                    }
+                }
+                return writer.complete(start.plusNanos(offset));
+            }
+        }
+
+        @Override
+        public boolean stopRequested() {
+            return mergeCalled;
+        }
+
+        @Override
+        public int activeCoreCount() {
+            return 4;
+        }
+
+        @Override
+        public String activeCpuSetHex() {
+            return "f";
+        }
+    }
+
+    private final class FallbackTrainingServices implements ClosedLoopServices {
+        private final ArrayList<ScenarioTrainingConfig> seenConfigs = new ArrayList<>();
+        private boolean trained;
+
+        @Override
+        public CalibrationPlan bootstrapCalibration(
+                DataMerger.CalibrationBootstrapRequest request) {
+            throw new AssertionError();
+        }
+
+        @Override
+        public DataMerger.MergeArtifacts merge(DataMerger.MergeRequest request) {
+            throw new AssertionError();
+        }
+
+        @Override
+        public ScenarioTrainingArtifacts train(ScenarioTrainingRequest request)
+                throws Exception {
+            seenConfigs.add(request.config());
+            if (request.config().requireTargetVariation()) {
+                throw new InsufficientScenarioLearningDataException(
+                        "validation has too few policy groups");
+            }
+            trained = true;
+            return io.euhedral_execution.training.learning.AuditScenarioModelFixture.writeRejected(
+                    request.modelDirectory(), request.requiredScenarios(), request.config(),
+                    SchedulingFixtures.policy(999), request.commitSha(),
+                    request.dirtyWorkingTree());
+        }
+
+        @Override
+        public ScenarioConditionedModel loadAcceptedModel(Path modelDirectory,
+                String producingDevice) {
+            throw new AssertionError();
+        }
+
+        @Override
+        public BenchmarkRunContext benchmark(NativeBenchmarkRunPlan plan,
+                java.util.function.BooleanSupplier stopRequested) {
+            throw new AssertionError();
+        }
+
+        @Override
+        public boolean stopRequested() {
+            return trained;
+        }
+
+        @Override
+        public int activeCoreCount() {
+            return 4;
+        }
+
+        @Override
+        public String activeCpuSetHex() {
+            return "f";
+        }
+    }
+
+    private final class RejectingTrainingServices implements ClosedLoopServices {
+        private final boolean stopAfterFirstMerge;
+        private final boolean failStrictTraining;
+        private final ArrayList<ScenarioTrainingConfig> seenConfigs = new ArrayList<>();
+        private boolean mergeCalled;
+
+        private RejectingTrainingServices(boolean stopAfterFirstMerge) {
+            this(stopAfterFirstMerge, false);
+        }
+
+        private RejectingTrainingServices(boolean stopAfterFirstMerge,
+                boolean failStrictTraining) {
+            this.stopAfterFirstMerge = stopAfterFirstMerge;
+            this.failStrictTraining = failStrictTraining;
+        }
+
+        @Override
+        public CalibrationPlan bootstrapCalibration(
+                DataMerger.CalibrationBootstrapRequest request) {
+            throw new AssertionError();
+        }
+
+        @Override
+        public DataMerger.MergeArtifacts merge(DataMerger.MergeRequest request)
+                throws Exception {
+            DataMerger.MergeArtifacts result = DataMerger.mergeV1(request);
+            mergeCalled = true;
+            return result;
+        }
+
+        @Override
+        public ScenarioTrainingArtifacts train(ScenarioTrainingRequest request)
+                throws Exception {
+            seenConfigs.add(request.config());
+            if (failStrictTraining && request.config().requireTargetVariation()) {
+                throw new InsufficientScenarioLearningDataException(
+                        "train lacks rows for a required scenario");
+            }
+            ScenarioTrainingConfig storedConfig = withBatchSize(request.config(), 4);
+            return io.euhedral_execution.training.learning.AuditScenarioModelFixture.writeRejected(
+                    request.modelDirectory(), request.requiredScenarios(), storedConfig,
+                    SchedulingFixtures.policy(999), request.commitSha(),
+                    request.dirtyWorkingTree());
+        }
+
+        @Override
+        public ScenarioConditionedModel loadAcceptedModel(Path modelDirectory,
+                String producingDevice) {
+            throw new AssertionError("Rejected models should use the neutral predictor");
+        }
+
+        @Override
+        public BenchmarkRunContext benchmark(NativeBenchmarkRunPlan plan,
+                java.util.function.BooleanSupplier stopRequested) {
+            Instant start = Instant.EPOCH;
+            BenchmarkRunDescriptor descriptor = new BenchmarkRunDescriptor(1,
+                    plan.benchmarkRunId(), plan.iteration(), plan.candidateCohortId(),
+                    plan.scenario(), plan.commitSha(), plan.dirtyWorkingTree(),
+                    EvidenceOrigin.NATIVE, start, plan.parameters());
+            try (ObservationBundleWriter writer = ObservationBundleWriter.open(
+                    plan.outputBundle(), descriptor)) {
+                plan.policies().forEach(writer::registerPolicy);
+                long offset = 0;
+                for (var policy : plan.policies()) {
+                    for (int repetition = 1;
+                            repetition <= plan.executionConfig().expectedRepetitions();
+                            repetition++) {
+                        Instant observationStart = start.plusNanos(offset);
+                        long elapsed = 100;
+                        long frames = 100;
+                        writer.write(new BenchmarkObservation(new ObservationKey(
+                                plan.benchmarkRunId(), plan.scenario(), policy.policy().id(),
+                                repetition), descriptor, policy, ObservationStatus.SUCCESS,
+                                MeasurementEncoding.COUNTER_DERIVED, observationStart,
+                                observationStart.plusNanos(elapsed), OptionalLong.of(elapsed),
+                                OptionalLong.of(frames), OptionalDouble.of(
+                                frames * 1_000_000_000.0 / elapsed), ""));
+                        offset += elapsed;
+                    }
+                }
+                return writer.complete(start.plusNanos(offset));
+            }
+        }
+
+        @Override
+        public boolean stopRequested() {
+            return mergeCalled && stopAfterFirstMerge;
+        }
+
+        @Override
+        public int activeCoreCount() {
+            return 4;
+        }
+
+        @Override
+        public String activeCpuSetHex() {
+            return "f";
+        }
+    }
+
+    private static ScenarioTrainingConfig withBatchSize(ScenarioTrainingConfig source,
+            int batchSize) {
+        return new ScenarioTrainingConfig(source.splitSeed(), source.modelSeed(), source.device(),
+                source.ensembleMembers(), source.losoEvaluationMembers(),
+                source.ablationMembers(), source.maxEpochs(), source.patience(), batchSize,
+                source.learningRate(), source.weightDecay(), source.labelSmoothing(),
+                source.minimumTrainPolicyGroups(), source.minimumValidationPolicyGroups(),
+                source.minimumTestPolicyGroups(), source.minimumTrainRowsPerScenario(),
+                source.minimumValidationRowsPerScenario(), source.minimumTestRowsPerScenario(),
+                source.includeWeakCalibrationRows(), source.requireTargetVariation(),
+                source.featureSelectionMode(), source.thresholds());
     }
 }

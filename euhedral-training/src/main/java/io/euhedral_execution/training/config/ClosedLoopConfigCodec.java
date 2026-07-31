@@ -269,6 +269,7 @@ public final class ClosedLoopConfigCodec {
                 parser.integer("training.minimum_validation_rows_per_scenario", 5),
                 parser.integer("training.minimum_test_rows_per_scenario", 5),
                 parser.bool("training.include_weak_calibration_rows", false),
+                parser.bool("training.require_target_variation", true),
                 parser.enumeration("training.feature_selection_mode",
                         FeatureSelectionMode.RATIO_ONLY, FeatureSelectionMode.class), thresholds);
         try {

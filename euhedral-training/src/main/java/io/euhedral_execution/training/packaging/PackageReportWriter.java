@@ -1,5 +1,6 @@
 package io.euhedral_execution.training.packaging;
 
+import io.euhedral_execution.training.data.PolicyVector;
 import io.euhedral_execution.training.data.enums.EvidenceOrigin;
 import io.euhedral_execution.training.data.io.CanonicalCsv;
 import io.euhedral_execution.training.learning.enums.ModelAcceptanceStatus;
@@ -58,6 +59,7 @@ final class PackageReportWriter {
                         .append(cell(row.get(14))).append(" |\n");
                 emitted++;
             }
+            appendVectors(out, source.winners(), winnerVectors(source.merge()));
         }
         out.append("\n## Required source scenarios\n\n"
                 + "| Scenario ID | Environment | Sources | Physical cores | Ratio |\n"
@@ -79,14 +81,26 @@ final class PackageReportWriter {
             out.append("Calibration is not available. Acceptance mode: `n/a`.\n");
         } else {
             Map<String, Integer> counts = calibrationCounts(source.merge());
-            out.append("- Reference: ").append(counts.getOrDefault("REFERENCE", 0)).append("\n")
-                    .append("- Strong: ").append(counts.getOrDefault("CALIBRATED", 0))
-                    .append("\n- Weak: ")
+            out.append("Counts describe benchmark runs, not candidate policies. Reference runs "
+                            + "are accepted baselines and are separate from strong and weak "
+                            + "non-reference calibrations.\n\n")
+                    .append("- Reference runs: ")
+                    .append(counts.getOrDefault("REFERENCE", 0)).append("\n")
+                    .append("- Strong calibrated runs: ")
+                    .append(counts.getOrDefault("CALIBRATED", 0))
+                    .append("\n- Weak calibrated runs: ")
                     .append(counts.getOrDefault("WEAKLY_CALIBRATED", 0))
-                    .append("\n- Failed/uncalibrated: ")
+                    .append("\n- Failed/uncalibrated runs: ")
                     .append(counts.getOrDefault("UNCALIBRATED", 0)).append("\n")
                     .append("- Acceptance mode: `").append(source.calibrationAcceptance())
                     .append("`\n");
+            if (counts.getOrDefault("REFERENCE", 0) > 0
+                    && counts.getOrDefault("CALIBRATED", 0) == 0
+                    && counts.getOrDefault("WEAKLY_CALIBRATED", 0) == 0
+                    && counts.getOrDefault("UNCALIBRATED", 0) == 0) {
+                out.append("- Interpretation: only bootstrap reference runs have been merged; "
+                        + "no non-reference run has reached calibration yet.\n");
+            }
         }
         out.append("\n## Model\n\n");
         if (source.modelMetadata() == null) {
@@ -157,6 +171,7 @@ final class PackageReportWriter {
                         .append(" |\n");
             }
         }
+        appendVectors(out, source.winners(), winnerVectors(source.merge()));
         out.append("\n## Incomplete policies\n\n"
                 + "| Policy ID | Valid | Observed | Required | Missing scenarios |\n"
                 + "| --- | ---: | ---: | ---: | --- |\n");
@@ -170,6 +185,58 @@ final class PackageReportWriter {
             }
         }
         return out.toString();
+    }
+
+    private static Map<String, double[]> winnerVectors(Path merge) throws IOException {
+        List<List<String>> rows = CanonicalCsv.read(
+                merge.resolve("robust-leaders.vectors.csv"));
+        if (rows.isEmpty()) {
+            throw new IllegalArgumentException("Missing robust leader vectors");
+        }
+        int policyColumn = rows.getFirst().indexOf("policy_id");
+        int weightColumn = rows.getFirst().indexOf("weight_00_bits");
+        if (policyColumn < 0 || weightColumn != policyColumn + 1
+                || rows.getFirst().size() != weightColumn + PolicyVector.WIDTH) {
+            throw new IllegalArgumentException("Invalid robust leader vector schema");
+        }
+        Map<String, double[]> result = new HashMap<>();
+        for (int index = 1; index < rows.size(); index++) {
+            List<String> row = rows.get(index);
+            if (row.size() != rows.getFirst().size()) {
+                throw new IllegalArgumentException("Invalid robust leader vector row");
+            }
+            double[] vector = new double[PolicyVector.WIDTH];
+            for (int lane = 0; lane < vector.length; lane++) {
+                vector[lane] = Double.longBitsToDouble(
+                        Long.parseUnsignedLong(row.get(weightColumn + lane), 16));
+                if (!Double.isFinite(vector[lane])) {
+                    throw new IllegalArgumentException("Non-finite robust leader vector");
+                }
+            }
+            if (result.put(row.get(policyColumn), vector) != null) {
+                throw new IllegalArgumentException("Duplicate robust leader vector");
+            }
+        }
+        return Map.copyOf(result);
+    }
+
+    private static void appendVectors(StringBuilder out, List<String> policies,
+            Map<String, double[]> vectors) {
+        out.append("\n### Winning policy vectors\n\n"
+                + "Weights are decimal values in runtime lane order `weight_00` through "
+                + "`weight_27`.\n");
+        for (String policy : policies) {
+            double[] vector = vectors.get(policy);
+            if (vector == null) {
+                throw new IllegalArgumentException("Winning policy lacks a vector: " + policy);
+            }
+            out.append("\n#### ").append(cell(policy)).append("\n\n```text\n[");
+            for (int lane = 0; lane < vector.length; lane++) {
+                if (lane > 0) out.append(", ");
+                out.append(Double.toString(vector[lane]));
+            }
+            out.append("]\n```\n");
+        }
     }
 
     private static String scenarios(PackageSourceSet source) throws IOException {
