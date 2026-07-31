@@ -263,6 +263,7 @@ public final class ClosedLoopRunner {
                     checkpoint.carryForward(), checkpoint.anchorSetId(),
                     checkpoint.calibrationPlan(), checkpoint.latestMerge(),
                     checkpoint.latestModel(), checkpoint.pendingSchedule(), pendingRows);
+            CheckpointSnapshotCodec.writeNext(config.workspace(), checkpoint);
             Path output = config.workspace().resolve(pending.evidenceRelativePath());
             BenchmarkRunContext context;
             if (Files.isRegularFile(output.resolve("COMPLETE"))) {
