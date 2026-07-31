@@ -859,3 +859,94 @@ Hand off this blueprint for developer review and merge into the P0 root only whe
 - implementation has not started on this unmerged blueprint child.
 
 No unresolved material decision remains.
+
+## Implementation completion record
+
+### Result
+
+P0 implementation is complete on
+`hardware-utils-overhaul/phase-0-compatibility-baseline-implementation`. The module now has a
+deterministic compiled compatibility gate against `900d8c50`. No production Java, native source,
+header, Zig, source resource, downstream module, CI, benchmark, or training file changed.
+
+### Changed files
+
+- `euhedral-hardware-utils/pom.xml`: test-scoped ASM 9.9.1 and the three bounded Surefire path
+  properties.
+- `euhedral-hardware-utils/src/test/java/io/euhedral_execution/hardware_utils/compatibility/**`:
+  ASM surface/native readers and generators, canonical manifest parser, subset/exact comparator,
+  deterministic report, defect-ledger parser, mutation tests, and focused behavior tests.
+- `euhedral-hardware-utils/src/test/resources/compatibility/api-900d8c50.tsv`
+- `euhedral-hardware-utils/src/test/resources/compatibility/native-contract-900d8c50.tsv`
+- `euhedral-hardware-utils/src/test/resources/compatibility/defect-ledger.tsv`
+- This completion record and the temporary P0 status block in `AGENTS.md`.
+
+### Commands and results
+
+- Captured SHA-256 fingerprints for every regular file below hardware `src/main/java` and
+  `src/main/resources`, including ignored files.
+- Ran direct `clean:clean resources:resources compiler:compile resources:testResources
+  compiler:testCompile`: passed. This selected no lifecycle phase and did not invoke Zig.
+- Created an isolated `/tmp` tree with
+  `git archive --format=tar 900d8c50 pom.xml euhedral-hardware-utils` and compiled it with direct
+  `resources:resources compiler:compile`: passed.
+- Generated the API fixture twice from the isolated compiled baseline through direct
+  `org.codehaus.mojo:exec-maven-plugin:3.6.3:java`: byte-identical.
+- Generated the native fixture twice from the same isolated compiled baseline: byte-identical.
+- Ran the complete direct-goal command
+  `resources:resources compiler:compile resources:testResources compiler:testCompile
+  surefire:test` twice after final fixture generation: both runs passed, 17 tests, 0 failures,
+  0 errors, 0 skipped.
+- Compared the two compatibility reports: byte-identical.
+- Recomputed the active source/resource fingerprint and compared it with the initial fingerprint:
+  byte-identical.
+- `git diff --exit-code -- euhedral-hardware-utils/src/main/java
+  euhedral-hardware-utils/src/main/resources`: passed.
+- `git diff --check`: passed.
+
+Fixture/report SHA-256:
+
+```text
+bc950202e4e4659a5e1263fc45ff91cea5bc23ea3e9214d4918586f9c9f7f994  api-900d8c50.tsv
+ca986693f60a5caf6f1eab902aec4282f8adaa1fda4dc564594acbb57273f5af  native-contract-900d8c50.tsv
+8632f21f5494707a040d603743c3195fb59b71b1afc3cb2b90292fa3d8766a9c  defect-ledger.tsv
+eea7d3e22c4d7ab1c5217debeb9aafb5e1c277165d8f3b3775436add90c575a2  compatibility-report.txt
+```
+
+### Acceptance evidence
+
+1. The compiled baseline came only from the isolated `900d8c50` archive and two generations are
+   byte-identical.
+2. The module descriptor is compared as an exact set, including name, flags, version, all
+   requires, and all five exports.
+3. Baseline public/protected types and members retain descriptors, hierarchy, interfaces,
+   signatures, modifiers, exceptions, typed constants, nested/nest/permitted metadata, and
+   ordered record components.
+4. Additive declarations pass and are reported; missing or changed baseline declarations fail.
+5. Comparator mutation coverage rejects a changed method descriptor, record-component order, and
+   module descriptor with stable diagnostics.
+6. The compiled member comparison includes the static `SystemInfo` facade and generated `isX86`.
+7. The native fixture contains exactly eight aggregate products, every Java native declaration,
+   derived short JNI name, visibility/static state, and exact N01/N02 exception records. Future
+   overloads receive and require deterministic long JNI names.
+8. Every canonical mask case, round trip, accepted prefix, and malformed input contract passes.
+9. ASM proves the default constructor delegates with `Duration.ofMillis(200)` and the test proves
+   exactly `200_000_000L` ns.
+10. Two latch-controlled executor submissions enter concurrently on distinct freshly created
+    threads and cleanup removes the CPU registry entry.
+11. The host-derived core-zero reservation matches the settled rule and leaves a nonempty
+    topology.
+12. The exact ledger contains B01-B07, T01-T06, A01-A04, R01-R14, N01-N02, and C01-C02 with the
+    prescribed owner phases, subjects, invariants, and later regression IDs.
+13. No incorrect numeric, topology, pressure, lifecycle, affinity, native, or core-policy output
+    is frozen as a golden value.
+14. Before/after production source/resource fingerprints are byte-identical.
+15. No artifact was installed or published; no Zig/native lifecycle, root reactor, or training
+    path/command was invoked.
+16. Both final test runs and deterministic comparisons passed; scope checks show only P0-owned
+    files.
+
+Approved deviations: none.
+
+Environmental limits: none for P0. The tests ran on the available Linux host and required no
+Docker, cross-platform runner, native generation, or network download.
