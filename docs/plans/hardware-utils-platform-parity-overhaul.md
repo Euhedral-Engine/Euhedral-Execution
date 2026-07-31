@@ -980,44 +980,44 @@ Execution still follows P0 through P8. This ranking only identifies how demandin
 Implementation selections are provisional until their blueprints complete the mandatory sizing,
 split, and implementation-model reassessments.
 
-| Rank | Prompt                                                     | OpenAI option           | Anthropic option                                                |
-|-----:|------------------------------------------------------------|-------------------------|-----------------------------------------------------------------|
-|    1 | P4 blueprint - sampling and pressure mathematics/lifecycle | `gpt-5.6-sol`, `max`    | Opus 4.8, thinking ~32k                                         |
-|    2 | P7 blueprint - macOS public-API parity                     | `gpt-5.6-sol`, `max`    | Opus 4.8, thinking ~32k                                         |
-|    3 | P6 blueprint - Windows processor-group/native parity       | `gpt-5.6-sol`, `max`    | Opus 4.8, thinking ~32k                                         |
-|    4 | P5 blueprint - Linux cgroup/provider/libc portability      | `gpt-5.6-sol`, `max`    | Opus 4.8, thinking ~32k                                         |
-|    5 | P3 blueprint - affinity and executor concurrency           | `gpt-5.6-sol`, `max`    | Opus 4.8, thinking ~24k                                         |
-|    6 | P2 blueprint - topology and snapshot ownership             | `gpt-5.6-sol`, `max`    | Opus 4.8, thinking ~24k                                         |
-|    7 | P1 blueprint - native build/JNI/package ABI                | `gpt-5.6-sol`, `max`    | Opus 4.8, thinking ~24k                                         |
-|    8 | P8 blueprint - core hot-loop and release integration       | `gpt-5.6-sol`, `max`    | Opus 4.8, thinking ~32k                                         |
-|    9 | P0 blueprint - compatibility/test baseline                 | `gpt-5.6-sol`, `high`   | Sonnet 5, thinking ~16k                                         |
-|   10 | P4 provisional implementation                              | `gpt-5.6-sol`, `high`   | Sonnet 5, thinking ~16k                                         |
-|   11 | P7 provisional implementation                              | `gpt-5.6-sol`, `high`   | Sonnet 5, thinking ~16k                                         |
-|   12 | P6 provisional implementation                              | `gpt-5.6-sol`, `high`   | Sonnet 5, thinking ~16k                                         |
-|   13 | P5 provisional implementation                              | `gpt-5.6-sol`, `high`   | Sonnet 5, thinking ~16k                                         |
-|   14 | P3 provisional implementation                              | `gpt-5.6-sol`, `high`   | Sonnet 5, thinking ~12k                                         |
-|   15 | P2 provisional implementation                              | `gpt-5.6-sol`, `high`   | Sonnet 5, thinking ~12k                                         |
-|   16 | P1 provisional implementation                              | `gpt-5.6-sol`, `high`   | Sonnet 5, thinking ~12k                                         |
-|   17 | P8 provisional implementation                              | `gpt-5.6-sol`, `high`   | Sonnet 5, thinking ~16k                                         |
-|   18 | P0 provisional implementation                              | `gpt-5.6-sol`, `medium` | Sonnet 5, thinking ~6k (Haiku 4.5 acceptable if cost-sensitive) |
-|   19 | P8 validation                                              | `gpt-5.6-sol`, `high`   | Sonnet 5, thinking ~12k                                         |
-|   20 | P4 validation                                              | `gpt-5.6-sol`, `high`   | Sonnet 5, thinking ~12k                                         |
-|   21 | P7 validation                                              | `gpt-5.6-sol`, `high`   | Sonnet 5, thinking ~12k                                         |
-|   22 | P6 validation                                              | `gpt-5.6-sol`, `high`   | Sonnet 5, thinking ~12k                                         |
-|   23 | P5 validation                                              | `gpt-5.6-sol`, `high`   | Sonnet 5, thinking ~12k                                         |
-|   24 | P3 validation                                              | `gpt-5.6-sol`, `high`   | Sonnet 5, thinking ~8k                                          |
-|   25 | P2 validation                                              | `gpt-5.6-sol`, `high`   | Sonnet 5, thinking ~8k                                          |
-|   26 | P1 validation                                              | `gpt-5.6-sol`, `high`   | Sonnet 5, thinking ~8k                                          |
-|   27 | P0 validation                                              | `gpt-5.6-sol`, `medium` | Sonnet 5, thinking ~4k (Haiku 4.5 acceptable)                   |
-|   28 | P8 final conformance audit                                 | `gpt-5.6-sol`, `high`   | Opus 4.8, thinking ~16k                                         |
-|   29 | P4 conformance audit                                       | `gpt-5.6-sol`, `high`   | Opus 4.8, thinking ~16k                                         |
-|   30 | P7 conformance audit                                       | `gpt-5.6-sol`, `high`   | Opus 4.8, thinking ~16k                                         |
-|   31 | P6 conformance audit                                       | `gpt-5.6-sol`, `high`   | Opus 4.8, thinking ~16k                                         |
-|   32 | P5 conformance audit                                       | `gpt-5.6-sol`, `high`   | Opus 4.8, thinking ~16k                                         |
-|   33 | P3 conformance audit                                       | `gpt-5.6-sol`, `high`   | Sonnet 5, thinking ~8k                                          |
-|   34 | P2 conformance audit                                       | `gpt-5.6-sol`, `high`   | Sonnet 5, thinking ~8k                                          |
-|   35 | P1 conformance audit                                       | `gpt-5.6-sol`, `high`   | Sonnet 5, thinking ~8k                                          |
-|   36 | P0 conformance audit                                       | `gpt-5.6-sol`, `medium` | Sonnet 5, thinking ~4k                                          |
+| Rank | Prompt | Selection |
+| ---: | --- | --- |
+| 1 | P4 blueprint - sampling and pressure mathematics/lifecycle | `gpt-5.6-sol`, `max` |
+| 2 | P7 blueprint - macOS public-API parity | `gpt-5.6-sol`, `max` |
+| 3 | P6 blueprint - Windows processor-group/native parity | `gpt-5.6-sol`, `max` |
+| 4 | P5 blueprint - Linux cgroup/provider/libc portability | `gpt-5.6-sol`, `max` |
+| 5 | P3 blueprint - affinity and executor concurrency | `gpt-5.6-sol`, `max` |
+| 6 | P2 blueprint - topology and snapshot ownership | `gpt-5.6-sol`, `max` |
+| 7 | P1 blueprint - native build/JNI/package ABI | `gpt-5.6-sol`, `max` |
+| 8 | P8 blueprint - core hot-loop and release integration | `gpt-5.6-sol`, `max` |
+| 9 | P0 blueprint - compatibility/test baseline | `gpt-5.6-sol`, `high` |
+| 10 | P4 provisional implementation | `gpt-5.6-sol`, `high` |
+| 11 | P7 provisional implementation | `gpt-5.6-sol`, `high` |
+| 12 | P6 provisional implementation | `gpt-5.6-sol`, `high` |
+| 13 | P5 provisional implementation | `gpt-5.6-sol`, `high` |
+| 14 | P3 provisional implementation | `gpt-5.6-sol`, `high` |
+| 15 | P2 provisional implementation | `gpt-5.6-sol`, `high` |
+| 16 | P1 provisional implementation | `gpt-5.6-sol`, `high` |
+| 17 | P8 provisional implementation | `gpt-5.6-sol`, `high` |
+| 18 | P0 provisional implementation | `gpt-5.6-sol`, `medium` |
+| 19 | P8 validation | `gpt-5.6-sol`, `high` |
+| 20 | P4 validation | `gpt-5.6-sol`, `high` |
+| 21 | P7 validation | `gpt-5.6-sol`, `high` |
+| 22 | P6 validation | `gpt-5.6-sol`, `high` |
+| 23 | P5 validation | `gpt-5.6-sol`, `high` |
+| 24 | P3 validation | `gpt-5.6-sol`, `high` |
+| 25 | P2 validation | `gpt-5.6-sol`, `high` |
+| 26 | P1 validation | `gpt-5.6-sol`, `high` |
+| 27 | P0 validation | `gpt-5.6-sol`, `medium` |
+| 28 | P8 final conformance audit | `gpt-5.6-sol`, `high` |
+| 29 | P4 conformance audit | `gpt-5.6-sol`, `high` |
+| 30 | P7 conformance audit | `gpt-5.6-sol`, `high` |
+| 31 | P6 conformance audit | `gpt-5.6-sol`, `high` |
+| 32 | P5 conformance audit | `gpt-5.6-sol`, `high` |
+| 33 | P3 conformance audit | `gpt-5.6-sol`, `high` |
+| 34 | P2 conformance audit | `gpt-5.6-sol`, `high` |
+| 35 | P1 conformance audit | `gpt-5.6-sol`, `high` |
+| 36 | P0 conformance audit | `gpt-5.6-sol`, `medium` |
 
 ### P0 - compatibility contract and deterministic test baseline
 
