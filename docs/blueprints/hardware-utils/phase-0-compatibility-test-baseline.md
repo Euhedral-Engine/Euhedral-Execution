@@ -968,3 +968,19 @@ toolchain fallback. No check was skipped and no environmental limitation prevent
 
 Detailed evidence and the 16-item acceptance matrix are recorded in
 `docs/validations/hardware-utils/phase-0-compatibility-test-baseline-validation.md`.
+
+## Conformance audit completion summary
+
+The independent P0 audit completed on
+`hardware-utils-overhaul/phase-0-compatibility-baseline-audit`. All 16 acceptance criteria are
+classified `satisfied`; no deviation, ambiguity, correction, or skipped check remains. The audit
+reran the direct compiler/test goals with pinned JDK 21.0.2 and Maven 3.9.16, yielding 17 passing
+tests with no failures, errors, or skips. The published compatibility report is `PASS` with an
+identical SHA-256 (`eea7d3e22e4d7ab1c5217debeb9aafb5e1c277165d8f3b3775436add90c575a2`), and
+the active Java/resource fingerprint and production diff remained unchanged. Full command and
+requirement evidence is in
+`docs/audits/hardware-utils/phase-0-compatibility-test-baseline-conformance.md`.
+
+The developer authorized P0 root closeout on 2026-07-30. The audit child merge is `ed839216`; the
+P0 closeout commit tracks the conformance report and removes the temporary P0 status block. P1 must
+branch from that completed root.
