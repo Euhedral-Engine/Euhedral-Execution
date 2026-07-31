@@ -336,3 +336,13 @@ Before handing work back:
 3. Inspect `git diff --check`.
 4. Inspect `git status --short` and confirm only intended files changed.
 5. Report tests that could not run and the exact environmental reason.
+
+## Temporary hardware-utils overhaul status (P0)
+
+- Planning context completed: `agent/hardware-utils-overhaul-plan`
+- Active root: `hardware-utils-overhaul/phase-0-compatibility-baseline`
+- Blueprint child completed: `hardware-utils-overhaul/phase-0-compatibility-baseline-blueprint`
+- Implementation child active, implementation complete, awaiting review and merge:
+  `hardware-utils-overhaul/phase-0-compatibility-baseline-implementation`
+- Blueprint and completion record:
+  `docs/blueprints/hardware-utils/phase-0-compatibility-test-baseline.md`
