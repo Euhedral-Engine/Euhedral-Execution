@@ -1221,6 +1221,17 @@ split, and implementation-model reassessments.
 > only after the authorized merge, P0 status-block removal, and closeout-summary update; do not
 > create P1 earlier.
 
+#### P0 closeout summary
+
+P0 is complete. Audit child `hardware-utils-overhaul/phase-0-compatibility-baseline-audit`
+independently classified all 16 acceptance criteria as `satisfied`, reran the direct-goal hardware
+compatibility suite with 17 tests passing, and confirmed the `PASS` compatibility report hash,
+source/resource non-contamination, and clean diff checks. No approved deviations or environmental
+limits remain. The developer authorized closeout on 2026-07-30; the audit child merge is
+`ed839216`, and the subsequent P0 closeout commit tracks the audit report and removes the temporary
+status block. P1 must branch from that completed root; its blueprint records the exact inherited
+commit.
+
 ### P1 - universal Zig build, JNI ABI, loader, and packaging
 
 #### P1 blueprint prompt
