@@ -3,6 +3,7 @@ package io.euhedral_execution.hardware_utils.compatibility;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.euhedral_execution.hardware_utils.compatibility.helpers.TestPaths;
 import java.nio.file.Files;
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicBoolean;

@@ -1,6 +1,8 @@
-package io.euhedral_execution.hardware_utils.compatibility;
+package io.euhedral_execution.hardware_utils.compatibility.helpers;
 
+import io.euhedral_execution.hardware_utils.compatibility.ApiSurface;
 import io.euhedral_execution.hardware_utils.compatibility.ApiSurface.Entry;
+import io.euhedral_execution.hardware_utils.compatibility.CompatibilityReport;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -8,9 +10,9 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 
-final class ApiSurfaceComparator {
+public final class ApiSurfaceComparator {
 
-    static CompatibilityReport compare(ApiSurface baseline, ApiSurface current) {
+    public static CompatibilityReport compare(ApiSurface baseline, ApiSurface current) {
         List<CompatibilityReport.Difference> removed = new ArrayList<>();
         List<CompatibilityReport.Difference> changed = new ArrayList<>();
         List<CompatibilityReport.Difference> added = new ArrayList<>();

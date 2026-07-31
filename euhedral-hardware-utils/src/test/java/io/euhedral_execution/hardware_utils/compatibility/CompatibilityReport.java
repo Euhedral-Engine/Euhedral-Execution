@@ -7,10 +7,10 @@ import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.List;
 
-record CompatibilityReport(boolean moduleSame, List<Difference> removed, List<Difference> changed,
-                           List<Difference> added) {
+public record CompatibilityReport(boolean moduleSame, List<Difference> removed, List<Difference> changed,
+                                  List<Difference> added) {
 
-    CompatibilityReport(boolean moduleSame, List<Difference> removed, List<Difference> changed,
+    public CompatibilityReport(boolean moduleSame, List<Difference> removed, List<Difference> changed,
             List<Difference> added) {
         Comparator<Difference> order = Comparator.comparing(Difference::key, ApiSurface.UTF8_ORDER);
         this.moduleSame = moduleSame;
@@ -50,7 +50,7 @@ record CompatibilityReport(boolean moduleSame, List<Difference> removed, List<Di
         Files.writeString(path, render(), StandardCharsets.UTF_8);
     }
 
-    record Difference(String key, String baselineValue, String currentValue) {
+    public record Difference(String key, String baselineValue, String currentValue) {
 
     }
 }

@@ -1,5 +1,6 @@
 package io.euhedral_execution.hardware_utils.compatibility;
 
+import io.euhedral_execution.hardware_utils.compatibility.helpers.ApiSurfaceReader;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -15,7 +16,7 @@ import java.util.TreeMap;
 public final class ApiSurface {
 
     static final String BASELINE = "900d8c50";
-    static final Comparator<String> UTF8_ORDER = (left, right) -> {
+    public static final Comparator<String> UTF8_ORDER = (left, right) -> {
         byte[] a = left.getBytes(StandardCharsets.UTF_8);
         byte[] b = right.getBytes(StandardCharsets.UTF_8);
         int length = Math.min(a.length, b.length);
@@ -116,7 +117,7 @@ public final class ApiSurface {
     }
     private final NavigableMap<String, Entry> entries;
 
-    ApiSurface(Collection<Entry> entries) {
+    public ApiSurface(Collection<Entry> entries) {
         NavigableMap<String, Entry> collected = new TreeMap<>(UTF8_ORDER);
         for (Entry entry : entries) {
             Entry old = collected.putIfAbsent(entry.identity(), entry);
@@ -127,11 +128,11 @@ public final class ApiSurface {
         this.entries = java.util.Collections.unmodifiableNavigableMap(collected);
     }
 
-    NavigableMap<String, Entry> entries() {
+    public NavigableMap<String, Entry> entries() {
         return this.entries;
     }
 
-    List<Entry> moduleEntries() {
+    public List<Entry> moduleEntries() {
         return this.entries.values().stream()
                 .filter(entry -> entry.kind().startsWith("module"))
                 .toList();
@@ -155,13 +156,13 @@ public final class ApiSurface {
         }
     }
 
-    record Entry(String kind, String key, String value) {
+    public record Entry(String kind, String key, String value) {
 
         String identity() {
             return kind + '\t' + key;
         }
 
-        String line() {
+        public String line() {
             return escape(kind) + '\t' + escape(key) + '\t' + escape(value);
         }
     }

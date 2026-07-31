@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.euhedral_execution.hardware_utils.compatibility.ApiSurface.Entry;
+import io.euhedral_execution.hardware_utils.compatibility.helpers.ApiSurfaceComparator;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;

@@ -2,6 +2,8 @@ package io.euhedral_execution.hardware_utils.compatibility;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import io.euhedral_execution.hardware_utils.compatibility.helpers.DefectLedger;
+import io.euhedral_execution.hardware_utils.compatibility.helpers.TestPaths;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.stream.Collectors;

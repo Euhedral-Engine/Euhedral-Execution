@@ -1,6 +1,7 @@
 package io.euhedral_execution.hardware_utils.compatibility;
 
 import io.euhedral_execution.hardware_utils.compatibility.ApiSurface.Entry;
+import io.euhedral_execution.hardware_utils.compatibility.helpers.ApiSurfaceReader;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
