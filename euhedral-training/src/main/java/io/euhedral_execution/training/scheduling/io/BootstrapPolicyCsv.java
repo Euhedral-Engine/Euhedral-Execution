@@ -23,7 +23,6 @@ public final class BootstrapPolicyCsv {
             throw new IllegalArgumentException("Invalid bootstrap header");
         }
         PolicyRegistry registry = new PolicyRegistry();
-        ArrayList<PolicyVector> policies = new ArrayList<>(expectedPolicyCount);
         for (int row = 1; row < rows.size(); row++) {
             List<String> fields = rows.get(row);
             if (fields.size() != 31 || !fields.get(0).equals("1")
@@ -38,9 +37,8 @@ public final class BootstrapPolicyCsv {
             if (!policy.id().canonical().equals(fields.get(2))) {
                 throw new IllegalArgumentException("Bootstrap policy ID mismatch");
             }
-            policies.add(policy);
         }
-        return List.copyOf(policies);
+        return List.copyOf(registry.policiesInIdOrder());
     }
 
     private BootstrapPolicyCsv() {

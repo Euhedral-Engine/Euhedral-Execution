@@ -27,6 +27,9 @@ import io.euhedral_execution.training.data.io.ObservationBundleReader;
 import io.euhedral_execution.training.data.io.ObservationBundleWriter;
 import io.euhedral_execution.training.optimization.SchedulerSeeds;
 import io.euhedral_execution.training.utils.BenchmarkFrameSink;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
@@ -45,6 +48,8 @@ import java.util.concurrent.locks.LockSupport;
 import java.util.function.BooleanSupplier;
 
 public final class BenchmarkRunner {
+    private static final Logger LOGGER = LoggerFactory.getLogger(BenchmarkRunner.class);
+
     public static BenchmarkRunContext runV1(NativeBenchmarkRunPlan plan,
             BooleanSupplier stopRequested) throws Exception {
         validatePlan(plan, true);
@@ -75,16 +80,14 @@ public final class BenchmarkRunner {
             for (ScheduledPolicy policy : plan.policies()) {
                 writer.registerPolicy(policy);
             }
-            boolean paused = true;
+            int currentP = 0;
+            int policies = plan.policies().size();
             for (ScheduledPolicy policy : plan.policies()) {
-                if (!paused) {
-                    throw new IllegalStateException("Benchmark policy boundary is not paused");
-                }
+                LOGGER.info("Scenario: {} Iteration: {} Policy: {} / {}", plan.scenario().toString(), plan.iteration(), currentP++, policies);
                 if (stopRequested.getAsBoolean()) {
                     throw ClosedLoopRunner.stopSignal();
                 }
                 backend.beginPolicy(policy);
-                paused = false;
                 ArrayList<Measurement> measurements = new ArrayList<>(
                         plan.executionConfig().expectedRepetitions());
                 boolean previousTimeout = false;
@@ -116,7 +119,6 @@ public final class BenchmarkRunner {
                     }
                 } finally {
                     backend.pause();
-                    paused = true;
                 }
                 if (!backend.paused()) {
                     throw new IllegalStateException("Evidence write requires paused sources");
@@ -127,9 +129,6 @@ public final class BenchmarkRunner {
                 }
             }
             context = writer.complete(time.instant());
-        } catch (Throwable failure) {
-            // The unique attempt directory is intentionally retained for diagnosis/retry.
-            throw failure;
         }
         ObservationBundle validated = ObservationBundleReader.read(attemptDirectory);
         validateBundle(plan, validated);

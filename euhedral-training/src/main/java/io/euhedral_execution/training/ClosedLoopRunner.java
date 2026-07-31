@@ -46,6 +46,9 @@ import io.euhedral_execution.training.scheduling.data.RotationGroup;
 import io.euhedral_execution.training.scheduling.io.BootstrapPolicyCsv;
 import io.euhedral_execution.training.scheduling.io.OptimizationCorpusReader;
 import io.euhedral_execution.training.scheduling.io.ScheduleCodec;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.AtomicMoveNotSupportedException;
@@ -67,6 +70,7 @@ import java.util.UUID;
 
 public final class ClosedLoopRunner {
     private static final int GENERATED_BOOTSTRAP_START_INDEX = 1024;
+    private static final Logger LOGGER = LoggerFactory.getLogger(ClosedLoopRunner.class);
 
     public static final class StopRequested extends RuntimeException {
         private StopRequested() {
@@ -212,6 +216,8 @@ public final class ClosedLoopRunner {
 
     private static LoadedCheckpoint runBootstrap(ClosedLoopConfig config,
             ClosedLoopServices services, LoadedCheckpoint loaded) throws Exception {
+        LOGGER.info("Running bootstrap calibration.");
+
         LoadedCheckpoint current = loaded;
         ClosedLoopCheckpoint checkpoint = current.checkpoint();
         List<SourceScenario> runnable = runnable(config, services);
@@ -257,7 +263,6 @@ public final class ClosedLoopRunner {
                     checkpoint.carryForward(), checkpoint.anchorSetId(),
                     checkpoint.calibrationPlan(), checkpoint.latestMerge(),
                     checkpoint.latestModel(), checkpoint.pendingSchedule(), pendingRows);
-            current = CheckpointSnapshotCodec.writeNext(config.workspace(), checkpoint);
             Path output = config.workspace().resolve(pending.evidenceRelativePath());
             BenchmarkRunContext context;
             if (Files.isRegularFile(output.resolve("COMPLETE"))) {
