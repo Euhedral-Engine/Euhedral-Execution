@@ -67,7 +67,7 @@ class PolicyGroupedSplitterTest {
         var table = new ScenarioLearningTable(rows, policies, scenarios, audit, "0".repeat(64));
         ScenarioTrainingConfig config = new ScenarioTrainingConfig(
                 ScenarioTrainingConfig.defaults().splitSeed(), 1, "cpu", 3, 1, 3, 1, 1, 1,
-                .001f, .0001f, .02f, 1, 2, 1, 1, 1, 1, false,
+                .001f, .0001f, .02f, 1, 2, 1, 1, 1, 1, false, true,
                 FeatureSelectionMode.RATIO_ONLY, EvaluationThresholds.defaults());
         PolicyGroupedSplit split = PolicyGroupedSplitter.split(table, config.splitSeed(), config);
         Map<PolicyId, Set<LearningPartition>> seen = new HashMap<>();
@@ -166,11 +166,40 @@ class PolicyGroupedSplitterTest {
         ScenarioTrainingConfig impossible = new ScenarioTrainingConfig(
                 ScenarioTrainingConfig.defaults().splitSeed(), 1, "cpu", 3, 1, 3,
                 1, 1, 1, 0.001f, 0.0001f, 0.02f,
-                10_000, 2, 1, 1, 1, 1, false,
+                10_000, 2, 1, 1, 1, 1, false, true,
                 FeatureSelectionMode.RATIO_ONLY, EvaluationThresholds.defaults());
         assertThatThrownBy(() -> PolicyGroupedSplitter.split(
                 table, impossible.splitSeed(), impossible))
                 .isInstanceOf(InsufficientScenarioLearningDataException.class);
+    }
+
+    @Test
+    void coldStartAllowsSparseTestScenarioCoverage() {
+        ScenarioTrainingConfig strict = ScenarioTrainingConfig.defaults();
+        ScenarioTrainingConfig coldStart = strict.coldStart();
+        SourceScenario heldOut = scenarios().first();
+        List<ScenarioResult> sparseTest = scenarioResults().stream().map(result ->
+                result.scenario().equals(heldOut)
+                        && PolicyGroupedSplitter.partition(
+                        result.policy().id(), strict.splitSeed()) == LearningPartition.TEST
+                        ? missing(result) : result).toList();
+        ScenarioLearningTable table = ScenarioLearningReader.fromScenarioResults(
+                sparseTest, scenarios(), false);
+
+        assertThatThrownBy(() -> PolicyGroupedSplitter.split(
+                table, strict.splitSeed(), strict))
+                .isInstanceOf(InsufficientScenarioLearningDataException.class)
+                .hasMessageContaining("test lacks rows for");
+
+        PolicyGroupedSplit split = PolicyGroupedSplitter.split(
+                table, coldStart.splitSeed(), coldStart);
+
+        assertThat(split.trainingRows())
+                .anyMatch(row -> row.scenario().equals(heldOut));
+        assertThat(split.validationRows())
+                .anyMatch(row -> row.scenario().equals(heldOut));
+        assertThat(split.testRows())
+                .noneMatch(row -> row.scenario().equals(heldOut));
     }
 
     @Test

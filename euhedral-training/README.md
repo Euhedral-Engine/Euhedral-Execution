@@ -65,10 +65,14 @@ must have a final LF and no BOM or CR.
 must be benchmarked natively in every exact required scenario before they can inform calibration or
 learning. If neither `run.bootstrap_policies` nor `run.initial_calibration_plan` is provided, the
 runner generates deterministic bootstrap vectors from `SequenceFinder`, starting at Sobol index
-`1024`, using `run.candidate_budget` rows. For required environments on different machines, point
+`1024`, using `run.candidate_budget` rows, and persists them under the workspace before
+benchmarking. For required environments on different machines, point
 each invocation at the same workspace, change only `run.active_environment_id`, and resume
 sequentially. The checkpoint waits until native bootstrap evidence exists for all required
-scenarios.
+scenarios. If the first cold-start model is rejected, iteration 1 still runs with deterministic
+neutral predictions so the loop can collect non-reference evidence and retry normal training.
+Later iterations that still have sparse policy partitions retry with the same relaxed training
+configuration; a rejected sparse-data model likewise uses neutral predictions for data collection.
 
 To inspect the scenario-model hardware environment without training or benchmarking:
 

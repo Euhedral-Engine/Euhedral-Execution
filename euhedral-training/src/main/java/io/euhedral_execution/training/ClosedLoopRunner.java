@@ -19,8 +19,12 @@ import io.euhedral_execution.training.data.ClosedLoopResult;
 import io.euhedral_execution.training.data.SourceScenario;
 import io.euhedral_execution.training.data.io.ObservationBundle;
 import io.euhedral_execution.training.data.io.ObservationBundleReader;
+import io.euhedral_execution.training.learning.InsufficientScenarioLearningDataException;
 import io.euhedral_execution.training.learning.ScenarioConditionedModel;
 import io.euhedral_execution.training.learning.ScenarioModelTrainer;
+import io.euhedral_execution.training.learning.config.ScenarioTrainingConfig;
+import io.euhedral_execution.training.learning.data.PolicyPredictionCurve;
+import io.euhedral_execution.training.learning.data.ScenarioPrediction;
 import io.euhedral_execution.training.learning.enums.ModelAcceptanceStatus;
 import io.euhedral_execution.training.learning.inputs.ScenarioInputs;
 import io.euhedral_execution.training.learning.inputs.ScenarioTrainingRequest;
@@ -46,9 +50,6 @@ import io.euhedral_execution.training.scheduling.data.RotationGroup;
 import io.euhedral_execution.training.scheduling.io.BootstrapPolicyCsv;
 import io.euhedral_execution.training.scheduling.io.OptimizationCorpusReader;
 import io.euhedral_execution.training.scheduling.io.ScheduleCodec;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.AtomicMoveNotSupportedException;
@@ -67,6 +68,8 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public final class ClosedLoopRunner {
     private static final int GENERATED_BOOTSTRAP_START_INDEX = 1024;
@@ -137,6 +140,9 @@ public final class ClosedLoopRunner {
             });
             validateResumeArtifacts(config, current.checkpoint());
             rejectUnexpectedEvidence(config.workspace(), current.checkpoint());
+            if (config.initialCalibrationPlan().isEmpty()) {
+                resolveBootstrapPolicies(config);
+            }
             if (current.checkpoint().stage() == CheckpointStage.BOOTSTRAP_PENDING) {
                 try {
                     current = runBootstrap(config, services, current);
@@ -147,14 +153,18 @@ public final class ClosedLoopRunner {
                     return result(current, awaiting(config, current.checkpoint()));
                 }
             }
-            while (current.checkpoint().stage() != CheckpointStage.RUN_COMPLETE
-                    && current.checkpoint().stage() != CheckpointStage.MODEL_REJECTED) {
+            while (current.checkpoint().stage() != CheckpointStage.RUN_COMPLETE) {
                 if (services.stopRequested()) {
+                    return result(current, new TreeSet<>());
+                }
+                if (current.checkpoint().stage() == CheckpointStage.MODEL_REJECTED
+                        && !shouldContinueRejectedSparseDataModel(config,
+                        current.checkpoint())) {
                     return result(current, new TreeSet<>());
                 }
                 current = switch (current.checkpoint().stage()) {
                     case READY_TO_TRAIN -> train(config, services, current);
-                    case MODEL_READY -> schedule(config, services, current);
+                    case MODEL_READY, MODEL_REJECTED -> schedule(config, services, current);
                     case SCHEDULE_READY -> transition(config, current,
                             copy(current.checkpoint(), CheckpointStage.BENCHMARKING));
                     case BENCHMARKING -> benchmark(config, services, current);
@@ -327,8 +337,11 @@ public final class ClosedLoopRunner {
             copyFileAtomically(source, persisted);
             return BootstrapPolicyCsv.read(persisted, config.candidateBudget());
         }
-        return SequenceFinder.bootstrapVectors(GENERATED_BOOTSTRAP_START_INDEX,
-                config.candidateBudget());
+        List<io.euhedral_execution.training.data.PolicyVector> generated =
+                SequenceFinder.bootstrapVectors(GENERATED_BOOTSTRAP_START_INDEX,
+                        config.candidateBudget());
+        BootstrapPolicyCsv.write(persisted, generated);
+        return BootstrapPolicyCsv.read(persisted, config.candidateBudget());
     }
 
     private static LoadedCheckpoint train(ClosedLoopConfig config,
@@ -351,10 +364,13 @@ public final class ClosedLoopRunner {
                     modelDirectory.resolve("training-history.csv"), metadata.acceptanceStatus(),
                     metadata.featureSet());
         } else {
-            trained = services.train(new ScenarioTrainingRequest(
-                    ScenarioInputs.from(merge), config.requiredScenarios(),
-                    modelDirectory, config.commitSha(), config.dirtyWorkingTree(),
-                    config.trainingConfig()));
+            boolean bootstrapEvidence = checkpoint.evidence().stream().anyMatch(entry ->
+                    entry.source() == EvidenceSource.BOOTSTRAP);
+            ScenarioTrainingConfig trainingConfig = iteration == 1 && bootstrapEvidence
+                    ? config.trainingConfig().coldStart()
+                    : config.trainingConfig();
+            trained = trainWithColdStartFallback(config, services, merge, modelDirectory,
+                    trainingConfig, bootstrapEvidence, iteration);
         }
         CheckpointStage stage = trained.acceptanceStatus() == ModelAcceptanceStatus.ACCEPTED
                 ? CheckpointStage.MODEL_READY : CheckpointStage.MODEL_REJECTED;
@@ -369,6 +385,32 @@ public final class ClosedLoopRunner {
         return CheckpointSnapshotCodec.writeNext(config.workspace(), next);
     }
 
+    private static ScenarioTrainingArtifacts trainWithColdStartFallback(
+            ClosedLoopConfig config, ClosedLoopServices services,
+            DataMerger.MergeArtifacts merge, Path modelDirectory,
+            ScenarioTrainingConfig trainingConfig, boolean bootstrapEvidence,
+            int iteration) throws Exception {
+        ScenarioInputs inputs = ScenarioInputs.from(merge);
+        try {
+            return services.train(new ScenarioTrainingRequest(inputs,
+                    config.requiredScenarios(), modelDirectory, config.commitSha(),
+                    config.dirtyWorkingTree(), trainingConfig));
+        } catch (InsufficientScenarioLearningDataException insufficient) {
+            if (!bootstrapEvidence) {
+                throw insufficient;
+            }
+            ScenarioTrainingConfig coldStart = config.trainingConfig().coldStart();
+            if (trainingConfig.equals(coldStart)) {
+                throw insufficient;
+            }
+            LOGGER.warn("Iteration {} training data is still sparse; retrying with cold-start "
+                    + "config: {}", iteration, insufficient.getMessage());
+            return services.train(new ScenarioTrainingRequest(inputs,
+                    config.requiredScenarios(), modelDirectory, config.commitSha(),
+                    config.dirtyWorkingTree(), coldStart));
+        }
+    }
+
     private static LoadedCheckpoint schedule(ClosedLoopConfig config,
             ClosedLoopServices services, LoadedCheckpoint loaded) throws Exception {
         ClosedLoopCheckpoint checkpoint = loaded.checkpoint();
@@ -376,7 +418,15 @@ public final class ClosedLoopRunner {
         Path modelDirectory = resolve(config.workspace(), checkpoint.latestModel().orElseThrow());
         ScenarioModelMetadata metadata = ScenarioModelMetadataCodec.read(
                 modelDirectory.resolve(ScenarioModelMetadataCodec.FILE_NAME));
-        if (!metadata.deploymentEligible()
+        boolean sparseDataFallback = checkpoint.stage() == CheckpointStage.MODEL_REJECTED
+                && shouldContinueRejectedSparseDataModel(config, checkpoint);
+        boolean isProduction = checkpoint.stage() == CheckpointStage.MODEL_READY;
+        if (checkpoint.stage() == CheckpointStage.MODEL_REJECTED
+                && !sparseDataFallback) {
+            throw new IllegalArgumentException(
+                    "Only rejected sparse-data fallback models may continue");
+        }
+        if (isProduction && !metadata.deploymentEligible()
                 || !metadata.requiredScenarios().equals(config.requiredScenarios())) {
             throw new IllegalArgumentException("Accepted model scenario catalog mismatch");
         }
@@ -387,15 +437,11 @@ public final class ClosedLoopRunner {
         OptimizationCorpusView corpus = OptimizationCorpusReader.read(merge,
                 config.requiredScenarios());
         IterationSchedule expected;
-        try (ScenarioConditionedModel model = services.loadAcceptedModel(modelDirectory,
-                metadata.producer().trainingDevice())) {
-            PolicyCurvePredictor predictor = policies ->
-                    policies.isEmpty() ? List.of()
-                            : model.predictConfiguredCurves(policies).stream().map(curve ->
-                            PredictedPolicyRanker.summarize(curve,
-                                    config.requiredScenarios())).toList();
-            var rescored = CarryForwardQueue.rescore(checkpoint.carryForward(), predictor,
-                    iteration);
+        if (!isProduction) {
+            PolicyCurvePredictor fallbackPredictor = neutralPredictor(
+                    config.requiredScenarios());
+            var rescored = CarryForwardQueue.rescore(checkpoint.carryForward(),
+                    fallbackPredictor, iteration);
             List<SourceScenario> selected = ScenarioRotation.select(
                     config.requiredScenarios(), checkpoint.rotationCursors(),
                     config.activeEnvironmentId(), services.activeCoreCount(),
@@ -403,7 +449,8 @@ public final class ClosedLoopRunner {
             CalibrationPlan calibration = CalibrationPlanCsv.read(resolve(config.workspace(),
                     checkpoint.calibrationPlan().orElseThrow()), config.requiredScenarios());
             var preparation = CandidateScheduler.prepare(iteration, config.candidateBudget(),
-                    calibration, corpus, rescored, selected, config.budgetConfig(), predictor);
+                    calibration, corpus, rescored, selected, config.budgetConfig(),
+                    fallbackPredictor);
             var generated = SequenceFinder.generate(new CandidateGenerationRequest(iteration,
                     preparation.baseExplorationCount(), preparation.preAuditOverflowCount(),
                     preparation.disagreementAuditCount(), checkpoint.sobolCursor(),
@@ -411,11 +458,42 @@ public final class ClosedLoopRunner {
                     calibration.anchors().fixedAnchors().stream()
                             .map(policy -> policy.id()).collect(
                                     java.util.stream.Collectors.toSet()),
-                    predictor, config.generationConfig()));
+                    fallbackPredictor, config.generationConfig()));
             expected = CandidateScheduler.complete(config.trainingRunId(),
                     config.schedulerSeed(), config.commitSha(), config.dirtyWorkingTree(),
                     services.activeCpuSetHex(), config.benchmarkConfig(), preparation,
                     generated);
+        } else {
+            try (ScenarioConditionedModel model = services.loadAcceptedModel(modelDirectory,
+                    metadata.producer().trainingDevice())) {
+                PolicyCurvePredictor predictor = policies ->
+                        policies.isEmpty() ? List.of()
+                                : model.predictConfiguredCurves(policies).stream().map(curve ->
+                                PredictedPolicyRanker.summarize(curve,
+                                        config.requiredScenarios())).toList();
+                var rescored = CarryForwardQueue.rescore(checkpoint.carryForward(), predictor,
+                        iteration);
+                List<SourceScenario> selected = ScenarioRotation.select(
+                        config.requiredScenarios(), checkpoint.rotationCursors(),
+                        config.activeEnvironmentId(), services.activeCoreCount(),
+                        config.scenariosPerIteration());
+                CalibrationPlan calibration = CalibrationPlanCsv.read(resolve(config.workspace(),
+                        checkpoint.calibrationPlan().orElseThrow()), config.requiredScenarios());
+                var preparation = CandidateScheduler.prepare(iteration, config.candidateBudget(),
+                        calibration, corpus, rescored, selected, config.budgetConfig(), predictor);
+                var generated = SequenceFinder.generate(new CandidateGenerationRequest(iteration,
+                        preparation.baseExplorationCount(), preparation.preAuditOverflowCount(),
+                        preparation.disagreementAuditCount(), checkpoint.sobolCursor(),
+                        config.schedulerSeed(), corpus,
+                        calibration.anchors().fixedAnchors().stream()
+                                .map(policy -> policy.id()).collect(
+                                        java.util.stream.Collectors.toSet()),
+                        predictor, config.generationConfig()));
+                expected = CandidateScheduler.complete(config.trainingRunId(),
+                        config.schedulerSeed(), config.commitSha(), config.dirtyWorkingTree(),
+                        services.activeCpuSetHex(), config.benchmarkConfig(), preparation,
+                        generated);
+            }
         }
         IterationSchedule iterationSchedule;
         if (Files.isRegularFile(scheduleDirectory.resolve("COMPLETE"))) {
@@ -456,6 +534,15 @@ public final class ClosedLoopRunner {
                 && persisted.selectedPredictions().equals(expected.selectedPredictions())
                 && persisted.carryAdmissions().equals(expected.carryAdmissions())
                 && persisted.budgetReports().equals(expected.budgetReports());
+    }
+
+    private static PolicyCurvePredictor neutralPredictor(
+            java.util.SortedSet<SourceScenario> requiredScenarios) {
+        List<ScenarioPrediction> template = requiredScenarios.stream().map(scenario ->
+                new ScenarioPrediction(scenario, 0.5, 0.0, 0.5,
+                        0.5, 0.0, 0.0, 0.0, 0.0)).toList();
+        return policies -> policies.stream().map(policy -> PredictedPolicyRanker.summarize(
+                new PolicyPredictionCurve(policy, template), requiredScenarios)).toList();
     }
 
     private static LoadedCheckpoint benchmark(ClosedLoopConfig config,
@@ -623,12 +710,56 @@ public final class ClosedLoopRunner {
             ScenarioModelMetadata metadata = ScenarioModelMetadataCodec.read(
                     resolve(config.workspace(), checkpoint.latestModel().orElseThrow())
                             .resolve(ScenarioModelMetadataCodec.FILE_NAME));
-            boolean acceptedStage = checkpoint.stage() != CheckpointStage.MODEL_REJECTED;
-            if (metadata.deploymentEligible() != acceptedStage
+            boolean deploymentEligibleRequired = checkpoint.stage() != CheckpointStage.MODEL_REJECTED
+                    && !carriesRejectedSparseDataModel(config, checkpoint,
+                    metadata);
+            if (metadata.deploymentEligible() != deploymentEligibleRequired
                     || !metadata.requiredScenarios().equals(config.requiredScenarios())) {
                 throw new IllegalArgumentException("Checkpoint model status mismatch");
             }
         }
+    }
+
+    private static boolean shouldContinueRejectedSparseDataModel(ClosedLoopConfig config,
+            ClosedLoopCheckpoint checkpoint) throws IOException {
+        if (checkpoint.stage() != CheckpointStage.MODEL_REJECTED
+                || checkpoint.latestModel().isEmpty()) {
+            return false;
+        }
+        ScenarioModelMetadata metadata = ScenarioModelMetadataCodec.read(
+                resolve(config.workspace(), checkpoint.latestModel().orElseThrow())
+                        .resolve(ScenarioModelMetadataCodec.FILE_NAME));
+        return isRejectedSparseDataModel(config, checkpoint, metadata);
+    }
+
+    private static boolean carriesRejectedSparseDataModel(ClosedLoopConfig config,
+            ClosedLoopCheckpoint checkpoint, ScenarioModelMetadata metadata) {
+        if (!isSparseDataModelConfig(config, metadata.trainingConfig())
+                || metadata.deploymentEligible()
+                || checkpoint.evidence().stream().noneMatch(entry ->
+                entry.source() == EvidenceSource.BOOTSTRAP)) {
+            return false;
+        }
+        return switch (checkpoint.stage()) {
+            case SCHEDULE_READY, BENCHMARKING, READY_TO_MERGE,
+                    READY_TO_TRAIN, RUN_COMPLETE -> true;
+            default -> false;
+        };
+    }
+
+    private static boolean isRejectedSparseDataModel(ClosedLoopConfig config,
+            ClosedLoopCheckpoint checkpoint, ScenarioModelMetadata metadata) {
+        return checkpoint.stage() == CheckpointStage.MODEL_REJECTED
+                && checkpoint.evidence().stream().anyMatch(entry ->
+                entry.source() == EvidenceSource.BOOTSTRAP)
+                && !metadata.deploymentEligible()
+                && isSparseDataModelConfig(config,
+                metadata.trainingConfig());
+    }
+
+    private static boolean isSparseDataModelConfig(ClosedLoopConfig config,
+            ScenarioTrainingConfig trainingConfig) {
+        return trainingConfig.isEffectiveVersionOf(config.trainingConfig().coldStart());
     }
 
     private static List<EvidenceIndexEntry> importInitialEvidence(ClosedLoopConfig config)
