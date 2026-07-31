@@ -63,9 +63,12 @@ must have a final LF and no BOM or CR.
 
 `run.bootstrap_policies` is a strict schema-v1 vector file. Its policies carry no measurements and
 must be benchmarked natively in every exact required scenario before they can inform calibration
-or learning. For required environments on different machines, point each invocation at the same
-workspace, change only `run.active_environment_id`, and resume sequentially. The checkpoint waits
-until native bootstrap evidence exists for all required scenarios.
+or learning. If neither `run.bootstrap_policies` nor `run.initial_calibration_plan` is provided,
+the runner generates deterministic bootstrap vectors from `SequenceFinder`, starting at Sobol index
+`1024`, using `run.candidate_budget` rows. For required environments on different machines, point
+each invocation at the same workspace, change only `run.active_environment_id`, and resume
+sequentially. The checkpoint waits until native bootstrap evidence exists for all required
+scenarios.
 
 To inspect the scenario-model hardware environment without training or benchmarking:
 
@@ -214,7 +217,7 @@ Repeated keys are allowed only for `scenario.required`, `run.initial_observation
 
 | Cross-key rule | Requirement |
 | --- | --- |
-| Bootstrap source | Exactly one of `run.bootstrap_policies` and `run.initial_calibration_plan` is required |
+| Bootstrap sources | `run.bootstrap_policies` and `run.initial_calibration_plan` are mutually exclusive |
 | Observation bundles | `run.initial_observation_bundle` is allowed only with `run.initial_calibration_plan` |
 | Reference overrides | Every override scenario must already appear in `scenario.required` |
 | Scenario coverage | At least one `scenario.required` entry must match `run.active_environment_id` |
@@ -223,11 +226,11 @@ Repeated keys are allowed only for `scenario.required`, `run.initial_observation
 | --- | --- | --- |
 | `calibration.reference_override` | repeated scenario/run mapping | empty |
 | `run.active_environment_id` | environment identifier | required |
-| `run.bootstrap_policies` | path | required when `run.initial_calibration_plan` is absent |
+| `run.bootstrap_policies` | path | empty; used when provided |
 | `run.candidate_budget` | decimal integer | required |
 | `run.commit_sha` | commit hash | required |
 | `run.dirty_working_tree` | boolean | required |
-| `run.initial_calibration_plan` | path | required when `run.bootstrap_policies` is absent |
+| `run.initial_calibration_plan` | path | empty; used when provided |
 | `run.initial_observation_bundle` | repeated path | empty |
 | `run.initial_sobol_cursor` | decimal integer (`long`) | `131072` |
 | `run.iterations` | decimal integer | required |

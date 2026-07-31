@@ -43,17 +43,15 @@ import io.euhedral_execution.training.scheduling.ScenarioRotation;
 import io.euhedral_execution.training.scheduling.data.IterationSchedule;
 import io.euhedral_execution.training.scheduling.data.OptimizationCorpusView;
 import io.euhedral_execution.training.scheduling.data.RotationGroup;
-import io.euhedral_execution.training.scheduling.data.ScheduledRun;
-import io.euhedral_execution.training.scheduling.enums.RunKind;
 import io.euhedral_execution.training.scheduling.io.BootstrapPolicyCsv;
 import io.euhedral_execution.training.scheduling.io.OptimizationCorpusReader;
 import io.euhedral_execution.training.scheduling.io.ScheduleCodec;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.AtomicMoveNotSupportedException;
-import java.nio.file.NoSuchFileException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
@@ -68,6 +66,8 @@ import java.util.TreeSet;
 import java.util.UUID;
 
 public final class ClosedLoopRunner {
+    private static final int GENERATED_BOOTSTRAP_START_INDEX = 1024;
+
     public static final class StopRequested extends RuntimeException {
         private StopRequested() {
             super(null, null, false, false);
@@ -196,16 +196,12 @@ public final class ClosedLoopRunner {
                     Optional.empty(), Optional.empty(), List.of());
             return CheckpointSnapshotCodec.writeNext(config.workspace(), checkpoint);
         }
-        Path source = config.bootstrapPolicies().orElseThrow(() ->
-                new IllegalArgumentException("Bootstrap policies are required"));
         List<io.euhedral_execution.training.data.PolicyVector> policies =
-                BootstrapPolicyCsv.read(source, config.candidateBudget());
+                resolveBootstrapPolicies(config);
         int targetAnchors = config.anchorSelectionConfig().targetCount(config.candidateBudget());
         if (policies.size() <= targetAnchors) {
             throw new IllegalArgumentException("Bootstrap budget must exceed anchor target");
         }
-        Path copied = config.workspace().resolve("bootstrap/bootstrap-policies.vectors.csv");
-        copyFileAtomically(source, copied);
         ClosedLoopCheckpoint checkpoint = new ClosedLoopCheckpoint(1, config.trainingRunId(), 1,
                 CheckpointStage.BOOTSTRAP_PENDING, 1, config.initialSobolCursor(), configHash,
                 config.requiredScenarios(), cursors, initialEvidence, List.of(),
@@ -220,8 +216,7 @@ public final class ClosedLoopRunner {
         ClosedLoopCheckpoint checkpoint = current.checkpoint();
         List<SourceScenario> runnable = runnable(config, services);
         List<io.euhedral_execution.training.data.PolicyVector> policies =
-                BootstrapPolicyCsv.read(config.workspace().resolve(
-                        "bootstrap/bootstrap-policies.vectors.csv"), config.candidateBudget());
+                resolveBootstrapPolicies(config);
         Set<SourceScenario> completeScenarios = checkpoint.evidence().stream()
                 .filter(entry -> entry.source() == EvidenceSource.BOOTSTRAP)
                 .map(EvidenceIndexEntry::scenario)
@@ -297,12 +292,12 @@ public final class ClosedLoopRunner {
                     config.aggregationConfig()));
         }
         Path mergeDirectory = config.workspace().resolve("merges/merge-000000");
-        DataMerger.MergeArtifacts merge = Files.isDirectory(mergeDirectory)
-                ? artifacts(mergeDirectory)
-                : services.merge(new DataMerger.MergeRequest(
-                evidencePaths(config.workspace(), checkpoint.evidence()),
-                config.requiredScenarios(), plan, mergeDirectory, config.calibrationConfig(),
-                config.aggregationConfig()));
+        if(!Files.isDirectory(mergeDirectory)) {
+            services.merge(new DataMerger.MergeRequest(
+                    evidencePaths(config.workspace(), checkpoint.evidence()),
+                    config.requiredScenarios(), plan, mergeDirectory, config.calibrationConfig(),
+                    config.aggregationConfig()));
+        }
         ClosedLoopCheckpoint ready = new ClosedLoopCheckpoint(1, checkpoint.trainingRunId(),
                 checkpoint.revision() + 1, CheckpointStage.READY_TO_TRAIN, 1,
                 checkpoint.sobolCursor(), checkpoint.configSha256(),
@@ -313,6 +308,21 @@ public final class ClosedLoopRunner {
                 Optional.of(reference(config.workspace(), mergeDirectory)), Optional.empty(),
                 Optional.empty(), List.of());
         return CheckpointSnapshotCodec.writeNext(config.workspace(), ready);
+    }
+
+    private static List<io.euhedral_execution.training.data.PolicyVector> resolveBootstrapPolicies(
+            ClosedLoopConfig config) throws IOException {
+        Path persisted = config.workspace().resolve("bootstrap/bootstrap-policies.vectors.csv");
+        if (Files.isRegularFile(persisted)) {
+            return BootstrapPolicyCsv.read(persisted, config.candidateBudget());
+        }
+        if (config.bootstrapPolicies().isPresent()) {
+            Path source = config.bootstrapPolicies().orElseThrow();
+            copyFileAtomically(source, persisted);
+            return BootstrapPolicyCsv.read(persisted, config.candidateBudget());
+        }
+        return SequenceFinder.bootstrapVectors(GENERATED_BOOTSTRAP_START_INDEX,
+                config.candidateBudget());
     }
 
     private static LoadedCheckpoint train(ClosedLoopConfig config,

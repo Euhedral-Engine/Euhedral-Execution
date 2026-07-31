@@ -87,6 +87,16 @@ public final class SequenceFinder {
                 Math.addExact(base.directAssigned(), overflow.directAssigned()), auditShortfall);
     }
 
+    public static List<PolicyVector> bootstrapVectors(int startIndex, int count) {
+        validateCursorRange(startIndex, count);
+        ArrayList<PolicyVector> result = new ArrayList<>(count);
+        long exclusiveEnd = Math.addExact((long) startIndex, count);
+        for (long cursor = startIndex; cursor < exclusiveEnd; cursor++) {
+            result.add(sobol(Math.toIntExact(cursor)));
+        }
+        return List.copyOf(result);
+    }
+
     private static Tranche selectTranche(int count, List<PredictedCandidate> cma,
             List<PredictedCandidate> bands, Set<PolicyId> excluded, DirectCursor direct,
             CandidateGenerationRequest request) {
