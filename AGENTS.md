@@ -24,8 +24,11 @@ contain expensive local runs. Treat them as user-owned even when they are untrac
 
 ## Modules and language levels
 
-Run the repository with the JDK selected by `mise`, currently Java 21. Individual artifacts retain
-lower release targets where possible.
+All Java, Maven, and Maven-build commands default to the exact tool versions selected by
+[`mise.toml`](mise.toml), currently Java 21 and Maven 3.9.16. Individual artifacts retain lower
+release targets where possible; a lower target does not authorize a different default JDK or Maven
+version. A restricted-environment fallback is allowed only under the documented exception below
+and must report the substituted versions and resulting limits.
 
 | Module                     | Release | Main responsibility                                   |
 |----------------------------|--------:|-------------------------------------------------------|
@@ -341,10 +344,11 @@ Before handing work back:
 
 - P0 and P1 are complete; the P2 parent and P2-A blueprint are merged on
   `hardware-utils-overhaul/phase-2-topology-snapshot`.
-- P2-A topology model/adapters implementation is complete on
-  `hardware-utils-overhaul/phase-2-topology-model-implementation` and awaits conformance/manual
-  review before merge.
-- P2-A implementation evidence and completion details are recorded in
-  `docs/blueprints/hardware-utils/phase-2-topology-model-adapters.md`.
-- P2-B snapshot/remap/publication work has not started and remains blocked on the merged P2-A
-  implementation and conformance/manual review.
+- P2-A topology model/adapters implementation and its conformance audit are complete on
+  `hardware-utils-overhaul/phase-2-topology-model-audit` and await developer review and merge
+  into the P2 root.
+- P2-A implementation and audit evidence are recorded in
+  `docs/blueprints/hardware-utils/phase-2-topology-model-adapters.md` and
+  `docs/audits/hardware-utils/phase-2-topology-model-adapters-conformance.md`.
+- P2-B snapshot/remap/publication work has not started and remains blocked until the audited P2-A
+  implementation is reviewed and merged.

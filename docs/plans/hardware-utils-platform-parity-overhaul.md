@@ -226,10 +226,17 @@ evidence and use the accepted glibc 2.17 plus musl fallback. It must not silentl
 
 ## Module and toolchain constraints
 
+### Authorized toolchain-policy revision
+
+The developer authorized this documentation revision on 2026-08-01. It clarifies the existing
+toolchain constraint without changing phase scope, acceptance criteria, or implementation design.
+
 - `euhedral-hardware-utils` remains Java 17.
 - `euhedral-core` remains Java 21.
-- Use the repository tools pinned by `mise.toml`: Java 21, Maven 3.9.16, Zig 0.16.0, and the
-  configured Apple codesigning tool.
+- All Java commands, Maven commands, and Maven builds default to the exact versions pinned by
+  `mise.toml`: Java 21, Maven 3.9.16, Zig 0.16.0, and the configured Apple codesigning tool. Use
+  `mise exec --` when available; a documented restricted-environment fallback may use only the
+  corresponding pinned installed tools and must record the substituted invocation and limits.
 - The build must not invoke `mise` from inside `build.zig`. Maven/CI supplies explicit tool and SDK
   inputs.
 - JNI calls validate nulls, lengths, ranges, and output capacity before native writes.

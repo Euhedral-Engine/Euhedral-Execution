@@ -25,6 +25,13 @@ If a child finds that stable ID semantics, public count/index meanings, null-hol
 fallbacks, copy boundaries, equality, core-zero policy, version rules, or publication modes must
 change, it returns to this parent blueprint. It must not make a private choice.
 
+### Authorized toolchain-policy revision
+
+The developer authorized this documentation revision on 2026-08-01. Every Java command, Maven
+command, and Maven build defaults to the exact versions in `mise.toml`; a documented
+restricted-environment fallback must use the corresponding pinned installed tools and record its
+versions and limits.
+
 ## Objective
 
 P2 introduces one validated, immutable topology model between platform discovery and the existing

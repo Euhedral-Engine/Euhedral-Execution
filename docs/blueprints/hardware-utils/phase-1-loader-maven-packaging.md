@@ -12,6 +12,13 @@ loader, package/binary/runtime gates, narrow hardware-module Maven test wiring, 
 The implementation does not inspect or modify training, native source semantics, the Zig graph,
 the root POM, or existing build/deploy workflow behavior.
 
+## Authorized toolchain-policy revision
+
+The developer authorized this documentation revision on 2026-08-01. Every Java command, Maven
+command, and Maven build defaults to the exact versions in `mise.toml`; a documented
+restricted-environment fallback must use the corresponding pinned installed tools and record its
+versions and limits.
+
 ## Implemented design
 
 `NativeProductCatalog` parses the generated UTF-8 TSV under a 65,536-byte bound, validates its
