@@ -1832,10 +1832,38 @@ families below, sequentially from the updated P2 root.
 > arithmetic, coalescing, version, core-zero, or publication-mode decision. Do not create
 > implementation before merge.
 
+#### P2-B developer-review summary
+
+- Purpose: make public utilization/snapshot values deeply owned and content-correct, and publish
+  mapper membership as one immutable fixed-shape topology with exact coalescing and versions.
+- Ownership: P2-B owns `TopologyMapper`, `SystemUtilization`, `UnmodifiableBitSet`,
+  `UnmodifiableDoubleArray`, and focused wrapper/snapshot/remap/race tests. P2-A model/adapters,
+  ResourceMonitor lifecycle/pressure, affinity/executor, core production, detailed platforms,
+  native sources, and training remain read-only or prohibited.
+- Key contracts: canonical record constructors copy mutable values and nested array accessors
+  clone; equality/hash includes every component. Socket arrays use the global core span and core
+  arrays use logical CPU indexes with exact null holes. Named memory fields use nonnegative,
+  saturating arithmetic. Mapper candidates intersect model, allowed, and utilization masks before
+  reserving global core zero only when another core remains. Greatest-sequence requests drain
+  through release/recheck; global and persistent socket versions count actual membership
+  publications, including socket deactivation/reactivation. One volatile topology write/read
+  publishes the complete graph and its version.
+- Work unit: one implementation and one combined conformance/manual-review audit remain. The child
+  stays unsplit because wrapper/snapshot ownership and mapper publication share the same active-ID,
+  fixed-null-hole, mutation, and race acceptance boundary.
+- Selected implementation: confirms `gpt-5.6-sol` with `high` reasoning. Lower effort is not
+  supported by the coupled public-value, sparse-index, exact-arithmetic, coalescing, version, and
+  Java Memory Model repair surface.
+- Risks: sparse but bounded arrays must not become cardinality-indexed; canonical constructors and
+  accessors both need ownership protection; coalescing intentionally hides intermediate states;
+  inactive socket versions persist privately; final verify depends on P1 native tools.
+- Unresolved decisions: none. Copy/accessor behavior, equality/hash, named fields, arithmetic,
+  spans/null holes, allowed/core-zero membership, coalescing/failure cleanup, versions/overflow,
+  and volatile publication are settled in the child blueprint.
+
 #### P2-B immutable snapshots/remap publication implementation prompt
 
-**Parent-selected model: `gpt-5.6-sol`; reasoning effort: `high`. The completed P2-B child
-blueprint must confirm this selection before this prompt may run.**
+**Child-confirmed model: `gpt-5.6-sol`; reasoning effort: `high`.**
 
 > After the P2-B blueprint is reviewed and merged, create
 > `hardware-utils-overhaul/phase-2-snapshot-publication-implementation` from the updated P2 root.
