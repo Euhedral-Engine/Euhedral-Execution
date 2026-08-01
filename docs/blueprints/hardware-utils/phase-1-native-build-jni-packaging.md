@@ -12,6 +12,13 @@
 - Status: implementation-ready parent contract; developer review and merge into the P1 root are
   required before either child blueprint starts
 
+### Verification note
+
+For this P1 phase, the developer-authorized validation step is skipped in favor of the conformance
+check and manual review. The conformance audit may make only the settled minor fixes allowed by
+this blueprint; it records skipped checks and limits, and does not introduce new ABI, manifest,
+packaging, loader, signing, or CI decisions.
+
 This blueprint is subordinate to the parent plan, `AGENTS.md`, and the compiled P0 compatibility
 contract. It settles the shared P1 architecture and divides implementation into two sequential
 responsibility-scoped children. There is no P1 root implementation action.
@@ -1525,10 +1532,12 @@ root. Do not start Child B before Child A's audit is reviewed and merged.
 
 ## P1 root integration completion record
 
-Formal integration validation was skipped by developer direction. Direct root conformance on
+Formal integration validation was removed from the workflow by developer direction. Direct root
+conformance on
 2026-08-01 made no correction and reran no Maven/Zig/runtime command. It classified 21 criteria
 `satisfied`, criteria 19/24 `unverified`, and criterion 22 `deviated`; Child A is `ambiguous`
 because its artifact chain is absent and Child B is `satisfied`. B01-B05, B07, and the P1 B06
 framework are `satisfied`. Hosted Windows/macOS remain unverified. `git diff --check` passed.
-P1 remains open pending authorized merge, status removal, closeout update, and root commit record.
+The developer declared P1 complete; the temporary status block was removed and no P2 work was
+created.
 See `docs/audits/hardware-utils/phase-1-native-build-jni-packaging-conformance.md`.
