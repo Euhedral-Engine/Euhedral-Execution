@@ -49,8 +49,11 @@ import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public final class ScenarioModelTrainer {
+    private static final Logger LOGGER = LoggerFactory.getLogger(ScenarioModelTrainer.class);
 
     public static ScenarioTrainingArtifacts train(ScenarioTrainingRequest request)
             throws Exception {
@@ -96,6 +99,11 @@ public final class ScenarioModelTrainer {
                 request.requiredScenarios(), requestedConfig.includeWeakCalibrationRows());
         PolicyGroupedSplit split = PolicyGroupedSplitter.split(
                 table, requestedConfig.splitSeed(), requestedConfig);
+        LOGGER.info("Training scenario model: policies={}, rows={}, train={}, validation={}, "
+                        + "test={}, device={}, targetVariation={}", table.policies().size(),
+                table.rows().size(), split.trainingRows().size(), split.validationRows().size(),
+                split.testRows().size(), requestedConfig.device(),
+                requestedConfig.requireTargetVariation());
         Device device = ScenarioOrdinalNetwork.resolveDevice(requestedConfig.device());
         int effectiveBatch = requestedConfig.batchSize() > 0
                 ? StrictMath.min(requestedConfig.batchSize(), split.trainingRows().size())
@@ -200,6 +208,8 @@ public final class ScenarioModelTrainer {
         ArrayList<ScenarioOrdinalNetwork.TrainingResult> productionResults = new ArrayList<>();
         try {
             for (int memberIndex = 0; memberIndex < config.ensembleMembers(); memberIndex++) {
+                LOGGER.info("Training production model member {}/{}", memberIndex + 1,
+                        config.ensembleMembers());
                 Path memberDirectory = directory.resolve("members")
                         .resolve("member-%03d".formatted(memberIndex));
                 ScenarioOrdinalNetwork.TrainingResult result = ScenarioOrdinalNetwork.train(
@@ -208,6 +218,8 @@ public final class ScenarioModelTrainer {
                 productionResults.add(result);
                 productionMembers.add(result.member());
                 history.addAll(result.history());
+                LOGGER.info("Finished production model member {}/{} (bestEpoch={})",
+                        memberIndex + 1, config.ensembleMembers(), result.bestEpoch());
             }
 
             EvaluationSummary grouped;
