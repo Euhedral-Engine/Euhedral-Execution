@@ -20,6 +20,15 @@ If a child discovers that a manifest field, JNI ABI rule, staged path, signing e
 catalog field, extraction policy, or binary gate must change, it returns to this parent blueprint.
 It must not make a private incompatible choice.
 
+### Developer decision: ad-hoc-only macOS signing
+
+On 2026-08-01, the developer chose ad-hoc signing for all macOS JNI libraries because no Apple
+Developer ID certificate is available. Official signing is not required for the JVM to load these
+libraries. This deliberately does not provide Apple's notarized, Gatekeeper-recognized distribution
+path: users launching a quarantined application bundle may receive a Gatekeeper warning or need to
+approve the application explicitly. Revisit this decision if the project later requires notarized,
+low-friction distribution outside the Mac App Store.
+
 ## Objective
 
 P1 replaces the source-writing native build with one universal, manifest-driven graph and makes
@@ -637,9 +646,6 @@ not encode its return type. No prefix or count wildcard is allowed. PE CRT expor
 -Doutput-root=<absolute target/generated-resources/native directory>
 -Dmacos-sdk=<absolute .sdk directory>
 -Drcodesign=<absolute rcodesign executable>
--Dsign-macos=<false|true>
--Dsigning-p12=<absolute file>                 # required only when sign-macos=true
--Dsigning-password-file=<absolute file>       # required only when sign-macos=true
 ```
 
 Maven supplies all non-secret paths. The module's default `mise exec -- mvn ...` build needs no
@@ -652,6 +658,8 @@ The graph never reads `JAVA_HOME`, runs `mise`, searches PATH for a signer, or s
 SDKROOT = "{{env.HOME}}/.local/share/mise/installs/macos-sdk/MacOSX26.1.sdk"
 RCODESIGN = "{{env.HOME}}/.local/share/mise/installs/apple-codesign/0.29.0/bin/rcodesign"
 ZIG = "{{env.HOME}}/.local/share/mise/installs/zig/0.16.0/zig"
+LLVM_READOBJ = "/usr/bin/llvm-readobj"
+LLVM_OBJDUMP = "/usr/bin/llvm-objdump"
 ```
 
 CI extracts the SDK with its `MacOSX26.1.sdk` top-level directory intact so the same `SDKROOT`
@@ -665,17 +673,12 @@ generated-jni          = ${project.build.directory}/generated-jni
 output-root            = ${project.build.directory}/generated-resources/native
 macos-sdk              = ${env.SDKROOT}
 rcodesign              = ${env.RCODESIGN}
-sign-macos             = ${zig.sign}
-signing-p12            = ${zig.signingP12}
-signing-password-file  = ${zig.signingPasswordFile}
 ```
 
 The exec plugin executable is `${env.ZIG}` and must be an absolute executable reporting 0.16.0.
 
-The two module properties for credential paths default to empty. Two module-local profiles,
-activated independently by `env.ZIG_SIGNING_P12` and `env.ZIG_SIGNING_PASSWORD_FILE`, map each
-environment path to its matching property; `sign-macos=true` with either empty value fails. The
-values are never root properties.
+There are no certificate, password, or signing-mode properties. Maven and Zig always use the
+ad-hoc signing path described by the developer decision above.
 
 `java-home` must contain readable `include/jni.h` and `release`; the release metadata must identify
 a 21.x JDK for the repository build. `macos-sdk` must directly contain the expected SDK `usr` and
@@ -724,16 +727,12 @@ rcodesign sign
   <unsigned input> <separate signed output>
 ```
 
-When `sign-macos=true`, signing additionally requires one P12 file and a distinct password file.
-It uses `--p12-file` and `--p12-password-file`, retains the hardened-runtime flag, and permits the
-credentialed timestamp service. A raw password, base64 certificate, or secret value never appears
-in a Maven/Zig command line, environment dump, test report, log, or cache key. Credentialed
-signing runs as a side-effecting, non-cacheable step; only paths are arguments. Missing,
-world-readable on POSIX, or non-regular credential files fail before compilation is installed.
+The graph has no credentialed signing branch and accepts no certificate or password inputs. It
+always disables timestamping and emits an ad-hoc signature with the hardened-runtime flag.
 
 `rcodesign verify` 0.29.0 was observed to reject its own ad-hoc result because it expects CMS.
 Cross-build verification therefore uses `print-signature-info`, asserts the exact binary
-identifier, CodeDirectory, ad-hoc/credentialed mode, and code hashes, and proves an
+identifier, CodeDirectory, ad-hoc mode, and code hashes, and proves an
 `LC_CODE_SIGNATURE`. A macOS runner performs the authoritative:
 
 ```text
@@ -1039,9 +1038,11 @@ llvm-objdump --macho --private-headers <Mach-O>
 ```
 
 The module test properties `p1.llvm.readobj` and `p1.llvm.objdump` are required absolute executable
-paths during `verify`; POM defaults map only the explicit `LLVM_READOBJ` and `LLVM_OBJDUMP`
-environment values. CI sets both after installing LLVM, and local validation commands pass them
-explicitly. Tests never search PATH or silently skip a missing inspector.
+paths during `verify`. The POM defaults to the supported Ubuntu build-host paths under `/usr/bin`;
+independently activated module profiles allow absolute `LLVM_READOBJ` and `LLVM_OBJDUMP`
+environment values to override those defaults. `mise.toml` supplies the Ubuntu paths, and local
+validation on another build host passes both explicitly. Tests never search PATH or silently skip
+a missing inspector.
 
 For Mach-O, `llvm-objdump` is authoritative for distinguishing `LC_ID_DYLIB` from
 `LC_LOAD_DYLIB`; `llvm-readobj --needed-libs` is only a redundant inventory cross-check. For every
@@ -1124,22 +1125,10 @@ No job has a product-selection flag. Cross-package builds all eight products onc
 test the applicable packaged product.
 
 Remove only the invalid JDK-header-copy steps from both existing workflows. Normalize their SDK
-setup and native input environment only as required by the new explicit P1 contract. Do not alter
-their Maven command, checkout credential behavior, permissions, deploy logic, or unrelated cache.
-
-Default and pull-request builds use ad-hoc signing and receive no signing secrets. For a
-non-snapshot deploy with `zig.sign=true`, the protected deploy job creates two mode-0600 files
-under `RUNNER_TEMP` from:
-
-```text
-MACOS_SIGNING_P12_BASE64
-MACOS_SIGNING_P12_PASSWORD
-```
-
-It exports only their absolute paths as `ZIG_SIGNING_P12` and
-`ZIG_SIGNING_PASSWORD_FILE`, never echoes content, and removes them in an `always()` cleanup step.
-Absent release secrets fail before Central publication. Configuring those repository secrets is
-an operational prerequisite, not permission to weaken release signing.
+setup and native input environment only as required by the new explicit P1 contract. The deploy
+workflow must not prepare, export, validate, or clean up macOS certificate credentials; release
+builds use the same ad-hoc signing graph as all other builds. Do not otherwise alter its Maven
+command, checkout credential behavior, permissions, deploy logic, or unrelated cache.
 
 ## Failure behavior
 
@@ -1231,9 +1220,9 @@ Owned implementation, in dependency order:
 6. update P0 native source discovery for the relocated root while preserving the P0 product and
    N01/N02 contract;
 7. delete only the tracked obsolete `build.sh`;
-8. remove the invalid header-copy blocks and normalize SDK, Zig, signer, LLVM, and protected
-   credential-file inputs in the native setup of the two existing workflows without changing
-   their Maven commands; and
+8. remove the invalid header-copy blocks and normalize SDK, Zig, signer, and LLVM inputs in the
+   native setup of the two existing workflows, removing deploy certificate handling without
+   changing their Maven commands; and
 9. add focused manifest/build/signature tests sufficient to validate Child A without loader or
    new runner-workflow design.
 
@@ -1297,7 +1286,6 @@ zig build \
   -Doutput-root=<module>/target/generated-resources/native \
   -Dmacos-sdk=<MacOSX26.1.sdk> \
   -Drcodesign=<rcodesign-0.29.0> \
-  -Dsign-macos=false \
   --cache-dir <module>/target/zig-cache \
   --global-cache-dir <module>/target/zig-global-cache
 
@@ -1379,7 +1367,7 @@ P1 root integration validation must classify every item:
 18. Concurrent callers observe one safely published load result with no post-initialization hot
     path.
 19. The hardware-specific workflow uses selected-module commands, read-only permissions, no
-    persisted checkout credentials, no PR signing secret, and required runner smoke/signature
+    persisted checkout credentials, no signing secrets, and required runner smoke/signature
     gates.
 20. Existing root build/deploy Maven commands and unrelated workflow behavior are unchanged; only
     the invalid header blocks and explicit native inputs change.
@@ -1445,7 +1433,7 @@ logic, non-hardware modules, platform semantics, and training.
   deletion;
 - module POM build/staging/resource configuration;
 - focused manifest/build/signing and relocated P0 compatibility tests;
-- exact native setup/header-removal/credential-file edits to the two existing workflows;
+- exact native setup/header-removal and ad-hoc-only deploy edits to the two existing workflows;
 - Child A validation and conformance audit; and
 - temporary P1 status updates.
 
