@@ -57,7 +57,7 @@
   <build>
     <resources>
       <resource>
-        <directory>src/main/resources</directory>
+        <directory>src/main/native</directory>
         <filtering>false</filtering>
         <excludes>
           <exclude>**/.zig-cache/**</exclude>
@@ -92,7 +92,7 @@
             </goals>
             <configuration>
               <executable>zig</executable>
-              <workingDirectory>${project.basedir}/src/main/resources</workingDirectory>
+              <workingDirectory>${project.basedir}/src/main/native</workingDirectory>
               <arguments>
                 <argument>build</argument>
                 <argument>-Dsign-macos=${zig.sign}</argument>
