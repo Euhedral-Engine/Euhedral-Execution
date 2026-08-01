@@ -1525,7 +1525,10 @@ root. Do not start Child B before Child A's audit is reviewed and merged.
 
 ## P1 root integration completion record
 
-Not started. After both child audits merge, the root integration validation action appends a
-compact result here that links both child completion records, the integration validation, the
-24-item acceptance matrix, B06 carry, commands, fixes, deviations, and environmental limits. The
-root conformance audit appends its final summary before authorized closeout.
+Formal integration validation was skipped by developer direction. Direct root conformance on
+2026-08-01 made no correction and reran no Maven/Zig/runtime command. It classified 21 criteria
+`satisfied`, criteria 19/24 `unverified`, and criterion 22 `deviated`; Child A is `ambiguous`
+because its artifact chain is absent and Child B is `satisfied`. B01-B05, B07, and the P1 B06
+framework are `satisfied`. Hosted Windows/macOS remain unverified. `git diff --check` passed.
+P1 remains open pending authorized merge, status removal, closeout update, and root commit record.
+See `docs/audits/hardware-utils/phase-1-native-build-jni-packaging-conformance.md`.

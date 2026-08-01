@@ -91,3 +91,9 @@ The timings are descriptive build observations, not performance or throughput cl
 Windows x64/JDK 17 loading, hosted macOS/JDK 17 loading and Apple `codesign`, and the static-only
 cross-architecture B06 portions remain unverified locally; the new workflow is the required
 environmental gate for those results. No P5-P7 platform semantic claim is made.
+
+### Root conformance note
+
+The 2026-08-01 root audit classified Child B `satisfied`. No correction or validation rerun was
+made, by developer direction. Hosted Windows/macOS remain unverified; see
+`docs/audits/hardware-utils/phase-1-native-build-jni-packaging-conformance.md`.
