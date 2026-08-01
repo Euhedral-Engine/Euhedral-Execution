@@ -342,13 +342,12 @@ Before handing work back:
 
 ## Temporary hardware-utils overhaul status (P2)
 
-- P0 and P1 are complete; the P2 parent and P2-A blueprint are merged on
-  `hardware-utils-overhaul/phase-2-topology-snapshot`.
-- P2-A topology model/adapters implementation and its conformance audit are complete on
-  `hardware-utils-overhaul/phase-2-topology-model-audit` and await developer review and merge
-  into the P2 root.
-- P2-A implementation and audit evidence are recorded in
+- P0 and P1 are complete; the P2 parent, audited P2-A implementation, and P2-B blueprint are
+  merged on `hardware-utils-overhaul/phase-2-topology-snapshot`.
+- P2-B snapshot/remap/publication implementation is complete on
+  `hardware-utils-overhaul/phase-2-snapshot-publication-implementation` and awaits developer
+  review and merge before its audit.
+- P2-A handoff evidence remains in
   `docs/blueprints/hardware-utils/phase-2-topology-model-adapters.md` and
-  `docs/audits/hardware-utils/phase-2-topology-model-adapters-conformance.md`.
-- P2-B snapshot/remap/publication work has not started and remains blocked until the audited P2-A
-  implementation is reviewed and merged.
+  `docs/audits/hardware-utils/phase-2-topology-model-adapters-conformance.md`; P2-B implementation
+  evidence is in `docs/blueprints/hardware-utils/phase-2-snapshot-remap-publication.md`.

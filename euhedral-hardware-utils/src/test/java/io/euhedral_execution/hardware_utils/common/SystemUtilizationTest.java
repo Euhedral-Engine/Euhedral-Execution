@@ -40,12 +40,12 @@ class SystemUtilizationTest {
         assertEquals(1, cpu.cpuId());
         assertEquals(0.3, cpu.stallRatio());
         assertEquals(0.2, cpu.throttleRatio());
-        assertEquals(0.664, cpu.pressure(), 0.000_001);
-        assertEquals(0.25, cpu.memoryUtilization());
+        assertEquals(0.776, cpu.pressure(), 0.000_001);
+        assertEquals(0.5, cpu.memoryUtilization());
 
         CoreSnapshot core = utilization.getCoreSnapshot(7, bits(1, 3), 1.5);
         assertEquals(7, core.coreId());
-        assertEquals(2, core.globalCpuCount());
+        assertEquals(3, core.globalCpuCount());
         assertEquals(200, core.memoryLimit());
         assertEquals(0.5, core.memoryUtilization());
         assertEquals(4, core.cpuSnapshots().length);
@@ -54,12 +54,13 @@ class SystemUtilizationTest {
                 2, Arrays.asList(bits(0), null, bits(1, 3)), 2.0);
         assertEquals(2, socket.socketId());
         assertEquals(bits(0, 2), socket.effectiveCores());
-        assertEquals(300, socket.globalBytesUsed());
+        assertEquals(400, socket.globalBytesUsed());
         assertNull(utilization.getSocketSnapshot(0, List.of(), 1));
         assertNull(utilization.getSocketSnapshot(0, List.of(bits(0)), -1));
 
         CpuSnapshot absent = utilization.getCpuSnapshot(10, 0.5, 1);
         assertEquals(0, absent.pressure());
+        assertEquals(10, absent.lastUsageNs());
         assertEquals(0.4, utilization.pressure());
         assertTrue(socket.memoryUtilization() >= 0);
     }
