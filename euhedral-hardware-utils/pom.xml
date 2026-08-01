@@ -57,6 +57,9 @@
   <build>
     <resources>
       <resource>
+        <directory>src/main/resources</directory>
+      </resource>
+      <resource>
         <directory>src/main/native</directory>
         <filtering>false</filtering>
         <excludes>
@@ -81,12 +84,26 @@
         </configuration>
       </plugin>
       <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <configuration>
+          <release>17</release>
+          <showWarnings>true</showWarnings>
+          <showDeprecation>true</showDeprecation>
+          <compilerArgs>
+            <arg>-h</arg>
+            <arg>${project.build.directory}/generated-jni/declarations</arg>
+            <arg>-parameters</arg>
+          </compilerArgs>
+        </configuration>
+      </plugin>
+      <plugin>
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>exec-maven-plugin</artifactId>
         <executions>
           <execution>
             <id>zig-build</id>
-            <phase>initialize</phase>
+            <phase>process-classes</phase>
             <goals>
               <goal>exec</goal>
             </goals>
@@ -95,6 +112,7 @@
               <workingDirectory>${project.basedir}/src/main/native</workingDirectory>
               <arguments>
                 <argument>build</argument>
+                <argument>-Djava-home=${java.home}</argument>
                 <argument>-Dsign-macos=${zig.sign}</argument>
                 <argument>--prefix</argument>
                 <argument>.</argument>

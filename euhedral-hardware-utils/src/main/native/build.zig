@@ -3,27 +3,13 @@ const std = @import("std");
 pub fn build(b: *std.Build) void {
     const optimize = .ReleaseFast;
 
-    const java_home = if (b.graph.environ_map.get("JAVA_HOME")) |val| val else blk: {
-        const result = std.process.run(
-            b.allocator,
-            b.graph.io,
-            .{ .argv = &.{ "mise", "which", "java" } },
-        ) catch {
-            break :blk "/usr/lib/jvm/default";
-        };
-
-        defer b.allocator.free(result.stdout);
-        defer b.allocator.free(result.stderr);
-
-        if (result.stdout.len > 0) {
-            const path = std.mem.trim(u8, result.stdout, " \n\r");
-            if (std.fs.path.dirname(path)) |bin_dir| {
-                if (std.fs.path.dirname(bin_dir)) |home_dir| {
-                    break :blk b.allocator.dupe(u8, home_dir) catch "/usr/lib/jvm/default";
-                }
-            }
-        }
-        break :blk "/usr/lib/jvm/default";
+    const java_home = b.option(
+        []const u8,
+        "java-home",
+        "Java home directory",
+    ) orelse {
+        std.debug.print("Missing -Djava-home argument", .{});
+        @panic("Missing -Djava-home argument");
     };
 
     const macos_sdk = blk: {
