@@ -336,3 +336,13 @@ Before handing work back:
 3. Inspect `git diff --check`.
 4. Inspect `git status --short` and confirm only intended files changed.
 5. Report tests that could not run and the exact environmental reason.
+
+## Temporary hardware-utils overhaul status
+
+- Phase 0 compatibility baseline is complete.
+- Phase 1 Child A native graph/JNI/staging is present on the Phase 1 root.
+- Phase 1 Child B loader/package implementation is complete and undergoing selected-module
+  validation; see
+  [
+  `docs/blueprints/hardware-utils/phase-1-loader-maven-packaging.md`](docs/blueprints/hardware-utils/phase-1-loader-maven-packaging.md).
+- Phase 1 root integration validation and conformance audit remain pending.

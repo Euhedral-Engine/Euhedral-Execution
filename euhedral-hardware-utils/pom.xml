@@ -79,6 +79,10 @@
             <p1.rcodesign>${env.RCODESIGN}</p1.rcodesign>
             <p1.llvm.readobj>${llvm.readobj}</p1.llvm.readobj>
             <p1.llvm.objdump>${llvm.objdump}</p1.llvm.objdump>
+            <p1.jar>${project.build.directory}/${project.build.finalName}.jar</p1.jar>
+            <p1.maven.executable>${maven.home}/bin/mvn</p1.maven.executable>
+            <p1.smoke.directory>${project.build.directory}/native-smoke</p1.smoke.directory>
+            <p1.test.classes>${project.build.testOutputDirectory}</p1.test.classes>
           </systemPropertyVariables>
         </configuration>
       </plugin>
@@ -127,6 +131,25 @@
                   followSymlinks="false" removeNotFollowedSymlinks="true" />
               </target>
             </configuration>
+          </execution>
+          <execution>
+            <configuration>
+              <target>
+                <copy file="${project.build.directory}/${project.build.finalName}.jar"
+                  overwrite="true" todir="${project.build.directory}/native-smoke"/>
+                <copy
+                  file="${project.build.testOutputDirectory}/io/euhedral_execution/hardware_utils/internal/NativeLoadSmokeMain.class"
+                  overwrite="true"
+                  todir="${project.build.directory}/native-smoke/io/euhedral_execution/hardware_utils/internal"/>
+                <mkdir
+                  dir="${project.build.directory}/native-smoke/io/euhedral_execution/hardware_utils/internal"/>
+              </target>
+            </configuration>
+            <goals>
+              <goal>run</goal>
+            </goals>
+            <id>prepare-native-smoke-bundle</id>
+            <phase>package</phase>
           </execution>
         </executions>
       </plugin>
@@ -185,6 +208,52 @@
             </configuration>
           </execution>
         </executions>
+      </plugin>
+      <plugin>
+        <artifactId>maven-dependency-plugin</artifactId>
+        <executions>
+          <execution>
+            <configuration>
+              <excludeTransitive>false</excludeTransitive>
+              <includeScope>runtime</includeScope>
+              <outputDirectory>${project.build.directory}/native-smoke/lib</outputDirectory>
+              <overWriteIfNewer>true</overWriteIfNewer>
+            </configuration>
+            <goals>
+              <goal>copy-dependencies</goal>
+            </goals>
+            <id>copy-native-smoke-runtime</id>
+            <phase>process-test-classes</phase>
+          </execution>
+        </executions>
+        <groupId>org.apache.maven.plugins</groupId>
+      </plugin>
+      <plugin>
+        <artifactId>maven-failsafe-plugin</artifactId>
+        <configuration>
+          <systemPropertyVariables>
+            <p0.build.directory>${project.build.directory}</p0.build.directory>
+            <p0.classes.directory>${project.build.outputDirectory}</p0.classes.directory>
+            <p0.project.basedir>${project.basedir}</p0.project.basedir>
+            <p1.jar>${project.build.directory}/${project.build.finalName}.jar</p1.jar>
+            <p1.llvm.objdump>${llvm.objdump}</p1.llvm.objdump>
+            <p1.llvm.readobj>${llvm.readobj}</p1.llvm.readobj>
+            <p1.maven.executable>${maven.home}/bin/mvn</p1.maven.executable>
+            <p1.rcodesign>${env.RCODESIGN}</p1.rcodesign>
+            <p1.smoke.directory>${project.build.directory}/native-smoke</p1.smoke.directory>
+            <p1.test.classes>${project.build.testOutputDirectory}</p1.test.classes>
+          </systemPropertyVariables>
+        </configuration>
+        <executions>
+          <execution>
+            <goals>
+              <goal>integration-test</goal>
+              <goal>verify</goal>
+            </goals>
+          </execution>
+        </executions>
+        <groupId>org.apache.maven.plugins</groupId>
+        <version>3.5.6</version>
       </plugin>
     </plugins>
   </build>
