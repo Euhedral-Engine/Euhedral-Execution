@@ -2,8 +2,9 @@
 
 ## Plan status
 
-- Phase: 2 - topology/snapshot parent blueprint review
-- Status: P0 and P1 complete; P2 parent blueprint split into P2-A and P2-B before implementation
+- Phase: 2 - P2-A topology model/adapters blueprint review
+- Status: P0 and P1 complete; P2-A topology model/adapters blueprint complete, review and merge
+  required
 - Plan branch: `agent/hardware-utils-overhaul-plan` (created before the updated phase-branch rule)
 - Branch point: `900d8c50` (`agent/phase7-cleanup-handoff`)
 - Active P1 root: `hardware-utils-overhaul/phase-1-native-build` (completed)
@@ -11,6 +12,8 @@
 - Active P2 root: `hardware-utils-overhaul/phase-2-topology-snapshot`
 - Active P2 parent blueprint branch:
   `hardware-utils-overhaul/phase-2-topology-snapshot-blueprint`
+- Active P2-A blueprint branch:
+  `hardware-utils-overhaul/phase-2-topology-model-blueprint`
 - Date: 2026-08-01
 - Planning model: `gpt-5.6-sol`
 - Planning reasoning effort: `max`
@@ -1726,10 +1729,36 @@ families below, sequentially from the updated P2 root.
 > identity, fallback, cache, count/index, ownership, or static-initialization rule. Do not create
 > implementation before that merge.
 
+#### P2-A developer-review summary
+
+- Purpose: install the common owned topology input/model/normalizer and make `SystemInfo` initialize
+  from one complete deterministic platform model or one whole-model fallback.
+- Ownership: P2-A owns `SystemInfo`, one unexported internal topology package, the common
+  collection/
+  projection boundaries of all three layout singletons, current Windows relationship values only
+  after parsing, and five deterministic topology fixture families. Mapper/snapshots, resources,
+  pressure, affinity/executor, native parity, core, and training remain prohibited.
+- Key contracts: Linux IDs remain kernel IDs; Windows uses unsigned `group * 64 + processor`;
+  macOS/fallback uses ordinals. Socket/core IDs are dense and source-key sorted, `CPU_COUNT` is the
+  logical index span, active entries are complete, and invalid/missing cache data receives exact
+  core-local L1/L2 or socket-local L3 fallbacks. Provider and model storage are copied twice at
+  trust boundaries. A hidden immutable map carrier gives `SystemInfo` the layout's exact model
+  without changing an existing descriptor, exporting the model, or creating a mutable registry.
+  Topology publishes through JVM class initialization before resource-provider construction.
+- Work unit: one implementation and one combined conformance/manual-review audit remain. The child
+  sizing gate passes without another split because collection, normalization, fallback, projection,
+  and facade bootstrap form one one-time lifecycle; detailed platforms are already split to P5-P7.
+- Selected implementation: confirms `gpt-5.6-sol` with `high` reasoning. No lower-effort evidence
+  exists for the coupled sparse/group identity, ownership, bounds, and static-initialization work.
+- Risks: sparse allocation pollution is rejected before allocation; Windows efficiency hints remain
+  conservative until P6; macOS remains synthetic until P7; final verify depends on P1 native tools.
+- Unresolved decisions: none. Provider shapes, identity/order, cache selection, model bridge,
+  fallback, ownership, failure behavior, test seams, and initialization order are settled in the
+  child blueprint.
+
 #### P2-A topology model/adapters implementation prompt
 
-**Parent-selected model: `gpt-5.6-sol`; reasoning effort: `high`. The completed P2-A child
-blueprint must confirm this selection before this prompt may run.**
+**Child-confirmed model: `gpt-5.6-sol`; reasoning effort: `high`.**
 
 > After the P2-A blueprint is reviewed and merged, create
 > `hardware-utils-overhaul/phase-2-topology-model-implementation` from the updated P2 root. Read
