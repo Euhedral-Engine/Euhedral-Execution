@@ -746,3 +746,28 @@ source; all reachable masks/lists/records are frozen before assignment.
 The pinned-tool API report, complete native-backed hardware verify, and read-only core test gate
 must be rerun in the documented Java 21/Maven 3.9.16/Zig environment before audit handoff. No
 deterministic fixture was skipped for host topology.
+
+### Conformance audit addendum
+
+Audited on `hardware-utils-overhaul/phase-2-snapshot-publication-audit` from merged P2 root commit
+`1c7d7859`.
+
+#### Commands, correction, and limits
+
+- Re-ran the direct resource/compiler/Surefire loop with the P2-B suite plus the P0 API/mask/
+  core-zero classes using OpenJDK `17.0.19`, Maven `3.6.3`, and workspace-local `.cache/m2`.
+  The eleven focused P2-B/mask/core-zero classes passed: 13 tests, zero failures.
+- The P0 `ApiCompatibilityTest` still fails only for its known baseline-report differences (three
+  Java-17 module-version changes, four merged P2-A macOS additions, and the two required
+  `UnmodifiableDoubleArray` value methods). It is therefore unverified under the fallback tools,
+  not a P2-B API regression.
+- Corrected `EffectiveSystemTopology` ownership so fixed socket lists are copied into an
+  unmodifiable list that retains required inactive-socket null holes. `List.copyOf` rejected those
+  holes before publication. Added a direct canonical-constructor regression assertion and reran
+  the focused suite above.
+- The implementation does not contain the blueprint's latch-controlled R2-R12 race coverage;
+  greatest-sequence, release/recheck, failure handoff, and reader-publication stress remain
+  unverified by deterministic tests. No redesign was made.
+- `mise` and Zig remain unavailable. The pinned Java 21/Maven 3.9.16 API gate, native-backed
+  hardware `verify`, and read-only core test gate remain outstanding. No training path was read or
+  run.

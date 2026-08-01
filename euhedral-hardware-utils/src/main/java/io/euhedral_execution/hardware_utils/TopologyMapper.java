@@ -279,8 +279,10 @@ public final class TopologyMapper {
                     Objects.requireNonNull(effectiveCores, "effectiveCores"));
             effectiveCpus = new UnmodifiableBitSet(
                     Objects.requireNonNull(effectiveCpus, "effectiveCpus"));
-            socketTopologies = List.copyOf(
-                    Objects.requireNonNull(socketTopologies, "socketTopologies"));
+            // Fixed socket spans deliberately retain null entries for inactive sockets. List.copyOf
+            // rejects those holes, so copy into an unmodifiable list without changing the shape.
+            socketTopologies = Collections.unmodifiableList(new ArrayList<>(
+                    Objects.requireNonNull(socketTopologies, "socketTopologies")));
         }
     }
 }
