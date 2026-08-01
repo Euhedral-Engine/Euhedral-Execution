@@ -690,3 +690,59 @@ Hand off this child blueprint for developer review and merge only when:
 
 Do not append an implementation completion record, edit production or `AGENTS.md`, or create the
 P2-B implementation branch before this blueprint is reviewed and merged into the P2 root.
+
+## Implementation completion record
+
+Completed on `hardware-utils-overhaul/phase-2-snapshot-publication-implementation` from P2 root
+commit `1640b864`.
+
+### Changed surface
+
+- `UnmodifiableDoubleArray` now clones construction input, validates exact copy/iteration ranges,
+  and implements array-content equality/hash. Existing `UnmodifiableBitSet` ownership, mutator,
+  ordinary-`BitSet` equality, array conversion, and mutable-clone behavior required no production
+  correction.
+- `SystemUtilization` canonical constructors own every mutable wrapper/array component; nested
+  array accessors clone; socket/core equality and hash include all components; snapshot derivation
+  uses fixed indexes, complete active entries, current timestamps, global cardinality, named
+  nonnegative/saturating memory values, and explicit active-span failures.
+- `TopologyMapper` owns and intersects constructor membership, applies core-zero reservation after
+  intersection, derives fixed immutable socket/core spans from the injected P2-A model, retains
+  persistent socket versions across inactivity, coalesces by greatest submission sequence, drains
+  through release/recheck, and publishes the entire final graph with one volatile write/read.
+- Added deterministic sparse two-socket and core-zero-only fixtures plus the five stable P2-B test
+  IDs, wrapper range/value tests, ownership/accessor mutation tests, named-field/saturation tests,
+  fixed-shape/unknown-bit checks, and first/identical/deactivate/reactivate version checks.
+
+### Commands and results
+
+- `mise exec -- ...`: unavailable because `mise` is not installed.
+- Fallback tool inspection: OpenJDK `17.0.19` and Maven `3.6.3`; the hardware module's Java 17
+  release is compatible, but these are not the pinned Java 21/Maven 3.9.16 defaults.
+- Direct P2-B plus P0 mask/core-zero loop through explicit resource/compiler/Surefire goals:
+  passed, 13 tests, zero failures.
+- P0 API gate: no removals. It remains unverified under the fallback compiler because the report
+  contains three Java-17 module-version changes, four already-merged P2-A macOS additions, and the
+  two blueprint-required `UnmodifiableDoubleArray.equals/hashCode` additions. Record-method access
+  flags match their baseline descriptors after correction.
+- `mvn -B -pl euhedral-hardware-utils -am verify`: unavailable past Java compilation because
+  `ZIG`/Zig is absent; Maven reports the `zig-build` executable missing.
+- `mvn -B -pl euhedral-core -am test`: upstream data-structures tests pass (8 tests), then the same
+  missing-Zig hardware lifecycle prevents the read-only core module from starting.
+- `git diff --check`, training scope diff, core-production scope diff, stale mapper-state search,
+  and final status checks pass. No module descriptor, P2-A model/adapter, ResourceMonitor,
+  affinity/executor, native/platform, core production, or training file changed.
+
+### Acceptance evidence and limits
+
+Owned inputs and accessor results cannot mutate older wrapper/snapshot/topology values; independent
+trees compare by complete content. Sparse logical CPU/global core positions retain exact null
+holes and all active entries are populated. Candidate membership never restores an intersected
+bit, core zero survives only when it is the sole candidate core, identical publications preserve
+identity, global versions count actual publications, and inactive socket increments persist into
+reactivation. The single volatile `effectiveTopology` field is the only reader publication/version
+source; all reachable masks/lists/records are frozen before assignment.
+
+The pinned-tool API report, complete native-backed hardware verify, and read-only core test gate
+must be rerun in the documented Java 21/Maven 3.9.16/Zig environment before audit handoff. No
+deterministic fixture was skipped for host topology.
