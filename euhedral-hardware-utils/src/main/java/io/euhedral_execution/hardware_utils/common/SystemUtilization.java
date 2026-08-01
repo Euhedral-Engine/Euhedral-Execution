@@ -43,7 +43,7 @@ public final class SystemUtilization {
         }
 
         @Override
-        public boolean equals(Object other) {
+        public final boolean equals(Object other) {
             if (!(other instanceof SocketSnapshot snapshot)) {
                 return false;
             }
@@ -58,7 +58,7 @@ public final class SystemUtilization {
         }
 
         @Override
-        public int hashCode() {
+        public final int hashCode() {
             int result = Objects.hash(socketId, effectiveCores, globalMemoryLimit, globalBytesUsed,
                     memoryLimit, memoryUtilization, lastUsageNs);
             return 31 * result + Arrays.hashCode(coreSnapshots);
@@ -106,7 +106,7 @@ public final class SystemUtilization {
         }
 
         @Override
-        public int hashCode() {
+        public final int hashCode() {
             int result = Objects.hash(coreId, quotaCpus, period, globalCpuCount,
                     globalMemoryLimit, globalBytesUsed, memoryLimit, memoryUtilization,
                     effectiveCpus);

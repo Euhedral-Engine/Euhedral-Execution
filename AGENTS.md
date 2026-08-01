@@ -344,9 +344,9 @@ Before handing work back:
 
 - P0 and P1 are complete; the P2 parent, audited P2-A implementation, and P2-B blueprint are
   merged on `hardware-utils-overhaul/phase-2-topology-snapshot`.
-- P2-B snapshot/remap/publication implementation is merged; its conformance audit is complete on
-  `hardware-utils-overhaul/phase-2-snapshot-publication-audit` and awaits developer review and
-  merge before the root audit.
+- P2-A and P2-B audits are complete; the root conformance audit is complete on
+  `hardware-utils-overhaul/phase-2-topology-snapshot-audit` and awaits developer review and merge
+  before explicit P2 closeout.
 - P2-A handoff evidence remains in
   `docs/blueprints/hardware-utils/phase-2-topology-model-adapters.md` and
   `docs/audits/hardware-utils/phase-2-topology-model-adapters-conformance.md`; P2-B implementation
