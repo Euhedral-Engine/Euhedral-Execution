@@ -5,14 +5,15 @@ import io.euhedral_execution.hardware_utils.common.SystemSnapshotProvider;
 import io.euhedral_execution.hardware_utils.common.SystemUtilization.SystemSnapshot;
 import io.euhedral_execution.hardware_utils.common.UnmodifiableBitSet;
 import io.euhedral_execution.hardware_utils.internal.Constants;
-import io.euhedral_execution.hardware_utils.linux.CgroupV2Resources;
+import io.euhedral_execution.hardware_utils.internal.topology.MaskCodec;
+import io.euhedral_execution.hardware_utils.internal.topology.TopologyBootstrap;
+import io.euhedral_execution.hardware_utils.internal.topology.TopologyModel;
 import io.euhedral_execution.hardware_utils.linux.LinuxSystemLayout;
-import io.euhedral_execution.hardware_utils.osx.OSXResources;
-import io.euhedral_execution.hardware_utils.windows.WindowsResources;
+import io.euhedral_execution.hardware_utils.osx.OSXSystemLayout;
 import io.euhedral_execution.hardware_utils.windows.WindowsSystemLayout;
-import it.unimi.dsi.fastutil.ints.Int2ObjectArrayMap;
 import java.util.BitSet;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.StringJoiner;
 import lombok.Getter;
@@ -43,10 +44,11 @@ public final class SystemInfo {
     private static final UnmodifiableBitSet P_CPU_SET;
     private static final UnmodifiableBitSet E_CPU_SET;
 
-    private static final Int2ObjectArrayMap<CpuCacheLayout> CPU_CACHE;
-    private static final Int2ObjectArrayMap<CpuInfo> CPU_INFO;
-    private static final Int2ObjectArrayMap<CoreInfo> CORE_INFO;
-    private static final Int2ObjectArrayMap<SocketInfo> SOCKET_INFO;
+    private static final Map<Integer, CpuCacheLayout> CPU_CACHE;
+    private static final Map<Integer, CpuInfo> CPU_INFO;
+    private static final Map<Integer, CoreInfo> CORE_INFO;
+    private static final Map<Integer, SocketInfo> SOCKET_INFO;
+    private static final TopologyModel TOPOLOGY_MODEL;
 
     @Getter
     private static final boolean X86;
@@ -55,84 +57,23 @@ public final class SystemInfo {
         String arch = System.getProperty("os.arch").toLowerCase();
         X86 = !(arch.startsWith("aarch64") || arch.contains("arm64"));
 
-        if (OSName.isLinux()) {
-            CPU_CACHE = new Int2ObjectArrayMap<>(LinuxSystemLayout.INSTANCE.getCacheLayout());
-            CPU_INFO = new Int2ObjectArrayMap<>(LinuxSystemLayout.INSTANCE.getCpuInfoMap());
-            CORE_INFO = new Int2ObjectArrayMap<>(LinuxSystemLayout.INSTANCE.getCoreInfoMap());
-            SOCKET_INFO = new Int2ObjectArrayMap<>(LinuxSystemLayout.INSTANCE.getSocketInfoMap());
-
-            CPU_COUNT = CPU_INFO.size();
-            CORE_COUNT = CORE_INFO.size();
-            SOCKET_COUNT = SOCKET_INFO.size();
-            SNAPSHOTTER = new CgroupV2Resources();
-        } else if (OSName.isMacOS()) {
-            CPU_CACHE = new Int2ObjectArrayMap<>();
-            CPU_INFO = new Int2ObjectArrayMap<>();
-            CORE_INFO = new Int2ObjectArrayMap<>();
-            SOCKET_INFO = new Int2ObjectArrayMap<>();
-
-            CPU_COUNT = Runtime.getRuntime().availableProcessors();
-            CORE_COUNT = CPU_COUNT;
-            SOCKET_COUNT = 1;
-            SNAPSHOTTER = OSXResources.INSTANCE;
-        } else if (OSName.isWindows()) {
-            CPU_CACHE = new Int2ObjectArrayMap<>(WindowsSystemLayout.INSTANCE.getCacheLayout());
-            CPU_INFO = new Int2ObjectArrayMap<>(WindowsSystemLayout.INSTANCE.getCpuInfoMap());
-            CORE_INFO = new Int2ObjectArrayMap<>(WindowsSystemLayout.INSTANCE.getCoreInfoMap());
-            SOCKET_INFO = new Int2ObjectArrayMap<>(WindowsSystemLayout.INSTANCE.getSocketInfoMap());
-
-            CPU_COUNT = CPU_INFO.size();
-            CORE_COUNT = CORE_INFO.size();
-            SOCKET_COUNT = SOCKET_INFO.size();
-            SNAPSHOTTER = WindowsResources.INSTANCE;
-        } else {
-            LOGGER.error("Unsupported OS. Defaulting to null and empty.");
-
-            CPU_CACHE = new Int2ObjectArrayMap<>();
-            CPU_INFO = new Int2ObjectArrayMap<>();
-            CORE_INFO = new Int2ObjectArrayMap<>();
-            SOCKET_INFO = new Int2ObjectArrayMap<>();
-
-            CPU_COUNT = Runtime.getRuntime().availableProcessors();
-            CORE_COUNT = CPU_COUNT;
-            SOCKET_COUNT = 1;
-            SNAPSHOTTER = null;
-        }
-
-        int maxCore = 0;
-        int maxSocket = 0;
-        for (CpuInfo info : CPU_INFO.values()) {
-            maxCore = Math.max(maxCore, info.core);
-            maxSocket = Math.max(maxSocket, info.socket);
-        }
-        MAX_CORE_ID = maxCore;
-        MAX_SOCKET_ID = maxSocket;
-
-        BitSet cpus = new BitSet(CPU_INFO.size());
-        BitSet pCores = new BitSet(MAX_CORE_ID);
-        BitSet eCores = new BitSet(MAX_CORE_ID);
-        BitSet pCpus = new BitSet(CPU_INFO.size());
-        BitSet eCpus = new BitSet(CPU_INFO.size());
-        if (OSName.CURRENT_OS != OSName.UNSUPPORTED) {
-            CACHE_LINE_SIZE_BYTES = CPU_CACHE.get(0).cacheLineBytes;
-            for (int c : CPU_INFO.keySet()) {
-                cpus.set(c);
-                int core = CPU_INFO.get(c).core;
-                CoreInfo coreInfo = CORE_INFO.get(core);
-                pCores.set(core, coreInfo.pCore);
-                pCpus.set(c, coreInfo.pCore);
-                eCores.set(core, !coreInfo.pCore);
-                eCpus.set(c, !coreInfo.pCore);
-            }
-        } else {
-            CACHE_LINE_SIZE_BYTES = 64;
-            cpus.set(0, Runtime.getRuntime().availableProcessors());
-        }
-        CPU_SET = UnmodifiableBitSet.wrap(cpus);
-        P_CORE_SET = UnmodifiableBitSet.wrap(pCores);
-        E_CORE_SET = UnmodifiableBitSet.wrap(eCores);
-        P_CPU_SET = UnmodifiableBitSet.wrap(pCpus);
-        E_CPU_SET = UnmodifiableBitSet.wrap(eCpus);
+        TOPOLOGY_MODEL = selectTopology();
+        CPU_CACHE = TOPOLOGY_MODEL.cacheLayout();
+        CPU_INFO = TOPOLOGY_MODEL.cpuInfo();
+        CORE_INFO = TOPOLOGY_MODEL.coreInfo();
+        SOCKET_INFO = TOPOLOGY_MODEL.socketInfo();
+        CPU_COUNT = TOPOLOGY_MODEL.cpuCount();
+        CORE_COUNT = TOPOLOGY_MODEL.coreCount();
+        SOCKET_COUNT = TOPOLOGY_MODEL.socketCount();
+        MAX_CORE_ID = TOPOLOGY_MODEL.maxCoreId();
+        MAX_SOCKET_ID = TOPOLOGY_MODEL.maxSocketId();
+        CACHE_LINE_SIZE_BYTES = TOPOLOGY_MODEL.cacheLineBytes();
+        CPU_SET = TOPOLOGY_MODEL.cpuSet();
+        P_CORE_SET = TOPOLOGY_MODEL.pCoreSet();
+        E_CORE_SET = TOPOLOGY_MODEL.eCoreSet();
+        P_CPU_SET = TOPOLOGY_MODEL.pCpuSet();
+        E_CPU_SET = TOPOLOGY_MODEL.eCpuSet();
+        SNAPSHOTTER = TopologyBootstrap.resources(LOGGER);
 
         String debugOut = asString();
         LOGGER.debug("\n{}", debugOut);
@@ -163,59 +104,15 @@ public final class SystemInfo {
     }
 
     public static int[] getSystemCpus() {
-        return CPU_CACHE.keySet().toIntArray();
+        return TOPOLOGY_MODEL.activeLogicalIds();
     }
 
     public static @NonNull BitSet fromHexMask(@NonNull String mask) {
-        String[] chunks = mask.split(",");
-
-        int bit = 0;
-        BitSet set = new BitSet(32 * chunks.length);
-        for (int i = chunks.length - 1; i >= 0; i--) {
-            long subMask = Long.parseUnsignedLong(chunks[i].replace("0x", "").trim(), 16);
-
-            int shifts = 0;
-            while (subMask > 0) {
-                int cpu = Long.numberOfTrailingZeros(subMask) + 1;
-                shifts += cpu;
-                bit += cpu;
-                set.set(bit - 1);
-                subMask >>>= cpu;
-            }
-            bit += 32 - shifts;
-        }
-        return set;
+        return MaskCodec.parse(mask);
     }
 
     public static @NonNull String toHexMask(@NonNull BitSet set) {
-        if (set.isEmpty()) {
-            return "0";
-        }
-
-        StringJoiner sj = new StringJoiner(",");
-        long[] bits = set.toLongArray();
-        boolean headWritten = false;
-
-        for (int i = bits.length - 1; i >= 0; i--) {
-            long chunk = bits[i];
-            int upper = (int) (chunk >>> 32);
-            int lower = (int) chunk;
-
-            if (headWritten) {
-                sj.add(String.format("%08x", upper));
-            } else if (upper != 0) {
-                sj.add(Integer.toHexString(upper));
-                headWritten = true;
-            }
-
-            if (headWritten) {
-                sj.add(String.format("%08x", lower));
-            } else if (lower != 0 || i == 0) {
-                sj.add(Integer.toHexString(lower));
-                headWritten = true;
-            }
-        }
-        return sj.toString();
+        return MaskCodec.format(set);
     }
 
     public static String asString() {
@@ -251,9 +148,10 @@ public final class SystemInfo {
         sj.add(lineBreak);
         for (int i = 0; i < CPU_COUNT; i++) {
             CpuCacheLayout layout = getCacheLayout(i);
-            if (layout != null) {
-                sj.add(layout.toString());
+            if (layout == null) {
+                continue;
             }
+            sj.add(layout.toString());
         }
         sj.add(lineBreak);
 
@@ -319,6 +217,37 @@ public final class SystemInfo {
 
     private SystemInfo() {
 
+    }
+
+    static TopologyModel topologyModel() {
+        return TOPOLOGY_MODEL;
+    }
+
+    private static TopologyModel selectTopology() {
+        try {
+            if (OSName.isLinux()) {
+                return TopologyBootstrap.extract(LinuxSystemLayout.INSTANCE.getCacheLayout(),
+                        LinuxSystemLayout.INSTANCE.getCpuInfoMap(),
+                        LinuxSystemLayout.INSTANCE.getCoreInfoMap(),
+                        LinuxSystemLayout.INSTANCE.getSocketInfoMap());
+            }
+            if (OSName.isWindows()) {
+                return TopologyBootstrap.extract(WindowsSystemLayout.INSTANCE.getCacheLayout(),
+                        WindowsSystemLayout.INSTANCE.getCpuInfoMap(),
+                        WindowsSystemLayout.INSTANCE.getCoreInfoMap(),
+                        WindowsSystemLayout.INSTANCE.getSocketInfoMap());
+            }
+            if (OSName.isMacOS()) {
+                return TopologyBootstrap.extract(OSXSystemLayout.INSTANCE.getCacheLayout(),
+                        OSXSystemLayout.INSTANCE.getCpuInfoMap(),
+                        OSXSystemLayout.INSTANCE.getCoreInfoMap(),
+                        OSXSystemLayout.INSTANCE.getSocketInfoMap());
+            }
+            LOGGER.error("Unsupported OS; using common fallback topology.");
+        } catch (Exception | LinkageError failure) {
+            LOGGER.error("Failed to initialize platform topology; using common fallback.", failure);
+        }
+        return TopologyBootstrap.fallback(Runtime.getRuntime().availableProcessors());
     }
 
     public record CpuInfo(int cpu, int core, int socket) {
