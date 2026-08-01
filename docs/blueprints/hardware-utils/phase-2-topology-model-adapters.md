@@ -28,6 +28,13 @@ public count meaning, provider/model ownership boundary, or initialization order
 return to this blueprint and its parent. Compile convenience is not authority to change one of
 those contracts.
 
+### Authorized toolchain-policy revision
+
+The developer authorized this documentation revision on 2026-08-01. Every Java command, Maven
+command, and Maven build defaults to the exact versions in `mise.toml`; a documented
+restricted-environment fallback must use the corresponding pinned installed tools and record its
+versions and limits.
+
 ## Objective
 
 P2-A inserts one deterministic, immutable common topology model between platform observations and
@@ -965,3 +972,23 @@ Maven reported only that build-cache support requires Maven 3.9; no test or gate
 
 The implementation is ready only for the prescribed P2-A conformance/manual review. P2-B remains
 out of scope until this implementation and its audit are reviewed and merged.
+
+## Conformance audit completion evidence
+
+P2-A conformance audit completed on 2026-08-01 on
+`hardware-utils-overhaul/phase-2-topology-model-audit`, based on P2 root commit `0e41bb8b`.
+
+- No production correction was needed. The audit classified identity, sparse Linux topology,
+  Windows unsigned group/bit-63 identity, macOS/fallback behavior, cache completion,
+  count/index/null-hole semantics, immutable projection ownership, bootstrap ordering, and
+  API/core compatibility as satisfied.
+- The focused fixture command passed 11 tests:
+  `mvn -B -pl euhedral-hardware-utils surefire:test -Dtest=SystemInfoFallbackTest,TopologyCacheFallbackTest,TopologyOwnershipTest,TopologyNormalizerTest,LinuxSystemLayoutFixtureTest,WindowsTopologyFixtureTest`.
+- P0 mask and core-zero checks passed. The API comparator had zero removals and only the four
+  blueprint-authorized macOS getter additions, but its module-version comparison is unverified on
+  this Java-17 host versus the P0 Java-21 baseline.
+- The normal hardware lifecycle could not run because `zig` is unavailable; the P2-A completion
+  record above remains the successful Java-21/Zig verification evidence.
+- T05 snapshot ownership/equality and T06 remap publication remain P2-B/P4 work; no P2-B code was
+  inspected or changed. The full audit is
+  `docs/audits/hardware-utils/phase-2-topology-model-adapters-conformance.md`.

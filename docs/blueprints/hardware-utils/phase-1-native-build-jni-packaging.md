@@ -23,6 +23,13 @@ This blueprint is subordinate to the parent plan, `AGENTS.md`, and the compiled 
 contract. It settles the shared P1 architecture and divides implementation into two sequential
 responsibility-scoped children. There is no P1 root implementation action.
 
+### Authorized toolchain-policy revision
+
+The developer authorized this documentation revision on 2026-08-01. Every Java command, Maven
+command, and Maven build defaults to the exact versions in `mise.toml`; a documented
+restricted-environment fallback must use the corresponding pinned installed tools and record its
+versions and limits.
+
 If a child discovers that a manifest field, JNI ABI rule, staged path, signing edge, loader
 catalog field, extraction policy, or binary gate must change, it returns to this parent blueprint.
 It must not make a private incompatible choice.
