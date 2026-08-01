@@ -40,5 +40,9 @@ class TopologyMapperPublicationTest {
                 directMask, topology.socketTopologies(), 1);
         directMask.clear();
         assertEquals(TopologyHelpers.bits(3), direct.effectiveCpus());
+
+        EffectiveSystemTopology sparse = new EffectiveSystemTopology(new BitSet(), new BitSet(),
+                new BitSet(), java.util.Collections.singletonList(null), 1);
+        assertNull(sparse.socketTopologies().get(0));
     }
 }
