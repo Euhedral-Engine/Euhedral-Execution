@@ -2,16 +2,18 @@
 
 ## Plan status
 
-- Phase: 3 - affinity capability/executor parent blueprint review
-- Status: P0-P2 complete; P3 parent blueprint complete, review and merge required before P3-A
+- Phase: 3-A - affinity capability child blueprint review
+- Status: P0-P2 complete; P3 parent merged; P3-A child blueprint complete, review and merge required
+  before P3-A implementation
 - Plan branch: `agent/hardware-utils-overhaul-plan` (created before the updated phase-branch rule)
 - Branch point: `900d8c50` (`agent/phase7-cleanup-handoff`)
 - Active P1 root: `hardware-utils-overhaul/phase-1-native-build` (completed)
 - Active P1 blueprint branch: `hardware-utils-overhaul/phase-1-native-build-blueprint` (historical)
 - Completed P2 root: `hardware-utils-overhaul/phase-2-topology-snapshot` at `e2495c5d`
 - Active P3 root: `hardware-utils-overhaul/phase-3-affinity-executor`
-- Active P3 parent blueprint branch:
-  `hardware-utils-overhaul/phase-3-affinity-executor-blueprint`
+- Completed P3 parent blueprint root commit: `7d3abea7`
+- Active P3-A blueprint branch:
+  `hardware-utils-overhaul/phase-3-affinity-capability-blueprint`
 - Date: 2026-08-01
 - Planning model: `gpt-5.6-sol`
 - Planning reasoning effort: `max`
@@ -1959,7 +1961,7 @@ neither topology publication nor the missing P2 race tests.
 
 ### P3 - affinity capability and executor lifecycle
 
-#### P3 parent blueprint prompt - COMPLETED, REVIEW AND MERGE REQUIRED
+#### P3 parent blueprint prompt - COMPLETED AND MERGED
 
 **Model: `gpt-5.6-sol`; reasoning effort: `max`.**
 
@@ -1968,8 +1970,8 @@ The completed output is
 `hardware-utils-overhaul/phase-3-affinity-executor-blueprint`. It freezes capability, masks,
 managed ownership, leases/restoration, executor state, registry, cleaner/hook, deadline, and Java
 Memory Model contracts. Its sizing gate splits P3 into sequential P3-A and P3-B children and
-prohibits a root implementation or validation branch. Review and merge it into
-`hardware-utils-overhaul/phase-3-affinity-executor` before creating P3-A.
+prohibits a root implementation or validation branch. The reviewed parent is merged into
+`hardware-utils-overhaul/phase-3-affinity-executor` at `7d3abea7`; P3-A was created from that root.
 
 #### P3 developer-review summary
 
@@ -2010,7 +2012,7 @@ The sizing gate rejected one P3 implementation context. Do not create
 `hardware-utils-overhaul/phase-3-affinity-executor-implementation`. Use the P3-A and P3-B action
 families below, sequentially from the updated P3 root.
 
-#### P3-A affinity capability blueprint prompt
+#### P3-A affinity capability blueprint prompt - COMPLETED, REVIEW AND MERGE REQUIRED
 
 **Model: `gpt-5.6-sol`; reasoning effort: `max`.**
 
@@ -2037,9 +2039,36 @@ families below, sequentially from the updated P3 root.
 > restoration, release, ownership, current-CPU, memory-mode, or test-seam rule. Merge before
 > implementation and do not start P3-B.
 
+#### P3-A developer-review summary
+
+- Purpose: replace destructive/null-unsafe affinity setup with one truthful common controller,
+  bounded unsigned requests, first-original restoration, conservative locality release, and scoped
+  managed logical ownership.
+- Package boundary: P3-A owns the additive root enum/query, `ThreadTools`, unexported affinity
+  controller/provider/value roles, the three Java affinity facades, and focused deterministic
+  tests. Module directives, legacy exported `common.ThreadPinner`, JNI declarations/bodies,
+  executor lifecycle, resource/pressure code, topology production, core production, and training
+  are unchanged or prohibited.
+- Key contracts: P3 Linux/Windows common capability remains `UNSUPPORTED` until P5/P6 supply exact
+  capture/restore; macOS is a conservative single-ordinal `LOCALITY_HINT` with tag-zero release
+  until P7. Every request is copied, bounded by the P2 span/active mask, all-or-nothing, and bit-63
+  safe. Exact leases preserve the first original snapshot; nested managed tokens are owner-thread,
+  LIFO, idempotent, and independent of placement. Current CPU is exact-provider-first, then managed
+  fallback, otherwise `-1`/null.
+- Work unit and tests: one implementation checklist covers the controller plus thin facade adapters.
+  Instance fakes prove exact and multi-CPU locality semantics; package-local raw-call seams prove
+  zero partial facade calls. A01, mutation, release failure, nesting/wrong-thread, API/JNI/mask,
+  hardware, core-compatibility, and scope gates are explicit.
+- Sizing/model: the child remains one irreducibly coupled but bounded responsibility. The
+  parent-selected implementation remains **`gpt-5.6-sol` with `high` reasoning**; no downgrade is
+  justified by the remaining mask, failure, ownership, and three-facade coupling.
+- Risks/unresolved items: hosted native capability is not semantic evidence and detailed platform
+  parity remains deferred. No capability, mask, platform-call, restoration, release, ownership,
+  current-CPU, memory-mode, or fake-seam choice remains unresolved.
+
 #### P3-A affinity capability implementation prompt
 
-**Parent-selected model: `gpt-5.6-sol`; reasoning effort: `high`; child confirmation required.**
+**Child-confirmed model: `gpt-5.6-sol`; reasoning effort: `high`.**
 
 > After the P3-A blueprint is reviewed and merged, create
 > `hardware-utils-overhaul/phase-3-affinity-capability-implementation` from the updated P3 root.
