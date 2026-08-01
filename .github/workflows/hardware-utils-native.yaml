@@ -1,0 +1,160 @@
+name: Hardware Utils Native Package
+
+on:
+  pull_request:
+    paths:
+      - "euhedral-hardware-utils/**"
+      - ".github/workflows/hardware-utils-native.yaml"
+      - "mise.toml"
+      - "pom.xml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cross-package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Cache macOS SDK
+        id: cache-macos-sdk
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/mise/installs/macos-sdk
+          key: macos-sdk-26.1-v1
+
+      - name: Download macOS SDK
+        if: steps.cache-macos-sdk.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y llvm xz-utils
+          mkdir -p ~/.local/share/mise/installs/macos-sdk
+          curl --fail --location --silent --show-error \
+            https://github.com/joseluisq/macosx-sdks/releases/download/26.1/MacOSX26.1.sdk.tar.xz \
+            | tar -xJ -C ~/.local/share/mise/installs/macos-sdk/
+
+      - name: Install LLVM
+        if: steps.cache-macos-sdk.outputs.cache-hit == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y llvm
+
+      - name: Install pinned tools
+        uses: jdx/mise-action@v2
+        with:
+          install: true
+          cache: true
+
+      - name: Cache Maven and target-local Zig data
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.m2/repository
+            euhedral-hardware-utils/target/zig-cache
+            euhedral-hardware-utils/target/zig-global-cache
+          key: ${{ runner.os }}-hardware-native-${{ hashFiles('pom.xml', 'euhedral-hardware-utils/pom.xml', 'euhedral-hardware-utils/src/main/native/**', 'mise.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-hardware-native-
+
+      - name: Build, inspect, package, and smoke
+        run: mise exec -- mvn -B -pl euhedral-hardware-utils -am verify
+
+      - name: Upload ordinary jar and bounded smoke bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: hardware-utils-native
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            euhedral-hardware-utils/target/euhedral-hardware-utils-*.jar
+            euhedral-hardware-utils/target/native-smoke
+
+  linux-jdk17-glibc:
+    needs: cross-package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: hardware-utils-native
+          path: artifact
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Load packaged glibc product
+        shell: bash
+        run: |
+          test "$(find artifact -type f | wc -l)" -le 64
+          test "$(du -sb artifact | cut -f1)" -le 134217728
+          timeout 60s java -cp 'artifact/native-smoke:artifact/native-smoke/*:artifact/native-smoke/lib/*' \
+            io.euhedral_execution.hardware_utils.internal.NativeLoadSmokeMain linux-get-cpu
+
+  linux-jdk17-musl:
+    needs: cross-package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: hardware-utils-native
+          path: artifact
+      - name: Load packaged musl fallback
+        shell: bash
+        run: |
+          docker pull eclipse-temurin:17-jre-alpine
+          timeout 180s docker run --rm --network none --memory 512m --cpus 2 \
+            -v "$PWD/artifact:/smoke:ro" eclipse-temurin:17-jre-alpine sh -ec '
+              timeout 60s java -cp "/smoke/native-smoke:/smoke/native-smoke/*:/smoke/native-smoke/lib/*" \
+                io.euhedral_execution.hardware_utils.internal.NativeLoadSmokeMain linux-get-cpu
+            '
+
+  windows-jdk17:
+    needs: cross-package
+    runs-on: windows-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: hardware-utils-native
+          path: artifact
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Load packaged Windows DLL
+        shell: pwsh
+        run: |
+          java -cp 'artifact/native-smoke;artifact/native-smoke/*;artifact/native-smoke/lib/*' `
+            io.euhedral_execution.hardware_utils.internal.NativeLoadSmokeMain load-only
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+  macos-jdk17:
+    needs: cross-package
+    runs-on: macos-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: hardware-utils-native
+          path: artifact
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Verify signatures and load host dylib
+        shell: bash
+        run: |
+          jar_path=$(find artifact -maxdepth 2 -name 'euhedral-hardware-utils-*.jar' -print -quit)
+          test -n "$jar_path"
+          verify_dir=$(mktemp -d)
+          trap 'rm -rf "$verify_dir"' EXIT
+          cd "$verify_dir"
+          jar xf "$GITHUB_WORKSPACE/$jar_path" bin/osx/osx_jni_x64.dylib bin/osx/osx_jni_arm64.dylib
+          /usr/bin/codesign --verify --strict --verbose=4 bin/osx/osx_jni_x64.dylib
+          /usr/bin/codesign --verify --strict --verbose=4 bin/osx/osx_jni_arm64.dylib
+          cd "$GITHUB_WORKSPACE"
+          java -cp 'artifact/native-smoke:artifact/native-smoke/*:artifact/native-smoke/lib/*' \
+            io.euhedral_execution.hardware_utils.internal.NativeLoadSmokeMain load-only
