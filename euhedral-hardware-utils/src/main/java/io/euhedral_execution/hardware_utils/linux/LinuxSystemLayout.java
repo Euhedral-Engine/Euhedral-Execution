@@ -1,25 +1,27 @@
 package io.euhedral_execution.hardware_utils.linux;
 
-import static io.euhedral_execution.hardware_utils.SystemInfo.DEFAULT_L1;
-import static io.euhedral_execution.hardware_utils.SystemInfo.DEFAULT_L2;
-import static io.euhedral_execution.hardware_utils.SystemInfo.DEFAULT_L3;
-
-import io.euhedral_execution.hardware_utils.SystemInfo;
 import io.euhedral_execution.hardware_utils.SystemInfo.CoreInfo;
 import io.euhedral_execution.hardware_utils.SystemInfo.CpuCacheLayout;
 import io.euhedral_execution.hardware_utils.SystemInfo.CpuInfo;
 import io.euhedral_execution.hardware_utils.SystemInfo.SocketInfo;
 import io.euhedral_execution.hardware_utils.common.OSName;
 import io.euhedral_execution.hardware_utils.internal.Constants;
-import it.unimi.dsi.fastutil.ints.Int2BooleanArrayMap;
-import it.unimi.dsi.fastutil.ints.Int2ObjectArrayMap;
+import io.euhedral_execution.hardware_utils.internal.topology.CacheDomain;
+import io.euhedral_execution.hardware_utils.internal.topology.CoreKind;
+import io.euhedral_execution.hardware_utils.internal.topology.LogicalCpu;
+import io.euhedral_execution.hardware_utils.internal.topology.MaskCodec;
+import io.euhedral_execution.hardware_utils.internal.topology.TopologyBootstrap;
+import io.euhedral_execution.hardware_utils.internal.topology.TopologyInput;
+import io.euhedral_execution.hardware_utils.internal.topology.TopologyModel;
+import io.euhedral_execution.hardware_utils.internal.topology.TopologyProvider;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.BitSet;
-import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,241 +29,208 @@ import org.slf4j.LoggerFactory;
 public final class LinuxSystemLayout {
 
     public static final LinuxSystemLayout INSTANCE;
-    private static final Logger LOGGER = LoggerFactory.getLogger(Constants.getLoggerName(LinuxSystemLayout.class));
+    private static final Logger LOGGER = LoggerFactory.getLogger(Constants.getLoggerName(
+            LinuxSystemLayout.class));
+    private static final Path CPU_ROOT = Path.of("/sys/devices/system/cpu");
 
     static {
-        if (OSName.isLinux()) {
-            INSTANCE = new LinuxSystemLayout();
-        } else {
-            INSTANCE = null;
+        INSTANCE = OSName.isLinux() ? new LinuxSystemLayout(CPU_ROOT) : null;
+    }
+
+    private static TopologyInput collect(Path cpuRoot) throws IOException {
+        List<Path> directories;
+        try (var paths = Files.list(cpuRoot)) {
+            directories = paths.filter(path -> path.getFileName().toString().matches("cpu\\d+"))
+                    .sorted(Comparator.comparingInt(
+                            path -> parseCpu(path.getFileName().toString())))
+                    .toList();
         }
+        List<RawCpu> raw = new ArrayList<>(directories.size());
+        List<CacheDomain> caches = new ArrayList<>();
+        for (Path directory : directories) {
+            int cpu = parseCpu(directory.getFileName().toString());
+            Path topology = directory.resolve("topology");
+            int packageId = parseSigned(read(topology.resolve("physical_package_id")));
+            int coreId = parseSigned(read(topology.resolve("core_id")));
+            int dieId = Files.isRegularFile(topology.resolve("die_id"))
+                    ? parseSigned(read(topology.resolve("die_id"))) : 0;
+            CacheScore cacheScore = collectCaches(directory.resolve("cache"), caches);
+            raw.add(new RawCpu(cpu, packageId, dieId, coreId, frequencyScore(directory),
+                    cacheScore.value));
+        }
+        Map<CoreTuple, CoreKind> kinds = classify(raw);
+        List<LogicalCpu> cpus = raw.stream().map(cpu -> {
+            CoreTuple tuple = new CoreTuple(cpu.packageId, cpu.dieId, cpu.coreId);
+            return new LogicalCpu(cpu.id, "linux:package:" + cpu.packageId,
+                    "linux:die:" + cpu.dieId, "linux:core:" + cpu.coreId,
+                    kinds.getOrDefault(tuple, CoreKind.UNKNOWN));
+        }).toList();
+        return new TopologyInput("linux", cpus, caches);
     }
 
-    private final Int2ObjectArrayMap<CpuCacheLayout> cpuCache = new Int2ObjectArrayMap<>();
-    private final Int2ObjectArrayMap<CpuInfo> cpuInfo = new Int2ObjectArrayMap<>();
-    private final Int2ObjectArrayMap<CoreInfo> coreInfo = new Int2ObjectArrayMap<>();
-    private final Int2ObjectArrayMap<SocketInfo> socketInfo = new Int2ObjectArrayMap<>();
-
-    private Int2ObjectArrayMap<Ranking> cpuRankings = new Int2ObjectArrayMap<>();
-
-    private LinuxSystemLayout() {
-        init();
-        this.cpuRankings = null;
-    }
-
-    private void init() {
-        try (var cpuDirs = Files.list(LinuxPaths.CPU_INFO_BASE)) {
-            Map<Integer, BitSet> socketToCpu = new HashMap<>();
-            Map<Integer, BitSet> socketToCore = new HashMap<>();
-
-            var list = cpuDirs.filter(p -> p.getFileName().toString().matches("cpu\\d+"))
-                    .peek(cpuDir -> {
-                        int cpu = parseCpu(cpuDir.getFileName().toString());
-                        initCacheLayout(cpu, cpuDir.resolve("cache"));
-                        try {
-                            this.cpuRankings.get(cpu).capacity[0] *= Long.parseLong(
-                                    read(cpuDir.resolve("cpufreq/cpuinfo_max_freq")));
-                        } catch (Throwable ignored) {
-                            // Not all info is supported
-                        }
-                    }).toList();
-            LOGGER.trace("Detected {} cpus", list.size());
-            Int2BooleanArrayMap pCpu = rankCpus();
-            list.forEach(cpuDir -> {
-                Path topology = cpuDir.resolve("topology");
-
-                int cpu = parseCpu(cpuDir.getFileName().toString());
-                int core = cpu;
-                int socket = 0;
-                String coreCpuSet = "";
-
+    private static CacheScore collectCaches(Path root, List<CacheDomain> target) {
+        if (!Files.isDirectory(root)) {
+            return CacheScore.INVALID;
+        }
+        long l1 = -1;
+        long l2 = -1;
+        try (var entries = Files.list(root)) {
+            for (Path entry : entries.toList()) {
                 try {
-                    core = Integer.parseInt(read(topology.resolve("core_id")));
-                    socket = Integer.parseInt(read(topology.resolve("physical_package_id")));
-                    coreCpuSet = SystemInfo.toHexMask(
-                            parseCpuList(read(topology.resolve("core_cpus_list"))));
-                } catch (IOException e) {
-                    LOGGER.error("Failed to read topology for CPU: {}", cpu, e);
+                    String type = read(entry.resolve("type")).toLowerCase();
+                    if (type.startsWith("instruction")) {
+                        continue;
+                    }
+                    int level = Integer.parseInt(read(entry.resolve("level")));
+                    long size = toBytes(read(entry.resolve("size")));
+                    int line = Integer.parseInt(read(entry.resolve("coherency_line_size")));
+                    BitSet sharers = MaskCodec.parse(read(entry.resolve("shared_cpu_map")));
+                    target.add(new CacheDomain(level, size, line, sharers));
+                    if (level == 1) {
+                        l1 = saturatedMultiply(size, sharers.cardinality());
+                    }
+                    if (level == 2) {
+                        l2 = size / (sharers.cardinality() > 2
+                                ? sharers.cardinality() : 1);
+                    }
+                } catch (Exception ignored) {
+                    // Cache observations are optional and completed by the common normalizer.
                 }
-                this.cpuInfo.put(cpu, new CpuInfo(cpu, core, socket));
-                this.coreInfo.put(core, new CoreInfo(coreCpuSet, pCpu.get(cpu), core, socket));
-
-                BitSet cpuSet = socketToCpu.computeIfAbsent(socket, k -> new BitSet());
-                BitSet coreSet = socketToCore.computeIfAbsent(socket, k -> new BitSet());
-                cpuSet.set(cpu);
-                coreSet.set(core);
-            });
-            LOGGER.trace("Detected {} cores", this.coreInfo.size());
-            for (var entry : socketToCore.entrySet()) {
-                int socket = entry.getKey();
-                socketInfo.put(socket, new SocketInfo(SystemInfo.toHexMask(socketToCpu.get(socket)),
-                        SystemInfo.toHexMask(entry.getValue()), socket));
             }
-            LOGGER.trace("Detected {} sockets", this.socketInfo.size());
-        } catch (IOException e) {
-            LOGGER.error("Failed to list cpus.", e);
+        } catch (IOException ignored) {
+            // Cache observations are optional and completed by the common normalizer.
         }
+        return l1 > 0 && l2 > 0 ? new CacheScore(saturatedAdd(l1, l2)) : CacheScore.INVALID;
+    }
+
+    private static long frequencyScore(Path cpu) {
+        try {
+            long frequency = Long.parseLong(read(cpu.resolve("cpufreq/cpuinfo_max_freq")));
+            return frequency > 0 ? frequency : -1;
+        } catch (Exception ignored) {
+            return -1;
+        }
+    }
+
+    private static Map<CoreTuple, CoreKind> classify(List<RawCpu> cpus) {
+        boolean frequenciesComplete = cpus.stream().allMatch(cpu -> cpu.frequencyScore > 0);
+        boolean cachesComplete = cpus.stream().allMatch(cpu -> cpu.cacheScore > 0);
+        boolean complete = frequenciesComplete || cachesComplete;
+        Map<CoreTuple, Long> scores = new HashMap<>();
+        for (RawCpu cpu : cpus) {
+            CoreTuple tuple = new CoreTuple(cpu.packageId, cpu.dieId, cpu.coreId);
+            long score = frequenciesComplete ? cpu.frequencyScore : cpu.cacheScore;
+            Long prior = scores.putIfAbsent(tuple, score);
+            if (score <= 0 || prior != null && prior != score) {
+                complete = false;
+            }
+        }
+        Map<CoreTuple, CoreKind> result = new HashMap<>();
+        scores.keySet().forEach(key -> result.put(key, CoreKind.UNKNOWN));
+        if (!complete || scores.size() < 2 || new java.util.HashSet<>(scores.values()).size() < 2) {
+            return result;
+        }
+        List<Map.Entry<CoreTuple, Long>> sorted = scores.entrySet().stream()
+                .sorted(Map.Entry.<CoreTuple, Long>comparingByValue().reversed()
+                        .thenComparing(entry -> entry.getKey().toString())).toList();
+        long largest = 0;
+        int boundary = -1;
+        for (int i = 0; i + 1 < sorted.size(); i++) {
+            long gap = sorted.get(i).getValue() - sorted.get(i + 1).getValue();
+            if (gap > largest) {
+                largest = gap;
+                boundary = i;
+            }
+        }
+        if (largest > 0) {
+            for (int i = 0; i < sorted.size(); i++) {
+                result.put(sorted.get(i).getKey(),
+                        i <= boundary ? CoreKind.PERFORMANCE : CoreKind.EFFICIENCY);
+            }
+        }
+        return result;
+    }
+
+    private static String read(Path path) throws IOException {
+        return Files.readString(path).trim();
+    }
+
+    private static int parseSigned(String value) {
+        return Integer.parseInt(value);
     }
 
     private static int parseCpu(String folder) {
-        int cpu = 0;
-        for (int i = 3; i < folder.length(); i++) {
-            char c = folder.charAt(i);
-            if (c < '0' || c > '9') {
-                break;
-            }
-            cpu *= 10;
-            cpu += c - '0';
-        }
-        return cpu;
+        return Integer.parseInt(folder.substring(3));
     }
 
-    private void initCacheLayout(int cpu, Path cachePath) {
-        if (Files.exists(cachePath)) {
-            int[] cacheLineBytes = {512};
-            long[] size = new long[3];
-            int[] shared = new int[3];
-            String[] masks = new String[3];
-
-            try (var indexes = Files.list(cachePath)) {
-                indexes.forEach(index -> {
-                    try {
-                        String type = read(index.resolve("type"));
-                        if (type.toLowerCase().startsWith("instruction")) {
-                            return;
-                        }
-
-                        int level = Integer.parseInt(read(index.resolve("level")));
-                        cacheLineBytes[0] = Math.min(cacheLineBytes[0],
-                                Integer.parseInt(read(index.resolve("coherency_line_size"))));
-                        size[level - 1] = toBytes(read(index.resolve("size")));
-                        masks[level - 1] = read(index.resolve("shared_cpu_map"));
-                        shared[level - 1] = parseSharedCount(masks[level - 1]);
-                    } catch (IOException ignored) {
-                        // Not all info is supported.
-                    }
-                });
-            } catch (Exception e) {
-                LOGGER.error("Failed to read cache layout for CPU: {}", cpu, e);
-            }
-            CpuCacheLayout layout = new CpuCacheLayout(
-                    cpu,
-                    size[0] <= 0 ? DEFAULT_L1 : size[0],
-                    size[1] <= 0 ? DEFAULT_L2 : size[1],
-                    size[2] <= 0 ? DEFAULT_L3 : size[2],
-                    Math.max(1, shared[0]),
-                    Math.max(1, shared[1]),
-                    Math.max(1, shared[2]),
-                    masks[0], masks[1],
-                    masks[2] == null ? "" : masks[2],
-                    cacheLineBytes[0]
-            );
-            this.cpuCache.put(cpu, layout);
-            this.cpuRankings.compute(cpu, (k, curr) -> {
-                if (curr == null) {
-                    curr = new Ranking(cpu, new long[2]);
-                }
-                int l2Div = layout.sharesL2() > 2 ? layout.sharesL2() : 1;
-                l2Div += shared[2] == 1 ? 1 : 0;
-                curr.capacity[0] += layout.bytesL1() * layout.sharesL1() + layout.bytesL2() / l2Div;
-                curr.capacity[1] = layout.sharesL1();
-                return curr;
-            });
+    private static long toBytes(String value) {
+        char suffix = value.charAt(value.length() - 1);
+        if (suffix == 'K' || suffix == 'k') {
+            return Long.parseLong(value.substring(0,
+                    value.length() - 1)) * 1024L;
         }
+        if (suffix == 'M' || suffix == 'm') {
+            return Long.parseLong(value.substring(0,
+                    value.length() - 1)) * 1024L * 1024L;
+        }
+        return Long.parseLong(value);
     }
 
-    private Int2BooleanArrayMap rankCpus() {
-        LOGGER.trace("Ranking cpus...");
-        Int2BooleanArrayMap pCpu = new Int2BooleanArrayMap(this.cpuRankings.size());
-
-        Ranking[] sorted = this.cpuRankings.values().toArray(Ranking[]::new);
-        Arrays.sort(sorted);
-
-        int splitIndex = -1;
-        long maxGap = -1;
-
-        for (int i = 0; i < sorted.length - 1; i++) {
-            long gap = sorted[i].capacity[0] - sorted[i + 1].capacity[0];
-            if (gap > maxGap) {
-                maxGap = gap;
-                splitIndex = i;
-            }
+    private static long saturatedMultiply(long left, int right) {
+        if (left <= 0 || right <= 0) {
+            return -1;
         }
-
-        if (maxGap > 0) {
-            for (int p = 0; p < sorted.length; p++) {
-                pCpu.put(sorted[p].cpu, p <= splitIndex);
-            }
-        } else {
-            for (Ranking ranking : sorted) {
-                pCpu.put(ranking.cpu, ranking.capacity[1] > 1);
-            }
+        if (left > Long.MAX_VALUE / right) {
+            return Long.MAX_VALUE;
         }
-
-        return pCpu;
+        return left * right;
     }
 
-    private static String read(Path p) throws IOException {
-        return Files.readString(p).trim();
+    private static long saturatedAdd(long left, long right) {
+        if (Long.MAX_VALUE - left < right) {
+            return Long.MAX_VALUE;
+        }
+        return left + right;
     }
 
-    private static BitSet parseCpuList(String cpuList) {
-        BitSet mask = new BitSet(Runtime.getRuntime().availableProcessors());
+    private final TopologyModel model;
 
-        String[] chunks = cpuList.split(",");
-        for (String c : chunks) {
-            String[] cpus = c.split("-");
-            if (cpus.length > 1) {
-                mask.set(Integer.parseInt(cpus[0]), Integer.parseInt(cpus[1]) + 1);
-            } else {
-                mask.set(Integer.parseInt(cpus[0]));
-            }
-        }
-
-        return mask;
+    LinuxSystemLayout(Path cpuRoot) {
+        this(() -> collect(cpuRoot));
     }
 
-    private static long toBytes(String size) {
-        char lastChar = size.charAt(size.length() - 1);
-        if (lastChar == 'K' || lastChar == 'k') {
-            return Long.parseLong(size.substring(0, size.length() - 1)) * 1024;
-        } else if (lastChar == 'M' || lastChar == 'm') {
-            return Long.parseLong(size.substring(0, size.length() - 1)) * 1024 * 1024;
-        }
-        return Long.parseLong(size);
-    }
-
-    private static int parseSharedCount(String shared) {
-        int cpus = 0;
-        String[] groups = shared.split(",");
-        for (String g : groups) {
-            cpus += Long.bitCount(Long.parseUnsignedLong(g, 16));
-        }
-        return cpus;
+    LinuxSystemLayout(TopologyProvider provider) {
+        this.model = TopologyBootstrap.normalize(provider,
+                Runtime.getRuntime().availableProcessors(), LOGGER, "linux");
     }
 
     public Map<Integer, CpuCacheLayout> getCacheLayout() {
-        return Collections.unmodifiableMap(this.cpuCache);
+        return model.cacheLayout();
     }
 
     public Map<Integer, CpuInfo> getCpuInfoMap() {
-        return Collections.unmodifiableMap(this.cpuInfo);
+        return model.cpuInfo();
     }
 
     public Map<Integer, CoreInfo> getCoreInfoMap() {
-        return Collections.unmodifiableMap(this.coreInfo);
+        return model.coreInfo();
     }
 
     public Map<Integer, SocketInfo> getSocketInfoMap() {
-        return Collections.unmodifiableMap(this.socketInfo);
+        return model.socketInfo();
     }
 
-    private record Ranking(int cpu, long[] capacity) implements Comparable<Ranking> {
+    private record RawCpu(int id, int packageId, int dieId, int coreId, long frequencyScore,
+                          long cacheScore) {
 
-        @Override
-        public int compareTo(Ranking o) {
-            // Descending order
-            return Long.compare(o.capacity[0], capacity[0]);
-        }
+    }
+
+    private record CacheScore(long value) {
+
+        private static final CacheScore INVALID = new CacheScore(-1);
+    }
+
+    private record CoreTuple(int packageId, int dieId, int coreId) {
+
     }
 }

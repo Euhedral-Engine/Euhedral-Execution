@@ -336,3 +336,15 @@ Before handing work back:
 3. Inspect `git diff --check`.
 4. Inspect `git status --short` and confirm only intended files changed.
 5. Report tests that could not run and the exact environmental reason.
+
+## Temporary hardware-utils overhaul status (P2)
+
+- P0 and P1 are complete; the P2 parent and P2-A blueprint are merged on
+  `hardware-utils-overhaul/phase-2-topology-snapshot`.
+- P2-A topology model/adapters implementation is complete on
+  `hardware-utils-overhaul/phase-2-topology-model-implementation` and awaits conformance/manual
+  review before merge.
+- P2-A implementation evidence and completion details are recorded in
+  `docs/blueprints/hardware-utils/phase-2-topology-model-adapters.md`.
+- P2-B snapshot/remap/publication work has not started and remains blocked on the merged P2-A
+  implementation and conformance/manual review.

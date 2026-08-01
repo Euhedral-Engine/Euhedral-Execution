@@ -918,3 +918,50 @@ Hand off this child blueprint for developer review and merge only when:
 
 Do not append an implementation completion record, edit `AGENTS.md`, or create the P2-A
 implementation branch before this blueprint is reviewed and merged into the P2 root.
+
+## Implementation completion record
+
+P2-A implementation completed on 2026-08-01 on
+`hardware-utils-overhaul/phase-2-topology-model-implementation`, branched from the updated P2 root
+at `ff80ae66`.
+
+Implemented scope:
+
+- Added the unexported `internal.topology` provider/input/model/normalizer/bootstrap path with
+  immutable owned values, unsigned UTF-8 identity ordering, pre-allocation ID/cardinality/index
+  bounds, deterministic dense socket/core IDs, canonical cache selection, and exact whole-model
+  fallback.
+- Reworked Linux topology-only collection to retain sparse kernel IDs, include package/die/core
+  identity, avoid `LinuxPaths` resource initialization, collect optional cache domains, and apply
+  the bounded frequency/cache capacity classification.
+- Reworked Windows relationship-value translation to use unsigned group IDs, retain mask bit 63,
+  form canonical 16-digit affinity signatures, validate package/core ownership, union multi-group
+  cache domains, and copy relationship inputs without changing the GLPIEx parser or JNI contract.
+- Added the conservative macOS ordinal model and the four reviewed additive public-record map
+  projection getters.
+- Rebuilt `SystemInfo` initialization around one extracted immutable model, exact sparse index-span
+  counts, complete cache projections, null-safe unique L3 aggregation, independent resource
+  provider initialization, and class-initialization publication.
+- Added the five stable fixture tests plus normalizer ordering, ID bounds, active-count,
+  core-index-budget, fallback, cache, and ownership coverage. No mapper/snapshot, resource,
+  pressure/monitor, affinity/executor, native/parser, core production, or training file changed.
+
+Verification evidence:
+
+- Direct deterministic loop: passed, 13 tests across the seven selected classes.
+- P0 API/mask/core-zero gate: passed; report is `module SAME`, zero removed entries, zero changed
+  entries, and exactly four additions, all the reviewed macOS layout map getters.
+- `mvn -B -pl euhedral-hardware-utils -am verify`: passed with 43 unit/P0 tests and 6 integration
+  tests, including native cross-build, package, signature, binary, load, and warm-removal gates.
+- Read-only `mvn -B -pl euhedral-core -am test`: passed; hardware 43 tests, data structures 8,
+  hashing 9, and core 99. No read-only consumer file changed.
+- `git diff --check` passed; training and non-hardware production scope diffs from `3e45f9a2` are
+  empty. Stale cardinality, CPU-zero cache dereference, signed Windows-mask loop, partial topology
+  read, and `LinuxPaths.CPU_INFO_BASE` searches found no active production occurrence.
+
+Toolchain note: `mise` and Maven 3.9.16 were unavailable on `PATH`. Verification used the installed
+JDK 21.0.11, Maven 3.6.3, Zig 0.16.0, macOS 26.1 SDK, apple-codesign 0.29.0, and system LLVM tools.
+Maven reported only that build-cache support requires Maven 3.9; no test or gate was skipped.
+
+The implementation is ready only for the prescribed P2-A conformance/manual review. P2-B remains
+out of scope until this implementation and its audit are reviewed and merged.
