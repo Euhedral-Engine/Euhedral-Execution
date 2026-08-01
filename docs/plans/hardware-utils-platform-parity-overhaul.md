@@ -2,13 +2,16 @@
 
 ## Plan status
 
-- Phase: 1 - native build conformance closeout
-- Status: P0 and P1 complete; validation step removed globally in favor of conformance/manual review
+- Phase: 2 - topology/snapshot parent blueprint review
+- Status: P0 and P1 complete; P2 parent blueprint split into P2-A and P2-B before implementation
 - Plan branch: `agent/hardware-utils-overhaul-plan` (created before the updated phase-branch rule)
 - Branch point: `900d8c50` (`agent/phase7-cleanup-handoff`)
 - Active P1 root: `hardware-utils-overhaul/phase-1-native-build` (completed)
 - Active P1 blueprint branch: `hardware-utils-overhaul/phase-1-native-build-blueprint` (historical)
-- Date: 2026-07-30
+- Active P2 root: `hardware-utils-overhaul/phase-2-topology-snapshot`
+- Active P2 parent blueprint branch:
+  `hardware-utils-overhaul/phase-2-topology-snapshot-blueprint`
+- Date: 2026-08-01
 - Planning model: `gpt-5.6-sol`
 - Planning reasoning effort: `max`
 
@@ -948,6 +951,16 @@ and manual review, and finally `phase-1-native-build-audit`. Each child starts o
 predecessor merges. The superseded
 `phase-1-native-build-implementation` branch is never created.
 
+P2 also uses the split rule. Its parent blueprint freezes the shared identity, count/index,
+fallback, immutability, null-hole, core-zero, version, and publication contracts. After that
+parent blueprint merges, the root advances through the
+`phase-2-topology-model-{blueprint,implementation,audit}` family and then the
+`phase-2-snapshot-publication-{blueprint,implementation,audit}` family. Each action starts only
+after its predecessor is reviewed and merged. The superseded
+`phase-2-topology-snapshot-implementation` branch is never created. Under the current workflow,
+each audit is the combined conformance check and manual review; no P2 validation branch or
+validation artifact exists.
+
 The audit action remains responsible for root closeout. It first produces its audit on the audit
 child. If the developer has not authorized the merge and closeout, it hands off a review-ready
 audit, leaves the root incomplete, and prohibits the next phase. Once authorized, resume that audit
@@ -984,7 +997,9 @@ an unbounded feature-history context.
 | P1 parent/root integration    | `docs/blueprints/hardware-utils/phase-1-native-build-jni-packaging.md`        | skipped; conformance check and manual review                     | `docs/audits/hardware-utils/phase-1-native-build-jni-packaging-conformance.md`        |
 | P1-A native graph/JNI/signing | `docs/blueprints/hardware-utils/phase-1-native-graph-jni-signing.md`          | skipped; conformance check and manual review                     | `docs/audits/hardware-utils/phase-1-native-graph-jni-signing-conformance.md`          |
 | P1-B loader/package/CI        | `docs/blueprints/hardware-utils/phase-1-loader-maven-packaging.md`            | skipped; conformance check and manual review                     | `docs/audits/hardware-utils/phase-1-loader-maven-packaging-conformance.md`            |
-| P2                            | `docs/blueprints/hardware-utils/phase-2-topology-snapshot-model.md`           | conformance/manual review                                        | `docs/audits/hardware-utils/phase-2-topology-snapshot-model-conformance.md`           |
+| P2 parent/root integration    | `docs/blueprints/hardware-utils/phase-2-topology-snapshot-model.md`           | child conformance/manual reviews plus root manual review         | `docs/audits/hardware-utils/phase-2-topology-snapshot-model-conformance.md`           |
+| P2-A topology model/adapters  | `docs/blueprints/hardware-utils/phase-2-topology-model-adapters.md`           | conformance check and manual review                              | `docs/audits/hardware-utils/phase-2-topology-model-adapters-conformance.md`           |
+| P2-B snapshots/publication    | `docs/blueprints/hardware-utils/phase-2-snapshot-remap-publication.md`        | conformance check and manual review                              | `docs/audits/hardware-utils/phase-2-snapshot-remap-publication-conformance.md`        |
 | P3                            | `docs/blueprints/hardware-utils/phase-3-affinity-executor-lifecycle.md`       | conformance/manual review                                        | `docs/audits/hardware-utils/phase-3-affinity-executor-lifecycle-conformance.md`       |
 | P4                            | `docs/blueprints/hardware-utils/phase-4-resource-monitor-pressure.md`         | conformance/manual review                                        | `docs/audits/hardware-utils/phase-4-resource-monitor-pressure-conformance.md`         |
 | P5                            | `docs/blueprints/hardware-utils/phase-5-linux-platform.md`                    | conformance/manual review                                        | `docs/audits/hardware-utils/phase-5-linux-platform-conformance.md`                    |
@@ -998,7 +1013,8 @@ an unbounded feature-history context.
 
 Execution still follows P0 through P8. This ranking only identifies how demanding each prompt is.
 Implementation selections are provisional until their blueprints complete the mandatory sizing,
-split, and implementation-model reassessments.
+split, and implementation-model reassessments. P2-A/P2-B show the parent-blueprint selections;
+their child blueprints must confirm them before implementation.
 
 | Rank | Prompt                                                     | Selection               |
 |-----:|------------------------------------------------------------|-------------------------|
@@ -1016,7 +1032,7 @@ split, and implementation-model reassessments.
 |   12 | P6 provisional implementation                              | `gpt-5.6-sol`, `high`   |
 |   13 | P5 provisional implementation                              | `gpt-5.6-sol`, `high`   |
 |   14 | P3 provisional implementation                              | `gpt-5.6-sol`, `high`   |
-|   15 | P2 provisional implementation                              | `gpt-5.6-sol`, `high`   |
+|   15 | P2-A and P2-B selected implementations                     | `gpt-5.6-sol`, `high`   |
 |   16 | P1-A and P1-B selected implementations                     | `gpt-5.6-sol`, `high`   |
 |   17 | P8 provisional implementation                              | `gpt-5.6-sol`, `high`   |
 |   18 | P0 implementation - compiled compatibility/test baseline   | `gpt-5.6-sol`, `medium` |
@@ -1026,7 +1042,7 @@ split, and implementation-model reassessments.
 |   22 | P6 conformance/manual review                               | `gpt-5.6-sol`, `high`   |
 |   23 | P5 conformance/manual review                               | `gpt-5.6-sol`, `high`   |
 |   24 | P3 conformance/manual review                               | `gpt-5.6-sol`, `high`   |
-|   25 | P2 conformance/manual review                               | `gpt-5.6-sol`, `high`   |
+|   25 | P2 child/root conformance/manual review                    | `gpt-5.6-sol`, `high`   |
 |   26 | P1 child and root conformance/manual review                | `gpt-5.6-sol`, `high`   |
 |   27 | P0 conformance/manual review                               | `gpt-5.6-sol`, `medium` |
 |   28 | P8 final conformance audit                                 | `gpt-5.6-sol`, `high`   |
@@ -1035,7 +1051,7 @@ split, and implementation-model reassessments.
 |   31 | P6 conformance audit                                       | `gpt-5.6-sol`, `high`   |
 |   32 | P5 conformance audit                                       | `gpt-5.6-sol`, `high`   |
 |   33 | P3 conformance audit                                       | `gpt-5.6-sol`, `high`   |
-|   34 | P2 conformance audit                                       | `gpt-5.6-sol`, `high`   |
+|   34 | P2 child/root conformance audits                           | `gpt-5.6-sol`, `high`   |
 |   35 | P1 child and root conformance audits                       | `gpt-5.6-sol`, `high`   |
 |   36 | P0 conformance audit                                       | `gpt-5.6-sol`, `medium` |
 
@@ -1631,125 +1647,230 @@ created.
 
 ### P2 - validated topology and immutable snapshot foundation
 
-#### P2 blueprint prompt
+#### P2 parent blueprint prompt - COMPLETED, REVIEW AND MERGE REQUIRED
 
 **Model: `gpt-5.6-sol`; reasoning effort: `max`.**
 
-> After authorization, create `hardware-utils-overhaul/phase-2-topology-snapshot` from the
-> completed P1 root, then work on
-> `hardware-utils-overhaul/phase-2-topology-snapshot-blueprint`. The parent artifact is
-> `docs/plans/hardware-utils-platform-parity-overhaul.md`, with completed P0-P1 phase artifact
-> index entries and closeout summaries as inherited evidence. Initial ownership is hardware
-> root/common/internal topology and snapshot code, layout adapters, and hardware tests. Inspect
-> `git status --short`. Read `AGENTS.md`, `docs/AGENT_WORKFLOW.md`, `docs/ARCHITECTURE.md`, the
-> parent plan, the exact P0-P1 files linked by those phase artifact index entries and summaries,
-> `SystemInfo`, `TopologyMapper`, all layout adapters, `SystemUtilization`, unmodifiable wrappers,
-> existing topology/snapshot tests, and non-training core consumers named by the plan. Do not
-> inspect training.
->
-> Write `docs/blueprints/hardware-utils/phase-2-topology-snapshot-model.md`. Settle an internal
-> validated topology representation; provider/adaptor boundary; stable logical IDs; global
-> socket/die/core identity; sparse/offline IDs; deterministic ordering; cache fallbacks; active
-> entry completeness; public count/ID/index meanings; defensive-copy ownership; equality/hash
-> behavior; SystemInfo initialization fallback; TopologyMapper coalescing, versions, and
-> publication memory semantics; allowed-mask ownership; and the exact retained core-zero policy.
-> Define fixtures for Linux duplicate local cores/sparse CPUs, Windows group identity, macOS
-> incomplete topology, missing caches, mutation resistance, and remap/version behavior. Detailed
-> platform collection parity remains in P5-P7.
->
-> Preserve every public record shape, export, static facade, mask format, and current core-zero
-> reservation. Pressure, monitor scheduling, executor lifecycle, detailed native platform work,
-> core production changes, and training are prohibited. Edit only blueprint/plan/planning docs.
->
-> Define package ownership, naming, topology-to-snapshot data flow, and high-reasoning contracts
-> without enumerating minor files unnecessarily. Include a bounded implementation context envelope
-> naming required inputs and owned outputs. Specify dependency order for contract-bearing
-> areas, exact invariants, failure/fallback behavior, sorting, mathematical precision, memory
-> access/publication semantics, allocation and memory-pollution/contamination boundaries, tests,
-> and commands. Record a reasoned `not applicable` only where justified. Apply the workflow
-> sizing/split gate; if independent topology, snapshot, or adapter responsibilities are too large,
-> define bounded responsibility child blueprint action items, branch names, and context envelopes
-> now, then update this plan's P2 implementation/validation/audit prompts, parent artifacts, and
-> phase artifact index. Only after this parent blueprint child is merged may those branches be
-> created from the updated P2 root; rerun the gate for every child. Do not run the root
-> implementation after a split.
->
-> Perform the mandatory `Implementation model reassessment` and replace the provisional P2
-> implementation selection and complete body. Append the developer-review summary to the P2 plan
-> section with
-> purpose, ownership, key contracts, children, selected model, risks, and unresolved decisions.
-> The output artifact is the finalized blueprint, plan summary, and implementation prompt. Handoff
-> for review and merge into the P2 root only when implementation can proceed without choosing ID
-> semantics, null-hole behavior, cache fallbacks, copy boundaries, or publication modes. Do not
-> start implementation before merge.
+The completed output is
+`docs/blueprints/hardware-utils/phase-2-topology-snapshot-model.md` on
+`hardware-utils-overhaul/phase-2-topology-snapshot-blueprint`. It froze the provider/model/facade/
+mapper/snapshot contracts, applied the split and implementation-model gates, and did not modify
+production code. Review and merge it into `hardware-utils-overhaul/phase-2-topology-snapshot`
+before creating any P2-A branch.
 
-#### P2 implementation prompt - PROVISIONAL, DO NOT RUN
+#### P2 developer-review summary
 
-**Provisional model: `gpt-5.6-sol`; provisional reasoning effort: `high`. The P2 blueprint must
-replace this selection and prompt body before implementation.**
+- Purpose: install a validated deterministic topology foundation and deeply immutable public
+  topology-indexed snapshots without changing the public Java/module/mask surface or core code.
+- Ownership: the parent contract spans hardware root/common/internal topology and snapshot code,
+  layout adapters, and hardware tests. P2-A owns `SystemInfo`, the unexported topology model,
+  adapter boundaries, and topology fixtures. P2-B owns `TopologyMapper`, `SystemUtilization`, the
+  wrappers, and snapshot/remap fixtures.
+- Key contracts: Linux logical CPU IDs remain kernel IDs; Windows IDs are
+  `group * 64 + processor`; macOS/fallback IDs are deterministic ordinals. Global sockets/cores
+  are dense and sorted from source identity including die. `CPU_COUNT` is the logical CPU index
+  span, core/socket counts are dense cardinalities, and inactive array/list positions are null
+  holes while every active entry is complete. Missing caches use exact core-local L1/L2 and
+  socket-local L3 defaults. Provider and public storage is defensively owned; snapshot equality
+  and hash use every component. Mapper requests are sequence-coalesced, versions change only for
+  actually published membership, and one volatile topology write/read publishes the whole graph.
+  Core zero means global core ID zero and is removed only when another allowed/effective core
+  remains.
+- Children: P2-A `phase-2-topology-model-*` must complete and merge before P2-B
+  `phase-2-snapshot-publication-*`. Each has blueprint, implementation, and combined conformance/
+  manual-review audit actions. There is no root implementation or validation branch.
+- Selected implementation model: `gpt-5.6-sol` with `high` reasoning for both P2-A and P2-B,
+  subject to mandatory confirmation by each child blueprint. Child/root audits use the same model
+  and effort.
+- Risks: sparse IDs can enlarge bounded arrays; static initialization can recurse; mutable record
+  component types require accessor as well as constructor protection; coalescing intentionally
+  hides intermediate states; common Windows/macOS fixtures do not prove P6/P7 platform parity;
+  full verify depends on the completed P1 native toolchain.
+- Unresolved decisions: none. ID semantics, count/index meanings, null holes, cache fallbacks,
+  copy boundaries, equality, fallback behavior, core-zero policy, version rules, and publication
+  modes are settled in the parent blueprint.
 
-> After the P2 blueprint child is reviewed and merged, start
-> `hardware-utils-overhaul/phase-2-topology-snapshot-implementation` from the P2 root. The parent
-> artifact is `docs/blueprints/hardware-utils/phase-2-topology-snapshot-model.md`. Ownership is
-> limited to its hardware topology/snapshot/layout/test context envelope. Inspect
-> `git status --short`. Read `AGENTS.md`, `docs/AGENT_WORKFLOW.md`, the plan's completed P0-P1
-> phase artifact index entries and closeout summaries, the parent blueprint, and only the
-> code/tests in its bounded context. Confirm this prompt is finalized.
->
-> Implement the approved internal topology/snapshot foundation, `SystemInfo` and
-> `TopologyMapper` corrections, deep immutable publication, equality/hash/value fixes, adapter
-> compile repairs, and deterministic fixtures/tests. Detailed Linux/Windows/macOS collection
-> parity, pressure, monitor, affinity/executor behavior, core production, and training are
-> prohibited. Allowed edits are blueprint-owned implementation/tests, the completion record, and
-> the compact temporary P2 phase-status block in `AGENTS.md`; no other `AGENTS.md` content may
-> change.
->
-> Run the API baseline and all topology/snapshot tests. Stop and return to blueprint on an
-> unstated public count/ID or memory-publication decision. Otherwise append completion notes with
-> changed files, commands, results, acceptance-criteria evidence, approved deviations, and
-> environmental limits. Add/update the temporary
-> `AGENTS.md` block with the completed P1 root, active P2 root, completed blueprint child, active
-> implementation child, and blueprint/completion links.
->
-> The output artifact is the implemented topology/snapshot foundation plus its completion record
-> appended to `docs/blueprints/hardware-utils/phase-2-topology-snapshot-model.md`.
->
-> Handoff only when active logical CPUs have complete deterministic mappings, sparse/missing
-> topology is safe, snapshots cannot alias provider storage, remaps/versioning are correct, and
-> the core-zero-only case passes. Merge this child into the P2 root before validation.
+#### P2 root implementation prompt - SUPERSEDED, DO NOT RUN
 
-#### P2 conformance audit prompt
+The sizing gate rejected one P2 implementation context. Do not create
+`hardware-utils-overhaul/phase-2-topology-snapshot-implementation`. Use the P2-A and P2-B action
+families below, sequentially from the updated P2 root.
+
+#### P2-A topology model/adapters blueprint prompt
+
+**Model: `gpt-5.6-sol`; reasoning effort: `max`.**
+
+> After the parent P2 blueprint is reviewed and merged, create
+> `hardware-utils-overhaul/phase-2-topology-model-blueprint` from the updated P2 root. The parent
+> artifact is `docs/blueprints/hardware-utils/phase-2-topology-snapshot-model.md`. Inspect
+> `git status --short` and preserve unrelated changes. Read `AGENTS.md`,
+> `docs/AGENT_WORKFLOW.md`, `docs/ARCHITECTURE.md`, the parent blueprint's P2-A context envelope,
+> the plan's completed P0-P1 artifact-index files/closeouts, `SystemInfo`, all layout adapters,
+> current Windows relationship types only at the adapter boundary, and existing topology/cache
+> tests. The developer deliberately deleted the P1-A/child-audit historical files; do not
+> reconstruct them. Do not inspect training.
+>
+> Write `docs/blueprints/hardware-utils/phase-2-topology-model-adapters.md`. Translate the frozen
+> internal `TopologyProvider -> TopologyInput -> TopologyNormalizer -> TopologyModel -> SystemInfo`
+> contract into one bounded implementation checklist. Preserve the exact logical/global identity,
+> count/index, cache fallback, active completeness, whole-model initialization fallback, resource-
+> provider separation, ordering, allocation bound, ownership, and fixture contracts. Detailed
+> Linux/Windows/macOS collection/native parity remains P5-P7. `TopologyMapper`, public snapshot
+> implementation, resource/pressure behavior, affinity/executor, core production, and training are
+> read-only/prohibited.
+>
+> Reapply the sizing gate and the implementation-model reassessment. Confirm the parent-selected
+> `gpt-5.6-sol`/`high` implementation or update this plan before handoff; do not silently
+> downgrade. Edit only the child blueprint, this plan if the gate changes, and closely related
+> planning docs. Handoff for review and merge only when implementation must choose no provider,
+> identity, fallback, cache, count/index, ownership, or static-initialization rule. Do not create
+> implementation before that merge.
+
+#### P2-A topology model/adapters implementation prompt
+
+**Parent-selected model: `gpt-5.6-sol`; reasoning effort: `high`. The completed P2-A child
+blueprint must confirm this selection before this prompt may run.**
+
+> After the P2-A blueprint is reviewed and merged, create
+> `hardware-utils-overhaul/phase-2-topology-model-implementation` from the updated P2 root. Read
+> `AGENTS.md`, the plan's P2 summary, the parent blueprint's P2-A envelope, and only the exact
+> inputs named by the child blueprint. Inspect status first and confirm the model gate is final.
+>
+> Implement only the internal topology input/model/normalizer/bootstrap, common-boundary layout
+> adapter changes, `SystemInfo` projection/fallback, and P2-A deterministic fixtures/tests. Preserve
+> public shapes/exports/masks and the P2-B ownership boundary. Do not change mapper/snapshots,
+> pressure/monitor behavior, detailed platform/native collection, affinity/executor, core, or
+> training. Append the completion record to the P2-A blueprint and add/update only the temporary
+> P2 `AGENTS.md` status block.
+>
+> Run the child blueprint's direct deterministic tests, P0 API/mask gate, final hardware verify,
+> read-only core compile/test gate, and scope/diff checks. A new ID, cache, fallback, count/index,
+> or initialization decision returns to the parent/child blueprint. Handoff for conformance/manual
+> review only when every active CPU has a deterministic complete projection, sparse/group IDs are
+> safe, missing caches are exact, fallback is complete, and provider buffers cannot alias the
+> model. Merge implementation before its audit.
+
+#### P2-A topology model/adapters conformance/manual-review prompt
 
 **Model: `gpt-5.6-sol`; reasoning effort: `high`.**
 
-> After the P2 validation child is reviewed and merged, start
-> `hardware-utils-overhaul/phase-2-topology-snapshot-audit` from the P2 root. The parent artifact
-> is `docs/validations/hardware-utils/phase-2-topology-snapshot-model-validation.md`. Ownership is
-> limited to independent conformance review and minor blueprint-settled P2 corrections. Inspect
-> `git status --short`. Read `AGENTS.md`, `docs/AGENT_WORKFLOW.md`,
-> `docs/ARCHITECTURE.md`, the plan's completed P0-P1 phase artifact index entries and closeout
-> summaries, the P2 blueprint's summarized parent context, implementation diff, completion record,
-> validation record, and tests. For split work, consume only the audited child context plus
-> summarized parent. Do not inspect or run training.
+> After P2-A implementation is reviewed and merged, create
+> `hardware-utils-overhaul/phase-2-topology-model-audit` from the updated P2 root. The parent
+> artifact is the P2-A blueprint and completion record; there is no validation artifact. Read only
+> the summarized parent contract, exact P2-A context/diff/tests/completion, P0 compatibility
+> contract, and relevant code. Do not inspect training or expand into P2-B.
 >
-> Independently audit deterministic ordering, sparse indexing, global identity, cache fallbacks,
-> defensive copies, equality/hash consistency, allowed-mask ownership, update coalescing,
-> publication memory semantics, socket versions, pressure-independent membership, core-zero
-> behavior, and validation sufficiency. Allowed edits are
-> `docs/audits/hardware-utils/phase-2-topology-snapshot-model-conformance.md`, completion and
-> validation records, the P2 closeout summary in this plan, the temporary phase-status block, and
-> minor blueprint-settled corrections. If corrected, rerun and record affected validation.
-> Redesign, unrelated files, and training are prohibited.
+> Independently classify every P2-A requirement and common P2 portions of T01-T03/T05/T06. Audit
+> deterministic global socket/die/core identity, Linux sparse/duplicate-local-core handling,
+> Windows group/bit-63 identity, macOS/common fallback, cache completion, count/index meanings,
+> immutable provider ownership, initialization cycles, and API/core compatibility. Make only minor
+> blueprint-settled corrections and rerun affected gates; a design choice returns to blueprint.
 >
-> The output artifacts are the audit above, updated completion record, P2 closeout summary in this
-> plan, and, after the authorized merge, removal of the temporary P2 status block on the root with
-> the resulting root commit recorded when committed. Classify every P2 requirement and common
-> T01-T06 portion exactly as `satisfied`, `deviated`, `unverified`, or `ambiguous`, with evidence; carry platform
-> collection portions of T01-T03/T05 to P5-P7. Append audit commands, results, fixes, skipped
-> checks, and environmental limits to the completion record. A material deviation returns to the
-> exact blueprint or implementation action. Handoff follows the audit/root-closeout contract: P2
-> is complete only after the authorized merge, P2 status-block removal, and closeout-summary
-> update; do not create P3 earlier.
+> Write `docs/audits/hardware-utils/phase-2-topology-model-adapters-conformance.md`, append command/
+> fix/limit evidence to the completion record, update only the P2 status block, and hand off for
+> review and merge. Do not start P2-B before this audit merges.
+
+#### P2-B immutable snapshots/remap publication blueprint prompt
+
+**Model: `gpt-5.6-sol`; reasoning effort: `max`.**
+
+> After the P2-A audit is reviewed and merged, create
+> `hardware-utils-overhaul/phase-2-snapshot-publication-blueprint` from the updated P2 root. The
+> parent artifact is `docs/blueprints/hardware-utils/phase-2-topology-snapshot-model.md`. Inspect
+> status. Read `AGENTS.md`, `docs/AGENT_WORKFLOW.md`, `docs/ARCHITECTURE.md`, the parent P2-B
+> context envelope, the P2-A blueprint/completion/conformance summary and final public model diff,
+> P0 compatibility contract, `TopologyMapper`, `SystemUtilization`, both wrappers, existing
+> topology/snapshot tests, the `ResourceMonitor` mapper call boundary, and only the named core
+> index/version/snapshot consumers. Do not inspect training.
+>
+> Write `docs/blueprints/hardware-utils/phase-2-snapshot-remap-publication.md`. Translate the
+> frozen defensive-copy, accessor ownership, content equality/hash, active entry, named field,
+> allowed-mask, core-zero, fixed null-hole shape, global/socket version, sequence-coalescing, and
+> volatile publication contracts into one bounded implementation checklist and deterministic race
+> matrix. Do not reopen P2-A identity/model design or change pressure, monitor lifecycle, affinity/
+> executor, detailed platform work, core production, or training.
+>
+> Reapply the sizing and implementation-model gates. Confirm the parent-selected
+> `gpt-5.6-sol`/`high` implementation or update the plan before handoff. Edit only planning docs.
+> Handoff and merge only when implementation needs no copy, equality, array-span, null-hole,
+> arithmetic, coalescing, version, core-zero, or publication-mode decision. Do not create
+> implementation before merge.
+
+#### P2-B immutable snapshots/remap publication implementation prompt
+
+**Parent-selected model: `gpt-5.6-sol`; reasoning effort: `high`. The completed P2-B child
+blueprint must confirm this selection before this prompt may run.**
+
+> After the P2-B blueprint is reviewed and merged, create
+> `hardware-utils-overhaul/phase-2-snapshot-publication-implementation` from the updated P2 root.
+> Inspect status; read the exact P2-B context envelope, summarized parent contract, and P2-A
+> handoff. Confirm the child model gate is final.
+>
+> Implement only wrapper ownership/value semantics, public snapshot construction/access/equality/
+> named-value corrections, `TopologyMapper` allowed-mask/core-zero/coalescing/version/publication
+> logic, and deterministic P2-B fixtures/tests. Do not alter the P2-A model/adapters, resource/
+> pressure/monitor behavior, affinity/executor, detailed native/platform collection, core
+> production, or training. Append completion evidence to the P2-B blueprint and update only the
+> temporary P2 status block.
+>
+> Run the direct P2-B test matrix, P0 API/mask/core-zero gates, complete hardware verify, read-only
+> core tests, and scope/diff checks. A new public field meaning, copy boundary, version rule, or
+> memory mode returns to blueprint. Handoff only when old publications resist all source/accessor
+> mutation, equality/hash are content-consistent, active snapshot entries are complete, final
+> coalesced membership cannot be lost, versions are exact, and volatile publication is evidenced.
+> Merge implementation before its audit.
+
+#### P2-B immutable snapshots/remap publication conformance/manual-review prompt
+
+**Model: `gpt-5.6-sol`; reasoning effort: `high`.**
+
+> After P2-B implementation is reviewed and merged, create
+> `hardware-utils-overhaul/phase-2-snapshot-publication-audit` from the updated P2 root. The parent
+> artifact is the P2-B blueprint and completion record; there is no validation artifact. Read only
+> the summarized parent/P2-A handoff and exact P2-B context, diff, tests, and completion. Do not
+> inspect training.
+>
+> Independently classify every P2-B requirement and its T04-T06/T05 portions. Audit deep copies on
+> canonical constructors and accessors, wrapper and nested record equality/hash, named/indexed
+> values, active completeness, allowed-mask ownership, exact core-zero intersections, fixed null
+> holes, pressure-independent versions, deactivate/reactivate socket versions, no-lost-newest
+> coalescing, and volatile happens-before. Make only minor blueprint-settled corrections with rerun
+> evidence; redesign returns to blueprint.
+>
+> Write `docs/audits/hardware-utils/phase-2-snapshot-remap-publication-conformance.md`, append
+> commands/fixes/skips/limits to the completion record, update the P2 status block, and hand off for
+> review and merge before the root audit.
+
+#### P2 root conformance audit prompt
+
+**Model: `gpt-5.6-sol`; reasoning effort: `high`.**
+
+> After both child audits are reviewed and merged, create
+> `hardware-utils-overhaul/phase-2-topology-snapshot-audit` from the updated P2 root. The parent
+> artifacts are the P2 parent blueprint and the exact P2-A/P2-B blueprint/completion/conformance
+> triples in the phase artifact index. There is no validation record. Inspect status. Read
+> `AGENTS.md`, `docs/AGENT_WORKFLOW.md`, `docs/ARCHITECTURE.md`, completed P0-P1 indexed artifacts/
+> closeouts, the parent acceptance matrix and summarized context, both child handoffs/diffs, and
+> relevant tests. Do not inspect or run training.
+>
+> Independently audit the combined provider -> normalized model -> `SystemInfo` -> mapper -> public
+> snapshot flow. Classify all 15 parent criteria and common P2 portions of T01-T06 exactly as
+> `satisfied`, `deviated`, `unverified`, or `ambiguous`; carry only detailed platform collection/
+> value portions to P5-P7. Recheck API/module/mask compatibility, deterministic topology/cache
+> fixtures, mutation/equality/index fixtures, core-zero/remap/version/concurrency fixtures, full
+> hardware selected-module verification, read-only core compatibility, memory/publication
+> arguments, scope, and diff hygiene.
+>
+> Allowed edits are `docs/audits/hardware-utils/phase-2-topology-snapshot-model-conformance.md`,
+> child/parent completion summaries, this plan's P2 closeout summary, the temporary P2 status
+> block, and minor blueprint-settled corrections. Rerun affected checks after a correction. New
+> identity, fallback, copy, version, or publication decisions return to the owning blueprint;
+> unrelated files and training are prohibited.
+>
+> Handoff a review-ready audit first. After explicit merge/closeout authorization, merge the audit
+> child, switch to the P2 root, remove only the temporary P2 status block, append the root branch/
+> commit and final classifications to the P2 closeout summary, and record the resulting root commit
+> when committed. P2 is complete only after that authorized closeout; do not create P3 earlier.
 
 ### P3 - affinity capability and executor lifecycle
 
