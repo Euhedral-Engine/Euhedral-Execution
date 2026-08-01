@@ -2,18 +2,16 @@
 
 ## Plan status
 
-- Phase: 2 - P2-A topology model/adapters blueprint review
-- Status: P0 and P1 complete; P2-A topology model/adapters blueprint complete, review and merge
-  required
+- Phase: 3 - affinity capability/executor parent blueprint review
+- Status: P0-P2 complete; P3 parent blueprint complete, review and merge required before P3-A
 - Plan branch: `agent/hardware-utils-overhaul-plan` (created before the updated phase-branch rule)
 - Branch point: `900d8c50` (`agent/phase7-cleanup-handoff`)
 - Active P1 root: `hardware-utils-overhaul/phase-1-native-build` (completed)
 - Active P1 blueprint branch: `hardware-utils-overhaul/phase-1-native-build-blueprint` (historical)
-- Active P2 root: `hardware-utils-overhaul/phase-2-topology-snapshot`
-- Active P2 parent blueprint branch:
-  `hardware-utils-overhaul/phase-2-topology-snapshot-blueprint`
-- Active P2-A blueprint branch:
-  `hardware-utils-overhaul/phase-2-topology-model-blueprint`
+- Completed P2 root: `hardware-utils-overhaul/phase-2-topology-snapshot` at `e2495c5d`
+- Active P3 root: `hardware-utils-overhaul/phase-3-affinity-executor`
+- Active P3 parent blueprint branch:
+  `hardware-utils-overhaul/phase-3-affinity-executor-blueprint`
 - Date: 2026-08-01
 - Planning model: `gpt-5.6-sol`
 - Planning reasoning effort: `max`
@@ -971,6 +969,16 @@ after its predecessor is reviewed and merged. The superseded
 each audit is the combined conformance check and manual review; no P2 validation branch or
 validation artifact exists.
 
+P3 uses the split rule as well. Its parent blueprint freezes the public affinity capability,
+mask, managed-owner, restoration, executor state, registry, cleaner/hook, deadline, and memory-
+ordering contracts. After that parent blueprint merges, the root advances through the
+`phase-3-affinity-capability-{blueprint,implementation,audit}` family and then the
+`phase-3-executor-lifecycle-{blueprint,implementation,audit}` family. Each action starts only
+after its predecessor is reviewed and merged. The superseded
+`phase-3-affinity-executor-implementation` branch is never created. Under the current workflow,
+each child audit is the combined conformance check and manual review; there is no P3 validation
+branch or validation artifact. A P3 root audit follows both child audits.
+
 The audit action remains responsible for root closeout. It first produces its audit on the audit
 child. If the developer has not authorized the merge and closeout, it hands off a review-ready
 audit, leaves the root incomplete, and prohibits the next phase. Once authorized, resume that audit
@@ -980,17 +988,17 @@ root commit when committed. The phase is complete only after those closeout outp
 
 ### Initial phase ownership
 
-| Plan phase | Initial package/module ownership |
-| --- | --- |
-| P0 | `euhedral-hardware-utils` test sources/resources and module-local compatibility tooling; non-training core/benchmark consumers are read-only |
-| P1 | hardware Maven/native build assets, generated resources, `hardware_utils.internal` loader code, and hardware-specific CI |
-| P2 | hardware root/common/internal topology and snapshot ownership, layout adapters, and hardware tests |
-| P3 | hardware root/internal affinity and executor lifecycle, platform affinity facades, and hardware tests |
-| P4 | hardware root/common/internal sampling, pressure, monitor lifecycle, provider compatibility adapters, and hardware tests; core is read-only |
-| P5 | hardware Linux Java/native implementation, Linux fixtures/tests, and Linux manifest/CI metadata |
-| P6 | hardware Windows Java/native implementation, Windows fixtures/tests, and Windows manifest/CI metadata |
-| P7 | hardware macOS Java/native implementation, macOS fixtures/tests, and macOS manifest/CI metadata |
-| P8 | `euhedral-core` `ControlPlaneFragment`, focused core tests, test-only `ControlPlaneCache`, hardware release/CI/docs, and approved non-training benchmarks |
+| Plan phase | Initial package/module ownership                                                                                                                                                                         |
+|------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| P0         | `euhedral-hardware-utils` test sources/resources and module-local compatibility tooling; non-training core/benchmark consumers are read-only                                                             |
+| P1         | hardware Maven/native build assets, generated resources, `hardware_utils.internal` loader code, and hardware-specific CI                                                                                 |
+| P2         | hardware root/common/internal topology and snapshot ownership, layout adapters, and hardware tests                                                                                                       |
+| P3         | parent: hardware root/internal affinity and executor lifecycle, platform affinity facades, and hardware tests; P3-A owns affinity/capability/managed ownership and P3-B owns executor registry/lifecycle |
+| P4         | hardware root/common/internal sampling, pressure, monitor lifecycle, provider compatibility adapters, and hardware tests; core is read-only                                                              |
+| P5         | hardware Linux Java/native implementation, Linux fixtures/tests, and Linux manifest/CI metadata                                                                                                          |
+| P6         | hardware Windows Java/native implementation, Windows fixtures/tests, and Windows manifest/CI metadata                                                                                                    |
+| P7         | hardware macOS Java/native implementation, macOS fixtures/tests, and macOS manifest/CI metadata                                                                                                          |
+| P8         | `euhedral-core` `ControlPlaneFragment`, focused core tests, test-only `ControlPlaneCache`, hardware release/CI/docs, and approved non-training benchmarks                                                |
 
 ### Phase artifact index
 
@@ -1010,7 +1018,9 @@ an unbounded feature-history context.
 | P2 parent/root integration    | `docs/blueprints/hardware-utils/phase-2-topology-snapshot-model.md`           | child conformance/manual reviews plus root manual review         | `docs/audits/hardware-utils/phase-2-topology-snapshot-model-conformance.md`           |
 | P2-A topology model/adapters  | `docs/blueprints/hardware-utils/phase-2-topology-model-adapters.md`           | conformance check and manual review                              | `docs/audits/hardware-utils/phase-2-topology-model-adapters-conformance.md`           |
 | P2-B snapshots/publication    | `docs/blueprints/hardware-utils/phase-2-snapshot-remap-publication.md`        | conformance check and manual review                              | `docs/audits/hardware-utils/phase-2-snapshot-remap-publication-conformance.md`        |
-| P3                            | `docs/blueprints/hardware-utils/phase-3-affinity-executor-lifecycle.md`       | conformance/manual review                                        | `docs/audits/hardware-utils/phase-3-affinity-executor-lifecycle-conformance.md`       |
+| P3 parent/root integration    | `docs/blueprints/hardware-utils/phase-3-affinity-executor-lifecycle.md`       | child conformance/manual reviews plus root manual review         | `docs/audits/hardware-utils/phase-3-affinity-executor-lifecycle-conformance.md`       |
+| P3-A affinity capability      | `docs/blueprints/hardware-utils/phase-3-affinity-capability.md`               | conformance check and manual review                              | `docs/audits/hardware-utils/phase-3-affinity-capability-conformance.md`               |
+| P3-B executor lifecycle       | `docs/blueprints/hardware-utils/phase-3-executor-lifecycle.md`                | conformance check and manual review                              | `docs/audits/hardware-utils/phase-3-executor-lifecycle-conformance.md`                |
 | P4                            | `docs/blueprints/hardware-utils/phase-4-resource-monitor-pressure.md`         | conformance/manual review                                        | `docs/audits/hardware-utils/phase-4-resource-monitor-pressure-conformance.md`         |
 | P5                            | `docs/blueprints/hardware-utils/phase-5-linux-platform.md`                    | conformance/manual review                                        | `docs/audits/hardware-utils/phase-5-linux-platform-conformance.md`                    |
 | P6                            | `docs/blueprints/hardware-utils/phase-6-windows-platform.md`                  | conformance/manual review                                        | `docs/audits/hardware-utils/phase-6-windows-platform-conformance.md`                  |
@@ -1032,7 +1042,7 @@ their child blueprints must confirm them before implementation.
 |    2 | P7 blueprint - macOS public-API parity                     | `gpt-5.6-sol`, `max`    |
 |    3 | P6 blueprint - Windows processor-group/native parity       | `gpt-5.6-sol`, `max`    |
 |    4 | P5 blueprint - Linux cgroup/provider/libc portability      | `gpt-5.6-sol`, `max`    |
-|    5 | P3 blueprint - affinity and executor concurrency           | `gpt-5.6-sol`, `max`    |
+|    5 | P3 parent/child blueprints - affinity/executor concurrency | `gpt-5.6-sol`, `max`    |
 |    6 | P2 blueprint - topology and snapshot ownership             | `gpt-5.6-sol`, `max`    |
 |    7 | P1 blueprint - native build/JNI/package ABI                | `gpt-5.6-sol`, `max`    |
 |    8 | P8 blueprint - core hot-loop and release integration       | `gpt-5.6-sol`, `max`    |
@@ -1041,7 +1051,7 @@ their child blueprints must confirm them before implementation.
 |   11 | P7 provisional implementation                              | `gpt-5.6-sol`, `high`   |
 |   12 | P6 provisional implementation                              | `gpt-5.6-sol`, `high`   |
 |   13 | P5 provisional implementation                              | `gpt-5.6-sol`, `high`   |
-|   14 | P3 provisional implementation                              | `gpt-5.6-sol`, `high`   |
+|   14 | P3-A and P3-B selected implementations                     | `gpt-5.6-sol`, `high`   |
 |   15 | P2-A and P2-B selected implementations                     | `gpt-5.6-sol`, `high`   |
 |   16 | P1-A and P1-B selected implementations                     | `gpt-5.6-sol`, `high`   |
 |   17 | P8 provisional implementation                              | `gpt-5.6-sol`, `high`   |
@@ -1051,7 +1061,7 @@ their child blueprints must confirm them before implementation.
 |   21 | P7 conformance/manual review                               | `gpt-5.6-sol`, `high`   |
 |   22 | P6 conformance/manual review                               | `gpt-5.6-sol`, `high`   |
 |   23 | P5 conformance/manual review                               | `gpt-5.6-sol`, `high`   |
-|   24 | P3 conformance/manual review                               | `gpt-5.6-sol`, `high`   |
+|   24 | P3 child/root conformance/manual review                    | `gpt-5.6-sol`, `high`   |
 |   25 | P2 child/root conformance/manual review                    | `gpt-5.6-sol`, `high`   |
 |   26 | P1 child and root conformance/manual review                | `gpt-5.6-sol`, `high`   |
 |   27 | P0 conformance/manual review                               | `gpt-5.6-sol`, `medium` |
@@ -1060,7 +1070,7 @@ their child blueprints must confirm them before implementation.
 |   30 | P7 conformance audit                                       | `gpt-5.6-sol`, `high`   |
 |   31 | P6 conformance audit                                       | `gpt-5.6-sol`, `high`   |
 |   32 | P5 conformance audit                                       | `gpt-5.6-sol`, `high`   |
-|   33 | P3 conformance audit                                       | `gpt-5.6-sol`, `high`   |
+|   33 | P3 child/root conformance audits                           | `gpt-5.6-sol`, `high`   |
 |   34 | P2 child/root conformance audits                           | `gpt-5.6-sol`, `high`   |
 |   35 | P1 child and root conformance audits                       | `gpt-5.6-sol`, `high`   |
 |   36 | P0 conformance audit                                       | `gpt-5.6-sol`, `medium` |
@@ -1936,126 +1946,241 @@ families below, sequentially from the updated P2 root.
 > commit and final classifications to the P2 closeout summary, and record the resulting root commit
 > when committed. P2 is complete only after that authorized closeout; do not create P3 earlier.
 
+#### P2 closeout summary
+
+The developer's authorization to begin P3 designates
+`hardware-utils-overhaul/phase-2-topology-snapshot` at `e2495c5d` as the completed P2 predecessor.
+The root contains the P2-A and P2-B implementations/conformance records plus the root conformance
+record and its minor blueprint-settled record-method flag correction. The inherited root audit
+classifies criteria 2-10 and 12-14 plus T01-T03/T05/T06 satisfied; criteria 1, 11, and 15 plus T04
+remain unverified because the pinned API/native/core gates and deterministic R2-R12 mapper race
+matrix were not evidenced in that audit environment. P3 does not reclassify those limits and owns
+neither topology publication nor the missing P2 race tests.
+
 ### P3 - affinity capability and executor lifecycle
 
-#### P3 blueprint prompt
+#### P3 parent blueprint prompt - COMPLETED, REVIEW AND MERGE REQUIRED
 
 **Model: `gpt-5.6-sol`; reasoning effort: `max`.**
 
-> After authorization, create `hardware-utils-overhaul/phase-3-affinity-executor` from the
-> completed P2 root, then work on
-> `hardware-utils-overhaul/phase-3-affinity-executor-blueprint`. The parent artifact is
-> `docs/plans/hardware-utils-platform-parity-overhaul.md`, with completed P0-P2 phase artifact
-> index entries and closeout summaries as inherited evidence. Initial ownership is hardware root/
-> internal affinity and executor lifecycle, platform affinity facades, and hardware tests. Inspect
-> `git status --short`. Read `AGENTS.md`, `docs/AGENT_WORKFLOW.md`,
-> `docs/ARCHITECTURE.md`, the parent plan, the exact P0-P2 files linked by those phase artifact
-> index entries and summaries,
-> `ThreadTools`, `PinnedThreadExecutor`, affinity interfaces/facades/native declarations, their
-> tests, and non-training worker usage named in the plan. Do not inspect training.
->
-> Write `docs/blueprints/hardware-utils/phase-3-affinity-executor-lifecycle.md`. Settle the new
-> additive affinity capability type/query; exact/locality/unsupported behavior; managed logical
-> ownership; deterministic empty/one-CPU/same-group/cross-group/multi-locality mask behavior with
-> no partial-success claim; legacy macOS boolean success when one representable locality hint is
-> applied; non-destructive original-mask discovery/restoration; release semantics; executor
-> singleton acquisition; fresh-thread task identity; execute/shutdown/start races; rejection;
-> interruption; truthful termination/await; cleaner and shutdown-hook ownership; map removal by
-> identity; closeAll; and every happens-before/VarHandle/atomic transition. Preserve concurrent
-> one-thread-per-execute behavior. Leave detailed platform native implementations to P5-P7.
->
-> Specify an executable concurrency state machine, exact files, public additions, failures,
-> deterministic latch/barrier tests, stress bounds, and cleanup assertions. Serializing tasks,
-> claiming macOS hard affinity, monitor/pressure/platform resources, core production, and training
-> are prohibited. Edit only blueprint/plan/planning docs.
->
-> Define package ownership, naming, task/affinity/lifecycle data flow, and all high-reasoning
-> contracts without enumerating minor files unnecessarily. Include a bounded implementation
-> context envelope naming required inputs and owned outputs. Specify the concurrency state machine,
-> mathematical precision for masks/deadlines, memory access and happens-before semantics, and
-> memory pollution/contamination and cleanup risks; record a reasoned `not applicable` only where
-> justified. Apply the workflow sizing/split gate. If affinity capability and executor lifecycle
-> are independently oversized, define bounded responsibility child blueprint action items, branch
-> names, and context envelopes now, then update P3 implementation/validation/audit prompts,
-> parents, and the phase artifact index. Only after this parent blueprint child is merged may those
-> branches be created from the updated P3 root; rerun the gate per child. Do not run the root
-> implementation after a split.
->
-> Perform the mandatory `Implementation model reassessment` and replace the provisional P3
-> implementation selection and complete body. Append the workflow developer-review summary to the P3 plan section
-> with purpose, ownership, contracts, children, model, risks, and unresolved decisions. The output
-> artifact is the finalized blueprint, plan summary, and implementation prompt. Handoff for review
-> and merge into the P3 root only when implementation requires no lifecycle, ownership,
-> memory-order, or capability decision. Do not start implementation before merge.
+The completed output is
+`docs/blueprints/hardware-utils/phase-3-affinity-executor-lifecycle.md` on
+`hardware-utils-overhaul/phase-3-affinity-executor-blueprint`. It freezes capability, masks,
+managed ownership, leases/restoration, executor state, registry, cleaner/hook, deadline, and Java
+Memory Model contracts. Its sizing gate splits P3 into sequential P3-A and P3-B children and
+prohibits a root implementation or validation branch. Review and merge it into
+`hardware-utils-overhaul/phase-3-affinity-executor` before creating P3-A.
 
-#### P3 implementation prompt - PROVISIONAL, DO NOT RUN
+#### P3 developer-review summary
 
-**Provisional model: `gpt-5.6-sol`; provisional reasoning effort: `high`. The P3 blueprint must
-replace this selection and prompt body before implementation.**
+- Purpose: make common affinity behavior operationally truthful and make the pinned executor a
+  linearizable, concurrent fresh-thread executor with bounded global cleanup.
+- Ownership: the parent spans hardware root/internal affinity and lifecycle, three Java affinity
+  facades, and focused hardware tests. P3-A owns the additive enum/query, `ThreadTools`, internal
+  pinner/controller/lease/managed-owner roles, platform Java facade conformance, and affinity
+  tests. P3-B owns `PinnedThreadExecutor`, bounded registry/cleanup support, and lifecycle/race/
+  cleanup tests. Native implementations, resources/pressure, topology production, core
+  production, and training remain read-only or prohibited.
+- Key contracts: `AffinityCapability` is exactly `EXACT`, `LOCALITY_HINT`, or `UNSUPPORTED` and
+  `ThreadTools.getAffinityCapability()` reports the operational common path. Requests are copied,
+  bounded to the P2 logical span, all-or-nothing, and never partially intersected into success.
+  Exact work captures/restores the calling thread's first original binding; macOS applies one
+  representable hint and releases tag zero. Managed IDs are scoped tokens, not physical claims.
+  The executor has RUNNING/SHUTDOWN/CLOSED states, one NEW thread per accepted execute, lock-
+  linearized start/execute/shutdown, truthful instant termination, overflow-safe await, exact
+  registry identity removal, noncapturing cleaner action, one bounded hook, and gated `closeAll`.
+- Children: P3-A `phase-3-affinity-capability-*` completes and merges before P3-B
+  `phase-3-executor-lifecycle-*`. Each has blueprint, implementation, and combined conformance/
+  manual-review audit actions. The root has no implementation/validation action; one root audit
+  follows both children.
+- Selected implementation model: `gpt-5.6-sol` with `high` reasoning for both P3-A and P3-B,
+  subject to mandatory confirmation/increase by each child blueprint. Child/root audits use the
+  same model and effort.
+- Risks: exact apply cannot outrun safe capture/restoration; P3 macOS locality grouping may be
+  narrower than P7; restart makes termination an instant observation; arbitrary thread creators
+  require create-outside/start-inside locking; interrupt-ignoring tasks retain closed tombstones;
+  cleaner/hook tests require deterministic seams; final verify depends on P1 native tools.
+- Unresolved decisions: none. Public naming, masks, capability meaning, owner/lease cleanup,
+  lifecycle transitions, task acceptance, registry overlap, deadlines, interruption, hooks,
+  cleaner reachability, memory modes, split order, and implementation capability are settled.
 
-> After the P3 blueprint child is reviewed and merged, start
-> `hardware-utils-overhaul/phase-3-affinity-executor-implementation` from the P3 root. The parent
-> artifact is
-> `docs/blueprints/hardware-utils/phase-3-affinity-executor-lifecycle.md`. Ownership is limited to
-> its affinity/executor/facade/test context envelope. Inspect `git status --short`. Read
-> `AGENTS.md`, `docs/AGENT_WORKFLOW.md`, the plan's completed P0-P2 phase artifact index entries
-> and closeout summaries, the parent blueprint, and its bounded context. Confirm this prompt is
-> finalized.
->
-> Implement only the additive capability API, common ThreadTools/managed-ownership behavior,
-> `PinnedThreadExecutor` state machine/cleanup, minimal platform facade declarations needed to
-> compile, and deterministic concurrency/lifecycle tests. Do not implement detailed P5-P7 native
-> affinity, resource monitoring, pressure, core changes, task serialization, or training.
-> Allowed edits are blueprint-owned implementation/tests, the completion record, and the compact
-> temporary P3 phase-status block in `AGENTS.md`; no other `AGENTS.md` content may change.
->
-> Run API, race, lifecycle, affinity restoration, unsupported-capability, and cleanup tests. If
-> an unstated state transition or public semantic is needed, stop and append the conflict. Otherwise
-> append completion notes with changed files, commands, results, acceptance-criteria evidence,
-> approved deviations, and environmental limits. Add/update the temporary `AGENTS.md` block with
-> the completed P2 root, active P3 root, completed blueprint child, active implementation child,
-> and blueprint/completion links.
->
-> The output artifact is the implemented affinity/executor lifecycle plus its completion record
-> appended to `docs/blueprints/hardware-utils/phase-3-affinity-executor-lifecycle.md`.
->
-> Handoff only when concurrent submissions remain concurrent, acquisition is identity-safe,
-> execute/shutdown races are deterministic, termination is truthful, original affinity is
-> restored where exact affinity exists, mask-shaped overloads never report partial coverage as
-> success, and all global hooks/maps clean up. Merge this child into the P3 root before validation.
+#### P3 root implementation prompt - SUPERSEDED, DO NOT RUN
 
-#### P3 conformance audit prompt
+The sizing gate rejected one P3 implementation context. Do not create
+`hardware-utils-overhaul/phase-3-affinity-executor-implementation`. Use the P3-A and P3-B action
+families below, sequentially from the updated P3 root.
+
+#### P3-A affinity capability blueprint prompt
+
+**Model: `gpt-5.6-sol`; reasoning effort: `max`.**
+
+> After the parent P3 blueprint is reviewed and merged, create
+> `hardware-utils-overhaul/phase-3-affinity-capability-blueprint` from the updated P3 root. The
+> parent artifact is
+> `docs/blueprints/hardware-utils/phase-3-affinity-executor-lifecycle.md`. Inspect status. Read
+> `AGENTS.md`, `docs/AGENT_WORKFLOW.md`, `docs/ARCHITECTURE.md`, the parent's exact P3-A context
+> envelope, the completed P0-P2 artifact-index/closeout summaries, P0 A01/API/mask evidence, P2
+> logical-ID/mask/span summary, `ThreadTools`, `internal.ThreadPinner`, the three Java affinity
+> facades/native declarations, focused tests, and only named current-CPU call locations. Do not
+> inspect training, native implementation bodies, executor internals, or resource/pressure code.
+>
+> Write `docs/blueprints/hardware-utils/phase-3-affinity-capability.md`. Translate the frozen enum/
+> query, operational capability, unsigned mask, exact/locality/unsupported matrix, non-destructive
+> base discovery, first-original lease/restoration, tag-zero release, managed-owner nesting,
+> current-CPU fallback, ownership, failure, memory, and deterministic fake-provider contracts into
+> one bounded implementation checklist. Preserve every existing descriptor/export and defer
+> detailed native platform parity to P5-P7.
+>
+> Reapply the sizing and implementation-model gates. Confirm parent-selected
+> `gpt-5.6-sol`/`high` or update this plan before handoff. Edit only child blueprint/plan/planning
+> docs. Handoff only when implementation must choose no capability, mask, platform-call,
+> restoration, release, ownership, current-CPU, memory-mode, or test-seam rule. Merge before
+> implementation and do not start P3-B.
+
+#### P3-A affinity capability implementation prompt
+
+**Parent-selected model: `gpt-5.6-sol`; reasoning effort: `high`; child confirmation required.**
+
+> After the P3-A blueprint is reviewed and merged, create
+> `hardware-utils-overhaul/phase-3-affinity-capability-implementation` from the updated P3 root.
+> Inspect status and confirm the child model gate is final. Read only the parent-summary/P3-A
+> context envelope, finalized child blueprint, P0 A01/API/mask contract, and P2 ID/span summary.
+>
+> Implement only `AffinityCapability`, `ThreadTools`/bounded internal affinity roles, three Java
+> facade common-contract changes, and deterministic P3-A tests. Do not edit native implementation,
+> executor lifecycle, resources/monitor/pressure, topology production, core production, CI,
+> benchmarks, or training. Append completion evidence to the child blueprint and update only the
+> temporary P3 status block.
+>
+> Run the child affinity matrix/restoration/ownership suite, P0 API/mask gate, hardware verify,
+> read-only core tests, and scope/diff checks. A new capability, mask, restoration, release,
+> managed-ID, or native decision returns to blueprint. Handoff only when A01 is evidenced, rejected
+> masks make zero platform calls, exact/locality success is honest, every thread-local is cleaned,
+> and no unsupported pinner is dereferenced. Merge implementation before its audit.
+
+#### P3-A affinity capability conformance/manual-review prompt
 
 **Model: `gpt-5.6-sol`; reasoning effort: `high`.**
 
-> After the P3 validation child is reviewed and merged, start
-> `hardware-utils-overhaul/phase-3-affinity-executor-audit` from the P3 root. The parent artifact
-> is
-> `docs/validations/hardware-utils/phase-3-affinity-executor-lifecycle-validation.md`. Ownership
-> is limited to independent conformance review and minor blueprint-settled P3 corrections.
-> Inspect `git status --short`. Read `AGENTS.md`, `docs/AGENT_WORKFLOW.md`, summarized parent
-> context from the P3 blueprint, the plan's completed P0-P2 phase artifact index entries and
-> closeout summaries, implementation diff, completion record, validation record, and tests. For
-> split work, consume only the audited child context plus summarized parent. Do not inspect or run
-> training.
+> After P3-A implementation is reviewed and merged, create
+> `hardware-utils-overhaul/phase-3-affinity-capability-audit` from the updated P3 root. The parent
+> artifact is the P3-A blueprint/completion record; there is no validation artifact. Read only its
+> exact context/diff/tests, summarized parent/P0-P2 contracts, and relevant code. Do not inspect
+> training, executor internals, or detailed native/platform work.
 >
-> Independently audit the lifecycle state machine and happens-before evidence, concurrency,
-> singleton races, command failure, shutdown/close/restart, interrupt preservation, deadlines,
-> identity removal, cleaner reachability, hook count, unsupported pinners, base-mask restoration,
-> and validation sufficiency. Allowed edits are
-> `docs/audits/hardware-utils/phase-3-affinity-executor-lifecycle-conformance.md`, completion and
-> validation records, the P3 closeout summary in this plan, the temporary phase-status block, and
-> minor blueprint-settled corrections. Rerun and record affected validation after a correction.
-> Redesign, task serialization, unrelated files, and training are prohibited.
+> Independently classify every P3-A requirement, parent criteria 1-6/13-16 as applicable, and A01.
+> Audit additive compatibility, operational capability, bit-63/bounds/ownership, the complete mask
+> matrix, zero partial calls, original restoration, tag-zero release, managed-owner nesting,
+> truthful current CPU, thread-local cleanup, happens-before, and test sufficiency. Make only minor
+> blueprint-settled corrections with rerun evidence; redesign returns to blueprint.
 >
-> The output artifacts are the audit above, updated completion record, P3 closeout summary in this
-> plan, and, after the authorized merge, removal of the temporary P3 status block on the root with
-> the resulting root commit recorded when committed. Classify every A01-A02 and P3 requirement
-> exactly as `satisfied`, `deviated`, `unverified`, or `ambiguous`, with evidence. Append audit commands,
-> results, fixes, skipped checks, and environmental limits to the completion record. A material
-> deviation returns to the exact blueprint or implementation action. Handoff follows the
-> audit/root-closeout contract: P3 is complete only after the authorized merge, P3 status-block
-> removal, and closeout-summary update; do not create P4 earlier.
+> Write `docs/audits/hardware-utils/phase-3-affinity-capability-conformance.md`, append commands/
+> fixes/skips/limits to the completion record, update only the P3 status block, and hand off for
+> review/merge. Do not start P3-B before this audit merges.
+
+#### P3-B executor lifecycle blueprint prompt
+
+**Model: `gpt-5.6-sol`; reasoning effort: `max`.**
+
+> After the P3-A audit is reviewed and merged, create
+> `hardware-utils-overhaul/phase-3-executor-lifecycle-blueprint` from the updated P3 root. The
+> parent artifact is
+> `docs/blueprints/hardware-utils/phase-3-affinity-executor-lifecycle.md`. Inspect status. Read
+> `AGENTS.md`, `docs/AGENT_WORKFLOW.md`, `docs/ARCHITECTURE.md`, the parent's exact P3-B context
+> envelope, the P3-A blueprint/completion/conformance summary and final managed-task boundary, P0
+> A02/fresh-thread evidence, `PinnedThreadExecutor`, its tests, and exact named worker/benchmark
+> call sites. Do not inspect training, native/platform internals, or resource/pressure code.
+>
+> Write `docs/blueprints/hardware-utils/phase-3-executor-lifecycle.md`. Translate the frozen
+> RUNNING/SHUTDOWN/CLOSED state machine, configuration epochs, create-outside/start-inside execute
+> linearization, fresh-thread wrapper cleanup, restart/rejection/interruption/termination/deadline
+> behavior, singleton/no-overlap registry, exact identity removal, noncapturing cleaner, one-hook
+> lifecycle, `closeAll`, E1-E12 schedules, bounded stress, JMM, and contamination contracts into
+> one bounded implementation checklist. Preserve concurrent one-thread-per-execute behavior.
+>
+> Reapply the sizing and implementation-model gates. Confirm parent-selected
+> `gpt-5.6-sol`/`high` or update this plan before handoff. Edit planning docs only. Handoff only
+> when implementation must choose no state, lock, acceptance, restart, interrupt, deadline,
+> registry, cleaner, hook, cleanup, or memory-mode rule. Merge before implementation.
+
+#### P3-B executor lifecycle implementation prompt
+
+**Parent-selected model: `gpt-5.6-sol`; reasoning effort: `high`; child confirmation required.**
+
+> After the P3-B blueprint is reviewed and merged, create
+> `hardware-utils-overhaul/phase-3-executor-lifecycle-implementation` from the updated P3 root.
+> Inspect status and confirm the child model gate is final. Read only the exact P3-B context,
+> summarized parent/P3-A task-binding contract, P0 A02/fresh-thread contract, owned executor/tests,
+> and named compatibility call sites.
+>
+> Implement only `PinnedThreadExecutor`, bounded internal registry/cleanup support, use of the
+> P3-A managed-task binding, and deterministic P3-B lifecycle tests. Do not change P3-A capability
+> semantics, detailed native/platform code, resources/monitor/pressure, topology, core production,
+> task serialization, CI, benchmarks, or training. Append completion evidence to the child
+> blueprint and update only the temporary P3 status block.
+>
+> Run E1-E12, bounded stress, fresh-thread/API gates, hardware verify, read-only core tests, and
+> scope/diff checks. A new state, restart, rejection, deadline, hook/cleaner, registry-overlap, or
+> memory-mode decision returns to blueprint. Handoff only when A02 is evidenced, no shutdown race
+> starts an untracked task, termination is truthful, interruption is preserved, old cleanup cannot
+> remove a replacement, and all deterministic cleanup counts reach zero. Merge before its audit.
+
+#### P3-B executor lifecycle conformance/manual-review prompt
+
+**Model: `gpt-5.6-sol`; reasoning effort: `high`.**
+
+> After P3-B implementation is reviewed and merged, create
+> `hardware-utils-overhaul/phase-3-executor-lifecycle-audit` from the updated P3 root. The parent
+> artifact is the P3-B blueprint/completion record; there is no validation artifact. Read only its
+> exact context/diff/tests, summarized parent/P3-A contract, and named compatibility callers. Do
+> not inspect training or expand into platform/resource/core ownership.
+>
+> Independently classify every P3-B requirement, parent criteria 7-16 as applicable, and A02.
+> Audit E1-E12 and stress evidence, fresh concurrent thread identity, start/shutdown/close ordering,
+> rejection/command/start failures, interruption/deadlines/termination, singleton/no-overlap,
+> cleaner reachability, hook count, identity removal, `closeAll`, contamination, and every JMM edge.
+> Make only minor blueprint-settled corrections and rerun affected gates; redesign returns to
+> blueprint.
+>
+> Write `docs/audits/hardware-utils/phase-3-executor-lifecycle-conformance.md`, append commands/
+> fixes/skips/limits to completion, update only the P3 status block, and hand off for review/merge
+> before the root audit.
+
+#### P3 validation prompt - SUPERSEDED, DO NOT RUN
+
+The current workflow uses each child audit as its combined conformance check and manual review.
+Do not create `hardware-utils-overhaul/phase-3-affinity-executor-validation` or
+`docs/validations/hardware-utils/phase-3-affinity-executor-lifecycle-validation.md`. The root audit
+consumes the two child blueprint/completion/conformance triples directly.
+
+#### P3 root conformance audit prompt
+
+**Model: `gpt-5.6-sol`; reasoning effort: `high`.**
+
+> After both child audits are reviewed and merged, create
+> `hardware-utils-overhaul/phase-3-affinity-executor-audit` from the updated P3 root. The parent
+> artifacts are the P3 parent blueprint and exact P3-A/P3-B blueprint/completion/conformance
+> triples in the phase artifact index. There is no validation record. Inspect status. Read the
+> summarized P0-P2 closeouts, parent acceptance matrix, both child handoffs/diffs, named tests, and
+> non-training compatibility call sites. Do not inspect or run training.
+>
+> Independently audit the combined request -> capability/lease/managed owner -> fresh task ->
+> release -> lifecycle/registry cleanup flow. Classify all 16 parent criteria and A01-A02 exactly as
+> `satisfied`, `deviated`, `unverified`, or `ambiguous`. Recheck P0 API/masks/fresh-thread behavior,
+> the complete affinity matrix, original restoration, E1-E12/stress, Java Memory Model arguments,
+> hook/cleaner/map/thread-local cleanup, selected-module hardware verification, read-only core
+> compatibility, scope, and diff hygiene.
+>
+> Allowed edits are
+> `docs/audits/hardware-utils/phase-3-affinity-executor-lifecycle-conformance.md`, child/parent
+> completion summaries, this plan's P3 closeout summary, temporary P3 status block, and minor
+> blueprint-settled corrections. New capability, state, memory mode, cleanup, or platform decision
+> returns to the owning blueprint; unrelated files and training are prohibited.
+>
+> Handoff a review-ready audit first. After explicit merge/closeout authorization, merge the audit
+> child, switch to the P3 root, remove only the temporary P3 status block, append root branch/commit
+> and final classifications to the P3 closeout summary, and record the resulting root commit when
+> committed. P3 is complete only after that authorized closeout; do not create P4 earlier.
 
 ### P4 - 200 ms sampling engine and normalized pressure
 
