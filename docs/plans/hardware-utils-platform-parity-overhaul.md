@@ -1608,6 +1608,19 @@ sequential child lifecycles below.
 > contract: P1 is complete only after the authorized audit merge, P1 status-block removal,
 > closeout-summary update, and resulting root commit record; do not create P2 earlier.
 
+#### P1 closeout summary
+
+P1 closeout is pending. Direct root conformance was recorded on 2026-08-01 after the developer
+explicitly skipped validation. The implementation substantially conforms, but hosted workflow
+evidence is `unverified`, the absent Child A artifact contract is `ambiguous`, and the required
+evidence criterion is `deviated` and final clean status is `unverified`. No production correction
+was made. See
+`docs/audits/hardware-utils/phase-1-native-build-jni-packaging-conformance.md`.
+
+Do not mark P1 complete or create P2 until the audit merge is authorized, the temporary P1 status
+block is removed, this summary records that removal and the resulting root commit, and clean root
+status is rechecked.
+
 ### P2 - validated topology and immutable snapshot foundation
 
 #### P2 blueprint prompt
