@@ -1061,3 +1061,14 @@ Hand off this parent blueprint for developer review and merge into the P2 root o
 - no implementation or child branch has started before this parent blueprint merge.
 
 Do not create P2-A or P2-B branches from this unmerged blueprint child. Do not start implementation.
+
+## Root conformance audit completion evidence
+
+Root audit prepared on `hardware-utils-overhaul/phase-2-topology-snapshot-audit` from P2 root
+commit `274a6f0b`. It found one minor blueprint-settled API correction: restore the baseline
+`final` flags on `SocketSnapshot.equals/hashCode` and `CoreSnapshot.hashCode`; the focused combined
+topology/snapshot suite passed 24 tests after that change. P0 reports zero removals, with only
+Java-17 module-version metadata and six authorized additions remaining. The audit records T04
+coalescing/publication, full selected-module verification, and the read-only core gate as
+unverified because the deterministic R2-R12 race matrix is absent and this host lacks mise/Zig and
+the pinned Java 21/Maven 3.9.16 tools. P2 remains pending review/merge and explicit closeout.
