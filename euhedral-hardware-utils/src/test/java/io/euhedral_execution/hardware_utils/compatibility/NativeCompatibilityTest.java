@@ -30,7 +30,7 @@ class NativeCompatibilityTest {
             "/bin/windows/windows_jni_arm64.dll");
 
     private static String readNativeSources() throws Exception {
-        Path resources = TestPaths.projectDirectory().resolve("src/main/resources");
+        Path resources = TestPaths.projectDirectory().resolve("src/main/native");
         StringBuilder contents = new StringBuilder();
         try (Stream<Path> paths = Files.walk(resources)) {
             for (Path path : paths.filter(Files::isRegularFile)

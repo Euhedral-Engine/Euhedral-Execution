@@ -2,6 +2,7 @@
 #define _Included_WindowsAffinity
 
 #include "windows_jni.h"
+#include "io_euhedral_execution_hardware_utils_windows_WindowsAffinity.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -59,7 +60,7 @@ Java_io_euhedral_1execution_hardware_1utils_windows_WindowsAffinity_setThreadAff
 }
 
 JNIEXPORT jint JNICALL Java_io_euhedral_1execution_hardware_1utils_windows_WindowsAffinity_getCpu(
-    JNIEnv *env, jclass clazz) {
+    JNIEnv *env, jobject object) {
   return (jint)GetCurrentProcessorNumber();
 }
 

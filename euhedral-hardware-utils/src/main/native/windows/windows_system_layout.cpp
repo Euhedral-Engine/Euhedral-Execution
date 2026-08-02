@@ -2,6 +2,7 @@
 #define _Included_WindowsSystemLayout
 
 #include "windows_jni.h"
+#include "io_euhedral_execution_hardware_utils_windows_WindowsSystemLayout.h"
 
 #ifdef __cplusplus
 extern "C" {

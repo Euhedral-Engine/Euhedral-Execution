@@ -45,8 +45,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            ~/.cache/zig
-            .zig-cache
+            euhedral-hardware-utils/target/zig-cache
+            euhedral-hardware-utils/target/zig-global-cache
           key: ${{ runner.os }}-zig-${{ hashFiles('mise.toml', '**/build.zig') }}
           restore-keys: |
             ${{ runner.os }}-zig-
@@ -56,7 +56,7 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y xz-utils
           mkdir -p ~/.local/share/mise/installs/macos-sdk
-          curl -f -L -s https://github.com/joseluisq/macosx-sdks/releases/download/26.1/MacOSX26.1.sdk.tar.xz | tar -xJ --strip-components=1 -C ~/.local/share/mise/installs/macos-sdk/
+          curl -f -L -s https://github.com/joseluisq/macosx-sdks/releases/download/26.1/MacOSX26.1.sdk.tar.xz | tar -xJ -C ~/.local/share/mise/installs/macos-sdk/
 
       - name: Install mise tools
         uses: jdx/mise-action@v2
@@ -64,18 +64,11 @@ jobs:
           install: true
           cache: true
 
-      - name: Fetch and Merge Multi-OS JNI Headers
-        if: ${{ !env.ACT }}
+      - name: Install LLVM
+        if: steps.cache-macos-sdk.outputs.cache-hit == 'true'
         run: |
-          MISE_JDK_PATH=$(mise where java)
-          INCLUDE_DIR="$MISE_JDK_PATH/include"
-          mkdir -p "$INCLUDE_DIR/darwin" "$INCLUDE_DIR/win32"
-
-          cp "$INCLUDE_DIR/linux/jni_md.h" "$INCLUDE_DIR/darwin/jni_md.h"
-          cp "$INCLUDE_DIR/linux/jni_md.h" "$INCLUDE_DIR/win32/jni_md.h"
-
-          echo "Final JNI Include Directory Layout:"
-          ls -R "$INCLUDE_DIR"
+          sudo apt-get update
+          sudo apt-get install -y llvm
 
       - name: Resolve Dependencies
         run: |

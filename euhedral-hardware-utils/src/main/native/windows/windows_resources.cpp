@@ -6,6 +6,7 @@
 #define _Included_WindowsResources
 
 #include "windows_jni.h"
+#include "io_euhedral_execution_hardware_utils_windows_WindowsResources.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -78,7 +79,7 @@ Java_io_euhedral_1execution_hardware_1utils_windows_WindowsResources_getAffinity
     return (jlong)processMask;
 }
 
-JNIEXPORT jint JNICALL
+JNIEXPORT void JNICALL
 Java_io_euhedral_1execution_hardware_1utils_windows_WindowsResources_getPerCpuLoad(JNIEnv *env, jclass clazz, jdoubleArray buffer) {
     init();
     DWORD cpuCount = g_CpuCount;
@@ -86,18 +87,18 @@ Java_io_euhedral_1execution_hardware_1utils_windows_WindowsResources_getPerCpuLo
 
     ULONG64 idleTimes[cpuCount];
     if (!QueryIdleProcessorCycleTime(&bufferSize, (PULONG64)idleTimes)) {
-        return -1;
+        return;
     }
 
     jdouble* load = env->GetDoubleArrayElements(buffer, NULL);
-    if (!load) return -1;
+    if (!load) return;
 
     for (DWORD i = 0; i < cpuCount; i++) {
         load[i] = (double)idleTimes[i];
     }
 
     env->ReleaseDoubleArrayElements(buffer, load, 0);
-    return cpuCount;
+    return;
 }
 
 JNIEXPORT void JNICALL

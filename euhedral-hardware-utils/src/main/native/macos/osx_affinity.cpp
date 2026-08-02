@@ -4,6 +4,7 @@
 #define _Included_OSXAffinity
 
 #include "osx_jni.h"
+#include "io_euhedral_execution_hardware_utils_osx_OSXAffinity.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -48,7 +49,7 @@ Java_io_euhedral_1execution_hardware_1utils_osx_OSXAffinity_setThreadAffinity(JN
 }
 
 JNIEXPORT jint JNICALL
-Java_io_euhedral_1execution_hardware_1utils_osx_OSXAffinity_getCpu(JNIEnv *env, jclass clazz) {
+Java_io_euhedral_1execution_hardware_1utils_osx_OSXAffinity_getCpu(JNIEnv *env, jobject object) {
 #if defined(__x86_64__) || defined(__i386__)
   uint32_t a, b, c, d;
   __cpuid_count(1, 0, a, b, c, d);
