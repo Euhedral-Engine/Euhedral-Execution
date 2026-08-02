@@ -1,5 +1,5 @@
 [tools]
-apple-codesign = "0.29.0"
+apple-codesign = "apple-codesign/0.29.0"
 java = "21"
 maven = "3.9.16"
 zig = "0.16.0"
@@ -9,7 +9,7 @@ apple-codesign = "github:indygreg/apple-platform-rs"
 
 [env]
 SDKROOT = "{{env.HOME}}/.local/share/mise/installs/macos-sdk/MacOSX26.1.sdk"
-RCODESIGN = "{{env.HOME}}/.local/share/mise/installs/apple-codesign/0.29.0/bin/rcodesign"
+RCODESIGN = "{{env.HOME}}/.local/share/mise/installs/apple-codesign/apple-codesign-0.29.0/rcodesign"
 ZIG = "{{env.HOME}}/.local/share/mise/installs/zig/0.16.0/zig"
 LLVM_READOBJ = "/usr/bin/llvm-readobj"
 LLVM_OBJDUMP = "/usr/bin/llvm-objdump"
