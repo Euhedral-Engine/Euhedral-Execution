@@ -14,9 +14,9 @@ mise install
 gradle :euhedral-training:build
 ```
 
-The distribution is under `euhedral-training/build/libs/`. Run the jar directly for CPU work, or use
-`build/bin/euhedral-training-gpu`. Java 21 and the native Euhedral library are required for physical
-benchmarks.
+The distribution is under `euhedral-training/build/libs/`. Run the jar directly for CPU work, or
+use `build/bin/euhedral-training-gpu`. Java 21 and the native Euhedral library are required for
+physical benchmarks.
 
 The command-line entry point provides these commands:
 
@@ -155,12 +155,19 @@ schema_version,anchor_set_id,scenario_id,benchmark_run_id
 ```
 
 `fixed-anchors.csv` contains the same `anchor_set_id` and the selected policy vectors. Its header is
-`schema_version,anchor_set_id,policy_id` followed by `weight_00_bits` through `weight_27_bits`; each
-weight is encoded as 16 lower-case hexadecimal digits containing the raw IEEE-754 bits of one policy
-weight. The anchor policies are benchmarked in every listed scenario, and their measured values are
-used to align runs so that results from different environments are comparable. The scenario IDs in
-the plan must also appear as repeated `scenario.required` settings. If observations are supplied
-with `run.initial_observation_bundle`, they must be used together with this plan.
+`schema_version,anchor_set_id,policy_id` followed by `weight_00_bits` through `weight_27_bits`;
+each weight is encoded as 16 lower-case hexadecimal digits containing the raw IEEE-754 bits of one
+policy weight. The anchor policies are benchmarked in every listed scenario, and their measured
+values are used to align runs so that results from different environments are comparable. The
+scenario IDs in the plan must also appear as repeated `scenario.required` settings. If observations
+are supplied with `run.initial_observation_bundle` or
+`run.initial_observation_bundle_directory`, they must be used together with this plan.
+
+Instead of listing one `run.initial_observation_bundle` per reference run, you may point
+`run.initial_observation_bundle_directory` at a directory containing benchmark-run bundle
+subdirectories such as a prior workspace `evidence/` directory. The runner reads
+`reference-runs.csv`, matches each `benchmark_run_id`, and imports the required bundles
+automatically.
 
 To inspect the scenario-model hardware environment without training or benchmarking:
 
@@ -216,32 +223,33 @@ Repeated keys are allowed only for `scenario.required`, `run.initial_observation
 | Unknown keys             | Rejected                                                           |
 | Whitespace               | Keys and values are trimmed before validation                      |
 
-| Cross-key rule      | Requirement                                                                          |
-|---------------------|--------------------------------------------------------------------------------------|
-| Bootstrap sources   | `run.bootstrap_policies` and `run.initial_calibration_plan` are mutually exclusive   |
-| Observation bundles | `run.initial_observation_bundle` is allowed only with `run.initial_calibration_plan` |
-| Reference overrides | Every override scenario must already appear in `scenario.required`                   |
-| Scenario coverage   | At least one `scenario.required` entry must match `run.active_environment_id`        |
+| Cross-key rule      | Requirement                                                                                                                          |
+|---------------------|--------------------------------------------------------------------------------------------------------------------------------------|
+| Bootstrap sources   | `run.bootstrap_policies` and `run.initial_calibration_plan` are mutually exclusive                                                   |
+| Observation bundles | `run.initial_observation_bundle` and `run.initial_observation_bundle_directory` are allowed only with `run.initial_calibration_plan` |
+| Reference overrides | Every override scenario must already appear in `scenario.required`                                                                   |
+| Scenario coverage   | At least one `scenario.required` entry must match `run.active_environment_id`                                                        |
 
-| Lifecycle key                    | Expected type                 | Default                   | Description                                                                 |
-|----------------------------------|-------------------------------|---------------------------|-----------------------------------------------------------------------------|
-| `calibration.reference_override` | repeated scenario/run mapping | empty                     | Selects the benchmark run used as the calibration reference for a scenario. |
-| `run.active_environment_id`      | environment identifier        | required                  | Identifies the machine/environment for this invocation.                     |
-| `run.bootstrap_policies`         | path                          | empty; used when provided | Supplies policy vectors to benchmark before normal candidate generation.    |
-| `run.candidate_budget`           | decimal integer               | required                  | Total policy-vector budget available for the run.                           |
-| `run.commit_sha`                 | commit hash                   | required                  | Records the source revision associated with the evidence.                   |
-| `run.dirty_working_tree`         | boolean                       | required                  | Records whether the source tree had uncommitted changes.                    |
-| `run.initial_calibration_plan`   | path                          | empty; used when provided | Supplies an explicit initial calibration plan.                              |
-| `run.initial_observation_bundle` | repeated path                 | empty                     | Adds previously captured observations to an initial calibration plan.       |
-| `run.initial_sobol_cursor`       | decimal integer (`long`)      | `131072`                  | Starting Sobol sequence index for generated vectors.                        |
-| `run.iterations`                 | decimal integer               | required                  | Number of closed-loop iterations to execute.                                |
-| `run.resume`                     | boolean                       | `true`                    | Resumes the highest complete checkpoint when one exists.                    |
-| `run.scenarios_per_iteration`    | decimal integer               | `2`                       | Maximum pending scenarios scheduled per iteration.                          |
-| `run.scheduler_seed_hex`         | unsigned 64-bit seed          | `6a09e667f3bcc909`        | Seed for deterministic candidate and scenario scheduling.                   |
-| `run.stop_file`                  | path                          | `<workspace>/STOP`        | File whose creation requests a checkpoint-safe stop.                        |
-| `run.training_run_id`            | identifier                    | required                  | Stable logical name for the training run and packages.                      |
-| `run.workspace`                  | path                          | required                  | Directory containing checkpoints, evidence, schedules, and packages.        |
-| `scenario.required`              | canonical scenario ID         | required, repeated        | Declares the exact source/core/environment scenarios that must be covered.  |
+| Lifecycle key                              | Expected type                 | Default                   | Description                                                                 |
+|--------------------------------------------|-------------------------------|---------------------------|-----------------------------------------------------------------------------|
+| `calibration.reference_override`           | repeated scenario/run mapping | empty                     | Selects the benchmark run used as the calibration reference for a scenario. |
+| `run.active_environment_id`                | environment identifier        | required                  | Identifies the machine/environment for this invocation.                     |
+| `run.bootstrap_policies`                   | path                          | empty; used when provided | Supplies policy vectors to benchmark before normal candidate generation.    |
+| `run.candidate_budget`                     | decimal integer               | required                  | Total policy-vector budget available for the run.                           |
+| `run.commit_sha`                           | commit hash                   | required                  | Records the source revision associated with the evidence.                   |
+| `run.dirty_working_tree`                   | boolean                       | required                  | Records whether the source tree had uncommitted changes.                    |
+| `run.initial_calibration_plan`             | path                          | empty; used when provided | Supplies an explicit initial calibration plan.                              |
+| `run.initial_observation_bundle_directory` | path                          | empty                     | Directory containing observation bundles for the referenced benchmark runs. |
+| `run.initial_observation_bundle`           | repeated path                 | empty                     | Adds previously captured observations to an initial calibration plan.       |
+| `run.initial_sobol_cursor`                 | decimal integer (`long`)      | `131072`                  | Starting Sobol sequence index for generated vectors.                        |
+| `run.iterations`                           | decimal integer               | required                  | Number of closed-loop iterations to execute.                                |
+| `run.resume`                               | boolean                       | `true`                    | Resumes the highest complete checkpoint when one exists.                    |
+| `run.scenarios_per_iteration`              | decimal integer               | `2`                       | Maximum pending scenarios scheduled per iteration.                          |
+| `run.scheduler_seed_hex`                   | unsigned 64-bit seed          | `6a09e667f3bcc909`        | Seed for deterministic candidate and scenario scheduling.                   |
+| `run.stop_file`                            | path                          | `<workspace>/STOP`        | File whose creation requests a checkpoint-safe stop.                        |
+| `run.training_run_id`                      | identifier                    | required                  | Stable logical name for the training run and packages.                      |
+| `run.workspace`                            | path                          | required                  | Directory containing checkpoints, evidence, schedules, and packages.        |
+| `scenario.required`                        | canonical scenario ID         | required, repeated        | Declares the exact source/core/environment scenarios that must be covered.  |
 
 | Key                                                           | Expected type                | Format / validation rule                                                                                                                                                  |
 |---------------------------------------------------------------|------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -303,6 +311,7 @@ Repeated keys are allowed only for `scenario.required`, `run.initial_observation
 | `run.commit_sha`                                              | commit hash                  | Exactly 40 or 64 lower-case hexadecimal digits                                                                                                                            |
 | `run.dirty_working_tree`                                      | boolean                      | Exactly `true` or `false`                                                                                                                                                 |
 | `run.initial_calibration_plan`                                | path                         | Path text with no NUL or `\`; relative paths resolve against the config file parent and are normalized to absolute paths                                                  |
+| `run.initial_observation_bundle_directory`                    | path                         | Path text with no NUL or `\`; relative paths resolve against the config file parent and are normalized to absolute paths                                                  |
 | `run.initial_observation_bundle`                              | path                         | Path text with no NUL or `\`; relative paths resolve against the config file parent and are normalized to absolute paths                                                  |
 | `run.initial_sobol_cursor`                                    | decimal integer (`long`)     | Parsed from `-?[0-9]+` as a signed 64-bit decimal                                                                                                                         |
 | `run.iterations`                                              | decimal integer              | Parsed from `-?[0-9]+`; leading `+` is not allowed                                                                                                                        |

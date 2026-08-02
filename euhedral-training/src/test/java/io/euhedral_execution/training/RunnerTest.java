@@ -215,6 +215,7 @@ class RunnerTest {
                 131_072,
                 Optional.of(temp.resolve("boot")),
                 Optional.empty(),
+                Optional.empty(),
                 List.of(),
                 Map.of(),
                 "0".repeat(40),

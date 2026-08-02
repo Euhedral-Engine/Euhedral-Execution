@@ -42,6 +42,7 @@ public final class ClosedLoopConfigCodec {
             "run.bootstrap_policies",
             "run.initial_calibration_plan",
             "run.initial_observation_bundle",
+            "run.initial_observation_bundle_directory",
             "run.commit_sha",
             "run.dirty_working_tree",
             "run.resume",
@@ -120,8 +121,6 @@ public final class ClosedLoopConfigCodec {
             "evaluation.maximum_counts_spearman_regression",
             "evaluation.maximum_counts_worst_environment_mae_regression");
 
-    private ClosedLoopConfigCodec() {}
-
     public static ClosedLoopConfig read(Path path) throws IOException {
         Path file = path.toAbsolutePath().normalize();
         byte[] bytes = java.nio.file.Files.readAllBytes(file);
@@ -146,17 +145,17 @@ public final class ClosedLoopConfigCodec {
 
     public static String example() {
         return """
-            run.workspace=workspace
-            run.training_run_id=example
-            run.iterations=3
-            run.candidate_budget=1024
-            run.active_environment_id=machine-a
-            run.bootstrap_policies=bootstrap-policies.vectors.csv
-            run.commit_sha=0000000000000000000000000000000000000000
-            run.dirty_working_tree=false
-            scenario.required=s1-machine-a-src1-core32-r1of32
-            scenario.required=s1-machine-a-src32-core32-r1of1
-            """;
+                run.workspace=workspace
+                run.training_run_id=example
+                run.iterations=3
+                run.candidate_budget=1024
+                run.active_environment_id=machine-a
+                run.bootstrap_policies=bootstrap-policies.vectors.csv
+                run.commit_sha=0000000000000000000000000000000000000000
+                run.dirty_working_tree=false
+                scenario.required=s1-machine-a-src1-core32-r1of32
+                scenario.required=s1-machine-a-src32-core32-r1of1
+                """;
     }
 
     private static LinkedHashMap<String, List<Value>> parse(String text) {
@@ -216,9 +215,10 @@ public final class ClosedLoopConfigCodec {
             throw new IllegalArgumentException(
                     "run.bootstrap_policies and run.initial_calibration_plan are mutually exclusive");
         }
+        Optional<Path> bundleDirectory = parser.optionalPath("run.initial_observation_bundle_directory");
         List<Path> bundles = parser.paths("run.initial_observation_bundle");
-        if (!bundles.isEmpty() && calibrationPlan.isEmpty()) {
-            throw new IllegalArgumentException("run.initial_observation_bundle requires run.initial_calibration_plan");
+        if ((bundleDirectory.isPresent() || !bundles.isEmpty()) && calibrationPlan.isEmpty()) {
+            throw new IllegalArgumentException("initial observation inputs require run.initial_calibration_plan");
         }
         Map<SourceScenario, String> overrides = parser.referenceOverrides();
 
@@ -322,6 +322,7 @@ public final class ClosedLoopConfigCodec {
                     parser.longInteger("run.initial_sobol_cursor", 131_072L),
                     bootstrap,
                     calibrationPlan,
+                    bundleDirectory,
                     bundles,
                     overrides,
                     parser.required("run.commit_sha"),
@@ -344,11 +345,6 @@ public final class ClosedLoopConfigCodec {
         return new IllegalArgumentException("Line " + (zeroBasedLine + 1) + ": " + message);
     }
 
-    @FunctionalInterface
-    private interface CheckedSupplier<T> {
-        T get();
-    }
-
     private record Value(String text, int line) {}
 
     private static final class Parser {
@@ -358,18 +354,6 @@ public final class ClosedLoopConfigCodec {
         private Parser(Path base, Map<String, List<Value>> values) {
             this.base = base;
             this.values = values;
-        }
-
-        private static void requireDecimal(String value) {
-            if (!value.matches("-?[0-9]+")) {
-                throw new IllegalArgumentException("Expected decimal integer");
-            }
-        }
-
-        private static void requireFloatingDecimal(String value) {
-            if (!DECIMAL.matcher(value).matches()) {
-                throw new IllegalArgumentException("Expected finite decimal number");
-            }
         }
 
         private String required(String key) {
@@ -575,5 +559,24 @@ public final class ClosedLoopConfigCodec {
                 throw new IllegalArgumentException("Line " + line + ": duplicate value for " + key);
             }
         }
+
+        private static void requireDecimal(String value) {
+            if (!value.matches("-?[0-9]+")) {
+                throw new IllegalArgumentException("Expected decimal integer");
+            }
+        }
+
+        private static void requireFloatingDecimal(String value) {
+            if (!DECIMAL.matcher(value).matches()) {
+                throw new IllegalArgumentException("Expected finite decimal number");
+            }
+        }
     }
+
+    @FunctionalInterface
+    private interface CheckedSupplier<T> {
+        T get();
+    }
+
+    private ClosedLoopConfigCodec() {}
 }

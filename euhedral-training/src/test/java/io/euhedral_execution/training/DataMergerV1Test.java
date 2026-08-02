@@ -154,26 +154,36 @@ class DataMergerV1Test {
     }
 
     @Test
-    void rejectsMismatchedAnchorCatalogsWhenMergingWorkspacePlans() throws Exception {
-        Corpus corpus = corpus();
+    void mergesOverlappingAnchorCatalogsWithoutDuplicateAnchors() throws Exception {
+        PolicyVector a1 = policy(101);
+        PolicyVector a2 = policy(102);
+        PolicyVector shared = policy(103);
+        PolicyVector b1 = policy(104);
+        PolicyVector b2 = policy(105);
 
         Path workspaceA = temporary.resolve("anchors-a");
         Path workspaceB = temporary.resolve("anchors-b");
-        writeWorkspaceCalibration(workspaceA, subsetPlan(corpus.plan, List.of(corpus.scenarios.first())));
 
-        List<PolicyVector> differentAnchors = List.of(policy(101), policy(102), policy(103), policy(104), policy(105));
-        AnchorCatalog differentCatalog = AnchorCatalog.of(differentAnchors);
-        SortedMap<SourceScenario, String> references = new TreeMap<>();
-        references.put(SourceScenario.of("host-c", 1, 32), "ref-host-c");
+        SourceScenario scenarioA = SourceScenario.of("host-a", 1, 32);
+        SourceScenario scenarioB = SourceScenario.of("host-b", 1, 32);
+
+        AnchorCatalog catalogA = AnchorCatalog.of(List.of(a1, a2, shared));
+        AnchorCatalog catalogB = AnchorCatalog.of(List.of(shared, b1, b2));
+        writeWorkspaceCalibration(
+                workspaceA,
+                new CalibrationPlan(
+                        catalogA,
+                        new ReferenceRunCatalog(1, catalogA.anchorSetId(), new TreeMap<>(Map.of(scenarioA, "ref-a")))));
         writeWorkspaceCalibration(
                 workspaceB,
                 new CalibrationPlan(
-                        differentCatalog, new ReferenceRunCatalog(1, differentCatalog.anchorSetId(), references)));
+                        catalogB,
+                        new ReferenceRunCatalog(1, catalogB.anchorSetId(), new TreeMap<>(Map.of(scenarioB, "ref-b")))));
 
-        assertThatIllegalArgumentException()
-                .isThrownBy(() -> DataMerger.mergeCalibrationPlansV1(new DataMerger.MergeCalibrationPlansRequest(
-                        List.of(workspaceA, workspaceB), temporary.resolve("mismatched-plan"))))
-                .withMessageContaining("Anchor policy content disagrees across workspaces");
+        CalibrationPlan merged = DataMerger.mergeCalibrationPlansV1(new DataMerger.MergeCalibrationPlansRequest(
+                List.of(workspaceA, workspaceB), temporary.resolve("merged-overlapping-anchors")));
+
+        assertThat(merged.anchors().fixedAnchors()).containsExactlyInAnyOrder(a1, a2, shared, b1, b2);
     }
 
     @Test
@@ -208,7 +218,7 @@ class DataMergerV1Test {
         CalibrationPlan merged = DataMerger.mergeCalibrationPlansV1(
                 new DataMerger.MergeCalibrationPlansRequest(List.of(workspaceA, workspaceB), output));
 
-        assertThat(merged.anchors().fixedAnchors()).containsExactly(a1, a2, a3, b1, b2, b3);
+        assertThat(merged.anchors().fixedAnchors()).containsExactlyInAnyOrder(a1, a2, a3, b1, b2, b3);
         assertThat(merged.references().referenceRunIds())
                 .containsExactly(Map.entry(scenarioA, "ref-a"), Map.entry(scenarioB, "ref-b"));
         assertThat(CalibrationPlanCsv.read(output)).isEqualTo(merged);

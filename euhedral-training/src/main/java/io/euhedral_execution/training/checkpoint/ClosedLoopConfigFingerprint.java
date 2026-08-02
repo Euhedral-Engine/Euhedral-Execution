@@ -1,8 +1,11 @@
 package io.euhedral_execution.training.checkpoint;
 
+import io.euhedral_execution.training.InitialObservationBundleResolver;
 import io.euhedral_execution.training.config.ClosedLoopConfig;
 import io.euhedral_execution.training.data.SourceScenario;
 import io.euhedral_execution.training.data.io.ObservationBundleReader;
+import io.euhedral_execution.training.merge.data.CalibrationPlan;
+import io.euhedral_execution.training.merge.data.CalibrationPlanCsv;
 import java.io.IOException;
 import java.lang.reflect.RecordComponent;
 import java.nio.charset.StandardCharsets;
@@ -11,8 +14,6 @@ import java.util.HexFormat;
 import java.util.Map;
 
 public final class ClosedLoopConfigFingerprint {
-    private ClosedLoopConfigFingerprint() {}
-
     public static String sha256(ClosedLoopConfig config) throws IOException {
         StringBuilder material = new StringBuilder("closed-loop-config-v1\n");
         append(material, "trainingRunId", config.trainingRunId());
@@ -51,11 +52,23 @@ public final class ClosedLoopConfigFingerprint {
             append(material, "bootstrapSourceSha256", "none");
         }
         java.util.TreeMap<String, java.nio.file.Path> bundles = new java.util.TreeMap<>();
-        for (var bundle : config.initialObservationBundles()) {
-            String runId =
-                    ObservationBundleReader.read(bundle).run().descriptor().benchmarkRunId();
-            if (bundles.put(runId, bundle) != null) {
-                throw new IllegalArgumentException("Duplicate initial benchmark run");
+        if (config.initialCalibrationPlan().isPresent()) {
+            CalibrationPlan plan =
+                    CalibrationPlanCsv.read(config.initialCalibrationPlan().get());
+            for (var bundle : InitialObservationBundleResolver.resolve(config, plan)) {
+                String runId =
+                        ObservationBundleReader.read(bundle).run().descriptor().benchmarkRunId();
+                if (bundles.put(runId, bundle) != null) {
+                    throw new IllegalArgumentException("Duplicate initial benchmark run");
+                }
+            }
+        } else {
+            for (var bundle : config.initialObservationBundles()) {
+                String runId =
+                        ObservationBundleReader.read(bundle).run().descriptor().benchmarkRunId();
+                if (bundles.put(runId, bundle) != null) {
+                    throw new IllegalArgumentException("Duplicate initial benchmark run");
+                }
             }
         }
         for (var entry : bundles.entrySet()) {
@@ -116,4 +129,6 @@ public final class ClosedLoopConfigFingerprint {
     private static void append(StringBuilder material, String name, Object value) {
         material.append(name).append('=').append(value).append('\n');
     }
+
+    private ClosedLoopConfigFingerprint() {}
 }

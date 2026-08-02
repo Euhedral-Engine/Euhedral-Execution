@@ -75,7 +75,11 @@ public final class ClosedLoopRunner {
     private static final int GENERATED_BOOTSTRAP_START_INDEX = 1024;
     private static final Logger LOGGER = LoggerFactory.getLogger(ClosedLoopRunner.class);
 
-    private ClosedLoopRunner() {}
+    public static final class StopRequested extends RuntimeException {
+        private StopRequested() {
+            super(null, null, false, false);
+        }
+    }
 
     static StopRequested stopSignal() {
         return new StopRequested();
@@ -193,11 +197,11 @@ public final class ClosedLoopRunner {
             throws Exception {
         Files.createDirectories(config.workspace());
         SortedMap<RotationGroup, Integer> cursors = initialCursors(config);
-        List<EvidenceIndexEntry> initialEvidence = importInitialEvidence(config);
         if (config.initialCalibrationPlan().isPresent()) {
             Path planDirectory = config.workspace().resolve("calibration-plan");
             copyDirectoryAtomically(config.initialCalibrationPlan().get(), planDirectory);
             CalibrationPlan plan = CalibrationPlanCsv.read(planDirectory, config.requiredScenarios());
+            List<EvidenceIndexEntry> initialEvidence = importInitialEvidence(config, plan);
             requireReferenceEvidence(plan, initialEvidence);
             if (plan.anchors().fixedAnchors().size() >= config.candidateBudget()) {
                 throw new IllegalArgumentException("Anchor count must be below policy budget");
@@ -231,6 +235,7 @@ public final class ClosedLoopRunner {
                     List.of());
             return CheckpointSnapshotCodec.writeNext(config.workspace(), checkpoint);
         }
+        List<EvidenceIndexEntry> initialEvidence = importInitialEvidence(config, null);
         List<io.euhedral_execution.training.data.PolicyVector> policies = resolveBootstrapPolicies(config);
         int targetAnchors = config.anchorSelectionConfig().targetCount(config.candidateBudget());
         if (policies.size() <= targetAnchors) {
@@ -981,10 +986,14 @@ public final class ClosedLoopRunner {
         return trainingConfig.isEffectiveVersionOf(config.trainingConfig().coldStart());
     }
 
-    private static List<EvidenceIndexEntry> importInitialEvidence(ClosedLoopConfig config) throws Exception {
+    private static List<EvidenceIndexEntry> importInitialEvidence(ClosedLoopConfig config, CalibrationPlan plan)
+            throws Exception {
         ArrayList<EvidenceIndexEntry> result = new ArrayList<>();
         Set<String> runIds = new HashSet<>();
-        for (Path source : config.initialObservationBundles()) {
+        List<Path> sources = plan == null
+                ? config.initialObservationBundles()
+                : InitialObservationBundleResolver.resolve(config, plan);
+        for (Path source : sources) {
             ObservationBundle bundle = ObservationBundleReader.read(source);
             String runId = bundle.run().descriptor().benchmarkRunId();
             if (!runIds.add(runId)) {
@@ -1147,12 +1156,6 @@ public final class ClosedLoopRunner {
         }
     }
 
-    public static final class StopRequested extends RuntimeException {
-        private StopRequested() {
-            super(null, null, false, false);
-        }
-    }
-
     private static final class ProductionServices implements ClosedLoopServices {
         private final Path stopFile;
 
@@ -1198,4 +1201,6 @@ public final class ClosedLoopRunner {
             super(cause);
         }
     }
+
+    private ClosedLoopRunner() {}
 }

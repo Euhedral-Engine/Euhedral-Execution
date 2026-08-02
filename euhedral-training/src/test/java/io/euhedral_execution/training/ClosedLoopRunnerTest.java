@@ -58,50 +58,6 @@ class ClosedLoopRunnerTest {
     @TempDir
     Path temp;
 
-    private static void writeBootstrap(Path file, int count) throws Exception {
-        List<String> header = new ArrayList<>(List.of("schema_version", "bootstrap_position", "policy_id"));
-        for (int i = 0; i < 28; i++) {
-            header.add("weight_%02d_bits".formatted(i));
-        }
-        StringBuilder output = new StringBuilder(CanonicalCsv.row(header));
-        for (int i = 0; i < count; i++) {
-            var policy = SchedulingFixtures.policy(100 + i);
-            List<String> row = new ArrayList<>(
-                    List.of("1", Integer.toString(i + 1), policy.id().canonical()));
-            for (double weight : policy.copyWeights()) {
-                row.add("%016x".formatted(Double.doubleToRawLongBits(weight)));
-            }
-            output.append(CanonicalCsv.row(row));
-        }
-        Files.writeString(file, output, StandardCharsets.UTF_8);
-    }
-
-    private static ScenarioTrainingConfig withBatchSize(ScenarioTrainingConfig source, int batchSize) {
-        return new ScenarioTrainingConfig(
-                source.splitSeed(),
-                source.modelSeed(),
-                source.device(),
-                source.ensembleMembers(),
-                source.losoEvaluationMembers(),
-                source.ablationMembers(),
-                source.maxEpochs(),
-                source.patience(),
-                batchSize,
-                source.learningRate(),
-                source.weightDecay(),
-                source.labelSmoothing(),
-                source.minimumTrainPolicyGroups(),
-                source.minimumValidationPolicyGroups(),
-                source.minimumTestPolicyGroups(),
-                source.minimumTrainRowsPerScenario(),
-                source.minimumValidationRowsPerScenario(),
-                source.minimumTestRowsPerScenario(),
-                source.includeWeakCalibrationRows(),
-                source.requireTargetVariation(),
-                source.featureSelectionMode(),
-                source.thresholds());
-    }
-
     @Test
     void bootstrapResumesAcrossRequiredEnvironmentsAndPostMergesBeforeTraining() throws Exception {
         Path bootstrap = temp.resolve("bootstrap.csv");
@@ -260,13 +216,10 @@ class ClosedLoopRunnerTest {
 
         ClosedLoopRunner.run(config(bootstrap, required, "env-a", false, 2), createBootstrapOnlyMockServices());
         Path sourceWorkspace = temp.resolve("workspace");
-        List<Path> evidence;
-        try (var paths = Files.list(sourceWorkspace.resolve("evidence"))) {
-            evidence = paths.filter(Files::isDirectory).sorted().toList();
-        }
+        Path evidenceDirectory = sourceWorkspace.resolve("evidence");
         Path importedWorkspace = temp.resolve("imported-workspace");
         ClosedLoopConfig imported = initialCalibrationConfig(
-                importedWorkspace, sourceWorkspace.resolve("calibration-plan"), evidence, required, false, 2);
+                importedWorkspace, sourceWorkspace.resolve("calibration-plan"), evidenceDirectory, required, false, 2);
 
         ClosedLoopResult initialized = ClosedLoopRunner.run(imported, createMockServices(true));
         assertThat(initialized.stage()).isEqualTo(CheckpointStage.READY_TO_TRAIN);
@@ -274,7 +227,12 @@ class ClosedLoopRunnerTest {
         ClosedLoopServices services = createRejectingTrainingMockServices(true, false, true);
         ClosedLoopResult result = ClosedLoopRunner.run(
                 initialCalibrationConfig(
-                        importedWorkspace, sourceWorkspace.resolve("calibration-plan"), evidence, required, true, 2),
+                        importedWorkspace,
+                        sourceWorkspace.resolve("calibration-plan"),
+                        evidenceDirectory,
+                        required,
+                        true,
+                        2),
                 services);
 
         assertThat(result.stage()).isEqualTo(CheckpointStage.READY_TO_TRAIN);
@@ -283,6 +241,28 @@ class ClosedLoopRunnerTest {
         ScenarioTrainingConfig capturedConfig = captor.getValue().config();
         assertThat(capturedConfig.requireTargetVariation()).isFalse();
         assertThat(capturedConfig.minimumValidationPolicyGroups()).isEqualTo(1);
+    }
+
+    @Test
+    void importedCalibrationCanResolveReferenceBundlesFromDirectory() throws Exception {
+        Path bootstrap = temp.resolve("bootstrap.csv");
+        writeBootstrap(bootstrap, 6);
+        SourceScenario scenario = SourceScenario.of("env-a", 1, 4);
+        TreeSet<SourceScenario> required = new TreeSet<>(List.of(scenario));
+
+        ClosedLoopRunner.run(config(bootstrap, required, "env-a", false, 2), new BootstrapOnlyServices());
+        Path sourceWorkspace = temp.resolve("workspace");
+        Path importedWorkspace = temp.resolve("imported-workspace");
+        ClosedLoopConfig imported = initialCalibrationConfig(
+                importedWorkspace,
+                sourceWorkspace.resolve("calibration-plan"),
+                sourceWorkspace.resolve("evidence"),
+                required,
+                false,
+                2);
+
+        ClosedLoopResult initialized = ClosedLoopRunner.run(imported, new FakeServices(true));
+        assertThat(initialized.stage()).isEqualTo(CheckpointStage.READY_TO_TRAIN);
     }
 
     @Test
@@ -349,6 +329,7 @@ class ClosedLoopRunnerTest {
                 100,
                 Optional.ofNullable(bootstrap),
                 Optional.empty(),
+                Optional.empty(),
                 List.of(),
                 Map.of(),
                 "0".repeat(40),
@@ -374,7 +355,7 @@ class ClosedLoopRunnerTest {
     private ClosedLoopConfig initialCalibrationConfig(
             Path workspace,
             Path calibrationPlan,
-            List<Path> evidence,
+            Path evidenceDirectory,
             TreeSet<SourceScenario> scenarios,
             boolean resume,
             int iterations) {
@@ -391,7 +372,8 @@ class ClosedLoopRunnerTest {
                 base.initialSobolCursor(),
                 Optional.empty(),
                 Optional.of(calibrationPlan),
-                evidence,
+                Optional.of(evidenceDirectory),
+                List.of(),
                 base.referenceOverrides(),
                 base.commitSha(),
                 base.dirtyWorkingTree(),
@@ -404,6 +386,24 @@ class ClosedLoopRunnerTest {
                 base.trainingConfig(),
                 resume,
                 workspace.resolve("STOP"));
+    }
+
+    private static void writeBootstrap(Path file, int count) throws Exception {
+        List<String> header = new ArrayList<>(List.of("schema_version", "bootstrap_position", "policy_id"));
+        for (int i = 0; i < 28; i++) {
+            header.add("weight_%02d_bits".formatted(i));
+        }
+        StringBuilder output = new StringBuilder(CanonicalCsv.row(header));
+        for (int i = 0; i < count; i++) {
+            var policy = SchedulingFixtures.policy(100 + i);
+            List<String> row = new ArrayList<>(
+                    List.of("1", Integer.toString(i + 1), policy.id().canonical()));
+            for (double weight : policy.copyWeights()) {
+                row.add("%016x".formatted(Double.doubleToRawLongBits(weight)));
+            }
+            output.append(CanonicalCsv.row(row));
+        }
+        Files.writeString(file, output, StandardCharsets.UTF_8);
     }
 
     private ClosedLoopServices createMockServices(boolean stopAfterMerge) throws Exception {
@@ -552,5 +552,31 @@ class ClosedLoopRunnerTest {
             }
             return writer.complete(start.plusNanos(offset));
         }
+    }
+
+    private static ScenarioTrainingConfig withBatchSize(ScenarioTrainingConfig source, int batchSize) {
+        return new ScenarioTrainingConfig(
+                source.splitSeed(),
+                source.modelSeed(),
+                source.device(),
+                source.ensembleMembers(),
+                source.losoEvaluationMembers(),
+                source.ablationMembers(),
+                source.maxEpochs(),
+                source.patience(),
+                batchSize,
+                source.learningRate(),
+                source.weightDecay(),
+                source.labelSmoothing(),
+                source.minimumTrainPolicyGroups(),
+                source.minimumValidationPolicyGroups(),
+                source.minimumTestPolicyGroups(),
+                source.minimumTrainRowsPerScenario(),
+                source.minimumValidationRowsPerScenario(),
+                source.minimumTestRowsPerScenario(),
+                source.includeWeakCalibrationRows(),
+                source.requireTargetVariation(),
+                source.featureSelectionMode(),
+                source.thresholds());
     }
 }
