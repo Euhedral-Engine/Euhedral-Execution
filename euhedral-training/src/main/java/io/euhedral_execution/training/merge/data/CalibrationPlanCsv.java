@@ -17,10 +17,11 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.SortedMap;
 import java.util.TreeMap;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public final class CalibrationPlanCsv {
-
-    private CalibrationPlanCsv() {}
+    private static final Logger LOGGER = LoggerFactory.getLogger(CalibrationPlanCsv.class);
 
     public static void write(Path directory, CalibrationPlan plan) throws IOException {
         Files.createDirectories(directory);
@@ -69,6 +70,7 @@ public final class CalibrationPlanCsv {
     }
 
     public static CalibrationPlan read(Path directory, Collection<SourceScenario> knownScenarios) throws IOException {
+        LOGGER.info("Reading calibration plan from {}", directory);
         List<String> anchorLines = strictLines(directory.resolve("fixed-anchors.csv"));
         if (anchorLines.size() < 2) {
             throw new IllegalArgumentException("Empty anchor catalog");
@@ -126,14 +128,16 @@ public final class CalibrationPlanCsv {
             }
             SourceScenario scenario =
                     knownScenarios == null ? SourceScenario.parse(fields[2]) : scenarioById.get(fields[2]);
-            if (scenario == null || references.put(scenario, fields[3]) != null) {
-                throw new IllegalArgumentException("Unknown or duplicate scenario");
+            if (scenario == null) {
+                scenario = SourceScenario.parse(fields[2]);
             }
+            references.put(scenario, fields[3]);
             if (previousScenario != null && previousScenario.compareTo(scenario) >= 0) {
                 throw new IllegalArgumentException("References are not in scenario order");
             }
             previousScenario = scenario;
         }
+        LOGGER.info("Found {} anchors and {} unique scenarios", anchors.size(), references.size());
         return new CalibrationPlan(
                 new AnchorCatalog(1, anchorSetId, anchors), new ReferenceRunCatalog(1, anchorSetId, references));
     }
@@ -149,4 +153,6 @@ public final class CalibrationPlanCsv {
         }
         return Arrays.asList(text.substring(0, text.length() - 1).split("\n", -1));
     }
+
+    private CalibrationPlanCsv() {}
 }

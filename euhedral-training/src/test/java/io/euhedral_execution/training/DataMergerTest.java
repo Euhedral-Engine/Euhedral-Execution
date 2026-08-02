@@ -8,10 +8,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.assertThatRuntimeException;
 
+import io.euhedral_execution.training.checkpoint.ArtifactFingerprint;
 import io.euhedral_execution.training.data.PolicyId;
 import io.euhedral_execution.training.data.PolicyVector;
 import io.euhedral_execution.training.data.SourceScenario;
 import io.euhedral_execution.training.data.enums.EvidenceOrigin;
+import io.euhedral_execution.training.data.io.ObservationBundleReader;
 import io.euhedral_execution.training.merge.config.AggregationConfig;
 import io.euhedral_execution.training.merge.config.CalibrationConfig;
 import io.euhedral_execution.training.merge.data.AnchorCatalog;
@@ -119,8 +121,12 @@ class DataMergerTest {
 
         Path workspaceA = temporary.resolve("workspace-a");
         Path workspaceB = temporary.resolve("workspace-b");
-        writeWorkspaceCalibration(workspaceA, subsetPlan(corpus.plan, scenarios.subList(0, 2)));
-        writeWorkspaceCalibration(workspaceB, subsetPlan(corpus.plan, scenarios.subList(2, 4)));
+        CalibrationPlan planA = subsetPlan(corpus.plan, scenarios.subList(0, 2));
+        CalibrationPlan planB = subsetPlan(corpus.plan, scenarios.subList(2, 4));
+        writeWorkspaceCalibration(workspaceA, planA);
+        writeWorkspaceCalibration(workspaceB, planB);
+        populateReferenceEvidence(workspaceA, corpus.bundles, planA);
+        populateReferenceEvidence(workspaceB, corpus.bundles, planB);
 
         Path output = temporary.resolve("merged-calibration-plan");
         CalibrationPlan merged = DataMerger.mergeCalibrationPlans(
@@ -128,6 +134,9 @@ class DataMergerTest {
 
         assertThat(merged).isEqualTo(corpus.plan);
         assertThat(CalibrationPlanCsv.read(output)).isEqualTo(corpus.plan);
+        assertThat(output.resolve("evidence")).isDirectory();
+        assertThat(output.resolve("evidence").resolve("ref-0")).exists();
+        assertThat(output.resolve("evidence").resolve("ref-2")).exists();
     }
 
     @Test
@@ -160,6 +169,8 @@ class DataMergerTest {
         PolicyVector shared = policy(103);
         PolicyVector b1 = policy(104);
         PolicyVector b2 = policy(105);
+        PolicyVector a3 = policy(106);
+        PolicyVector b3 = policy(107);
 
         Path workspaceA = temporary.resolve("anchors-a");
         Path workspaceB = temporary.resolve("anchors-b");
@@ -167,8 +178,8 @@ class DataMergerTest {
         SourceScenario scenarioA = SourceScenario.of("host-a", 1, 32);
         SourceScenario scenarioB = SourceScenario.of("host-b", 1, 32);
 
-        AnchorCatalog catalogA = AnchorCatalog.of(List.of(a1, a2, shared));
-        AnchorCatalog catalogB = AnchorCatalog.of(List.of(shared, b1, b2));
+        AnchorCatalog catalogA = AnchorCatalog.of(List.of(a1, a2, shared, a3));
+        AnchorCatalog catalogB = AnchorCatalog.of(List.of(shared, b1, b2, b3));
         writeWorkspaceCalibration(
                 workspaceA,
                 new CalibrationPlan(
@@ -179,11 +190,60 @@ class DataMergerTest {
                 new CalibrationPlan(
                         catalogB,
                         new ReferenceRunCatalog(1, catalogB.anchorSetId(), new TreeMap<>(Map.of(scenarioB, "ref-b")))));
+        writeReferenceBundle(workspaceA, "ref-a", scenarioA, List.of(a1, a2, shared, a3));
+        writeReferenceBundle(workspaceB, "ref-b", scenarioB, List.of(shared, b1, b2, b3));
 
         CalibrationPlan merged = DataMerger.mergeCalibrationPlans(new DataMerger.MergeCalibrationPlansRequest(
                 List.of(workspaceA, workspaceB), temporary.resolve("merged-overlapping-anchors")));
 
-        assertThat(merged.anchors().fixedAnchors()).containsExactlyInAnyOrder(a1, a2, shared, b1, b2);
+        assertThat(merged.anchors().fixedAnchors()).containsExactlyInAnyOrder(a1, a2, shared, a3, b1, b2, b3);
+    }
+
+    @Test
+    void dedupesMatchingReferenceEvidenceAcrossInputs() throws Exception {
+        Corpus corpus = corpus();
+        SourceScenario scenario = corpus.scenarios.first();
+        String runId = corpus.plan.references().referenceRunIds().get(scenario);
+        Path sourceBundle = findBundleByRunId(corpus.bundles, runId);
+
+        Path workspaceA = temporary.resolve("dedupe-a");
+        Path workspaceB = temporary.resolve("dedupe-b");
+        writeWorkspaceCalibration(workspaceA, subsetPlan(corpus.plan, List.of(scenario)));
+        writeWorkspaceCalibration(workspaceB, subsetPlan(corpus.plan, List.of(scenario)));
+        copyBundle(sourceBundle, workspaceA.resolve("evidence").resolve(runId));
+        copyBundle(sourceBundle, workspaceB.resolve("evidence").resolve(runId));
+
+        Path output = temporary.resolve("deduped-evidence-plan");
+        DataMerger.mergeCalibrationPlans(
+                new DataMerger.MergeCalibrationPlansRequest(List.of(workspaceA, workspaceB), output));
+
+        Path mergedBundle = output.resolve("evidence").resolve(runId);
+        assertThat(mergedBundle).exists();
+        assertThat(ArtifactFingerprint.sha256(mergedBundle)).isEqualTo(ArtifactFingerprint.sha256(sourceBundle));
+    }
+
+    @Test
+    void rejectsConflictingDuplicateReferenceEvidenceAcrossInputs() throws Exception {
+        Corpus corpus = corpus();
+        SourceScenario scenario = corpus.scenarios.first();
+        String runId = corpus.plan.references().referenceRunIds().get(scenario);
+        Path sourceBundle = findBundleByRunId(corpus.bundles, runId);
+
+        Path workspaceA = temporary.resolve("evidence-conflict-a");
+        Path workspaceB = temporary.resolve("evidence-conflict-b");
+        writeWorkspaceCalibration(workspaceA, subsetPlan(corpus.plan, List.of(scenario)));
+        writeWorkspaceCalibration(workspaceB, subsetPlan(corpus.plan, List.of(scenario)));
+        copyBundle(sourceBundle, workspaceA.resolve("evidence").resolve(runId));
+        Path conflicting =
+                copyBundle(sourceBundle, workspaceB.resolve("evidence").resolve(runId));
+        Files.writeString(
+                conflicting.resolve("run.csv"),
+                Files.readString(conflicting.resolve("run.csv")).replaceFirst("false", "true"));
+
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> DataMerger.mergeCalibrationPlans(new DataMerger.MergeCalibrationPlansRequest(
+                        List.of(workspaceA, workspaceB), temporary.resolve("evidence-conflict-output"))))
+                .withMessageContaining("Duplicate evidence bundle for benchmark run " + runId);
     }
 
     @Test
@@ -352,6 +412,41 @@ class DataMergerTest {
     private void writeWorkspaceCalibration(Path workspace, CalibrationPlan plan) throws Exception {
         Files.createDirectories(workspace);
         CalibrationPlanCsv.write(workspace.resolve("calibration-plan"), plan);
+        Files.createDirectories(workspace.resolve("evidence"));
+    }
+
+    private void populateReferenceEvidence(Path workspace, List<Path> bundles, CalibrationPlan plan) throws Exception {
+        for (String runId : plan.references().referenceRunIds().values()) {
+            copyBundle(
+                    findBundleByRunId(bundles, runId),
+                    workspace.resolve("evidence").resolve(runId));
+        }
+    }
+
+    private Path findBundleByRunId(List<Path> bundles, String runId) {
+        return bundles.stream()
+                .filter(bundle -> ObservationBundleReader.read(bundle)
+                        .run()
+                        .descriptor()
+                        .benchmarkRunId()
+                        .equals(runId))
+                .findFirst()
+                .orElseThrow();
+    }
+
+    private void writeReferenceBundle(Path workspace, String runId, SourceScenario scenario, List<PolicyVector> anchors)
+            throws Exception {
+        Map<PolicyId, double[]> throughputs = new HashMap<>();
+        for (int index = 0; index < anchors.size(); index++) {
+            double value = 100 + index;
+            throughputs.put(anchors.get(index).id(), new double[] {value, value, value});
+        }
+        writeSuccessBundle(
+                workspace.resolve("evidence").resolve(runId),
+                run(runId, scenario, 3, EvidenceOrigin.NATIVE, START),
+                anchors,
+                throughputs,
+                new HashSet<>(anchors.stream().map(PolicyVector::id).toList()));
     }
 
     private CalibrationPlan subsetPlan(CalibrationPlan plan, List<SourceScenario> scenarios) {

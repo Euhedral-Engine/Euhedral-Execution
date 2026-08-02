@@ -1,5 +1,6 @@
 package io.euhedral_execution.training;
 
+import io.euhedral_execution.training.checkpoint.ArtifactFingerprint;
 import io.euhedral_execution.training.config.ClosedLoopConfig;
 import io.euhedral_execution.training.data.io.ObservationBundleReader;
 import io.euhedral_execution.training.merge.data.CalibrationPlan;
@@ -15,46 +16,49 @@ import java.util.TreeMap;
 public final class InitialObservationBundleResolver {
 
     public static List<Path> resolve(ClosedLoopConfig config, CalibrationPlan plan) throws IOException {
-        ArrayList<Path> result = new ArrayList<>(config.initialObservationBundles());
-        if (config.initialObservationBundleDirectory().isPresent()) {
-            result.addAll(resolveReferenceBundles(
-                    config.initialObservationBundleDirectory().orElseThrow(), plan));
+        Map<String, Path> bundlesByRunId = new TreeMap<>();
+        for (Path bundle : config.initialObservationBundles()) {
+            registerBundle(bundlesByRunId, bundle.toAbsolutePath().normalize());
         }
-        return List.copyOf(result);
+        if (config.initialObservationBundleDirectory().isPresent()) {
+            for (Path bundle :
+                    resolveBundles(config.initialObservationBundleDirectory().orElseThrow())) {
+                registerBundle(bundlesByRunId, bundle);
+            }
+        }
+        for (String runId : plan.references().referenceRunIds().values()) {
+            if (!bundlesByRunId.containsKey(runId)) {
+                throw new IllegalArgumentException("Missing initial observation bundle for reference run " + runId);
+            }
+        }
+        return List.copyOf(bundlesByRunId.values());
     }
 
-    private static List<Path> resolveReferenceBundles(Path directory, CalibrationPlan plan) throws IOException {
+    private static List<Path> resolveBundles(Path directory) throws IOException {
         Path root = directory.toAbsolutePath().normalize();
         if (!Files.isDirectory(root)) {
             throw new IllegalArgumentException("Initial observation bundle directory is not a directory");
         }
-        Map<String, Path> bundlesByRunId = new TreeMap<>();
+        ArrayList<Path> result = new ArrayList<>();
         try (var stream = Files.list(root)) {
             for (Path candidate : stream.filter(Files::isDirectory)
                     .filter(path -> Files.isRegularFile(path.resolve("COMPLETE")))
                     .sorted(Comparator.comparing(path -> path.getFileName().toString()))
                     .toList()) {
-                String runId = ObservationBundleReader.read(candidate)
-                        .run()
-                        .descriptor()
-                        .benchmarkRunId();
-                Path previous = bundlesByRunId.putIfAbsent(
-                        runId, candidate.toAbsolutePath().normalize());
-                if (previous != null) {
-                    throw new IllegalArgumentException(
-                            "Duplicate initial observation bundle for benchmark run " + runId);
-                }
+                result.add(candidate.toAbsolutePath().normalize());
             }
         }
-        ArrayList<Path> result = new ArrayList<>();
-        for (String runId : plan.references().referenceRunIds().values()) {
-            Path bundle = bundlesByRunId.get(runId);
-            if (bundle == null) {
-                throw new IllegalArgumentException("Missing initial observation bundle for reference run " + runId);
+        return List.copyOf(result);
+    }
+
+    private static void registerBundle(Map<String, Path> bundlesByRunId, Path bundle) throws IOException {
+        String runId = ObservationBundleReader.read(bundle).run().descriptor().benchmarkRunId();
+        Path previous = bundlesByRunId.putIfAbsent(runId, bundle);
+        if (previous != null) {
+            if (!ArtifactFingerprint.sha256(previous).equals(ArtifactFingerprint.sha256(bundle))) {
+                throw new IllegalArgumentException("Duplicate initial observation bundle for benchmark run " + runId);
             }
-            result.add(bundle);
         }
-        return result;
     }
 
     private InitialObservationBundleResolver() {}

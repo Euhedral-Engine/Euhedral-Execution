@@ -1,9 +1,11 @@
 package io.euhedral_execution.training;
 
+import io.euhedral_execution.training.checkpoint.ArtifactFingerprint;
 import io.euhedral_execution.training.data.PolicyId;
 import io.euhedral_execution.training.data.PolicyRegistry;
 import io.euhedral_execution.training.data.PolicyVector;
 import io.euhedral_execution.training.data.SourceScenario;
+import io.euhedral_execution.training.data.io.ObservationBundleReader;
 import io.euhedral_execution.training.merge.AnchorBootstrapper;
 import io.euhedral_execution.training.merge.HierarchicalAggregator;
 import io.euhedral_execution.training.merge.MergeCsvWriter;
@@ -83,11 +85,17 @@ public class DataMerger {
         Path temporary = temporarySibling(target);
         ensureNewTarget(target, temporary);
         try {
-            CalibrationPlan plan = mergeCalibrationPlans(request.workspaces());
+            ResolvedCalibrationWorkspace merged = mergeCalibrationWorkspace(request.workspaces());
+            CalibrationPlan plan = merged.plan();
             CalibrationPlanCsv.write(temporary, plan);
             CalibrationPlan readBack = CalibrationPlanCsv.read(temporary);
             if (!readBack.equals(plan)) {
                 throw new IllegalStateException("Merged calibration plan validation failed");
+            }
+            Path evidenceDirectory = temporary.resolve("evidence");
+            Files.createDirectories(evidenceDirectory);
+            for (Path bundle : merged.evidenceBundles()) {
+                Files.createSymbolicLink(evidenceDirectory.resolve(bundle.getFileName()), bundle);
             }
             publish(temporary, target);
             return plan;
@@ -150,9 +158,10 @@ public class DataMerger {
         }
     }
 
-    private static CalibrationPlan mergeCalibrationPlans(List<Path> workspaces) throws Exception {
+    private static ResolvedCalibrationWorkspace mergeCalibrationWorkspace(List<Path> workspaces) throws Exception {
         SortedMap<PolicyId, PolicyVector> anchorsById = new TreeMap<>();
         SortedMap<SourceScenario, String> references = new TreeMap<>();
+        SortedMap<String, Path> bundlesByRunId = new TreeMap<>();
         for (Path workspace : workspaces) {
             Path root = workspace.toAbsolutePath().normalize();
             CalibrationPlan plan = CalibrationPlanCsv.read(root.resolve("calibration-plan"));
@@ -171,12 +180,42 @@ public class DataMerger {
                             + entry.getKey().canonical());
                 }
             }
+            Path evidenceDirectory = root.resolve("evidence");
+            if (Files.isDirectory(evidenceDirectory)) {
+                try (var stream = Files.list(evidenceDirectory)) {
+                    for (Path bundle : stream.filter(Files::isDirectory)
+                            .filter(path -> Files.isRegularFile(path.resolve("COMPLETE")))
+                            .sorted(Comparator.comparing(
+                                    path -> path.getFileName().toString()))
+                            .toList()) {
+                        String runId = ObservationBundleReader.read(bundle)
+                                .run()
+                                .descriptor()
+                                .benchmarkRunId();
+                        Path normalized = bundle.toAbsolutePath().normalize();
+                        Path previous = bundlesByRunId.putIfAbsent(runId, normalized);
+                        if (previous != null
+                                && !previous.equals(normalized)
+                                && !ArtifactFingerprint.sha256(previous)
+                                        .equals(ArtifactFingerprint.sha256(normalized))) {
+                            throw new IllegalArgumentException("Duplicate evidence bundle for benchmark run " + runId);
+                        }
+                    }
+                }
+            }
         }
         if (anchorsById.isEmpty()) {
             throw new IllegalArgumentException("At least one workspace is required");
         }
         AnchorCatalog anchors = AnchorCatalog.of(List.copyOf(anchorsById.values()));
-        return new CalibrationPlan(anchors, new ReferenceRunCatalog(1, anchors.anchorSetId(), references));
+        for (String runId : references.values()) {
+            if (!bundlesByRunId.containsKey(runId)) {
+                throw new IllegalArgumentException("Missing evidence bundle for reference run " + runId);
+            }
+        }
+        CalibrationPlan plan =
+                new CalibrationPlan(anchors, new ReferenceRunCatalog(1, anchors.anchorSetId(), references));
+        return new ResolvedCalibrationWorkspace(plan, List.copyOf(bundlesByRunId.values()));
     }
 
     private static void validateMergeOutput(Path directory, SortedSet<SourceScenario> requiredScenarios)
@@ -276,4 +315,6 @@ public class DataMerger {
             Path coverageReport,
             Path robustLeaderVectors,
             Path incompleteVectors) {}
+
+    private record ResolvedCalibrationWorkspace(CalibrationPlan plan, List<Path> evidenceBundles) {}
 }
