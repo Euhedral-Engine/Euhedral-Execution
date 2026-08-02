@@ -344,8 +344,10 @@ Before handing work back:
 
 - P0-P2 are complete. The reviewed P3 parent and P3-A blueprint are merged on
   `hardware-utils-overhaul/phase-3-affinity-executor` at `b5333c8e`.
-- P3-A implementation is complete on
-  `hardware-utils-overhaul/phase-3-affinity-capability-implementation` and awaits developer review
-  and merge before its conformance/manual-review audit.
-- P3-A blueprint and completion evidence are in
-  `docs/blueprints/hardware-utils/phase-3-affinity-capability.md`. P3-B has not started.
+- P3-A implementation and conformance audit are complete on
+  `hardware-utils-overhaul/phase-3-affinity-capability-audit`. The Linux current-CPU compatibility
+  regression and all audit defects are corrected with complete hardware/core rerun evidence; the
+  audit awaits developer review and merge. Do not start P3-B before that merge.
+- P3-A blueprint/completion evidence and the audit are in
+  `docs/blueprints/hardware-utils/phase-3-affinity-capability.md` and
+  `docs/audits/hardware-utils/phase-3-affinity-capability-conformance.md`.

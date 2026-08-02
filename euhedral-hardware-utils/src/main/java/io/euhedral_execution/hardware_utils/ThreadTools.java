@@ -4,7 +4,6 @@ import io.euhedral_execution.hardware_utils.SystemInfo.CpuInfo;
 import io.euhedral_execution.hardware_utils.common.OSName;
 import io.euhedral_execution.hardware_utils.common.UnmodifiableBitSet;
 import io.euhedral_execution.hardware_utils.internal.AffinityController;
-import io.euhedral_execution.hardware_utils.internal.AffinityMasks;
 import io.euhedral_execution.hardware_utils.internal.AffinityProvider;
 import io.euhedral_execution.hardware_utils.internal.Constants;
 import io.euhedral_execution.hardware_utils.linux.LinuxAffinity;
@@ -57,46 +56,19 @@ public final class ThreadTools {
     }
 
     public static boolean setAffinity() {
-        return setAffinity(CONTROLLER.currentCpu());
+        return CONTROLLER.setAffinity();
     }
 
     public static boolean setAffinity(int cpu) {
-        if (cpu < 0 || cpu >= SystemInfo.getCpuCount() || !SystemInfo.getCpuSet().get(cpu)) {
-            return false;
-        }
-        long[] masks = new long[(cpu >>> 6) + 1];
-        masks[cpu >>> 6] = 1L << (cpu & 63);
-        return CONTROLLER.setAffinity(masks);
+        return CONTROLLER.setAffinity(cpu);
     }
 
     public static boolean setAffinity(int[] cpus) {
-        if (cpus == null || cpus.length == 0 || cpus.length > AffinityMasks.MAX_BITS) {
-            return false;
-        }
-        int[] owned = cpus.clone();
-        int highest = -1;
-        for (int cpu : owned) {
-            if (cpu < 0 || cpu >= SystemInfo.getCpuCount() || !SystemInfo.getCpuSet().get(cpu)) {
-                return false;
-            }
-            highest = Math.max(highest, cpu);
-        }
-        long[] masks = new long[(highest >>> 6) + 1];
-        for (int cpu : owned) {
-            masks[cpu >>> 6] |= 1L << (cpu & 63);
-        }
-        return CONTROLLER.setAffinity(masks);
+        return CONTROLLER.setAffinity(cpus);
     }
 
     public static boolean setAffinity(BitSet cpus) {
-        if (cpus == null || cpus.isEmpty() || cpus.length() > AffinityMasks.MAX_BITS) {
-            return false;
-        }
-        BitSet owned = (BitSet) cpus.clone();
-        if (owned.length() > AffinityMasks.MAX_BITS) {
-            return false;
-        }
-        return CONTROLLER.setAffinity(owned.toLongArray());
+        return CONTROLLER.setAffinity(cpus);
     }
 
     public static boolean setAffinity(long[] cpuMasks) {

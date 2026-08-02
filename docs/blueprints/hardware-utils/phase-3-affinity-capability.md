@@ -152,27 +152,28 @@ relationships remain.
 
 ### Capability meanings
 
-| Capability      | Successful common request                                                                                | Release                                     | Unmanaged current CPU                                 |
-|-----------------|----------------------------------------------------------------------------------------------------------|---------------------------------------------|-------------------------------------------------------|
-| `EXACT`         | complete requested supported logical set is applied atomically after exact original capture is available | restore the exact first captured binding    | validated provider CPU, otherwise no fabricated value |
-| `LOCALITY_HINT` | every requested logical CPU maps to one identical representable locality and that one hint applies       | invoke the provider's tag-zero release once | `-1`                                                  |
-| `UNSUPPORTED`   | never succeeds and never invokes a raw setter                                                            | no-op                                       | `-1`                                                  |
+| Capability      | Successful common request                                                                                | Release                                     | Unmanaged current CPU                                             |
+|-----------------|----------------------------------------------------------------------------------------------------------|---------------------------------------------|-------------------------------------------------------------------|
+| `EXACT`         | complete requested supported logical set is applied atomically after exact original capture is available | restore the exact first captured binding    | validated independent provider CPU, otherwise no fabricated value |
+| `LOCALITY_HINT` | every requested logical CPU maps to one identical representable locality and that one hint applies       | invoke the provider's tag-zero release once | validated independent provider CPU when available, otherwise `-1` |
+| `UNSUPPORTED`   | never succeeds and never invokes a raw setter                                                            | no-op                                       | validated independent provider CPU when available, otherwise `-1` |
 
 `EXACT` requires capture, full apply, and exact restore together. A raw setter alone is
 insufficient.
 `LOCALITY_HINT` makes no placement guarantee. Boolean success means only that the one hint was
-applied. `UNSUPPORTED` is a normal runtime result, not an initialization failure.
+applied. `UNSUPPORTED` is a normal runtime result, not an initialization failure. Affinity
+mutation/restoration capability does not suppress an independently truthful current-CPU query.
 
 ### P3 production capability table
 
 Detailed native work remains deferred, so P3-A freezes this conservative common-path table:
 
-| Selected facade                          | Common capability in P3-A                                                                  | Reason                                                                                                                                              |
-|------------------------------------------|--------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------|
-| Linux                                    | `UNSUPPORTED`                                                                              | the existing declarations expose a raw setter/current CPU but no exact capture/restore operation; P5 may raise this to `EXACT`                      |
-| Windows                                  | `UNSUPPORTED`                                                                              | the existing declarations expose neither exact capture/restore nor proved atomic multi-group apply; P6 may raise this to `EXACT`                    |
-| macOS                                    | `LOCALITY_HINT` when its existing Java/native boundary is present, otherwise `UNSUPPORTED` | P3-A can conservatively represent one logical ordinal as one Mach tag and release tag zero; P7 may widen locality grouping but never report `EXACT` |
-| unsupported OS or absent facade instance | `UNSUPPORTED`                                                                              | no provider is dereferenced                                                                                                                         |
+| Selected facade                          | Common capability in P3-A                                                                  | Independent current CPU | Reason                                                                                                                            |
+|------------------------------------------|--------------------------------------------------------------------------------------------|-------------------------|-----------------------------------------------------------------------------------------------------------------------------------|
+| Linux                                    | `UNSUPPORTED`                                                                              | existing native query   | the existing declarations expose a truthful current CPU but no exact capture/restore operation; P5 may raise affinity to `EXACT`  |
+| Windows                                  | `UNSUPPORTED`                                                                              | unavailable in P3       | the existing group-relative query is not yet a proved Euhedral logical ID; P6 owns that correction and exact affinity             |
+| macOS                                    | `LOCALITY_HINT` when its existing Java/native boundary is present, otherwise `UNSUPPORTED` | unavailable in P3       | P3-A can represent one Mach tag but cannot truthfully report current CPU; P7 may widen locality grouping but never report `EXACT` |
+| unsupported OS or absent facade instance | `UNSUPPORTED`                                                                              | unavailable             | no provider is dereferenced                                                                                                       |
 
 The controller seam nevertheless implements and tests `EXACT` now so P5/P6 can supply complete
 providers without changing common semantics.
@@ -403,13 +404,13 @@ close, a wrong-thread close or same-thread out-of-LIFO close throws `IllegalStat
 changes neither thread's state. Token fields do not strongly retain a command, executor, or
 platform request.
 
-Current CPU selection is deterministic:
+Current CPU selection is deterministic and independent of affinity mutation capability:
 
-1. on `EXACT`, ask the provider and accept only an ID in the span and supported mask;
-2. if that result is unavailable/invalid or the provider throws recoverably, return the current
-   managed logical owner when present;
-3. on `LOCALITY_HINT` or `UNSUPPORTED`, do not call a raw physical-current-CPU method; return the
-   managed owner when present; and
+1. when a provider exists, ask its independently truthful current-CPU hook and accept only an ID
+   in the span and supported mask;
+2. a provider without such a query returns `-1` without invoking an untruthful platform boundary;
+3. if the result is unavailable/invalid or the provider throws recoverably, return the current
+   managed logical owner when present; and
 4. otherwise return `-1`.
 
 `getCpuInfo()` calls that operation once. It returns `SystemInfo.getCpuInfo(cpu)` only for a
@@ -504,8 +505,8 @@ The same class also covers:
    restoration/release failure still empties it;
 8. nested managed tokens restore the prior ID; invalid, wrong-thread, out-of-order, double-close,
    normal, and failing paths have the exact outcomes above;
-9. exact provider current CPU preference, invalid/throwing current CPU managed fallback,
-   locality/unsupported managed fallback, and unmanaged `-1`/`null`; and
+9. independent provider current CPU preference across mutation capabilities, invalid/throwing
+   current CPU managed fallback, and unavailable unmanaged `-1`/`null`; and
 10. mutation of every caller `long[]`, `int[]`, `BitSet`, provider-received array, captured
     snapshot source, and base source after the call cannot alter owned state.
 
@@ -569,8 +570,9 @@ No checklist item authorizes executor implementation or detailed platform parity
    fully resolved hint and release tag zero once; all new/failing lease paths clean exactly.
 7. Managed ownership is supported-ID-only, owner-thread/LIFO/idempotent/nested-safe, independent of
    physical placement, and absent after outer close.
-8. Current CPU follows the exact provider-first then managed fallback tree; unmanaged
-   locality/unsupported is `-1`/`null`, and CPU zero is never fabricated.
+8. Current CPU follows the independent truthful-provider-first then managed fallback tree; Linux
+   remains queryable while affinity mutation is unsupported, unavailable queries yield
+   `-1`/`null`, and CPU zero is never fabricated.
 9. Unsupported/absent providers and all settled recoverable failures neither dereference null nor
    retain buffers/thread-locals; fatal errors propagate.
 10. Final-field/class-initialization/thread-confinement arguments match the implementation; no
@@ -749,3 +751,32 @@ dereferenced.
 Pinned API/module verification, native-backed hardware verification, and read-only core tests
 remain environmentally unverified for the exact reasons above; no source or build configuration
 was changed to accommodate the fallback environment.
+
+## Conformance audit completion record
+
+The P3-A conformance/manual-review audit was completed on
+`hardware-utils-overhaul/phase-3-affinity-capability-audit`, based on the updated P3 root at
+`0faaee70`. Its full classification is in
+`docs/audits/hardware-utils/phase-3-affinity-capability-conformance.md`.
+
+- Developer review exposed and authorized correction of a blueprint defect that coupled truthful
+  current-CPU querying to exact affinity mutation/restoration. The corrected contract makes those
+  independent: Linux remains mutation-`UNSUPPORTED` but reports its validated native logical CPU;
+  Windows and macOS remain unavailable until P6/P7.
+- The correction also centralized every public affinity overload in the owned controller, made
+  pending-lease cleanup survive propagated fatal apply errors, expanded deterministic boundary/
+  mutation/failure/facade coverage, and repaired two stale core test fixtures for P2 non-null
+  immutable inputs. No core production, native body/declaration, module descriptor, executor, or
+  training file changed.
+- Under `mise` Java 21.0.2/Maven 3.9.16, the focused P3-A suite passed (14 tests), the P0
+  API/native/
+  mask/fresh-thread gates passed (4 tests), and cache-disabled hardware verification passed,
+  including Zig/native packaging/load checks and 63 unit tests.
+- The complete cache-disabled `euhedral-core -am test` gate passed: 63 hardware tests and 99 core
+  tests, including the unmanaged Linux `ThreadTools.getCpu/getCpuInfo` callers and the corrected
+  topology/snapshot fixtures.
+- Skipped: host-affinity placement testing, by the blueprint's deterministic-fake rule. Limits:
+  `mise` warns about unrelated unavailable user-level tool entries; those warnings did not affect
+  Java 21/Maven 3.9.16 or the completed hardware verification.
+
+The corrected audit is review-ready for merge. P3-B remains prohibited until that merge.

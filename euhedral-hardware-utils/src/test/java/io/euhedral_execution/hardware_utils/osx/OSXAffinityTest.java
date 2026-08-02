@@ -2,6 +2,7 @@ package io.euhedral_execution.hardware_utils.osx;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.concurrent.atomic.AtomicReference;
@@ -26,5 +27,11 @@ class OSXAffinityTest {
             return 0;
         }));
         assertArrayEquals(new long[]{0}, seen.get());
+        assertFalse(OSXAffinityCalls.raw(new long[]{0}, mask -> {
+            throw new UnsatisfiedLinkError("configured failure");
+        }));
+        assertThrows(ThreadDeath.class, () -> OSXAffinityCalls.raw(new long[]{0}, mask -> {
+            throw new ThreadDeath();
+        }));
     }
 }

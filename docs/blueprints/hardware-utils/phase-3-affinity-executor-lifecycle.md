@@ -252,10 +252,11 @@ execute(command)
   -> finally: release lease -> close owner token -> remove task -> signal termination
 ```
 
-Managed ownership is an Euhedral lane identity, not proof of physical placement. On an `EXACT`
-platform, a truthful platform current-CPU result remains preferred. On `LOCALITY_HINT` or
-`UNSUPPORTED`, `ThreadTools.getCpu()` returns the managed logical owner while the token is active;
-outside managed ownership it returns `-1` when the platform cannot truthfully map the current CPU.
+Managed ownership is an Euhedral lane identity, not proof of physical placement. A truthful
+platform current-CPU result remains preferred independently of affinity mutation/restoration
+capability. Otherwise `ThreadTools.getCpu()` returns the managed logical owner while the token is
+active; outside managed ownership it returns `-1` when the platform cannot truthfully map the
+current CPU.
 `getCpuInfo()` returns the matching `CpuInfo` for a nonnegative known result and otherwise returns
 `null`; P3-A adds the JSpecify `@Nullable` return annotation without changing its JVM descriptor.
 No fallback invents CPU zero.
@@ -272,7 +273,8 @@ No fallback invents CPU zero.
   requested logical CPU. It does not guarantee placement on any requested CPU. macOS reports this
   value and never `EXACT`.
 - `UNSUPPORTED`: the common path cannot safely honor a request. Every set operation returns false
-  without invoking a raw platform setter; release is a no-op; current CPU is `-1` outside managed
+  without invoking a raw platform setter and release is a no-op. It does not suppress an
+  independently truthful current-CPU query; otherwise current CPU is `-1` outside managed
   ownership.
 
 Linux and Windows facades must not report `EXACT` in P3 merely because a legacy raw setter exists.
@@ -646,7 +648,8 @@ The affinity suite must also prove:
    release applies tag zero once;
 7. nested managed bindings restore the prior logical owner, wrong-thread close fails, and all
    thread-local values are absent after normal/failing paths;
-8. unmanaged unsupported current CPU is `-1`/null, while managed logical ownership is stable; and
+8. an independent truthful provider CPU is preferred, unavailable current CPU is `-1`/null, and
+   managed logical ownership is stable; and
 9. mutation of every caller array/bitset and fake-provider buffer after the call cannot change a
    request, snapshot, or `BASE_MASK`.
 
@@ -902,7 +905,8 @@ The two scope diffs are empty. Do not otherwise inspect training.
 5. Base-mask discovery is non-destructive; exact sets capture and restore the calling thread's
    first original binding; no fallback mask expands affinity.
 6. Managed logical ownership is stable only while its token is active, nested-safe, and absent
-   after every exit; unmanaged unsupported physical CPU remains `-1`/null.
+   after every exit; an independent truthful provider CPU is preferred and an unavailable
+   unmanaged physical CPU remains `-1`/null.
 7. Singleton acquisition returns one live identity per CPU and stale/cleaner removal is by exact
    entry identity.
 8. Every accepted execution creates one distinct NEW thread, and concurrent commands remain

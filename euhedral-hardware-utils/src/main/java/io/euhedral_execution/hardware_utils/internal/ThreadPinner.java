@@ -10,10 +10,11 @@ public abstract sealed class ThreadPinner implements AffinityProvider permits Li
 
     private final AffinityCapability capability;
     private final RawLocalityCall localityCall;
+    private final boolean currentCpuAvailable;
 
     /// Creates a platform facade whose common affinity path is unsupported.
     protected ThreadPinner() {
-        this(io.euhedral_execution.hardware_utils.AffinityCapability.UNSUPPORTED, null);
+        this(io.euhedral_execution.hardware_utils.AffinityCapability.UNSUPPORTED, null, false);
     }
 
     /// Creates a facade with an operational capability and optional locality raw call.
@@ -22,8 +23,15 @@ public abstract sealed class ThreadPinner implements AffinityProvider permits Li
     /// @param localityCall raw setter for one locality tag and the neutral tag `0`
     protected ThreadPinner(io.euhedral_execution.hardware_utils.AffinityCapability capability,
             RawLocalityCall localityCall) {
+        this(capability, localityCall, false);
+    }
+
+    /// Creates a facade with independently declared affinity and current-CPU operations.
+    protected ThreadPinner(io.euhedral_execution.hardware_utils.AffinityCapability capability,
+            RawLocalityCall localityCall, boolean currentCpuAvailable) {
         this.capability = capability;
         this.localityCall = localityCall;
+        this.currentCpuAvailable = currentCpuAvailable;
     }
 
     public abstract int getCpu();
@@ -39,7 +47,7 @@ public abstract sealed class ThreadPinner implements AffinityProvider permits Li
 
     @Override
     public final int currentCpu() {
-        return capability == AffinityCapability.EXACT ? getCpu() : -1;
+        return currentCpuAvailable ? getCpu() : -1;
     }
 
     /// Maps a process-visible logical CPU ordinal to its nonzero macOS locality tag.
