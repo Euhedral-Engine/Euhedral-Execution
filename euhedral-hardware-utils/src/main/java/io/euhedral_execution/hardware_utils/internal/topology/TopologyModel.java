@@ -41,10 +41,10 @@ public final class TopologyModel {
         this.eCoreSet = eCoreSet;
         this.pCpuSet = pCpuSet;
         this.eCpuSet = eCpuSet;
-        this.cacheLayout = new ProjectionMap<>(this, cacheLayout);
-        this.cpuInfo = new ProjectionMap<>(this, cpuInfo);
-        this.coreInfo = new ProjectionMap<>(this, coreInfo);
-        this.socketInfo = new ProjectionMap<>(this, socketInfo);
+        this.cacheLayout = Collections.unmodifiableMap(new ProjectionMap<>(this, cacheLayout));
+        this.cpuInfo = Collections.unmodifiableMap(new ProjectionMap<>(this, cpuInfo));
+        this.coreInfo = Collections.unmodifiableMap(new ProjectionMap<>(this, coreInfo));
+        this.socketInfo = Collections.unmodifiableMap(new ProjectionMap<>(this, socketInfo));
         this.cpuCount = cpuCount;
         this.coreCount = coreCount;
         this.socketCount = socketCount;
