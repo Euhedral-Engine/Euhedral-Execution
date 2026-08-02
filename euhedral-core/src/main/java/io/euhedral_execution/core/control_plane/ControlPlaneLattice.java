@@ -451,7 +451,7 @@ public final class ControlPlaneLattice implements LatticeTerminal {
      * Freezes ingest and clears all socket-distributor and fragment-local caches before another
      * benchmark policy is activated. Ingest sources should be paused before calling this method.
      */
-    public CacheReset resetForNextTrial(Duration timeout) {
+    public CacheReset clear(Duration timeout) {
         Objects.requireNonNull(timeout);
         if (timeout.isZero() || timeout.isNegative()) {
             throw new IllegalArgumentException("Reset timeout must be positive");

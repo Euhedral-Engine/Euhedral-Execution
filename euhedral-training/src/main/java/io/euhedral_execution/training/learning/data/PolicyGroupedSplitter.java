@@ -42,18 +42,22 @@ public final class PolicyGroupedSplitter {
                 }
             }
         }
+        boolean requireVariation = config.requireTargetVariation();
         check("train", train, table.requiredScenarios(), config.minimumTrainPolicyGroups(),
-                config.minimumTrainRowsPerScenario(), false);
+                config.minimumTrainRowsPerScenario(), true, false);
         check("validation", validation, table.requiredScenarios(),
                 config.minimumValidationPolicyGroups(), config.minimumValidationRowsPerScenario(),
-                true);
+                true, requireVariation);
         check("test", test, table.requiredScenarios(), config.minimumTestPolicyGroups(),
-                config.minimumTestRowsPerScenario(), true);
-        int halfGroups = (config.minimumValidationPolicyGroups() + 1) / 2;
-        int halfRows = StrictMath.max(2, (config.minimumValidationRowsPerScenario() + 1) / 2);
-        check("ablation early stop", earlyRows, table.requiredScenarios(), halfGroups, halfRows,
-                false);
-        check("ablation score", scoreRows, table.requiredScenarios(), halfGroups, halfRows, true);
+                config.minimumTestRowsPerScenario(), requireVariation, requireVariation);
+        if (requireVariation) {
+            int halfGroups = (config.minimumValidationPolicyGroups() + 1) / 2;
+            int halfRows = StrictMath.max(2, (config.minimumValidationRowsPerScenario() + 1) / 2);
+            check("ablation early stop", earlyRows, table.requiredScenarios(), halfGroups,
+                    halfRows, true, false);
+            check("ablation score", scoreRows, table.requiredScenarios(), halfGroups, halfRows,
+                    true, true);
+        }
         return new PolicyGroupedSplit(assignments, train, validation, test, early, score,
                 earlyRows, scoreRows);
     }
@@ -89,10 +93,13 @@ public final class PolicyGroupedSplitter {
 
     private static void check(String name, List<ScenarioLearningRow> rows,
             SortedSet<SourceScenario> scenarios, int groups, int minimumRows,
-            boolean targetChecks) {
+            boolean requireScenarioCoverage, boolean targetChecks) {
         long groupCount = rows.stream().map(r -> r.policy().id()).distinct().count();
         if (groupCount < groups) {
             fail(name + " has too few policy groups");
+        }
+        if (!requireScenarioCoverage) {
+            return;
         }
         for (var scenario : scenarios) {
             List<ScenarioLearningRow> selected = rows.stream()

@@ -247,6 +247,7 @@
     "minimum_validation_rows_per_scenario": 1,
     "minimum_test_rows_per_scenario": 1,
     "include_weak_calibration_rows": false,
+    "require_target_variation": true,
     "feature_selection_mode": "RATIO_ONLY"
   },
   "evaluation_thresholds": {

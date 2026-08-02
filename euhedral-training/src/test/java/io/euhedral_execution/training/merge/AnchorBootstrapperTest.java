@@ -94,6 +94,21 @@ class AnchorBootstrapperTest {
     }
 
     @Test
+    void coldStartsFromGeneratedBootstrapWhenValidIntersectionIsBelowTarget() {
+        CalibrationPlan plan = AnchorBootstrapper.bootstrap(corpus(),
+                new TreeSet<>(Set.of(one, two)), 1024, Map.of(),
+                AnchorSelectionConfig.defaults(), AggregationConfig.defaults());
+
+        assertThat(plan.references().referenceRunIds())
+                .containsEntry(one, "one-a")
+                .containsEntry(two, "two-a");
+        assertThat(plan.anchors().fixedAnchors()).hasSize(5)
+                .containsExactlyInAnyOrder(
+                        policies.get(0), policies.get(1), policies.get(2),
+                        policies.get(3), policies.get(4));
+    }
+
+    @Test
     void rejectsShortIntersectionAndImportedDefaultReference() {
         List<RunAggregate> shortRows = new ArrayList<>(corpus());
         shortRows.removeIf(row -> row.run().descriptor().scenario().equals(one)
@@ -112,7 +127,7 @@ class AnchorBootstrapperTest {
 
         List<RunAggregate> imported = corpus().stream().map(this::asImported).toList();
         assertThatIllegalArgumentException().isThrownBy(() -> bootstrap(imported, Map.of()))
-                .withMessageContaining("No bootstrap reference");
+                .withMessageContaining("No valid bootstrap evidence exists");
     }
 
     private CalibrationPlan bootstrap(List<RunAggregate> rows,

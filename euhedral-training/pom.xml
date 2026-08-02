@@ -58,11 +58,6 @@
       <groupId>ai.djl.pytorch</groupId>
       <artifactId>pytorch-engine</artifactId>
     </dependency>
-    <!--
-      The JNI bridge is small and portable. The CUDA-enabled PyTorch native libraries are loaded
-      from an Ubuntu Python environment through PYTORCH_LIBRARY_PATH instead of being repackaged by
-      Maven. This keeps the trainer distribution Linux-focused and avoids multi-gigabyte uber jars.
-    -->
     <dependency>
       <groupId>ai.djl.pytorch</groupId>
       <artifactId>pytorch-jni</artifactId>

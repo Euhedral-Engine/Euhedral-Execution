@@ -324,6 +324,7 @@ public final class ScenarioModelMetadataCodec {
         writer.field("minimum_test_rows_per_scenario",
                 config.minimumTestRowsPerScenario());
         writer.field("include_weak_calibration_rows", config.includeWeakCalibrationRows());
+        writer.field("require_target_variation", config.requireTargetVariation());
         writer.field("feature_selection_mode", config.featureSelectionMode().name());
         writer.endObject();
     }
@@ -337,7 +338,7 @@ public final class ScenarioModelMetadataCodec {
                 "minimum_validation_policy_groups", "minimum_test_policy_groups",
                 "minimum_train_rows_per_scenario", "minimum_validation_rows_per_scenario",
                 "minimum_test_rows_per_scenario", "include_weak_calibration_rows",
-                "feature_selection_mode"), "training_config");
+                "require_target_variation", "feature_selection_mode"), "training_config");
         try {
             return new ScenarioTrainingConfig(parseHex64(string(value, "split_seed_hex")),
                     parseHex64(string(value, "model_seed_hex")), string(value, "device"),
@@ -354,6 +355,7 @@ public final class ScenarioModelMetadataCodec {
                     integer(value, "minimum_validation_rows_per_scenario"),
                     integer(value, "minimum_test_rows_per_scenario"),
                     bool(value, "include_weak_calibration_rows"),
+                    bool(value, "require_target_variation"),
                     enumValue(FeatureSelectionMode.class,
                             string(value, "feature_selection_mode")), thresholds);
         } catch (RuntimeException error) {

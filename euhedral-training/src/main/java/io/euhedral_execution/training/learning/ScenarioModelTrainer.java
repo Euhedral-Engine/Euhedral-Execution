@@ -49,8 +49,11 @@ import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public final class ScenarioModelTrainer {
+    private static final Logger LOGGER = LoggerFactory.getLogger(ScenarioModelTrainer.class);
 
     public static ScenarioTrainingArtifacts train(ScenarioTrainingRequest request)
             throws Exception {
@@ -96,6 +99,11 @@ public final class ScenarioModelTrainer {
                 request.requiredScenarios(), requestedConfig.includeWeakCalibrationRows());
         PolicyGroupedSplit split = PolicyGroupedSplitter.split(
                 table, requestedConfig.splitSeed(), requestedConfig);
+        LOGGER.info("Training scenario model: policies={}, rows={}, train={}, validation={}, "
+                        + "test={}, device={}, targetVariation={}", table.policies().size(),
+                table.rows().size(), split.trainingRows().size(), split.validationRows().size(),
+                split.testRows().size(), requestedConfig.device(),
+                requestedConfig.requireTargetVariation());
         Device device = ScenarioOrdinalNetwork.resolveDevice(requestedConfig.device());
         int effectiveBatch = requestedConfig.batchSize() > 0
                 ? StrictMath.min(requestedConfig.batchSize(), split.trainingRows().size())
@@ -105,40 +113,44 @@ public final class ScenarioModelTrainer {
 
         ArrayList<EvaluationSummary> policyContext = new ArrayList<>();
         ArrayList<EvaluationSummary> ratioContext = new ArrayList<>();
-        for (SourceScenario heldOut : table.requiredScenarios()) {
-            List<ScenarioLearningRow> fitting =
-                    PolicyGroupedSplitter.withoutScenario(split.trainingRows(), heldOut);
-            List<ScenarioLearningRow> early = PolicyGroupedSplitter.withoutScenario(
-                    split.ablationEarlyStopRows(), heldOut);
-            List<ScenarioLearningRow> score = PolicyGroupedSplitter.onlyScenario(
-                    split.ablationScoreRows(), heldOut);
-            ScenarioFoldRunner.validateRowSets(fitting, early, score);
-            if (ScenarioFoldRunner.distinctRatios(fitting) < 2) {
-                throw new InsufficientScenarioLearningDataException(
-                        "Context fold lacks two fitting ratios: " + heldOut);
+        if (config.requireTargetVariation()) {
+            for (SourceScenario heldOut : table.requiredScenarios()) {
+                List<ScenarioLearningRow> fitting =
+                        PolicyGroupedSplitter.withoutScenario(split.trainingRows(), heldOut);
+                List<ScenarioLearningRow> early = PolicyGroupedSplitter.withoutScenario(
+                        split.ablationEarlyStopRows(), heldOut);
+                List<ScenarioLearningRow> score = PolicyGroupedSplitter.onlyScenario(
+                        split.ablationScoreRows(), heldOut);
+                ScenarioFoldRunner.validateRowSets(fitting, early, score);
+                if (ScenarioFoldRunner.distinctRatios(fitting) < 2) {
+                    throw new InsufficientScenarioLearningDataException(
+                            "Context fold lacks two fitting ratios: " + heldOut);
+                }
             }
-        }
-        for (SourceScenario heldOut : table.requiredScenarios()) {
-            List<ScenarioLearningRow> fitting =
-                    PolicyGroupedSplitter.withoutScenario(split.trainingRows(), heldOut);
-            List<ScenarioLearningRow> early = PolicyGroupedSplitter.withoutScenario(
-                    split.ablationEarlyStopRows(), heldOut);
-            List<ScenarioLearningRow> score = PolicyGroupedSplitter.onlyScenario(
-                    split.ablationScoreRows(), heldOut);
-            ScenarioFoldRunner.FoldResult policyFold = ScenarioFoldRunner.run(
-                    "VALIDATION_CONTEXT_LOSO", "VALIDATION_CONTEXT_LOSO",
-                    heldOut.canonical(), ScenarioFeatureSet.POLICY_ONLY, fitting, early, score,
-                    config.ablationMembers(), config, device,
-                    foldWorkspace.resolve("context-policy").resolve(heldOut.canonical()), false);
-            policyContext.add(policyFold.evaluation());
-            history.addAll(policyFold.history());
-            ScenarioFoldRunner.FoldResult ratioFold = ScenarioFoldRunner.run(
-                    "VALIDATION_CONTEXT_LOSO", "VALIDATION_CONTEXT_LOSO",
-                    heldOut.canonical(), ScenarioFeatureSet.RATIO_ONLY, fitting, early, score,
-                    config.ablationMembers(), config, device,
-                    foldWorkspace.resolve("context-ratio").resolve(heldOut.canonical()), false);
-            ratioContext.add(ratioFold.evaluation());
-            history.addAll(ratioFold.history());
+            for (SourceScenario heldOut : table.requiredScenarios()) {
+                List<ScenarioLearningRow> fitting =
+                        PolicyGroupedSplitter.withoutScenario(split.trainingRows(), heldOut);
+                List<ScenarioLearningRow> early = PolicyGroupedSplitter.withoutScenario(
+                        split.ablationEarlyStopRows(), heldOut);
+                List<ScenarioLearningRow> score = PolicyGroupedSplitter.onlyScenario(
+                        split.ablationScoreRows(), heldOut);
+                ScenarioFoldRunner.FoldResult policyFold = ScenarioFoldRunner.run(
+                        "VALIDATION_CONTEXT_LOSO", "VALIDATION_CONTEXT_LOSO",
+                        heldOut.canonical(), ScenarioFeatureSet.POLICY_ONLY, fitting, early, score,
+                        config.ablationMembers(), config, device,
+                        foldWorkspace.resolve("context-policy").resolve(heldOut.canonical()),
+                        false);
+                policyContext.add(policyFold.evaluation());
+                history.addAll(policyFold.history());
+                ScenarioFoldRunner.FoldResult ratioFold = ScenarioFoldRunner.run(
+                        "VALIDATION_CONTEXT_LOSO", "VALIDATION_CONTEXT_LOSO",
+                        heldOut.canonical(), ScenarioFeatureSet.RATIO_ONLY, fitting, early, score,
+                        config.ablationMembers(), config, device,
+                        foldWorkspace.resolve("context-ratio").resolve(heldOut.canonical()),
+                        false);
+                ratioContext.add(ratioFold.evaluation());
+                history.addAll(ratioFold.history());
+            }
         }
 
         SortedSet<String> environments = new TreeSet<>();
@@ -196,6 +208,8 @@ public final class ScenarioModelTrainer {
         ArrayList<ScenarioOrdinalNetwork.TrainingResult> productionResults = new ArrayList<>();
         try {
             for (int memberIndex = 0; memberIndex < config.ensembleMembers(); memberIndex++) {
+                LOGGER.info("Training production model member {}/{}", memberIndex + 1,
+                        config.ensembleMembers());
                 Path memberDirectory = directory.resolve("members")
                         .resolve("member-%03d".formatted(memberIndex));
                 ScenarioOrdinalNetwork.TrainingResult result = ScenarioOrdinalNetwork.train(
@@ -204,6 +218,8 @@ public final class ScenarioModelTrainer {
                 productionResults.add(result);
                 productionMembers.add(result.member());
                 history.addAll(result.history());
+                LOGGER.info("Finished production model member {}/{} (bestEpoch={})",
+                        memberIndex + 1, config.ensembleMembers(), result.bestEpoch());
             }
 
             EvaluationSummary grouped;
@@ -295,6 +311,10 @@ public final class ScenarioModelTrainer {
                     PolicyGroupedSplitter.withoutScenario(split.validationRows(), heldOut);
             List<ScenarioLearningRow> score =
                     PolicyGroupedSplitter.onlyScenario(split.testRows(), heldOut);
+            if (!config.requireTargetVariation()
+                    && (fitting.isEmpty() || early.isEmpty() || score.isEmpty())) {
+                continue;
+            }
             int distinctRatios = ScenarioFoldRunner.distinctRatios(fitting);
             boolean insufficientContext = featureSet != ScenarioFeatureSet.POLICY_ONLY
                     && distinctRatios < 2;
@@ -479,8 +499,8 @@ public final class ScenarioModelTrainer {
                 source.minimumTrainPolicyGroups(), source.minimumValidationPolicyGroups(),
                 source.minimumTestPolicyGroups(), source.minimumTrainRowsPerScenario(),
                 source.minimumValidationRowsPerScenario(), source.minimumTestRowsPerScenario(),
-                source.includeWeakCalibrationRows(), source.featureSelectionMode(),
-                source.thresholds());
+                source.includeWeakCalibrationRows(), source.requireTargetVariation(),
+                source.featureSelectionMode(), source.thresholds());
     }
 
     private static String deviceName(Device device) {

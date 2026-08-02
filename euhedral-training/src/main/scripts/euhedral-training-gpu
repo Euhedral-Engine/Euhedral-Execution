@@ -13,13 +13,11 @@ try:
     import torch
 except ImportError as error:
     raise SystemExit(
-        "PyTorch is not installed. Install torch 2.7.1 from the CUDA 12.8 index first."
+        "PyTorch is not installed. Install torch 2.7.1 first."
     ) from error
 
 if torch.__version__.split("+")[0] != "2.7.1":
     raise SystemExit(f"Expected PyTorch 2.7.1, found {torch.__version__}")
-if torch.version.cuda != "12.8":
-    raise SystemExit(f"Expected a CUDA 12.8 PyTorch wheel, found CUDA {torch.version.cuda}")
 if not torch.cuda.is_available():
     raise SystemExit("PyTorch cannot access CUDA. Check the NVIDIA driver and nvidia-smi.")
 
@@ -61,4 +59,5 @@ done
 
 exec java "${JAVA_ARGS[@]}" "${FORWARDED_JVM_ARGS[@]}" \
   -Dai.djl.default_engine=PyTorch \
+  -DAllEuhedralLogs=ERROR \
   -jar "$JAR" "${APPLICATION_ARGS[@]}"
