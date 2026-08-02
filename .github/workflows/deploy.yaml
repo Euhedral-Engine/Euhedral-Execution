@@ -45,8 +45,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            ~/.cache/zig
-            .zig-cache
+            euhedral-hardware-utils/target/zig-cache
+            euhedral-hardware-utils/target/zig-global-cache
           key: ${{ runner.os }}-zig-${{ hashFiles('mise.toml', '**/build.zig') }}
           restore-keys: |
             ${{ runner.os }}-zig-

@@ -74,7 +74,7 @@ final class NativeLibraryLoader {
                 Path extracted = extractor.extract(candidate);
                 librarySystem.load(extracted);
                 extractor.loadSucceeded(extracted);
-                return new NativeLoadResult(candidate, extracted, failures);
+                return new NativeLoadResult(candidate, extracted, List.copyOf(failures));
             } catch (IOException | SecurityException | LinkageError failure) {
                 failures.add(new NativeLoadFailure(candidate, extractionPath, failure));
                 extractor.candidateFailed(extractionPath);
