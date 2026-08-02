@@ -204,6 +204,7 @@ public final class ClosedLoopRunner {
             List<EvidenceIndexEntry> initialEvidence = importInitialEvidence(config, plan);
             requireReferenceEvidence(plan, initialEvidence);
             if (plan.anchors().fixedAnchors().size() >= config.candidateBudget()) {
+                LOGGER.error("Anchors: {} Budget: {}", plan.anchors().fixedAnchors(), config.candidateBudget());
                 throw new IllegalArgumentException("Anchor count must be below policy budget");
             }
             Path mergeDirectory = config.workspace().resolve("merges/merge-000000");
@@ -239,6 +240,7 @@ public final class ClosedLoopRunner {
         List<io.euhedral_execution.training.data.PolicyVector> policies = resolveBootstrapPolicies(config);
         int targetAnchors = config.anchorSelectionConfig().targetCount(config.candidateBudget());
         if (policies.size() <= targetAnchors) {
+            LOGGER.error("Policies: {} Anchors: {}", policies.size(), targetAnchors);
             throw new IllegalArgumentException("Bootstrap budget must exceed anchor target");
         }
         ClosedLoopCheckpoint checkpoint = new ClosedLoopCheckpoint(

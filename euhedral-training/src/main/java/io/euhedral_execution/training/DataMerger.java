@@ -29,6 +29,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.SortedMap;
 import java.util.SortedSet;
 import java.util.TreeMap;
@@ -94,8 +95,23 @@ public class DataMerger {
             }
             Path evidenceDirectory = temporary.resolve("evidence");
             Files.createDirectories(evidenceDirectory);
+
             for (Path bundle : merged.evidenceBundles()) {
-                Files.createSymbolicLink(evidenceDirectory.resolve(bundle.getFileName()), bundle);
+                Path destination = evidenceDirectory.resolve(bundle.getFileName());
+
+                try (var stream = Files.walk(bundle)) {
+                    stream.filter(Files::isRegularFile).forEach(sourceFile -> {
+                        try {
+                            Path relativePath = bundle.relativize(sourceFile);
+                            Path dirFile = destination.resolve(relativePath);
+
+                            Files.createDirectories(dirFile.getParent());
+                            Files.copy(sourceFile, dirFile, StandardCopyOption.REPLACE_EXISTING);
+                        } catch (Exception e) {
+                            throw new RuntimeException(e);
+                        }
+                    });
+                }
             }
             publish(temporary, target);
             return plan;
@@ -180,6 +196,7 @@ public class DataMerger {
                             + entry.getKey().canonical());
                 }
             }
+            Set<String> accepted = new HashSet<>();
             Path evidenceDirectory = root.resolve("evidence");
             if (Files.isDirectory(evidenceDirectory)) {
                 try (var stream = Files.list(evidenceDirectory)) {
@@ -192,6 +209,7 @@ public class DataMerger {
                                 .run()
                                 .descriptor()
                                 .benchmarkRunId();
+                        accepted.add(runId);
                         Path normalized = bundle.toAbsolutePath().normalize();
                         Path previous = bundlesByRunId.putIfAbsent(runId, normalized);
                         if (previous != null
@@ -201,6 +219,7 @@ public class DataMerger {
                             throw new IllegalArgumentException("Duplicate evidence bundle for benchmark run " + runId);
                         }
                     }
+                    references.entrySet().removeIf(entry -> !accepted.contains(entry.getValue()));
                 }
             }
         }

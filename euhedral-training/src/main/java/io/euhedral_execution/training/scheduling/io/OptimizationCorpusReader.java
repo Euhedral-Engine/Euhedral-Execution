@@ -20,6 +20,8 @@ import java.util.SortedMap;
 import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public final class OptimizationCorpusReader {
     private static final List<String> RANKING_HEADER = List.of(
@@ -49,6 +51,8 @@ public final class OptimizationCorpusReader {
             "measured_scenarios",
             "missing_scenarios",
             "rejected_scenarios");
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(OptimizationCorpusReader.class);
 
     public static OptimizationCorpusView read(
             DataMerger.MergeArtifacts artifacts, SortedSet<SourceScenario> requiredScenarios) throws IOException {
@@ -264,7 +268,13 @@ public final class OptimizationCorpusReader {
             }
         }
         for (var entry : result.entrySet()) {
-            if (!entry.getValue().keySet().equals(required)) {
+            if (!entry.getValue().keySet().containsAll(required)) {
+                LOGGER.error(
+                        "Entry: {} ValueKeySet: {} Required: {}, File: {}",
+                        entry.getKey(),
+                        entry.getValue().keySet(),
+                        required,
+                        file);
                 throw new IllegalArgumentException("Incomplete scenario grid for " + entry.getKey());
             }
         }
