@@ -158,7 +158,7 @@ public final class ClosedLoopRunner {
                     return result(current, new TreeSet<>());
                 }
                 if (current.checkpoint().stage() == CheckpointStage.MODEL_REJECTED
-                        && !shouldContinueRejectedSparseDataModel(config,
+                        && !shouldContinueRejectedSeedModel(config,
                         current.checkpoint())) {
                     return result(current, new TreeSet<>());
                 }
@@ -364,13 +364,12 @@ public final class ClosedLoopRunner {
                     modelDirectory.resolve("training-history.csv"), metadata.acceptanceStatus(),
                     metadata.featureSet());
         } else {
-            boolean bootstrapEvidence = checkpoint.evidence().stream().anyMatch(entry ->
-                    entry.source() == EvidenceSource.BOOTSTRAP);
-            ScenarioTrainingConfig trainingConfig = iteration == 1 && bootstrapEvidence
+            boolean seedEvidence = hasSeedEvidence(checkpoint);
+            ScenarioTrainingConfig trainingConfig = iteration == 1 && seedEvidence
                     ? config.trainingConfig().coldStart()
                     : config.trainingConfig();
             trained = trainWithColdStartFallback(config, services, merge, modelDirectory,
-                    trainingConfig, bootstrapEvidence, iteration);
+                    trainingConfig, seedEvidence, iteration);
         }
         CheckpointStage stage = trained.acceptanceStatus() == ModelAcceptanceStatus.ACCEPTED
                 ? CheckpointStage.MODEL_READY : CheckpointStage.MODEL_REJECTED;
@@ -388,7 +387,7 @@ public final class ClosedLoopRunner {
     private static ScenarioTrainingArtifacts trainWithColdStartFallback(
             ClosedLoopConfig config, ClosedLoopServices services,
             DataMerger.MergeArtifacts merge, Path modelDirectory,
-            ScenarioTrainingConfig trainingConfig, boolean bootstrapEvidence,
+            ScenarioTrainingConfig trainingConfig, boolean seedEvidence,
             int iteration) throws Exception {
         ScenarioInputs inputs = ScenarioInputs.from(merge);
         try {
@@ -396,7 +395,7 @@ public final class ClosedLoopRunner {
                     config.requiredScenarios(), modelDirectory, config.commitSha(),
                     config.dirtyWorkingTree(), trainingConfig));
         } catch (InsufficientScenarioLearningDataException insufficient) {
-            if (!bootstrapEvidence) {
+            if (!seedEvidence) {
                 throw insufficient;
             }
             ScenarioTrainingConfig coldStart = config.trainingConfig().coldStart();
@@ -419,7 +418,7 @@ public final class ClosedLoopRunner {
         ScenarioModelMetadata metadata = ScenarioModelMetadataCodec.read(
                 modelDirectory.resolve(ScenarioModelMetadataCodec.FILE_NAME));
         boolean sparseDataFallback = checkpoint.stage() == CheckpointStage.MODEL_REJECTED
-                && shouldContinueRejectedSparseDataModel(config, checkpoint);
+                && shouldContinueRejectedSeedModel(config, checkpoint);
         boolean isProduction = checkpoint.stage() == CheckpointStage.MODEL_READY;
         if (checkpoint.stage() == CheckpointStage.MODEL_REJECTED
                 && !sparseDataFallback) {
@@ -711,7 +710,7 @@ public final class ClosedLoopRunner {
                     resolve(config.workspace(), checkpoint.latestModel().orElseThrow())
                             .resolve(ScenarioModelMetadataCodec.FILE_NAME));
             boolean deploymentEligibleRequired = checkpoint.stage() != CheckpointStage.MODEL_REJECTED
-                    && !carriesRejectedSparseDataModel(config, checkpoint,
+                    && !carriesRejectedSeedModel(config, checkpoint,
                     metadata);
             if (metadata.deploymentEligible() != deploymentEligibleRequired
                     || !metadata.requiredScenarios().equals(config.requiredScenarios())) {
@@ -720,7 +719,7 @@ public final class ClosedLoopRunner {
         }
     }
 
-    private static boolean shouldContinueRejectedSparseDataModel(ClosedLoopConfig config,
+    private static boolean shouldContinueRejectedSeedModel(ClosedLoopConfig config,
             ClosedLoopCheckpoint checkpoint) throws IOException {
         if (checkpoint.stage() != CheckpointStage.MODEL_REJECTED
                 || checkpoint.latestModel().isEmpty()) {
@@ -729,15 +728,12 @@ public final class ClosedLoopRunner {
         ScenarioModelMetadata metadata = ScenarioModelMetadataCodec.read(
                 resolve(config.workspace(), checkpoint.latestModel().orElseThrow())
                         .resolve(ScenarioModelMetadataCodec.FILE_NAME));
-        return isRejectedSparseDataModel(config, checkpoint, metadata);
+        return isContinuableRejectedSeedModel(config, checkpoint, metadata);
     }
 
-    private static boolean carriesRejectedSparseDataModel(ClosedLoopConfig config,
+    private static boolean carriesRejectedSeedModel(ClosedLoopConfig config,
             ClosedLoopCheckpoint checkpoint, ScenarioModelMetadata metadata) {
-        if (!isSparseDataModelConfig(config, metadata.trainingConfig())
-                || metadata.deploymentEligible()
-                || checkpoint.evidence().stream().noneMatch(entry ->
-                entry.source() == EvidenceSource.BOOTSTRAP)) {
+        if (!isContinuableRejectedSeedModel(config, checkpoint, metadata)) {
             return false;
         }
         return switch (checkpoint.stage()) {
@@ -747,14 +743,25 @@ public final class ClosedLoopRunner {
         };
     }
 
-    private static boolean isRejectedSparseDataModel(ClosedLoopConfig config,
+    private static boolean isContinuableRejectedSeedModel(ClosedLoopConfig config,
             ClosedLoopCheckpoint checkpoint, ScenarioModelMetadata metadata) {
-        return checkpoint.stage() == CheckpointStage.MODEL_REJECTED
-                && checkpoint.evidence().stream().anyMatch(entry ->
-                entry.source() == EvidenceSource.BOOTSTRAP)
+        return hasSeedEvidence(checkpoint)
                 && !metadata.deploymentEligible()
-                && isSparseDataModelConfig(config,
-                metadata.trainingConfig());
+                && (isSparseDataModelConfig(config, metadata.trainingConfig())
+                || isLegacyImportedFirstModel(checkpoint));
+    }
+
+    private static boolean hasSeedEvidence(ClosedLoopCheckpoint checkpoint) {
+        return checkpoint.evidence().stream().anyMatch(entry ->
+                entry.source() == EvidenceSource.BOOTSTRAP
+                        || entry.source() == EvidenceSource.INITIAL);
+    }
+
+    private static boolean isLegacyImportedFirstModel(ClosedLoopCheckpoint checkpoint) {
+        return checkpoint.evidence().stream().anyMatch(entry ->
+                entry.source() == EvidenceSource.INITIAL)
+                && checkpoint.latestModel().map(model ->
+                model.relativePath().equals("models/model-000001")).orElse(false);
     }
 
     private static boolean isSparseDataModelConfig(ClosedLoopConfig config,
