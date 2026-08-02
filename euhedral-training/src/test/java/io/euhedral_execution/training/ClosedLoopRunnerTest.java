@@ -486,7 +486,7 @@ class ClosedLoopRunnerTest {
         }
     }
 
-    private final class FallbackTrainingServices implements ClosedLoopServices {
+    private static final class FallbackTrainingServices implements ClosedLoopServices {
         private final ArrayList<ScenarioTrainingConfig> seenConfigs = new ArrayList<>();
         private boolean trained;
 
@@ -544,7 +544,7 @@ class ClosedLoopRunnerTest {
         }
     }
 
-    private final class RejectingTrainingServices implements ClosedLoopServices {
+    private static final class RejectingTrainingServices implements ClosedLoopServices {
         private final boolean stopAfterFirstMerge;
         private final boolean failStrictTraining;
         private final boolean storeStrictMetadata;
