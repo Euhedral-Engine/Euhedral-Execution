@@ -2,20 +2,19 @@
 
 ## Plan status
 
-- Phase: 3-B - executor lifecycle child blueprint review
-- Status: P0-P2 and P3-A complete; P3-B child blueprint complete, review and merge required
-  before P3-B implementation
+- Phase: 4 - resource monitor and pressure parent blueprint review
+- Status: P0-P3 complete; P4 parent blueprint complete, review and merge required before the P4-A
+  sample/validity child blueprint
 - Plan branch: `agent/hardware-utils-overhaul-plan` (created before the updated phase-branch rule)
 - Branch point: `900d8c50` (`agent/phase7-cleanup-handoff`)
 - Active P1 root: `hardware-utils-overhaul/phase-1-native-build` (completed)
 - Active P1 blueprint branch: `hardware-utils-overhaul/phase-1-native-build-blueprint` (historical)
 - Completed P2 root: `hardware-utils-overhaul/phase-2-topology-snapshot` at `e2495c5d`
-- Active P3 root: `hardware-utils-overhaul/phase-3-affinity-executor`
-- Completed P3 parent blueprint root commit: `7d3abea7`
-- Completed P3-A implementation/audit root commit: `2027a47b`
-- Active P3-B blueprint branch:
-  `hardware-utils-overhaul/phase-3-executor-lifecycle-blueprint`
-- Date: 2026-08-01
+- Completed P3 root: `hardware-utils-overhaul/phase-3-affinity-executor` at `748f34d5`
+- Active P4 root: `hardware-utils-overhaul/phase-4-pressure-monitor` from `748f34d5`
+- Active P4 parent blueprint branch:
+  `hardware-utils-overhaul/phase-4-pressure-monitor-blueprint`
+- Date: 2026-08-02
 - Planning model: `gpt-5.6-sol`
 - Planning reasoning effort: `max`
 
@@ -941,6 +940,10 @@ items, and merge all child results into the root before phase-level audit and cl
 blueprint must update this plan's prompts, parent artifacts, lineage, and phase artifact index
 before handoff. Replace or expand that phase's index entry to name every parent/child blueprint and
 completion record, every child conformance/manual-review record, and any root conformance/audit.
+An explicit developer-authorized integrated-conformance exception may omit child conformance
+actions only when the plan names the exception, retains reviewed sequential child implementations,
+and assigns every child criterion to one final independent conformance action. P4 uses that
+exception; it has one integrated conformance action after P4-D and no child validation/audit.
 
 P1 uses that split rule with a developer-authorized conformance-only exception: the validation
 action is skipped in favor of conformance checking and manual review. After the parent blueprint
@@ -971,6 +974,20 @@ after its predecessor is reviewed and merged. The superseded
 each child audit is the combined conformance check and manual review; there is no P3 validation
 branch or validation artifact. A P3 root audit follows both child audits.
 
+P4 uses a four-way responsibility split. Its parent blueprint freezes canonical units, detailed
+sample/validity and compatibility contracts, delta/age rules, pressure formulas/constants,
+public projection, duration/lifecycle/scheduler behavior, listener ownership, and memory-ordering
+edges. After that parent blueprint merges, the root advances through the
+`phase-4-sample-validity-{blueprint,implementation}` family, then
+`phase-4-pressure-math-{blueprint,implementation}`, then
+`phase-4-listener-publication-{blueprint,implementation}`, and finally
+`phase-4-monitor-lifecycle-{blueprint,implementation}`. Each action starts only after its
+predecessor is reviewed and merged. By explicit developer direction, P4 is an exception to the
+per-child conformance rule: no child validation/conformance/audit branch or artifact is created.
+The superseded `phase-4-pressure-monitor-implementation` branch and every P4 validation branch are
+never created. One integrated `phase-4-pressure-monitor-audit` conformance action follows the
+reviewed and merged P4-D implementation and owns phase closeout.
+
 The audit action remains responsible for root closeout. It first produces its audit on the audit
 child. If the developer has not authorized the merge and closeout, it hands off a review-ready
 audit, leaves the root incomplete, and prohibits the next phase. Once authorized, resume that audit
@@ -980,17 +997,17 @@ root commit when committed. The phase is complete only after those closeout outp
 
 ### Initial phase ownership
 
-| Plan phase | Initial package/module ownership                                                                                                                                                                         |
-|------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| P0         | `euhedral-hardware-utils` test sources/resources and module-local compatibility tooling; non-training core/benchmark consumers are read-only                                                             |
-| P1         | hardware Gradle/native build assets, generated resources, `hardware_utils.internal` loader code, and hardware-specific CI                                                                                 |
-| P2         | hardware root/common/internal topology and snapshot ownership, layout adapters, and hardware tests                                                                                                       |
-| P3         | parent: hardware root/internal affinity and executor lifecycle, platform affinity facades, and hardware tests; P3-A owns affinity/capability/managed ownership and P3-B owns executor registry/lifecycle |
-| P4         | hardware root/common/internal sampling, pressure, monitor lifecycle, provider compatibility adapters, and hardware tests; core is read-only                                                              |
-| P5         | hardware Linux Java/native implementation, Linux fixtures/tests, and Linux manifest/CI metadata                                                                                                          |
-| P6         | hardware Windows Java/native implementation, Windows fixtures/tests, and Windows manifest/CI metadata                                                                                                    |
-| P7         | hardware macOS Java/native implementation, macOS fixtures/tests, and macOS manifest/CI metadata                                                                                                          |
-| P8         | `euhedral-core` `ControlPlaneFragment`, focused core tests, test-only `ControlPlaneCache`, hardware release/CI/docs, and approved non-training benchmarks                                                |
+| Plan phase | Initial package/module ownership                                                                                                                                                                                                                                                             |
+|------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| P0         | `euhedral-hardware-utils` test sources/resources and module-local compatibility tooling; non-training core/benchmark consumers are read-only                                                                                                                                                 |
+| P1         | hardware Gradle/native build assets, generated resources, `hardware_utils.internal` loader code, and hardware-specific CI                                                                                                                                                                    |
+| P2         | hardware root/common/internal topology and snapshot ownership, layout adapters, and hardware tests                                                                                                                                                                                           |
+| P3         | parent: hardware root/internal affinity and executor lifecycle, platform affinity facades, and hardware tests; P3-A owns affinity/capability/managed ownership and P3-B owns executor registry/lifecycle                                                                                     |
+| P4         | parent: hardware root/common/internal sampling, pressure, monitor lifecycle, provider compatibility adapters, and hardware tests; P4-A owns sampling/validity/adapters, P4-B pressure/public projection, P4-C listener publication, and P4-D monitor lifecycle/scheduling; core is read-only |
+| P5         | hardware Linux Java/native implementation, Linux fixtures/tests, and Linux manifest/CI metadata                                                                                                                                                                                              |
+| P6         | hardware Windows Java/native implementation, Windows fixtures/tests, and Windows manifest/CI metadata                                                                                                                                                                                        |
+| P7         | hardware macOS Java/native implementation, macOS fixtures/tests, and macOS manifest/CI metadata                                                                                                                                                                                              |
+| P8         | `euhedral-core` `ControlPlaneFragment`, focused core tests, test-only `ControlPlaneCache`, hardware release/CI/docs, and approved non-training benchmarks                                                                                                                                    |
 
 ### Phase artifact index
 
@@ -1013,7 +1030,11 @@ an unbounded feature-history context.
 | P3 parent/root integration    | `docs/blueprints/hardware-utils/phase-3-affinity-executor-lifecycle.md`       | child conformance/manual reviews plus root manual review         | `docs/audits/hardware-utils/phase-3-affinity-executor-lifecycle-conformance.md`       |
 | P3-A affinity capability      | `docs/blueprints/hardware-utils/phase-3-affinity-capability.md`               | conformance check and manual review                              | `docs/audits/hardware-utils/phase-3-affinity-capability-conformance.md`               |
 | P3-B executor lifecycle       | `docs/blueprints/hardware-utils/phase-3-executor-lifecycle.md`                | conformance check and manual review                              | `docs/audits/hardware-utils/phase-3-executor-lifecycle-conformance.md`                |
-| P4                            | `docs/blueprints/hardware-utils/phase-4-resource-monitor-pressure.md`         | conformance/manual review                                        | `docs/audits/hardware-utils/phase-4-resource-monitor-pressure-conformance.md`         |
+| P4 parent/root integration    | `docs/blueprints/hardware-utils/phase-4-resource-monitor-pressure.md`         | one integrated conformance/manual review after P4-D              | `docs/audits/hardware-utils/phase-4-resource-monitor-pressure-conformance.md`         |
+| P4-A sample/validity          | `docs/blueprints/hardware-utils/phase-4-sample-validity-contract.md`          | covered by final integrated P4 conformance                       | none; developer-authorized single-conformance flow                                    |
+| P4-B pressure/projection      | `docs/blueprints/hardware-utils/phase-4-pressure-mathematics.md`              | covered by final integrated P4 conformance                       | none; developer-authorized single-conformance flow                                    |
+| P4-C listener publication     | `docs/blueprints/hardware-utils/phase-4-listener-publication.md`              | covered by final integrated P4 conformance                       | none; developer-authorized single-conformance flow                                    |
+| P4-D monitor lifecycle        | `docs/blueprints/hardware-utils/phase-4-monitor-lifecycle-scheduler.md`       | covered by final integrated P4 conformance                       | none; developer-authorized single-conformance flow                                    |
 | P5                            | `docs/blueprints/hardware-utils/phase-5-linux-platform.md`                    | conformance/manual review                                        | `docs/audits/hardware-utils/phase-5-linux-platform-conformance.md`                    |
 | P6                            | `docs/blueprints/hardware-utils/phase-6-windows-platform.md`                  | conformance/manual review                                        | `docs/audits/hardware-utils/phase-6-windows-platform-conformance.md`                  |
 | P7                            | `docs/blueprints/hardware-utils/phase-7-macos-platform.md`                    | conformance/manual review                                        | `docs/audits/hardware-utils/phase-7-macos-platform-conformance.md`                    |
@@ -1025,12 +1046,13 @@ an unbounded feature-history context.
 
 Execution still follows P0 through P8. This ranking only identifies how demanding each prompt is.
 Implementation selections are provisional until their blueprints complete the mandatory sizing,
-split, and implementation-model reassessments. P2-A/P2-B show the parent-blueprint selections;
-their child blueprints must confirm them before implementation.
+split, and implementation-model reassessments. P2-A/P2-B and P4-A through P4-D show settled
+parent-blueprint selections; their child blueprints must confirm or upgrade them before
+implementation.
 
 | Rank | Prompt                                                     | Selection               |
 |-----:|------------------------------------------------------------|-------------------------|
-|    1 | P4 blueprint - sampling and pressure mathematics/lifecycle | `gpt-5.6-sol`, `max`    |
+|    1 | P4 parent/child blueprints - sampling/pressure/lifecycle   | `gpt-5.6-sol`, `max`    |
 |    2 | P7 blueprint - macOS public-API parity                     | `gpt-5.6-sol`, `max`    |
 |    3 | P6 blueprint - Windows processor-group/native parity       | `gpt-5.6-sol`, `max`    |
 |    4 | P5 blueprint - Linux cgroup/provider/libc portability      | `gpt-5.6-sol`, `max`    |
@@ -1039,7 +1061,7 @@ their child blueprints must confirm them before implementation.
 |    7 | P1 blueprint - native build/JNI/package ABI                | `gpt-5.6-sol`, `max`    |
 |    8 | P8 blueprint - core hot-loop and release integration       | `gpt-5.6-sol`, `max`    |
 |    9 | P0 blueprint - compatibility/test baseline                 | `gpt-5.6-sol`, `high`   |
-|   10 | P4 provisional implementation                              | `gpt-5.6-sol`, `high`   |
+|   10 | P4-A through P4-D parent-selected implementations          | `gpt-5.6-sol`, `high`   |
 |   11 | P7 provisional implementation                              | `gpt-5.6-sol`, `high`   |
 |   12 | P6 provisional implementation                              | `gpt-5.6-sol`, `high`   |
 |   13 | P5 provisional implementation                              | `gpt-5.6-sol`, `high`   |
@@ -1049,23 +1071,22 @@ their child blueprints must confirm them before implementation.
 |   17 | P8 provisional implementation                              | `gpt-5.6-sol`, `high`   |
 |   18 | P0 implementation - compiled compatibility/test baseline   | `gpt-5.6-sol`, `medium` |
 |   19 | P8 conformance/manual review                               | `gpt-5.6-sol`, `high`   |
-|   20 | P4 conformance/manual review                               | `gpt-5.6-sol`, `high`   |
-|   21 | P7 conformance/manual review                               | `gpt-5.6-sol`, `high`   |
-|   22 | P6 conformance/manual review                               | `gpt-5.6-sol`, `high`   |
-|   23 | P5 conformance/manual review                               | `gpt-5.6-sol`, `high`   |
-|   24 | P3 child/root conformance/manual review                    | `gpt-5.6-sol`, `high`   |
-|   25 | P2 child/root conformance/manual review                    | `gpt-5.6-sol`, `high`   |
-|   26 | P1 child and root conformance/manual review                | `gpt-5.6-sol`, `high`   |
-|   27 | P0 conformance/manual review                               | `gpt-5.6-sol`, `medium` |
-|   28 | P8 final conformance audit                                 | `gpt-5.6-sol`, `high`   |
-|   29 | P4 conformance audit                                       | `gpt-5.6-sol`, `high`   |
-|   30 | P7 conformance audit                                       | `gpt-5.6-sol`, `high`   |
-|   31 | P6 conformance audit                                       | `gpt-5.6-sol`, `high`   |
-|   32 | P5 conformance audit                                       | `gpt-5.6-sol`, `high`   |
-|   33 | P3 child/root conformance audits                           | `gpt-5.6-sol`, `high`   |
-|   34 | P2 child/root conformance audits                           | `gpt-5.6-sol`, `high`   |
-|   35 | P1 child and root conformance audits                       | `gpt-5.6-sol`, `high`   |
-|   36 | P0 conformance audit                                       | `gpt-5.6-sol`, `medium` |
+|   20 | P7 conformance/manual review                               | `gpt-5.6-sol`, `high`   |
+|   21 | P6 conformance/manual review                               | `gpt-5.6-sol`, `high`   |
+|   22 | P5 conformance/manual review                               | `gpt-5.6-sol`, `high`   |
+|   23 | P3 child/root conformance/manual review                    | `gpt-5.6-sol`, `high`   |
+|   24 | P2 child/root conformance/manual review                    | `gpt-5.6-sol`, `high`   |
+|   25 | P1 child and root conformance/manual review                | `gpt-5.6-sol`, `high`   |
+|   26 | P0 conformance/manual review                               | `gpt-5.6-sol`, `medium` |
+|   27 | P8 final conformance audit                                 | `gpt-5.6-sol`, `high`   |
+|   28 | P4 single integrated conformance/manual-review audit       | `gpt-5.6-sol`, `high`   |
+|   29 | P7 conformance audit                                       | `gpt-5.6-sol`, `high`   |
+|   30 | P6 conformance audit                                       | `gpt-5.6-sol`, `high`   |
+|   31 | P5 conformance audit                                       | `gpt-5.6-sol`, `high`   |
+|   32 | P3 child/root conformance audits                           | `gpt-5.6-sol`, `high`   |
+|   33 | P2 child/root conformance audits                           | `gpt-5.6-sol`, `high`   |
+|   34 | P1 child and root conformance audits                       | `gpt-5.6-sol`, `high`   |
+|   35 | P0 conformance audit                                       | `gpt-5.6-sol`, `medium` |
 
 ### P0 - compatibility contract and deterministic test baseline
 
@@ -2233,6 +2254,26 @@ consumes the two child blueprint/completion/conformance triples directly.
 > and final classifications to the P3 closeout summary, and record the resulting root commit when
 > committed. P3 is complete only after that authorized closeout; do not create P4 earlier.
 
+#### P3 closeout summary
+
+The developer's authorization to begin P4 design designates
+`hardware-utils-overhaul/phase-3-affinity-executor` at `748f34d5` as the completed P3 predecessor.
+That root contains the P3-A affinity-capability implementation/audit merged at `2027a47b`, the
+P3-B executor-lifecycle implementation/audit merged at `d6389711`, and the combined root audit.
+
+The root audit classifies all 16 P3 parent criteria and A01-A02 as `satisfied`; it records no P3
+deviation, ambiguity, or unverified criterion. Its independent fallback run passed the 30-test
+combined deterministic suite and five repeated 14-test lifecycle runs, including the 50-round
+stress schedule. The child evidence records the passing pinned Java 21 P0/API gate, selected
+hardware verification, and 99-test read-only core gate.
+
+The closeout retains the exact audit environment limit: the audit host exposed OpenJDK 17.0.19 and
+Maven 3.6.3 but not the pinned Java 21/Maven 3.9.16 selection or Zig. A fresh hardware `verify` and
+the Maven-lifecycle core gate therefore stopped at the missing Zig executable; no source/build
+workaround was made. Native/platform parity remains assigned to P5-P7. Training was neither
+inspected nor run. The authorization to start P4 is the explicit closeout authority; the compact
+P3 status text inherited in `AGENTS.md` is not edited by this planning-only P4 blueprint action.
+
 ### P4 - 200 ms sampling engine and normalized pressure
 
 #### P4 blueprint prompt
@@ -2303,82 +2344,294 @@ consumes the two child blueprint/completion/conformance triples directly.
 > directly without choosing a unit, formula, threshold, smoothing constant, stale policy,
 > lifecycle transition, or listener queue design. Do not start implementation before merge.
 
-#### P4 implementation prompt - PROVISIONAL, DO NOT RUN
+#### P4 developer-review summary
 
-**Provisional model: `gpt-5.6-sol`; provisional reasoning effort: `high`. The P4 blueprint must
-replace this selection and prompt body before implementation.**
+- Purpose: replace the mixed-unit, double-primed monitor with one canonical sample-to-pressure-to-
+  publication path at the default 200 ms cadence.
+- Ownership: P4-A owns detailed sample validity, compatibility adapters, delta/age state, and slow
+  caching; P4-B owns formulas, smoothing, public projection, and ratio sanitation; P4-C owns the
+  bounded latest-value listener dispatcher; P4-D owns duration validation, monitor lifecycle,
+  anchored scheduling, and integrated publication. Platform collectors and core production are
+  read-only.
+- Key contracts: cumulative nanosecond/byte counters establish baselines before deltas; fast TTL is
+  `min(30 s, max(1 s, 5P))`, slow cadence/TTL are 5/15 seconds; reset/wrap/regression cannot spike;
+  correlated signals and independent bottleneck domains compose by `max`; memory headroom begins
+  at 80 percent and reaches full at 100 percent; reclaim reaches full at two percent of limit per
+  second; I/O latency spans 1-50 ms; attack/release EWMA alphas are 0.20/0.05 at 200 ms; public
+  ratios are finite `[0.0, 1.0]`; productive utilization/bytes are telemetry; every derived
+  CPU/socket timestamp equals the publication timestamp.
+- Lifecycle/publication: public periods are 10 ms through 24 hours, constructor sampling is
+  prohibited, one stopped initial read is coalesced, `stop()` is additive/restartable, the explicit
+  six-state lifecycle distinguishes permanent `CLOSING` from completed `CLOSED`, an already-
+  claimed publication may finish only before external close returns, poll starts follow anchored
+  `t0 + kP` first-future scheduling, `0 -> 450 -> 600 ms` is mandatory, the monitor no longer
+  requests a 1 ns platform timer/scheduler mutation, and one release store follows topology update
+  per successful evaluation.
+- Listener ownership: one active callback and one coalesced latest value, identity-based ordered
+  registration, no callback under the registry lock, safe callback-time `addListener`/`close`,
+  `Throwable` isolation, and a truthful close barrier.
+- Children: four sequential blueprint/implementation families P4-A through P4-D. By explicit
+  developer direction there are no child validation/conformance/audit steps; one integrated P4
+  conformance action follows the merged P4-D implementation.
+- Model: each child blueprint uses `gpt-5.6-sol`/`max`; the parent-selected implementation minimum
+  is `gpt-5.6-sol`/`high`, subject only to child confirmation or upgrade; the one final conformance
+  action uses `gpt-5.6-sol`/`high`.
+- Risks: current platform pressure is intentionally validity-neutral until P5-P7; due slow sensors
+  may skip fast boundaries; truthful external close may wait for user/provider work; fixed
+  thresholds become observable when later providers supply rich signals.
+- Unresolved decisions: none. Units, schema, validity, TTLs, formulas, constants, precision,
+  public mapping, duration bounds, states, recurrence, memory modes, listener queue, split order,
+  and the single-conformance workflow are settled in the parent blueprint.
 
-> After the P4 blueprint child is reviewed and merged, start
-> `hardware-utils-overhaul/phase-4-pressure-monitor-implementation` from the P4 root. The parent
-> artifact is
-> `docs/blueprints/hardware-utils/phase-4-resource-monitor-pressure.md`. Ownership is limited to
-> its common sampling/pressure/lifecycle/provider-adapter/test context; core remains read-only.
-> Inspect `git status --short`. Read `AGENTS.md`, `docs/AGENT_WORKFLOW.md`, the plan's completed
-> P0-P3 phase artifact index entries and closeout summaries, the parent blueprint, and its bounded
-> source/test context. Confirm this prompt is finalized.
+#### P4 root implementation prompt - SUPERSEDED, DO NOT RUN
+
+The sizing gate rejected one root implementation context. Do not create
+`hardware-utils-overhaul/phase-4-pressure-monitor-implementation`. Use P4-A through P4-D below,
+sequentially from the updated P4 root. There is no per-child validation, conformance, or audit
+action.
+
+#### P4-A sample/validity blueprint prompt
+
+**Model: `gpt-5.6-sol`; reasoning effort: `max`.**
+
+> After the P4 parent blueprint is reviewed and merged, create
+> `hardware-utils-overhaul/phase-4-sample-validity-blueprint` from the updated P4 root. Inspect
+> `git status --short`. Read `AGENTS.md`, `docs/AGENT_WORKFLOW.md`, the parent's P4-A context
+> envelope and fixed unit/validity/delta contracts, summarized P0-P3 closeouts,
+> `SystemSnapshotProvider`, current provider records as read-only adapter inputs, and the exact
+> existing snapshot/provider tests. Do not inspect pressure/public projection, monitor/listener
+> implementation, core beyond the parent's summary, native bodies, or training.
 >
-> Implement only the shared detailed-sample/validity adapter, monitor scheduler/lifecycle,
-> delta/staleness/smoothing engine, listener dispatcher, pressure formulas, immutable public
-> publication, minimal provider compile adapters, and deterministic tests. Do not expand
-> platform-specific collection, edit core production, change public record components, alter
-> action-picker policy, or access training. Allowed edits are blueprint-owned implementation/tests,
-> the completion record, and the compact temporary P4 phase-status block in `AGENTS.md`; no other
-> `AGENTS.md` content may change.
+> Write `docs/blueprints/hardware-utils/phase-4-sample-validity-contract.md`. Translate the parent
+> schema into an exact local inventory for `internal.sampling`, immutable constructors, validity
+> factories, compatibility-profile selection, fixed counter/cache state, fast/slow grids, failure
+> conversion, and fixtures. Preserve every parent unit, TTL, reset/wrap/regression rule, sidecar
+> prohibition, and deep-copy boundary. Apply the sizing/model gates; split again only if this one
+> responsibility still cannot fit. Confirm or upgrade the parent-selected implementation model
+> and update the P4-A implementation label. Edit only the child blueprint and authorized plan
+> prompt/status text. Do not implement.
 >
-> Run fake-clock poll-start/publication/overrun tests including `0 -> 450 -> 600 ms`, invalid
-> public-duration constructor tests, irregular-delta/first-sample/reset/stale tests,
-> reflection-backed property tests for every ratio accessor, memory/units/timestamp tests,
-> mutation tests, slow-listener/reentrant-add/Throwable/close tests, API baseline, and
-> focused hardware verify.
-> Stop and return to blueprint on any missing mathematical or lifecycle decision. Otherwise append
-> completion notes with changed files, commands, results, acceptance-criteria evidence, approved
-> deviations, and environmental limits. Add/update the temporary `AGENTS.md` block with the
-> completed P3 root, active P4 root, completed blueprint child, active implementation child, and
-> blueprint/completion links.
+> Handoff only when implementation can add the SPI/adapter/state engine without choosing a type,
+> unit, validity transition, cache key, timestamp rule, TTL boundary, or legacy mapping. Merge the
+> blueprint into the P4 root before creating P4-A implementation.
+
+#### P4-A sample/validity implementation prompt
+
+**Parent-selected model: `gpt-5.6-sol`; reasoning effort: `high`. The P4-A blueprint must confirm
+or upgrade this selection before this prompt is runnable.**
+
+> After the P4-A blueprint is reviewed and merged, create
+> `hardware-utils-overhaul/phase-4-sample-validity-implementation` from the updated P4 root.
+> Inspect status and read only the parent summary, finalized P4-A blueprint, its exact
+> source/test envelope, and named P0-P3 compatibility anchors. Do not inspect training.
 >
-> The output artifact is the implemented common sampling/pressure engine plus its completion
-> record appended to
-> `docs/blueprints/hardware-utils/phase-4-resource-monitor-pressure.md`.
+> Implement only `internal.sampling`, canonical `SystemSnapshotProvider` documentation, fixed
+> legacy compatibility adapters, sample/delta/age/slow-cache tests and fixtures, and exact P4-A
+> compatibility-ledger records. Current platform collectors are read-only and must remain neutral
+> where the parent says their signals are untrustworthy. Do not edit pressure projection,
+> `ResourceMonitor`, listener code, core production, native code, module exports, or Maven.
 >
-> Handoff only when the 200 ms poll-start grid and post-evaluation publication semantics are
-> proven, invalid durations fail safely, listeners are bounded/ordered, all pressure values are
-> finite and monotonic, productive utilization is not pressure, unsupported signals are neutral,
-> first/reset samples do not spike, and old snapshots remain immutable. Merge this child into the
-> P4 root before validation.
+> Run the blueprint's focused Java-only tests, mutation/reset/wrap/regression/TTL/property cases,
+> P0 compatibility gate, diff/scope checks, and applicable selected-module verification. Append
+> changed files, commands/results, acceptance evidence, deviations, and environmental limits to
+> the P4-A blueprint. Update only the compact temporary P4 status block in `AGENTS.md`.
+>
+> Handoff for review and merge when P4-A's immutable interval output is complete and P4-B can
+> consume it without platform guesses. There is no P4-A validation or audit action. After merge,
+> create only the P4-B blueprint branch.
+
+#### P4-B pressure mathematics blueprint prompt
+
+**Model: `gpt-5.6-sol`; reasoning effort: `max`.**
+
+> After P4-A implementation is reviewed and merged, create
+> `hardware-utils-overhaul/phase-4-pressure-math-blueprint` from the updated P4 root. Inspect
+> status. Read the parent P4-B envelope/formula/public mapping, the compact P4-A completion/review
+> summary and immutable interval API, `SystemUtilization`, its three focused tests, and named
+> read-only core pressure consumers. Do not read provider bodies, monitor/listener internals,
+> native code, unrelated core, or training.
+>
+> Write `docs/blueprints/hardware-utils/phase-4-pressure-mathematics.md`. Enumerate the bounded
+> evaluator/projection inventory and exact golden/property mechanics for every parent formula,
+> ULP/clamp/overflow rule, asymmetric smoother state, public constructor sanitation, field mapping,
+> byte allocation, deep copy, and timestamp invariant. Do not alter a parent threshold or add a
+> pressure signal. Apply the sizing/model gates and confirm or upgrade the implementation model.
+> Edit planning docs only; do not implement.
+>
+> Handoff only when no implementation choice remains in normalization, correlation, precision,
+> smoother initialization, unsupported clearing, derived records, or direct-constructor behavior.
+> Merge before P4-B implementation.
+
+#### P4-B pressure mathematics implementation prompt
+
+**Parent-selected model: `gpt-5.6-sol`; reasoning effort: `high`. The P4-B blueprint must confirm
+or upgrade this selection before this prompt is runnable.**
+
+> After the P4-B blueprint is reviewed and merged, create
+> `hardware-utils-overhaul/phase-4-pressure-math-implementation` from the updated P4 root. Read
+> only its finalized context, the parent formula tables, P4-A's immutable interval interface, the
+> P0 compatibility anchor, `SystemUtilization`, and named tests/read-only consumers.
+>
+> Implement only `internal.pressure`, settled changes to `SystemUtilization`, public ratio
+> sanitation, math/projection tests and fixtures, and exact P4-B ledger entries. Do not edit P4-A
+> contracts, `ResourceMonitor`, listener code, platform/native collection, module/Maven, core
+> production, or training.
+>
+> Run every normalization boundary/golden/property case, the reflection-exhaustive ratio test,
+> actual-time smoothing tests, public field/timestamp/mutation tests, inherited snapshot tests,
+> P0 compatibility, and scope/hygiene commands. Append a complete P4-B completion record and update
+> only the temporary P4 status block.
+>
+> Handoff for review/merge only when every normalized accessor is finite and exact, productive
+> telemetry is pressure-neutral, correlation uses `max`, reset baselines do not spike, and the
+> immutable candidate is ready for monitor integration. There is no P4-B validation or audit
+> action. After merge, create only the P4-C blueprint branch.
+
+#### P4-C listener publication blueprint prompt
+
+**Model: `gpt-5.6-sol`; reasoning effort: `max`.**
+
+> After P4-B implementation is reviewed and merged, create
+> `hardware-utils-overhaul/phase-4-listener-publication-blueprint` from the updated P4 root.
+> Inspect status. Read the parent P4-C envelope/listener contract, compact P4-A/P4-B summaries,
+> `ResourceMonitor.MonitorListener`, `HardwareUtilization`, and only current listener-related test
+> context. Sampling/math/monitor lifecycle/platform/core/native/training implementation is
+> read-only or prohibited as stated by the parent.
+>
+> Write `docs/blueprints/hardware-utils/phase-4-listener-publication.md`. Freeze the local
+> `LatestValueDispatcher` inventory, identity registry, one-active/one-pending state machine,
+> offer/replace/wake ordering, callback snapshot iteration, Throwable/interrupt cleanup, thread
+> start failure, nonblocking `beginClose(terminationHook)` cutoff, exactly-once unlocked termination
+> notification, external `awaitClosed()`/reentrant close barrier, lifecycle -> dispatcher lock
+> order, memory edges, deterministic seams, and every latch test. Apply the sizing/model gates and
+> confirm or upgrade the selected implementation
+> capability. Planning docs only; do not implement.
+>
+> Handoff only when add/offer/dispatch/close can be translated without choosing a queue, lock,
+> callback ownership rule, close linearization point, or memory mode. Merge before implementation.
+
+#### P4-C listener publication implementation prompt
+
+**Parent-selected model: `gpt-5.6-sol`; reasoning effort: `high`. The P4-C blueprint must confirm
+or upgrade this selection before this prompt is runnable.**
+
+> After the P4-C blueprint is reviewed and merged, create
+> `hardware-utils-overhaul/phase-4-listener-publication-implementation` from the updated P4 root.
+> Read only the finalized P4-C context, parent listener/JMM rules, published utilization contract,
+> nested listener signature, and named tests.
+>
+> Implement only `internal.monitor.LatestValueDispatcher`, its deterministic tests, and exact P4-C
+> ledger entries. Do not edit `ResourceMonitor`, P4-A/P4-B contracts, platform/native code, module/
+> Maven, core production, or training.
+>
+> Run nonblocking/coalescing/order/non-overlap tests, identity dedupe, callback-time add and close,
+> `beginClose` rejection/termination notification, external `awaitClosed()`,
+> `RuntimeException`/`Error`/interrupt
+> isolation, start failure, bounded retention, P0 compatibility, and scope/diff checks. Append the
+> P4-C completion record and update only the temporary P4 status block.
+>
+> Handoff for review/merge when one active/one latest pending is proven, no callback holds the
+> registry lock, close is truthful without self-join, and all retained state clears. There is no
+> P4-C validation or audit action. After merge, create only the P4-D blueprint branch.
+
+#### P4-D monitor lifecycle/scheduler blueprint prompt
+
+**Model: `gpt-5.6-sol`; reasoning effort: `max`.**
+
+> After P4-C implementation is reviewed and merged, create
+> `hardware-utils-overhaul/phase-4-monitor-lifecycle-blueprint` from the updated P4 root. Inspect
+> status. Read the parent P4-D lifecycle/scheduler/publication envelope, compact P4-A/P4-B/P4-C
+> completion/review summaries and interfaces, `ResourceMonitor`, `TopologyMapper`, focused monitor
+> tests, and only the named read-only lattice/core consumers. Platform collector bodies, unrelated
+> core, native code, and training are prohibited.
+>
+> Write `docs/blueprints/hardware-utils/phase-4-monitor-lifecycle-scheduler.md`. Translate the
+> six-state table, constructor/duration failures, coalesced stopped read, initial/restart freshness,
+> `evaluationActive`/`publicationClaimed` close ordering, provider/topology/thread failure
+> transitions, explicit P2 logical-span injection, clock/waiter/`TopologyUpdater` seams, anchored
+> first-future
+> recurrence, one release publication, topology/listener ordering, self-stop/close, cleanup, JMM,
+> removal of the monitor's 1 ns timer-resolution request, and integration fixtures into an exact
+> bounded inventory. Apply the sizing/model gates and
+> confirm or upgrade the model. Do not reopen A-C contracts or implement.
+>
+> Handoff only when no duration, state, deadline, failure, publication, memory-mode, or cleanup
+> decision remains. Merge before P4-D implementation.
+
+#### P4-D monitor lifecycle/scheduler implementation prompt
+
+**Parent-selected model: `gpt-5.6-sol`; reasoning effort: `high`. The P4-D blueprint must confirm
+or upgrade this selection before this prompt is runnable.**
+
+> After the P4-D blueprint is reviewed and merged, create
+> `hardware-utils-overhaul/phase-4-monitor-lifecycle-implementation` from the updated P4 root.
+> Read only the finalized P4-D context, parent lifecycle/recurrence/JMM contract, merged A-C public
+> interfaces/completion summaries, `ResourceMonitor`, `TopologyMapper`, named tests, and read-only
+> consumers.
+>
+> Implement only `ResourceMonitor`, the small clock/waiter/`TopologyUpdater` seams, integration
+> tests/fixtures, and
+> exact P4-D compatibility-ledger/status records. Compose A-C without changing their settled
+> contracts. Platform collection, core production, native code, module exports, Maven, action
+> picker, and training are prohibited.
+>
+> Run every duration/state/failure/concurrent-read test, close before and after the publication
+> claim, fake starts `0, 200, 400`, exact-boundary and `0 -> 450 -> 600 ms` overrun tests,
+> regression/reanchor, topology-before-single-release publication counts, post-`CLOSING` listener
+> cutoff, listener coalescing independence, all A-C suites, P0 compatibility, focused hardware
+> verification, read-only core tests, and scope/diff hygiene. Append the P4-D completion record and
+> update only the temporary P4 status block.
+>
+> Handoff for review/merge only when the integrated path satisfies all 22 parent criteria and no
+> polling/listener thread, provider buffer, pending value, or state leaks. There is no P4-D
+> validation or audit action. After merge, create only the single P4 conformance branch below.
+
+#### P4 validation prompts - SUPERSEDED, DO NOT RUN
+
+By explicit developer direction, do not create a P4 root or child validation branch/artifact and
+do not create P4-A/P4-B/P4-C/P4-D conformance or audit branches. Implementation actions run and
+record their owned tests; the one integrated conformance action below independently reviews the
+merged result.
 
 #### P4 conformance audit prompt
 
 **Model: `gpt-5.6-sol`; reasoning effort: `high`.**
 
-> After the P4 validation child is reviewed and merged, start
-> `hardware-utils-overhaul/phase-4-pressure-monitor-audit` from the P4 root. The parent artifact is
-> `docs/validations/hardware-utils/phase-4-resource-monitor-pressure-validation.md`. Ownership is
-> limited to independent conformance review and minor blueprint-settled P4 corrections. Inspect
-> `git status --short`. Read `AGENTS.md`, `docs/AGENT_WORKFLOW.md`, the P4 blueprint's summarized
-> parent context, the plan's completed P0-P3 phase artifact index entries and closeout summaries,
-> implementation diff, completion record, validation record, and tests. For split work, consume
-> only the audited child context plus summarized parent. Do not inspect or run training.
+> After the P4-D implementation is reviewed and merged, create
+> `hardware-utils-overhaul/phase-4-pressure-monitor-audit` from the updated P4 root. This is the
+> only P4 conformance/manual-review action. Its parent artifacts are the P4 parent blueprint and
+> the four indexed child blueprint/completion records; there are no child conformance or validation
+> artifacts. Ownership is independent integrated conformance review and minor blueprint-settled P4
+> corrections. Inspect `git status --short`. Read `AGENTS.md`, `docs/AGENT_WORKFLOW.md`, the
+> summarized P0-P3 closeouts, the parent acceptance matrix, compact A-D completion records, merged
+> P4 implementation diff, named tests, and read-only consumer context. Do not inspect or run
+> training.
 >
-> Independently audit the formulas, precision, finite `[0.0, 1.0]` bounds, units, correlated-signal
-> treatment, exact 200 ms poll-start recurrence and `0 -> 450 -> 600 ms` case, publication
-> timing/memory semantics, duration safety, first/reset behavior, staleness, smoothing, listener
-> bounds/reentrancy/close, immutable ownership, memory contamination, resource cleanup, and
-> validation sufficiency. Allowed edits are
-> `docs/audits/hardware-utils/phase-4-resource-monitor-pressure-conformance.md`, completion and
-> validation records, the P4 closeout summary in this plan, the temporary phase-status block, and
-> minor blueprint-settled corrections. Rerun and record affected validation after a correction.
-> Mathematical/lifecycle redesign, platform expansion, core production, unrelated files, and
-> training are prohibited.
+> Independently audit the end-to-end provider/adapter -> delta/age -> pressure/projection ->
+> topology/release publication -> bounded listener flow. Classify all 22 parent criteria and the
+> common P4 portions of R01-R10/R13-R14. Recheck canonical units and counter baselines,
+> staleness/slow caching, every formula/constant/precision/clamp rule, finite ratio manifest,
+> correlated-signal treatment, actual-time smoothing, public field/timestamp/deep-copy ownership,
+> duration safety, the six-state lifecycle and publication-claim close ordering, exact 200 ms
+> recurrence and `0 -> 450 -> 600 ms`, one
+> release publication, Java Memory Model edges, listener bounds/reentrancy/Throwable/close,
+> allocation/retention/contamination, P0 compatibility, selected hardware verification, read-only
+> core compatibility, and scope/diff hygiene. Carry platform collection portions explicitly to
+> P5-P7.
 >
-> The output artifacts are the audit above, updated completion record, P4 closeout summary in this
-> plan, and, after the authorized merge, removal of the temporary P4 status block on the root with
-> the resulting root commit recorded when committed. Classify every P4 requirement and common
-> portion of R01-R10/R13-R14 exactly as `satisfied`, `deviated`, `unverified`, or `ambiguous`, with evidence;
-> carry the named platform portions to P5-P7. Append audit commands, results, fixes, skipped
-> checks, and environmental limits to the completion record. A material deviation returns to the
-> exact blueprint or implementation action. Handoff follows the audit/root-closeout contract: P4
-> is complete only after the authorized merge, P4 status-block removal, and closeout-summary
-> update; do not create P5 earlier.
+> Write `docs/audits/hardware-utils/phase-4-resource-monitor-pressure-conformance.md`. Allowed
+> edits are that audit, the applicable A-D completion records, the P4 closeout summary in this plan,
+> the temporary P4 status block, and minor blueprint-settled corrections. Rerun affected tests after
+> a correction. A new unit, signal, threshold, validity/TTL, formula, lifecycle transition,
+> recurrence, memory mode, or listener ownership design returns to the exact owning blueprint;
+> platform expansion, core production, unrelated files, and training are prohibited.
+>
+> Classify every item exactly as `satisfied`, `deviated`, `unverified`, or `ambiguous`, with direct
+> evidence and environmental limits. Handoff a review-ready integrated audit first. After explicit
+> merge/closeout authorization, merge this one audit child, switch to the P4 root, remove only the
+> temporary P4 status block, append the root branch/commit and final classifications to the P4
+> closeout summary, and record the resulting root commit when committed. P4 is complete only after
+> that authorized closeout; do not create P5 earlier.
 
 ### P5 - Linux parity, cgroups, and libc portability
 
