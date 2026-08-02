@@ -110,8 +110,6 @@ public final class ApiSurfaceReader {
                     innerAccess.getOrDefault(name, new int[]{access})[0]));
         }
 
-        Map<String, ClassFile> byName = new HashMap<>();
-        classes.forEach(type -> byName.put(type.name(), type));
         Set<String> included = new HashSet<>();
         boolean changed;
         do {
