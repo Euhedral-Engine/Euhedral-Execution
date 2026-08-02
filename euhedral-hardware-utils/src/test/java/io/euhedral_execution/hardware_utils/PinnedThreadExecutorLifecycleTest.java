@@ -222,10 +222,10 @@ class PinnedThreadExecutorLifecycleTest {
         pending.add(root);
         while (!pending.isEmpty()) {
             Object value = pending.removeFirst();
-            if (value == null || !seen.add(value) || value instanceof Reference<?>
-                    || value instanceof String || value instanceof Number
-                    || value instanceof Boolean || value instanceof Character
-                    || value.getClass().isEnum() || value instanceof Class<?>) {
+            if (!seen.add(value) || value instanceof Reference<?> || value instanceof String
+                    || value instanceof Number || value instanceof Boolean
+                    || value instanceof Character || value.getClass().isEnum()
+                    || value instanceof Class<?>) {
                 continue;
             }
             assertFalse(value instanceof PinnedThreadExecutor,
@@ -364,7 +364,7 @@ class PinnedThreadExecutorLifecycleTest {
         assertEquals(Thread.State.NEW, rejectedCandidate.get().getState());
         assertEquals(0, harness.control(cpu).activeTaskCount());
 
-        assertSame(executor, harness.acquire(cpu, ignored -> new Thread(ignored)));
+        assertSame(executor, harness.acquire(cpu, Thread::new));
         Thread e3Execute = new Thread(() -> executor.execute(() -> {
             taskEntered.countDown();
             await(taskRelease);
@@ -394,8 +394,7 @@ class PinnedThreadExecutorLifecycleTest {
     void e4OrdersRestartShutdownCloseAndEpochOverflow() throws Exception {
         Harness harness = new Harness();
         int cpu = testCpu();
-        PinnedThreadExecutor executor = harness.acquire(cpu, Thread::new);
-        try {
+        try (PinnedThreadExecutor executor = harness.acquire(cpu, Thread::new)) {
             executor.shutdown();
             executor.start("restarted", 99, true);
             Thread restarted = executor.getPinnedFactory().newThread(() -> {
@@ -420,7 +419,6 @@ class PinnedThreadExecutorLifecycleTest {
             assertThrows(IllegalStateException.class,
                     () -> executor.start("closed", Thread.NORM_PRIORITY, false));
         } finally {
-            executor.close();
             harness.closeAll();
         }
         harness.assertClean();
@@ -698,7 +696,7 @@ class PinnedThreadExecutorLifecycleTest {
         assertEquals(1, harness.hooks.maximumLive.get());
 
         first.shutdown();
-        assertSame(first, harness.acquire(firstCpu, ignored -> new Thread(ignored)));
+        assertSame(first, harness.acquire(firstCpu, Thread::new));
         first.close();
         first.close();
         second.close();
@@ -999,7 +997,6 @@ class PinnedThreadExecutorLifecycleTest {
         private final AtomicInteger registrations = new AtomicInteger();
         private final AtomicInteger live = new AtomicInteger();
         private final AtomicBoolean failRegistration = new AtomicBoolean();
-        private final List<FakeCleanup> installed = new CopyOnWriteArrayList<>();
 
         /// Registers one action without retaining the supplied referent.
         @Override
@@ -1009,9 +1006,7 @@ class PinnedThreadExecutorLifecycleTest {
             }
             this.registrations.incrementAndGet();
             this.live.incrementAndGet();
-            FakeCleanup cleanup = new FakeCleanup(action, this.live);
-            this.installed.add(cleanup);
-            return cleanup;
+            return new FakeCleanup(action, this.live);
         }
     }
 
