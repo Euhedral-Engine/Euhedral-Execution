@@ -32,14 +32,10 @@ public final class WindowsAffinity extends ThreadPinner {
     @Override
     public native int getCpu();
 
+    /// Applies a little-endian mask only when its requested CPUs fit one processor-group word.
     @Override
     public boolean setAffinity(long[] masks) {
-        int status = setThreadAffinity(masks);
-        if (status != 0) {
-            LOGGER.error("Failed to set thread affinity: ERR_CODE: {}", status);
-        }
-
-        return status == 0;
+        return WindowsAffinityCalls.apply(masks, WindowsAffinity::setThreadAffinity);
     }
 
     @Override
@@ -84,4 +80,5 @@ public final class WindowsAffinity extends ThreadPinner {
     private static native int setThreadAffinity(long[] masks);
 
     private static native int ntSetTimerResolution(int resolution, boolean set);
+
 }

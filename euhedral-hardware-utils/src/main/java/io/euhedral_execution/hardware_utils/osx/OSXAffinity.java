@@ -1,14 +1,10 @@
 package io.euhedral_execution.hardware_utils.osx;
 
 import io.euhedral_execution.hardware_utils.common.OSName;
-import io.euhedral_execution.hardware_utils.internal.Constants;
 import io.euhedral_execution.hardware_utils.internal.JNIClassLoader;
 import io.euhedral_execution.hardware_utils.internal.ThreadPinner;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public final class OSXAffinity extends ThreadPinner {
-    private static final Logger LOGGER = LoggerFactory.getLogger(Constants.getLoggerName(OSXAffinity.class));
 
     public static final OSXAffinity INSTANCE;
 
@@ -23,20 +19,19 @@ public final class OSXAffinity extends ThreadPinner {
     }
 
     private OSXAffinity() {
-
+        super(io.euhedral_execution.hardware_utils.AffinityCapability.LOCALITY_HINT,
+                OSXAffinity::setThreadAffinity);
     }
 
     @Override
     public native int getCpu();
 
+    /// Applies one process-visible CPU ordinal as a macOS scheduler-locality tag.
+    ///
+    /// This is a preference only and does not promise exact CPU placement.
     @Override
     public boolean setAffinity(long[] masks) {
-        int status = setThreadAffinity(masks);
-        if (status != 0) {
-            LOGGER.error("Failed to set thread affinity: ERR_CODE: {}", status);
-        }
-
-        return status == 0;
+        return OSXAffinityCalls.applyOrdinal(masks, OSXAffinity::setThreadAffinity);
     }
 
     @Override
@@ -51,4 +46,5 @@ public final class OSXAffinity extends ThreadPinner {
     private static native int setThreadAffinity(long[] masks);
 
     private static native boolean setThreadTickPolicy(long nanos);
+
 }

@@ -48,17 +48,14 @@ public final class LinuxAffinity extends ThreadPinner {
         return true;
     }
 
+    /// Applies one complete little-endian logical CPU mask through the Linux JNI boundary.
     @Override
     public boolean setAffinity(long[] masks) {
-        int status = setThreadAffinity(masks);
-        if (status != 0) {
-            LOGGER.error("Failed to set thread affinity: ERR_CODE: {}", status);
-        }
-
-        return status == 0;
+        return LinuxAffinityCalls.apply(masks, LinuxAffinity::setThreadAffinity);
     }
 
     private static native int setThreadAffinity(long[] masks);
 
     private static native int prctl(long nanos);
+
 }

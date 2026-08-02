@@ -340,16 +340,12 @@ Before handing work back:
 4. Inspect `git status --short` and confirm only intended files changed.
 5. Report tests that could not run and the exact environmental reason.
 
-## Temporary hardware-utils overhaul status (P2)
+## Temporary hardware-utils overhaul status (P3)
 
-- P0 and P1 are complete; the P2 parent, audited P2-A implementation, and P2-B blueprint are
-  merged on `hardware-utils-overhaul/phase-2-topology-snapshot`.
-- P2-A and P2-B audits are complete; the root conformance audit is complete on
-  `hardware-utils-overhaul/phase-2-topology-snapshot-audit` and awaits developer review and merge
-  before explicit P2 closeout.
-- P2-A handoff evidence remains in
-  `docs/blueprints/hardware-utils/phase-2-topology-model-adapters.md` and
-  `docs/audits/hardware-utils/phase-2-topology-model-adapters-conformance.md`; P2-B implementation
-  evidence is in `docs/blueprints/hardware-utils/phase-2-snapshot-remap-publication.md` and its
-  conformance record is in
-  `docs/audits/hardware-utils/phase-2-snapshot-remap-publication-conformance.md`.
+- P0-P2 are complete. The reviewed P3 parent and P3-A blueprint are merged on
+  `hardware-utils-overhaul/phase-3-affinity-executor` at `b5333c8e`.
+- P3-A implementation is complete on
+  `hardware-utils-overhaul/phase-3-affinity-capability-implementation` and awaits developer review
+  and merge before its conformance/manual-review audit.
+- P3-A blueprint and completion evidence are in
+  `docs/blueprints/hardware-utils/phase-3-affinity-capability.md`. P3-B has not started.
