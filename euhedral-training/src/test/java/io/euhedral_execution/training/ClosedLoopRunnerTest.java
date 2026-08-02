@@ -190,6 +190,42 @@ class ClosedLoopRunnerTest {
     }
 
     @Test
+    void importedCalibrationColdStartRejectionContinuesWithNeutralScheduling()
+            throws Exception {
+        Path bootstrap = temp.resolve("bootstrap.csv");
+        writeBootstrap(bootstrap, 6);
+        SourceScenario scenario = SourceScenario.of("env-a", 1, 4);
+        TreeSet<SourceScenario> required = new TreeSet<>(List.of(scenario));
+
+        ClosedLoopRunner.run(config(bootstrap, required, "env-a", false, 2),
+                new BootstrapOnlyServices());
+        Path sourceWorkspace = temp.resolve("workspace");
+        List<Path> evidence;
+        try (var paths = Files.list(sourceWorkspace.resolve("evidence"))) {
+            evidence = paths.filter(Files::isDirectory).sorted().toList();
+        }
+        Path importedWorkspace = temp.resolve("imported-workspace");
+        ClosedLoopConfig imported = initialCalibrationConfig(importedWorkspace,
+                sourceWorkspace.resolve("calibration-plan"), evidence, required, false, 2);
+
+        ClosedLoopResult initialized = ClosedLoopRunner.run(imported,
+                new FakeServices(true));
+        assertThat(initialized.stage()).isEqualTo(CheckpointStage.READY_TO_TRAIN);
+
+        RejectingTrainingServices services = new RejectingTrainingServices(true,
+                false, true);
+        ClosedLoopResult result = ClosedLoopRunner.run(initialCalibrationConfig(
+                importedWorkspace, sourceWorkspace.resolve("calibration-plan"), evidence,
+                required, true, 2), services);
+
+        assertThat(result.stage()).isEqualTo(CheckpointStage.READY_TO_TRAIN);
+        assertThat(services.seenConfigs).singleElement().satisfies(training -> {
+            assertThat(training.requireTargetVariation()).isFalse();
+            assertThat(training.minimumValidationPolicyGroups()).isEqualTo(1);
+        });
+    }
+
+    @Test
     void bootstrapColdStartRejectionCompletesTheSingleConfiguredIteration() throws Exception {
         Path bootstrap = temp.resolve("bootstrap.csv");
         writeBootstrap(bootstrap, 6);
@@ -255,6 +291,21 @@ class ClosedLoopRunnerTest {
                 AnchorSelectionConfig.defaults(), CalibrationConfig.defaults(),
                 AggregationConfig.defaults(), ScenarioTrainingConfig.defaults(), resume,
                 temp.resolve("workspace/STOP"));
+    }
+
+    private ClosedLoopConfig initialCalibrationConfig(Path workspace, Path calibrationPlan,
+            List<Path> evidence, TreeSet<SourceScenario> scenarios, boolean resume,
+            int iterations) {
+        ClosedLoopConfig base = config(null, scenarios, "env-a", resume, iterations);
+        return new ClosedLoopConfig(workspace, base.trainingRunId(), base.iterations(),
+                base.candidateBudget(), base.requiredScenarios(), base.activeEnvironmentId(),
+                base.scenariosPerIteration(), base.schedulerSeed(), base.initialSobolCursor(),
+                Optional.empty(), Optional.of(calibrationPlan), evidence,
+                base.referenceOverrides(), base.commitSha(), base.dirtyWorkingTree(),
+                base.budgetConfig(), base.generationConfig(), base.benchmarkConfig(),
+                base.anchorSelectionConfig(), base.calibrationConfig(),
+                base.aggregationConfig(), base.trainingConfig(), resume,
+                workspace.resolve("STOP"));
     }
 
     private static void writeBootstrap(Path file, int count) throws Exception {
@@ -496,17 +547,24 @@ class ClosedLoopRunnerTest {
     private final class RejectingTrainingServices implements ClosedLoopServices {
         private final boolean stopAfterFirstMerge;
         private final boolean failStrictTraining;
+        private final boolean storeStrictMetadata;
         private final ArrayList<ScenarioTrainingConfig> seenConfigs = new ArrayList<>();
         private boolean mergeCalled;
 
         private RejectingTrainingServices(boolean stopAfterFirstMerge) {
-            this(stopAfterFirstMerge, false);
+            this(stopAfterFirstMerge, false, false);
         }
 
         private RejectingTrainingServices(boolean stopAfterFirstMerge,
                 boolean failStrictTraining) {
+            this(stopAfterFirstMerge, failStrictTraining, false);
+        }
+
+        private RejectingTrainingServices(boolean stopAfterFirstMerge,
+                boolean failStrictTraining, boolean storeStrictMetadata) {
             this.stopAfterFirstMerge = stopAfterFirstMerge;
             this.failStrictTraining = failStrictTraining;
+            this.storeStrictMetadata = storeStrictMetadata;
         }
 
         @Override
@@ -531,7 +589,8 @@ class ClosedLoopRunnerTest {
                 throw new InsufficientScenarioLearningDataException(
                         "train lacks rows for a required scenario");
             }
-            ScenarioTrainingConfig storedConfig = withBatchSize(request.config(), 4);
+            ScenarioTrainingConfig storedConfig = withBatchSize(storeStrictMetadata
+                    ? ScenarioTrainingConfig.defaults() : request.config(), 4);
             return io.euhedral_execution.training.learning.AuditScenarioModelFixture.writeRejected(
                     request.modelDirectory(), request.requiredScenarios(), storedConfig,
                     SchedulingFixtures.policy(999), request.commitSha(),
