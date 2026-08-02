@@ -933,3 +933,19 @@ merged P3 root at `bfca49b6`.
 No state, lock, acceptance, restart, rejection, interruption, deadline, registry, cleaner, hook,
 cleanup-order, or memory-mode decision changed. P3-B is ready for developer review and merge before
 its combined conformance/manual-review audit begins.
+
+## Conformance audit completion evidence
+
+The independent P3-B conformance audit completed on 2026-08-01 on
+`hardware-utils-overhaul/phase-3-executor-lifecycle-audit` from updated P3 root `6e70cb8d`.
+
+- Every P3-B requirement, applicable parent criteria 7-16, and A02 is classified `satisfied` in
+  `docs/audits/hardware-utils/phase-3-executor-lifecycle-conformance.md`.
+- No implementation correction was required. The audit independently reviewed E1-E12, 50-round
+  stress, fresh concurrent threads, lifecycle/rejection/failure boundaries, interruption/deadline
+  truthfulness, registry no-overlap, cleanup reachability, hook count, exact removal, `closeAll`,
+  contamination, and the documented JMM edges.
+- Focused lifecycle and P0 compatibility gates pass, with the lifecycle class passing five
+  consecutive runs. Scope and diff checks are clean. The audit records the unavailable pinned Java
+  21/Maven 3.9.16/Zig toolchain and does not replace the implementation record's native limit.
+- This audit now awaits developer review and merge before the combined P3 root audit.
