@@ -346,9 +346,10 @@ Before handing work back:
   conformance audit are merged on `hardware-utils-overhaul/phase-3-affinity-executor` at
   `2027a47b`.
 - The reviewed P3-B executor lifecycle blueprint is merged on the P3 root at `bfca49b6`. Its
-  implementation and deterministic lifecycle evidence are complete on
-  `hardware-utils-overhaul/phase-3-executor-lifecycle-implementation` and await developer review
-  and merge before the P3-B conformance/manual-review audit starts.
+  implementation and deterministic lifecycle evidence are complete at `6e70cb8d`. The independent
+  P3-B conformance/manual-review audit is complete on
+  `hardware-utils-overhaul/phase-3-executor-lifecycle-audit` and awaits developer review and merge
+  before the combined P3 root audit starts.
 - P3-A evidence is in `docs/blueprints/hardware-utils/phase-3-affinity-capability.md` and
   `docs/audits/hardware-utils/phase-3-affinity-capability-conformance.md`. The P3-B contract and
   implementation completion evidence are in
