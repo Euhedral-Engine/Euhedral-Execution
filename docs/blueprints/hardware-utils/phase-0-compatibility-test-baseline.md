@@ -17,6 +17,13 @@ at `900d8c50` disagree about an existing declaration, the source is authoritativ
 implementation must correct this blueprint's derived inventory rather than changing production
 code.
 
+### Authorized toolchain-policy revision
+
+The developer authorized this documentation revision on 2026-08-01. Every Java command, Maven
+command, and Maven build defaults to the exact versions in `mise.toml`; a documented
+restricted-environment fallback must use the corresponding pinned installed tools and record its
+versions and limits.
+
 ## Objective
 
 Create a deterministic, checked-in compatibility gate for the hardware module. The gate must:
