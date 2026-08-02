@@ -2,9 +2,9 @@
 
 ## Plan status
 
-- Phase: 3-A - affinity capability child blueprint review
-- Status: P0-P2 complete; P3 parent merged; P3-A child blueprint complete, review and merge required
-  before P3-A implementation
+- Phase: 3-B - executor lifecycle child blueprint review
+- Status: P0-P2 and P3-A complete; P3-B child blueprint complete, review and merge required
+  before P3-B implementation
 - Plan branch: `agent/hardware-utils-overhaul-plan` (created before the updated phase-branch rule)
 - Branch point: `900d8c50` (`agent/phase7-cleanup-handoff`)
 - Active P1 root: `hardware-utils-overhaul/phase-1-native-build` (completed)
@@ -12,8 +12,9 @@
 - Completed P2 root: `hardware-utils-overhaul/phase-2-topology-snapshot` at `e2495c5d`
 - Active P3 root: `hardware-utils-overhaul/phase-3-affinity-executor`
 - Completed P3 parent blueprint root commit: `7d3abea7`
-- Active P3-A blueprint branch:
-  `hardware-utils-overhaul/phase-3-affinity-capability-blueprint`
+- Completed P3-A implementation/audit root commit: `2027a47b`
+- Active P3-B blueprint branch:
+  `hardware-utils-overhaul/phase-3-executor-lifecycle-blueprint`
 - Date: 2026-08-01
 - Planning model: `gpt-5.6-sol`
 - Planning reasoning effort: `max`
@@ -2012,7 +2013,7 @@ The sizing gate rejected one P3 implementation context. Do not create
 `hardware-utils-overhaul/phase-3-affinity-executor-implementation`. Use the P3-A and P3-B action
 families below, sequentially from the updated P3 root.
 
-#### P3-A affinity capability blueprint prompt - COMPLETED, REVIEW AND MERGE REQUIRED
+#### P3-A affinity capability blueprint prompt - COMPLETED AND MERGED
 
 **Model: `gpt-5.6-sol`; reasoning effort: `max`.**
 
@@ -2066,7 +2067,7 @@ families below, sequentially from the updated P3 root.
   parity remains deferred. No capability, mask, platform-call, restoration, release, ownership,
   current-CPU, memory-mode, or fake-seam choice remains unresolved.
 
-#### P3-A affinity capability implementation prompt
+#### P3-A affinity capability implementation prompt - COMPLETED AND MERGED
 
 **Child-confirmed model: `gpt-5.6-sol`; reasoning effort: `high`.**
 
@@ -2087,7 +2088,7 @@ families below, sequentially from the updated P3 root.
 > masks make zero platform calls, exact/locality success is honest, every thread-local is cleaned,
 > and no unsupported pinner is dereferenced. Merge implementation before its audit.
 
-#### P3-A affinity capability conformance/manual-review prompt
+#### P3-A affinity capability conformance/manual-review prompt - COMPLETED AND MERGED
 
 **Model: `gpt-5.6-sol`; reasoning effort: `high`.**
 
@@ -2107,7 +2108,7 @@ families below, sequentially from the updated P3 root.
 > fixes/skips/limits to the completion record, update only the P3 status block, and hand off for
 > review/merge. Do not start P3-B before this audit merges.
 
-#### P3-B executor lifecycle blueprint prompt
+#### P3-B executor lifecycle blueprint prompt - COMPLETED, REVIEW AND MERGE REQUIRED
 
 **Model: `gpt-5.6-sol`; reasoning effort: `max`.**
 
@@ -2132,9 +2133,41 @@ families below, sequentially from the updated P3 root.
 > when implementation must choose no state, lock, acceptance, restart, interrupt, deadline,
 > registry, cleaner, hook, cleanup, or memory-mode rule. Merge before implementation.
 
+#### P3-B developer-review summary
+
+- Purpose: replace the executor's check-then-put registry, atomic shutdown flag, early task-map
+  clearing, per-instance hook, capturing cleaner, and polling deadline with one linearizable
+  restartable lifecycle while retaining a fresh concurrent thread for every accepted execution.
+- Package boundary: P3-B owns `PinnedThreadExecutor`, optional bounded unexported lifecycle/
+  registry support, one new focused lifecycle test, and bounded updates to the two existing
+  executor tests. P3-A, platform/native affinity, topology, resources/pressure, core/benchmark
+  production, CI, and training are unchanged or prohibited.
+- Key contracts: one synchronized lifecycle monitor owns RUNNING/SHUTDOWN/CLOSED, immutable
+  configuration, checked epoch, task identity, wait/notify, and create-outside/start-inside
+  acceptance. One registry monitor uses registry -> lifecycle lock order, exact weak entries,
+  CLOSED-active tombstones, a noncapturing one-CAS cleanup action, one reusable hook identity, and
+  gated bounded `closeAll`. Interrupt delivery and registry callbacks stay outside the lifecycle
+  monitor.
+- P3-A boundary: wrappers bind managed logical ownership before attempting affinity or running
+  user code, then attempt release, owner close, and exact task removal in nested cleanup. False
+  affinity does not skip work, independent current CPU remains preferred, and the audited Linux
+  non-null current-CPU correction is consumed without reopening capability semantics.
+- Tests: A02 and the existing fresh-thread anchor remain stable. E1-E12, direct factory and failure
+  boundaries, deterministic cleanup/hook/task-affinity fakes, structural noncapture assertions,
+  and 50 bounded stress rounds cover lifecycle, registry, interruption, deadlines, no-overlap,
+  happens-before, and contamination.
+- Sizing/model: the child remains one bounded but irreducibly coupled lifecycle owner. The parent
+  selection is confirmed as **`gpt-5.6-sol` with `high` reasoning**; a downgrade is not justified
+  by the two-monitor ordering, restartable termination, weak cleanup, and forced race schedules.
+- Risks/unresolved items: arbitrary creators may allocate one discarded NEW candidate during a
+  race; interrupt-ignoring tasks deliberately retain CLOSED tombstones; real cleaner/GC and JVM
+  shutdown timing are not test gates. No state, lock, acceptance, restart, interrupt, deadline,
+  registry, cleaner, hook, cleanup, memory-mode, sizing, or implementation-model choice remains
+  unresolved.
+
 #### P3-B executor lifecycle implementation prompt
 
-**Parent-selected model: `gpt-5.6-sol`; reasoning effort: `high`; child confirmation required.**
+**Child-confirmed model: `gpt-5.6-sol`; reasoning effort: `high`.**
 
 > After the P3-B blueprint is reviewed and merged, create
 > `hardware-utils-overhaul/phase-3-executor-lifecycle-implementation` from the updated P3 root.
