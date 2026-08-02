@@ -199,6 +199,11 @@ named by that blueprint. Modify only the files and contracts enumerated by the b
 run the specified tests, fix defects within the settled design, and verify acceptance criteria
 and architectural consistency.
 
+When creating a class or method, or when changing a method signature, add a Markdown-style `///`
+comment at the declaration. Explain the type's or method's purpose and define any non-obvious
+parameter, return value, capability, ownership, ordering, unit, or failure semantics. Keep the
+comment adjacent to the declaration and update it when the signature or behavior changes.
+
 Implementation must not introduce architecture. If it finds an unstated design decision or an
 incompatible blueprint requirement, stop without deleting in-progress work. Append the conflict,
 relevant evidence, and the needed decision to the blueprint; return the work to a blueprint prompt.

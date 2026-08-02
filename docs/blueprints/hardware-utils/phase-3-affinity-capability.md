@@ -696,3 +696,56 @@ Hand off for developer review and merge into the P3 root only when:
 After review, merge this blueprint branch before creating
 `hardware-utils-overhaul/phase-3-affinity-capability-implementation`. Do not start P3-B until the
 P3-A implementation and combined conformance/manual-review audit have both merged into the P3 root.
+
+## Implementation completion record
+
+Implementation completed on
+`hardware-utils-overhaul/phase-3-affinity-capability-implementation`, based on the reviewed P3 root
+at `b5333c8e`.
+
+### Changed surface
+
+- Added the exact public `AffinityCapability` enum and `ThreadTools.getAffinityCapability()` query.
+- Replaced destructive base-mask probing with one bounded `AffinityController`, immutable copied
+  requests/snapshots, stable operational capability selection, first-original exact restoration,
+  whole-request locality handling, tag-zero release, managed logical-owner tokens, and truthful
+  current-CPU fallback.
+- Kept Linux and Windows common capability unsupported; macOS supplies only the frozen single-
+  ordinal locality contract. Direct facade helpers validate complete requests before one raw call.
+- Added deterministic controller and facade tests. No JNI declaration/body, module directive,
+  executor, resource/pressure, topology production, core production, CI, benchmark, or training
+  file changed.
+
+### Commands and results
+
+- Pinned `mise` could not run because `mise` is not installed. The documented fallback found
+  OpenJDK 17.0.19 and Maven 3.6.3; the hardware module's Java 17 sources/tests compile under that
+  fallback, but it is not the pinned Java 21/Maven 3.9.16 toolchain.
+- The direct P3-A command passed: 10 tests, zero failures. This includes
+  `ThreadToolsAffinityTest#discoversAndRestoresTheOriginalMask` (A01), exact/locality/unsupported
+  behavior, rejected-mask zero-call checks, bit-63 preservation, restoration/release cleanup,
+  managed ownership, current-CPU fallback, and the three facade seams.
+- The P0 native, mask-format, and fresh-thread tests passed. The API comparison reported zero
+  removals. Its P3-A additions are exactly the enum, its compiler members/constants, and the
+  capability query; no unintended facade hook remains. The test itself remains red under the
+  fallback because the historic baseline rejects all additions, includes inherited P2 additions,
+  and OpenJDK 17 stamps three module-requires versions that the baseline records as absent.
+- `mvn -B -pl euhedral-hardware-utils -am verify` and
+  `mvn -B -pl euhedral-core -am test` both stopped in the hardware Zig lifecycle before native or
+  core tests because the `ZIG` executable parameter is missing/invalid. The latter completed the
+  upstream data-structures suite (8 tests) before that stop.
+- `git diff --check` passed. Diffs from `b5333c8e` under `euhedral-training`,
+  `euhedral-core/src/main`, `module-info.java`, and `src/main/native` are empty.
+
+### Acceptance evidence and limits
+
+A01 is directly evidenced. Invalid, empty, high, sparse-hole, unsupported, cross-group, and
+multi-locality requests are rejected before platform mutation. Exact success requires a captured
+original and complete apply; locality success follows one fully resolved hint. Exact/locality
+leases are removed after release success, false status, or recoverable failure, and managed owners
+remove their outermost thread-local value. Unsupported provider selection is stable and never
+dereferenced.
+
+Pinned API/module verification, native-backed hardware verification, and read-only core tests
+remain environmentally unverified for the exact reasons above; no source or build configuration
+was changed to accommodate the fallback environment.
