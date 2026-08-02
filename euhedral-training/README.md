@@ -70,7 +70,9 @@ directory.
 
 - Repeat `--workspace <path>` for each source workspace. Each workspace must contain a
   `calibration-plan/` directory.
-- All source workspaces must use the same fixed anchor catalog.
+- Source workspaces may contribute different fixed anchor sets. The merged plan uses the union of
+  anchor policies from all inputs.
+- If the same policy ID appears in more than one workspace, its vector contents must agree.
 - If two workspaces provide a reference run for the same scenario, the benchmark run ID must
   agree.
 - `--output <path>`: required destination directory for the merged calibration plan. The command

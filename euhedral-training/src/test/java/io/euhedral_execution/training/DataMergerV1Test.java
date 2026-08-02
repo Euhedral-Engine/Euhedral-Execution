@@ -173,7 +173,45 @@ class DataMergerV1Test {
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> DataMerger.mergeCalibrationPlansV1(new DataMerger.MergeCalibrationPlansRequest(
                         List.of(workspaceA, workspaceB), temporary.resolve("mismatched-plan"))))
-                .withMessageContaining("Calibration anchors disagree across workspaces");
+                .withMessageContaining("Anchor policy content disagrees across workspaces");
+    }
+
+    @Test
+    void mergesDistinctAnchorSetsFromDifferentWorkspaces() throws Exception {
+        PolicyVector a1 = policy(201);
+        PolicyVector a2 = policy(202);
+        PolicyVector a3 = policy(203);
+        PolicyVector b1 = policy(204);
+        PolicyVector b2 = policy(205);
+        PolicyVector b3 = policy(206);
+
+        Path workspaceA = temporary.resolve("distinct-anchors-a");
+        Path workspaceB = temporary.resolve("distinct-anchors-b");
+
+        SourceScenario scenarioA = SourceScenario.of("host-a", 1, 32);
+        SourceScenario scenarioB = SourceScenario.of("host-b", 4, 32);
+
+        AnchorCatalog catalogA = AnchorCatalog.of(List.of(a1, a2, a3));
+        AnchorCatalog catalogB = AnchorCatalog.of(List.of(b1, b2, b3));
+        writeWorkspaceCalibration(
+                workspaceA,
+                new CalibrationPlan(
+                        catalogA,
+                        new ReferenceRunCatalog(1, catalogA.anchorSetId(), new TreeMap<>(Map.of(scenarioA, "ref-a")))));
+        writeWorkspaceCalibration(
+                workspaceB,
+                new CalibrationPlan(
+                        catalogB,
+                        new ReferenceRunCatalog(1, catalogB.anchorSetId(), new TreeMap<>(Map.of(scenarioB, "ref-b")))));
+
+        Path output = temporary.resolve("merged-distinct-anchors");
+        CalibrationPlan merged = DataMerger.mergeCalibrationPlansV1(
+                new DataMerger.MergeCalibrationPlansRequest(List.of(workspaceA, workspaceB), output));
+
+        assertThat(merged.anchors().fixedAnchors()).containsExactly(a1, a2, a3, b1, b2, b3);
+        assertThat(merged.references().referenceRunIds())
+                .containsExactly(Map.entry(scenarioA, "ref-a"), Map.entry(scenarioB, "ref-b"));
+        assertThat(CalibrationPlanCsv.read(output)).isEqualTo(merged);
     }
 
     @Test

@@ -1,6 +1,8 @@
 package io.euhedral_execution.training;
 
+import io.euhedral_execution.training.data.PolicyId;
 import io.euhedral_execution.training.data.PolicyRegistry;
+import io.euhedral_execution.training.data.PolicyVector;
 import io.euhedral_execution.training.data.SourceScenario;
 import io.euhedral_execution.training.merge.AnchorBootstrapper;
 import io.euhedral_execution.training.merge.HierarchicalAggregator;
@@ -149,15 +151,17 @@ public class DataMerger {
     }
 
     private static CalibrationPlan mergeCalibrationPlans(List<Path> workspaces) throws Exception {
-        AnchorCatalog anchors = null;
+        SortedMap<PolicyId, PolicyVector> anchorsById = new TreeMap<>();
         SortedMap<SourceScenario, String> references = new TreeMap<>();
         for (Path workspace : workspaces) {
             Path root = workspace.toAbsolutePath().normalize();
             CalibrationPlan plan = CalibrationPlanCsv.read(root.resolve("calibration-plan"));
-            if (anchors == null) {
-                anchors = plan.anchors();
-            } else if (!anchors.equals(plan.anchors())) {
-                throw new IllegalArgumentException("Calibration anchors disagree across workspaces");
+            for (PolicyVector policy : plan.anchors().fixedAnchors()) {
+                PolicyVector previous = anchorsById.putIfAbsent(policy.id(), policy);
+                if (previous != null && !previous.equals(policy)) {
+                    throw new IllegalArgumentException("Anchor policy content disagrees across workspaces: "
+                            + policy.id().canonical());
+                }
             }
             for (Map.Entry<SourceScenario, String> entry :
                     plan.references().referenceRunIds().entrySet()) {
@@ -168,9 +172,10 @@ public class DataMerger {
                 }
             }
         }
-        if (anchors == null) {
+        if (anchorsById.isEmpty()) {
             throw new IllegalArgumentException("At least one workspace is required");
         }
+        AnchorCatalog anchors = AnchorCatalog.of(List.copyOf(anchorsById.values()));
         return new CalibrationPlan(anchors, new ReferenceRunCatalog(1, anchors.anchorSetId(), references));
     }
 
