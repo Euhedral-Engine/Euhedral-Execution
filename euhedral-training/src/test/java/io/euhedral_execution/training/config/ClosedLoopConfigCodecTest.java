@@ -12,7 +12,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -108,11 +107,20 @@ class ClosedLoopConfigCodecTest {
                 "lower-case hex");
         assertRejected(minimal("").replace("run.bootstrap_policies=boot",
                 "run.bootstrap_policies=boot\nrun.initial_calibration_plan=plan"),
-                "Exactly one bootstrap");
-        assertRejected(minimal("").replace("run.bootstrap_policies=boot\n", ""),
-                "Exactly one bootstrap");
+                "mutually exclusive");
         assertRejected(minimal("scenario.required=s1-env-a-src1-core8-r1of8"),
                 "Duplicate list value");
+    }
+
+    @Test
+    void allowsMissingBootstrapSourceForGeneratedBootstrapVectors() throws Exception {
+        Path configFile = write("generated-bootstrap.conf",
+                minimal("").replace("run.bootstrap_policies=boot\n", ""));
+
+        ClosedLoopConfig config = ClosedLoopConfigCodec.read(configFile);
+
+        assertThat(config.bootstrapPolicies()).isEmpty();
+        assertThat(config.initialCalibrationPlan()).isEmpty();
     }
 
     @Test

@@ -241,7 +241,7 @@ The runtime evaluates fixed weights only. Neural-network training belongs in `eu
 Do not add DJL, PyTorch, corpus handling, or candidate search dependencies to `euhedral-core`.
 
 Local fragment caches are MPSC structures with an owner consumer. A reset that clears one must run
-on the owner thread and acknowledge completion. The `resetForNextTrial` path demonstrates this
+on the owner thread and acknowledge completion. The `clear` path demonstrates this
 handoff.
 
 ## Concurrency rules

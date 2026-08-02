@@ -175,8 +175,9 @@ public final class ClosedLoopConfigCodec {
         }
         Optional<Path> bootstrap = parser.optionalPath("run.bootstrap_policies");
         Optional<Path> calibrationPlan = parser.optionalPath("run.initial_calibration_plan");
-        if (bootstrap.isPresent() == calibrationPlan.isPresent()) {
-            throw new IllegalArgumentException("Exactly one bootstrap source is required");
+        if (bootstrap.isPresent() && calibrationPlan.isPresent()) {
+            throw new IllegalArgumentException(
+                    "run.bootstrap_policies and run.initial_calibration_plan are mutually exclusive");
         }
         List<Path> bundles = parser.paths("run.initial_observation_bundle");
         if (!bundles.isEmpty() && calibrationPlan.isEmpty()) {
@@ -268,6 +269,7 @@ public final class ClosedLoopConfigCodec {
                 parser.integer("training.minimum_validation_rows_per_scenario", 5),
                 parser.integer("training.minimum_test_rows_per_scenario", 5),
                 parser.bool("training.include_weak_calibration_rows", false),
+                parser.bool("training.require_target_variation", true),
                 parser.enumeration("training.feature_selection_mode",
                         FeatureSelectionMode.RATIO_ONLY, FeatureSelectionMode.class), thresholds);
         try {

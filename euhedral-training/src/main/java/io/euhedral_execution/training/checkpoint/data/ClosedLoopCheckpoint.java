@@ -97,6 +97,7 @@ public record ClosedLoopCheckpoint(int schemaVersion, String trainingRunId, int 
         if (modelRequired && latestModel.isEmpty()) {
             throw new IllegalArgumentException("Checkpoint stage lacks model artifact");
         }
+
         boolean scheduleRequired = stage == CheckpointStage.SCHEDULE_READY
                 || stage == CheckpointStage.BENCHMARKING
                 || stage == CheckpointStage.READY_TO_MERGE;

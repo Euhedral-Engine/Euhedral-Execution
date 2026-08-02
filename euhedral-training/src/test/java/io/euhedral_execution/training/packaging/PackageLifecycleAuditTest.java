@@ -528,8 +528,9 @@ class PackageLifecycleAuditTest {
         }
         assertThat(readme).contains("- Checkpoint stage: `RUN_COMPLETE`",
                 "- Checkpoint revision: 24", "- Package status: `COMPLETE`",
-                "- Omissions: none", "- Reference: 4", "- Strong: 4",
-                "- Weak: 0", "- Failed/uncalibrated: 0",
+                "- Omissions: none", "- Reference runs: 4",
+                "- Strong calibrated runs: 4", "- Weak calibrated runs: 0",
+                "- Failed/uncalibrated runs: 0",
                 "Model status: `accepted/deployable`",
                 "`vectors/*.vectors.csv`: vector-only datasets",
                 "`policy-scenario-measurements.csv`: vectors with measurements",
@@ -547,6 +548,15 @@ class PackageLifecycleAuditTest {
 
         String rankingReport = Files.readString(
                 complete.resolve("reports/robust-ranking.md"));
+        List<List<String>> leaderVectors = CanonicalCsv.read(
+                complete.resolve("vectors/robust-leaders.vectors.csv"));
+        int firstWeight = leaderVectors.getFirst().indexOf("weight_00_bits");
+        String decimalPrefix = "[" + Double.longBitsToDouble(Long.parseUnsignedLong(
+                leaderVectors.get(1).get(firstWeight), 16)) + ", "
+                + Double.longBitsToDouble(Long.parseUnsignedLong(
+                leaderVectors.get(1).get(firstWeight + 1), 16));
+        assertThat(readme).contains("### Winning policy vectors", decimalPrefix);
+        assertThat(rankingReport).contains("### Winning policy vectors", decimalPrefix);
         List<List<String>> ranking = CanonicalCsv.read(
                 complete.resolve("robust-ranking.csv"));
         assertThat(rankingReport.indexOf(manifest.winningPolicyIds().getFirst()))

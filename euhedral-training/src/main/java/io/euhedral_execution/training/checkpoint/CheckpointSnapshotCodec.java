@@ -200,12 +200,13 @@ public final class CheckpointSnapshotCodec {
             case READY_TO_TRAIN -> to == CheckpointStage.MODEL_READY
                     || to == CheckpointStage.MODEL_REJECTED;
             case MODEL_READY -> to == CheckpointStage.SCHEDULE_READY;
+            case MODEL_REJECTED -> to == CheckpointStage.SCHEDULE_READY;
             case SCHEDULE_READY -> to == CheckpointStage.BENCHMARKING;
             case BENCHMARKING -> to == CheckpointStage.BENCHMARKING
                     || to == CheckpointStage.READY_TO_MERGE;
             case READY_TO_MERGE -> to == CheckpointStage.READY_TO_TRAIN
                     || to == CheckpointStage.RUN_COMPLETE;
-            case MODEL_REJECTED, RUN_COMPLETE -> false;
+            case RUN_COMPLETE -> false;
         };
     }
 

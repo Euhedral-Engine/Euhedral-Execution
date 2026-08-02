@@ -40,6 +40,7 @@ public final class AnchorBootstrapper {
             throw new IllegalArgumentException("No required scenarios");
         }
         int target = anchorConfig.targetCount(policyBudget);
+        int minimumTarget = anchorConfig.minimumFixedAnchors();
         SortedMap<SourceScenario, String> references = new TreeMap<>();
         Map<String, List<RunAggregate>> byRun = groupByRun(rawRunAggregates);
         for (SourceScenario scenario : requiredScenarios) {
@@ -57,8 +58,7 @@ public final class AnchorBootstrapper {
                     .filter(rows -> rows.getFirst().run().descriptor().scenario().equals(scenario))
                     .filter(rows -> bootstrapOriginAllowed(rows.getFirst(), anchorConfig))
                     .filter(rows ->
-                            rows.stream().filter(row -> validBootstrap(row, anchorConfig)).count()
-                                    >= target)
+                            rows.stream().anyMatch(row -> validBootstrap(row, anchorConfig)))
                     .sorted(Comparator.comparing(
                                     (List<RunAggregate> rows) -> rows.getFirst().run().descriptor()
                                             .startedAt())
@@ -66,7 +66,8 @@ public final class AnchorBootstrapper {
                                     rows -> rows.getFirst().run().descriptor().benchmarkRunId()))
                     .map(rows -> rows.getFirst().run().descriptor().benchmarkRunId())
                     .findFirst().orElseThrow(() -> new IllegalArgumentException(
-                            "No bootstrap reference for " + scenario.canonical()));
+                            "No valid bootstrap evidence exists to seed a reference run for "
+                                    + scenario.canonical()));
             references.put(scenario, selected);
         }
         SortedMap<PolicyId, PolicyVector> common = null;
@@ -83,11 +84,14 @@ public final class AnchorBootstrapper {
                 common.keySet().retainAll(valid.keySet());
             }
         }
-        if (common == null || common.size() < target) {
+        int available = common == null ? 0 : common.size();
+        if (available < minimumTarget) {
             throw new IllegalArgumentException("Bootstrap intersection has "
-                    + (common == null ? 0 : common.size()) + " policies; requires " + target
+                    + available + " policies; requires at least " + minimumTarget
+                    + " to seed calibration; target=" + target
                     + "; references=" + references.values());
         }
+        int anchorCount = Math.min(target, available);
         List<ScenarioResult> provisional = new ArrayList<>();
         for (SourceScenario scenario : requiredScenarios) {
             String runId = references.get(scenario);
@@ -104,12 +108,12 @@ public final class AnchorBootstrapper {
         summaries.sort(AnchorBootstrapper::compareWorstFirst);
         int population = summaries.size();
         SortedMap<PolicyId, PolicyVector> selected = new TreeMap<>();
-        for (int i = 0; i < target; i++) {
-            int index = (int) StrictMath.floor((i + 0.5) * population / target);
+        for (int i = 0; i < anchorCount; i++) {
+            int index = (int) StrictMath.floor((i + 0.5) * population / anchorCount);
             PolicyVector policy = summaries.get(index).policy();
             selected.put(policy.id(), policy);
         }
-        if (selected.size() != target) {
+        if (selected.size() != anchorCount) {
             throw new IllegalStateException("Strata selected duplicates");
         }
         AnchorCatalog catalog = AnchorCatalog.of(List.copyOf(selected.values()));

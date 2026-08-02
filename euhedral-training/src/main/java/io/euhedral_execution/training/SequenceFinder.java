@@ -20,11 +20,18 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Set;
 import org.apache.commons.math4.legacy.random.SobolSequenceGenerator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public final class SequenceFinder {
     private static final int[] MIX_TIE_ORDER = {0, 1, 2};
+    private static final Logger LOGGER = LoggerFactory.getLogger(SequenceFinder.class);
 
     public static CandidateGenerationResult generate(CandidateGenerationRequest request) {
+        LOGGER.info("Generating candidate policies for iteration {}: screenCursor={}, "
+                        + "screenRows={}, requested={}", request.iteration(), request.sobolCursor(),
+                request.config().screenRows(), request.baseExplorationCount()
+                        + request.overflowExplorationCount() + request.disagreementAuditCount());
         validateCursorRange(request.sobolCursor(), request.config().screenRows());
         Set<PolicyId> historical = new HashSet<>(request.corpus().policies().keySet());
         historical.addAll(request.fixedAnchorIds());
@@ -80,11 +87,32 @@ public final class SequenceFinder {
                 excluded, directCursor, request);
         Tranche overflow = selectTranche(overflowCount, cma, bandCandidates, excluded,
                 directCursor, request);
-        return new CandidateGenerationResult(selectedAudits, base.candidates(),
+        CandidateGenerationResult result = new CandidateGenerationResult(selectedAudits, base.candidates(),
                 overflow.candidates(), directCursor.cursor(),
                 Math.addExact(base.cmaAssigned(), overflow.cmaAssigned()),
                 Math.addExact(base.bandAssigned(), overflow.bandAssigned()),
                 Math.addExact(base.directAssigned(), overflow.directAssigned()), auditShortfall);
+        LOGGER.info("Generated candidate policies for iteration {}: audits={}, base={}, "
+                        + "overflow={}, nextSobolCursor={}", request.iteration(),
+                result.disagreementAudits().size(), result.baseExploration().size(),
+                result.overflowExploration().size(), result.nextSobolCursor());
+        return result;
+    }
+
+    public static List<PolicyVector> bootstrapVectors(int startIndex, int count) {
+        LOGGER.info("Generating {} bootstrap policy vectors from Sobol index {}", count, startIndex);
+        validateCursorRange(startIndex, count);
+        ArrayList<PolicyVector> result = new ArrayList<>(count);
+        long exclusiveEnd = Math.addExact((long) startIndex, count);
+        for (long cursor = startIndex; cursor < exclusiveEnd; cursor++) {
+            result.add(sobol(Math.toIntExact(cursor)));
+            if ((cursor - startIndex + 1) % 256 == 0 || cursor + 1 == exclusiveEnd) {
+                LOGGER.info("Generated bootstrap policy vectors: {}/{}",
+                        cursor - startIndex + 1, count);
+            }
+        }
+        LOGGER.info("Finished generating {} bootstrap policy vectors", count);
+        return List.copyOf(result);
     }
 
     private static Tranche selectTranche(int count, List<PredictedCandidate> cma,
@@ -116,8 +144,10 @@ public final class SequenceFinder {
             java.util.function.Consumer<PredictedCandidate> consumer) {
         long exclusiveEnd = Math.addExact(request.sobolCursor(),
                 request.config().screenRows());
+        LOGGER.info("Screening Sobol policy vectors: {}..{}", request.sobolCursor(), exclusiveEnd);
         ArrayList<PolicyVector> batch = new ArrayList<>(
                 request.config().maximumPredictionRows());
+        long screened = 0;
         for (long cursor = request.sobolCursor(); cursor < exclusiveEnd; cursor++) {
             PolicyVector policy = sobol(Math.toIntExact(cursor));
             if (!historical.contains(policy.id())) {
@@ -126,6 +156,11 @@ public final class SequenceFinder {
             if (batch.size() == request.config().maximumPredictionRows()) {
                 predictBatch(request, batch, consumer);
                 batch.clear();
+            }
+            screened++;
+            if (screened % 131_072 == 0 || cursor + 1 == exclusiveEnd) {
+                LOGGER.info("Screened Sobol policy vectors: {}/{}", screened,
+                        exclusiveEnd - request.sobolCursor());
             }
         }
         if (!batch.isEmpty()) {
@@ -195,8 +230,7 @@ public final class SequenceFinder {
                 if (cursor > Integer.MAX_VALUE) {
                     throw new IllegalStateException("Sobol cursor exhausted");
                 }
-                PolicyVector policy = sobol(Math.toIntExact(cursor++));
-                registry.register(policy);
+                PolicyVector policy = registry.register(sobol(Math.toIntExact(cursor++)));
                 if (excluded.add(policy.id())) {
                     policies.add(policy);
                 }

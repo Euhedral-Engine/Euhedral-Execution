@@ -35,10 +35,6 @@ public class Runner {
         }
     }
 
-    static void closedLoop(String[] args) throws Exception {
-        closedLoop(args, ProductionCommandServices.INSTANCE);
-    }
-
     private static void closedLoop(String[] args, CommandServices services) throws Exception {
         if (args.length != 3 || !args[1].equals("--config")
                 || args[2].startsWith("--")) {
