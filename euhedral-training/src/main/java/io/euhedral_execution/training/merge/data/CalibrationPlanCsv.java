@@ -109,7 +109,9 @@ public final class CalibrationPlanCsv {
             anchors.add(policy);
         }
         Map<String, SourceScenario> scenarioById = new HashMap<>();
-        knownScenarios.forEach(item -> scenarioById.put(item.canonical(), item));
+        if (knownScenarios != null) {
+            knownScenarios.forEach(item -> scenarioById.put(item.canonical(), item));
+        }
         SortedMap<SourceScenario, String> references = new TreeMap<>();
         List<String> referenceLines = strictLines(directory.resolve("reference-runs.csv"));
         if (referenceLines.isEmpty()
@@ -122,7 +124,8 @@ public final class CalibrationPlanCsv {
             if (fields.length != 4 || !"1".equals(fields[0]) || !Objects.equals(anchorSetId, fields[1])) {
                 throw new IllegalArgumentException("Invalid reference catalog");
             }
-            SourceScenario scenario = scenarioById.get(fields[2]);
+            SourceScenario scenario =
+                    knownScenarios == null ? SourceScenario.parse(fields[2]) : scenarioById.get(fields[2]);
             if (scenario == null || references.put(scenario, fields[3]) != null) {
                 throw new IllegalArgumentException("Unknown or duplicate scenario");
             }
@@ -133,6 +136,10 @@ public final class CalibrationPlanCsv {
         }
         return new CalibrationPlan(
                 new AnchorCatalog(1, anchorSetId, anchors), new ReferenceRunCatalog(1, anchorSetId, references));
+    }
+
+    public static CalibrationPlan read(Path directory) throws IOException {
+        return read(directory, null);
     }
 
     private static List<String> strictLines(Path path) throws IOException {

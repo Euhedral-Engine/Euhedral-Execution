@@ -24,6 +24,7 @@ The command-line entry point provides these commands:
 closed-loop --config <path>
 training-info
 package-run --workspace <path> --inputs <path> --output-root <path>
+merge-calibration-plan --workspace <path> [--workspace <path> ...] --output <path>
 ```
 
 `closed-loop` runs benchmarking, evidence merging, candidate selection, and model training from a
@@ -61,6 +62,19 @@ benchmarks.
   created. Existing conflicting packages are not overwritten.
 
 The three `package-run` options are required and must appear in this order.
+
+`merge-calibration-plan --workspace <path> [--workspace <path> ...] --output <path>`
+
+Merges compatible calibration plans from prior closed-loop workspaces into one calibration-plan
+directory.
+
+- Repeat `--workspace <path>` for each source workspace. Each workspace must contain a
+  `calibration-plan/` directory.
+- All source workspaces must use the same fixed anchor catalog.
+- If two workspaces provide a reference run for the same scenario, the benchmark run ID must
+  agree.
+- `--output <path>`: required destination directory for the merged calibration plan. The command
+  creates a new plan directory and does not overwrite an existing one.
 
 ## Configure and run the closed loop
 
@@ -102,6 +116,17 @@ environments on different machines, point each invocation at the same workspace,
 bootstrap evidence exists for all required scenarios. If a cold-start model is rejected, the loop
 uses deterministic neutral predictions while it collects more evidence; sparse-data retries follow
 the same relaxed training configuration.
+
+If calibration was prepared across multiple prior workspaces, merge those workspace calibration
+plans before starting a new run with `run.initial_calibration_plan`:
+
+```bash
+java -jar euhedral-training/target/trainer/euhedral-training-0.0.7-SNAPSHOT.jar \
+  merge-calibration-plan \
+  --workspace output/run-machine-a \
+  --workspace output/run-machine-b \
+  --output output/merged-calibration-plan
+```
 
 ### Calibration plan example
 

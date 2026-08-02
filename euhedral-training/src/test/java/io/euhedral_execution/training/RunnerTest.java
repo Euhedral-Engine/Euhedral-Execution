@@ -36,36 +36,6 @@ class RunnerTest {
     @TempDir
     Path temp;
 
-    private static List<String[]> concat(List<String[]> first, List<String[]> second) {
-        ArrayList<String[]> result = new ArrayList<>(first);
-        result.addAll(second);
-        return result;
-    }
-
-    private static List<String> captureLogs(ThrowingRunnable action) throws Exception {
-        Object logger = LoggerFactory.getLogger(Runner.class);
-        Class<?> appenderType = Class.forName("ch.qos.logback.core.Appender");
-        Class<?> listAppenderType = Class.forName("ch.qos.logback.core.read.ListAppender");
-        Object appender = listAppenderType.getConstructor().newInstance();
-        listAppenderType.getMethod("start").invoke(appender);
-        logger.getClass().getMethod("addAppender", appenderType).invoke(logger, appender);
-        try {
-            action.run();
-            @SuppressWarnings("unchecked")
-            List<Object> events =
-                    (List<Object>) listAppenderType.getField("list").get(appender);
-            ArrayList<String> result = new ArrayList<>();
-            for (Object event : events) {
-                result.add((String)
-                        event.getClass().getMethod("getFormattedMessage").invoke(event));
-            }
-            return List.copyOf(result);
-        } finally {
-            logger.getClass().getMethod("detachAppender", appenderType).invoke(logger, appender);
-            listAppenderType.getMethod("stop").invoke(appender);
-        }
-    }
-
     @Test
     void dispatchesOnlyTheExplicitCommandAndLogsExactResults() throws Exception {
         RecordingServices services = services();
@@ -112,6 +82,25 @@ class RunnerTest {
                 .containsExactly(
                         temp.resolve("published").toAbsolutePath().normalize().toString());
         assertThat(services.trainingDiagnostics).isEqualTo(1);
+
+        Path mergedOutput = temp.resolve("merged-plan");
+        List<String> mergeLogs = captureLogs(() -> Runner.dispatch(
+                new String[] {
+                    "merge-calibration-plan",
+                    "--workspace",
+                    temp.resolve("workspace-a").toString(),
+                    "--workspace",
+                    temp.resolve("workspace-b").toString(),
+                    "--output",
+                    mergedOutput.toString()
+                },
+                services));
+        assertThat(services.mergedCalibrationPlans).isEqualTo(1);
+        assertThat(services.lastMergeWorkspaces)
+                .containsExactly(temp.resolve("workspace-a"), temp.resolve("workspace-b"));
+        assertThat(services.lastMergeOutput).isEqualTo(mergedOutput);
+        assertThat(mergeLogs)
+                .containsExactly(mergedOutput.toAbsolutePath().normalize().toString());
     }
 
     @Test
@@ -130,7 +119,15 @@ class RunnerTest {
                 new String[] {"package-run", "--workspace", "a", "--inputs", "b"},
                 new String[] {"package-run", "--workspace", "a", "--inputs", "b", "--output-root", "c", "extra"},
                 new String[] {"package-run", "--workspace", "a", "--workspace", "b", "--output-root", "c"});
-        for (String[] args : concat(closed, packages)) {
+        List<String[]> mergeCalibration = List.of(
+                new String[] {"merge-calibration-plan"},
+                new String[] {"merge-calibration-plan", "--workspace", "a"},
+                new String[] {"merge-calibration-plan", "--output", "out"},
+                new String[] {"merge-calibration-plan", "--workspace", "a", "--output"},
+                new String[] {"merge-calibration-plan", "--workspace", "a", "--workspace", "--output", "out"},
+                new String[] {"merge-calibration-plan", "--workspace", "a", "--output", "out", "extra"},
+                new String[] {"merge-calibration-plan", "--output", "out", "--workspace", "a"});
+        for (String[] args : concat(concat(closed, packages), mergeCalibration)) {
             assertThatThrownBy(() -> Runner.dispatch(args, services))
                     .as(String.join(" ", args))
                     .isInstanceOf(IllegalArgumentException.class);
@@ -175,6 +172,7 @@ class RunnerTest {
                         "training-info",
                         "scenario-model DJL, PyTorch, CUDA, and device details",
                         "package-run --workspace <path> --inputs <path> --output-root <path>",
+                        "merge-calibration-plan --workspace <path> [--workspace <path> ...] --output <path>",
                         "Reproduce a checkpoint-backed package; this does not rerun")
                 .doesNotContain(
                         "merge-" + "metadata",
@@ -250,6 +248,36 @@ class RunnerTest {
         return new RecordingServices(config, result, inputs);
     }
 
+    private static List<String[]> concat(List<String[]> first, List<String[]> second) {
+        ArrayList<String[]> result = new ArrayList<>(first);
+        result.addAll(second);
+        return result;
+    }
+
+    private static List<String> captureLogs(ThrowingRunnable action) throws Exception {
+        Object logger = LoggerFactory.getLogger(Runner.class);
+        Class<?> appenderType = Class.forName("ch.qos.logback.core.Appender");
+        Class<?> listAppenderType = Class.forName("ch.qos.logback.core.read.ListAppender");
+        Object appender = listAppenderType.getConstructor().newInstance();
+        listAppenderType.getMethod("start").invoke(appender);
+        logger.getClass().getMethod("addAppender", appenderType).invoke(logger, appender);
+        try {
+            action.run();
+            @SuppressWarnings("unchecked")
+            List<Object> events =
+                    (List<Object>) listAppenderType.getField("list").get(appender);
+            ArrayList<String> result = new ArrayList<>();
+            for (Object event : events) {
+                result.add((String)
+                        event.getClass().getMethod("getFormattedMessage").invoke(event));
+            }
+            return List.copyOf(result);
+        } finally {
+            logger.getClass().getMethod("detachAppender", appenderType).invoke(logger, appender);
+            listAppenderType.getMethod("stop").invoke(appender);
+        }
+    }
+
     @FunctionalInterface
     private interface ThrowingRunnable {
         void run() throws Exception;
@@ -264,7 +292,10 @@ class RunnerTest {
         private int trainingDiagnostics;
         private int packageInputReads;
         private int packages;
+        private int mergedCalibrationPlans;
         private TrainingRunPackageRequest lastPackage;
+        private List<Path> lastMergeWorkspaces = List.of();
+        private Path lastMergeOutput;
 
         private RecordingServices(ClosedLoopConfig config, ClosedLoopResult result, TrainingRunPackageInputs inputs) {
             this.config = config;
@@ -307,8 +338,21 @@ class RunnerTest {
                     TrainingRunPackageStatus.PARTIAL_RECOVERABLE);
         }
 
+        @Override
+        public Path mergeCalibrationPlans(List<Path> workspaces, Path outputDirectory) {
+            mergedCalibrationPlans++;
+            lastMergeWorkspaces = List.copyOf(workspaces);
+            lastMergeOutput = outputDirectory;
+            return outputDirectory;
+        }
+
         private int totalCalls() {
-            return configReads + closedLoopRuns + trainingDiagnostics + packageInputReads + packages;
+            return configReads
+                    + closedLoopRuns
+                    + trainingDiagnostics
+                    + packageInputReads
+                    + packages
+                    + mergedCalibrationPlans;
         }
     }
 }

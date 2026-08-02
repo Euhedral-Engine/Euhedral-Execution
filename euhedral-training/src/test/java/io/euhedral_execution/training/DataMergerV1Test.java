@@ -16,6 +16,7 @@ import io.euhedral_execution.training.merge.config.AggregationConfig;
 import io.euhedral_execution.training.merge.config.CalibrationConfig;
 import io.euhedral_execution.training.merge.data.AnchorCatalog;
 import io.euhedral_execution.training.merge.data.CalibrationPlan;
+import io.euhedral_execution.training.merge.data.CalibrationPlanCsv;
 import io.euhedral_execution.training.merge.data.ReferenceRunCatalog;
 import io.euhedral_execution.training.scheduling.io.OptimizationCorpusReader;
 import java.nio.file.Files;
@@ -37,16 +38,6 @@ import org.junit.jupiter.api.io.TempDir;
 class DataMergerV1Test {
     @TempDir
     Path temporary;
-
-    private static Path copyBundle(Path source, Path target) throws Exception {
-        Files.createDirectory(target);
-        try (var files = Files.list(source)) {
-            for (Path file : files.toList()) {
-                Files.copy(file, target.resolve(file.getFileName()));
-            }
-        }
-        return target;
-    }
 
     @Test
     void writesDeterministicHierarchicalArtifactsAndRanksRobustPolicyFirst() throws Exception {
@@ -119,6 +110,70 @@ class DataMergerV1Test {
         assertThat(optimizerCorpus.eligiblePolicies().getFirst().policy().id()).isEqualTo(corpus.robust.id());
         assertThat(optimizerCorpus.policies())
                 .containsKeys(corpus.robust.id(), corpus.specialist.id(), corpus.incomplete.id());
+    }
+
+    @Test
+    void mergesWorkspaceCalibrationPlansIntoOnePlan() throws Exception {
+        Corpus corpus = corpus();
+        List<SourceScenario> scenarios = new ArrayList<>(corpus.scenarios);
+
+        Path workspaceA = temporary.resolve("workspace-a");
+        Path workspaceB = temporary.resolve("workspace-b");
+        writeWorkspaceCalibration(workspaceA, subsetPlan(corpus.plan, scenarios.subList(0, 2)));
+        writeWorkspaceCalibration(workspaceB, subsetPlan(corpus.plan, scenarios.subList(2, 4)));
+
+        Path output = temporary.resolve("merged-calibration-plan");
+        CalibrationPlan merged = DataMerger.mergeCalibrationPlansV1(
+                new DataMerger.MergeCalibrationPlansRequest(List.of(workspaceA, workspaceB), output));
+
+        assertThat(merged).isEqualTo(corpus.plan);
+        assertThat(CalibrationPlanCsv.read(output)).isEqualTo(corpus.plan);
+    }
+
+    @Test
+    void rejectsConflictingScenarioReferencesWhenMergingWorkspacePlans() throws Exception {
+        Corpus corpus = corpus();
+        SourceScenario scenario = corpus.scenarios.first();
+
+        Path workspaceA = temporary.resolve("conflict-a");
+        Path workspaceB = temporary.resolve("conflict-b");
+        writeWorkspaceCalibration(workspaceA, subsetPlan(corpus.plan, List.of(scenario)));
+
+        SortedMap<SourceScenario, String> conflictingReferences = new TreeMap<>();
+        conflictingReferences.put(scenario, "other-reference");
+        writeWorkspaceCalibration(
+                workspaceB,
+                new CalibrationPlan(
+                        corpus.plan.anchors(),
+                        new ReferenceRunCatalog(1, corpus.plan.anchors().anchorSetId(), conflictingReferences)));
+
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> DataMerger.mergeCalibrationPlansV1(new DataMerger.MergeCalibrationPlansRequest(
+                        List.of(workspaceA, workspaceB), temporary.resolve("conflicted-plan"))))
+                .withMessageContaining("Scenario reference disagrees across workspaces");
+    }
+
+    @Test
+    void rejectsMismatchedAnchorCatalogsWhenMergingWorkspacePlans() throws Exception {
+        Corpus corpus = corpus();
+
+        Path workspaceA = temporary.resolve("anchors-a");
+        Path workspaceB = temporary.resolve("anchors-b");
+        writeWorkspaceCalibration(workspaceA, subsetPlan(corpus.plan, List.of(corpus.scenarios.first())));
+
+        List<PolicyVector> differentAnchors = List.of(policy(101), policy(102), policy(103), policy(104), policy(105));
+        AnchorCatalog differentCatalog = AnchorCatalog.of(differentAnchors);
+        SortedMap<SourceScenario, String> references = new TreeMap<>();
+        references.put(SourceScenario.of("host-c", 1, 32), "ref-host-c");
+        writeWorkspaceCalibration(
+                workspaceB,
+                new CalibrationPlan(
+                        differentCatalog, new ReferenceRunCatalog(1, differentCatalog.anchorSetId(), references)));
+
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> DataMerger.mergeCalibrationPlansV1(new DataMerger.MergeCalibrationPlansRequest(
+                        List.of(workspaceA, workspaceB), temporary.resolve("mismatched-plan"))))
+                .withMessageContaining("Calibration anchors disagree across workspaces");
     }
 
     @Test
@@ -244,6 +299,30 @@ class DataMergerV1Test {
                 policies,
                 throughputs,
                 new HashSet<>(anchors.stream().map(PolicyVector::id).toList()));
+    }
+
+    private void writeWorkspaceCalibration(Path workspace, CalibrationPlan plan) throws Exception {
+        Files.createDirectories(workspace);
+        CalibrationPlanCsv.write(workspace.resolve("calibration-plan"), plan);
+    }
+
+    private CalibrationPlan subsetPlan(CalibrationPlan plan, List<SourceScenario> scenarios) {
+        SortedMap<SourceScenario, String> references = new TreeMap<>();
+        for (SourceScenario scenario : scenarios) {
+            references.put(scenario, plan.references().referenceRunIds().get(scenario));
+        }
+        return new CalibrationPlan(
+                plan.anchors(), new ReferenceRunCatalog(1, plan.anchors().anchorSetId(), references));
+    }
+
+    private static Path copyBundle(Path source, Path target) throws Exception {
+        Files.createDirectory(target);
+        try (var files = Files.list(source)) {
+            for (Path file : files.toList()) {
+                Files.copy(file, target.resolve(file.getFileName()));
+            }
+        }
+        return target;
     }
 
     private record Corpus(

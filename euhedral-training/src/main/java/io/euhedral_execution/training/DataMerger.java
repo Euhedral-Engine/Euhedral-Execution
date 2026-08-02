@@ -11,24 +11,27 @@ import io.euhedral_execution.training.merge.ScenarioQualityRanker;
 import io.euhedral_execution.training.merge.config.AggregationConfig;
 import io.euhedral_execution.training.merge.config.AnchorSelectionConfig;
 import io.euhedral_execution.training.merge.config.CalibrationConfig;
+import io.euhedral_execution.training.merge.data.AnchorCatalog;
 import io.euhedral_execution.training.merge.data.CalibrationPlan;
 import io.euhedral_execution.training.merge.data.CalibrationPlanCsv;
 import io.euhedral_execution.training.merge.data.MergeRecords.MergeResult;
+import io.euhedral_execution.training.merge.data.ReferenceRunCatalog;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.SortedMap;
 import java.util.SortedSet;
+import java.util.TreeMap;
 import java.util.UUID;
 import java.util.stream.Stream;
 
 public class DataMerger {
-
-    private DataMerger() {}
 
     private static void deleteRecursively(Path root) throws Exception {
         if (!Files.exists(root)) {
@@ -63,6 +66,26 @@ public class DataMerger {
             if (!readBack.anchors().anchorSetId().equals(plan.anchors().anchorSetId())
                     || !readBack.references().equals(plan.references())) {
                 throw new IllegalStateException("Calibration plan validation failed");
+            }
+            publish(temporary, target);
+            return plan;
+        } catch (Throwable error) {
+            deleteRecursively(temporary);
+            throw error;
+        }
+    }
+
+    public static CalibrationPlan mergeCalibrationPlansV1(MergeCalibrationPlansRequest request) throws Exception {
+        Objects.requireNonNull(request);
+        Path target = request.outputDirectory().toAbsolutePath().normalize();
+        Path temporary = temporarySibling(target);
+        ensureNewTarget(target, temporary);
+        try {
+            CalibrationPlan plan = mergeCalibrationPlans(request.workspaces());
+            CalibrationPlanCsv.write(temporary, plan);
+            CalibrationPlan readBack = CalibrationPlanCsv.read(temporary);
+            if (!readBack.equals(plan)) {
+                throw new IllegalStateException("Merged calibration plan validation failed");
             }
             publish(temporary, target);
             return plan;
@@ -125,6 +148,32 @@ public class DataMerger {
         }
     }
 
+    private static CalibrationPlan mergeCalibrationPlans(List<Path> workspaces) throws Exception {
+        AnchorCatalog anchors = null;
+        SortedMap<SourceScenario, String> references = new TreeMap<>();
+        for (Path workspace : workspaces) {
+            Path root = workspace.toAbsolutePath().normalize();
+            CalibrationPlan plan = CalibrationPlanCsv.read(root.resolve("calibration-plan"));
+            if (anchors == null) {
+                anchors = plan.anchors();
+            } else if (!anchors.equals(plan.anchors())) {
+                throw new IllegalArgumentException("Calibration anchors disagree across workspaces");
+            }
+            for (Map.Entry<SourceScenario, String> entry :
+                    plan.references().referenceRunIds().entrySet()) {
+                String previous = references.putIfAbsent(entry.getKey(), entry.getValue());
+                if (previous != null && !previous.equals(entry.getValue())) {
+                    throw new IllegalArgumentException("Scenario reference disagrees across workspaces: "
+                            + entry.getKey().canonical());
+                }
+            }
+        }
+        if (anchors == null) {
+            throw new IllegalArgumentException("At least one workspace is required");
+        }
+        return new CalibrationPlan(anchors, new ReferenceRunCatalog(1, anchors.anchorSetId(), references));
+    }
+
     private static void validateMergeOutput(Path directory, SortedSet<SourceScenario> requiredScenarios)
             throws Exception {
         CalibrationPlanCsv.read(directory, requiredScenarios);
@@ -157,6 +206,8 @@ public class DataMerger {
                 directory.resolve("incomplete-policies.vectors.csv"));
     }
 
+    private DataMerger() {}
+
     public record CalibrationBootstrapRequest(
             List<Path> observationBundles,
             SortedSet<SourceScenario> requiredScenarios,
@@ -173,6 +224,23 @@ public class DataMerger {
             Objects.requireNonNull(planDirectory);
             Objects.requireNonNull(anchorSelection);
             Objects.requireNonNull(aggregation);
+        }
+    }
+
+    public record MergeCalibrationPlansRequest(List<Path> workspaces, Path outputDirectory) {
+
+        public MergeCalibrationPlansRequest {
+            Objects.requireNonNull(workspaces);
+            workspaces = workspaces.stream()
+                    .map(path -> Objects.requireNonNull(path).toAbsolutePath().normalize())
+                    .toList();
+            if (workspaces.isEmpty()) {
+                throw new IllegalArgumentException("At least one workspace is required");
+            }
+            if (new HashSet<>(workspaces).size() != workspaces.size()) {
+                throw new IllegalArgumentException("Duplicate workspace");
+            }
+            Objects.requireNonNull(outputDirectory);
         }
     }
 
