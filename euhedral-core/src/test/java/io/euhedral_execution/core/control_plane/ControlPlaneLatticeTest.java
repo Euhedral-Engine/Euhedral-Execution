@@ -61,9 +61,15 @@ class ControlPlaneLatticeTest {
         for (int i = 0; i < 2; i++) {
             BitSet cores = new BitSet(4);
             BitSet cpus = new BitSet(8);
+            List<BitSet> coreToCpu = new ArrayList<>(4);
+            for (int core = 0; core < 4; core++) {
+                coreToCpu.add(new BitSet(8));
+            }
             cores.set(i * 2, i * 2 + 2);
             cpus.set(i * 4, i * 4 + 4);
-            topologies.add(new EffectiveSocketTopology(0, i, cores, cpus, null));
+            coreToCpu.get(i * 2).set(i * 4, i * 4 + 2);
+            coreToCpu.get(i * 2 + 1).set(i * 4 + 2, i * 4 + 4);
+            topologies.add(new EffectiveSocketTopology(0, i, cores, cpus, coreToCpu));
         }
 
         return new EffectiveSystemTopology(effectiveSockets,
@@ -194,15 +200,17 @@ class ControlPlaneLatticeTest {
         controlPlane = createControlPlaneWithMocks(snapshots);
         controlPlane.start();
 
-        effectiveSystemTopology.effectiveSockets().clear(0);
-        effectiveSystemTopology.effectiveCores().clear(0, 2);
-        effectiveSystemTopology.effectiveCpus().clear(0, 4);
+        BitSet retainedSockets = (BitSet) effectiveSystemTopology.effectiveSockets().clone();
+        BitSet retainedCores = (BitSet) effectiveSystemTopology.effectiveCores().clone();
+        BitSet retainedCpus = (BitSet) effectiveSystemTopology.effectiveCpus().clone();
+        retainedSockets.clear(0);
+        retainedCores.clear(0, 2);
+        retainedCpus.clear(0, 4);
 
         version = 3;
         effectiveSystemTopology = new EffectiveSystemTopology(
-                effectiveSystemTopology.effectiveSockets(),
-                effectiveSystemTopology.effectiveCores(),
-                effectiveSystemTopology.effectiveCpus(), effectiveSystemTopology.socketTopologies(),
+                retainedSockets, retainedCores, retainedCpus,
+                effectiveSystemTopology.socketTopologies(),
                 version);
         deferShutdown.set(true);
 

@@ -65,7 +65,7 @@ class ThreadToolsAffinityTest {
         AffinityController controller = controller(provider, bits(0, 63, 64, 127), 128);
         int baselineCaptures = provider.captures;
 
-        assertFalse(controller.setAffinity(null));
+        assertFalse(controller.setAffinity((long[]) null));
         assertFalse(controller.setAffinity(new long[0]));
         assertFalse(controller.setAffinity(new long[]{0}));
         assertFalse(controller.setAffinity(new long[]{2}));
@@ -78,6 +78,54 @@ class ThreadToolsAffinityTest {
         request[0] = 0;
         assertArrayEquals(new long[]{Long.MIN_VALUE, Long.MIN_VALUE}, provider.applied);
         controller.releaseAffinity();
+    }
+
+    @Test
+    void everyOverloadUsesOwnedCompleteRequests() {
+        FakeProvider provider = exact(new long[]{1}, new long[]{1});
+        provider.capturesToReturn.add(new long[]{1});
+        provider.capturesToReturn.add(new long[]{1});
+        AffinityController controller = controller(provider, bits(0, 63, 64, 127), 128);
+
+        assertFalse(controller.setAffinity(-1));
+        assertFalse(controller.setAffinity(128));
+        assertFalse(controller.setAffinity(new int[0]));
+        assertFalse(controller.setAffinity(new int[]{0, 1}));
+        assertFalse(controller.setAffinity(new BitSet()));
+        assertEquals(0, provider.applies);
+
+        int[] ids = {127, 0, 127};
+        assertTrue(controller.setAffinity(ids));
+        ids[0] = 64;
+        assertArrayEquals(new long[]{1, Long.MIN_VALUE}, provider.applied);
+        controller.releaseAffinity();
+
+        BitSet requested = bits(63, 64);
+        assertTrue(controller.setAffinity(requested));
+        requested.clear();
+        assertArrayEquals(new long[]{Long.MIN_VALUE, 1}, provider.applied);
+        controller.releaseAffinity();
+
+        provider.currentCpu = 64;
+        assertTrue(controller.setAffinity());
+        assertArrayEquals(new long[]{0, 1}, provider.applied);
+        controller.releaseAffinity();
+    }
+
+    @Test
+    void constructorAndMaximumBoundsAreEnforcedWithoutAliasing() {
+        BitSet supported = bits(0, 1_048_575);
+        FakeProvider provider = new FakeProvider(AffinityCapability.UNSUPPORTED);
+        AffinityController controller = controller(provider, supported, 1_048_576);
+        supported.clear();
+        assertEquals(bits(0, 1_048_575), controller.baseMask());
+        assertFalse(controller.setAffinity(new long[16_385]));
+        assertThrows(IllegalArgumentException.class,
+                () -> controller(provider, bits(0), 0));
+        assertThrows(IllegalArgumentException.class,
+                () -> controller(provider, bits(0), 1_048_577));
+        assertThrows(IllegalArgumentException.class,
+                () -> controller(provider, bits(1), 1));
     }
 
     @Test
@@ -100,6 +148,22 @@ class ThreadToolsAffinityTest {
     }
 
     @Test
+    void recoverableAndFatalApplyFailuresCleanNewPendingLeases() {
+        FakeProvider provider = exact(new long[]{1}, new long[]{1});
+        provider.capturesToReturn.add(new long[]{1});
+        AffinityController controller = controller(provider, bits(0), 1);
+
+        provider.applyLinkageFailure = true;
+        assertFalse(controller.setAffinity(new long[]{1}));
+        assertFalse(controller.hasAffinityLease());
+
+        provider.applyLinkageFailure = false;
+        provider.applyFatalFailure = true;
+        assertThrows(OutOfMemoryError.class, () -> controller.setAffinity(new long[]{1}));
+        assertFalse(controller.hasAffinityLease());
+    }
+
+    @Test
     void localityResolvesWholeRequestAndReleasesTagZeroObligation() {
         FakeProvider provider = new FakeProvider(AffinityCapability.LOCALITY_HINT);
         provider.localities.put(0, 7);
@@ -115,6 +179,23 @@ class ThreadToolsAffinityTest {
         controller.releaseAffinity();
         assertEquals(1, provider.localityReleases);
         assertFalse(controller.hasAffinityLease());
+    }
+
+    @Test
+    void exactCrossWordApplyIsAtomicAndLocalityMissingMappingMakesZeroCalls() {
+        FakeProvider exact = exact(new long[]{1}, new long[]{1});
+        AffinityController exactController = controller(exact, bits(0, 64), 65);
+        assertTrue(exactController.setAffinity(new long[]{1, 1}));
+        assertArrayEquals(new long[]{1, 1}, exact.applied);
+        assertEquals(1, exact.applies);
+        exactController.releaseAffinity();
+
+        FakeProvider locality = new FakeProvider(AffinityCapability.LOCALITY_HINT);
+        locality.localities.put(0, 7);
+        AffinityController localityController = controller(locality, bits(0, 64), 65);
+        assertFalse(localityController.setAffinity(new long[]{1, 1}));
+        assertEquals(0, locality.localityApplies);
+        assertFalse(localityController.hasAffinityLease());
     }
 
     @Test
@@ -164,7 +245,7 @@ class ThreadToolsAffinityTest {
     }
 
     @Test
-    void exactCurrentCpuFallsBackOnlyToManagedOwner() {
+    void currentCpuIsIndependentOfMutationCapabilityAndFallsBackToManagedOwner() {
         FakeProvider provider = exact(new long[]{1}, new long[]{1});
         AffinityController controller = controller(provider, bits(0, 2), 3);
         provider.currentCpu = 2;
@@ -173,8 +254,23 @@ class ThreadToolsAffinityTest {
         assertEquals(-1, controller.currentCpu());
         try (AffinityController.ManagedOwner ignored = controller.bindManagedCpu(0)) {
             assertEquals(0, controller.currentCpu());
+            provider.currentLinkageFailure = true;
+            assertEquals(0, controller.currentCpu());
+            provider.currentLinkageFailure = false;
         }
         assertEquals(-1, controller.currentCpu());
+
+        FakeProvider unsupported = new FakeProvider(AffinityCapability.UNSUPPORTED);
+        unsupported.currentCpu = 2;
+        AffinityController readOnly = controller(unsupported, bits(0, 2), 3);
+        assertEquals(AffinityCapability.UNSUPPORTED, readOnly.capability());
+        assertEquals(2, readOnly.currentCpu());
+        assertFalse(readOnly.setAffinity(new long[]{4}));
+        assertEquals(0, unsupported.applies);
+
+        FakeProvider locality = new FakeProvider(AffinityCapability.LOCALITY_HINT);
+        locality.currentCpu = 2;
+        assertEquals(2, controller(locality, bits(0, 2), 3).currentCpu());
     }
 
     private static final class FakeProvider implements AffinityProvider {
@@ -191,6 +287,9 @@ class ThreadToolsAffinityTest {
         private int appliedLocality;
         private boolean applyResult = true;
         private boolean restoreResult = true;
+        private boolean applyLinkageFailure;
+        private boolean applyFatalFailure;
+        private boolean currentLinkageFailure;
         private long[] applied;
         private long[] restored;
 
@@ -205,6 +304,9 @@ class ThreadToolsAffinityTest {
 
         @Override
         public int currentCpu() {
+            if (currentLinkageFailure) {
+                throw new UnsatisfiedLinkError("configured failure");
+            }
             return currentCpu;
         }
 
@@ -217,6 +319,12 @@ class ThreadToolsAffinityTest {
 
         @Override
         public boolean applyExact(long[] mask) {
+            if (applyLinkageFailure) {
+                throw new UnsatisfiedLinkError("configured failure");
+            }
+            if (applyFatalFailure) {
+                throw new OutOfMemoryError("configured failure");
+            }
             applies++;
             applied = mask.clone();
             mask[0] = 0;

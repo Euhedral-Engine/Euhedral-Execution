@@ -1,5 +1,6 @@
 package io.euhedral_execution.hardware_utils.linux;
 
+import io.euhedral_execution.hardware_utils.AffinityCapability;
 import io.euhedral_execution.hardware_utils.common.OSName;
 import io.euhedral_execution.hardware_utils.internal.Constants;
 import io.euhedral_execution.hardware_utils.internal.JNIClassLoader;
@@ -23,6 +24,7 @@ public final class LinuxAffinity extends ThreadPinner {
     }
 
     private LinuxAffinity() {
+        super(AffinityCapability.UNSUPPORTED, null, true);
     }
 
     @Override

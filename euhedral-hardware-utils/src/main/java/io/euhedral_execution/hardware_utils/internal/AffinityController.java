@@ -78,9 +78,56 @@ public final class AffinityController {
                 : applyLocality(request);
     }
 
-    /// Returns an exact provider CPU, then the managed logical owner, otherwise `-1`.
+    /// Applies affinity to the current truthful or managed logical CPU.
+    public boolean setAffinity() {
+        return setAffinity(currentCpu());
+    }
+
+    /// Validates one logical CPU before allocating its minimal request mask.
+    public boolean setAffinity(int cpu) {
+        if (!isSupported(cpu)) {
+            return false;
+        }
+        long[] masks = new long[(cpu >>> 6) + 1];
+        masks[cpu >>> 6] = 1L << (cpu & 63);
+        return setAffinity(masks);
+    }
+
+    /// Copies and validates every logical CPU before allocating the request mask.
+    public boolean setAffinity(int[] source) {
+        if (source == null || source.length == 0 || source.length > AffinityMasks.MAX_BITS) {
+            return false;
+        }
+        int[] owned = source.clone();
+        int highest = -1;
+        for (int cpu : owned) {
+            if (!isSupported(cpu)) {
+                return false;
+            }
+            highest = Math.max(highest, cpu);
+        }
+        long[] masks = new long[(highest >>> 6) + 1];
+        for (int cpu : owned) {
+            masks[cpu >>> 6] |= 1L << (cpu & 63);
+        }
+        return setAffinity(masks);
+    }
+
+    /// Copies and validates a caller-owned bit set before conversion.
+    public boolean setAffinity(BitSet source) {
+        if (source == null || source.isEmpty() || source.length() > AffinityMasks.MAX_BITS) {
+            return false;
+        }
+        BitSet owned = (BitSet) source.clone();
+        if (owned.length() > AffinityMasks.MAX_BITS) {
+            return false;
+        }
+        return setAffinity(owned.toLongArray());
+    }
+
+    /// Returns a truthful provider CPU, then the managed logical owner, otherwise `-1`.
     public int currentCpu() {
-        if (capability == AffinityCapability.EXACT) {
+        if (provider != null) {
             try {
                 int cpu = provider.currentCpu();
                 if (isSupported(cpu)) {
@@ -160,18 +207,17 @@ public final class AffinityController {
                 return false;
             }
         }
+        boolean applied = false;
         try {
-            boolean applied = provider.applyExact(request.clone());
+            applied = provider.applyExact(request.clone());
+            return applied;
+        } catch (RuntimeException | LinkageError failure) {
+            diagnostic("Affinity apply failed", failure);
+            return false;
+        } finally {
             if (!applied && pending != null) {
                 leases.remove();
             }
-            return applied;
-        } catch (RuntimeException | LinkageError failure) {
-            if (pending != null) {
-                leases.remove();
-            }
-            diagnostic("Affinity apply failed", failure);
-            return false;
         }
     }
 
@@ -203,18 +249,17 @@ public final class AffinityController {
             pending = new Lease(false, null);
             leases.set(pending);
         }
+        boolean applied = false;
         try {
-            boolean applied = provider.applyLocality(locality);
+            applied = provider.applyLocality(locality);
+            return applied;
+        } catch (RuntimeException | LinkageError failure) {
+            diagnostic("Affinity locality apply failed", failure);
+            return false;
+        } finally {
             if (!applied && pending != null) {
                 leases.remove();
             }
-            return applied;
-        } catch (RuntimeException | LinkageError failure) {
-            if (pending != null) {
-                leases.remove();
-            }
-            diagnostic("Affinity locality apply failed", failure);
-            return false;
         }
     }
 

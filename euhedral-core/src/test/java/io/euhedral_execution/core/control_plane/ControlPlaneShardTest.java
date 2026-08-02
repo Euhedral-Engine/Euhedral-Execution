@@ -13,6 +13,7 @@ import io.euhedral_execution.hardware_utils.SystemInfo;
 import io.euhedral_execution.hardware_utils.SystemInfo.SocketInfo;
 import io.euhedral_execution.hardware_utils.TopologyMapper.EffectiveSocketTopology;
 import io.euhedral_execution.hardware_utils.common.SystemUtilization.CoreSnapshot;
+import io.euhedral_execution.hardware_utils.common.SystemUtilization.CpuSnapshot;
 import io.euhedral_execution.hardware_utils.common.SystemUtilization.SocketSnapshot;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -91,43 +92,15 @@ class ControlPlaneShardTest {
         assertTrue(shard.isStarted(), "Expected the shard to be marked started");
     }
 
-    @Test
-    void closesOnlyClonesRemovedByARebalance() {
-        LatticeEdge upstream = new LatticeEdge(new AtomicBoolean());
-        RecordingClone factory = new RecordingClone();
-        shard =
-                new ControlPlaneShard(0, "TestShard", factory, Duration.ofSeconds(1));
+    private static SocketSnapshot getSocketSnapshot(EffectiveSocketTopology topology) {
+        CoreSnapshot[] coreSnapshots = new CoreSnapshot[topology.effectiveCores().length()];
+        for (int i = 0; i < coreSnapshots.length; i++) {
+            coreSnapshots[i] = new CoreSnapshot(i, 0, 100_000, 0, 0, 0, 0, 0,
+                    topology.effectiveCoreToCpu().get(i),
+                    new CpuSnapshot[0]);
+        }
 
-        EffectiveSocketTopology topo1 = getTopology(); // Version 0, Core 0 and 1 active
-
-        SocketSnapshot snapshot1 = getSocketSnapshot(topo1);
-
-        shard.start(snapshot1, topo1, upstream);
-
-        RecordingClone first = factory.created.get(0);
-        RecordingClone second = factory.created.get(1);
-        assertTrue(first.started);
-        assertTrue(second.started);
-
-        // Trigger Rebalance: Drop Core 0
-        topo1.effectiveCores().clear(0);
-        topo1.effectiveCpus().clear(0, 2);
-        topo1.effectiveCoreToCpu().get(0).clear();
-        EffectiveSocketTopology topo2 = new EffectiveSocketTopology(topo1.version() + 1,
-                topo1.socketId(),
-                topo1.effectiveCores(), topo1.effectiveCpus(), topo1.effectiveCoreToCpu());
-
-        SocketSnapshot snap2 = getSocketSnapshot(topo2);
-
-        shard.update(snap2, topo2);
-
-        Awaitility.await()
-                .atMost(2, TimeUnit.SECONDS)
-                .until(() -> !shard.isRebalancing());
-
-        assertTrue(first.closed, "The removed core should be closed");
-        assertFalse(second.closed, "The retained core should stay open");
-        assertEquals(1, shard.getActiveCores());
+        return new SocketSnapshot(0, topology.effectiveCores(), 0, 0, 0, 0, coreSnapshots, 0);
     }
 
     @Test
@@ -174,15 +147,49 @@ class ControlPlaneShardTest {
         return new EffectiveSocketTopology(0, 0, effectiveCores, effectiveCpus, effectiveCoreToCpu);
     }
 
-    private static SocketSnapshot getSocketSnapshot(EffectiveSocketTopology topology) {
-        CoreSnapshot[] coreSnapshots = new CoreSnapshot[topology.effectiveCores().length()];
-        for (int i = 0; i < coreSnapshots.length; i++) {
-            coreSnapshots[i] = new CoreSnapshot(i, 0, 100_000, 0, 0, 0, 0, 0,
-                    topology.effectiveCoreToCpu().get(i),
-                    null);
-        }
+    @Test
+    void closesOnlyClonesRemovedByARebalance() {
+        LatticeEdge upstream = new LatticeEdge(new AtomicBoolean());
+        RecordingClone factory = new RecordingClone();
+        shard =
+                new ControlPlaneShard(0, "TestShard", factory, Duration.ofSeconds(1));
 
-        return new SocketSnapshot(0, topology.effectiveCores(), 0, 0, 0, 0, coreSnapshots, 0);
+        EffectiveSocketTopology topo1 = getTopology(); // Version 0, Core 0 and 1 active
+
+        SocketSnapshot snapshot1 = getSocketSnapshot(topo1);
+
+        shard.start(snapshot1, topo1, upstream);
+
+        RecordingClone first = factory.created.get(0);
+        RecordingClone second = factory.created.get(1);
+        assertTrue(first.started);
+        assertTrue(second.started);
+
+        // Trigger Rebalance: Drop Core 0
+        BitSet retainedCores = (BitSet) topo1.effectiveCores().clone();
+        BitSet retainedCpus = (BitSet) topo1.effectiveCpus().clone();
+        List<BitSet> retainedCoreToCpu = new ArrayList<>();
+        for (BitSet coreCpus : topo1.effectiveCoreToCpu()) {
+            retainedCoreToCpu.add((BitSet) coreCpus.clone());
+        }
+        retainedCores.clear(0);
+        retainedCpus.clear(0, 2);
+        retainedCoreToCpu.get(0).clear();
+        EffectiveSocketTopology topo2 = new EffectiveSocketTopology(topo1.version() + 1,
+                topo1.socketId(),
+                retainedCores, retainedCpus, retainedCoreToCpu);
+
+        SocketSnapshot snap2 = getSocketSnapshot(topo2);
+
+        shard.update(snap2, topo2);
+
+        Awaitility.await()
+                .atMost(2, TimeUnit.SECONDS)
+                .until(() -> !shard.isRebalancing());
+
+        assertTrue(first.closed, "The removed core should be closed");
+        assertFalse(second.closed, "The retained core should stay open");
+        assertEquals(1, shard.getActiveCores());
     }
 
     private static CloneConfig[] getConfigs(SocketSnapshot snapshot,
