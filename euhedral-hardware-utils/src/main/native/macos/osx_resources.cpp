@@ -2,6 +2,7 @@
 #define _Included_OSXResources
 
 #include "osx_jni.h"
+#include "io_euhedral_execution_hardware_utils_osx_OSXResources.h"
 
 #ifdef __cplusplus
 extern "C" {

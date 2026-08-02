@@ -2,11 +2,13 @@
 
 ## Plan status
 
-- Phase: 1 - planning and prompt-sequence design
-- Status: requirements settled; no production code changed
+- Phase: 1 - native build conformance closeout
+- Status: P0 and P1 complete; validation step removed globally in favor of conformance/manual review
 - Plan branch: `agent/hardware-utils-overhaul-plan` (created before the updated phase-branch rule)
 - Branch point: `900d8c50` (`agent/phase7-cleanup-handoff`)
-- Date: 2026-07-29
+- Active P1 root: `hardware-utils-overhaul/phase-1-native-build` (completed)
+- Active P1 blueprint branch: `hardware-utils-overhaul/phase-1-native-build-blueprint` (historical)
+- Date: 2026-07-30
 - Planning model: `gpt-5.6-sol`
 - Planning reasoning effort: `max`
 
@@ -272,7 +274,7 @@ architectural choice returns to blueprint.
 | B01 | P1 | Native compilation writes into source resources, allowing stale binaries and headers into jars. Stage only generated resources and prove exact clean/rebuild contents. |
 | B02 | P1 | Build targets and folders are hardcoded; discovery is shallow, unsorted, and silently skips failures. Replace with one validated folder manifest and deterministic discovery that fails loudly. |
 | B03 | P1 | macOS signing is ordered after install and signs the emitted cache file, not necessarily the packaged copy. Sign and verify the staged artifact before its install/package edge completes. |
-| B04 | P1 | CI copies Linux `jni_md.h` into Darwin and Win32 include folders. Replace this with platform-correct generated declarations and ABI headers. |
+| B04 | P1 | Build and deploy CI copy Linux `jni_md.h` into Darwin and Win32 include folders. Replace both copies with platform-correct generated declarations and ABI headers. |
 | B05 | P1 | `JNIClassLoader` unconditionally sets POSIX permissions, misses `LinkageError` fallback, maps unknown architectures to x64, and has weak temp-file/noexec-filesystem diagnostics and cleanup. Correct all loader paths without changing its public trigger; provide a safe configurable/fallback extraction location or an actionable noexec diagnosis. |
 | B06 | P1, P5-P7 | Native binaries lack enforceable architecture, export, import, runtime-floor, and deployment-target gates. Add binary inspection and real smoke calls. |
 | B07 | P1 | The build hardcodes `ReleaseFast` plus `-O3`, disables several hardening/debuggability features, bundles compiler runtime despite low-dependency goals, scans SDK paths blindly, and links an apparently unused framework. Select and justify optimization, safety, runtime, SDK, and framework settings explicitly. |
@@ -519,10 +521,11 @@ topology relationships or hard affinity remain explicitly limited.
 - exact jar resource inventory
 
 Native binaries already present under `src/main/resources/bin` are build artifacts. They are not
-edited manually. Their removal or relocation occurs only in the P1 implementation after the
-blueprint proves clean generated-resource packaging and the developer authorizes that
-implementation. That one-time version-controlled removal is distinct from a build execution;
-after migration, builds must never create, delete, or modify that source path.
+tracked by Git and are user-owned even though ignored. P1 must fingerprint and preserve them; it
+may not delete, move, rewrite, or clean them. P1 instead relocates only tracked native inputs,
+deletes only the tracked obsolete `build.sh`, allowlists source resources, and stages generated
+products under `target`. Builds must never create, delete, or modify the ignored source binary or
+source-local Zig cache paths.
 
 ### Tests and fixtures
 
@@ -562,9 +565,10 @@ approved prompt names the file, and no training consumer is part of this invento
 
 ### CI and documentation
 
-- native setup portions of `.github/workflows/build.yaml` only where required to remove invalid JNI
-  header preparation; its pre-existing full-reactor command is outside this initiative and never
-  counts as task validation evidence
+- native setup portions of `.github/workflows/build.yaml` and `.github/workflows/deploy.yaml` only
+  where required to remove invalid JNI header preparation or supply the P1-settled explicit SDK,
+  signer, and release credential-file paths; their pre-existing Maven commands are outside this
+  initiative, remain unchanged, and never count as task validation evidence
 - a hardware-specific cross-platform workflow with explicit selected-module jobs; no new or
   modified task command may select training
 - no root POM/plugin change whose behavior is inherited by `euhedral-training`
@@ -590,8 +594,10 @@ P0 compatibility and deterministic baseline
   -> P8 ControlPlaneFragment integration and release conformance
 ```
 
-Each phase has a blueprint, implementation, and combined verification/conformance audit. A phase
-cannot hand off with a material deviation.
+Each unsplit phase has a blueprint, implementation, conformance check, and manual-review/audit path.
+A phase
+whose sizing gate splits work uses the child and root-integration sequence recorded in its artifact
+index. A phase cannot hand off with a material deviation.
 
 ## Success criteria
 
@@ -754,8 +760,9 @@ modern hosted runner proves only its actual environment, not a minimum-family fl
   invalid manifest entries fail with actionable errors.
 - Independent target/signing nodes have no unnecessary dependency edges.
 - No host-only/development mode exists.
-- After the approved one-time version-controlled stale-artifact removal, build executions never
-  create, delete, or modify `src/main/resources/bin`.
+- Existing ignored `src/main/resources/bin` and source-local Zig caches are fingerprint-identical
+  before and after migration/builds; source resource allowlists make them unpackageable without
+  deleting or moving user-owned artifacts.
 - A clean build and a rebuild after removing a manifest product yield a jar with exactly the
   declared product set and no stale libraries, headers, native sources, Zig caches, or scripts.
 - The packaged macOS file is the signed file; signature verification runs against the bundled copy.
@@ -856,9 +863,9 @@ Cross-compilation/package validation and real runtime validation are separate:
 - Signing credentials, if any are introduced, are unavailable to untrusted pull requests. PRs use
   only an explicitly safe ad hoc/test signature path.
 - Task validation and runtime jobs live in a hardware-specific selected-module workflow. Removing
-  the invalid JNI-header preparation from the existing root workflow is allowed, but that
-  workflow's pre-existing full-reactor command remains outside initiative evidence and no task
-  change may broaden or rely on its training execution.
+  invalid JNI-header preparation and supplying explicit native inputs in the existing build and
+  deploy workflows is allowed, but their pre-existing Maven commands remain outside initiative
+  evidence and no task change may broaden or rely on their training execution.
 
 ### Performance validation
 
@@ -898,7 +905,7 @@ changes.
 The completed planning branch `agent/hardware-utils-overhaul-plan` predates the updated branch
 format and is retained. Each future P0-P8 work phase uses one compliant root phase branch. A root
 begins from the completed preceding root; its action items use child branches with `-blueprint`,
-`-implementation`, `-validation`, and `-audit` suffixes.
+`-implementation`, and `-audit` suffixes.
 
 | Plan phase | Root phase branch |
 | --- | --- |
@@ -916,19 +923,30 @@ For each root phase:
 
 1. Create the root from the completed preceding root.
 2. Create the blueprint child from the root, complete it, and merge it back only when authorized.
-3. Create implementation, validation, and audit children in order from the updated root; merge each
-   completed child before creating its sibling.
+3. Create implementation and audit/conformance children in order from the updated root; merge each
+   completed child before creating its sibling. P1's authorized conformance-only exception omits
+   conformance/manual-review children.
 4. Do not start the next root phase from an unmerged child.
 5. Implementation and later action items maintain the temporary `AGENTS.md` phase-status block.
    After the audit child is merged and the root phase is complete, remove that block on the root
    before starting the next phase.
 
 If a blueprint's sizing gate creates child blueprints, use the same root phase prefix with a
-specific responsibility suffix, give every child its own implementation/validation/audit action
+specific responsibility suffix, give every child its own implementation/conformance/manual-review
+action
 items, and merge all child results into the root before phase-level audit and closeout. The
 blueprint must update this plan's prompts, parent artifacts, lineage, and phase artifact index
 before handoff. Replace or expand that phase's index entry to name every parent/child blueprint and
-completion record, every child validation and audit, and any root integration validation/audit.
+completion record, every child conformance/manual-review record, and any root conformance/audit.
+
+P1 uses that split rule with a developer-authorized conformance-only exception: the validation
+action is skipped in favor of conformance checking and manual review. After the parent blueprint
+merges, the root advances through the
+`phase-1-native-graph-{blueprint,implementation,audit}` family, then the
+`phase-1-loader-package-{blueprint,implementation,audit}` family, then the root conformance check
+and manual review, and finally `phase-1-native-build-audit`. Each child starts only after its
+predecessor merges. The superseded
+`phase-1-native-build-implementation` branch is never created.
 
 The audit action remains responsible for root closeout. It first produces its audit on the audit
 child. If the developer has not authorized the merge and closeout, it hands off a review-ready
@@ -960,17 +978,19 @@ requirement status, approved deviations, and environmental limits. When a prompt
 artifact-index entries, read these exact files plus those compact closeout summaries; do not infer
 an unbounded feature-history context.
 
-| Phase | Blueprint and completion record | Validation | Conformance audit |
-| --- | --- | --- | --- |
-| P0 | `docs/blueprints/hardware-utils/phase-0-compatibility-test-baseline.md` | `docs/validations/hardware-utils/phase-0-compatibility-test-baseline-validation.md` | `docs/audits/hardware-utils/phase-0-compatibility-test-baseline-conformance.md` |
-| P1 | `docs/blueprints/hardware-utils/phase-1-native-build-jni-packaging.md` | `docs/validations/hardware-utils/phase-1-native-build-jni-packaging-validation.md` | `docs/audits/hardware-utils/phase-1-native-build-jni-packaging-conformance.md` |
-| P2 | `docs/blueprints/hardware-utils/phase-2-topology-snapshot-model.md` | `docs/validations/hardware-utils/phase-2-topology-snapshot-model-validation.md` | `docs/audits/hardware-utils/phase-2-topology-snapshot-model-conformance.md` |
-| P3 | `docs/blueprints/hardware-utils/phase-3-affinity-executor-lifecycle.md` | `docs/validations/hardware-utils/phase-3-affinity-executor-lifecycle-validation.md` | `docs/audits/hardware-utils/phase-3-affinity-executor-lifecycle-conformance.md` |
-| P4 | `docs/blueprints/hardware-utils/phase-4-resource-monitor-pressure.md` | `docs/validations/hardware-utils/phase-4-resource-monitor-pressure-validation.md` | `docs/audits/hardware-utils/phase-4-resource-monitor-pressure-conformance.md` |
-| P5 | `docs/blueprints/hardware-utils/phase-5-linux-platform.md` | `docs/validations/hardware-utils/phase-5-linux-platform-validation.md` | `docs/audits/hardware-utils/phase-5-linux-platform-conformance.md` |
-| P6 | `docs/blueprints/hardware-utils/phase-6-windows-platform.md` | `docs/validations/hardware-utils/phase-6-windows-platform-validation.md` | `docs/audits/hardware-utils/phase-6-windows-platform-conformance.md` |
-| P7 | `docs/blueprints/hardware-utils/phase-7-macos-platform.md` | `docs/validations/hardware-utils/phase-7-macos-platform-validation.md` | `docs/audits/hardware-utils/phase-7-macos-platform-conformance.md` |
-| P8 | `docs/blueprints/hardware-utils/phase-8-control-plane-integration-release.md` | `docs/validations/hardware-utils/phase-8-control-plane-integration-release-validation.md` | `docs/audits/hardware-utils/phase-8-control-plane-integration-release-conformance.md` |
+| Phase                         | Blueprint and completion record                                               | Conformance/manual review                                        | Audit                                                                                 |
+|-------------------------------|-------------------------------------------------------------------------------|------------------------------------------------------------------|---------------------------------------------------------------------------------------|
+| P0                            | `docs/blueprints/hardware-utils/phase-0-compatibility-test-baseline.md`       | conformance/manual review; historical validation record retained | `docs/audits/hardware-utils/phase-0-compatibility-test-baseline-conformance.md`       |
+| P1 parent/root integration    | `docs/blueprints/hardware-utils/phase-1-native-build-jni-packaging.md`        | skipped; conformance check and manual review                     | `docs/audits/hardware-utils/phase-1-native-build-jni-packaging-conformance.md`        |
+| P1-A native graph/JNI/signing | `docs/blueprints/hardware-utils/phase-1-native-graph-jni-signing.md`          | skipped; conformance check and manual review                     | `docs/audits/hardware-utils/phase-1-native-graph-jni-signing-conformance.md`          |
+| P1-B loader/package/CI        | `docs/blueprints/hardware-utils/phase-1-loader-maven-packaging.md`            | skipped; conformance check and manual review                     | `docs/audits/hardware-utils/phase-1-loader-maven-packaging-conformance.md`            |
+| P2                            | `docs/blueprints/hardware-utils/phase-2-topology-snapshot-model.md`           | conformance/manual review                                        | `docs/audits/hardware-utils/phase-2-topology-snapshot-model-conformance.md`           |
+| P3                            | `docs/blueprints/hardware-utils/phase-3-affinity-executor-lifecycle.md`       | conformance/manual review                                        | `docs/audits/hardware-utils/phase-3-affinity-executor-lifecycle-conformance.md`       |
+| P4                            | `docs/blueprints/hardware-utils/phase-4-resource-monitor-pressure.md`         | conformance/manual review                                        | `docs/audits/hardware-utils/phase-4-resource-monitor-pressure-conformance.md`         |
+| P5                            | `docs/blueprints/hardware-utils/phase-5-linux-platform.md`                    | conformance/manual review                                        | `docs/audits/hardware-utils/phase-5-linux-platform-conformance.md`                    |
+| P6                            | `docs/blueprints/hardware-utils/phase-6-windows-platform.md`                  | conformance/manual review                                        | `docs/audits/hardware-utils/phase-6-windows-platform-conformance.md`                  |
+| P7                            | `docs/blueprints/hardware-utils/phase-7-macos-platform.md`                    | conformance/manual review                                        | `docs/audits/hardware-utils/phase-7-macos-platform-conformance.md`                    |
+| P8                            | `docs/blueprints/hardware-utils/phase-8-control-plane-integration-release.md` | conformance/manual review                                        | `docs/audits/hardware-utils/phase-8-control-plane-integration-release-conformance.md` |
 
 ## Prompt sequence
 
@@ -980,44 +1000,44 @@ Execution still follows P0 through P8. This ranking only identifies how demandin
 Implementation selections are provisional until their blueprints complete the mandatory sizing,
 split, and implementation-model reassessments.
 
-| Rank | Prompt | Selection |
-| ---: | --- | --- |
-| 1 | P4 blueprint - sampling and pressure mathematics/lifecycle | `gpt-5.6-sol`, `max` |
-| 2 | P7 blueprint - macOS public-API parity | `gpt-5.6-sol`, `max` |
-| 3 | P6 blueprint - Windows processor-group/native parity | `gpt-5.6-sol`, `max` |
-| 4 | P5 blueprint - Linux cgroup/provider/libc portability | `gpt-5.6-sol`, `max` |
-| 5 | P3 blueprint - affinity and executor concurrency | `gpt-5.6-sol`, `max` |
-| 6 | P2 blueprint - topology and snapshot ownership | `gpt-5.6-sol`, `max` |
-| 7 | P1 blueprint - native build/JNI/package ABI | `gpt-5.6-sol`, `max` |
-| 8 | P8 blueprint - core hot-loop and release integration | `gpt-5.6-sol`, `max` |
-| 9 | P0 blueprint - compatibility/test baseline | `gpt-5.6-sol`, `high` |
-| 10 | P4 provisional implementation | `gpt-5.6-sol`, `high` |
-| 11 | P7 provisional implementation | `gpt-5.6-sol`, `high` |
-| 12 | P6 provisional implementation | `gpt-5.6-sol`, `high` |
-| 13 | P5 provisional implementation | `gpt-5.6-sol`, `high` |
-| 14 | P3 provisional implementation | `gpt-5.6-sol`, `high` |
-| 15 | P2 provisional implementation | `gpt-5.6-sol`, `high` |
-| 16 | P1 provisional implementation | `gpt-5.6-sol`, `high` |
-| 17 | P8 provisional implementation | `gpt-5.6-sol`, `high` |
-| 18 | P0 implementation - compiled compatibility/test baseline | `gpt-5.6-sol`, `medium` |
-| 19 | P8 validation | `gpt-5.6-sol`, `high` |
-| 20 | P4 validation | `gpt-5.6-sol`, `high` |
-| 21 | P7 validation | `gpt-5.6-sol`, `high` |
-| 22 | P6 validation | `gpt-5.6-sol`, `high` |
-| 23 | P5 validation | `gpt-5.6-sol`, `high` |
-| 24 | P3 validation | `gpt-5.6-sol`, `high` |
-| 25 | P2 validation | `gpt-5.6-sol`, `high` |
-| 26 | P1 validation | `gpt-5.6-sol`, `high` |
-| 27 | P0 validation | `gpt-5.6-sol`, `medium` |
-| 28 | P8 final conformance audit | `gpt-5.6-sol`, `high` |
-| 29 | P4 conformance audit | `gpt-5.6-sol`, `high` |
-| 30 | P7 conformance audit | `gpt-5.6-sol`, `high` |
-| 31 | P6 conformance audit | `gpt-5.6-sol`, `high` |
-| 32 | P5 conformance audit | `gpt-5.6-sol`, `high` |
-| 33 | P3 conformance audit | `gpt-5.6-sol`, `high` |
-| 34 | P2 conformance audit | `gpt-5.6-sol`, `high` |
-| 35 | P1 conformance audit | `gpt-5.6-sol`, `high` |
-| 36 | P0 conformance audit | `gpt-5.6-sol`, `medium` |
+| Rank | Prompt                                                     | Selection               |
+|-----:|------------------------------------------------------------|-------------------------|
+|    1 | P4 blueprint - sampling and pressure mathematics/lifecycle | `gpt-5.6-sol`, `max`    |
+|    2 | P7 blueprint - macOS public-API parity                     | `gpt-5.6-sol`, `max`    |
+|    3 | P6 blueprint - Windows processor-group/native parity       | `gpt-5.6-sol`, `max`    |
+|    4 | P5 blueprint - Linux cgroup/provider/libc portability      | `gpt-5.6-sol`, `max`    |
+|    5 | P3 blueprint - affinity and executor concurrency           | `gpt-5.6-sol`, `max`    |
+|    6 | P2 blueprint - topology and snapshot ownership             | `gpt-5.6-sol`, `max`    |
+|    7 | P1 blueprint - native build/JNI/package ABI                | `gpt-5.6-sol`, `max`    |
+|    8 | P8 blueprint - core hot-loop and release integration       | `gpt-5.6-sol`, `max`    |
+|    9 | P0 blueprint - compatibility/test baseline                 | `gpt-5.6-sol`, `high`   |
+|   10 | P4 provisional implementation                              | `gpt-5.6-sol`, `high`   |
+|   11 | P7 provisional implementation                              | `gpt-5.6-sol`, `high`   |
+|   12 | P6 provisional implementation                              | `gpt-5.6-sol`, `high`   |
+|   13 | P5 provisional implementation                              | `gpt-5.6-sol`, `high`   |
+|   14 | P3 provisional implementation                              | `gpt-5.6-sol`, `high`   |
+|   15 | P2 provisional implementation                              | `gpt-5.6-sol`, `high`   |
+|   16 | P1-A and P1-B selected implementations                     | `gpt-5.6-sol`, `high`   |
+|   17 | P8 provisional implementation                              | `gpt-5.6-sol`, `high`   |
+|   18 | P0 implementation - compiled compatibility/test baseline   | `gpt-5.6-sol`, `medium` |
+|   19 | P8 conformance/manual review                               | `gpt-5.6-sol`, `high`   |
+|   20 | P4 conformance/manual review                               | `gpt-5.6-sol`, `high`   |
+|   21 | P7 conformance/manual review                               | `gpt-5.6-sol`, `high`   |
+|   22 | P6 conformance/manual review                               | `gpt-5.6-sol`, `high`   |
+|   23 | P5 conformance/manual review                               | `gpt-5.6-sol`, `high`   |
+|   24 | P3 conformance/manual review                               | `gpt-5.6-sol`, `high`   |
+|   25 | P2 conformance/manual review                               | `gpt-5.6-sol`, `high`   |
+|   26 | P1 child and root conformance/manual review                | `gpt-5.6-sol`, `high`   |
+|   27 | P0 conformance/manual review                               | `gpt-5.6-sol`, `medium` |
+|   28 | P8 final conformance audit                                 | `gpt-5.6-sol`, `high`   |
+|   29 | P4 conformance audit                                       | `gpt-5.6-sol`, `high`   |
+|   30 | P7 conformance audit                                       | `gpt-5.6-sol`, `high`   |
+|   31 | P6 conformance audit                                       | `gpt-5.6-sol`, `high`   |
+|   32 | P5 conformance audit                                       | `gpt-5.6-sol`, `high`   |
+|   33 | P3 conformance audit                                       | `gpt-5.6-sol`, `high`   |
+|   34 | P2 conformance audit                                       | `gpt-5.6-sol`, `high`   |
+|   35 | P1 child and root conformance audits                       | `gpt-5.6-sol`, `high`   |
+|   36 | P0 conformance audit                                       | `gpt-5.6-sol`, `medium` |
 
 ### P0 - compatibility contract and deterministic test baseline
 
@@ -1063,7 +1083,7 @@ split, and implementation-model reassessments.
 > `not applicable` where an area truly does not apply. Apply the workflow sizing/split gate. If
 > independent responsibilities make this blueprint too large, define responsibility-scoped child
 > blueprint action items and branch names now, give each a bounded context envelope, and update
-> this plan's P0 implementation/validation/audit lineage, parent artifacts, and phase artifact
+> this plan's P0 implementation/conformance/audit lineage, parent artifacts, and phase artifact
 > index. Only after this parent blueprint child is merged may those branches be created from the
 > updated P0 root; rerun the gate for every child. The root implementation prompt must not run
 > after a split.
@@ -1158,7 +1178,7 @@ split, and implementation-model reassessments.
 > defect maps to a later exact regression, and only blueprint-owned files changed. Merge this child
 > into the P0 root before validation.
 
-#### P0 validation prompt
+#### P0 validation prompt — SUPERSEDED, DO NOT RUN
 
 **Model: `gpt-5.6-sol`; reasoning effort: `medium`.**
 
@@ -1228,9 +1248,8 @@ independently classified all 16 acceptance criteria as `satisfied`, reran the di
 compatibility suite with 17 tests passing, and confirmed the `PASS` compatibility report hash,
 source/resource non-contamination, and clean diff checks. No approved deviations or environmental
 limits remain. The developer authorized closeout on 2026-07-30; the audit child merge is
-`ed839216`, and the subsequent P0 closeout commit tracks the audit report and removes the temporary
-status block. P1 must branch from that completed root; its blueprint records the exact inherited
-commit.
+`ed839216`, and closeout commit `03ff2060` tracks the audit report and removes the temporary status
+block. P1 root and parent blueprint branches inherit exactly `03ff2060`.
 
 ### P1 - universal Zig build, JNI ABI, loader, and packaging
 
@@ -1248,8 +1267,9 @@ commit.
 > `git status --short`. Read `AGENTS.md`, `docs/AGENT_WORKFLOW.md`, the parent plan, the exact P0
 > blueprint/completion, validation, and audit files linked by its phase artifact index entry and
 > its closeout summary, `mise.toml`, the hardware `pom.xml`, `build.zig`, native folder tree, JNI
-> declarations/headers, `JNIClassLoader`, `.github/workflows/build.yaml`, and clean packaged-
-> resource inventories. Do not inspect training.
+> declarations/headers, `JNIClassLoader`, the native setup in `.github/workflows/build.yaml` and
+> `.github/workflows/deploy.yaml`, and clean packaged-resource inventories. Do not inspect
+> training.
 >
 > Write `docs/blueprints/hardware-utils/phase-1-native-build-jni-packaging.md`. Settle the
 > checked-in folder manifest format and schema; recursive source extensions/order; aggregate
@@ -1270,9 +1290,9 @@ commit.
 > tests, timing evidence, and binary commands. Platform sensor/topology/pressure/affinity semantics,
 > core, benchmarks without an approved measurement need, unrelated CI, and all training work are
 > prohibited. Task validation/runtime jobs must use a hardware-specific selected-module workflow;
-> no root POM/plugin behavior inherited by training may change. The invalid header-copy step may be
-> removed from the existing root workflow, but its pre-existing full-reactor command is outside
-> initiative evidence and must not be modified to support this task.
+> no root POM/plugin behavior inherited by training may change. The invalid header-copy steps may
+> be removed from the existing build and deploy workflows, but their pre-existing Maven commands
+> are outside initiative evidence and must remain unchanged.
 >
 > Define package/artifact ownership, naming, data flow, and high-reasoning build, ABI, safety, and
 > compatibility contracts without enumerating minor files unnecessarily. Include a bounded
@@ -1282,7 +1302,7 @@ commit.
 > only where justified. Apply the workflow sizing/split gate. If independent build, JNI, loader,
 > or signing responsibilities exceed one implementation context, define responsibility-scoped
 > child blueprint action items, branch names, and context envelopes now, then update all P1
-> implementation/validation/audit prompts, parents, and the phase artifact index in this plan.
+> implementation/conformance/manual-review prompts, parents, and the phase artifact index in this plan.
 > Only after this parent blueprint child is merged may those branches be created from the updated
 > P1 root; rerun the gate per child. The root implementation prompt must not run after a split.
 >
@@ -1293,117 +1313,320 @@ commit.
 > purpose, ownership, key contracts, children, selected implementation model, risks, and unresolved
 > decisions.
 >
-> The output artifact is the finalized blueprint, plan summary, and implementation prompt. Handoff
-> for review and merge into the P1 root only when implementation needs no decision about manifest
-> format, headers, output paths, signing edges, loader lookup generation/extraction,
-> hardening/optimization, or runtime gates. Do not start implementation before that merge.
+> The output artifact is the finalized blueprint, plan summary, and, if split, the complete child
+> blueprint/implementation/conformance/manual-review and root prompt sequence. Handoff for
+> review and merge into the P1 root only when no child needs to decide manifest format, headers,
+> output paths, signing edges, loader lookup generation/extraction, hardening/optimization, or
+> runtime gates. Do not create the first child branch before that merge.
 
-#### P1 implementation prompt - PROVISIONAL, DO NOT RUN
+#### P1 developer-review summary
 
-**Provisional model: `gpt-5.6-sol`; provisional reasoning effort: `high`. The P1 blueprint must
-replace this selection and prompt body before implementation.**
+- Purpose: replace the source-writing native build and hardcoded loader table with a strict
+  manifest, target-local JNI ABI, signed target staging, exact packaging, safe extraction, and
+  enforceable binary/runtime gates.
+- Ownership: hardware native/Maven/generated resources and internal loader code, narrowly scoped
+  native CI setup, module-local tests, and P1 documentation. Platform semantics, core, root Maven
+  policy, unrelated workflow behavior, and training are excluded.
+- Key contracts: exact eight-product JSON schema; recursive sorted discovery; generated seven-class
+  JNI declarations plus project-owned target `jni_md.h`; glibc 2.17 plus musl; ReleaseSafe with
+  selected hardening; product-private signing and verified staged copy; generated TSV as the only
+  loader table; exact jar inventory; bounded owner-private extraction/cleanup; and LLVM plus real
+  runner gates.
+- Children: P1-A owns the native graph, JNI, signing, and Maven staging. After its audit merges,
+  P1-B owns loader, package/binary gates, runtime smoke, and CI. Root conformance checking,
+  manual review, and root audit follow both child audits; validation is skipped.
+- Implementation capability: both child implementations, conformance audits/manual reviews, and root
+  integration use `gpt-5.6-sol` with `high` reasoning. Each child blueprint must rerun the gate
+  and may raise capability/effort, but may not silently downgrade.
+- Primary risks: Zig 0.16 API drift, strict Windows UCRT imports, cross-tool signature semantics,
+  safe treatment of ignored source artifacts, and hosted runner/Docker availability.
+- Unresolved decisions: none. Protected release configuration must supply the two named signing
+  secrets before a non-snapshot deployment; that is an operational prerequisite.
 
-> After the P1 blueprint child is reviewed and merged, start
-> `hardware-utils-overhaul/phase-1-native-build-implementation` from the P1 root. The parent
+#### P1 root implementation prompt - SUPERSEDED, DO NOT RUN
+
+The parent blueprint's sizing gate rejected one P1 implementation context. No
+`hardware-utils-overhaul/phase-1-native-build-implementation` branch may be created. Use the two
+sequential child lifecycles below.
+
+#### P1-A native graph/JNI/signing blueprint prompt
+
+**Model: `gpt-5.6-sol`; reasoning effort: `max`.**
+
+> After the parent P1 blueprint is reviewed and merged, create
+> `hardware-utils-overhaul/phase-1-native-graph-blueprint` from the updated P1 root. The parent
 > artifact is
-> `docs/blueprints/hardware-utils/phase-1-native-build-jni-packaging.md`. Ownership is limited to
-> the blueprint's hardware build, generated-resource, loader, packaging-test, and
-> hardware-specific CI envelope. Inspect `git status --short`. Read `AGENTS.md`,
-> `docs/AGENT_WORKFLOW.md`, the plan's completed P0 phase artifact index entry and closeout
-> summary, the parent blueprint, and its exact bounded context envelope. Confirm this prompt is
-> finalized.
+> `docs/blueprints/hardware-utils/phase-1-native-build-jni-packaging.md`. Inspect
+> `git status --short`. Read `AGENTS.md`, `docs/AGENT_WORKFLOW.md`, the completed P0 artifact-index
+> files/closeout, the parent blueprint's Child A bounded context envelope, and only its named
+> native/JNI/Maven/tool inputs. Reinspect the installed Zig 0.16 APIs and rcodesign 0.29.0 command
+> surface. Do not inspect training or `JNIClassLoader`.
 >
-> Implement only the enumerated native folder manifest, Zig graph, manifest-derived loader
-> metadata, JNI generation/ABI header flow, Maven generated-resource packaging, safe
-> stale-artifact migration, `JNIClassLoader` corrections, package/binary tests, and
-> blueprint-approved CI setup. Platform resource/topology/pressure
-> calculations, affinity behavior, core, development-only modes, unrelated workflows,
-> benchmarks not named by the blueprint, and all training paths/commands are prohibited. Allowed
-> edits are the blueprint-owned implementation/tests/configuration, its completion record, and the
-> compact temporary P1 phase-status block in `AGENTS.md`; no other `AGENTS.md` content may change.
+> Write `docs/blueprints/hardware-utils/phase-1-native-graph-jni-signing.md`. Translate the parent
+> contract into an implementation checklist in dependency order: tool input pinning; tracked
+> native relocation and user-owned ignored-artifact fingerprint; strict JSON parser/schema;
+> recursive discovery; exact targets/flags; generated JNI declarations and target `jni_md.h`;
+> `JNI_OnLoad`; independent compile/sign/verify/install nodes; generated TSV; target caches and
+> staging; Maven `javac -h`, cleanup, Zig, and copy-resource ordering; P0 source-root update;
+> tracked `build.sh` deletion; exact existing-workflow invalid-header removal plus explicit
+> SDK/Zig/signer/LLVM/credential-file setup; focused tests; and exact failure/validation commands.
+> Preserve N01, N02, and the named legacy macOS export as exact exceptions; do not change either
+> existing workflow's Maven command or unrelated behavior.
 >
-> Run clean and repeated universal builds, rebuild after removing a manifest product, exact jar
-> inventory, loader fallback tests, binary gates, signature verification of the bundled copy, and
-> recorded clean/warm timings. If implementation exposes an unsettled ABI or packaging choice,
-> stop and append it to the blueprint. Otherwise append completion notes with changed files,
-> commands, results, acceptance-criteria evidence, approved deviations, and environmental limits.
-> Add/update the temporary
-> `AGENTS.md` phase-status block with the completed P0 root, active P1 root, completed blueprint
-> child, active implementation child, and blueprint/completion links.
->
-> The output artifact is the implemented native build/package pipeline plus its completion record
-> appended to `docs/blueprints/hardware-utils/phase-1-native-build-jni-packaging.md`.
->
-> Handoff only when a no-flag build deterministically builds every manifest product, automatically
-> discovers designated-folder sources, leaves source resources untouched after the approved
-> one-time migration, packages no stale content, and signs/verifies the packaged macOS artifacts.
-> Merge this child into the P1 root before validation.
+> Reapply the sizing gate and the implementation-model reassessment. The selected implementation
+> is `gpt-5.6-sol` with `high` reasoning; confirm it or update this plan before handoff. Allowed
+> edits are this child blueprint, the parent plan, and planning documentation only. The output is
+> an implementation-ready child blueprint and any required prompt correction. Handoff for review
+> and merge only when no implementation choice remains; do not create the implementation child
+> before that merge.
 
-#### P1 validation prompt
+#### P1-A native graph/JNI/signing implementation prompt
 
 **Model: `gpt-5.6-sol`; reasoning effort: `high`.**
 
-> After the P1 implementation child is reviewed and merged, start
-> `hardware-utils-overhaul/phase-1-native-build-validation` from the P1 root. The parent artifact
-> is the implementation completion record in
-> `docs/blueprints/hardware-utils/phase-1-native-build-jni-packaging.md`. Ownership remains the
-> P1 build/JNI/loader/package/CI envelope, with only blueprint-settled minor corrections permitted.
-> Inspect `git status --short`. Read `AGENTS.md`, `docs/AGENT_WORKFLOW.md`, the plan's completed P0
-> phase artifact index entry and closeout summary, the finalized P1 blueprint, implementation
-> diff, package inventories, tests, and completion notes. Do not inspect or run training.
+> After the P1-A blueprint is reviewed and merged, create
+> `hardware-utils-overhaul/phase-1-native-graph-implementation` from the P1 root. The parent
+> artifact is the finalized blueprint/completion file
+> `docs/blueprints/hardware-utils/phase-1-native-graph-jni-signing.md`. Inspect
+> `git status --short`; read `AGENTS.md`, `docs/AGENT_WORKFLOW.md`, the summarized parent contract,
+> and the exact Child A context envelope. Confirm the child blueprint retained this model
+> selection.
 >
-> Re-run clean, warm, repeated, and manifest-removal builds. Verify source-tree non-mutation,
-> deterministic discovery, fail-loud invalid manifests, exact jar contents, platform-correct JNI
-> declarations/ABI, manifest-to-package-to-loader coverage, loader LinkageError fallback, noexec
-> extraction handling/diagnosis, Windows permission handling, selected hardening/runtime settings,
-> parallel graph independence, staged signing order, bundled signature, architectures, exports, imports,
-> deployment targets, and runtime floors. Compare timing without making an unsupported speed
-> claim.
+> Implement only Child A's native graph, JNI, signing, Maven staging, relocated compatibility
+> tests, tracked migration, and exact existing-workflow native setup. Never delete, move, clean,
+> or rewrite ignored source binaries or source caches. Do not edit the loader, add the
+> hardware-specific workflow, change existing workflow Maven commands/unrelated behavior, alter
+> platform semantics/core, or touch training. Allowed documentation edits are the completion
+> record appended to the child blueprint and the compact temporary P1 block in `AGENTS.md`.
 >
-> Allowed edits are minor blueprint-settled test/naming/packaging corrections, the P1 completion
-> record, the temporary `AGENTS.md` phase-status block, and
-> `docs/validations/hardware-utils/phase-1-native-build-jni-packaging-validation.md`. Architecture
-> redesign, new manifest/ABI decisions, unrelated files, and all training work are prohibited. A
-> new architectural decision returns to blueprint; an ordinary defect returns to implementation.
+> Run direct Zig validation, clean and repeated selected-module package/verify commands, malformed
+> manifest cases, recursive discovery cases, generated-header/ABI checks, all eight static binary
+> gates available locally, signed-staged-copy checks, exact jar/catalog inventory, source
+> fingerprints, timing, `git diff --check`, and scope checks. If a schema/ABI/signing/staging
+> choice is missing, stop and return to blueprint. Otherwise append changed files, commands,
+> results, acceptance evidence, deviations, and environmental limits.
 >
-> The output artifact is the validation record above, containing all commands, results, fixes,
-> skips, environmental limits, and an acceptance-criterion matrix. Append its summary to the P1
-> completion record and update the phase-status block. Handoff for merge into the P1 root only
-> when the build/package pipeline passes every available gate and B06's intentionally deferred
-> platform runtime portions are explicit. Merge this child before audit.
+> Handoff only when the module lifecycle produces the exact eight products and catalog under
+> `target`, the signed macOS outputs are the staged outputs, source artifacts are unchanged, and
+> P0 compatibility passes. Handoff for P1-A conformance review and manual review.
+
+#### P1-A native graph/JNI/signing validation prompt — SUPERSEDED, DO NOT RUN
+
+**Model: `gpt-5.6-sol`; reasoning effort: `high`.**
+
+> After the P1-A implementation is reviewed and merged, create
+> `hardware-utils-overhaul/phase-1-native-graph-validation` from the P1 root. The parent artifact
+> is the P1-A implementation completion record. Read only the completed P0 summary/artifacts, the
+> parent P1 contract, P1-A blueprint/completion and implementation diff, and the exact Child A
+> inputs/outputs. Do not inspect training or loader/CI code.
+>
+> Independently rerun strict manifest/discovery failures, clean/warm/repeated universal builds,
+> generated JNI widths and declaration inventory, N01/N02 exception exactness, graph independence,
+> target flags, imports/exports/versions/deployment metadata, macOS signing and staged digest
+> identity, catalog determinism, exact resources, P0 compatibility, timing, ignored-artifact
+> fingerprints, and scope checks. Make only minor blueprint-settled corrections.
+>
+> Write
+> `docs/validations/hardware-utils/phase-1-native-graph-jni-signing-validation.md` with commands,
+> results, fixes, skips, limits, and an acceptance matrix; append its summary to the completion
+> record and update the temporary status block. New architecture returns to blueprint. Merge this
+> validation before P1-A audit.
+
+#### P1-A native graph/JNI/signing audit prompt
+
+**Model: `gpt-5.6-sol`; reasoning effort: `high`.**
+
+> After P1-A implementation is reviewed and merged, create
+> `hardware-utils-overhaul/phase-1-native-graph-audit` from the P1 root. The parent artifact is
+> the P1-A completion record and implementation evidence. Read the
+> summarized parent contract and exact P1-A blueprint/completion, diff, tests, and conformance/manual-review evidence.
+> Do not inspect training or expand into P1-B ownership.
+>
+> Independently classify every Child A requirement and its portions of B01-B04, B06, and B07 as
+> `satisfied`, `deviated`, `unverified`, or `ambiguous`. Verify source preservation, strict
+> inventory, ABI exceptions, signing DAG, staged identity, hardening, binary floors, and evidence
+> quality. Minor blueprint-settled corrections are allowed with rerun evidence; redesign returns
+> to the exact child blueprint.
+>
+> Write
+> `docs/audits/hardware-utils/phase-1-native-graph-jni-signing-conformance.md`, update the child
+> completion/conformance summaries and temporary status block, and hand off for merge. P1 remains
+> open; do not remove the status block or start P2. Only after this audit merges may P1-B start.
+
+#### P1-B loader/package/CI blueprint prompt
+
+**Model: `gpt-5.6-sol`; reasoning effort: `max`.**
+
+> After the P1-A audit is reviewed and merged, create
+> `hardware-utils-overhaul/phase-1-loader-package-blueprint` from the updated P1 root. The parent
+> artifact is
+> `docs/blueprints/hardware-utils/phase-1-native-build-jni-packaging.md`. Inspect
+> `git status --short`. Read `AGENTS.md`, `docs/AGENT_WORKFLOW.md`, completed P0 artifacts/
+> closeout, the parent blueprint's Child B envelope, and the exact P1-A blueprint/completion,
+> conformance/manual-review, catalog/staging handoff, and relevant diff. Read only the existing loader,
+> module packaging/test wiring, Child A's summarized existing-workflow native setup, and the new
+> hardware-workflow path. Do not inspect training.
+>
+> Write `docs/blueprints/hardware-utils/phase-1-loader-maven-packaging.md`. Translate the frozen
+> TSV/staging contract into an implementation checklist for immutable catalog parsing, generic
+> alias/product selection, allowed fallback taxonomy, owner-private bounded extraction, POSIX/
+> Windows permissions, immediate/deferred/stale cleanup, noexec diagnostics, load seam and class
+> initialization, exact jar/digest/binary/signature/warm-removal gates, smoke bundle/matrix,
+> Failsafe wiring, selected-module workflow, and protected credential-file setup. Name every
+> filesystem safety assertion and failure test. Do not change the manifest/schema, product graph,
+> ABI, flags, or signing order.
+>
+> Reapply the sizing and implementation-model gates. The selected implementation is
+> `gpt-5.6-sol` with `high` reasoning; confirm it or update this plan before handoff. Edit only
+> planning documentation. Handoff for review and merge only when no loader, cleanup, package,
+> runner, or signing-secret decision remains. Do not create implementation before that merge.
+
+#### P1-B loader/package/CI implementation prompt
+
+**Model: `gpt-5.6-sol`; reasoning effort: `high`.**
+
+> After the P1-B blueprint is reviewed and merged, create
+> `hardware-utils-overhaul/phase-1-loader-package-implementation` from the P1 root. The parent
+> artifact is the finalized blueprint/completion file
+> `docs/blueprints/hardware-utils/phase-1-loader-maven-packaging.md`. Inspect status and read the
+> exact Child B context envelope, summarized parent contract, and P1-A handoff. Confirm the child
+> blueprint retained this model selection.
+>
+> Implement only the internal catalog/loader/extraction code, loader/package/binary/smoke tests,
+> narrow module POM test wiring, and hardware-specific selected-module workflow. Treat Child A's
+> existing-workflow native setup as read-only unless a missing settled gate requires a minor
+> correction; never alter its Maven commands or unrelated behavior. Do not alter the native
+> manifest/graph/ABI/signing policy, platform semantics, core, unrelated files, ignored source
+> artifacts, or training. Append completion evidence to the P1-B blueprint and update only the
+> temporary P1 `AGENTS.md` block.
+>
+> Run unit failure matrices, clean/warm/repeated selected-module verify, isolated manifest-removal
+> rebuild, exact jar/digest/static binary/signature gates, glibc and available musl/Windows/macOS
+> smoke gates, source fingerprints, timing, diff checks, and workflow command/scope assertions.
+> New design returns to blueprint. Handoff only when the loader has no hardcoded product table,
+> fallback and cleanup are deterministic/safe, packaged bytes pass all available gates, and CI
+> selects no training. Handoff for P1-B conformance review and manual review.
+
+#### P1-B loader/package/CI validation prompt — SUPERSEDED, DO NOT RUN
+
+**Model: `gpt-5.6-sol`; reasoning effort: `high`.**
+
+> After the P1-B implementation is reviewed and merged, create
+> `hardware-utils-overhaul/phase-1-loader-package-validation` from the P1 root. The parent artifact
+> is the P1-B completion record. Read the summarized parent contract, P1-A handoff artifacts, and
+> exact P1-B blueprint/diff/tests/completion. Do not inspect training or redesign native inputs.
+>
+> Independently rerun catalog parser/alias/fallback/error taxonomy, zero/oversize copy, POSIX and
+> Windows permissions, class-initialization publication, immediate/shutdown/stale cleanup safety,
+> noexec diagnostics, exact package and staged digest, warm-removal, all static binary/signature
+> gates, required available runner smoke, selected-module CI assertions, release secret
+> non-disclosure, P0 compatibility, timing, fingerprints, and scope checks. Make only minor
+> blueprint-settled corrections.
+>
+> Write
+> `docs/validations/hardware-utils/phase-1-loader-maven-packaging-validation.md`, append its
+> summary to the completion record, and update the status block. Record unavailable external
+> runners as explicit B06 `unverified` portions. Merge before P1-B audit.
+
+#### P1-B loader/package/CI audit prompt
+
+**Model: `gpt-5.6-sol`; reasoning effort: `high`.**
+
+> After P1-B implementation is reviewed and merged, create
+> `hardware-utils-overhaul/phase-1-loader-package-audit` from the P1 root. The parent artifact is
+> `docs/validations/hardware-utils/phase-1-loader-maven-packaging-validation.md`. Read the
+> summarized parent contract, P1-A handoff summary, and exact P1-B blueprint/completion, diff,
+> tests, and conformance/manual-review evidence. Do not inspect training.
+>
+> Independently classify every Child B requirement and its B03-B06 portions. Audit unknown-arch
+> rejection, fallback exception boundary, extraction ownership and bounded cleanup, noexec
+> honesty, class-init publication, exact package/digest/signature evidence, runner classification,
+> workflow scope, and secret handling. Minor blueprint-settled corrections require rerun evidence;
+> redesign returns to blueprint.
+>
+> Write
+> `docs/audits/hardware-utils/phase-1-loader-maven-packaging-conformance.md`, update the child
+> records/status block, and hand off for root conformance checking and manual review. The root audit
+> records the final P1 disposition.
+
+#### P1 root integration validation prompt — SUPERSEDED, DO NOT RUN
+
+**Model: `gpt-5.6-sol`; reasoning effort: `high`.**
+
+> SUPERSEDED by the developer-authorized conformance check and manual review. Do not create or run
+> this validation action. After both child audits are reviewed and merged, the conformance review
+> consumes the same implementation surfaces directly. The former prompt was:
+>
+> After both child audits are reviewed and merged, create
+> `hardware-utils-overhaul/phase-1-native-build-integration-validation` from the P1 root. The
+> parent artifacts are the P1 parent blueprint and both child blueprint/completion, validation,
+> and audit triples in the artifact index. Inspect `git status --short`. Read `AGENTS.md`,
+> `docs/AGENT_WORKFLOW.md`, the completed P0 entry/closeout, the parent blueprint's summarized
+> context and 24 acceptance criteria, both child handoff summaries/diffs, exact package
+> inventories, and tests. Do not inspect or run training.
+>
+> Validate the combined producer/consumer boundary rather than repeating only child-local checks:
+> JSON -> source graph -> generated JNI -> signed stage -> TSV -> classpath -> jar -> catalog
+> selection -> extraction -> runtime load. Run clean, warm, repeated, and isolated
+> manifest-removal builds; P0 compatibility; strict manifest/catalog failures; all eight static
+> binary/digest/signature gates; loader failure matrices; available glibc, musl, Windows, and
+> macOS smoke/signature gates; source/user-artifact fingerprints; selected-module workflow
+> checks; timing; diff checks; and the exact acceptance matrix. Verify existing workflow Maven
+> commands are unchanged and no P1 command selects training.
+>
+> Allowed edits are the root integration record, temporary P1 status block, and minor
+> blueprint-settled cross-child test/naming/wiring corrections. A JSON/TSV, ABI, signing,
+> extraction, package, or runner-policy decision returns to the parent or owning child blueprint.
+> Write
+> `docs/validations/hardware-utils/phase-1-native-build-jni-packaging-integration-validation.md`
+> with commands, results, fixes, skips, limits, the 24-item matrix, and B06 carry. Handoff for
+> review and merge only when every available combined gate passes and every unavailable platform
+> runtime portion is explicit. Append a compact root integration completion summary to the parent
+> blueprint and merge before the root audit.
 
 #### P1 conformance audit prompt
 
 **Model: `gpt-5.6-sol`; reasoning effort: `high`.**
 
-> After the P1 validation child is reviewed and merged, start
+> After the conformance check and manual review are complete, start
 > `hardware-utils-overhaul/phase-1-native-build-audit` from the P1 root. The parent artifact is
-> `docs/validations/hardware-utils/phase-1-native-build-jni-packaging-validation.md`. Ownership is
-> limited to independent conformance review of the P1 envelope and minor blueprint-settled
-> corrections. Inspect `git status --short`. Read `AGENTS.md`, `docs/AGENT_WORKFLOW.md`, the
-> completed P0 phase artifact index entry and closeout summary, the P1 blueprint's summarized
-> parent context, implementation diff, package inventories, completion record, and validation
-> record. For split work, consume only the audited child context and summarized parent. Do not
-> inspect or run training.
+> the P1 parent blueprint, implementation records, and conformance/manual-review record; no
+> validation artifact is required.
+> Ownership is limited to independent P1 root conformance and minor blueprint-settled corrections.
+> Inspect `git status --short`. Read `AGENTS.md`, `docs/AGENT_WORKFLOW.md`, completed P0
+> artifacts/closeout, the parent P1 blueprint and review summary, both child
+> blueprint/completion/conformance/manual-review summaries, the root conformance record, final P1 diff,
+> package inventories, and relevant tests. Do not inspect or run training.
 >
-> Independently evaluate every P1 requirement and the validation evidence for deterministic
+> Independently evaluate every P1 requirement and the implementation/conformance evidence for deterministic
 > discovery, source-tree non-mutation, manifest failures, JNI ABI, jar/loader coverage, fallback
 > and extraction behavior, hardening, graph independence, signing, architectures, exports,
 > imports, deployment targets, runtime floors, and timing claims. Allowed edits are
 > `docs/audits/hardware-utils/phase-1-native-build-jni-packaging-conformance.md`, completion and
-> validation records, the P1 closeout summary in this plan, the temporary phase-status block, and
-> minor blueprint-settled corrections. If a correction is made, rerun and record affected
-> validation. Redesign, new ABI/manifest decisions, unrelated files, and training are prohibited.
+> conformance/manual-review records, the P1 closeout summary in this plan, the temporary phase-status block, and
+> minor blueprint-settled corrections. If a correction is made, rerun and record the affected
+> conformance check. Redesign, new ABI/manifest decisions, unrelated files, and training are prohibited.
 >
-> The output artifacts are the audit above, updated completion record, P1 closeout summary in this
-> plan, and, after the authorized merge, removal of the temporary P1 status block on the root with
-> the resulting root commit recorded when committed. Classify every P1, B01-B05, B07, and B06
-> gate-framework requirement exactly as `satisfied`, `deviated`, `unverified`, or `ambiguous`, with evidence;
-> carry B06 platform runtime portions to P5-P7. Append audit commands, results, fixes, skipped
-> checks, and environmental limits to the completion record. A material ABI, manifest, signing,
-> or packaging deviation returns to the exact blueprint or implementation action. Handoff follows
-> the audit/root-closeout contract: P1 is complete only after the authorized merge, P1
-> status-block removal, and closeout-summary update; do not create P2 earlier.
+> The output artifacts are the audit above, child/root record corrections, P1 closeout summary in
+> this plan, and, after the authorized merge, removal of the temporary P1 status block on the root
+> with the resulting root commit recorded when committed. Classify all 24 parent acceptance
+> criteria, both child requirements, B01-B05, B07, and the P1 B06 gate framework exactly as
+> `satisfied`, `deviated`, `unverified`, or `ambiguous`, with evidence; carry only the exact named
+> architecture/runtime B06 portions to P5-P7. Append commands, results, fixes, skips, and limits
+> to the applicable completion/root record. A material ABI, manifest, signing, loader, packaging,
+> or CI deviation returns to the exact parent/child action. Handoff follows the audit/root-closeout
+> contract: P1 is complete only after the authorized audit merge, P1 status-block removal,
+> closeout-summary update, and resulting root commit record; do not create P2 earlier.
+
+#### P1 closeout summary
+
+P1 is complete under the developer-authorized conformance-only workflow. Validation was removed
+from the global workflow; conformance checking and manual review are the sole verification path.
+The direct audit recorded 21 satisfied criteria, criteria 19/24 unverified, criterion 22 deviated,
+Child A ambiguous because its historical artifact chain is absent, Child B satisfied, and B01-B05,
+B07, and the P1 B06 gate framework satisfied. No production correction was made. The audit is
+`docs/audits/hardware-utils/phase-1-native-build-jni-packaging-conformance.md`; no P2 work was
+created.
 
 ### P2 - validated topology and immutable snapshot foundation
 
@@ -1493,37 +1716,6 @@ replace this selection and prompt body before implementation.**
 > Handoff only when active logical CPUs have complete deterministic mappings, sparse/missing
 > topology is safe, snapshots cannot alias provider storage, remaps/versioning are correct, and
 > the core-zero-only case passes. Merge this child into the P2 root before validation.
-
-#### P2 validation prompt
-
-**Model: `gpt-5.6-sol`; reasoning effort: `high`.**
-
-> After the P2 implementation child is reviewed and merged, start
-> `hardware-utils-overhaul/phase-2-topology-snapshot-validation` from the P2 root. The parent
-> artifact is the implementation completion record in
-> `docs/blueprints/hardware-utils/phase-2-topology-snapshot-model.md`. Ownership remains the P2
-> topology/snapshot/test envelope, with only blueprint-settled minor corrections permitted.
-> Inspect `git status --short`. Read `AGENTS.md`, `docs/AGENT_WORKFLOW.md`,
-> `docs/ARCHITECTURE.md`, the plan's completed P0-P1 phase artifact index entries and closeout
-> summaries, the finalized P2 blueprint, implementation diff, tests, and completion notes. Do not
-> inspect or run training.
->
-> Re-run API/topology/snapshot tests and independently inspect deterministic ordering, sparse
-> indexing, global identity, cache fallbacks, defensive copies, record equality/hash consistency,
-> allowed-mask ownership, update coalescing, VarHandle/volatile publication reasoning, socket
-> versions, pressure-independent membership, and core-zero behavior.
->
-> Allowed edits are minor blueprint-settled local test/implementation corrections, the P2
-> completion record, the temporary phase-status block, and
-> `docs/validations/hardware-utils/phase-2-topology-snapshot-model-validation.md`.
-> Architecture/ID/publication redesign, unrelated files, and training are prohibited. A new
-> architectural decision returns to blueprint; an ordinary defect returns to implementation.
->
-> The output artifact is the validation record above, containing commands, results, fixes, skips,
-> environmental limits, and the acceptance matrix. Append its summary to the completion record
-> and update the phase-status block. Handoff for merge into the P2 root only when P2's common
-> T01-T06 portions pass and platform collection portions of T01-T03/T05 are explicitly deferred
-> to P5-P7. Merge this child before audit.
 
 #### P2 conformance audit prompt
 
@@ -1645,35 +1837,6 @@ replace this selection and prompt body before implementation.**
 > execute/shutdown races are deterministic, termination is truthful, original affinity is
 > restored where exact affinity exists, mask-shaped overloads never report partial coverage as
 > success, and all global hooks/maps clean up. Merge this child into the P3 root before validation.
-
-#### P3 validation prompt
-
-**Model: `gpt-5.6-sol`; reasoning effort: `high`.**
-
-> After the P3 implementation child is reviewed and merged, start
-> `hardware-utils-overhaul/phase-3-affinity-executor-validation` from the P3 root. The parent
-> artifact is the implementation completion record in
-> `docs/blueprints/hardware-utils/phase-3-affinity-executor-lifecycle.md`. Ownership remains the
-> P3 affinity/executor/test envelope, with only blueprint-settled minor corrections permitted.
-> Inspect `git status --short`. Read `AGENTS.md`, `docs/AGENT_WORKFLOW.md`, the plan's completed
-> P0-P2 phase artifact index entries and closeout summaries, the finalized P3 blueprint,
-> implementation diff, tests, and completion notes. Do not inspect or run training.
->
-> Re-run API and deterministic/stress lifecycle tests. Inspect the state machine and
-> happens-before argument, check fresh-thread concurrency, singleton races, command failure,
-> shutdown/close/restart, interrupt preservation, await deadlines, identity removal, cleaner
-> reachability, hook count, unsupported pinners, and base-mask restoration.
->
-> Allowed edits are minor blueprint-settled local test/implementation corrections, the P3
-> completion record, the temporary phase-status block, and
-> `docs/validations/hardware-utils/phase-3-affinity-executor-lifecycle-validation.md`.
-> Lifecycle/capability redesign, task serialization, unrelated files, and training are prohibited.
-> A new architectural decision returns to blueprint; an ordinary defect returns to implementation.
->
-> The output artifact is the validation record above, with commands, results, fixes, skips,
-> environmental limits, and the acceptance matrix. Append its summary to the completion record
-> and update the phase-status block. Handoff for merge into the P3 root only when A01-A02 and P3
-> requirements pass without material deviation. Merge this child before audit.
 
 #### P3 conformance audit prompt
 
@@ -1821,42 +1984,6 @@ replace this selection and prompt body before implementation.**
 > first/reset samples do not spike, and old snapshots remain immutable. Merge this child into the
 > P4 root before validation.
 
-#### P4 validation prompt
-
-**Model: `gpt-5.6-sol`; reasoning effort: `high`.**
-
-> After the P4 implementation child is reviewed and merged, start
-> `hardware-utils-overhaul/phase-4-pressure-monitor-validation` from the P4 root. The parent
-> artifact is the implementation completion record in
-> `docs/blueprints/hardware-utils/phase-4-resource-monitor-pressure.md`. Ownership remains the P4
-> sampling/pressure/lifecycle/test envelope, with only blueprint-settled minor corrections
-> permitted and core read-only. Inspect `git status --short`. Read `AGENTS.md`,
-> `docs/AGENT_WORKFLOW.md`, the plan's completed P0-P3 phase artifact index entries and closeout
-> summaries, the finalized P4 blueprint, implementation diff, completion notes, and tests. Do not
-> inspect or run training.
->
-> Independently rederive/check units and pressure bounds; re-run fake-clock, poll-start/
-> publication/overrun, duration-boundary, irregular interval, first-sample, reset/wrap, zero-limit,
-> stale/failure, listener ordering/coalescing/Error/close, timestamp, immutability, exhaustive
-> listener reentrant mutation, ratio-property, API, and hardware verification tests. Check that
-> high healthy I/O and productive
-> CPU work stay low, each pressure signal is monotonic, correlated signals are not accidentally
-> amplified, no state sidecar bypasses snapshot ownership, and no polling/listener resource leaks
-> remain. Make only minor blueprint-settled fixes.
->
-> Allowed edits are minor blueprint-settled local test/implementation corrections, the P4
-> completion record, the temporary phase-status block, and
-> `docs/validations/hardware-utils/phase-4-resource-monitor-pressure-validation.md`.
-> Mathematical/lifecycle redesign, platform expansion, core production changes, unrelated files,
-> and training are prohibited. A new architectural decision returns to blueprint; an ordinary
-> defect returns to implementation.
->
-> The output artifact is the validation record above, with commands, results, fixes, skips,
-> environmental limits, and the acceptance matrix. Append its summary to the completion record
-> and update the phase-status block. Handoff for merge into the P4 root only when P4's common
-> portions of R01-R10/R13-R14 and all P4 requirements pass, with platform portions of R01-R04,
-> R06, and R13-R14 explicitly deferred to P5-P7. Merge this child before audit.
-
 #### P4 conformance audit prompt
 
 **Model: `gpt-5.6-sol`; reasoning effort: `high`.**
@@ -1985,40 +2112,6 @@ replace this selection and prompt body before implementation.**
 > or unavailable real-runtime gates are explicitly `unverified` and carried as release blockers
 > pending a developer-approved deviation. Merge this child into the P5 root before validation.
 
-#### P5 validation prompt
-
-**Model: `gpt-5.6-sol`; reasoning effort: `high`.**
-
-> After the P5 implementation child is reviewed and merged, start
-> `hardware-utils-overhaul/phase-5-linux-validation` from the P5 root. The parent artifact is the
-> implementation completion record in
-> `docs/blueprints/hardware-utils/phase-5-linux-platform.md`. Ownership remains the bounded Linux
-> platform envelope, with only blueprint-settled minor corrections permitted. Inspect
-> `git status --short`. Read `AGENTS.md`, `docs/AGENT_WORKFLOW.md`, the plan's completed P0-P4
-> phase artifact index entries and closeout summaries, the finalized P5 blueprint, implementation
-> diff, fixtures, tests, binaries, and completion notes. Do not inspect or run training.
->
-> Re-run and adversarially review cgroup scope without writes, v1/v2/hybrid/bare fixtures, unlimited
-> quota, cpuset changes, PSI zero/reset/staleness, cgroup-versus-host attribution without
-> fabricated per-CPU apportionment, complete large/partial reads, missing-path log behavior,
-> ordinary/loop device accounting, duplicate local core IDs, sparse/offline CPUs,
-> cache fallback, sensor validity/cadence, JNI buffer validation, affinity restore, imports/
-> `DT_NEEDED`/GLIBC versions, architecture, and real glibc/musl smoke. Make only local
-> blueprint-settled corrections.
->
-> Allowed edits are minor blueprint-settled Linux test/implementation corrections, the P5
-> completion record, the temporary phase-status block, and
-> `docs/validations/hardware-utils/phase-5-linux-platform-validation.md`. Common-contract redesign,
-> other platforms, core, unrelated files, and training are prohibited. A new architectural
-> decision returns to blueprint; an ordinary defect returns to implementation.
->
-> The output artifact is the validation record above, with commands, results, fixes, skips,
-> environmental limits, and the acceptance matrix. Append its summary to the P5 completion record
-> and update the phase-status block. Handoff for merge into the P5 root only when Linux portions
-> of R01-R02, R06, R11-R14, T02, T05, B06, and all P5 requirements pass, or unavailable
-> real-runtime gates are explicitly carried as release-blocking `unverified` items. Merge this
-> child before audit.
-
 #### P5 conformance audit prompt
 
 **Model: `gpt-5.6-sol`; reasoning effort: `high`.**
@@ -2142,38 +2235,6 @@ replace this selection and prompt body before implementation.**
 > canonical units, multi-group affinity reports correctly, older documented fallbacks work, and
 > runtime/import gates are evidenced; an unavailable minimum-family runtime remains an explicit
 > release-blocking `unverified` item. Merge this child into the P6 root before validation.
-
-#### P6 validation prompt
-
-**Model: `gpt-5.6-sol`; reasoning effort: `high`.**
-
-> After the P6 implementation child is reviewed and merged, start
-> `hardware-utils-overhaul/phase-6-windows-validation` from the P6 root. The parent artifact is
-> the implementation completion record in
-> `docs/blueprints/hardware-utils/phase-6-windows-platform.md`. Ownership remains the bounded
-> Windows platform envelope, with only blueprint-settled minor corrections permitted. Inspect
-> `git status --short`. Read `AGENTS.md`, `docs/AGENT_WORKFLOW.md`, the plan's completed P0-P5
-> phase artifact index entries and closeout summaries, the finalized P6 blueprint, implementation
-> diff, fixtures, tests, binaries, and completion notes. Do not inspect or run training.
->
-> Re-run and adversarially inspect structure offsets/alignment/bounds, truncated blobs, bit 63,
-> multiple groups and >64 processors, deterministic logical IDs, packages/cores/caches/efficiency,
-> current/release affinity, job quota and mask units, cumulative counters, working-set underflow,
-> capacity signals, null/short arrays, concurrent initialization, timer JNI symbols, dynamic API
-> fallback, PE architectures/imports, and real runtime smoke. Make only blueprint-settled fixes.
->
-> Allowed edits are minor blueprint-settled Windows test/implementation corrections, the P6
-> completion record, the temporary phase-status block, and
-> `docs/validations/hardware-utils/phase-6-windows-platform-validation.md`. Shared redesign, other
-> platforms, core, unrelated files, and training are prohibited. A new architectural decision
-> returns to blueprint; an ordinary defect returns to implementation.
->
-> The output artifact is the validation record above, with commands, results, fixes, skips,
-> environmental limits, and the acceptance matrix. Append its summary to the P6 completion record
-> and update the phase-status block. Handoff for merge into the P6 root only when Windows portions
-> of R01, R04, R13, T03, T05, A03, N01, B06, and every P6 requirement pass, or unavailable
-> minimum-family runtime gates remain explicit release-blocking `unverified` items. Merge this
-> child before audit.
 
 #### P6 conformance audit prompt
 
@@ -2308,39 +2369,6 @@ replace this selection and prompt body before implementation.**
 > semantics are honest, and no private/realtime behavior remains; an unavailable minimum-family
 > runtime remains an explicit release-blocking `unverified` item. Merge this child into the P7
 > root before validation.
-
-#### P7 validation prompt
-
-**Model: `gpt-5.6-sol`; reasoning effort: `high`.**
-
-> After the P7 implementation child is reviewed and merged, start
-> `hardware-utils-overhaul/phase-7-macos-validation` from the P7 root. The parent artifact is the
-> implementation completion record in
-> `docs/blueprints/hardware-utils/phase-7-macos-platform.md`. Ownership remains the bounded macOS
-> platform envelope, with only blueprint-settled minor corrections permitted. Inspect
-> `git status --short`. Read `AGENTS.md`, `docs/AGENT_WORKFLOW.md`, the plan's completed P0-P6
-> phase artifact index entries and closeout summaries, the finalized P7 blueprint, implementation
-> diff, fixtures, tests, binaries, and completion notes. Do not inspect or run training.
->
-> Re-run and independently inspect all public API usage, Intel/Apple Silicon topology ordering and
-> fallbacks, complete cache/info maps, cumulative counter units, working-memory semantics, thermal/
-> low-power validity, Mach buffer/timebase cleanup, shift bounds, managed logical ownership,
-> `LOCALITY_HINT`, tag-zero release, unsupported physical CPU behavior, absence of realtime
-> policy, CPU/I/O telemetry pressure neutrality, deployment target, frameworks/imports, bundled
-> signature, and real runtime smoke. Make only blueprint-settled fixes.
->
-> Allowed edits are minor blueprint-settled macOS test/implementation corrections, the P7
-> completion record, the temporary phase-status block, and
-> `docs/validations/hardware-utils/phase-7-macos-platform-validation.md`. Private APIs, semantic
-> redesign, other platforms, core, unrelated files, and training are prohibited. A new
-> architectural decision returns to blueprint; an ordinary defect returns to implementation.
->
-> The output artifact is the validation record above, with commands, results, fixes, skips,
-> environmental limits, and the acceptance matrix. Append its summary to the P7 completion record
-> and update the phase-status block. Handoff for merge into the P7 root only when macOS portions
-> of R01, R03, R13, T01, T05, A04, N02, B06, and all P7 requirements pass, or unavailable
-> minimum-family runtime gates remain explicit release-blocking `unverified` items. Merge this
-> child before audit.
 
 #### P7 conformance audit prompt
 
@@ -2483,49 +2511,6 @@ replace this selection and prompt body before implementation.**
 > allocation/lock/I/O free, batch/cache responses are finite/monotonic/progressive, selected
 > modules compile and test without training, and every known defect has a disposition. Merge this
 > child into the P8 root before validation.
-
-#### P8 validation prompt
-
-**Model: `gpt-5.6-sol`; reasoning effort: `high`.**
-
-> After the P8 implementation child is reviewed and merged, start
-> `hardware-utils-overhaul/phase-8-core-release-validation` from the P8 root. The parent artifact
-> is the implementation completion record in
-> `docs/blueprints/hardware-utils/phase-8-control-plane-integration-release.md`. Ownership remains
-> the bounded P8 core-integration/release envelope, with only blueprint-settled minor corrections
-> permitted. Inspect `git status --short`. Read `AGENTS.md`, `docs/AGENT_WORKFLOW.md`, the plan,
-> its exact completed P0-P7 phase artifact index entries and closeout summaries, the P8 blueprint
-> and completion record, the complete non-training implementation diff, tests, and final
-> package/CI evidence. Do not inspect, edit, build, or test training.
->
-> Run every phase's required validation that is available: hardware `verify`; focused core and
-> lattice tests; selected Reactor/Spring compatibility; approved benchmark only if a performance
-> claim exists; compatibility baseline; clean/repeated/manifest-removal jar inventory; native
-> architecture/export/import/runtime-floor/deployment/signature gates; deterministic platform
-> fixtures; real platform smoke jobs; pressure/cadence/listener/lifecycle/property tests; executor
-> races; and final thread/native-resource cleanup. Use explicit selected-module Maven commands and
-> no root command that includes training.
->
-> Check every success criterion and every defect-ledger ID. Verify `git diff --check`, stale
-> names/resources/platform-support documentation, exact changed-file scope,
-> `git diff --name-only 900d8c50 -- euhedral-training` has no output, and
-> `git status --short -- euhedral-training` has no output. Make only minor
-> blueprint-settled corrections such as missing deterministic assertions, local naming/formatting,
-> or validation omissions; do not redesign architecture.
->
-> Allowed edits are those minor blueprint-settled corrections, the P8 completion record, the
-> temporary phase-status block, and
-> `docs/validations/hardware-utils/phase-8-control-plane-integration-release-validation.md`. New
-> architecture, scope expansion, broad cleanup, unrelated files, and every training action are
-> prohibited. A new architectural decision returns to blueprint; an ordinary defect returns to
-> implementation.
->
-> The output artifact is the validation record above, with every command, result, fix, skip, exact
-> environmental limit, changed-file/scope check, known-defect disposition, and acceptance matrix.
-> Append its summary to the completion record and update the phase-status block. Handoff for merge
-> into the P8 root only when no material deviation remains and every unavailable platform gate is
-> explicitly recorded according to the approved required-versus-unverified rules. Merge this
-> child before audit.
 
 #### P8 final conformance audit prompt
 

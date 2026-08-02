@@ -1,0 +1,199 @@
+{
+  "schemaVersion": 1,
+  "sourceRules": {
+    "compiledExtensions": [".c", ".cc", ".cpp", ".cxx"],
+    "passiveExtensions": [".h", ".hh", ".hpp", ".hxx", ".inc"],
+    "recursive": true,
+    "followSymlinks": false
+  },
+  "operatingSystems": [
+    {
+      "id": "linux",
+      "runtimeAliases": [
+        {"match": "exact", "value": "linux"}
+      ]
+    },
+    {
+      "id": "macos",
+      "runtimeAliases": [
+        {"match": "exact", "value": "darwin"},
+        {"match": "exact", "value": "mac os x"},
+        {"match": "exact", "value": "macos"}
+      ]
+    },
+    {
+      "id": "windows",
+      "runtimeAliases": [
+        {"match": "prefix", "value": "windows"}
+      ]
+    }
+  ],
+  "architectures": [
+    {
+      "id": "x64",
+      "zig": "x86_64",
+      "runtimeAliases": ["amd64", "x86-64", "x86_64"],
+      "elfMachine": "EM_X86_64",
+      "peMachine": "IMAGE_FILE_MACHINE_AMD64",
+      "machoCpu": "X86_64"
+    },
+    {
+      "id": "arm64",
+      "zig": "aarch64",
+      "runtimeAliases": ["aarch64", "arm64"],
+      "elfMachine": "EM_AARCH64",
+      "peMachine": "IMAGE_FILE_MACHINE_ARM64",
+      "machoCpu": "ARM64"
+    }
+  ],
+  "components": [
+    {
+      "id": "linux-jni",
+      "os": "linux",
+      "sourceRoots": ["common", "linux"],
+      "outputStem": "linux_jni",
+      "extension": "so"
+    },
+    {
+      "id": "macos-jni",
+      "os": "macos",
+      "sourceRoots": ["common", "macos"],
+      "outputStem": "osx_jni",
+      "extension": "dylib"
+    },
+    {
+      "id": "windows-jni",
+      "os": "windows",
+      "sourceRoots": ["common", "windows"],
+      "outputStem": "windows_jni",
+      "extension": "dll"
+    }
+  ],
+  "gatePolicies": [
+    {
+      "id": "linux-glibc",
+      "format": "elf",
+      "allowedLibraries": ["libc.so.6"],
+      "forbiddenLibraryFragments": ["libc++", "libgcc_s", "libstdc++"],
+      "maximumSymbolVersion": "GLIBC_2.17"
+    },
+    {
+      "id": "linux-musl",
+      "format": "elf",
+      "allowedLibraries": ["libc.so"],
+      "forbiddenLibraryFragments": ["libc++", "libgcc_s", "libstdc++"],
+      "maximumSymbolVersion": "none"
+    },
+    {
+      "id": "macos-11",
+      "format": "macho",
+      "allowedLibraries": ["/usr/lib/libSystem.B.dylib"],
+      "forbiddenLibraryFragments": ["CoreFoundation", "libc++", "libobjc"],
+      "installNameTemplate": "@rpath/{outputFilename}",
+      "minimumDeploymentTarget": "11.0"
+    },
+    {
+      "id": "windows-10",
+      "format": "pe",
+      "allowedLibraries": [
+        "KERNEL32.dll",
+        "api-ms-win-crt-heap-l1-1-0.dll",
+        "api-ms-win-crt-runtime-l1-1-0.dll"
+      ],
+      "forbiddenLibraryFragments": ["libc++", "libgcc", "libstdc++", "stdio"],
+      "minimumRuntime": "windows-10"
+    }
+  ],
+  "products": [
+    {
+      "id": "linux-glibc-x64",
+      "component": "linux-jni",
+      "architecture": "x64",
+      "libc": "glibc",
+      "zigTarget": "x86_64-linux-gnu.2.17",
+      "gatePolicy": "linux-glibc",
+      "resourcePath": "bin/linux/glibc/linux_jni_x64.so",
+      "buildOrder": 10,
+      "loadOrder": 10
+    },
+    {
+      "id": "linux-glibc-arm64",
+      "component": "linux-jni",
+      "architecture": "arm64",
+      "libc": "glibc",
+      "zigTarget": "aarch64-linux-gnu.2.17",
+      "gatePolicy": "linux-glibc",
+      "resourcePath": "bin/linux/glibc/linux_jni_arm64.so",
+      "buildOrder": 20,
+      "loadOrder": 10
+    },
+    {
+      "id": "linux-musl-x64",
+      "component": "linux-jni",
+      "architecture": "x64",
+      "libc": "musl",
+      "zigTarget": "x86_64-linux-musl",
+      "gatePolicy": "linux-musl",
+      "resourcePath": "bin/linux/musl/linux_jni_x64.so",
+      "buildOrder": 30,
+      "loadOrder": 20
+    },
+    {
+      "id": "linux-musl-arm64",
+      "component": "linux-jni",
+      "architecture": "arm64",
+      "libc": "musl",
+      "zigTarget": "aarch64-linux-musl",
+      "gatePolicy": "linux-musl",
+      "resourcePath": "bin/linux/musl/linux_jni_arm64.so",
+      "buildOrder": 40,
+      "loadOrder": 20
+    },
+    {
+      "id": "macos-x64",
+      "component": "macos-jni",
+      "architecture": "x64",
+      "libc": "none",
+      "zigTarget": "x86_64-macos.11.0",
+      "gatePolicy": "macos-11",
+      "resourcePath": "bin/osx/osx_jni_x64.dylib",
+      "buildOrder": 50,
+      "loadOrder": 10,
+      "signingIdentifier": "io.euhedral.execution.hardware-utils.osx-jni-x64"
+    },
+    {
+      "id": "macos-arm64",
+      "component": "macos-jni",
+      "architecture": "arm64",
+      "libc": "none",
+      "zigTarget": "aarch64-macos.11.0",
+      "gatePolicy": "macos-11",
+      "resourcePath": "bin/osx/osx_jni_arm64.dylib",
+      "buildOrder": 60,
+      "loadOrder": 10,
+      "signingIdentifier": "io.euhedral.execution.hardware-utils.osx-jni-arm64"
+    },
+    {
+      "id": "windows-x64",
+      "component": "windows-jni",
+      "architecture": "x64",
+      "libc": "none",
+      "zigTarget": "x86_64-windows-gnu",
+      "gatePolicy": "windows-10",
+      "resourcePath": "bin/windows/windows_jni_x64.dll",
+      "buildOrder": 70,
+      "loadOrder": 10
+    },
+    {
+      "id": "windows-arm64",
+      "component": "windows-jni",
+      "architecture": "arm64",
+      "libc": "none",
+      "zigTarget": "aarch64-windows-gnu",
+      "gatePolicy": "windows-10",
+      "resourcePath": "bin/windows/windows_jni_arm64.dll",
+      "buildOrder": 80,
+      "loadOrder": 10
+    }
+  ]
+}
