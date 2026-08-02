@@ -852,6 +852,84 @@ create `hardware-utils-overhaul/phase-3-executor-lifecycle-implementation` from 
 
 ## Implementation completion record
 
-Not started. The implementation branch appends its exact changed surface, commands/results,
-E1-E12 and stress evidence, A02/parent-criteria classification, fixes, skips, limits, and final
-scope/status here. A material contract change returns to this blueprint before code continues.
+Implementation completed on
+`hardware-utils-overhaul/phase-3-executor-lifecycle-implementation`, based on the reviewed and
+merged P3 root at `bfca49b6`.
+
+### Changed surface
+
+- Replaced `PinnedThreadExecutor`'s check-then-put map, independent atomic lifecycle fields,
+  per-executor hooks, strong cleaner action, joining shutdown, and polling deadline with the frozen
+  lifecycle monitor, exact weak registry entries, one registry hook, noncapturing cleanup action,
+  elapsed-subtraction await, and gated `closeAll` design.
+- Every accepted execution now constructs one distinct NEW thread outside the lifecycle monitor,
+  rechecks state/epoch, identity-registers and starts under that monitor, and runs through the P3-A
+  managed binding before affinity and user code. Nested cleanup attempts release, binding close,
+  and exact task removal while preserving command/fatal failures and caller interruption.
+- Added only package-private nested registry, cleanup/hook, task-binding, and deterministic
+  thread-configuration seams. No public/protected descriptor, module directive, P3-A source,
+  native/platform source, resource/topology/monitor source, core/benchmark production, CI,
+  training, Reactor, or Spring file changed.
+- Added `PinnedThreadExecutorLifecycleTest`; the two existing executor compatibility tests required
+  no changes. Updated only this completion record and the temporary P3 status block in `AGENTS.md`.
+
+### Commands, results, skips, and limits
+
+- `mise` is not installed. The documented fallback used OpenJDK 21.0.11 explicitly from
+  `/usr/lib/jvm/java-21-openjdk-amd64` with system Maven 3.6.3. The JDK matches the repository
+  default major version; Maven is below the pinned 3.9.16 and disables the build cache.
+- The focused lifecycle command passed 16 tests: 14 lifecycle/boundary/stress tests plus
+  `PinnedThreadExecutorTest` and the P0 concurrent-fresh-thread compatibility anchor. The complete
+  lifecycle class, including its 50-round stress test, also passed five consecutive reruns.
+- The P0 API/mask/fresh-thread command passed 3 tests after a clean Java 21 compilation. It reported
+  zero removed or changed public descriptors/module directives and only the already-reviewed
+  P2/P3-A additions.
+- A direct-goal, read-only `euhedral-core` compile/test passed all 99 core tests under Java 21. The
+  exact `-pl euhedral-core -am test` lifecycle command cannot reach core because the hardware Zig
+  phase fails first.
+- `mvn -B -pl euhedral-hardware-utils -am verify` stops before tests at
+  `exec-maven-plugin:zig-build`: the `ZIG` executable parameter is missing or invalid. No `zig` or
+  `rcodesign` executable is installed, so native packaging/signing verification is unavailable.
+  Source or build configuration was not changed to bypass that limit.
+- Scope and hygiene checks passed: `git diff --check` is clean, and diffs from `bfca49b6` under
+  training, core/benchmark production, P3-A `ThreadTools`/controller, and platform affinity paths
+  are empty. Final status contains only the two owned Java files, this completion record, and the
+  temporary P3 status block.
+
+### E1-E12, stress, and cleanup evidence
+
+- E1 proves 32 synchronized acquisition callers receive one identity, entry, cleanable, and hook.
+  The A02 anchor `linearizesExecuteShutdownAndCleanup` forces E2 candidate rejection after shutdown
+  and E3 register/start-before-shutdown visibility, then proves zero tasks, entries, cleanables,
+  and hooks.
+- E4-E6 prove ordered restart/shutdown/close, checked epoch rollback, CLOSED restart rejection,
+  active tombstone replacement exclusion, distinct concurrent thread identities, and managed
+  logical ownership without a physical-placement assertion.
+- E7-E9 prove original command/fatal failure delivery after recoverable cleanup, later reuse,
+  orderly versus interrupting shutdown, interrupt-ignoring truthful termination, immutable-empty
+  `shutdownNow`, spurious/restart/saturation/expiration predicates, and restored waiter/caller
+  interruption.
+- E10-E12 prove delayed exact cleanup cannot remove a replacement, structural cleanup reachability
+  has no executor/factory/command/task-thread or synthetic outer path, hook count never exceeds one,
+  hook failures reuse the exact identity, and `closeAll` gates acquisition until its complete
+  CLOSED snapshot is published.
+- Boundary tests cover invalid/null inputs, throwing/null/non-NEW creators, injected configuration
+  failure, `Thread.start` failure, direct factory use after close without task membership, creator
+  retention across restart, and cleanup/hook registration rollback. Every normal deterministic
+  harness and each of 50 stress rounds ends with zero active tasks, CLOSED tombstones, entries,
+  fake cleanup registrations, fake hooks, managed owners, and affinity leases.
+
+### Acceptance classification
+
+- A02: `satisfied` by its stable ledger anchor and final zero-count cleanup assertions.
+- Parent criteria 7-15: `satisfied` by E1-E12, boundary/failure coverage, the one-monitor lifecycle
+  and registry-monitor lock proof, the single cleanup CAS, structural reachability, and empty scope
+  diffs. Parent criteria 1-6 remain inherited as `satisfied` from the merged P3-A audit and were not
+  reimplemented.
+- Parent criterion 16: `satisfied` under its pass-or-record-exact-limit clause. Focused, P0, direct
+  core, repetition, and hygiene gates pass; full hardware verify and the exact reactor core command
+  have the missing Zig/rcodesign and unpinned-Maven limits recorded above.
+
+No state, lock, acceptance, restart, rejection, interruption, deadline, registry, cleaner, hook,
+cleanup-order, or memory-mode decision changed. P3-B is ready for developer review and merge before
+its combined conformance/manual-review audit begins.
