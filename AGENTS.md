@@ -342,15 +342,11 @@ Before handing work back:
 
 ## Temporary hardware-utils overhaul status (P3)
 
-- P0-P2 and P3-A are complete. The reviewed P3 parent and P3-A blueprint, implementation, and
-  conformance audit are merged on `hardware-utils-overhaul/phase-3-affinity-executor` at
-  `2027a47b`.
-- The reviewed P3-B executor lifecycle blueprint is merged on the P3 root at `bfca49b6`. Its
-  implementation and deterministic lifecycle evidence are complete at `6e70cb8d`. The independent
-  P3-B conformance/manual-review audit is complete on
-  `hardware-utils-overhaul/phase-3-executor-lifecycle-audit` and awaits developer review and merge
-  before the combined P3 root audit starts.
-- P3-A evidence is in `docs/blueprints/hardware-utils/phase-3-affinity-capability.md` and
-  `docs/audits/hardware-utils/phase-3-affinity-capability-conformance.md`. The P3-B contract and
-  implementation completion evidence are in
-  `docs/blueprints/hardware-utils/phase-3-executor-lifecycle.md`.
+- P0-P2 and both P3 children are complete. The P3-A implementation/audit merged at `2027a47b`;
+  the P3-B implementation/audit merged at `d6389711` on
+  `hardware-utils-overhaul/phase-3-affinity-executor`.
+- The combined root audit is review-ready on
+  `hardware-utils-overhaul/phase-3-affinity-executor-audit`:
+  `docs/audits/hardware-utils/phase-3-affinity-executor-lifecycle-conformance.md` classifies all
+  16 parent criteria plus A01-A02 as satisfied. P3 remains incomplete pending explicit audit
+  merge/closeout authorization; do not create P4.
