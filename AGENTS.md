@@ -24,8 +24,11 @@ contain expensive local runs. Treat them as user-owned even when they are untrac
 
 ## Modules and language levels
 
-Run the repository with the JDK selected by `mise`, currently Java 21. Individual artifacts retain
-lower release targets where possible.
+All Java, Maven, and Maven-build commands default to the exact tool versions selected by
+[`mise.toml`](mise.toml), currently Java 21 and Maven 3.9.16. Individual artifacts retain lower
+release targets where possible; a lower target does not authorize a different default JDK or Maven
+version. A restricted-environment fallback is allowed only under the documented exception below
+and must report the substituted versions and resulting limits.
 
 | Module                     | Release | Main responsibility                                   |
 |----------------------------|--------:|-------------------------------------------------------|
@@ -336,3 +339,14 @@ Before handing work back:
 3. Inspect `git diff --check`.
 4. Inspect `git status --short` and confirm only intended files changed.
 5. Report tests that could not run and the exact environmental reason.
+
+## Temporary hardware-utils overhaul status (P3)
+
+- P0-P2 and both P3 children are complete. The P3-A implementation/audit merged at `2027a47b`;
+  the P3-B implementation/audit merged at `d6389711` on
+  `hardware-utils-overhaul/phase-3-affinity-executor`.
+- The combined root audit is review-ready on
+  `hardware-utils-overhaul/phase-3-affinity-executor-audit`:
+  `docs/audits/hardware-utils/phase-3-affinity-executor-lifecycle-conformance.md` classifies all
+  16 parent criteria plus A01-A02 as satisfied. P3 remains incomplete pending explicit audit
+  merge/closeout authorization; do not create P4.

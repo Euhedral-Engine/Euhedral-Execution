@@ -43,6 +43,14 @@ non-frontier implementation agent. Completion records, conformance evidence, and
 up through parent blueprints and phases to the root plan. Parent artifacts summarize and link to
 their children; they must not force downstream agents to reread the full feature history.
 
+## Toolchain default
+
+Every Java command, Maven command, and Maven build defaults to the exact versions declared in the
+repository's `mise.toml`. Use `mise exec --` for those commands when available. A restricted
+environment may use the documented explicit pinned-tool fallback only when `mise` cannot be used;
+record the substituted versions and any verification limit. A module's lower Java release target
+does not permit silently defaulting to an older JDK or Maven.
+
 ## Pipeline
 
 Each non-trivial feature proceeds in this order:
@@ -190,6 +198,11 @@ implementation-model gate. Confirm that the plan prompt is no longer labeled pro
 named by that blueprint. Modify only the files and contracts enumerated by the blueprint, compile,
 run the specified tests, fix defects within the settled design, and verify acceptance criteria
 and architectural consistency.
+
+When creating a class or method, or when changing a method signature, add a Markdown-style `///`
+comment at the declaration. Explain the type's or method's purpose and define any non-obvious
+parameter, return value, capability, ownership, ordering, unit, or failure semantics. Keep the
+comment adjacent to the declaration and update it when the signature or behavior changes.
 
 Implementation must not introduce architecture. If it finds an unstated design decision or an
 incompatible blueprint requirement, stop without deleting in-progress work. Append the conflict,
