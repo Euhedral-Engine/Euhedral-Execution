@@ -1484,7 +1484,7 @@ specialist.
 
 ### End-to-end merger fixture
 
-`DataMergerV1Test` constructs:
+`DataMergerTest` constructs:
 
 - two environments;
 - two exact source scenarios per environment;
@@ -1650,7 +1650,7 @@ Changed production files:
 - Added exact statistics, anchor bootstrap/catalog persistence, direct reference calibration,
   hierarchical aggregation, scenario midranks, robust summaries/comparators, and deterministic CSV
   output under `training/merge`.
-- Extended `DataMerger` with `bootstrapCalibrationV1` and `mergeV1`, atomic temporary-sibling
+- Extended `DataMerger` with `bootstrapCalibrationV1` and `merge`, atomic temporary-sibling
   publication, output validation, and the nested request/artifact records. The pooled v0 entry
   points remain as deprecated `ROBUST_OPTIMIZER_POOLED_V0_REMOVAL` seams.
 - Did not change `BenchmarkRunner`, `ClosedLoopRunner`, `Runner`, `SequenceFinder`,
@@ -1666,7 +1666,7 @@ Added deterministic tests and resources:
 - `HierarchicalAggregatorTest`
 - `ScenarioQualityRankerTest`
 - `PolicyComparatorTest`
-- `DataMergerV1Test`
+- `DataMergerTest`
 - `fixtures/SyntheticObservations`
 - `src/test/resources/robust-training/v1/golden-bundle/`
 

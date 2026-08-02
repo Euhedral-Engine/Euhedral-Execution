@@ -35,7 +35,7 @@ import java.util.TreeSet;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-class DataMergerV1Test {
+class DataMergerTest {
     @TempDir
     Path temporary;
 
@@ -45,10 +45,10 @@ class DataMergerV1Test {
         Path first = temporary.resolve("merge-first");
         Path second = temporary.resolve("merge-second");
         DataMerger.MergeArtifacts artifacts =
-                DataMerger.mergeV1(request(corpus.bundles, first, corpus.plan, corpus.scenarios));
+                DataMerger.merge(request(corpus.bundles, first, corpus.plan, corpus.scenarios));
         List<Path> reversed = new ArrayList<>(corpus.bundles);
         Collections.reverse(reversed);
-        DataMerger.mergeV1(request(reversed, second, corpus.plan, corpus.scenarios));
+        DataMerger.merge(request(reversed, second, corpus.plan, corpus.scenarios));
 
         List<String> names = List.of(
                 "fixed-anchors.csv",
@@ -123,7 +123,7 @@ class DataMergerV1Test {
         writeWorkspaceCalibration(workspaceB, subsetPlan(corpus.plan, scenarios.subList(2, 4)));
 
         Path output = temporary.resolve("merged-calibration-plan");
-        CalibrationPlan merged = DataMerger.mergeCalibrationPlansV1(
+        CalibrationPlan merged = DataMerger.mergeCalibrationPlans(
                 new DataMerger.MergeCalibrationPlansRequest(List.of(workspaceA, workspaceB), output));
 
         assertThat(merged).isEqualTo(corpus.plan);
@@ -148,7 +148,7 @@ class DataMergerV1Test {
                         new ReferenceRunCatalog(1, corpus.plan.anchors().anchorSetId(), conflictingReferences)));
 
         assertThatIllegalArgumentException()
-                .isThrownBy(() -> DataMerger.mergeCalibrationPlansV1(new DataMerger.MergeCalibrationPlansRequest(
+                .isThrownBy(() -> DataMerger.mergeCalibrationPlans(new DataMerger.MergeCalibrationPlansRequest(
                         List.of(workspaceA, workspaceB), temporary.resolve("conflicted-plan"))))
                 .withMessageContaining("Scenario reference disagrees across workspaces");
     }
@@ -180,7 +180,7 @@ class DataMergerV1Test {
                         catalogB,
                         new ReferenceRunCatalog(1, catalogB.anchorSetId(), new TreeMap<>(Map.of(scenarioB, "ref-b")))));
 
-        CalibrationPlan merged = DataMerger.mergeCalibrationPlansV1(new DataMerger.MergeCalibrationPlansRequest(
+        CalibrationPlan merged = DataMerger.mergeCalibrationPlans(new DataMerger.MergeCalibrationPlansRequest(
                 List.of(workspaceA, workspaceB), temporary.resolve("merged-overlapping-anchors")));
 
         assertThat(merged.anchors().fixedAnchors()).containsExactlyInAnyOrder(a1, a2, shared, b1, b2);
@@ -215,7 +215,7 @@ class DataMergerV1Test {
                         new ReferenceRunCatalog(1, catalogB.anchorSetId(), new TreeMap<>(Map.of(scenarioB, "ref-b")))));
 
         Path output = temporary.resolve("merged-distinct-anchors");
-        CalibrationPlan merged = DataMerger.mergeCalibrationPlansV1(
+        CalibrationPlan merged = DataMerger.mergeCalibrationPlans(
                 new DataMerger.MergeCalibrationPlansRequest(List.of(workspaceA, workspaceB), output));
 
         assertThat(merged.anchors().fixedAnchors()).containsExactlyInAnyOrder(a1, a2, a3, b1, b2, b3);
@@ -231,7 +231,7 @@ class DataMergerV1Test {
         duplicate.add(corpus.bundles.getFirst());
         Path output = temporary.resolve("must-not-exist");
         assertThatIllegalArgumentException()
-                .isThrownBy(() -> DataMerger.mergeV1(request(duplicate, output, corpus.plan, corpus.scenarios)));
+                .isThrownBy(() -> DataMerger.merge(request(duplicate, output, corpus.plan, corpus.scenarios)));
         assertThat(output).doesNotExist();
     }
 
@@ -250,7 +250,7 @@ class DataMergerV1Test {
             bundles.set(0, changed);
             Path output = temporary.resolve("invalid-" + kind);
             assertThatRuntimeException()
-                    .isThrownBy(() -> DataMerger.mergeV1(request(bundles, output, corpus.plan, corpus.scenarios)));
+                    .isThrownBy(() -> DataMerger.merge(request(bundles, output, corpus.plan, corpus.scenarios)));
             assertThat(output).doesNotExist();
         }
     }

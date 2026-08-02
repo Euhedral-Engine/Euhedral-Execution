@@ -130,8 +130,7 @@ public class Runner {
         TrainingRunPackage publishPackage(TrainingRunPackageRequest request) throws Exception;
 
         default Path mergeCalibrationPlans(List<Path> workspaces, Path outputDirectory) throws Exception {
-            DataMerger.mergeCalibrationPlansV1(
-                    new DataMerger.MergeCalibrationPlansRequest(workspaces, outputDirectory));
+            DataMerger.mergeCalibrationPlans(new DataMerger.MergeCalibrationPlansRequest(workspaces, outputDirectory));
             return outputDirectory;
         }
     }

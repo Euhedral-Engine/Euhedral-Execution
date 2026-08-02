@@ -2141,7 +2141,7 @@ unless an existing opt-in Phase 2 integration test does so.
 - asserts ordered frames retain `routingHash == idHash`; and
 - covers the kill-switch overload without changing liveness semantics.
 
-`BenchmarkRunnerV1Test` uses package-private fake benchmark sources/counters and a fixed clock:
+`BenchmarkRunnerTest` uses package-private fake benchmark sources/counters and a fixed clock:
 
 - writes one complete strict bundle with success, timeout, failed, and skipped rows;
 - proves throughput is frames per second with exact raw bits;
@@ -2541,7 +2541,7 @@ Remaining verification limits:
 
 - Dedicated `CandidateSchedulerTest`, `SequenceFinderTest`, `CarryForwardQueueTest`,
   `ScenarioRotationTest`, `ScheduleCodecTest`, `CheckpointSnapshotCodecTest`,
-  `BenchmarkRunnerV1Test`, and `ClosedLoopRunnerTest` fixtures from the blueprint are not yet
+  `BenchmarkRunnerTest`, and `ClosedLoopRunnerTest` fixtures from the blueprint are not yet
   present as separate test classes. The implementation compiles and the current suite passes, but
   the exact restart interruption matrix and every schedule/checkpoint rejection case are not
   independently exercised by tests in this pass.

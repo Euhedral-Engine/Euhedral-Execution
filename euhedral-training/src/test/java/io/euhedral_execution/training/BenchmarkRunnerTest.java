@@ -18,7 +18,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-class BenchmarkRunnerV1Test {
+class BenchmarkRunnerTest {
     @TempDir
     Path temp;
 

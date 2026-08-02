@@ -1170,7 +1170,7 @@ public final class ClosedLoopRunner {
 
         @Override
         public DataMerger.MergeArtifacts merge(DataMerger.MergeRequest request) throws Exception {
-            return DataMerger.mergeV1(request);
+            return DataMerger.merge(request);
         }
 
         @Override

@@ -77,7 +77,7 @@ public class DataMerger {
         }
     }
 
-    public static CalibrationPlan mergeCalibrationPlansV1(MergeCalibrationPlansRequest request) throws Exception {
+    public static CalibrationPlan mergeCalibrationPlans(MergeCalibrationPlansRequest request) throws Exception {
         Objects.requireNonNull(request);
         Path target = request.outputDirectory().toAbsolutePath().normalize();
         Path temporary = temporarySibling(target);
@@ -97,7 +97,7 @@ public class DataMerger {
         }
     }
 
-    public static MergeArtifacts mergeV1(MergeRequest request) throws Exception {
+    public static MergeArtifacts merge(MergeRequest request) throws Exception {
         Objects.requireNonNull(request);
         Path target = request.outputDirectory().toAbsolutePath().normalize();
         Path temporary = temporarySibling(target);

@@ -104,7 +104,7 @@ The required Phase 3 named tests are present and passed:
 - `ScenarioRotationTest`
 - `ScheduleCodecTest`
 - `CheckpointSnapshotCodecTest`
-- `BenchmarkRunnerV1Test`
+- `BenchmarkRunnerTest`
 - `ClosedLoopRunnerTest`
 - core `BenchmarkFrameTest`
 

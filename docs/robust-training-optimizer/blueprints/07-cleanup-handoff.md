@@ -192,7 +192,7 @@ Retain:
 
 Keep `DataMerger` as the Phase 1 v1 facade because `ClosedLoopRunner`, `ClosedLoopServices`,
 learning inputs, optimization-corpus loading, package selection, and tests use its request/result
-records and `bootstrapCalibrationV1`/`mergeV1`.
+records and `bootstrapCalibrationV1`/`merge`.
 
 Remove exactly these public pooled methods:
 
