@@ -64,6 +64,12 @@ jobs:
           install: true
           cache: true
 
+      - name: Install LLVM
+        if: steps.cache-macos-sdk.outputs.cache-hit == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y llvm
+
       - name: Resolve Dependencies
         run: |
           mise exec -- mvn dependency:go-offline -B --file pom.xml
