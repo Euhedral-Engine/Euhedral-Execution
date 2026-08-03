@@ -5,6 +5,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.Properties;
 import org.tensorflow.Graph;
 import org.tensorflow.Operand;
@@ -26,6 +27,7 @@ import org.tensorflow.types.TFloat32;
 public class TensorFlowNetwork implements AutoCloseable {
 
     private static final String INPUT_LAYER_NAME = "INPUT";
+    private static final String CHECKPOINT_STATE_FILE = "checkpoint";
 
     private static Placeholder<TFloat32> inputLayer(int featureWidth, Ops tf) {
         return tf.withName(INPUT_LAYER_NAME).placeholder(TFloat32.class, Placeholder.shape(Shape.of(-1, featureWidth)));
@@ -197,12 +199,21 @@ public class TensorFlowNetwork implements AutoCloseable {
     public void save(Path memberDirectory, String name) throws IOException {
         ensureOpen();
         Files.createDirectories(memberDirectory);
-        Path checkpointFile = memberDirectory.resolve(name);
-        session.save(checkpointFile.toString());
+        Path stagingDirectory = Files.createTempDirectory(memberDirectory, name + "-checkpoint-");
+        try {
+            Path checkpointFile = stagingDirectory.resolve(name);
+            session.save(checkpointFile.toString());
 
-        Path propFile = memberDirectory.resolve(name + ".properties");
-        try (OutputStream out = Files.newOutputStream(propFile)) {
-            properties.store(out, "TensorFlowNetwork properties");
+            clearCheckpointArtifacts(memberDirectory, name);
+            copyCheckpointArtifacts(stagingDirectory, memberDirectory);
+            writeCheckpointStateFile(memberDirectory, name);
+
+            Path propFile = memberDirectory.resolve(name + ".properties");
+            try (OutputStream out = Files.newOutputStream(propFile)) {
+                properties.store(out, "TensorFlowNetwork properties");
+            }
+        } finally {
+            deleteDirectory(stagingDirectory);
         }
     }
 
@@ -215,6 +226,57 @@ public class TensorFlowNetwork implements AutoCloseable {
         if (Files.exists(propFile)) {
             try (InputStream in = Files.newInputStream(propFile)) {
                 properties.load(in);
+            }
+        }
+    }
+
+    private void clearCheckpointArtifacts(Path memberDirectory, String name) throws IOException {
+        try (var paths = Files.list(memberDirectory)) {
+            for (Path path : paths.toList()) {
+                String fileName = path.getFileName().toString();
+                if (fileName.equals(CHECKPOINT_STATE_FILE)
+                        || fileName.equals(name)
+                        || fileName.startsWith(name + ".")) {
+                    if (Files.isDirectory(path)) {
+                        deleteDirectory(path);
+                    } else {
+                        Files.deleteIfExists(path);
+                    }
+                }
+            }
+        }
+    }
+
+    private void copyCheckpointArtifacts(Path sourceDirectory, Path destinationDirectory)
+            throws IOException {
+        try (var paths = Files.list(sourceDirectory)) {
+            for (Path path : paths.toList()) {
+                String fileName = path.getFileName().toString();
+                if (Files.isRegularFile(path) && !fileName.equals(CHECKPOINT_STATE_FILE)) {
+                    Files.copy(path, destinationDirectory.resolve(fileName),
+                            StandardCopyOption.REPLACE_EXISTING,
+                            StandardCopyOption.COPY_ATTRIBUTES);
+                }
+            }
+        }
+    }
+
+    private void writeCheckpointStateFile(Path memberDirectory, String name) throws IOException {
+        String checkpointState = """
+                model_checkpoint_path: \"%s\"
+                all_model_checkpoint_paths: \"%s\"
+                """.formatted(name, name);
+        Files.writeString(memberDirectory.resolve(CHECKPOINT_STATE_FILE), checkpointState);
+    }
+
+    private void deleteDirectory(Path directory) throws IOException {
+        if (Files.notExists(directory)) {
+            return;
+        }
+        try (var paths = Files.walk(directory)) {
+            for (Path path : paths.sorted((left, right) ->
+                    Integer.compare(right.getNameCount(), left.getNameCount())).toList()) {
+                Files.deleteIfExists(path);
             }
         }
     }
