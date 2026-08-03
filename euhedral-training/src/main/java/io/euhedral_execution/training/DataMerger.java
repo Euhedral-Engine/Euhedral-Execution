@@ -219,10 +219,10 @@ public class DataMerger {
                             throw new IllegalArgumentException("Duplicate evidence bundle for benchmark run " + runId);
                         }
                     }
-                    references.entrySet().removeIf(entry -> !accepted.contains(entry.getValue()));
                 }
             }
         }
+        references.entrySet().removeIf(entry -> !bundlesByRunId.containsKey(entry.getValue()));
         if (anchorsById.isEmpty()) {
             throw new IllegalArgumentException("At least one workspace is required");
         }

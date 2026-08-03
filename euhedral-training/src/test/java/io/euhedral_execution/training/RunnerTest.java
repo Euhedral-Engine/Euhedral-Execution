@@ -104,7 +104,7 @@ class RunnerTest {
     }
 
     @Test
-    void rejectsEveryMissingDuplicateReorderedAndExtraFlagForm() throws Exception {
+    void rejectsEveryMissingDuplicateReorderedAndExtraFlagForm() {
         RecordingServices services = services();
         List<String[]> closed = List.of(
                 new String[] {"closed-loop"},

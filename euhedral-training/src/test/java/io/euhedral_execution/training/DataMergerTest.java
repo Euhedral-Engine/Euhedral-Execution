@@ -247,7 +247,7 @@ class DataMergerTest {
     }
 
     @Test
-    void mergesDistinctAnchorSetsFromDifferentWorkspaces() throws Exception {
+    void mergePrunesReferencesWithMissingEvidenceFromDifferentWorkspaces() throws Exception {
         PolicyVector a1 = policy(201);
         PolicyVector a2 = policy(202);
         PolicyVector a3 = policy(203);
@@ -273,15 +273,10 @@ class DataMergerTest {
                 new CalibrationPlan(
                         catalogB,
                         new ReferenceRunCatalog(1, catalogB.anchorSetId(), new TreeMap<>(Map.of(scenarioB, "ref-b")))));
-
-        Path output = temporary.resolve("merged-distinct-anchors");
-        CalibrationPlan merged = DataMerger.mergeCalibrationPlans(
-                new DataMerger.MergeCalibrationPlansRequest(List.of(workspaceA, workspaceB), output));
-
-        assertThat(merged.anchors().fixedAnchors()).containsExactlyInAnyOrder(a1, a2, a3, b1, b2, b3);
-        assertThat(merged.references().referenceRunIds())
-                .containsExactly(Map.entry(scenarioA, "ref-a"), Map.entry(scenarioB, "ref-b"));
-        assertThat(CalibrationPlanCsv.read(output)).isEqualTo(merged);
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> DataMerger.mergeCalibrationPlans(new DataMerger.MergeCalibrationPlansRequest(
+                        List.of(workspaceA, workspaceB), temporary.resolve("merged-distinct-anchors"))))
+                .withMessageContaining("ReferenceRunIds is empty");
     }
 
     @Test
