@@ -9,6 +9,13 @@ export TF_CPP_MIN_LOG_LEVEL=${TF_CPP_MIN_LOG_LEVEL:-1}
 export TF_CPP_MIN_VLOG_LEVEL=${TF_CPP_MIN_VLOG_LEVEL:-0}
 export TF_FORCE_GPU_ALLOW_GROWTH=${TF_FORCE_GPU_ALLOW_GROWTH:-true}
 
+export LD_LIBRARY_PATH="/usr/local/cuda/lib64:${LD_LIBRARY_PATH:-}"
+export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}
+export XLA_FLAGS="--xla_gpu_cuda_data_dir=/usr/local/cuda"
+
+# Suppress warnings (0 = all logs, 1 = hide INFO, 2 = hide INFO/WARNING, 3 = hide ALL)
+export TF_CPP_MIN_LOG_LEVEL=2
+
 JAR=$(find "$DIST_DIR" -maxdepth 1 -type f -name 'euhedral-training-*.jar' -print -quit)
 if [[ -z "$JAR" ]]; then
   echo "Unable to find the Euhedral trainer jar under $DIST_DIR" >&2
