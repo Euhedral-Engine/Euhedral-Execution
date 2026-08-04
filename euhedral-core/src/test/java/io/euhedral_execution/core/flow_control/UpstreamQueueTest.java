@@ -23,6 +23,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import test_utils.TestReceiver;
 
+@SuppressWarnings("unchecked")
 class UpstreamQueueTest {
 
     private UpstreamQueue queue;

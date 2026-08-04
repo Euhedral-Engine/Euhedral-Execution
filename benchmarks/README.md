@@ -3,7 +3,7 @@
 The benchmark runtime targets Java 21. Package it from the repository root:
 
 ```bash
-mise exec -- mvn -B -pl benchmarks -am package -Dmaven.test.skip=true
+gradle :benchmarks:assemble
 ```
 
 This creates a thin distribution at `benchmarks/target`:
@@ -15,7 +15,7 @@ This creates a thin distribution at `benchmarks/target`:
 Run the launcher rather than relying on a shaded JAR:
 
 ```bash
-benchmarks/target/bin/euhedral-benchmarks core-latency core-hc-throughput
+benchmarks/build/bin/euhedral-benchmarks core-latency core-hc-throughput
 ```
 
 ## Benchmark selection

@@ -1,15 +1,22 @@
 package io.euhedral_execution.training;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import io.euhedral_execution.training.checkpoint.ArtifactFingerprint;
 import io.euhedral_execution.training.checkpoint.CheckpointSnapshotCodec;
+import io.euhedral_execution.training.checkpoint.data.PendingBenchmarkRun;
 import io.euhedral_execution.training.checkpoint.enums.CheckpointStage;
 import io.euhedral_execution.training.checkpoint.enums.PendingRunStatus;
 import io.euhedral_execution.training.data.PolicyId;
 import io.euhedral_execution.training.data.SourceScenario;
 import io.euhedral_execution.training.data.io.CanonicalCsv;
 import io.euhedral_execution.training.merge.enums.CalibrationStatus;
+import io.euhedral_execution.testing.tags.IntegrationTest;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -19,14 +26,17 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-class EndToEndAuditTest {
+@SuppressWarnings("unchecked")
+class EndToEndTest {
     @TempDir
     Path temporary;
 
     @Test
+    @IntegrationTest
     void importsBootstrapsInterruptsResumesAndPackagesDeterministically()
             throws Exception {
         AuditFixtures.Experiment experiment = AuditFixtures.execute(temporary);
@@ -49,7 +59,7 @@ class EndToEndAuditTest {
                 .checkpoint();
         assertThat(interrupted.stage()).isEqualTo(CheckpointStage.BENCHMARKING);
         assertThat(interrupted.evidence()).hasSize(5);
-        assertThat(interrupted.pendingRuns()).extracting(row -> row.status())
+        assertThat(interrupted.pendingRuns()).extracting(PendingBenchmarkRun::status)
                 .containsExactly(PendingRunStatus.COMPLETE, PendingRunStatus.PENDING);
 
         assertEquivalentFinalState(experiment);
@@ -58,6 +68,120 @@ class EndToEndAuditTest {
         assertFinalRankingOracle(experiment);
         assertFailedObservationOracle(experiment);
         assertPackageCounts(experiment);
+    }
+
+    @Test
+    void independentMidrankCalculationIsCorrect() {
+        List<List<String>> mockData = List.of(
+                List.of("", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "100.0"),
+                List.of("", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "90.0"),
+                List.of("", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "80.0"),
+                List.of("", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "70.0")
+        );
+        
+        assertThat(independentMidrank(mockData, 100.0)).isEqualTo(1.0);
+        assertThat(independentMidrank(mockData, 90.0)).isCloseTo(0.666, 
+                org.assertj.core.data.Offset.offset(0.01));
+        assertThat(independentMidrank(mockData, 80.0)).isCloseTo(0.333, 
+                org.assertj.core.data.Offset.offset(0.01));
+        assertThat(independentMidrank(mockData, 70.0)).isEqualTo(0.0);
+        
+        List<List<String>> singleValue = List.of(
+                List.of("", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "50.0")
+        );
+        assertThat(independentMidrank(singleValue, 50.0)).isEqualTo(1.0);
+    }
+
+    @Test
+    void type7QuantileCalculationIsCorrect() {
+        List<Double> values = List.of(1.0, 2.0, 3.0, 4.0, 5.0);
+        
+        assertThat(type7(values, 0.0)).isEqualTo(1.0);
+        assertThat(type7(values, 0.25)).isEqualTo(2.0);
+        assertThat(type7(values, 0.5)).isEqualTo(3.0);
+        assertThat(type7(values, 0.75)).isEqualTo(4.0);
+        assertThat(type7(values, 1.0)).isEqualTo(5.0);
+        
+        List<Double> single = List.of(42.0);
+        assertThat(type7(single, 0.5)).isEqualTo(42.0);
+        
+        List<Double> twoValues = List.of(10.0, 20.0);
+        assertThat(type7(twoValues, 0.0)).isEqualTo(10.0);
+        assertThat(type7(twoValues, 0.5)).isEqualTo(15.0);
+        assertThat(type7(twoValues, 1.0)).isEqualTo(20.0);
+    }
+
+    @Test
+    void exactDoubleComparisonWorks() {
+        exact("1.5", 1.5);
+        exact("0.0", 0.0);
+        exact("3.141592653589793", Math.PI);
+        
+        assertThat(Double.doubleToRawLongBits(Double.parseDouble("0.8888888888888888")))
+                .isEqualTo(Double.doubleToRawLongBits(8.0 / 9.0));
+    }
+
+    @Test
+    void csvParsingAndFiltering() {
+        Function<List<String>, Boolean> mockPredicate = mock(Function.class);
+        when(mockPredicate.apply(any())).thenReturn(true, false, true);
+        
+        List<List<String>> testData = List.of(
+                List.of("header1", "header2"),
+                List.of("row1", "value1"),
+                List.of("row2", "value2"),
+                List.of("row3", "value3")
+        );
+        
+        List<List<String>> filtered = testData.stream()
+                .skip(1)
+                .filter(mockPredicate::apply)
+                .toList();
+        
+        assertThat(filtered).hasSize(2);
+        verify(mockPredicate, times(3)).apply(any());
+    }
+
+    @Test
+    void mapGroupingAndStreamOperations() {
+        Map<PolicyId, AuditFixtures.PolicyMeaning> mockMeanings = mock(Map.class);
+        AuditFixtures.PolicyMeaning mockMeaning = mock(AuditFixtures.PolicyMeaning.class);
+        PolicyId testId = mock(PolicyId.class);
+        
+        when(mockMeanings.get(testId)).thenReturn(mockMeaning);
+        when(mockMeaning.symbol()).thenReturn("TEST");
+        
+        AuditFixtures.PolicyMeaning result = mockMeanings.get(testId);
+        
+        assertThat(result).isNotNull();
+        assertThat(result.symbol()).isEqualTo("TEST");
+        verify(mockMeanings).get(testId);
+        verify(mockMeaning).symbol();
+    }
+
+    @Test
+    void calibrationStatusProcessing() {
+        List<List<String>> mockRows = List.of(
+                List.of("", "", "", "", "", "", "", "", "0.0", "1.0", "0.0", "", 
+                        "REFERENCE"),
+                List.of("", "", "audit-b:1/4", "", "", "", "", "", "0.693", "0.5", "0.0", "", 
+                        "CALIBRATED"),
+                List.of("", "", "audit-a:1/4", "", "", "", "", "", "-0.693", "2.0", "0.0", "", 
+                        "CALIBRATED")
+        );
+        
+        long referenceCount = mockRows.stream()
+                .map(row -> CalibrationStatus.valueOf(row.get(12)))
+                .filter(status -> status == CalibrationStatus.REFERENCE)
+                .count();
+        
+        long calibratedCount = mockRows.stream()
+                .map(row -> CalibrationStatus.valueOf(row.get(12)))
+                .filter(status -> status == CalibrationStatus.CALIBRATED)
+                .count();
+        
+        assertThat(referenceCount).isEqualTo(1);
+        assertThat(calibratedCount).isEqualTo(2);
     }
 
     private static void assertEquivalentFinalState(

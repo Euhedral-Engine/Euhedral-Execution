@@ -6,7 +6,8 @@ on:
       - "euhedral-hardware-utils/**"
       - ".github/workflows/hardware-utils-native.yaml"
       - "mise.toml"
-      - "pom.xml"
+      - "build.gradle.kts"
+      - "settings.gradle.kts"
   workflow_dispatch:
 
 permissions:
@@ -50,19 +51,29 @@ jobs:
           install: true
           cache: true
 
-      - name: Cache Maven and target-local Zig data
+      - name: Cache Gradle dependencies
         uses: actions/cache@v4
         with:
           path: |
-            ~/.m2/repository
-            euhedral-hardware-utils/target/zig-cache
-            euhedral-hardware-utils/target/zig-global-cache
-          key: ${{ runner.os }}-hardware-native-${{ hashFiles('pom.xml', 'euhedral-hardware-utils/pom.xml', 'euhedral-hardware-utils/src/main/native/**', 'mise.toml') }}
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
           restore-keys: |
-            ${{ runner.os }}-hardware-native-
+            ${{ runner.os }}-gradle-
+
+      - name: Cache Zig
+        uses: actions/cache@v4
+        with:
+          path: |
+            euhedral-hardware-utils/zig-cache
+            euhedral-hardware-utils/zig-global-cache
+          key: ${{ runner.os }}-zig-${{ hashFiles('mise.toml', '**/build.zig') }}
+          restore-keys: |
+            ${{ runner.os }}-zig-
 
       - name: Build, inspect, package, and smoke
-        run: mise exec -- mvn -B -pl euhedral-hardware-utils -am verify
+        run: |
+          mise exec -- gradle build
 
       - name: Upload ordinary jar and bounded smoke bundle
         uses: actions/upload-artifact@v4
@@ -71,8 +82,8 @@ jobs:
           if-no-files-found: error
           retention-days: 7
           path: |
-            euhedral-hardware-utils/target/euhedral-hardware-utils-*.jar
-            euhedral-hardware-utils/target/native-smoke
+            euhedral-hardware-utils/build/libs/euhedral-hardware-utils-*.jar
+            euhedral-hardware-utils/build/native-smoke
 
   linux-jdk17-glibc:
     needs: cross-package

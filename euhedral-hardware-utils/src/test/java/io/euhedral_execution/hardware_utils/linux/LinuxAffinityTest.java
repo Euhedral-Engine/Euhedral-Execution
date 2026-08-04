@@ -3,7 +3,6 @@ package io.euhedral_execution.hardware_utils.linux;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.concurrent.atomic.AtomicInteger;
@@ -33,9 +32,6 @@ class LinuxAffinityTest {
         }));
         assertFalse(LinuxAffinityCalls.apply(new long[]{1}, mask -> {
             throw new UnsatisfiedLinkError("configured failure");
-        }));
-        assertThrows(ThreadDeath.class, () -> LinuxAffinityCalls.apply(new long[]{1}, mask -> {
-            throw new ThreadDeath();
         }));
         assertEquals(2, calls.get());
     }

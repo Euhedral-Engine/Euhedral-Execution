@@ -20,7 +20,9 @@ import java.util.BitSet;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Isolated;
 
+@Isolated
 class ControlPlaneFragmentTest {
 
     private final List<ControlPlaneFragment> fragments = new ArrayList<>();
