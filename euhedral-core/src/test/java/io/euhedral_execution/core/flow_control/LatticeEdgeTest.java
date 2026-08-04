@@ -27,11 +27,13 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Isolated;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import test_utils.TestFrame;
 import test_utils.TestReceiver;
 
+@Isolated
 class LatticeEdgeTest {
 
     private AtomicBoolean drain;
