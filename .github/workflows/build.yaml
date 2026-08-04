@@ -25,20 +25,22 @@ jobs:
           path: ~/.local/share/mise/installs/macos-sdk
           key: macos-sdk-26.1-v1
 
-      - name: Cache Maven dependencies
+      - name: Cache Gradle dependencies
         uses: actions/cache@v4
         with:
-          path: ~/.m2/repository
-          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
           restore-keys: |
-            ${{ runner.os }}-maven-
+            ${{ runner.os }}-gradle-
 
       - name: Cache Zig
         uses: actions/cache@v4
         with:
           path: |
-            euhedral-hardware-utils/target/zig-cache
-            euhedral-hardware-utils/target/zig-global-cache
+            euhedral-hardware-utils/zig-cache
+            euhedral-hardware-utils/zig-global-cache
           key: ${{ runner.os }}-zig-${{ hashFiles('mise.toml', '**/build.zig') }}
           restore-keys: |
             ${{ runner.os }}-zig-
@@ -65,10 +67,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y llvm
 
-      - name: Resolve Dependencies
-        run: |
-          mise exec -- mvn dependency:go-offline -B --file pom.xml
-
       - name: Build and Verify
         run: |
-          mise exec -- mvn -B verify --file pom.xml
+          mise exec -- gradle build --build-cache

@@ -33,20 +33,22 @@ jobs:
           path: ~/.local/share/mise/installs/macos-sdk
           key: macos-sdk-26.1-v1
 
-      - name: Cache Maven dependencies
+      - name: Cache Gradle dependencies
         uses: actions/cache@v4
         with:
-          path: ~/.m2/repository
-          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
           restore-keys: |
-            ${{ runner.os }}-maven-
+            ${{ runner.os }}-gradle-
 
       - name: Cache Zig
         uses: actions/cache@v4
         with:
           path: |
-            euhedral-hardware-utils/target/zig-cache
-            euhedral-hardware-utils/target/zig-global-cache
+            euhedral-hardware-utils/zig-cache
+            euhedral-hardware-utils/zig-global-cache
           key: ${{ runner.os }}-zig-${{ hashFiles('mise.toml', '**/build.zig') }}
           restore-keys: |
             ${{ runner.os }}-zig-
@@ -69,28 +71,24 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y llvm
 
-      - name: Resolve Dependencies
-        run: |
-          mise exec -- mvn dependency:go-offline -B --file pom.xml
-
       - name: Install GPG Private Key
         uses: crazy-max/ghaction-import-gpg@v6
         with:
           gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
           passphrase: ${{ secrets.GPG_PASSPHRASE }}
 
-      - name: Parse POM Version
+      - name: Parse Version from gradle.properties
         id: check_version
         run: |
-          POM_VERSION=$(mise exec -- mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
-          echo "TARGET_TAG=v$POM_VERSION" >> $GITHUB_OUTPUT
+          VERSION=$(grep '^version=' gradle.properties | cut -d'=' -f2)
+          echo "TARGET_TAG=v$VERSION" >> $GITHUB_OUTPUT
           
-          if [[ "$POM_VERSION" == *"-SNAPSHOT"* ]]; then
+          if [[ "$VERSION" == *"-SNAPSHOT"* ]]; then
             echo "is_snapshot=true" >> $GITHUB_OUTPUT
-            echo "Detected SNAPSHOT version: $POM_VERSION. Will compile and verify, but SKIP deployment."
+            echo "Detected SNAPSHOT version: $VERSION. Will compile and verify, but SKIP deployment."
           else
             echo "is_snapshot=false" >> $GITHUB_OUTPUT
-            echo "Detected RELEASE version: $POM_VERSION. Validating deployment targets."
+            echo "Detected RELEASE version: $VERSION. Validating deployment targets."
           fi
 
       - name: Check Existing Releases
@@ -109,17 +107,18 @@ jobs:
       - name: Build and Verify
         if: ${{ steps.check_version.outputs.is_snapshot == 'true' }}
         run: |
-          mise exec -- mvn -B verify --file pom.xml
+          mise exec -- gradle build --build-cache
 
       - name: Build and Deploy to Apache Maven Central
         if: ${{ steps.check_version.outputs.is_snapshot == 'false' }}
         run: |
-          mise exec -- mvn -B clean deploy -DskiTests -pl '!benchmarks' -P release -s settings.xml
+          mise exec -- gradle publish -Prelease -x test --build-cache
         env:
-          CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
-          CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
-          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          RELEASE_MODE: "true"
+          ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.CENTRAL_USERNAME }}
+          ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.CENTRAL_PASSWORD }}
+          ORG_GRADLE_PROJECT_signingKey: ${{ secrets.GPG_PRIVATE_KEY }}
+          ORG_GRADLE_PROJECT_signingPassword: ${{ secrets.GPG_PASSPHRASE }}
 
       - name: Configure Git
         run: |
@@ -139,12 +138,13 @@ jobs:
         if: ${{ steps.check_version.outputs.is_snapshot == 'false' }}
         env:
           TARGET_TAG: ${{ steps.check_version.outputs.TARGET_TAG }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           git tag -a "$TARGET_TAG" -m "Release $TARGET_TAG"
           git push origin "$TARGET_TAG"
           
           FILES=()
-          for file in **/target/*.jar; do
+          for file in **/build/libs/*.jar; do
             if [[ ! "$file" == *"-sources.jar" ]] && [[ ! "$file" == *"-javadoc.jar" ]]; then
               FILES+=("$file")
             fi
@@ -155,10 +155,21 @@ jobs:
       - name: Roll to Next Development Snapshot
         if: ${{ steps.check_version.outputs.is_snapshot == 'false' }}
         run: |
-          mise exec -- mvn versions:set -DnextSnapshot=true -DgenerateBackupPoms=false
+          CURRENT_VERSION=$(grep '^version=' gradle.properties | cut -d'=' -f2)
           
-          NEW_SNAPSHOT=$(mise exec -- mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          BASE_VERSION=${CURRENT_VERSION%-SNAPSHOT}
+          IFS='.' read -ra VERSION_PARTS <<< "$BASE_VERSION"
           
-          git add **/pom.xml pom.xml
+          # Increment patch version
+          MAJOR=${VERSION_PARTS[0]}
+          MINOR=${VERSION_PARTS[1]}
+          PATCH=${VERSION_PARTS[2]}
+          PATCH=$((PATCH + 1))
+          
+          NEW_SNAPSHOT="$MAJOR.$MINOR.$PATCH-SNAPSHOT"
+          
+          sed -i "s/^version=.*/version=$NEW_SNAPSHOT/" gradle.properties
+          
+          git add gradle.properties
           git commit -m "actions: Bump version to $NEW_SNAPSHOT [skip ci]"
           git push origin main
