@@ -69,4 +69,4 @@ jobs:
 
       - name: Build and Verify
         run: |
-          mise exec -- gradle build --build-cache
+          mise exec -- gradle build integrationTest --build-cache

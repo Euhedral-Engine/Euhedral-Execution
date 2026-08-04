@@ -64,6 +64,7 @@ dependencies {
     runtimeOnly(libs.ch.qos.logback.logback.classic)
     testImplementation(libs.org.junit.jupiter.junit.jupiter)
     testImplementation(libs.org.assertj.assertj.core)
+    testImplementation(libs.org.mockito.mockito.core)
     compileOnly(libs.org.projectlombok.lombok)
     annotationProcessor(libs.org.projectlombok.lombok)
 }
