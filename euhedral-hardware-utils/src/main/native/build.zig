@@ -194,16 +194,13 @@ pub fn build(b: *std.Build) void {
     const signer_version = b.addSystemCommand(&.{ rcodesign, "--version" });
     signer_version.expectStdOutEqual("apple-codesign 0.29.0\n");
 
-    const products = b.allocator.dupe(Product, manifest.products) catch @panic("OOM");
-    std.mem.sort(Product, products, {}, lessProductBuildOrder);
-
     const common_flags = &.{
         "-fno-exceptions",
         "-fno-rtti",
         "-fvisibility=hidden",
     };
 
-    for (products) |product| {
+    for (manifest.products) |product| {
         const component = findComponent(&manifest, product.component);
         const architecture = findArchitecture(&manifest, product.architecture);
         const policy = findGatePolicy(&manifest, product.gatePolicy);

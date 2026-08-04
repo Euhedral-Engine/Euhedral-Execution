@@ -2,6 +2,54 @@ plugins {
     id("buildlogic.java-conventions")
 }
 
+// Configure JAR with manifest and custom name
+tasks.named<Jar>("jar") {
+    archiveBaseName.set("euhedral-benchmark")
+    manifest {
+        attributes(
+            "Main-Class" to "io.euhedral_execution.benchmarks.BenchRunner",
+            "Class-Path" to configurations.runtimeClasspath.get().files.joinToString(" ") { "lib/${it.name}" }
+        )
+    }
+}
+
+val copyRuntimeDependencies = tasks.register<Copy>("copyRuntimeDependencies") {
+    dependsOn(tasks.named("jar"))
+    
+    from(configurations.runtimeClasspath)
+    into(layout.buildDirectory.dir("lib"))
+
+    description = "Copies the needed runtime dependencies"
+}
+
+val copyLauncherScript = tasks.register<Copy>("copyLauncherScript") {
+    from("src/main/scripts/euhedral-benchmarks")
+    into(layout.buildDirectory.dir("bin"))
+    filePermissions {
+        unix("rwxr-xr-x")
+    }
+    description = "Copies the automatic launch script."
+}
+
+val assembleBenchmarkDistribution = tasks.register("assembleBenchmarkDistribution") {
+    dependsOn(tasks.named("jar"), copyRuntimeDependencies, copyLauncherScript)
+    group = "distribution"
+    description = "Assembles the complete benchmark distribution with dependencies and scripts"
+}
+
+tasks.named("assemble") {
+    dependsOn(assembleBenchmarkDistribution)
+}
+
+tasks.named<ProcessResources>("processResources") {
+    from(project(":euhedral-core").file("src/main/resources")) {
+        include("logback-fragments/**")
+    }
+    from(project(":euhedral-hardware-utils").file("src/main/resources")) {
+        include("logback-fragments/**")
+    }
+}
+
 dependencies {
     api(project(":euhedral-core"))
     api(project(":euhedral-data-structures"))
