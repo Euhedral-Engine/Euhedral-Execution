@@ -135,33 +135,35 @@ public final class ClosedLoopRunner {
     }
 
     static ClosedLoopResult run(ClosedLoopConfig config, ClosedLoopServices services) throws Exception {
-        try (WorkspaceLock ignored = WorkspaceLock.acquire(config.workspace())) {
-            String configHash = ClosedLoopConfigFingerprint.sha256(config);
-            Optional<LoadedCheckpoint> loaded =
-                    CheckpointSnapshotCodec.loadLatest(config.workspace(), config.trainingRunId(), configHash);
-            if (!config.resume() && loaded.isPresent()) {
+        try (WorkspaceLock ignored = WorkspaceLock.acquire(config.workspace());
+                StagedInitialCalibrationPlan stagedPlan = stageInitialCalibrationPlan(config)) {
+            ClosedLoopConfig effectiveConfig = stagedPlan.config();
+            String configHash = ClosedLoopConfigFingerprint.sha256(effectiveConfig);
+            Optional<LoadedCheckpoint> loaded = CheckpointSnapshotCodec.loadLatest(
+                    effectiveConfig.workspace(), effectiveConfig.trainingRunId(), configHash);
+            if (!effectiveConfig.resume() && loaded.isPresent()) {
                 throw new IllegalArgumentException("A complete Phase 3 checkpoint already exists");
             }
             LoadedCheckpoint current = loaded.orElseGet(() -> {
                 try {
-                    return initialize(config, services, configHash);
+                    return initialize(effectiveConfig, services, configHash);
                 } catch (Exception error) {
                     throw new InitializationFailure(error);
                 }
             });
-            validateResumeArtifacts(config, current.checkpoint());
-            rejectUnexpectedEvidence(config.workspace(), current.checkpoint());
-            if (config.initialCalibrationPlan().isEmpty()) {
-                resolveBootstrapPolicies(config);
+            validateResumeArtifacts(effectiveConfig, current.checkpoint());
+            rejectUnexpectedEvidence(effectiveConfig.workspace(), current.checkpoint());
+            if (effectiveConfig.initialCalibrationPlan().isEmpty()) {
+                resolveBootstrapPolicies(effectiveConfig);
             }
             if (current.checkpoint().stage() == CheckpointStage.BOOTSTRAP_PENDING) {
                 try {
-                    current = runBootstrap(config, services, current);
+                    current = runBootstrap(effectiveConfig, services, current);
                 } catch (StopRequested stop) {
-                    return result(current, awaiting(config, current.checkpoint()));
+                    return result(current, awaiting(effectiveConfig, current.checkpoint()));
                 }
                 if (current.checkpoint().stage() == CheckpointStage.BOOTSTRAP_PENDING) {
-                    return result(current, awaiting(config, current.checkpoint()));
+                    return result(current, awaiting(effectiveConfig, current.checkpoint()));
                 }
             }
             while (current.checkpoint().stage() != CheckpointStage.RUN_COMPLETE) {
@@ -169,16 +171,16 @@ public final class ClosedLoopRunner {
                     return result(current, new TreeSet<>());
                 }
                 if (current.checkpoint().stage() == CheckpointStage.MODEL_REJECTED
-                        && !shouldContinueRejectedSeedModel(config, current.checkpoint())) {
+                        && !shouldContinueRejectedSeedModel(effectiveConfig, current.checkpoint())) {
                     return result(current, new TreeSet<>());
                 }
                 current = switch (current.checkpoint().stage()) {
-                    case READY_TO_TRAIN -> train(config, services, current);
-                    case MODEL_READY, MODEL_REJECTED -> schedule(config, services, current);
+                    case READY_TO_TRAIN -> train(effectiveConfig, services, current);
+                    case MODEL_READY, MODEL_REJECTED -> schedule(effectiveConfig, services, current);
                     case SCHEDULE_READY ->
-                        transition(config, current, copy(current.checkpoint(), CheckpointStage.BENCHMARKING));
-                    case BENCHMARKING -> benchmark(config, services, current);
-                    case READY_TO_MERGE -> merge(config, services, current);
+                        transition(effectiveConfig, current, copy(current.checkpoint(), CheckpointStage.BENCHMARKING));
+                    case BENCHMARKING -> benchmark(effectiveConfig, services, current);
+                    case READY_TO_MERGE -> merge(effectiveConfig, services, current);
                     default ->
                         throw new IllegalStateException("Unexpected closed-loop stage "
                                 + current.checkpoint().stage());
@@ -262,6 +264,53 @@ public final class ClosedLoopRunner {
                 Optional.empty(),
                 List.of());
         return CheckpointSnapshotCodec.writeNext(config.workspace(), checkpoint);
+    }
+
+    private static StagedInitialCalibrationPlan stageInitialCalibrationPlan(ClosedLoopConfig config) throws Exception {
+        if (config.initialCalibrationPlan().isEmpty()) {
+            return new StagedInitialCalibrationPlan(config, Optional.empty());
+        }
+        Path source =
+                config.initialCalibrationPlan().orElseThrow().toAbsolutePath().normalize();
+        Path snapshot = temporarySibling(config.workspace().resolve("initial-calibration-plan"));
+        String sourceHashBefore = ArtifactFingerprint.sha256(source);
+        copyDirectoryAtomically(source, snapshot);
+        String snapshotHash = ArtifactFingerprint.sha256(snapshot);
+        String sourceHashAfter = ArtifactFingerprint.sha256(source);
+        if (!sourceHashBefore.equals(sourceHashAfter) || !sourceHashBefore.equals(snapshotHash)) {
+            deleteRecursively(snapshot);
+            throw new IllegalArgumentException("Initial calibration plan changed while being staged");
+        }
+        return new StagedInitialCalibrationPlan(withInitialCalibrationPlan(config, snapshot), Optional.of(snapshot));
+    }
+
+    private static ClosedLoopConfig withInitialCalibrationPlan(ClosedLoopConfig config, Path initialCalibrationPlan) {
+        return new ClosedLoopConfig(
+                config.workspace(),
+                config.trainingRunId(),
+                config.iterations(),
+                config.candidateBudget(),
+                config.requiredScenarios(),
+                config.activeEnvironmentId(),
+                config.scenariosPerIteration(),
+                config.schedulerSeed(),
+                config.initialSobolCursor(),
+                config.bootstrapPolicies(),
+                Optional.of(initialCalibrationPlan.toAbsolutePath().normalize()),
+                config.initialObservationBundleDirectory(),
+                config.initialObservationBundles(),
+                config.referenceOverrides(),
+                config.commitSha(),
+                config.dirtyWorkingTree(),
+                config.budgetConfig(),
+                config.generationConfig(),
+                config.benchmarkConfig(),
+                config.anchorSelectionConfig(),
+                config.calibrationConfig(),
+                config.aggregationConfig(),
+                config.trainingConfig(),
+                config.resume(),
+                config.stopFile());
     }
 
     private static LoadedCheckpoint runBootstrap(
@@ -864,6 +913,14 @@ public final class ClosedLoopRunner {
                 checkpoint.pendingRuns());
     }
 
+    private static Path temporarySibling(Path target) {
+        Path parent = target.getParent();
+        if (parent == null) {
+            throw new IllegalArgumentException("Output requires a parent");
+        }
+        return parent.resolve("." + target.getFileName() + ".tmp-" + UUID.randomUUID());
+    }
+
     private static NativeBenchmarkRunPlan plan(
             ClosedLoopConfig config,
             IterationSchedule schedule,
@@ -1155,6 +1212,28 @@ public final class ClosedLoopRunner {
             Files.move(temp, target, StandardCopyOption.ATOMIC_MOVE);
         } catch (AtomicMoveNotSupportedException error) {
             throw new IOException("Atomic artifact copy is required", error);
+        }
+    }
+
+    private static void deleteRecursively(Path root) throws IOException {
+        if (!Files.exists(root, LinkOption.NOFOLLOW_LINKS)) {
+            return;
+        }
+        try (var stream = Files.walk(root)) {
+            for (Path path : stream.sorted(Comparator.reverseOrder()).toList()) {
+                Files.deleteIfExists(path);
+            }
+        }
+    }
+
+    private record StagedInitialCalibrationPlan(ClosedLoopConfig config, Optional<Path> snapshotDirectory)
+            implements AutoCloseable {
+
+        @Override
+        public void close() throws IOException {
+            if (snapshotDirectory.isPresent()) {
+                deleteRecursively(snapshotDirectory.orElseThrow());
+            }
         }
     }
 

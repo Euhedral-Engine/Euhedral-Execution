@@ -247,13 +247,14 @@ public class TensorFlowNetwork implements AutoCloseable {
         }
     }
 
-    private void copyCheckpointArtifacts(Path sourceDirectory, Path destinationDirectory)
-            throws IOException {
+    private void copyCheckpointArtifacts(Path sourceDirectory, Path destinationDirectory) throws IOException {
         try (var paths = Files.list(sourceDirectory)) {
             for (Path path : paths.toList()) {
                 String fileName = path.getFileName().toString();
                 if (Files.isRegularFile(path) && !fileName.equals(CHECKPOINT_STATE_FILE)) {
-                    Files.copy(path, destinationDirectory.resolve(fileName),
+                    Files.copy(
+                            path,
+                            destinationDirectory.resolve(fileName),
                             StandardCopyOption.REPLACE_EXISTING,
                             StandardCopyOption.COPY_ATTRIBUTES);
                 }
@@ -274,8 +275,8 @@ public class TensorFlowNetwork implements AutoCloseable {
             return;
         }
         try (var paths = Files.walk(directory)) {
-            for (Path path : paths.sorted((left, right) ->
-                    Integer.compare(right.getNameCount(), left.getNameCount())).toList()) {
+            for (Path path : paths.sorted((left, right) -> Integer.compare(right.getNameCount(), left.getNameCount()))
+                    .toList()) {
                 Files.deleteIfExists(path);
             }
         }

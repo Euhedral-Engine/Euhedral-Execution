@@ -43,8 +43,8 @@ class TensorFlowNetworkTest {
         }
         try (var files = Files.list(memberDirectory)) {
             assertThat(files.map(path -> path.getFileName().toString()).toList().stream()
-                    .anyMatch(fileName -> fileName.startsWith("model.")
-                            && !fileName.equals("model.properties")))
+                            .anyMatch(
+                                    fileName -> fileName.startsWith("model.") && !fileName.equals("model.properties")))
                     .isTrue();
         }
 
