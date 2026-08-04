@@ -36,8 +36,8 @@ class NativeLoadSmokeIT {
     void packagedGlibcProductLoadsAndCallsGetCpu() throws Exception {
         String architecture = System.getProperty("os.arch", "").toLowerCase(Locale.ROOT);
         assertTrue(architecture.equals("amd64") || architecture.equals("x86_64"),
-                "P1 build-host smoke requires Linux x64");
-        Path smoke = Path.of(System.getProperty("p1.smoke.directory"));
+                "Test build-host smoke requires Linux x64");
+        Path smoke = Path.of(System.getProperty("smoke.directory"));
         List<String> command = new ArrayList<>();
         command.add(Path.of(System.getProperty("java.home"), "bin", "java").toString());
         command.add("-cp");

@@ -133,9 +133,9 @@ artifact repository, or a root build plugin.
 In the hardware POM's existing Surefire configuration, expose only these test system properties:
 
 ```text
-p0.project.basedir=${project.basedir}
-p0.classes.directory=${project.build.outputDirectory}
-p0.build.directory=${project.build.directory}
+project.basedir=${project.basedir}
+classes.directory=${project.build.outputDirectory}
+build.directory=${project.build.directory}
 ```
 
 Tests normalize those paths for I/O but never emit an absolute path into a fixture or report.

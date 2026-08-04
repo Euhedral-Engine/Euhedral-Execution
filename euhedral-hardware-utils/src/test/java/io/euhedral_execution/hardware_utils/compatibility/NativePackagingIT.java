@@ -43,7 +43,7 @@ class NativePackagingIT {
 
     @Test
     void jarHasOnlyTheExactGeneratedResourceInventory() throws Exception {
-        Path jar = Path.of(System.getProperty("p1.jar"));
+        Path jar = Path.of(System.getProperty("test.jar"));
         assertTrue(Files.isRegularFile(jar), () -> "native-package: missing ordinary jar " + jar);
         Set<String> expectedClasses = new HashSet<>();
         Path classes = TestPaths.classesDirectory();
@@ -85,7 +85,7 @@ class NativePackagingIT {
 
     @Test
     void smokeBundleIsSmallAndContainsNoUnrelatedTestOrSourceFiles() throws Exception {
-        Path bundle = Path.of(System.getProperty("p1.smoke.directory"));
+        Path bundle = Path.of(System.getProperty("smoke.directory"));
         assertTrue(Files.isDirectory(bundle), "native-package: missing smoke bundle");
         long files;
         long bytes;
