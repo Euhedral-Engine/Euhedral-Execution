@@ -140,6 +140,13 @@ tasks.named("test") {
 }
 
 tasks.named<Test>("test") {
+    maxParallelForks = 1
+    forkEvery = 0
+
+    systemProperty("junit.jupiter.execution.parallel.enabled", "true")
+    systemProperty("junit.jupiter.execution.parallel.mode.default", "concurrent")
+    systemProperty("junit.jupiter.execution.parallel.config.strategy", "dynamic")
+
     systemProperty("project.basedir", project.projectDir.absolutePath)
     systemProperty("classes.directory", sourceSets.main.get().output.classesDirs.asPath)
     systemProperty("build.directory", layout.buildDirectory.get().asFile.absolutePath)

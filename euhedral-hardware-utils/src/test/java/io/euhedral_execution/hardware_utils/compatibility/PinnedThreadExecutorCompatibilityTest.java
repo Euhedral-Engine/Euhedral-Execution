@@ -11,7 +11,9 @@ import io.euhedral_execution.hardware_utils.ThreadTools;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Isolated;
 
+@Isolated
 class PinnedThreadExecutorCompatibilityTest {
 
     @Test
