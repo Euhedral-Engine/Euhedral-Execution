@@ -26,11 +26,15 @@ class NativeWarmRemovalIT {
     private static final String REMOVED_PRODUCT = "bin/windows/windows_jni_arm64.dll";
 
     private static void runPackage(Path module) throws Exception {
-        Path maven = Path.of(System.getProperty("p1.maven.executable"));
+        Path projectRoot = module.getParent();
+        Path gradlew = projectRoot.resolve("gradlew");
         List<String> command = new ArrayList<>(List.of(
-                maven.toString(), "-B", "-f", module.resolve("pom.xml").toString(),
-                "package", "-DskipTests"));
-        Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
+                gradlew.toString(), "--no-daemon", "--console=plain",
+                ":euhedral-hardware-utils:build", "-x", "test"));
+        Process process = new ProcessBuilder(command)
+                .directory(projectRoot.toFile())
+                .redirectErrorStream(true)
+                .start();
         byte[] bytes = process.getInputStream().readNBytes(4 * 1_024 * 1_024 + 1);
         assertTrue(bytes.length <= 4 * 1_024 * 1_024,
                 "native-package: nested build output is oversized");
@@ -41,6 +45,11 @@ class NativeWarmRemovalIT {
     }
 
     private static void copyTree(Path source, Path destination) throws IOException {
+        copyTree(source, destination, false);
+    }
+
+    private static void copyTree(Path source, Path destination, boolean excludeBuild)
+            throws IOException {
         Files.walkFileTree(source, new SimpleFileVisitor<>() {
             @Override
             public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes)
@@ -48,6 +57,12 @@ class NativeWarmRemovalIT {
                 if (Files.isSymbolicLink(directory)) {
                     throw new IOException(
                             "native-package: source tree contains symlink " + directory);
+                }
+                if (excludeBuild && directory.getFileName().toString().equals("build")) {
+                    return FileVisitResult.SKIP_SUBTREE;
+                }
+                if (excludeBuild && directory.getFileName().toString().equals(".gradle")) {
+                    return FileVisitResult.SKIP_SUBTREE;
                 }
                 Files.createDirectories(destination.resolve(source.relativize(directory)));
                 return FileVisitResult.CONTINUE;
@@ -73,8 +88,29 @@ class NativeWarmRemovalIT {
         Path isolatedRoot = temporaryDirectory.resolve("isolated");
         Path isolatedModule = isolatedRoot.resolve("euhedral-hardware-utils");
         Files.createDirectories(isolatedModule);
-        Files.copy(TestPaths.projectDirectory().getParent().resolve("pom.xml"),
-                isolatedRoot.resolve("pom.xml"));
+        Path projectRoot = TestPaths.projectDirectory().getParent();
+        String minimalSettings = """
+                rootProject.name = "euhedral-execution"
+                include(":euhedral-hardware-utils")
+                
+                dependencyResolutionManagement {
+                    repositories {
+                        mavenCentral()
+                    }
+                    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+                }
+                """;
+        Files.writeString(isolatedRoot.resolve("settings.gradle.kts"),
+                minimalSettings, StandardCharsets.UTF_8);
+        Files.copy(projectRoot.resolve("gradle.properties"),
+                isolatedRoot.resolve("gradle.properties"));
+        Files.copy(projectRoot.resolve("gradlew"),
+                isolatedRoot.resolve("gradlew"));
+        isolatedRoot.resolve("gradlew").toFile().setExecutable(true);
+        Files.copy(projectRoot.resolve("gradlew.bat"),
+                isolatedRoot.resolve("gradlew.bat"));
+        copyTree(projectRoot.resolve("gradle"), isolatedRoot.resolve("gradle"));
+        copyTree(projectRoot.resolve("buildSrc"), isolatedRoot.resolve("buildSrc"), true);
         copyTree(TestPaths.projectDirectory().resolve("src/main/java"),
                 isolatedModule.resolve("src/main/java"));
         copyTree(TestPaths.projectDirectory().resolve("src/main/native"),
@@ -91,20 +127,20 @@ class NativeWarmRemovalIT {
                 "src/test/java/io/euhedral_execution/hardware_utils/internal/NativeLoadSmokeMain.java");
         Files.createDirectories(isolatedSmokeMain.getParent());
         Files.copy(smokeMain, isolatedSmokeMain);
-        Files.copy(TestPaths.projectDirectory().resolve("pom.xml"),
-                isolatedModule.resolve("pom.xml"));
+        Files.copy(TestPaths.projectDirectory().resolve("build.gradle.kts"),
+                isolatedModule.resolve("build.gradle.kts"));
 
         Path external = temporaryDirectory.resolve("external-sentinel");
         Files.createDirectories(external);
         Path sentinel = external.resolve("keep.txt");
         Files.writeString(sentinel, "user-owned\n", StandardCharsets.UTF_8);
-        Path generated = isolatedModule.resolve("target/generated-resources/native");
+        Path generated = isolatedModule.resolve("build/generated-resources/native");
         Files.createDirectories(generated);
         Files.createSymbolicLink(generated.resolve("trap"), external);
 
         runPackage(isolatedModule);
         assertEquals("user-owned\n", Files.readString(sentinel, StandardCharsets.UTF_8));
-        assertTrue(Files.exists(isolatedModule.resolve("target/generated-resources/native")
+        assertTrue(Files.exists(isolatedModule.resolve("build/generated-resources/native")
                 .resolve(REMOVED_PRODUCT)));
 
         Path manifest = isolatedModule.resolve("src/main/native/native-products.json");
@@ -119,15 +155,15 @@ class NativeWarmRemovalIT {
                 StandardCharsets.UTF_8);
 
         runPackage(isolatedModule);
-        assertFalse(Files.exists(isolatedModule.resolve("target/generated-resources/native")
+        assertFalse(Files.exists(isolatedModule.resolve("build/generated-resources/native")
                 .resolve(REMOVED_PRODUCT)));
         assertFalse(
-                Files.exists(isolatedModule.resolve("target/classes").resolve(REMOVED_PRODUCT)));
+                Files.exists(isolatedModule.resolve("build/classes/java/main").resolve(REMOVED_PRODUCT)));
         String catalog = Files.readString(isolatedModule.resolve(
-                        "target/generated-resources/native/META-INF/euhedral/native-products.tsv"),
+                        "build/generated-resources/native/META-INF/euhedral/native-products.tsv"),
                 StandardCharsets.UTF_8);
         assertFalse(catalog.contains(REMOVED_PRODUCT));
-        Path jar = isolatedModule.resolve("target/euhedral-hardware-utils-0.0.7-SNAPSHOT.jar");
+        Path jar = isolatedModule.resolve("build/libs/euhedral-hardware-utils-0.0.7-SNAPSHOT.jar");
         try (JarFile archive = new JarFile(jar.toFile())) {
             assertFalse(
                     archive.stream().anyMatch(entry -> entry.getName().equals(REMOVED_PRODUCT)));

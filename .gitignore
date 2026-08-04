@@ -39,6 +39,9 @@ gradlew.bat
 **/bin/
 **/zig-out/
 **/.zig-cache/
+**/zig-cache/
+**/zig-global-cache/
+
 **/async-profiler*/
 **/.tool-versions
 **/.profileconfig.json
