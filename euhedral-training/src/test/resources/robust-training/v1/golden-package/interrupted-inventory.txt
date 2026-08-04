@@ -14,9 +14,9 @@ manifest.json
 model/ablation-evaluation.csv
 model/grouped-evaluation.csv
 model/loso-evaluation.csv
-model/members/member-000/euhedral-scenario-ordinal-0000.params
-model/members/member-001/euhedral-scenario-ordinal-0000.params
-model/members/member-002/euhedral-scenario-ordinal-0000.params
+model/members/member-000/euhedral-scenario-ordinal.index
+model/members/member-001/euhedral-scenario-ordinal.index
+model/members/member-002/euhedral-scenario-ordinal.index
 model/model-metadata.json
 model/training-history.csv
 policy-scenario-measurements.csv

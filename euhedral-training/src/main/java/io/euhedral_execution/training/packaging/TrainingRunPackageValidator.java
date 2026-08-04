@@ -36,8 +36,6 @@ import java.util.List;
 import java.util.Map;
 
 public final class TrainingRunPackageValidator {
-    private TrainingRunPackageValidator() {}
-
     public static TrainingRunPackage validate(Path packageDirectory) throws IOException {
         Path root = packageDirectory.toAbsolutePath().normalize();
         if (Files.isSymbolicLink(root) || !Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS)) {
@@ -311,9 +309,14 @@ public final class TrainingRunPackageValidator {
 
     private static void validateReference(ArtifactReference reference, String pathPrefix, String actualHash)
             throws IOException {
-        if (!reference.relativePath().startsWith(pathPrefix)
-                || !reference.sha256().equals(actualHash)) {
-            throw new IOException("Detached artifact reference mismatch");
+        if (!reference.relativePath().startsWith(pathPrefix)) {
+            throw new IOException("Detached artifact reference path mismatch: expected prefix '" + pathPrefix
+                    + "' but got '" + reference.relativePath() + "'");
+        }
+        if (!reference.sha256().equals(actualHash)) {
+            throw new IOException("Detached artifact reference hash mismatch for '"
+                    + reference.relativePath() + "': expected " + reference.sha256()
+                    + " but computed " + actualHash);
         }
     }
 
@@ -508,4 +511,6 @@ public final class TrainingRunPackageValidator {
         @Override
         public void onObservation(BenchmarkObservation observation) {}
     }
+
+    private TrainingRunPackageValidator() {}
 }

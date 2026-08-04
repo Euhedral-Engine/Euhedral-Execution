@@ -20,7 +20,7 @@ public record MemberMetadata(int index, long seed, int bestEpoch, String relativ
         if (index < 0) {
             throw new IllegalArgumentException("Negative member index");
         }
-        return "members/member-%03d/euhedral-scenario-ordinal-0000.params".formatted(index);
+        return "members/member-%03d/euhedral-scenario-ordinal.index".formatted(index);
     }
 
     @Override

@@ -151,21 +151,21 @@
       "index": 0,
       "seed_hex": "c066c6f196ffe6d3",
       "best_epoch": 1,
-      "path": "members/member-000/euhedral-scenario-ordinal-0000.params",
+      "path": "members/member-000/euhedral-scenario-ordinal.index",
       "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
     },
     {
       "index": 1,
       "seed_hex": "9141c9205b7b043b",
       "best_epoch": 1,
-      "path": "members/member-001/euhedral-scenario-ordinal-0000.params",
+      "path": "members/member-001/euhedral-scenario-ordinal.index",
       "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
     },
     {
       "index": 2,
       "seed_hex": "54445ee768f6d23b",
       "best_epoch": 1,
-      "path": "members/member-002/euhedral-scenario-ordinal-0000.params",
+      "path": "members/member-002/euhedral-scenario-ordinal.index",
       "sha256": "2222222222222222222222222222222222222222222222222222222222222222"
     }
   ],

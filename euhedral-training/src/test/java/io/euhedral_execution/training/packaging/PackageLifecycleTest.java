@@ -68,14 +68,16 @@ class PackageLifecycleAuditTest {
             "scenario-results.csv",
             "vectors/incomplete-promising.vectors.csv",
             "vectors/robust-leaders.vectors.csv");
+    // NOTE: Model files include TensorFlow checkpoint artifacts (.index, .data-*, checkpoint, .properties)
+    // Only .index files are included here as they're the primary checkpoint references
     private static final List<String> MODEL_FILES = List.of(
             "model/ablation-evaluation.csv",
             "model/grouped-evaluation.csv",
             "model/loso-evaluation.csv",
             "model/model-metadata.json",
-            "model/members/member-000/euhedral-scenario-ordinal-0000.params",
-            "model/members/member-001/euhedral-scenario-ordinal-0000.params",
-            "model/members/member-002/euhedral-scenario-ordinal-0000.params",
+            "model/members/member-000/euhedral-scenario-ordinal.index",
+            "model/members/member-001/euhedral-scenario-ordinal.index",
+            "model/members/member-002/euhedral-scenario-ordinal.index",
             "model/training-history.csv");
     private static final List<String> SCHEDULE_FILES = List.of(
             "scheduler/COMPLETE",
@@ -90,121 +92,6 @@ class PackageLifecycleAuditTest {
     static Path temporary;
 
     private CompletableFuture<Experiment> experimentFuture;
-
-    private static List<PackageOmission> expectedOmissions(
-            ClosedLoopCheckpoint checkpoint, boolean merge, boolean model, boolean schedule) {
-        ArrayList<PackageOmission> result = new ArrayList<>();
-        if (!merge) {
-            result.add(new PackageOmission("MERGE", "NOT_YET_CALIBRATED", true));
-        }
-        if (!model) {
-            result.add(new PackageOmission("MODEL", "NOT_YET_TRAINED", true));
-        }
-        if (!schedule) {
-            result.add(new PackageOmission(
-                    "SCHEDULE",
-                    checkpoint.stage() == CheckpointStage.MODEL_REJECTED
-                            ? "MODEL_REJECTED_BEFORE_SCHEDULING"
-                            : "NO_NORMAL_ITERATION_SCHEDULE_AT_CHECKPOINT",
-                    true));
-        }
-        return result.stream().sorted().toList();
-    }
-
-    private static List<String> expectedInventory(
-            ClosedLoopCheckpoint checkpoint, boolean merge, boolean model, boolean schedule) {
-        ArrayList<String> result = new ArrayList<>(List.of(
-                "README.md",
-                "manifest.json",
-                "provenance/package-inputs.properties",
-                "raw-data/index.csv",
-                "reports/robust-ranking.md",
-                "reports/source-scenario-comparison.md"));
-        CHECKPOINT_FILES.forEach(name -> result.add("checkpoints/latest/" + name));
-        checkpoint.evidence().forEach(evidence -> {
-            String prefix = "raw-data/bundles/" + evidence.benchmarkRunId() + "/";
-            for (String name : List.of("COMPLETE", "observations.csv", "policies.csv", "run.csv")) {
-                result.add(prefix + name);
-            }
-        });
-        if (merge) {
-            result.addAll(MERGE_FILES);
-        }
-        if (model) {
-            result.addAll(MODEL_FILES);
-        }
-        if (schedule) {
-            result.addAll(SCHEDULE_FILES);
-        }
-        return result.stream().sorted().toList();
-    }
-
-    private static void assertCsvMetadata(Path file, PackageFile entry) throws Exception {
-        long rows = 0;
-        String header;
-        try (BufferedReader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
-            header = reader.readLine();
-            while (reader.readLine() != null) {
-                rows++;
-            }
-        }
-        assertThat(rows).isEqualTo(entry.rowCount());
-        assertThat(header).startsWith("schema_version,");
-        try (BufferedReader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                if (!line.startsWith("schema_version,")) {
-                    assertThat(line).startsWith(entry.schemaVersion().toString() + ",");
-                }
-            }
-        }
-    }
-
-    private static void copyTree(Path source, Path target) throws Exception {
-        try (var stream = Files.walk(source)) {
-            for (Path path : stream.sorted().toList()) {
-                Path destination = target.resolve(source.relativize(path).toString());
-                if (Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) {
-                    Files.createDirectories(destination);
-                } else {
-                    Files.copy(path, destination, StandardCopyOption.COPY_ATTRIBUTES);
-                }
-            }
-        }
-    }
-
-    private static List<String> inventory(Path root) throws Exception {
-        try (var stream = Files.walk(root)) {
-            return stream.filter(path -> Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
-                    .map(path -> root.relativize(path).toString().replace('\\', '/'))
-                    .sorted()
-                    .toList();
-        }
-    }
-
-    private static String streamSha256(Path file) throws Exception {
-        MessageDigest digest = MessageDigest.getInstance("SHA-256");
-        byte[] buffer = new byte[8192];
-        try (InputStream input = new BufferedInputStream(Files.newInputStream(file))) {
-            int read;
-            while ((read = input.read(buffer)) >= 0) {
-                if (read > 0) {
-                    digest.update(buffer, 0, read);
-                }
-            }
-        }
-        return HexFormat.of().formatHex(digest.digest());
-    }
-
-    private static List<Path> stagingEntries(Path output) throws Exception {
-        if (!Files.isDirectory(output)) {
-            return List.of();
-        }
-        try (var stream = Files.list(output)) {
-            return stream.filter(path -> path.getFileName().toString().contains(".tmp-"))
-                    .toList();
-        }
-    }
 
     @BeforeAll
     void buildExperiment() throws Exception {
@@ -580,6 +467,54 @@ class PackageLifecycleAuditTest {
         }
     }
 
+    private static List<PackageOmission> expectedOmissions(
+            ClosedLoopCheckpoint checkpoint, boolean merge, boolean model, boolean schedule) {
+        ArrayList<PackageOmission> result = new ArrayList<>();
+        if (!merge) {
+            result.add(new PackageOmission("MERGE", "NOT_YET_CALIBRATED", true));
+        }
+        if (!model) {
+            result.add(new PackageOmission("MODEL", "NOT_YET_TRAINED", true));
+        }
+        if (!schedule) {
+            result.add(new PackageOmission(
+                    "SCHEDULE",
+                    checkpoint.stage() == CheckpointStage.MODEL_REJECTED
+                            ? "MODEL_REJECTED_BEFORE_SCHEDULING"
+                            : "NO_NORMAL_ITERATION_SCHEDULE_AT_CHECKPOINT",
+                    true));
+        }
+        return result.stream().sorted().toList();
+    }
+
+    private static List<String> expectedInventory(
+            ClosedLoopCheckpoint checkpoint, boolean merge, boolean model, boolean schedule) {
+        ArrayList<String> result = new ArrayList<>(List.of(
+                "README.md",
+                "manifest.json",
+                "provenance/package-inputs.properties",
+                "raw-data/index.csv",
+                "reports/robust-ranking.md",
+                "reports/source-scenario-comparison.md"));
+        CHECKPOINT_FILES.forEach(name -> result.add("checkpoints/latest/" + name));
+        checkpoint.evidence().forEach(evidence -> {
+            String prefix = "raw-data/bundles/" + evidence.benchmarkRunId() + "/";
+            for (String name : List.of("COMPLETE", "observations.csv", "policies.csv", "run.csv")) {
+                result.add(prefix + name);
+            }
+        });
+        if (merge) {
+            result.addAll(MERGE_FILES);
+        }
+        if (model) {
+            result.addAll(MODEL_FILES);
+        }
+        if (schedule) {
+            result.addAll(SCHEDULE_FILES);
+        }
+        return result.stream().sorted().toList();
+    }
+
     private void assertOwningSourceChecksums(
             AuditFixtures.Experiment experiment, Path complete, TrainingRunManifest manifest) throws Exception {
         assertThat(ArtifactFingerprint.sha256(complete.resolve("checkpoints/latest")))
@@ -714,6 +649,27 @@ class PackageLifecycleAuditTest {
         }
     }
 
+    private static void assertCsvMetadata(Path file, PackageFile entry) throws Exception {
+        long rows = 0;
+        String header;
+        try (BufferedReader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+            header = reader.readLine();
+            while (reader.readLine() != null) {
+                rows++;
+            }
+        }
+        assertThat(rows).isEqualTo(entry.rowCount());
+        assertThat(header).startsWith("schema_version,");
+        try (BufferedReader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (!line.startsWith("schema_version,")) {
+                    assertThat(line).startsWith(entry.schemaVersion().toString() + ",");
+                }
+            }
+        }
+    }
+
     private TrainingRunPackageRequest request(ClosedLoopConfig config, int revision, Path outputRoot) throws Exception {
         ClosedLoopCheckpoint checkpoint = CheckpointSnapshotCodec.loadRevision(config.workspace(), revision)
                 .checkpoint();
@@ -740,6 +696,28 @@ class PackageLifecycleAuditTest {
         return target;
     }
 
+    private static void copyTree(Path source, Path target) throws Exception {
+        try (var stream = Files.walk(source)) {
+            for (Path path : stream.sorted().toList()) {
+                Path destination = target.resolve(source.relativize(path).toString());
+                if (Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) {
+                    Files.createDirectories(destination);
+                } else {
+                    Files.copy(path, destination, StandardCopyOption.COPY_ATTRIBUTES);
+                }
+            }
+        }
+    }
+
+    private static List<String> inventory(Path root) throws Exception {
+        try (var stream = Files.walk(root)) {
+            return stream.filter(path -> Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
+                    .map(path -> root.relativize(path).toString().replace('\\', '/'))
+                    .sorted()
+                    .toList();
+        }
+    }
+
     private List<String> resourceLines(String name) throws Exception {
         String resource = "/robust-training/v1/golden-package/" + name;
         try (InputStream input = getClass().getResourceAsStream(resource)) {
@@ -749,6 +727,30 @@ class PackageLifecycleAuditTest {
             return new String(input.readAllBytes(), StandardCharsets.US_ASCII)
                     .lines()
                     .filter(line -> !line.isEmpty())
+                    .toList();
+        }
+    }
+
+    private static String streamSha256(Path file) throws Exception {
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        byte[] buffer = new byte[8192];
+        try (InputStream input = new BufferedInputStream(Files.newInputStream(file))) {
+            int read;
+            while ((read = input.read(buffer)) >= 0) {
+                if (read > 0) {
+                    digest.update(buffer, 0, read);
+                }
+            }
+        }
+        return HexFormat.of().formatHex(digest.digest());
+    }
+
+    private static List<Path> stagingEntries(Path output) throws Exception {
+        if (!Files.isDirectory(output)) {
+            return List.of();
+        }
+        try (var stream = Files.list(output)) {
+            return stream.filter(path -> path.getFileName().toString().contains(".tmp-"))
                     .toList();
         }
     }

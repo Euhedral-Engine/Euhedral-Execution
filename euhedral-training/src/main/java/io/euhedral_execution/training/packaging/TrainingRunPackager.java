@@ -33,8 +33,6 @@ public final class TrainingRunPackager {
             "robust-ranking.csv",
             "coverage-report.csv");
 
-    private TrainingRunPackager() {}
-
     public static TrainingRunPackage publish(TrainingRunPackageRequest request) throws IOException {
         return publish(request, PublicationProbe.NO_OP);
     }
@@ -223,8 +221,9 @@ public final class TrainingRunPackager {
         if (path.startsWith("model/")) {
             if (path.equals("model/model-metadata.json"))
                 return c(ArtifactSemanticType.MODEL_METADATA, ProducingStage.LEARNING);
-            if (path.endsWith(".params"))
+            if (path.endsWith(".index") || path.contains(".data-")) {
                 return c(ArtifactSemanticType.MODEL_MEMBER_PARAMETERS, ProducingStage.LEARNING);
+            }
             return c(ArtifactSemanticType.MODEL_EVALUATION_DATASET, ProducingStage.LEARNING);
         }
         if (Set.of(
@@ -298,7 +297,9 @@ public final class TrainingRunPackager {
         if (path.endsWith(".md")) return "text/markdown";
         if (path.endsWith(".json")) return "application/json";
         if (path.endsWith(".properties")) return "text/plain";
-        if (path.endsWith(".params")) return "application/octet-stream";
+        if (path.endsWith(".index") || path.contains(".data-")) {
+            return "application/octet-stream";
+        }
         return "application/octet-stream";
     }
 
@@ -358,6 +359,8 @@ public final class TrainingRunPackager {
         }
     }
 
+    record Classification(ArtifactSemanticType semanticType, ProducingStage producingStage) {}
+
     enum PublicationPoint {
         AFTER_SOURCE_VALIDATION,
         DURING_COPY,
@@ -373,5 +376,5 @@ public final class TrainingRunPackager {
         void at(PublicationPoint point) throws IOException;
     }
 
-    record Classification(ArtifactSemanticType semanticType, ProducingStage producingStage) {}
+    private TrainingRunPackager() {}
 }
