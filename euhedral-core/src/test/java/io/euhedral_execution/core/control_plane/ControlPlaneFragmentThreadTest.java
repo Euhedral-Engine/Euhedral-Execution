@@ -13,7 +13,9 @@ import java.util.BitSet;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.LockSupport;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Isolated;
 
+@Isolated
 class ControlPlaneFragmentThreadTest {
 
     @Test
