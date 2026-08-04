@@ -157,7 +157,7 @@ tools:
 ```bash
 mise install
 mise exec -- java -version
-mise exec -- mvn -B verify
+gradle build
 ```
 
 Run applications with:
@@ -166,7 +166,7 @@ Run applications with:
 -XX:+UseThreadPriorities
 ```
 
-The hardware module cross-builds native libraries during Maven initialization. A full build also
+The hardware module cross-builds native libraries during Gradle initialization. A full build also
 needs Zig, target JNI headers, and a macOS SDK; the setup in
 [`.github/workflows/build.yaml`](./.github/workflows/build.yaml) is the reference configuration.
 Focused Core and Reactor builds are shown in their quick starts.

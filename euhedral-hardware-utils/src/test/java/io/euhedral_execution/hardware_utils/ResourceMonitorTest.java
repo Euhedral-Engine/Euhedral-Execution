@@ -12,16 +12,17 @@ import java.time.Duration;
 import java.util.BitSet;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Isolated;
 
+@Isolated
 class ResourceMonitorTest {
 
     @Test
     void calculatesUtilizationFromInjectedSnapshots() {
         IncrementingSnapshotProvider snapshots = new IncrementingSnapshotProvider();
-        ResourceMonitor monitor = new ResourceMonitor(
-                new TopologyMapper(new BitSet()), Duration.ofMillis(200), snapshots);
 
-        try {
+        try (ResourceMonitor monitor = new ResourceMonitor(
+                new TopologyMapper(new BitSet()), Duration.ofMillis(200), snapshots)) {
             HardwareUtilization utilization = monitor.getUtilization();
 
             assertEquals(1.0, utilization.quotaCpus());
@@ -33,8 +34,6 @@ class ResourceMonitorTest {
             assertEquals(200.0, utilization.diskIOBytesPerSecond(), 0.01);
             assertEquals(snapshots.effectiveCpus, utilization.globalEffectiveCpus());
             assertEquals(3, snapshots.samples.get());
-        } finally {
-            monitor.close();
         }
     }
 

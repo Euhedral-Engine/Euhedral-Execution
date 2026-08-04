@@ -3,7 +3,9 @@ package io.euhedral_execution.training.packaging;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.euhedral_execution.testing.tags.IntegrationTest;
 import io.euhedral_execution.training.AuditFixtures;
+import io.euhedral_execution.training.AuditFixtures.Experiment;
 import io.euhedral_execution.training.checkpoint.ArtifactFingerprint;
 import io.euhedral_execution.training.checkpoint.CheckpointSnapshotCodec;
 import io.euhedral_execution.training.checkpoint.data.ClosedLoopCheckpoint;
@@ -30,19 +32,21 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.io.TempDir;
 
+@IntegrationTest
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class PackageLifecycleAuditTest {
     private static final List<String> CHECKPOINT_FILES = List.of("COMPLETE",
@@ -70,16 +74,28 @@ class PackageLifecycleAuditTest {
     @TempDir
     static Path temporary;
 
-    private AuditFixtures.Experiment experiment;
+    private CompletableFuture<Experiment> experimentFuture;
 
     @BeforeAll
     void buildExperiment() throws Exception {
-        experiment = AuditFixtures.execute(temporary.resolve("experiment"));
+        this.experimentFuture = CompletableFuture.supplyAsync(() -> {
+            try {
+                return AuditFixtures.execute(temporary.resolve("experiment"));
+            } catch (Exception e) {
+                throw new CompletionException(e);
+            }
+        });
+    }
+
+    private AuditFixtures.Experiment getExperiment() {
+        return experimentFuture.join();
     }
 
     @Test
     void packagesEveryCheckpointLifecycleStageWithExactSelectedArtifacts()
             throws Exception {
+        AuditFixtures.Experiment experiment = getExperiment();
+
         Map<CheckpointStage, Integer> firstRevision = new EnumMap<>(CheckpointStage.class);
         for (LoadedCheckpoint loaded : AuditFixtures.checkpoints(
                 experiment.resumedWorkspace())) {
@@ -101,19 +117,21 @@ class PackageLifecycleAuditTest {
             TrainingRunPackage packaged = TrainingRunPackager.publish(request(
                     experiment.resumedFinalConfig(), revision,
                     temporary.resolve("lifecycle")));
-            assertLifecyclePackage(packaged, loaded);
+            assertLifecyclePackage(experiment, packaged, loaded);
         }
 
         LoadedCheckpoint rejected = CheckpointSnapshotCodec.loadRevision(
                 experiment.rejectedWorkspace(),
                 AuditFixtures.revision(experiment.rejected().latestCheckpoint()));
         assertThat(rejected.checkpoint().stage()).isEqualTo(CheckpointStage.MODEL_REJECTED);
-        assertLifecyclePackage(experiment.rejectedPackage(), rejected);
+        assertLifecyclePackage(experiment, experiment.rejectedPackage(), rejected);
     }
 
     @Test
     void fixedInventoriesChecksumsManifestAndReportsMatchIndependentOracles()
             throws Exception {
+        AuditFixtures.Experiment experiment = getExperiment();
+
         Path complete = experiment.resumedPackage().directory();
         Path interrupted = experiment.interruptedPackage().directory();
         assertThat(inventory(complete)).containsExactlyElementsOf(
@@ -163,14 +181,16 @@ class PackageLifecycleAuditTest {
             }
         }
 
-        assertOwningSourceChecksums(complete, manifest);
-        assertReadmeAndReports(complete, manifest);
-        assertNoPublicationPathLeak(complete);
+        assertOwningSourceChecksums(experiment, complete, manifest);
+        assertReadmeAndReports(experiment, complete, manifest);
+        assertNoPublicationPathLeak(experiment, complete);
     }
 
     @Test
     void publicationFailuresCollisionsAndStagingOwnershipAreTransactional()
             throws Exception {
+        AuditFixtures.Experiment experiment = getExperiment();
+
         int revision = AuditFixtures.revision(
                 experiment.resumedComplete().latestCheckpoint());
         String workspaceHash = ArtifactFingerprint.sha256(
@@ -271,6 +291,8 @@ class PackageLifecycleAuditTest {
     @Test
     void validatorRejectsEveryArtifactFamilyAndMalformedManifestSurface()
             throws Exception {
+        AuditFixtures.Experiment experiment = getExperiment();
+
         Path source = experiment.resumedPackage().directory();
         TrainingRunManifest manifest = PackageManifestCodec.read(
                 source.resolve("manifest.json"));
@@ -390,7 +412,7 @@ class PackageLifecycleAuditTest {
         }
     }
 
-    private void assertLifecyclePackage(TrainingRunPackage packaged,
+    private void assertLifecyclePackage(AuditFixtures.Experiment experiment, TrainingRunPackage packaged,
             LoadedCheckpoint loaded) throws Exception {
         ClosedLoopCheckpoint checkpoint = loaded.checkpoint();
         TrainingRunManifest manifest = PackageManifestCodec.read(packaged.manifest());
@@ -485,7 +507,7 @@ class PackageLifecycleAuditTest {
         return result.stream().sorted().toList();
     }
 
-    private void assertOwningSourceChecksums(Path complete,
+    private void assertOwningSourceChecksums(AuditFixtures.Experiment experiment, Path complete,
             TrainingRunManifest manifest) throws Exception {
         assertThat(ArtifactFingerprint.sha256(complete.resolve("checkpoints/latest")))
                 .isEqualTo(manifest.checkpointSha256());
@@ -514,7 +536,7 @@ class PackageLifecycleAuditTest {
         }
     }
 
-    private void assertReadmeAndReports(Path complete,
+    private void assertReadmeAndReports(AuditFixtures.Experiment experiment, Path complete,
             TrainingRunManifest manifest) throws Exception {
         String readme = Files.readString(complete.resolve("README.md"));
         int previous = -1;
@@ -580,7 +602,7 @@ class PackageLifecycleAuditTest {
         }
     }
 
-    private void assertNoPublicationPathLeak(Path complete) throws Exception {
+    private void assertNoPublicationPathLeak(AuditFixtures.Experiment experiment, Path complete) throws Exception {
         List<String> forbidden = List.of(experiment.root().toString(),
                 experiment.resumedWorkspace().toString(),
                 experiment.resumedPackages().toString(), ".tmp-");

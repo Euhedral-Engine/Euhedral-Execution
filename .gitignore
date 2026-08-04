@@ -4,6 +4,14 @@
 **/.vscode/
 !.mvn/wrapper/maven-wrapper.jar
 
+### Gradle ###
+.gradle/
+**/build/
+!gradle/wrapper/gradle-wrapper.properties
+gradle/wrapper/*.jar
+gradlew
+gradlew.bat
+
 ### STS ###
 .apt_generated
 .classpath
@@ -31,6 +39,9 @@
 **/bin/
 **/zig-out/
 **/.zig-cache/
+**/zig-cache/
+**/zig-global-cache/
+
 **/async-profiler*/
 **/.tool-versions
 **/.profileconfig.json

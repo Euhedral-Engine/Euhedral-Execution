@@ -139,8 +139,8 @@ class NativeBinaryInspectionIT {
 
     @Test
     void everyPackagedProductPassesArchitectureImportExportAndRuntimeFloorGates() throws Exception {
-        Path readobj = executableProperty("p1.llvm.readobj");
-        Path objdump = executableProperty("p1.llvm.objdump");
+        Path readobj = executableProperty("llvm.readobj");
+        Path objdump = executableProperty("llvm.objdump");
         Path generated = TestPaths.buildDirectory().resolve("generated-resources/native");
         Map<String, String> machines = Map.of(
                 "bin/linux/glibc/linux_jni_x64.so", "Machine: EM_X86_64",
@@ -210,8 +210,8 @@ class NativeBinaryInspectionIT {
 
     @Test
     void packagedMacosProductsRetainAdHocHardenedSignatures() throws Exception {
-        Path signer = executableProperty("p1.rcodesign");
-        Path jar = Path.of(System.getProperty("p1.jar"));
+        Path signer = executableProperty("rcodesign");
+        Path jar = Path.of(System.getProperty("test.jar"));
         Map<String, String> identifiers = Map.of(
                 "bin/osx/osx_jni_x64.dylib", "io.euhedral.execution.hardware-utils.osx-jni-x64",
                 "bin/osx/osx_jni_arm64.dylib",

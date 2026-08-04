@@ -13,7 +13,7 @@ Most performance and correctness constraints follow from that shape.
 
 1. Run `git status --short` and preserve unrelated changes, generated data, and local benchmark
    output.
-2. Identify the owning module and inspect its `pom.xml` and `module-info.java`.
+2. Identify the owning module and inspect its `build.gradle.kts` and `module-info.java`.
 3. Read the nearest tests before changing a concurrency or lifecycle contract.
 4. Use the repository toolchain from [`mise.toml`](mise.toml).
 5. Do not commit, push, delete user data, or rewrite unrelated files unless the task explicitly asks
@@ -24,9 +24,9 @@ contain expensive local runs. Treat them as user-owned even when they are untrac
 
 ## Modules and language levels
 
-All Java, Maven, and Maven-build commands default to the exact tool versions selected by
-[`mise.toml`](mise.toml), currently Java 21 and Maven 3.9.16. Individual artifacts retain lower
-release targets where possible; a lower target does not authorize a different default JDK or Maven
+All Java and Gradle build commands default to the exact tool versions selected by
+[`mise.toml`](mise.toml), currently Java 21 and Gradle 9.6.1. Individual artifacts retain lower
+release targets where possible; a lower target does not authorize a different default JDK or Gradle
 version. A restricted-environment fallback is allowed only under the documented exception below
 and must report the substituted versions and resulting limits.
 
@@ -62,89 +62,59 @@ Install and activate the pinned tools:
 ```bash
 mise install
 mise exec -- java -version
-mise exec -- mvn -version
+gradle --version
 ```
 
 The normal repository check is the same one used by CI:
 
 ```bash
-mise exec -- mvn -B verify
+gradle build
 ```
+
+To run integration tests
+```bash
+gradle build integrationTest
+```
+
 
 For a focused Java change, select the module and include its required upstream modules:
 
 ```bash
-mise exec -- mvn -B -pl euhedral-core -am test
-mise exec -- mvn -B -pl euhedral-data-structures -am test
-mise exec -- mvn -B -pl euhedral-spring-core -am test
+gradle :euhedral-core:test
+gradle :euhedral-data-structures:test
+gradle :euhedral-spring-core:test
 ```
 
-Use `verify`, not only `test`, when the change affects native packaging, generated protobuf code, or
+Use `build`, not only `test`, when the change affects native packaging, generated protobuf code, or
 integration-test lifecycle bindings:
 
 ```bash
-mise exec -- mvn -B -pl euhedral-hardware-utils -am verify
-mise exec -- mvn -B -pl euhedral-spring-core -am verify
+gradle :euhedral-hardware-utils:build
+gradle :euhedral-spring-core:build
 ```
 
-The hardware module invokes Zig during Maven's `initialize` phase, even for an ordinary compile. It
+The hardware module invokes Zig during Gradle's initialization phase, even for an ordinary compile. It
 cross-builds native libraries for Linux, Windows, and macOS. A missing `zig`, JNI platform header,
 or macOS SDK can fail the build before Java compilation begins. Use
 [`.github/workflows/build.yaml`](.github/workflows/build.yaml) as the reference setup; it prepares
-the cross-target JNI headers and macOS SDK before running `mvn verify`.
+the cross-target JNI headers and macOS SDK before running `gradle build`.
 
 Hardware resource tests use Testcontainers and need a working Docker daemon. Affinity tests also
 depend on the CPUs exposed by the host or container. Report those environmental limits separately
 from Java compilation failures.
 
-For focused trainer work, the documented sequence installs upstream artifacts without compiling
+For focused trainer work, the documented sequence builds upstream artifacts without compiling
 their tests, then runs trainer tests:
 
 ```bash
-mise exec -- mvn -B -pl euhedral-training -am install -Dmaven.test.skip=true
-mise exec -- mvn -B -pl euhedral-training test
+gradle :euhedral-training:build -x test
+gradle :euhedral-training:test
 ```
 
 See [`euhedral-training/CLOSED_LOOP.md`](euhedral-training/CLOSED_LOOP.md) for packaging and runtime
 properties. CUDA is not needed for ordinary compilation or CPU tests. The packaged GPU launcher
 expects the exact PyTorch and CUDA versions described in
 [`euhedral-training/GPU_SETUP_UBUNTU.md`](euhedral-training/GPU_SETUP_UBUNTU.md).
-
-### Toolchain fallbacks in restricted agent environments
-
-`mise` is the preferred toolchain selector, but an agent sandbox may not permit `mise install` or
-other writes outside the workspace. Do not bypass those restrictions with `sudo` or by writing to
-shared tool directories. First inspect the available tools without changing state:
-
-```bash
-command -v java
-command -v mvn
-java -version
-mvn -version
-```
-
-If the pinned JDK and Maven are already installed, invoke them directly instead of asking `mise` to
-install or activate anything. Supply the JDK home and Maven executable explicitly; this is the same
-form used by the focused trainer blueprints:
-
-```bash
-env JAVA_HOME=<jdk-21-home> \
-    PATH=<jdk-21-home>/bin:/usr/bin:/bin \
-    <maven-home>/bin/mvn -B -pl euhedral-training test
-```
-
-When a sandbox cannot write the default Maven local repository, use a workspace-local cache and
-report that dependency resolution may still require network access:
-
-```bash
-mvn -Dmaven.repo.local=.cache/m2 -B -pl euhedral-training test
-```
-
-The system `java` and `mvn` are acceptable only after confirming that their JDK satisfies the
-selected module's release level. If a Maven wrapper is added later, prefer its checked-in version
-over an unverified system Maven. If neither the pinned nor a compatible preinstalled toolchain is
-usable, report the exact limitation and use the CI workflow as the authoritative build recipe; do
-not change source or build configuration merely to accommodate the agent environment.
 
 ## Runtime invariants
 
@@ -314,7 +284,7 @@ The generated gRPC classes
 Edit the proto, run the Spring module's generation phase, and review the generated diff. Do not hand
 edit generated Java.
 
-Native binaries under `euhedral-hardware-utils/src/main/resources/bin`, Zig caches, Maven `target`
+Native binaries under `euhedral-hardware-utils/src/main/resources/bin`, Zig caches, Gradle `build`
 directories, training outputs, and benchmark output are build or run artifacts. Do not add or
 remove them as part of an unrelated source change.
 
@@ -335,7 +305,7 @@ monitors, channels, and containers in teardown so static state does not leak int
 Before handing work back:
 
 1. Search for stale names and references.
-2. Run the narrowest meaningful tests, then `mvn verify` for cross-module or native changes.
+2. Run the narrowest meaningful tests, then `gradle build` for cross-module or native changes.
 3. Inspect `git diff --check`.
 4. Inspect `git status --short` and confirm only intended files changed.
 5. Report tests that could not run and the exact environmental reason.

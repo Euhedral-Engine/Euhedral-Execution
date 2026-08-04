@@ -11,14 +11,11 @@ From the repository root:
 
 ```bash
 mise install
-mise exec -- mvn -B -pl euhedral-training -am install -Dmaven.test.skip=true
-mise exec -- mvn -B -pl euhedral-training test
-mise exec -- mvn -B -pl euhedral-training -am package -Dmaven.test.skip=true
+gradle :euhedral-training:build
 ```
 
-The distribution is under `euhedral-training/target/trainer/`. Run its jar directly for CPU work, or
-use `target/trainer/bin/euhedral-training-gpu` after following
-[GPU_SETUP_UBUNTU.md](GPU_SETUP_UBUNTU.md). Java 21 and the native Euhedral library are required for
+The distribution is under `euhedral-training/build/libs/`. Run the jar directly for CPU work, or
+use `build/bin/euhedral-training-gpu`. Java 21 and the native Euhedral library are required for
 physical benchmarks.
 
 The command-line entry point provides these commands:

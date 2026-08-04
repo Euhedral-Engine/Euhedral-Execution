@@ -17,7 +17,7 @@ class ApiCompatibilityTest {
         ApiSurface current = ApiSurfaceReader.read(TestPaths.classesDirectory());
         CompatibilityReport report = ApiSurfaceComparator.compare(baseline, current);
         Path reportPath = TestPaths.buildDirectory()
-                .resolve("p0-compatibility/compatibility-report.txt");
+                .resolve("compatibility/compatibility-report.txt");
         report.write(reportPath);
 
         assertEquals(5, current.moduleEntries().stream()

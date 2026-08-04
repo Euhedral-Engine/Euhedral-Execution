@@ -367,7 +367,7 @@ in the Phase 5/6 completion and conformance artifacts.
 
 ### Unchanged audit surface
 
-`EndToEndAuditTest`, `PackageLifecycleAuditTest`, the golden package resources, and production
+`EndToEndTest`, `PackageLifecycleAuditTest`, the golden package resources, and production
 package/checkpoint code should require no semantic edit. Imports or record accessor compile repair
 caused solely by the `Experiment` field removal is permitted, but current reference searches show
 no external use of those two fields.
@@ -465,7 +465,7 @@ data, enum, and I/O packages. Phase 7 settles the remaining ambiguous names as f
 | `DataMerger` | retain | It is the established v1 facade used across the robust path. |
 | `BenchmarkRunner` / `SequenceFinder` | retain | They now exclusively own native-v1 and robust candidate APIs. |
 | `DataMergerV1Test` / `BenchmarkRunnerV1Test` | retain | `V1` denotes persisted schema version, not implementation phase. |
-| `AuditFixtures` / `EndToEndAuditTest` | retain | Phase-number prefixes were already removed; names state behavior. |
+| `AuditFixtures` / `EndToEndTest` | retain | Phase-number prefixes were already removed; names state behavior. |
 
 No other production class, package, command, artifact, or report name requires a Phase 7 rename.
 
@@ -589,7 +589,7 @@ Record `java -version` and `mvn -version` for that prefix. Then run:
   test
 
 <PINNED_MVN> -B -pl euhedral-training \
-  -Dtest=ArtifactFingerprintTest,TrainingRunPackageInputsCodecTest,PackageManifestCodecTest,PackageDatasetWriterTest,PackageReportWriterTest,TrainingRunPackagerTest,TrainingRunPackageValidatorTest,PackageLifecycleAuditTest,ClosedLoopConfigCodecTest,RunnerTest,EndToEndAuditTest \
+  -Dtest=ArtifactFingerprintTest,TrainingRunPackageInputsCodecTest,PackageManifestCodecTest,PackageDatasetWriterTest,PackageReportWriterTest,TrainingRunPackagerTest,TrainingRunPackageValidatorTest,PackageLifecycleAuditTest,ClosedLoopConfigCodecTest,RunnerTest,EndToEndTest \
   test
 
 <PINNED_MVN> -B -pl euhedral-training test
@@ -695,7 +695,7 @@ The selected six-project `euhedral-training -am verify` remains mandatory.
 
 ## Final result-package evidence
 
-The existing `EndToEndAuditTest` and `PackageLifecycleAuditTest` are the executable package proof.
+The existing `EndToEndTest` and `PackageLifecycleAuditTest` are the executable package proof.
 Prompt 7B must record that they still assert:
 
 - robust winner `R`, policy `p1-4e8bd733c51b5dab`, at published rank 1;
@@ -862,7 +862,7 @@ The first package/CLI/audit-list attempt exposed one fixture-only path setup def
 blueprint-required parent creation fixed it; the complete command was rerun and passed as recorded
 above. No production or golden output changed.
 
-`EndToEndAuditTest` and `PackageLifecycleAuditTest` continue to prove winner `R`
+`EndToEndTest` and `PackageLifecycleAuditTest` continue to prove winner `R`
 (`p1-4e8bd733c51b5dab`) at rank 1 across all four exact scenarios, `RUN_COMPLETE` revision 24,
 70 complete-package paths with 69 manifest entries, 58 interrupted-package paths with 57 manifest
 entries, byte-identical control/resumed/package-run reproduction, source/checksum joins, report
@@ -991,7 +991,7 @@ git diff -- .github/workflows
 
 both returned no output. `git diff --check` and `git diff --cached --check` were clean.
 
-`EndToEndAuditTest` and `PackageLifecycleAuditTest` passed in both the focused package/CLI/audit
+`EndToEndTest` and `PackageLifecycleAuditTest` passed in both the focused package/CLI/audit
 list and the full `euhedral-training test` run. They continue to prove winner `R`
 (`p1-4e8bd733c51b5dab`) at rank 1 across all four exact scenarios, `RUN_COMPLETE` revision 24,
 70 complete-package paths with 69 manifest entries, 58 interrupted-package paths with 57 manifest
