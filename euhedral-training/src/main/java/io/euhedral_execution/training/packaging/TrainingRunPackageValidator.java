@@ -271,14 +271,12 @@ public final class TrainingRunPackageValidator {
             }
         }
         if (checkpoint.calibrationPlan().isPresent()) {
-            validateReference(
-                    checkpoint.calibrationPlan().orElseThrow(),
-                    "calibration-plan",
-                    virtualFingerprint(Map.of(
-                            "fixed-anchors.csv",
-                            root.resolve("fixed-anchors.csv"),
-                            "reference-runs.csv",
-                            root.resolve("reference-runs.csv"))));
+            String computed = virtualFingerprint(Map.of(
+                    "fixed-anchors.csv",
+                    root.resolve("fixed-anchors.csv"),
+                    "reference-runs.csv",
+                    root.resolve("reference-runs.csv")));
+            validateReference(checkpoint.calibrationPlan().orElseThrow(), "calibration-plan", computed);
         }
         if (checkpoint.latestMerge().isPresent()) {
             Map<String, Path> files = new HashMap<>();
@@ -408,7 +406,12 @@ public final class TrainingRunPackageValidator {
                 "loso-evaluation.csv",
                 "ablation-evaluation.csv",
                 "training-history.csv"));
-        metadata.members().stream().map(MemberMetadata::relativePath).forEach(expected::add);
+        metadata.members().stream().map(MemberMetadata::relativePath).forEach(path -> {
+            expected.add(path);
+            expected.add(path.replace(".index", ".data-00000-of-00001"));
+            expected.add(path.replace(".index", ".properties"));
+            expected.add(path.replace("euhedral-scenario-ordinal.index", "checkpoint"));
+        });
         expected.sort(String::compareTo);
         List<String> actual;
         try (var stream = Files.walk(root.resolve("model"))) {
@@ -419,6 +422,8 @@ public final class TrainingRunPackageValidator {
                     .toList();
         }
         if (!actual.equals(expected)) {
+            System.out.println(actual);
+            System.out.println(expected);
             throw new IOException("Unexpected model inventory");
         }
     }
@@ -459,11 +464,14 @@ public final class TrainingRunPackageValidator {
                         || Files.isSymbolicLink(entry.getValue())) {
                     throw new IOException("Virtual artifact file is absent");
                 }
-                digest.update(entry.getKey().getBytes(StandardCharsets.UTF_8));
+                String filename = entry.getKey();
+                long size = Files.size(entry.getValue());
+                String fileHash = CanonicalFileSupport.sha256(entry.getValue());
+                digest.update(filename.getBytes(StandardCharsets.UTF_8));
                 digest.update((byte) '\t');
-                digest.update(Long.toString(Files.size(entry.getValue())).getBytes(StandardCharsets.UTF_8));
+                digest.update(Long.toString(size).getBytes(StandardCharsets.UTF_8));
                 digest.update((byte) '\t');
-                digest.update(CanonicalFileSupport.sha256(entry.getValue()).getBytes(StandardCharsets.UTF_8));
+                digest.update(fileHash.getBytes(StandardCharsets.UTF_8));
                 digest.update((byte) '\n');
             }
             return HexFormat.of().formatHex(digest.digest());

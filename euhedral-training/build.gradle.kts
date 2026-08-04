@@ -7,7 +7,7 @@ tasks.named<Jar>("jar") {
     manifest {
         attributes(
             "Main-Class" to "io.euhedral_execution.training.Runner",
-            "Class-Path" to configurations.runtimeClasspath.get().files.joinToString(" ") { "lib/${it.name}" }
+            "Class-Path" to configurations.runtimeClasspath.get().files.joinToString(" ") { it.name }
         )
     }
 }
@@ -16,6 +16,7 @@ val copyRuntimeDependencies = tasks.register<Copy>("copyRuntimeDependencies") {
     dependsOn(tasks.named("jar"))
 
     from(configurations.runtimeClasspath)
+    from(tasks.named<Jar>("jar"))
     into(layout.buildDirectory.dir("lib"))
 
     description = "Copies the needed runtime dependencies"
@@ -57,10 +58,10 @@ dependencies {
     api(project(":euhedral-hashing"))
     api(libs.org.apache.commons.commons.math4.legacy)
     api(libs.org.jspecify.jspecify)
-    api(libs.ai.djl.api)
-    api(libs.ai.djl.pytorch.pytorch.engine)
+    api(libs.org.tensorflow.tensorflow.core.api)
+    api(libs.org.tensorflow.tensorflow.framework)
     api(libs.org.slf4j.slf4j.api)
-    runtimeOnly(libs.ai.djl.pytorch.pytorch.jni)
+    runtimeOnly(variantOf(libs.org.tensorflow.tensorflow.core.native) { classifier("linux-x86_64-gpu") })
     runtimeOnly(libs.ch.qos.logback.logback.classic)
     testImplementation(libs.org.junit.jupiter.junit.jupiter)
     testImplementation(libs.org.assertj.assertj.core)

@@ -68,7 +68,20 @@ record PackageSourceSet(
         }
         Path calibrationPlan = checkpoint
                 .calibrationPlan()
-                .map(reference -> resolveArtifact(workspace, reference.relativePath(), reference.sha256()))
+                .map(reference -> {
+                    Path path = workspace.resolve(reference.relativePath()).normalize();
+                    try {
+                        CanonicalFileSupport.rejectSymlinkComponents(path);
+                        String computedHash = ArtifactFingerprint.sha256(path);
+                        if (!path.startsWith(workspace) || !computedHash.equals(reference.sha256())) {
+                            throw new IllegalArgumentException("Calibration plan fingerprint mismatch: expected "
+                                    + reference.sha256() + " but got " + computedHash);
+                        }
+                    } catch (IOException error) {
+                        throw new IllegalStateException(error);
+                    }
+                    return path;
+                })
                 .orElse(null);
         Path merge = checkpoint
                 .latestMerge()
