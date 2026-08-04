@@ -51,22 +51,29 @@ jobs:
           install: true
           cache: true
 
-      - name: Cache Gradle and Zig data
+      - name: Cache Gradle dependencies
         uses: actions/cache@v4
         with:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Cache Zig
+        uses: actions/cache@v4
+        with:
+          path: |
             euhedral-hardware-utils/zig-cache
             euhedral-hardware-utils/zig-global-cache
-          key: ${{ runner.os }}-hardware-native-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties', 'euhedral-hardware-utils/src/main/native/**', 'mise.toml') }}
+          key: ${{ runner.os }}-zig-${{ hashFiles('mise.toml', '**/build.zig') }}
           restore-keys: |
-            ${{ runner.os }}-hardware-native-
+            ${{ runner.os }}-zig-
 
       - name: Build, inspect, package, and smoke
         run: |
-          mise exec -- gradle build -x test -am --build-cache
-          mise exec -- gradle :euhedral-hardware-utils:build -am --build-cache
+          mise exec -- gradle build
 
       - name: Upload ordinary jar and bounded smoke bundle
         uses: actions/upload-artifact@v4
