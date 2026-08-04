@@ -200,20 +200,17 @@ public class TensorFlowNetwork implements AutoCloseable {
         ensureOpen();
         Files.createDirectories(memberDirectory);
         Path stagingDirectory = Files.createTempDirectory(memberDirectory, name + "-checkpoint-");
-        try {
-            Path checkpointFile = stagingDirectory.resolve(name);
-            session.save(checkpointFile.toString());
 
-            clearCheckpointArtifacts(memberDirectory, name);
-            copyCheckpointArtifacts(stagingDirectory, memberDirectory);
-            writeCheckpointStateFile(memberDirectory, name);
+        Path checkpointFile = stagingDirectory.resolve(name);
+        session.save(checkpointFile.toString());
 
-            Path propFile = memberDirectory.resolve(name + ".properties");
-            try (OutputStream out = Files.newOutputStream(propFile)) {
-                properties.store(out, "TensorFlowNetwork properties");
-            }
-        } finally {
-            deleteDirectory(stagingDirectory);
+        clearCheckpointArtifacts(memberDirectory, name);
+        copyCheckpointArtifacts(stagingDirectory, memberDirectory);
+        writeCheckpointStateFile(memberDirectory, name);
+
+        Path propFile = memberDirectory.resolve(name + ".properties");
+        try (OutputStream out = Files.newOutputStream(propFile)) {
+            properties.store(out, "TensorFlowNetwork properties");
         }
     }
 
