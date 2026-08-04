@@ -25,13 +25,9 @@ import java.util.Set;
 import java.util.UUID;
 
 public final class TrainingRunPackager {
-    private static final List<String> MERGE_COPIES = List.of(
-            "fixed-anchors.csv",
-            "reference-runs.csv",
-            "calibration-report.csv",
-            "scenario-results.csv",
-            "robust-ranking.csv",
-            "coverage-report.csv");
+
+    private static final List<String> MERGE_ONLY_COPIES =
+            List.of("calibration-report.csv", "scenario-results.csv", "robust-ranking.csv", "coverage-report.csv");
 
     public static TrainingRunPackage publish(TrainingRunPackageRequest request) throws IOException {
         return publish(request, PublicationProbe.NO_OP);
@@ -99,8 +95,14 @@ public final class TrainingRunPackager {
         Files.createDirectories(staging.resolve("raw-data/bundles"));
         CanonicalFileSupport.copyDirectory(source.loaded().snapshotDirectory(), staging.resolve("checkpoints/latest"));
         probe.at(PublicationPoint.DURING_COPY);
+        if (source.calibrationPlan() != null) {
+            CanonicalFileSupport.copy(
+                    source.calibrationPlan().resolve("fixed-anchors.csv"), staging.resolve("fixed-anchors.csv"));
+            CanonicalFileSupport.copy(
+                    source.calibrationPlan().resolve("reference-runs.csv"), staging.resolve("reference-runs.csv"));
+        }
         if (source.merge() != null) {
-            for (String name : MERGE_COPIES) {
+            for (String name : MERGE_ONLY_COPIES) {
                 CanonicalFileSupport.copy(source.merge().resolve(name), staging.resolve(name));
             }
             CanonicalFileSupport.copy(

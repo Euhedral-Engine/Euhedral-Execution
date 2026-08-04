@@ -32,6 +32,7 @@ import java.util.TreeSet;
 record PackageSourceSet(
         LoadedCheckpoint loaded,
         Path workspace,
+        Path calibrationPlan,
         Path merge,
         Path model,
         Path schedule,
@@ -65,6 +66,10 @@ record PackageSourceSet(
         if (!expectedPackageId.equals(request.inputs().packageId())) {
             throw new IllegalArgumentException("Package ID disagrees with checkpoint lifecycle");
         }
+        Path calibrationPlan = checkpoint
+                .calibrationPlan()
+                .map(reference -> resolveArtifact(workspace, reference.relativePath(), reference.sha256()))
+                .orElse(null);
         Path merge = checkpoint
                 .latestMerge()
                 .map(reference -> resolveArtifact(workspace, reference.relativePath(), reference.sha256()))
@@ -141,6 +146,7 @@ record PackageSourceSet(
         return new PackageSourceSet(
                 loaded,
                 workspace,
+                calibrationPlan,
                 merge,
                 model,
                 schedule,
