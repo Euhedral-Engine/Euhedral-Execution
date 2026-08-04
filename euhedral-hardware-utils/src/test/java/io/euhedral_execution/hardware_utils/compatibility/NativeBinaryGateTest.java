@@ -70,10 +70,10 @@ class NativeBinaryGateTest {
 
     @Test
     void windowsImportsMatchManifestAllowlist() throws Exception {
-        String inspectorProperty = System.getProperty("p1.llvm.readobj");
-        assertNotNull(inspectorProperty, "p1.llvm.readobj is required");
+        String inspectorProperty = System.getProperty("llvm.readobj");
+        assertNotNull(inspectorProperty, "llvm.readobj is required");
         Path inspector = Path.of(inspectorProperty);
-        assertTrue(inspector.isAbsolute(), "p1.llvm.readobj must be absolute");
+        assertTrue(inspector.isAbsolute(), "llvm.readobj must be absolute");
         assertTrue(Files.isExecutable(inspector), inspector.toString());
 
         Path generated = TestPaths.buildDirectory().resolve("generated-resources/native");

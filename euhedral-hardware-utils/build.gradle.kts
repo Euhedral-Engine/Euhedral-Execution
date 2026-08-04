@@ -153,15 +153,15 @@ tasks.named("test") {
 
 // Configure test system properties
 tasks.named<Test>("test") {
-    systemProperty("p0.project.basedir", project.projectDir.absolutePath)
-    systemProperty("p0.classes.directory", sourceSets.main.get().output.classesDirs.asPath)
-    systemProperty("p0.build.directory", layout.buildDirectory.get().asFile.absolutePath)
-    systemProperty("p1.rcodesign", System.getenv("RCODESIGN") ?: "")
-    systemProperty("p1.llvm.readobj", System.getenv("LLVM_READOBJ") ?: "/usr/bin/llvm-readobj")
-    systemProperty("p1.llvm.objdump", System.getenv("LLVM_OBJDUMP") ?: "/usr/bin/llvm-objdump")
-    systemProperty("p1.jar", tasks.jar.get().archiveFile.get().asFile.absolutePath)
-    systemProperty("p1.smoke.directory", "${layout.buildDirectory.get()}/native-smoke")
-    systemProperty("p1.test.classes", sourceSets.test.get().output.classesDirs.asPath)
+    systemProperty("project.basedir", project.projectDir.absolutePath)
+    systemProperty("classes.directory", sourceSets.main.get().output.classesDirs.asPath)
+    systemProperty("build.directory", layout.buildDirectory.get().asFile.absolutePath)
+    systemProperty("rcodesign", System.getenv("RCODESIGN") ?: "")
+    systemProperty("llvm.readobj", System.getenv("LLVM_READOBJ") ?: "/usr/bin/llvm-readobj")
+    systemProperty("llvm.objdump", System.getenv("LLVM_OBJDUMP") ?: "/usr/bin/llvm-objdump")
+    systemProperty("test.jar", tasks.jar.get().archiveFile.get().asFile.absolutePath)
+    systemProperty("smoke.directory", "${layout.buildDirectory.get()}/native-smoke")
+    systemProperty("test.classes", sourceSets.test.get().output.classesDirs.asPath)
 }
 
 dependencies {

@@ -5,15 +5,15 @@ import java.nio.file.Path;
 public final class TestPaths {
 
     public static Path projectDirectory() {
-        return requiredPath("p0.project.basedir");
+        return requiredPath("project.basedir");
     }
 
     public static Path classesDirectory() {
-        return requiredPath("p0.classes.directory");
+        return requiredPath("classes.directory");
     }
 
     public static Path buildDirectory() {
-        return requiredPath("p0.build.directory");
+        return requiredPath("build.directory");
     }
 
     public static Path resource(String name) {

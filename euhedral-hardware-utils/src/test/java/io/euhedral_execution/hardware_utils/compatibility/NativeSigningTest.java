@@ -13,8 +13,8 @@ class NativeSigningTest {
 
     @Test
     void packagesTheVerifiedSignedMacosCopy() throws Exception {
-        String rcodesign = System.getProperty("p1.rcodesign");
-        assertTrue(rcodesign != null && !rcodesign.isBlank(), "p1.rcodesign is required");
+        String rcodesign = System.getProperty("rcodesign");
+        assertTrue(rcodesign != null && !rcodesign.isBlank(), "rcodesign is required");
         Path generated = TestPaths.buildDirectory().resolve("generated-resources/native");
         Path classes = TestPaths.classesDirectory();
         Map<String, String> products = Map.of(

@@ -1051,7 +1051,7 @@ llvm-readobj --file-header --needed-libs --macho-version-min --symbols <Mach-O>
 llvm-objdump --macho --private-headers <Mach-O>
 ```
 
-The module test properties `p1.llvm.readobj` and `p1.llvm.objdump` are required absolute executable
+The module test properties `llvm.readobj` and `llvm.objdump` are required absolute executable
 paths during `verify`. The POM defaults to the supported Ubuntu build-host paths under `/usr/bin`;
 independently activated module profiles allow absolute `LLVM_READOBJ` and `LLVM_OBJDUMP`
 environment values to override those defaults. `mise.toml` supplies the Ubuntu paths, and local
