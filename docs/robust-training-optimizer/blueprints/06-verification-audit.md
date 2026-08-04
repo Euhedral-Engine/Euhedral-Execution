@@ -105,7 +105,7 @@ Add these test fixtures:
 - `AuditScenarioModelFixture` in package
   `io.euhedral_execution.training.learning`, solely to use the existing package-private
   `ScenarioConditionedModel.forTest` boundary;
-- `EndToEndAuditTest` in package `io.euhedral_execution.training`.
+- `EndToEndTest` in package `io.euhedral_execution.training`.
 
 Fixture methods return immutable records and defensive copies. Mutable row buffers and fake-service
 state are thread-confined to the test invocation.
@@ -692,7 +692,7 @@ env JAVA_HOME=/home/bagotay/.local/share/mise/installs/java/21.0.2 \
     PATH=/home/bagotay/.local/share/mise/installs/java/21.0.2/bin:/usr/bin:/bin \
     /home/bagotay/.local/share/mise/installs/maven/3.9.16/apache-maven-3.9.16/bin/mvn \
     -B -pl euhedral-training \
-    -Dtest=ArtifactFingerprintTest,TrainingRunPackageInputsCodecTest,PackageManifestCodecTest,PackageDatasetWriterTest,PackageReportWriterTest,TrainingRunPackagerTest,TrainingRunPackageValidatorTest,PackageLifecycleAuditTest,CurrentWorkspaceImporterTest,ClosedLoopConfigCodecTest,RunnerTest,EndToEndAuditTest \
+    -Dtest=ArtifactFingerprintTest,TrainingRunPackageInputsCodecTest,PackageManifestCodecTest,PackageDatasetWriterTest,PackageReportWriterTest,TrainingRunPackagerTest,TrainingRunPackageValidatorTest,PackageLifecycleAuditTest,CurrentWorkspaceImporterTest,ClosedLoopConfigCodecTest,RunnerTest,EndToEndTest \
     test
 ```
 
@@ -887,7 +887,7 @@ implementation and returns it to a blueprint prompt.
 ## Naming and package cleanup record
 
 The 2026-07-29 cleanup removes phase-number prefixes from proposed test support and audit classes:
-`AuditFixtures`, `AuditScenarioModelFixture`, `EndToEndAuditTest`, and
+`AuditFixtures`, `AuditScenarioModelFixture`, `EndToEndTest`, and
 `PackageLifecycleAuditTest`. It also uses the inherited `SchedulingFixtures`,
 `PolicyComparatorTest`, and `training.config.ClosedLoopConfigCodec` names and locations.
 
@@ -912,7 +912,7 @@ tests:
 `ScenarioOrdinalNetworkIntegrationTest` remains in
 `io.euhedral_execution.training.learning` at
 `euhedral-training/src/test/java/io/euhedral_execution/training/learning/ScenarioOrdinalNetworkIntegrationTest.java`.
-Keep `AuditFixtures` and `EndToEndAuditTest` in the root training test package, and keep
+Keep `AuditFixtures` and `EndToEndTest` in the root training test package, and keep
 `AuditScenarioModelFixture` in the learning test package so it can use the package-private
 `ScenarioConditionedModel.forTest` boundary. No production package move or functional change is
 required by this addendum.
