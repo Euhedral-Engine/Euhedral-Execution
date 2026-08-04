@@ -64,7 +64,9 @@ jobs:
             ${{ runner.os }}-hardware-native-
 
       - name: Build, inspect, package, and smoke
-        run: mise exec -- gradle :euhedral-hardware-utils:build -am --build-cache
+        run: |
+          mise exec -- gradle build -x test -am --build-cache
+          mise exec -- gradle :euhedral-hardware-utils:build -am --build-cache
 
       - name: Upload ordinary jar and bounded smoke bundle
         uses: actions/upload-artifact@v4
