@@ -16,12 +16,11 @@ java {
 
 dependencies {
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.10.5")
+    testImplementation(files("${rootProject.projectDir}/buildSrc/build/classes/java/main"))
 }
 
-// Check if release mode is enabled (similar to Maven's -P release)
 val isReleaseMode = project.hasProperty("release") || System.getenv("RELEASE_MODE") == "true"
 
-// Only generate sources and javadoc JARs in release mode
 if (isReleaseMode) {
     java {
         withSourcesJar()
@@ -77,7 +76,6 @@ publishing {
 }
 
 signing {
-    // Only configure signing in release mode
     isRequired = isReleaseMode
     
     // Use in-memory key from environment variable if available
@@ -104,7 +102,6 @@ configurations {
 
 tasks.withType<Javadoc>() {
     options.encoding = "UTF-8"
-    // Disable strict doclint to match Maven configuration
     (options as StandardJavadocDocletOptions).addStringOption("Xdoclint:none", "-quiet")
 }
 
@@ -113,5 +110,27 @@ tasks.withType<Test>() {
     
     // Suppress Lombok-related JVM warnings about bootstrap classpath
     jvmArgs("-Xshare:off")
+}
+
+tasks.register<Test>("integrationTest") {
+    description = "Runs integration tests tagged with @IntegrationTest"
+    group = "verification"
+    
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    
+    useJUnitPlatform {
+        includeTags("integration")
+    }
+    
+    jvmArgs("-Xshare:off")
+
+    shouldRunAfter(tasks.test)
+}
+
+tasks.test {
+    useJUnitPlatform {
+        excludeTags("integration")
+    }
 }
 

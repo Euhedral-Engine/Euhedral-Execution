@@ -107,12 +107,12 @@ jobs:
       - name: Build and Verify
         if: ${{ steps.check_version.outputs.is_snapshot == 'true' }}
         run: |
-          mise exec -- gradle build --build-cache
+          mise exec -- gradle build integrationTest --build-cache
 
       - name: Build and Deploy to Apache Maven Central
         if: ${{ steps.check_version.outputs.is_snapshot == 'false' }}
         run: |
-          mise exec -- gradle publish -Prelease -x test --build-cache
+          mise exec -- gradle integrationTest publish -Prelease -x test --build-cache
         env:
           RELEASE_MODE: "true"
           ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.CENTRAL_USERNAME }}
