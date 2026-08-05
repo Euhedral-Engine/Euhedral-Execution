@@ -33,15 +33,10 @@ jobs:
           path: ~/.local/share/mise/installs/macos-sdk
           key: macos-sdk-26.1-v1
 
-      - name: Cache Gradle dependencies
-        uses: actions/cache@v4
+      - name: Cache Gradle
+        uses: gradle/actions/setup-gradle@v4
         with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
+          cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION }}
 
       - name: Cache Zig
         uses: actions/cache@v4
@@ -80,7 +75,7 @@ jobs:
       - name: Parse Version from gradle.properties
         id: check_version
         run: |
-          VERSION=$(grep '^version=' gradle.properties | cut -d'=' -f2)
+          VERSION=$(grep '^version =' buildSrc/src/main/kotlin/buildlogic.java-conventions.gradle.kts | cut -d'=' -f2 | tr -d '"')
           echo "TARGET_TAG=v$VERSION" >> $GITHUB_OUTPUT
           
           if [[ "$VERSION" == *"-SNAPSHOT"* ]]; then
@@ -107,12 +102,12 @@ jobs:
       - name: Build and Verify
         if: ${{ steps.check_version.outputs.is_snapshot == 'true' }}
         run: |
-          mise exec -- gradle build integrationTest --build-cache
+          mise exec -- gradle build integrationTest
 
       - name: Build and Deploy to Apache Maven Central
         if: ${{ steps.check_version.outputs.is_snapshot == 'false' }}
         run: |
-          mise exec -- gradle integrationTest publish -Prelease -x test --build-cache
+          mise exec -- gradle integrationTest publish -Prelease -x test
         env:
           RELEASE_MODE: "true"
           ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.CENTRAL_USERNAME }}
@@ -155,7 +150,7 @@ jobs:
       - name: Roll to Next Development Snapshot
         if: ${{ steps.check_version.outputs.is_snapshot == 'false' }}
         run: |
-          CURRENT_VERSION=$(grep '^version=' gradle.properties | cut -d'=' -f2)
+          CURRENT_VERSION=$(grep '^version =' buildSrc/src/main/kotlin/buildlogic.java-conventions.gradle.kts | cut -d'=' -f2 | tr -d '"')
           
           BASE_VERSION=${CURRENT_VERSION%-SNAPSHOT}
           IFS='.' read -ra VERSION_PARTS <<< "$BASE_VERSION"
@@ -168,7 +163,7 @@ jobs:
           
           NEW_SNAPSHOT="$MAJOR.$MINOR.$PATCH-SNAPSHOT"
           
-          sed -i "s/^version=.*/version=$NEW_SNAPSHOT/" gradle.properties
+          sed -i "s/^version =.*/version = \"$NEW_SNAPSHOT\"/" buildSrc/src/main/kotlin/buildlogic.java-conventions.gradle.kts
           
           git add gradle.properties
           git commit -m "actions: Bump version to $NEW_SNAPSHOT [skip ci]"

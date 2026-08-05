@@ -51,15 +51,10 @@ jobs:
           install: true
           cache: true
 
-      - name: Cache Gradle dependencies
-        uses: actions/cache@v4
+      - name: Cache Gradle
+        uses: gradle/actions/setup-gradle@v4
         with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
+          cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION }}
 
       - name: Cache Zig
         uses: actions/cache@v4
@@ -71,9 +66,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-zig-
 
-      - name: Build, inspect, package, and smoke
+      - name: Build and Test
         run: |
-          mise exec -- gradle build
+          mise exec -- gradle build integrationTest
 
       - name: Upload ordinary jar and bounded smoke bundle
         uses: actions/upload-artifact@v4

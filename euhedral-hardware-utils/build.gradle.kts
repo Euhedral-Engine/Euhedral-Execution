@@ -19,6 +19,8 @@ tasks.named<JavaCompile>("compileJava") {
     )
     options.compilerArgs.add("--release")
     options.compilerArgs.add("17")
+
+    outputs.dir(generatedJniDir).withPropertyName("jniHeaders")
 }
 
 val cleanNativeResources = tasks.register<Delete>("cleanNativeResources") {
@@ -61,6 +63,8 @@ val zigBuild = tasks.register<Exec>("zigBuild") {
 
     inputs.dir("src/main/native")
     inputs.dir(generatedJniDir)
+        .withPropertyName("jniHeaders")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
     outputs.dir(nativeGeneratedResources)
 
     description = "Cross compiles the JNI source code."
