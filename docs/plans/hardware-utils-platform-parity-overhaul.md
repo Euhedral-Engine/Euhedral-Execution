@@ -2,9 +2,8 @@
 
 ## Plan status
 
-- Phase: 4 - resource monitor and pressure parent blueprint review
-- Status: P0-P3 complete; P4 parent blueprint complete, review and merge required before the P4-A
-  sample/validity child blueprint
+- Phase: 4-A - sample/validity child blueprint review
+- Status: P4-A sample/validity child blueprint complete, review and merge required before P4-A implementation
 - Plan branch: `agent/hardware-utils-overhaul-plan` (created before the updated phase-branch rule)
 - Branch point: `900d8c50` (`agent/phase7-cleanup-handoff`)
 - Active P1 root: `hardware-utils-overhaul/phase-1-native-build` (completed)
@@ -2417,8 +2416,7 @@ action.
 
 #### P4-A sample/validity implementation prompt
 
-**Parent-selected model: `gpt-5.6-sol`; reasoning effort: `high`. The P4-A blueprint must confirm
-or upgrade this selection before this prompt is runnable.**
+**Confirmed blueprint implementation model: `gpt-5.6-sol`; reasoning effort: `high`.**
 
 > After the P4-A blueprint is reviewed and merged, create
 > `hardware-utils-overhaul/phase-4-sample-validity-implementation` from the updated P4 root.
