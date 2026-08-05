@@ -120,3 +120,53 @@ Package: `io.euhedral_execution.hardware_utils.internal.sampling` (not exported)
 - **Child Work Units**: Fast/slow signals, SampleStateEngine, SlowSampleCache, SystemSnapshotCompatibilityAdapter.
 - **Implementation**: Confirmed `gpt-5.6-sol` at `high` reasoning effort.
 - **Risks/Unresolved**: None. All definitions strictly follow P4 parent blueprint without structural changes.
+
+## Completion Record
+
+### Changed Files
+- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/sampling/enums/CompatibilityProfile.java`
+- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/sampling/enums/SignalResolution.java`
+- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/sampling/enums/SignalValidity.java`
+- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/sampling/enums/ThermalSeverity.java`
+- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/sampling/primatives/BooleanSignal.java`
+- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/sampling/primatives/CounterDelta.java`
+- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/sampling/primatives/CounterSignal.java`
+- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/sampling/primatives/DoubleGaugeSignal.java`
+- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/sampling/primatives/LatencyInterval.java`
+- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/sampling/primatives/LongGaugeSignal.java`
+- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/sampling/primatives/ResolvedDouble.java`
+- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/sampling/primatives/ResolvedLong.java`
+- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/sampling/samples/FastHardwareSample.java`
+- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/sampling/samples/IntervalHardwareSample.java`
+- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/sampling/sample/SlowHardwareSample.java`
+- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/sampling/signals/CpuFastSignals.java`
+- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/sampling/signals/CpuIntervalSignals.java`
+- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/sampling/signals/CpuSlowIntervalSignals.java`
+- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/sampling/signals/CpuSlowSignals.java`
+- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/sampling/signals/IoFastSignals.java`
+- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/sampling/signals/IoIntervalSignals.java`
+- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/sampling/signals/MemoryFastSignals.java`
+- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/sampling/signals/MemoryIntervalSignals.java`
+- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/sampling/signals/SystemSlowIntervalSignals.java`
+- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/sampling/signals/SystemSlowSignals.java`
+- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/sampling/signals/ThermalSignal.java`
+- 
+- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/sampling/DetailedSystemSnapshotProvider.java`
+- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/sampling/SampleStateEngine.java`
+- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/sampling/SlowSampleCache.java`
+- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/sampling/SystemSnapshotCompatibilityAdapter.java`
+- `euhedral-hardware-utils/src/test/java/io/euhedral_execution/hardware_utils/internal/sampling/SamplingContractTest.java`
+
+### Commands and Results
+- `gradle :euhedral-hardware-utils:compileJava` - Successful.
+- `gradle :euhedral-hardware-utils:test --tests io.euhedral_execution.hardware_utils.internal.sampling.SamplingContractTest` - All 2 sampling tests passed.
+- `gradle :euhedral-hardware-utils:test` - Failed at `JniHeaderTest > usesTargetCorrectPlatformHeaders()` due to environmental limits (missing native headers/SDK in the current dev environment).
+
+### Acceptance Evidence
+The P4-A implementation explicitly addresses exact mathematical deltas, state evaluation mapping from immutable primitive samples to deltas/resolutions, and cache resolution through `SlowSampleCache` and `SampleStateEngine`. Tests verify the slow cache anchor/TTL logic and reset-on-regression rules in `SampleStateEngine`.
+
+### Deviations
+None. The code matches the parent blueprint precisely and strictly implements validity logic without cross-polluting P4-B's mathematical smoothing logic.
+
+### Environmental Limits
+The `gradle :euhedral-hardware-utils:test` suite failed on `JniHeaderTest` throwing `java.nio.file.NoSuchFileException`. This is a known environmental limit (as specified in `docs/AGENT_WORKFLOW.md` / `AGENTS.md`) caused by missing cross-target JNI headers/SDK required for native tests in the local run. It is treated as an external infrastructure condition, not a compilation or Java unit test failure caused by the P4-A implementation.

@@ -159,6 +159,7 @@ dependencies {
     api(libs.it.unimi.dsi.fastutil)
     api(libs.org.slf4j.slf4j.api)
     testImplementation(libs.org.junit.jupiter.junit.jupiter)
+    testImplementation(libs.org.mockito.mockito.core)
     testImplementation(libs.org.ow2.asm.asm)
     compileOnly(libs.org.projectlombok.lombok)
     annotationProcessor(libs.org.projectlombok.lombok)
