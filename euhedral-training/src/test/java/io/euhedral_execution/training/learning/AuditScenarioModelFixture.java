@@ -38,12 +38,11 @@ import java.util.SortedSet;
 import java.util.TreeMap;
 
 /**
- * Deterministic Phase 6 model artifact that exercises metadata and scheduling without loading DJL.
+ * Deterministic Phase 6 model artifact that exercises metadata and scheduling without loading
+ * TensorFlow native runtime state.
  */
 public final class AuditScenarioModelFixture {
     private static final ScenarioFeatureSet FEATURES = ScenarioFeatureSet.RATIO_ONLY;
-
-    private AuditScenarioModelFixture() {}
 
     public static ScenarioTrainingArtifacts write(
             Path modelDirectory,
@@ -192,7 +191,7 @@ public final class AuditScenarioModelFixture {
                 evaluation,
                 acceptanceStatus,
                 acceptanceReasons,
-                new ProducerMetadata(commitSha, dirtyWorkingTree, "PyTorch", "2.7.1", "cpu"),
+                new ProducerMetadata(commitSha, dirtyWorkingTree, "TensorFlow", "1.2.0", "cpu"),
                 probe);
         Path metadataPath = modelDirectory.resolve(ScenarioModelMetadataCodec.FILE_NAME);
         ScenarioModelMetadataCodec.write(metadataPath, metadata);
@@ -296,4 +295,6 @@ public final class AuditScenarioModelFixture {
         @Override
         public void close() {}
     }
+
+    private AuditScenarioModelFixture() {}
 }

@@ -2,8 +2,8 @@
 
 Euhedral training searches for robust values for the runtime's 28 policy weights. The closed loop
 keeps policy, source scenario, benchmark run, iteration, cohort, and environment identity attached
-to native evidence through the final package. DJL and model training remain offline and are never
-loaded by `euhedral-core`.
+to native evidence through the final package. TensorFlow-based model training remains offline and
+is never loaded by `euhedral-core`.
 
 ## Build and launch
 
@@ -46,7 +46,7 @@ Runs or resumes a training workspace.
 
 `training-info`
 
-Reports the visible DJL, PyTorch, CUDA, and device environment. It takes no arguments and does not
+Reports the visible TensorFlow, CUDA, and device environment. It takes no arguments and does not
 train models or run benchmarks.
 
 `package-run --workspace <path> --inputs <path> --output-root <path>`
@@ -175,7 +175,7 @@ To inspect the scenario-model hardware environment without training or benchmark
 java -jar euhedral-training/target/trainer/euhedral-training-0.0.7-SNAPSHOT.jar training-info
 ```
 
-This reports DJL, PyTorch, CUDA, and device visibility.
+This reports TensorFlow, CUDA, and device visibility.
 
 Fixed anchors calibrate runs directly in log space. Strong calibration needs five shared anchors and
 residual at most `0.05`; weak calibration needs three and residual at most `0.15` by default.
@@ -391,7 +391,7 @@ Repeated keys are allowed only for `scenario.required`, `run.initial_observation
 |-------------------------------------------------|--------------------------|--------------------|------------------------------------------------------------------------------------------|
 | `training.ablation_members`                     | decimal integer          | `3`                | Models trained for feature-ablation analysis.                                            |
 | `training.batch_size`                           | decimal integer          | `0`                | Training batch size; zero selects the runtime default.                                   |
-| `training.device`                               | string                   | `auto`             | Device selection: auto, CPU, or a numbered GPU.                                          |
+| `training.device`                               | string                   | `auto`             | Device selection: `auto`, `cpu`, `gpu`, `gpuN`, `cuda`, or `cuda:N`.                     |
 | `training.ensemble_members`                     | decimal integer          | `5`                | Models trained and combined in the production ensemble.                                  |
 | `training.feature_selection_mode`               | enum constant            | `RATIO_ONLY`       | Feature schema used by the scenario model.                                               |
 | `training.include_weak_calibration_rows`        | boolean                  | `false`            | Includes weakly calibrated rows in model training.                                       |

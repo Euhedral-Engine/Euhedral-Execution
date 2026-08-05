@@ -170,7 +170,7 @@ class RunnerTest {
                         "Usage: Runner <command>",
                         "closed-loop --config <path>",
                         "training-info",
-                        "scenario-model DJL, PyTorch, CUDA, and device details",
+                        "scenario-model TensorFlow, CUDA, and device details",
                         "package-run --workspace <path> --inputs <path> --output-root <path>",
                         "merge-calibration-plan --workspace <path> [--workspace <path> ...] --output <path>",
                         "Reproduce a checkpoint-backed package; this does not rerun")

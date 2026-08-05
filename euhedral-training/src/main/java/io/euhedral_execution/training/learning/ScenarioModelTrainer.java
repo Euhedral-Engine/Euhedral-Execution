@@ -1,7 +1,5 @@
 package io.euhedral_execution.training.learning;
 
-import ai.djl.Device;
-import ai.djl.engine.Engine;
 import io.euhedral_execution.training.data.PartitionCounts;
 import io.euhedral_execution.training.data.PolicyId;
 import io.euhedral_execution.training.data.PolicyVector;
@@ -51,11 +49,10 @@ import java.util.TreeSet;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.tensorflow.TensorFlow;
 
 public final class ScenarioModelTrainer {
     private static final Logger LOGGER = LoggerFactory.getLogger(ScenarioModelTrainer.class);
-
-    private ScenarioModelTrainer() {}
 
     public static ScenarioTrainingArtifacts train(ScenarioTrainingRequest request) throws Exception {
         Path target = request.modelDirectory();
@@ -110,7 +107,7 @@ public final class ScenarioModelTrainer {
                 split.testRows().size(),
                 requestedConfig.device(),
                 requestedConfig.requireTargetVariation());
-        Device device = ScenarioOrdinalNetwork.resolveDevice(requestedConfig.device());
+        TrainingDevice device = ScenarioOrdinalNetwork.resolveDevice(requestedConfig.device());
         int effectiveBatch = requestedConfig.batchSize() > 0
                 ? StrictMath.min(
                         requestedConfig.batchSize(), split.trainingRows().size())
@@ -326,7 +323,7 @@ public final class ScenarioModelTrainer {
                     request.commitSha(),
                     request.dirtyWorkingTree(),
                     ScenarioOrdinalNetwork.ENGINE_NAME,
-                    Engine.getEngine(ScenarioOrdinalNetwork.ENGINE_NAME).getVersion(),
+                    TensorFlow.version(),
                     deviceName(device));
             ScenarioModelMetadata metadata = new ScenarioModelMetadata(
                     ScenarioModelMetadata.SCHEMA_VERSION,
@@ -376,7 +373,7 @@ public final class ScenarioModelTrainer {
             PolicyGroupedSplit split,
             ScenarioFeatureSet featureSet,
             ScenarioTrainingConfig config,
-            Device device,
+            TrainingDevice device,
             Path directory)
             throws Exception {
         ArrayList<LosoEvaluationMetrics> rows = new ArrayList<>();
@@ -616,7 +613,7 @@ public final class ScenarioModelTrainer {
                 source.thresholds());
     }
 
-    private static String deviceName(Device device) {
+    private static String deviceName(TrainingDevice device) {
         return device.isGpu() ? "gpu" + device.getDeviceId() : "cpu";
     }
 
@@ -634,6 +631,8 @@ public final class ScenarioModelTrainer {
             }
         }
     }
+
+    private ScenarioModelTrainer() {}
 
     private record LosoResult(
             List<LosoEvaluationMetrics> rows, EvaluationSummary summary, List<TrainingHistoryEntry> history) {}

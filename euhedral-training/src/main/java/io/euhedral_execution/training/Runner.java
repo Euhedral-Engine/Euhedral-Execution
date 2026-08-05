@@ -107,7 +107,7 @@ public class Runner {
                                       Run the typed closed loop; no -Dcycle.* properties are read.
                                       run.resume controls resume, run.stop_file requests a
                                       checkpoint-safe stop, and the package path is printed.
-                  training-info       Print scenario-model DJL, PyTorch, CUDA, and device details;
+                  training-info       Print scenario-model TensorFlow, CUDA, and device details;
                                       this does not train or benchmark.
                   package-run --workspace <path> --inputs <path> --output-root <path>
                                       Reproduce a checkpoint-backed package; this does not rerun

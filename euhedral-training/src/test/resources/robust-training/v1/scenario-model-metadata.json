@@ -302,8 +302,8 @@
   "producer": {
     "commit_sha": "0000000000000000000000000000000000000000",
     "dirty_working_tree": false,
-    "djl_engine": "PyTorch",
-    "djl_engine_version": "2.7.1",
+    "runtime": "TensorFlow",
+    "runtime_version": "1.2.0",
     "training_device": "cpu"
   },
   "metadata_probe": {

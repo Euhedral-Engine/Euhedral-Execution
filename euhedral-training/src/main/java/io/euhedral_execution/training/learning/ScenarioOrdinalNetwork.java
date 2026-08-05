@@ -1,6 +1,5 @@
 package io.euhedral_execution.training.learning;
 
-import ai.djl.Device;
 import io.euhedral_execution.training.learning.config.ScenarioMemberSeeds;
 import io.euhedral_execution.training.learning.config.ScenarioTrainingConfig;
 import io.euhedral_execution.training.learning.data.BalancedScenarioOrdinalLoss;
@@ -23,15 +22,12 @@ final class ScenarioOrdinalNetwork implements OrdinalMember {
     static final String ENGINE_NAME = "TensorFlow";
     private static final Object TRAINING_MONITOR = new Object();
 
-    static Device resolveDevice(String requested) {
-        if ("auto".equals(requested)) {
-            return Device.cpu();
-        }
-        return Device.fromName(requested);
+    static TrainingDevice resolveDevice(String requested) {
+        return TrainingDevice.resolve(requested);
     }
 
     static ScenarioOrdinalNetwork load(
-            Path memberDirectory, ScenarioFeatureSet featureSet, MemberMetadata metadata, Device device)
+            Path memberDirectory, ScenarioFeatureSet featureSet, MemberMetadata metadata, TrainingDevice device)
             throws IOException {
         ScenarioOrdinalNetwork network = new ScenarioOrdinalNetwork(featureSet.width(), device);
         try {
@@ -49,7 +45,7 @@ final class ScenarioOrdinalNetwork implements OrdinalMember {
             ScenarioLearningMatrix validation,
             ScenarioFeatureSet featureSet,
             ScenarioTrainingConfig config,
-            Device device,
+            TrainingDevice device,
             String trainingKind,
             String foldId,
             int memberIndex,
@@ -77,11 +73,11 @@ final class ScenarioOrdinalNetwork implements OrdinalMember {
     }
 
     private final int featureWidth;
-    private final Device device;
+    private final TrainingDevice device;
     private final TensorFlowNetwork tfNetwork;
     private boolean closed;
 
-    private ScenarioOrdinalNetwork(int featureWidth, Device device) {
+    private ScenarioOrdinalNetwork(int featureWidth, TrainingDevice device) {
         this.featureWidth = featureWidth;
         this.device = device;
         this.tfNetwork = new TensorFlowNetwork(featureWidth);

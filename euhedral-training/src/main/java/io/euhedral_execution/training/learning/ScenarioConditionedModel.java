@@ -1,6 +1,5 @@
 package io.euhedral_execution.training.learning;
 
-import ai.djl.Device;
 import io.euhedral_execution.training.data.PolicyId;
 import io.euhedral_execution.training.data.PolicyVector;
 import io.euhedral_execution.training.data.SourceScenario;
@@ -89,7 +88,7 @@ public final class ScenarioConditionedModel implements AutoCloseable {
                 throw new IOException("Missing or checksum-mismatched member " + member.index());
             }
         }
-        Device resolved;
+        TrainingDevice resolved;
         try {
             resolved = ScenarioOrdinalNetwork.resolveDevice(device.trim().toLowerCase());
         } catch (RuntimeException error) {

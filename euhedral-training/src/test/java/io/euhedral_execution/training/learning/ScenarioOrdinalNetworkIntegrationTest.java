@@ -4,7 +4,6 @@ import static io.euhedral_execution.training.learning.fixtures.ScenarioLearningF
 import static io.euhedral_execution.training.learning.fixtures.ScenarioLearningFixtures.scenarios;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import ai.djl.Device;
 import io.euhedral_execution.training.learning.config.ScenarioTrainingConfig;
 import io.euhedral_execution.training.learning.data.ScenarioLearningMatrix;
 import io.euhedral_execution.training.learning.enums.FeatureSelectionMode;
@@ -27,7 +26,8 @@ class ScenarioOrdinalNetworkIntegrationTest {
     @Test
     void trainsSavesAndReloadsDynamicInputMember() throws Exception {
         Assumptions.assumeTrue(
-                Boolean.getBoolean("training.djlIntegration"), "Enable with -Dtraining.djlIntegration=true");
+                Boolean.getBoolean("training.tensorflowIntegration"),
+                "Enable with -Dtraining.tensorflowIntegration=true");
         List<ScenarioLearningRow> rows = learningRows();
         List<ScenarioLearningRow> fitting =
                 rows.stream().filter(row -> row.policy().weight(0) < 0.75).toList();
@@ -42,7 +42,7 @@ class ScenarioOrdinalNetworkIntegrationTest {
                 validationMatrix,
                 ScenarioFeatureSet.RATIO_ONLY,
                 config,
-                Device.cpu(),
+                TrainingDevice.cpu(),
                 "PRODUCTION",
                 "all",
                 0,
@@ -66,7 +66,7 @@ class ScenarioOrdinalNetworkIntegrationTest {
         MemberMetadata memberMetadata = new MemberMetadata(
                 0, result.seed(), result.bestEpoch(), MemberMetadata.expectedPath(0), "0".repeat(64));
         try (ScenarioOrdinalNetwork reloaded = ScenarioOrdinalNetwork.load(
-                temporary.resolve("member-000"), ScenarioFeatureSet.RATIO_ONLY, memberMetadata, Device.cpu())) {
+                temporary.resolve("member-000"), ScenarioFeatureSet.RATIO_ONLY, memberMetadata, TrainingDevice.cpu())) {
             float[] reloadedLogits = new float[18];
             reloaded.predictLogits(features, 2, reloadedLogits);
             assertThat(reloadedLogits).containsExactly(savedLogits);
@@ -74,7 +74,10 @@ class ScenarioOrdinalNetworkIntegrationTest {
         MemberMetadata wrongSeed = new MemberMetadata(
                 0, result.seed() + 1, result.bestEpoch(), MemberMetadata.expectedPath(0), "0".repeat(64));
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> ScenarioOrdinalNetwork.load(
-                        temporary.resolve("member-000"), ScenarioFeatureSet.RATIO_ONLY, wrongSeed, Device.cpu()))
+                        temporary.resolve("member-000"),
+                        ScenarioFeatureSet.RATIO_ONLY,
+                        wrongSeed,
+                        TrainingDevice.cpu()))
                 .isInstanceOf(java.io.IOException.class)
                 .hasMessageContaining("Failed to load");
     }

@@ -30,8 +30,6 @@ public final class ScenarioModelMetadataCodec {
 
     public static final String FILE_NAME = "model-metadata.json";
 
-    private ScenarioModelMetadataCodec() {}
-
     public static void write(Path path, ScenarioModelMetadata metadata) throws IOException {
         Files.writeString(path, encode(metadata), StandardCharsets.UTF_8);
     }
@@ -594,8 +592,8 @@ public final class ScenarioModelMetadataCodec {
         writer.beginObject();
         writer.field("commit_sha", producer.commitSha());
         writer.field("dirty_working_tree", producer.dirtyWorkingTree());
-        writer.field("djl_engine", producer.djlEngine());
-        writer.field("djl_engine_version", producer.djlEngineVersion());
+        writer.field("runtime", producer.runtime());
+        writer.field("runtime_version", producer.runtimeVersion());
         writer.field("training_device", producer.trainingDevice());
         writer.endObject();
     }
@@ -603,13 +601,13 @@ public final class ScenarioModelMetadataCodec {
     private static ProducerMetadata readProducer(Map<String, Object> value) throws IOException {
         requireKeys(
                 value,
-                List.of("commit_sha", "dirty_working_tree", "djl_engine", "djl_engine_version", "training_device"),
+                List.of("commit_sha", "dirty_working_tree", "runtime", "runtime_version", "training_device"),
                 "producer");
         return new ProducerMetadata(
                 string(value, "commit_sha"),
                 bool(value, "dirty_working_tree"),
-                string(value, "djl_engine"),
-                string(value, "djl_engine_version"),
+                string(value, "runtime"),
+                string(value, "runtime_version"),
                 string(value, "training_device"));
     }
 
@@ -844,6 +842,8 @@ public final class ScenarioModelMetadataCodec {
             throw new IOException("Unexpected " + key);
         }
     }
+
+    private ScenarioModelMetadataCodec() {}
 
     private static final class JsonWriter {
 

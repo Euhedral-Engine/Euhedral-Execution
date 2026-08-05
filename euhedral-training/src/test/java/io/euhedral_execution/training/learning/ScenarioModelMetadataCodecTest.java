@@ -34,6 +34,70 @@ import java.util.TreeSet;
 import org.junit.jupiter.api.Test;
 
 class ScenarioModelMetadataCodecTest {
+    @Test
+    void roundTripsCanonicalBytesAndEveryRawNormalizerBit() throws Exception {
+        ScenarioModelMetadata metadata = metadata();
+        String encoded = ScenarioModelMetadataCodec.encode(metadata);
+        ScenarioModelMetadata decoded = ScenarioModelMetadataCodec.decode(encoded);
+        assertThat(ScenarioModelMetadataCodec.encode(decoded)).isEqualTo(encoded);
+        assertThat(decoded.normalizer().means())
+                .containsExactly(metadata.normalizer().means());
+        assertThat(decoded.normalizer().scales())
+                .containsExactly(metadata.normalizer().scales());
+        assertThat(encoded).endsWith("\n");
+        assertThat(encoded).contains("\"artifact_type\": " + "\"euhedral-scenario-conditioned-ordinal-model\"");
+    }
+
+    @Test
+    void goldenMetadataDecodesAndCanonicalizesByteStably() throws Exception {
+        String golden;
+        try (InputStream input = getClass().getResourceAsStream("/robust-training/v1/scenario-model-metadata.json")) {
+            assertThat(input).isNotNull();
+            golden = new String(input.readAllBytes(), StandardCharsets.UTF_8);
+        }
+        ScenarioModelMetadata decoded = ScenarioModelMetadataCodec.decode(golden);
+        String canonical = ScenarioModelMetadataCodec.encode(decoded);
+        assertThat(canonical).isEqualTo(golden);
+        assertThat(ScenarioModelMetadataCodec.encode(ScenarioModelMetadataCodec.decode(canonical)))
+                .isEqualTo(canonical);
+    }
+
+    @Test
+    void rejectsUnknownDuplicateMissingAndTrailingFields() {
+        String encoded = ScenarioModelMetadataCodec.encode(metadata());
+        assertThatThrownBy(() -> ScenarioModelMetadataCodec.decode(encoded.replaceFirst("\\{", "{\"unknown\": 1,")))
+                .isInstanceOf(IOException.class);
+        assertThatThrownBy(() -> ScenarioModelMetadataCodec.decode(
+                        encoded.replaceFirst("\"schema_version\": 1,", "\"schema_version\": 1,\"schema_version\": 1,")))
+                .isInstanceOf(IOException.class);
+        assertThatThrownBy(() -> ScenarioModelMetadataCodec.decode(encoded.replaceFirst("\"policy_width\": 28,", "")))
+                .isInstanceOf(IOException.class);
+        assertThatThrownBy(() -> ScenarioModelMetadataCodec.decode(encoded + "x"))
+                .isInstanceOf(IOException.class);
+        assertThatThrownBy(() -> ScenarioModelMetadataCodec.decode("{\"x\":\"\\\\q\"}"))
+                .isInstanceOf(IOException.class);
+    }
+
+    @Test
+    void rejectsChangedObjectiveFeatureNamesAndThresholds() {
+        String encoded = ScenarioModelMetadataCodec.encode(metadata());
+        assertThatThrownBy(() -> ScenarioModelMetadataCodec.decode(
+                        encoded.replace("scenario-quality-ordinal-v1", "scenario-quality-ordinal-v2")))
+                .isInstanceOf(IOException.class);
+        assertThatThrownBy(() -> ScenarioModelMetadataCodec.decode(
+                        encoded.replace("\"schema_version\": 1", "\"schema_version\": 2")))
+                .isInstanceOf(IOException.class);
+        assertThatThrownBy(() -> ScenarioModelMetadataCodec.decode(
+                        encoded.replace("\"feature_width\": 29", "\"feature_width\": 28")))
+                .isInstanceOf(IOException.class);
+        assertThatThrownBy(() ->
+                        ScenarioModelMetadataCodec.decode(encoded.replace("policy_weight_00", "policy_weight_xx")))
+                .isInstanceOf(IOException.class);
+        String threshold = ScenarioModelMetadata.expectedThresholdBits().getFirst();
+        assertThatThrownBy(() -> ScenarioModelMetadataCodec.decode(encoded.replace(threshold, "0000000000000000")))
+                .isInstanceOf(IOException.class);
+    }
+
     static ScenarioModelMetadata metadata() {
         PolicyVector policy = PolicyVector.of(new double[28]);
         SourceScenario scenario = scenarios().first();
@@ -115,7 +179,7 @@ class ScenarioModelMetadataCodecTest {
                 summary,
                 ModelAcceptanceStatus.ACCEPTED,
                 List.of(),
-                new ProducerMetadata("0".repeat(40), false, "PyTorch", "2.7.1", "cpu"),
+                new ProducerMetadata("0".repeat(40), false, "TensorFlow", "1.2.0", "cpu"),
                 probe);
     }
 
@@ -126,69 +190,5 @@ class ScenarioModelMetadataCodecTest {
                 1,
                 MemberMetadata.expectedPath(index),
                 Integer.toHexString(index).repeat(64).substring(0, 64));
-    }
-
-    @Test
-    void roundTripsCanonicalBytesAndEveryRawNormalizerBit() throws Exception {
-        ScenarioModelMetadata metadata = metadata();
-        String encoded = ScenarioModelMetadataCodec.encode(metadata);
-        ScenarioModelMetadata decoded = ScenarioModelMetadataCodec.decode(encoded);
-        assertThat(ScenarioModelMetadataCodec.encode(decoded)).isEqualTo(encoded);
-        assertThat(decoded.normalizer().means())
-                .containsExactly(metadata.normalizer().means());
-        assertThat(decoded.normalizer().scales())
-                .containsExactly(metadata.normalizer().scales());
-        assertThat(encoded).endsWith("\n");
-        assertThat(encoded).contains("\"artifact_type\": " + "\"euhedral-scenario-conditioned-ordinal-model\"");
-    }
-
-    @Test
-    void goldenMetadataDecodesAndCanonicalizesByteStably() throws Exception {
-        String golden;
-        try (InputStream input = getClass().getResourceAsStream("/robust-training/v1/scenario-model-metadata.json")) {
-            assertThat(input).isNotNull();
-            golden = new String(input.readAllBytes(), StandardCharsets.UTF_8);
-        }
-        ScenarioModelMetadata decoded = ScenarioModelMetadataCodec.decode(golden);
-        String canonical = ScenarioModelMetadataCodec.encode(decoded);
-        assertThat(canonical).isEqualTo(golden);
-        assertThat(ScenarioModelMetadataCodec.encode(ScenarioModelMetadataCodec.decode(canonical)))
-                .isEqualTo(canonical);
-    }
-
-    @Test
-    void rejectsUnknownDuplicateMissingAndTrailingFields() {
-        String encoded = ScenarioModelMetadataCodec.encode(metadata());
-        assertThatThrownBy(() -> ScenarioModelMetadataCodec.decode(encoded.replaceFirst("\\{", "{\"unknown\": 1,")))
-                .isInstanceOf(IOException.class);
-        assertThatThrownBy(() -> ScenarioModelMetadataCodec.decode(
-                        encoded.replaceFirst("\"schema_version\": 1,", "\"schema_version\": 1,\"schema_version\": 1,")))
-                .isInstanceOf(IOException.class);
-        assertThatThrownBy(() -> ScenarioModelMetadataCodec.decode(encoded.replaceFirst("\"policy_width\": 28,", "")))
-                .isInstanceOf(IOException.class);
-        assertThatThrownBy(() -> ScenarioModelMetadataCodec.decode(encoded + "x"))
-                .isInstanceOf(IOException.class);
-        assertThatThrownBy(() -> ScenarioModelMetadataCodec.decode("{\"x\":\"\\\\q\"}"))
-                .isInstanceOf(IOException.class);
-    }
-
-    @Test
-    void rejectsChangedObjectiveFeatureNamesAndThresholds() {
-        String encoded = ScenarioModelMetadataCodec.encode(metadata());
-        assertThatThrownBy(() -> ScenarioModelMetadataCodec.decode(
-                        encoded.replace("scenario-quality-ordinal-v1", "scenario-quality-ordinal-v2")))
-                .isInstanceOf(IOException.class);
-        assertThatThrownBy(() -> ScenarioModelMetadataCodec.decode(
-                        encoded.replace("\"schema_version\": 1", "\"schema_version\": 2")))
-                .isInstanceOf(IOException.class);
-        assertThatThrownBy(() -> ScenarioModelMetadataCodec.decode(
-                        encoded.replace("\"feature_width\": 29", "\"feature_width\": 28")))
-                .isInstanceOf(IOException.class);
-        assertThatThrownBy(() ->
-                        ScenarioModelMetadataCodec.decode(encoded.replace("policy_weight_00", "policy_weight_xx")))
-                .isInstanceOf(IOException.class);
-        String threshold = ScenarioModelMetadata.expectedThresholdBits().getFirst();
-        assertThatThrownBy(() -> ScenarioModelMetadataCodec.decode(encoded.replace(threshold, "0000000000000000")))
-                .isInstanceOf(IOException.class);
     }
 }

@@ -1,6 +1,5 @@
 package io.euhedral_execution.training.learning;
 
-import ai.djl.Device;
 import io.euhedral_execution.training.data.PolicyId;
 import io.euhedral_execution.training.data.PolicyVector;
 import io.euhedral_execution.training.data.SourceScenario;
@@ -24,8 +23,6 @@ import java.util.TreeSet;
 
 final class ScenarioFoldRunner {
 
-    private ScenarioFoldRunner() {}
-
     static FoldResult run(
             String trainingKind,
             String evaluationKind,
@@ -36,7 +33,7 @@ final class ScenarioFoldRunner {
             List<ScenarioLearningRow> scoreRows,
             int memberCount,
             ScenarioTrainingConfig config,
-            Device device,
+            TrainingDevice device,
             Path directory,
             boolean insufficientContextVariation)
             throws Exception {
@@ -167,6 +164,8 @@ final class ScenarioFoldRunner {
         }
         return result;
     }
+
+    private ScenarioFoldRunner() {}
 
     record FoldResult(
             EvaluationSummary evaluation,
