@@ -1,6 +1,8 @@
 name: Euhedral Execution Build and Verify
 
 on:
+  push:
+    branches: [ "main"]
   pull_request:
     branches: [ "main" ]
   workflow_dispatch:
@@ -25,15 +27,10 @@ jobs:
           path: ~/.local/share/mise/installs/macos-sdk
           key: macos-sdk-26.1-v1
 
-      - name: Cache Gradle dependencies
-        uses: actions/cache@v4
+      - name: Cache Gradle
+        uses: gradle/actions/setup-gradle@v4
         with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
+          cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION }}
 
       - name: Cache Zig
         uses: actions/cache@v4
@@ -69,4 +66,4 @@ jobs:
 
       - name: Build and Verify
         run: |
-          mise exec -- gradle build integrationTest
+          mise exec -- gradle build integrationTest --build-cache
