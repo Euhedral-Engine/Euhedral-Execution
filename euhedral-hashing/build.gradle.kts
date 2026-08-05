@@ -12,13 +12,4 @@ dependencies {
     testImplementation(libs.org.junit.jupiter.junit.jupiter)
 }
 
-tasks.named<Test>("test") {
-    maxParallelForks = 1
-    forkEvery = 0
-
-    systemProperty("junit.jupiter.execution.parallel.enabled", "true")
-    systemProperty("junit.jupiter.execution.parallel.mode.default", "concurrent")
-    systemProperty("junit.jupiter.execution.parallel.config.strategy", "dynamic")
-}
-
 description = "Euhedral Hashing"
