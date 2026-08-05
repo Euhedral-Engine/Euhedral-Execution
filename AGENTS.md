@@ -310,13 +310,7 @@ Before handing work back:
 4. Inspect `git status --short` and confirm only intended files changed.
 5. Report tests that could not run and the exact environmental reason.
 
-## Temporary hardware-utils overhaul status (P3)
+## Temporary hardware-utils overhaul status (P4)
 
-- P0-P2 and both P3 children are complete. The P3-A implementation/audit merged at `2027a47b`;
-  the P3-B implementation/audit merged at `d6389711` on
-  `hardware-utils-overhaul/phase-3-affinity-executor`.
-- The combined root audit is review-ready on
-  `hardware-utils-overhaul/phase-3-affinity-executor-audit`:
-  `docs/audits/hardware-utils/phase-3-affinity-executor-lifecycle-conformance.md` classifies all
-  16 parent criteria plus A01-A02 as satisfied. P3 remains incomplete pending explicit audit
-  merge/closeout authorization; do not create P4.
+- P0-P3 are complete.
+- P4 is in progress. The P4 parent blueprint and P4-A blueprint are merged. P4-A implementation is complete and ready for review. Do not create P4-B blueprint until P4-A merges.
