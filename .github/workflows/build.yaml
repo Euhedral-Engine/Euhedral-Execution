@@ -24,6 +24,14 @@ jobs:
           persist-credentials: true
           fetch-depth: 0
 
+      - name: Generate GitHub App Token
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.DEPLOY_ID }}
+          private-key: ${{ secrets.DEPLOY_KEY }}
+
       - name: Cache macOS SDK
         id: cache-macos-sdk
         uses: actions/cache@v4
@@ -65,14 +73,6 @@ jobs:
         with:
           install: true
           cache: true
-
-      - name: Generate GitHub App Token
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        id: app-token
-        uses: actions/create-github-app-token@v2
-        with:
-          app-id: ${{ vars.DEPLOY_ID }}
-          private-key: ${{ secrets.DEPLOY_KEY }}
 
       - name: Parse Version from gradle.properties
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
