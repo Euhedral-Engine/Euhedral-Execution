@@ -16,6 +16,9 @@ permissions:
 jobs:
   cross-package:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v4
         with:
@@ -29,21 +32,19 @@ jobs:
           path: ~/.local/share/mise/installs/macos-sdk
           key: macos-sdk-26.1-v1
 
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y llvm xz-utils
+
       - name: Download macOS SDK
         if: steps.cache-macos-sdk.outputs.cache-hit != 'true'
         shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y xz-utils
           mkdir -p ~/.local/share/mise/installs/macos-sdk
           curl --fail --location --silent --show-error \
             https://github.com/joseluisq/macosx-sdks/releases/download/26.1/MacOSX26.1.sdk.tar.xz \
             | tar -xJ -C ~/.local/share/mise/installs/macos-sdk/
-
-      - name: Install LLVM
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y llvm
 
       - name: Install pinned tools
         uses: jdx/mise-action@v2

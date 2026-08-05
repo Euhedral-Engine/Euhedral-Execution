@@ -10,6 +10,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
     permissions:
       contents: write
 
@@ -42,12 +45,15 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-zig-
 
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y llvm xz-utils
+
       - name: Download macOS SDK
         if: steps.cache-macos-sdk.outputs.cache-hit != 'true'
         shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y xz-utils
           mkdir -p ~/.local/share/mise/installs/macos-sdk
           curl --fail --location --silent --show-error \
             https://github.com/joseluisq/macosx-sdks/releases/download/26.1/MacOSX26.1.sdk.tar.xz \
@@ -58,11 +64,6 @@ jobs:
         with:
           install: true
           cache: true
-
-      - name: Install LLVM
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y llvm
 
       - name: Build and Verify
         run: |

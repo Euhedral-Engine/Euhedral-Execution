@@ -48,10 +48,14 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-zig-
 
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y llvm xz-utils
+
       - name: Download macOS SDK headers for Zig
         if: ${{ !env.ACT && steps.cache-macos-sdk.outputs.cache-hit != 'true' }}
         run: |
-          sudo apt-get update && sudo apt-get install -y xz-utils
           mkdir -p ~/.local/share/mise/installs/macos-sdk
           curl -f -L -s https://github.com/joseluisq/macosx-sdks/releases/download/26.1/MacOSX26.1.sdk.tar.xz | tar -xJ -C ~/.local/share/mise/installs/macos-sdk/
 
@@ -60,11 +64,6 @@ jobs:
         with:
           install: true
           cache: true
-
-      - name: Install LLVM
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y llvm
 
       - name: Install GPG Private Key
         uses: crazy-max/ghaction-import-gpg@v6
