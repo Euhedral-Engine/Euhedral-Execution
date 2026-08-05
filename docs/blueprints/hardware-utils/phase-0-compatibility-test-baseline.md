@@ -19,8 +19,8 @@ code.
 
 ### Authorized toolchain-policy revision
 
-The developer authorized this documentation revision on 2026-08-01. Every Java command, Maven
-command, and Maven build defaults to the exact versions in `mise.toml`; a documented
+The developer authorized this documentation revision on 2026-08-01. Every Java command, Gradle
+command, and Gradle build defaults to the exact versions in `mise.toml`; a documented
 restricted-environment fallback must use the corresponding pinned installed tools and record its
 versions and limits.
 
@@ -35,7 +35,7 @@ Create a deterministic, checked-in compatibility gate for the hardware module. T
 4. prove canonical mask formatting, the exact 200 ms default, concurrent fresh-thread executor
    behavior, and the core-zero reservation;
 5. map every known correction to an exact defect-ledger record and later regression-test ID; and
-6. avoid executing the native-generating Maven lifecycle or mutating the active source/resource
+6. avoid executing the native-generating Gradle build lifecycle or mutating the active source/resource
    tree.
 
 P0 freezes compatibility boundaries. It does not make an incorrect numeric result, unsafe
@@ -75,7 +75,7 @@ The implementation may organize several small test classes differently within th
 - Any inspection, edit, command, build, or test under `euhedral-training`.
 - Running a root reactor command or the hardware module's bound `initialize`/native build in the
   active worktree.
-- Publishing or installing a Maven artifact.
+- Publishing or installing a Gradle artifact.
 - Treating stale per-source binaries, incorrect numeric outputs, JNI mismatches, or unsafe
   lifecycle behavior as compatibility requirements.
 
@@ -157,7 +157,7 @@ git archive 900d8c50 (POM + hardware module only)
                   |
                   v
 isolated temporary directory
-direct compiler:compile goal (no Maven lifecycle)
+direct compiler:compile goal (no Gradle build lifecycle)
                   |
                   v
 baseline target/classes ----+
@@ -600,7 +600,7 @@ it does not claim to settle T04's future publication mode.
 - Fingerprint all regular files under active `src/main/java` and `src/main/resources`, including
   ignored binaries, before and after generation using relative path, size, and SHA-256. The
   fingerprints must be byte-identical.
-- Never invoke `zig`, `exec:exec`, Maven `initialize`, `test`, `verify`, `package`, `install`, or
+- Never invoke `zig`, `exec:exec`, Gradle `initialize`, `test`, `verify`, `package`, `install`, or
   another lifecycle phase in the active worktree during P0. Use the direct plugin goals specified
   below.
 - Tests close monitors/executors and leave no registered executor, polling thread, or listener task.
@@ -645,14 +645,14 @@ The `find` output includes ignored native files because it does not consult Git.
 ### 2. Compile only the necessary active Java/test classes with direct goals
 
 ```bash
-mise exec -- mvn -B -pl euhedral-hardware-utils \
+mise exec -- gradle -B -pl euhedral-hardware-utils \
   clean:clean \
   resources:resources compiler:compile \
   resources:testResources compiler:testCompile
 ```
 
-These are direct plugin goals, not a Maven lifecycle. They do not execute the bound
-`exec-maven-plugin:exec` Zig build.
+These are direct plugin goals, not a Gradle build lifecycle. They do not execute the bound
+`exec-gradle-plugin:exec` Zig build.
 
 ### 3. Create and compile the isolated branch-point source
 
@@ -660,7 +660,7 @@ These are direct plugin goals, not a Maven lifecycle. They do not execute the bo
 mkdir "$P0_TMP/baseline"
 git archive --format=tar 900d8c50 pom.xml euhedral-hardware-utils \
   | tar -xf - -C "$P0_TMP/baseline"
-mise exec -- mvn -B \
+mise exec -- gradle -B \
   -f "$P0_TMP/baseline/euhedral-hardware-utils/pom.xml" \
   resources:resources compiler:compile
 ```
@@ -671,16 +671,16 @@ module and publishes no artifact.
 ### 4. Generate twice and compare with the checked-in fixture
 
 ```bash
-mise exec -- mvn -B -pl euhedral-hardware-utils \
+mise exec -- gradle -B -pl euhedral-hardware-utils \
   -Dexec.mainClass=io.euhedral_execution.hardware_utils.compatibility.ApiSurface \
   -Dexec.classpathScope=test \
   -Dexec.args="$P0_TMP/baseline/euhedral-hardware-utils/target/classes $P0_TMP/api-first.tsv" \
-  org.codehaus.mojo:exec-maven-plugin:3.6.3:java
-mise exec -- mvn -B -pl euhedral-hardware-utils \
+  org.codehaus.mojo:exec-gradle-plugin:3.6.3:java
+mise exec -- gradle -B -pl euhedral-hardware-utils \
   -Dexec.mainClass=io.euhedral_execution.hardware_utils.compatibility.ApiSurface \
   -Dexec.classpathScope=test \
   -Dexec.args="$P0_TMP/baseline/euhedral-hardware-utils/target/classes $P0_TMP/api-second.tsv" \
-  org.codehaus.mojo:exec-maven-plugin:3.6.3:java
+  org.codehaus.mojo:exec-gradle-plugin:3.6.3:java
 cmp "$P0_TMP/api-first.tsv" "$P0_TMP/api-second.tsv"
 cmp "$P0_TMP/api-first.tsv" \
   euhedral-hardware-utils/src/test/resources/compatibility/api-900d8c50.tsv
@@ -692,13 +692,13 @@ bound native `exec` goal.
 ### 5. Run the P0 tests without the native lifecycle
 
 ```bash
-mise exec -- mvn -B -pl euhedral-hardware-utils \
+mise exec -- gradle -B -pl euhedral-hardware-utils \
   resources:resources compiler:compile \
   resources:testResources compiler:testCompile \
   surefire:test
 cp euhedral-hardware-utils/target/p0-compatibility/compatibility-report.txt \
   "$P0_TMP/report-first.tsv"
-mise exec -- mvn -B -pl euhedral-hardware-utils \
+mise exec -- gradle -B -pl euhedral-hardware-utils \
   resources:resources compiler:compile \
   resources:testResources compiler:testCompile \
   surefire:test
@@ -723,7 +723,7 @@ git status --short
 git diff --check
 ```
 
-Do not use a root Maven command. Do not run or inspect training. Retain the temporary directory
+Do not use a root Gradle command. Do not run or inspect training. Retain the temporary directory
 until the completion record captures fixture hashes and comparison results.
 
 ## Acceptance criteria
@@ -898,7 +898,7 @@ header, Zig, source resource, downstream module, CI, benchmark, or training file
   `git archive --format=tar 900d8c50 pom.xml euhedral-hardware-utils` and compiled it with direct
   `resources:resources compiler:compile`: passed.
 - Generated the API fixture twice from the isolated compiled baseline through direct
-  `org.codehaus.mojo:exec-maven-plugin:3.6.3:java`: byte-identical.
+  `org.codehaus.mojo:exec-gradle-plugin:3.6.3:java`: byte-identical.
 - Generated the native fixture twice from the same isolated compiled baseline: byte-identical.
 - Ran the complete direct-goal command
   `resources:resources compiler:compile resources:testResources compiler:testCompile
@@ -970,7 +970,7 @@ match the implementation completion record.
 The test-helper relocation to the `compatibility.helpers` subpackage is accepted as organization
 within the owned test surface and does not alter a production or compatibility contract. No
 validation-agent implementation correction was required. `mise` was unavailable, so the commands
-used the already-installed pinned JDK 21.0.2 and Maven 3.9.16 directly under the documented
+used the already-installed pinned JDK 21.0.2 and Gradle 3.9.16 directly under the documented
 toolchain fallback. No check was skipped and no environmental limitation prevented P0 validation.
 
 Detailed evidence and the 16-item acceptance matrix are recorded in
@@ -981,7 +981,7 @@ Detailed evidence and the 16-item acceptance matrix are recorded in
 The independent P0 audit completed on
 `hardware-utils-overhaul/phase-0-compatibility-baseline-audit`. All 16 acceptance criteria are
 classified `satisfied`; no deviation, ambiguity, correction, or skipped check remains. The audit
-reran the direct compiler/test goals with pinned JDK 21.0.2 and Maven 3.9.16, yielding 17 passing
+reran the direct compiler/test goals with pinned JDK 21.0.2 and Gradle 3.9.16, yielding 17 passing
 tests with no failures, errors, or skips. The published compatibility report is `PASS` with an
 identical SHA-256 (`eea7d3e22e4d7ab1c5217debeb9aafb5e1c277165d8f3b3775436add90c575a2`), and
 the active Java/resource fingerprint and production diff remained unchanged. Full command and

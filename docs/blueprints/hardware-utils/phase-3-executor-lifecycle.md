@@ -8,7 +8,7 @@
   `2027a47b`
 - Blueprint branch: `hardware-utils-overhaul/phase-3-executor-lifecycle-blueprint`
 - Owning module: `euhedral-hardware-utils` (Java 17 release target)
-- Repository toolchain: the Java 21 and Maven 3.9.16 versions selected by `mise.toml`
+- Repository toolchain: the Java 21 and Gradle 3.9.16 versions selected by `mise.toml`
 - Blueprint model: `gpt-5.6-sol`
 - Blueprint reasoning effort: `max`
 - Status: implementation-ready child contract; review and merge into the P3 root are required
@@ -731,7 +731,7 @@ No command may select training.
 Focused lifecycle suite:
 
 ```bash
-mise exec -- mvn -B -pl euhedral-hardware-utils \
+mise exec -- gradle -B -pl euhedral-hardware-utils \
   resources:resources compiler:compile \
   resources:testResources compiler:testCompile \
   -Dtest='PinnedThreadExecutorLifecycleTest,PinnedThreadExecutorCompatibilityTest,PinnedThreadExecutorTest' \
@@ -741,7 +741,7 @@ mise exec -- mvn -B -pl euhedral-hardware-utils \
 P0 compatibility gates:
 
 ```bash
-mise exec -- mvn -B -pl euhedral-hardware-utils \
+mise exec -- gradle -B -pl euhedral-hardware-utils \
   resources:resources compiler:compile \
   resources:testResources compiler:testCompile \
   -Dtest='ApiCompatibilityTest,MaskFormattingCompatibilityTest,PinnedThreadExecutorCompatibilityTest' \
@@ -751,8 +751,8 @@ mise exec -- mvn -B -pl euhedral-hardware-utils \
 Module and read-only consumer gates:
 
 ```bash
-mise exec -- mvn -B -pl euhedral-hardware-utils -am verify
-mise exec -- mvn -B -pl euhedral-core -am test
+gradle :euhedral-hardware-utils:build
+gradle :euhedral-core:test
 ```
 
 The hardware verify may depend on the P1 cross-native toolchain. If unavailable, record the exact
@@ -876,8 +876,8 @@ merged P3 root at `bfca49b6`.
 ### Commands, results, skips, and limits
 
 - `mise` is not installed. The documented fallback used OpenJDK 21.0.11 explicitly from
-  `/usr/lib/jvm/java-21-openjdk-amd64` with system Maven 3.6.3. The JDK matches the repository
-  default major version; Maven is below the pinned 3.9.16 and disables the build cache.
+  `/usr/lib/jvm/java-21-openjdk-amd64` with system Gradle 3.6.3. The JDK matches the repository
+  default major version; Gradle is below the pinned 3.9.16 and disables the build cache.
 - The focused lifecycle command passed 16 tests: 14 lifecycle/boundary/stress tests plus
   `PinnedThreadExecutorTest` and the P0 concurrent-fresh-thread compatibility anchor. The complete
   lifecycle class, including its 50-round stress test, also passed five consecutive reruns.
@@ -887,8 +887,8 @@ merged P3 root at `bfca49b6`.
 - A direct-goal, read-only `euhedral-core` compile/test passed all 99 core tests under Java 21. The
   exact `-pl euhedral-core -am test` lifecycle command cannot reach core because the hardware Zig
   phase fails first.
-- `mvn -B -pl euhedral-hardware-utils -am verify` stops before tests at
-  `exec-maven-plugin:zig-build`: the `ZIG` executable parameter is missing or invalid. No `zig` or
+- `gradle :euhedral-hardware-utils:build` stops before tests at
+  `exec-gradle-plugin:zig-build`: the `ZIG` executable parameter is missing or invalid. No `zig` or
   `rcodesign` executable is installed, so native packaging/signing verification is unavailable.
   Source or build configuration was not changed to bypass that limit.
 - Scope and hygiene checks passed: `git diff --check` is clean, and diffs from `bfca49b6` under
@@ -928,7 +928,7 @@ merged P3 root at `bfca49b6`.
   reimplemented.
 - Parent criterion 16: `satisfied` under its pass-or-record-exact-limit clause. Focused, P0, direct
   core, repetition, and hygiene gates pass; full hardware verify and the exact reactor core command
-  have the missing Zig/rcodesign and unpinned-Maven limits recorded above.
+  have the missing Zig/rcodesign and unpinned-Gradle limits recorded above.
 
 No state, lock, acceptance, restart, rejection, interruption, deadline, registry, cleaner, hook,
 cleanup-order, or memory-mode decision changed. P3-B is ready for developer review and merge before
@@ -947,5 +947,5 @@ The independent P3-B conformance audit completed on 2026-08-01 on
   contamination, and the documented JMM edges.
 - Focused lifecycle and P0 compatibility gates pass, with the lifecycle class passing five
   consecutive runs. Scope and diff checks are clean. The audit records the unavailable pinned Java
-  21/Maven 3.9.16/Zig toolchain and does not replace the implementation record's native limit.
+  21/Gradle 3.9.16/Zig toolchain and does not replace the implementation record's native limit.
 - This audit now awaits developer review and merge before the combined P3 root audit.

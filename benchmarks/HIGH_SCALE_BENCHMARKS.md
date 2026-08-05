@@ -185,21 +185,21 @@ Times are in seconds.
 Package the benchmark distribution from the repository root:
 
 ```bash
-mise exec -- mvn -B -pl benchmarks -am package -Dmaven.test.skip=true
+gradle :benchmarks:build -x test
 ```
 
 Run the Mandelbrot comparison with GC profiling:
 
 ```bash
 JAVA_TOOL_OPTIONS="-Dgc=true" \
-    benchmarks/target/bin/euhedral-benchmarks mandelbrot
+    benchmarks/build/bin/euhedral-benchmarks mandelbrot
 ```
 
 On Linux hosts that expose the required perf events, enable both profilers:
 
 ```bash
 JAVA_TOOL_OPTIONS="-Dgc=true -Dperf=true" \
-    benchmarks/target/bin/euhedral-benchmarks mandelbrot
+    benchmarks/build/bin/euhedral-benchmarks mandelbrot
 ```
 
 See the [benchmark guide](./README.md) for packaging details, launcher options, and additional

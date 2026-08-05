@@ -36,7 +36,7 @@ temporary P3 status block can be removed, a P3 closeout summary can be appended,
 | 13. Deterministic cleanup bounds                            | satisfied      | Leases and owner thread-locals are removed in their `finally` paths. E1-E12 and the 50-round alternating stress assert zero active tasks, tombstones, registry entries, fake cleanables/hooks, owners, leases, and retained command paths at each terminal boundary.                                                                                                                                                                                      |
 | 14. Java Memory Model argument                              | satisfied      | Registry synchronization publishes entries, weak references, controls, actions, and hook identity; lifecycle synchronization publishes state/configuration/epoch/task membership and pairs transitions/removals with waiter notification. Registry -> lifecycle is the only nested lock order; register-before-`Thread.start()` publishes the wrapper, and cleanup CAS owns exactly one action. No independent lifecycle flag weakens those edges.        |
 | 15. Scope isolation                                         | satisfied      | The aggregate P3 diff changes only P3 hardware implementation/tests and prescribed records, plus two P2-immutability core test fixture corrections from the P3-A review. `euhedral-training`, `euhedral-core/src/main`, and `benchmarks/src/main` diffs are empty; platform-native bodies, resources/pressure, topology production, task serialization, CI, and module directives remain outside P3.                                                      |
-| 16. Required verification and hygiene                       | satisfied      | Recorded Java 21 child evidence passes focused affinity/lifecycle, P0, cache-disabled hardware verify, and the 99-test read-only core gate. This audit independently passed the 30-test deterministic combined suite and five repeated lifecycle runs, then confirmed `git diff --check` and prohibited-path scope diffs. The currently unavailable pinned Java 21/Maven 3.9.16/Zig environment is an exact recorded limit, not substituted verification. |
+| 16. Required verification and hygiene                       | satisfied      | Recorded Java 21 child evidence passes focused affinity/lifecycle, P0, cache-disabled hardware verify, and the 99-test read-only core gate. This audit independently passed the 30-test deterministic combined suite and five repeated lifecycle runs, then confirmed `git diff --check` and prohibited-path scope diffs. The currently unavailable pinned Java 21/Gradle 3.9.16/Zig environment is an exact recorded limit, not substituted verification. |
 
 ## Ledger anchors
 
@@ -61,10 +61,10 @@ repair.
 
 ## Commands, results, and limits
 
-- Available fallback toolchain: OpenJDK 17.0.19 and Maven 3.6.3; `mise`, its Java 21/Maven 3.9.16
+- Available fallback toolchain: OpenJDK 17.0.19 and Gradle 3.6.3; `mise`, its Java 21/Gradle 3.9.16
   selection, and `zig` are unavailable.
 -
-`mvn -B -pl euhedral-hardware-utils resources:resources compiler:compile resources:testResources compiler:testCompile -Dtest='ThreadToolsAffinityTest,LinuxAffinityTest,WindowsAffinityTest,OSXAffinityTest,PinnedThreadExecutorLifecycleTest,PinnedThreadExecutorTest,PinnedThreadExecutorCompatibilityTest' surefire:test`:
+`gradle -B -pl euhedral-hardware-utils resources:resources compiler:compile resources:testResources compiler:testCompile -Dtest='ThreadToolsAffinityTest,LinuxAffinityTest,WindowsAffinityTest,OSXAffinityTest,PinnedThreadExecutorLifecycleTest,PinnedThreadExecutorTest,PinnedThreadExecutorCompatibilityTest' surefire:test`:
 passed, 30 tests (11 affinity controller, 14 lifecycle, and five facade/compatibility tests).
 - Five further `PinnedThreadExecutorLifecycleTest` runs passed, 14 tests each, including the
   50-round bounded stress schedule.
@@ -72,9 +72,9 @@ passed, 30 tests (11 affinity controller, 14 lifecycle, and five facade/compatib
   `ApiCompatibilityTest` fails only because JDK 17 reports module version metadata and the
   historic baseline treats reviewed P2/P3 additions as additions; this matches the recorded
   fallback limitation. The P3-A Java 21 evidence is the passing P0 API/module result.
-- `mvn -B -Dmaven.build.cache.enabled=false -pl euhedral-hardware-utils -am verify` stops before
-  test execution at `exec-maven-plugin:zig-build` because the `ZIG` executable is missing.
-  `mvn -B -Dmaven.build.cache.enabled=false -pl euhedral-core -am test` consequently stops at the
+- `gradle :euhedral-hardware-utils:build` stops before
+  test execution at `exec-gradle-plugin:zig-build` because the `ZIG` executable is missing.
+  `gradle :euhedral-core:test` consequently stops at the
   same hardware phase after eight upstream data-structure tests; it cannot reach core. No source
   or build configuration was changed to bypass either limit.
 - `git diff --check 7d3abea7..HEAD` and scope checks for training, core production, and benchmark

@@ -2,8 +2,6 @@
 **/target/
 **/*.iml
 **/.vscode/
-!.mvn/wrapper/maven-wrapper.jar
-
 ### Gradle ###
 .gradle/
 **/build/

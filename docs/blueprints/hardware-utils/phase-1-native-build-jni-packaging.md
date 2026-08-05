@@ -25,8 +25,8 @@ responsibility-scoped children. There is no P1 root implementation action.
 
 ### Authorized toolchain-policy revision
 
-The developer authorized this documentation revision on 2026-08-01. Every Java command, Maven
-command, and Maven build defaults to the exact versions in `mise.toml`; a documented
+The developer authorized this documentation revision on 2026-08-01. Every Java command, Gradle
+command, and Gradle build defaults to the exact versions in `mise.toml`; a documented
 restricted-environment fallback must use the corresponding pinned installed tools and record its
 versions and limits.
 
@@ -88,7 +88,7 @@ The two children together may edit only:
   and this phase's closeout material; and
 - the temporary P1 status block in `AGENTS.md` during implementation through audit.
 
-The existing root workflow and deploy workflow Maven commands remain byte-for-byte unchanged.
+The existing root workflow and deploy workflow Gradle commands remain byte-for-byte unchanged.
 Their full-reactor results are not P1 evidence.
 
 ### Read-only inputs
@@ -96,7 +96,7 @@ Their full-reactor results are not P1 evidence.
 - P0 blueprint/completion, validation, audit, fixtures, and compiled compatibility contract;
 - the existing Java native declarations in the seven native-owning classes;
 - native code while a child is not its owner;
-- root Maven plugin management and release-profile semantics;
+- root Gradle plugin management and release-profile semantics;
 - non-training downstream consumers named by the parent plan; and
 - platform implementation code except for include-path or declaration-only edits required by the
   selected JNI build contract.
@@ -662,7 +662,7 @@ not encode its return type. No prefix or count wildcard is allowed. PE CRT expor
 -Drcodesign=<absolute rcodesign executable>
 ```
 
-Maven supplies all non-secret paths. The module's default `mise exec -- mvn ...` build needs no
+Gradle supplies all non-secret paths. The module's default `mise exec -- gradle ...` build needs no
 product-selection or host-mode property. A direct Zig invocation must provide the explicit paths.
 The graph never reads `JAVA_HOME`, runs `mise`, searches PATH for a signer, or scans for an SDK.
 
@@ -691,7 +691,7 @@ rcodesign              = ${env.RCODESIGN}
 
 The exec plugin executable is `${env.ZIG}` and must be an absolute executable reporting 0.16.0.
 
-There are no certificate, password, or signing-mode properties. Maven and Zig always use the
+There are no certificate, password, or signing-mode properties. Gradle and Zig always use the
 ad-hoc signing path described by the developer decision above.
 
 `java-home` must contain readable `include/jni.h` and `release`; the release metadata must identify
@@ -834,7 +834,7 @@ Fields are tab-separated and cannot contain tabs, CR, LF, NUL, or leading/traili
 The generator performs no wall-clock, host, absolute-path, cache, or signing-mode interpolation.
 Two runs from the same manifest produce byte-identical catalogs.
 
-## Maven lifecycle and packaging
+## Gradle build lifecycle and packaging
 
 ### Lifecycle order
 
@@ -844,9 +844,9 @@ The hardware POM uses module-local plugin executions in this order:
 2. `process-classes`: a narrowly configured AntRun execution deletes only
    `target/generated-resources/native`, `target/classes/bin`, and
    `target/classes/META-INF/euhedral/native-products.tsv`;
-3. `process-classes`: `exec-maven-plugin` invokes the relocated Zig graph with explicit paths and
+3. `process-classes`: `exec-gradle-plugin` invokes the relocated Zig graph with explicit paths and
    target-local caches;
-4. `process-classes`: `maven-resources-plugin:copy-resources` copies the generated native resource
+4. `process-classes`: `gradle-resources-plugin:copy-resources` copies the generated native resource
    root into `target/classes`; and
 5. `package`/`verify`: the normal jar is built, then Failsafe package/binary/runtime integration
    tests inspect that exact jar.
@@ -856,7 +856,7 @@ cleanup refuses an empty, source-root, workspace-root, or unresolved property an
 three target-owned paths above. Its Ant delete/fileset configuration sets
 `followSymlinks="false"` and `removeNotFollowedSymlinks="true"`; a temporary sentinel test proves
 a symlink at or below any cleanup root is removed or rejected without touching its external
-target. `mvn clean` removes all target caches; warm builds preserve `target/zig-cache` and
+target. `gradle clean` removes all target caches; warm builds preserve `target/zig-cache` and
 `target/zig-global-cache`.
 
 Source resources use an allowlist containing only:
@@ -883,8 +883,8 @@ files in addition to the eight native entries below:
 ```text
 META-INF/MANIFEST.MF
 META-INF/euhedral/native-products.tsv
-META-INF/maven/io.euhedral-execution/euhedral-hardware-utils/pom.properties
-META-INF/maven/io.euhedral-execution/euhedral-hardware-utils/pom.xml
+META-INF/gradle/io.euhedral-execution/euhedral-hardware-utils/pom.properties
+META-INF/gradle/io.euhedral-execution/euhedral-hardware-utils/pom.xml
 logback-fragments/euhedral-hardware-utils.xml
 ```
 
@@ -1087,7 +1087,7 @@ Add a test-only `NativeLoadSmokeMain` with two modes:
 
 The CI smoke artifact contains only the ordinary module jar, that compiled test main class at its
 package path, and the module's runtime dependency jars under `lib/`. A module-local
-`maven-dependency-plugin` execution prepares the runtime jars under `target/native-smoke/lib`
+`gradle-dependency-plugin` execution prepares the runtime jars under `target/native-smoke/lib`
 without attaching or publishing another artifact. The jobs run it on the classpath, cap the
 bundle at 64 files and 134,217,728 bytes, and reject any source, credential, cache, or unrelated
 test fixture.
@@ -1125,10 +1125,10 @@ Add `.github/workflows/hardware-utils-native.yaml` with:
 
 - `permissions: contents: read`;
 - checkout with `persist-credentials: false`;
-- a cross-package Ubuntu job using the pinned JDK 21, Maven 3.9.16, Zig 0.16.0, rcodesign 0.29.0,
+- a cross-package Ubuntu job using the pinned JDK 21, Gradle 3.9.16, Zig 0.16.0, rcodesign 0.29.0,
   the exact macOS SDK path, and LLVM;
 - only
-  `mvn -B -pl euhedral-hardware-utils -am verify` as its Maven validation selection;
+  `gradle :euhedral-hardware-utils:build` as its Gradle validation selection;
 - target-local Zig caches in the cache key, never source `.zig-cache`;
 - upload of the exact jar and a bounded smoke bundle;
 - JDK 17 Linux glibc and musl smoke gates in addition to the build-JDK Failsafe gate;
@@ -1141,7 +1141,7 @@ test the applicable packaged product.
 Remove only the invalid JDK-header-copy steps from both existing workflows. Normalize their SDK
 setup and native input environment only as required by the new explicit P1 contract. The deploy
 workflow must not prepare, export, validate, or clean up macOS certificate credentials; release
-builds use the same ad-hoc signing graph as all other builds. Do not otherwise alter its Maven
+builds use the same ad-hoc signing graph as all other builds. Do not otherwise alter its Gradle
 command, checkout credential behavior, permissions, deploy logic, or unrelated cache.
 
 ## Failure behavior
@@ -1211,7 +1211,7 @@ inputs, catalog bytes, and staged-copy identity remain required.
 
 ## Implementation order and child ownership
 
-### Child A - native graph, JNI, signing, and Maven staging
+### Child A - native graph, JNI, signing, and Gradle staging
 
 Branch family:
 
@@ -1236,7 +1236,7 @@ Owned implementation, in dependency order:
 7. delete only the tracked obsolete `build.sh`;
 8. remove the invalid header-copy blocks and normalize SDK, Zig, signer, and LLVM inputs in the
    native setup of the two existing workflows, removing deploy certificate handling without
-   changing their Maven commands; and
+   changing their Gradle commands; and
 9. add focused manifest/build/signature tests sufficient to validate Child A without loader or
    new runner-workflow design.
 
@@ -1305,16 +1305,16 @@ zig build \
 
 env JAVA_HOME=<jdk-21> ZIG=<zig-0.16.0> SDKROOT=<MacOSX26.1.sdk> RCODESIGN=<rcodesign-0.29.0> \
     LLVM_READOBJ=<llvm-readobj> LLVM_OBJDUMP=<llvm-objdump> \
-    <maven-3.9.16>/bin/mvn -B -pl euhedral-hardware-utils -am clean verify
+    <gradle-3.9.16>/bin/gradle -B -pl euhedral-hardware-utils -am clean verify
 env JAVA_HOME=<jdk-21> ZIG=<zig-0.16.0> SDKROOT=<MacOSX26.1.sdk> RCODESIGN=<rcodesign-0.29.0> \
     LLVM_READOBJ=<llvm-readobj> LLVM_OBJDUMP=<llvm-objdump> \
-    <maven-3.9.16>/bin/mvn -B -pl euhedral-hardware-utils -am verify
+    <gradle-3.9.16>/bin/gradle :euhedral-hardware-utils:build
 env JAVA_HOME=<jdk-21> ZIG=<zig-0.16.0> SDKROOT=<MacOSX26.1.sdk> RCODESIGN=<rcodesign-0.29.0> \
     LLVM_READOBJ=<llvm-readobj> LLVM_OBJDUMP=<llvm-objdump> \
-    <maven-3.9.16>/bin/mvn -B -pl euhedral-hardware-utils -am verify
+    <gradle-3.9.16>/bin/gradle :euhedral-hardware-utils:build
 ```
 
-Use the repository JDK 21 and Maven 3.9.16 explicitly. None of these selections includes training.
+Use the repository JDK 21 and Gradle 3.9.16 explicitly. None of these selections includes training.
 
 ### Inventory, binary, and signature checks
 
@@ -1340,7 +1340,7 @@ builds. Source writes in that disposable tree are expected and then discarded. R
 clean/two warm sequence for the completed P1 graph in the active module, whose source
 fingerprints must remain unchanged.
 
-Record host CPU/memory, JDK, Maven, Zig, SDK, signer, and cache state for both sequences. Compare
+Record host CPU/memory, JDK, Gradle, Zig, SDK, signer, and cache state for both sequences. Compare
 descriptively. There is no speed threshold and no throughput claim.
 
 ## Acceptance criteria
@@ -1383,7 +1383,7 @@ P1 root integration validation must classify every item:
 19. The hardware-specific workflow uses selected-module commands, read-only permissions, no
     persisted checkout credentials, no signing secrets, and required runner smoke/signature
     gates.
-20. Existing root build/deploy Maven commands and unrelated workflow behavior are unchanged; only
+20. Existing root build/deploy Gradle commands and unrelated workflow behavior are unchanged; only
     the invalid header blocks and explicit native inputs change.
 21. Clean/warm timing is recorded without an unsupported performance claim.
 22. B01-B05 and B07 are satisfied; the P1 gate-framework portion of B06 is satisfied and named
@@ -1398,13 +1398,13 @@ B06 runtime portions assigned to P5-P7.
 
 A single implementation context is rejected. The native graph child combines strict parsing,
 recursive filesystem discovery, cross-target ABI definitions, eight compiler/linker products,
-signing DAG correctness, and Maven lifecycle ordering. The loader/package child combines class
+signing DAG correctness, and Gradle build lifecycle ordering. The loader/package child combines class
 initialization, filesystem security, cross-OS permissions and cleanup, deterministic fallback,
 binary parsing, runtime smoke, and release secret handling.
 
 Those responsibilities have a stable producer/consumer boundary (JSON manifest, TSV catalog,
 generated resource root, exact product set) and can be implemented sequentially. Combining them
-would require one pass to hold unrelated Zig 0.16 APIs, Java filesystem/lifecycle states, Maven
+would require one pass to hold unrelated Zig 0.16 APIs, Java filesystem/lifecycle states, Gradle
 ordering, binary formats, and CI secret policy, making omissions difficult to localize. Splitting
 within either child would create more overlap than isolation, so both children pass their own
 sizing gate as written.
@@ -1462,7 +1462,7 @@ logic, non-hardware modules, platform semantics, and training.
 - hardware POM generated-resource contract and exact built jar/catalog;
 - Child A's summarized existing-workflow native-input handoff and the new hardware workflow path;
   and
-- JDK 17/21 `Files`, attribute-view, `ProcessHandle`, class-initialization, `System.load`, Maven
+- JDK 17/21 `Files`, attribute-view, `ProcessHandle`, class-initialization, `System.load`, Gradle
   Failsafe, LLVM, and runner behavior needed by the owned tests.
 
 Child B excludes native source semantics, Zig schema/graph redesign, non-hardware code, root POM,
@@ -1470,7 +1470,7 @@ unrelated workflow logic, and training.
 
 ### Child B owned outputs
 
-- `docs/blueprints/hardware-utils/phase-1-loader-maven-packaging.md` and completion record;
+- `docs/blueprints/hardware-utils/phase-1-loader-gradle-packaging.md` and completion record;
 - internal catalog/loader/extraction implementation;
 - loader, packaging, binary, warm-removal, and smoke tests plus narrow POM test wiring;
 - hardware-specific selected-module workflow;
@@ -1482,12 +1482,12 @@ unrelated workflow logic, and training.
 ### Context and coupling
 
 The original provisional root implementation is not safe. It would span strict serialization,
-filesystem migration, Zig 0.16 graph APIs, target ABI rules, signing dependencies, Maven lifecycle
+filesystem migration, Zig 0.16 graph APIs, target ABI rules, signing dependencies, Gradle build lifecycle
 ordering, Java class initialization, cross-OS file security, cleanup recovery, three binary
 formats, and CI secrets in one pass.
 
 Child A still requires coupled reasoning across a schema, recursive filesystem safety, compiler
-targets, JNI widths/calling conventions, signing input/output identity, and Maven phase ordering.
+targets, JNI widths/calling conventions, signing input/output identity, and Gradle phase ordering.
 Child B still requires coupled reasoning across immutable publication, exception taxonomy,
 cross-platform filesystem semantics, bounded cleanup, archive identity, process invocation, and
 runner/release behavior. Neither is a low-effort mechanical edit.
@@ -1541,7 +1541,7 @@ root. Do not start Child B before Child A's audit is reviewed and merged.
 
 Formal integration validation was removed from the workflow by developer direction. Direct root
 conformance on
-2026-08-01 made no correction and reran no Maven/Zig/runtime command. It classified 21 criteria
+2026-08-01 made no correction and reran no Gradle/Zig/runtime command. It classified 21 criteria
 `satisfied`, criteria 19/24 `unverified`, and criterion 22 `deviated`; Child A is `ambiguous`
 because its artifact chain is absent and Child B is `satisfied`. B01-B05, B07, and the P1 B06
 framework are `satisfied`. Hosted Windows/macOS remain unverified. `git diff --check` passed.

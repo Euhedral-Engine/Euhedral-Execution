@@ -32,7 +32,7 @@ wait for its merge.
 | 10. Ownership and memory semantics                   | satisfied      | Provider, capability, supported mask, and base mask are final construction/class-initialization state. Requests and snapshots are cloned, and lease/owner state is ordinary thread-confined `ThreadLocal` state; no registry, atomics, VarHandles, or cross-thread mutable state was added.            |
 | 11. Deterministic test sufficiency                   | satisfied      | The expanded focused Java 21 suite covers A01, all overload ownership, maximum bounds, bit 63/cross-word masks, exact/locality/unsupported matrix behavior, original restoration, release/owner cleanup, independent current CPU, recoverable/fatal provider behavior, and facade zero/one-call seams. |
 | 12. Excluded scope remains excluded                  | satisfied      | No executor implementation, native body, topology/resource/core production, or training file changed. Two core test fixtures were updated only to supply the P2-required non-null immutable topology/snapshot inputs and clone before mutation.                                                        |
-| 13. Required verification and hygiene                | satisfied      | Focused suite, P0 gates, cache-disabled hardware verify, full read-only core tests, `git diff --check`, and scope checks pass under `mise` Java 21.0.2/Maven 3.9.16.                                                                                                                                   |
+| 13. Required verification and hygiene                | satisfied      | Focused suite, P0 gates, cache-disabled hardware verify, full read-only core tests, `git diff --check`, and scope checks pass under `mise` Java 21.0.2/Gradle 3.9.16.                                                                                                                                   |
 
 ## Applicable parent criteria and A01
 
@@ -52,19 +52,19 @@ wait for its merge.
 
 ## Commands, results, skips, and limits
 
-All recorded commands used the project-default `mise` environment: OpenJDK 21.0.2 and Maven
+All recorded commands used the project-default `mise` environment: OpenJDK 21.0.2 and Gradle
 3.9.16. `mise` emitted unrelated warnings for unavailable user-level tool entries but selected the
-project Java/Maven defaults correctly.
+project Java/Gradle defaults correctly.
 
 -
-`mise exec -- mvn -B -pl euhedral-hardware-utils ... -Dtest='ThreadToolsAffinityTest,LinuxAffinityTest,WindowsAffinityTest,OSXAffinityTest' surefire:test`:
+`mise exec -- gradle -B -pl euhedral-hardware-utils ... -Dtest='ThreadToolsAffinityTest,LinuxAffinityTest,WindowsAffinityTest,OSXAffinityTest' surefire:test`:
 passed, 14 tests.
 -
-`mise exec -- mvn -B -pl euhedral-hardware-utils ... -Dtest='ApiCompatibilityTest,NativeCompatibilityTest,MaskFormattingCompatibilityTest,PinnedThreadExecutorCompatibilityTest' surefire:test`:
+`mise exec -- gradle -B -pl euhedral-hardware-utils ... -Dtest='ApiCompatibilityTest,NativeCompatibilityTest,MaskFormattingCompatibilityTest,PinnedThreadExecutorCompatibilityTest' surefire:test`:
 passed, 4 tests.
-- `mise exec -- mvn -B -Dmaven.build.cache.enabled=false -pl euhedral-hardware-utils -am verify`:
+- `mise exec -- gradle :euhedral-hardware-utils:build`:
   passed. Native Zig build, 63 unit tests, and native packaging/load integration checks passed.
-- `mise exec -- mvn -B -Dmaven.build.cache.enabled=false -pl euhedral-core -am test`: passed. The
+- `mise exec -- gradle :euhedral-core:test`: passed. The
   hardware module ran 63 tests and the core module ran 99 tests, all green; the Linux unmanaged
   current-CPU caller paths and corrected immutable fixtures are included.
 - `git diff --check 7d3abea7..HEAD` and P3-A scope diffs for `euhedral-training`,

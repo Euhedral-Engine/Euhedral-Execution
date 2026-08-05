@@ -27,8 +27,8 @@ change, it returns to this parent blueprint. It must not make a private choice.
 
 ### Authorized toolchain-policy revision
 
-The developer authorized this documentation revision on 2026-08-01. Every Java command, Maven
-command, and Maven build defaults to the exact versions in `mise.toml`; a documented
+The developer authorized this documentation revision on 2026-08-01. Every Java command, Gradle
+command, and Gradle build defaults to the exact versions in `mise.toml`; a documented
 restricted-environment fallback must use the corresponding pinned installed tools and record its
 versions and limits.
 
@@ -936,7 +936,7 @@ update defects that require coupled repair.
 
 ## Commands and acceptance gates
 
-Use the pinned installed JDK 21.0.2 and Maven 3.9.16 through `mise` when available, or the explicit
+Use the pinned installed JDK 21.0.2 and Gradle 3.9.16 through `mise` when available, or the explicit
 toolchain fallback in `AGENTS.md`. No command may select training.
 
 ### Fast deterministic child loop
@@ -945,13 +945,13 @@ Use direct plugin goals so topology/snapshot iteration does not needlessly rerun
 packaging:
 
 ```bash
-mise exec -- mvn -B -pl euhedral-hardware-utils \
+mise exec -- gradle -B -pl euhedral-hardware-utils \
   resources:resources compiler:compile \
   resources:testResources compiler:testCompile \
   -Dtest='SystemInfoFallbackTest,LinuxSystemLayoutFixtureTest,WindowsTopologyFixtureTest,TopologyCacheFallbackTest,TopologyOwnershipTest' \
   surefire:test
 
-mise exec -- mvn -B -pl euhedral-hardware-utils \
+mise exec -- gradle -B -pl euhedral-hardware-utils \
   resources:resources compiler:compile \
   resources:testResources compiler:testCompile \
   -Dtest='SnapshotOwnershipTest,SnapshotIndexContractTest,TopologyMapperCoreZeroTest,TopologyMapperPublicationTest,TopologyMapperVersionTest' \
@@ -964,14 +964,14 @@ verification.
 ### Compatibility and final selected-module gates
 
 ```bash
-mise exec -- mvn -B -pl euhedral-hardware-utils \
+mise exec -- gradle -B -pl euhedral-hardware-utils \
   resources:resources compiler:compile \
   resources:testResources compiler:testCompile \
   -Dtest='ApiCompatibilityTest,MaskFormattingCompatibilityTest,CoreZeroReservationCompatibilityTest' \
   surefire:test
 
-mise exec -- mvn -B -pl euhedral-hardware-utils -am verify
-mise exec -- mvn -B -pl euhedral-core -am test
+gradle :euhedral-hardware-utils:build
+gradle :euhedral-core:test
 ```
 
 The final hardware `verify` rechecks the completed P1 native/package gates. Docker/hosted
@@ -1071,4 +1071,4 @@ topology/snapshot suite passed 24 tests after that change. P0 reports zero remov
 Java-17 module-version metadata and six authorized additions remaining. The audit records T04
 coalescing/publication, full selected-module verification, and the read-only core gate as
 unverified because the deterministic R2-R12 race matrix is absent and this host lacks mise/Zig and
-the pinned Java 21/Maven 3.9.16 tools. P2 remains pending review/merge and explicit closeout.
+the pinned Java 21/Gradle 3.9.16 tools. P2 remains pending review/merge and explicit closeout.

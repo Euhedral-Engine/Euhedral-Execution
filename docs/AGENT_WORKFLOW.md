@@ -45,11 +45,11 @@ their children; they must not force downstream agents to reread the full feature
 
 ## Toolchain default
 
-Every Java command, Maven command, and Maven build defaults to the exact versions declared in the
+Every Java command and Gradle build defaults to the exact versions declared in the
 repository's `mise.toml`. Use `mise exec --` for those commands when available. A restricted
 environment may use the documented explicit pinned-tool fallback only when `mise` cannot be used;
 record the substituted versions and any verification limit. A module's lower Java release target
-does not permit silently defaulting to an older JDK or Maven.
+does not permit silently defaulting to an older JDK or Gradle.
 
 ## Pipeline
 

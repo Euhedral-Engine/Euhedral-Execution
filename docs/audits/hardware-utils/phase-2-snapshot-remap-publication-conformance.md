@@ -35,4 +35,4 @@ copy the fixed socket list without rejecting its required null holes.
 
 The completed behavior is review-ready with the recorded verification limits. Before root audit,
 reviewers should merge this audit and arrange the missing deterministic R2-R12 race evidence and
-pinned Java 21/Maven 3.9.16/Zig gates; no architectural redesign is proposed.
+pinned Java 21/Gradle 3.9.16/Zig gates; no architectural redesign is proposed.

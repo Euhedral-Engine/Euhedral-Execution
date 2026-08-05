@@ -180,7 +180,7 @@ evidence and use the accepted glibc 2.17 plus musl fallback. It must not silentl
   artifact that was signed and verified.
 - Do not add development-only build modes. Do not over-engineer around the currently small compile
   time.
-- Build output belongs under Maven/Zig target or generated-resource directories, never under
+- Build output belongs under Gradle/Zig target or generated-resource directories, never under
   `src/main/resources/bin`.
 - P1 must explicitly select optimization and native hardening/portability settings. Any disabled
   stack protector/check, unwind/frame-pointer behavior, compiler-runtime bundling, or framework
@@ -193,7 +193,7 @@ evidence and use the accepted glibc 2.17 plus musl fallback. It must not silentl
 - `euhedral-hardware-utils` Java implementation and tests.
 - Its Linux, Windows, and macOS native implementation.
 - JNI declarations, loading, ABI checks, generated headers, runtime probing, and resource cleanup.
-- Zig manifest, build graph, packaging, signing order, cache use, and Maven integration.
+- Zig manifest, build graph, packaging, signing order, cache use, and Gradle integration.
 - Topology discovery and validation.
 - Affinity capability reporting, logical ownership, and executor lifecycle.
 - Resource collection and canonical units.
@@ -234,11 +234,11 @@ toolchain constraint without changing phase scope, acceptance criteria, or imple
 
 - `euhedral-hardware-utils` remains Java 17.
 - `euhedral-core` remains Java 21.
-- All Java commands, Maven commands, and Maven builds default to the exact versions pinned by
-  `mise.toml`: Java 21, Maven 3.9.16, Zig 0.16.0, and the configured Apple codesigning tool. Use
+- All Java commands, Gradle commands, and Gradle builds default to the exact versions pinned by
+  `mise.toml`: Java 21, Gradle 9.8.1, Zig 0.16.0, and the configured Apple codesigning tool. Use
   `mise exec --` when available; a documented restricted-environment fallback may use only the
   corresponding pinned installed tools and must record the substituted invocation and limits.
-- The build must not invoke `mise` from inside `build.zig`. Maven/CI supplies explicit tool and SDK
+- The build must not invoke `mise` from inside `build.zig`. Gradle/CI supplies explicit tool and SDK
   inputs.
 - JNI calls validate nulls, lengths, ranges, and output capacity before native writes.
 - Native initialization is thread-safe and repeatable.
@@ -581,7 +581,7 @@ approved prompt names the file, and no training consumer is part of this invento
 
 - native setup portions of `.github/workflows/build.yaml` and `.github/workflows/deploy.yaml` only
   where required to remove invalid JNI header preparation or supply the P1-settled explicit SDK,
-  signer, and release credential-file paths; their pre-existing Maven commands are outside this
+  signer, and release credential-file paths; their pre-existing Gradle commands are outside this
   initiative, remain unchanged, and never count as task validation evidence
 - a hardware-specific cross-platform workflow with explicit selected-module jobs; no new or
   modified task command may select training
@@ -792,7 +792,7 @@ modern hosted runner proves only its actual environment, not a minimum-family fl
 - `git diff --name-only 900d8c50 -- euhedral-training` and
   `git status --short -- euhedral-training` both have no output.
 - No stage invokes a training build or test.
-- No root Maven command that selects training is used as validation.
+- No root Gradle command that selects training is used as validation.
 - `git diff --check` is clean.
 - Searches find no stale native names, source-tree package paths, invalid header-copy workaround,
   obsolete resource references, or root documentation that still describes macOS as unsupported/
@@ -813,34 +813,23 @@ modern hosted runner proves only its actual environment, not a minimum-family fl
 - Use immutable fixture snapshots to test old-publication stability after provider buffer reuse.
 - Keep host-dependent affinity and topology smoke tests separate from deterministic parser tests.
 
-### Focused Maven validation
+### Focused Gradle validation
 
 Preferred commands:
 
 ```bash
-mise exec -- mvn -B -pl euhedral-hardware-utils -am verify
-mise exec -- mvn -B -pl euhedral-core -am test
-mise exec -- mvn -B -pl euhedral-reactor-core -am test
-mise exec -- mvn -B -pl euhedral-spring-core -am verify
-mise exec -- mvn -B -pl benchmarks -am package -DskipTests
+gradle :euhedral-hardware-utils:build
+gradle :euhedral-core:test
+mise exec -- gradle -B -pl euhedral-reactor-core -am test
+mise exec -- gradle -B -pl euhedral-spring-core -am verify
+mise exec -- gradle -B -pl benchmarks -am package -DskipTests
 ```
 
 Use only the commands relevant to the current phase. `-am` for these selected modules must not
 select `euhedral-training`; verify the reactor list when introducing a new command.
 
-The normal root `mvn verify` from `AGENTS.md` is intentionally not part of this initiative because
-the developer excluded the training module. The selected-module sequence is the final Maven gate.
-
-In a restricted agent environment, use the already installed explicit toolchain:
-
-```bash
-env \
-  JAVA_HOME=/home/bagotay/.local/share/mise/installs/java/21.0.2 \
-  PATH=/home/bagotay/.local/share/mise/installs/zig/0.16.0:/home/bagotay/.local/share/mise/installs/java/21.0.2/bin:/usr/bin:/bin \
-  SDKROOT=/home/bagotay/.local/share/mise/installs/macos-sdk/MacOSX26.1.sdk \
-  /home/bagotay/.local/share/mise/installs/maven/3.9.16/apache-maven-3.9.16/bin/mvn \
-  -B -pl euhedral-hardware-utils -am verify
-```
+The normal root `gradle test` from `AGENTS.md` is intentionally not part of this initiative because
+the developer excluded the training module. The selected-module sequence is the final Gradle gate.
 
 Hardware tests using Testcontainers require a working Docker daemon. Host affinity tests require
 exposed CPUs. Report either environmental limitation separately from Java/native compilation.
@@ -878,7 +867,7 @@ Cross-compilation/package validation and real runtime validation are separate:
   only an explicitly safe ad hoc/test signature path.
 - Task validation and runtime jobs live in a hardware-specific selected-module workflow. Removing
   invalid JNI-header preparation and supplying explicit native inputs in the existing build and
-  deploy workflows is allowed, but their pre-existing Maven commands remain outside initiative
+  deploy workflows is allowed, but their pre-existing Gradle commands remain outside initiative
   evidence and no task change may broaden or rely on their training execution.
 
 ### Performance validation
@@ -994,7 +983,7 @@ root commit when committed. The phase is complete only after those closeout outp
 | Plan phase | Initial package/module ownership                                                                                                                                                                         |
 |------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | P0         | `euhedral-hardware-utils` test sources/resources and module-local compatibility tooling; non-training core/benchmark consumers are read-only                                                             |
-| P1         | hardware Maven/native build assets, generated resources, `hardware_utils.internal` loader code, and hardware-specific CI                                                                                 |
+| P1         | hardware Gradle/native build assets, generated resources, `hardware_utils.internal` loader code, and hardware-specific CI                                                                                 |
 | P2         | hardware root/common/internal topology and snapshot ownership, layout adapters, and hardware tests                                                                                                       |
 | P3         | parent: hardware root/internal affinity and executor lifecycle, platform affinity facades, and hardware tests; P3-A owns affinity/capability/managed ownership and P3-B owns executor registry/lifecycle |
 | P4         | hardware root/common/internal sampling, pressure, monitor lifecycle, provider compatibility adapters, and hardware tests; core is read-only                                                              |
@@ -1017,7 +1006,7 @@ an unbounded feature-history context.
 | P0                            | `docs/blueprints/hardware-utils/phase-0-compatibility-test-baseline.md`       | conformance/manual review; historical validation record retained | `docs/audits/hardware-utils/phase-0-compatibility-test-baseline-conformance.md`       |
 | P1 parent/root integration    | `docs/blueprints/hardware-utils/phase-1-native-build-jni-packaging.md`        | skipped; conformance check and manual review                     | `docs/audits/hardware-utils/phase-1-native-build-jni-packaging-conformance.md`        |
 | P1-A native graph/JNI/signing | `docs/blueprints/hardware-utils/phase-1-native-graph-jni-signing.md`          | skipped; conformance check and manual review                     | `docs/audits/hardware-utils/phase-1-native-graph-jni-signing-conformance.md`          |
-| P1-B loader/package/CI        | `docs/blueprints/hardware-utils/phase-1-loader-maven-packaging.md`            | skipped; conformance check and manual review                     | `docs/audits/hardware-utils/phase-1-loader-maven-packaging-conformance.md`            |
+| P1-B loader/package/CI        | `docs/blueprints/hardware-utils/phase-1-loader-gradle-packaging.md`            | skipped; conformance check and manual review                     | `docs/audits/hardware-utils/phase-1-loader-gradle-packaging-conformance.md`            |
 | P2 parent/root integration    | `docs/blueprints/hardware-utils/phase-2-topology-snapshot-model.md`           | child conformance/manual reviews plus root manual review         | `docs/audits/hardware-utils/phase-2-topology-snapshot-model-conformance.md`           |
 | P2-A topology model/adapters  | `docs/blueprints/hardware-utils/phase-2-topology-model-adapters.md`           | conformance check and manual review                              | `docs/audits/hardware-utils/phase-2-topology-model-adapters-conformance.md`           |
 | P2-B snapshots/publication    | `docs/blueprints/hardware-utils/phase-2-snapshot-remap-publication.md`        | conformance check and manual review                              | `docs/audits/hardware-utils/phase-2-snapshot-remap-publication-conformance.md`        |
@@ -1111,7 +1100,7 @@ their child blueprints must confirm them before implementation.
 > and regression-test ID; unmatched drift fails. Specify contract-bearing files,
 > tool/plugin choice, deterministic output format, commands, failures, and acceptance assertions.
 > Generate the branch-point baseline through source-level signature extraction or an isolated
-> temporary worktree/output path. Do not invoke the current native-generating Maven lifecycle in
+> temporary worktree/output path. Do not invoke the current native-generating Gradle build lifecycle in
 > the active worktree before P1; prove the active worktree and source-resource inventory are
 > unchanged before and after baseline generation.
 >
@@ -1161,7 +1150,7 @@ their child blueprints must confirm them before implementation.
 - Implementation selection: `gpt-5.6-sol`, `medium`.
 - Principal risks: subtle classfile normalization, JPMS test compilation, accidentally loading
   hardware classes during extraction, host cleanup in the executor test, and accidentally
-  triggering the bound Zig lifecycle. The blueprint fixes each boundary and uses direct Maven
+  triggering the bound Zig lifecycle. The blueprint fixes each boundary and uses direct Gradle
   plugin goals plus source/resource fingerprints.
 - Unresolved decisions: none.
 
@@ -1188,7 +1177,7 @@ their child blueprints must confirm them before implementation.
 >
 > Generate `api-900d8c50.tsv` only from an isolated `git archive` containing the root POM and
 > hardware module at `900d8c50`. Use the blueprint's direct `resources`, `compiler`, `surefire`,
-> and `exec:java` plugin goals; do not run Maven `initialize`, `test`, `verify`, `package`,
+> and `exec:java` plugin goals; do not run Gradle `initialize`, `test`, `verify`, `package`,
 > `install`, a root reactor, or Zig in the active worktree. Fingerprint every active main Java and
 > resource file, including ignored binaries, before and after generation. The ASM tool must not
 > load production classes. Preserve the exact complete module descriptor and baseline
@@ -1301,7 +1290,7 @@ commit.
 > root, then work on
 > `hardware-utils-overhaul/phase-1-native-build-blueprint`. The parent artifact is
 > `docs/plans/hardware-utils-platform-parity-overhaul.md`, with the completed P0 phase artifact
-> index entry and closeout summary as inherited evidence. Initial ownership is hardware Maven/
+> index entry and closeout summary as inherited evidence. Initial ownership is hardware Gradle/
 > native build assets, generated resources,
 > `hardware_utils.internal` loader code, and hardware-specific CI. Inspect
 > `git status --short`. Read `AGENTS.md`, `docs/AGENT_WORKFLOW.md`, the parent plan, the exact P0
@@ -1326,12 +1315,12 @@ commit.
 > musl fallback only on recorded failure.
 >
 > Specify each affected file in dependency order, exact manifest examples, deterministic product
-> ordering, failure diagnostics, Maven lifecycle/resource wiring, CI signing safety, clean/rebuild
+> ordering, failure diagnostics, Gradle build lifecycle/resource wiring, CI signing safety, clean/rebuild
 > tests, timing evidence, and binary commands. Platform sensor/topology/pressure/affinity semantics,
 > core, benchmarks without an approved measurement need, unrelated CI, and all training work are
 > prohibited. Task validation/runtime jobs must use a hardware-specific selected-module workflow;
 > no root POM/plugin behavior inherited by training may change. The invalid header-copy steps may
-> be removed from the existing build and deploy workflows, but their pre-existing Maven commands
+> be removed from the existing build and deploy workflows, but their pre-existing Gradle commands
 > are outside initiative evidence and must remain unchanged.
 >
 > Define package/artifact ownership, naming, data flow, and high-reasoning build, ABI, safety, and
@@ -1364,15 +1353,15 @@ commit.
 - Purpose: replace the source-writing native build and hardcoded loader table with a strict
   manifest, target-local JNI ABI, signed target staging, exact packaging, safe extraction, and
   enforceable binary/runtime gates.
-- Ownership: hardware native/Maven/generated resources and internal loader code, narrowly scoped
-  native CI setup, module-local tests, and P1 documentation. Platform semantics, core, root Maven
+- Ownership: hardware native/Gradle/generated resources and internal loader code, narrowly scoped
+  native CI setup, module-local tests, and P1 documentation. Platform semantics, core, root Gradle
   policy, unrelated workflow behavior, and training are excluded.
 - Key contracts: exact eight-product JSON schema; recursive sorted discovery; generated seven-class
   JNI declarations plus project-owned target `jni_md.h`; glibc 2.17 plus musl; ReleaseSafe with
   selected hardening; product-private signing and verified staged copy; generated TSV as the only
   loader table; exact jar inventory; bounded owner-private extraction/cleanup; and LLVM plus real
   runner gates.
-- Children: P1-A owns the native graph, JNI, signing, and Maven staging. After its audit merges,
+- Children: P1-A owns the native graph, JNI, signing, and Gradle staging. After its audit merges,
   P1-B owns loader, package/binary gates, runtime smoke, and CI. Root conformance checking,
   manual review, and root audit follow both child audits; validation is skipped.
 - Implementation capability: both child implementations, conformance audits/manual reviews, and root
@@ -1399,7 +1388,7 @@ sequential child lifecycles below.
 > `docs/blueprints/hardware-utils/phase-1-native-build-jni-packaging.md`. Inspect
 > `git status --short`. Read `AGENTS.md`, `docs/AGENT_WORKFLOW.md`, the completed P0 artifact-index
 > files/closeout, the parent blueprint's Child A bounded context envelope, and only its named
-> native/JNI/Maven/tool inputs. Reinspect the installed Zig 0.16 APIs and rcodesign 0.29.0 command
+> native/JNI/Gradle/tool inputs. Reinspect the installed Zig 0.16 APIs and rcodesign 0.29.0 command
 > surface. Do not inspect training or `JNIClassLoader`.
 >
 > Write `docs/blueprints/hardware-utils/phase-1-native-graph-jni-signing.md`. Translate the parent
@@ -1407,11 +1396,11 @@ sequential child lifecycles below.
 > native relocation and user-owned ignored-artifact fingerprint; strict JSON parser/schema;
 > recursive discovery; exact targets/flags; generated JNI declarations and target `jni_md.h`;
 > `JNI_OnLoad`; independent compile/sign/verify/install nodes; generated TSV; target caches and
-> staging; Maven `javac -h`, cleanup, Zig, and copy-resource ordering; P0 source-root update;
+> staging; Gradle `javac -h`, cleanup, Zig, and copy-resource ordering; P0 source-root update;
 > tracked `build.sh` deletion; exact existing-workflow invalid-header removal plus explicit
 > SDK/Zig/signer/LLVM/credential-file setup; focused tests; and exact failure/validation commands.
 > Preserve N01, N02, and the named legacy macOS export as exact exceptions; do not change either
-> existing workflow's Maven command or unrelated behavior.
+> existing workflow's Gradle command or unrelated behavior.
 >
 > Reapply the sizing gate and the implementation-model reassessment. The selected implementation
 > is `gpt-5.6-sol` with `high` reasoning; confirm it or update this plan before handoff. Allowed
@@ -1432,10 +1421,10 @@ sequential child lifecycles below.
 > and the exact Child A context envelope. Confirm the child blueprint retained this model
 > selection.
 >
-> Implement only Child A's native graph, JNI, signing, Maven staging, relocated compatibility
+> Implement only Child A's native graph, JNI, signing, Gradle staging, relocated compatibility
 > tests, tracked migration, and exact existing-workflow native setup. Never delete, move, clean,
 > or rewrite ignored source binaries or source caches. Do not edit the loader, add the
-> hardware-specific workflow, change existing workflow Maven commands/unrelated behavior, alter
+> hardware-specific workflow, change existing workflow Gradle commands/unrelated behavior, alter
 > platform semantics/core, or touch training. Allowed documentation edits are the completion
 > record appended to the child blueprint and the compact temporary P1 block in `AGENTS.md`.
 >
@@ -1507,7 +1496,7 @@ sequential child lifecycles below.
 > module packaging/test wiring, Child A's summarized existing-workflow native setup, and the new
 > hardware-workflow path. Do not inspect training.
 >
-> Write `docs/blueprints/hardware-utils/phase-1-loader-maven-packaging.md`. Translate the frozen
+> Write `docs/blueprints/hardware-utils/phase-1-loader-gradle-packaging.md`. Translate the frozen
 > TSV/staging contract into an implementation checklist for immutable catalog parsing, generic
 > alias/product selection, allowed fallback taxonomy, owner-private bounded extraction, POSIX/
 > Windows permissions, immediate/deferred/stale cleanup, noexec diagnostics, load seam and class
@@ -1528,14 +1517,14 @@ sequential child lifecycles below.
 > After the P1-B blueprint is reviewed and merged, create
 > `hardware-utils-overhaul/phase-1-loader-package-implementation` from the P1 root. The parent
 > artifact is the finalized blueprint/completion file
-> `docs/blueprints/hardware-utils/phase-1-loader-maven-packaging.md`. Inspect status and read the
+> `docs/blueprints/hardware-utils/phase-1-loader-gradle-packaging.md`. Inspect status and read the
 > exact Child B context envelope, summarized parent contract, and P1-A handoff. Confirm the child
 > blueprint retained this model selection.
 >
 > Implement only the internal catalog/loader/extraction code, loader/package/binary/smoke tests,
 > narrow module POM test wiring, and hardware-specific selected-module workflow. Treat Child A's
 > existing-workflow native setup as read-only unless a missing settled gate requires a minor
-> correction; never alter its Maven commands or unrelated behavior. Do not alter the native
+> correction; never alter its Gradle commands or unrelated behavior. Do not alter the native
 > manifest/graph/ABI/signing policy, platform semantics, core, unrelated files, ignored source
 > artifacts, or training. Append completion evidence to the P1-B blueprint and update only the
 > temporary P1 `AGENTS.md` block.
@@ -1564,7 +1553,7 @@ sequential child lifecycles below.
 > blueprint-settled corrections.
 >
 > Write
-> `docs/validations/hardware-utils/phase-1-loader-maven-packaging-validation.md`, append its
+> `docs/validations/hardware-utils/phase-1-loader-gradle-packaging-validation.md`, append its
 > summary to the completion record, and update the status block. Record unavailable external
 > runners as explicit B06 `unverified` portions. Merge before P1-B audit.
 
@@ -1574,7 +1563,7 @@ sequential child lifecycles below.
 
 > After P1-B implementation is reviewed and merged, create
 > `hardware-utils-overhaul/phase-1-loader-package-audit` from the P1 root. The parent artifact is
-> `docs/validations/hardware-utils/phase-1-loader-maven-packaging-validation.md`. Read the
+> `docs/validations/hardware-utils/phase-1-loader-gradle-packaging-validation.md`. Read the
 > summarized parent contract, P1-A handoff summary, and exact P1-B blueprint/completion, diff,
 > tests, and conformance/manual-review evidence. Do not inspect training.
 >
@@ -1585,7 +1574,7 @@ sequential child lifecycles below.
 > redesign returns to blueprint.
 >
 > Write
-> `docs/audits/hardware-utils/phase-1-loader-maven-packaging-conformance.md`, update the child
+> `docs/audits/hardware-utils/phase-1-loader-gradle-packaging-conformance.md`, update the child
 > records/status block, and hand off for root conformance checking and manual review. The root audit
 > records the final P1 disposition.
 
@@ -1611,7 +1600,7 @@ sequential child lifecycles below.
 > manifest-removal builds; P0 compatibility; strict manifest/catalog failures; all eight static
 > binary/digest/signature gates; loader failure matrices; available glibc, musl, Windows, and
 > macOS smoke/signature gates; source/user-artifact fingerprints; selected-module workflow
-> checks; timing; diff checks; and the exact acceptance matrix. Verify existing workflow Maven
+> checks; timing; diff checks; and the exact acceptance matrix. Verify existing workflow Gradle
 > commands are unchanged and no P1 command selects training.
 >
 > Allowed edits are the root integration record, temporary P1 status block, and minor
@@ -2821,7 +2810,7 @@ replace this selection and prompt body before implementation.**
 > naming required inputs and owned outputs. Specify contract-bearing files, exact formula/
 > table and floating-point/integer precision, bounds, deterministic order, state and memory
 > semantics, memory pollution/contamination and no-allocation evidence, safety, compatibility,
-> test assertions, platform CI required-versus-unverified rules, selected Maven commands, and the
+> test assertions, platform CI required-versus-unverified rules, selected Gradle commands, and the
 > final release checklist. Apply the workflow sizing/split gate. If core integration and release
 > conformance are independently oversized, define bounded responsibility child blueprint action
 > items, branch names, and context envelopes now, then update all P8 implementation/validation/

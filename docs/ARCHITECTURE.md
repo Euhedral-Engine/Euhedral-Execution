@@ -294,8 +294,8 @@ The hardware module keeps OS details out of the control plane:
 - `JNIClassLoader` extracts and loads the native library packaged for the current platform.
 
 [`build.zig`](../euhedral-hardware-utils/src/main/resources/build.zig) builds Linux glibc and musl,
-Windows, and macOS libraries for x64 and arm64. Maven runs that build during the hardware module's
-`initialize` phase. The exact tool versions live in [`mise.toml`](../mise.toml).
+Windows, and macOS libraries for x64 and arm64. Gradle runs that build during the hardware module's
+build phase. The exact tool versions live in [`mise.toml`](../mise.toml).
 
 ### Hashing
 

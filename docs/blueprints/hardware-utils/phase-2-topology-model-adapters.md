@@ -30,8 +30,8 @@ those contracts.
 
 ### Authorized toolchain-policy revision
 
-The developer authorized this documentation revision on 2026-08-01. Every Java command, Maven
-command, and Maven build defaults to the exact versions in `mise.toml`; a documented
+The developer authorized this documentation revision on 2026-08-01. Every Java command, Gradle
+command, and Gradle build defaults to the exact versions in `mise.toml`; a documented
 restricted-environment fallback must use the corresponding pinned installed tools and record its
 versions and limits.
 
@@ -112,7 +112,7 @@ binaries, host paths, timestamps, or dependence on host directory/map iteration 
   performance-level/sysctl parity assigned to P5-P7.
 - Native source, generated JNI, manifest, loader, packaging, signing, POM lifecycle, CI, core
   production, Reactor, Spring, benchmarks, root POM, or unrelated documentation.
-- Any inspection, edit, build, test, or command under `euhedral-training`, and any Maven reactor
+- Any inspection, edit, build, test, or command under `euhedral-training`, and any Gradle reactor
   command that selects it.
 
 ## Package and type contracts
@@ -719,14 +719,14 @@ public internal-model accessor, global registry, platform-specific fallback, or 
 
 ## Commands and acceptance gates
 
-Use the repository-pinned JDK 21.0.2, Maven 3.9.16, Zig 0.16.0, macOS SDK, signer, and LLVM inputs.
+Use the repository-pinned JDK 21.0.2, Gradle 3.9.16, Zig 0.16.0, macOS SDK, signer, and LLVM inputs.
 Use `mise exec --` when available. Otherwise use the explicit installed paths documented in
 `AGENTS.md`. No command may select training.
 
 ### Direct deterministic loop
 
 ```bash
-mise exec -- mvn -B -pl euhedral-hardware-utils \
+mise exec -- gradle -B -pl euhedral-hardware-utils \
   resources:resources compiler:compile \
   resources:testResources compiler:testCompile \
   -Dtest='SystemInfoFallbackTest,LinuxSystemLayoutFixtureTest,WindowsTopologyFixtureTest,TopologyCacheFallbackTest,TopologyOwnershipTest,TopologyNormalizerTest,SystemInfoTest' \
@@ -739,7 +739,7 @@ names may be added to the selector.
 ### P0 compatibility gate
 
 ```bash
-mise exec -- mvn -B -pl euhedral-hardware-utils \
+mise exec -- gradle -B -pl euhedral-hardware-utils \
   resources:resources compiler:compile \
   resources:testResources compiler:testCompile \
   -Dtest='ApiCompatibilityTest,MaskFormattingCompatibilityTest,CoreZeroReservationCompatibilityTest' \
@@ -752,8 +752,8 @@ entries if the macOS projection requires them.
 ### Final selected-module gates
 
 ```bash
-mise exec -- mvn -B -pl euhedral-hardware-utils -am verify
-mise exec -- mvn -B -pl euhedral-core -am test
+gradle :euhedral-hardware-utils:build
+gradle :euhedral-core:test
 ```
 
 The first command rechecks the P1 generated JNI/package/binary gates. Hosted Windows/macOS and
@@ -958,17 +958,17 @@ Verification evidence:
 - Direct deterministic loop: passed, 13 tests across the seven selected classes.
 - P0 API/mask/core-zero gate: passed; report is `module SAME`, zero removed entries, zero changed
   entries, and exactly four additions, all the reviewed macOS layout map getters.
-- `mvn -B -pl euhedral-hardware-utils -am verify`: passed with 43 unit/P0 tests and 6 integration
+- `gradle :euhedral-hardware-utils:build`: passed with 43 unit/P0 tests and 6 integration
   tests, including native cross-build, package, signature, binary, load, and warm-removal gates.
-- Read-only `mvn -B -pl euhedral-core -am test`: passed; hardware 43 tests, data structures 8,
+- Read-only `gradle :euhedral-core:test`: passed; hardware 43 tests, data structures 8,
   hashing 9, and core 99. No read-only consumer file changed.
 - `git diff --check` passed; training and non-hardware production scope diffs from `3e45f9a2` are
   empty. Stale cardinality, CPU-zero cache dereference, signed Windows-mask loop, partial topology
   read, and `LinuxPaths.CPU_INFO_BASE` searches found no active production occurrence.
 
-Toolchain note: `mise` and Maven 3.9.16 were unavailable on `PATH`. Verification used the installed
-JDK 21.0.11, Maven 3.6.3, Zig 0.16.0, macOS 26.1 SDK, apple-codesign 0.29.0, and system LLVM tools.
-Maven reported only that build-cache support requires Maven 3.9; no test or gate was skipped.
+Toolchain note: `mise` and Gradle 3.9.16 were unavailable on `PATH`. Verification used the installed
+JDK 21.0.11, Gradle 3.6.3, Zig 0.16.0, macOS 26.1 SDK, apple-codesign 0.29.0, and system LLVM tools.
+Gradle reported only that build-cache support requires Gradle 3.9; no test or gate was skipped.
 
 The implementation is ready only for the prescribed P2-A conformance/manual review. P2-B remains
 out of scope until this implementation and its audit are reviewed and merged.
@@ -983,7 +983,7 @@ P2-A conformance audit completed on 2026-08-01 on
   count/index/null-hole semantics, immutable projection ownership, bootstrap ordering, and
   API/core compatibility as satisfied.
 - The focused fixture command passed 11 tests:
-  `mvn -B -pl euhedral-hardware-utils surefire:test -Dtest=SystemInfoFallbackTest,TopologyCacheFallbackTest,TopologyOwnershipTest,TopologyNormalizerTest,LinuxSystemLayoutFixtureTest,WindowsTopologyFixtureTest`.
+  `gradle -B -pl euhedral-hardware-utils surefire:test -Dtest=SystemInfoFallbackTest,TopologyCacheFallbackTest,TopologyOwnershipTest,TopologyNormalizerTest,LinuxSystemLayoutFixtureTest,WindowsTopologyFixtureTest`.
 - P0 mask and core-zero checks passed. The API comparator had zero removals and only the four
   blueprint-authorized macOS getter additions, but its module-version comparison is unverified on
   this Java-17 host versus the P0 Java-21 baseline.

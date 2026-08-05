@@ -22,7 +22,6 @@ class NativePackagingIT {
             "META-INF/MANIFEST.MF",
             "META-INF/euhedral/native-products.tsv",
             "META-INF/maven/io.euhedral-execution/euhedral-hardware-utils/pom.properties",
-            "META-INF/maven/io.euhedral-execution/euhedral-hardware-utils/pom.xml",
             "logback-fragments/euhedral-hardware-utils.xml",
             "bin/linux/glibc/linux_jni_x64.so",
             "bin/linux/glibc/linux_jni_arm64.so",
