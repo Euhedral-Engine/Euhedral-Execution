@@ -1,4 +1,4 @@
-# Phase 1 Child B: Loader, Maven Packaging Gates, Runtime Smoke, and CI
+# Phase 1 Child B: Loader, Gradle Packaging Gates, Runtime Smoke, and CI
 
 ## Authority and scope
 
@@ -6,7 +6,7 @@ This child implements Child B of
 [`phase-1-native-build-jni-packaging.md`](phase-1-native-build-jni-packaging.md). The parent
 blueprint's catalog schema, eight-product inventory, native graph, ABI exceptions, target flags,
 and ad-hoc macOS signing contract are immutable inputs. This child owns only the internal runtime
-loader, package/binary/runtime gates, narrow hardware-module Maven test wiring, and
+loader, package/binary/runtime gates, narrow hardware-module Gradle test wiring, and
 `.github/workflows/hardware-utils-native.yaml`.
 
 The implementation does not inspect or modify training, native source semantics, the Zig graph,
@@ -14,8 +14,8 @@ the root POM, or existing build/deploy workflow behavior.
 
 ## Authorized toolchain-policy revision
 
-The developer authorized this documentation revision on 2026-08-01. Every Java command, Maven
-command, and Maven build defaults to the exact versions in `mise.toml`; a documented
+The developer authorized this documentation revision on 2026-08-01. Every Java command, Gradle
+command, and Gradle build defaults to the exact versions in `mise.toml`; a documented
 restricted-environment fallback must use the corresponding pinned installed tools and record its
 versions and limits.
 
@@ -43,7 +43,7 @@ legacy macOS exceptions, runtime floors, Mach-O load commands, and packaged sign
 isolated warm build proves product removal and symlink-safe cleanup. The smoke bundle contains only
 the ordinary jar, runtime dependency jars, and `NativeLoadSmokeMain`.
 
-The dedicated workflow builds all products once with the selected-module Maven command, then sends
+The dedicated workflow builds all products once with the selected-module Gradle command, then sends
 that same artifact to JDK 17 Linux glibc, bounded musl, Windows, and macOS jobs. It uses read-only
 permissions, non-persistent checkout credentials, target-local Zig caches, no signing secrets, and
 Apple `codesign` verification for both packaged dylibs.
@@ -52,8 +52,8 @@ Apple `codesign` verification for both packaged dylibs.
 
 Required evidence is:
 
-- one clean and two warm `mvn -B -pl euhedral-hardware-utils -am verify` runs with the pinned JDK,
-  Maven, Zig, SDK, signer, and LLVM paths;
+- one clean and two warm `gradle :euhedral-hardware-utils:build` runs with the pinned JDK,
+  Gradle, Zig, SDK, signer, and LLVM paths;
 - all unit, P0 compatibility, package, binary, signature, warm-removal, and Linux build-host smoke
   tests passing;
 - exact jar and bounded smoke inventories;
@@ -65,7 +65,7 @@ Required evidence is:
 ## Implementation model reassessment
 
 The implementation spans immutable publication, strict serialization, cross-platform filesystem
-ownership, bounded recovery, archive identity, three binary formats, Maven lifecycle ordering, and
+ownership, bounded recovery, archive identity, three binary formats, Gradle build lifecycle ordering, and
 runner behavior. These remain coupled at the native load/package boundary, so the parent-selected
 `gpt-5.6-sol` implementation at high reasoning effort remains appropriate.
 
@@ -73,11 +73,11 @@ runner behavior. These remain coupled at the native load/package boundary, so th
 
 Implementation is complete in the owned source, test, POM, workflow, and documentation surfaces.
 The clean selected-module verification initially found and repaired two test-harness issues:
-duplicate ELF names in LLVM version tables and a Maven executable path missing from the forked
+duplicate ELF names in LLVM version tables and a Gradle executable path missing from the forked
 Failsafe JVM. A subsequent focused binary inspection passed, and the isolated warm-removal proof
 passed.
 
-Local validation used OpenJDK 21.0.2, Maven 3.9.16, Zig 0.16.0, rcodesign 0.29.0, the macOS 26.1
+Local validation used OpenJDK 21.0.2, Gradle 3.9.16, Zig 0.16.0, rcodesign 0.29.0, the macOS 26.1
 SDK, and `/usr/bin/llvm-readobj` plus `/usr/bin/llvm-objdump` on a 14-CPU Intel Core Ultra 7 155U
 host with 62 GiB RAM. The `mise` launcher was unavailable in the shell, so the pinned installed
 executables were invoked by absolute path as permitted by `AGENTS.md`.

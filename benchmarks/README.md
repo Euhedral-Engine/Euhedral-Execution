@@ -6,7 +6,7 @@ The benchmark runtime targets Java 21. Package it from the repository root:
 gradle :benchmarks:assemble
 ```
 
-This creates a thin distribution at `benchmarks/target`:
+This creates a thin distribution at `benchmarks/build`:
 
 - `euhedral-benchmark.jar` contains Euhedral's benchmark classes.
 - `lib/` contains the runtime dependencies.
@@ -47,5 +47,5 @@ benchmarks/build/bin/euhedral-benchmarks core-latency core-hc-throughput
 ## Example
 
 ```
-JAVA_TOOL_OPTIONS=-Dgc=true benchmarks/target/bin/euhedral-benchmarks core-latency core-hc-throughput
+JAVA_TOOL_OPTIONS=-Dgc=true benchmarks/build/bin/euhedral-benchmarks core-latency core-hc-throughput
 ```

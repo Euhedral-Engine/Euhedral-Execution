@@ -49,10 +49,10 @@ be resolved when the child audit is committed/merged.
   on `SocketSnapshot.equals/hashCode` and `CoreSnapshot.hashCode`; `CoreSnapshot.equals` correctly
   remains non-final. The report now has zero removals and only Java-17 module-version metadata plus
   six authorized additions.
-- `mvn -B -pl euhedral-hardware-utils -am verify` and the read-only
-  `mvn -B -pl euhedral-core -am test` stop at the hardware `zig-build` lifecycle because `ZIG` is
-  unset. `mise` is unavailable; this host supplies OpenJDK 17.0.19 and Maven 3.6.3 rather than the
-  pinned Java 21/Maven 3.9.16 toolchain.
+- `gradle :euhedral-hardware-utils:build` and the read-only
+  `gradle :euhedral-core:test` stop at the hardware `zig-build` lifecycle because `ZIG` is
+  unset. `mise` is unavailable; this host supplies OpenJDK 17.0.19 and Gradle 3.6.3 rather than the
+  pinned Java 21/Gradle 3.9.16 toolchain.
 
 ## Handoff
 

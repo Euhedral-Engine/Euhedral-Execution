@@ -487,7 +487,7 @@ Use the exact `mise.toml` toolchain. No command selects training.
 ### Fast deterministic P2-B loop
 
 ```bash
-mise exec -- mvn -B -pl euhedral-hardware-utils \
+mise exec -- gradle -B -pl euhedral-hardware-utils \
   resources:resources compiler:compile \
   resources:testResources compiler:testCompile \
   -Dtest='UnmodifiableBitSetTest,UnmodifiableDoubleArrayTest,SystemUtilizationTest,SnapshotOwnershipTest,SnapshotIndexContractTest,TopologyMapperTest,TopologyMapperCoreZeroTest,TopologyMapperPublicationTest,TopologyMapperVersionTest' \
@@ -500,7 +500,7 @@ If wrapper coverage remains combined in `UnmodifiableBitSetTest`, omit only the 
 ### P0 compatibility gate
 
 ```bash
-mise exec -- mvn -B -pl euhedral-hardware-utils \
+mise exec -- gradle -B -pl euhedral-hardware-utils \
   resources:resources compiler:compile \
   resources:testResources compiler:testCompile \
   -Dtest='ApiCompatibilityTest,MaskFormattingCompatibilityTest,CoreZeroReservationCompatibilityTest' \
@@ -514,8 +514,8 @@ justified and reviewed before handoff.
 ### Final selected-module gates
 
 ```bash
-mise exec -- mvn -B -pl euhedral-hardware-utils -am verify
-mise exec -- mvn -B -pl euhedral-core -am test
+gradle :euhedral-hardware-utils:build
+gradle :euhedral-core:test
 ```
 
 The core gate is read-only. Native/Docker/host limitations are reported separately, but no
@@ -717,17 +717,17 @@ commit `1640b864`.
 ### Commands and results
 
 - `mise exec -- ...`: unavailable because `mise` is not installed.
-- Fallback tool inspection: OpenJDK `17.0.19` and Maven `3.6.3`; the hardware module's Java 17
-  release is compatible, but these are not the pinned Java 21/Maven 3.9.16 defaults.
+- Fallback tool inspection: OpenJDK `17.0.19` and Gradle `3.6.3`; the hardware module's Java 17
+  release is compatible, but these are not the pinned Java 21/Gradle 3.9.16 defaults.
 - Direct P2-B plus P0 mask/core-zero loop through explicit resource/compiler/Surefire goals:
   passed, 13 tests, zero failures.
 - P0 API gate: no removals. It remains unverified under the fallback compiler because the report
   contains three Java-17 module-version changes, four already-merged P2-A macOS additions, and the
   two blueprint-required `UnmodifiableDoubleArray.equals/hashCode` additions. Record-method access
   flags match their baseline descriptors after correction.
-- `mvn -B -pl euhedral-hardware-utils -am verify`: unavailable past Java compilation because
-  `ZIG`/Zig is absent; Maven reports the `zig-build` executable missing.
-- `mvn -B -pl euhedral-core -am test`: upstream data-structures tests pass (8 tests), then the same
+- `gradle :euhedral-hardware-utils:build`: unavailable past Java compilation because
+  `ZIG`/Zig is absent; Gradle reports the `zig-build` executable missing.
+- `gradle :euhedral-core:test`: upstream data-structures tests pass (8 tests), then the same
   missing-Zig hardware lifecycle prevents the read-only core module from starting.
 - `git diff --check`, training scope diff, core-production scope diff, stale mapper-state search,
   and final status checks pass. No module descriptor, P2-A model/adapter, ResourceMonitor,
@@ -744,7 +744,7 @@ reactivation. The single volatile `effectiveTopology` field is the only reader p
 source; all reachable masks/lists/records are frozen before assignment.
 
 The pinned-tool API report, complete native-backed hardware verify, and read-only core test gate
-must be rerun in the documented Java 21/Maven 3.9.16/Zig environment before audit handoff. No
+must be rerun in the documented Java 21/Gradle 3.9.16/Zig environment before audit handoff. No
 deterministic fixture was skipped for host topology.
 
 ### Conformance audit addendum
@@ -755,7 +755,7 @@ Audited on `hardware-utils-overhaul/phase-2-snapshot-publication-audit` from mer
 #### Commands, correction, and limits
 
 - Re-ran the direct resource/compiler/Surefire loop with the P2-B suite plus the P0 API/mask/
-  core-zero classes using OpenJDK `17.0.19`, Maven `3.6.3`, and workspace-local `.cache/m2`.
+  core-zero classes using OpenJDK `17.0.19`, Gradle `3.6.3`, and workspace-local `.cache/m2`.
   The eleven focused P2-B/mask/core-zero classes passed: 13 tests, zero failures.
 - The P0 `ApiCompatibilityTest` still fails only for its known baseline-report differences (three
   Java-17 module-version changes, four merged P2-A macOS additions, and the two required
@@ -768,6 +768,6 @@ Audited on `hardware-utils-overhaul/phase-2-snapshot-publication-audit` from mer
 - The implementation does not contain the blueprint's latch-controlled R2-R12 race coverage;
   greatest-sequence, release/recheck, failure handoff, and reader-publication stress remain
   unverified by deterministic tests. No redesign was made.
-- `mise` and Zig remain unavailable. The pinned Java 21/Maven 3.9.16 API gate, native-backed
+- `mise` and Zig remain unavailable. The pinned Java 21/Gradle 3.9.16 API gate, native-backed
   hardware `verify`, and read-only core test gate remain outstanding. No training path was read or
   run.

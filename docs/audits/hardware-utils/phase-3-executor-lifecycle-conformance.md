@@ -34,7 +34,7 @@ and merge; the P3 root audit remains subsequent work.
 | Parent 13                                   | satisfied      | Active membership is identity-keyed and removed on start failure/final exit; actions exclude executor/factory/command/thread paths; fakes finish empty.                                                            |
 | Parent 14                                   | satisfied      | Registry/lifecycle monitor publication, final construction, `Thread.start()`, wait/notify, fixed lock order, and cleanup-CAS semantics match the frozen JMM proof.                                                 |
 | Parent 15                                   | satisfied      | Scope diff is empty for training, core/benchmark production, P3-A controller/`ThreadTools`, and platform affinity paths.                                                                                           |
-| Parent 16                                   | satisfied      | Focused lifecycle/P0 gates, repeated lifecycle runs, diff hygiene, and scope checks pass; unavailable pinned Java/Maven/Zig verification is recorded below.                                                        |
+| Parent 16                                   | satisfied      | Focused lifecycle/P0 gates, repeated lifecycle runs, diff hygiene, and scope checks pass; unavailable pinned Java/Gradle/Zig verification is recorded below.                                                        |
 | A02                                         | satisfied      | The A02 anchor forces candidate rejection after shutdown and register/start-before-shutdown visibility; E1-E12 cover the remaining repaired state-machine races.                                                   |
 
 ## JMM and cleanup review
@@ -55,7 +55,7 @@ and merge; the P3 root audit remains subsequent work.
 - P0 API/native/mask/fresh-thread compatibility command: passed 4 tests.
 - `git diff --check bfca49b6..HEAD` and scoped prohibited-path diffs: passed/empty.
 
-No fixes were made. `mise` and the pinned Java 21/Maven 3.9.16/Zig toolchain are unavailable;
-focused module gates ran on OpenJDK 17.0.19/Maven 3.6.3 (hardware's release target is 17, Maven
+No fixes were made. `mise` and the pinned Java 21/Gradle 3.9.16/Zig toolchain are unavailable;
+focused module gates ran on OpenJDK 17.0.19/Gradle 3.6.3 (hardware's release target is 17, Gradle
 disabled its cache). Full selected-module `verify` remains unrun because native initialization needs
 Zig and the documented signing setup. No training command or inspection occurred.

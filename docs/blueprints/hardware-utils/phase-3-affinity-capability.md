@@ -595,20 +595,20 @@ unnecessary native lifecycle for fast iteration; the final `verify` still exerci
 package gates. No command may select training.
 
 ```bash
-mise exec -- mvn -B -pl euhedral-hardware-utils \
+mise exec -- gradle -B -pl euhedral-hardware-utils \
   resources:resources compiler:compile \
   resources:testResources compiler:testCompile \
   -Dtest='ThreadToolsAffinityTest,LinuxAffinityTest,WindowsAffinityTest,OSXAffinityTest' \
   surefire:test
 
-mise exec -- mvn -B -pl euhedral-hardware-utils \
+mise exec -- gradle -B -pl euhedral-hardware-utils \
   resources:resources compiler:compile \
   resources:testResources compiler:testCompile \
   -Dtest='ApiCompatibilityTest,NativeCompatibilityTest,MaskFormattingCompatibilityTest,PinnedThreadExecutorCompatibilityTest' \
   surefire:test
 
-mise exec -- mvn -B -pl euhedral-hardware-utils -am verify
-mise exec -- mvn -B -pl euhedral-core -am test
+gradle :euhedral-hardware-utils:build
+gradle :euhedral-core:test
 git diff --check
 git diff --name-only 7d3abea7 -- euhedral-training
 git diff --name-only 7d3abea7 -- euhedral-core/src/main
@@ -721,8 +721,8 @@ at `b5333c8e`.
 ### Commands and results
 
 - Pinned `mise` could not run because `mise` is not installed. The documented fallback found
-  OpenJDK 17.0.19 and Maven 3.6.3; the hardware module's Java 17 sources/tests compile under that
-  fallback, but it is not the pinned Java 21/Maven 3.9.16 toolchain.
+  OpenJDK 17.0.19 and Gradle 3.6.3; the hardware module's Java 17 sources/tests compile under that
+  fallback, but it is not the pinned Java 21/Gradle 3.9.16 toolchain.
 - The direct P3-A command passed: 10 tests, zero failures. This includes
   `ThreadToolsAffinityTest#discoversAndRestoresTheOriginalMask` (A01), exact/locality/unsupported
   behavior, rejected-mask zero-call checks, bit-63 preservation, restoration/release cleanup,
@@ -732,8 +732,8 @@ at `b5333c8e`.
   capability query; no unintended facade hook remains. The test itself remains red under the
   fallback because the historic baseline rejects all additions, includes inherited P2 additions,
   and OpenJDK 17 stamps three module-requires versions that the baseline records as absent.
-- `mvn -B -pl euhedral-hardware-utils -am verify` and
-  `mvn -B -pl euhedral-core -am test` both stopped in the hardware Zig lifecycle before native or
+- `gradle :euhedral-hardware-utils:build` and
+  `gradle :euhedral-core:test` both stopped in the hardware Zig lifecycle before native or
   core tests because the `ZIG` executable parameter is missing/invalid. The latter completed the
   upstream data-structures suite (8 tests) before that stop.
 - `git diff --check` passed. Diffs from `b5333c8e` under `euhedral-training`,
@@ -768,7 +768,7 @@ The P3-A conformance/manual-review audit was completed on
   mutation/failure/facade coverage, and repaired two stale core test fixtures for P2 non-null
   immutable inputs. No core production, native body/declaration, module descriptor, executor, or
   training file changed.
-- Under `mise` Java 21.0.2/Maven 3.9.16, the focused P3-A suite passed (14 tests), the P0
+- Under `mise` Java 21.0.2/Gradle 3.9.16, the focused P3-A suite passed (14 tests), the P0
   API/native/
   mask/fresh-thread gates passed (4 tests), and cache-disabled hardware verification passed,
   including Zig/native packaging/load checks and 63 unit tests.
@@ -777,6 +777,6 @@ The P3-A conformance/manual-review audit was completed on
   topology/snapshot fixtures.
 - Skipped: host-affinity placement testing, by the blueprint's deterministic-fake rule. Limits:
   `mise` warns about unrelated unavailable user-level tool entries; those warnings did not affect
-  Java 21/Maven 3.9.16 or the completed hardware verification.
+  Java 21/Gradle 3.9.16 or the completed hardware verification.
 
 The corrected audit is review-ready for merge. P3-B remains prohibited until that merge.

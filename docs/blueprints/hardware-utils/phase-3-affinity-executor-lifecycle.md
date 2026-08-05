@@ -855,26 +855,26 @@ environment fallback must report substituted versions and limits. No command may
 Child blueprints finalize exact class lists. The required shape is:
 
 ```bash
-mise exec -- mvn -B -pl euhedral-hardware-utils \
+mise exec -- gradle -B -pl euhedral-hardware-utils \
   resources:resources compiler:compile \
   resources:testResources compiler:testCompile \
   -Dtest='ThreadToolsAffinityTest,*Affinity*Test' \
   surefire:test
 
-mise exec -- mvn -B -pl euhedral-hardware-utils \
+mise exec -- gradle -B -pl euhedral-hardware-utils \
   resources:resources compiler:compile \
   resources:testResources compiler:testCompile \
   -Dtest='PinnedThreadExecutorLifecycleTest,PinnedThreadExecutorCompatibilityTest,PinnedThreadExecutorTest' \
   surefire:test
 
-mise exec -- mvn -B -pl euhedral-hardware-utils \
+mise exec -- gradle -B -pl euhedral-hardware-utils \
   resources:resources compiler:compile \
   resources:testResources compiler:testCompile \
   -Dtest='ApiCompatibilityTest,MaskFormattingCompatibilityTest,PinnedThreadExecutorCompatibilityTest' \
   surefire:test
 
-mise exec -- mvn -B -pl euhedral-hardware-utils -am verify
-mise exec -- mvn -B -pl euhedral-core -am test
+gradle :euhedral-hardware-utils:build
+gradle :euhedral-core:test
 ```
 
 The final hardware verify rechecks P1 native/package gates but does not authorize detailed

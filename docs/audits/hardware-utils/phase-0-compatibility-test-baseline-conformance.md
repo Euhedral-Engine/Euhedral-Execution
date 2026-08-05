@@ -14,12 +14,12 @@ path was inspected, built, tested, or edited.
 
 ## Evidence
 
-The audit used the documented toolchain fallback because the system defaults are Java 17 and Maven
+The audit used the documented toolchain fallback because the system defaults are Java 17 and Gradle
 3.6.3. The pinned tools were invoked explicitly:
 
 ```text
 Java:  /home/bagotay/.local/share/mise/installs/java/21.0.2
-Maven: /home/bagotay/.local/share/mise/installs/maven/3.9.16/apache-maven-3.9.16
+Gradle: /home/bagotay/.local/share/mise/installs/gradle/3.9.16/apache-gradle-3.9.16
 Host:  Linux amd64, kernel 6.8.0-134-generic
 ```
 

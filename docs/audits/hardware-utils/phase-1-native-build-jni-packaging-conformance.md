@@ -20,7 +20,7 @@ limits, not silently converted to passes. No P2 work was created.
 ## Evidence
 
 The audit read the governing instructions, P0 closeout, parent P1 blueprint/plan, available Child
-B blueprint/completion, complete P1 diff, manifest, Zig graph, Maven lifecycle, loader/extractor,
+B blueprint/completion, complete P1 diff, manifest, Zig graph, Gradle build lifecycle, loader/extractor,
 workflow, relevant tests, generated resources, catalog, and ordinary jar. The jar contains exactly
 eight native products plus `META-INF/euhedral/native-products.tsv`; the staged catalog is 804 bytes
 with SHA-256 `1eb24160db409c6f2b69fec9699d8b2cd09748a2b1cc1d9f37bb0a1e60aeeb8b`.
@@ -49,14 +49,14 @@ inherited completion claims, not audit reruns.
 | 10 |   satisfied    | Products have independent compile/install chains; macOS installs only the separately signed and inspected output.                   |
 | 11 |   satisfied    | Zig deterministically emits the manifest-derived TSV; Java has no product/alias table.                                              |
 | 12 |   satisfied    | Lifecycle cleanup plus isolated warm-removal coverage prevents stale generated/classpath/catalog/jar entries.                       |
-| 13 |   satisfied    | Jar inventory has only the eight binaries, catalog, expected logback resource, classes, and Maven metadata.                         |
+| 13 |   satisfied    | Jar inventory has only the eight binaries, catalog, expected logback resource, classes, and Gradle metadata.                         |
 | 14 |   satisfied    | Package, binary, signature, and digest integration gates cover all eight products; completion records them passing.                 |
 | 15 |   satisfied    | Unknown OS/architecture fails; fallback catches only IO, security, and linkage failures, not arbitrary `Error`.                     |
 | 16 |   satisfied    | POSIX/Windows security, 64 MiB copy, ownership, immediate/deferred cleanup, and 64-entry scavenging are implemented/tested.         |
 | 17 |   satisfied    | Exhaustion reports attempts, paths, causes, the extraction override, and honest possible-noexec diagnosis.                          |
 | 18 |   satisfied    | Holder initialization safely publishes one final result and leaves no reload hot path.                                              |
 | 19 |   unverified   | Workflow text conforms, but no hosted workflow result was supplied.                                                                 |
-| 20 |   satisfied    | Existing build/deploy Maven/release behavior is unchanged apart from invalid headers, SDK layout, and explicit native inputs.       |
+| 20 |   satisfied    | Existing build/deploy Gradle/release behavior is unchanged apart from invalid headers, SDK layout, and explicit native inputs.       |
 | 21 |   satisfied    | Wall time/RSS are explicitly descriptive; no throughput/performance conclusion is claimed.                                          |
 | 22 |    deviated    | B01-B05/B07 and B06 framework conform, but required child/root evidence artifacts were skipped.                                     |
 | 23 |   satisfied    | Completion reports selected-module/P0 tests passing with no training selection; CI selection is hardware-only.                      |
@@ -93,7 +93,7 @@ Windows x64 and host-macOS jobs are also P1 environmental gates and remain `unve
   binaries, and workflow delta.
 - `git diff --check`: passed.
 - Fixes: none.
-- Validation step: removed from the workflow by explicit developer direction; no Maven, Zig, Docker,
+- Validation step: removed from the workflow by explicit developer direction; no Gradle, Zig, Docker,
   signing, hosted runner, or runtime command was run by this conformance audit.
 - Limits: absent child/root evidence artifacts, hosted results, authorized merge, and clean final
   root.

@@ -47,7 +47,7 @@ There is no deviation or design decision to return to the blueprint.
 ## Verification and limits
 
 - Passed:
-  `mvn -B -pl euhedral-hardware-utils surefire:test -Dtest=SystemInfoFallbackTest,TopologyCacheFallbackTest,TopologyOwnershipTest,TopologyNormalizerTest,LinuxSystemLayoutFixtureTest,WindowsTopologyFixtureTest` --
+  `gradle -B -pl euhedral-hardware-utils surefire:test -Dtest=SystemInfoFallbackTest,TopologyCacheFallbackTest,TopologyOwnershipTest,TopologyNormalizerTest,LinuxSystemLayoutFixtureTest,WindowsTopologyFixtureTest` --
   11 tests.
 - Passed: P0 mask-formatting and core-zero tests.
 - Unverified: P0 API comparison reports zero removals and four expected macOS additions, but fails
