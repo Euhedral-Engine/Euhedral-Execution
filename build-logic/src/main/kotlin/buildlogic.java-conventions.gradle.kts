@@ -1,4 +1,3 @@
-
 plugins {
     `java-library`
     `maven-publish`
@@ -16,7 +15,7 @@ java {
 
 dependencies {
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.10.5")
-    testImplementation(files("${rootProject.projectDir}/buildSrc/build/classes/java/main"))
+    testImplementation(files("${rootProject.projectDir}/build-logic/build/classes/java/main"))
 }
 
 val isReleaseMode = project.hasProperty("release") || System.getenv("RELEASE_MODE") == "true"
@@ -110,6 +109,10 @@ tasks.withType<Test>() {
     
     // Suppress Lombok-related JVM warnings about bootstrap classpath
     jvmArgs("-Xshare:off")
+    
+    systemProperty("junit.jupiter.execution.parallel.enabled", "true")
+    systemProperty("junit.jupiter.execution.parallel.mode.default", "concurrent")
+    systemProperty("junit.jupiter.execution.parallel.config.strategy", "dynamic")
 }
 
 tasks.register<Test>("integrationTest") {
