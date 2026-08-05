@@ -76,7 +76,7 @@ jobs:
         with:
           name: hardware-utils-native
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 1
           path: |
             euhedral-hardware-utils/build/libs/euhedral-hardware-utils-*.jar
             euhedral-hardware-utils/build/native-smoke
