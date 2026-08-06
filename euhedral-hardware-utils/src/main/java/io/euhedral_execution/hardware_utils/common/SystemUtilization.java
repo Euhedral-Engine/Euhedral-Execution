@@ -122,10 +122,51 @@ public final class SystemUtilization {
                                  long inactiveFileMemory, long diskIOBytes) {
 
         public SystemSnapshot {
+            if (totalCpus <= 0) {
+                throw new IllegalArgumentException("totalCpus must be positive");
+            }
+            if (pressurePerCpu == null || pressurePerCpu.length() != totalCpus) {
+                throw new IllegalArgumentException("pressurePerCpu length must match totalCpus");
+            }
+            if (effectiveCpus != null && effectiveCpus.length() > totalCpus) {
+                throw new IllegalArgumentException("effectiveCpus out of bounds");
+            }
+
+            cpuUsage = Math.max(0, cpuUsage);
+            cpuThrottle = Math.max(0, cpuThrottle);
+            diskIOBytes = Math.max(0, diskIOBytes);
+            memoryUsage = Math.max(0, memoryUsage);
+            inactiveFileMemory = Math.max(0, inactiveFileMemory);
+            
+            if (memoryLimit < 0) {
+                memoryLimit = Long.MAX_VALUE;
+            }
+            
+            if (Double.isNaN(quotaCpus) || !Double.isFinite(quotaCpus) || quotaCpus < 0.0) {
+                quotaCpus = 0.0;
+            } else if (effectiveCpus != null && quotaCpus > effectiveCpus.cardinality()) {
+                quotaCpus = effectiveCpus.cardinality();
+            }
+
+            period = Math.max(0, period);
+
             effectiveCpus = new UnmodifiableBitSet(
                     Objects.requireNonNull(effectiveCpus, "effectiveCpus"));
-            pressurePerCpu = copyOf(
-                    Objects.requireNonNull(pressurePerCpu, "pressurePerCpu"));
+            
+            double[] pressureCopy = new double[pressurePerCpu.length()];
+            for (int i = 0; i < pressureCopy.length; i++) {
+                double p = pressurePerCpu.get(i);
+                if (Double.isNaN(p) || !Double.isFinite(p) || p < 0.0) {
+                    pressureCopy[i] = 0.0;
+                } else if (p > 1.0) {
+                    pressureCopy[i] = 1.0;
+                } else if (p == -0.0) {
+                    pressureCopy[i] = +0.0;
+                } else {
+                    pressureCopy[i] = p;
+                }
+            }
+            pressurePerCpu = new UnmodifiableDoubleArray(pressureCopy);
         }
 
         public static SystemSnapshot create(long timeNs, int totalCpus, double quotaCpus,
@@ -213,10 +254,66 @@ public final class SystemUtilization {
         public HardwareUtilization {
             globalEffectiveCpus = new UnmodifiableBitSet(
                     Objects.requireNonNull(globalEffectiveCpus, "globalEffectiveCpus"));
-            perQuotaCpuThrottleRatio = copyOf(Objects.requireNonNull(
-                    perQuotaCpuThrottleRatio, "perQuotaCpuThrottleRatio"));
-            perQuotaCpuPressure = copyOf(
-                    Objects.requireNonNull(perQuotaCpuPressure, "perQuotaCpuPressure"));
+
+            if (Double.isNaN(quotaCpus) || !Double.isFinite(quotaCpus) || quotaCpus < 0.0) {
+                quotaCpus = 0.0;
+            } else if (quotaCpus > globalEffectiveCpus.cardinality()) {
+                quotaCpus = globalEffectiveCpus.cardinality();
+            }
+
+            period = Math.max(0, period);
+
+            if (snapshot != null) {
+                if (snapshot.timeNs() != timestampNs) {
+                    throw new IllegalArgumentException("timestampNs mismatch");
+                }
+                if (!snapshot.effectiveCpus().equals(globalEffectiveCpus)) {
+                    throw new IllegalArgumentException("effectiveCpus mismatch");
+                }
+                if (Double.compare(snapshot.quotaCpus(), quotaCpus) != 0 || snapshot.period() != period) {
+                    throw new IllegalArgumentException("Quota or period mismatch with nested snapshot");
+                }
+            }
+
+            quotaCpuUsage = sanitizeRatio(quotaCpuUsage, true);
+            cpuThrottleRatio = sanitizeRatio(cpuThrottleRatio, false);
+            totalMemoryUtilization = sanitizeRatio(totalMemoryUtilization, false);
+            diskIOPressure = sanitizeRatio(diskIOPressure, false);
+            diskIOBytesPerSecond = sanitizeTelemetry(diskIOBytesPerSecond);
+
+            globalMemoryPool = Math.max(0, globalMemoryPool);
+            perCpuMemoryPool = Math.max(0, perCpuMemoryPool);
+            memPerCpuUsageBytes = Math.max(0, memPerCpuUsageBytes);
+
+            Objects.requireNonNull(perQuotaCpuThrottleRatio, "perQuotaCpuThrottleRatio");
+            double[] throttleCopy = new double[perQuotaCpuThrottleRatio.length()];
+            for (int i = 0; i < throttleCopy.length; i++) {
+                throttleCopy[i] = sanitizeRatio(perQuotaCpuThrottleRatio.get(i), false);
+            }
+            perQuotaCpuThrottleRatio = new UnmodifiableDoubleArray(throttleCopy);
+
+            Objects.requireNonNull(perQuotaCpuPressure, "perQuotaCpuPressure");
+            double[] pressureCopy = new double[perQuotaCpuPressure.length()];
+            for (int i = 0; i < pressureCopy.length; i++) {
+                pressureCopy[i] = sanitizeRatio(perQuotaCpuPressure.get(i), false);
+            }
+            perQuotaCpuPressure = new UnmodifiableDoubleArray(pressureCopy);
+        }
+
+        private static double sanitizeRatio(double val, boolean isTelemetry) {
+            if (Double.isNaN(val) || val < 0.0) return 0.0;
+            if (isTelemetry && val == Double.POSITIVE_INFINITY) return Double.MAX_VALUE;
+            if (!isTelemetry && (!Double.isFinite(val))) return 0.0;
+            if (val > 1.0) return 1.0;
+            if (val == -0.0) return 0.0;
+            return val;
+        }
+
+        private static double sanitizeTelemetry(double val) {
+            if (Double.isNaN(val) || val < 0.0) return 0.0;
+            if (val == Double.POSITIVE_INFINITY) return Double.MAX_VALUE;
+            if (val == -0.0) return 0.0;
+            return val;
         }
 
         /// Get a snapshot of a socket's utilization
@@ -312,28 +409,35 @@ public final class SystemUtilization {
             double stallRatio = perQuotaCpuPressure.get(cpuId);
             double throttleRatio = perQuotaCpuThrottleRatio.get(cpuId);
 
-            double cpuPressure = 1.0 - ((1.0 - stallRatio) * (1.0 - throttleRatio));
+            double pressure = perQuotaCpuPressure.get(cpuId);
 
             long memoryLimit = nonnegative(perCpuMemoryPool);
             long memoryUsage = nonnegative(memPerCpuUsageBytes);
             double memUtil = finiteUtilization(memoryUsage, memoryLimit);
-            double io = diskIOPressure * 0.8;
-            double combinedPressure = 1.0 - ((1.0 - cpuPressure) * (1.0 - io) * (1.0 - memUtil));
 
             return new CpuSnapshot(cpuId, cpuQuota, period, globalEffectiveCpus.cardinality(),
                     nonnegative(globalMemoryPool),
                     saturatedProduct(globalMemoryPool, totalMemoryUtilization), memoryLimit,
                     memUtil, stallRatio,
-                    throttleRatio, combinedPressure, timestampNs);
+                    throttleRatio, pressure, timestampNs);
         }
 
         /// Gets the total system pressure
         public double pressure() {
-            double cpu = 1.0 - (1.0 - cpuThrottleRatio);
-            double io = diskIOPressure * 0.8;
-            double pressure = Math.max(Math.max(cpu, totalMemoryUtilization), io);
-
-            return Math.min(1.0, Math.max(0.0, pressure));
+            if (globalEffectiveCpus.isEmpty()) {
+                return 1.0;
+            }
+            double max = 0.0;
+            for (int i = globalEffectiveCpus.nextSetBit(0); i >= 0;
+                    i = globalEffectiveCpus.nextSetBit(i + 1)) {
+                if (i < perQuotaCpuPressure.length()) {
+                    double p = perQuotaCpuPressure.get(i);
+                    if (p > max) {
+                        max = p;
+                    }
+                }
+            }
+            return Math.min(1.0, Math.max(0.0, max));
         }
     }
 }

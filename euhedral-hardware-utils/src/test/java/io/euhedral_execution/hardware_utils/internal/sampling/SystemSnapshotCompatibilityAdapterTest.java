@@ -104,7 +104,7 @@ public class SystemSnapshotCompatibilityAdapterTest {
         assertEquals(10_000L, fast.quotaPeriodNs().value());
 
         fast = adapter.sampleFast(2000L);
-        assertEquals(SignalValidity.TRANSIENT_FAILURE, fast.quotaPeriodNs().validity());
+        assertEquals(SignalValidity.UNSUPPORTED, fast.quotaPeriodNs().validity());
 
         // Overflow
         fast = adapter.sampleFast(2000L);
@@ -126,9 +126,9 @@ public class SystemSnapshotCompatibilityAdapterTest {
         assertEquals(SignalValidity.VALID, fast.quotaPeriodNs().validity());
         assertEquals(10_000L, fast.quotaPeriodNs().value());
 
-        // Negative period
+        // Negative period is sanitized to 0
         fast = adapter.sampleFast(2000L);
-        assertEquals(SignalValidity.TRANSIENT_FAILURE, fast.quotaPeriodNs().validity());
+        assertEquals(SignalValidity.UNSUPPORTED, fast.quotaPeriodNs().validity());
 
         // Zero period
         fast = adapter.sampleFast(2000L);
