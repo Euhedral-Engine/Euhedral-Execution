@@ -314,4 +314,5 @@ Before handing work back:
 ## Temporary hardware-utils overhaul status (P5)
 
 - P0-P4 are complete.
-- P5 is in progress. P5-A blueprint, implementation, and conformance audit are complete. P5-A is ready to be merged into the P5 root.
+- P5 is in progress. P5-A blueprint, implementation, and conformance audit are complete.
+- P5-B blueprint is complete ([`phase-5-linux-resource-provider.md`](docs/blueprints/hardware-utils/phase-5-linux-resource-provider.md)) and ready for review and merge into the P5 root.
