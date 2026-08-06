@@ -67,3 +67,10 @@ None. The capability fulfills the parent constraint without ambiguity.
 - **Demands**: Standard concurrency (locks, condition variables, thread interruption).
 - **Reasoning Effort**: `low`. The blueprint provides exact semantics for the state machine and lock ordering.
 - **Selected Model**: Capability equivalent to `gpt-5.5` at `low` effort is approved for implementation. The plan's implementation prompt label must be updated with this selection.
+
+## Completion Record
+- **Changed Files**: `LatestValueDispatcher.java`, `LatestValueDispatcherTest.java`
+- **Commands Run**: `gradle :euhedral-hardware-utils:test --tests "*LatestValueDispatcherTest*"`
+- **Results**: Build successful. All conformance tests passed.
+- **Acceptance-criteria evidence**: Proven exactly-once termination hook (unlocked), bounded state via one-active/one-pending coalescing, reentrant addition/close safety via snapshot iteration, and `Throwable` isolation.
+- **Deviations**: None.
