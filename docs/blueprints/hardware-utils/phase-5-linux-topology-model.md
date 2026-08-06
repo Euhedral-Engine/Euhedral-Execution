@@ -312,11 +312,13 @@ gradle :euhedral-hardware-utils:test
 
 - `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/linux/LinuxSystemLayout.java`
 - `euhedral-hardware-utils/src/test/java/io/euhedral_execution/hardware_utils/linux/LinuxSystemLayoutFixtureTest.java`
+- `docs/audits/hardware-utils/phase-5-linux-topology-model-conformance.md`
 
 ### Commands Run & Results
 
 - `gradle :euhedral-hardware-utils:test --tests "io.euhedral_execution.hardware_utils.linux.LinuxSystemLayoutFixtureTest"` - Passed 6/6 tests cleanly.
 - `gradle :euhedral-hardware-utils:test` - Passed all 67 hardware-utils tests cleanly.
+- `gradle :euhedral-hardware-utils:test --rerun-tasks` - Passed all 67 hardware-utils tests cleanly with fresh execution.
 - `gradle :euhedral-hardware-utils:build` - Build successful, native packaging, test compilation, and verification passed.
 
 ### Acceptance Evidence
@@ -327,6 +329,7 @@ gradle :euhedral-hardware-utils:test
 - Cache domains are extracted from sysfs cache index nodes and fall back cleanly to P2 synthesized L1/L2/L3 domains if sysfs cache entries are missing or unreadable.
 - P/E core gap classification correctly identifies performance vs efficiency cores from cpufreq max frequency or cache capacity scores, falling back to `CoreKind.UNKNOWN` when scores are homogeneous.
 - Missing or unreadable sysfs root directories fall back cleanly to the conservative whole-model fallback topology without throwing exceptions.
+- Independent conformance audit completed in `docs/audits/hardware-utils/phase-5-linux-topology-model-conformance.md` verifying all 5 acceptance criteria satisfied with 0 deviations.
 
 ### Approved Deviations
 

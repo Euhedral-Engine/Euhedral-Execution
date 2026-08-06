@@ -314,4 +314,4 @@ Before handing work back:
 ## Temporary hardware-utils overhaul status (P5)
 
 - P0-P4 are complete.
-- P5 is in progress. The P5 root blueprint and P5-A blueprint are merged. P5-A implementation is complete and ready for review.
+- P5 is in progress. P5-A blueprint, implementation, and conformance audit are complete. P5-A is ready to be merged into the P5 root.
