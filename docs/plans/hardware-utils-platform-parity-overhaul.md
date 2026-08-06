@@ -2,18 +2,19 @@
 
 ## Plan status
 
-- Phase: 4-A - sample/validity child blueprint review
-- Status: P4-A sample/validity child blueprint complete, review and merge required before P4-A implementation
+- Phase: 5 - Linux platform blueprint
+- Status: P5 parent blueprint complete, review and merge required before child branches
 - Plan branch: `agent/hardware-utils-overhaul-plan` (created before the updated phase-branch rule)
 - Branch point: `900d8c50` (`agent/phase7-cleanup-handoff`)
 - Active P1 root: `hardware-utils-overhaul/phase-1-native-build` (completed)
 - Active P1 blueprint branch: `hardware-utils-overhaul/phase-1-native-build-blueprint` (historical)
 - Completed P2 root: `hardware-utils-overhaul/phase-2-topology-snapshot` at `e2495c5d`
 - Completed P3 root: `hardware-utils-overhaul/phase-3-affinity-executor` at `748f34d5`
-- Active P4 root: `hardware-utils-overhaul/phase-4-pressure-monitor` from `748f34d5`
-- Active P4 parent blueprint branch:
-  `hardware-utils-overhaul/phase-4-pressure-monitor-blueprint`
-- Date: 2026-08-02
+- Completed P4 root: `hardware-utils-overhaul/phase-4-pressure-monitor` at `487003ba`
+- Active P5 root: `hardware-utils-overhaul/phase-5-linux`
+- Active P5 parent blueprint branch:
+  `hardware-utils-overhaul/phase-5-linux-blueprint`
+- Date: 2026-08-06
 - Planning model: `gpt-5.6-sol`
 - Planning reasoning effort: `max`
 
@@ -1034,7 +1035,10 @@ an unbounded feature-history context.
 | P4-B pressure/projection      | `docs/blueprints/hardware-utils/phase-4-pressure-mathematics.md`              | covered by final integrated P4 conformance                       | none; developer-authorized single-conformance flow                                    |
 | P4-C listener publication     | `docs/blueprints/hardware-utils/phase-4-listener-publication.md`              | covered by final integrated P4 conformance                       | none; developer-authorized single-conformance flow                                    |
 | P4-D monitor lifecycle        | `docs/blueprints/hardware-utils/phase-4-monitor-lifecycle-scheduler.md`       | covered by final integrated P4 conformance                       | none; developer-authorized single-conformance flow                                    |
-| P5                            | `docs/blueprints/hardware-utils/phase-5-linux-platform.md`                    | conformance/manual review                                        | `docs/audits/hardware-utils/phase-5-linux-platform-conformance.md`                    |
+| P5 parent/root integration    | `docs/blueprints/hardware-utils/phase-5-linux-platform.md`                    | child conformance/manual reviews plus root manual review         | `docs/audits/hardware-utils/phase-5-linux-platform-conformance.md`                    |
+| P5-A Linux topology model     | `docs/blueprints/hardware-utils/phase-5-linux-topology-model.md`               | conformance check and manual review                              | `docs/audits/hardware-utils/phase-5-linux-topology-model-conformance.md`               |
+| P5-B Linux resource provider  | `docs/blueprints/hardware-utils/phase-5-linux-resource-provider.md`             | conformance check and manual review                              | `docs/audits/hardware-utils/phase-5-linux-resource-provider-conformance.md`             |
+| P5-C Linux affinity & native  | `docs/blueprints/hardware-utils/phase-5-linux-affinity-native.md`              | conformance check and manual review                              | `docs/audits/hardware-utils/phase-5-linux-affinity-native-conformance.md`              |
 | P6                            | `docs/blueprints/hardware-utils/phase-6-windows-platform.md`                  | conformance/manual review                                        | `docs/audits/hardware-utils/phase-6-windows-platform-conformance.md`                  |
 | P7                            | `docs/blueprints/hardware-utils/phase-7-macos-platform.md`                    | conformance/manual review                                        | `docs/audits/hardware-utils/phase-7-macos-platform-conformance.md`                    |
 | P8                            | `docs/blueprints/hardware-utils/phase-8-control-plane-integration-release.md` | conformance/manual review                                        | `docs/audits/hardware-utils/phase-8-control-plane-integration-release-conformance.md` |
@@ -1054,16 +1058,16 @@ implementation.
 |    1 | P4 parent/child blueprints - sampling/pressure/lifecycle   | `gpt-5.6-sol`, `max`    |
 |    2 | P7 blueprint - macOS public-API parity                     | `gpt-5.6-sol`, `max`    |
 |    3 | P6 blueprint - Windows processor-group/native parity       | `gpt-5.6-sol`, `max`    |
-|    4 | P5 blueprint - Linux cgroup/provider/libc portability      | `gpt-5.6-sol`, `max`    |
+|    4 | P5 parent & child blueprints - Linux topology/resources/ABI| `gpt-5.6-sol`, `max`    |
 |    5 | P3 parent/child blueprints - affinity/executor concurrency | `gpt-5.6-sol`, `max`    |
 |    6 | P2 blueprint - topology and snapshot ownership             | `gpt-5.6-sol`, `max`    |
 |    7 | P1 blueprint - native build/JNI/package ABI                | `gpt-5.6-sol`, `max`    |
 |    8 | P8 blueprint - core hot-loop and release integration       | `gpt-5.6-sol`, `max`    |
 |    9 | P0 blueprint - compatibility/test baseline                 | `gpt-5.6-sol`, `high`   |
 |   10 | P4-A through P4-D parent-selected implementations          | `gpt-5.6-sol`, `high`   |
-|   11 | P7 provisional implementation                              | `gpt-5.6-sol`, `high`   |
-|   12 | P6 provisional implementation                              | `gpt-5.6-sol`, `high`   |
-|   13 | P5 provisional implementation                              | `gpt-5.6-sol`, `high`   |
+|   11 | P5-A, P5-B, P5-C parent-selected implementations           | `gpt-5.6-sol`, `high`   |
+|   12 | P7 provisional implementation                              | `gpt-5.6-sol`, `high`   |
+|   13 | P6 provisional implementation                              | `gpt-5.6-sol`, `high`   |
 |   14 | P3-A and P3-B selected implementations                     | `gpt-5.6-sol`, `high`   |
 |   15 | P2-A and P2-B selected implementations                     | `gpt-5.6-sol`, `high`   |
 |   16 | P1-A and P1-B selected implementations                     | `gpt-5.6-sol`, `high`   |
@@ -1072,16 +1076,16 @@ implementation.
 |   19 | P8 conformance/manual review                               | `gpt-5.6-sol`, `high`   |
 |   20 | P7 conformance/manual review                               | `gpt-5.6-sol`, `high`   |
 |   21 | P6 conformance/manual review                               | `gpt-5.6-sol`, `high`   |
-|   22 | P5 conformance/manual review                               | `gpt-5.6-sol`, `high`   |
+|   22 | P5 child/root conformance/manual reviews                   | `gpt-5.6-sol`, `high`   |
 |   23 | P3 child/root conformance/manual review                    | `gpt-5.6-sol`, `high`   |
 |   24 | P2 child/root conformance/manual review                    | `gpt-5.6-sol`, `high`   |
 |   25 | P1 child and root conformance/manual review                | `gpt-5.6-sol`, `high`   |
 |   26 | P0 conformance/manual review                               | `gpt-5.6-sol`, `medium` |
 |   27 | P8 final conformance audit                                 | `gpt-5.6-sol`, `high`   |
-|   28 | P4 single integrated conformance/manual-review audit       | `gpt-5.6-sol`, `high`   |
-|   29 | P7 conformance audit                                       | `gpt-5.6-sol`, `high`   |
-|   30 | P6 conformance audit                                       | `gpt-5.6-sol`, `high`   |
-|   31 | P5 conformance audit                                       | `gpt-5.6-sol`, `high`   |
+|   28 | P5 child/root conformance audits                           | `gpt-5.6-sol`, `high`   |
+|   29 | P4 single integrated conformance/manual-review audit       | `gpt-5.6-sol`, `high`   |
+|   30 | P7 conformance audit                                       | `gpt-5.6-sol`, `high`   |
+|   31 | P6 conformance audit                                       | `gpt-5.6-sol`, `high`   |
 |   32 | P3 child/root conformance audits                           | `gpt-5.6-sol`, `high`   |
 |   33 | P2 child/root conformance audits                           | `gpt-5.6-sol`, `high`   |
 |   34 | P1 child and root conformance audits                       | `gpt-5.6-sol`, `high`   |
@@ -2633,131 +2637,181 @@ merged result.
 
 ### P5 - Linux parity, cgroups, and libc portability
 
-#### P5 blueprint prompt
+#### P5 parent blueprint prompt - COMPLETED, REVIEW AND MERGE REQUIRED
 
 **Model: `gpt-5.6-sol`; reasoning effort: `max`.**
 
-> After authorization, create `hardware-utils-overhaul/phase-5-linux` from the completed P4 root,
-> then work on `hardware-utils-overhaul/phase-5-linux-blueprint`. The parent artifact is
-> `docs/plans/hardware-utils-platform-parity-overhaul.md`, with completed P0-P4 phase artifact
-> index entries and closeout summaries as inherited evidence. Initial ownership is hardware Linux
-> Java/native implementation, Linux fixtures/tests, and Linux manifest/CI metadata. Inspect
-> `git status --short`. Read `AGENTS.md`, `docs/AGENT_WORKFLOW.md`,
-> `docs/ARCHITECTURE.md`, the parent plan, the exact P0-P4 files linked by those phase artifact
-> index entries and summaries, all Linux Java/native sources, the P1 manifest/build contracts,
-> Linux provider/topology tests, and proposed proc/sysfs/cgroup fixtures. Do not inspect training.
->
-> Write `docs/blueprints/hardware-utils/phase-5-linux-platform.md`. Settle read-only cgroup
-> v1/v2/hybrid/bare-host discovery and scope; mountinfo/cgroup parsing; cpuset/quota changes;
-> unlimited quota; canonical cumulative CPU/throttle/PSI units; pressure reset semantics; process
-> and host CPU scope; honest cgroup-aggregate pressure propagation to effective CPUs without host
-> jiffy apportionment; sparse/offline multisocket topology/cache; complete bounded file reads;
-> channel ownership; diagnostic rate limiting; correct block-device inclusion; scheduler/steal,
-> memory reclaim/headroom, I/O stall, frequency and thermal signals with cadences/validity; stable
-> affinity syscalls; and the Linux native ABI.
->
-> Derive and prove the lowest practical kernel floor per x86-64/AArch64 from the required syscall
-> and JDK surface; do not choose a floor newer than 3.10 without developer approval. Prove a
-> libc-neutral direct-syscall design on that floor if viable. Otherwise document the failing gate
-> and specify glibc 2.17 plus musl artifacts. Define exact syscalls, structure layouts, errno
-> handling, imported-symbol allowlists, no-libstdc++ requirement, fallback behavior, file/path
-> fixtures, Testcontainers/runtime images, and binary commands.
->
-> Shared pressure redesign, Windows/macOS, core, unrelated build changes, and all training work are
-> prohibited. Edit only blueprint/plan/planning docs.
->
-> Define package/artifact ownership, naming, file/native-to-sample data flow, and all
-> high-reasoning contracts without enumerating minor files unnecessarily. Include a bounded
-> implementation context envelope naming required inputs and owned outputs. Explicitly settle
-> integer/floating-point precision and conversions, deterministic ordering, native/JVM memory
-> ownership and publication, buffer safety, allocation/retention and memory
-> pollution/contamination, portability, and compatibility. Apply the workflow sizing/split gate.
-> If cgroup/resource collection, topology, affinity/native ABI, or portability gates are
-> independently oversized, define bounded responsibility child blueprint action items, branch
-> names, and context envelopes now, then update every P5 implementation/validation/audit prompt,
-> parent, and phase artifact index entry. Only after this parent blueprint child is merged may
-> those branches be created from the updated P5 root; rerun the gate per child. Do not run the root
-> implementation after a split.
->
-> Perform the mandatory `Implementation model reassessment` and replace the provisional P5
-> implementation selection and complete prompt body.
->
-> Append the workflow developer-review summary to the P5 plan section with purpose, ownership,
-> contracts, children, selected implementation model, risks, and unresolved decisions. The output
-> artifact is the finalized blueprint, plan summary, and implementation prompt. Handoff for review
-> and merge into the P5 root only when implementation needs no cgroup scope, unit, file-read,
-> device-filter, sensor-cadence, syscall, libc, or fallback decision. Do not start implementation
-> before merge.
+The completed output is `docs/blueprints/hardware-utils/phase-5-linux-platform.md` on `hardware-utils-overhaul/phase-5-linux-blueprint`. It froze cgroup v1/v2/hybrid/bare-host discovery, complete bounded reads, unlimited quota, honest cgroup-aggregate pressure propagation, sparse multisocket topology, Linux 3.10 kernel floor derivation, and glibc 2.17 / musl native ABI contracts. Its sizing gate splits P5 into sequential P5-A, P5-B, and P5-C children. Review and merge it into `hardware-utils-overhaul/phase-5-linux` before creating any child branch.
 
-#### P5 implementation prompt - PROVISIONAL, DO NOT RUN
+#### P5 developer-review summary
 
-**Provisional model: `gpt-5.6-sol`; provisional reasoning effort: `high`. The P5 blueprint must
-replace this selection and prompt body before implementation.**
+- Purpose: deliver read-only cgroup v1/v2/hybrid/bare-host resource collection, sparse multisocket Linux topology parsing, direct syscall affinity, and glibc 2.17 / musl ABI portability on Linux 3.10+.
+- Ownership: `io.euhedral_execution.hardware_utils.linux.*` (Java), `src/main/native/linux/*` (C++), `native-products.json` (Manifest).
+- Key contracts: read-only discovery (zero controller writes); unlimited quota equals effective cpuset cardinality; honest cgroup pressure propagation without host jiffy apportionment; Linux 3.10 kernel floor; glibc 2.17 + musl dual ELF artifacts without C++ runtimes; complete bounded file reads with channel cleanup; block-device loop filter; 60 s rate-limited diagnostic logging.
+- Children: P5-A (Topology), P5-B (Resources), P5-C (Affinity & Native ABI).
+- Selected model: `gpt-5.6-sol` with `high` reasoning for all implementation and audit action items.
+- Risks: sysfs path variations across Linux distros; cgroup v1 vs v2 permission differences; host vs container CPU ID mismatches; JNI array pin safety.
+- Unresolved decisions: none. Cgroup scope, units, file-read bounds, device filters, sensor cadences, syscalls, libc targets, and fallbacks are fully settled.
 
-> After the P5 blueprint child is reviewed and merged, start
-> `hardware-utils-overhaul/phase-5-linux-implementation` from the P5 root. The parent artifact is
-> `docs/blueprints/hardware-utils/phase-5-linux-platform.md`. Ownership is limited to its Linux
-> Java/native/fixture/test/manifest/CI context envelope. Inspect `git status --short`. Read
-> `AGENTS.md`, `docs/AGENT_WORKFLOW.md`, the plan's completed P0-P4 phase artifact index entries
-> and closeout summaries, the parent blueprint, and only its bounded Linux context. Confirm this
-> prompt is finalized.
->
-> Implement the approved Linux topology/resource/affinity native and Java adapters, cgroup
-> variants, signal collection, file ownership/diagnostics, fixtures/tests, and named manifest/CI
-> metadata. Do not redesign common pressure, touch Windows/macOS/core, mutate cgroup controllers,
-> or access training. Allowed edits are blueprint-owned implementation/tests/configuration, the
-> completion record, and the compact temporary P5 phase-status block in `AGENTS.md`; no other
-> `AGENTS.md` content may change.
->
-> Run all fixture matrices, no-write checks, API/common contract tests, Linux native boundary
-> tests, a cgroup-scope-versus-host-activity attribution fixture, glibc/musl x86-64/AArch64 binary
-> gates, and real runtime smoke where available. Stop on an unstated scope/fallback/ABI choice;
-> otherwise append completion notes with changed files, commands, results, acceptance-criteria
-> evidence, approved deviations, and environmental limits. Add/update the temporary `AGENTS.md`
-> block with the completed P4 root, active P5 root, completed blueprint child, active
-> implementation child, and blueprint/completion links.
->
-> The output artifact is the implemented Linux platform layer plus its completion record appended
-> to `docs/blueprints/hardware-utils/phase-5-linux-platform.md`.
->
-> Handoff only when cgroup v1/v2/hybrid/bare host, quota `max`, PSI reset, sparse topology, normal
-> block devices, bounded reads, resource cleanup, affinity, and accepted libc/runtime gates pass
-> or unavailable real-runtime gates are explicitly `unverified` and carried as release blockers
-> pending a developer-approved deviation. Merge this child into the P5 root before validation.
+#### P5 root implementation prompt - SUPERSEDED, DO NOT RUN
 
-#### P5 conformance audit prompt
+The sizing gate rejected one P5 root implementation context. Do not create `hardware-utils-overhaul/phase-5-linux-implementation`. Use P5-A, P5-B, and P5-C action families below, sequentially from the updated P5 root.
+
+#### P5-A Linux topology model blueprint prompt
+
+**Model: `gpt-5.6-sol`; reasoning effort: `max`.**
+
+> After the parent P5 blueprint is reviewed and merged, create
+> `hardware-utils-overhaul/phase-5-linux-topology-blueprint` from the updated P5 root. The parent
+> artifact is `docs/blueprints/hardware-utils/phase-5-linux-platform.md`. Inspect `git status --short`.
+> Read `AGENTS.md`, `docs/AGENT_WORKFLOW.md`, `docs/ARCHITECTURE.md`, the parent's P5-A context
+> envelope, summarized P0-P4 closeouts, `LinuxSystemLayout`, sysfs cpu topology files, and existing
+> topology tests. Do not inspect resource collection, native C++ bodies, core, or training.
+>
+> Write `docs/blueprints/hardware-utils/phase-5-linux-topology-model.md`. Translate the parent
+> topology contract into an implementation checklist: sysfs `/sys/devices/system/cpu/` scanning,
+> sparse OS CPU ID mapping with null holes, compound `(packageId, dieId, coreId)` global core
+> uniqueness, cache domain extraction, P2 cache fallbacks, and P/E core classification from
+> cpufreq/caches.
+>
+> Reapply sizing/model gates and confirm `gpt-5.6-sol`/`high` implementation model. Edit planning
+> docs only. Handoff for review and merge into the P5 root before creating P5-A implementation.
+
+#### P5-A Linux topology model implementation prompt
+
+**Child-confirmed model: `gpt-5.6-sol`; reasoning effort: `high`.**
+
+> After the P5-A blueprint is reviewed and merged, create
+> `hardware-utils-overhaul/phase-5-linux-topology-implementation` from the updated P5 root. Read
+> `AGENTS.md`, the plan's P5 summary, finalized P5-A blueprint, and its exact context envelope.
+>
+> Implement `LinuxSystemLayout`, sparse OS CPU ID indexing, compound global core tuples, cache fallbacks,
+> and P5-A fixture tests. Do not edit resource collection, native C++ files, core, or training.
+> Append completion notes to the P5-A blueprint and update the temporary P5 status block in `AGENTS.md`.
+>
+> Run P5-A topology tests, sparse/multisocket fixtures, P0 compatibility gate, and hardware verify.
+> Merge implementation before its audit.
+
+#### P5-A Linux topology model conformance/manual-review prompt
 
 **Model: `gpt-5.6-sol`; reasoning effort: `high`.**
 
-> After the P5 validation child is reviewed and merged, start
-> `hardware-utils-overhaul/phase-5-linux-audit` from the P5 root. The parent artifact is
-> `docs/validations/hardware-utils/phase-5-linux-platform-validation.md`. Ownership is limited to
-> independent conformance review and minor blueprint-settled Linux corrections. Inspect
-> `git status --short`. Read `AGENTS.md`, `docs/AGENT_WORKFLOW.md`, the P5 blueprint's summarized
-> parent context, the plan's completed P0-P4 phase artifact index entries and closeout summaries,
-> implementation diff, fixtures, binaries, completion record, and validation record. For split
-> work, consume only the audited child context plus summarized parent. Do not inspect or run
-> training.
+> After P5-A implementation is reviewed and merged, create
+> `hardware-utils-overhaul/phase-5-linux-topology-audit` from the updated P5 root. Read P5-A
+> blueprint, completion record, and diff.
 >
-> Independently audit cgroup read-only scope and attribution, fixture completeness, resets,
-> bounded reads, device filtering, topology, sensor validity/cadence, native bounds/ownership,
-> affinity restore, libc neutrality or accepted glibc 2.17 plus musl fallback, imports/
-> `DT_NEEDED`/GLIBC versions, architectures, kernel floors, real-runtime evidence, and validation
-> sufficiency. Allowed edits are
-> `docs/audits/hardware-utils/phase-5-linux-platform-conformance.md`, completion and validation
-> records, the P5 closeout summary in this plan, the temporary phase-status block, and minor
-> blueprint-settled corrections. Rerun and record affected validation after a correction. Common
-> redesign, other platforms, core, unrelated files, and training are prohibited.
+> Independently audit sparse CPU handling, global core uniqueness, cache fallbacks, and P/E core
+> classification. Write `docs/audits/hardware-utils/phase-5-linux-topology-model-conformance.md`,
+> append command/fix/limit evidence to completion, update the status block, and hand off for merge.
+
+#### P5-B Linux resource provider blueprint prompt
+
+**Model: `gpt-5.6-sol`; reasoning effort: `max`.**
+
+> After P5-A audit is reviewed and merged, create
+> `hardware-utils-overhaul/phase-5-linux-resources-blueprint` from the updated P5 root. The parent
+> artifact is `docs/blueprints/hardware-utils/phase-5-linux-platform.md`. Read parent P5-B context
+> envelope, P4 sampling contract, `LinuxResourceProvider`, `LinuxPaths`, cgroup/procfs fixtures.
 >
-> The output artifacts are the audit above, updated completion record, P5 closeout summary in this
-> plan, and, after the authorized merge, removal of the temporary P5 status block on the root with
-> the resulting root commit recorded when committed. Classify every Linux portion of R01-R02, R06,
-> R11-R14, T02, T05, B06, and P5 requirement exactly as `satisfied`, `deviated`, `unverified`, or
-> `ambiguous`, with evidence. Append audit commands, results, fixes, skipped checks, and
-> environmental limits to the completion record. A material deviation returns to the exact
-> blueprint or implementation action. Handoff follows the audit/root-closeout contract: P5 is
-> complete only after the authorized merge, P5 status-block removal, and closeout-summary update;
-> do not create P6 earlier.
+> Write `docs/blueprints/hardware-utils/phase-5-linux-resource-provider.md`. Translate parent
+> contract into implementation checklist: read-only v1/v2/hybrid/bare-host discovery, mountinfo/cgroup
+> parsing, complete bounded file reads via reusable `ByteBuffer`, 60 s rate-limited diagnostic logging,
+> unlimited quota calculation (`effectiveCpus.cardinality()`), cgroup-aggregate pressure propagation
+> without host jiffy apportionment, block-device filtering (excluding `loop`/`ram`), fast/slow cadences,
+> and `SignalValidity` state tracking.
+>
+> Reapply sizing/model gates and confirm `gpt-5.6-sol`/`high` implementation model. Edit planning
+> docs only. Handoff for review and merge into the P5 root before creating P5-B implementation.
+
+#### P5-B Linux resource provider implementation prompt
+
+**Child-confirmed model: `gpt-5.6-sol`; reasoning effort: `high`.**
+
+> After P5-B blueprint is reviewed and merged, create
+> `hardware-utils-overhaul/phase-5-linux-resources-implementation` from the updated P5 root. Read
+> finalized P5-B blueprint and context envelope.
+>
+> Implement `LinuxResourceProvider`, `LinuxPaths`, read-only cgroup discovery, bounded file reads,
+> block-device filter, unlimited quota fix, and cgroup-aggregate pressure propagation. Append completion
+> record to P5-B blueprint and update status block in `AGENTS.md`.
+>
+> Run cgroup v1/v2/hybrid/bare-host fixtures, unlimited quota tests, host-activity isolation fixtures,
+> block-device filter tests, and hardware verify. Merge implementation before its audit.
+
+#### P5-B Linux resource provider conformance/manual-review prompt
+
+**Model: `gpt-5.6-sol`; reasoning effort: `high`.**
+
+> After P5-B implementation is reviewed and merged, create
+> `hardware-utils-overhaul/phase-5-linux-resources-audit` from the updated P5 root. Read P5-B
+> blueprint, completion record, and diff.
+>
+> Independently audit read-only cgroup discovery, unlimited quota math, host-activity isolation, bounded
+> reads, block-device filter, and sensor validity. Write
+> `docs/audits/hardware-utils/phase-5-linux-resource-provider-conformance.md`, append evidence, and
+> hand off for merge.
+
+#### P5-C Linux affinity & native ABI blueprint prompt
+
+**Model: `gpt-5.6-sol`; reasoning effort: `max`.**
+
+> After P5-B audit is reviewed and merged, create
+> `hardware-utils-overhaul/phase-5-linux-affinity-native-blueprint` from the updated P5 root. The
+> parent artifact is `docs/blueprints/hardware-utils/phase-5-linux-platform.md`. Read parent P5-C
+> envelope, `LinuxAffinity`, `LinuxAffinityCalls`, `linux_affinity.cpp`, `linux_jni.h`, and P1 native
+> build graph.
+>
+> Write `docs/blueprints/hardware-utils/phase-5-linux-affinity-native.md`. Translate parent contract
+> into implementation checklist: direct Linux syscalls (`sys_sched_setaffinity`, `sys_sched_getaffinity`,
+> `sys_getcpu`, `sys_prctl`), Linux 3.10 kernel floor verification, glibc 2.17 + musl dual ELF gates,
+> JNI array pinning safety, errno handling, timer slack, and affinity lease capture/restoration.
+>
+> Reapply sizing/model gates and confirm `gpt-5.6-sol`/`high` implementation model. Edit planning
+> docs only. Handoff for review and merge into the P5 root before creating P5-C implementation.
+
+#### P5-C Linux affinity & native ABI implementation prompt
+
+**Child-confirmed model: `gpt-5.6-sol`; reasoning effort: `high`.**
+
+> After P5-C blueprint is reviewed and merged, create
+> `hardware-utils-overhaul/phase-5-linux-affinity-native-implementation` from the updated P5 root. Read
+> finalized P5-C blueprint and context envelope.
+>
+> Implement `LinuxAffinity`, `LinuxAffinityCalls`, `linux_affinity.cpp`, `linux_jni.h`, direct syscall
+> wrappers, and affinity lease restoration. Append completion record to P5-C blueprint and update status block.
+>
+> Run affinity matrix tests, original mask restoration tests, glibc 2.17 / musl binary gates, and JNI
+> load smoke tests. Merge implementation before its audit.
+
+#### P5-C Linux affinity & native ABI conformance/manual-review prompt
+
+**Model: `gpt-5.6-sol`; reasoning effort: `high`.**
+
+> After P5-C implementation is reviewed and merged, create
+> `hardware-utils-overhaul/phase-5-linux-affinity-native-audit` from the updated P5 root. Read P5-C
+> blueprint, completion record, and diff.
+>
+> Independently audit direct syscalls, errno translation, Linux 3.10 kernel floor, glibc 2.17 / musl
+> gates, and affinity lease restoration. Write
+> `docs/audits/hardware-utils/phase-5-linux-affinity-native-conformance.md`, append evidence, and hand
+> off for merge.
+
+#### P5 root conformance audit prompt
+
+**Model: `gpt-5.6-sol`; reasoning effort: `high`.**
+
+> After all three child audits (P5-A, P5-B, P5-C) are reviewed and merged, create
+> `hardware-utils-overhaul/phase-5-linux-audit` from the updated P5 root. The parent artifacts are
+> the P5 parent blueprint and the three indexed child blueprint/completion/conformance triples.
+>
+> Independently audit the end-to-end Linux platform provider: topology discovery -> cgroup/resource
+> metrics -> native direct syscall affinity. Classify all Linux requirements and defect ledger items
+> (T02, R02, R06, R11, R12, R14, B06) as `satisfied`, `deviated`, `unverified`, or `ambiguous`.
+>
+> Write `docs/audits/hardware-utils/phase-5-linux-platform-conformance.md`, append the P5 closeout
+> summary to the parent plan, remove the temporary P5 status block upon authorized merge, and record
+> the resulting root commit. P5 is complete only after this authorized closeout; do not create P6
+> earlier.
 
 ### P6 - Windows processor-group and resource parity
 
