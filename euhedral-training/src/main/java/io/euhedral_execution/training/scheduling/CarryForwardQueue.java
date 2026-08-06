@@ -25,6 +25,27 @@ public final class CarryForwardQueue {
         this.entries = List.copyOf(entries);
     }
 
+    public List<CarryForwardEntry> entries() {
+        return entries;
+    }
+
+    public List<CarryForwardEntry> selectFor(SourceScenario scenario, long iteration, int limit) {
+        if (limit < 0) {
+            throw new IllegalArgumentException("limit must not be negative");
+        }
+        List<CarryForwardEntry> candidates = new ArrayList<>();
+        for (CarryForwardEntry entry : entries) {
+            CarryScenarioState state = entry.scenarios().get(scenario);
+            if (state != null
+                    && state.coverage() != CoverageState.VALID
+                    && iteration >= state.nextEligibleIteration()) {
+                candidates.add(entry);
+            }
+        }
+        candidates.sort(priority());
+        return candidates.subList(0, Math.min(limit, candidates.size()));
+    }
+
     public static List<CarryForwardEntry> reconcile(
             List<CarryForwardEntry> previous,
             OptimizationCorpusView corpus,
@@ -152,9 +173,9 @@ public final class CarryForwardQueue {
                 .thenComparing(entry -> entry.policy().id());
     }
 
-    private static SortedMapBuilder scenarioGrid(
+    private static TreeMap<SourceScenario, CarryScenarioState> scenarioGrid(
             PredictedPolicySummary prediction, OptimizationCorpusView corpus, PolicyId policyId) {
-        SortedMapBuilder builder = new SortedMapBuilder();
+        TreeMap<SourceScenario, CarryScenarioState> builder = new TreeMap<>();
         for (ScenarioPrediction row : prediction.predictions()) {
             builder.put(
                     row.scenario(),
@@ -204,27 +225,4 @@ public final class CarryForwardQueue {
                 .max()
                 .orElse(0.0);
     }
-
-    public List<CarryForwardEntry> entries() {
-        return entries;
-    }
-
-    public List<CarryForwardEntry> selectFor(SourceScenario scenario, long iteration, int limit) {
-        if (limit < 0) {
-            throw new IllegalArgumentException("limit must not be negative");
-        }
-        List<CarryForwardEntry> candidates = new ArrayList<>();
-        for (CarryForwardEntry entry : entries) {
-            CarryScenarioState state = entry.scenarios().get(scenario);
-            if (state != null
-                    && state.coverage() != CoverageState.VALID
-                    && iteration >= state.nextEligibleIteration()) {
-                candidates.add(entry);
-            }
-        }
-        candidates.sort(priority());
-        return candidates.subList(0, Math.min(limit, candidates.size()));
-    }
-
-    private static final class SortedMapBuilder extends TreeMap<SourceScenario, CarryScenarioState> {}
 }

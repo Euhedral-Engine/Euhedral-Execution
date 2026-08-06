@@ -357,7 +357,7 @@ Repeated keys are allowed only for `scenario.required`, `run.initial_observation
 | `candidate.cma.population_size`       | decimal integer              | `96`                   | Candidates in each CMA-ES generation.                         |
 | `candidate.cma_weight`                | decimal integer              | `8`                    | Relative share assigned to CMA-ES.                            |
 | `candidate.direct_sobol_weight`       | decimal integer              | `1`                    | Relative share assigned to direct Sobol candidates.           |
-| `candidate.maximum_prediction_rows`   | decimal integer              | `16384`                | Maximum rows scored by the prediction model.                  |
+| `candidate.maximum_prediction_rows`   | decimal integer              | `16384`                | Batch size for rows scored by the prediction model.           |
 | `candidate.score_band_weight`         | decimal integer              | `7`                    | Relative share assigned to score-band sampling.               |
 | `candidate.score_band_weights`        | comma-separated integer list | `1,1,1,1,2,2,3,5,8,16` | Allocation across score bands from low to high.               |
 | `candidate.screen_rows`               | decimal integer              | `2097152`              | Number of generated candidates screened before selection.     |

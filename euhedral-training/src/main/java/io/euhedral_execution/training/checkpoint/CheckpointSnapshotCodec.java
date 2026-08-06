@@ -43,8 +43,11 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public final class CheckpointSnapshotCodec {
+    private static final Logger LOGGER = LoggerFactory.getLogger(CheckpointSnapshotCodec.class);
     private static final String ARTIFACT_TYPE = "euhedral-optimizer-checkpoint";
     private static final List<String> SIDECARS = List.of(
             "required-scenarios.csv",
@@ -170,6 +173,7 @@ public final class CheckpointSnapshotCodec {
             writeForced(temp.resolve("COMPLETE"), "");
             ClosedLoopCheckpoint readBack = read(root, temp);
             if (!readBack.equals(checkpoint)) {
+                LOGGER.error("Checkpoint read-back mismatch: checkpoint={}, readBack={}", checkpoint, readBack);
                 throw new IllegalStateException("Checkpoint read-back mismatch");
             }
             try {

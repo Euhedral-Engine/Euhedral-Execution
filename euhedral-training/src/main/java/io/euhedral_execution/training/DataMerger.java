@@ -35,8 +35,12 @@ import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.UUID;
 import java.util.stream.Stream;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class DataMerger {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(DataMerger.class);
 
     private static void deleteRecursively(Path root) throws Exception {
         if (!Files.exists(root)) {
@@ -70,6 +74,11 @@ public class DataMerger {
             CalibrationPlan readBack = CalibrationPlanCsv.read(temporary, request.requiredScenarios());
             if (!readBack.anchors().anchorSetId().equals(plan.anchors().anchorSetId())
                     || !readBack.references().equals(plan.references())) {
+                LOGGER.error(
+                        "Calibration plan validation failed: written anchorSetId={}, readBack anchorSetId={}, referencesMatch={}",
+                        plan.anchors().anchorSetId(),
+                        readBack.anchors().anchorSetId(),
+                        readBack.references().equals(plan.references()));
                 throw new IllegalStateException("Calibration plan validation failed");
             }
             publish(temporary, target);
@@ -91,6 +100,7 @@ public class DataMerger {
             CalibrationPlanCsv.write(temporary, plan);
             CalibrationPlan readBack = CalibrationPlanCsv.read(temporary);
             if (!readBack.equals(plan)) {
+                LOGGER.error("Merged calibration plan validation failed: written={}, readBack={}", plan, readBack);
                 throw new IllegalStateException("Merged calibration plan validation failed");
             }
             Path evidenceDirectory = temporary.resolve("evidence");
@@ -252,6 +262,11 @@ public class DataMerger {
         for (String file : files) {
             String text = Files.readString(directory.resolve(file));
             if (!text.startsWith("schema_version,") || !text.endsWith("\n")) {
+                LOGGER.error(
+                        "Invalid merge artifact {}: startsWithSchema={}, endsWithNewline={}",
+                        file,
+                        text.startsWith("schema_version,"),
+                        text.endsWith("\n"));
                 throw new IllegalStateException("Invalid merge artifact " + file);
             }
         }

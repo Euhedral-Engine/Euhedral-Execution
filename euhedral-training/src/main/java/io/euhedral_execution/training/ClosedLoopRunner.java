@@ -142,6 +142,10 @@ public final class ClosedLoopRunner {
             Optional<LoadedCheckpoint> loaded = CheckpointSnapshotCodec.loadLatest(
                     effectiveConfig.workspace(), effectiveConfig.trainingRunId(), configHash);
             if (!effectiveConfig.resume() && loaded.isPresent()) {
+                LOGGER.error(
+                        "Resume is false but checkpoint exists: workspace={}, loadedCheckpoint={}",
+                        effectiveConfig.workspace(),
+                        loaded.get().snapshotDirectory());
                 throw new IllegalArgumentException("A complete Phase 3 checkpoint already exists");
             }
             LoadedCheckpoint current = loaded.orElseGet(() -> {
@@ -273,11 +277,26 @@ public final class ClosedLoopRunner {
         Path source =
                 config.initialCalibrationPlan().orElseThrow().toAbsolutePath().normalize();
         Path snapshot = temporarySibling(config.workspace().resolve("initial-calibration-plan"));
-        String sourceHashBefore = ArtifactFingerprint.sha256(source);
-        copyDirectoryAtomically(source, snapshot);
-        String snapshotHash = ArtifactFingerprint.sha256(snapshot);
-        String sourceHashAfter = ArtifactFingerprint.sha256(source);
-        if (!sourceHashBefore.equals(sourceHashAfter) || !sourceHashBefore.equals(snapshotHash)) {
+        Path sourceAnchors = source.resolve("fixed-anchors.csv");
+        Path sourceReferences = source.resolve("reference-runs.csv");
+        String anchorsHashBefore = ArtifactFingerprint.sha256(sourceAnchors);
+        String referencesHashBefore = ArtifactFingerprint.sha256(sourceReferences);
+
+        Files.createDirectories(snapshot);
+        copyFileAtomically(sourceAnchors, snapshot.resolve("fixed-anchors.csv"));
+        copyFileAtomically(sourceReferences, snapshot.resolve("reference-runs.csv"));
+
+        String anchorsHashAfter = ArtifactFingerprint.sha256(sourceAnchors);
+        String referencesHashAfter = ArtifactFingerprint.sha256(sourceReferences);
+
+        if (!anchorsHashBefore.equals(anchorsHashAfter) || !referencesHashBefore.equals(referencesHashAfter)) {
+            LOGGER.error(
+                    "Initial calibration plan changed while being staged: source={}, anchorsBefore={}, anchorsAfter={}, refBefore={}, refAfter={}",
+                    source,
+                    anchorsHashBefore,
+                    anchorsHashAfter,
+                    referencesHashBefore,
+                    referencesHashAfter);
             deleteRecursively(snapshot);
             throw new IllegalArgumentException("Initial calibration plan changed while being staged");
         }
@@ -574,10 +593,20 @@ public final class ClosedLoopRunner {
                 && shouldContinueRejectedSeedModel(config, checkpoint);
         boolean isProduction = checkpoint.stage() == CheckpointStage.MODEL_READY;
         if (checkpoint.stage() == CheckpointStage.MODEL_REJECTED && !sparseDataFallback) {
+            LOGGER.error(
+                    "Disallowed model continuation: stage={}, sparseDataFallback={}",
+                    checkpoint.stage(),
+                    sparseDataFallback);
             throw new IllegalArgumentException("Only rejected sparse-data fallback models may continue");
         }
         if (isProduction && !metadata.deploymentEligible()
                 || !metadata.requiredScenarios().equals(config.requiredScenarios())) {
+            LOGGER.error(
+                    "Accepted model scenario catalog mismatch: isProduction={}, deploymentEligible={}, modelScenarios={}, configScenarios={}",
+                    isProduction,
+                    metadata.deploymentEligible(),
+                    metadata.requiredScenarios(),
+                    config.requiredScenarios());
             throw new IllegalArgumentException("Accepted model scenario catalog mismatch");
         }
         Path scheduleDirectory = config.workspace().resolve("iterations/iteration-%06d/schedule".formatted(iteration));
@@ -690,6 +719,8 @@ public final class ClosedLoopRunner {
                     config.dirtyWorkingTree(),
                     config.benchmarkConfig());
             if (!samePersistedSchedule(persisted, expected)) {
+                LOGGER.error(
+                        "Published schedule does not match deterministic inputs: scheduleDir={}", scheduleDirectory);
                 throw new IllegalArgumentException("Published schedule does not match deterministic inputs");
             }
             iterationSchedule = expected;
@@ -946,6 +977,12 @@ public final class ClosedLoopRunner {
         if (!bundle.run().descriptor().benchmarkRunId().equals(pending.benchmarkRunId())
                 || !bundle.run().descriptor().candidateCohortId().equals(pending.candidateCohortId())
                 || !bundle.run().descriptor().scenario().equals(pending.scenario())) {
+            LOGGER.error(
+                    "Expected evidence bundle identity mismatch: bundleDescriptor={}, pendingRunId={}, pendingCohortId={}, pendingScenario={}",
+                    bundle.run().descriptor(),
+                    pending.benchmarkRunId(),
+                    pending.candidateCohortId(),
+                    pending.scenario());
             throw new IllegalArgumentException("Expected evidence bundle identity mismatch");
         }
         return bundle.run();
@@ -965,6 +1002,7 @@ public final class ClosedLoopRunner {
                     .filter(path -> Files.isRegularFile(path.resolve("COMPLETE")))
                     .toList()) {
                 if (!expected.contains(path.getFileName().toString())) {
+                    LOGGER.error("Unexpected complete evidence bundle: path={}, expected={}", path, expected);
                     throw new IllegalArgumentException("Unexpected complete evidence bundle " + path.getFileName());
                 }
             }
@@ -991,6 +1029,12 @@ public final class ClosedLoopRunner {
                     && !carriesRejectedSeedModel(config, checkpoint, metadata);
             if (metadata.deploymentEligible() != deploymentEligibleRequired
                     || !metadata.requiredScenarios().equals(config.requiredScenarios())) {
+                LOGGER.error(
+                        "Checkpoint model status mismatch: metadataEligible={}, requiredEligible={}, metadataScenarios={}, configScenarios={}",
+                        metadata.deploymentEligible(),
+                        deploymentEligibleRequired,
+                        metadata.requiredScenarios(),
+                        config.requiredScenarios());
                 throw new IllegalArgumentException("Checkpoint model status mismatch");
             }
         }
@@ -1137,6 +1181,7 @@ public final class ClosedLoopRunner {
         Path root = workspace.toAbsolutePath().normalize();
         Path target = artifact.toAbsolutePath().normalize();
         if (!target.startsWith(root)) {
+            LOGGER.error("Artifact is outside the closed-loop workspace: target={}, root={}", target, root);
             throw new IllegalArgumentException("Artifact is outside the closed-loop workspace");
         }
         return new ArtifactReference(
@@ -1150,6 +1195,7 @@ public final class ClosedLoopRunner {
                 .resolve(reference.relativePath())
                 .normalize();
         if (!result.startsWith(workspace.toAbsolutePath().normalize())) {
+            LOGGER.error("Artifact path escapes workspace: result={}, workspace={}", result, workspace);
             throw new IllegalArgumentException("Artifact path escapes workspace");
         }
         return result;
@@ -1170,6 +1216,7 @@ public final class ClosedLoopRunner {
     private static void copyFileAtomically(Path source, Path target) throws IOException {
         if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
             if (!ArtifactFingerprint.sha256(source).equals(ArtifactFingerprint.sha256(target))) {
+                LOGGER.error("Existing copied input differs: source={}, target={}", source, target);
                 throw new IllegalArgumentException("Existing copied input differs");
             }
             return;
@@ -1180,6 +1227,7 @@ public final class ClosedLoopRunner {
         try {
             Files.move(temp, target, StandardCopyOption.ATOMIC_MOVE);
         } catch (AtomicMoveNotSupportedException error) {
+            LOGGER.error("Atomic input copy failed for target {}", target, error);
             throw new IOException("Atomic input copy is required", error);
         }
     }
@@ -1187,6 +1235,7 @@ public final class ClosedLoopRunner {
     private static void copyDirectoryAtomically(Path source, Path target) throws IOException {
         if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
             if (!ArtifactFingerprint.sha256(source).equals(ArtifactFingerprint.sha256(target))) {
+                LOGGER.error("Existing copied artifact differs: source={}, target={}", source, target);
                 throw new IllegalArgumentException("Existing copied artifact differs");
             }
             return;
@@ -1197,6 +1246,7 @@ public final class ClosedLoopRunner {
         try (var stream = Files.walk(source)) {
             for (Path path : stream.sorted().toList()) {
                 if (Files.isSymbolicLink(path)) {
+                    LOGGER.error("Input artifact contains symlink: path={}", path);
                     throw new IllegalArgumentException("Input artifacts must not contain symlinks");
                 }
                 Path relative = source.relativize(path);
@@ -1211,6 +1261,7 @@ public final class ClosedLoopRunner {
         try {
             Files.move(temp, target, StandardCopyOption.ATOMIC_MOVE);
         } catch (AtomicMoveNotSupportedException error) {
+            LOGGER.error("Atomic artifact copy failed for target {}", target, error);
             throw new IOException("Atomic artifact copy is required", error);
         }
     }

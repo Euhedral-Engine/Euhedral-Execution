@@ -9,8 +9,6 @@ import java.util.List;
 
 public final class VectorStatistics {
 
-    private VectorStatistics() {}
-
     public static double quantileType7(double[] values, double probability) {
         if (values.length == 0 || !Double.isFinite(probability) || probability < 0 || probability > 1) {
             throw new IllegalArgumentException("Invalid quantile input");
@@ -146,7 +144,7 @@ public final class VectorStatistics {
                 || Arrays.stream(result)
                         .anyMatch(
                                 weight -> !Double.isFinite(weight) || weight <= 0 || weight > Math.nextUp(maximumShare))
-                || compensatedSum(result) != 1.0) {
+                || StrictMath.abs(compensatedSum(result) - 1.0) > 1e-14) {
             throw new IllegalStateException("Unable to cap and normalize anchor weights");
         }
         return result;
@@ -165,4 +163,6 @@ public final class VectorStatistics {
     private static double canonicalZero(double value) {
         return value == 0 ? 0.0 : value;
     }
+
+    private VectorStatistics() {}
 }

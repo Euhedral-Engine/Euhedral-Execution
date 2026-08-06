@@ -19,6 +19,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Consumer;
 import org.apache.commons.math4.legacy.random.SobolSequenceGenerator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,8 +27,6 @@ import org.slf4j.LoggerFactory;
 public final class SequenceFinder {
     private static final int[] MIX_TIE_ORDER = {0, 1, 2};
     private static final Logger LOGGER = LoggerFactory.getLogger(SequenceFinder.class);
-
-    private SequenceFinder() {}
 
     public static CandidateGenerationResult generate(CandidateGenerationRequest request) {
         LOGGER.info(
@@ -70,7 +69,7 @@ public final class SequenceFinder {
             }
         }
 
-        streamSobolScreen(request, historical, registry, candidate -> {
+        streamSobolScreen(request, historical, candidate -> {
             audits.accept(candidate);
             bands.accept(candidate);
         });
@@ -144,6 +143,10 @@ public final class SequenceFinder {
         List<PredictedCandidate> directCandidates = direct.next(directTarget);
         selected.addAll(directCandidates);
         if (selected.size() != count) {
+            LOGGER.error(
+                    "Candidate generation did not fill tranche: selectedSize={}, requestedCount={}",
+                    selected.size(),
+                    count);
             throw new IllegalStateException("Candidate generation did not fill tranche");
         }
         return new Tranche(List.copyOf(selected), cmaAssigned, bandAssigned, directCandidates.size());
@@ -163,11 +166,10 @@ public final class SequenceFinder {
     private static void streamSobolScreen(
             CandidateGenerationRequest request,
             Set<PolicyId> historical,
-            PolicyRegistry registry,
             java.util.function.Consumer<PredictedCandidate> consumer) {
         long exclusiveEnd =
                 Math.addExact(request.sobolCursor(), request.config().screenRows());
-        LOGGER.info("Screening Sobol policy vectors: {}..{}", request.sobolCursor(), exclusiveEnd);
+        LOGGER.info("Screening Sobol policy vectors: {} -> {}", request.sobolCursor(), exclusiveEnd);
         ArrayList<PolicyVector> batch = new ArrayList<>(request.config().maximumPredictionRows());
         long screened = 0;
         for (long cursor = request.sobolCursor(); cursor < exclusiveEnd; cursor++) {
@@ -190,9 +192,7 @@ public final class SequenceFinder {
     }
 
     private static void predictBatch(
-            CandidateGenerationRequest request,
-            List<PolicyVector> policies,
-            java.util.function.Consumer<PredictedCandidate> consumer) {
+            CandidateGenerationRequest request, List<PolicyVector> policies, Consumer<PredictedCandidate> consumer) {
         for (PredictedPolicySummary summary : request.predictor().predict(List.copyOf(policies))) {
             consumer.accept(new PredictedCandidate(summary.policy(), summary, CandidateOrigin.SCORE_BAND));
         }
@@ -222,6 +222,7 @@ public final class SequenceFinder {
 
     private static void validateCursorRange(long start, int count) {
         if (start < 0 || count <= 0 || Math.addExact(start, count) > Integer.MAX_VALUE) {
+            LOGGER.error("Sobol cursor exhausted in validateCursorRange: start={}, count={}", start, count);
             throw new IllegalStateException("Sobol cursor exhausted");
         }
     }
@@ -230,10 +231,10 @@ public final class SequenceFinder {
             List<PredictedCandidate> candidates, int cmaAssigned, int bandAssigned, int directAssigned) {}
 
     private static final class DirectCursor {
+        private long cursor;
         private final PolicyRegistry registry;
         private final Set<PolicyId> excluded;
         private final CandidateGenerationRequest request;
-        private long cursor;
 
         private DirectCursor(
                 long cursor, PolicyRegistry registry, Set<PolicyId> excluded, CandidateGenerationRequest request) {
@@ -247,6 +248,8 @@ public final class SequenceFinder {
             ArrayList<PolicyVector> policies = new ArrayList<>(count);
             while (policies.size() < count) {
                 if (cursor > Integer.MAX_VALUE) {
+                    LOGGER.error(
+                            "Sobol cursor exhausted in DirectCursor.next: cursor={}, requestedCount={}", cursor, count);
                     throw new IllegalStateException("Sobol cursor exhausted");
                 }
                 PolicyVector policy = registry.register(sobol(Math.toIntExact(cursor++)));
@@ -295,4 +298,6 @@ public final class SequenceFinder {
                     .toList();
         }
     }
+
+    private SequenceFinder() {}
 }
