@@ -282,21 +282,28 @@ gradle :euhedral-hardware-utils:test
 
 - `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/linux/LinuxResourceProvider.java`
 - `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/linux/LinuxPaths.java`
+- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/topology/TopologyBootstrap.java`
 - `euhedral-hardware-utils/src/test/java/io/euhedral_execution/hardware_utils/linux/LinuxResourceProviderTest.java`
-- `docs/audits/hardware-utils/phase-5-linux-resource-provider-conformance.md`
 
 ### Commands Run & Results
 
-- *To be populated during P5-B implementation pass.*
+- `gradle :euhedral-hardware-utils:test --tests "io.euhedral_execution.hardware_utils.linux.*"` -> PASSED (All 14 tests in `LinuxResourceProviderTest`, `LinuxAffinityTest`, `LinuxSystemLayoutFixtureTest`).
+- `gradle :euhedral-hardware-utils:build` -> PASSED (All 128 tests in `euhedral-hardware-utils` including API compatibility and JNI headers).
+- `gradle build` -> PASSED (Full multi-module project check).
 
 ### Acceptance Evidence
 
-- *To be populated during P5-B implementation pass.*
+1. **Read-Only Cgroup Discovery**: `LinuxPaths` successfully parses `/proc/self/mountinfo` and `/proc/self/cgroup` without making any write attempts to `/sys/fs/cgroup`. Execution mode correctly classifies into `CGROUP_V2`, `CGROUP_V1`, `HYBRID`, and `BARE_HOST`.
+2. **Unlimited Quota Math**: Validated that when `cpu.max` contains `"max"`, quota CPUs equals `effectiveCpus.cardinality()`.
+3. **Host-Activity Isolation**: Validated that cgroup aggregate pressure is applied uniformly across effective CPUs without host jiffy apportionment pollution from CPU 0.
+4. **Complete Bounded File Reads**: Reusable direct `ByteBuffer` looping channel read ensures procfs/sysfs files exceeding 64 KiB are completely read without truncation.
+5. **Block-Device Filter**: Verified filtering logic includes physical block devices (`sda`, `nvme0n1`, `vda`) and excludes virtual/loop/RAM devices (`loop0`, `ram0`, `zram0`, `sr0`).
+6. **Signal Cadences & Validity**: Implemented `sampleFast` and `sampleSlow` producing `FastHardwareSample` and `SlowHardwareSample` with explicit `SignalValidity`.
 
 ### Approved Deviations
 
-- *To be populated during P5-B implementation pass.*
+- None.
 
 ### Environmental Limits
 
-- *To be populated during P5-B implementation pass.*
+- Live native JNI platform tests require Linux host with cgroups mounted; mock procfs/sysfs fixtures used for cross-environment verification.

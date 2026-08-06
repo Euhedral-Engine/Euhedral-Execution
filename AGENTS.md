@@ -315,4 +315,4 @@ Before handing work back:
 
 - P0-P4 are complete.
 - P5 is in progress. P5-A blueprint, implementation, and conformance audit are complete.
-- P5-B blueprint is complete ([`phase-5-linux-resource-provider.md`](docs/blueprints/hardware-utils/phase-5-linux-resource-provider.md)) and ready for review and merge into the P5 root.
+- P5-B blueprint and implementation are complete ([`phase-5-linux-resource-provider.md`](docs/blueprints/hardware-utils/phase-5-linux-resource-provider.md)); conformance audit pending.

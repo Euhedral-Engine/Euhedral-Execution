@@ -334,6 +334,11 @@ method	io/euhedral_execution/hardware_utils/windows/WindowsSystemLayout#getSocke
 module	module	name=euhedral.hardware_utils;access=-;version=0.0.7-SNAPSHOT
 module-exports	io/euhedral_execution/hardware_utils	access=-;targets=-
 module-exports	io/euhedral_execution/hardware_utils/common	access=-;targets=-
+module-exports	io/euhedral_execution/hardware_utils/internal/sampling	access=-;targets=-
+module-exports	io/euhedral_execution/hardware_utils/internal/sampling/enums	access=-;targets=-
+module-exports	io/euhedral_execution/hardware_utils/internal/sampling/primitives	access=-;targets=-
+module-exports	io/euhedral_execution/hardware_utils/internal/sampling/samples	access=-;targets=-
+module-exports	io/euhedral_execution/hardware_utils/internal/sampling/signals	access=-;targets=-
 module-exports	io/euhedral_execution/hardware_utils/linux	access=-;targets=-
 module-exports	io/euhedral_execution/hardware_utils/osx	access=-;targets=-
 module-exports	io/euhedral_execution/hardware_utils/windows	access=-;targets=-

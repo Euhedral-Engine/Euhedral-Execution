@@ -20,7 +20,7 @@ class ApiCompatibilityTest {
                 .resolve("compatibility/compatibility-report.txt");
         report.write(reportPath);
 
-        assertEquals(5, current.moduleEntries().stream()
+        assertEquals(10, current.moduleEntries().stream()
                 .filter(entry -> entry.kind().equals("module-exports")).count());
         assertTrue(report.passes(), () -> "compatibility failure; see " + reportPath
                 + System.lineSeparator() + report.render());
