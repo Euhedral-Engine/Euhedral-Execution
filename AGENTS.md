@@ -314,4 +314,4 @@ Before handing work back:
 ## Temporary hardware-utils overhaul status (P4)
 
 - P0-P3 are complete.
-- P4 is in progress. The P4 parent blueprint, P4-A blueprint, and P4-B blueprint are merged. P4-A and P4-B implementations are complete and ready for review. Do not create P4-C blueprint until P4-B merges.
+- P4 is in progress. The P4 parent blueprint, P4-A blueprint, and P4-B blueprint are merged. P4-A and P4-B implementations are complete and ready for review. P4-C blueprint and implementation are complete and ready for review. Do not create P4-D blueprint until P4-C merges.
