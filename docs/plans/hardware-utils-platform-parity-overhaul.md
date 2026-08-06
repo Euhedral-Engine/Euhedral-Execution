@@ -2510,7 +2510,7 @@ or upgrade this selection before this prompt is runnable.**
 
 #### P4-C listener publication implementation prompt
 
-**Parent-selected model: `gpt-5.6-sol`; reasoning effort: `high`. The P4-C blueprint must confirm
+**Parent-selected model: `gpt-5.6-sol`; reasoning effort: `low`. The P4-C blueprint must confirm
 or upgrade this selection before this prompt is runnable.**
 
 > After the P4-C blueprint is reviewed and merged, create
