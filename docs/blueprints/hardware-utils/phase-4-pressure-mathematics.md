@@ -887,3 +887,31 @@ Hand this blueprint off for review and merge into the P4 root only when:
 Do not implement P4-B from this branch. After review and explicit merge authorization, merge this
 blueprint into the P4 root, create only the P4-B implementation branch from that updated root, and
 rerun P4-B's sizing/model gate.
+
+## Completion Record
+
+### Changed Files
+- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/pressure/PressureConstants.java`
+- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/pressure/PressureEvaluation.java`
+- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/pressure/PressureEvaluator.java`
+- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/pressure/PressureProjection.java`
+- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/pressure/PressureState.java`
+- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/common/SystemUtilization.java`
+- `euhedral-hardware-utils/src/test/java/io/euhedral_execution/hardware_utils/internal/pressure/PressureCompositionTest.java`
+- `euhedral-hardware-utils/src/test/java/io/euhedral_execution/hardware_utils/internal/pressure/PressureEvaluatorTest.java`
+- `euhedral-hardware-utils/src/test/java/io/euhedral_execution/hardware_utils/internal/pressure/PressurePropertiesTest.java`
+- `euhedral-hardware-utils/src/test/java/io/euhedral_execution/hardware_utils/internal/pressure/PressureSignalAvailabilityTest.java`
+- `euhedral-hardware-utils/src/test/java/io/euhedral_execution/hardware_utils/common/RatioAccessorContractTest.java`
+
+### Commands and Results
+- `gradle :euhedral-hardware-utils:test --tests "io.euhedral_execution.hardware_utils.internal.pressure.*"` - Passed.
+- `gradle :euhedral-hardware-utils:test --tests "io.euhedral_execution.hardware_utils.common.RatioAccessorContractTest"` - Passed.
+
+### Acceptance Evidence
+Evaluates multidomain hardware pressure signals with actual-time EWMA smoothing, finite ratio sanitation in [0.0, 1.0], composite max, and public record projection.
+
+### Deviations
+None.
+
+### Environmental Limits
+None.
