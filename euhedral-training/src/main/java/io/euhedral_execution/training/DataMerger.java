@@ -215,10 +215,7 @@ public class DataMerger {
                             .sorted(Comparator.comparing(
                                     path -> path.getFileName().toString()))
                             .toList()) {
-                        String runId = ObservationBundleReader.read(bundle)
-                                .run()
-                                .descriptor()
-                                .benchmarkRunId();
+                        String runId = ObservationBundleReader.readRunId(bundle);
                         accepted.add(runId);
                         Path normalized = bundle.toAbsolutePath().normalize();
                         Path previous = bundlesByRunId.putIfAbsent(runId, normalized);

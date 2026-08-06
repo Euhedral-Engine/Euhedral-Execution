@@ -1,5 +1,7 @@
 package io.euhedral_execution.training.merge.data;
 
+import io.euhedral_execution.hardware_utils.PinnedThreadExecutor;
+import io.euhedral_execution.hardware_utils.SystemInfo;
 import io.euhedral_execution.training.data.PolicyId;
 import io.euhedral_execution.training.data.PolicyVector;
 import io.euhedral_execution.training.data.SourceScenario;
@@ -17,11 +19,17 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.SortedMap;
 import java.util.TreeMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class CalibrationPlanCsv {
+
     private static final Logger LOGGER = LoggerFactory.getLogger(CalibrationPlanCsv.class);
+
+    /// Minimum number of anchor data rows before parallel chunk parsing is worthwhile.
+    private static final int PARALLEL_ANCHOR_THRESHOLD = 64;
 
     public static void write(Path directory, CalibrationPlan plan) throws IOException {
         Files.createDirectories(directory);
@@ -71,7 +79,29 @@ public final class CalibrationPlanCsv {
 
     public static CalibrationPlan read(Path directory, Collection<SourceScenario> knownScenarios) throws IOException {
         LOGGER.info("Reading calibration plan from {}", directory);
-        List<String> anchorLines = strictLines(directory.resolve("fixed-anchors.csv"));
+        int cpuCount = SystemInfo.getCpuCount();
+
+        // Read both CSV files concurrently on separate pinned CPUs
+        PinnedThreadExecutor cpu0 = acquireExecutor(0);
+        Future<List<String>> anchorFuture = cpu0.submit(() -> strictLines(directory.resolve("fixed-anchors.csv")));
+
+        PinnedThreadExecutor refExecutor = cpuCount > 1 ? acquireExecutor(1) : cpu0;
+        Future<List<String>> referenceFuture =
+                refExecutor.submit(() -> strictLines(directory.resolve("reference-runs.csv")));
+
+        List<String> anchorLines;
+        List<String> referenceLines;
+        try {
+            anchorLines = anchorFuture.get();
+            referenceLines = referenceFuture.get();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Interrupted while reading calibration plan", e);
+        } catch (ExecutionException e) {
+            throw unwrapIOException(e);
+        }
+
+        // Validate anchor header and extract anchorSetId
         if (anchorLines.size() < 2) {
             throw new IllegalArgumentException("Empty anchor catalog");
         }
@@ -82,16 +112,113 @@ public final class CalibrationPlanCsv {
         if (!anchorLines.getFirst().contentEquals(expectedAnchorHeader)) {
             throw new IllegalArgumentException("Invalid anchor header");
         }
-        String anchorSetId = null;
+
+        // Extract anchorSetId from the first data row for reference validation.
+        String[] firstAnchorFields = anchorLines.get(1).split(",", -1);
+        if (firstAnchorFields.length != 31 || !"1".equals(firstAnchorFields[0])) {
+            throw new IllegalArgumentException();
+        }
+        String anchorSetId = firstAnchorFields[1];
+
+        // Parse anchor rows in parallel chunks
+        int dataRowCount = anchorLines.size() - 1;
+        List<PolicyVector> anchors;
+        if (dataRowCount >= PARALLEL_ANCHOR_THRESHOLD && cpuCount > 1) {
+            anchors = parseAnchorsParallel(anchorLines, anchorSetId, cpuCount);
+        } else {
+            anchors = parseAnchorsSerial(anchorLines, anchorSetId);
+        }
+
+        // Parse references
+        Map<String, SourceScenario> scenarioById = new HashMap<>();
+        if (knownScenarios != null) {
+            knownScenarios.forEach(item -> scenarioById.put(item.canonical(), item));
+        }
+        SortedMap<SourceScenario, String> references =
+                parseReferences(referenceLines, anchorSetId, knownScenarios, scenarioById);
+
+        LOGGER.info("Found {} anchors and {} unique scenarios", anchors.size(), references.size());
+        return new CalibrationPlan(
+                new AnchorCatalog(1, anchorSetId, anchors), new ReferenceRunCatalog(1, anchorSetId, references));
+    }
+
+    public static CalibrationPlan read(Path directory) throws IOException {
+        return read(directory, null);
+    }
+
+    /// Parsed result for one anchor row, carrying both the vector and the raw fields for
+    /// post-validation of policy ID ordering and anchor-set consistency.
+    private record ParsedAnchor(PolicyVector policy, String rawPolicyId, String rawAnchorSetId) {}
+
+    /// Parses anchor data rows in parallel chunks across available pinned CPUs. Each chunk produces
+    /// a list of ParsedAnchor. After all chunks complete, results are merged and validated for
+    /// ordering and anchor-set consistency.
+    private static List<PolicyVector> parseAnchorsParallel(List<String> anchorLines, String anchorSetId, int cpuCount)
+            throws IOException {
+        int dataRowCount = anchorLines.size() - 1;
+        int workerCount = Math.min(cpuCount, dataRowCount);
+        int chunkSize = (dataRowCount + workerCount - 1) / workerCount;
+
+        @SuppressWarnings("unchecked")
+        Future<List<ParsedAnchor>>[] futures = new Future[workerCount];
+        for (int w = 0; w < workerCount; w++) {
+            int startRow = 1 + w * chunkSize; // 1-based into anchorLines
+            int endRow = Math.min(startRow + chunkSize, anchorLines.size()); // exclusive
+            if (startRow >= anchorLines.size()) {
+                break;
+            }
+            PinnedThreadExecutor executor = acquireExecutor(w);
+            int capturedStart = startRow;
+            int capturedEnd = endRow;
+            futures[w] = executor.submit(() -> {
+                List<ParsedAnchor> chunk = new ArrayList<>(capturedEnd - capturedStart);
+                for (int line = capturedStart; line < capturedEnd; line++) {
+                    chunk.add(parseOneAnchorRow(anchorLines.get(line)));
+                }
+                return chunk;
+            });
+        }
+
+        // Collect results in order and validate.
+        List<PolicyVector> anchors = new ArrayList<>(dataRowCount);
+        PolicyId previousPolicyId = null;
+        try {
+            for (Future<List<ParsedAnchor>> future : futures) {
+                if (future == null) {
+                    break;
+                }
+                for (ParsedAnchor parsed : future.get()) {
+                    if (!anchorSetId.equals(parsed.rawAnchorSetId())) {
+                        throw new IllegalArgumentException("Mixed anchor set");
+                    }
+                    if (!parsed.policy().id().equals(PolicyId.parse(parsed.rawPolicyId()))) {
+                        throw new IllegalArgumentException();
+                    }
+                    if (previousPolicyId != null
+                            && previousPolicyId.compareTo(parsed.policy().id()) >= 0) {
+                        throw new IllegalArgumentException("Anchors are not in policy order");
+                    }
+                    previousPolicyId = parsed.policy().id();
+                    anchors.add(parsed.policy());
+                }
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Interrupted while parsing anchors", e);
+        } catch (ExecutionException e) {
+            throw unwrapIOException(e);
+        }
+        return anchors;
+    }
+
+    /// Serial anchor parsing fallback for small files or single-CPU systems.
+    private static List<PolicyVector> parseAnchorsSerial(List<String> anchorLines, String anchorSetId) {
         List<PolicyVector> anchors = new ArrayList<>();
         PolicyId previousPolicyId = null;
         for (int line = 1; line < anchorLines.size(); line++) {
             String[] fields = anchorLines.get(line).split(",", -1);
             if (fields.length != 31 || !"1".equals(fields[0])) {
                 throw new IllegalArgumentException();
-            }
-            if (anchorSetId == null) {
-                anchorSetId = fields[1];
             }
             if (!anchorSetId.equals(fields[1])) {
                 throw new IllegalArgumentException("Mixed anchor set");
@@ -110,16 +237,38 @@ public final class CalibrationPlanCsv {
             previousPolicyId = policy.id();
             anchors.add(policy);
         }
-        Map<String, SourceScenario> scenarioById = new HashMap<>();
-        if (knownScenarios != null) {
-            knownScenarios.forEach(item -> scenarioById.put(item.canonical(), item));
+        return anchors;
+    }
+
+    /// Parses one anchor CSV row into a ParsedAnchor carrying the constructed PolicyVector and raw
+    /// field values for deferred validation. This is the per-row hot path: hex decode of 28 weight
+    /// fields followed by xxHash64 inside PolicyVector.of().
+    private static ParsedAnchor parseOneAnchorRow(String row) {
+        String[] fields = row.split(",", -1);
+        if (fields.length != 31 || !"1".equals(fields[0])) {
+            throw new IllegalArgumentException();
         }
-        SortedMap<SourceScenario, String> references = new TreeMap<>();
-        List<String> referenceLines = strictLines(directory.resolve("reference-runs.csv"));
+        double[] weights = new double[PolicyVector.WIDTH];
+        for (int i = 0; i < weights.length; i++) {
+            weights[i] = Double.longBitsToDouble(Long.parseUnsignedLong(fields[i + 3], 16));
+        }
+        return new ParsedAnchor(PolicyVector.of(weights), fields[2], fields[1]);
+    }
+
+    // -- Reference parsing ------------------------------------------------------------------------
+
+    /// Parses reference-runs.csv lines. References are lightweight (no hashing), so this runs
+    /// serially on the calling thread.
+    private static SortedMap<SourceScenario, String> parseReferences(
+            List<String> referenceLines,
+            String anchorSetId,
+            Collection<SourceScenario> knownScenarios,
+            Map<String, SourceScenario> scenarioById) {
         if (referenceLines.isEmpty()
                 || !referenceLines.getFirst().equals("schema_version,anchor_set_id,scenario_id,benchmark_run_id")) {
             throw new IllegalArgumentException("Invalid reference header");
         }
+        SortedMap<SourceScenario, String> references = new TreeMap<>();
         SourceScenario previousScenario = null;
         for (int line = 1; line < referenceLines.size(); line++) {
             String[] fields = referenceLines.get(line).split(",", -1);
@@ -137,13 +286,32 @@ public final class CalibrationPlanCsv {
             }
             previousScenario = scenario;
         }
-        LOGGER.info("Found {} anchors and {} unique scenarios", anchors.size(), references.size());
-        return new CalibrationPlan(
-                new AnchorCatalog(1, anchorSetId, anchors), new ReferenceRunCatalog(1, anchorSetId, references));
+        return references;
     }
 
-    public static CalibrationPlan read(Path directory) throws IOException {
-        return read(directory, null);
+    // -- Executor and utility helpers -------------------------------------------------------------
+
+    /// Acquires a PinnedThreadExecutor for the given CPU index. Uses getOrSetIfAbsent which
+    /// returns an existing RUNNING executor, restarts a SHUTDOWN executor, or creates a new one.
+    /// The returned executor is a JVM-wide daemon-thread singleton; callers must not shut it down.
+    private static PinnedThreadExecutor acquireExecutor(int cpu) {
+        return PinnedThreadExecutor.getOrSetIfAbsent(cpu, "calibration-plan-reader-" + cpu, Thread.NORM_PRIORITY, true);
+    }
+
+    /// Unwraps an ExecutionException into an IOException, IllegalArgumentException, or wraps the
+    /// cause in an IOException for checked propagation.
+    private static IOException unwrapIOException(ExecutionException e) throws IOException {
+        Throwable cause = e.getCause();
+        if (cause instanceof IOException io) {
+            throw io;
+        }
+        if (cause instanceof IllegalArgumentException iae) {
+            throw iae;
+        }
+        if (cause instanceof Error error) {
+            throw error;
+        }
+        throw new IOException("Failed during calibration plan read", cause);
     }
 
     private static List<String> strictLines(Path path) throws IOException {

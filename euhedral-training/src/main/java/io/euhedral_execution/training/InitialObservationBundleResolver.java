@@ -52,7 +52,7 @@ public final class InitialObservationBundleResolver {
     }
 
     private static void registerBundle(Map<String, Path> bundlesByRunId, Path bundle) throws IOException {
-        String runId = ObservationBundleReader.read(bundle).run().descriptor().benchmarkRunId();
+        String runId = ObservationBundleReader.readRunId(bundle);
         Path previous = bundlesByRunId.putIfAbsent(runId, bundle);
         if (previous != null) {
             if (!ArtifactFingerprint.sha256(previous).equals(ArtifactFingerprint.sha256(bundle))) {

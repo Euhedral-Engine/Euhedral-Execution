@@ -77,6 +77,22 @@ public final class ObservationBundleReader {
 
     private ObservationBundleReader() {}
 
+    public static String readRunId(Path directory) {
+        try {
+            if (!Files.isRegularFile(directory.resolve("COMPLETE")) || Files.size(directory.resolve("COMPLETE")) != 0) {
+                throw new IllegalArgumentException("Bundle lacks COMPLETE");
+            }
+            List<List<String>> runRows = readCsv(directory.resolve("run.csv"));
+            requireRows(runRows, 2, 23);
+            if (!runRows.getFirst().equals(RUN_HEADER)) {
+                throw new IllegalArgumentException("Run header");
+            }
+            return runRows.get(1).get(1);
+        } catch (IOException error) {
+            throw new IllegalStateException(error);
+        }
+    }
+
     public static ObservationBundle read(Path directory) {
         try {
             if (!Files.isRegularFile(directory.resolve("COMPLETE")) || Files.size(directory.resolve("COMPLETE")) != 0) {

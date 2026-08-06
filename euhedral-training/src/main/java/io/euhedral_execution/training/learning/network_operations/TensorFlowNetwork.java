@@ -155,11 +155,11 @@ public class TensorFlowNetwork implements AutoCloseable {
             return;
         }
         try (TFloat32 inputTensor = TFloat32.tensorOf(Shape.of(rows, featureWidth), DataBuffers.of(features));
-                TFloat32 outputTensor = (TFloat32) session.runner()
+                org.tensorflow.Result result = session.runner()
                         .feed(inputPlaceholder, inputTensor)
                         .fetch(outputLayer)
-                        .run()
-                        .get(0)) {
+                        .run();
+                TFloat32 outputTensor = (TFloat32) result.get(0)) {
             outputTensor.copyTo(DataBuffers.of(destination));
         }
     }
@@ -176,16 +176,15 @@ public class TensorFlowNetwork implements AutoCloseable {
                 TFloat32 labelTensor = TFloat32.tensorOf(Shape.of(batchRows, 9), DataBuffers.of(labels));
                 TFloat32 weightTensor = TFloat32.tensorOf(Shape.of(batchRows, 1), DataBuffers.of(rowWeights));
                 TFloat32 posTensor = TFloat32.tensorOf(Shape.of(1, 9), DataBuffers.of(posWeights));
-                TFloat32 negTensor = TFloat32.tensorOf(Shape.of(1, 9), DataBuffers.of(negWeights))) {
-            session.runner()
-                    .feed(inputPlaceholder, inputTensor)
-                    .feed(labelPlaceholder, labelTensor)
-                    .feed(rowWeightPlaceholder, weightTensor)
-                    .feed(posWeightPlaceholder, posTensor)
-                    .feed(negWeightPlaceholder, negTensor)
-                    .addTarget(trainOp)
-                    .run();
-        }
+                TFloat32 negTensor = TFloat32.tensorOf(Shape.of(1, 9), DataBuffers.of(negWeights));
+                org.tensorflow.Result result = session.runner()
+                        .feed(inputPlaceholder, inputTensor)
+                        .feed(labelPlaceholder, labelTensor)
+                        .feed(rowWeightPlaceholder, weightTensor)
+                        .feed(posWeightPlaceholder, posTensor)
+                        .feed(negWeightPlaceholder, negTensor)
+                        .addTarget(trainOp)
+                        .run()) {}
     }
 
     public void setProperty(String key, String value) {
@@ -212,6 +211,8 @@ public class TensorFlowNetwork implements AutoCloseable {
         try (OutputStream out = Files.newOutputStream(propFile)) {
             properties.store(out, "TensorFlowNetwork properties");
         }
+
+        deleteDirectory(stagingDirectory);
     }
 
     public void load(Path memberDirectory, String name) throws IOException {

@@ -56,16 +56,14 @@ public final class ClosedLoopConfigFingerprint {
             CalibrationPlan plan =
                     CalibrationPlanCsv.read(config.initialCalibrationPlan().get());
             for (var bundle : InitialObservationBundleResolver.resolve(config, plan)) {
-                String runId =
-                        ObservationBundleReader.read(bundle).run().descriptor().benchmarkRunId();
+                String runId = ObservationBundleReader.readRunId(bundle);
                 if (bundles.put(runId, bundle) != null) {
                     throw new IllegalArgumentException("Duplicate initial benchmark run");
                 }
             }
         } else {
             for (var bundle : config.initialObservationBundles()) {
-                String runId =
-                        ObservationBundleReader.read(bundle).run().descriptor().benchmarkRunId();
+                String runId = ObservationBundleReader.readRunId(bundle);
                 if (bundles.put(runId, bundle) != null) {
                     throw new IllegalArgumentException("Duplicate initial benchmark run");
                 }
