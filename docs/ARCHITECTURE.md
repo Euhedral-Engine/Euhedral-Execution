@@ -324,7 +324,7 @@ The production fragment evaluates a fixed 28-weight policy. Model training stays
 ordinal policy ranker, generates candidates, benchmarks them, and promotes only completed runs back
 into the corpus. See the
 [`training README`](../euhedral-training/README.md) for commands and properties, and
-[`ML_CLOSED_LOOP_ARCHITECTURE.md`](ML_CLOSED_LOOP_ARCHITECTURE.md) for the slower feedback loop’s
+[`ML_CLOSED_LOOP_ARCHITECTURE.md`](ML_CLOSED_LOOP_ARCHITECTURE.md) for the slower feedback loop's
 design.
 
 The separate [`benchmarks`](../benchmarks/) module packages JMH tests for end-to-end latency,

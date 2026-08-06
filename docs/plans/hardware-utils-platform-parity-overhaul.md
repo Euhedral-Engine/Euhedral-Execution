@@ -252,13 +252,13 @@ toolchain constraint without changing phase scope, acceptance criteria, or imple
 
 Zig 0.16.0 is pinned, and Zig's build-system API (`build.zig`, `std.Build`, module/step wiring) has
 changed materially across recent releases. Whichever model executes P1 (blueprint or
-implementation), it should not rely on memorized Zig syntax from training data — training data for
+implementation), it should not rely on memorized Zig syntax from training data - training data for
 any current model is likely to contain a mix of pre-0.16 API shapes that will silently fail to
 compile or, worse, compile with different semantics than intended. Before writing or reviewing any
 `build.zig` manifest logic, the agent should pull current Zig 0.16 documentation/source (or run
 `zig build --help` / inspect the pinned toolchain directly in the environment) to confirm the
 actual API surface, rather than trust pattern-matched recall. This applies equally to the
-OpenAI and Anthropic options above — it's a model-agnostic risk, not one the vendor choice fixes.
+OpenAI and Anthropic options above - it's a model-agnostic risk, not one the vendor choice fixes.
 
 ## Current-state findings
 
@@ -1226,7 +1226,7 @@ implementation.
 > defect maps to a later exact regression, and only blueprint-owned files changed. Merge this child
 > into the P0 root before validation.
 
-#### P0 validation prompt — SUPERSEDED, DO NOT RUN
+#### P0 validation prompt - SUPERSEDED, DO NOT RUN
 
 **Model: `gpt-5.6-sol`; reasoning effort: `medium`.**
 
@@ -1459,7 +1459,7 @@ sequential child lifecycles below.
 > `target`, the signed macOS outputs are the staged outputs, source artifacts are unchanged, and
 > P0 compatibility passes. Handoff for P1-A conformance review and manual review.
 
-#### P1-A native graph/JNI/signing validation prompt — SUPERSEDED, DO NOT RUN
+#### P1-A native graph/JNI/signing validation prompt - SUPERSEDED, DO NOT RUN
 
 **Model: `gpt-5.6-sol`; reasoning effort: `high`.**
 
@@ -1556,7 +1556,7 @@ sequential child lifecycles below.
 > fallback and cleanup are deterministic/safe, packaged bytes pass all available gates, and CI
 > selects no training. Handoff for P1-B conformance review and manual review.
 
-#### P1-B loader/package/CI validation prompt — SUPERSEDED, DO NOT RUN
+#### P1-B loader/package/CI validation prompt - SUPERSEDED, DO NOT RUN
 
 **Model: `gpt-5.6-sol`; reasoning effort: `high`.**
 
@@ -1598,7 +1598,7 @@ sequential child lifecycles below.
 > records/status block, and hand off for root conformance checking and manual review. The root audit
 > records the final P1 disposition.
 
-#### P1 root integration validation prompt — SUPERSEDED, DO NOT RUN
+#### P1 root integration validation prompt - SUPERSEDED, DO NOT RUN
 
 **Model: `gpt-5.6-sol`; reasoning effort: `high`.**
 

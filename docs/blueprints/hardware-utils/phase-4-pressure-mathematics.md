@@ -44,13 +44,13 @@ limit). Zero deviations from parent blueprint. All constraints met.
 
 Key P4-A artifacts consumed by P4-B:
 
-- `IntervalHardwareSample` — complete resolved boundary record.
-- `SignalResolution` — `CURRENT`, `CACHED`, `BASELINE`, `UNAVAILABLE`.
-- `CounterDelta`, `ResolvedDouble`, `ResolvedLong`, `LatencyInterval` — immutable resolved
+- `IntervalHardwareSample` - complete resolved boundary record.
+- `SignalResolution` - `CURRENT`, `CACHED`, `BASELINE`, `UNAVAILABLE`.
+- `CounterDelta`, `ResolvedDouble`, `ResolvedLong`, `LatencyInterval` - immutable resolved
   primitives.
 - `CpuIntervalSignals`, `MemoryIntervalSignals`, `IoIntervalSignals`,
-  `CpuSlowIntervalSignals`, `SystemSlowIntervalSignals` — grouped interval signal records.
-- `ThermalSeverity` — `NOMINAL`, `FAIR`, `SERIOUS`, `CRITICAL`, `EMERGENCY`.
+  `CpuSlowIntervalSignals`, `SystemSlowIntervalSignals` - grouped interval signal records.
+- `ThermalSeverity` - `NOMINAL`, `FAIR`, `SERIOUS`, `CRITICAL`, `EMERGENCY`.
 
 ## Sizing and split gate
 
@@ -183,7 +183,7 @@ Global/memory/I/O cells (one each, independent of CPU count):
 Scope smoothers (`scopeWait`, `scopePsi`, `scopeReported`, `globalThrottle`, `systemThermal`,
 `systemLowPower`) are stored once and their smoothed values apply to every effective CPU.
 
-Total cell count: `(per-CPU-specific × logicalSpan) + scope-shared + global` where the exact count
+Total cell count: `(per-CPU-specific x logicalSpan) + scope-shared + global` where the exact count
 is derived at construction from this inventory. Arrays are allocated at construction, touched by
 `firstTouch()` if applicable.
 
@@ -588,7 +588,7 @@ Sanitize:
 - `quotaCpus`: non-finite or negative -> `0.0`; clamp to `[0.0, globalEffectiveCpus.cardinality()]`.
 - `period`: negative -> `0`.
 
-### `CpuSnapshot` — no compact constructor changes needed
+### `CpuSnapshot` - no compact constructor changes needed
 
 `CpuSnapshot` is a simple record. Its fields are always constructed by `HardwareUtilization`
 accessor methods which perform their own sanitation. Direct public construction of `CpuSnapshot`
@@ -596,7 +596,7 @@ must still produce valid values; the existing record semantics suffice because a
 participate in ratio contracts pass through the projection's `unit()` before becoming
 `CpuSnapshot` components.
 
-### `SocketSnapshot` and `CoreSnapshot` — existing constructors
+### `SocketSnapshot` and `CoreSnapshot` - existing constructors
 
 Already deep-copy `effectiveCores`/`effectiveCpus` via `UnmodifiableBitSet` and clone arrays.
 Existing constructors are sufficient.

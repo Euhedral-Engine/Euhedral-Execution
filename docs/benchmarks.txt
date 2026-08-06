@@ -1,5 +1,5 @@
 Benchmark                                          Mode    Cnt    Score   Error  Units
-EndToEndLatencyBenchmark.ECore.endToEnd          sample  38852   33.407 ± 0.025  ns/op
+EndToEndLatencyBenchmark.ECore.endToEnd          sample  38852   33.407 +/- 0.025  ns/op
 EndToEndLatencyBenchmark.ECore.endToEnd:p0.00    sample          28.000          ns/op
 EndToEndLatencyBenchmark.ECore.endToEnd:p0.50    sample          33.000          ns/op
 EndToEndLatencyBenchmark.ECore.endToEnd:p0.90    sample          35.000          ns/op
@@ -8,7 +8,7 @@ EndToEndLatencyBenchmark.ECore.endToEnd:p0.99    sample          37.000         
 EndToEndLatencyBenchmark.ECore.endToEnd:p0.999   sample          38.000          ns/op
 EndToEndLatencyBenchmark.ECore.endToEnd:p0.9999  sample          64.115          ns/op
 EndToEndLatencyBenchmark.ECore.endToEnd:p1.00    sample          71.000          ns/op
-EndToEndLatencyBenchmark.PCore.endToEnd          sample  22320   61.527 ± 0.088  ns/op
+EndToEndLatencyBenchmark.PCore.endToEnd          sample  22320   61.527 +/- 0.088  ns/op
 EndToEndLatencyBenchmark.PCore.endToEnd:p0.00    sample          45.000          ns/op
 EndToEndLatencyBenchmark.PCore.endToEnd:p0.50    sample          62.000          ns/op
 EndToEndLatencyBenchmark.PCore.endToEnd:p0.90    sample          66.000          ns/op
@@ -19,8 +19,8 @@ EndToEndLatencyBenchmark.PCore.endToEnd:p0.9999  sample         121.518         
 EndToEndLatencyBenchmark.PCore.endToEnd:p1.00    sample         126.000          ns/op
 
 Benchmark                                                   Mode  Cnt   Score   Error   Units
-TrueThroughputBenchmark.ingest32million32sources           thrpt    5   0.037 ± 0.001  ops/ns
-TrueThroughputBenchmark.ingest32million32sources          sample   60  27.333 ± 0.256   ns/op
+TrueThroughputBenchmark.ingest32million32sources           thrpt    5   0.037 +/- 0.001  ops/ns
+TrueThroughputBenchmark.ingest32million32sources          sample   60  27.333 +/- 0.256   ns/op
 TrueThroughputBenchmark.ingest32million32sources:p0.00    sample       27.000           ns/op
 TrueThroughputBenchmark.ingest32million32sources:p0.50    sample       27.000           ns/op
 TrueThroughputBenchmark.ingest32million32sources:p0.90    sample       28.000           ns/op
