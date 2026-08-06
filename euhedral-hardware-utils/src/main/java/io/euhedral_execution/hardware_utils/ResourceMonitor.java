@@ -2,53 +2,70 @@ package io.euhedral_execution.hardware_utils;
 
 import io.euhedral_execution.hardware_utils.common.SystemSnapshotProvider;
 import io.euhedral_execution.hardware_utils.common.SystemUtilization.HardwareUtilization;
-import io.euhedral_execution.hardware_utils.common.SystemUtilization.SystemSnapshot;
-import io.euhedral_execution.hardware_utils.common.UnmodifiableBitSet;
-import io.euhedral_execution.hardware_utils.internal.Constants;
-import it.unimi.dsi.fastutil.objects.ObjectArraySet;
-import java.time.Duration;
-import java.util.BitSet;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.locks.LockSupport;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import io.euhedral_execution.hardware_utils.internal.monitor.DeadlineWaiter;
+import io.euhedral_execution.hardware_utils.internal.monitor.LatestValueDispatcher;
+import io.euhedral_execution.hardware_utils.internal.monitor.MonotonicClock;
+import io.euhedral_execution.hardware_utils.internal.monitor.TopologyUpdater;
+import io.euhedral_execution.hardware_utils.internal.pressure.PressureEvaluation;
+import io.euhedral_execution.hardware_utils.internal.pressure.PressureEvaluator;
 
-@SuppressWarnings("unused")
+import io.euhedral_execution.hardware_utils.internal.pressure.PressureState;
+import io.euhedral_execution.hardware_utils.internal.sampling.DetailedSystemSnapshotProvider;
+import io.euhedral_execution.hardware_utils.internal.sampling.SampleStateEngine;
+import io.euhedral_execution.hardware_utils.internal.sampling.SystemSnapshotCompatibilityAdapter;
+import io.euhedral_execution.hardware_utils.internal.sampling.samples.FastHardwareSample;
+import io.euhedral_execution.hardware_utils.internal.sampling.samples.IntervalHardwareSample;
+
+
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
+import java.time.Duration;
+import java.util.concurrent.ThreadFactory;
+
 public class ResourceMonitor implements AutoCloseable {
 
-    // 1M GB to represent unlimited memory limit.
-    private static final long MEMORY_CLAMP = 1_000_000_000_000_000L;
-    private static final double NS_TO_SEC = 1.0 / 1_000_000_000.0;
+    private static final int NEW = 0;
+    private static final int STARTING = 1;
+    private static final int RUNNING = 2;
+    private static final int STOPPED = 3;
+    private static final int CLOSING = 4;
+    private static final int CLOSED = 5;
 
-    private static long clampMemory(long val) {
-        return Math.min(MEMORY_CLAMP, Math.max(0, val));
+    private static final VarHandle STATE;
+    private static final VarHandle EVAL_ACTIVE;
+    private static final VarHandle PUB_CLAIMED;
+
+    static {
+        try {
+            MethodHandles.Lookup l = MethodHandles.lookup();
+            STATE = l.findVarHandle(ResourceMonitor.class, "state", int.class);
+            EVAL_ACTIVE = l.findVarHandle(ResourceMonitor.class, "evaluationActive", boolean.class);
+            PUB_CLAIMED = l.findVarHandle(ResourceMonitor.class, "publicationClaimed", boolean.class);
+        } catch (ReflectiveOperationException e) {
+            throw new ExceptionInInitializerError(e);
+        }
     }
 
-    private static double clampDouble(double val, double min, double max) {
-        return Math.min(max, Math.max(min, val));
-    }
+    private volatile int state = NEW;
+    private volatile boolean evaluationActive;
+    private volatile boolean publicationClaimed;
 
-    private final Logger logger = LoggerFactory.getLogger(Constants.getLoggerName(this.getClass()));
-    private final TopologyMapper topology;
-    private final SystemSnapshotProvider snapshotProvider;
-
+    private final TopologyUpdater topology;
+    private final DetailedSystemSnapshotProvider provider;
     private final long sampleRateNs;
-    private final double smoothingFactor;
+    private final MonotonicClock clock;
+    private final DeadlineWaiter waiter;
+    private final ThreadFactory threadFactory;
 
-    private final AtomicBoolean listenerGuard = new AtomicBoolean(false);
-    private final AtomicBoolean running = new AtomicBoolean(false);
-    private final AtomicBoolean closing = new AtomicBoolean(false);
-
-    private final ObjectArraySet<MonitorListener> listeners = new ObjectArraySet<>(1);
-    private final Readings readings = new Readings();
-
-    private volatile HardwareUtilization hardwareUtilization;
-    private volatile BitSet globalEffectiveCpus;
-    private volatile long lastCpuUsageNs;
-    private volatile long lastThrottleNs;
-    private volatile long lastDiskIOBytes;
+    private final LatestValueDispatcher dispatcher;
+    private final SampleStateEngine stateEngine;
+    
+    private volatile PressureState pressureState;
     private volatile Thread pollingThread;
+    private volatile HardwareUtilization lastUtilization;
+    
+    // For coalesced stopped read
+    private volatile boolean coalescedReadPending = false;
 
     public ResourceMonitor(TopologyMapper mapper) {
         this(mapper, Duration.ofMillis(200));
@@ -58,308 +75,208 @@ public class ResourceMonitor implements AutoCloseable {
         this(mapper, sampleRate, SystemInfo.SNAPSHOTTER);
     }
 
-    ResourceMonitor(TopologyMapper mapper, Duration sampleRate,
-            SystemSnapshotProvider snapshotProvider) {
-        this.topology = mapper;
-        this.snapshotProvider = snapshotProvider;
-        this.sampleRateNs = sampleRate.toNanos();
+    ResourceMonitor(TopologyMapper mapper, Duration sampleRate, SystemSnapshotProvider provider) {
+        this(TopologyUpdater.from(mapper), sampleRate, provider, 
+             System::nanoTime, DeadlineWaiter.DEFAULT, Thread::new);
+    }
 
-        double dt = Math.max(1, sampleRate.toMillis()) / 1000d;
-        double tau = 3d; // 3 Seconds
-        double smoothingFactor = 1d - Math.exp(-dt / tau);
-
-        if (!Double.isFinite(smoothingFactor) || smoothingFactor <= 0) {
-            this.smoothingFactor = 0.0645; // Fallback to 1 - e^(-0.2/3.0)
-        } else {
-            this.smoothingFactor = clampDouble(smoothingFactor, 0.01, 1.0);
+    ResourceMonitor(TopologyUpdater topology, Duration sampleRate, SystemSnapshotProvider provider,
+                    MonotonicClock clock, DeadlineWaiter waiter, ThreadFactory threadFactory) {
+        try {
+            if (sampleRate == null || sampleRate.toNanos() <= 0) {
+                throw new IllegalArgumentException("Invalid sample rate");
+            }
+            if (provider == null || topology == null) {
+                throw new NullPointerException();
+            }
+            this.topology = topology;
+            this.sampleRateNs = sampleRate.toNanos();
+            this.clock = clock;
+            this.waiter = waiter;
+            this.threadFactory = threadFactory;
+            this.provider = SystemSnapshotCompatibilityAdapter.wrap(provider);
+            this.dispatcher = new LatestValueDispatcher();
+            
+            // Initialization: do not sample in constructor.
+            int cpuCount = SystemInfo.getCpuCount();
+            this.stateEngine = new SampleStateEngine(cpuCount, this.sampleRateNs);
+            this.pressureState = new PressureState(cpuCount);
+            
+        } catch (Throwable t) {
+            this.state = CLOSED;
+            throw t;
         }
-
-        init();
-        poll();
     }
 
     public void start() {
-        if (this.snapshotProvider == null) {
-            throw new RuntimeException(
-                    "Resource monitoring not available on this platform. Monitor will not start.");
+        while (true) {
+            int s = (int) STATE.getAcquire(this);
+            if (s == CLOSING || s == CLOSED) return;
+            if (s == RUNNING || s == STARTING) return;
+            
+            if (STATE.compareAndSet(this, s, STARTING)) {
+                if (s == NEW) {
+                    Thread t = threadFactory.newThread(this::runLoop);
+                    t.setDaemon(true);
+                    this.pollingThread = t;
+                    t.start();
+                } else if (s == STOPPED) {
+                    // Signal thread to resume
+                    coalescedReadPending = false;
+                    STATE.setRelease(this, RUNNING);
+                }
+                return;
+            }
         }
-        while (this.closing.getAcquire()) {
-            Thread.onSpinWait();
-        }
-
-        if (!this.running.compareAndSet(false, true)) {
-            return;
-        }
-        this.logger.trace("Starting...");
-
-        init();
-        poll();
-
-        this.pollingThread = new Thread(this::runLoop);
-        this.pollingThread.start();
     }
 
-    private void init() {
-        this.readings.lastWallClockNs = System.nanoTime();
-        SystemSnapshot snapshot = this.snapshotProvider.getSnapshot();
-
-        this.lastCpuUsageNs = snapshot.cpuUsage();
-
-        this.lastThrottleNs = snapshot.cpuThrottle();
-        this.lastDiskIOBytes = snapshot.diskIOBytes();
+    public void stop() {
+        while (true) {
+            int s = (int) STATE.getAcquire(this);
+            if (s == CLOSING || s == CLOSED || s == STOPPED || s == NEW) return;
+            if (STATE.compareAndSet(this, s, STOPPED)) {
+                coalescedReadPending = true;
+                return;
+            }
+        }
     }
 
     @Override
     public void close() {
-        if (this.closing.compareAndSet(false, true)) {
-            if (this.running.compareAndSet(true, false)) {
-                try {
-                    Thread t = this.pollingThread;
+        while (true) {
+            int s = (int) STATE.getAcquire(this);
+            if (s == CLOSING || s == CLOSED) {
+                dispatcher.awaitClosed();
+                return;
+            }
+            if (STATE.compareAndSet(this, s, CLOSING)) {
+                dispatcher.beginClose(this::cleanup);
+                
+                Thread t = pollingThread;
+                if (t != null && t != Thread.currentThread()) {
                     t.interrupt();
-                    LockSupport.unpark(t);
-                    t.join(500);
-                } catch (Exception ignored) {
-                    // Ignore interrupt on close
-                } finally {
-                    this.pollingThread = null;
                 }
+                
+                // wait for eval & pub to finish
+                while ((boolean) EVAL_ACTIVE.getAcquire(this) || (boolean) PUB_CLAIMED.getAcquire(this)) {
+                    Thread.onSpinWait();
+                }
+                
+                STATE.setRelease(this, CLOSED);
+                dispatcher.awaitClosed();
+                return;
             }
-            this.closing.set(false);
         }
     }
 
-    /// Adds a listener to this monitor to be updated asynchronously.
     public void addListener(MonitorListener listener) {
-        while (!this.listenerGuard.compareAndSet(false, true)) {
-            Thread.onSpinWait();
-        }
-        this.listeners.add(listener);
-        this.listenerGuard.set(false);
+        dispatcher.addListener(listener);
+    }
+    
+    public void removeListener(MonitorListener listener) {
+        dispatcher.removeListener(listener);
     }
 
-    /// Iterates through the listeners and gives them the new HardwareUtilization record.
-    private void updateListeners(HardwareUtilization utilization) {
-        CompletableFuture.runAsync(() -> {
-            while (!this.listenerGuard.compareAndSet(false, true)) {
-                Thread.onSpinWait();
-            }
-            for (MonitorListener listener : this.listeners) {
-                try {
-                    listener.update(utilization);
-                } catch (Exception ignored) {
-                    // Errors in listeners are ignored
-                }
-            }
-            this.listenerGuard.set(false);
-        });
-    }
-
-    public final HardwareUtilization getUtilization() {
-        if (!this.running.getAcquire()) {
-            poll();
-        }
-        return this.hardwareUtilization;
+    private void cleanup() {
+        // All temporary allocations, executor hooks, and listener arrays clear on CLOSED.
+        // dispatcher already handles listeners.
     }
 
     private void runLoop() {
-        ThreadTools.setTimerResolution(1);
-
-        long now;
-        while (this.running.get() && !Thread.interrupted()) {
-            now = System.nanoTime();
-            poll();
-            updateListeners(this.hardwareUtilization);
-
-            long dT = System.nanoTime() - now;
-            long deadline = this.sampleRateNs + now - dT;
-            long temp;
-            while ((temp = System.nanoTime()) <= deadline) {
-                LockSupport.parkNanos(deadline - temp);
-            }
-        }
-        close();
-    }
-
-    private void poll() {
         try {
-            SystemSnapshot snapshot = this.snapshotProvider.getSnapshot();
+            STATE.compareAndSet(this, STARTING, RUNNING);
+            long t0 = clock.nanoTime();
+            long nextTick = t0;
+            long lastNow = t0;
 
-            updateCpu(snapshot);
-            updateMemory(snapshot);
-            updateDiskIO(snapshot);
-            this.readings.lastWallClockNs = snapshot.timeNs();
+            while (true) {
+                int s = (int) STATE.getAcquire(this);
+                if (s == CLOSING || s == CLOSED) break;
+                
+                if (s == STOPPED) {
+                    if (coalescedReadPending) {
+                        evaluateAndPublish();
+                        coalescedReadPending = false;
+                    }
+                    Thread.onSpinWait();
+                    continue;
+                }
 
-            long memoryLimit = clampMemory(snapshot.memoryLimit());
-            this.hardwareUtilization = HardwareUtilization.create(this.readings.lastWallClockNs,
-                    this.readings.quotaCpus,
-                    this.readings.cpuUsageRatio,
-                    snapshot.period(),
-                    UnmodifiableBitSet.wrap(this.globalEffectiveCpus),
-                    this.readings.cpuThrottleRatio,
-                    this.readings.perCpuThrottleRatio,
-                    this.readings.perCpuPressureRatio,
-                    memoryLimit,
-                    memoryLimit / snapshot.totalCpus(),
-                    this.readings.memUsageRatio,
-                    this.readings.memPerCpuUsageBytes,
-                    this.readings.diskIOBytesPerSecond, this.readings.diskIOPressure,
-                    snapshot
-            );
-            this.topology.update(this.hardwareUtilization);
-        } catch (Exception e) {
-            this.logger.error("Failed to update utilization", e);
-        }
-    }
+                long now = clock.nanoTime();
+                if (now < lastNow) {
+                    // regression, reanchor
+                    t0 = now;
+                    nextTick = now;
+                }
+                lastNow = now;
 
-    // ----- CPU -----
+                if (now >= nextTick) {
+                    if (nextTick != t0) { // skip first iteration overrun logic
+                        long skips = (now - t0) / sampleRateNs;
+                        nextTick = t0 + (skips + 1) * sampleRateNs;
+                    } else {
+                        nextTick = t0 + sampleRateNs;
+                    }
+                }
 
-    private void updateCpu(SystemSnapshot snapshot) {
-        long deltaUsage = snapshot.cpuUsage() - this.lastCpuUsageNs;
-        long deltaThrottle = snapshot.cpuThrottle() - this.lastThrottleNs;
-        long deltaTime = Math.max(snapshot.timeNs() - this.readings.lastWallClockNs,
-                Duration.ofMillis(10).toNanos());
+                waiter.await(nextTick, clock);
+                
+                // re-check state after wait
+                s = (int) STATE.getAcquire(this);
+                if (s == CLOSING || s == CLOSED) break;
+                if (s == STOPPED) continue;
 
-        if (deltaTime <= 0) {
-            return;
-        }
-
-        double rawCpuUtil = deltaUsage / (double) deltaTime / snapshot.quotaCpus();
-        double rawThrottle = deltaThrottle / (double) deltaTime;
-        updatePerCpuUtilization(deltaTime, deltaThrottle, snapshot);
-
-        this.lastCpuUsageNs = snapshot.cpuUsage();
-        this.lastThrottleNs = snapshot.cpuThrottle();
-        this.readings.cpuUsageRatio = ewma(this.readings.cpuUsageRatio,
-                !Double.isFinite(rawCpuUtil) ? 0.0 : rawCpuUtil);
-        this.readings.cpuThrottleRatio = ewma(this.readings.cpuThrottleRatio,
-                !Double.isFinite(rawThrottle) ? 0.0 : rawThrottle);
-        this.readings.quotaCpus = snapshot.quotaCpus();
-    }
-
-    private void updatePerCpuUtilization(long deltaTimeNs, long deltaTotalThrottleNs,
-            SystemSnapshot snapshot) {
-        BitSet effective = (BitSet) snapshot.effectiveCpus().clone();
-
-        if (effective == null) {
-            return;
-        }
-
-        double invDeltaTimeNs = 1.0 / deltaTimeNs;
-        double totalThrottleRatio = deltaTotalThrottleNs * invDeltaTimeNs;
-        double available = this.readings.quotaCpus;
-
-        double throttleScale = (available > 0) ? (totalThrottleRatio / available) : 0;
-
-        for (int i = effective.nextSetBit(0); i >= 0; i = effective.nextSetBit(i + 1)) {
-            double deltaPressureNs = snapshot.pressurePerCpu().get(i) * 1000.0;
-            double cpuPressureRatio = deltaPressureNs * invDeltaTimeNs;
-
-            double cpuThrottle = cpuPressureRatio * throttleScale;
-
-            this.readings.perCpuPressureRatio[i] = ewma(this.readings.perCpuPressureRatio[i],
-                    Math.max(0.0, cpuPressureRatio));
-            this.readings.perCpuThrottleRatio[i] = ewma(this.readings.perCpuThrottleRatio[i],
-                    Math.max(0.0, cpuThrottle));
-        }
-
-        int totalCpus = snapshot.totalCpus();
-        for (int i = effective.nextClearBit(0); i >= 0 && i < totalCpus;
-                i = effective.nextClearBit(i + 1)) {
-            this.readings.perCpuPressureRatio[i] = 0.0;
-            this.readings.perCpuThrottleRatio[i] = 0.0;
-        }
-
-        this.globalEffectiveCpus = effective;
-    }
-
-    // ----- MEMORY -----
-
-    private void updateMemory(SystemSnapshot snapshot) {
-        long workingMemory = Math.max(0, snapshot.memoryUsage() - snapshot.inactiveFileMemory());
-
-        if (snapshot.memoryLimit() > 0 && snapshot.memoryLimit() < 1_000_000_000_000_000L) {
-            double workingMemoryUtil = (double) workingMemory / snapshot.memoryLimit();
-
-            double availableCpus = snapshot.totalCpus();
-
-            if (Double.isFinite(workingMemoryUtil)) {
-                this.readings.memUsageRatio = ewma(this.readings.memUsageRatio,
-                        clampDouble(workingMemoryUtil, 0.0, 1.0));
-
-                // Density relative to the physical core count visible in the container
-                this.readings.memPerCpuUsageBytes = (long) ((workingMemory * availableCpus)
-                        / snapshot.memoryLimit());
+                evaluateAndPublish();
+                lastNow = clock.nanoTime();
             }
+        } catch (Throwable t) {
+            // Safe fallback to CLOSING then CLOSED
+            close();
         }
     }
 
-    // ----- IO -----
+    private void evaluateAndPublish() {
+        EVAL_ACTIVE.setRelease(this, true);
+        try {
+            int s = (int) STATE.getAcquire(this);
+            if (s == CLOSING || s == CLOSED) return;
 
-    private void updateDiskIO(SystemSnapshot snapshot) {
-        long deltaTimeNs = snapshot.timeNs() - this.readings.lastWallClockNs;
+            long pollStartNs = clock.nanoTime();
+            if (stateEngine.isSlowDue(pollStartNs)) {
+                stateEngine.processSlow(pollStartNs, provider.sampleSlow(pollStartNs));
+            }
+            FastHardwareSample fast = provider.sampleFast(pollStartNs);
+            long evaluationNs = clock.nanoTime();
 
-        if (deltaTimeNs > 0) {
-            double deltaTimeSec = deltaTimeNs * NS_TO_SEC;
-
-            // Calculate raw Bytes Per Second
-            long deltaBytes = (this.lastDiskIOBytes == 0) ? 0 : snapshot.diskIOBytes() - this.lastDiskIOBytes;
-            double rawBps = deltaBytes / deltaTimeSec;
-
-            this.readings.diskIOBytesPerSecond = ewmaUnbounded(
-                    this.readings.diskIOBytesPerSecond, rawBps);
-
-            double currentPeak = Math.max(rawBps, this.readings.peakDiskIoBPS * 0.9999);
-            double rawIoRatio =
-                    (currentPeak > 0) ? this.readings.diskIOBytesPerSecond / currentPeak : 0.0;
-
-            this.readings.peakDiskIoBPS = currentPeak;
-            this.readings.diskIOPressure = clampDouble(rawIoRatio, 0.0, 1.0);
-            this.lastDiskIOBytes = snapshot.diskIOBytes();
+            IntervalHardwareSample interval = stateEngine.processFast(evaluationNs, fast);
+            if (interval != null) {
+                PressureEvaluation eval = PressureEvaluator.evaluate(interval, pressureState, evaluationNs);
+                pressureState = eval.state();
+                HardwareUtilization util = eval.candidate();
+                this.lastUtilization = util;
+                
+                PUB_CLAIMED.setRelease(this, true);
+                try {
+                    s = (int) STATE.getAcquire(this);
+                    if (s != CLOSING && s != CLOSED) {
+                        topology.update(util);
+                        dispatcher.offer(util);
+                    }
+                } finally {
+                    PUB_CLAIMED.setRelease(this, false);
+                }
+            }
+        } finally {
+            EVAL_ACTIVE.setRelease(this, false);
         }
     }
-
-    private double ewma(double oldVal, double newVal) {
-        double clampedNew = clampDouble(newVal, 0.0, 1.0);
-
-        if (oldVal <= 0) {
-            return clampedNew;
-        }
-
-        return (this.smoothingFactor * clampedNew) + (1 - this.smoothingFactor) * oldVal;
-    }
-
-    private double ewmaUnbounded(double oldVal, double newVal) {
-        double finiteNew = Double.isFinite(newVal) ? Math.max(0.0, newVal) : 0.0;
-
-        if (oldVal <= 0) {
-            return finiteNew;
-        }
-
-        return (this.smoothingFactor * finiteNew) + (1 - this.smoothingFactor) * oldVal;
+    
+    public final HardwareUtilization getUtilization() {
+        return lastUtilization;
     }
 
     @FunctionalInterface
     public interface MonitorListener {
-
         void update(HardwareUtilization utilization);
-    }
-
-    private static final class Readings {
-
-        public final double[] perCpuPressureRatio = new double[SystemInfo.getCpuCount()];
-        public final double[] perCpuThrottleRatio = new double[SystemInfo.getCpuCount()];
-
-        public long lastWallClockNs = System.nanoTime();
-
-        public double quotaCpus = 0D;
-        public double cpuUsageRatio = 0D;
-        public double cpuThrottleRatio = 0D;
-
-        public double memUsageRatio = 0D;
-        public long memPerCpuUsageBytes = 0L;
-
-        public double diskIOBytesPerSecond = 0D;
-        public double diskIOPressure = 0D;
-        public double peakDiskIoBPS = 1024D * 1024D;
     }
 }

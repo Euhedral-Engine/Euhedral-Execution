@@ -2,7 +2,7 @@ package io.euhedral_execution.hardware_utils.internal.pressure;
 
 import java.util.Arrays;
 
-final class PressureState {
+public final class PressureState {
 
     // Offsets for global/shared cells
     static final int CELL_SCOPE_WAIT = 0;
@@ -18,6 +18,7 @@ final class PressureState {
     static final int CELL_IO_LATENCY = 10;
     static final int CELL_IO_QUEUE = 11;
     static final int GLOBAL_CELL_COUNT = 12;
+
     // Per-CPU offsets within a CPU block
     static final int PC_WAIT = 0;
     static final int PC_PSI = 1;
@@ -36,7 +37,7 @@ final class PressureState {
     final double[] previous;
     final long[] lastEvaluationNs;
 
-    PressureState(int logicalSpan) {
+    public PressureState(int logicalSpan) {
         if (logicalSpan <= 0) {
             throw new IllegalArgumentException("logicalSpan must be positive");
         }

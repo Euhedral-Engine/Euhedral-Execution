@@ -157,8 +157,11 @@ public final class LatestValueDispatcher {
                     pendingUtilization = null;
                     listenersSnapshot = listeners;
 
-                    if(toDispatch == null || (boolean) CLOSING.getAcquire(this)) {
+                    if ((boolean) CLOSING.getAcquire(this)) {
                         break;
+                    }
+                    if (toDispatch == null) {
+                        continue;
                     }
                 } catch (Exception e) {
                     CLOSING.setRelease(this, true);
