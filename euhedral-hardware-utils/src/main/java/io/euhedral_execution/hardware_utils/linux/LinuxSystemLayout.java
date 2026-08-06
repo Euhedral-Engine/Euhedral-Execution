@@ -26,6 +26,12 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/// Linux CPU topology provider and sysfs directory scanner.
+///
+/// Scans sysfs `/sys/devices/system/cpu/` to discover logical CPUs, physical packages,
+/// dies, cores, cache domains, and cpufreq scaling information. Translates observations
+/// into normalized `TopologyModel` instances with sparse OS CPU ID indexing and explicit
+/// `null` holes for offline or unmapped CPU IDs.
 public final class LinuxSystemLayout {
 
     public static final LinuxSystemLayout INSTANCE;
@@ -37,23 +43,30 @@ public final class LinuxSystemLayout {
         INSTANCE = OSName.isLinux() ? new LinuxSystemLayout(CPU_ROOT) : null;
     }
 
-    private static TopologyInput collect(Path cpuRoot) throws IOException {
+    /// Scans sysfs CPU root directory for `cpu\d+` subdirectories, collecting topology
+    /// attributes, cache domains, and core classification data. Returns an empty `TopologyInput`
+    /// if `cpuRoot` is absent or unreadable.
+    private static TopologyInput collect(Path cpuRoot) {
+        if (cpuRoot == null || !Files.isDirectory(cpuRoot)) {
+            return new TopologyInput("linux", List.of(), List.of());
+        }
         List<Path> directories;
         try (var paths = Files.list(cpuRoot)) {
             directories = paths.filter(path -> path.getFileName().toString().matches("cpu\\d+"))
                     .sorted(Comparator.comparingInt(
                             path -> parseCpu(path.getFileName().toString())))
                     .toList();
+        } catch (IOException e) {
+            return new TopologyInput("linux", List.of(), List.of());
         }
         List<RawCpu> raw = new ArrayList<>(directories.size());
         List<CacheDomain> caches = new ArrayList<>();
         for (Path directory : directories) {
             int cpu = parseCpu(directory.getFileName().toString());
             Path topology = directory.resolve("topology");
-            int packageId = parseSigned(read(topology.resolve("physical_package_id")));
-            int coreId = parseSigned(read(topology.resolve("core_id")));
-            int dieId = Files.isRegularFile(topology.resolve("die_id"))
-                    ? parseSigned(read(topology.resolve("die_id"))) : 0;
+            int packageId = parseAttrOrDefault(topology.resolve("physical_package_id"), 0);
+            int coreId = parseAttrOrDefault(topology.resolve("core_id"), 0);
+            int dieId = parseAttrOrDefault(topology.resolve("die_id"), 0);
             CacheScore cacheScore = collectCaches(directory.resolve("cache"), caches);
             raw.add(new RawCpu(cpu, packageId, dieId, coreId, frequencyScore(directory),
                     cacheScore.value));
@@ -68,6 +81,21 @@ public final class LinuxSystemLayout {
         return new TopologyInput("linux", cpus, caches);
     }
 
+    /// Safely parses an integer attribute from a file, returning `defaultValue` if the file
+    /// is missing, empty, or unreadable.
+    private static int parseAttrOrDefault(Path file, int defaultValue) {
+        if (!Files.isRegularFile(file)) {
+            return defaultValue;
+        }
+        try {
+            return Integer.parseInt(read(file));
+        } catch (Exception ignored) {
+            return defaultValue;
+        }
+    }
+
+    /// Scans a `cpuX/cache/` directory for `indexY` cache domain subdirectories.
+    /// Skips instruction caches and extracts data/unified cache domains.
     private static CacheScore collectCaches(Path root, List<CacheDomain> target) {
         if (!Files.isDirectory(root)) {
             return CacheScore.INVALID;
@@ -103,6 +131,7 @@ public final class LinuxSystemLayout {
         return l1 > 0 && l2 > 0 ? new CacheScore(saturatedAdd(l1, l2)) : CacheScore.INVALID;
     }
 
+    /// Reads maximum CPU frequency in kHz from `cpufreq/cpuinfo_max_freq`. Returns -1 if absent or unreadable.
     private static long frequencyScore(Path cpu) {
         try {
             long frequency = Long.parseLong(read(cpu.resolve("cpufreq/cpuinfo_max_freq")));
@@ -112,6 +141,8 @@ public final class LinuxSystemLayout {
         }
     }
 
+    /// Classifies cores into `PERFORMANCE` vs `EFFICIENCY` by scoring cpufreq max frequency or cache capacity
+    /// and finding the maximum score gap across distinct core tuples.
     private static Map<CoreTuple, CoreKind> classify(List<RawCpu> cpus) {
         boolean frequenciesComplete = cpus.stream().allMatch(cpu -> cpu.frequencyScore > 0);
         boolean cachesComplete = cpus.stream().allMatch(cpu -> cpu.cacheScore > 0);
@@ -195,10 +226,12 @@ public final class LinuxSystemLayout {
 
     private final TopologyModel model;
 
+    /// Constructs a `LinuxSystemLayout` by scanning the specified sysfs CPU root directory.
     LinuxSystemLayout(Path cpuRoot) {
         this(() -> collect(cpuRoot));
     }
 
+    /// Constructs a `LinuxSystemLayout` using a custom `TopologyProvider` functional interface.
     LinuxSystemLayout(TopologyProvider provider) {
         this.model = TopologyBootstrap.normalize(provider,
                 Runtime.getRuntime().availableProcessors(), LOGGER, "linux");

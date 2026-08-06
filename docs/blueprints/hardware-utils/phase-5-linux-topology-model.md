@@ -305,3 +305,33 @@ gradle :euhedral-hardware-utils:test --tests "io.euhedral_execution.hardware_uti
 # Run all hardware-utils tests
 gradle :euhedral-hardware-utils:test
 ```
+
+## 9. Completion Record
+
+### Changed Files
+
+- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/linux/LinuxSystemLayout.java`
+- `euhedral-hardware-utils/src/test/java/io/euhedral_execution/hardware_utils/linux/LinuxSystemLayoutFixtureTest.java`
+
+### Commands Run & Results
+
+- `gradle :euhedral-hardware-utils:test --tests "io.euhedral_execution.hardware_utils.linux.LinuxSystemLayoutFixtureTest"` - Passed 6/6 tests cleanly.
+- `gradle :euhedral-hardware-utils:test` - Passed all 67 hardware-utils tests cleanly.
+- `gradle :euhedral-hardware-utils:build` - Build successful, native packaging, test compilation, and verification passed.
+
+### Acceptance Evidence
+
+- `LinuxSystemLayout` correctly scans sysfs `/sys/devices/system/cpu/` with directory stream closure via try-with-resources.
+- OS CPU IDs are preserved directly in logical CPU IDs, mapping sparse CPU sets with explicit null holes for unmapped indices.
+- Multi-socket/multi-die topologies generate unique global core tuples `(packageId, dieId, coreId)` preventing core aliasing across packages.
+- Cache domains are extracted from sysfs cache index nodes and fall back cleanly to P2 synthesized L1/L2/L3 domains if sysfs cache entries are missing or unreadable.
+- P/E core gap classification correctly identifies performance vs efficiency cores from cpufreq max frequency or cache capacity scores, falling back to `CoreKind.UNKNOWN` when scores are homogeneous.
+- Missing or unreadable sysfs root directories fall back cleanly to the conservative whole-model fallback topology without throwing exceptions.
+
+### Approved Deviations
+
+None.
+
+### Environmental Limits
+
+None.
