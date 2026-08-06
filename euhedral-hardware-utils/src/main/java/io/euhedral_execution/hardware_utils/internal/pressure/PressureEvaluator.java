@@ -24,11 +24,11 @@ import io.euhedral_execution.hardware_utils.internal.sampling.signals.IoInterval
 import io.euhedral_execution.hardware_utils.internal.sampling.signals.MemoryIntervalSignals;
 import java.util.BitSet;
 
-final class PressureEvaluator {
+public final class PressureEvaluator {
 
     private static final double NS_TO_SEC = 1.0 / 1_000_000_000;
 
-    static PressureEvaluation evaluate(IntervalHardwareSample sample, PressureState priorState,
+    public static PressureEvaluation evaluate(IntervalHardwareSample sample, PressureState priorState,
             long evaluationNs) {
         PressureState state = priorState.deepCopy();
         BitSet effectiveCpus = (BitSet) sample.effectiveCpus().clone();
