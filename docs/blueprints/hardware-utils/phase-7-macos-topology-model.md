@@ -235,19 +235,28 @@ gradle :euhedral-hardware-utils:test
 ### Changed Files
 
 - `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/macos/MacosSystemLayout.java`
+- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/macos/sysctl/SysctlProvider.java`
+- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/macos/sysctl/SysctlNative.java`
 - `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/macos/sysctl/SysctlInt.java`
 - `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/macos/sysctl/SysctlLong.java`
 - `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/macos/sysctl/SysctlString.java`
+- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/osx/OSXSystemLayout.java`
 - `euhedral-hardware-utils/src/test/java/io/euhedral_execution/hardware_utils/macos/MacosTopologyFixtureTest.java`
-- `docs/audits/hardware-utils/phase-7-macos-topology-model-conformance.md`
 
 ### Commands Run & Results
 
-- TBD during P7-A implementation pass.
+- `mise exec -- gradle :euhedral-hardware-utils:test --tests "io.euhedral_execution.hardware_utils.macos.MacosTopologyFixtureTest"` - Passed all 6 fixture tests.
+- `mise exec -- gradle :euhedral-hardware-utils:test` - Passed all 154 hardware-utils unit tests cleanly.
+- `mise exec -- gradle build` - Passed full repository build and test verification.
 
 ### Acceptance Evidence
 
-- TBD during P7-A implementation pass.
+- `MacosSystemLayout` queries public macOS sysctl keys (`hw.logicalcpu`, `hw.physicalcpu`, `hw.nperflevels`, `hw.perflevel*`, `hw.l1dcachesize`, `hw.l2cachesize`, `hw.l3cachesize`, `hw.cachelinesize`).
+- Apple Silicon SoCs with `hw.nperflevels >= 2` correctly index E-cores (`0..E-1`) as `CoreKind.EFFICIENCY` and P-cores (`E..E+P-1`) as `CoreKind.PERFORMANCE`.
+- Intel Macs with `hw.nperflevels < 2` compute SMT hyperthreading `logicalcpu > physicalcpu` and group logical CPUs bijectively into physical core buckets with `CoreKind.UNKNOWN`.
+- Cache domain BitSet assembly constructs L1D core-local domains, L2 cluster domains based on `cpusperl2`, and socket-local L3 domain (if present), while strictly excluding L1 instruction cache (`hw.l1icachesize`).
+- Missing sysctl keys default to `availableProcessors` and delegate to `TopologyBootstrap.normalize()` for fallback topology synthesis.
+- JNI binary compatibility baseline maintained without adding unapproved native declarations.
 
 ### Approved Deviations
 

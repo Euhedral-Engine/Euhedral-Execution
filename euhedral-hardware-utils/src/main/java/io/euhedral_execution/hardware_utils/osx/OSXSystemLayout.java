@@ -11,6 +11,7 @@ import io.euhedral_execution.hardware_utils.internal.topology.LogicalCpu;
 import io.euhedral_execution.hardware_utils.internal.topology.TopologyBootstrap;
 import io.euhedral_execution.hardware_utils.internal.topology.TopologyInput;
 import io.euhedral_execution.hardware_utils.internal.topology.TopologyModel;
+import io.euhedral_execution.hardware_utils.macos.MacosSystemLayout;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.IntStream;
@@ -33,6 +34,14 @@ public final class OSXSystemLayout {
     private static native int getSysctlInt(String key);
     private static native int getSysctlString(String key);
 
+    public static int sysctlInt(String key) {
+        return getSysctlInt(key);
+    }
+
+    public static long sysctlLong(String key) {
+        return getSysctlLong(key);
+    }
+
     private final TopologyModel model;
 
     private OSXSystemLayout(int processorCount) {
@@ -45,18 +54,18 @@ public final class OSXSystemLayout {
     }
 
     public Map<Integer, CpuCacheLayout> getCacheLayout() {
-        return model.cacheLayout();
+        return MacosSystemLayout.INSTANCE != null ? MacosSystemLayout.INSTANCE.getCacheLayout() : model.cacheLayout();
     }
 
     public Map<Integer, CpuInfo> getCpuInfoMap() {
-        return model.cpuInfo();
+        return MacosSystemLayout.INSTANCE != null ? MacosSystemLayout.INSTANCE.getCpuInfoMap() : model.cpuInfo();
     }
 
     public Map<Integer, CoreInfo> getCoreInfoMap() {
-        return model.coreInfo();
+        return MacosSystemLayout.INSTANCE != null ? MacosSystemLayout.INSTANCE.getCoreInfoMap() : model.coreInfo();
     }
 
     public Map<Integer, SocketInfo> getSocketInfoMap() {
-        return model.socketInfo();
+        return MacosSystemLayout.INSTANCE != null ? MacosSystemLayout.INSTANCE.getSocketInfoMap() : model.socketInfo();
     }
 }
