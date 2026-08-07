@@ -1,6 +1,9 @@
 package io.euhedral_execution.training.merge;
 
+import io.euhedral_execution.hardware_utils.PinnedThreadExecutor;
+import io.euhedral_execution.hardware_utils.SystemInfo;
 import io.euhedral_execution.hashing.HasherApi;
+import io.euhedral_execution.training.data.PolicyId;
 import io.euhedral_execution.training.data.PolicyVector;
 import io.euhedral_execution.training.data.SourceScenario;
 import io.euhedral_execution.training.merge.config.AggregationConfig;
@@ -21,10 +24,10 @@ import java.util.OptionalDouble;
 import java.util.Random;
 import java.util.SortedSet;
 import java.util.TreeSet;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 
 public final class HierarchicalAggregator {
-
-    private HierarchicalAggregator() {}
 
     public static List<ScenarioResult> aggregateScenarios(
             Collection<PolicyVector> policies,
@@ -42,17 +45,76 @@ public final class HierarchicalAggregator {
         runs.forEach(run -> scenarios.add(run.run().descriptor().scenario()));
         List<PolicyVector> sortedPolicies =
                 policies.stream().sorted(Comparator.comparing(PolicyVector::id)).toList();
-        List<ScenarioResult> results = new ArrayList<>();
-        for (SourceScenario scenario : scenarios) {
-            for (PolicyVector policy : sortedPolicies) {
-                List<RunAggregate> matching = runs.stream()
-                        .filter(run -> run.policy().id().equals(policy.id())
-                                && run.run().descriptor().scenario().equals(scenario))
-                        .toList();
-                results.add(aggregate(scenario, policy, matching, calibrationByRun, config));
+
+        Map<SourceScenario, Map<PolicyId, List<RunAggregate>>> runIndex = new HashMap<>();
+        for (RunAggregate run : runs) {
+            runIndex.computeIfAbsent(run.run().descriptor().scenario(), k -> new HashMap<>())
+                    .computeIfAbsent(run.policy().id(), k -> new ArrayList<>())
+                    .add(run);
+        }
+
+        List<SourceScenario> scenarioList = new ArrayList<>(scenarios);
+        int cpuCount = SystemInfo.getCpuCount();
+
+        if (scenarioList.size() <= 1 || cpuCount <= 1) {
+            List<ScenarioResult> results = new ArrayList<>();
+            for (SourceScenario scenario : scenarioList) {
+                results.addAll(aggregateOneScenario(scenario, sortedPolicies, runIndex, calibrationByRun, config));
             }
+            return List.copyOf(results);
+        }
+
+        @SuppressWarnings("unchecked")
+        Future<List<ScenarioResult>>[] futures = new Future[scenarioList.size()];
+        for (int i = 0; i < scenarioList.size(); i++) {
+            SourceScenario scenario = scenarioList.get(i);
+            PinnedThreadExecutor executor = PinnedThreadExecutor.getOrSetIfAbsent(
+                    io.euhedral_execution.core.utils.FlowThread.getFactory(),
+                    i % cpuCount,
+                    "hierarchical-aggregator-" + (i % cpuCount),
+                    Thread.NORM_PRIORITY,
+                    true);
+            futures[i] = executor.submit(
+                    () -> aggregateOneScenario(scenario, sortedPolicies, runIndex, calibrationByRun, config));
+        }
+
+        List<ScenarioResult> results = new ArrayList<>();
+        try {
+            for (Future<List<ScenarioResult>> future : futures) {
+                results.addAll(future.get());
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted during scenario aggregation", e);
+        } catch (ExecutionException e) {
+            Throwable cause = e.getCause();
+            if (cause instanceof RuntimeException re) {
+                throw re;
+            }
+            if (cause instanceof Error error) {
+                throw error;
+            }
+            throw new IllegalStateException("Scenario aggregation failed", cause);
         }
         return List.copyOf(results);
+    }
+
+    /// Aggregates all policies for one scenario. This method is safe to call concurrently
+    /// from different threads because it reads only from immutable or thread-safe inputs and
+    /// writes only to its own local result list.
+    private static List<ScenarioResult> aggregateOneScenario(
+            SourceScenario scenario,
+            List<PolicyVector> sortedPolicies,
+            Map<SourceScenario, Map<PolicyId, List<RunAggregate>>> runIndex,
+            Map<String, RunCalibration> calibrationByRun,
+            AggregationConfig config) {
+        Map<PolicyId, List<RunAggregate>> scenarioRuns = runIndex.getOrDefault(scenario, Map.of());
+        List<ScenarioResult> results = new ArrayList<>(sortedPolicies.size());
+        for (PolicyVector policy : sortedPolicies) {
+            List<RunAggregate> matching = scenarioRuns.getOrDefault(policy.id(), List.of());
+            results.add(aggregate(scenario, policy, matching, calibrationByRun, config));
+        }
+        return results;
     }
 
     private static ScenarioResult aggregate(
@@ -215,6 +277,8 @@ public final class HierarchicalAggregator {
                 empty,
                 empty);
     }
+
+    private HierarchicalAggregator() {}
 
     private record Accepted(RunAggregate run, double median, double p25, double p75) {}
 }

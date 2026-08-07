@@ -1,5 +1,6 @@
 package io.euhedral_execution.training.merge.data;
 
+import io.euhedral_execution.core.utils.FlowThread;
 import io.euhedral_execution.hardware_utils.PinnedThreadExecutor;
 import io.euhedral_execution.hardware_utils.SystemInfo;
 import io.euhedral_execution.training.data.PolicyId;
@@ -295,7 +296,8 @@ public final class CalibrationPlanCsv {
     /// returns an existing RUNNING executor, restarts a SHUTDOWN executor, or creates a new one.
     /// The returned executor is a JVM-wide daemon-thread singleton; callers must not shut it down.
     private static PinnedThreadExecutor acquireExecutor(int cpu) {
-        return PinnedThreadExecutor.getOrSetIfAbsent(cpu, "calibration-plan-reader-" + cpu, Thread.NORM_PRIORITY, true);
+        return PinnedThreadExecutor.getOrSetIfAbsent(
+                FlowThread.getFactory(), cpu, "calibration-plan-reader-" + cpu, Thread.NORM_PRIORITY, true);
     }
 
     /// Unwraps an ExecutionException into an IOException, IllegalArgumentException, or wraps the

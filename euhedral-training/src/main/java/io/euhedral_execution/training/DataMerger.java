@@ -133,6 +133,7 @@ public class DataMerger {
 
     public static MergeArtifacts merge(MergeRequest request) throws Exception {
         Objects.requireNonNull(request);
+        LOGGER.info("Merging calibration scenarios.");
         Path target = request.outputDirectory().toAbsolutePath().normalize();
         Path temporary = temporarySibling(target);
         ensureNewTarget(target, temporary);

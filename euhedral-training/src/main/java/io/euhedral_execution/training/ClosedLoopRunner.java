@@ -697,6 +697,8 @@ public final class ClosedLoopRunner {
                                 .collect(java.util.stream.Collectors.toSet()),
                         predictor,
                         config.generationConfig()));
+                System.out.println("TIME_TEST: CandidateScheduler.complete starting (else block)");
+                long t2 = System.currentTimeMillis();
                 expected = CandidateScheduler.complete(
                         config.trainingRunId(),
                         config.schedulerSeed(),
@@ -706,6 +708,8 @@ public final class ClosedLoopRunner {
                         config.benchmarkConfig(),
                         preparation,
                         generated);
+                System.out.println("TIME_TEST: CandidateScheduler.complete finished in "
+                        + (System.currentTimeMillis() - t2) + "ms");
             }
         }
         IterationSchedule iterationSchedule;
@@ -725,7 +729,11 @@ public final class ClosedLoopRunner {
             }
             iterationSchedule = expected;
         } else {
+            System.out.println("TIME_TEST: ScheduleCodec.write starting");
+            long t3 = System.currentTimeMillis();
             ScheduleCodec.write(scheduleDirectory, expected);
+            System.out.println(
+                    "TIME_TEST: ScheduleCodec.write finished in " + (System.currentTimeMillis() - t3) + "ms");
             iterationSchedule = expected;
         }
         ArtifactReference scheduleReference = reference(config.workspace(), scheduleDirectory);
@@ -758,7 +766,12 @@ public final class ClosedLoopRunner {
                 checkpoint.latestModel(),
                 Optional.of(scheduleReference),
                 pending);
-        return CheckpointSnapshotCodec.writeNext(config.workspace(), next);
+        System.out.println("TIME_TEST: CheckpointSnapshotCodec.writeNext starting");
+        long t4 = System.currentTimeMillis();
+        LoadedCheckpoint ret = CheckpointSnapshotCodec.writeNext(config.workspace(), next);
+        System.out.println(
+                "TIME_TEST: CheckpointSnapshotCodec.writeNext finished in " + (System.currentTimeMillis() - t4) + "ms");
+        return ret;
     }
 
     private static boolean samePersistedSchedule(IterationSchedule persisted, IterationSchedule expected) {
@@ -786,6 +799,8 @@ public final class ClosedLoopRunner {
         ClosedLoopCheckpoint checkpoint = current.checkpoint();
         Path scheduleDirectory =
                 resolve(config.workspace(), checkpoint.pendingSchedule().orElseThrow());
+        System.out.println("TIME_TEST: benchmark ScheduleCodec.read starting");
+        long t1 = System.currentTimeMillis();
         IterationSchedule schedule = ScheduleCodec.read(
                 scheduleDirectory,
                 config.requiredScenarios(),
@@ -794,6 +809,8 @@ public final class ClosedLoopRunner {
                 config.commitSha(),
                 config.dirtyWorkingTree(),
                 config.benchmarkConfig());
+        System.out.println(
+                "TIME_TEST: benchmark ScheduleCodec.read finished in " + (System.currentTimeMillis() - t1) + "ms");
         for (PendingBenchmarkRun pending : checkpoint.pendingRuns()) {
             if (pending.status() == PendingRunStatus.COMPLETE) {
                 continue;
@@ -805,9 +822,15 @@ public final class ClosedLoopRunner {
             Path output = config.workspace().resolve(pending.evidenceRelativePath());
             BenchmarkRunContext context;
             try {
-                context = Files.isRegularFile(output.resolve("COMPLETE"))
-                        ? adopt(output, pending)
-                        : services.benchmark(plan(config, schedule, run, output), services::stopRequested);
+                if (Files.isRegularFile(output.resolve("COMPLETE"))) {
+                    context = adopt(output, pending);
+                } else {
+                    System.out.println("TIME_TEST: services.benchmark starting");
+                    long t2 = System.currentTimeMillis();
+                    context = services.benchmark(plan(config, schedule, run, output), services::stopRequested);
+                    System.out.println(
+                            "TIME_TEST: services.benchmark finished in " + (System.currentTimeMillis() - t2) + "ms");
+                }
             } catch (StopRequested stop) {
                 return current;
             }

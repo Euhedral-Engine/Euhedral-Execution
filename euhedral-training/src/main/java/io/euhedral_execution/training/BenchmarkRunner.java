@@ -87,6 +87,7 @@ public final class BenchmarkRunner {
             }
             int currentP = 0;
             int policies = plan.policies().size();
+            System.out.println("TIME_TEST: Beginning policy loop");
             for (ScheduledPolicy policy : plan.policies()) {
                 LOGGER.info(
                         "Scenario: {} Iteration: {} Policy: {} / {}",

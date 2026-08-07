@@ -117,8 +117,10 @@ public final class SequenceFinder {
         validateCursorRange(startIndex, count);
         ArrayList<PolicyVector> result = new ArrayList<>(count);
         long exclusiveEnd = Math.addExact((long) startIndex, count);
+        SobolSequenceGenerator generator = new SobolSequenceGenerator(PolicyVector.WIDTH);
+        generator.skipTo(startIndex);
         for (long cursor = startIndex; cursor < exclusiveEnd; cursor++) {
-            result.add(sobol(Math.toIntExact(cursor)));
+            result.add(sobol(generator));
             if ((cursor - startIndex + 1) % 256 == 0 || cursor + 1 == exclusiveEnd) {
                 LOGGER.info("Generated bootstrap policy vectors: {}/{}", cursor - startIndex + 1, count);
             }
@@ -172,8 +174,10 @@ public final class SequenceFinder {
         LOGGER.info("Screening Sobol policy vectors: {} -> {}", request.sobolCursor(), exclusiveEnd);
         ArrayList<PolicyVector> batch = new ArrayList<>(request.config().maximumPredictionRows());
         long screened = 0;
+        SobolSequenceGenerator generator = new SobolSequenceGenerator(PolicyVector.WIDTH);
+        generator.skipTo(Math.toIntExact(request.sobolCursor()));
         for (long cursor = request.sobolCursor(); cursor < exclusiveEnd; cursor++) {
-            PolicyVector policy = sobol(Math.toIntExact(cursor));
+            PolicyVector policy = sobol(generator);
             if (!historical.contains(policy.id())) {
                 batch.add(policy);
             }
@@ -212,9 +216,7 @@ public final class SequenceFinder {
         return destination.size() - start;
     }
 
-    private static PolicyVector sobol(int index) {
-        SobolSequenceGenerator generator = new SobolSequenceGenerator(PolicyVector.WIDTH);
-        generator.skipTo(index);
+    private static PolicyVector sobol(SobolSequenceGenerator generator) {
         double[] vector = generator.get();
         CommonFunctions.normalizeSobolVector(vector);
         return PolicyVector.of(vector);
@@ -235,6 +237,7 @@ public final class SequenceFinder {
         private final PolicyRegistry registry;
         private final Set<PolicyId> excluded;
         private final CandidateGenerationRequest request;
+        private final SobolSequenceGenerator generator;
 
         private DirectCursor(
                 long cursor, PolicyRegistry registry, Set<PolicyId> excluded, CandidateGenerationRequest request) {
@@ -242,6 +245,8 @@ public final class SequenceFinder {
             this.registry = registry;
             this.excluded = excluded;
             this.request = request;
+            this.generator = new SobolSequenceGenerator(PolicyVector.WIDTH);
+            this.generator.skipTo(Math.toIntExact(cursor));
         }
 
         private List<PredictedCandidate> next(int count) {
@@ -252,7 +257,8 @@ public final class SequenceFinder {
                             "Sobol cursor exhausted in DirectCursor.next: cursor={}, requestedCount={}", cursor, count);
                     throw new IllegalStateException("Sobol cursor exhausted");
                 }
-                PolicyVector policy = registry.register(sobol(Math.toIntExact(cursor++)));
+                PolicyVector policy = registry.register(sobol(generator));
+                cursor++;
                 if (excluded.add(policy.id())) {
                     policies.add(policy);
                 }
