@@ -240,7 +240,6 @@ gradle :euhedral-hardware-utils:test
 - `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/macos/sysctl/SysctlInt.java`
 - `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/macos/sysctl/SysctlLong.java`
 - `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/macos/sysctl/SysctlString.java`
-- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/osx/OSXSystemLayout.java`
 - `euhedral-hardware-utils/src/test/java/io/euhedral_execution/hardware_utils/macos/MacosTopologyFixtureTest.java`
 
 ### Commands Run & Results

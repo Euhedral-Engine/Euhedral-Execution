@@ -21,24 +21,13 @@ Java_io_euhedral_1execution_hardware_1utils_macos_MacosAffinity_setThreadAffinit
   if (!masks)
     return -1;
 
-  int affinityTag = 0;
-  bool found = false;
-
-  for (int i = 0; i < len; i++) {
-    if (masks[i] != 0 && masks[i] != -1L) {
-      for (int bit = 0; bit < 64; bit++) {
-        if ((masks[i] >> bit) & 1ULL) {
-          affinityTag = (i * 64) + bit + 1; // Ordinal c maps to Tag c + 1
-          found = true;
-          break;
-        }
-      }
-    }
-    if (found)
-      break;
-  }
-
+  jlong rawTag = masks[0];
   env->ReleaseLongArrayElements(maskArray, masks, JNI_ABORT);
+
+  if (rawTag < 0)
+    return -1;
+
+  int affinityTag = (int)rawTag;
 
   thread_affinity_policy_data_t policy = {affinityTag};
   kern_return_t kr = thread_policy_set(

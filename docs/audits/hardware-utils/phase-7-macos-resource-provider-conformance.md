@@ -6,8 +6,7 @@ Audited P7-B implementation on branch `hardware-utils-overhaul/phase-7-macos` ag
 
 Inspection covered:
 - `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/macos/MacosResources.java`
-- `euhedral-hardware-utils/src/main/native/macos/osx_resources.cpp`
-- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/osx/OSXResources.java`
+- `euhedral-hardware-utils/src/main/native/macos/macos_resources.cpp`
 - `euhedral-hardware-utils/src/test/java/io/euhedral_execution/hardware_utils/macos/MacosResourcesTest.java`
 
 **Disposition: review-ready; P7-B child action complete.** All 6 acceptance criteria are satisfied. Implementation correctly enforces telemetry pressure isolation, working set memory underflow protection, zero-division guards on Mach timebase calculations, and dynamic Objective-C NSProcessInfo signal dispatch.
@@ -27,7 +26,7 @@ Inspection covered:
 
 ### 1. proc_pid_rusage process CPU nanoseconds and disk I/O bytes
 
-`osx_resources.cpp` executes `proc_pid_rusage(getpid(), RUSAGE_INFO_V3, &rusage)`.
+`macos_resources.cpp` executes `proc_pid_rusage(getpid(), RUSAGE_INFO_V3, &rusage)`.
 - Cumulative process CPU usage nanoseconds: `cpuUsageNs = rusage.ri_user_time + rusage.ri_system_time`.
 - Cumulative transferred disk I/O bytes: `ioBytes = rusage.ri_diskio_bytesread + rusage.ri_diskio_byteswritten`.
 - Fallback: If `proc_pid_rusage` returns a non-zero code or fails, `getrusage(RUSAGE_SELF, &usage)` converts `tv_sec` and `tv_usec` timevals into nanoseconds (`tv_sec * 1_000_000_000 + tv_usec * 1_000`).
@@ -47,7 +46,7 @@ macOS does not provide kernel-level pressure stall metrics comparable to Linux `
 
 ### 4. Objective-C NSProcessInfo dynamic dispatch
 
-`osx_resources.cpp` uses dynamic symbol lookup via `dlsym(RTLD_DEFAULT, ...)` (`objc_getClass`, `sel_registerName`, `objc_msgSend`) to interact with `Foundation.framework`:
+`macos_resources.cpp` uses dynamic symbol lookup via `dlsym(RTLD_DEFAULT, ...)` (`objc_getClass`, `sel_registerName`, `objc_msgSend`) to interact with `Foundation.framework`:
 - Queries `[NSProcessInfo processInfo].thermalState` and maps enum values 0 (Nominal), 1 (Fair), 2 (Serious), 3 (Critical) to `ThermalSeverity`.
 - Queries `[NSProcessInfo processInfo].isLowPowerModeEnabled` for battery saver status.
 - Both signals are wrapped with `SignalValidity.VALID` and timestamp `requestedAtNs` on 5-second slow cadence samples.

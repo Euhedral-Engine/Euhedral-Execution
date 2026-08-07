@@ -39,9 +39,8 @@ The objective of **Phase 7-C** is to deliver a robust, thread-safe macOS thread 
   - `setTimerResolution(long nanos)` validates `nanos >= 0` (throws `IllegalArgumentException` on negative values).
   - Clamps minimum resolution `nanos = Math.max(1L, nanos)`.
   - Completes safely and idempotently without altering thread scheduling constraints.
-- **Modernized Package & Backward Compatibility Wrappers**:
-  - Primary Java source: `io.euhedral_execution.hardware_utils.macos.MacosAffinity` and `MacosAffinityCalls`.
-  - Legacy `OSXAffinity` and `OSXAffinityCalls` in package `io.euhedral_execution.hardware_utils.osx` are preserved as backward-compatibility wrappers delegating directly to `MacosAffinity`.
+- **Modernized Package**:
+  - Primary Java source: `io.euhedral_execution.hardware_utils.macos.MacosAffinity` and `MacosAffinityCalls` replacing legacy `OSX` classes.
 - **Mach-O Universal Binary, Deployment Floor & Hardening**:
   - Baseline deployment floor: macOS 11.0 (Big Sur) for both `x86_64` and `arm64`.
   - Universal Mach-O fat binary packaging (`x86_64` + `arm64`) compiled with `-fno-exceptions -fno-rtti -fvisibility=hidden`.
@@ -59,8 +58,6 @@ The objective of **Phase 7-C** is to deliver a robust, thread-safe macOS thread 
   - [`euhedral-hardware-utils/src/main/native/macos/macos_resources.cpp`](file:///home/bagotay/src/euhedral/Euhedral-Execution/euhedral-hardware-utils/src/main/native/macos/macos_resources.cpp)
   - [`euhedral-hardware-utils/src/main/native/macos/macos_system_layout.cpp`](file:///home/bagotay/src/euhedral/Euhedral-Execution/euhedral-hardware-utils/src/main/native/macos/macos_system_layout.cpp)
   - [`euhedral-hardware-utils/src/main/native/macos/macos_jni.h`](file:///home/bagotay/src/euhedral/Euhedral-Execution/euhedral-hardware-utils/src/main/native/macos/macos_jni.h)
-  - [`euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/osx/OSXAffinity.java`](file:///home/bagotay/src/euhedral/Euhedral-Execution/euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/osx/OSXAffinity.java)
-  - [`euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/osx/OSXAffinityCalls.java`](file:///home/bagotay/src/euhedral/Euhedral-Execution/euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/osx/OSXAffinityCalls.java)
 - **Mach & POSIX System Calls**:
   - `thread_policy_set(pthread_mach_thread_np(pthread_self()), THREAD_AFFINITY_POLICY, ...)` for thread affinity locality tags.
   - `pthread_mach_thread_np(pthread_self())` for Mach port lookup.
@@ -216,14 +213,12 @@ MacosAffinityCalls.applyOrdinal(masks, RawCall)  [Mask Canonicalization & Cardin
 
 - [ ] **Codesign Verification**:
   - Execute `codesign -v` verification on native `.dylib` binaries during build and JNI loading (`NativeLoader`).
-- [ ] **Backward Compatibility Integration**:
-  - Ensure legacy `OSXAffinity` delegates to `MacosAffinity` without breaking existing calls.
 
 ## 5. Sizing & Split Gate Assessment
 
 ### Sizing Evaluation
 
-1. **Context Load**: The implementation is strictly bounded to `MacosAffinity.java`, `MacosAffinityCalls.java`, `macos_affinity.cpp`, `macos_resources.cpp`, `macos_system_layout.cpp`, `macos_jni.h`, `OSXAffinity.java`, `OSXAffinityCalls.java`, and `MacosAffinityTest.java`. The context covers Mach thread affinity tag mapping, single-locality cardinality checking, returning `-1` for physical CPU queries, safe idempotent timer resolution, universal Mach-O binary rules, and codesign checks. This comfortably fits within the working memory of a single implementation pass.
+1. **Context Load**: The implementation is strictly bounded to `MacosAffinity.java`, `MacosAffinityCalls.java`, `macos_affinity.cpp`, `macos_resources.cpp`, `macos_system_layout.cpp`, `macos_jni.h`, and `MacosAffinityTest.java`. The context covers Mach thread affinity tag mapping, single-locality cardinality checking, returning `-1` for physical CPU queries, safe idempotent timer resolution, universal Mach-O binary rules, and codesign checks. This comfortably fits within the working memory of a single implementation pass.
 2. **Single Responsibility**: `MacosAffinity` owns macOS thread affinity hints, CPU queries, timer policy, and native Mach-O ABI integration. Topology parsing (P7-A) and resource metrics (P7-B) are cleanly decoupled.
 3. **Independent Validation**: Native affinity and ABI features can be fully validated via JNI unit tests, Mach-O binary inspection tools, and fixture tests.
 
@@ -240,7 +235,7 @@ MacosAffinityCalls.applyOrdinal(masks, RawCall)  [Mask Canonicalization & Cardin
 | Item | Details |
 |---|---|
 | **Purpose** | Deliver Mach thread affinity tag mapping (`thread_policy_set`), tag `0` release preference, single-locality mask enforcement with deterministic rejection (`false`), physical current CPU query returning `-1`, safe idempotent timer policy without `THREAD_TIME_CONSTRAINT_POLICY` realtime scheduling, macOS 11 deployment floor, universal Mach-O binary compilation (`x86_64` + `arm64`) with zero C++ runtimes (`-fno-exceptions -fno-rtti`), and bundled `codesign -v` verification. |
-| **Package Boundaries** | `io.euhedral_execution.hardware_utils.macos.MacosAffinity`, `MacosAffinityCalls` (Java), `src/main/native/macos/*` (C++), `io.euhedral_execution.hardware_utils.osx.*` (Legacy Wrappers). |
+| **Package Boundaries** | `io.euhedral_execution.hardware_utils.macos.MacosAffinity`, `MacosAffinityCalls` (Java), `src/main/native/macos/*` (C++). |
 | **Key Invariants** | Mach thread affinity maps logical CPU ordinal `c` to tag `c + 1`; tag `0` releases locality preference; single-locality mask enforced (cardinality != 1 returns `false`); physical CPU query returns `-1`; safe timer policy avoids realtime thread scheduling traps; JNI arrays checked for nullness and unpinned with `JNI_ABORT`; universal Mach-O binary targeting macOS 11+ with `-fno-exceptions -fno-rtti` and codesign verification. |
 | **Child Action Items** | P7-C implementation: `hardware-utils-overhaul/phase-7-macos-affinity-native-implementation`. |
 | **Selected Model** | `gpt-5.6-sol` with `high` reasoning effort for implementation and conformance audit. |
@@ -292,13 +287,16 @@ gradle :euhedral-hardware-utils:test
   - Implemented `getCpu()` returning `-1` (`UNSUPPORTED`) on all macOS architectures, replacing legacy APIC CPUID queries.
   - Implemented safe timer resolution policy (`setTimerResolution(long nanos)`), validating `nanos >= 0` (throwing `IllegalArgumentException`), clamping minimum `nanos` to `1L`, and eliminating `THREAD_TIME_CONSTRAINT_POLICY` realtime thread traps.
   - Modernized native files (`macos_affinity.cpp`, `macos_resources.cpp`, `macos_system_layout.cpp`, `macos_jni.h`).
-  - Preserved backward-compatibility wrappers `OSXAffinity` and `OSXAffinityCalls` in package `io.euhedral_execution.hardware_utils.osx`, maintaining JNI contract signatures (`private static native`).
+  - Replaced legacy `OSX` classes with modernized `Macos` implementations under package `io.euhedral_execution.hardware_utils.macos`.
   - Updated `ThreadPinner` sealed permits clause to permit `MacosAffinity` and `ThreadTools` to select `MacosAffinity.INSTANCE`.
 - **Verification Results**:
-  - `MacosAffinityTest` passed: capability validation, `getCpu()` returning `-1`, single-locality mask acceptance, multi-locality mask rejection, tag `0` release, safe timer policy, negative argument rejection (`IllegalArgumentException`), legacy `OSXAffinity` delegation.
-  - `OSXAffinityTest` passed: legacy wrapper compatibility and tag encoding.
+  - `MacosAffinityTest` passed: capability validation, `getCpu()` returning `-1`, single-locality mask acceptance, multi-locality mask rejection, tag `0` release, safe timer policy, negative argument rejection (`IllegalArgumentException`).
   - `NativeCompatibilityTest` passed: preserved aggregate native products and JNI declarations baseline contract (`native-contract-900d8c50.tsv`).
   - `NativeBinaryGateTest` passed: universal Mach-O binary gates (`x86_64` + `arm64`) targeting macOS 11.0.
   - `NativeSigningTest` passed: codesign verification (`codesign -v`).
   - `NativeBinaryInspectionIT` passed.
   - Full `gradle build` succeeded with clean output across all workspace modules.
+- **Audit Summary**:
+  - Independent audit report completed: [`docs/audits/hardware-utils/phase-7-macos-affinity-native-conformance.md`](file:///home/bagotay/src/euhedral/Euhedral-Execution/docs/audits/hardware-utils/phase-7-macos-affinity-native-conformance.md).
+  - Audited tag decoding in `macos_affinity.cpp`: extracted raw tag integer `masks[0]` directly with `JNI_ABORT` pointer release mode.
+  - All 6 acceptance criteria verified and classified as **satisfied**.

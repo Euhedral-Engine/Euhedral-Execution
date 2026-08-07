@@ -4,7 +4,7 @@
 
 Audited `hardware-utils-overhaul/phase-7-macos-topology-audit` from the P7 root branch `hardware-utils-overhaul/phase-7-macos`. The parent artifacts are the P7 parent blueprint (`docs/blueprints/hardware-utils/phase-7-macos-platform.md`) and the P7-A child blueprint (`docs/blueprints/hardware-utils/phase-7-macos-topology-model.md`).
 
-Inspection was limited to `MacosSystemLayout.java`, `SysctlProvider.java`, `SysctlNative.java`, `SysctlInt.java`, `SysctlLong.java`, `SysctlString.java`, `OSXSystemLayout.java`, `MacosTopologyFixtureTest.java`, and integration contracts with `TopologyBootstrap` and `TopologyNormalizer` in `euhedral-hardware-utils`.
+Inspection was limited to `MacosSystemLayout.java`, `SysctlProvider.java`, `SysctlNative.java`, `SysctlInt.java`, `SysctlLong.java`, `SysctlString.java`, `MacosTopologyFixtureTest.java`, and integration contracts with `TopologyBootstrap` and `TopologyNormalizer` in `euhedral-hardware-utils`.
 
 **Disposition: review-ready; P7-A child action complete.** All 5 acceptance criteria are classified as `satisfied`. No production or blueprint defects were found. P7-A is ready to be merged into the P7 root branch.
 
@@ -24,7 +24,7 @@ Inspection was limited to `MacosSystemLayout.java`, `SysctlProvider.java`, `Sysc
 
 macOS exposes hardware parameters via `sysctlbyname()`. `SysctlProvider` defines functional contracts for raw object, integer, long, and string queries. `SysctlInt`, `SysctlLong`, and `SysctlString` wrap queries with null-safe optional return types.
 
-`SysctlNative` delegates sysctl calls to native `OSXSystemLayout` JNI bindings without adding unapproved native declarations, preserving the binary JNI compatibility baseline.
+`SysctlNative` delegates sysctl calls to native `MacosSystemLayout` JNI bindings without adding unapproved native declarations, preserving the binary JNI compatibility baseline.
 
 ```java
 OptionalInt intVal = SysctlInt.query(provider, "hw.logicalcpu");

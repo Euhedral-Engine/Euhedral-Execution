@@ -287,8 +287,7 @@ gradle :euhedral-hardware-utils:test
 ### Changed Files
 
 - `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/macos/MacosResources.java`
-- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/osx/OSXResources.java`
-- `euhedral-hardware-utils/src/main/native/macos/osx_resources.cpp`
+- `euhedral-hardware-utils/src/main/native/macos/macos_resources.cpp`
 - `euhedral-hardware-utils/src/test/java/io/euhedral_execution/hardware_utils/macos/MacosResourcesTest.java`
 - `docs/blueprints/hardware-utils/phase-7-macos-resource-provider.md`
 
