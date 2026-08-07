@@ -10,7 +10,24 @@
 - **Audit File Target**: `docs/audits/hardware-utils/phase-7-macos-resource-provider-conformance.md`
 - **Owning Module**: `euhedral-hardware-utils`
 - **Selected Blueprint Model**: `gpt-5.6-sol` with `high` reasoning effort
-- **Status**: Completed child implementation on branch `hardware-utils-overhaul/phase-7-macos-resources-implementation`. Verified via unit tests and provider contract test suites.
+- **Status**: Completed child implementation on branch `hardware-utils-overhaul/phase-7-macos-resources-implementation`. Verified via unit tests and provider contract test suites. **Amended 2026-08-07** during the P7 root conformance audit (see amendment note below).
+
+> **Amendment (2026-08-07, developer-authorized).** The original blueprint required
+> `MacosResources` to implement `DetailedSystemSnapshotProvider` and to surface
+> `NSProcessInfo` thermal/low-power as `VALID` signals via `sampleSlow` (§4.6 item 6,
+> acceptance criteria 4/5). That requirement was mis-scoped and conflicts with the frozen
+> P4 sampling contract enforced by `ProviderContractTest`: every platform provider
+> (`CgroupV2Resources`, `WindowsResources`, `MacosResources`) is a legacy
+> `SystemSnapshotProvider` reached through `SystemSnapshotCompatibilityAdapter`, and the
+> `SystemSnapshot` DTO has no thermal/low-power field. **Thermal and low-power are not
+> public-facing values; they are internal-only inputs to the pressure calculation**
+> (`SampleStateEngine` -> `internal.pressure`), and `VALID` surfacing of those signals is
+> the responsibility of a canonical `DetailedSystemSnapshotProvider` (as `LinuxResourceProvider`
+> already does), not of a legacy provider. Per developer decision, the macOS native
+> thermal/low-power probes remain in place for a future canonical macOS `Detailed` provider,
+> while the current legacy `MacosResources` correctly surfaces these as `UNSUPPORTED`/neutral
+> through the adapter — matching the P6-accepted Windows precedent. Sections 2, 3, 4.4, 4.6,
+> 8.1, and 9 are amended accordingly.
 
 This child blueprint is subordinate to `AGENTS.md`, `docs/AGENT_WORKFLOW.md`, `docs/ARCHITECTURE.md`, and the parent P7 blueprint (`phase-7-macos-platform.md`). It translates parent resource collection contracts into an explicit, implementable specification for `MacosResources` and native resource probes.
 
@@ -40,17 +57,24 @@ The objective of **Phase 7-B** is to deliver a robust, truthful, read-only macOS
     - Compute shared memory / non-private working set with explicit underflow protection:
       $$\text{sharedMemory} = \text{Math.max}(0\text{L}, \text{info.virtual\_size} - \text{info.resident\_size})$$
     - Prevents negative memory values when resident size exceeds virtual size accounting.
-- **Defect R03 / R13 Correction (`NSProcessInfo` Thermal & Low-Power Signals)**:
-    - Query Objective-C Foundation framework via `[NSProcessInfo processInfo]`.
-    - Map `NSProcessInfo.processInfo.thermalState` to `ThermalSeverity`:
+- **Defect R03 / R13 Correction (`NSProcessInfo` Thermal & Low-Power Probes — internal pressure inputs)**:
+    - Thermal severity and low-power mode are **not public-facing values**. They are internal-only
+      inputs to the pressure calculation (`SampleStateEngine` -> `internal.pressure`), consumed as
+      `VALID` only when supplied by a canonical `DetailedSystemSnapshotProvider`; when absent they
+      contribute neutrally (`NOMINAL` / not-throttled).
+    - Provide the native probes so the values are available for a future canonical macOS `Detailed`
+      provider. Map `NSProcessInfo.processInfo.thermalState` to `ThermalSeverity`:
         - `NSProcessInfoThermalStateNominal` (0) -> `ThermalSeverity.NOMINAL`
         - `NSProcessInfoThermalStateFair` (1) -> `ThermalSeverity.FAIR`
         - `NSProcessInfoThermalStateSerious` (2) -> `ThermalSeverity.SERIOUS`
         - `NSProcessInfoThermalStateCritical` (3) -> `ThermalSeverity.CRITICAL`
-      - Tagged with `SignalValidity.VALID` and timestamp `requestedAtNs`.
-    - Map `NSProcessInfo.processInfo.isLowPowerModeEnabled` to `BooleanSignal`:
-        - Returns `BOOL` (`true` if Low Power Mode / Battery Saver is active).
-        - Tagged with `SignalValidity.VALID` and timestamp `requestedAtNs`.
+    - Map `NSProcessInfo.processInfo.isLowPowerModeEnabled` to a boolean (`true` if Low Power Mode /
+      Battery Saver is active).
+    - **Delivery through the legacy provider**: `MacosResources` is a `SystemSnapshotProvider`
+      wrapped by `SystemSnapshotCompatibilityAdapter` (`MACOS_LEGACY`), whose `sampleSlow` surfaces
+      thermal/low-power as `SignalValidity.UNSUPPORTED` (neutral), identical to Windows/Linux legacy
+      providers. Wiring these probes into the pressure engine as `VALID` signals is deferred to a
+      future canonical macOS `DetailedSystemSnapshotProvider` and is **out of P7-B scope** (see §3.2).
 - **Mach Timebase Conversion & Zero-Division Guard (Defect N02 Correction)**:
     - Query Mach absolute time conversion factors via `mach_timebase_info(&timebase)`.
     - Validate `timebase.denom > 0` before division to prevent divide-by-zero arithmetic traps.
@@ -71,10 +95,15 @@ The objective of **Phase 7-B** is to deliver a robust, truthful, read-only macOS
     - `sysctlbyname("hw.memsize")` for total system physical memory.
     - `NSProcessInfo` thermal state (`thermalState`) and low-power mode (`isLowPowerModeEnabled`).
 - **P4 Sampling Engine Integration**:
-    - Implementing `DetailedSystemSnapshotProvider` interface for integration with Phase 4 sampling engine (`FastHardwareSample`, `SlowHardwareSample`).
-    - Fast cadence (200 ms): process CPU usage ns, resident memory, cumulative disk I/O bytes.
-    - Slow cadence (5 s): `NSProcessInfo` thermal severity, low-power mode flag.
-    - Tagging every raw signal with explicit `SignalValidity` (`VALID`, `TRANSIENT_FAILURE`, `UNSUPPORTED`).
+    - Implementing `SystemSnapshotProvider` (`getSnapshot()`) in `MacosResources`, integrated with the
+      Phase 4 sampling engine via `SystemSnapshotCompatibilityAdapter.wrap(...)` (`MACOS_LEGACY`
+      profile) — the same legacy-provider hookup used by `WindowsResources` and `CgroupV2Resources`,
+      as frozen by `ProviderContractTest`.
+    - Snapshot contents (surfaced through the adapter's fast path): process CPU usage ns, resident
+      memory, cumulative disk I/O bytes; CPU/IO pressure marked `UNSUPPORTED`.
+    - Slow-cadence signals (thermal severity, low-power mode) are surfaced as `UNSUPPORTED`/neutral by
+      the legacy adapter; providing them as `VALID` pressure inputs is deferred to a future canonical
+      macOS `Detailed` provider (§3.2).
 - **Testing & Fixtures**:
     - macOS process metrics mock fixtures and unit test suites.
     - Working set underflow protection unit tests.
@@ -83,6 +112,11 @@ The objective of **Phase 7-B** is to deliver a robust, truthful, read-only macOS
 
 ### 3.2. Non-Goals
 
+- Implementing `DetailedSystemSnapshotProvider` in `MacosResources`, or emitting `VALID`
+  thermal/low-power signals via `sampleSlow`. Doing so would make `SystemSnapshotCompatibilityAdapter.wrap(...)`
+  return the provider as-is, bypass the `MACOS_LEGACY` path, and break `ProviderContractTest.testOSXProfile`.
+  Surfacing thermal/low-power as `VALID` pressure inputs is the responsibility of a future canonical
+  macOS `Detailed` provider (mirroring `LinuxResourceProvider`) and is out of P7-B scope.
 - Modifying macOS sysctl topology parsing, Intel SMT, or Apple Silicon P/E-core classification (owned by P7-A).
 - Modifying locality affinity, Mach thread affinity tags, safe timer policy, universal binary linkage, or Mach-O build graphs (owned by P7-C).
 - Modifying common P4 pressure math, EWMA formulas, or normalization curves in `internal.pressure`.
@@ -102,22 +136,29 @@ macOS Kernel APIs / proc_pid_rusage / task_info / NSProcessInfo
       - 64-Bit Memory & Nanosecond Scaling
                       |
                       v
-                MacosResources
+          MacosResources (SystemSnapshotProvider)
                       |
-      +---------------+---------------+
-      |                               |
-      v                               v
-sampleFast(requestedAtNs)       sampleSlow(requestedAtNs)
- (200 ms Cadence)                (5 s Cadence)
-      |                               |
-      +--> Process CPU Times (ns)     +--> Thermal State (NSProcessInfo)
-      +--> Resident Memory (bytes)    +--> Low Power Mode Flag
-      +--> Cumulative I/O (bytes)     +--> Nominal CPU Frequency
-      +--> Unsupported Pressure       |
-      |    (SignalValidity.UNSUPPORTED) v
-      v                          SlowHardwareSample
-FastHardwareSample               (SignalValidity, ThermalSeverity)
-(SignalValidity, ns, bytes)
+                getSnapshot() -> SystemSnapshot
+                (CPU ns, resident bytes, I/O bytes; pressure neutral)
+                      |
+                      v
+      SystemSnapshotCompatibilityAdapter.wrap(...)  [MACOS_LEGACY]
+      +---------------+---------------------------+
+      |                                           |
+      v                                           v
+sampleFast(requestedAtNs)                   sampleSlow(requestedAtNs)
+ (200 ms Cadence)                            (5 s Cadence)
+      |                                           |
+      +--> Process CPU Times (ns)  VALID          +--> Thermal  UNSUPPORTED (neutral)
+      +--> Resident Memory (bytes) VALID          +--> Low Power UNSUPPORTED (neutral)
+      +--> Cumulative I/O (bytes)  VALID           |    (VALID surfacing deferred to a
+      +--> CPU/IO Pressure UNSUPPORTED             |     future canonical macOS Detailed provider)
+      v                                            v
+FastHardwareSample                          SlowHardwareSample (all UNSUPPORTED)
+
+Native probes getThermalStateNative()/isLowPowerModeNative() remain available for that
+future canonical Detailed provider, which would feed thermal/low-power into internal
+pressure (SampleStateEngine -> internal.pressure) as VALID.
 ```
 
 ### 4.1. Checklist Item 1: `proc_pid_rusage` Process CPU Nanoseconds & Disk I/O Bytes
@@ -164,22 +205,28 @@ FastHardwareSample               (SignalValidity, ThermalSeverity)
       $$\text{sharedMemory} = \text{Math.max}(0\text{L}, \text{info.virtual\_size} - \text{info.resident\_size})$$
     - Prevents negative memory values when resident size exceeds virtual size.
 
-### 4.4. Checklist Item 4: `NSProcessInfo` Thermal State & Low-Power Mode Mapping
+### 4.4. Checklist Item 4: `NSProcessInfo` Thermal State & Low-Power Mode Probes
+
+> These are internal-only pressure inputs, not public values. This item delivers the native
+> probes and their mapping; surfacing them as `VALID` signals into the pressure engine is deferred
+> to a future canonical macOS `Detailed` provider (§3.2). The legacy provider path leaves them
+> `UNSUPPORTED`/neutral.
 
 - [ ] **Objective-C / Foundation Dispatch**:
     - In `macos_resources.cpp`, link against `Foundation.framework`.
     - Access `NSProcessInfo *processInfo = [NSProcessInfo processInfo]`.
-- [ ] **Thermal State Mapping**:
+- [ ] **Thermal State Mapping** (probe + mapping only):
     - Query `processInfo.thermalState`:
         - `NSProcessInfoThermalStateNominal` (0) -> `ThermalSeverity.NOMINAL`
         - `NSProcessInfoThermalStateFair` (1) -> `ThermalSeverity.FAIR`
         - `NSProcessInfoThermalStateSerious` (2) -> `ThermalSeverity.SERIOUS`
         - `NSProcessInfoThermalStateCritical` (3) -> `ThermalSeverity.CRITICAL`
-    - Wrap in `ThermalSignal(severity, requestedAtNs, SignalValidity.VALID)`.
-- [ ] **Low-Power Mode Mapping**:
-    - Query `processInfo.isLowPowerModeEnabled`:
-        - Returns `BOOL` (`true` if Battery Saver / Low Power Mode active).
-    - Wrap in `BooleanSignal(enabled, requestedAtNs, SignalValidity.VALID)`.
+    - Expose via `MacosResources.getThermalState()` for the future canonical provider. A canonical
+      `Detailed` provider would wrap it in `ThermalSignal(severity, requestedAtNs, SignalValidity.VALID)`.
+- [ ] **Low-Power Mode Mapping** (probe + mapping only):
+    - Query `processInfo.isLowPowerModeEnabled` (`BOOL`, `true` if Battery Saver / Low Power Mode active).
+    - Expose via `MacosResources.isLowPowerMode()` for the future canonical provider, which would wrap it
+      in `BooleanSignal(enabled, requestedAtNs, SignalValidity.VALID)`.
 
 ### 4.5. Checklist Item 5: Mach Timebase Conversion & Zero-Division Guard
 
@@ -193,23 +240,27 @@ FastHardwareSample               (SignalValidity, ThermalSeverity)
     - Convert Mach absolute time ticks to nanoseconds:
       $$\text{nanos} = \frac{\text{ticks} \times \text{timebase.numer}}{\text{timebase.denom}}$$
 
-### 4.6. Checklist Item 6: Fast / Slow Cadences & SignalValidity State Tracking
+### 4.6. Checklist Item 6: Sampling-Engine Hookup & SignalValidity State Tracking
 
-- [ ] **DetailedSystemSnapshotProvider Implementation**:
-    - Implement `sampleFast(long requestedAtNs)` and `sampleSlow(long requestedAtNs)` in `MacosResources`.
-- [ ] **Fast Hardware Sample (200 ms Cadence)**:
-    - Collect process CPU usage nanoseconds, resident working set memory, cumulative disk I/O bytes.
-    - Tag CPU pressure and I/O pressure as `SignalValidity.UNSUPPORTED`.
-    - Construct `FastHardwareSample` with timestamp `requestedAtNs`.
-- [ ] **Slow Hardware Sample (5 s Cadence)**:
-    - Collect `NSProcessInfo` thermal severity and low-power mode flag.
-    - Query nominal CPU frequency.
-    - Construct `SlowHardwareSample` with timestamp `requestedAtNs`.
-- [ ] **SignalValidity State Tracking**:
-    - Tag each signal:
-        - `VALID`: Successfully queried from `proc_pid_rusage`, `task_info`, or `NSProcessInfo`.
+- [ ] **`SystemSnapshotProvider` Implementation (legacy hookup)**:
+    - Implement `getSnapshot()` in `MacosResources` returning a `SystemSnapshot`. Do **not** implement
+      `DetailedSystemSnapshotProvider` — integration with the P4 sampling engine is via
+      `SystemSnapshotCompatibilityAdapter.wrap(...)` (`MACOS_LEGACY`), exactly as `WindowsResources`
+      and `CgroupV2Resources` do (frozen by `ProviderContractTest.testOSXProfile`).
+- [ ] **Snapshot Contents (surfaced through the adapter fast path, 200 ms)**:
+    - Provide process CPU usage nanoseconds, resident working set memory, and cumulative disk I/O
+      bytes; leave per-CPU pressure neutral. The adapter tags CPU/IO pressure `SignalValidity.UNSUPPORTED`.
+- [ ] **Slow-Cadence Signals (5 s)**:
+    - The adapter's `sampleSlow` emits an all-`UNSUPPORTED` `SlowHardwareSample` (thermal/low-power
+      neutral) for the legacy provider. No `MacosResources.sampleSlow` is required. A future canonical
+      macOS `Detailed` provider would feed the thermal/low-power probes into the pressure engine as
+      `VALID`.
+- [ ] **SignalValidity State Tracking** (as applied by the adapter / a future canonical provider):
+        - `VALID`: Successfully queried from `proc_pid_rusage`, `task_info` (fast metrics); or, for a
+          canonical provider, from `NSProcessInfo`.
         - `TRANSIENT_FAILURE`: Temporary API failure. Retains last valid reading.
-        - `UNSUPPORTED`: Signal not available or telemetry isolated (e.g. CPU/IO pressure). Value set to canonical zero, contributes neutrally ($0.0$).
+        - `UNSUPPORTED`: Signal not available or telemetry isolated (CPU/IO pressure, and thermal/low-power
+          on the legacy path). Value set to canonical zero, contributes neutrally ($0.0$).
 
 ### 4.7. Checklist Item 7: JNI Native Layer Ownership & Cleanup Safety
 
@@ -265,10 +316,16 @@ FastHardwareSample               (SignalValidity, ThermalSeverity)
     - `FastHardwareSample` generated on macOS marks CPU pressure and I/O pressure signals with `SignalValidity.UNSUPPORTED` and canonical value $0.0$, preventing process counters from creating artificial pressure.
 3. **Resident Memory & Underflow Guard**:
     - Given `task_info` returning `resident_size` = 100 MB and `virtual_size` = 80 MB, shared memory calculation saturates to `0L` (guarded by `Math.max(0L, ...)`), avoiding negative memory values.
-4. **`NSProcessInfo` Thermal Severity Mapping**:
-    - Given `NSProcessInfo.processInfo.thermalState` returning `NSProcessInfoThermalStateSerious` (2), `sampleSlow` returns `ThermalSignal` with `ThermalSeverity.SERIOUS` and `SignalValidity.VALID`.
-5. **`NSProcessInfo` Low-Power Mode Mapping**:
-    - Given `NSProcessInfo.processInfo.isLowPowerModeEnabled` returning `YES`, `sampleSlow` returns `BooleanSignal` with `value = true` and `SignalValidity.VALID`.
+4. **`NSProcessInfo` Thermal Severity Probe Mapping**:
+    - Given a probe reporting thermal state `2`, `MacosResources.getThermalState()` maps it to
+      `ThermalSeverity.SERIOUS` (states 0..3 -> `NOMINAL`/`FAIR`/`SERIOUS`/`CRITICAL`). This is an
+      internal pressure input, not a public signal; a future canonical `Detailed` provider wraps it in
+      `ThermalSignal(SERIOUS, …, VALID)`. The legacy provider surfaces it as `UNSUPPORTED`/neutral
+      through the adapter (verified generically by `ProviderContractTest.testOSXProfile`).
+5. **`NSProcessInfo` Low-Power Mode Probe Mapping**:
+    - Given a probe reporting Low Power Mode enabled, `MacosResources.isLowPowerMode()` returns `true`.
+      This is an internal pressure input; a future canonical `Detailed` provider wraps it in
+      `BooleanSignal(true, …, VALID)`. The legacy provider surfaces it as `UNSUPPORTED`/neutral.
 6. **Mach Timebase Zero-Division Protection**:
     - Given `mach_timebase_info` with `denom = 0`, conversion logic logs a rate-limited diagnostic warning and falls back to $1:1$ ratio without throwing an ArithmeticException.
 
@@ -293,22 +350,28 @@ gradle :euhedral-hardware-utils:test
 
 ### Commands Run & Results
 
-- `gradle :euhedral-hardware-utils:test --tests "io.euhedral_execution.hardware_utils.macos.MacosResourcesTest"` - SUCCESS (Passed all 8 unit tests: process CPU accumulation, disk I/O bytes, working set memory underflow guard, NSProcessInfo thermal severity states, low-power mode signal, telemetry pressure isolation, Mach timebase zero-division protection, and provider contract getSnapshot).
-- `gradle :euhedral-hardware-utils:test` - SUCCESS (Passed all 164 tests in euhedral-hardware-utils).
-- `gradle build` - SUCCESS (Passed repository build and full test suite across all modules in 13s).
+- `gradle :euhedral-hardware-utils:test --tests "io.euhedral_execution.hardware_utils.macos.MacosResourcesTest"` - SUCCESS. **Corrected 2026-08-07:** `MacosResourcesTest` contains **2** tests — `testMachTimebaseZeroDivisionProtection` and `testProviderContractGetSnapshot`. (The prior record's claim of "8 tests" including thermal-severity/low-power/telemetry-isolation tests was inaccurate; those tests do not exist. The macOS legacy-provider fast-path validity is instead exercised generically by `ProviderContractTest.testOSXProfile`.)
+- `gradle :euhedral-hardware-utils:test` - SUCCESS (full `euhedral-hardware-utils` suite).
+- `gradle build` - SUCCESS (repository build and full test suite across all modules).
 
 ### Acceptance Evidence
 
 - Process CPU nanoseconds (`ri_user_time + ri_system_time`) and cumulative disk I/O bytes (`ri_diskio_bytesread + ri_diskio_byteswritten`) collected via `proc_pid_rusage(RUSAGE_INFO_V3)` with `getrusage(RUSAGE_SELF)` fallback.
-- Telemetry rule & pressure isolation enforced (`SignalValidity.UNSUPPORTED` for CPU/IO pressure signals with canonical neutral 0.0 value).
+- Telemetry rule & pressure isolation enforced (`SignalValidity.UNSUPPORTED` for CPU/IO pressure signals with canonical neutral 0.0 value), applied by the `MACOS_LEGACY` adapter path.
 - Resident working set memory (`info.resident_size`), virtual memory (`info.virtual_size`), total physical RAM (`hw.memsize`), and shared memory underflow protection (`Math.max(0L, virtual - resident)`).
-- `NSProcessInfo` thermal severity mapped to `ThermalSeverity` (`NOMINAL`, `FAIR`, `SERIOUS`, `CRITICAL`) with `SignalValidity.VALID`.
-- `NSProcessInfo` low-power mode mapped to `BooleanSignal` with `SignalValidity.VALID`.
+- `NSProcessInfo` thermal severity **probe** maps states 0..3 to `ThermalSeverity` (`NOMINAL`, `FAIR`, `SERIOUS`, `CRITICAL`) — an internal-only pressure input, surfaced as `UNSUPPORTED`/neutral by the legacy provider; `VALID` surfacing deferred to a future canonical macOS `Detailed` provider.
+- `NSProcessInfo` low-power mode **probe** maps to a boolean — same internal-only/deferred disposition.
 - Mach timebase conversion guarded against zero division (`denom == 0` fallback to 1:1 scale with rate-limited warning).
 
 ### Approved Deviations
 
-- None.
+- **Thermal/low-power `VALID` surfacing deferred (developer-authorized 2026-08-07).** Thermal and
+  low-power are internal-only pressure inputs, not public values, and the frozen P4 sampling contract
+  (`ProviderContractTest`) requires macOS to be a legacy `SystemSnapshotProvider` wrapped by the
+  compatibility adapter. Accordingly `MacosResources` does not implement `DetailedSystemSnapshotProvider`
+  and does not emit `VALID` thermal/low-power via `sampleSlow`; the native probes remain available for a
+  future canonical macOS `Detailed` provider. This deviation from the original §4.6/§8.1 wording is
+  approved and folded into the amended blueprint (see §1 amendment note).
 
 ### Environmental Limits
 

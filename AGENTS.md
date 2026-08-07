@@ -310,12 +310,3 @@ Before handing work back:
 3. Inspect `git diff --check`.
 4. Inspect `git status --short` and confirm only intended files changed.
 5. Report tests that could not run and the exact environmental reason.
-
-## Temporary hardware-utils overhaul status (P7)
-
-- P0-P6 are complete.
-- P7 is in progress.
-  - P7 parent blueprint is complete ([`phase-7-macos-platform.md`](docs/blueprints/hardware-utils/phase-7-macos-platform.md)).
-  - Child P7-A (Topology & Sysctl) implementation is complete ([`phase-7-macos-topology-model.md`](docs/blueprints/hardware-utils/phase-7-macos-topology-model.md)).
-  - Child P7-B (Resource Provider & Signals) implementation and conformance audit are complete ([`phase-7-macos-resource-provider.md`](docs/blueprints/hardware-utils/phase-7-macos-resource-provider.md) and [`phase-7-macos-resource-provider-conformance.md`](docs/audits/hardware-utils/phase-7-macos-resource-provider-conformance.md)).
-  - Child P7-C (Affinity, Timer & Native ABI) implementation and conformance audit are complete ([`phase-7-macos-affinity-native.md`](docs/blueprints/hardware-utils/phase-7-macos-affinity-native.md) and [`phase-7-macos-affinity-native-conformance.md`](docs/audits/hardware-utils/phase-7-macos-affinity-native-conformance.md)).

@@ -2,8 +2,8 @@
 
 ## Plan status
 
-- Phase: 5 - Linux platform blueprint
-- Status: P5 parent blueprint complete, review and merge required before child branches
+- Phase: 7 - macOS platform (complete)
+- Status: P0-P7 complete; P7 macOS platform closed out 2026-08-07 (see P7 closeout below)
 - Plan branch: `agent/hardware-utils-overhaul-plan` (created before the updated phase-branch rule)
 - Branch point: `900d8c50` (`agent/phase7-cleanup-handoff`)
 - Active P1 root: `hardware-utils-overhaul/phase-1-native-build` (completed)
@@ -11,6 +11,7 @@
 - Completed P2 root: `hardware-utils-overhaul/phase-2-topology-snapshot` at `e2495c5d`
 - Completed P3 root: `hardware-utils-overhaul/phase-3-affinity-executor` at `748f34d5`
 - Completed P4 root: `hardware-utils-overhaul/phase-4-pressure-monitor` at `487003ba`
+- Completed P7 root: `hardware-utils-overhaul/phase-7-macos` at `<P7-ROOT-COMMIT>` (closed out 2026-08-07)
 - Active P5 root: `hardware-utils-overhaul/phase-5-linux`
 - Active P5 parent blueprint branch:
   `hardware-utils-overhaul/phase-5-linux-blueprint`
@@ -3291,3 +3292,44 @@ replace this selection and prompt body before implementation.**
 > Handoff follows the audit/root-closeout contract. The initiative is complete only when all
 > material requirements are satisfied and, after the authorized audit merge, the P8 status block
 > is removed and the closeout summary is updated.
+
+## P7 closeout (macOS platform) — 2026-08-07
+
+P7 delivered the end-to-end macOS platform provider (sysctl topology -> resource/thermal metrics
+-> locality affinity & Mach-O ABI) across three child action items, each with an independent
+conformance audit, plus a root end-to-end conformance audit
+(`docs/audits/hardware-utils/phase-7-macos-platform-conformance.md`).
+
+Outcome by child:
+- **P7-A (topology & sysctl):** all 5 acceptance criteria `satisfied`. Apple Silicon P/E vs Intel
+  SMT classification, cache-domain BitSets, and conservative missing-key fallbacks
+  (`MacosTopologyFixtureTest`, 6 tests). Closes the macOS portion of T01.
+- **P7-B (resource provider & signals):** CPU/IO/memory/timebase and telemetry isolation
+  `satisfied` (`proc_pid_rusage` ns + disk bytes, `task_info`/`hw.memsize` with underflow guard,
+  Mach-timebase zero-division guard). Thermal/low-power resolved as **internal-only pressure
+  inputs** (fix 1): `MacosResources` stays a legacy `SystemSnapshotProvider` wrapped by
+  `SystemSnapshotCompatibilityAdapter` (`MACOS_LEGACY`), surfacing them as `UNSUPPORTED`/neutral
+  uniform with Linux/Windows; `VALID` surfacing is deferred to a future canonical macOS
+  `DetailedSystemSnapshotProvider`. Native probes remain in place for that provider. Closes R01,
+  R03, and the macOS portion of R13.
+- **P7-C (affinity, timer & native ABI):** all 6 acceptance criteria `satisfied`. Mach affinity
+  tag mapping (ordinal `c` -> tag `c+1`, tag `0` release), single-locality enforcement,
+  `getCpu()==-1`, safe idempotent timer policy (no realtime traps), and universal Mach-O
+  (`x86_64`+`arm64`, macOS 11.0 floor, no C++ runtime, codesigned). Closes A04 and the macOS
+  portion of N02.
+
+Root-audit dispositions of note:
+- One material blueprint-vs-architecture item (thermal/low-power) was raised, returned to the
+  P7-B blueprint, and resolved there via developer-authorized **fix 1** (internal-only /
+  deferred). The frozen P4 contract (`ProviderContractTest.testOSXProfile`) and the P6 Windows
+  precedent are preserved; no change to `MacosResources`, the shared `SystemSnapshot` DTO, or P4
+  was required.
+- One audit-integrity defect (the P7-B child audit cited six nonexistent tests and an "8/8
+  passed" result) was corrected in the child audit.
+- **B06 / requirement #12 (on-host macOS 11 Intel/arm64 smoke):** `satisfied` — the developer
+  confirmed the hardware-utils GitHub CI workflow (which runs the macOS jobs) passed on
+  2026-08-07 (developer-attested; not re-run in the Linux authoring environment).
+
+Ledger items T01, A04, R01, R03, R13, N02, and B06 are all `satisfied` for macOS. The temporary
+P7 status block was removed from `AGENTS.md` as part of this closeout. Resulting P7 root commit
+recorded in the Plan status list above. P8 is not started by this action.
