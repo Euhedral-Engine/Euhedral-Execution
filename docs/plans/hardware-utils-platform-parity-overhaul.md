@@ -2980,6 +2980,11 @@ The sizing gate rejected one P5 root implementation context. Do not create `hard
 >
 > Write `docs/audits/hardware-utils/phase-6-windows-platform-conformance.md`, append the P6 closeout summary to the parent plan, remove the temporary P6 status block upon authorized merge, and record the resulting root commit. P6 is complete only after this authorized closeout; do not create P7 earlier.
 
+#### P6 closeout summary
+
+The Phase 6 Windows platform provider implementation and conformance audit are complete on `hardware-utils-overhaul/phase-6-windows` (root commit `04b0111`). The audit artifact `docs/audits/hardware-utils/phase-6-windows-platform-conformance.md` evaluates the end-to-end Windows platform provider (GLPIEx topology parsing -> Job Object/process resource metrics -> multi-group native affinity and PE ABI). All 5 Windows defect ledger items (**T03, A03, R04, N01, B06**) and all 9 core platform requirements are classified as `satisfied`. P6-A, P6-B, and P6-C child blueprints, implementations, and audits are fully integrated and verified. The developer authorized closeout; temporary P6 status block removed from `AGENTS.md`. P6 closeout authorizes Phase 7 work.
+
+
 ### P7 - public-API macOS parity with honest locality semantics
 
 #### P7 blueprint prompt

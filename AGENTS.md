@@ -310,12 +310,3 @@ Before handing work back:
 3. Inspect `git diff --check`.
 4. Inspect `git status --short` and confirm only intended files changed.
 5. Report tests that could not run and the exact environmental reason.
-
-## Temporary hardware-utils overhaul status (P6)
-
-- P0-P4 are complete.
-- P5 is complete (P5-A, P5-B, P5-C).
-- P6 is in progress.
-  - P6-A blueprint and implementation are complete ([`phase-6-windows-topology-model.md`](docs/blueprints/hardware-utils/phase-6-windows-topology-model.md)).
-  - P6-B blueprint and implementation are complete ([`phase-6-windows-resource-provider.md`](docs/blueprints/hardware-utils/phase-6-windows-resource-provider.md)); conformance audit pending.
-  - P6-C blueprint and implementation are complete ([`phase-6-windows-affinity-native.md`](docs/blueprints/hardware-utils/phase-6-windows-affinity-native.md)); conformance audit pending.
