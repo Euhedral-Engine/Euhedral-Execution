@@ -1042,9 +1042,12 @@ an unbounded feature-history context.
 | P6 parent/root integration    | `docs/blueprints/hardware-utils/phase-6-windows-platform.md`                 | child conformance/manual reviews plus root manual review         | `docs/audits/hardware-utils/phase-6-windows-platform-conformance.md`                 |
 | P6-A Windows topology model   | `docs/blueprints/hardware-utils/phase-6-windows-topology-model.md`            | conformance check and manual review                              | `docs/audits/hardware-utils/phase-6-windows-topology-model-conformance.md`            |
 | P6-B Windows resource provider| `docs/blueprints/hardware-utils/phase-6-windows-resource-provider.md`          | conformance check and manual review                              | `docs/audits/hardware-utils/phase-6-windows-resource-provider-conformance.md`          |
-| P6-C Windows affinity & native| `docs/blueprints/hardware-utils/phase-6-windows-affinity-native.md`           | conformance check and manual review                              | `docs/audits/hardware-utils/phase-6-windows-affinity-native-conformance.md`           |
-| P7                            | `docs/blueprints/hardware-utils/phase-7-macos-platform.md`                    | conformance/manual review                                        | `docs/audits/hardware-utils/phase-7-macos-platform-conformance.md`                    |
+| P7 parent/root integration    | `docs/blueprints/hardware-utils/phase-7-macos-platform.md`                    | child conformance/manual reviews plus root manual review         | `docs/audits/hardware-utils/phase-7-macos-platform-conformance.md`                    |
+| P7-A macOS topology model     | `docs/blueprints/hardware-utils/phase-7-macos-topology-model.md`              | conformance check and manual review                              | `docs/audits/hardware-utils/phase-7-macos-topology-model-conformance.md`              |
+| P7-B macOS resource provider  | `docs/blueprints/hardware-utils/phase-7-macos-resource-provider.md`            | conformance check and manual review                              | `docs/audits/hardware-utils/phase-7-macos-resource-provider-conformance.md`            |
+| P7-C macOS affinity & native  | `docs/blueprints/hardware-utils/phase-7-macos-affinity-native.md`             | conformance check and manual review                              | `docs/audits/hardware-utils/phase-7-macos-affinity-native-conformance.md`             |
 | P8                            | `docs/blueprints/hardware-utils/phase-8-control-plane-integration-release.md` | conformance/manual review                                        | `docs/audits/hardware-utils/phase-8-control-plane-integration-release-conformance.md` |
+
 
 ## Prompt sequence
 
@@ -2987,134 +2990,152 @@ The Phase 6 Windows platform provider implementation and conformance audit are c
 
 ### P7 - public-API macOS parity with honest locality semantics
 
-#### P7 blueprint prompt
+#### P7 parent blueprint prompt - COMPLETED, REVIEW AND MERGE REQUIRED
 
 **Model: `gpt-5.6-sol`; reasoning effort: `max`.**
 
-> After authorization, create `hardware-utils-overhaul/phase-7-macos` from the completed P6 root,
-> then work on `hardware-utils-overhaul/phase-7-macos-blueprint`. The parent artifact is
-> `docs/plans/hardware-utils-platform-parity-overhaul.md`, with completed P0-P6 phase artifact
-> index entries and closeout summaries as inherited evidence. Initial ownership is hardware macOS
-> Java/native implementation, macOS fixtures/tests, and macOS manifest/CI metadata. Inspect
-> `git status --short`. Read `AGENTS.md`, `docs/AGENT_WORKFLOW.md`,
-> `docs/ARCHITECTURE.md`, the parent plan, the exact P0-P6 files linked by those phase artifact
-> index entries and summaries, every macOS Java/native source and declaration, the P1 manifest/ABI
-> contract, public sysctl/Mach/host/task/process API usage, and Intel/Apple Silicon fixture plans.
-> Do not inspect training.
->
-> Write `docs/blueprints/hardware-utils/phase-7-macos-platform.md`. Settle deterministic topology
-> from `hw.logicalcpu`, physical/performance-level/cache/memory sysctls and conservative missing-key
-> fallbacks; Intel SMT and Apple Silicon performance-level modeling; stable managed logical
-> ownership; supported public cumulative CPU/process/I/O counters; host/task memory semantics;
-> Mach buffer deallocation and timebase; public `NSProcessInfo` thermal/low-power inputs; sensor
-> cadences/validity; runtime availability/weak-link guards preserving macOS 11; affinity tag
-> mapping reported only as `LOCALITY_HINT`, with legacy boolean success only for a representable
-> successfully applied single-locality mask and deterministic failure for arbitrary
-> multi-locality masks; release tag `0`; unsupported physical current CPU outside managed
-> ownership; and safe idempotent timer behavior with no realtime policy.
->
-> Treat host/process CPU and process I/O counters as telemetry. They do not become CPU/I/O
-> pressure without a separately documented public wait, stall, or capacity-loss signal; unsupported
-> contention remains validity-neutral.
->
-> Specify exact public APIs/frameworks, counter conversions, topology ordering, core/cache
-> fallbacks, ownership tables, native allocation cleanup, 64-bit shift bounds, failure behavior,
-> deployment target 11, Intel/ARM64 fixtures/runtime tests, imports, and bundled codesign checks.
-> Private APIs, fabricated hard affinity/current CPU, realtime scheduling, shared redesign, other
-> platforms/core, and all training work are prohibited. Edit only blueprint/plan/planning docs.
->
-> Define package/artifact ownership, naming, public-API/native-to-Java data flow, and all
-> high-reasoning contracts without enumerating minor files unnecessarily. Include a bounded
-> implementation context envelope naming required inputs and owned outputs. Explicitly settle
-> integer/floating-point/timebase precision, deterministic
-> ordering, native/JVM allocation and publication ownership, deallocation/lifetime safety,
-> memory pollution/contamination, portability, and compatibility. Apply the workflow sizing/split
-> gate. If topology synthesis, resource collection, locality affinity, or ABI/runtime gates are
-> independently oversized, define bounded responsibility child blueprint action items, branch
-> names, and context envelopes now, then update every P7 implementation/validation/audit prompt,
-> parent artifact, and phase artifact index entry. Only after this parent blueprint child is merged
-> may those branches be created from the updated P7 root; rerun the gate per child. Do not run the
-> root implementation after a split.
->
-> Perform the mandatory `Implementation model reassessment` and replace the provisional P7
-> implementation selection and complete prompt body.
->
-> Append the workflow developer-review summary to the P7 plan section with purpose, ownership,
-> contracts, children, selected implementation model, risks, and unresolved decisions. The output
-> artifact is the finalized blueprint, plan summary, and implementation prompt. Handoff for review
-> and merge into the P7 root only when implementation needs no public-API, topology synthesis,
-> cumulative-unit, ownership, locality, timer, memory-cleanup, or fallback decision. Do not start
-> implementation before merge.
+The completed output is `docs/blueprints/hardware-utils/phase-7-macos-platform.md` on `hardware-utils-overhaul/phase-7-macos-blueprint`. It froze public sysctl topology discovery (`hw.logicalcpu`, `hw.nperflevels`, `hw.perflevel*`), Apple Silicon P/E-core vs Intel SMT modeling, `proc_pid_rusage` CPU/IO telemetry, `task_info` resident memory, `NSProcessInfo` thermal/low-power signals, locality-hint thread affinity tag semantics with tag `0` release and single-locality enforcement, physical current CPU returning `-1`, safe idempotent timer resolution without `THREAD_TIME_CONSTRAINT_POLICY` realtime scheduling, and Mach-O universal binary (`x86_64` + `arm64`) ABI contracts. Its sizing gate splits P7 into sequential P7-A, P7-B, and P7-C children. Review and merge it into `hardware-utils-overhaul/phase-7-macos` before creating any child branch.
 
-#### P7 implementation prompt - PROVISIONAL, DO NOT RUN
+#### P7 developer-review summary
 
-**Provisional model: `gpt-5.6-sol`; provisional reasoning effort: `high`. The P7 blueprint must
-replace this selection and prompt body before implementation.**
+- Purpose: deliver public sysctl topology discovery, Apple Silicon P/E-core and Intel SMT modeling, `proc_pid_rusage` CPU/IO telemetry, `task_info` memory tracking, `NSProcessInfo` thermal/low-power signals, locality-hint thread affinity with release tag `0`, safe timer policy without realtime constraints, and Mach-O universal binary ABI hardening for macOS 11+ platforms.
+- Ownership: `io.euhedral_execution.hardware_utils.macos.*` (Java), `src/main/native/macos/*` (C++), `native-products.json` (Manifest).
+- Key contracts: Public sysctl discovery (`hw.logicalcpu`, `hw.nperflevels`, `hw.perflevel*`); bijective logical CPU mapping (`0..N-1`); telemetry rule (process CPU/IO counters do not become artificial pressure); resident memory via `task_info`; thermal state (`NSProcessInfoThermalState`) and low-power mode (`isLowPowerModeEnabled`); locality-hint affinity with single-locality enforcement and tag `0` release; physical current CPU returns `-1`; safe timer policy without `THREAD_TIME_CONSTRAINT_POLICY` realtime constraints; universal Mach-O binaries (`x86_64` + `arm64`) with zero C++ runtimes (`-fno-exceptions -fno-rtti`) and codesign verification.
+- Children: P7-A (Topology & Sysctl), P7-B (Resources & Signals), P7-C (Affinity & Native ABI).
+- Selected Model: `gpt-5.6-sol` with `high` reasoning effort for all implementation and audit action items.
+- Principal Risks: Missing sysctl keys on older macOS releases or Intel hardware; Objective-C runtime linkage in native C++; `THREAD_TIME_CONSTRAINT_POLICY` realtime scheduling traps; Mach timebase divide-by-zero.
+- Unresolved Items: None. sysctl keys, unit scaling, core classification, thermal state mapping, locality tag rules, timer policy, and Mach-O ABI floors are fully settled.
 
-> After the P7 blueprint child is reviewed and merged, start
-> `hardware-utils-overhaul/phase-7-macos-implementation` from the P7 root. The parent artifact is
-> `docs/blueprints/hardware-utils/phase-7-macos-platform.md`. Ownership is limited to its macOS
-> Java/native/fixture/test/manifest/CI context envelope. Inspect `git status --short`. Read
-> `AGENTS.md`, `docs/AGENT_WORKFLOW.md`, the plan's completed P0-P6 phase artifact index entries
-> and closeout summaries, the parent blueprint, and only its bounded macOS context. Confirm this
-> prompt is finalized.
->
-> Implement the approved public-API macOS topology/resource/thermal/low-power adapters, stable
-> managed logical ownership, locality-hint affinity/release, safe timer behavior, native cleanup,
-> fixtures/tests, and named manifest/CI metadata. Do not use private APIs, claim hard affinity,
-> fabricate physical current CPU, install realtime policy, redesign common contracts, touch other
-> platforms/core, or access training. Allowed edits are blueprint-owned implementation/tests/
-> configuration, the completion record, and the compact temporary P7 phase-status block in
-> `AGENTS.md`; no other `AGENTS.md` content may change.
->
-> Run Intel/Apple Silicon sysctl fixtures, missing-key/homogeneous/no-L3 fallbacks, cumulative
-> provider contract tests, memory/timebase/Mach deallocation tests, affinity capability/release
-> and representable/unrepresentable mask boolean tests, low-power runtime-availability tests,
-> CPU-load-only and process-I/O-only pressure-neutral tests, native boundary/ABI/deployment/
-> signature gates, and real Intel/Apple Silicon smoke where available. Stop on any unstated API
-> or synthesis choice; otherwise append completion notes with changed files, commands, results,
-> acceptance-criteria evidence, approved deviations, and environmental limits. Add/update the
-> temporary `AGENTS.md` block with the completed P6 root, active P7 root, completed blueprint
-> child, active implementation child, and blueprint/completion links.
->
-> The output artifact is the implemented macOS platform layer plus its completion record appended
-> to `docs/blueprints/hardware-utils/phase-7-macos-platform.md`.
->
-> Handoff only when `SystemInfo` and `ResourceMonitor` initialize on both mac architectures,
-> topology entries are complete, normalized pressure receives supported macOS state, locality
-> semantics are honest, and no private/realtime behavior remains; an unavailable minimum-family
-> runtime remains an explicit release-blocking `unverified` item. Merge this child into the P7
-> root before validation.
+#### P7 root implementation prompt - SUPERSEDED, DO NOT RUN
 
-#### P7 conformance audit prompt
+This prompt is superseded by the child implementation prompts below. Do not execute a single integrated implementation pass for P7.
+
+#### P7-A macOS topology model blueprint prompt
+
+**Model: `gpt-5.6-sol`; reasoning effort: `max`.**
+
+> After P7 parent blueprint child is reviewed and merged, create
+> `hardware-utils-overhaul/phase-7-macos-topology-blueprint` from the updated P7 root. The parent
+> artifact is `docs/blueprints/hardware-utils/phase-7-macos-platform.md`. Read parent P7-A context
+> envelope, P2 topology model, `MacosSystemLayout`, `sysctl.*` parsers, Apple Silicon and Intel fixtures.
+>
+> Write `docs/blueprints/hardware-utils/phase-7-macos-topology-model.md`. Translate parent contract
+> into implementation checklist: exact sysctl key queries (`hw.logicalcpu`, `hw.physicalcpu`, `hw.packages`, `hw.nperflevels`, `hw.perflevel0.logicalcpu`, `hw.perflevel0.cpusperl2`, `hw.perflevel1.logicalcpu`, `hw.perflevel1.cpusperl2`, cache sizes), Apple Silicon P/E-core classification (`CoreKind.PERFORMANCE` vs `CoreKind.EFFICIENCY`), Intel SMT hyperthreading discovery (`logicalcpu > physicalcpu`), cache domain BitSet assembly spanning logical CPUs, and conservative missing-key fallback topology generation.
+>
+> Reapply sizing/model gates and confirm `gpt-5.6-sol`/`high` implementation model. Edit planning docs only. Handoff for review and merge into the P7 root before creating P7-A implementation.
+
+#### P7-A macOS topology model implementation prompt
+
+**Child-confirmed model: `gpt-5.6-sol`; reasoning effort: `high`.**
+
+> After P7-A blueprint is reviewed and merged, create
+> `hardware-utils-overhaul/phase-7-macos-topology-implementation` from the updated P7 root. Read
+> finalized P7-A blueprint and context envelope.
+>
+> Implement `MacosSystemLayout`, `sysctl.*` parsers, sysctl key queries, Apple Silicon P/E-core classification, Intel SMT discovery, and cache domain BitSet assembly. Append completion record to P7-A blueprint and update status block.
+>
+> Run Apple Silicon, Intel, missing-key, and homogeneous topology fixture tests. Merge implementation before its audit.
+
+#### P7-A macOS topology model conformance/manual-review prompt
 
 **Model: `gpt-5.6-sol`; reasoning effort: `high`.**
 
-> After the P7 validation child is reviewed and merged, start
-> `hardware-utils-overhaul/phase-7-macos-audit` from the P7 root. The parent artifact is
-> `docs/validations/hardware-utils/phase-7-macos-platform-validation.md`. Ownership is limited to
-> independent conformance review and minor blueprint-settled macOS corrections. Inspect
-> `git status --short`. Read `AGENTS.md`, `docs/AGENT_WORKFLOW.md`, the P7 blueprint's summarized
-> parent context, the plan's completed P0-P6 phase artifact index entries and closeout summaries,
-> implementation diff, fixtures/binaries, completion record, and validation record. For split
-> work, consume only the audited child context plus summarized parent. Do not inspect or run
-> training.
+> After P7-A implementation is reviewed and merged, create
+> `hardware-utils-overhaul/phase-7-macos-topology-audit` from the updated P7 root. Read P7-A
+> blueprint, completion record, and diff.
 >
-> Independently audit public API use, Intel/Apple Silicon topology and fallbacks, counter units,
-> memory/thermal/low-power semantics, Mach/timebase cleanup, shift bounds, managed logical
-> ownership, honest `LOCALITY_HINT` behavior and release, absence of fabricated hard affinity/
-> current CPU/realtime policy, telemetry pressure neutrality, deployment/import/signature/runtime
-> gates, and validation sufficiency. Allowed edits are
-> `docs/audits/hardware-utils/phase-7-macos-platform-conformance.md`, completion and validation
-> records, the P7 closeout summary in this plan, the temporary phase-status block, and minor
-> blueprint-settled corrections. Rerun and record affected validation after a correction. Private
-> APIs, semantic redesign, other platforms, core, unrelated files, and training are prohibited.
+> Independently audit sysctl key parsing, Apple Silicon vs Intel core modeling, cache domains, and fallback logic. Write
+> `docs/audits/hardware-utils/phase-7-macos-topology-model-conformance.md`, append evidence, and hand
+> off for merge.
+
+#### P7-B macOS resource provider blueprint prompt
+
+**Model: `gpt-5.6-sol`; reasoning effort: `max`.**
+
+> After P7-A audit is reviewed and merged, create
+> `hardware-utils-overhaul/phase-7-macos-resources-blueprint` from the updated P7 root. The parent
+> artifact is `docs/blueprints/hardware-utils/phase-7-macos-platform.md`. Read parent P7-B context
+> envelope, P4 sampling contract, `MacosResources`, `proc_pid_rusage`, `task_info`, `NSProcessInfo`.
 >
-> The output artifacts are the audit above, updated completion record, P7 closeout summary in this
-> plan, and, after the authorized merge, removal of the temporary P7 status block on the root with
-> the resulting root commit recorded when committed. Classify every macOS portion of R01, R03,
-> R13, T01, T05, A04, N02, B06, and P7 requirement exactly as `satisfied`, `deviated`, `unverified`, or
-> `ambiguous`, with evidence. Append audit commands, results, fixes, skipped checks, and
+> Write `docs/blueprints/hardware-utils/phase-7-macos-resource-provider.md`. Translate parent contract
+> into implementation checklist: `proc_pid_rusage` nanosecond CPU time (`ri_user_time + ri_system_time`) and cumulative I/O bytes (`ri_diskio_bytesread + ri_diskio_byteswritten`), `task_info` resident memory (`info.resident_size`) and virtual memory, `NSProcessInfo` thermal severity (`NSProcessInfoThermalState`) and low-power mode (`isLowPowerModeEnabled`), and telemetry pressure isolation (`SignalValidity.UNSUPPORTED` for unsupported pressure metrics).
+>
+> Reapply sizing/model gates and confirm `gpt-5.6-sol`/`high` implementation model. Edit planning docs only. Handoff for review and merge into the P7 root before creating P7-B implementation.
+
+#### P7-B macOS resource provider implementation prompt
+
+**Child-confirmed model: `gpt-5.6-sol`; reasoning effort: `high`.**
+
+> After P7-B blueprint is reviewed and merged, create
+> `hardware-utils-overhaul/phase-7-macos-resources-implementation` from the updated P7 root. Read
+> finalized P7-B blueprint and context envelope.
+>
+> Implement `MacosResources`, process CPU nanoseconds, disk I/O bytes, resident memory tracking, `NSProcessInfo` thermal state, low-power mode signals, and telemetry pressure isolation. Append completion record to P7-B blueprint and update status block.
+>
+> Run process CPU time tests, I/O byte accumulation tests, memory snapshot tests, thermal severity state tests, and provider contract tests. Merge implementation before its audit.
+
+#### P7-B macOS resource provider conformance/manual-review prompt
+
+**Model: `gpt-5.6-sol`; reasoning effort: `high`.**
+
+> After P7-B implementation is reviewed and merged, create
+> `hardware-utils-overhaul/phase-7-macos-resources-audit` from the updated P7 root. Read P7-B
+> blueprint, completion record, and diff.
+>
+> Independently audit `proc_pid_rusage`, `task_info`, `NSProcessInfo` signals, and telemetry pressure isolation. Write
+> `docs/audits/hardware-utils/phase-7-macos-resource-provider-conformance.md`, append evidence, and hand
+> off for merge.
+
+#### P7-C macOS affinity & native ABI blueprint prompt
+
+**Model: `gpt-5.6-sol`; reasoning effort: `max`.**
+
+> After P7-B audit is reviewed and merged, create
+> `hardware-utils-overhaul/phase-7-macos-affinity-native-blueprint` from the updated P7 root. The parent
+> artifact is `docs/blueprints/hardware-utils/phase-7-macos-platform.md`. Read parent P7-C context
+> envelope, `MacosAffinity`, `MacosAffinityCalls`, `macos_affinity.cpp`, `macos_resources.cpp`, `macos_system_layout.cpp`, `macos_jni.h`, and P1 native build graph.
+>
+> Write `docs/blueprints/hardware-utils/phase-7-macos-affinity-native.md`. Translate parent contract
+> into implementation checklist: Mach thread affinity tag mapping (`thread_policy_set`), tag `0` release preference, single-locality mask enforcement with deterministic multi-locality rejection (`false`), physical current CPU query returning `-1`, safe idempotent timer policy without `THREAD_TIME_CONSTRAINT_POLICY` realtime scheduling, macOS 11 deployment floor, universal Mach-O binary compilation (`x86_64` + `arm64`) with zero C++ runtimes (`-fno-exceptions -fno-rtti`), and bundled `codesign -v` verification.
+>
+> Reapply sizing/model gates and confirm `gpt-5.6-sol`/`high` implementation model. Edit planning docs only. Handoff for review and merge into the P7 root before creating P7-C implementation.
+
+#### P7-C macOS affinity & native ABI implementation prompt
+
+**Child-confirmed model: `gpt-5.6-sol`; reasoning effort: `high`.**
+
+> After P7-C blueprint is reviewed and merged, create
+> `hardware-utils-overhaul/phase-7-macos-affinity-native-implementation` from the updated P7 root. Read
+> finalized P7-C blueprint and context envelope.
+>
+> Implement `MacosAffinity`, `MacosAffinityCalls`, `macos_affinity.cpp`, `macos_resources.cpp`, `macos_system_layout.cpp`, `macos_jni.h`, Mach affinity tag mapping, single-locality enforcement, tag `0` release, safe timer policy, universal Mach-O ABI compilation, and codesign checks. Append completion record to P7-C blueprint and update status block.
+>
+> Run affinity capability tests, single-locality vs multi-locality rejection tests, tag `0` release tests, safe timer resolution tests, universal Mach-O binary gates, and codesign inspection. Merge implementation before its audit.
+
+#### P7-C macOS affinity & native ABI conformance/manual-review prompt
+
+**Model: `gpt-5.6-sol`; reasoning effort: `high`.**
+
+> After P7-C implementation is reviewed and merged, create
+> `hardware-utils-overhaul/phase-7-macos-affinity-native-audit` from the updated P7 root. Read P7-C
+> blueprint, completion record, and diff.
+>
+> Independently audit Mach thread affinity tags, tag `0` release, single-locality enforcement, safe timer resolution, universal Mach-O binary gates, and codesign verification. Write
+> `docs/audits/hardware-utils/phase-7-macos-affinity-native-conformance.md`, append evidence, and hand
+> off for merge.
+
+#### P7 root conformance audit prompt
+
+**Model: `gpt-5.6-sol`; reasoning effort: `high`.**
+
+> After all three child audits (P7-A, P7-B, P7-C) are reviewed and merged, create
+> `hardware-utils-overhaul/phase-7-macos-audit` from the updated P7 root. The parent artifacts are
+> the P7 parent blueprint and the three indexed child blueprint/completion/conformance triples.
+>
+> Independently audit the end-to-end macOS platform provider: sysctl topology discovery -> resource & thermal metrics -> locality affinity & Mach-O ABI. Classify all macOS requirements and defect ledger items as `satisfied`, `deviated`, `unverified`, or `ambiguous`.
+>
+> Write `docs/audits/hardware-utils/phase-7-macos-platform-conformance.md`, append the P7 closeout summary to the parent plan, remove the temporary P7 status block upon authorized merge, and record the resulting root commit. P7 is complete only after this authorized closeout; do not create P8 earlier.
+
 > environmental limits to the completion record. A material deviation returns to the exact
 > blueprint or implementation action. Handoff follows the audit/root-closeout contract: P7 is
 > complete only after the authorized merge, P7 status-block removal, and closeout-summary update;
