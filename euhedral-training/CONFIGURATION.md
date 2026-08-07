@@ -38,7 +38,7 @@ The closed-loop training process optimizes engine performance across physical co
 |  +--------------------+      +--------------------+      +---------------------+  |
 |                                                                     |             |
 |  +--------------------+      +--------------------+                 v             |
-|  | Package            | <--- | Surrogate Model    | <-----------------------------+  |
+|  | Package            | <--- | Surrogate Model    | <---------------*             |
 |  | Publication        |      | Retraining         |                               |
 |  | (Artifacts & CSV)  |      | (TensorFlow/DJL)   |                               |
 |  +--------------------+      +--------------------+                               |
