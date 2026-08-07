@@ -2,11 +2,11 @@ package io.euhedral_execution.hardware_utils.internal;
 
 import io.euhedral_execution.hardware_utils.AffinityCapability;
 import io.euhedral_execution.hardware_utils.linux.LinuxAffinity;
-import io.euhedral_execution.hardware_utils.osx.OSXAffinity;
+import io.euhedral_execution.hardware_utils.macos.MacosAffinity;
 import io.euhedral_execution.hardware_utils.windows.WindowsAffinity;
 
 public abstract sealed class ThreadPinner implements AffinityProvider permits LinuxAffinity,
-        OSXAffinity, WindowsAffinity {
+        MacosAffinity, WindowsAffinity {
 
     private final AffinityCapability capability;
     private final RawLocalityCall localityCall;

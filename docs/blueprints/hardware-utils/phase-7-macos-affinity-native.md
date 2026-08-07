@@ -282,7 +282,23 @@ gradle :euhedral-hardware-utils:test
 
 ## 9. Completion Record
 
-- **Date**: Pending Implementation
+- **Date**: 2026-08-07
 - **Branch**: `hardware-utils-overhaul/phase-7-macos-affinity-native-implementation`
-- **Implementation Highlights**: To be populated upon completion.
-- **Verification Results**: To be populated upon completion.
+- **Implementation Highlights**:
+  - Implemented `MacosAffinity` and `MacosAffinityCalls` in `io.euhedral_execution.hardware_utils.macos`.
+  - Enforced single-locality mask cardinality check (`cardinality == 1`) in `MacosAffinityCalls.applyOrdinal`, deterministically rejecting multi-locality requests (`> 1` set bits) and empty requests (`0` set bits).
+  - Mapped requested logical CPU ordinal `c` bijectively to Mach thread affinity tag `c + 1` via `thread_policy_set(pthread_mach_thread_np(pthread_self()), THREAD_AFFINITY_POLICY, ...)`.
+  - Implemented Tag `0` release preference in `MacosAffinityCalls.raw` passing tag `0` to clear scheduler locality hints.
+  - Implemented `getCpu()` returning `-1` (`UNSUPPORTED`) on all macOS architectures, replacing legacy APIC CPUID queries.
+  - Implemented safe timer resolution policy (`setTimerResolution(long nanos)`), validating `nanos >= 0` (throwing `IllegalArgumentException`), clamping minimum `nanos` to `1L`, and eliminating `THREAD_TIME_CONSTRAINT_POLICY` realtime thread traps.
+  - Modernized native files (`macos_affinity.cpp`, `macos_resources.cpp`, `macos_system_layout.cpp`, `macos_jni.h`).
+  - Preserved backward-compatibility wrappers `OSXAffinity` and `OSXAffinityCalls` in package `io.euhedral_execution.hardware_utils.osx`, maintaining JNI contract signatures (`private static native`).
+  - Updated `ThreadPinner` sealed permits clause to permit `MacosAffinity` and `ThreadTools` to select `MacosAffinity.INSTANCE`.
+- **Verification Results**:
+  - `MacosAffinityTest` passed: capability validation, `getCpu()` returning `-1`, single-locality mask acceptance, multi-locality mask rejection, tag `0` release, safe timer policy, negative argument rejection (`IllegalArgumentException`), legacy `OSXAffinity` delegation.
+  - `OSXAffinityTest` passed: legacy wrapper compatibility and tag encoding.
+  - `NativeCompatibilityTest` passed: preserved aggregate native products and JNI declarations baseline contract (`native-contract-900d8c50.tsv`).
+  - `NativeBinaryGateTest` passed: universal Mach-O binary gates (`x86_64` + `arm64`) targeting macOS 11.0.
+  - `NativeSigningTest` passed: codesign verification (`codesign -v`).
+  - `NativeBinaryInspectionIT` passed.
+  - Full `gradle build` succeeded with clean output across all workspace modules.

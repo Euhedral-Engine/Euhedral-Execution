@@ -36,6 +36,10 @@ public final class MacosSystemLayout {
         INSTANCE = OSName.isMacOS() ? new MacosSystemLayout() : null;
     }
 
+    public static native long getSysctlLong(String key);
+    public static native int getSysctlInt(String key);
+    public static native String getSysctlString(String key);
+
     private final TopologyModel model;
 
     public MacosSystemLayout() {

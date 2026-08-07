@@ -2,7 +2,7 @@ package io.euhedral_execution.hardware_utils.macos.sysctl;
 
 import io.euhedral_execution.hardware_utils.common.OSName;
 import io.euhedral_execution.hardware_utils.internal.JNIClassLoader;
-import io.euhedral_execution.hardware_utils.osx.OSXSystemLayout;
+import io.euhedral_execution.hardware_utils.macos.MacosSystemLayout;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
@@ -49,11 +49,11 @@ public final class SysctlNative implements SysctlProvider {
             return OptionalInt.empty();
         }
         try {
-            int val = OSXSystemLayout.sysctlInt(key);
+            int val = MacosSystemLayout.getSysctlInt(key);
             if (val > 0) {
                 return OptionalInt.of(val);
             }
-            long lval = OSXSystemLayout.sysctlLong(key);
+            long lval = MacosSystemLayout.getSysctlLong(key);
             if (lval > 0 && lval <= Integer.MAX_VALUE) {
                 return OptionalInt.of((int) lval);
             }
@@ -68,11 +68,11 @@ public final class SysctlNative implements SysctlProvider {
             return OptionalLong.empty();
         }
         try {
-            long val = OSXSystemLayout.sysctlLong(key);
+            long val = MacosSystemLayout.getSysctlLong(key);
             if (val > 0) {
                 return OptionalLong.of(val);
             }
-            int ival = OSXSystemLayout.sysctlInt(key);
+            int ival = MacosSystemLayout.getSysctlInt(key);
             if (ival > 0) {
                 return OptionalLong.of(ival);
             }
@@ -85,6 +85,13 @@ public final class SysctlNative implements SysctlProvider {
     public Optional<String> getString(String key) {
         if (!loaded || key == null) {
             return Optional.empty();
+        }
+        try {
+            String str = MacosSystemLayout.getSysctlString(key);
+            if (str != null && !str.isEmpty()) {
+                return Optional.of(str);
+            }
+        } catch (Throwable ignored) {
         }
         return Optional.empty();
     }

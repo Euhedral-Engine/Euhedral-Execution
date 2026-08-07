@@ -17,9 +17,9 @@ class JniHeaderTest {
 
     private static final Set<String> DECLARATIONS = Set.of(
             "io_euhedral_execution_hardware_utils_linux_LinuxAffinity.h",
-            "io_euhedral_execution_hardware_utils_osx_OSXAffinity.h",
-            "io_euhedral_execution_hardware_utils_osx_OSXResources.h",
-            "io_euhedral_execution_hardware_utils_osx_OSXSystemLayout.h",
+            "io_euhedral_execution_hardware_utils_macos_MacosAffinity.h",
+            "io_euhedral_execution_hardware_utils_macos_MacosResources.h",
+            "io_euhedral_execution_hardware_utils_macos_MacosSystemLayout.h",
             "io_euhedral_execution_hardware_utils_windows_WindowsAffinity.h",
             "io_euhedral_execution_hardware_utils_windows_WindowsResources.h",
             "io_euhedral_execution_hardware_utils_windows_WindowsSystemLayout.h");

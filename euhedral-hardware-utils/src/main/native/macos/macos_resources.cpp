@@ -1,8 +1,8 @@
-#ifndef _Included_OSXResources
-#define _Included_OSXResources
+#ifndef _Included_MacosResources
+#define _Included_MacosResources
 
-#include "osx_jni.h"
-#include "io_euhedral_execution_hardware_utils_osx_OSXResources.h"
+#include "macos_jni.h"
+#include "io_euhedral_execution_hardware_utils_macos_MacosResources.h"
 
 #include <dlfcn.h>
 #include <string.h>
@@ -13,7 +13,7 @@ extern "C" {
 
 // CPU Times
 JNIEXPORT jlongArray JNICALL
-Java_io_euhedral_1execution_hardware_1utils_osx_OSXResources_getCpuTimes(JNIEnv *env,
+Java_io_euhedral_1execution_hardware_1utils_macos_MacosResources_getCpuTimes(JNIEnv *env,
                                                            jclass) {
   struct rusage usage;
   memset(&usage, 0, sizeof(usage));
@@ -36,7 +36,7 @@ Java_io_euhedral_1execution_hardware_1utils_osx_OSXResources_getCpuTimes(JNIEnv 
 
 // CPU Load (system-wide)
 JNIEXPORT jdouble JNICALL
-Java_io_euhedral_1execution_hardware_1utils_osx_OSXResources_getSystemCpuLoad(JNIEnv *,
+Java_io_euhedral_1execution_hardware_1utils_macos_MacosResources_getSystemCpuLoad(JNIEnv *,
                                                                 jclass) {
   host_cpu_load_info_data_t cpuinfo;
   mach_msg_type_number_t count = HOST_CPU_LOAD_INFO_COUNT;
@@ -59,7 +59,7 @@ Java_io_euhedral_1execution_hardware_1utils_osx_OSXResources_getSystemCpuLoad(JN
 
 // Memory
 JNIEXPORT jlongArray JNICALL
-Java_io_euhedral_1execution_hardware_1utils_osx_OSXResources_getMemorySnapshot(JNIEnv *env,
+Java_io_euhedral_1execution_hardware_1utils_macos_MacosResources_getMemorySnapshot(JNIEnv *env,
                                                                  jclass) {
   jlong values[3] = {0, 0, 0};
 
@@ -89,7 +89,7 @@ Java_io_euhedral_1execution_hardware_1utils_osx_OSXResources_getMemorySnapshot(J
 
 // IO Bytes
 JNIEXPORT jlong JNICALL
-Java_io_euhedral_1execution_hardware_1utils_osx_OSXResources_getIoBytes(JNIEnv *, jclass) {
+Java_io_euhedral_1execution_hardware_1utils_macos_MacosResources_getIoBytes(JNIEnv *, jclass) {
   struct rusage_info_v3 rusage;
   memset(&rusage, 0, sizeof(rusage));
   if (proc_pid_rusage(getpid(), RUSAGE_INFO_V3, (void **)&rusage) == 0) {
@@ -99,7 +99,7 @@ Java_io_euhedral_1execution_hardware_1utils_osx_OSXResources_getIoBytes(JNIEnv *
 }
 
 JNIEXPORT jobjectArray JNICALL
-Java_io_euhedral_1execution_hardware_1utils_osx_OSXResources_getCoreTypeMask(
+Java_io_euhedral_1execution_hardware_1utils_macos_MacosResources_getCoreTypeMask(
     JNIEnv *env, jobject, jboolean getPCores) {
   const char *levelKey =
       getPCores ? "hw.perflevel0.logicalcpu" : "hw.perflevel1.logicalcpu";
@@ -142,7 +142,7 @@ Java_io_euhedral_1execution_hardware_1utils_osx_OSXResources_getCoreTypeMask(
 
 // Process Rusage: Nanosecond CPU times & cumulative disk I/O bytes
 JNIEXPORT jboolean JNICALL
-Java_io_euhedral_1execution_hardware_1utils_osx_OSXResources_getProcessRusageNative(
+Java_io_euhedral_1execution_hardware_1utils_macos_MacosResources_getProcessRusageNative(
     JNIEnv *env, jclass, jlongArray outCpuAndIoBytes) {
   if (outCpuAndIoBytes == NULL) return JNI_FALSE;
   jsize len = env->GetArrayLength(outCpuAndIoBytes);
@@ -174,7 +174,7 @@ Java_io_euhedral_1execution_hardware_1utils_osx_OSXResources_getProcessRusageNat
 
 // Task Memory: Total RAM via hw.memsize, resident memory & virtual size via task_info
 JNIEXPORT jboolean JNICALL
-Java_io_euhedral_1execution_hardware_1utils_osx_OSXResources_getTaskMemoryNative(
+Java_io_euhedral_1execution_hardware_1utils_macos_MacosResources_getTaskMemoryNative(
     JNIEnv *env, jclass, jlongArray outMemory) {
   if (outMemory == NULL) return JNI_FALSE;
   jsize len = env->GetArrayLength(outMemory);
@@ -207,7 +207,7 @@ typedef void *(*objc_msgSend_fn)(void *, void *);
 
 // NSProcessInfo Thermal State
 JNIEXPORT jint JNICALL
-Java_io_euhedral_1execution_hardware_1utils_osx_OSXResources_getThermalStateNative(
+Java_io_euhedral_1execution_hardware_1utils_macos_MacosResources_getThermalStateNative(
     JNIEnv *, jclass) {
   objc_getClass_fn p_objc_getClass = (objc_getClass_fn)dlsym(RTLD_DEFAULT, "objc_getClass");
   sel_registerName_fn p_sel_registerName = (sel_registerName_fn)dlsym(RTLD_DEFAULT, "sel_registerName");
@@ -235,7 +235,7 @@ Java_io_euhedral_1execution_hardware_1utils_osx_OSXResources_getThermalStateNati
 
 // NSProcessInfo Low-Power Mode
 JNIEXPORT jboolean JNICALL
-Java_io_euhedral_1execution_hardware_1utils_osx_OSXResources_isLowPowerModeNative(
+Java_io_euhedral_1execution_hardware_1utils_macos_MacosResources_isLowPowerModeNative(
     JNIEnv *, jclass) {
   objc_getClass_fn p_objc_getClass = (objc_getClass_fn)dlsym(RTLD_DEFAULT, "objc_getClass");
   sel_registerName_fn p_sel_registerName = (sel_registerName_fn)dlsym(RTLD_DEFAULT, "sel_registerName");
@@ -261,7 +261,7 @@ Java_io_euhedral_1execution_hardware_1utils_osx_OSXResources_isLowPowerModeNativ
 
 // Mach Timebase: Conversion factors numer and denom
 JNIEXPORT jboolean JNICALL
-Java_io_euhedral_1execution_hardware_1utils_osx_OSXResources_getMachTimebaseNative(
+Java_io_euhedral_1execution_hardware_1utils_macos_MacosResources_getMachTimebaseNative(
     JNIEnv *env, jclass, jintArray outNumerDenom) {
   if (outNumerDenom == NULL) return JNI_FALSE;
   jsize len = env->GetArrayLength(outNumerDenom);
