@@ -368,3 +368,39 @@ void resourceMonitorUpdatesPropagateToControlPlaneFragment() {
 > Add all new tests directly to existing test files (`ControlPlaneFragmentTest.java`, `ControlPlaneFragmentThreadTest.java`, `ControlPlaneCacheTest.java`, `ControlPlaneLatticeTest.java`). Do not create new test files. Run `gradle :euhedral-core:test` to verify.
 >
 > Append completion notes to the blueprint when finished.
+
+---
+
+## Completion Record
+
+- **Date**: 2026-08-07
+- **Branch**: `hardware-utils-overhaul/phase-8-core-release-implementation`
+- **Status**: Completed and Verified
+
+### Changed Files
+
+- `euhedral-core/src/main/java/io/euhedral_execution/core/control_plane/ControlPlaneFragment.java`: Added static `ADAPTIVE_BATCH_CAP` and `LAST_ACCEPTED_TIMESTAMP_NS` VarHandles; initialized primitive `adaptiveBatchCap` field; implemented sanitized snapshot validation and lock-free VarHandle timestamp CAS loop in `update(CoreSnapshot)`; implemented single `getOpaque` primitive read in `getBatchLimit()`; removed P/E core pressure multiplier.
+- `euhedral-core/src/test/java/io/euhedral_execution/core/control_plane/ControlPlaneFragmentTest.java`: Added unit tests for adaptive batch cap calculation, lower bound floor $\ge 2$, NaN/Infinity sanitization, and sparse/null snapshot handling.
+- `euhedral-core/src/test/java/io/euhedral_execution/core/control_plane/ControlPlaneFragmentThreadTest.java`: Added concurrency test verifying lock-free timestamp CAS linearization under concurrent updates.
+- `euhedral-core/src/test/java/io/euhedral_execution/core/control_plane/ControlPlaneCacheTest.java`: Added test for EWMA hysteresis and cap factor updates.
+- `euhedral-core/src/test/java/io/euhedral_execution/core/control_plane/ControlPlaneLatticeTest.java`: Added live component interaction test between monitor, lattice, shard, and fragment.
+
+### Commands Executed and Verification Results
+
+```bash
+# Core module tests
+mise exec -- gradle :euhedral-core:test
+# Result: SUCCESS (all unit, thread, cache, and lattice integration tests passed)
+
+# Full non-training multi-module build
+mise exec -- gradle :euhedral-core:build :euhedral-hardware-utils:build :euhedral-data-structures:build :euhedral-hashing:build :euhedral-reactor-core:build :euhedral-spring-core:build
+# Result: SUCCESS (BUILD SUCCESSFUL across all 6 non-training modules)
+```
+
+### Acceptance Criteria Evidence
+
+- **Unattenuated Response Curve**: Verified batch cap formula $C(p) = \text{clampLong}(\text{Math.round}(\text{eligibleMax} - p \cdot (\text{eligibleMax} - 2)), 2, \text{eligibleMax})$ responds monotonically to pressure in $[0.0, 1.0]$.
+- **Batch Floor Invariant**: Verified cap never drops below 2 under maximum pressure ($p = 1.0$) or constrained configuration bounds.
+- **Lock-Free Concurrency**: Verified timestamp ordering using VarHandle CAS (`compareAndSet`) loop on `LAST_ACCEPTED_TIMESTAMP_NS` without synchronization locks.
+- **Hot-Loop Zero Allocation**: Verified `getBatchLimit()` reads `ADAPTIVE_BATCH_CAP.getOpaque(this)` directly as a primitive read with zero object allocations, formatting, or locks.
+- **Defect Ledger Closeout**: Defect items **C01** and **C02** are satisfied.

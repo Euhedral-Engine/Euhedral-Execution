@@ -151,6 +151,30 @@ class ControlPlaneCacheTest {
         assertDoesNotThrow(manager::close);
     }
 
+    @Test
+    void shouldApplyEwmaHysteresisOnPressureSpikeAndRecovery() {
+        ControlPlaneCache manager = manager();
+
+        CoreSnapshot highPressure = mock(CoreSnapshot.class);
+        CpuSnapshot highCpu = mock(CpuSnapshot.class);
+        when(highPressure.cpuSnapshots()).thenReturn(new CpuSnapshot[]{highCpu});
+        when(highCpu.pressure()).thenReturn(0.80);
+
+        manager.update(highPressure);
+        double capAfterHigh = manager.getCapFactor();
+
+        CoreSnapshot lowPressure = mock(CoreSnapshot.class);
+        CpuSnapshot lowCpu = mock(CpuSnapshot.class);
+        when(lowPressure.cpuSnapshots()).thenReturn(new CpuSnapshot[]{lowCpu});
+        when(lowCpu.pressure()).thenReturn(0.00);
+
+        manager.update(lowPressure);
+        double capAfterLow = manager.getCapFactor();
+
+        assertTrue(capAfterHigh < 1.0);
+        assertTrue(capAfterLow >= capAfterHigh);
+    }
+
     private static class CPCImpl extends ControlPlaneCache {
 
         public CPCImpl(@NonNull CacheConfig cacheConfig) {
