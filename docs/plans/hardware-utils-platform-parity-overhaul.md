@@ -3010,7 +3010,7 @@ The completed output is `docs/blueprints/hardware-utils/phase-7-macos-platform.m
 
 This prompt is superseded by the child implementation prompts below. Do not execute a single integrated implementation pass for P7.
 
-#### P7-A macOS topology model blueprint prompt - COMPLETED, REVIEW AND MERGE REQUIRED
+#### P7-A macOS topology model blueprint prompt - COMPLETED AND MERGED
 
 **Model: `gpt-5.6-sol`; reasoning effort: `max`.**
 
@@ -3024,7 +3024,7 @@ This prompt is superseded by the child implementation prompts below. Do not exec
 >
 > Reapply sizing/model gates and confirm `gpt-5.6-sol`/`high` implementation model. Edit planning docs only. Handoff for review and merge into the P7 root before creating P7-A implementation.
 
-#### P7-A macOS topology model implementation prompt
+#### P7-A macOS topology model implementation prompt - COMPLETED AND MERGED
 
 **Child-confirmed model: `gpt-5.6-sol`; reasoning effort: `high`.**
 
@@ -3036,7 +3036,7 @@ This prompt is superseded by the child implementation prompts below. Do not exec
 >
 > Run Apple Silicon, Intel, missing-key, and homogeneous topology fixture tests. Merge implementation before its audit.
 
-#### P7-A macOS topology model conformance/manual-review prompt
+#### P7-A macOS topology model conformance/manual-review prompt - COMPLETED, REVIEW AND MERGE REQUIRED
 
 **Model: `gpt-5.6-sol`; reasoning effort: `high`.**
 
