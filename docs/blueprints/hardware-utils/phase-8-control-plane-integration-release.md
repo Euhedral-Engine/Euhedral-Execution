@@ -404,3 +404,28 @@ mise exec -- gradle :euhedral-core:build :euhedral-hardware-utils:build :euhedra
 - **Lock-Free Concurrency**: Verified timestamp ordering using VarHandle CAS (`compareAndSet`) loop on `LAST_ACCEPTED_TIMESTAMP_NS` without synchronization locks.
 - **Hot-Loop Zero Allocation**: Verified `getBatchLimit()` reads `ADAPTIVE_BATCH_CAP.getOpaque(this)` directly as a primitive read with zero object allocations, formatting, or locks.
 - **Defect Ledger Closeout**: Defect items **C01** and **C02** are satisfied.
+
+### Audit Summary and Environmental Evidence
+
+- **Audit Date**: 2026-08-07
+- **Audit Branch**: `hardware-utils-overhaul/phase-8-core-release-audit`
+- **Conformance Audit Artifact**: [docs/audits/hardware-utils/phase-8-control-plane-integration-release-conformance.md](file:///home/bagotay/src/euhedral/Euhedral-Execution/docs/audits/hardware-utils/phase-8-control-plane-integration-release-conformance.md)
+- **Validation Record Artifact**: [docs/validations/hardware-utils/phase-8-control-plane-integration-release-validation.md](file:///home/bagotay/src/euhedral/Euhedral-Execution/docs/validations/hardware-utils/phase-8-control-plane-integration-release-validation.md)
+
+#### Audit Commands Executed
+```bash
+# Non-training multi-module test suite
+mise exec -- gradle :euhedral-core:test :euhedral-hardware-utils:test :euhedral-data-structures:test :euhedral-hashing:test :euhedral-reactor-core:test :euhedral-spring-core:test
+# Result: BUILD SUCCESSFUL in 42s
+
+# Non-training multi-module build & packaging
+mise exec -- gradle :euhedral-core:build :euhedral-hardware-utils:build :euhedral-data-structures:build :euhedral-hashing:build :euhedral-reactor-core:build :euhedral-spring-core:build
+# Result: BUILD SUCCESSFUL in 4s
+```
+
+#### Fixes and Adjustments Made During Audit
+- None (implementation fully satisfied all blueprint and release requirements without requiring production code edits during audit).
+
+#### Skipped Checks and Environmental Limits
+- **Skipped / Unverified Gates**: Real-host execution on physical macOS and Windows hardware was unverified in the Linux authoring container; satisfied via developer-attested hardware CI workflow results.
+- **Environment**: Linux x86_64, OpenJDK 21, Gradle 9.6.1, Zig 0.16.0 cross-toolchain.

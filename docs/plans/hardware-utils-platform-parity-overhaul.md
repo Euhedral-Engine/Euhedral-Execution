@@ -3359,3 +3359,18 @@ Root-audit dispositions of note:
 Ledger items T01, A04, R01, R03, R13, N02, and B06 are all `satisfied` for macOS. The temporary
 P7 status block was removed from `AGENTS.md` as part of this closeout. Resulting P7 root commit
 recorded in the Plan status list above. P8 is not started by this action.
+
+## P8 closeout (control plane integration and release) — 2026-08-07
+
+Phase 8 delivered the core control plane integration of the normalized hardware pressure engine into `ControlPlaneFragment` and completed the initiative release audit (`docs/audits/hardware-utils/phase-8-control-plane-integration-release-conformance.md`).
+
+Key achievements and dispositions:
+- **Defect Ledger Closeout**:
+  - **C01 (`ControlPlaneFragment` pressure curve & attenuation)**: `satisfied`. Monotonic linear adaptive batch cap formula $C(p) = \text{clampLong}(\text{Math.round}(\text{eligibleMax} - p \cdot (\text{eligibleMax} - 2)), 2, \text{eligibleMax})$ implemented; P/E core pressure attenuation multiplier (`0.5`/`0.7`) removed; zero-allocation primitive hot-loop read (`getOpaque`) verified in `cycle()`.
+  - **C02 (`ControlPlaneCache` delegation & hysteresis)**: `satisfied`. `ControlPlaneCache.java` production source code untouched (test-only scope preserved); update delegation executed on valid monotonic snapshots; EWMA attack/release hysteresis verified.
+- **Timestamp Linearization and Concurrency**: Monotonic timestamp ordering enforced via VarHandle `LAST_ACCEPTED_TIMESTAMP_NS.compareAndSet(...)` CAS loop; memory publication bounded by `ADAPTIVE_BATCH_CAP.setRelease(...)`.
+- **Snapshot Sanitization**: Null snapshots, empty `cpuSnapshots` arrays, out-of-bounds CPU indices, and NaN/Infinite pressure values correctly sanitized and rejected.
+- **Component & Module Isolation**: Monitor-to-Lattice component wiring verified in `ControlPlaneLatticeTest`. Build and tests pass cleanly across all 6 non-training modules (`core`, `hardware-utils`, `data-structures`, `hashing`, `reactor-core`, `spring-core`) with zero training module edits or dependencies.
+- **Platform Native & Binary Gates**: Universal JNI native libraries for Linux, Windows, macOS (`x86_64`, `aarch64`) cross-built via Zig 0.16.0 verified (`NativeBinaryGateTest`); macOS binaries signed via `rcodesign`.
+
+All requirements are `satisfied` (with non-Linux real-host smoke `unverified` in container but satisfied via developer-attested CI results). The entire non-training Hardware-Utils Platform Parity Initiative is complete and closed out.
