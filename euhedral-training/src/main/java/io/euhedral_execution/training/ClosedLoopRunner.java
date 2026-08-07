@@ -1101,11 +1101,7 @@ public final class ClosedLoopRunner {
     }
 
     private static boolean isLegacyImportedFirstModel(ClosedLoopCheckpoint checkpoint) {
-        return checkpoint.evidence().stream().anyMatch(entry -> entry.source() == EvidenceSource.INITIAL)
-                && checkpoint
-                        .latestModel()
-                        .map(model -> model.relativePath().equals("models/model-000001"))
-                        .orElse(false);
+        return checkpoint.evidence().stream().anyMatch(entry -> entry.source() == EvidenceSource.INITIAL);
     }
 
     private static boolean isSparseDataModelConfig(ClosedLoopConfig config, ScenarioTrainingConfig trainingConfig) {

@@ -237,6 +237,32 @@ class ClosedLoopRunnerTest {
     }
 
     @Test
+    void importedCalibrationColdStartRejectionContinuesAcrossMultipleIterations() throws Exception {
+        Path bootstrap = temp.resolve("bootstrap.csv");
+        writeBootstrap(bootstrap, 6);
+        SourceScenario scenario = SourceScenario.of("env-a", 1, 4);
+        TreeSet<SourceScenario> required = new TreeSet<>(List.of(scenario));
+
+        ClosedLoopRunner.run(config(bootstrap, required, "env-a", false, 2), new BootstrapOnlyServices());
+        Path sourceWorkspace = temp.resolve("workspace");
+        Path evidenceDirectory = sourceWorkspace.resolve("evidence");
+        Path importedWorkspace = temp.resolve("imported-workspace");
+
+        RejectingTrainingServices services = new RejectingTrainingServices(false, false, false);
+        ClosedLoopResult result = ClosedLoopRunner.run(
+                initialCalibrationConfig(
+                        importedWorkspace,
+                        sourceWorkspace.resolve("calibration-plan"),
+                        evidenceDirectory,
+                        required,
+                        false,
+                        2),
+                services);
+
+        assertThat(result.stage()).isEqualTo(CheckpointStage.RUN_COMPLETE);
+    }
+
+    @Test
     void importedCalibrationCanResolveReferenceBundlesFromDirectory() throws Exception {
         Path bootstrap = temp.resolve("bootstrap.csv");
         writeBootstrap(bootstrap, 6);
