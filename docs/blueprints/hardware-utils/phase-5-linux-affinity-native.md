@@ -224,15 +224,23 @@ gradle :euhedral-hardware-utils:test
 - `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/linux/LinuxAffinityCalls.java`
 - `euhedral-hardware-utils/src/main/native/linux/linux_affinity.cpp`
 - `euhedral-hardware-utils/src/main/native/linux/linux_jni.h`
+- `euhedral-hardware-utils/src/main/native/common/jni_onload.cpp`
 - `euhedral-hardware-utils/src/test/java/io/euhedral_execution/hardware_utils/linux/LinuxAffinityTest.java`
 
 ### Commands Run & Results
 
-- *Pending implementation step execution.*
+- `gradle :euhedral-hardware-utils:test --tests "io.euhedral_execution.hardware_utils.linux.LinuxAffinityTest"`: PASSED (4/4 tests clean).
+- `gradle :euhedral-hardware-utils:zigBuild --rerun-tasks`: PASSED (built dual ELF glibc 2.17 / musl binaries for x86-64 and AArch64).
+- `gradle :euhedral-hardware-utils:test`: PASSED (133/133 tests clean, including NativeBinaryGateTest, NativeBinaryInspectionIT, NativeLoadSmokeIT, NativePackagingIT).
+- `gradle build`: PASSED (full multi-module build and verification clean).
 
 ### Acceptance Evidence
 
-- *Pending implementation step execution.*
+- **Direct Linux Syscalls**: Direct `syscall()` wrappers implemented in `linux_affinity.cpp` using exact numbers for x86-64 (`SYS_sched_setaffinity=203`, `SYS_sched_getaffinity=204`, `SYS_getcpu=309`, `SYS_prctl=157`) and AArch64 (`SYS_sched_setaffinity=122`, `SYS_sched_getaffinity=123`, `SYS_getcpu=168`, `SYS_prctl=167`).
+- **JNI Array Safety**: Null pointer checks return `EINVAL`, `GetLongArrayElements` failures return `ENOMEM`, setter calls release via `JNI_ABORT` (no heap copy-back), getter calls release via mode `0` (commit results back to Java heap).
+- **Errno Translation**: `LinuxAffinityCalls.apply()` converts `0` return code to `true` and non-zero to `false`, swallowing `RuntimeException` / `LinkageError` safely.
+- **Timer Slack Granularity**: Negative `nanos` rejected with `RuntimeException`, positive values clamped to at least `1L` and sent via `SYS_prctl` with `PR_SET_TIMER_SLACK=29`.
+- **Affinity Lease Capture & Restoration**: `captureAffinity()` retrieves calling thread's current exact CPU mask trimmed to logical CPU count span, and `restoreExact()` successfully restores captured masks via `AffinityController`.
 
 ### Approved Deviations
 
@@ -240,4 +248,4 @@ gradle :euhedral-hardware-utils:test
 
 ### Environmental Limits
 
-- Native JNI execution requires Linux environment with JNI shared library loaded; fallback mocks used for non-Linux platforms.
+- Native JNI execution requires Linux platform; non-Linux platforms fallback safely to `AffinityCapability.UNSUPPORTED` without linkage failures.
