@@ -10,7 +10,7 @@
 - **Audit File Target**: `docs/audits/hardware-utils/phase-6-windows-topology-model-conformance.md`
 - **Owning Module**: `euhedral-hardware-utils`
 - **Selected Blueprint Model**: `gpt-5.6-sol` with `high` reasoning effort
-- **Status**: Implementation-ready child blueprint. Pending developer review and merge into the P6 root before child implementation begins.
+- **Status**: Complete. Implementation finalized and verified.
 
 This child blueprint is subordinate to `AGENTS.md`, `docs/AGENT_WORKFLOW.md`, `docs/ARCHITECTURE.md`, and the parent P6 blueprint (`phase-6-windows-platform.md`). It translates the parent topology contracts into an explicit, implementable specification for `WindowsSystemLayout` and `win32.*` GLPIEx binary structure parsers.
 
@@ -280,4 +280,15 @@ gradle :euhedral-hardware-utils:test
 
 ## 9. Completion Record
 
-*(To be filled during Phase 6-A implementation and conformance audit)*
+- **Date**: 2026-08-06
+- **Branch**: `hardware-utils-overhaul/phase-6-windows-topology-implementation`
+- **Implementation Highlights**:
+  - Corrected GLPIEx structure header double-advancement defect (T03) in `SystemLogicalProcessorInformation.java` by advancing byte position strictly by record `size` bytes.
+  - Implemented bijective Windows group + processor to global logical CPU ID mapping (`logicalId = group * 64 + processor`) in `WindowsSystemLayout.java`.
+  - Added Bit 63 KAFFINITY mask safety handling (`(mask & (1L << bit)) != 0L`) across group affinity loops and logical ID mapping.
+  - Implemented heterogeneous P-core vs E-core classification using `EfficiencyClass` (payload offset 1) in `ProcessorRelationship.java` and `WindowsSystemLayout.translate()`.
+  - Added `CacheType.INSTRUCTION` exclusion and multi-group cache domain `BitSet` mask generation in `CacheRelationship.java` and `WindowsSystemLayout.java`.
+  - Enforced strict buffer bounds and payload length checks across all `win32.*` parsers, throwing `IllegalArgumentException` on malformed/truncated buffers to trigger P2 topology fallbacks.
+- **Verification Results**:
+  - `WindowsTopologyFixtureTest`: Executed single-group, multi-group, >64 CPU, bit 63, P/E core classification, cache domain extraction, and malformed buffer fixture tests. Passed 100%.
+  - `gradle :euhedral-hardware-utils:test`: Full module build and test suite passed successfully.

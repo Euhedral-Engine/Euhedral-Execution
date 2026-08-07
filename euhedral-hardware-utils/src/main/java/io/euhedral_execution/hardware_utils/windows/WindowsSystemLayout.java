@@ -75,8 +75,9 @@ public final class WindowsSystemLayout {
         Map<Integer, LogicalCpu> cpus = new TreeMap<>();
         for (ProcessorRelationship value : cores) {
             String coreSignature = signature("core", value.groupAffinities);
-            CoreKind kind = value.pCore ? CoreKind.PERFORMANCE
-                    : hasTrue && hasFalse ? CoreKind.EFFICIENCY : CoreKind.UNKNOWN;
+            CoreKind kind = (hasTrue && hasFalse) ? (value.pCore ? CoreKind.PERFORMANCE
+                    : CoreKind.EFFICIENCY)
+                    : CoreKind.UNKNOWN;
             forEachCpu(value.groupAffinities, cpu -> {
                 Set<String> owners = packageOwners.get(cpu);
                 if (owners == null || owners.size() != 1) {

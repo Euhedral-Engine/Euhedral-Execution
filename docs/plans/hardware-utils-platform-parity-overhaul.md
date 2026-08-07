@@ -2910,17 +2910,6 @@ The sizing gate rejected one P5 root implementation context. Do not create `hard
 >
 > Run GLPIEx single-group, multi-group, >64 CPU, bit 63, and malformed buffer fixtures. Merge implementation before its audit.
 
-#### P6-A Windows topology model conformance/manual-review prompt
-
-**Model: `gpt-5.6-sol`; reasoning effort: `high`.**
-
-> After P6-A implementation is reviewed and merged, create
-> `hardware-utils-overhaul/phase-6-windows-topology-audit` from the updated P6 root. Read P6-A
-> blueprint, completion record, and diff.
->
-> Independently audit GLPIEx offsets, bit 63 mask math, multi-group logical IDs, cache domains, and P/E
-> core classification. Write `docs/audits/hardware-utils/phase-6-windows-topology-model-conformance.md`, append evidence, and hand off for merge.
-
 #### P6-B Windows resource provider blueprint prompt
 
 **Model: `gpt-5.6-sol`; reasoning effort: `max`.**
