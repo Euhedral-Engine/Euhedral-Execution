@@ -1,11 +1,12 @@
-# Euhedral training
+# Euhedral Training
 
-Euhedral training searches for robust values for the runtime's 28 policy weights. The closed loop
-keeps policy, source scenario, benchmark run, iteration, cohort, and environment identity attached
-to native evidence through the final package. TensorFlow-based model training remains offline and
-is never loaded by `euhedral-core`.
+Euhedral training searches for robust values for the runtime's 28 policy weights. The closed loop keeps policy, source scenario, benchmark run, iteration, cohort, and environment identity attached to native evidence through the final package. Machine learning model training remains offline and is never loaded by `euhedral-core`.
 
-## Build and launch
+For an exhaustive, field-by-field reference of every configuration key, validation rule, and tuning guide, see [CONFIGURATION.md](file:///home/brandon/src/Euhedral-Execution/euhedral-training/CONFIGURATION.md).
+
+---
+
+## Build and Launch
 
 From the repository root:
 
@@ -14,11 +15,18 @@ mise install
 gradle :euhedral-training:build
 ```
 
-The distribution is under `euhedral-training/build/libs/`. Run the jar directly for CPU work, or
-use `build/bin/euhedral-training-gpu`. Java 21 and the native Euhedral library are required for
-physical benchmarks.
+The distribution artifacts are created under `euhedral-training/build/`:
+- `build/libs/euhedral-training.jar`: Standard runnable JAR.
+- `build/lib/`: Dependent runtime libraries.
+- `build/bin/euhedral-training-gpu`: GPU launcher wrapper script.
 
-The command-line entry point provides these commands:
+Run the JAR directly for CPU work, or use `build/bin/euhedral-training-gpu` for GPU-accelerated training. Java 21 and the native Euhedral library are required for physical benchmarks. For GPU configuration requirements, see [GPU_SETUP_UBUNTU.md](file:///home/brandon/src/Euhedral-Execution/euhedral-training/GPU_SETUP_UBUNTU.md).
+
+---
+
+## CLI Commands and Arguments
+
+The command-line entry point (`io.euhedral_execution.training.Runner`) provides four primary commands:
 
 ```text
 closed-loop --config <path>
@@ -27,60 +35,37 @@ package-run --workspace <path> --inputs <path> --output-root <path>
 merge-calibration-plan --workspace <path> [--workspace <path> ...] --output <path>
 ```
 
-`closed-loop` runs benchmarking, evidence merging, candidate selection, and model training from a
-typed configuration file. It does not read `-Dcycle.*` properties.
+### `closed-loop --config <path>`
+Runs or resumes a training workspace using a typed configuration file.
 
-### Commands and arguments
+- `--config <path>`: Required path to the UTF-8/LF configuration file. Relative paths inside the file are resolved relative to the configuration file's directory.
+- Writes checkpoints, schedules, evidence, models, and published packages under `run.workspace`.
+- On completion or stop, logs the latest `stage`, `checkpoint`, `package`, and any pending scenarios waiting for evidence.
+- `run.resume` controls whether an existing complete checkpoint is loaded, and `run.stop_file` requests a safe stop at the next checkpoint boundary.
 
-`closed-loop --config <path>`
+### `training-info`
+Reports the visible TensorFlow native library, CUDA runtime/driver versions, and GPU/CPU device environment. It takes no extra arguments and does not run benchmarks or train models.
 
-Runs or resumes a training workspace.
+### `package-run --workspace <path> --inputs <path> --output-root <path>`
+Publishes a standalone package from an existing workspace checkpoint and recorded inputs without re-running physical benchmarks.
 
-- `--config <path>`: required path to the UTF-8/LF typed configuration file. Relative paths inside
-  that file are resolved relative to the configuration file.
-- The command writes checkpoints, schedules, evidence, models, and packages below
-  `run.workspace`.
-- On success it logs the latest `stage`, `checkpoint`, `package`, and any scenarios still waiting
-  for evidence. `run.resume` controls whether an existing complete checkpoint is loaded, and
-  `run.stop_file` requests a safe stop at the next checkpoint boundary.
+- `--workspace <path>`: Closed-loop workspace directory containing the source checkpoint and artifacts.
+- `--inputs <path>`: Path to `provenance/package-inputs.properties` identifying the checkpoint, package ID, configuration, and metadata.
+- `--output-root <path>`: Writable directory under which the reproduced package directory is created. Existing conflicting packages are not overwritten.
 
-`training-info`
+### `merge-calibration-plan --workspace <path> [--workspace <path> ...] --output <path>`
+Merges compatible calibration plans from prior single-environment workspaces into one consolidated calibration plan directory.
 
-Reports the visible TensorFlow, CUDA, and device environment. It takes no arguments and does not
-train models or run benchmarks.
+- Repeat `--workspace <path>` for each source workspace (each must contain a `calibration-plan/` directory).
+- Source workspaces may contribute different anchor sets; the merged plan uses the union of anchor policies across inputs.
+- If a policy ID appears in multiple workspaces, its vector contents must agree.
+- `--output <path>`: Required destination directory for the merged calibration plan (must not already exist).
 
-`package-run --workspace <path> --inputs <path> --output-root <path>`
+---
 
-Publishes a package from an existing checkpoint and its recorded inputs without rerunning physical
-benchmarks.
+## Configure and Run the Closed Loop
 
-- `--workspace <path>`: closed-loop workspace containing the checkpoint and source artifacts named
-  by the input record.
-- `--inputs <path>`: `provenance/package-inputs.properties` (or an equivalent package-inputs file)
-  identifying the checkpoint, package ID, configuration, and source metadata to publish.
-- `--output-root <path>`: writable directory under which the reproduced package directory is
-  created. Existing conflicting packages are not overwritten.
-
-The three `package-run` options are required and must appear in this order.
-
-`merge-calibration-plan --workspace <path> [--workspace <path> ...] --output <path>`
-
-Merges compatible calibration plans from prior closed-loop workspaces into one calibration-plan
-directory.
-
-- Repeat `--workspace <path>` for each source workspace. Each workspace must contain a
-  `calibration-plan/` directory.
-- Source workspaces may contribute different fixed anchor sets. The merged plan uses the union of
-  anchor policies from all inputs.
-- If the same policy ID appears in more than one workspace, its vector contents must agree.
-- If two workspaces provide a reference run for the same scenario, the benchmark run ID must
-  agree.
-- `--output <path>`: required destination directory for the merged calibration plan. The command
-  creates a new plan directory and does not overwrite an existing one.
-
-## Configure and run the closed loop
-
-Create a UTF-8/LF configuration such as:
+Create a UTF-8/LF configuration file (e.g. `closed-loop.conf`):
 
 ```properties
 run.workspace=output/robust-closed-loop
@@ -96,357 +81,188 @@ scenario.required=s1-machine-a-src1-core32-r1of32
 scenario.required=s1-machine-a-src32-core32-r1of1
 ```
 
-Then run:
+Run the closed loop:
 
 ```bash
-java -jar euhedral-training/target/trainer/euhedral-training-0.0.7-SNAPSHOT.jar \
+java -jar euhedral-training/build/libs/euhedral-training.jar \
   closed-loop --config closed-loop.conf
 ```
 
-Relative paths resolve against the configuration file. Unknown keys, duplicates, malformed values,
-non-finite numbers, ambiguous bootstrap sources, and invalid scenario identities fail before the
-run. Booleans are exactly `true` or `false`; seeds are 16 lower-case hexadecimal digits. The file
-must have a final LF and no BOM or CR.
+### Configuration Syntax Rules
+- **Format**: `key=value` pairs, one per line. Whitespace around keys and values is trimmed.
+- **File Encoding & Line Endings**: Valid UTF-8 with LF line endings only (no CR, no BOM, final LF required).
+- **Comments**: Lines starting with `#` as the first non-whitespace character are comments.
+- **Validation**: Unknown keys, duplicate singleton keys, backslashes (`\`), or NUL (`\0`) characters cause immediate validation failure before execution begins.
+- **Booleans & Hex Seeds**: Booleans must be strictly `true` or `false`. Seeds are 16 lowercase hexadecimal digits.
+- **Repeated Keys**: Allowed ONLY for `scenario.required`, `run.initial_observation_bundle`, and `calibration.reference_override`.
 
-`run.bootstrap_policies` is a strict schema-v1 vector file. Its policies carry no measurements and
-must be benchmarked natively in every exact required scenario before they can inform calibration or
-learning. If neither `run.bootstrap_policies` nor `run.initial_calibration_plan` is provided, the
-runner generates deterministic bootstrap vectors from `SequenceFinder`, starting at Sobol index
-`1024`, using `run.candidate_budget` rows, and persists them under the workspace. For required
-environments on different machines, point each invocation at the same workspace, change only
-`run.active_environment_id`, and resume sequentially. The workspace is ready to train once native
-bootstrap evidence exists for all required scenarios. If a cold-start model is rejected, the loop
-uses deterministic neutral predictions while it collects more evidence; sparse-data retries follow
-the same relaxed training configuration.
+### Bootstrapping & Multi-Node Workspaces
+- `run.bootstrap_policies` points to a schema-v1 vector CSV. Its policies carry no measurements and are benchmarked natively across required scenarios before model-guided sampling begins.
+- If neither `run.bootstrap_policies` nor `run.initial_calibration_plan` is provided, the runner deterministically generates bootstrap vectors using `SequenceFinder` starting at Sobol index `131072`.
+- For multi-machine environments sharing a workspace, point each machine's invocation at the same workspace, set `run.active_environment_id` to match the local machine, and execute sequentially.
 
-If calibration was prepared across multiple prior workspaces, merge those workspace calibration
-plans before starting a new run with `run.initial_calibration_plan`:
+### Calibration Plans
+If calibration was prepared across multiple prior workspaces, merge those plans before starting:
 
 ```bash
-java -jar euhedral-training/target/trainer/euhedral-training-0.0.7-SNAPSHOT.jar \
+java -jar euhedral-training/build/libs/euhedral-training.jar \
   merge-calibration-plan \
   --workspace output/run-machine-a \
   --workspace output/run-machine-b \
   --output output/merged-calibration-plan
 ```
 
-### Calibration plan example
+Point `run.initial_calibration_plan` to the merged directory (`calibration-plan/` containing `fixed-anchors.csv` and `reference-runs.csv`). Import observation bundles using `run.initial_observation_bundle_directory` or repeated `run.initial_observation_bundle` parameters.
 
-`run.initial_calibration_plan` points to a directory containing a fixed anchor set and one reference
-benchmark run for each required scenario. It is useful when calibration was prepared elsewhere or
-when a run must use a known, repeatable set of anchors rather than selecting them from newly
-collected bootstrap evidence. It cannot be combined with `run.bootstrap_policies`.
+### Calibration & Policy Selection Metrics
+- Fixed anchors calibrate benchmark runs directly in log space. `STRONG` calibration requires $\ge 5$ shared anchors and residual $\le 0.05$; `WEAK` calibration requires $\ge 3$ shared anchors and residual $\le 0.15$.
+- Policy comparison across required scenarios is strictly lexicographic:
+  1. Higher minimum scenario quality score.
+  2. Higher type-7 P25 scenario quality score.
+  3. Higher geometric mean quality score.
+  4. Lower cross-scenario quality Mean Absolute Deviation (MAD).
+  5. Lower measurement instability and timeout rate.
 
-For example:
+Candidate budget is split among exploration, carry-forward completion, leader revalidation, and active learning disagreement audits (default relative weights: `68 / 25 / 2 / 5`).
 
-```text
-calibration-plan/
-+-- fixed-anchors.csv
-`-- reference-runs.csv
-```
+Creating `run.stop_file` (default `<workspace>/STOP`) requests a safe stop at the next checkpoint boundary.
 
-The reference file maps each scenario to the benchmark run whose measurements define the reference
-in log-space:
+---
 
-```csv
-schema_version,anchor_set_id,scenario_id,benchmark_run_id
-1,anchors-2026-07,s1-machine-a-src1-core32-r1of32,bootstrap-machine-a-001
-1,anchors-2026-07,s1-machine-a-src32-core32-r1of1,bootstrap-machine-a-002
-```
+## Configuration Reference Summary
 
-`fixed-anchors.csv` contains the same `anchor_set_id` and the selected policy vectors. Its header is
-`schema_version,anchor_set_id,policy_id` followed by `weight_00_bits` through `weight_27_bits`;
-each weight is encoded as 16 lower-case hexadecimal digits containing the raw IEEE-754 bits of one
-policy weight. The anchor policies are benchmarked in every listed scenario, and their measured
-values are used to align runs so that results from different environments are comparable. The
-scenario IDs in the plan must also appear as repeated `scenario.required` settings. If observations
-are supplied with `run.initial_observation_bundle` or
-`run.initial_observation_bundle_directory`, they must be used together with this plan.
+For detailed component mappings, default values, and tuning advice, see [CONFIGURATION.md](file:///home/brandon/src/Euhedral-Execution/euhedral-training/CONFIGURATION.md).
 
-Instead of listing one `run.initial_observation_bundle` per reference run, you may point
-`run.initial_observation_bundle_directory` at a directory containing benchmark-run bundle
-subdirectories such as a prior workspace `evidence/` directory. The runner reads
-`reference-runs.csv`, matches each `benchmark_run_id`, and imports the required bundles
-automatically.
+### Lifecycle & Workspace (`run.*`, `scenario.*`)
+| Key | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `run.workspace` | Path | *Required* | Directory containing checkpoints, evidence, models, and packages. |
+| `run.training_run_id` | String | *Required* | Canonical logical identifier for the training run (`[a-z0-9._-]{1,96}`). |
+| `run.iterations` | Integer | *Required* | Total closed-loop iterations to execute ($> 0$). |
+| `run.candidate_budget` | Integer | *Required* | Total policy-vector evaluation budget per iteration. |
+| `run.active_environment_id` | String | *Required* | Local host environment identifier (`[a-z0-9._-]{1,64}`). |
+| `scenario.required` | Set | *Required* | Required execution topology scenario IDs (repeated key). |
+| `run.bootstrap_policies` | Path | `empty` | Path to CSV supplying cold-start bootstrap policy vectors. |
+| `run.initial_calibration_plan` | Path | `empty` | Path to pre-built calibration plan directory. |
+| `run.initial_observation_bundle_directory` | Path | `empty` | Directory containing observation bundles matching calibration reference runs. |
+| `run.initial_observation_bundle` | Path List | `empty` | Explicit observation bundle paths (repeated key). |
+| `calibration.reference_override` | Map | `empty` | Map overriding reference run for a scenario (`<scenario>\|<run-id>`, repeated). |
+| `run.commit_sha` | Hex | *Required* | Git commit hash recorded in manifests (40 or 64 hex digits). |
+| `run.dirty_working_tree` | Boolean | *Required* | Flag recording whether uncommitted source changes were present. |
+| `run.resume` | Boolean | `true` | Resumes from highest complete workspace checkpoint when `true`. |
+| `run.scenarios_per_iteration` | Integer | `2` | Maximum pending scenarios scheduled per iteration. |
+| `run.scheduler_seed_hex` | Hex Seed | `6a09e667f3bcc909` | 64-bit seed for candidate scheduling and Sobol sequence. |
+| `run.initial_sobol_cursor` | Long | `131072` | Starting Sobol sequence cursor index. |
+| `run.stop_file` | Path | `<ws>/STOP` | Path to file triggering safe shutdown at next checkpoint boundary. |
 
-To inspect the scenario-model hardware environment without training or benchmarking:
+### Benchmark Execution (`benchmark.*`)
+| Key | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `benchmark.expected_repetitions` | Integer | `10` | Benchmark repetitions collected per policy/scenario. |
+| `benchmark.frames_per_source` | Integer | `100000` | Pre-generated frames per source to prevent allocation overhead. |
+| `benchmark.liveness_timeout_nanos` | Long (ns) | `50000000` | Maximum wait for frame progress before declaring a run stalled (50 ms). |
+| `benchmark.ordered_frames` | Boolean | `false` | Preserves ordered frame routing during benchmarks when `true`. |
+| `benchmark.reset_timeout_nanos` | Long (ns) | `2000000000` | Maximum wait time to flush lattice queues between policy runs (2.0s). |
+| `benchmark.sample_duration_nanos` | Long (ns) | `200000000` | Active throughput measurement window duration (200 ms). |
 
-```bash
-java -jar euhedral-training/target/trainer/euhedral-training-0.0.7-SNAPSHOT.jar training-info
-```
+### Calibration & Aggregation (`anchors.*`, `calibration.*`, `aggregation.*`)
+| Key | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `anchors.allow_imported_bootstrap` | Boolean | `false` | Allows imported evidence to serve as bootstrap anchor references. |
+| `anchors.fixed_fraction` | Double | `0.02` | Share of candidate budget reserved for fixed anchor policies (2%). |
+| `anchors.maximum_bootstrap_non_success_rate` | Double | `0.10` | Maximum non-success rate allowed for anchor candidates (10%). |
+| `anchors.maximum_bootstrap_relative_iqr` | Double | `0.25` | Maximum relative IQR ($\text{IQR}/\text{Median}$) allowed for anchors (25%). |
+| `anchors.minimum_fixed_anchors` | Integer | `5` | Floor count for selected fixed anchors. |
+| `calibration.maximum_anchor_weight_share` | Double | `0.25` | Weight cap for a single anchor in median log-space scaling (25%). |
+| `calibration.maximum_strong_residual` | Double | `0.05` | Maximum residual permitted for `STRONG` calibration status (0.05). |
+| `calibration.maximum_weak_residual` | Double | `0.15` | Maximum residual permitted for `WEAK` calibration status (0.15). |
+| `calibration.minimum_log_sigma` | Double | `0.01` | Log-space standard error floor to regularize anchor weights. |
+| `calibration.minimum_strong_anchors` | Integer | `5` | Minimum shared anchors required for `STRONG` calibration. |
+| `calibration.minimum_weak_anchors` | Integer | `3` | Minimum shared anchors required for `WEAK` calibration. |
+| `aggregation.bootstrap_replicates` | Integer | `1000` | Monte Carlo bootstrap resamples for 95% confidence intervals. |
+| `aggregation.bootstrap_seed_hex` | Hex Seed | `6a09e667f3bcc909` | Master seed for reproducible bootstrap evidence aggregation. |
+| `aggregation.calibration_acceptance` | Enum | `STRONG_ONLY` | Acceptance level for evidence aggregation (`STRONG_ONLY` or `INCLUDE_WEAK`). |
+| `aggregation.minimum_success_fraction` | Double | `0.5` | Minimum required benchmark repetition completion rate (50%). |
+| `aggregation.minimum_successful_repetitions` | Integer | `3` | Minimum successful repetitions required per policy aggregate. |
 
-This reports TensorFlow, CUDA, and device visibility.
+### Budget & Candidate Generation (`budget.*`, `candidate.*`)
+| Key | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `budget.exploration_weight` | Integer | `68` | Share of residual budget for new policy exploration. |
+| `budget.carry_forward_weight` | Integer | `25` | Share reserved for completing multi-scenario policy coverage. |
+| `budget.leader_revalidation_weight` | Integer | `2` | Share allocated to re-benchmarking top robust leader policies. |
+| `budget.disagreement_audit_weight` | Integer | `5` | Active learning share for candidates with high ensemble disagreement. |
+| `candidate.direct_sobol_weight` | Integer | `1` | Relative weight for direct low-discrepancy Sobol candidates. |
+| `candidate.cma_weight` | Integer | `8` | Relative weight for CMA-ES continuous optimization candidates. |
+| `candidate.score_band_weight` | Integer | `7` | Relative weight for score-band quality-stratified candidates. |
+| `candidate.score_band_weights` | Int List | `1,..,16` | Capacity allocation across 10 predicted quality bands (`1,1,1,1,2,2,3,5,8,16`). |
+| `candidate.screen_rows` | Integer | `2097152` | Raw Sobol candidate pool size screened by model inference ($2^{21}$). |
+| `candidate.maximum_prediction_rows` | Integer | `16384` | Model inference batch size during screening ($2^{14}$). |
+| `candidate.cma.enabled` | Boolean | `true` | Master toggle for CMA-ES evolutionary candidate optimization. |
+| `candidate.cma.generations` | Integer | `12` | Evolutionary search generations per CMA-ES island. |
+| `candidate.cma.initial_sigma` | Double | `0.20` | Initial mutation step size for CMA-ES search. |
+| `candidate.cma.islands` | Integer | `4` | Number of independent multi-start CMA-ES search populations. |
+| `candidate.cma.minimum_seed_policies` | Integer | `10` | Minimum historical policies required to seed CMA-ES search. |
+| `candidate.cma.population_size` | Integer | `96` | Candidate population evaluated per CMA-ES generation. |
 
-Fixed anchors calibrate runs directly in log space. Strong calibration needs five shared anchors and
-residual at most `0.05`; weak calibration needs three and residual at most `0.15` by default.
-Aggregation gives each run one vote. Within each scenario, calibrated policies receive percentile
-quality with midranks.
+### Surrogate Model Training & Evaluation (`training.*`, `evaluation.*`)
+| Key | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `training.device` | String | `auto` | Model training compute device (`auto`, `cpu`, `gpu0`). |
+| `training.learning_rate` | Float | `0.001` | Adam optimizer learning rate step size. |
+| `training.weight_decay` | Float | `0.0001` | $L_2$ weight regularization penalty. |
+| `training.batch_size` | Integer | `0` | Training mini-batch size (`0` auto-selects 4096 on GPU / 512 on CPU). |
+| `training.max_epochs` | Integer | `250` | Maximum outer training epochs. |
+| `training.patience` | Integer | `20` | Epoch patience window for early stopping on validation loss. |
+| `training.ensemble_members` | Integer | `5` | Number of production ensemble member models (must be odd). |
+| `training.ablation_members` | Integer | `3` | Ensemble members evaluated during feature selection ablation. |
+| `training.loso_evaluation_members` | Integer | `1` | Ensemble members evaluated during Leave-One-Scenario-Out cross-validation. |
+| `training.feature_selection_mode` | Enum | `RATIO_ONLY` | Feature schema selection policy (`RATIO_ONLY`, `ALLOW_COUNTS`, `REQUIRE_COUNTS`). |
+| `training.label_smoothing` | Float | `0.02` | Classification label smoothing factor. |
+| `training.include_weak_calibration_rows` | Boolean | `false` | Includes weakly calibrated evidence in training data when `true`. |
+| `training.require_target_variation` | Boolean | `true` | Enforces score variation in validation/test splits. |
+| `training.model_seed_hex` | Hex Seed | `13198a2e03707344` | Master seed deriving network weight initialization seeds. |
+| `training.split_seed_hex` | Hex Seed | `243f6a8885a308d3` | Seed driving 80/10/10 policy-grouped dataset splitting. |
+| `training.minimum_train_policy_groups` | Integer | `40` | Minimum policy groups required in the training split. |
+| `training.minimum_train_rows_per_scenario` | Integer | `30` | Minimum training evidence rows per scenario. |
+| `training.minimum_validation_policy_groups` | Integer | `10` | Minimum policy groups required in the validation split. |
+| `training.minimum_validation_rows_per_scenario` | Integer | `5` | Minimum validation evidence rows per scenario. |
+| `training.minimum_test_policy_groups` | Integer | `10` | Minimum policy groups required in the test split. |
+| `training.minimum_test_rows_per_scenario` | Integer | `5` | Minimum test evidence rows per scenario. |
+| `evaluation.maximum_grouped_macro_mae` | Double | `0.20` | Upper limit on grouped test set MAE (0.20). |
+| `evaluation.minimum_grouped_macro_spearman` | Double | `0.50` | Lower limit on grouped test set Spearman correlation (0.50). |
+| `evaluation.minimum_grouped_macro_precision_at_ten` | Double | `0.20` | Lower limit on top-10 precision on test set (0.20). |
+| `evaluation.maximum_loso_macro_mae` | Double | `0.25` | Upper limit on Leave-One-Scenario-Out macro MAE (0.25). |
+| `evaluation.minimum_loso_macro_spearman` | Double | `0.35` | Lower limit on Leave-One-Scenario-Out macro Spearman (0.35). |
+| `evaluation.maximum_loso_worst_scenario_mae` | Double | `0.35` | Worst-case scenario MAE limit during LOSO evaluation (0.35). |
+| `evaluation.minimum_context_mae_improvement` | Double | `0.01` | Required MAE gain to accept scenario context features (0.01). |
+| `evaluation.minimum_context_spearman_improvement` | Double | `0.05` | Required Spearman gain to accept scenario context features (0.05). |
+| `evaluation.maximum_context_mae_regression` | Double | `0.01` | Max MAE regression permitted when adding context features (0.01). |
+| `evaluation.maximum_context_spearman_regression` | Double | `0.02` | Max Spearman drop permitted when adding context features (0.02). |
+| `evaluation.minimum_counts_cross_environment_mae_improvement` | Double | `0.01` | Required cross-env MAE gain to accept hardware count features (0.01). |
+| `evaluation.maximum_counts_spearman_regression` | Double | `0.02` | Max Spearman drop permitted when adding count features (0.02). |
+| `evaluation.maximum_counts_worst_environment_mae_regression` | Double | `0.02` | Max worst-environment MAE drop for count features (0.02). |
 
-A policy is a robust leader only with valid evidence for every required scenario. The authoritative
-comparison is lexicographic:
+---
 
-1. higher minimum scenario quality;
-2. higher type-7 P25 scenario quality;
-3. higher geometric mean quality;
-4. lower cross-scenario quality MAD; and
-5. lower measurement instability and timeout rate.
+## Training-Run Packages
 
-Incomplete policies remain in a separate carry-forward pool until coverage is complete. Candidate
-selection predicts a complete curve over configured scenarios and reserves budget, after fixed
-anchors, for exploration, carry-forward completion, leader revalidation, and disagreement audits.
-Their default relative weights are `68/25/2/5`.
+Every successful run publishes an immutable, reproducible package under `<workspace>/packages/training-run-<package-id>`.
 
-`run.resume=true` validates and loads the highest complete checkpoint. Frozen semantic configuration
-must match, and a persisted pending schedule is reused. `run.resume=false` rejects an existing
-complete checkpoint. Creating `run.stop_file` (default `<workspace>/STOP`) requests a
-checkpoint-safe stop at an existing stage boundary; a symlink is not a stop request.
+Package directories contain:
+- `manifest.json`: Machine-readable package metadata, checksums, and stage provenance.
+- `vectors/*.vectors.csv`: Raw 28D policy vectors without performance measurements.
+- `policy-scenario-measurements.csv`: Complete policy vectors combined with aggregated performance measurements.
+- `models/`: Trained TensorFlow/DJL surrogate model artifacts.
+- `reports/`: Markdown and CSV evaluation reports.
+- `provenance/package-inputs.properties`: Input properties file enabling bit-for-bit package reproduction via `package-run`.
 
-On every normal return the command prints `stage`, `checkpoint`, `package`, and any
-`awaiting_scenario` rows.
-
-## Configuration keys
-
-Repeated keys are allowed only for `scenario.required`, `run.initial_observation_bundle`, and
-`calibration.reference_override`. A reference override is
-`<canonical-scenario>|<benchmark-run-id>`.
-
-### Config syntax and value formats
-
-| Rule                     | Requirement                                                        |
-|--------------------------|--------------------------------------------------------------------|
-| Comments                 | A line is a comment when its first non-whitespace character is `#` |
-| Duplicate singleton keys | Rejected                                                           |
-| Escapes                  | Values may not contain NUL or backslash characters                 |
-| File encoding            | Valid UTF-8                                                        |
-| Line endings             | LF only; final LF required; no CR and no BOM                       |
-| Line shape               | One `key=value` pair per nonblank line                             |
-| Unknown keys             | Rejected                                                           |
-| Whitespace               | Keys and values are trimmed before validation                      |
-
-| Cross-key rule      | Requirement                                                                                                                          |
-|---------------------|--------------------------------------------------------------------------------------------------------------------------------------|
-| Bootstrap sources   | `run.bootstrap_policies` and `run.initial_calibration_plan` are mutually exclusive                                                   |
-| Observation bundles | `run.initial_observation_bundle` and `run.initial_observation_bundle_directory` are allowed only with `run.initial_calibration_plan` |
-| Reference overrides | Every override scenario must already appear in `scenario.required`                                                                   |
-| Scenario coverage   | At least one `scenario.required` entry must match `run.active_environment_id`                                                        |
-
-| Lifecycle key                              | Expected type                 | Default                   | Description                                                                 |
-|--------------------------------------------|-------------------------------|---------------------------|-----------------------------------------------------------------------------|
-| `calibration.reference_override`           | repeated scenario/run mapping | empty                     | Selects the benchmark run used as the calibration reference for a scenario. |
-| `run.active_environment_id`                | environment identifier        | required                  | Identifies the machine/environment for this invocation.                     |
-| `run.bootstrap_policies`                   | path                          | empty; used when provided | Supplies policy vectors to benchmark before normal candidate generation.    |
-| `run.candidate_budget`                     | decimal integer               | required                  | Total policy-vector budget available for the run.                           |
-| `run.commit_sha`                           | commit hash                   | required                  | Records the source revision associated with the evidence.                   |
-| `run.dirty_working_tree`                   | boolean                       | required                  | Records whether the source tree had uncommitted changes.                    |
-| `run.initial_calibration_plan`             | path                          | empty; used when provided | Supplies an explicit initial calibration plan.                              |
-| `run.initial_observation_bundle_directory` | path                          | empty                     | Directory containing observation bundles for the referenced benchmark runs. |
-| `run.initial_observation_bundle`           | repeated path                 | empty                     | Adds previously captured observations to an initial calibration plan.       |
-| `run.initial_sobol_cursor`                 | decimal integer (`long`)      | `131072`                  | Starting Sobol sequence index for generated vectors.                        |
-| `run.iterations`                           | decimal integer               | required                  | Number of closed-loop iterations to execute.                                |
-| `run.resume`                               | boolean                       | `true`                    | Resumes the highest complete checkpoint when one exists.                    |
-| `run.scenarios_per_iteration`              | decimal integer               | `2`                       | Maximum pending scenarios scheduled per iteration.                          |
-| `run.scheduler_seed_hex`                   | unsigned 64-bit seed          | `6a09e667f3bcc909`        | Seed for deterministic candidate and scenario scheduling.                   |
-| `run.stop_file`                            | path                          | `<workspace>/STOP`        | File whose creation requests a checkpoint-safe stop.                        |
-| `run.training_run_id`                      | identifier                    | required                  | Stable logical name for the training run and packages.                      |
-| `run.workspace`                            | path                          | required                  | Directory containing checkpoints, evidence, schedules, and packages.        |
-| `scenario.required`                        | canonical scenario ID         | required, repeated        | Declares the exact source/core/environment scenarios that must be covered.  |
-
-| Key                                                           | Expected type                | Format / validation rule                                                                                                                                                  |
-|---------------------------------------------------------------|------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `aggregation.bootstrap_replicates`                            | decimal integer              | Parsed from `-?[0-9]+`; leading `+` is not allowed                                                                                                                        |
-| `aggregation.bootstrap_seed_hex`                              | unsigned 64-bit seed         | Exactly 16 lower-case hexadecimal digits; preserved as raw bits                                                                                                           |
-| `aggregation.calibration_acceptance`                          | enum constant                | Exact Java enum name, case-sensitive                                                                                                                                      |
-| `aggregation.minimum_success_fraction`                        | finite decimal (`double`)    | Java decimal syntax with optional sign and exponent; must parse to a finite value                                                                                         |
-| `aggregation.minimum_successful_repetitions`                  | decimal integer              | Parsed from `-?[0-9]+`; leading `+` is not allowed                                                                                                                        |
-| `anchors.allow_imported_bootstrap`                            | boolean                      | Exactly `true` or `false`                                                                                                                                                 |
-| `anchors.fixed_fraction`                                      | finite decimal (`double`)    | Java decimal syntax with optional sign and exponent; must parse to a finite value                                                                                         |
-| `anchors.maximum_bootstrap_non_success_rate`                  | finite decimal (`double`)    | Java decimal syntax with optional sign and exponent; must parse to a finite value                                                                                         |
-| `anchors.maximum_bootstrap_relative_iqr`                      | finite decimal (`double`)    | Java decimal syntax with optional sign and exponent; must parse to a finite value                                                                                         |
-| `anchors.minimum_fixed_anchors`                               | decimal integer              | Parsed from `-?[0-9]+`; leading `+` is not allowed                                                                                                                        |
-| `benchmark.expected_repetitions`                              | decimal integer              | Parsed from `-?[0-9]+`; leading `+` is not allowed                                                                                                                        |
-| `benchmark.frames_per_source`                                 | decimal integer              | Parsed from `-?[0-9]+`; leading `+` is not allowed                                                                                                                        |
-| `benchmark.liveness_timeout_nanos`                            | decimal integer (`long`)     | Parsed from `-?[0-9]+` as a signed 64-bit decimal                                                                                                                         |
-| `benchmark.ordered_frames`                                    | boolean                      | Exactly `true` or `false`                                                                                                                                                 |
-| `benchmark.reset_timeout_nanos`                               | decimal integer (`long`)     | Parsed from `-?[0-9]+` as a signed 64-bit decimal                                                                                                                         |
-| `benchmark.sample_duration_nanos`                             | decimal integer (`long`)     | Parsed from `-?[0-9]+` as a signed 64-bit decimal                                                                                                                         |
-| `budget.carry_forward_weight`                                 | decimal integer              | Parsed from `-?[0-9]+`; leading `+` is not allowed                                                                                                                        |
-| `budget.disagreement_audit_weight`                            | decimal integer              | Parsed from `-?[0-9]+`; leading `+` is not allowed                                                                                                                        |
-| `budget.exploration_weight`                                   | decimal integer              | Parsed from `-?[0-9]+`; leading `+` is not allowed                                                                                                                        |
-| `budget.leader_revalidation_weight`                           | decimal integer              | Parsed from `-?[0-9]+`; leading `+` is not allowed                                                                                                                        |
-| `calibration.maximum_anchor_weight_share`                     | finite decimal (`double`)    | Java decimal syntax with optional sign and exponent; must parse to a finite value                                                                                         |
-| `calibration.maximum_strong_residual`                         | finite decimal (`double`)    | Java decimal syntax with optional sign and exponent; must parse to a finite value                                                                                         |
-| `calibration.maximum_weak_residual`                           | finite decimal (`double`)    | Java decimal syntax with optional sign and exponent; must parse to a finite value                                                                                         |
-| `calibration.minimum_log_sigma`                               | finite decimal (`double`)    | Java decimal syntax with optional sign and exponent; must parse to a finite value                                                                                         |
-| `calibration.minimum_strong_anchors`                          | decimal integer              | Parsed from `-?[0-9]+`; leading `+` is not allowed                                                                                                                        |
-| `calibration.minimum_weak_anchors`                            | decimal integer              | Parsed from `-?[0-9]+`; leading `+` is not allowed                                                                                                                        |
-| `calibration.reference_override`                              | scenario/run mapping         | Must be `<canonical-scenario>                                                                                                                                             |<benchmark-run-id>`, where the run ID matches `[a-z0-9][a-z0-9._-]{0,95}` |
-| `candidate.cma.enabled`                                       | boolean                      | Exactly `true` or `false`                                                                                                                                                 |
-| `candidate.cma.generations`                                   | decimal integer              | Parsed from `-?[0-9]+`; leading `+` is not allowed                                                                                                                        |
-| `candidate.cma.initial_sigma`                                 | finite decimal (`double`)    | Java decimal syntax with optional sign and exponent; must parse to a finite value                                                                                         |
-| `candidate.cma.islands`                                       | decimal integer              | Parsed from `-?[0-9]+`; leading `+` is not allowed                                                                                                                        |
-| `candidate.cma.minimum_seed_policies`                         | decimal integer              | Parsed from `-?[0-9]+`; leading `+` is not allowed                                                                                                                        |
-| `candidate.cma.population_size`                               | decimal integer              | Parsed from `-?[0-9]+`; leading `+` is not allowed                                                                                                                        |
-| `candidate.cma_weight`                                        | decimal integer              | Parsed from `-?[0-9]+`; leading `+` is not allowed                                                                                                                        |
-| `candidate.direct_sobol_weight`                               | decimal integer              | Parsed from `-?[0-9]+`; leading `+` is not allowed                                                                                                                        |
-| `candidate.maximum_prediction_rows`                           | decimal integer              | Parsed from `-?[0-9]+`; leading `+` is not allowed                                                                                                                        |
-| `candidate.score_band_weight`                                 | decimal integer              | Parsed from `-?[0-9]+`; leading `+` is not allowed                                                                                                                        |
-| `candidate.score_band_weights`                                | comma-separated integer list | Comma-separated decimal integers with no empty elements, for example `1,1,1,1,2,2,3,5,8,16`                                                                               |
-| `candidate.screen_rows`                                       | decimal integer              | Parsed from `-?[0-9]+`; leading `+` is not allowed                                                                                                                        |
-| `evaluation.maximum_context_mae_regression`                   | finite decimal (`double`)    | Java decimal syntax with optional sign and exponent; must parse to a finite value                                                                                         |
-| `evaluation.maximum_context_spearman_regression`              | finite decimal (`double`)    | Java decimal syntax with optional sign and exponent; must parse to a finite value                                                                                         |
-| `evaluation.maximum_counts_spearman_regression`               | finite decimal (`double`)    | Java decimal syntax with optional sign and exponent; must parse to a finite value                                                                                         |
-| `evaluation.maximum_counts_worst_environment_mae_regression`  | finite decimal (`double`)    | Java decimal syntax with optional sign and exponent; must parse to a finite value                                                                                         |
-| `evaluation.maximum_grouped_macro_mae`                        | finite decimal (`double`)    | Java decimal syntax with optional sign and exponent; must parse to a finite value                                                                                         |
-| `evaluation.maximum_loso_macro_mae`                           | finite decimal (`double`)    | Java decimal syntax with optional sign and exponent; must parse to a finite value                                                                                         |
-| `evaluation.maximum_loso_worst_scenario_mae`                  | finite decimal (`double`)    | Java decimal syntax with optional sign and exponent; must parse to a finite value                                                                                         |
-| `evaluation.minimum_context_mae_improvement`                  | finite decimal (`double`)    | Java decimal syntax with optional sign and exponent; must parse to a finite value                                                                                         |
-| `evaluation.minimum_context_spearman_improvement`             | finite decimal (`double`)    | Java decimal syntax with optional sign and exponent; must parse to a finite value                                                                                         |
-| `evaluation.minimum_counts_cross_environment_mae_improvement` | finite decimal (`double`)    | Java decimal syntax with optional sign and exponent; must parse to a finite value                                                                                         |
-| `evaluation.minimum_grouped_macro_precision_at_ten`           | finite decimal (`double`)    | Java decimal syntax with optional sign and exponent; must parse to a finite value                                                                                         |
-| `evaluation.minimum_grouped_macro_spearman`                   | finite decimal (`double`)    | Java decimal syntax with optional sign and exponent; must parse to a finite value                                                                                         |
-| `evaluation.minimum_loso_macro_spearman`                      | finite decimal (`double`)    | Java decimal syntax with optional sign and exponent; must parse to a finite value                                                                                         |
-| `run.active_environment_id`                                   | environment identifier       | Must match `[a-z0-9][a-z0-9._-]{0,63}`                                                                                                                                    |
-| `run.bootstrap_policies`                                      | path                         | Path text with no NUL or `\`; relative paths resolve against the config file parent and are normalized to absolute paths                                                  |
-| `run.candidate_budget`                                        | decimal integer              | Parsed from `-?[0-9]+`; leading `+` is not allowed                                                                                                                        |
-| `run.commit_sha`                                              | commit hash                  | Exactly 40 or 64 lower-case hexadecimal digits                                                                                                                            |
-| `run.dirty_working_tree`                                      | boolean                      | Exactly `true` or `false`                                                                                                                                                 |
-| `run.initial_calibration_plan`                                | path                         | Path text with no NUL or `\`; relative paths resolve against the config file parent and are normalized to absolute paths                                                  |
-| `run.initial_observation_bundle_directory`                    | path                         | Path text with no NUL or `\`; relative paths resolve against the config file parent and are normalized to absolute paths                                                  |
-| `run.initial_observation_bundle`                              | path                         | Path text with no NUL or `\`; relative paths resolve against the config file parent and are normalized to absolute paths                                                  |
-| `run.initial_sobol_cursor`                                    | decimal integer (`long`)     | Parsed from `-?[0-9]+` as a signed 64-bit decimal                                                                                                                         |
-| `run.iterations`                                              | decimal integer              | Parsed from `-?[0-9]+`; leading `+` is not allowed                                                                                                                        |
-| `run.resume`                                                  | boolean                      | Exactly `true` or `false`                                                                                                                                                 |
-| `run.scheduler_seed_hex`                                      | unsigned 64-bit seed         | Exactly 16 lower-case hexadecimal digits; preserved as raw bits                                                                                                           |
-| `run.scenarios_per_iteration`                                 | decimal integer              | Parsed from `-?[0-9]+`; leading `+` is not allowed                                                                                                                        |
-| `run.stop_file`                                               | path                         | Path text with no NUL or `\`; relative paths resolve against the config file parent and are normalized to absolute paths                                                  |
-| `run.training_run_id`                                         | identifier                   | Must match `[a-z0-9][a-z0-9._-]{0,95}`                                                                                                                                    |
-| `run.workspace`                                               | path                         | Path text with no NUL or `\`; relative paths resolve against the config file parent and are normalized to absolute paths                                                  |
-| `scenario.required`                                           | canonical scenario ID        | Must be `s1-<environmentId>-src<positive-int>-core<positive-int>-r<numerator>of<denominator>` and the ratio suffix must exactly match the reduced `sourceCount/coreCount` |
-| `training.ablation_members`                                   | decimal integer              | Parsed from `-?[0-9]+`; leading `+` is not allowed                                                                                                                        |
-| `training.batch_size`                                         | decimal integer              | Parsed from `-?[0-9]+`; leading `+` is not allowed                                                                                                                        |
-| `training.device`                                             | string                       | Free-form string; default is `auto`                                                                                                                                       |
-| `training.ensemble_members`                                   | decimal integer              | Parsed from `-?[0-9]+`; leading `+` is not allowed                                                                                                                        |
-| `training.feature_selection_mode`                             | enum constant                | Exact Java enum name, case-sensitive                                                                                                                                      |
-| `training.include_weak_calibration_rows`                      | boolean                      | Exactly `true` or `false`                                                                                                                                                 |
-| `training.label_smoothing`                                    | finite decimal (`float`)     | Java decimal syntax with optional sign and exponent; must parse to a finite `float`                                                                                       |
-| `training.learning_rate`                                      | finite decimal (`float`)     | Java decimal syntax with optional sign and exponent; must parse to a finite `float`                                                                                       |
-| `training.loso_evaluation_members`                            | decimal integer              | Parsed from `-?[0-9]+`; leading `+` is not allowed                                                                                                                        |
-| `training.max_epochs`                                         | decimal integer              | Parsed from `-?[0-9]+`; leading `+` is not allowed                                                                                                                        |
-| `training.minimum_test_policy_groups`                         | decimal integer              | Parsed from `-?[0-9]+`; leading `+` is not allowed                                                                                                                        |
-| `training.minimum_test_rows_per_scenario`                     | decimal integer              | Parsed from `-?[0-9]+`; leading `+` is not allowed                                                                                                                        |
-| `training.minimum_train_policy_groups`                        | decimal integer              | Parsed from `-?[0-9]+`; leading `+` is not allowed                                                                                                                        |
-| `training.minimum_train_rows_per_scenario`                    | decimal integer              | Parsed from `-?[0-9]+`; leading `+` is not allowed                                                                                                                        |
-| `training.minimum_validation_policy_groups`                   | decimal integer              | Parsed from `-?[0-9]+`; leading `+` is not allowed                                                                                                                        |
-| `training.minimum_validation_rows_per_scenario`               | decimal integer              | Parsed from `-?[0-9]+`; leading `+` is not allowed                                                                                                                        |
-| `training.model_seed_hex`                                     | unsigned 64-bit seed         | Exactly 16 lower-case hexadecimal digits; preserved as raw bits                                                                                                           |
-| `training.patience`                                           | decimal integer              | Parsed from `-?[0-9]+`; leading `+` is not allowed                                                                                                                        |
-| `training.split_seed_hex`                                     | unsigned 64-bit seed         | Exactly 16 lower-case hexadecimal digits; preserved as raw bits                                                                                                           |
-| `training.weight_decay`                                       | finite decimal (`float`)     | Java decimal syntax with optional sign and exponent; must parse to a finite `float`                                                                                       |
-
-| Budget and generation key             | Expected type                | Default                | Description                                                   |
-|---------------------------------------|------------------------------|------------------------|---------------------------------------------------------------|
-| `budget.carry_forward_weight`         | decimal integer              | `25`                   | Share for completing policies with missing scenario coverage. |
-| `budget.disagreement_audit_weight`    | decimal integer              | `5`                    | Share for auditing prediction disagreements.                  |
-| `budget.exploration_weight`           | decimal integer              | `68`                   | Share for exploring new candidate policies.                   |
-| `budget.leader_revalidation_weight`   | decimal integer              | `2`                    | Share for rechecking the current leader.                      |
-| `candidate.cma.enabled`               | boolean                      | `true`                 | Enables CMA-ES candidate generation.                          |
-| `candidate.cma.generations`           | decimal integer              | `12`                   | Generations produced by each CMA-ES island.                   |
-| `candidate.cma.initial_sigma`         | finite decimal (`double`)    | `0.20`                 | Initial CMA-ES mutation scale.                                |
-| `candidate.cma.islands`               | decimal integer              | `4`                    | Number of independent CMA-ES populations.                     |
-| `candidate.cma.minimum_seed_policies` | decimal integer              | `10`                   | Minimum existing policies needed to seed CMA-ES.              |
-| `candidate.cma.population_size`       | decimal integer              | `96`                   | Candidates in each CMA-ES generation.                         |
-| `candidate.cma_weight`                | decimal integer              | `8`                    | Relative share assigned to CMA-ES.                            |
-| `candidate.direct_sobol_weight`       | decimal integer              | `1`                    | Relative share assigned to direct Sobol candidates.           |
-| `candidate.maximum_prediction_rows`   | decimal integer              | `16384`                | Batch size for rows scored by the prediction model.           |
-| `candidate.score_band_weight`         | decimal integer              | `7`                    | Relative share assigned to score-band sampling.               |
-| `candidate.score_band_weights`        | comma-separated integer list | `1,1,1,1,2,2,3,5,8,16` | Allocation across score bands from low to high.               |
-| `candidate.screen_rows`               | decimal integer              | `2097152`              | Number of generated candidates screened before selection.     |
-
-| Evidence key                                 | Expected type             | Default            | Description                                                           |
-|----------------------------------------------|---------------------------|--------------------|-----------------------------------------------------------------------|
-| `aggregation.bootstrap_replicates`           | decimal integer           | `1000`             | Bootstrap resamples used to estimate aggregate quality.               |
-| `aggregation.bootstrap_seed_hex`             | unsigned 64-bit seed      | `6a09e667f3bcc909` | Seed for deterministic aggregation resampling.                        |
-| `aggregation.calibration_acceptance`         | enum constant             | `STRONG_ONLY`      | Which calibration strength is eligible for aggregation.               |
-| `aggregation.minimum_success_fraction`       | finite decimal (`double`) | `0.5`              | Minimum successful repetition fraction for usable evidence.           |
-| `aggregation.minimum_successful_repetitions` | decimal integer           | `3`                | Minimum successful repetitions for usable evidence.                   |
-| `anchors.allow_imported_bootstrap`           | boolean                   | `false`            | Allows imported, rather than native, bootstrap evidence as anchors.   |
-| `anchors.fixed_fraction`                     | finite decimal (`double`) | `0.02`             | Fraction of the policy budget reserved for fixed anchors.             |
-| `anchors.maximum_bootstrap_non_success_rate` | finite decimal (`double`) | `0.10`             | Maximum non-success rate permitted among bootstrap anchors.           |
-| `anchors.maximum_bootstrap_relative_iqr`     | finite decimal (`double`) | `0.25`             | Maximum relative interquartile range permitted for bootstrap anchors. |
-| `anchors.minimum_fixed_anchors`              | decimal integer           | `5`                | Minimum number of fixed anchors selected.                             |
-| `benchmark.expected_repetitions`             | decimal integer           | `10`               | Benchmark repetitions collected per policy/scenario.                  |
-| `benchmark.frames_per_source`                | decimal integer           | `100000`           | Frames generated by each benchmark source.                            |
-| `benchmark.liveness_timeout_nanos`           | decimal integer (`long`)  | `50000000`         | Maximum wait for benchmark progress before declaring it stalled.      |
-| `benchmark.ordered_frames`                   | boolean                   | `false`            | Preserves ordered frame routing during benchmarks.                    |
-| `benchmark.reset_timeout_nanos`              | decimal integer (`long`)  | `2000000000`       | Maximum wait for benchmark reset completion.                          |
-| `benchmark.sample_duration_nanos`            | decimal integer (`long`)  | `200000000`        | Duration of each benchmark measurement sample.                        |
-| `calibration.maximum_anchor_weight_share`    | finite decimal (`double`) | `0.25`             | Maximum share contributed by one anchor.                              |
-| `calibration.maximum_strong_residual`        | finite decimal (`double`) | `0.05`             | Largest residual accepted for strong calibration.                     |
-| `calibration.maximum_weak_residual`          | finite decimal (`double`) | `0.15`             | Largest residual accepted for weak calibration.                       |
-| `calibration.minimum_log_sigma`              | finite decimal (`double`) | `0.01`             | Lower bound on fitted log-space uncertainty.                          |
-| `calibration.minimum_strong_anchors`         | decimal integer           | `5`                | Minimum anchors required for strong calibration.                      |
-| `calibration.minimum_weak_anchors`           | decimal integer           | `3`                | Minimum anchors needed for weak calibration.                          |
-
-| Training key                                    | Expected type            | Default            | Description                                                                              |
-|-------------------------------------------------|--------------------------|--------------------|------------------------------------------------------------------------------------------|
-| `training.ablation_members`                     | decimal integer          | `3`                | Models trained for feature-ablation analysis.                                            |
-| `training.batch_size`                           | decimal integer          | `0`                | Training batch size; zero selects the runtime default.                                   |
-| `training.device`                               | string                   | `auto`             | Device selection: `auto`, `cpu`, `gpu`, `gpuN`, `cuda`, or `cuda:N`.                     |
-| `training.ensemble_members`                     | decimal integer          | `5`                | Models trained and combined in the production ensemble.                                  |
-| `training.feature_selection_mode`               | enum constant            | `RATIO_ONLY`       | Feature schema used by the scenario model.                                               |
-| `training.include_weak_calibration_rows`        | boolean                  | `false`            | Includes weakly calibrated rows in model training.                                       |
-| `training.label_smoothing`                      | finite decimal (`float`) | `0.02`             | Softens labels to reduce model overconfidence.                                           |
-| `training.learning_rate`                        | finite decimal (`float`) | `0.001`            | Optimizer step size.                                                                     |
-| `training.loso_evaluation_members`              | decimal integer          | `1`                | Ensemble members used for leave-one-scenario-out evaluation.                             |
-| `training.max_epochs`                           | decimal integer          | `250`              | Maximum training epochs.                                                                 |
-| `training.minimum_test_policy_groups`           | decimal integer          | `10`               | Minimum distinct policy groups in the test split.                                        |
-| `training.minimum_test_rows_per_scenario`       | decimal integer          | `5`                | Minimum test rows per scenario.                                                          |
-| `training.minimum_train_policy_groups`          | decimal integer          | `40`               | Minimum distinct policy groups in the training split.                                    |
-| `training.minimum_train_rows_per_scenario`      | decimal integer          | `30`               | Minimum training rows per scenario.                                                      |
-| `training.minimum_validation_policy_groups`     | decimal integer          | `10`               | Minimum distinct policy groups in the validation split.                                  |
-| `training.minimum_validation_rows_per_scenario` | decimal integer          | `5`                | Minimum validation rows per scenario.                                                    |
-| `training.model_seed_hex`                       | unsigned 64-bit seed     | `13198a2e03707344` | Seed for deterministic model initialization.                                             |
-| `training.patience`                             | decimal integer          | `20`               | Epochs without improvement before early stopping.                                        |
-| `training.split_seed_hex`                       | unsigned 64-bit seed     | `243f6a8885a308d3` | Seed for deterministic dataset splitting.                                                |
-| `training.weight_decay`                         | finite decimal (`float`) | `0.0001`           | L2 penalty applied to model weights.                                                     |
-| `training.require_target_variation`             | boolean                  | `true`             | Requires training partitions to contain target variation; disables this for cold starts. |
-
-| Evaluation key                                                | Expected type             | Default | Description                                                    |
-|---------------------------------------------------------------|---------------------------|---------|----------------------------------------------------------------|
-| `evaluation.maximum_context_mae_regression`                   | finite decimal (`double`) | `0.01`  | Maximum MAE regression allowed for context features.           |
-| `evaluation.maximum_context_spearman_regression`              | finite decimal (`double`) | `0.02`  | Maximum Spearman regression allowed for context features.      |
-| `evaluation.maximum_counts_spearman_regression`               | finite decimal (`double`) | `0.02`  | Maximum Spearman regression allowed for count features.        |
-| `evaluation.maximum_counts_worst_environment_mae_regression`  | finite decimal (`double`) | `0.02`  | Maximum worst-environment MAE regression for count features.   |
-| `evaluation.maximum_grouped_macro_mae`                        | finite decimal (`double`) | `0.20`  | Maximum grouped macro MAE accepted for the model.              |
-| `evaluation.maximum_loso_macro_mae`                           | finite decimal (`double`) | `0.25`  | Maximum leave-one-scenario-out macro MAE accepted.             |
-| `evaluation.maximum_loso_worst_scenario_mae`                  | finite decimal (`double`) | `0.35`  | Maximum leave-one-scenario-out MAE in the worst scenario.      |
-| `evaluation.minimum_context_mae_improvement`                  | finite decimal (`double`) | `0.01`  | Minimum MAE improvement required from context features.        |
-| `evaluation.minimum_context_spearman_improvement`             | finite decimal (`double`) | `0.05`  | Minimum Spearman improvement required from context features.   |
-| `evaluation.minimum_counts_cross_environment_mae_improvement` | finite decimal (`double`) | `0.01`  | Minimum cross-environment MAE improvement from count features. |
-| `evaluation.minimum_grouped_macro_precision_at_ten`           | finite decimal (`double`) | `0.20`  | Minimum grouped macro precision among the top ten predictions. |
-| `evaluation.minimum_grouped_macro_spearman`                   | finite decimal (`double`) | `0.50`  | Minimum grouped macro Spearman correlation.                    |
-| `evaluation.minimum_loso_macro_spearman`                      | finite decimal (`double`) | `0.35`  | Minimum leave-one-scenario-out macro Spearman correlation.     |
-
-## Training-run packages
-
-Every normal return publishes an immutable package below
-`<workspace>/packages/training-run-<package-id>`. A completed run uses the training-run ID;
-recoverable partial runs use `<training-run-id>.partial.r<checkpoint-revision>`.
-
-The manifest records checksums, schemas, row counts, producing stages, source runs, completeness,
-and native versus imported provenance. `vectors/*.vectors.csv` are vector-only;
-`policy-scenario-measurements.csv` contains vectors with measurements; CSV files are
-machine-readable and `README.md` plus `reports/*.md` are human-readable.
-
-Reproduce a package without rerunning the physical experiment:
+To reproduce a package without re-running physical benchmarks:
 
 ```bash
-java -jar euhedral-training/target/trainer/euhedral-training-0.0.7-SNAPSHOT.jar \
+java -jar euhedral-training/build/libs/euhedral-training.jar \
   package-run \
   --workspace output/robust-closed-loop \
-  --inputs training-run-<package-id>/provenance/package-inputs.properties \
+  --inputs output/robust-closed-loop/packages/training-run-trial-2026-07/provenance/package-inputs.properties \
   --output-root output/reproduced-packages
 ```
-
-Publication streams large artifacts, validates the staged package, and uses an atomic directory
-rename. Existing conflicting packages are never overwritten.
