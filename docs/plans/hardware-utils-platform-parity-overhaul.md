@@ -11,7 +11,7 @@
 - Completed P2 root: `hardware-utils-overhaul/phase-2-topology-snapshot` at `e2495c5d`
 - Completed P3 root: `hardware-utils-overhaul/phase-3-affinity-executor` at `748f34d5`
 - Completed P4 root: `hardware-utils-overhaul/phase-4-pressure-monitor` at `487003ba`
-- Completed P7 root: `hardware-utils-overhaul/phase-7-macos` at `<P7-ROOT-COMMIT>` (closed out 2026-08-07)
+- Completed P7 root: `hardware-utils-overhaul/phase-7-macos` at `6b02cf1` (closed out 2026-08-07)
 - Active P5 root: `hardware-utils-overhaul/phase-5-linux`
 - Active P5 parent blueprint branch:
   `hardware-utils-overhaul/phase-5-linux-blueprint`
