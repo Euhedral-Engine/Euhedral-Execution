@@ -2990,7 +2990,7 @@ The Phase 6 Windows platform provider implementation and conformance audit are c
 
 ### P7 - public-API macOS parity with honest locality semantics
 
-#### P7 parent blueprint prompt - COMPLETED, REVIEW AND MERGE REQUIRED
+#### P7 parent blueprint prompt - COMPLETED AND MERGED
 
 **Model: `gpt-5.6-sol`; reasoning effort: `max`.**
 
@@ -3010,7 +3010,7 @@ The completed output is `docs/blueprints/hardware-utils/phase-7-macos-platform.m
 
 This prompt is superseded by the child implementation prompts below. Do not execute a single integrated implementation pass for P7.
 
-#### P7-A macOS topology model blueprint prompt
+#### P7-A macOS topology model blueprint prompt - COMPLETED, REVIEW AND MERGE REQUIRED
 
 **Model: `gpt-5.6-sol`; reasoning effort: `max`.**
 
