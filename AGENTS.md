@@ -317,5 +317,5 @@ Before handing work back:
 - P7 is in progress.
   - P7 parent blueprint is complete ([`phase-7-macos-platform.md`](docs/blueprints/hardware-utils/phase-7-macos-platform.md)).
   - Child P7-A (Topology & Sysctl) implementation is complete ([`phase-7-macos-topology-model.md`](docs/blueprints/hardware-utils/phase-7-macos-topology-model.md)).
-  - Child P7-B (Resource Provider & Signals) implementation is complete ([`phase-7-macos-resource-provider.md`](docs/blueprints/hardware-utils/phase-7-macos-resource-provider.md)).
+  - Child P7-B (Resource Provider & Signals) implementation and conformance audit are complete ([`phase-7-macos-resource-provider.md`](docs/blueprints/hardware-utils/phase-7-macos-resource-provider.md) and [`phase-7-macos-resource-provider-conformance.md`](docs/audits/hardware-utils/phase-7-macos-resource-provider-conformance.md)).
   - Child P7-C (Affinity, Timer & Native ABI) is ready for execution on `hardware-utils-overhaul/phase-7-macos-affinity-native-blueprint`.
