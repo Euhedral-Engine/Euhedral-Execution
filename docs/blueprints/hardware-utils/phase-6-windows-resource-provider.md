@@ -273,15 +273,22 @@ gradle :euhedral-hardware-utils:test
 - `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/windows/WindowsResources.java`
 - `euhedral-hardware-utils/src/main/native/windows/windows_resources.cpp`
 - `euhedral-hardware-utils/src/test/java/io/euhedral_execution/hardware_utils/windows/WindowsResourcesTest.java`
+- `euhedral-hardware-utils/src/test/java/io/euhedral_execution/hardware_utils/internal/sampling/ProviderContractTest.java`
 
 ### Commands Run & Results
 
-- `gradle :euhedral-hardware-utils:test --tests "io.euhedral_execution.hardware_utils.windows.*"` -> (To be populated by implementation pass)
-- `gradle :euhedral-hardware-utils:build` -> (To be populated by implementation pass)
+- `mise exec -- gradle :euhedral-hardware-utils:test --tests "io.euhedral_execution.hardware_utils.windows.WindowsResourcesTest"` -> PASSED (6/6 tests passed)
+- `mise exec -- gradle :euhedral-hardware-utils:test --tests "io.euhedral_execution.hardware_utils.internal.sampling.ProviderContractTest"` -> PASSED (5/5 tests passed)
+- `mise exec -- gradle :euhedral-hardware-utils:test` -> PASSED (146/146 tests passed)
 
 ### Acceptance Evidence
 
-- (To be populated by implementation pass)
+- **Job Object Quota Scaling**: Verified CpuRate = 5000 yields 0.50 quota fraction and quotaCpus = 4.0 on an 8-CPU system.
+- **Working Set Underflow Guard**: Verified Math.max(0L, ws - priv) saturates to 0L when private usage exceeds working set size.
+- **Process CPU Times 100-ns Scaling**: Verified FILETIMEQuadPart sum multiplied by 100L converts 100-ns intervals to nanoseconds.
+- **Idle Cycle Delta Normalization**: Verified per-CPU busy ratios derived from cycle deltas normalized against interval nanoseconds produce valid ratios in [0.0, 1.0].
+- **Cumulative I/O Bytes**: Verified ReadTransferCount + WriteTransferCount produces total process transferred bytes.
+- **Zero VLA Compliance**: Audit of `windows_resources.cpp` confirms zero Variable Length Arrays; heap fallback `malloc`/`free` used for CPU counts exceeding stack buffer (256).
 
 ### Approved Deviations
 
@@ -289,4 +296,4 @@ gradle :euhedral-hardware-utils:test
 
 ### Environmental Limits
 
-- Live native JNI platform tests require Windows OS host; mock Win32 fixtures used for cross-environment verification.
+- Live Win32 JNI platform tests require Windows OS host; mock Win32 fixtures and unit tests used for Linux host verification.

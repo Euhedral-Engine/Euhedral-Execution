@@ -5,6 +5,7 @@
 #ifndef _Included_WindowsResources
 #define _Included_WindowsResources
 
+#include <stdlib.h>
 #include "windows_jni.h"
 #include "io_euhedral_execution_hardware_utils_windows_WindowsResources.h"
 
@@ -49,9 +50,11 @@ Java_io_euhedral_1execution_hardware_1utils_windows_WindowsResources_getCpuTimes
         return;
     }
 
+    if (!buffer || env->GetArrayLength(buffer) < 2) return;
+
     jlong* values = env->GetLongArrayElements(buffer, NULL);
     if (values) {
-        values[0] = ((*((ULARGE_INTEGER*)&kernelTime)).QuadPart + (*((ULARGE_INTEGER*)&userTime)).QuadPart) * 100;
+        values[0] = (jlong)(((*((ULARGE_INTEGER*)&kernelTime)).QuadPart + (*((ULARGE_INTEGER*)&userTime)).QuadPart) * 100L);
         values[1] = 0;
         env->ReleaseLongArrayElements(buffer, values, 0);
     }
@@ -83,27 +86,48 @@ JNIEXPORT void JNICALL
 Java_io_euhedral_1execution_hardware_1utils_windows_WindowsResources_getPerCpuLoad(JNIEnv *env, jclass clazz, jdoubleArray buffer) {
     init();
     DWORD cpuCount = g_CpuCount;
-    ULONG bufferSize = cpuCount * sizeof(ULONG64);
+    if (cpuCount == 0) cpuCount = 1;
 
-    ULONG64 idleTimes[cpuCount];
+    if (!buffer) return;
+    jsize bufLen = env->GetArrayLength(buffer);
+    DWORD countToRead = (cpuCount < (DWORD)bufLen) ? cpuCount : (DWORD)bufLen;
+    if (countToRead == 0) return;
+
+    ULONG64 stackIdleTimes[256];
+    ULONG64* idleTimes = stackIdleTimes;
+    ULONG64* heapIdleTimes = NULL;
+
+    if (countToRead > 256) {
+        heapIdleTimes = (ULONG64*)malloc(countToRead * sizeof(ULONG64));
+        if (!heapIdleTimes) return;
+        idleTimes = heapIdleTimes;
+    }
+
+    ULONG bufferSize = countToRead * sizeof(ULONG64);
     if (!QueryIdleProcessorCycleTime(&bufferSize, (PULONG64)idleTimes)) {
+        if (heapIdleTimes) free(heapIdleTimes);
         return;
     }
 
     jdouble* load = env->GetDoubleArrayElements(buffer, NULL);
-    if (!load) return;
+    if (!load) {
+        if (heapIdleTimes) free(heapIdleTimes);
+        return;
+    }
 
-    for (DWORD i = 0; i < cpuCount; i++) {
+    for (DWORD i = 0; i < countToRead; i++) {
         load[i] = (double)idleTimes[i];
     }
 
     env->ReleaseDoubleArrayElements(buffer, load, 0);
-    return;
+    if (heapIdleTimes) free(heapIdleTimes);
 }
 
 JNIEXPORT void JNICALL
 Java_io_euhedral_1execution_hardware_1utils_windows_WindowsResources_getMemorySnapshot(JNIEnv *env, jclass clazz, jlongArray buffer) {
     init();
+
+    if (!buffer || env->GetArrayLength(buffer) < 3) return;
 
     jlong* values = env->GetLongArrayElements(buffer, NULL);
     if (!values) return;
@@ -118,8 +142,12 @@ Java_io_euhedral_1execution_hardware_1utils_windows_WindowsResources_getMemorySn
 
     PROCESS_MEMORY_COUNTERS_EX pmc;
     if (GetProcessMemoryInfo(GetCurrentProcess(), (PROCESS_MEMORY_COUNTERS *)&pmc, sizeof(pmc))) {
-        values[1] = (jlong)pmc.WorkingSetSize;
-        values[2] = (jlong)(pmc.WorkingSetSize - pmc.PrivateUsage);
+        jlong ws = (jlong)pmc.WorkingSetSize;
+        jlong priv = (jlong)pmc.PrivateUsage;
+        jlong shared = ws - priv;
+        if (shared < 0) shared = 0;
+        values[1] = ws;
+        values[2] = shared;
     }
 
     if (values[0] == 0) {

@@ -2940,16 +2940,6 @@ The sizing gate rejected one P5 root implementation context. Do not create `hard
 >
 > Run Job Object quota scaling tests, working set underflow boundary tests, idle cycle delta tests, and provider contract tests. Merge implementation before its audit.
 
-#### P6-B Windows resource provider conformance/manual-review prompt
-
-**Model: `gpt-5.6-sol`; reasoning effort: `high`.**
-
-> After P6-B implementation is reviewed and merged, create
-> `hardware-utils-overhaul/phase-6-windows-resources-audit` from the updated P6 root. Read P6-B
-> blueprint, completion record, and diff.
->
-> Independently audit Job Object quota scaling, effective quota CPUs, working set underflow protection, cycle delta normalization, and sensor validity. Write `docs/audits/hardware-utils/phase-6-windows-resource-provider-conformance.md`, append evidence, and hand off for merge.
-
 #### P6-C Windows affinity & native ABI blueprint prompt
 
 **Model: `gpt-5.6-sol`; reasoning effort: `max`.**
