@@ -31,12 +31,7 @@ class NativeBinaryInspectionIT {
             throws Exception {
         Set<String> expected = expectedJniExports(osToken);
         expected.add("JNI_OnLoad");
-        if (osToken.equals("windows")) {
-            expected.remove(
-                    "Java_io_euhedral_1execution_hardware_1utils_windows_WindowsAffinity_ntSetTimerResolution");
-            expected.add(
-                    "Java_io_euhedral_1execution_hardware_1utils_windows_WindowsTimerResolution_ntSetTimerResolution");
-        } else if (osToken.equals("osx")) {
+        if (osToken.equals("osx")) {
             expected.add(
                     "Java_io_euhedral_1execution_hardware_1utils_osx_OSXResources_getCoreTypeMask");
         }

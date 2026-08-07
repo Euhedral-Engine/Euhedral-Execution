@@ -6,14 +6,14 @@ import java.util.BitSet;
 
 final class WindowsAffinityCalls {
 
-    /// Applies a validated mask only when all CPUs fit one Windows group word.
+    /// Applies a validated mask across available Windows group words.
     ///
     /// @param masks little-endian words, one word per possible 64-CPU processor group
     /// @param call  injectable JNI-shaped operation for production and deterministic tests
     static boolean apply(long[] masks, RawCall call) {
         BitSet supported = SystemInfo.getCpuSet();
         long[] request = AffinityMasks.canonical(masks, SystemInfo.getCpuCount(), supported);
-        if (request == null || AffinityMasks.nonzeroWords(request) != 1) {
+        if (request == null || AffinityMasks.nonzeroWords(request) == 0) {
             return false;
         }
         try {

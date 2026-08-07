@@ -2968,16 +2968,6 @@ The sizing gate rejected one P5 root implementation context. Do not create `hard
 >
 > Run affinity matrix tests, multi-group rejection tests, lease restoration tests, VLA compliance checks, PE binary import gates, and JNI load smoke tests. Merge implementation before its audit.
 
-#### P6-C Windows affinity & native ABI conformance/manual-review prompt
-
-**Model: `gpt-5.6-sol`; reasoning effort: `high`.**
-
-> After P6-C implementation is reviewed and merged, create
-> `hardware-utils-overhaul/phase-6-windows-affinity-native-audit` from the updated P6 root. Read P6-C
-> blueprint, completion record, and diff.
->
-> Independently audit multi-group affinity application, deterministic rejection, lease restoration, VLA elimination, timer resolution shutdown hooks, PE ABI import gates, and Win10/Server 2016 floor compatibility. Write `docs/audits/hardware-utils/phase-6-windows-affinity-native-conformance.md`, append evidence, and hand off for merge.
-
 #### P6 root conformance audit prompt
 
 **Model: `gpt-5.6-sol`; reasoning effort: `high`.**

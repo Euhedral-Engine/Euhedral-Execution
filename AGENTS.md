@@ -318,4 +318,4 @@ Before handing work back:
 - P6 is in progress.
   - P6-A blueprint and implementation are complete ([`phase-6-windows-topology-model.md`](docs/blueprints/hardware-utils/phase-6-windows-topology-model.md)).
   - P6-B blueprint and implementation are complete ([`phase-6-windows-resource-provider.md`](docs/blueprints/hardware-utils/phase-6-windows-resource-provider.md)); conformance audit pending.
-  - P6-C blueprint is complete ([`phase-6-windows-affinity-native.md`](docs/blueprints/hardware-utils/phase-6-windows-affinity-native.md)).
+  - P6-C blueprint and implementation are complete ([`phase-6-windows-affinity-native.md`](docs/blueprints/hardware-utils/phase-6-windows-affinity-native.md)); conformance audit pending.

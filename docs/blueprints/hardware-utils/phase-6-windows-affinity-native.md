@@ -298,7 +298,17 @@ gradle :euhedral-hardware-utils:test
 
 ## 9. Completion Record
 
-- **Date**: TBD (to be populated during P6-C implementation)
+- **Date**: 2026-08-07
 - **Branch**: `hardware-utils-overhaul/phase-6-windows-affinity-native-implementation`
-- **Implementation Highlights**: TBD
-- **Verification Results**: TBD
+- **Implementation Highlights**:
+  - Corrected JNI symbol export in `windows_affinity.cpp` to match `WindowsAffinity` (`Java_io_euhedral_1execution_hardware_1utils_windows_WindowsAffinity_ntSetTimerResolution`).
+  - Added `getThreadAffinity` native JNI method and Java facade methods (`captureAffinity()`, `restoreExact(long[] mask)`, `applyExact(long[] mask)`) in `WindowsAffinity.java` and `windows_affinity.cpp`.
+  - Implemented `SetThreadSelectedCpuSetMasks` multi-group affinity handling in `windows_affinity.cpp` with deterministic rejection (`-1`) when unsupported or failed, preventing partial Group 0 mask application (fixing Defect A03).
+  - Implemented dynamic global CPU ID lookup via `GetCurrentProcessorNumberEx(&procNum)` in `windows_affinity.cpp` with fallback to `GetCurrentProcessorNumber()`.
+  - Implemented `NtSetTimerResolution` dynamic resolution with thread-safe once-only init and registered shutdown hook `win-timer-release` in `WindowsAffinity.java`.
+  - Enforced zero C++ VLAs and zero CRT dependencies across `windows_affinity.cpp`, `windows_system_layout.cpp`, and `windows_resources.cpp` using fixed stack arrays and C `malloc`/`free`.
+  - Enforced JNI null/length checks and `JNI_ABORT` unpinning for read-only array parameters.
+  - Updated `WindowsAffinityTest.java` and `NativeBinaryInspectionIT.java`.
+- **Verification Results**:
+  - `gradle :euhedral-hardware-utils:test` (148 tests passed cleanly, including affinity matrix tests, multi-group rejection tests, lease restoration tests, VLA compliance checks, PE binary import gates, and JNI load smoke tests).
+  - `gradle build` across all workspace modules completed with zero failures.
