@@ -176,7 +176,7 @@
   "include_weak_calibration_rows": false,
   "required_scenarios": [
     {
-      "scenario_id": "s1-host-a-src8-core32-r1of4",
+      "scenario_id": "s1-host-a-src8-cores32",
       "environment_id": "host-a",
       "source_count": 8,
       "available_physical_core_count": 32,
@@ -186,7 +186,7 @@
   ],
   "training_scenarios": [
     {
-      "scenario_id": "s1-host-a-src8-core32-r1of4",
+      "scenario_id": "s1-host-a-src8-cores32",
       "environment_id": "host-a",
       "source_count": 8,
       "available_physical_core_count": 32,
@@ -211,19 +211,19 @@
     },
     "scenario_row_counts": {
       "ABLATION_EARLY_STOP": {
-        "s1-host-a-src8-core32-r1of4": 1
+        "s1-host-a-src8-cores32": 1
       },
       "ABLATION_SCORE": {
-        "s1-host-a-src8-core32-r1of4": 1
+        "s1-host-a-src8-cores32": 1
       },
       "TEST": {
-        "s1-host-a-src8-core32-r1of4": 1
+        "s1-host-a-src8-cores32": 1
       },
       "TRAIN": {
-        "s1-host-a-src8-core32-r1of4": 1
+        "s1-host-a-src8-cores32": 1
       },
       "VALIDATION": {
-        "s1-host-a-src8-core32-r1of4": 2
+        "s1-host-a-src8-cores32": 2
       }
     }
   },
@@ -308,7 +308,7 @@
   },
   "metadata_probe": {
     "policy_id": "p1-08faf2bfbd873e50",
-    "scenario_id": "s1-host-a-src8-core32-r1of4",
+    "scenario_id": "s1-host-a-src8-cores32",
     "prediction_raw_bits": [
       "0000000000000000",
       "0000000000000000",

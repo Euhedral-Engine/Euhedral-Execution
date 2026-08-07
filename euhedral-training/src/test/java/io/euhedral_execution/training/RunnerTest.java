@@ -54,8 +54,8 @@ class RunnerTest {
                         "checkpoint="
                                 + temp.resolve("checkpoint").toAbsolutePath().normalize(),
                         "package=" + temp.resolve("package").toAbsolutePath().normalize(),
-                        "awaiting_scenario=s1-env-a-src1-core4-r1of4",
-                        "awaiting_scenario=s1-env-b-src4-core4-r1of1");
+                        "awaiting_scenario=s1-env-a-src1-cores4",
+                        "awaiting_scenario=s1-env-b-src4-cores4");
 
         Runner.dispatch(new String[] {"training-info"}, services);
         assertThat(services.trainingDiagnostics).isEqualTo(1);

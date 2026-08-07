@@ -633,32 +633,9 @@ public final class ScenarioModelMetadataCodec {
     }
 
     private static SourceScenario parseScenarioCanonical(String canonical) throws IOException {
-        if (!canonical.startsWith("s1-")) {
-            throw new IOException("Malformed scenario ID");
-        }
-        int source = canonical.lastIndexOf("-src");
-        int core = canonical.lastIndexOf("-core");
-        int ratio = canonical.lastIndexOf("-r");
-        int of = canonical.lastIndexOf("of");
-        if (source < 3 || core < source || ratio < core || of < ratio) {
-            throw new IOException("Malformed scenario ID " + canonical);
-        }
         try {
-            String environment = canonical.substring(3, source);
-            int sourceCount = Integer.parseInt(canonical.substring(source + 4, core));
-            int coreCount = Integer.parseInt(canonical.substring(core + 5, ratio));
-            SourceScenario scenario = new SourceScenario(
-                    environment,
-                    sourceCount,
-                    coreCount,
-                    new SourceRatio(
-                            Integer.parseInt(canonical.substring(ratio + 2, of)),
-                            Integer.parseInt(canonical.substring(of + 2))));
-            if (!scenario.canonical().equals(canonical)) {
-                throw new IllegalArgumentException();
-            }
-            return scenario;
-        } catch (RuntimeException error) {
+            return SourceScenario.parse(canonical);
+        } catch (IllegalArgumentException error) {
             throw new IOException("Malformed scenario ID " + canonical, error);
         }
     }

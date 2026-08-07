@@ -166,13 +166,13 @@ These settings control workspace persistence, machine environment binding, itera
 
 ### `scenario.required` *(Repeated Key)*
 - **Type**: `SortedSet<SourceScenario>` | **Default**: *Required (At least 1)*
-- **Validation**: Must follow canonical format `s1-<environmentId>-src<sources>-core<cores>-r<numerator>of<denominator>`. The ratio `rNofM` must equal the simplified fraction of `sources/cores`.
+- **Validation**: Must follow canonical format `s1-<environmentId>-src<sourceCount>-cores<availablePhysicalCoreCount>` (e.g. `s1-i9-14900k-src6-cores24`). Developers no longer need to compute GCD or specify the `-r<num>of<den>` ratio suffix.
 - **Code Reference**: [`SourceScenario.parse(...)`](file:///home/brandon/src/Euhedral-Execution/euhedral-training/src/main/java/io/euhedral_execution/training/data/SourceScenario.java)
 - **Explanation**: Declares all hardware topology scenarios that candidate policies must evaluate across to achieve "Robust Leader" status.
 - **Example**:
   ```properties
-  scenario.required=s1-machine-a-src1-core32-r1of32
-  scenario.required=s1-machine-a-src32-core32-r1of1
+  scenario.required=s1-machine-a-src1-cores32
+  scenario.required=s1-machine-a-src32-cores32
   ```
 
 ### `run.bootstrap_policies`
@@ -251,7 +251,7 @@ Configured by [`BenchmarkExecutionConfig`](file:///home/brandon/src/Euhedral-Exe
 |                                                                                   |
 |  +--------------------+      +--------------------+      +---------------------+  |
 |  | Warm-up & Lattice  | ---> | Frame Processing   | ---> | Performance Metric  |  |
-|  | Flush (Reset Timeout)    | Active Window      |      | Computation         |  |
+|  | Flush (Reset Timeout)     | Active Window      |      | Computation         |  |
 |  | (reset_timeout)    |      | (sample_duration)  |      | (Repetitions)       |  |
 |  +--------------------+      +--------------------+      +---------------------+  |
 |                                         |                                         |

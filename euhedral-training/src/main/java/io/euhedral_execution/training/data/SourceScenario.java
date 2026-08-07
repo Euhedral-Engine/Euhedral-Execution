@@ -28,26 +28,16 @@ public record SourceScenario(String environmentId, int sourceCount, int availabl
             throw new IllegalArgumentException("Malformed scenario ID");
         }
         java.util.regex.Matcher matcher = java.util.regex.Pattern.compile(
-                        "s1-([a-z0-9][a-z0-9._-]{0,63})-src([1-9][0-9]*)-core([1-9][0-9]*)"
-                                + "-r([1-9][0-9]*)of([1-9][0-9]*)")
+                        "s1-([a-z0-9][a-z0-9._-]{0,63})-src([1-9][0-9]*)-cores?([1-9][0-9]*)")
                 .matcher(value);
         if (!matcher.matches()) {
             throw new IllegalArgumentException("Malformed scenario ID: " + value);
         }
-        SourceScenario scenario =
-                of(matcher.group(1), Integer.parseInt(matcher.group(2)), Integer.parseInt(matcher.group(3)));
-        if (scenario.ratio().numerator() != Integer.parseInt(matcher.group(4))
-                || scenario.ratio().denominator() != Integer.parseInt(matcher.group(5))
-                || !scenario.canonical().equals(value)) {
-            throw new IllegalArgumentException("Scenario ID ratio mismatch");
-        }
-        return scenario;
+        return of(matcher.group(1), Integer.parseInt(matcher.group(2)), Integer.parseInt(matcher.group(3)));
     }
 
     public String canonical() {
-        return "s1-" + environmentId + "-src" + sourceCount + "-core"
-                + availablePhysicalCoreCount + "-r" + ratio.numerator() + "of"
-                + ratio.denominator();
+        return "s1-" + environmentId + "-src" + sourceCount + "-cores" + availablePhysicalCoreCount;
     }
 
     @Override

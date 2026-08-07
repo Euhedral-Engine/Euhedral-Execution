@@ -153,8 +153,8 @@ public final class ClosedLoopConfigCodec {
                 run.bootstrap_policies=bootstrap-policies.vectors.csv
                 run.commit_sha=0000000000000000000000000000000000000000
                 run.dirty_working_tree=false
-                scenario.required=s1-machine-a-src1-core32-r1of32
-                scenario.required=s1-machine-a-src32-core32-r1of1
+                scenario.required=s1-machine-a-src1-cores32
+                scenario.required=s1-machine-a-src32-cores32
                 """;
     }
 

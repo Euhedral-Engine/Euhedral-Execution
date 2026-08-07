@@ -127,7 +127,7 @@ SourceRatio(numerator, denominator)
   commit SHA and benchmark parameters are stored separately and do not become hidden parts of this
   ID.
 - Canonical scenario text is
-  `s1-<environmentId>-src<sourceCount>-core<availablePhysicalCoreCount>-r<numerator>of<denominator>`.
+  `s1-<environmentId>-src<sourceCount>-cores<availablePhysicalCoreCount>`.
 - Natural scenario ordering is environment ID, available core count, source count, then the reduced
   numerator and denominator.
 

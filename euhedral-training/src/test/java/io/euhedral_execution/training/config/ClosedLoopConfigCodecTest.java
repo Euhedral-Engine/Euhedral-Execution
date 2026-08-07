@@ -32,8 +32,8 @@ class ClosedLoopConfigCodecTest {
                 run.bootstrap_policies=bootstrap.csv
                 run.commit_sha=0000000000000000000000000000000000000000
                 run.dirty_working_tree=false
-                scenario.required=s1-env-b-src8-core32-r1of4
-                scenario.required=s1-env-a-src1-core32-r1of32
+                scenario.required=s1-env-b-src8-cores32
+                scenario.required=s1-env-a-src1-cores32
                 """);
         ClosedLoopConfig config = ClosedLoopConfigCodec.read(configFile);
         assertThat(config.workspace()).isEqualTo(temp.resolve("workspace"));
@@ -62,8 +62,8 @@ class ClosedLoopConfigCodecTest {
                 run.dirty_working_tree=true
                 run.scheduler_seed_hex=ffffffffffffffff
                 run.stop_file=custom.stop
-                scenario.required=s1-env-a-src1-core8-r1of8
-                calibration.reference_override=s1-env-a-src1-core8-r1of8|run-a
+                scenario.required=s1-env-a-src1-cores8
+                calibration.reference_override=s1-env-a-src1-cores8|run-a
                 budget.exploration_weight=1
                 candidate.cma.enabled=false
                 candidate.score_band_weights=1,1,1,1,1,1,1,1,1,1
@@ -102,7 +102,7 @@ class ClosedLoopConfigCodecTest {
                 run.initial_observation_bundle_directory=bundles
                 run.commit_sha=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
                 run.dirty_working_tree=true
-                scenario.required=s1-env-a-src1-core8-r1of8
+                scenario.required=s1-env-a-src1-cores8
                 """);
         ClosedLoopConfig config = ClosedLoopConfigCodec.read(configFile);
         assertThat(config.initialObservationBundleDirectory()).contains(temp.resolve("bundles"));
@@ -130,7 +130,7 @@ class ClosedLoopConfigCodecTest {
                                 "run.bootstrap_policies=boot",
                                 "run.bootstrap_policies=boot\nrun.initial_calibration_plan=plan"),
                 "mutually exclusive");
-        assertRejected(minimal("scenario.required=s1-env-a-src1-core8-r1of8"), "Duplicate list value");
+        assertRejected(minimal("scenario.required=s1-env-a-src1-cores8"), "Duplicate list value");
     }
 
     @Test
@@ -420,9 +420,9 @@ class ClosedLoopConfigCodecTest {
                 run.dirty_working_tree=true
                 run.resume=false
                 run.stop_file=custom.stop
-                scenario.required=s1-env-b-src4-core8-r1of2
-                scenario.required=s1-env-a-src1-core8-r1of8
-                calibration.reference_override=s1-env-a-src1-core8-r1of8|reference-a
+                scenario.required=s1-env-b-src4-cores8
+                scenario.required=s1-env-a-src1-cores8
+                calibration.reference_override=s1-env-a-src1-cores8|reference-a
                 budget.exploration_weight=11
                 budget.carry_forward_weight=12
                 budget.leader_revalidation_weight=13
@@ -508,8 +508,8 @@ class ClosedLoopConfigCodecTest {
         result.put("run.bootstrap_policies", "boot-b");
         result.put("run.commit_sha", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
         result.put("run.dirty_working_tree", "false");
-        result.put("scenario.required", "s1-env-a-src2-core8-r1of4");
-        result.put("calibration.reference_override", "s1-env-a-src1-core8-r1of8|reference-b");
+        result.put("scenario.required", "s1-env-a-src2-cores8");
+        result.put("calibration.reference_override", "s1-env-a-src1-cores8|reference-b");
         result.put("budget.exploration_weight", "15");
         result.put("budget.carry_forward_weight", "16");
         result.put("budget.leader_revalidation_weight", "17");
@@ -590,8 +590,8 @@ class ClosedLoopConfigCodecTest {
                 java.util.regex.Matcher.quoteReplacement(key + "=" + value));
         if (key.equals("scenario.required")) {
             changed = changed.replace(
-                    "calibration.reference_override=s1-env-a-src1-core8-r1of8|reference-a",
-                    "calibration.reference_override=s1-env-a-src2-core8-r1of4|reference-a");
+                    "calibration.reference_override=s1-env-a-src1-cores8|reference-a",
+                    "calibration.reference_override=s1-env-a-src2-cores8|reference-a");
         }
         return changed;
     }
@@ -614,7 +614,7 @@ class ClosedLoopConfigCodecTest {
                 run.bootstrap_policies=boot
                 run.commit_sha=0000000000000000000000000000000000000000
                 run.dirty_working_tree=false
-                scenario.required=s1-env-a-src1-core8-r1of8
+                scenario.required=s1-env-a-src1-cores8
                 """ + (extra.isEmpty() ? "" : extra + "\n");
     }
 

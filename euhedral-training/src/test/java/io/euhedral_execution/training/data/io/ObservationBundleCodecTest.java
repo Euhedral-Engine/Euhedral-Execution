@@ -36,70 +36,6 @@ class ObservationBundleCodecTest {
     @TempDir
     Path temporary;
 
-    private static BenchmarkObservation success(
-            BenchmarkRunDescriptor run, ScheduledPolicy policy, int repetition, Instant time, long frames) {
-        return new BenchmarkObservation(
-                new ObservationKey(
-                        run.benchmarkRunId(), run.scenario(), policy.policy().id(), repetition),
-                run,
-                policy,
-                ObservationStatus.SUCCESS,
-                MeasurementEncoding.COUNTER_DERIVED,
-                time,
-                time.plusSeconds(1),
-                OptionalLong.of(1_000_000_000L),
-                OptionalLong.of(frames),
-                OptionalDouble.of((double) frames),
-                "");
-    }
-
-    private static BenchmarkObservation failed(
-            BenchmarkRunDescriptor run,
-            ScheduledPolicy policy,
-            int repetition,
-            Instant time,
-            ObservationStatus status,
-            String code) {
-        return new BenchmarkObservation(
-                new ObservationKey(
-                        run.benchmarkRunId(), run.scenario(), policy.policy().id(), repetition),
-                run,
-                policy,
-                status,
-                MeasurementEncoding.COUNTER_DERIVED,
-                time,
-                time.plusSeconds(1),
-                OptionalLong.of(1_000_000_000L),
-                OptionalLong.of(10),
-                OptionalDouble.of(10),
-                code);
-    }
-
-    private static BenchmarkObservation skipped(
-            BenchmarkRunDescriptor run, ScheduledPolicy policy, int repetition, Instant time) {
-        return new BenchmarkObservation(
-                new ObservationKey(
-                        run.benchmarkRunId(), run.scenario(), policy.policy().id(), repetition),
-                run,
-                policy,
-                ObservationStatus.SKIPPED,
-                MeasurementEncoding.COUNTER_DERIVED,
-                time,
-                time,
-                OptionalLong.of(0),
-                OptionalLong.of(0),
-                OptionalDouble.empty(),
-                "PREVIOUS_TIMEOUT");
-    }
-
-    private static Path copy(Path source, Path target) throws IOException {
-        Files.createDirectory(target);
-        try (var files = Files.list(source)) {
-            for (Path file : files.toList()) Files.copy(file, target.resolve(file.getFileName()));
-        }
-        return target;
-    }
-
     @Test
     void roundTripsCompleteFivePolicyBundleDeterministically() throws Exception {
         Path first = writeMixed(temporary.resolve("first"));
@@ -114,7 +50,7 @@ class ObservationBundleCodecTest {
                         ObservationStatus.TIMEOUT,
                         ObservationStatus.FAILED,
                         ObservationStatus.SKIPPED);
-        assertThat(bundle.run().descriptor().scenario().canonical()).isEqualTo("s1-host-a-src2-core8-r1of4");
+        assertThat(bundle.run().descriptor().scenario().canonical()).isEqualTo("s1-host-a-src2-cores8");
         assertThat(bundle.run().descriptor()).satisfies(run -> {
             assertThat(run.candidateCohortId()).isEqualTo("cohort-1");
             assertThat(run.commitSha()).isEqualTo(SHA);
@@ -192,7 +128,7 @@ class ObservationBundleCodecTest {
                 original,
                 "scenario",
                 "run.csv",
-                text -> text.replace("s1-host-a-src2-core8-r1of4", "s1-host-b-src2-core8-r1of4"));
+                text -> text.replace("s1-host-a-src2-cores8", "s1-host-b-src2-cores8"));
         assertTamperRejected(
                 original, "hash", "policies.csv", text -> text.replaceFirst("p1-[0-9a-f]{16}", "p1-0000000000000000"));
         assertTamperRejected(
@@ -322,10 +258,74 @@ class ObservationBundleCodecTest {
         return directory;
     }
 
+    private static BenchmarkObservation success(
+            BenchmarkRunDescriptor run, ScheduledPolicy policy, int repetition, Instant time, long frames) {
+        return new BenchmarkObservation(
+                new ObservationKey(
+                        run.benchmarkRunId(), run.scenario(), policy.policy().id(), repetition),
+                run,
+                policy,
+                ObservationStatus.SUCCESS,
+                MeasurementEncoding.COUNTER_DERIVED,
+                time,
+                time.plusSeconds(1),
+                OptionalLong.of(1_000_000_000L),
+                OptionalLong.of(frames),
+                OptionalDouble.of((double) frames),
+                "");
+    }
+
+    private static BenchmarkObservation failed(
+            BenchmarkRunDescriptor run,
+            ScheduledPolicy policy,
+            int repetition,
+            Instant time,
+            ObservationStatus status,
+            String code) {
+        return new BenchmarkObservation(
+                new ObservationKey(
+                        run.benchmarkRunId(), run.scenario(), policy.policy().id(), repetition),
+                run,
+                policy,
+                status,
+                MeasurementEncoding.COUNTER_DERIVED,
+                time,
+                time.plusSeconds(1),
+                OptionalLong.of(1_000_000_000L),
+                OptionalLong.of(10),
+                OptionalDouble.of(10),
+                code);
+    }
+
+    private static BenchmarkObservation skipped(
+            BenchmarkRunDescriptor run, ScheduledPolicy policy, int repetition, Instant time) {
+        return new BenchmarkObservation(
+                new ObservationKey(
+                        run.benchmarkRunId(), run.scenario(), policy.policy().id(), repetition),
+                run,
+                policy,
+                ObservationStatus.SKIPPED,
+                MeasurementEncoding.COUNTER_DERIVED,
+                time,
+                time,
+                OptionalLong.of(0),
+                OptionalLong.of(0),
+                OptionalDouble.empty(),
+                "PREVIOUS_TIMEOUT");
+    }
+
     private void assertTamperRejected(
             Path original, String name, String file, java.util.function.UnaryOperator<String> tamper) throws Exception {
         Path copy = copy(original, temporary.resolve(name));
         Files.writeString(copy.resolve(file), tamper.apply(Files.readString(copy.resolve(file))));
         assertThatIllegalArgumentException().isThrownBy(() -> ObservationBundleReader.read(copy));
+    }
+
+    private static Path copy(Path source, Path target) throws IOException {
+        Files.createDirectory(target);
+        try (var files = Files.list(source)) {
+            for (Path file : files.toList()) Files.copy(file, target.resolve(file.getFileName()));
+        }
+        return target;
     }
 }
