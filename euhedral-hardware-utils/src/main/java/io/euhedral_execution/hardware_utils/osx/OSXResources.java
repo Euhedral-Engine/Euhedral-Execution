@@ -6,6 +6,7 @@ import io.euhedral_execution.hardware_utils.common.SystemUtilization.SystemSnaps
 import io.euhedral_execution.hardware_utils.common.UnmodifiableBitSet;
 import io.euhedral_execution.hardware_utils.internal.Constants;
 import io.euhedral_execution.hardware_utils.internal.JNIClassLoader;
+import io.euhedral_execution.hardware_utils.macos.MacosResources;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -13,6 +14,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/// Legacy macOS resource provider implementing SystemSnapshotProvider and delegating to MacosResources.
 public final class OSXResources implements SystemSnapshotProvider {
 
     public static final OSXResources INSTANCE;
@@ -39,6 +41,7 @@ public final class OSXResources implements SystemSnapshotProvider {
     private final long[] lastCpuTimes = new long[2];
     private long lastTimeNs = -1;
 
+    /// Constructs an OSXResources provider instance.
     public OSXResources() throws Throwable {
         int available = Runtime.getRuntime().availableProcessors();
         BitSet set = new BitSet(available);
@@ -46,7 +49,12 @@ public final class OSXResources implements SystemSnapshotProvider {
         this.effectiveCpus = UnmodifiableBitSet.wrap(set);
     }
 
+    @Override
     public SystemSnapshot getSnapshot() {
+        if (MacosResources.INSTANCE != null) {
+            return MacosResources.INSTANCE.getSnapshot();
+        }
+
         if (!this.wip.compareAndSet(false, true)) {
             while (this.wip.get()) {
                 Thread.onSpinWait();
@@ -90,8 +98,8 @@ public final class OSXResources implements SystemSnapshotProvider {
             snapshot = SystemSnapshot.create(
                     now,
                     availableCpus,
-                    availableCpus, // MacOS has no quota cpus
-                    1L, // MacOS has no cgroup period equivalent
+                    availableCpus,
+                    1L,
                     cpuUsageDelta,
                     cpuThrottle,
                     effectiveCpus,
@@ -108,11 +116,30 @@ public final class OSXResources implements SystemSnapshotProvider {
         return snapshot;
     }
 
+    /// Legacy native method to query CPU usage times.
     public static native long[] getCpuTimes();
 
+    /// Legacy native method to query system CPU load.
     public static native double getSystemCpuLoad();
 
+    /// Legacy native method to query memory snapshot.
     public static native long[] getMemorySnapshot();
 
+    /// Legacy native method to query cumulative disk I/O bytes.
     public static native long getIoBytes();
+
+    /// Native method to query process CPU usage nanoseconds and cumulative disk I/O bytes.
+    public static native boolean getProcessRusageNative(long[] outCpuAndIoBytes);
+
+    /// Native method to query system total memory and process task resident / virtual memory.
+    public static native boolean getTaskMemoryNative(long[] outMemory);
+
+    /// Native method to query NSProcessInfo thermal state enum.
+    public static native int getThermalStateNative();
+
+    /// Native method to query NSProcessInfo low-power mode status.
+    public static native boolean isLowPowerModeNative();
+
+    /// Native method to query Mach timebase numer and denom conversion factors.
+    public static native boolean getMachTimebaseNative(int[] outNumerDenom);
 }

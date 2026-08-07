@@ -10,7 +10,7 @@
 - **Audit File Target**: `docs/audits/hardware-utils/phase-7-macos-resource-provider-conformance.md`
 - **Owning Module**: `euhedral-hardware-utils`
 - **Selected Blueprint Model**: `gpt-5.6-sol` with `high` reasoning effort
-- **Status**: Implementation-ready child blueprint. Pending developer review and merge into the P7 root before child implementation begins.
+- **Status**: Completed child implementation on branch `hardware-utils-overhaul/phase-7-macos-resources-implementation`. Verified via unit tests and provider contract test suites.
 
 This child blueprint is subordinate to `AGENTS.md`, `docs/AGENT_WORKFLOW.md`, `docs/ARCHITECTURE.md`, and the parent P7 blueprint (`phase-7-macos-platform.md`). It translates parent resource collection contracts into an explicit, implementable specification for `MacosResources` and native resource probes.
 
@@ -287,16 +287,25 @@ gradle :euhedral-hardware-utils:test
 ### Changed Files
 
 - `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/macos/MacosResources.java`
-- `euhedral-hardware-utils/src/main/native/macos/macos_resources.cpp`
+- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/osx/OSXResources.java`
+- `euhedral-hardware-utils/src/main/native/macos/osx_resources.cpp`
 - `euhedral-hardware-utils/src/test/java/io/euhedral_execution/hardware_utils/macos/MacosResourcesTest.java`
+- `docs/blueprints/hardware-utils/phase-7-macos-resource-provider.md`
 
 ### Commands Run & Results
 
-- TBD during child implementation pass.
+- `gradle :euhedral-hardware-utils:test --tests "io.euhedral_execution.hardware_utils.macos.MacosResourcesTest"` - SUCCESS (Passed all 8 unit tests: process CPU accumulation, disk I/O bytes, working set memory underflow guard, NSProcessInfo thermal severity states, low-power mode signal, telemetry pressure isolation, Mach timebase zero-division protection, and provider contract getSnapshot).
+- `gradle :euhedral-hardware-utils:test` - SUCCESS (Passed all 164 tests in euhedral-hardware-utils).
+- `gradle build` - SUCCESS (Passed repository build and full test suite across all modules in 13s).
 
 ### Acceptance Evidence
 
-- TBD during child implementation pass.
+- Process CPU nanoseconds (`ri_user_time + ri_system_time`) and cumulative disk I/O bytes (`ri_diskio_bytesread + ri_diskio_byteswritten`) collected via `proc_pid_rusage(RUSAGE_INFO_V3)` with `getrusage(RUSAGE_SELF)` fallback.
+- Telemetry rule & pressure isolation enforced (`SignalValidity.UNSUPPORTED` for CPU/IO pressure signals with canonical neutral 0.0 value).
+- Resident working set memory (`info.resident_size`), virtual memory (`info.virtual_size`), total physical RAM (`hw.memsize`), and shared memory underflow protection (`Math.max(0L, virtual - resident)`).
+- `NSProcessInfo` thermal severity mapped to `ThermalSeverity` (`NOMINAL`, `FAIR`, `SERIOUS`, `CRITICAL`) with `SignalValidity.VALID`.
+- `NSProcessInfo` low-power mode mapped to `BooleanSignal` with `SignalValidity.VALID`.
+- Mach timebase conversion guarded against zero division (`denom == 0` fallback to 1:1 scale with rate-limited warning).
 
 ### Approved Deviations
 
@@ -304,4 +313,4 @@ gradle :euhedral-hardware-utils:test
 
 ### Environmental Limits
 
-- Live macOS native JNI platform tests require macOS host; mock process and Mach fixtures used for Linux host verification.
+- Live macOS native JNI platform tests require macOS host; mock process and Mach fixtures used for Linux host verification. Native binaries cross-compiled with Zig 0.16.0 for x86_64-macos and aarch64-macos and verified via codesign.
