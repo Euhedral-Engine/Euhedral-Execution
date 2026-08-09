@@ -70,10 +70,13 @@ record PackageSourceSet(
                 .calibrationPlan()
                 .map(reference -> {
                     Path path = workspace.resolve(reference.relativePath()).normalize();
+                    if (!path.startsWith(workspace)) {
+                        throw new IllegalArgumentException("Calibration plan path escapes workspace");
+                    }
                     try {
                         CanonicalFileSupport.rejectSymlinkComponents(path);
                         String computedHash = ArtifactFingerprint.sha256(path);
-                        if (!path.startsWith(workspace) || !computedHash.equals(reference.sha256())) {
+                        if (!computedHash.equals(reference.sha256())) {
                             throw new IllegalArgumentException("Calibration plan fingerprint mismatch: expected "
                                     + reference.sha256() + " but got " + computedHash);
                         }

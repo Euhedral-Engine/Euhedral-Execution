@@ -422,8 +422,6 @@ public final class TrainingRunPackageValidator {
                     .toList();
         }
         if (!actual.equals(expected)) {
-            System.out.println(actual);
-            System.out.println(expected);
             throw new IOException("Unexpected model inventory");
         }
     }

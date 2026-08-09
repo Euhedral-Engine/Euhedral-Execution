@@ -2,6 +2,7 @@ package io.euhedral_execution.training.learning.network_operations;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.euhedral_execution.training.learning.TrainingDevice;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
@@ -23,6 +24,19 @@ class TensorFlowNetworkTest {
 
             network.predictLogits(features, rows, destination);
             assertThat(destination).hasSize(18);
+        }
+    }
+
+    @Test
+    void explicitlyPlacesCpuModelsOnTheRequestedDevice() {
+        try (TensorFlowNetwork network = new TensorFlowNetwork(64, TrainingDevice.cpu())) {
+            String inputDevice = network.graph().toGraphDef().getNodeList().stream()
+                    .filter(node -> node.getName().equals("INPUT"))
+                    .findFirst()
+                    .orElseThrow()
+                    .getDevice();
+
+            assertThat(inputDevice).isEqualTo("/device:CPU:0");
         }
     }
 

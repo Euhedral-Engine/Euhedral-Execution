@@ -1,6 +1,5 @@
 package io.euhedral_execution.training.merge;
 
-import io.euhedral_execution.hardware_utils.PinnedThreadExecutor;
 import io.euhedral_execution.hardware_utils.SystemInfo;
 import io.euhedral_execution.hashing.HasherApi;
 import io.euhedral_execution.training.data.PolicyId;
@@ -25,6 +24,8 @@ import java.util.Random;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 public final class HierarchicalAggregator {
@@ -64,25 +65,19 @@ public final class HierarchicalAggregator {
             return List.copyOf(results);
         }
 
-        @SuppressWarnings("unchecked")
-        Future<List<ScenarioResult>>[] futures = new Future[scenarioList.size()];
-        for (int i = 0; i < scenarioList.size(); i++) {
-            SourceScenario scenario = scenarioList.get(i);
-            PinnedThreadExecutor executor = PinnedThreadExecutor.getOrSetIfAbsent(
-                    io.euhedral_execution.core.utils.FlowThread.getFactory(),
-                    i % cpuCount,
-                    "hierarchical-aggregator-" + (i % cpuCount),
-                    Thread.NORM_PRIORITY,
-                    true);
-            futures[i] = executor.submit(
-                    () -> aggregateOneScenario(scenario, sortedPolicies, runIndex, calibrationByRun, config));
-        }
+        int workerCount = Math.min(cpuCount, scenarioList.size());
+        try (ExecutorService executor = Executors.newFixedThreadPool(workerCount)) {
+            List<Future<List<ScenarioResult>>> futures = new ArrayList<>(scenarioList.size());
+            for (SourceScenario scenario : scenarioList) {
+                futures.add(executor.submit(
+                        () -> aggregateOneScenario(scenario, sortedPolicies, runIndex, calibrationByRun, config)));
+            }
 
-        List<ScenarioResult> results = new ArrayList<>();
-        try {
+            List<ScenarioResult> results = new ArrayList<>();
             for (Future<List<ScenarioResult>> future : futures) {
                 results.addAll(future.get());
             }
+            return List.copyOf(results);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("Interrupted during scenario aggregation", e);
@@ -96,12 +91,9 @@ public final class HierarchicalAggregator {
             }
             throw new IllegalStateException("Scenario aggregation failed", cause);
         }
-        return List.copyOf(results);
     }
 
-    /// Aggregates all policies for one scenario. This method is safe to call concurrently
-    /// from different threads because it reads only from immutable or thread-safe inputs and
-    /// writes only to its own local result list.
+    /// Aggregates all policies for one scenario using only local result state.
     private static List<ScenarioResult> aggregateOneScenario(
             SourceScenario scenario,
             List<PolicyVector> sortedPolicies,

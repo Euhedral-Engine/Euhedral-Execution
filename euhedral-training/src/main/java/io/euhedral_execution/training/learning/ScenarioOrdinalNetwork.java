@@ -80,7 +80,7 @@ final class ScenarioOrdinalNetwork implements OrdinalMember {
     private ScenarioOrdinalNetwork(int featureWidth, TrainingDevice device) {
         this.featureWidth = featureWidth;
         this.device = device;
-        this.tfNetwork = new TensorFlowNetwork(featureWidth);
+        this.tfNetwork = new TensorFlowNetwork(featureWidth, device);
     }
 
     private TrainingResult fit(
@@ -114,7 +114,7 @@ final class ScenarioOrdinalNetwork implements OrdinalMember {
         int staleEpochs = 0;
 
         try (TensorFlowNetwork trainerNetwork =
-                new TensorFlowNetwork(featureWidth, config.learningRate(), config.labelSmoothing())) {
+                new TensorFlowNetwork(featureWidth, config.learningRate(), config.labelSmoothing(), device)) {
             float[] fittingFeatures = fitting.features();
             float[] fittingLabels = fitting.ordinalLabels();
             float[] fittingWeights = fitting.rowWeights();

@@ -1,5 +1,6 @@
 package io.euhedral_execution.training.learning.network_operations;
 
+import io.euhedral_execution.training.learning.TrainingDevice;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -7,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.Properties;
+import org.tensorflow.DeviceSpec;
 import org.tensorflow.Graph;
 import org.tensorflow.Operand;
 import org.tensorflow.Session;
@@ -101,10 +103,10 @@ public class TensorFlowNetwork implements AutoCloseable {
     private final Properties properties;
     private boolean closed;
 
-    public TensorFlowNetwork(int featureWidth, float learningRate, float labelSmoothing) {
+    public TensorFlowNetwork(int featureWidth, float learningRate, float labelSmoothing, TrainingDevice device) {
         this.featureWidth = featureWidth;
         this.graph = new Graph();
-        this.tf = Ops.create(graph);
+        this.tf = Ops.create(graph).withDevice(deviceSpec(device));
         this.inputPlaceholder = inputLayer(featureWidth, tf);
         this.outputLayer = buildBlock(tf, inputPlaceholder, featureWidth);
 
@@ -130,8 +132,23 @@ public class TensorFlowNetwork implements AutoCloseable {
         this.properties = new Properties();
     }
 
+    public TensorFlowNetwork(int featureWidth, float learningRate, float labelSmoothing) {
+        this(featureWidth, learningRate, labelSmoothing, TrainingDevice.cpu());
+    }
+
+    public TensorFlowNetwork(int featureWidth, TrainingDevice device) {
+        this(featureWidth, 0.001f, 0.0f, device);
+    }
+
     public TensorFlowNetwork(int featureWidth) {
-        this(featureWidth, 0.001f, 0.0f);
+        this(featureWidth, TrainingDevice.cpu());
+    }
+
+    private static DeviceSpec deviceSpec(TrainingDevice device) {
+        return DeviceSpec.newBuilder()
+                .deviceType(device.isGpu() ? DeviceSpec.DeviceType.GPU : DeviceSpec.DeviceType.CPU)
+                .deviceIndex(device.isGpu() ? device.getDeviceId() : 0)
+                .build();
     }
 
     public int featureWidth() {
