@@ -75,7 +75,6 @@ jobs:
           cache: true
 
       - name: Parse Version from gradle.properties
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         id: check_version
         run: |
           VERSION=$(grep '^version =' build-logic/src/main/kotlin/buildlogic.java-conventions.gradle.kts | cut -d'=' -f2 | tr -d '"')
@@ -103,7 +102,7 @@ jobs:
           fi
 
       - name: Build and Verify
-        if: ${{ steps.check_version.outputs.is_snapshot == 'true' }}
+        if: github.event_name != 'push' || steps.check_version.outputs.is_snapshot == 'true'
         run: |
           mise exec -- gradle build integrationTest
 
