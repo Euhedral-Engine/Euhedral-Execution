@@ -43,17 +43,21 @@ public class ResourceMonitor implements AutoCloseable {
         }
     }
 
+    private volatile int state = NEW;
+    private volatile boolean evaluationActive;
+    private volatile boolean publicationClaimed;
+
     private final TopologyUpdater topology;
     private final DetailedSystemSnapshotProvider provider;
     private final long sampleRateNs;
     private final MonotonicClock clock;
     private final DeadlineWaiter waiter;
     private final ThreadFactory threadFactory;
+    private final Object evaluationLock = new Object();
+
     private final LatestValueDispatcher dispatcher;
     private final SampleStateEngine stateEngine;
-    private volatile int state = NEW;
-    private volatile boolean evaluationActive;
-    private volatile boolean publicationClaimed;
+
     private volatile PressureState pressureState;
     private volatile Thread pollingThread;
     private volatile HardwareUtilization lastUtilization;
@@ -234,43 +238,60 @@ public class ResourceMonitor implements AutoCloseable {
     }
 
     private void evaluateAndPublish() {
-        EVAL_ACTIVE.setRelease(this, true);
-        try {
-            int s = (int) STATE.getAcquire(this);
-            if (s == CLOSING || s == CLOSED) return;
+        synchronized (evaluationLock) {
+            EVAL_ACTIVE.setRelease(this, true);
+            try {
+                int s = (int) STATE.getAcquire(this);
+                if (s == CLOSING || s == CLOSED) return;
 
-            long pollStartNs = clock.nanoTime();
-            if (stateEngine.isSlowDue(pollStartNs)) {
-                stateEngine.processSlow(pollStartNs, provider.sampleSlow(pollStartNs));
-            }
-            FastHardwareSample fast = provider.sampleFast(pollStartNs);
-            long evaluationNs = clock.nanoTime();
-
-            IntervalHardwareSample interval = stateEngine.processFast(evaluationNs, fast);
-            if (interval != null) {
-                PressureEvaluation eval = PressureEvaluator.evaluate(interval, pressureState, evaluationNs);
-                pressureState = eval.state();
-                HardwareUtilization util = eval.candidate();
-                this.lastUtilization = util;
-
-                PUB_CLAIMED.setRelease(this, true);
-                try {
-                    s = (int) STATE.getAcquire(this);
-                    if (s != CLOSING && s != CLOSED) {
-                        topology.update(util);
-                        dispatcher.offer(util);
-                    }
-                } finally {
-                    PUB_CLAIMED.setRelease(this, false);
+                long pollStartNs = clock.nanoTime();
+                if (stateEngine.isSlowDue(pollStartNs)) {
+                    stateEngine.processSlow(pollStartNs, provider.sampleSlow(pollStartNs));
                 }
+                FastHardwareSample fast = provider.sampleFast(pollStartNs);
+                long evaluationNs = clock.nanoTime();
+
+                IntervalHardwareSample interval = stateEngine.processFast(evaluationNs, fast);
+                if (interval != null) {
+                    PressureEvaluation eval = PressureEvaluator.evaluate(interval, pressureState, evaluationNs);
+                    pressureState = eval.state();
+                    HardwareUtilization util = eval.candidate();
+                    this.lastUtilization = util;
+
+                    PUB_CLAIMED.setRelease(this, true);
+                    try {
+                        s = (int) STATE.getAcquire(this);
+                        if (s != CLOSING && s != CLOSED) {
+                            topology.update(util);
+                            if (s == RUNNING) {
+                                dispatcher.offer(util);
+                            }
+                        }
+                    } finally {
+                        PUB_CLAIMED.setRelease(this, false);
+                    }
+                }
+            } finally {
+                EVAL_ACTIVE.setRelease(this, false);
             }
-        } finally {
-            EVAL_ACTIVE.setRelease(this, false);
         }
     }
 
     public final HardwareUtilization getUtilization() {
-        return lastUtilization;
+        HardwareUtilization utilization = lastUtilization;
+        if (utilization != null) {
+            return utilization;
+        }
+
+        int currentState = (int) STATE.getAcquire(this);
+        if (currentState == NEW || currentState == STOPPED) {
+            evaluateAndPublish();
+            utilization = lastUtilization;
+        }
+        if (utilization == null) {
+            throw new IllegalStateException("Resource utilization is not available");
+        }
+        return utilization;
     }
 
     @FunctionalInterface
