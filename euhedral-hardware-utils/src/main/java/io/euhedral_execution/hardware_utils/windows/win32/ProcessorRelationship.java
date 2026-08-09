@@ -8,25 +8,31 @@ import java.util.List;
 /// [PROCESSOR_RELATIONSHIP](https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-processor_relationship)
 public final class ProcessorRelationship extends SystemLogicalProcessorInformation {
 
-    private static final byte RESERVED = 20;
-
-    public static ProcessorRelationship parse(ByteBuffer buffer, int pos) {
-        Relationship relationship = Relationship.from(buffer.getInt(pos));
-        pos += Long.BYTES + HEADER;
-
-        byte flags = buffer.get(pos);
-        byte eClass = buffer.get(pos + 1);
-        pos += 2 + RESERVED;
-
-        short groupCount = buffer.getShort(pos);
-        pos += Short.BYTES;
-
-        List<GroupAffinity> groups = new ArrayList<>();
-        for (short i = 0; i < groupCount; i++) {
-            groups.add(GroupAffinity.parse(buffer, pos));
-            pos += 16;
+    public static ProcessorRelationship parse(ByteBuffer buffer, int payloadPos, int payloadLen,
+            Relationship relationship) {
+        if (payloadLen < 24) {
+            throw new IllegalArgumentException(
+                    "Malformed ProcessorRelationship payload length: " + payloadLen);
         }
-        return new ProcessorRelationship(relationship, flags > 0, eClass > 0,
+        byte flags = buffer.get(payloadPos);
+        byte eClass = buffer.get(payloadPos + 1);
+
+        int groupCount = Short.toUnsignedInt(buffer.getShort(payloadPos + 22));
+        if (payloadLen < 24 + groupCount * 16) {
+            throw new IllegalArgumentException("Malformed ProcessorRelationship payload length "
+                    + payloadLen + " for groupCount " + groupCount);
+        }
+
+        List<GroupAffinity> groups = new ArrayList<>(groupCount);
+        int groupPos = payloadPos + 24;
+        for (int i = 0; i < groupCount; i++) {
+            groups.add(GroupAffinity.parse(buffer, groupPos));
+            groupPos += 16;
+        }
+        boolean smt = (flags & 0x01) != 0;
+        boolean pCore = Byte.toUnsignedInt(eClass) > 0;
+
+        return new ProcessorRelationship(relationship, smt, pCore,
                 Collections.unmodifiableList(groups));
     }
 

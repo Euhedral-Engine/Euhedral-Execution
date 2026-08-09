@@ -310,10 +310,3 @@ Before handing work back:
 3. Inspect `git diff --check`.
 4. Inspect `git status --short` and confirm only intended files changed.
 5. Report tests that could not run and the exact environmental reason.
-
-## Temporary hardware-utils overhaul status (P5)
-
-- P0-P4 are complete.
-- P5 is in progress. P5-A blueprint, implementation, and conformance audit are complete.
-- P5-B blueprint and implementation are complete ([`phase-5-linux-resource-provider.md`](docs/blueprints/hardware-utils/phase-5-linux-resource-provider.md)); conformance audit pending.
-- P5-C blueprint and implementation are complete ([`phase-5-linux-affinity-native.md`](docs/blueprints/hardware-utils/phase-5-linux-affinity-native.md)); conformance audit pending.

@@ -1039,7 +1039,10 @@ an unbounded feature-history context.
 | P5-A Linux topology model     | `docs/blueprints/hardware-utils/phase-5-linux-topology-model.md`               | conformance check and manual review                              | `docs/audits/hardware-utils/phase-5-linux-topology-model-conformance.md`               |
 | P5-B Linux resource provider  | `docs/blueprints/hardware-utils/phase-5-linux-resource-provider.md`             | conformance check and manual review                              | `docs/audits/hardware-utils/phase-5-linux-resource-provider-conformance.md`             |
 | P5-C Linux affinity & native  | `docs/blueprints/hardware-utils/phase-5-linux-affinity-native.md`              | conformance check and manual review                              | `docs/audits/hardware-utils/phase-5-linux-affinity-native-conformance.md`              |
-| P6                            | `docs/blueprints/hardware-utils/phase-6-windows-platform.md`                  | conformance/manual review                                        | `docs/audits/hardware-utils/phase-6-windows-platform-conformance.md`                  |
+| P6 parent/root integration    | `docs/blueprints/hardware-utils/phase-6-windows-platform.md`                 | child conformance/manual reviews plus root manual review         | `docs/audits/hardware-utils/phase-6-windows-platform-conformance.md`                 |
+| P6-A Windows topology model   | `docs/blueprints/hardware-utils/phase-6-windows-topology-model.md`            | conformance check and manual review                              | `docs/audits/hardware-utils/phase-6-windows-topology-model-conformance.md`            |
+| P6-B Windows resource provider| `docs/blueprints/hardware-utils/phase-6-windows-resource-provider.md`          | conformance check and manual review                              | `docs/audits/hardware-utils/phase-6-windows-resource-provider-conformance.md`          |
+| P6-C Windows affinity & native| `docs/blueprints/hardware-utils/phase-6-windows-affinity-native.md`           | conformance check and manual review                              | `docs/audits/hardware-utils/phase-6-windows-affinity-native-conformance.md`           |
 | P7                            | `docs/blueprints/hardware-utils/phase-7-macos-platform.md`                    | conformance/manual review                                        | `docs/audits/hardware-utils/phase-7-macos-platform-conformance.md`                    |
 | P8                            | `docs/blueprints/hardware-utils/phase-8-control-plane-integration-release.md` | conformance/manual review                                        | `docs/audits/hardware-utils/phase-8-control-plane-integration-release-conformance.md` |
 
@@ -2815,7 +2818,7 @@ The sizing gate rejected one P5 root implementation context. Do not create `hard
 
 ### P6 - Windows processor-group and resource parity
 
-#### P6 blueprint prompt
+#### P6 parent blueprint prompt
 
 **Model: `gpt-5.6-sol`; reasoning effort: `max`.**
 
@@ -2867,74 +2870,120 @@ The sizing gate rejected one P5 root implementation context. Do not create `hard
 > API-fallback, initialization, buffer, or import decision. Do not start implementation before
 > merge.
 
-#### P6 implementation prompt - PROVISIONAL, DO NOT RUN
+#### P6 developer-review summary
 
-**Provisional model: `gpt-5.6-sol`; provisional reasoning effort: `high`. The P6 blueprint must
-replace this selection and prompt body before implementation.**
+- Purpose: Deliver GLPIEx topology parsing, multi-group processor mapping, Job Object quota and memory tracking, multi-group thread affinity with lease restoration, VLA-free native code, and PE ABI hardening for Windows 10/11 platforms.
+- Ownership: `io.euhedral_execution.hardware_utils.windows.*` (Java), `src/main/native/windows/*` (C++), `native-products.json` (Manifest).
+- Key contracts: Exact GLPIEx structure offsets; bijective `(group, processor)` to logical ID mapping; `CpuRate / 10000.0` quota scaling; `WorkingSetSize - PrivateUsage` underflow protection; deterministic multi-group affinity rejection (`false`); timer resolution shutdown hook cleanup; zero VLAs in C++; PE ABI hardening without C++ runtimes.
+- Child Action Items: P6-A (Topology & GLPIEx), P6-B (Resources & Job Objects), P6-C (Affinity & PE ABI).
+- Selected Model: `gpt-5.6-sol` with `high` reasoning effort for all implementation and audit action items.
+- Principal Risks: Win32 structure alignment across 64-bit boundaries; processor group mask bit 63 signed shift bugs; legacy cycle count time division; VLA stack allocations in JNI.
+- Unresolved Items: None. GLPIEx offsets, group mapping, units, underflow bounds, affinity fallbacks, timer hooks, PE floors, and CRT policies are fully settled.
 
-> After the P6 blueprint child is reviewed and merged, start
-> `hardware-utils-overhaul/phase-6-windows-implementation` from the P6 root. The parent artifact
-> is `docs/blueprints/hardware-utils/phase-6-windows-platform.md`. Ownership is limited to its
-> Windows Java/native/fixture/test/manifest/CI context envelope. Inspect `git status --short`.
-> Read `AGENTS.md`, `docs/AGENT_WORKFLOW.md`, the plan's completed P0-P5 phase artifact index
-> entries and closeout summaries, the parent blueprint, and only its bounded Windows context.
-> Confirm this prompt is finalized.
->
-> Implement the approved Windows topology parser/provider, processor-group mapping, affinity,
-> resource/capacity signals, timer/native safety, fixtures/tests, and named manifest/CI metadata.
-> Do not redesign shared pressure, touch Linux/macOS/core, use private APIs, or access training.
-> Allowed edits are blueprint-owned implementation/tests/configuration, the completion record, and
-> the compact temporary P6 phase-status block in `AGENTS.md`; no other `AGENTS.md` content may
-> change.
->
-> Run GLPIEx one/multi-group/bit63/>64/malformed fixtures, common provider contracts, affinity and
-> mask-shape/partial-success/native buffer/race tests, x86-64 and ARM64 PE gates, Windows x86-64
-> runtime smoke, and ARM64 smoke where available. Stop on an unstated structure/API/runtime
-> decision; otherwise append completion notes with changed files, commands, results,
-> acceptance-criteria evidence, approved deviations, and environmental limits. Add/update the
-> temporary `AGENTS.md` block with the completed P5 root, active P6 root, completed blueprint
-> child, active implementation child, and blueprint/completion links.
->
-> The output artifact is the implemented Windows platform layer plus its completion record
-> appended to `docs/blueprints/hardware-utils/phase-6-windows-platform.md`.
->
-> Handoff only when Windows loads normally, topology and global IDs are complete, counters use
-> canonical units, multi-group affinity reports correctly, older documented fallbacks work, and
-> runtime/import gates are evidenced; an unavailable minimum-family runtime remains an explicit
-> release-blocking `unverified` item. Merge this child into the P6 root before validation.
+#### P6-A Windows topology model blueprint prompt
 
-#### P6 conformance audit prompt
+**Model: `gpt-5.6-sol`; reasoning effort: `max`.**
+
+> After P6 parent blueprint child is reviewed and merged, create
+> `hardware-utils-overhaul/phase-6-windows-topology-blueprint` from the updated P6 root. The parent
+> artifact is `docs/blueprints/hardware-utils/phase-6-windows-platform.md`. Read parent P6-A context
+> envelope, P2 topology model, `WindowsSystemLayout`, `win32.*` parsers, GLPIEx fixtures.
+>
+> Write `docs/blueprints/hardware-utils/phase-6-windows-topology-model.md`. Translate parent contract
+> into implementation checklist: exact GLPIEx structure offset parsing (`SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX`,
+> `PROCESSOR_RELATIONSHIP`, `CACHE_RELATIONSHIP`, `GROUP_AFFINITY`), bit 63 KAFFINITY mask math, bijective
+> `(group, processor)` to Euhedral logical ID mapping (`group * 64 + processor`), P/E core classification via
+> `EfficiencyClass`, SMT detection, cache domain BitSet masks spanning multi-group logical IDs, and malformed buffer error handling.
+>
+> Reapply sizing/model gates and confirm `gpt-5.6-sol`/`high` implementation model. Edit planning docs only. Handoff for review and merge into the P6 root before creating P6-A implementation.
+
+#### P6-A Windows topology model implementation prompt
+
+**Child-confirmed model: `gpt-5.6-sol`; reasoning effort: `high`.**
+
+> After P6-A blueprint is reviewed and merged, create
+> `hardware-utils-overhaul/phase-6-windows-topology-implementation` from the updated P6 root. Read
+> finalized P6-A blueprint and context envelope.
+>
+> Implement `WindowsSystemLayout`, `win32.*` parsers, GLPIEx record offset parser, bit 63 mask math,
+> global logical ID mapping, and multi-group cache domains. Append completion record to P6-A blueprint and update status block.
+>
+> Run GLPIEx single-group, multi-group, >64 CPU, bit 63, and malformed buffer fixtures. Merge implementation before its audit.
+
+#### P6-B Windows resource provider blueprint prompt
+
+**Model: `gpt-5.6-sol`; reasoning effort: `max`.**
+
+> After P6-A audit is reviewed and merged, create
+> `hardware-utils-overhaul/phase-6-windows-resources-blueprint` from the updated P6 root. The parent
+> artifact is `docs/blueprints/hardware-utils/phase-6-windows-platform.md`. Read parent P6-B context
+> envelope, P4 sampling contract, `WindowsResources`, Win32 job object APIs.
+>
+> Write `docs/blueprints/hardware-utils/phase-6-windows-resource-provider.md`. Translate parent contract
+> into implementation checklist: Job Object CPU rate control (`CpuRate / 10000.0` quota scaling), effective quota CPUs
+> (`quotaFraction * availableCpus`), process working set underflow protection (`Math.max(0L, WorkingSetSize - PrivateUsage)`),
+> `GetProcessTimes` 100-ns to nanosecond conversion (`* 100L`), `QueryIdleProcessorCycleTime` idle cycle delta normalization,
+> cumulative I/O bytes (`ReadTransferCount + WriteTransferCount`), and `SignalValidity` state tracking.
+>
+> Reapply sizing/model gates and confirm `gpt-5.6-sol`/`high` implementation model. Edit planning docs only. Handoff for review and merge into the P6 root before creating P6-B implementation.
+
+#### P6-B Windows resource provider implementation prompt
+
+**Child-confirmed model: `gpt-5.6-sol`; reasoning effort: `high`.**
+
+> After P6-B blueprint is reviewed and merged, create
+> `hardware-utils-overhaul/phase-6-windows-resources-implementation` from the updated P6 root. Read
+> finalized P6-B blueprint and context envelope.
+>
+> Implement `WindowsResources`, Job Object `CpuRate` quota scaling, working set underflow guard, process
+> CPU time conversion, idle cycle delta normalization, and cumulative I/O bytes. Append completion record to P6-B blueprint and update status block.
+>
+> Run Job Object quota scaling tests, working set underflow boundary tests, idle cycle delta tests, and provider contract tests. Merge implementation before its audit.
+
+#### P6-C Windows affinity & native ABI blueprint prompt
+
+**Model: `gpt-5.6-sol`; reasoning effort: `max`.**
+
+> After P6-B audit is reviewed and merged, create
+> `hardware-utils-overhaul/phase-6-windows-affinity-native-blueprint` from the updated P6 root. The parent
+> artifact is `docs/blueprints/hardware-utils/phase-6-windows-platform.md`. Read parent P6-C context
+> envelope, `WindowsAffinity`, `WindowsAffinityCalls`, `windows_affinity.cpp`, `windows_resources.cpp`, `windows_system_layout.cpp`, `windows_hardening.cpp`, `windows_jni.h`, and P1 native build graph.
+>
+> Write `docs/blueprints/hardware-utils/phase-6-windows-affinity-native.md`. Translate parent contract
+> into implementation checklist: multi-group affinity application via `SetThreadSelectedCpuSetMasks` (or `SetThreadGroupAffinity`),
+> deterministic rejection (`false`) for unrepresentable multi-group requests, original thread group affinity restoration,
+> `GetCurrentProcessorNumberEx` global ID query (`group * 64 + processor`), `NtSetTimerResolution` JNI wrapper with thread-safe `std::atomic<bool>` init and `win-timer-release` shutdown hook, complete elimination of VLAs in C++ native code (using fixed stack buffers or dynamic vector allocation), JNI array null/length checks, x86-64 (Win10/Server 2016) and ARM64 (Win11) PE ABI hardening with zero CRT/compiler runtime dependencies (`-fno-exceptions -fno-rtti`).
+>
+> Reapply sizing/model gates and confirm `gpt-5.6-sol`/`high` implementation model. Edit planning docs only. Handoff for review and merge into the P6 root before creating P6-C implementation.
+
+#### P6-C Windows affinity & native ABI implementation prompt
+
+**Child-confirmed model: `gpt-5.6-sol`; reasoning effort: `high`.**
+
+> After P6-C blueprint is reviewed and merged, create
+> `hardware-utils-overhaul/phase-6-windows-affinity-native-implementation` from the updated P6 root. Read
+> finalized P6-C blueprint and context envelope.
+>
+> Implement `WindowsAffinity`, `WindowsAffinityCalls`, `windows_affinity.cpp`, `windows_resources.cpp`, `windows_system_layout.cpp`, `windows_hardening.cpp`, `windows_jni.h`, multi-group affinity with deterministic rejection, lease restoration, `NtSetTimerResolution` shutdown hook, VLA elimination, and PE hardening. Append completion record to P6-C blueprint and update status block.
+>
+> Run affinity matrix tests, multi-group rejection tests, lease restoration tests, VLA compliance checks, PE binary import gates, and JNI load smoke tests. Merge implementation before its audit.
+
+#### P6 root conformance audit prompt
 
 **Model: `gpt-5.6-sol`; reasoning effort: `high`.**
 
-> After the P6 validation child is reviewed and merged, start
-> `hardware-utils-overhaul/phase-6-windows-audit` from the P6 root. The parent artifact is
-> `docs/validations/hardware-utils/phase-6-windows-platform-validation.md`. Ownership is limited
-> to independent conformance review and minor blueprint-settled Windows corrections. Inspect
-> `git status --short`. Read `AGENTS.md`, `docs/AGENT_WORKFLOW.md`, the P6 blueprint's summarized
-> parent context, the plan's completed P0-P5 phase artifact index entries and closeout summaries,
-> implementation diff, fixtures/binaries, completion record, and validation record. For split
-> work, consume only the audited child context plus summarized parent. Do not inspect or run
-> training.
+> After all three child audits (P6-A, P6-B, P6-C) are reviewed and merged, create
+> `hardware-utils-overhaul/phase-6-windows-audit` from the updated P6 root. The parent artifacts are
+> the P6 parent blueprint and the three indexed child blueprint/completion/conformance triples.
 >
-> Independently audit GLPIEx bounds/layout, global processor identity, >64-CPU/group behavior,
-> topology/cache/efficiency, affinity apply/current/release and no-partial-success semantics, quota
-> and counter units, capacity signals, native buffer safety/initialization, dynamic fallbacks, PE
-> ABI/import/runtime floors, real-runtime evidence, and validation sufficiency. Allowed edits are
-> `docs/audits/hardware-utils/phase-6-windows-platform-conformance.md`, completion and validation
-> records, the P6 closeout summary in this plan, the temporary phase-status block, and minor
-> blueprint-settled corrections. Rerun and record affected validation after a correction. Shared
-> redesign, other platforms, core, unrelated files, and training are prohibited.
+> Independently audit the end-to-end Windows platform provider: GLPIEx topology discovery -> Job Object/process resource metrics -> multi-group native affinity and PE ABI. Classify all Windows requirements and defect ledger items (T03, A03, R04, N01, B06) as `satisfied`, `deviated`, `unverified`, or `ambiguous`.
 >
-> The output artifacts are the audit above, updated completion record, P6 closeout summary in this
-> plan, and, after the authorized merge, removal of the temporary P6 status block on the root with
-> the resulting root commit recorded when committed. Classify every Windows portion of R01, R04,
-> R13, T03, T05, A03, N01, B06, and P6 requirement exactly as `satisfied`, `deviated`, `unverified`, or
-> `ambiguous`, with evidence. Append audit commands, results, fixes, skipped checks, and
-> environmental limits to the completion record. A material deviation returns to the exact
-> blueprint or implementation action. Handoff follows the audit/root-closeout contract: P6 is
-> complete only after the authorized merge, P6 status-block removal, and closeout-summary update;
-> do not create P7 earlier.
+> Write `docs/audits/hardware-utils/phase-6-windows-platform-conformance.md`, append the P6 closeout summary to the parent plan, remove the temporary P6 status block upon authorized merge, and record the resulting root commit. P6 is complete only after this authorized closeout; do not create P7 earlier.
+
+#### P6 closeout summary
+
+The Phase 6 Windows platform provider implementation and conformance audit are complete on `hardware-utils-overhaul/phase-6-windows` (root commit `04b0111`). The audit artifact `docs/audits/hardware-utils/phase-6-windows-platform-conformance.md` evaluates the end-to-end Windows platform provider (GLPIEx topology parsing -> Job Object/process resource metrics -> multi-group native affinity and PE ABI). All 5 Windows defect ledger items (**T03, A03, R04, N01, B06**) and all 9 core platform requirements are classified as `satisfied`. P6-A, P6-B, and P6-C child blueprints, implementations, and audits are fully integrated and verified. The developer authorized closeout; temporary P6 status block removed from `AGENTS.md`. P6 closeout authorizes Phase 7 work.
+
 
 ### P7 - public-API macOS parity with honest locality semantics
 

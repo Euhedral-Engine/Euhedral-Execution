@@ -7,29 +7,28 @@ import java.util.List;
 
 public final class CacheRelationship extends SystemLogicalProcessorInformation {
 
-    private static final byte RESERVED = 18;
+    public static CacheRelationship parse(ByteBuffer buffer, int payloadPos, int payloadLen) {
+        if (payloadLen < 32) {
+            throw new IllegalArgumentException(
+                    "Malformed CacheRelationship payload length: " + payloadLen);
+        }
+        byte level = buffer.get(payloadPos);
+        byte associativity = buffer.get(payloadPos + 1);
+        short lineSize = buffer.getShort(payloadPos + 2);
+        int cacheSizeBytes = buffer.getInt(payloadPos + 4);
+        int type = buffer.getInt(payloadPos + 8);
+        int groupCount = Short.toUnsignedInt(buffer.getShort(payloadPos + 30));
 
-    public static CacheRelationship parse(ByteBuffer buffer, int pos) {
-        pos += 8 + HEADER; // 8 to skip relationship and size
-
-        byte level = buffer.get(pos);
-        pos++;
-        byte associativity = buffer.get(pos);
-        pos++;
-        short lineSize = buffer.getShort(pos);
-        pos += Short.BYTES;
-        int cacheSizeBytes = buffer.getInt(pos);
-        pos += Integer.BYTES;
-        int type = buffer.getInt(pos);
-        pos += Integer.BYTES + RESERVED;
-
-        short groupCount = buffer.getShort(pos);
-        pos += Short.BYTES;
+        if (payloadLen < 32 + groupCount * 16) {
+            throw new IllegalArgumentException("Malformed CacheRelationship payload length "
+                    + payloadLen + " for groupCount " + groupCount);
+        }
 
         List<GroupAffinity> groupAffinities = new ArrayList<>(groupCount);
-        for (short i = 0; i < groupCount; i++) {
-            groupAffinities.add(GroupAffinity.parse(buffer, pos));
-            pos += 16;
+        int groupPos = payloadPos + 32;
+        for (int i = 0; i < groupCount; i++) {
+            groupAffinities.add(GroupAffinity.parse(buffer, groupPos));
+            groupPos += 16;
         }
 
         return new CacheRelationship(level, associativity, lineSize, cacheSizeBytes, CacheType.from(type),
