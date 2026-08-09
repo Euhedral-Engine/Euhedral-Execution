@@ -311,7 +311,9 @@ Before handing work back:
 4. Inspect `git status --short` and confirm only intended files changed.
 5. Report tests that could not run and the exact environmental reason.
 
-## Temporary hardware-utils overhaul status (P4)
+## Temporary hardware-utils overhaul status (P5)
 
-- P0-P3 are complete.
-- P4 is in progress. The P4 parent blueprint, P4-A blueprint, and P4-B blueprint are merged. P4-A and P4-B implementations are complete and ready for review. P4-C blueprint and implementation are complete and ready for review. Do not create P4-D blueprint until P4-C merges.
+- P0-P4 are complete.
+- P5 is in progress. P5-A blueprint, implementation, and conformance audit are complete.
+- P5-B blueprint and implementation are complete ([`phase-5-linux-resource-provider.md`](docs/blueprints/hardware-utils/phase-5-linux-resource-provider.md)); conformance audit pending.
+- P5-C blueprint and implementation are complete ([`phase-5-linux-affinity-native.md`](docs/blueprints/hardware-utils/phase-5-linux-affinity-native.md)); conformance audit pending.

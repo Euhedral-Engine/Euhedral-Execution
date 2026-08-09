@@ -12,4 +12,9 @@ module euhedral.hardware_utils {
     exports io.euhedral_execution.hardware_utils.linux;
     exports io.euhedral_execution.hardware_utils.osx;
     exports io.euhedral_execution.hardware_utils.windows;
+    exports io.euhedral_execution.hardware_utils.internal.sampling;
+    exports io.euhedral_execution.hardware_utils.internal.sampling.enums;
+    exports io.euhedral_execution.hardware_utils.internal.sampling.primitives;
+    exports io.euhedral_execution.hardware_utils.internal.sampling.samples;
+    exports io.euhedral_execution.hardware_utils.internal.sampling.signals;
 }

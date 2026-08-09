@@ -6,7 +6,7 @@ import io.euhedral_execution.hardware_utils.SystemInfo.CpuInfo;
 import io.euhedral_execution.hardware_utils.SystemInfo.SocketInfo;
 import io.euhedral_execution.hardware_utils.common.OSName;
 import io.euhedral_execution.hardware_utils.common.SystemSnapshotProvider;
-import io.euhedral_execution.hardware_utils.linux.CgroupV2Resources;
+import io.euhedral_execution.hardware_utils.linux.LinuxResourceProvider;
 import io.euhedral_execution.hardware_utils.osx.OSXResources;
 import io.euhedral_execution.hardware_utils.windows.WindowsResources;
 import java.util.ArrayList;
@@ -51,7 +51,7 @@ public final class TopologyBootstrap {
     public static SystemSnapshotProvider resources(Logger logger) {
         try {
             if (OSName.isLinux()) {
-                return new CgroupV2Resources();
+                return new LinuxResourceProvider();
             }
             if (OSName.isWindows()) {
                 return WindowsResources.INSTANCE;
