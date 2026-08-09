@@ -242,19 +242,19 @@ public final class ScenarioModelTrainer {
         ArrayList<OrdinalMember> productionMembers = new ArrayList<>();
         ArrayList<ScenarioOrdinalNetwork.TrainingResult> productionResults = new ArrayList<>();
         try {
-            for (int memberIndex = 0; memberIndex < config.ensembleMembers(); memberIndex++) {
-                LOGGER.info("Training production model member {}/{}", memberIndex + 1, config.ensembleMembers());
-                Path memberDirectory = directory.resolve("members").resolve("member-%03d".formatted(memberIndex));
-                ScenarioOrdinalNetwork.TrainingResult result = ScenarioOrdinalNetwork.train(
-                        training,
-                        validation,
-                        selectedFeatureSet,
-                        config,
-                        device,
-                        "PRODUCTION",
-                        "all",
-                        memberIndex,
-                        memberDirectory);
+            LOGGER.info("Training {} production model members", config.ensembleMembers());
+            List<ScenarioOrdinalNetwork.TrainingResult> trainedMembers = ScenarioOrdinalNetwork.trainMembers(
+                    training,
+                    validation,
+                    selectedFeatureSet,
+                    config,
+                    device,
+                    "PRODUCTION",
+                    "all",
+                    config.ensembleMembers(),
+                    directory.resolve("members"));
+            for (int memberIndex = 0; memberIndex < trainedMembers.size(); memberIndex++) {
+                ScenarioOrdinalNetwork.TrainingResult result = trainedMembers.get(memberIndex);
                 productionResults.add(result);
                 productionMembers.add(result.member());
                 history.addAll(result.history());

@@ -13,6 +13,7 @@ import io.euhedral_execution.training.learning.metadata.FeatureNormalizer;
 import io.euhedral_execution.training.learning.metadata.MemberMetadata;
 import io.euhedral_execution.training.learning.utils.ScenarioFeatureEncoder;
 import io.euhedral_execution.training.learning.utils.ScenarioOrdinalTargets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import org.junit.jupiter.api.Assumptions;
@@ -80,5 +81,44 @@ class ScenarioOrdinalNetworkIntegrationTest {
                         TrainingDevice.cpu()))
                 .isInstanceOf(java.io.IOException.class)
                 .hasMessageContaining("Failed to load");
+    }
+
+    @Test
+    void trainsEnsembleMembersInParallelTensorFlowSessions() throws Exception {
+        Assumptions.assumeTrue(
+                Boolean.getBoolean("training.tensorflowIntegration"),
+                "Enable with -Dtraining.tensorflowIntegration=true");
+        List<ScenarioLearningRow> rows = learningRows();
+        List<ScenarioLearningRow> fitting =
+                rows.stream().filter(row -> row.policy().weight(0) < 0.75).toList();
+        List<ScenarioLearningRow> validation =
+                rows.stream().filter(row -> row.policy().weight(0) >= 0.75).toList();
+        FeatureNormalizer normalizer = FeatureNormalizer.fit(fitting, ScenarioFeatureSet.RATIO_ONLY);
+        ScenarioLearningMatrix fittingMatrix = ScenarioFeatureEncoder.matrix(fitting, scenarios(), normalizer);
+        ScenarioLearningMatrix validationMatrix = ScenarioFeatureEncoder.matrix(validation, scenarios(), normalizer);
+        ScenarioTrainingConfig config = ScenarioTrainingConfig.forTest(1, 2, FeatureSelectionMode.RATIO_ONLY);
+
+        List<ScenarioOrdinalNetwork.TrainingResult> results = ScenarioOrdinalNetwork.trainMembers(
+                fittingMatrix,
+                validationMatrix,
+                ScenarioFeatureSet.RATIO_ONLY,
+                config,
+                TrainingDevice.cpu(),
+                "PRODUCTION",
+                "all",
+                3,
+                temporary.resolve("ensemble"));
+        try {
+            assertThat(results).hasSize(3);
+            for (int index = 0; index < results.size(); index++) {
+                assertThat(Files.isRegularFile(temporary
+                                .resolve("ensemble")
+                                .resolve("member-%03d".formatted(index))
+                                .resolve("euhedral-scenario-ordinal.index")))
+                        .isTrue();
+            }
+        } finally {
+            results.forEach(result -> result.member().close());
+        }
     }
 }

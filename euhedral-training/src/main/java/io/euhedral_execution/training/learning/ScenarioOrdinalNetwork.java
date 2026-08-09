@@ -20,7 +20,6 @@ import java.util.List;
 final class ScenarioOrdinalNetwork implements OrdinalMember {
 
     static final String ENGINE_NAME = "TensorFlow";
-    private static final Object TRAINING_MONITOR = new Object();
 
     static TrainingDevice resolveDevice(String requested) {
         return TrainingDevice.resolve(requested);
@@ -52,24 +51,43 @@ final class ScenarioOrdinalNetwork implements OrdinalMember {
             Path memberDirectory)
             throws Exception {
         long memberSeed = ScenarioMemberSeeds.derive(config.modelSeed(), trainingKind, featureSet, foldId, memberIndex);
-        synchronized (TRAINING_MONITOR) {
-            ScenarioOrdinalNetwork network = new ScenarioOrdinalNetwork(featureSet.width(), device);
-            try {
-                return network.fit(
+        return fit(
+                fitting,
+                validation,
+                featureSet,
+                config,
+                device,
+                trainingKind,
+                foldId,
+                memberIndex,
+                memberSeed,
+                memberDirectory);
+    }
+
+    static List<TrainingResult> trainMembers(
+            ScenarioLearningMatrix fitting,
+            ScenarioLearningMatrix validation,
+            ScenarioFeatureSet featureSet,
+            ScenarioTrainingConfig config,
+            TrainingDevice device,
+            String trainingKind,
+            String foldId,
+            int memberCount,
+            Path directory)
+            throws Exception {
+        return ParallelTrainer.run(
+                memberCount,
+                memberIndex -> train(
                         fitting,
                         validation,
                         featureSet,
                         config,
+                        device,
                         trainingKind,
                         foldId,
                         memberIndex,
-                        memberSeed,
-                        memberDirectory);
-            } catch (Throwable error) {
-                network.close();
-                throw error;
-            }
-        }
+                        directory.resolve("member-%03d".formatted(memberIndex))),
+                result -> result.member().close());
     }
 
     private final int featureWidth;
@@ -83,20 +101,20 @@ final class ScenarioOrdinalNetwork implements OrdinalMember {
         this.tfNetwork = new TensorFlowNetwork(featureWidth, device);
     }
 
-    private TrainingResult fit(
+    private static TrainingResult fit(
             ScenarioLearningMatrix fitting,
             ScenarioLearningMatrix validation,
             ScenarioFeatureSet featureSet,
             ScenarioTrainingConfig config,
+            TrainingDevice device,
             String trainingKind,
             String foldId,
             int memberIndex,
             long memberSeed,
             Path memberDirectory)
             throws Exception {
-        if (fitting.featureWidth() != featureWidth
-                || validation.featureWidth() != featureWidth
-                || featureSet.width() != featureWidth) {
+        int featureWidth = featureSet.width();
+        if (fitting.featureWidth() != featureWidth || validation.featureWidth() != featureWidth) {
             throw new IllegalArgumentException("Feature widths disagree");
         }
         Files.createDirectories(memberDirectory);
@@ -175,7 +193,7 @@ final class ScenarioOrdinalNetwork implements OrdinalMember {
                     bestBce = bce;
                     bestEpoch = epoch;
                     staleEpochs = 0;
-                    save(trainerNetwork, memberDirectory, featureSet, memberIndex, memberSeed);
+                    save(trainerNetwork, memberDirectory, featureSet, featureWidth, memberIndex, memberSeed);
                 } else if (++staleEpochs >= config.patience()) {
                     break;
                 }
@@ -185,7 +203,6 @@ final class ScenarioOrdinalNetwork implements OrdinalMember {
         if (bestEpoch < 0) {
             throw new IllegalStateException("No model epoch was selected");
         }
-        close();
         ScenarioOrdinalNetwork best = load(
                 memberDirectory,
                 featureSet,
@@ -209,15 +226,20 @@ final class ScenarioOrdinalNetwork implements OrdinalMember {
         return new TrainingResult(best, memberSeed, bestEpoch, List.copyOf(selectedHistory));
     }
 
-    private float[] evaluate(TensorFlowNetwork network, ScenarioLearningMatrix matrix) {
+    private static float[] evaluate(TensorFlowNetwork network, ScenarioLearningMatrix matrix) {
         float[] features = matrix.features();
         float[] logits = new float[matrix.rows() * 9];
         network.predictLogits(features, matrix.rows(), logits);
         return logits;
     }
 
-    private void save(
-            TensorFlowNetwork network, Path directory, ScenarioFeatureSet featureSet, int memberIndex, long memberSeed)
+    private static void save(
+            TensorFlowNetwork network,
+            Path directory,
+            ScenarioFeatureSet featureSet,
+            int featureWidth,
+            int memberIndex,
+            long memberSeed)
             throws IOException {
         network.setProperty("Epoch", "0");
         network.setProperty("artifact_type", ScenarioModelMetadata.ARTIFACT_TYPE);

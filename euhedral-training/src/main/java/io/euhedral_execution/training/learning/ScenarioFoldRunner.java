@@ -46,18 +46,9 @@ final class ScenarioFoldRunner {
         ArrayList<OrdinalMember> members = new ArrayList<>(memberCount);
         ArrayList<TrainingHistoryEntry> history = new ArrayList<>();
         try {
-            for (int memberIndex = 0; memberIndex < memberCount; memberIndex++) {
-                Path memberDirectory = directory.resolve("member-%03d".formatted(memberIndex));
-                ScenarioOrdinalNetwork.TrainingResult trained = ScenarioOrdinalNetwork.train(
-                        fitting,
-                        validation,
-                        featureSet,
-                        config,
-                        device,
-                        trainingKind,
-                        foldId,
-                        memberIndex,
-                        memberDirectory);
+            List<ScenarioOrdinalNetwork.TrainingResult> trainedMembers = ScenarioOrdinalNetwork.trainMembers(
+                    fitting, validation, featureSet, config, device, trainingKind, foldId, memberCount, directory);
+            for (ScenarioOrdinalNetwork.TrainingResult trained : trainedMembers) {
                 members.add(trained.member());
                 history.addAll(trained.history());
             }
