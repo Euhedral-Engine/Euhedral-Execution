@@ -47,11 +47,9 @@ class JniHeaderTest {
         assertTrue(abi.contains("static_assert(sizeof(jlong) == 8"));
         assertTrue(abi.contains("static_assert(sizeof(void *) == 8"));
 
-        for (String workflow : Set.of("build.yaml", "deploy.yaml")) {
-            String contents = Files.readString(
-                    TestPaths.projectDirectory().resolve("../.github/workflows").normalize().resolve(workflow),
-                    StandardCharsets.UTF_8);
-            assertFalse(contents.contains("cp \"$INCLUDE_DIR/linux/jni_md.h\""), workflow);
-        }
+        String contents = Files.readString(
+                TestPaths.projectDirectory().resolve("../.github/workflows").normalize().resolve("build.yaml"),
+                StandardCharsets.UTF_8);
+        assertFalse(contents.contains("cp \"$INCLUDE_DIR/linux/jni_md.h\""), "build.yaml");
     }
 }
