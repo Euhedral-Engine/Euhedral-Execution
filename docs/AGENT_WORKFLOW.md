@@ -149,15 +149,24 @@ Before selecting the implementation model, evaluate every drafted blueprint:
 If any answer shows that the scope exceeds what a non-frontier implementation agent can reasonably
 execute, split the blueprint into child blueprints before handoff. Give each child a bounded
 responsibility, package ownership, inputs and outputs, acceptance criteria, and
-conformance/manual-review action
-item. Update the phase's subsequent prompts, branch lineage, parent blueprint, and plan so they
-address the children rather than the oversized parent; then re-run this gate for every child. A
+conformance/manual-review action item. Update the phase's subsequent prompts, branch lineage,
+parent blueprint, and plan so they address the children rather than the oversized parent; then
+re-run this gate for every child. A
 blueprint that cannot be split further is an exception and must explain why its coupling is
 irreducible.
 
-Conformance and audit action items for a child consume only its context envelope and summarized
-parent context. They should require no frontier reasoning unless the child is demonstrably
-irreducible or reveals a new unsettled architectural decision.
+An explicit developer instruction may instead authorize one integrated conformance/manual-review
+action after all child implementations for a named phase. Record that exception in the parent
+blueprint, plan rules, branch lineage, artifact index, and every downstream prompt. Child
+blueprints and implementations must still be sequentially reviewed and merged, each implementation
+must run and record its owned tests, and the final conformance action must classify every child and
+parent acceptance criterion. Do not create intermediate validation/conformance/audit branches or
+artifacts for such a phase. Without that explicit recorded authorization, the per-child rule above
+remains the default.
+
+When the per-child rule applies, conformance and audit action items consume only the child's
+context envelope and summarized parent context. They should require no frontier reasoning unless
+the child is demonstrably irreducible or reveals a new unsettled architectural decision.
 
 On creation, append a concise developer-review summary to the parent plan or phase record:
 purpose, package boundaries, key contracts, child work units, selected implementation capability,

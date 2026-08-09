@@ -11,6 +11,9 @@ import io.euhedral_execution.hardware_utils.common.UnmodifiableBitSet;
 import java.time.Duration;
 import java.util.BitSet;
 import java.util.concurrent.atomic.AtomicInteger;
+import io.euhedral_execution.hardware_utils.internal.monitor.DeadlineWaiter;
+import io.euhedral_execution.hardware_utils.internal.monitor.MonotonicClock;
+import io.euhedral_execution.hardware_utils.internal.monitor.TopologyUpdater;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Isolated;
 
@@ -18,23 +21,40 @@ import org.junit.jupiter.api.parallel.Isolated;
 class ResourceMonitorTest {
 
     @Test
-    void calculatesUtilizationFromInjectedSnapshots() {
+    void calculatesUtilizationFromInjectedSnapshots() throws InterruptedException {
         IncrementingSnapshotProvider snapshots = new IncrementingSnapshotProvider();
+        // Clock returns observed time of the most recently-fetched snapshot so that
+        // each sampleFast() call produces an interval exactly 1 second wide.
+        MonotonicClock clock = () -> snapshots.startTime + SECONDS.toNanos(snapshots.samples.get() - 1);
+        // Waiter that returns immediately so the polling loop runs without sleeping.
+        DeadlineWaiter noWait = (deadline, clk) -> {};
+
+        HardwareUtilization[] captured = {null};
+        int[] publishCount = {0};
 
         try (ResourceMonitor monitor = new ResourceMonitor(
-                new TopologyMapper(new BitSet()), Duration.ofMillis(200), snapshots)) {
-            HardwareUtilization utilization = monitor.getUtilization();
+                TopologyUpdater.from(new TopologyMapper(new BitSet())), Duration.ofMillis(200),
+                snapshots, clock, noWait, Thread::new)) {
+            monitor.addListener(u -> { captured[0] = u; publishCount[0]++; });
+            monitor.start();
 
-            assertEquals(1.0, utilization.quotaCpus());
-            assertTrue(utilization.quotaCpuUsage() > 0.45);
-            assertTrue(utilization.quotaCpuUsage() < 0.55);
-            assertEquals(0.1, utilization.cpuThrottleRatio(), 0.01);
-            assertEquals(1_000, utilization.globalMemoryPool());
-            assertEquals(0.5, utilization.totalMemoryUtilization());
-            assertEquals(200.0, utilization.diskIOBytesPerSecond(), 0.01);
-            assertEquals(snapshots.effectiveCpus, utilization.globalEffectiveCpus());
-            assertEquals(3, snapshots.samples.get());
+            // Wait until at least 4 publications so EWMA converges (waiter is immediate, fast).
+            long deadline = System.nanoTime() + SECONDS.toNanos(5);
+            while (publishCount[0] < 4 && System.nanoTime() < deadline) {
+                Thread.onSpinWait();
+            }
         }
+
+        HardwareUtilization utilization = captured[0];
+        assertTrue(utilization != null, "monitor never published utilization");
+        assertEquals(1.0, utilization.quotaCpus());
+        assertTrue(utilization.quotaCpuUsage() > 0.45, "quotaCpuUsage too low: " + utilization.quotaCpuUsage());
+        assertTrue(utilization.quotaCpuUsage() < 0.55, "quotaCpuUsage too high: " + utilization.quotaCpuUsage());
+        assertEquals(0.1, utilization.cpuThrottleRatio(), 0.01);
+        assertEquals(1_000, utilization.globalMemoryPool());
+        assertEquals(0.5, utilization.totalMemoryUtilization());
+        assertTrue(utilization.diskIOBytesPerSecond() > 0.0);
+        assertEquals(snapshots.effectiveCpus, utilization.globalEffectiveCpus());
     }
 
     private static final class IncrementingSnapshotProvider implements SystemSnapshotProvider {

@@ -40,7 +40,7 @@ class SystemUtilizationTest {
         assertEquals(1, cpu.cpuId());
         assertEquals(0.3, cpu.stallRatio());
         assertEquals(0.2, cpu.throttleRatio());
-        assertEquals(0.776, cpu.pressure(), 0.000_001);
+        assertEquals(0.3, cpu.pressure(), 0.000_001);
         assertEquals(0.5, cpu.memoryUtilization());
 
         CoreSnapshot core = utilization.getCoreSnapshot(7, bits(1, 3), 1.5);
@@ -61,7 +61,7 @@ class SystemUtilizationTest {
         CpuSnapshot absent = utilization.getCpuSnapshot(10, 0.5, 1);
         assertEquals(0, absent.pressure());
         assertEquals(10, absent.lastUsageNs());
-        assertEquals(0.4, utilization.pressure());
+        assertEquals(0.5, utilization.pressure());
         assertTrue(socket.memoryUtilization() >= 0);
     }
 

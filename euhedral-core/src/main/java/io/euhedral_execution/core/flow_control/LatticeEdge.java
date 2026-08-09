@@ -31,7 +31,7 @@ import org.slf4j.LoggerFactory;
 /// When another `LatticeEdge` is connected, it becomes part of the same chain, effectively
 /// extending the execution topology. When an `UpstreamHandle` is added, it is propagated upward
 /// through the graph. When a `LatticeReceiver` is attached, it becomes the execution boundary (the
-/// “floor”) of that branch.
+/// "floor") of that branch.
 ///
 /// Work flows downward through the graph toward receivers, while demand and backpressure flow
 /// upward toward upstream sources. The structure is designed to continuously reconcile both

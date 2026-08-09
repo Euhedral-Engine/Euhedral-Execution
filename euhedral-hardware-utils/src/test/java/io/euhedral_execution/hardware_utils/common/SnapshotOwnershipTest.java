@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.euhedral_execution.hardware_utils.common.SystemUtilization.CoreSnapshot;
 import io.euhedral_execution.hardware_utils.common.SystemUtilization.CpuSnapshot;
+import io.euhedral_execution.hardware_utils.common.SystemUtilization.HardwareUtilization;
 import io.euhedral_execution.hardware_utils.common.SystemUtilization.SocketSnapshot;
 import io.euhedral_execution.hardware_utils.common.SystemUtilization.SystemSnapshot;
 import java.util.BitSet;
@@ -59,5 +60,41 @@ class SnapshotOwnershipTest {
 
         assertThrows(NullPointerException.class, () -> new CoreSnapshot(0, 0, 0, 0,
                 0, 0, 0, 0, null, new CpuSnapshot[0]));
+    }
+
+    @Test
+    void validatesAndSanitizesRatioFields() {
+        double[] pressures = {Double.NaN, -0.5, 1.5, -0.0};
+        SystemSnapshot snapshot = SystemSnapshot.create(1, 4, 1, 1, -10, -5,
+                bits(0, 1, 2, 3), pressures, new long[]{-10, -5, -1}, -20);
+
+        assertEquals(0, snapshot.cpuUsage());
+        assertEquals(0, snapshot.cpuThrottle());
+        assertEquals(0, snapshot.memoryUsage());
+        assertEquals(0, snapshot.inactiveFileMemory());
+        assertEquals(0, snapshot.diskIOBytes());
+        assertEquals(Long.MAX_VALUE, snapshot.memoryLimit());
+
+        assertEquals(0.0, snapshot.pressurePerCpu().get(0));
+        assertEquals(0.0, snapshot.pressurePerCpu().get(1));
+        assertEquals(1.0, snapshot.pressurePerCpu().get(2));
+        assertEquals(0.0, snapshot.pressurePerCpu().get(3)); // -0.0 -> +0.0
+        assertEquals(Double.doubleToRawLongBits(+0.0),
+                Double.doubleToRawLongBits(snapshot.pressurePerCpu().get(3)));
+
+        HardwareUtilization util = HardwareUtilization.create(
+                1, 1, Double.NaN, 1, bits(0, 1, 2, 3), -0.0,
+                pressures, pressures, -10, -5, 1.5, -2, -0.5, Double.NaN, snapshot);
+
+        assertEquals(0.0, util.quotaCpuUsage());
+        assertEquals(0.0, util.cpuThrottleRatio());
+        assertEquals(1.0, util.totalMemoryUtilization());
+        assertEquals(0.0, util.diskIOPressure());
+        assertEquals(0.0, util.diskIOBytesPerSecond());
+        assertEquals(0, util.globalMemoryPool());
+        assertEquals(0, util.perCpuMemoryPool());
+        assertEquals(0, util.memPerCpuUsageBytes());
+        assertEquals(0.0, util.perQuotaCpuThrottleRatio().get(0));
+        assertEquals(1.0, util.perQuotaCpuPressure().get(2));
     }
 }

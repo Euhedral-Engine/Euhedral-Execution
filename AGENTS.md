@@ -18,6 +18,7 @@ Most performance and correctness constraints follow from that shape.
 4. Use the repository toolchain from [`mise.toml`](mise.toml).
 5. Do not commit, push, delete user data, or rewrite unrelated files unless the task explicitly asks
    for it.
+6. Read [AGENT_WORKFLOW.md](docs/AGENT_WORKFLOW.md)
 
 Several directories under `euhedral-training/input`, `euhedral-training/output`, and `data` may
 contain expensive local runs. Treat them as user-owned even when they are untracked.
@@ -310,13 +311,7 @@ Before handing work back:
 4. Inspect `git status --short` and confirm only intended files changed.
 5. Report tests that could not run and the exact environmental reason.
 
-## Temporary hardware-utils overhaul status (P3)
+## Temporary hardware-utils overhaul status (P4)
 
-- P0-P2 and both P3 children are complete. The P3-A implementation/audit merged at `2027a47b`;
-  the P3-B implementation/audit merged at `d6389711` on
-  `hardware-utils-overhaul/phase-3-affinity-executor`.
-- The combined root audit is review-ready on
-  `hardware-utils-overhaul/phase-3-affinity-executor-audit`:
-  `docs/audits/hardware-utils/phase-3-affinity-executor-lifecycle-conformance.md` classifies all
-  16 parent criteria plus A01-A02 as satisfied. P3 remains incomplete pending explicit audit
-  merge/closeout authorization; do not create P4.
+- P0-P3 are complete.
+- P4 is in progress. The P4 parent blueprint, P4-A blueprint, and P4-B blueprint are merged. P4-A and P4-B implementations are complete and ready for review. P4-C blueprint and implementation are complete and ready for review. Do not create P4-D blueprint until P4-C merges.
