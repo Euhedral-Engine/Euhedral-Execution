@@ -178,7 +178,14 @@ public final class ClosedLoopRunner {
                         && !shouldContinueRejectedSeedModel(effectiveConfig, current.checkpoint())) {
                     return result(current, new TreeSet<>());
                 }
-                current = switch (current.checkpoint().stage()) {
+                CheckpointStage stage = current.checkpoint().stage();
+                long stageStarted = System.nanoTime();
+                LOGGER.info(
+                        "Starting closed-loop stage: stage={}, revision={}, iteration={}",
+                        stage,
+                        current.checkpoint().revision(),
+                        current.checkpoint().nextIteration());
+                current = switch (stage) {
                     case READY_TO_TRAIN -> train(effectiveConfig, services, current);
                     case MODEL_READY, MODEL_REJECTED -> schedule(effectiveConfig, services, current);
                     case SCHEDULE_READY ->
@@ -189,6 +196,12 @@ public final class ClosedLoopRunner {
                         throw new IllegalStateException("Unexpected closed-loop stage "
                                 + current.checkpoint().stage());
                 };
+                LOGGER.info(
+                        "Finished closed-loop stage: from={}, to={}, revision={}, elapsedMs={}",
+                        stage,
+                        current.checkpoint().stage(),
+                        current.checkpoint().revision(),
+                        elapsedMillis(stageStarted));
             }
             return result(current, new TreeSet<>());
         } catch (InitializationFailure failure) {
@@ -583,6 +596,7 @@ public final class ClosedLoopRunner {
 
     private static LoadedCheckpoint schedule(
             ClosedLoopConfig config, ClosedLoopServices services, LoadedCheckpoint loaded) throws Exception {
+        long scheduleStarted = System.nanoTime();
         ClosedLoopCheckpoint checkpoint = loaded.checkpoint();
         int iteration = checkpoint.nextIteration();
         Path modelDirectory =
@@ -615,6 +629,7 @@ public final class ClosedLoopRunner {
         OptimizationCorpusView corpus = OptimizationCorpusReader.read(merge, config.requiredScenarios());
         IterationSchedule expected;
         if (!isProduction) {
+            LOGGER.info("Preparing iteration schedule with neutral predictor: iteration={}", iteration);
             PolicyCurvePredictor fallbackPredictor = neutralPredictor(config.requiredScenarios());
             var rescored = CarryForwardQueue.rescore(checkpoint.carryForward(), fallbackPredictor, iteration);
             List<SourceScenario> selected = ScenarioRotation.select(
@@ -658,8 +673,20 @@ public final class ClosedLoopRunner {
                     preparation,
                     generated);
         } else {
+            long modelLoadStarted = System.nanoTime();
+            long modelCloseStarted;
+            LOGGER.info(
+                    "Loading accepted scenario model for candidate prediction: iteration={}, "
+                            + "directory={}, members={}",
+                    iteration,
+                    modelDirectory,
+                    metadata.members().size());
             try (ScenarioConditionedModel model = services.loadAcceptedModel(
                     modelDirectory, metadata.producer().trainingDevice())) {
+                LOGGER.info(
+                        "Loaded accepted scenario model: iteration={}, elapsedMs={}",
+                        iteration,
+                        elapsedMillis(modelLoadStarted));
                 PolicyCurvePredictor predictor = policies -> policies.isEmpty()
                         ? List.of()
                         : model.predictConfiguredCurves(policies).stream()
@@ -706,7 +733,23 @@ public final class ClosedLoopRunner {
                         config.benchmarkConfig(),
                         preparation,
                         generated);
+                LOGGER.info(
+                        "Built iteration schedule in memory: iteration={}, runs={}, "
+                                + "policiesPerRun={}, elapsedMs={}",
+                        iteration,
+                        expected.runs().size(),
+                        config.candidateBudget(),
+                        elapsedMillis(scheduleStarted));
+                modelCloseStarted = System.nanoTime();
+                LOGGER.info(
+                        "Closing accepted scenario model: iteration={}, members={}",
+                        iteration,
+                        metadata.members().size());
             }
+            LOGGER.info(
+                    "Closed accepted scenario model: iteration={}, elapsedMs={}",
+                    iteration,
+                    elapsedMillis(modelCloseStarted));
         }
         IterationSchedule iterationSchedule;
         if (Files.isRegularFile(scheduleDirectory.resolve("COMPLETE"))) {
@@ -725,7 +768,14 @@ public final class ClosedLoopRunner {
             }
             iterationSchedule = expected;
         } else {
+            long writeStarted = System.nanoTime();
+            LOGGER.info(
+                    "Writing iteration schedule: iteration={}, directory={}, runs={}",
+                    iteration,
+                    scheduleDirectory,
+                    expected.runs().size());
             ScheduleCodec.write(scheduleDirectory, expected);
+            LOGGER.info("Wrote iteration schedule: iteration={}, elapsedMs={}", iteration, elapsedMillis(writeStarted));
             iterationSchedule = expected;
         }
         ArtifactReference scheduleReference = reference(config.workspace(), scheduleDirectory);
@@ -759,6 +809,10 @@ public final class ClosedLoopRunner {
                 Optional.of(scheduleReference),
                 pending);
         return CheckpointSnapshotCodec.writeNext(config.workspace(), next);
+    }
+
+    private static long elapsedMillis(long started) {
+        return (System.nanoTime() - started) / 1_000_000L;
     }
 
     private static boolean samePersistedSchedule(IterationSchedule persisted, IterationSchedule expected) {

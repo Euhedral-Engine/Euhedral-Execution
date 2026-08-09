@@ -43,6 +43,10 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -89,8 +93,6 @@ public final class CheckpointSnapshotCodec {
             "latest_model_sha256",
             "pending_schedule_path",
             "pending_schedule_sha256");
-
-    private CheckpointSnapshotCodec() {}
 
     public static Optional<LoadedCheckpoint> loadLatest(
             Path workspace, String expectedTrainingRunId, String expectedConfigSha256) throws IOException {
@@ -154,10 +156,12 @@ public final class CheckpointSnapshotCodec {
     }
 
     public static LoadedCheckpoint writeNext(Path workspace, ClosedLoopCheckpoint checkpoint) throws IOException {
+        long started = System.nanoTime();
         Path root = workspace.toAbsolutePath().normalize();
         Path checkpoints = root.resolve("checkpoints");
         Files.createDirectories(checkpoints);
         validatePrevious(root, checkpoint);
+        LOGGER.info("Validated checkpoint transition: revision={}", checkpoint.revision());
         Path target = checkpoints.resolve("checkpoint-%08d".formatted(checkpoint.revision()));
         if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
             throw new IllegalArgumentException("Checkpoint revision already exists");
@@ -181,11 +185,21 @@ public final class CheckpointSnapshotCodec {
             } catch (AtomicMoveNotSupportedException error) {
                 throw new IOException("Atomic checkpoint publication is required", error);
             }
+            LOGGER.info(
+                    "Published checkpoint: revision={}, stage={}, directory={}, elapsedMs={}",
+                    checkpoint.revision(),
+                    checkpoint.stage(),
+                    target,
+                    elapsedMillis(started));
             return new LoadedCheckpoint(target, checkpoint);
         } catch (Throwable error) {
             deleteTree(temp);
             throw error;
         }
+    }
+
+    private static long elapsedMillis(long started) {
+        return (System.nanoTime() - started) / 1_000_000L;
     }
 
     private static void validatePrevious(Path workspace, ClosedLoopCheckpoint next) throws IOException {
@@ -205,13 +219,16 @@ public final class CheckpointSnapshotCodec {
             }
             return;
         }
-        ClosedLoopCheckpoint previous = read(workspace, complete.getLast());
+        ClosedLoopCheckpoint previous = read(workspace, complete.getLast(), false);
         if (next.revision() != previous.revision() + 1
                 || !next.trainingRunId().equals(previous.trainingRunId())
                 || !next.configSha256().equals(previous.configSha256())
                 || !next.requiredScenarios().equals(previous.requiredScenarios())
                 || !validTransition(previous.stage(), next.stage())) {
             throw new IllegalArgumentException("Invalid checkpoint transition");
+        }
+        if (!new java.util.HashSet<>(next.evidence()).containsAll(previous.evidence())) {
+            throw new IllegalArgumentException("Checkpoint transition dropped or changed evidence");
         }
         if (next.sobolCursor() != previous.sobolCursor() && next.stage() != CheckpointStage.SCHEDULE_READY) {
             throw new IllegalArgumentException("Sobol cursor changed without schedule publication");
@@ -546,7 +563,7 @@ public final class CheckpointSnapshotCodec {
                         "evidence_path",
                         "evidence_sha256",
                         "source"));
-        ArrayList<EvidenceIndexEntry> result = new ArrayList<>();
+        ArrayList<PendingEvidenceValidation> pending = new ArrayList<>();
         String previous = null;
         for (int i = 1; i < rows.size(); i++) {
             List<String> row = width(rows.get(i), 6);
@@ -560,19 +577,74 @@ public final class CheckpointSnapshotCodec {
                 throw new IllegalArgumentException("Evidence bundle is outside evidence/");
             }
             SourceScenario scenario = SourceScenario.parse(row.get(2));
-            if (dereferenceArtifacts) {
-                validateArtifact(workspace, bundle);
-                ObservationBundle observationBundle = ObservationBundleReader.read(bundlePath);
-                if (!observationBundle.run().descriptor().benchmarkRunId().equals(row.get(1))
-                        || !observationBundle.run().descriptor().scenario().equals(scenario)) {
-                    throw new IllegalArgumentException("Evidence bundle identity mismatch");
-                }
-            }
-            result.add(new EvidenceIndexEntry(row.get(1), scenario, bundle, EvidenceSource.valueOf(row.get(5))));
+            EvidenceIndexEntry entry =
+                    new EvidenceIndexEntry(row.get(1), scenario, bundle, EvidenceSource.valueOf(row.get(5)));
+            pending.add(new PendingEvidenceValidation(i, rows.size() - 1, bundlePath, entry));
             previous = row.get(1);
         }
-        return List.copyOf(result);
+        if (dereferenceArtifacts && !pending.isEmpty()) {
+            validateEvidence(workspace, pending);
+        }
+        return pending.stream().map(PendingEvidenceValidation::entry).toList();
     }
+
+    private static void validateEvidence(Path workspace, List<PendingEvidenceValidation> pending) throws IOException {
+        int parallelism = Math.min(pending.size(), Math.min(Runtime.getRuntime().availableProcessors(), 8));
+        LOGGER.info("Validating checkpoint evidence: bundles={}, workers={}", pending.size(), parallelism);
+        ArrayList<Future<Void>> futures = new ArrayList<>(pending.size());
+        try (ExecutorService executor = Executors.newFixedThreadPool(
+                parallelism, runnable -> new Thread(runnable, "checkpoint-evidence-validator"))) {
+            for (PendingEvidenceValidation validation : pending) {
+                futures.add(executor.submit(() -> {
+                    validateEvidence(workspace, validation);
+                    return null;
+                }));
+            }
+            for (Future<Void> future : futures) {
+                try {
+                    future.get();
+                } catch (InterruptedException error) {
+                    Thread.currentThread().interrupt();
+                    throw new IOException("Interrupted while validating checkpoint evidence", error);
+                } catch (ExecutionException error) {
+                    Throwable cause = error.getCause();
+                    if (cause instanceof IOException io) {
+                        throw io;
+                    }
+                    if (cause instanceof RuntimeException runtime) {
+                        throw runtime;
+                    }
+                    if (cause instanceof Error fatal) {
+                        throw fatal;
+                    }
+                    throw new IOException("Checkpoint evidence validation failed", cause);
+                }
+            }
+        } finally {
+            futures.forEach(future -> future.cancel(true));
+        }
+    }
+
+    private static void validateEvidence(Path workspace, PendingEvidenceValidation validation) throws IOException {
+        long started = System.nanoTime();
+        EvidenceIndexEntry entry = validation.entry();
+        validateArtifact(workspace, entry.bundle());
+        ObservationBundle observationBundle = ObservationBundleReader.read(validation.bundlePath());
+        if (!observationBundle.run().descriptor().benchmarkRunId().equals(entry.benchmarkRunId())
+                || !observationBundle.run().descriptor().scenario().equals(entry.scenario())) {
+            throw new IllegalArgumentException("Evidence bundle identity mismatch");
+        }
+        LOGGER.info(
+                "Validated checkpoint evidence bundle: bundle={}, run={}, policies={}, "
+                        + "observations={}, elapsedMs={}",
+                validation.index(),
+                entry.benchmarkRunId(),
+                observationBundle.policies().size(),
+                observationBundle.observations().size(),
+                elapsedMillis(started));
+    }
+
+    private record PendingEvidenceValidation(int index, int total, Path bundlePath, EvidenceIndexEntry entry) {}
 
     private static List<CarryForwardEntry> readCarry(Path summaryFile, Path scenarioFile, Set<SourceScenario> required)
             throws IOException {
@@ -906,4 +978,6 @@ public final class CheckpointSnapshotCodec {
             double pessimistic,
             double maxEpistemic,
             double maxDisagreement) {}
+
+    private CheckpointSnapshotCodec() {}
 }

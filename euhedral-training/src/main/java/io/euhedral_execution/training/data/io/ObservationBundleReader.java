@@ -75,8 +75,6 @@ public final class ObservationBundleReader {
             "throughput_frames_per_second",
             "failure_code");
 
-    private ObservationBundleReader() {}
-
     public static String readRunId(Path directory) {
         try {
             if (!Files.isRegularFile(directory.resolve("COMPLETE")) || Files.size(directory.resolve("COMPLETE")) != 0) {
@@ -158,6 +156,7 @@ public final class ObservationBundleReader {
                 throw new IllegalArgumentException("Policy header");
             }
             List<ScheduledPolicy> policies = new ArrayList<>();
+            Map<PolicyId, ScheduledPolicy> policiesById = new HashMap<>();
             PolicyRegistry registry = new PolicyRegistry();
             Set<PolicyId> policyIds = new HashSet<>();
             for (int rowIndex = 1; rowIndex < policyRows.size(); rowIndex++) {
@@ -194,7 +193,9 @@ public final class ObservationBundleReader {
                 if (!canonicalRoles.equals(row.get(3))) {
                     throw new IllegalArgumentException("Policy roles are not sorted");
                 }
-                policies.add(new ScheduledPolicy(rowIndex, policy, roles));
+                ScheduledPolicy scheduled = new ScheduledPolicy(rowIndex, policy, roles);
+                policies.add(scheduled);
+                policiesById.put(policy.id(), scheduled);
             }
 
             List<List<String>> observationRows = readCsv(directory.resolve("observations.csv"));
@@ -210,10 +211,10 @@ public final class ObservationBundleReader {
                 }
                 requireVersion(row.get(0));
                 PolicyId policyId = PolicyId.parse(row.get(2));
-                ScheduledPolicy policy = policies.stream()
-                        .filter(item -> item.policy().id().equals(policyId))
-                        .findFirst()
-                        .orElseThrow();
+                ScheduledPolicy policy = policiesById.get(policyId);
+                if (policy == null) {
+                    throw new IllegalArgumentException("Observation references unknown policy");
+                }
                 ObservationKey key =
                         new ObservationKey(descriptor.benchmarkRunId(), scenario, policyId, integer(row.get(3)));
                 if (!key.canonical().equals(row.get(1)) || !keys.add(key)) {
@@ -509,6 +510,8 @@ public final class ObservationBundleReader {
             throw new IllegalStateException(error);
         }
     }
+
+    private ObservationBundleReader() {}
 
     public interface ObservationVisitor {
 

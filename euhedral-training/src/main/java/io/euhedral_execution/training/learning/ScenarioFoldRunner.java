@@ -20,8 +20,11 @@ import java.util.List;
 import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 final class ScenarioFoldRunner {
+    private static final Logger LOGGER = LoggerFactory.getLogger(ScenarioFoldRunner.class);
 
     static FoldResult run(
             String trainingKind,
@@ -37,6 +40,17 @@ final class ScenarioFoldRunner {
             Path directory,
             boolean insufficientContextVariation)
             throws Exception {
+        long started = System.nanoTime();
+        LOGGER.info(
+                "Training evaluation fold: kind={}, fold={}, features={}, members={}, "
+                        + "fitRows={}, earlyStopRows={}, scoreRows={}",
+                trainingKind,
+                foldId,
+                featureSet,
+                memberCount,
+                fittingRows.size(),
+                earlyStopRows.size(),
+                scoreRows.size());
         validateRowSets(fittingRows, earlyStopRows, scoreRows);
         SortedSet<SourceScenario> fittingScenarios = scenarios(fittingRows);
         SortedSet<SourceScenario> scoreScenarios = scenarios(scoreRows);
@@ -53,6 +67,7 @@ final class ScenarioFoldRunner {
                 history.addAll(trained.history());
             }
             List<PolicyVector> policies = policies(scoreRows);
+            FoldResult result;
             try (ScenarioConditionedModel model =
                     ScenarioConditionedModel.forTest(normalizer, scoreScenarios, members)) {
                 List<PolicyPredictionCurve> predictions =
@@ -65,13 +80,24 @@ final class ScenarioFoldRunner {
                         retainPredictionsForRows(predictions, scoreRows),
                         insufficientContextVariation);
                 members.clear(); // ownership moved to and closed by the model
-                return new FoldResult(evaluation, List.copyOf(history), normalizer, fittingScenarios, scoreScenarios);
+                result = new FoldResult(evaluation, List.copyOf(history), normalizer, fittingScenarios, scoreScenarios);
             }
+            LOGGER.info(
+                    "Finished evaluation fold: kind={}, fold={}, members={}, elapsedMs={}",
+                    trainingKind,
+                    foldId,
+                    memberCount,
+                    elapsedMillis(started));
+            return result;
         } finally {
             for (OrdinalMember member : members) {
                 member.close();
             }
         }
+    }
+
+    private static long elapsedMillis(long started) {
+        return (System.nanoTime() - started) / 1_000_000L;
     }
 
     static SortedSet<SourceScenario> scenarios(List<ScenarioLearningRow> rows) {

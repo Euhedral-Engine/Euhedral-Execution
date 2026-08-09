@@ -53,6 +53,13 @@ public final class BenchmarkRunner {
     public static BenchmarkRunContext runV1(NativeBenchmarkRunPlan plan, BooleanSupplier stopRequested)
             throws Exception {
         validatePlan(plan, true);
+        LOGGER.info(
+                "Preparing native benchmark: run={}, scenario={}, policies={}, sources={}, " + "framesPerSource={}",
+                plan.benchmarkRunId(),
+                plan.scenario(),
+                plan.policies().size(),
+                plan.parameters().frameSourceSeeds().size(),
+                plan.parameters().framesPerSource());
         try (BenchmarkBackend backend = NativeBackend.open(plan)) {
             return runV1(plan, stopRequested, backend, SystemTime.INSTANCE);
         }
@@ -89,11 +96,16 @@ public final class BenchmarkRunner {
             int policies = plan.policies().size();
             for (ScheduledPolicy policy : plan.policies()) {
                 LOGGER.info(
-                        "Scenario: {} Iteration: {} Policy: {} / {}",
-                        plan.scenario().toString(),
+                        "Benchmarking policy: run={}, scenario={}, iteration={}/{}, policy={}/{}, "
+                                + "role={}, sampleMs={}",
+                        plan.benchmarkRunId(),
+                        plan.scenario(),
                         plan.iteration(),
+                        plan.executionConfig().expectedRepetitions(),
                         ++currentP,
-                        policies);
+                        policies,
+                        policy.roles(),
+                        plan.executionConfig().sampleDurationNanos() / 1_000_000L);
                 if (stopRequested.getAsBoolean()) {
                     throw ClosedLoopRunner.stopSignal();
                 }
