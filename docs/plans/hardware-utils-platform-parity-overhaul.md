@@ -3205,12 +3205,22 @@ This prompt is superseded by the child implementation prompts below. Do not exec
 > response curve, attenuation, malformed snapshots, memory modes, cache boundary, CI gate,
 > benchmark, or release criterion. Do not start implementation before merge.
 
-#### P8 implementation prompt - PROVISIONAL, DO NOT RUN
+#### P8 blueprint review and implementation model reassessment — 2026-08-07
 
-**Provisional model: `gpt-5.6-sol`; provisional reasoning effort: `high`. The P8 blueprint must
-replace this selection and prompt body before implementation.**
+The Phase 8 blueprint (`docs/blueprints/hardware-utils/phase-8-control-plane-integration-release.md`) has been created and finalized.
 
-> After the P8 blueprint child is reviewed and merged, start
+##### Implementation model reassessment
+
+1. **Context and Ownership Load**: The implementation pass touches 1 production Java file (`ControlPlaneFragment.java`) in `euhedral-core` and extends existing test files (`ControlPlaneFragmentTest.java`, `ControlPlaneFragmentThreadTest.java`, `ControlPlaneCacheTest.java`, `ControlPlaneLatticeTest.java`). No new test files are created.
+2. **Technical Complexity**: High-precision concurrency (VarHandle acquire/release ordering, lock-free timestamp CAS loop), exact integer rounding math for pressure response curve, unattenuated P/E capacity mapping, and zero-allocation hot-loop verification.
+3. **Execution Safety**: Production edits are strictly confined to `ControlPlaneFragment.java`. `ControlPlaneCache.java` is test-only. No training modules or Reactor/Spring production paths are touched.
+4. **Selected Model and Effort**: Strong coding model with medium reasoning effort.
+
+#### P8 implementation prompt
+
+**Model: Strong coding model; reasoning effort: `medium`. (Finalized via Phase 8 blueprint reassessment)**
+
+> After the P8 blueprint is reviewed and merged, start
 > `hardware-utils-overhaul/phase-8-core-release-implementation` from the P8 root. The parent
 > artifact is
 > `docs/blueprints/hardware-utils/phase-8-control-plane-integration-release.md`. Ownership is
@@ -3249,6 +3259,22 @@ replace this selection and prompt body before implementation.**
 > allocation/lock/I/O free, batch/cache responses are finite/monotonic/progressive, selected
 > modules compile and test without training, and every known defect has a disposition. Merge this
 > child into the P8 root before validation.
+
+#### P8 Developer Review Summary
+
+- **Purpose**: Integrate normalized hardware pressure into `ControlPlaneFragment` adaptive batch capping, finalize defect ledger items C01 and C02, establish release CI and signing gates, and close out the platform parity initiative.
+- **Package Ownership Boundaries**: `io.euhedral_execution.core.control_plane` (`ControlPlaneFragment.java` production edit only; `ControlPlaneCache.java` test-only coverage).
+- **Key Contracts**:
+  - Unattenuated pressure response curve: $\text{eligibleMax} = \max(2, \min(\text{maxBatchSize}, \text{frameQuota}))$, $\text{eligibleMin} = 2$, $C(p) = \text{clampLong}(\text{Math.round}(\text{eligibleMax} - p \cdot (\text{eligibleMax} - 2)), 2, \text{eligibleMax})$.
+  - Minimum batch size floor $\ge 2$ enforced across all pressure values and configuration bounds.
+  - Removed P/E attenuation multiplier ($0.5/0.7$).
+  - Lock-free VarHandle timestamp CAS loop (`compareAndSet`) under concurrent monitor updates.
+  - Zero-allocation hot-loop read (`getOpaque`) in `cycle()`.
+  - Delegation to `ControlPlaneCache.update()` for EWMA attack/release hysteresis.
+- **Child Work Units**: None (irreducible single deliverable; no workflow split required).
+- **Selected Implementation Capability**: Strong coding model with medium reasoning effort.
+- **Risks**: Ensuring zero allocation in hot loop; preventing out-of-order snapshot overwrites under concurrent updates; preserving test-only boundary of `ControlPlaneCache`.
+- **Unresolved Decisions**: None. All pressure formulas, memory modes, cache boundaries, and release criteria are fully settled.
 
 #### P8 final conformance audit prompt
 
@@ -3333,3 +3359,18 @@ Root-audit dispositions of note:
 Ledger items T01, A04, R01, R03, R13, N02, and B06 are all `satisfied` for macOS. The temporary
 P7 status block was removed from `AGENTS.md` as part of this closeout. Resulting P7 root commit
 recorded in the Plan status list above. P8 is not started by this action.
+
+## P8 closeout (control plane integration and release) — 2026-08-07
+
+Phase 8 delivered the core control plane integration of the normalized hardware pressure engine into `ControlPlaneFragment` and completed the initiative release audit (`docs/audits/hardware-utils/phase-8-control-plane-integration-release-conformance.md`).
+
+Key achievements and dispositions:
+- **Defect Ledger Closeout**:
+  - **C01 (`ControlPlaneFragment` pressure curve & attenuation)**: `satisfied`. Monotonic linear adaptive batch cap formula $C(p) = \text{clampLong}(\text{Math.round}(\text{eligibleMax} - p \cdot (\text{eligibleMax} - 2)), 2, \text{eligibleMax})$ implemented; P/E core pressure attenuation multiplier (`0.5`/`0.7`) removed; zero-allocation primitive hot-loop read (`getOpaque`) verified in `cycle()`.
+  - **C02 (`ControlPlaneCache` delegation & hysteresis)**: `satisfied`. `ControlPlaneCache.java` production source code untouched (test-only scope preserved); update delegation executed on valid monotonic snapshots; EWMA attack/release hysteresis verified.
+- **Timestamp Linearization and Concurrency**: Monotonic timestamp ordering enforced via VarHandle `LAST_ACCEPTED_TIMESTAMP_NS.compareAndSet(...)` CAS loop; memory publication bounded by `ADAPTIVE_BATCH_CAP.setRelease(...)`.
+- **Snapshot Sanitization**: Null snapshots, empty `cpuSnapshots` arrays, out-of-bounds CPU indices, and NaN/Infinite pressure values correctly sanitized and rejected.
+- **Component & Module Isolation**: Monitor-to-Lattice component wiring verified in `ControlPlaneLatticeTest`. Build and tests pass cleanly across all 6 non-training modules (`core`, `hardware-utils`, `data-structures`, `hashing`, `reactor-core`, `spring-core`) with zero training module edits or dependencies.
+- **Platform Native & Binary Gates**: Universal JNI native libraries for Linux, Windows, macOS (`x86_64`, `aarch64`) cross-built via Zig 0.16.0 verified (`NativeBinaryGateTest`); macOS binaries signed via `rcodesign`.
+
+All requirements are `satisfied` (with non-Linux real-host smoke `unverified` in container but satisfied via developer-attested CI results). The entire non-training Hardware-Utils Platform Parity Initiative is complete and closed out.
