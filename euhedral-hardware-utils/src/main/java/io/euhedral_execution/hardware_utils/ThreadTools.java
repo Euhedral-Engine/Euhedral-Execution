@@ -7,7 +7,7 @@ import io.euhedral_execution.hardware_utils.internal.AffinityController;
 import io.euhedral_execution.hardware_utils.internal.AffinityProvider;
 import io.euhedral_execution.hardware_utils.internal.Constants;
 import io.euhedral_execution.hardware_utils.linux.LinuxAffinity;
-import io.euhedral_execution.hardware_utils.osx.OSXAffinity;
+import io.euhedral_execution.hardware_utils.macos.MacosAffinity;
 import io.euhedral_execution.hardware_utils.windows.WindowsAffinity;
 import java.util.BitSet;
 import org.jspecify.annotations.Nullable;
@@ -100,7 +100,7 @@ public final class ThreadTools {
                 return WindowsAffinity.INSTANCE;
             }
             if (OSName.isMacOS()) {
-                return OSXAffinity.INSTANCE;
+                return MacosAffinity.INSTANCE;
             }
         } catch (RuntimeException | LinkageError failure) {
             LOGGER.debug("Affinity provider selection failed", failure);

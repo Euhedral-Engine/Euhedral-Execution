@@ -1,16 +1,17 @@
-package io.euhedral_execution.hardware_utils.osx;
+package io.euhedral_execution.hardware_utils.macos;
 
 import io.euhedral_execution.hardware_utils.SystemInfo;
 import io.euhedral_execution.hardware_utils.internal.AffinityMasks;
 import java.util.BitSet;
 
-final class OSXAffinityCalls {
+/// Single-locality mask canonicalization and ordinal-to-tag mapping helper for macOS affinity hints.
+public final class MacosAffinityCalls {
 
     /// Converts one requested logical CPU ordinal to one nonzero macOS locality tag.
     ///
     /// macOS locality is scheduler preference rather than exact binding. Multiple distinct ordinals
-    /// are rejected because P3-A cannot prove that they share one locality.
-    static boolean applyOrdinal(long[] masks, RawCall call) {
+    /// or empty masks are rejected because single-locality enforcement requires cardinality 1.
+    public static boolean applyOrdinal(long[] masks, RawCall call) {
         BitSet supported = SystemInfo.getCpuSet();
         long[] request = AffinityMasks.canonical(masks, SystemInfo.getCpuCount(), supported);
         if (request == null) {
@@ -27,7 +28,7 @@ final class OSXAffinityCalls {
     ///
     /// @param mask single-word provider encoding, not a logical CPU request mask
     /// @param call injectable JNI-shaped operation for production and deterministic tests
-    static boolean raw(long[] mask, RawCall call) {
+    public static boolean raw(long[] mask, RawCall call) {
         try {
             return call.apply(mask.clone()) == 0;
         } catch (RuntimeException | LinkageError failure) {
@@ -35,12 +36,12 @@ final class OSXAffinityCalls {
         }
     }
 
-    private OSXAffinityCalls() {
+    private MacosAffinityCalls() {
     }
 
     /// JNI-shaped macOS affinity-tag setter returning `0` on success.
     @FunctionalInterface
-    interface RawCall {
+    public interface RawCall {
 
         int apply(long[] masks);
     }

@@ -31,9 +31,9 @@ class NativeBinaryInspectionIT {
             throws Exception {
         Set<String> expected = expectedJniExports(osToken);
         expected.add("JNI_OnLoad");
-        if (osToken.equals("osx")) {
+        if (osToken.equals("osx") || osToken.equals("macos")) {
             expected.add(
-                    "Java_io_euhedral_1execution_hardware_1utils_osx_OSXResources_getCoreTypeMask");
+                    "Java_io_euhedral_1execution_hardware_1utils_macos_MacosResources_getCoreTypeMask");
         }
         String symbolInventory = output;
         int versionSymbols = output.indexOf("VersionSymbols [");
@@ -58,7 +58,8 @@ class NativeBinaryInspectionIT {
         Set<String> exports = new HashSet<>();
         try (Stream<Path> paths = Files.list(declarations)) {
             for (Path header : paths.filter(
-                    path -> path.getFileName().toString().contains('_' + osToken + '_')).toList()) {
+                    path -> path.getFileName().toString().contains('_' + osToken + '_')
+                            || (osToken.equals("osx") && path.getFileName().toString().contains("_macos_"))).toList()) {
                 Matcher matcher = HEADER_JNI.matcher(
                         Files.readString(header, StandardCharsets.UTF_8));
                 while (matcher.find()) {

@@ -9,7 +9,7 @@ import io.euhedral_execution.hardware_utils.internal.topology.MaskCodec;
 import io.euhedral_execution.hardware_utils.internal.topology.TopologyBootstrap;
 import io.euhedral_execution.hardware_utils.internal.topology.TopologyModel;
 import io.euhedral_execution.hardware_utils.linux.LinuxSystemLayout;
-import io.euhedral_execution.hardware_utils.osx.OSXSystemLayout;
+import io.euhedral_execution.hardware_utils.macos.MacosSystemLayout;
 import io.euhedral_execution.hardware_utils.windows.WindowsSystemLayout;
 import java.util.BitSet;
 import java.util.HashSet;
@@ -238,10 +238,10 @@ public final class SystemInfo {
                         WindowsSystemLayout.INSTANCE.getSocketInfoMap());
             }
             if (OSName.isMacOS()) {
-                return TopologyBootstrap.extract(OSXSystemLayout.INSTANCE.getCacheLayout(),
-                        OSXSystemLayout.INSTANCE.getCpuInfoMap(),
-                        OSXSystemLayout.INSTANCE.getCoreInfoMap(),
-                        OSXSystemLayout.INSTANCE.getSocketInfoMap());
+                return TopologyBootstrap.extract(MacosSystemLayout.INSTANCE.getCacheLayout(),
+                        MacosSystemLayout.INSTANCE.getCpuInfoMap(),
+                        MacosSystemLayout.INSTANCE.getCoreInfoMap(),
+                        MacosSystemLayout.INSTANCE.getSocketInfoMap());
             }
             LOGGER.error("Unsupported OS; using common fallback topology.");
         } catch (Exception | LinkageError failure) {

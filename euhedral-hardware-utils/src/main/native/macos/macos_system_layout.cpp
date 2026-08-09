@@ -1,16 +1,15 @@
-#ifndef _Included_OSXSystemLayout
-#define _Included_OSXSystemLayout
+#ifndef _Included_MacosSystemLayout
+#define _Included_MacosSystemLayout
 
-#include "osx_jni.h"
-
-// N02 deliberately prevents including the generated owner header until P7.
+#include "macos_jni.h"
+#include "io_euhedral_execution_hardware_utils_macos_MacosSystemLayout.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 JNIEXPORT jlong JNICALL
-Java_io_euhedral_1execution_hardware_1utils_osx_OSXSystemLayout_getSysctlLong(JNIEnv *env,
+Java_io_euhedral_1execution_hardware_1utils_macos_MacosSystemLayout_getSysctlLong(JNIEnv *env,
                                                                 jclass clazz,
                                                                 jstring jkey) {
   const char *key = env->GetStringUTFChars(jkey, NULL);
@@ -22,7 +21,7 @@ Java_io_euhedral_1execution_hardware_1utils_osx_OSXSystemLayout_getSysctlLong(JN
 }
 
 JNIEXPORT jint JNICALL
-Java_io_euhedral_1execution_hardware_1utils_osx_OSXSystemLayout_getSysctlInt(JNIEnv *env,
+Java_io_euhedral_1execution_hardware_1utils_macos_MacosSystemLayout_getSysctlInt(JNIEnv *env,
                                                                jclass clazz,
                                                                jstring jkey) {
   const char *key = env->GetStringUTFChars(jkey, NULL);
@@ -34,7 +33,7 @@ Java_io_euhedral_1execution_hardware_1utils_osx_OSXSystemLayout_getSysctlInt(JNI
 }
 
 JNIEXPORT jstring JNICALL
-Java_io_euhedral_1execution_hardware_1utils_osx_OSXSystemLayout_getSysctlString(JNIEnv *env,
+Java_io_euhedral_1execution_hardware_1utils_macos_MacosSystemLayout_getSysctlString(JNIEnv *env,
                                                                   jclass clazz,
                                                                   jstring jkey) {
   const char *key = env->GetStringUTFChars(jkey, NULL);

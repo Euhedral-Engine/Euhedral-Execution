@@ -1,7 +1,7 @@
 package io.euhedral_execution.hardware_utils.common;
 
 public enum OSName {
-    LINUX("Linux"), OSX("MacOS"), WINDOWS("Windows"), UNSUPPORTED("UNSUPPORTED");
+    LINUX("Linux"), MACOS("MacOS"), WINDOWS("Windows"), UNSUPPORTED("UNSUPPORTED");
 
     public static final OSName CURRENT_OS;
     public final String os;
@@ -11,7 +11,7 @@ public enum OSName {
         if (os.contains("linux")) {
             CURRENT_OS = LINUX;
         } else if (os.contains("mac")) {
-            CURRENT_OS = OSX;
+            CURRENT_OS = MACOS;
         } else if(os.contains("win")) {
             CURRENT_OS = WINDOWS;
         } else {
@@ -24,7 +24,7 @@ public enum OSName {
     }
 
     public static boolean isMacOS() {
-        return CURRENT_OS == OSX;
+        return CURRENT_OS == MACOS;
     }
 
     public static boolean isWindows() {

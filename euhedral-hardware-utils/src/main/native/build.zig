@@ -8,9 +8,9 @@ const catalog_limit = 64 * 1024;
 
 const expected_jni_headers = [_][]const u8{
     "io_euhedral_execution_hardware_utils_linux_LinuxAffinity.h",
-    "io_euhedral_execution_hardware_utils_osx_OSXAffinity.h",
-    "io_euhedral_execution_hardware_utils_osx_OSXResources.h",
-    "io_euhedral_execution_hardware_utils_osx_OSXSystemLayout.h",
+    "io_euhedral_execution_hardware_utils_macos_MacosAffinity.h",
+    "io_euhedral_execution_hardware_utils_macos_MacosResources.h",
+    "io_euhedral_execution_hardware_utils_macos_MacosSystemLayout.h",
     "io_euhedral_execution_hardware_utils_windows_WindowsAffinity.h",
     "io_euhedral_execution_hardware_utils_windows_WindowsResources.h",
     "io_euhedral_execution_hardware_utils_windows_WindowsSystemLayout.h",

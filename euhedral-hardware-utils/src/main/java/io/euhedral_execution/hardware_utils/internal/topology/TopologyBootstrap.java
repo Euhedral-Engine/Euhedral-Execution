@@ -7,7 +7,7 @@ import io.euhedral_execution.hardware_utils.SystemInfo.SocketInfo;
 import io.euhedral_execution.hardware_utils.common.OSName;
 import io.euhedral_execution.hardware_utils.common.SystemSnapshotProvider;
 import io.euhedral_execution.hardware_utils.linux.LinuxResourceProvider;
-import io.euhedral_execution.hardware_utils.osx.OSXResources;
+import io.euhedral_execution.hardware_utils.macos.MacosResources;
 import io.euhedral_execution.hardware_utils.windows.WindowsResources;
 import java.util.ArrayList;
 import java.util.List;
@@ -57,7 +57,7 @@ public final class TopologyBootstrap {
                 return WindowsResources.INSTANCE;
             }
             if (OSName.isMacOS()) {
-                return OSXResources.INSTANCE;
+                return MacosResources.INSTANCE;
             }
             logger.error("Unsupported OS; resource snapshot provider is unavailable.");
         } catch (Exception | LinkageError failure) {
