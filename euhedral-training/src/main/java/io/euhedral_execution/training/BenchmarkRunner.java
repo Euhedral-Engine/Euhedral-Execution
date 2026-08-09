@@ -5,7 +5,6 @@ import io.euhedral_execution.core.config.FragmentConfig;
 import io.euhedral_execution.core.config.LatticeConfig;
 import io.euhedral_execution.core.control_plane.ControlPlaneLattice;
 import io.euhedral_execution.core.control_plane.ControlPlaneShard;
-import io.euhedral_execution.core.frames.BenchmarkFrame;
 import io.euhedral_execution.core.impl.BaseCloneableObject;
 import io.euhedral_execution.hardware_utils.SystemInfo;
 import io.euhedral_execution.hardware_utils.ThreadTools;
@@ -413,7 +412,7 @@ public final class BenchmarkRunner {
             ControlPlaneLattice lattice = ControlPlaneLattice.getOrCreate(config);
             ArrayList<BenchmarkFrameSink> sinks = new ArrayList<>();
             for (FrameSourceSeed seed : plan.parameters().frameSourceSeeds()) {
-                BenchmarkFrame[] frames = BenchmarkFrame.generate(
+                FixedMandelbrotFrame[] frames = FixedMandelbrotFrame.generate(
                         plan.parameters().framesPerSource(),
                         plan.parameters().orderedFrames(),
                         seed.idHash(),
