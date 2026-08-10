@@ -8,14 +8,12 @@ import io.euhedral_execution.hardware_utils.internal.monitor.MonotonicClock;
 import io.euhedral_execution.hardware_utils.internal.monitor.TopologyUpdater;
 import io.euhedral_execution.hardware_utils.internal.pressure.PressureEvaluation;
 import io.euhedral_execution.hardware_utils.internal.pressure.PressureEvaluator;
-
 import io.euhedral_execution.hardware_utils.internal.pressure.PressureState;
 import io.euhedral_execution.hardware_utils.internal.sampling.DetailedSystemSnapshotProvider;
 import io.euhedral_execution.hardware_utils.internal.sampling.SampleStateEngine;
 import io.euhedral_execution.hardware_utils.internal.sampling.SystemSnapshotCompatibilityAdapter;
 import io.euhedral_execution.hardware_utils.internal.sampling.samples.FastHardwareSample;
 import io.euhedral_execution.hardware_utils.internal.sampling.samples.IntervalHardwareSample;
-
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.time.Duration;

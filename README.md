@@ -23,24 +23,22 @@ data.
 
 ## Why Euhedral?
 
-- **Pull-driven execution.** 
-  - Workers create demand; a central dispatcher does not push tasks at
-    threads.
-- **Topology-aware routing.** 
-  - Euhedral discovers the available CPUs, sockets, NUMA nodes, and cache
-    groups, then pins persistent workers to that topology.
-- **Ordering when it matters.** 
-  - Related frames can share a stable routing lane. Independent frames
-    can spread across the machine.
-- **Adaptive per-core control.** 
-  - Each worker adjusts how it pulls, drains, and executes work from
-    current queue and system pressure.
-- **Low-allocation pipelines.** 
-  - Frames and queues are designed for batching, reuse, and predictable
-    ownership.
+- **Pull-driven execution.**
+    - Workers create demand; a central dispatcher does not push tasks at threads.
+- **Topology-aware routing.**
+    - Euhedral discovers the available CPUs, sockets, NUMA nodes, and cache groups, then pins
+      persistent workers to that topology.
+- **Ordering when it matters.**
+    - Related frames can share a stable routing lane. Independent frames can spread across the
+      machine.
+- **Adaptive per-core control.**
+    - Each worker adjusts how it pulls, drains, and executes work from current queue and system
+      pressure.
+- **Low-allocation pipelines.**
+    - Frames and queues are designed for batching, reuse, and predictable ownership.
 
-This is not a general-purpose replacement for every executor. It is aimed at sustained,
-fine-grained workloads where routing, locality, and coordination overhead are part of the problem.
+This is not a general-purpose replacement for every executor. It is aimed at sustained, fine-grained
+workloads where routing, locality, and coordination overhead are part of the problem.
 
 ## The execution model
 
@@ -125,25 +123,25 @@ and shutdown.
 
 ## Choose an entry point
 
-| If you are building... | Start with... |
-| --- | --- |
-| A direct frame or function pipeline | [`euhedral-core`](./QUICK_START.md) |
-| A Reactor application | [`euhedral-reactor-core`](./REACTOR_QUICK_START.md) |
-| A Spring Boot service, Kafka consumer, or gRPC transport | [`euhedral-spring-core`](./euhedral-spring-core) |
-| A custom queue or atomic-heavy component | [`euhedral-data-structures`](./euhedral-data-structures) |
+| If you are building...                                   | Start with...                                            |
+|----------------------------------------------------------|----------------------------------------------------------|
+| A direct frame or function pipeline                      | [`euhedral-core`](./QUICK_START.md)                      |
+| A Reactor application                                    | [`euhedral-reactor-core`](./REACTOR_QUICK_START.md)      |
+| A Spring Boot service, Kafka consumer, or gRPC transport | [`euhedral-spring-core`](./euhedral-spring-core)         |
+| A custom queue or atomic-heavy component                 | [`euhedral-data-structures`](./euhedral-data-structures) |
 
 ## Repository modules
 
-| Module | Purpose |
-| --- | --- |
-| `euhedral-hashing` | xxHash64-based hashing and mixing used by routing |
-| `euhedral-data-structures` | SPSC, SPMC, MPSC, and MPMC queues plus padded atomics |
-| `euhedral-hardware-utils` | Topology discovery, resource monitoring, affinity, and JNI |
-| `euhedral-core` | Frames, ingest, routing, the control plane, and execution |
-| `euhedral-reactor-core` | Reactor scheduler and mapping operators |
-| `euhedral-spring-core` | Spring Boot, Kafka, and gRPC integration |
-| `euhedral-training` | Offline tuning of the fixed runtime scheduling policy |
-| `benchmarks` | JMH workloads and comparison harnesses |
+| Module                     | Purpose                                                    |
+|----------------------------|------------------------------------------------------------|
+| `euhedral-hashing`         | xxHash64-based hashing and mixing used by routing          |
+| `euhedral-data-structures` | SPSC, SPMC, MPSC, and MPMC queues plus padded atomics      |
+| `euhedral-hardware-utils`  | Topology discovery, resource monitoring, affinity, and JNI |
+| `euhedral-core`            | Frames, ingest, routing, the control plane, and execution  |
+| `euhedral-reactor-core`    | Reactor scheduler and mapping operators                    |
+| `euhedral-spring-core`     | Spring Boot, Kafka, and gRPC integration                   |
+| `euhedral-training`        | Offline tuning of the fixed runtime scheduling policy      |
+| `benchmarks`               | JMH workloads and comparison harnesses                     |
 
 The lower-level hashing, data structure, and hardware modules do not depend on the Core runtime.
 Reactor and Spring are integration layers above Core. Training and benchmarks remain outside the

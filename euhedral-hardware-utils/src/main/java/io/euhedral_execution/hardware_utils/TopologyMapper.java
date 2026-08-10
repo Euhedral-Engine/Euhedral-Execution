@@ -30,12 +30,15 @@ public final class TopologyMapper {
     // volatile read, which publishes every final value reachable from the selected graph.
     @Getter
     private volatile EffectiveSystemTopology effectiveTopology;
+
     public TopologyMapper() {
         this(SystemInfo.topologyModel(), SystemInfo.topologyModel().cpuSet());
     }
+
     public TopologyMapper(BitSet allowedCpus) {
         this(SystemInfo.topologyModel(), allowedCpus);
     }
+
     TopologyMapper(TopologyModel topologyModel, BitSet allowedCpus) {
         this.topologyModel = Objects.requireNonNull(topologyModel, "topologyModel");
         BitSet ownedAllowed =

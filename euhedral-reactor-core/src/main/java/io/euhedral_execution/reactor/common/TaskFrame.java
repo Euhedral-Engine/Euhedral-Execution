@@ -13,10 +13,13 @@ import reactor.core.Disposable;
 public final class TaskFrame extends AbstractFrame implements Disposable {
 
     private final Runnable task;
+
     @Getter
     private final long periodNs;
+
     private Thread thread;
     private long seed;
+
     private TaskFrame(long idHash, Runnable task, EuhedralWorker sink, long delay, long period, TimeUnit unit) {
         super(idHash, null, new AtomicBoolean());
 

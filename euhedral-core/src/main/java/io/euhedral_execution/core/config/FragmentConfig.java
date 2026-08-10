@@ -1,6 +1,5 @@
 package io.euhedral_execution.core.config;
 
-import io.euhedral_execution.core.control_plane.ControlPlaneFragment;
 import io.euhedral_execution.core.generics.CloneableObject;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.Objects;

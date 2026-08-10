@@ -9,8 +9,8 @@
 - Owning module: `euhedral-hardware-utils` (Java 17 release target)
 - Blueprint model: `gpt-5.6-sol`
 - Blueprint reasoning effort: `max`
-- Status: implementation-ready child contract; review and merge into the P3 root are required
-  before implementation
+- Status: implementation-ready child contract; review and merge into the P3 root are required before
+  implementation
 
 This child refines only the parent's frozen P3-A responsibility. The parent remains authoritative
 for capability meanings, mask mathematics, lease/restoration semantics, managed ownership, and the
@@ -33,12 +33,12 @@ instance-testable Java controller that:
 2. validates and owns every request before any platform call;
 3. reports only operational exact placement, conservative locality hinting, or unsupported;
 4. discovers `BASE_MASK` without changing affinity;
-5. restores the calling thread's first captured exact binding or releases one applied locality
-   hint with tag zero;
+5. restores the calling thread's first captured exact binding or releases one applied locality hint
+   with tag zero;
 6. gives managed task threads a nested, scoped Euhedral logical owner without claiming physical
    placement;
-7. remains safe when the OS is unsupported, a platform singleton is absent, or a recoverable
-   native boundary fails; and
+7. remains safe when the OS is unsupported, a platform singleton is absent, or a recoverable native
+   boundary fails; and
 8. proves the complete contract with deterministic Java fakes rather than host-affinity timing.
 
 P3-A does not change executor lifecycle. It supplies only the package-private managed-task binding
@@ -108,8 +108,8 @@ Those callers are compile/test evidence only. Their production files do not ente
 
 - `PinnedThreadExecutor` implementation or any executor registry/lifecycle/cleanup work owned by
   P3-B;
-- native implementation bodies, new or changed native declarations, processor-group APIs,
-  sysfs/proc discovery, Mach topology, timer-policy repair, or detailed P5-P7 parity;
+- native implementation bodies, new or changed native declarations, processor-group APIs, sysfs/proc
+  discovery, Mach topology, timer-policy repair, or detailed P5-P7 parity;
 - topology production/adapters, resources, `ResourceMonitor`, pressure, snapshots, or cadence;
 - core production, benchmarks, Reactor, Spring, CI, root POM, native build/package/loader, or
   unrelated cleanup; and
@@ -144,9 +144,9 @@ Retain the descriptors, modifiers, and declared exceptions of `ThreadTools.BASE_
 `@Nullable` to `getCpuInfo()`'s return type because `null` is now explicit; the descriptor remains
 `()Lio/euhedral_execution/hardware_utils/SystemInfo$CpuInfo;`.
 
-Retain all existing public/protected facade types, `INSTANCE` fields, constructors, methods,
-native modifiers, and JNI declarations. The exported legacy `common.ThreadPinner` is unchanged.
-The internal sealed `ThreadPinner` may gain non-public operational hooks and an internal provider
+Retain all existing public/protected facade types, `INSTANCE` fields, constructors, methods, native
+modifiers, and JNI declarations. The exported legacy `common.ThreadPinner` is unchanged. The
+internal sealed `ThreadPinner` may gain non-public operational hooks and an internal provider
 contract, but its three public abstract compatibility methods and the three facade inheritance
 relationships remain.
 
@@ -189,8 +189,8 @@ Use one `AffinityController` instance behind static `ThreadTools`. It receives a
 - the P2 logical index span; and
 - the existing bounded logger/diagnostic boundary.
 
-Construction validates `span` in `[1, 1_048_576]`, validates that the nonempty supported mask has
-no bit at or above `span`, and performs base discovery exactly once. The controller exposes
+Construction validates `span` in `[1, 1_048_576]`, validates that the nonempty supported mask has no
+bit at or above `span`, and performs base discovery exactly once. The controller exposes
 package-private instance operations corresponding to the public facade, lease release, managed
 binding, and test-only state observations. Tests construct it directly; they do not mutate static
 `ThreadTools`, change `os.name`, use reflection to reset final fields, or rely on test order.
@@ -218,8 +218,8 @@ Required immutable value roles are:
   snapshot; and
 - one thread-confined lease state discriminating exact restoration from locality release.
 
-Array constructors clone. Array access passed to a provider or returned to a test is another
-clone. No record accessor or ordinary getter exposes the stored mutable array.
+Array constructors clone. Array access passed to a provider or returned to a test is another clone.
+No record accessor or ordinary getter exposes the stored mutable array.
 
 ### P3-B managed-task bridge
 
@@ -247,14 +247,13 @@ are never silently intersected away.
 
 For `long[]`, word `i` is little-endian and bit `b` is logical CPU `64 * i + b`, including bit 63.
 Use `Long.numberOfTrailingZeros`, `Long.numberOfLeadingZeros`, unsigned shifts, or
-`word &= word - 1`;
-never use signed comparison to enumerate a word.
+`word &= word - 1`; never use signed comparison to enumerate a word.
 
 Canonicalization is one shared operation used by the controller and direct facade validation:
 
 1. reject `null`;
-2. reject an input word count greater than `(span + 63) >>> 6` before cloning or allocating
-   another proportional buffer;
+2. reject an input word count greater than `(span + 63) >>> 6` before cloning or allocating another
+   proportional buffer;
 3. clone the accepted input before inspection;
 4. remove trailing zero words from the owned logical representation;
 5. reject zero length/all zero;
@@ -275,8 +274,8 @@ Overload rules are exact:
 - `setAffinity(BitSet cpus)`: reject null; reject an observable storage/high-bit bound beyond the
   maximum before cloning, then clone and recheck the clone before conversion. Empty is false.
 - `setAffinity(long[] masks)`: use the canonicalization above.
-- `setAffinity()`: obtain the controller's truthful current logical CPU, then use the same
-  single-ID path; `-1` therefore returns false without a provider mutation.
+- `setAffinity()`: obtain the controller's truthful current logical CPU, then use the same single-ID
+  path; `-1` therefore returns false without a provider mutation.
 
 Concurrent mutation of a caller collection is not synchronization supplied by this API. The owned
 clone is the request snapshot; all validation and calls use only that snapshot.
@@ -309,21 +308,21 @@ before its one raw call. It keeps its existing descriptor and boolean result.
 - Linux may make exactly one existing JNI call for a complete valid canonical mask and return true
   only for status zero. No Java word-by-word fallback is allowed.
 - Windows may make exactly one existing JNI call only when the canonical request has one nonzero
-  group word. A request with two or more nonzero group words returns false before JNI in P3-A;
-  P6 owns a proved atomic multi-group operation.
+  group word. A request with two or more nonzero group words returns false before JNI in P3-A; P6
+  owns a proved atomic multi-group operation.
 - macOS may make exactly one existing JNI call only when all requested CPUs resolve to one
   conservative representable P3 locality. P3 maps each process-visible logical ordinal to its own
   nonzero tag, so after duplicate collapse this is exactly one distinct CPU. Multiple distinct
   ordinals return false before JNI. P7 may widen the mapping from public topology evidence.
 
-Empty/all-zero remains false for every public `setAffinity`. The macOS operational release hook,
-not public `setAffinity`, invokes the existing raw boundary once with the all-zero/tag-zero release
-representation. No new JNI declaration is added. Package-private facade seams accept a fake raw
-call and expose call count/input/status to tests; production uses the same helper with the existing
+Empty/all-zero remains false for every public `setAffinity`. The macOS operational release hook, not
+public `setAffinity`, invokes the existing raw boundary once with the all-zero/tag-zero release
+representation. No new JNI declaration is added. Package-private facade seams accept a fake raw call
+and expose call count/input/status to tests; production uses the same helper with the existing
 native method reference.
 
-Direct facade setters do not capture or promise restoration. Therefore their boolean result does
-not upgrade the common `ThreadTools` capability.
+Direct facade setters do not capture or promise restoration. Therefore their boolean result does not
+upgrade the common `ThreadTools` capability.
 
 ## Capability initialization and base discovery
 
@@ -366,14 +365,14 @@ For the first exact request since release on a thread:
    `finally`.
 
 A later successful exact set before release reuses the first snapshot and does not recapture.
-Failure of a later apply leaves the earlier successful lease intact so release can still restore
-the true original. No fallback mask replaces a missing snapshot.
+Failure of a later apply leaves the earlier successful lease intact so release can still restore the
+true original. No fallback mask replaces a missing snapshot.
 
 ### Locality acquisition
 
-Resolve the complete request to one locality before mutation. On a thread without a locality
-lease, install a pending lease before the one apply and remove it if apply fails. On success retain
-the applied-locality lease. Later successful hint changes before release retain the same release
+Resolve the complete request to one locality before mutation. On a thread without a locality lease,
+install a pending lease before the one apply and remove it if apply fails. On success retain the
+applied-locality lease. Later successful hint changes before release retain the same release
 obligation; a later failure does not erase an earlier applied lease.
 
 ### Release
@@ -401,13 +400,13 @@ affinity request succeeded.
 
 Successful close is idempotent. Closing a current top token twice is a no-op. Before successful
 close, a wrong-thread close or same-thread out-of-LIFO close throws `IllegalStateException` and
-changes neither thread's state. Token fields do not strongly retain a command, executor, or
-platform request.
+changes neither thread's state. Token fields do not strongly retain a command, executor, or platform
+request.
 
 Current CPU selection is deterministic and independent of affinity mutation capability:
 
-1. when a provider exists, ask its independently truthful current-CPU hook and accept only an ID
-   in the span and supported mask;
+1. when a provider exists, ask its independently truthful current-CPU hook and accept only an ID in
+   the span and supported mask;
 2. a provider without such a query returns `-1` without invoking an untruthful platform boundary;
 3. if the result is unavailable/invalid or the provider throws recoverably, return the current
    managed logical owner when present; and
@@ -436,8 +435,8 @@ and never invents CPU zero.
 At affinity/provider boundaries, normalize `RuntimeException` and `LinkageError` to the table's
 false/unsupported/fallback outcome. Do not catch or normalize `VirtualMachineError` or
 `ThreadDeath`; outer `finally` cleanup still runs where one already exists. Diagnostics use SLF4J
-placeholders, pass the throwable last, have fixed-size messages, and do not stringify masks in a
-hot path.
+placeholders, pass the throwable last, have fixed-size messages, and do not stringify masks in a hot
+path.
 
 `setTimerResolution` is not redesigned. With a selected provider it preserves the existing
 delegation and provider behavior; without one it returns false rather than dereferencing null.
@@ -479,8 +478,8 @@ or use a cross-platform native runtime as semantic evidence. Every helper restor
 current-thread tokens in `finally` and asserts both thread-local seams empty.
 
 `ThreadToolsAffinityTest#discoversAndRestoresTheOriginalMask` is the A01 anchor. With an exact fake
-whose initialization snapshot and first per-thread snapshot are distinct sparse masks containing
-bit 63, it proves:
+whose initialization snapshot and first per-thread snapshot are distinct sparse masks containing bit
+63, it proves:
 
 - construction makes exactly one non-mutating capture and zero apply/release calls;
 - the base mask is the owned initialization snapshot;
@@ -507,8 +506,8 @@ The same class also covers:
    normal, and failing paths have the exact outcomes above;
 9. independent provider current CPU preference across mutation capabilities, invalid/throwing
    current CPU managed fallback, and unavailable unmanaged `-1`/`null`; and
-10. mutation of every caller `long[]`, `int[]`, `BitSet`, provider-received array, captured
-    snapshot source, and base source after the call cannot alter owned state.
+10. mutation of every caller `long[]`, `int[]`, `BitSet`, provider-received array, captured snapshot
+    source, and base source after the call cannot alter owned state.
 
 Facade package tests use counters and copied arguments to prove:
 
@@ -521,8 +520,8 @@ Facade package tests use counters and copied arguments to prove:
 
 The P0 API test must report zero removed/changed declarations and only the reviewed additive enum,
 enum constants/compiler members, and capability query. The module section stays `SAME`. The P0
-native declaration comparison stays unchanged. Canonical mask formatting remains green even
-though request validation uses the same logical bit meanings.
+native declaration comparison stays unchanged. Canonical mask formatting remains green even though
+request validation uses the same logical bit meanings.
 
 ## Bounded implementation checklist
 
@@ -540,12 +539,12 @@ Implement in this order as one P3-A action item:
 5. Implement exact first-original pending/applied lease state, repeat-set preservation, exact
    restore, locality whole-request mapping, one-hint apply, and tag-zero release with `finally`
    removal.
-6. Implement nested owner-thread `ManagedCpuBinding`, the package-private P3-B bridge, and the
-   exact provider/managed/`-1` current-CPU decision tree.
+6. Implement nested owner-thread `ManagedCpuBinding`, the package-private P3-B bridge, and the exact
+   provider/managed/`-1` current-CPU decision tree.
 7. Adapt Linux, Windows, and macOS Java facades to the frozen conservative P3 table and direct-call
    rules using package-local fake raw-call seams; do not add JNI or inspect/change native bodies.
-8. Normalize only the settled recoverable failures, preserve fatal errors, keep timer delegation
-   out of redesign, and ensure every failure path retains no new request/snapshot/thread-local.
+8. Normalize only the settled recoverable failures, preserve fatal errors, keep timer delegation out
+   of redesign, and ensure every failure path retains no new request/snapshot/thread-local.
 9. Add the deterministic controller and facade suites, including A01, full matrix, mutation,
    nesting/wrong-thread, failure, and zero-call assertions.
 10. Run the focused P3-A suite, P0 API/native/mask gates, hardware verification, read-only core
@@ -560,8 +559,8 @@ No checklist item authorizes executor implementation or detailed platform parity
    all baseline declarations, JNI declarations, and module directives are unchanged.
 2. Capability is non-null, stable, operationally truthful, and follows the conservative P3
    production table; macOS never reports `EXACT`.
-3. All overloads copy and validate the complete unsigned request within the P2 span/active mask;
-   bit 63 is retained and no invalid bit is intersected into success.
+3. All overloads copy and validate the complete unsigned request within the P2 span/active mask; bit
+   63 is retained and no invalid bit is intersected into success.
 4. Every deterministic matrix cell passes; rejected/unrepresentable requests make zero raw calls,
    Windows never reports partial cross-group success, and macOS never applies a first-only hint.
 5. Base discovery is non-destructive and bounded to one capture; fallback base data never restores
@@ -625,8 +624,8 @@ P3-A remains one bounded implementation child and is not split again.
 
 - It owns one module and one responsibility: request-to-capability/lease/managed-owner behavior.
 - The public surface is one enum/query; all other new roles are unexported and feed one controller.
-- The three facades share one frozen validation/apply matrix and do not introduce independent
-  native implementations. Their package tests are small adapters around the same contract.
+- The three facades share one frozen validation/apply matrix and do not introduce independent native
+  implementations. Their package tests are small adapters around the same contract.
 - Exact masks, thread-local leases, and current-CPU ownership are coupled: splitting facade work
   from the controller would duplicate or temporarily violate all-or-nothing semantics.
 - The P3-B boundary is one package-private binding operation and is independently implementable
@@ -638,26 +637,26 @@ cross-child temporary API for a single controller without reducing the high-reas
 ## Implementation model reassessment
 
 P3-A touches one Java 17 module, the exported root facade, one unexported provider/controller
-region, three exported platform Java facades, one new public enum, and four focused test classes.
-It combines unsigned bounded mask mathematics, safe initialization, exact/locality capability
-honesty, all-or-nothing platform calls, per-thread pending/applied restoration state, nested owner
-tokens, recoverable native failures, and additive API/JNI compatibility.
+region, three exported platform Java facades, one new public enum, and four focused test classes. It
+combines unsigned bounded mask mathematics, safe initialization, exact/locality capability honesty,
+all-or-nothing platform calls, per-thread pending/applied restoration state, nested owner tokens,
+recoverable native failures, and additive API/JNI compatibility.
 
 The exact context envelope is substantially smaller than the parent P3 context, and no executor
-registry, global lifecycle state, deadline, filesystem, serialization, resource math, or native
-body is involved. However, the implementation still must keep capability, mask, restoration,
-thread-local cleanup, three facade deferrals, and downstream nullability compatibility coherent.
-A lower-effort pass could easily report raw setters as exact, lose bit 63, install a lease after
-mutation, erase a prior lease on later failure, or leak owner state.
+registry, global lifecycle state, deadline, filesystem, serialization, resource math, or native body
+is involved. However, the implementation still must keep capability, mask, restoration, thread-local
+cleanup, three facade deferrals, and downstream nullability compatibility coherent. A lower-effort
+pass could easily report raw setters as exact, lose bit 63, install a lease after mutation, erase a
+prior lease on later failure, or leak owner state.
 
 The parent-selected implementation model is therefore confirmed without downgrade:
 
 - **Implementation: `gpt-5.6-sol`, reasoning effort `high`.**
 - **Combined conformance/manual review: `gpt-5.6-sol`, reasoning effort `high`.**
 
-`medium` or `low` is not justified. The blueprint removes architecture selection but not the
-coupled failure and ownership reasoning. If this model is unavailable, stop for developer direction
-or split again; do not silently substitute a lower-capability implementation pass.
+`medium` or `low` is not justified. The blueprint removes architecture selection but not the coupled
+failure and ownership reasoning. If this model is unavailable, stop for developer direction or split
+again; do not silently substitute a lower-capability implementation pass.
 
 ## Exact implementation context envelope
 
@@ -687,8 +686,8 @@ temporary P3 status update authorized by the implementation prompt.
 
 Hand off for developer review and merge into the P3 root only when:
 
-- every capability, mask, platform-call, restoration, release, ownership, current-CPU,
-  failure/JMM, and fake-seam rule above is settled;
+- every capability, mask, platform-call, restoration, release, ownership, current-CPU, failure/JMM,
+  and fake-seam rule above is settled;
 - the sizing gate still yields one P3-A child;
 - the plan records the confirmed `gpt-5.6-sol`/`high` implementation selection and review summary;
 - only this child blueprint and authorized plan text differ from `7d3abea7`;
@@ -715,14 +714,14 @@ at `b5333c8e`.
 - Kept Linux and Windows common capability unsupported; macOS supplies only the frozen single-
   ordinal locality contract. Direct facade helpers validate complete requests before one raw call.
 - Added deterministic controller and facade tests. No JNI declaration/body, module directive,
-  executor, resource/pressure, topology production, core production, CI, benchmark, or training
-  file changed.
+  executor, resource/pressure, topology production, core production, CI, benchmark, or training file
+  changed.
 
 ### Commands and results
 
-- Pinned `mise` could not run because `mise` is not installed. The documented fallback found
-  OpenJDK 17.0.19 and Gradle 3.6.3; the hardware module's Java 17 sources/tests compile under that
-  fallback, but it is not the pinned Java 21/Gradle 3.9.16 toolchain.
+- Pinned `mise` could not run because `mise` is not installed. The documented fallback found OpenJDK
+  17.0.19 and Gradle 3.6.3; the hardware module's Java 17 sources/tests compile under that fallback,
+  but it is not the pinned Java 21/Gradle 3.9.16 toolchain.
 - The direct P3-A command passed: 10 tests, zero failures. This includes
   `ThreadToolsAffinityTest#discoversAndRestoresTheOriginalMask` (A01), exact/locality/unsupported
   behavior, rejected-mask zero-call checks, bit-63 preservation, restoration/release cleanup,
@@ -730,12 +729,12 @@ at `b5333c8e`.
 - The P0 native, mask-format, and fresh-thread tests passed. The API comparison reported zero
   removals. Its P3-A additions are exactly the enum, its compiler members/constants, and the
   capability query; no unintended facade hook remains. The test itself remains red under the
-  fallback because the historic baseline rejects all additions, includes inherited P2 additions,
-  and OpenJDK 17 stamps three module-requires versions that the baseline records as absent.
+  fallback because the historic baseline rejects all additions, includes inherited P2 additions, and
+  OpenJDK 17 stamps three module-requires versions that the baseline records as absent.
 - `gradle :euhedral-hardware-utils:build` and
-  `gradle :euhedral-core:test` both stopped in the hardware Zig lifecycle before native or
-  core tests because the `ZIG` executable parameter is missing/invalid. The latter completed the
-  upstream data-structures suite (8 tests) before that stop.
+  `gradle :euhedral-core:test` both stopped in the hardware Zig lifecycle before native or core
+  tests because the `ZIG` executable parameter is missing/invalid. The latter completed the upstream
+  data-structures suite (8 tests) before that stop.
 - `git diff --check` passed. Diffs from `b5333c8e` under `euhedral-training`,
   `euhedral-core/src/main`, `module-info.java`, and `src/main/native` are empty.
 
@@ -743,14 +742,13 @@ at `b5333c8e`.
 
 A01 is directly evidenced. Invalid, empty, high, sparse-hole, unsupported, cross-group, and
 multi-locality requests are rejected before platform mutation. Exact success requires a captured
-original and complete apply; locality success follows one fully resolved hint. Exact/locality
-leases are removed after release success, false status, or recoverable failure, and managed owners
-remove their outermost thread-local value. Unsupported provider selection is stable and never
-dereferenced.
+original and complete apply; locality success follows one fully resolved hint. Exact/locality leases
+are removed after release success, false status, or recoverable failure, and managed owners remove
+their outermost thread-local value. Unsupported provider selection is stable and never dereferenced.
 
-Pinned API/module verification, native-backed hardware verification, and read-only core tests
-remain environmentally unverified for the exact reasons above; no source or build configuration
-was changed to accommodate the fallback environment.
+Pinned API/module verification, native-backed hardware verification, and read-only core tests remain
+environmentally unverified for the exact reasons above; no source or build configuration was changed
+to accommodate the fallback environment.
 
 ## Conformance audit completion record
 
@@ -769,9 +767,8 @@ The P3-A conformance/manual-review audit was completed on
   immutable inputs. No core production, native body/declaration, module descriptor, executor, or
   training file changed.
 - Under `mise` Java 21.0.2/Gradle 3.9.16, the focused P3-A suite passed (14 tests), the P0
-  API/native/
-  mask/fresh-thread gates passed (4 tests), and cache-disabled hardware verification passed,
-  including Zig/native packaging/load checks and 63 unit tests.
+  API/native/ mask/fresh-thread gates passed (4 tests), and cache-disabled hardware verification
+  passed, including Zig/native packaging/load checks and 63 unit tests.
 - The complete cache-disabled `euhedral-core -am test` gate passed: 63 hardware tests and 99 core
   tests, including the unmanaged Linux `ThreadTools.getCpu/getCpuInfo` callers and the corrected
   topology/snapshot fixtures.

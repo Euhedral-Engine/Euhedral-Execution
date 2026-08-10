@@ -11,8 +11,8 @@
 - Repository toolchain: the Java 21 and Gradle 3.9.16 versions selected by `mise.toml`
 - Blueprint model: `gpt-5.6-sol`
 - Blueprint reasoning effort: `max`
-- Status: implementation-ready child contract; review and merge into the P3 root are required
-  before implementation
+- Status: implementation-ready child contract; review and merge into the P3 root are required before
+  implementation
 
 This child refines only the parent's frozen P3-B responsibility. The parent remains authoritative
 for public compatibility, fresh concurrent execution, lifecycle states, registry overlap,
@@ -72,8 +72,8 @@ euhedral-hardware-utils/src/test/java/io/euhedral_execution/hardware_utils/
   PinnedThreadExecutorLifecycleTest.java
 ```
 
-The implementation may update only assertions or teardown in these existing tests when necessary
-to express the already-frozen behavior:
+The implementation may update only assertions or teardown in these existing tests when necessary to
+express the already-frozen behavior:
 
 ```text
 PinnedThreadExecutorTest.java
@@ -106,12 +106,12 @@ normal `AbstractExecutorService` behavior through this class's `execute` impleme
 
 - Changes to `ThreadTools`, `AffinityCapability`, the P3-A controller/provider/lease types, or
   platform Java/native affinity code.
-- Topology production or adapters, `SystemInfo` production, resources, `ResourceMonitor`,
-  pressure, cadence, snapshots, or timer policy.
+- Topology production or adapters, `SystemInfo` production, resources, `ResourceMonitor`, pressure,
+  cadence, snapshots, or timer policy.
 - Core production, benchmarks, Reactor, Spring, native build/package/loader, CI, root POM, or
   unrelated cleanup.
-- Task queues, pooled/reused threads, a persistent worker, one-thread-at-a-time serialization, or
-  a new scheduling policy.
+- Task queues, pooled/reused threads, a persistent worker, one-thread-at-a-time serialization, or a
+  new scheduling policy.
 - Any inspection, edit, build, test, documentation, or command under `euhedral-training`.
 
 ## Frozen P3-A task boundary
@@ -148,9 +148,9 @@ independent provider CPU wins, then an active managed logical owner is the fallb
 result is `-1`/null.
 
 This preserves the P3-A Linux correction: Linux can return a non-null `getCpuInfo()` from its
-independent current-CPU provider even while mutation capability remains `UNSUPPORTED`. P3-B must
-not suppress that provider result, equate managed ownership with physical placement, or change
-P3-A capability semantics.
+independent current-CPU provider even while mutation capability remains `UNSUPPORTED`. P3-B must not
+suppress that provider result, equate managed ownership with physical placement, or change P3-A
+capability semantics.
 
 `releaseAffinity` is attempted even when the affinity call returned false because the P3-A
 controller makes an unmatched release a harmless no-op. Nested `finally` blocks ensure release,
@@ -178,8 +178,8 @@ awaitTermination(long,TimeUnit)
 close()
 ```
 
-In particular, `awaitTermination` continues to declare no checked `InterruptedException`.
-Preserve the configured thread name, clamp priority to the inclusive JDK
+In particular, `awaitTermination` continues to declare no checked `InterruptedException`. Preserve
+the configured thread name, clamp priority to the inclusive JDK
 `Thread.MIN_PRIORITY..Thread.MAX_PRIORITY` range, preserve daemon configuration, and return the
 validated logical CPU as `int`. The `Function<Runnable, ? extends Thread>` creator is fixed for one
 executor identity; restart updates only name, clamped priority, and daemon. Acquisition of an
@@ -197,13 +197,13 @@ The public pinned factory remains a direct construction surface. Each `newThread
 - snapshots the latest published configuration under the lifecycle monitor;
 - invokes the fixed creator and configures the candidate outside that monitor;
 - returns one distinct configured NEW ownership/affinity-wrapped thread;
-- does not inspect lifecycle state, register an active task, start the thread, or make it subject
-  to executor termination; and
+- does not inspect lifecycle state, register an active task, start the thread, or make it subject to
+  executor termination; and
 - allows the direct caller to own start, interruption, join, and disposal.
 
-A null or non-NEW creator result becomes `RejectedExecutionException`. An unchecked exception
-from the creator or from configuring the candidate propagates unchanged. Direct wrappers tolerate
-the absence of an active-task entry during final cleanup.
+A null or non-NEW creator result becomes `RejectedExecutionException`. An unchecked exception from
+the creator or from configuring the candidate propagates unchanged. Direct wrappers tolerate the
+absence of an active-task entry during final cleanup.
 
 ## Per-executor lifecycle architecture
 
@@ -219,25 +219,25 @@ One executor identity has:
 - one lifecycle state: `RUNNING`, `SHUTDOWN`, or `CLOSED`;
 - one immutable current thread configuration;
 - one checked `long` configuration epoch, initially 1; and
-- one identity-keyed active-task map containing only accepted threads that successfully started
-  and have not completed wrapper cleanup.
+- one identity-keyed active-task map containing only accepted threads that successfully started and
+  have not completed wrapper cleanup.
 
 The lifecycle control is a static nested or package-private object. It has no implicit or explicit
 back-reference to `PinnedThreadExecutor`, no pinned-factory reference, and no command field. Its
-only temporary paths toward an executor are active `Thread` keys whose running wrappers already
-hold that executor intentionally; the map is empty for an idle executor.
+only temporary paths toward an executor are active `Thread` keys whose running wrappers already hold
+that executor intentionally; the map is empty for an idle executor.
 
 State, configuration, epoch, and active membership are guarded by exactly one private
 `synchronized` lifecycle monitor. Use that monitor's `wait`/`notifyAll`; do not add a second task
-counter, shutdown atomic, volatile configuration, polling loop, per-thread join, `ReentrantLock`,
-or separate termination condition.
+counter, shutdown atomic, volatile configuration, polling loop, per-thread join, `ReentrantLock`, or
+separate termination condition.
 
 The registry has one distinct low-frequency `synchronized` monitor. If an operation must hold both
 monitors, the only order is registry monitor -> lifecycle monitor. Code holding the lifecycle
 monitor never acquires the registry monitor. Task exit, explicit cleanup, and interrupt delivery
 release the lifecycle monitor before invoking registry or external operations. Thread creation is
-outside both monitors. `Thread.start()` is the one external call deliberately made while holding
-the lifecycle monitor.
+outside both monitors. `Thread.start()` is the one external call deliberately made while holding the
+lifecycle monitor.
 
 ### State machine and observations
 
@@ -300,11 +300,11 @@ shutdown/restart cycle even when all visible configuration values are equal.
 3. Outside all locks, construct the executor-tracked ownership/affinity wrapper, call the creator,
    configure the returned thread from the snapshot, and require its state to be NEW. Creator or
    configuration exceptions propagate; null/non-NEW becomes `RejectedExecutionException`.
-4. Reenter the lifecycle monitor. Require RUNNING, the identical epoch, and the candidate still
-   NEW. If any check fails, reject; the unstarted candidate and command are not retained.
+4. Reenter the lifecycle monitor. Require RUNNING, the identical epoch, and the candidate still NEW.
+   If any check fails, reject; the unstarted candidate and command are not retained.
 5. Register by `Thread` object identity and call `Thread.start()` before releasing the monitor.
-6. If start throws, remove that exact identity, notify waiters, and propagate the original
-   failure. No registry or lifecycle state transition is implied.
+6. If start throws, remove that exact identity, notify waiters, and propagate the original failure.
+   No registry or lifecycle state transition is implied.
 
 Once step 5 succeeds, shutdown cannot miss the accepted task. The new thread may block on the same
 monitor during final removal until execute releases it; this is intentional. There is no interval
@@ -313,12 +313,12 @@ accepted execute repeats construction and therefore creates a different thread i
 
 ### Wrapper failure and cleanup
 
-The command is invoked once and is not caught as an application error. An unchecked command
-failure leaves the executor state unchanged and reaches the thread's configured uncaught-exception
-handler after cleanup. Cleanup must preserve that exact failure.
+The command is invoked once and is not caught as an application error. An unchecked command failure
+leaves the executor state unchanged and reaches the thread's configured uncaught-exception handler
+after cleanup. Cleanup must preserve that exact failure.
 
-Recoverable `RuntimeException` or `LinkageError` from affinity release or owner close is logged as
-a bounded diagnostic, does not replace an in-flight command failure, and cannot prevent the next
+Recoverable `RuntimeException` or `LinkageError` from affinity release or owner close is logged as a
+bounded diagnostic, does not replace an in-flight command failure, and cannot prevent the next
 cleanup step. `VirtualMachineError` and `ThreadDeath` are not normalized or logged as recoverable;
 they propagate after the outer active-task-removal `finally` runs. Active removal itself is
 nonthrowing under valid invariants.
@@ -329,21 +329,21 @@ empty, it records an identity-safe registry-removal request, releases the lifecy
 then asks the registry to remove only its exact entry. Names and numeric thread IDs never identify
 tasks.
 
-The task wrapper holds its `PinnedThreadExecutor` strongly through the outer `finally`. Therefore
-a running accepted task prevents cleaner action merely because the submitting caller discarded
-the executor reference. After task removal, the active map and wrapper retain no completed command.
+The task wrapper holds its `PinnedThreadExecutor` strongly through the outer `finally`. Therefore a
+running accepted task prevents cleaner action merely because the submitting caller discarded the
+executor reference. After task removal, the active map and wrapper retain no completed command.
 
 ### Shutdown, interruption, and close
 
 - `shutdown()` changes RUNNING to SHUTDOWN under the lifecycle monitor, notifies waiters, and does
   not interrupt or unpark accepted work. Repetition in SHUTDOWN/CLOSED is a no-op.
-- `shutdownNow()` changes RUNNING to SHUTDOWN when necessary, snapshots all active thread
-  identities under the lifecycle monitor, notifies on a transition, then interrupts and unparks
-  each snapshot thread outside every lock. It performs the best-effort snapshot on repeated calls
-  and returns `List.of()` or another immutable empty list.
-- `close()` permanently changes RUNNING/SHUTDOWN to CLOSED, snapshots active threads, notifies,
-  then interrupts/unparks outside every lock and invokes the entry's same idempotent cleanup
-  registration used by the cleaner. It never joins or waits without a bound.
+- `shutdownNow()` changes RUNNING to SHUTDOWN when necessary, snapshots all active thread identities
+  under the lifecycle monitor, notifies on a transition, then interrupts and unparks each snapshot
+  thread outside every lock. It performs the best-effort snapshot on repeated calls and returns
+  `List.of()` or another immutable empty list.
+- `close()` permanently changes RUNNING/SHUTDOWN to CLOSED, snapshots active threads, notifies, then
+  interrupts/unparks outside every lock and invokes the entry's same idempotent cleanup registration
+  used by the cleaner. It never joins or waits without a bound.
 - Cleaner and hook closure use the same control transition and interrupt helper. Concurrent exits
   and repeated interrupt/unpark are harmless.
 
@@ -351,8 +351,8 @@ Interrupt delivery calls `interrupt()` and `LockSupport.unpark(thread)` at least
 thread in the snapshot. A recoverable per-thread interruption failure is a bounded diagnostic and
 does not stop attempts for later snapshot threads. These methods do not call
 `Thread.interrupted()`, `sleep`, `join`, or another interrupt-clearing operation, so the caller's
-preexisting interrupt status is preserved. An interrupt-ignoring command may remain active;
-shutdown methods do not claim otherwise.
+preexisting interrupt status is preserved. An interrupt-ignoring command may remain active; shutdown
+methods do not claim otherwise.
 
 ## Termination and deadline contract
 
@@ -383,9 +383,9 @@ remaining := budget - elapsed
 ```
 
 Do not calculate `now + timeout`. Convert a positive remaining value into the millisecond/nanosecond
-arguments for `Object.wait` without narrowing overflow. This contract covers all practical
-durations below the signed `nanoTime` horizon, including a saturated `Long.MAX_VALUE` budget.
-There is no fixed polling park, busy wait, future loop, or sequential worker join.
+arguments for `Object.wait` without narrowing overflow. This contract covers all practical durations
+below the signed `nanoTime` horizon, including a saturated `Long.MAX_VALUE` budget. There is no
+fixed polling park, busy wait, future loop, or sequential worker join.
 
 ## Singleton registry
 
@@ -408,38 +408,38 @@ the executor. A registry entry is compared by object identity, never only by CPU
 `getOrSetIfAbsent` is entirely linearized under the registry monitor after argument validation:
 
 1. A live RUNNING entry returns its executor identity without changing configuration.
-2. A live SHUTDOWN entry calls the documented restart while holding registry then lifecycle
-   monitor and returns the same identity. The original thread creator remains fixed.
+2. A live SHUTDOWN entry calls the documented restart while holding registry then lifecycle monitor
+   and returns the same identity. The original thread creator remains fixed.
 3. A CLOSED entry with any active task rejects with `RejectedExecutionException`; it remains a
    tombstone and no candidate executor is created.
 4. A CLOSED, cleared, or otherwise stale entry with no active task is removed only if it is still
    the exact mapped entry. Cleanup/hook bookkeeping for that identity is completed before
    replacement.
-5. For an absent CPU, one executor/control/entry is constructed and its cleaner is registered
-   first. The existing registry hook is reused or the first hook is then registered. Only after
-   both registrations succeed is the exact entry published. Because creation occurs while the
+5. For an absent CPU, one executor/control/entry is constructed and its cleaner is registered first.
+   The existing registry hook is reused or the first hook is then registered. Only after both
+   registrations succeed is the exact entry published. Because creation occurs while the
    low-frequency registry monitor is held, concurrent callers do not construct losing executor
    candidates.
 
 Cleaner-registration failure occurs before a new hook is added. Hook-add failure explicitly cleans
 the new cleanup registration before propagating. Thus no map entry, leaked per-entry registration,
-or externally returned unhooked executor is published. Registry construction invokes no user
-thread creator; that function is only stored.
+or externally returned unhooked executor is published. Registry construction invokes no user thread
+creator; that function is only stored.
 
-`get(cpu)` under the same registry monitor returns the referent only when it is live and RUNNING.
-It returns null for SHUTDOWN, CLOSED, cleared, or absent entries. It may complete exact stale-entry
+`get(cpu)` under the same registry monitor returns the referent only when it is live and RUNNING. It
+returns null for SHUTDOWN, CLOSED, cleared, or absent entries. It may complete exact stale-entry
 cleanup when no task is active, but it never restarts and can never remove a replacement.
 
 ### Closed tombstones and exact removal
 
 A CLOSED entry is removed immediately only when its active map is empty. While an old task remains,
 the entry stays mapped even if the weak referent would otherwise be stale; the wrapper's strong
-reference normally keeps that referent alive. Same-CPU acquisition rejects until final wrapper
-exit removes the last task and then the exact entry.
+reference normally keeps that referent alive. Same-CPU acquisition rejects until final wrapper exit
+removes the last task and then the exact entry.
 
-Every removal path performs an identity comparison equivalent to `remove(cpu, exactEntry)` under
-the registry monitor. An explicit close, delayed cleaner action, task exit, `get` cleanup, hook,
-or `closeAll` action associated with an old entry cannot remove or close a newer replacement.
+Every removal path performs an identity comparison equivalent to `remove(cpu, exactEntry)` under the
+registry monitor. An explicit close, delayed cleaner action, task exit, `get` cleanup, hook, or
+`closeAll` action associated with an old entry cannot remove or close a newer replacement.
 
 ## Cleaner, hook, and `closeAll`
 
@@ -478,8 +478,8 @@ executor or command.
   entry publication.
 - Later entries and every restart reuse the same hook identity.
 - Removing the last exact entry during ordinary runtime removes that exact hook.
-- Add failure rolls back acquisition. A non-shutdown remove failure is logged and retains the
-  exact registration for reuse, so a second hook is never added.
+- Add failure rolls back acquisition. A non-shutdown remove failure is logged and retains the exact
+  registration for reuse, so a second hook is never added.
 - `removeShutdownHook` throwing `IllegalStateException` during JVM shutdown is expected; it is
   recorded as shutdown-in-progress and never causes replacement-hook registration.
 
@@ -541,15 +541,15 @@ never waits for task exit and therefore remains bounded when a command ignores i
   happens-before publishes the wrapper, command, CPU, and configuration to the new thread.
 - Successful `Thread.start()` returns before execute releases the monitor. A task's final removal
   and `notifyAll` under that monitor happen-before a later locked termination predicate.
-- `Object.wait` atomically releases and reacquires the lifecycle monitor. State transitions and
-  task removals notify under the same monitor, so predicate loops tolerate spurious wakeups and
-  cannot miss coherent publication.
+- `Object.wait` atomically releases and reacquires the lifecycle monitor. State transitions and task
+  removals notify under the same monitor, so predicate loops tolerate spurious wakeups and cannot
+  miss coherent publication.
 - Registry -> lifecycle is the only nested lock order. Task exit and cleanup release lifecycle
   before registry removal; interrupt/unpark, creator, hook registrar callbacks where avoidable,
   logging, and cleanup registration invocation occur without the lifecycle monitor.
 - The cleanup control's one `AtomicBoolean.compareAndSet(false, true)` has volatile read/write
-  semantics and publishes its final action fields before cleanup/removal. Opaque or plain access
-  is insufficient for that ownership transition.
+  semantics and publishes its final action fields before cleanup/removal. Opaque or plain access is
+  insufficient for that ownership transition.
 - Hook identity and `closeAll` gating are registry-monitor state. Do not add an unlocked map
   snapshot, volatile hook count, or independent close-all flag.
 
@@ -563,10 +563,10 @@ added to this blueprint before implementation proceeds.
   wrappers have not completed. Start failure and final exit remove exact identities.
 - Rejected and failed candidates are unstarted/unregistered and cease to be referenced by executor
   state when `execute` returns or throws.
-- Active wrappers retain the executor and command only through final cleanup. Completed commands
-  are absent from active maps, entries, actions, registrations, and hooks.
-- Registry entries weakly reference executors. Cleanup actions, cleanup registrations, hook
-  threads, and static method references contain no strong path to an idle executor.
+- Active wrappers retain the executor and command only through final cleanup. Completed commands are
+  absent from active maps, entries, actions, registrations, and hooks.
+- Registry entries weakly reference executors. Cleanup actions, cleanup registrations, hook threads,
+  and static method references contain no strong path to an idle executor.
 - The lifecycle control captured by cleanup is not an inner-class back-reference. Structural
   reachability from an idle action through its entry/control/registration graph finds no executor,
   pinned factory, command, or task thread.
@@ -591,9 +591,9 @@ registrar fake, a runtime-hook registrar fake, and a task-affinity fake that mir
 test uses `System.gc()`, ReferenceQueue timing, arbitrary sleep, real JVM shutdown, or physical CPU
 placement timing.
 
-Every blocking assertion has a five-second diagnostic timeout. The stress test has a 30-second
-outer timeout. Each test closes/releases all commands in `finally`, empties its isolated registry,
-and restores production registrars.
+Every blocking assertion has a five-second diagnostic timeout. The stress test has a 30-second outer
+timeout. Each test closes/releases all commands in `finally`, empties its isolated registry, and
+restores production registrars.
 
 ### Stable anchors and compatibility
 
@@ -640,8 +640,8 @@ identity rather than name/numeric-ID removal.
 ### Bounded stress
 
 Run 50 rounds. Each round uses eight acquisition/submitter threads and permits at most eight live
-commands. Alternate barrier-controlled execute-vs-shutdown and close-vs-acquire races. Commands
-use bounded latches and always release in `finally`.
+commands. Alternate barrier-controlled execute-vs-shutdown and close-vs-acquire races. Commands use
+bounded latches and always release in `finally`.
 
 After every round assert:
 
@@ -670,9 +670,9 @@ This is bounded race/cleanup evidence, not a throughput or physical-affinity cla
    best-effort shutdownNow/close interruption, and immutable empty shutdownNow result.
 7. Implement monitor-based state queries and elapsed-subtraction `awaitTermination`, including
    restart, spurious wakeup, saturation, and interrupt restoration.
-8. Replace the registry with exact weak entries under one monitor, enforcing live reuse,
-   SHUTDOWN restart, CLOSED-active rejection, stale exact removal, fixed lock order, and no losing
-   cleanup ownership.
+8. Replace the registry with exact weak entries under one monitor, enforcing live reuse, SHUTDOWN
+   restart, CLOSED-active rejection, stale exact removal, fixed lock order, and no losing cleanup
+   ownership.
 9. Add the noncapturing cleanup control/action and explicit cleanup-registration path with exactly
    one CAS and final-task tombstone removal.
 10. Add one registry-wide hook identity, deterministic add/remove failure behavior, ordinary last-
@@ -691,13 +691,13 @@ edit.
 
 1. P0 reports no removed or changed public API/module descriptor, and the A02 stable test plus
    concurrent-fresh-thread compatibility anchor pass.
-2. Every accepted execution creates and starts one distinct NEW thread; two blocking commands
-   enter concurrently and no queue or thread reuse exists.
+2. Every accepted execution creates and starts one distinct NEW thread; two blocking commands enter
+   concurrently and no queue or thread reuse exists.
 3. Managed binding precedes affinity and user code, false affinity does not skip work, and every
    normal/failing wrapper attempts release, owner close, and exact task removal without changing
    P3-A current-CPU/capability semantics.
-4. RUNNING/SHUTDOWN/CLOSED, immutable configuration, epoch, restart, execute, shutdown,
-   shutdownNow, close, and task exit follow the frozen monitor linearization in E2-E8.
+4. RUNNING/SHUTDOWN/CLOSED, immutable configuration, epoch, restart, execute, shutdown, shutdownNow,
+   close, and task exit follow the frozen monitor linearization in E2-E8.
 5. No shutdown race starts an untracked task; creator/config/start/command/cleanup failures leave
    coherent lifecycle and active membership.
 6. `isShutdown`, `isTerminated`, and `awaitTermination` are predicate-truthful,
@@ -707,8 +707,7 @@ edit.
 8. Cleanup action and hook are noncapturing; one cleanable belongs to each installed identity; at
    most one hook exists and ordinary final removal returns its count to zero.
 9. Repeated close/shutdown/closeAll, delayed cleaner action, hook failures, interrupt-ignoring
-   tasks,
-   and final task exit satisfy the failure and tombstone contracts.
+   tasks, and final task exit satisfy the failure and tombstone contracts.
 10. Every lifecycle/registry/CAS edge matches the documented JMM proof; no independent atomic,
     volatile, VarHandle, or reversed nested lock weakens coherent publication.
 11. E1-E12 and the 50-round stress finish within bounds with zero tasks, tombstones, registry
@@ -718,15 +717,14 @@ edit.
 13. Detailed native/platform work, resources/pressure, topology, core/benchmark production, task
     serialization, training, and unrelated changes are absent from the diff.
 14. Focused tests, P0 gates, hardware verify, read-only core tests, `git diff --check`, scope
-    checks,
-    and final status pass or record the exact environmental limit without substituting Java 17 for
-    the repository's mise-selected JDK 21 toolchain.
+    checks, and final status pass or record the exact environmental limit without substituting Java
+    17 for the repository's mise-selected JDK 21 toolchain.
 
 ## Verification commands
 
 Use the repository defaults through `mise exec --`. The module remains compiled with its Java 17
-release target, but commands run on the mise-selected JDK 21; do not select a Java 17 runtime.
-No command may select training.
+release target, but commands run on the mise-selected JDK 21; do not select a Java 17 runtime. No
+command may select training.
 
 Focused lifecycle suite:
 
@@ -788,9 +786,8 @@ P3-B remains one bounded implementation child and is not split further.
 - E1-E12 share the same isolated registry/control seams and together prove the indivisible
   acceptance boundary. A separate test-only child would delay evidence for the exact races the
   implementation creates.
-- The inventory is nevertheless bounded: one owning module, one contract-bearing production
-  class, optional small support roles, one new stable test class, and two existing compatibility
-  tests.
+- The inventory is nevertheless bounded: one owning module, one contract-bearing production class,
+  optional small support roles, one new stable test class, and two existing compatibility tests.
 
 Do not recombine P3-A or split registry/cleanup into a separately merged behavior phase. If this
 inventory expands into caller production, P3-A/native/platform work, or a second lifecycle owner,
@@ -809,8 +806,8 @@ matrix. A downgrade is not justified: restartable termination, arbitrary creator
 create-outside/start-inside linearization, two-monitor ordering, weak reachability, cleaner/hook
 identity, and E1-E12 still require high-reasoning concurrency work.
 
-If that model/effort is unavailable, stop for developer direction. Do not silently downgrade or
-omit race schedules.
+If that model/effort is unavailable, stop for developer direction. Do not silently downgrade or omit
+race schedules.
 
 ## Exact implementation context envelope
 
@@ -847,8 +844,8 @@ Hand off this child blueprint for developer review and merge only when:
 - `git diff --check`, documentation scope, and final status checks pass; and
 - no implementation code or implementation branch has started before review and merge.
 
-Do not implement P3-B on this branch. After authorized review/merge into the updated P3 root,
-create `hardware-utils-overhaul/phase-3-executor-lifecycle-implementation` from that root.
+Do not implement P3-B on this branch. After authorized review/merge into the updated P3 root, create
+`hardware-utils-overhaul/phase-3-executor-lifecycle-implementation` from that root.
 
 ## Implementation completion record
 
@@ -864,12 +861,12 @@ merged P3 root at `bfca49b6`.
   elapsed-subtraction await, and gated `closeAll` design.
 - Every accepted execution now constructs one distinct NEW thread outside the lifecycle monitor,
   rechecks state/epoch, identity-registers and starts under that monitor, and runs through the P3-A
-  managed binding before affinity and user code. Nested cleanup attempts release, binding close,
-  and exact task removal while preserving command/fatal failures and caller interruption.
+  managed binding before affinity and user code. Nested cleanup attempts release, binding close, and
+  exact task removal while preserving command/fatal failures and caller interruption.
 - Added only package-private nested registry, cleanup/hook, task-binding, and deterministic
   thread-configuration seams. No public/protected descriptor, module directive, P3-A source,
-  native/platform source, resource/topology/monitor source, core/benchmark production, CI,
-  training, Reactor, or Spring file changed.
+  native/platform source, resource/topology/monitor source, core/benchmark production, CI, training,
+  Reactor, or Spring file changed.
 - Added `PinnedThreadExecutorLifecycleTest`; the two existing executor compatibility tests required
   no changes. Updated only this completion record and the temporary P3 status block in `AGENTS.md`.
 
@@ -882,8 +879,8 @@ merged P3 root at `bfca49b6`.
   `PinnedThreadExecutorTest` and the P0 concurrent-fresh-thread compatibility anchor. The complete
   lifecycle class, including its 50-round stress test, also passed five consecutive reruns.
 - The P0 API/mask/fresh-thread command passed 3 tests after a clean Java 21 compilation. It reported
-  zero removed or changed public descriptors/module directives and only the already-reviewed
-  P2/P3-A additions.
+  zero removed or changed public descriptors/module directives and only the already-reviewed P2/P3-A
+  additions.
 - A direct-goal, read-only `euhedral-core` compile/test passed all 99 core tests under Java 21. The
   exact `-pl euhedral-core -am test` lifecycle command cannot reach core because the hardware Zig
   phase fails first.
@@ -900,24 +897,24 @@ merged P3 root at `bfca49b6`.
 
 - E1 proves 32 synchronized acquisition callers receive one identity, entry, cleanable, and hook.
   The A02 anchor `linearizesExecuteShutdownAndCleanup` forces E2 candidate rejection after shutdown
-  and E3 register/start-before-shutdown visibility, then proves zero tasks, entries, cleanables,
-  and hooks.
+  and E3 register/start-before-shutdown visibility, then proves zero tasks, entries, cleanables, and
+  hooks.
 - E4-E6 prove ordered restart/shutdown/close, checked epoch rollback, CLOSED restart rejection,
-  active tombstone replacement exclusion, distinct concurrent thread identities, and managed
-  logical ownership without a physical-placement assertion.
+  active tombstone replacement exclusion, distinct concurrent thread identities, and managed logical
+  ownership without a physical-placement assertion.
 - E7-E9 prove original command/fatal failure delivery after recoverable cleanup, later reuse,
   orderly versus interrupting shutdown, interrupt-ignoring truthful termination, immutable-empty
   `shutdownNow`, spurious/restart/saturation/expiration predicates, and restored waiter/caller
   interruption.
 - E10-E12 prove delayed exact cleanup cannot remove a replacement, structural cleanup reachability
   has no executor/factory/command/task-thread or synthetic outer path, hook count never exceeds one,
-  hook failures reuse the exact identity, and `closeAll` gates acquisition until its complete
-  CLOSED snapshot is published.
+  hook failures reuse the exact identity, and `closeAll` gates acquisition until its complete CLOSED
+  snapshot is published.
 - Boundary tests cover invalid/null inputs, throwing/null/non-NEW creators, injected configuration
   failure, `Thread.start` failure, direct factory use after close without task membership, creator
   retention across restart, and cleanup/hook registration rollback. Every normal deterministic
-  harness and each of 50 stress rounds ends with zero active tasks, CLOSED tombstones, entries,
-  fake cleanup registrations, fake hooks, managed owners, and affinity leases.
+  harness and each of 50 stress rounds ends with zero active tasks, CLOSED tombstones, entries, fake
+  cleanup registrations, fake hooks, managed owners, and affinity leases.
 
 ### Acceptance classification
 

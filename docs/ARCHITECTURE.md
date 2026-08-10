@@ -1,8 +1,8 @@
 # How Euhedral Works
 
-Euhedral is easiest to understand as a pull-driven execution graph, not as a thread pool.
-Long-lived workers are pinned to CPUs. Those workers ask for work, route it through a graph shaped
-around sockets and cores, and execute small reusable objects called frames.
+Euhedral is easiest to understand as a pull-driven execution graph, not as a thread pool. Long-lived
+workers are pinned to CPUs. Those workers ask for work, route it through a graph shaped around
+sockets and cores, and execute small reusable objects called frames.
 
 The shortest useful view of the runtime is:
 
@@ -16,16 +16,16 @@ between those named stages and keep most coordination local to the worker that n
 
 ## Repository map
 
-| Module | What it owns |
-| --- | --- |
-| [`euhedral-core`](../euhedral-core/) | The control plane, routing graph, frames, ingest sources, execution boundary, and metrics |
-| [`euhedral-data-structures`](../euhedral-data-structures/) | Concurrent queue families, partitioned queues, padded atomics, and adders |
-| [`euhedral-hardware-utils`](../euhedral-hardware-utils/) | CPU topology, resource snapshots, affinity, pinned executors, and JNI loading |
-| [`euhedral-hashing`](../euhedral-hashing/) | xxHash64-based hashing used for identity and routing |
-| [`euhedral-reactor-core`](../euhedral-reactor-core/) | Reactor scheduler, operators, subscribers, and frame sequencing |
-| [`euhedral-spring-core`](../euhedral-spring-core/) | Spring Boot auto-configuration plus Kafka and gRPC transports |
-| [`euhedral-training`](../euhedral-training/) | Offline policy training, candidate generation, and closed-loop tuning |
-| [`benchmarks`](../benchmarks/) | JMH benchmarks for the engine and queue implementations |
+| Module                                                     | What it owns                                                                              |
+|------------------------------------------------------------|-------------------------------------------------------------------------------------------|
+| [`euhedral-core`](../euhedral-core/)                       | The control plane, routing graph, frames, ingest sources, execution boundary, and metrics |
+| [`euhedral-data-structures`](../euhedral-data-structures/) | Concurrent queue families, partitioned queues, padded atomics, and adders                 |
+| [`euhedral-hardware-utils`](../euhedral-hardware-utils/)   | CPU topology, resource snapshots, affinity, pinned executors, and JNI loading             |
+| [`euhedral-hashing`](../euhedral-hashing/)                 | xxHash64-based hashing used for identity and routing                                      |
+| [`euhedral-reactor-core`](../euhedral-reactor-core/)       | Reactor scheduler, operators, subscribers, and frame sequencing                           |
+| [`euhedral-spring-core`](../euhedral-spring-core/)         | Spring Boot auto-configuration plus Kafka and gRPC transports                             |
+| [`euhedral-training`](../euhedral-training/)               | Offline policy training, candidate generation, and closed-loop tuning                     |
+| [`benchmarks`](../benchmarks/)                             | JMH benchmarks for the engine and queue implementations                                   |
 
 The Java module descriptors are a good quick check of the public package boundaries. Start with
 [`euhedral-core/module-info.java`](../euhedral-core/src/main/java/module-info.java) and follow the
@@ -33,22 +33,27 @@ same file in the other library modules.
 
 ## Starting the runtime
 
-[`ControlPlaneLattice`](../euhedral-core/src/main/java/io/euhedral_execution/core/control_plane/ControlPlaneLattice.java)
+[
+`ControlPlaneLattice`](../euhedral-core/src/main/java/io/euhedral_execution/core/control_plane/ControlPlaneLattice.java)
 is the top-level runtime object. It is a JVM-wide singleton created through `getOrCreate()`. Calling
 `addUpstream()` starts it lazily, although applications can call `start()` themselves.
 
 At startup the lattice:
 
 1. Reads the machine layout through
-   [`SystemInfo`](../euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/SystemInfo.java).
+   [
+   `SystemInfo`](../euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/SystemInfo.java).
 2. Intersects the configured CPU set with the CPUs currently available to the process through
-   [`TopologyMapper`](../euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/TopologyMapper.java).
+   [
+   `TopologyMapper`](../euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/TopologyMapper.java).
 3. Creates one
-   [`ControlPlaneShard`](../euhedral-core/src/main/java/io/euhedral_execution/core/control_plane/ControlPlaneShard.java)
+   [
+   `ControlPlaneShard`](../euhedral-core/src/main/java/io/euhedral_execution/core/control_plane/ControlPlaneShard.java)
    for each known socket.
 4. Starts the active shards and their per-core worker pipelines.
 5. Starts a
-   [`ResourceMonitor`](../euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/ResourceMonitor.java)
+   [
+   `ResourceMonitor`](../euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/ResourceMonitor.java)
    that samples the system every 200 ms and feeds topology and pressure updates back into the
    control plane.
 
@@ -66,18 +71,20 @@ squares.push(List.of(2, 4, 8));
 squares.completeGracefully();
 ```
 
-The last constructor argument enables per-item hash randomization in the built-in sink so independent
-work can spread across workers. Execution is asynchronous, so application shutdown still needs its
-own completion coordination.
+The last constructor argument enables per-item hash randomization in the built-in sink so
+independent work can spread across workers. Execution is asynchronous, so application shutdown still
+needs its own completion coordination.
 
 For a restricted CPU set or a custom execution stage, construct a
-[`LatticeConfig`](../euhedral-core/src/main/java/io/euhedral_execution/core/config/LatticeConfig.java)
+[
+`LatticeConfig`](../euhedral-core/src/main/java/io/euhedral_execution/core/config/LatticeConfig.java)
 and pass it to `getOrCreate(config)`.
 
 ## How work enters and moves
 
 An input implements
-[`LatticeSource`](../euhedral-core/src/main/java/io/euhedral_execution/core/generics/LatticeSource.java).
+[
+`LatticeSource`](../euhedral-core/src/main/java/io/euhedral_execution/core/generics/LatticeSource.java).
 A source supports two ways of satisfying demand:
 
 - `request(long)` lets the source push frames downstream.
@@ -90,13 +97,16 @@ The built-in sources live under
 functions.
 
 When the lattice ingests a source,
-[`LatticeVertex`](../euhedral-core/src/main/java/io/euhedral_execution/core/flow_control/LatticeVertex.java)
+[
+`LatticeVertex`](../euhedral-core/src/main/java/io/euhedral_execution/core/flow_control/LatticeVertex.java)
 wraps it in an `UpstreamInterceptor`. Worker-local
-[`UpstreamQueue`](../euhedral-core/src/main/java/io/euhedral_execution/core/flow_control/UpstreamQueue.java)
+[
+`UpstreamQueue`](../euhedral-core/src/main/java/io/euhedral_execution/core/flow_control/UpstreamQueue.java)
 instances aggregate those source handles and share demand between them. A handle is acquired by one
 worker at a time, so one source is not pulled concurrently by several workers.
 
-[`LatticeEdge`](../euhedral-core/src/main/java/io/euhedral_execution/core/flow_control/LatticeEdge.java)
+[
+`LatticeEdge`](../euhedral-core/src/main/java/io/euhedral_execution/core/flow_control/LatticeEdge.java)
 provides the chain itself. It sends frames down to a receiver and sends demand up to a source.
 `LatticeVertex` adds fan-out, routing tables, and optional shared remote caches. This split matters:
 edges describe connectivity, while vertices decide which branch receives a frame.
@@ -104,7 +114,8 @@ edges describe connectivity, while vertices decide which branch receives a frame
 ## Routing, ordering, and locality
 
 Every
-[`AbstractFrame`](../euhedral-core/src/main/java/io/euhedral_execution/core/frames/AbstractFrame.java)
+[
+`AbstractFrame`](../euhedral-core/src/main/java/io/euhedral_execution/core/frames/AbstractFrame.java)
 has two hashes:
 
 - `idHash` is fixed for the life of the frame.
@@ -139,14 +150,15 @@ frame.randomizeHash(seed++);
 
 Do not change either routing metadata or payload while a frame is in flight.
 
-[`RoutingPolicy`](../euhedral-core/src/main/java/io/euhedral_execution/core/flow_control/RoutingPolicy.java)
+[
+`RoutingPolicy`](../euhedral-core/src/main/java/io/euhedral_execution/core/flow_control/RoutingPolicy.java)
 adds an origin-local preference:
 
-| Policy | Placement behavior |
-| --- | --- |
-| `ANYWHERE` | Use normal hash routing |
+| Policy         | Placement behavior                                           |
+|----------------|--------------------------------------------------------------|
+| `ANYWHERE`     | Use normal hash routing                                      |
 | `SOCKET_LOCAL` | Stay on the frame origin's socket when that socket is active |
-| `CACHE_LOCAL` | Stay on the frame origin's core when that core is active |
+| `CACHE_LOCAL`  | Stay on the frame origin's core when that core is active     |
 
 If the origin is missing or no longer active, routing falls back to the hash. `FrameFactory` records
 an origin for managed frames. Code that constructs frames manually must set an origin itself if it
@@ -159,10 +171,12 @@ socket's L3 capacity. It routes frames to the active physical cores and may hold
 per-destination remote caches.
 
 For each active core, the shard clones a
-[`CloneableObject`](../euhedral-core/src/main/java/io/euhedral_execution/core/generics/CloneableObject.java)
+[
+`CloneableObject`](../euhedral-core/src/main/java/io/euhedral_execution/core/generics/CloneableObject.java)
 with a `CloneConfig` containing the physical core ID and its usable logical CPUs. The default clone
 is
-[`BaseCloneableObject`](../euhedral-core/src/main/java/io/euhedral_execution/core/impl/BaseCloneableObject.java).
+[
+`BaseCloneableObject`](../euhedral-core/src/main/java/io/euhedral_execution/core/impl/BaseCloneableObject.java).
 It joins two pieces:
 
 ```text
@@ -180,9 +194,11 @@ terminal stage.
 
 ## The per-core control loop
 
-[`ControlPlaneFragment`](../euhedral-core/src/main/java/io/euhedral_execution/core/control_plane/ControlPlaneFragment.java)
+[
+`ControlPlaneFragment`](../euhedral-core/src/main/java/io/euhedral_execution/core/control_plane/ControlPlaneFragment.java)
 is the active worker. It runs on a
-[`PinnedThreadExecutor`](../euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/PinnedThreadExecutor.java)
+[
+`PinnedThreadExecutor`](../euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/PinnedThreadExecutor.java)
 bound to one logical CPU from its physical core.
 
 The class hierarchy describes its data path:
@@ -194,12 +210,14 @@ ControlPlaneFragment
   extends LatticeVertex
 ```
 
-[`ControlPlaneCache`](../euhedral-core/src/main/java/io/euhedral_execution/core/control_plane/ControlPlaneCache.java)
+[
+`ControlPlaneCache`](../euhedral-core/src/main/java/io/euhedral_execution/core/control_plane/ControlPlaneCache.java)
 owns a partitioned MPSC cache local to the fragment. Its default budget is 70 percent of the
 available L1 and L2 capacity, split into eight partitions. The usable capacity shrinks quickly under
 CPU pressure and recovers more slowly when pressure falls.
 
-[`WorkRequester`](../euhedral-core/src/main/java/io/euhedral_execution/core/control_plane/WorkRequester.java)
+[
+`WorkRequester`](../euhedral-core/src/main/java/io/euhedral_execution/core/control_plane/WorkRequester.java)
 turns cache occupancy into upstream demand. The fragment then chooses work in this order:
 
 1. Execute from its local cache.
@@ -208,7 +226,8 @@ turns cache occupancy into upstream demand. The fragment then chooses work in th
 
 Those optional choices, along with requesting more work and briefly parking the thread, are selected
 by
-[`FragmentActionPicker`](../euhedral-core/src/main/java/io/euhedral_execution/core/config/FragmentActionPicker.java).
+[
+`FragmentActionPicker`](../euhedral-core/src/main/java/io/euhedral_execution/core/config/FragmentActionPicker.java).
 It is a small linear policy, not a neural network in the runtime. Four actions each have six input
 weights and one bias, for 28 weights in total:
 
@@ -221,12 +240,13 @@ The fragment normalizes the six measured inputs before evaluating the actions. I
 size from observed throughput and caps that batch using CPU pressure, the configured maximum, and
 the local frame quota. The default maximum is 4,096 frames.
 
-This division keeps the learned or hand-tuned policy inside a narrow control surface. Routing,
-queue ownership, lifecycle, pressure limits, and error handling remain ordinary runtime code.
+This division keeps the learned or hand-tuned policy inside a narrow control surface. Routing, queue
+ownership, lifecycle, pressure limits, and error handling remain ordinary runtime code.
 
 ## Frame completion, cancellation, and reuse
 
-[`AbstractExecutor`](../euhedral-core/src/main/java/io/euhedral_execution/core/generics/AbstractExecutor.java)
+[
+`AbstractExecutor`](../euhedral-core/src/main/java/io/euhedral_execution/core/generics/AbstractExecutor.java)
 owns the final frame lifecycle:
 
 1. Check `isAlive()`.
@@ -264,8 +284,8 @@ When the effective CPU or socket set changes:
 The lattice handles socket changes. Each shard handles core changes inside its socket.
 
 `resetForNextTrial()` is a stronger benchmark operation. It freezes ingest and clears routing and
-fragment caches so the next policy trial does not inherit buffered work from the previous one. It
-is not part of normal application flow.
+fragment caches so the next policy trial does not inherit buffered work from the previous one. It is
+not part of normal application flow.
 
 ## Supporting modules
 
@@ -278,7 +298,8 @@ consumer APIs favor batch drains because the control loop normally handles more 
 time.
 
 The
-[`atomics`](../euhedral-data-structures/src/main/java/io/euhedral_execution/data_structures/atomics/)
+[
+`atomics`](../euhedral-data-structures/src/main/java/io/euhedral_execution/data_structures/atomics/)
 package provides padded scalar and array types for hot counters. Their `getOpaque`, `getAcquire`,
 `setRelease`, and volatile methods expose intentional Java Memory Model choices used throughout the
 engine.
@@ -306,13 +327,16 @@ ad hoc low-bit masks.
 
 ### Reactor and Spring
 
-[`EuhedralScheduler`](../euhedral-reactor-core/src/main/java/io/euhedral_execution/reactor/EuhedralScheduler.java)
+[
+`EuhedralScheduler`](../euhedral-reactor-core/src/main/java/io/euhedral_execution/reactor/EuhedralScheduler.java)
 adapts the lattice to Reactor's `Scheduler` API.
-[`EuhedralOperator`](../euhedral-reactor-core/src/main/java/io/euhedral_execution/reactor/EuhedralOperator.java)
+[
+`EuhedralOperator`](../euhedral-reactor-core/src/main/java/io/euhedral_execution/reactor/EuhedralOperator.java)
 turns Reactor values into recyclable callback or sequenced frames for parallel, sequential, and
 concatenated mapping.
 
-[`EuhedralConfiguration`](../euhedral-spring-core/src/main/java/io/euhedral_execution/spring/core/configuration/EuhedralConfiguration.java)
+[
+`EuhedralConfiguration`](../euhedral-spring-core/src/main/java/io/euhedral_execution/spring/core/configuration/EuhedralConfiguration.java)
 auto-configures the lattice, scheduler, and operator in Spring Boot. The same module contains
 demand-aware gRPC handlers and a Kafka source that maps records to frames, preserves partition
 liveness, and commits offsets after frame completion.
@@ -341,9 +365,10 @@ diagnostic tooling; it is not on the production runtime path.
 - Perform owner-thread queue resets on the owner thread.
 - Keep allocation, blocking I/O, and verbose logging out of per-frame loops.
 - Preserve the chosen VarHandle memory semantics unless the synchronization argument changes too.
-- Close sources and the lattice explicitly so worker threads, native state, and metrics are released.
+- Close sources and the lattice explicitly so worker threads, native state, and metrics are
+  released.
 
 For concrete behavior, the core tests under
-[`euhedral-core/src/test`](../euhedral-core/src/test/) are a better companion to this document than a
-class diagram. They show routing, draining, source demand, cloning, and rebalance boundaries in
+[`euhedral-core/src/test`](../euhedral-core/src/test/) are a better companion to this document than
+a class diagram. They show routing, draining, source demand, cloning, and rebalance boundaries in
 executable form.

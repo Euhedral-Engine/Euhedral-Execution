@@ -2,10 +2,10 @@
 
 Status: ready for Prompt 5B implementation
 
-This blueprint settles the only supported pre-upgrade workspace import, the final typed
-closed-loop configuration surface, command help, stop/resume behavior, and user documentation.
-Prompt 5B must implement these decisions without reopening Phase 1-4 data, statistical,
-scheduling, checkpoint, or packaging contracts.
+This blueprint settles the only supported pre-upgrade workspace import, the final typed closed-loop
+configuration surface, command help, stop/resume behavior, and user documentation. Prompt 5B must
+implement these decisions without reopening Phase 1-4 data, statistical, scheduling, checkpoint, or
+packaging contracts.
 
 The implementation-model reassessment at the end selects the model and exact context envelope for
 Prompt 5B. The provisional model in the original plan is replaced as part of this blueprint.
@@ -22,20 +22,20 @@ Phase 5:
    guessing;
 5. emits a deterministic report for every recognized and unexpected file;
 6. keeps every legacy path, token, and format rule inside one removable package;
-7. replaces the transitional no-argument closed-loop command with a strict typed configuration
-   file that constructs `ClosedLoopConfig`;
+7. replaces the transitional no-argument closed-loop command with a strict typed configuration file
+   that constructs `ClosedLoopConfig`;
 8. supplies a stop file to the production closed-loop services without changing the Phase 3
    checkpoint fingerprint or state machine;
-9. documents anchors, fixed robust ranking, budgets, importing, resume, cross-environment
-   bootstrap, packages, and package-only reproduction; and
+9. documents anchors, fixed robust ranking, budgets, importing, resume, cross-environment bootstrap,
+   packages, and package-only reproduction; and
 10. provides an exact deletion recipe for the temporary importer.
 
 ### Explicit non-goals
 
 - Do not import a legacy measurement by inferring source count, core count, environment, run,
   iteration, cohort, commit, benchmark duration, timestamps, timeout, or failure status.
-- Do not reinterpret a zero-filled repetition as a successful zero-throughput observation,
-  timeout, failure, or skipped repetition.
+- Do not reinterpret a zero-filled repetition as a successful zero-throughput observation, timeout,
+  failure, or skipped repetition.
 - Do not create an imported Phase 1 observation bundle from the current files.
 - Do not import or copy a pooled model, DJL directory, `.bin`, optimizer state,
   `state.properties`, `latest-model`, `latest-training-data.txt`, checkpoint, Maven output, or
@@ -49,27 +49,27 @@ Phase 5:
 - Do not change Phase 4 package identity, manifest, layout, provenance, or the meaning of
   `package-run`.
 - Do not remediate the remaining Phase 4 audit test-coverage findings. They remain Phase 4 work.
-- Do not delete the pooled-v0 implementation in this phase. Phase 7 owns that deletion after the
-  new CLI has replaced its callers.
+- Do not delete the pooled-v0 implementation in this phase. Phase 7 owns that deletion after the new
+  CLI has replaced its callers.
 - Do not read the real user-owned input/output trees from tests or modify them during
   implementation.
 
 ## Reconciliation with the completed phases
 
-| Existing contract | Phase 5 decision |
-| --- | --- |
-| `PolicyVector` validates 28 finite weights and derives exact `p1` identity from raw IEEE-754 lanes. | Every accepted legacy vector is converted immediately to `PolicyVector` and registered with `PolicyRegistry`. |
-| `ObservationBundle` requires explicit scenario, run, cohort, iteration, environment, parameters, timestamps, repetitions, statuses, and provenance. | No current file has enough information. Phase 5 emits no observation bundle. |
-| `MeasurementEncoding.DIRECT_THROUGHPUT` permits imported throughput only when the rest of the run identity is established. | The encoding is not a license to invent missing metadata; current measurements are rejected. |
-| `BootstrapPolicyCsv` requires schema 1, exact raw-bit vector columns, contiguous positions, and exactly the configured policy budget. | The importer writes an exact compatible bootstrap file selected deterministically from the complete imported catalog. |
-| `ClosedLoopConfig` is the complete Phase 3 typed input; `ClosedLoopRunner.run()` is a rejecting transitional adapter. | A strict config codec creates the record and `Runner closed-loop --config ...` calls the typed public entry point. The no-argument adapter is removed. |
-| `ClosedLoopConfigFingerprint` deliberately excludes active environment, resume, paths, and stop-file path. | Phase 5 does not add stop-file material to the fingerprint. |
-| Public `ClosedLoopRunner.run(ClosedLoopConfig)` packages every normal return under `<workspace>/packages`. | The CLI prints the returned checkpoint stage, checkpoint path, awaiting scenarios, and package path. It does not repackage independently. |
-| `package-run` rebuilds an immutable package from recorded inputs. | Its exact flags and meaning remain unchanged. |
-| Phase 4 conformance is still missing parts of its test matrix. | Phase 5 tests only its own integration and does not claim those Phase 4 findings are resolved. |
+| Existing contract                                                                                                                                   | Phase 5 decision                                                                                                                                       |
+|-----------------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `PolicyVector` validates 28 finite weights and derives exact `p1` identity from raw IEEE-754 lanes.                                                 | Every accepted legacy vector is converted immediately to `PolicyVector` and registered with `PolicyRegistry`.                                          |
+| `ObservationBundle` requires explicit scenario, run, cohort, iteration, environment, parameters, timestamps, repetitions, statuses, and provenance. | No current file has enough information. Phase 5 emits no observation bundle.                                                                           |
+| `MeasurementEncoding.DIRECT_THROUGHPUT` permits imported throughput only when the rest of the run identity is established.                          | The encoding is not a license to invent missing metadata; current measurements are rejected.                                                           |
+| `BootstrapPolicyCsv` requires schema 1, exact raw-bit vector columns, contiguous positions, and exactly the configured policy budget.               | The importer writes an exact compatible bootstrap file selected deterministically from the complete imported catalog.                                  |
+| `ClosedLoopConfig` is the complete Phase 3 typed input; `ClosedLoopRunner.run()` is a rejecting transitional adapter.                               | A strict config codec creates the record and `Runner closed-loop --config ...` calls the typed public entry point. The no-argument adapter is removed. |
+| `ClosedLoopConfigFingerprint` deliberately excludes active environment, resume, paths, and stop-file path.                                          | Phase 5 does not add stop-file material to the fingerprint.                                                                                            |
+| Public `ClosedLoopRunner.run(ClosedLoopConfig)` packages every normal return under `<workspace>/packages`.                                          | The CLI prints the returned checkpoint stage, checkpoint path, awaiting scenarios, and package path. It does not repackage independently.              |
+| `package-run` rebuilds an immutable package from recorded inputs.                                                                                   | Its exact flags and meaning remain unchanged.                                                                                                          |
+| Phase 4 conformance is still missing parts of its test matrix.                                                                                      | Phase 5 tests only its own integration and does not claim those Phase 4 findings are resolved.                                                         |
 
-`euhedral-training` remains an unnamed Java module. No `module-info.java` or Maven dependency
-change is required.
+`euhedral-training` remains an unnamed Java module. No `module-info.java` or Maven dependency change
+is required.
 
 ## Current workspace inventory and settled semantics
 
@@ -101,8 +101,8 @@ observations. The import report contains two rows for each file:
 - `POLICY_VECTORS / ACCEPTED / POLICY_VECTORS_IMPORTED`; and
 - `LEGACY_MEASUREMENTS / REJECTED / REQUIRED_OBSERVATION_IDENTITY_UNRECOVERABLE`.
 
-The filename fragments `graviton5`, `zen4`, `laptop`, `32core`, `1`, `2`, and `3` have no
-normative meaning. They are never parsed as scenario or run metadata.
+The filename fragments `graviton5`, `zen4`, `laptop`, `32core`, `1`, `2`, and `3` have no normative
+meaning. They are never parsed as scenario or run metadata.
 
 ### Vector-only file
 
@@ -140,8 +140,8 @@ euhedral-training/output
 ```
 
 Every regular file not exactly listed above receives
-`UNKNOWN / REJECTED / UNMAPPED_CURRENT_WORKSPACE_PATH` and is never opened as a legacy format.
-Every symlink or unsupported file type receives
+`UNKNOWN / REJECTED / UNMAPPED_CURRENT_WORKSPACE_PATH` and is never opened as a legacy format. Every
+symlink or unsupported file type receives
 `UNKNOWN / REJECTED / UNSUPPORTED_OR_SYMLINK_PATH`.
 
 This fail-closed rule excludes any model, `.bin`, `.params`, `state.properties`, checkpoint,
@@ -182,8 +182,8 @@ TEMPORARY_CURRENT_WORKSPACE_IMPORT_REMOVAL
 ```
 
 No class in `data`, `data.io`, `merge`, `learning`, `optimization`, `scheduling`, `checkpoint`,
-`benchmark`, or `packaging` may import this package. `Runner` is the only production caller.
-The importer may depend on `PolicyVector`, `PolicyRegistry`, and JDK APIs. It must not depend on
+`benchmark`, or `packaging` may import this package. `Runner` is the only production caller. The
+importer may depend on `PolicyVector`, `PolicyRegistry`, and JDK APIs. It must not depend on
 `DataMerger`, the legacy `BenchmarkOutputReader`, a model, checkpoint, scheduler, or packager.
 Keeping its decimal-token reader local makes deletion independent of pooled-v0 cleanup.
 
@@ -195,8 +195,8 @@ The exact command is:
 import-current-workspace --source-root <path> --output <path> --bootstrap-count <positive-int>
 ```
 
-Flags occur exactly once and in that order. The command is off by default: no other command,
-startup path, config read, merge, or resume probes for the current workspace.
+Flags occur exactly once and in that order. The command is off by default: no other command, startup
+path, config read, merge, or resume probes for the current workspace.
 
 Add:
 
@@ -223,9 +223,9 @@ public final class CurrentWorkspaceImporter {
 ```
 
 Constructors normalize absolute paths, require an existing non-symlink source root, require a
-positive bootstrap count, reject an output inside either scanned input/output tree, and require
-that the final output path not exist. The source root may itself contain unrelated repository
-files; only the two known subtrees are walked.
+positive bootstrap count, reject an output inside either scanned input/output tree, and require that
+the final output path not exist. The source root may itself contain unrelated repository files; only
+the two known subtrees are walked.
 
 Internal immutable types are:
 
@@ -284,8 +284,8 @@ Use a streaming ASCII token reader with a fixed 128 KiB direct or heap buffer.
 - A repeated bit-identical policy increments `duplicateCount`; a hash collision is fatal.
 - Validate one file into a file-local list before merging it into the global registry. A malformed
   mapped file gets one `UNKNOWN / REJECTED / MALFORMED_CURRENT_WORKSPACE_FILE` row and contributes
-  no policies. The diagnostic includes the relative path and one-based line/token position, but
-  the canonical report reason remains stable.
+  no policies. The diagnostic includes the relative path and one-based line/token position, but the
+  canonical report reason remains stable.
 - Continue processing other files after a mapped-file format rejection. Filesystem/I/O failure,
   policy hash collision, unsafe path, or output publication failure aborts the import.
 
@@ -314,8 +314,8 @@ path. `COMPLETE` is empty.
 schema_version,policy_id,weight_00_bits,...,weight_27_bits
 ```
 
-It contains every unique accepted `PolicyVector` in unsigned `PolicyId` order. Raw bits are
-16 lower-case hexadecimal digits. This is a vector-only audit catalog; no measurement or inferred
+It contains every unique accepted `PolicyVector` in unsigned `PolicyId` order. Raw bits are 16
+lower-case hexadecimal digits. This is a vector-only audit catalog; no measurement or inferred
 scenario column is present.
 
 ### Bootstrap file
@@ -326,8 +326,8 @@ scenario column is present.
 schema_version,bootstrap_position,policy_id,weight_00_bits,...,weight_27_bits
 ```
 
-Select the first `bootstrapPolicyCount` entries from the unsigned-`PolicyId` sorted complete
-catalog and assign contiguous one-based positions. Require
+Select the first `bootstrapPolicyCount` entries from the unsigned-`PolicyId` sorted complete catalog
+and assign contiguous one-based positions. Require
 `bootstrapPolicyCount <= uniquePolicyCount`. Reopen through `BootstrapPolicyCsv.read` before
 publication. Selection is deliberately independent of rejected measurements, source filenames,
 filesystem order, and input duplication.
@@ -343,8 +343,8 @@ This file is supplied to `closed-loop` through `run.bootstrap_policies`; its row
 schema_version,path,semantic_type,status,record_count,accepted_count,duplicate_count,rejected_count,reason
 ```
 
-Rows sort by path, then semantic type enum order. Counts are non-negative `long` values.
-For an alternating file, vector `record_count` is its vector row count and measurement
+Rows sort by path, then semantic type enum order. Counts are non-negative `long` values. For an
+alternating file, vector `record_count` is its vector row count and measurement
 `record_count` is its measurement row count. Rejected legacy measurements have
 `rejected_count == record_count`. Summary and unexpected-file rows use one file record.
 
@@ -383,9 +383,9 @@ public final class ClosedLoopConfigCodec {
 ```
 
 The file is UTF-8 with a required final LF, no BOM or CR, and one `key=value` per nonblank line.
-Lines whose first non-whitespace character is `#` are comments. Keys and values are trimmed.
-Unknown keys, duplicate singleton keys, duplicate list values, missing required values, empty
-values, malformed escapes, and trailing junk are rejected with line numbers.
+Lines whose first non-whitespace character is `#` are comments. Keys and values are trimmed. Unknown
+keys, duplicate singleton keys, duplicate list values, missing required values, empty values,
+malformed escapes, and trailing junk are rejected with line numbers.
 
 There is no environment-variable, `~`, shell, or system-property interpolation. Relative paths
 resolve against the config file's parent and are normalized. Paths may not contain NUL. Existence
@@ -403,10 +403,10 @@ calibration.reference_override
 `calibration.reference_override` is
 `<canonical-scenario>|<benchmark-run-id>`.
 
-Booleans are exactly `true` or `false`. Decimal integers have no leading `+`; seeds are exactly
-16 lower-case hexadecimal digits. Floats/doubles use finite Java decimal syntax and are passed to
-the target record constructor without rounding. Comma lists contain no empty element.
-Enum values use exact Java enum names.
+Booleans are exactly `true` or `false`. Decimal integers have no leading `+`; seeds are exactly 16
+lower-case hexadecimal digits. Floats/doubles use finite Java decimal syntax and are passed to the
+target record constructor without rounding. Comma lists contain no empty element. Enum values use
+exact Java enum names.
 
 ### Required keys
 
@@ -428,79 +428,79 @@ the typed runner also requires its exact visible physical-core count at executio
 
 ### Top-level and lifecycle keys
 
-| Key | Default / mapping |
-| --- | --- |
-| `run.workspace` | required -> `ClosedLoopConfig.workspace` |
-| `run.training_run_id` | required -> `trainingRunId` |
-| `run.iterations` | required -> `iterations` |
-| `run.candidate_budget` | required -> `candidateBudget` |
-| `run.active_environment_id` | required -> `activeEnvironmentId` |
-| `run.scenarios_per_iteration` | `2` |
-| `run.scheduler_seed_hex` | `6a09e667f3bcc909` |
-| `run.initial_sobol_cursor` | `131072` |
-| `run.bootstrap_policies` | mutually exclusive optional path |
-| `run.initial_calibration_plan` | mutually exclusive optional path |
-| `run.initial_observation_bundle` | repeated path, default empty |
-| `run.commit_sha` | required lower-case 40/64 hex |
-| `run.dirty_working_tree` | required |
-| `run.resume` | `true` |
-| `run.stop_file` | `<workspace>/STOP`; excluded from config fingerprint |
-| `scenario.required` | repeated canonical scenario, natural-order set |
-| `calibration.reference_override` | repeated scenario/run mapping, default empty |
+| Key                              | Default / mapping                                    |
+|----------------------------------|------------------------------------------------------|
+| `run.workspace`                  | required -> `ClosedLoopConfig.workspace`             |
+| `run.training_run_id`            | required -> `trainingRunId`                          |
+| `run.iterations`                 | required -> `iterations`                             |
+| `run.candidate_budget`           | required -> `candidateBudget`                        |
+| `run.active_environment_id`      | required -> `activeEnvironmentId`                    |
+| `run.scenarios_per_iteration`    | `2`                                                  |
+| `run.scheduler_seed_hex`         | `6a09e667f3bcc909`                                   |
+| `run.initial_sobol_cursor`       | `131072`                                             |
+| `run.bootstrap_policies`         | mutually exclusive optional path                     |
+| `run.initial_calibration_plan`   | mutually exclusive optional path                     |
+| `run.initial_observation_bundle` | repeated path, default empty                         |
+| `run.commit_sha`                 | required lower-case 40/64 hex                        |
+| `run.dirty_working_tree`         | required                                             |
+| `run.resume`                     | `true`                                               |
+| `run.stop_file`                  | `<workspace>/STOP`; excluded from config fingerprint |
+| `scenario.required`              | repeated canonical scenario, natural-order set       |
+| `calibration.reference_override` | repeated scenario/run mapping, default empty         |
 
 `run.scheduler_seed_hex` is interpreted as unsigned raw long bits. The default equals the Phase 3
 scheduler/config seed convention; it is distinct from aggregation, split, and model seeds.
 
 ### Budget and candidate-generation keys
 
-| Key | Default |
-| --- | ---: |
-| `budget.exploration_weight` | 68 |
-| `budget.carry_forward_weight` | 25 |
-| `budget.leader_revalidation_weight` | 2 |
-| `budget.disagreement_audit_weight` | 5 |
-| `candidate.screen_rows` | 2097152 |
-| `candidate.maximum_prediction_rows` | 16384 |
-| `candidate.score_band_weights` | `1,1,1,1,2,2,3,5,8,16` |
-| `candidate.cma_weight` | 8 |
-| `candidate.score_band_weight` | 7 |
-| `candidate.direct_sobol_weight` | 1 |
-| `candidate.cma.enabled` | true |
-| `candidate.cma.islands` | 4 |
-| `candidate.cma.generations` | 12 |
-| `candidate.cma.population_size` | 96 |
-| `candidate.cma.initial_sigma` | 0.20 |
-| `candidate.cma.minimum_seed_policies` | 10 |
+| Key                                   |                Default |
+|---------------------------------------|-----------------------:|
+| `budget.exploration_weight`           |                     68 |
+| `budget.carry_forward_weight`         |                     25 |
+| `budget.leader_revalidation_weight`   |                      2 |
+| `budget.disagreement_audit_weight`    |                      5 |
+| `candidate.screen_rows`               |                2097152 |
+| `candidate.maximum_prediction_rows`   |                  16384 |
+| `candidate.score_band_weights`        | `1,1,1,1,2,2,3,5,8,16` |
+| `candidate.cma_weight`                |                      8 |
+| `candidate.score_band_weight`         |                      7 |
+| `candidate.direct_sobol_weight`       |                      1 |
+| `candidate.cma.enabled`               |                   true |
+| `candidate.cma.islands`               |                      4 |
+| `candidate.cma.generations`           |                     12 |
+| `candidate.cma.population_size`       |                     96 |
+| `candidate.cma.initial_sigma`         |                   0.20 |
+| `candidate.cma.minimum_seed_policies` |                     10 |
 
 Map directly to `CandidateBudgetConfig`, `CandidateGenerationConfig`, and `CmaEsConfig`. Their
 constructors are authoritative for range and overflow validation.
 
 ### Benchmark, anchor, calibration, and aggregation keys
 
-| Key | Default |
-| --- | ---: |
-| `benchmark.expected_repetitions` | 10 |
-| `benchmark.sample_duration_nanos` | 200000000 |
-| `benchmark.liveness_timeout_nanos` | 50000000 |
-| `benchmark.frames_per_source` | 100000 |
-| `benchmark.reset_timeout_nanos` | 2000000000 |
-| `benchmark.ordered_frames` | false |
-| `anchors.fixed_fraction` | 0.02 |
-| `anchors.minimum_fixed_anchors` | 5 |
-| `anchors.maximum_bootstrap_non_success_rate` | 0.10 |
-| `anchors.maximum_bootstrap_relative_iqr` | 0.25 |
-| `anchors.allow_imported_bootstrap` | false |
-| `calibration.minimum_strong_anchors` | 5 |
-| `calibration.minimum_weak_anchors` | 3 |
-| `calibration.maximum_strong_residual` | 0.05 |
-| `calibration.maximum_weak_residual` | 0.15 |
-| `calibration.minimum_log_sigma` | 0.01 |
-| `calibration.maximum_anchor_weight_share` | 0.25 |
-| `aggregation.minimum_successful_repetitions` | 3 |
-| `aggregation.minimum_success_fraction` | 0.5 |
-| `aggregation.bootstrap_replicates` | 1000 |
-| `aggregation.bootstrap_seed_hex` | `6a09e667f3bcc909` |
-| `aggregation.calibration_acceptance` | `STRONG_ONLY` |
+| Key                                          |            Default |
+|----------------------------------------------|-------------------:|
+| `benchmark.expected_repetitions`             |                 10 |
+| `benchmark.sample_duration_nanos`            |          200000000 |
+| `benchmark.liveness_timeout_nanos`           |           50000000 |
+| `benchmark.frames_per_source`                |             100000 |
+| `benchmark.reset_timeout_nanos`              |         2000000000 |
+| `benchmark.ordered_frames`                   |              false |
+| `anchors.fixed_fraction`                     |               0.02 |
+| `anchors.minimum_fixed_anchors`              |                  5 |
+| `anchors.maximum_bootstrap_non_success_rate` |               0.10 |
+| `anchors.maximum_bootstrap_relative_iqr`     |               0.25 |
+| `anchors.allow_imported_bootstrap`           |              false |
+| `calibration.minimum_strong_anchors`         |                  5 |
+| `calibration.minimum_weak_anchors`           |                  3 |
+| `calibration.maximum_strong_residual`        |               0.05 |
+| `calibration.maximum_weak_residual`          |               0.15 |
+| `calibration.minimum_log_sigma`              |               0.01 |
+| `calibration.maximum_anchor_weight_share`    |               0.25 |
+| `aggregation.minimum_successful_repetitions` |                  3 |
+| `aggregation.minimum_success_fraction`       |                0.5 |
+| `aggregation.bootstrap_replicates`           |               1000 |
+| `aggregation.bootstrap_seed_hex`             | `6a09e667f3bcc909` |
+| `aggregation.calibration_acceptance`         |      `STRONG_ONLY` |
 
 Map directly to `BenchmarkExecutionConfig`, `AnchorSelectionConfig`, `CalibrationConfig`, and
 `AggregationConfig`. Imported current-workspace vectors are benchmarked natively during bootstrap;
@@ -509,47 +509,47 @@ as an importer shortcut.
 
 ### Training and evaluation keys
 
-| Key | Default |
-| --- | ---: |
-| `training.split_seed_hex` | `243f6a8885a308d3` |
-| `training.model_seed_hex` | `13198a2e03707344` |
-| `training.device` | `auto` |
-| `training.ensemble_members` | 5 |
-| `training.loso_evaluation_members` | 1 |
-| `training.ablation_members` | 3 |
-| `training.max_epochs` | 250 |
-| `training.patience` | 20 |
-| `training.batch_size` | 0 |
-| `training.learning_rate` | 0.001 |
-| `training.weight_decay` | 0.0001 |
-| `training.label_smoothing` | 0.02 |
-| `training.minimum_train_policy_groups` | 40 |
-| `training.minimum_validation_policy_groups` | 10 |
-| `training.minimum_test_policy_groups` | 10 |
-| `training.minimum_train_rows_per_scenario` | 30 |
-| `training.minimum_validation_rows_per_scenario` | 5 |
-| `training.minimum_test_rows_per_scenario` | 5 |
-| `training.include_weak_calibration_rows` | false |
-| `training.feature_selection_mode` | `RATIO_ONLY` |
+| Key                                             |            Default |
+|-------------------------------------------------|-------------------:|
+| `training.split_seed_hex`                       | `243f6a8885a308d3` |
+| `training.model_seed_hex`                       | `13198a2e03707344` |
+| `training.device`                               |             `auto` |
+| `training.ensemble_members`                     |                  5 |
+| `training.loso_evaluation_members`              |                  1 |
+| `training.ablation_members`                     |                  3 |
+| `training.max_epochs`                           |                250 |
+| `training.patience`                             |                 20 |
+| `training.batch_size`                           |                  0 |
+| `training.learning_rate`                        |              0.001 |
+| `training.weight_decay`                         |             0.0001 |
+| `training.label_smoothing`                      |               0.02 |
+| `training.minimum_train_policy_groups`          |                 40 |
+| `training.minimum_validation_policy_groups`     |                 10 |
+| `training.minimum_test_policy_groups`           |                 10 |
+| `training.minimum_train_rows_per_scenario`      |                 30 |
+| `training.minimum_validation_rows_per_scenario` |                  5 |
+| `training.minimum_test_rows_per_scenario`       |                  5 |
+| `training.include_weak_calibration_rows`        |              false |
+| `training.feature_selection_mode`               |       `RATIO_ONLY` |
 
 Map directly to `ScenarioTrainingConfig`. `POLICY_ONLY` is not a value of
 `FeatureSelectionMode` and is never exposed as deployable configuration.
 
-| Evaluation key | Default |
-| --- | ---: |
-| `evaluation.maximum_grouped_macro_mae` | 0.20 |
-| `evaluation.minimum_grouped_macro_spearman` | 0.50 |
-| `evaluation.minimum_grouped_macro_precision_at_ten` | 0.20 |
-| `evaluation.maximum_loso_macro_mae` | 0.25 |
-| `evaluation.minimum_loso_macro_spearman` | 0.35 |
-| `evaluation.maximum_loso_worst_scenario_mae` | 0.35 |
-| `evaluation.minimum_context_mae_improvement` | 0.01 |
-| `evaluation.minimum_context_spearman_improvement` | 0.05 |
-| `evaluation.maximum_context_mae_regression` | 0.01 |
-| `evaluation.maximum_context_spearman_regression` | 0.02 |
-| `evaluation.minimum_counts_cross_environment_mae_improvement` | 0.01 |
-| `evaluation.maximum_counts_spearman_regression` | 0.02 |
-| `evaluation.maximum_counts_worst_environment_mae_regression` | 0.02 |
+| Evaluation key                                                | Default |
+|---------------------------------------------------------------|--------:|
+| `evaluation.maximum_grouped_macro_mae`                        |    0.20 |
+| `evaluation.minimum_grouped_macro_spearman`                   |    0.50 |
+| `evaluation.minimum_grouped_macro_precision_at_ten`           |    0.20 |
+| `evaluation.maximum_loso_macro_mae`                           |    0.25 |
+| `evaluation.minimum_loso_macro_spearman`                      |    0.35 |
+| `evaluation.maximum_loso_worst_scenario_mae`                  |    0.35 |
+| `evaluation.minimum_context_mae_improvement`                  |    0.01 |
+| `evaluation.minimum_context_spearman_improvement`             |    0.05 |
+| `evaluation.maximum_context_mae_regression`                   |    0.01 |
+| `evaluation.maximum_context_spearman_regression`              |    0.02 |
+| `evaluation.minimum_counts_cross_environment_mae_improvement` |    0.01 |
+| `evaluation.maximum_counts_spearman_regression`               |    0.02 |
+| `evaluation.maximum_counts_worst_environment_mae_regression`  |    0.02 |
 
 Map directly to `EvaluationThresholds`.
 
@@ -561,13 +561,13 @@ settled.
 
 Replace the enum-only production service with a private instance configured with the stop path.
 `stopRequested()` returns
-`Files.isRegularFile(stopFile, LinkOption.NOFOLLOW_LINKS)`. A symlink at the stop path is not a
-stop request. An I/O inspection failure is wrapped in `UncheckedIOException` and propagates before
-a new stage rather than being treated as false; the `ClosedLoopServices` signature does not
-change. The existing benchmark stop boundaries and checkpoint transitions remain unchanged.
+`Files.isRegularFile(stopFile, LinkOption.NOFOLLOW_LINKS)`. A symlink at the stop path is not a stop
+request. An I/O inspection failure is wrapped in `UncheckedIOException` and propagates before a new
+stage rather than being treated as false; the `ClosedLoopServices` signature does not change. The
+existing benchmark stop boundaries and checkpoint transitions remain unchanged.
 
-Resume is explicit through `run.resume=true`. The codec does not inspect the workspace to choose
-the value. The Phase 3 runner remains authoritative:
+Resume is explicit through `run.resume=true`. The codec does not inspect the workspace to choose the
+value. The Phase 3 runner remains authoritative:
 
 - `false` rejects an existing complete checkpoint;
 - `true` loads and validates the highest complete checkpoint;
@@ -685,8 +685,8 @@ Implement in this dependency order:
 1. Add importer enums/records and `CurrentWorkspaceLayout` under
    `training/importer/currentworkspace`.
 2. Add the package-local streaming decimal-bit reader and deterministic CSV writer/validator.
-3. Add `CurrentWorkspaceImporter` with exact mapping, report, catalog, bootstrap selection,
-   owned cleanup, and atomic publication.
+3. Add `CurrentWorkspaceImporter` with exact mapping, report, catalog, bootstrap selection, owned
+   cleanup, and atomic publication.
 4. Add `ClosedLoopConfigCodec` under `io.euhedral_execution.training.config`, beside
    `ClosedLoopConfig`; it contains no legacy layout knowledge.
 5. Add `stopFile` to `ClosedLoopConfig` and update constructor call sites/tests.
@@ -702,13 +702,13 @@ Implement in this dependency order:
 ### Memory semantics
 
 Import and config parsing are offline, single-owner operations. Mutable token buffers, file-local
-vectors, registry state, report builders, and config maps are thread-confined. Immutable records
-are published through ordinary return, and the import directory through atomic rename. No
-VarHandle, volatile field, CAS, padded atomic, executor, parallel stream, or pinned thread belongs
-in this code.
+vectors, registry state, report builders, and config maps are thread-confined. Immutable records are
+published through ordinary return, and the import directory through atomic rename. No VarHandle,
+volatile field, CAS, padded atomic, executor, parallel stream, or pinned thread belongs in this
+code.
 
-The stop file is polled only at the existing Phase 3 stage and paused-policy boundaries. It does
-not add shared Java state or alter benchmark counter acquire/release semantics.
+The stop file is polled only at the existing Phase 3 stage and paused-policy boundaries. It does not
+add shared Java state or alter benchmark counter acquire/release semantics.
 
 ### Memory pollution
 
@@ -716,8 +716,8 @@ not add shared Java state or alter benchmark counter acquire/release semantics.
 - Retain no legacy measurement arrays or observation objects.
 - Retain at most the current file's validated policies plus one global interned policy per unique
   ID.
-- Do not use `Files.readAllLines`, `readAllBytes`, memory mapping, streams over all numeric
-  tokens, DJL, or `TDigest`.
+- Do not use `Files.readAllLines`, `readAllBytes`, memory mapping, streams over all numeric tokens,
+  DJL, or `TDigest`.
 - Config files are small and may retain parsed scalar strings, but path artifacts are validated by
   their owning codecs.
 - Import tests use small fixtures under `@TempDir`, never the real current workspace.
@@ -729,8 +729,8 @@ not add shared Java state or alter benchmark counter acquire/release semantics.
 - Policy output uses `Double.doubleToRawLongBits` and 16-digit lower-case hex.
 - Do not normalize, round, clamp, reorder weights, or use rejected measurements.
 - Policy ordering is unsigned `PolicyId`; bootstrap positions are integers.
-- The importer performs no throughput conversion, calibration, percentile, quantile, prediction,
-  or ranking arithmetic.
+- The importer performs no throughput conversion, calibration, percentile, quantile, prediction, or
+  ranking arithmetic.
 - Config decimal values use the target Java primitive parser and the target record constructor's
   exact validation. Seeds preserve raw 64-bit hex.
 
@@ -776,8 +776,8 @@ Assert:
 - comments and blank lines are accepted;
 - unknown/duplicate/missing keys, duplicate list values, bad boolean/enum/seed/number, NaN,
   infinity, BOM, CR, missing final LF, malformed scenario/reference, invalid path relation,
-  both/neither bootstrap sources, bundle without plan, and config constructor failures are
-  rejected with the key and line;
+  both/neither bootstrap sources, bundle without plan, and config constructor failures are rejected
+  with the key and line;
 - changing `run.stop_file`, active environment, or resume does not change
   `ClosedLoopConfigFingerprint`, while every frozen semantic key does; and
 - no system property or environment variable changes parsed output.
@@ -823,8 +823,8 @@ Prompt 5B is complete only when:
   focused tests, and the documented deletion section;
 - `closed-loop --config` constructs the complete typed Phase 3 configuration without system
   properties or hidden defaults beyond those enumerated here;
-- anchor, calibration, aggregation, budget, candidate, benchmark, training, and evaluation
-  settings map exactly to their owning immutable records;
+- anchor, calibration, aggregation, budget, candidate, benchmark, training, and evaluation settings
+  map exactly to their owning immutable records;
 - stop and resume preserve the Phase 3 state-machine and fingerprint rules;
 - successful returns disclose the exact checkpoint, package, and awaiting scenarios;
 - help and documentation describe fixed robust ranking, coverage, importer limitations, resume,
@@ -898,11 +898,10 @@ may be new changes, in addition to the pre-existing user-owned workspace files.
 
 There is no unresolved Phase 5 design blocker.
 
-- The current workspace contributes vectors, not evidence. Users must run native bootstrap
-  scenarios before calibration or learning.
-- A user who can establish missing measurement metadata from an external authoritative source
-  needs a new explicit data-ingestion blueprint; this importer must not grow a metadata override
-  language.
+- The current workspace contributes vectors, not evidence. Users must run native bootstrap scenarios
+  before calibration or learning.
+- A user who can establish missing measurement metadata from an external authoritative source needs
+  a new explicit data-ingestion blueprint; this importer must not grow a metadata override language.
 - Phase 6 must exercise the typed config, imported bootstrap vectors, multi-environment wait/resume,
   final post-merge, and package in its end-to-end synthetic audit.
 - Phase 7 deletes the temporary importer using the exact recipe above and separately removes the
@@ -930,8 +929,8 @@ The implementation crosses one module but several ownership boundaries:
 - regression compatibility with Phase 1-4.
 
 The importer performs no concurrency or statistical mathematics, and the blueprint eliminates the
-largest migration ambiguity by rejecting measurements. Nevertheless, this is not a local
-low-effort edit: compile repair spans constructors and tests, while filesystem safety, deterministic
+largest migration ambiguity by rejecting measurements. Nevertheless, this is not a local low-effort
+edit: compile repair spans constructors and tests, while filesystem safety, deterministic
 serialization, complete config mapping, and the removable dependency boundary interact.
 
 Earlier Phase 3 evidence shows that `gpt-5.5 / low` omitted broad state-machine and acceptance
@@ -957,20 +956,20 @@ The exact minimal context envelope is:
    focused tests; and
 8. the current `Runner`, training README, and ML architecture document.
 
-Do not preload all prior blueprints. This blueprint contains their settled Phase 5 mappings.
-Consult a prior blueprint only if implementation finds a direct contract conflict, and stop rather
-than choose a new architecture.
+Do not preload all prior blueprints. This blueprint contains their settled Phase 5 mappings. Consult
+a prior blueprint only if implementation finds a direct contract conflict, and stop rather than
+choose a new architecture.
 
 If `gpt-5.6-sol / medium` is unavailable, request an explicit alternative instead of silently
 downgrading.
 
 ## Naming and package cleanup record
 
-The 2026-07-29 organization pass places `ClosedLoopConfigCodec` and its focused test in the
-existing `training.config` package beside `ClosedLoopConfig`. The temporary importer remains a
-single isolated `training.importer.currentworkspace` subtree because that package is its explicit
-removal boundary. No importer mapping, configuration key, stop/resume rule, memory ownership,
-numeric parsing, or precision contract changes.
+The 2026-07-29 organization pass places `ClosedLoopConfigCodec` and its focused test in the existing
+`training.config` package beside `ClosedLoopConfig`. The temporary importer remains a single
+isolated `training.importer.currentworkspace` subtree because that package is its explicit removal
+boundary. No importer mapping, configuration key, stop/resume rule, memory ownership, numeric
+parsing, or precision contract changes.
 
 ## Prompt 5B completion record
 
@@ -1012,17 +1011,17 @@ mvn -B -pl euhedral-training test
 ```
 
 The single skip is the existing opt-in `ScenarioOrdinalNetworkIntegrationTest`; it is outside the
-Phase 5 deterministic importer/config/CLI surface. `git diff --check` passed. The dependency-boundary
-and system-property searches returned no forbidden matches. The current-path search returned only
-the temporary package and Runner marker plus the pre-existing pooled-v0
+Phase 5 deterministic importer/config/CLI surface. `git diff --check` passed. The
+dependency-boundary and system-property searches returned no forbidden matches. The current-path
+search returned only the temporary package and Runner marker plus the pre-existing pooled-v0
 `legacy/PooledSequenceFinder` default `output/temp_data`; Phase 5's explicit non-goal preserves that
 legacy implementation for Phase 7 deletion.
 
-Fixture evidence covers bit-exact signed-zero vector preservation, duplicate counting,
-measurement rejection, summary skipping, unknown model/state rejection, mapped-file transactional
-failure, deterministic bytes across output parents, collision-safe target refusal, typed defaults,
-nested overrides, unsigned seed bits, strict malformed config rejection, and exact command flag
-ordering. The importer tests operate only on `@TempDir` fixtures.
+Fixture evidence covers bit-exact signed-zero vector preservation, duplicate counting, measurement
+rejection, summary skipping, unknown model/state rejection, mapped-file transactional failure,
+deterministic bytes across output parents, collision-safe target refusal, typed defaults, nested
+overrides, unsigned seed bits, strict malformed config rejection, and exact command flag ordering.
+The importer tests operate only on `@TempDir` fixtures.
 
 ### Memory, precision, and filesystem evidence
 
@@ -1033,11 +1032,11 @@ hex output without normalization or rounding. Mutable parser/registry/report sta
 thread-confined. Publication forces each member, writes `COMPLETE` last, validates the staged
 inventory and bootstrap artifact, and uses `ATOMIC_MOVE` with no fallback or overwrite.
 
-No current workspace input/output file or pre-existing user-owned change was modified or included
-in the Phase 5B implementation scope. No Phase 1-4 persisted schema, statistical comparator,
+No current workspace input/output file or pre-existing user-owned change was modified or included in
+the Phase 5B implementation scope. No Phase 1-4 persisted schema, statistical comparator,
 scheduler/checkpoint schema, package manifest, POM, module descriptor, or generated artifact was
-changed. There were no approved deviations; the outstanding Phase 4 audit matrix remains
-out of scope and unresolved as required.
+changed. There were no approved deviations; the outstanding Phase 4 audit matrix remains out of
+scope and unresolved as required.
 
 ## Prompt 5C/D verification and conformance record
 
@@ -1067,8 +1066,8 @@ no matches.
 ### Blueprint-settled correction
 
 Malformed mapped files already retained their path, one-based line, and token in the parser
-diagnostic, but the importer discarded that diagnostic after emitting the stable report reason.
-The verifier now logs that existing diagnostic while preserving the required
+diagnostic, but the importer discarded that diagnostic after emitting the stable report reason. The
+verifier now logs that existing diagnostic while preserving the required
 `MALFORMED_CURRENT_WORKSPACE_FILE` report reason and deterministic artifact bytes. No data schema,
 recognition rule, stop/resume state transition, or package behavior changed.
 
@@ -1080,8 +1079,8 @@ typed runtime path, but the phase is not fully conformant because several explic
 deterministic importer/configuration/CLI test cases have not been implemented. This is an
 acceptance-surface gap, not an architectural redesign request.
 
-The 2026-07-29 naming pass subsequently moved the typed codec and its test to `training.config`;
-the verification and conformance outcome is unchanged.
+The 2026-07-29 naming pass subsequently moved the typed codec and its test to `training.config`; the
+verification and conformance outcome is unchanged.
 
 ### Repackage compatibility addendum (2026-07-29)
 
@@ -1089,6 +1088,6 @@ The Phase 5 names remain valid at their current boundaries:
 `ClosedLoopConfig` and `ClosedLoopConfigCodec` are in
 `io.euhedral_execution.training.config`; `CurrentWorkspaceImporter` and its focused test are in
 `io.euhedral_execution.training.importer.currentworkspace`; and `Runner`, `RunnerTest`, and
-`ClosedLoopRunner` remain in the root `io.euhedral_execution.training` package. The importer
-remains isolated from the Phase 1-4 package families. No parser, CLI, stop/resume, package, or
+`ClosedLoopRunner` remain in the root `io.euhedral_execution.training` package. The importer remains
+isolated from the Phase 1-4 package families. No parser, CLI, stop/resume, package, or
 temporary-import removal contract changed.

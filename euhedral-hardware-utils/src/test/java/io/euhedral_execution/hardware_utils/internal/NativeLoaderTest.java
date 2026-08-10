@@ -38,6 +38,7 @@ class NativeLoaderTest {
         product\tmacos-arm64\tmacos\tarm64\tnone\t10\t/bin/osx/osx_jni_arm64.dylib
         product\twindows-x64\twindows\tx64\tnone\t10\t/bin/windows/windows_jni_x64.dll
         """;
+
     @TempDir
     Path temporaryDirectory;
 

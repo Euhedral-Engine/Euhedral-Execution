@@ -1,6 +1,5 @@
 package io.euhedral_execution.core.ingest;
 
-import io.euhedral_execution.core.control_plane.ControlPlaneLattice;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.generics.LatticeReceiver;
 import io.euhedral_execution.core.generics.LatticeSource;

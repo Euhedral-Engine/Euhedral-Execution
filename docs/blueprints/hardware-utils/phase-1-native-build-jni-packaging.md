@@ -15,8 +15,8 @@
 ### Verification note
 
 For this P1 phase, the developer-authorized validation step is skipped in favor of the conformance
-check and manual review. The conformance audit may make only the settled minor fixes allowed by
-this blueprint; it records skipped checks and limits, and does not introduce new ABI, manifest,
+check and manual review. The conformance audit may make only the settled minor fixes allowed by this
+blueprint; it records skipped checks and limits, and does not introduce new ABI, manifest,
 packaging, loader, signing, or CI decisions.
 
 This blueprint is subordinate to the parent plan, `AGENTS.md`, and the compiled P0 compatibility
@@ -30,9 +30,9 @@ command, and Gradle build defaults to the exact versions in `mise.toml`; a docum
 restricted-environment fallback must use the corresponding pinned installed tools and record its
 versions and limits.
 
-If a child discovers that a manifest field, JNI ABI rule, staged path, signing edge, loader
-catalog field, extraction policy, or binary gate must change, it returns to this parent blueprint.
-It must not make a private incompatible choice.
+If a child discovers that a manifest field, JNI ABI rule, staged path, signing edge, loader catalog
+field, extraction policy, or binary gate must change, it returns to this parent blueprint. It must
+not make a private incompatible choice.
 
 ### Developer decision: ad-hoc-only macOS signing
 
@@ -45,26 +45,26 @@ low-friction distribution outside the Mac App Store.
 
 ## Objective
 
-P1 replaces the source-writing native build with one universal, manifest-driven graph and makes
-the resulting eight products safe to package and load. Completion must:
+P1 replaces the source-writing native build with one universal, manifest-driven graph and makes the
+resulting eight products safe to package and load. Completion must:
 
-1. build every declared Linux, Windows, and macOS product on the default hardware-module
-   lifecycle without a host-only or development mode;
+1. build every declared Linux, Windows, and macOS product on the default hardware-module lifecycle
+   without a host-only or development mode;
 2. make one strict JSON manifest the sole native source-root and product inventory;
 3. generate target-correct JNI declarations and ABI definitions without modifying a JDK;
 4. stage only generated native resources under `target`, sign macOS outputs before staging, and
    package exactly the intended eight products plus manifest-derived loader metadata;
-5. select explicit optimized and hardened native settings and enforce architecture, export,
-   import, runtime-floor, and signature gates;
-6. remove hardcoded loader product tables, reject unknown architectures, support Linux glibc to
-   musl fallback on `LinkageError`, and safely own extracted files on POSIX and Windows;
-7. preserve ignored source-tree binaries and caches as user-owned data while making them
-   impossible to package; and
+5. select explicit optimized and hardened native settings and enforce architecture, export, import,
+   runtime-floor, and signature gates;
+6. remove hardcoded loader product tables, reject unknown architectures, support Linux glibc to musl
+   fallback on `LinkageError`, and safely own extracted files on POSIX and Windows;
+7. preserve ignored source-tree binaries and caches as user-owned data while making them impossible
+   to package; and
 8. establish selected-module CI and runtime smoke gates without changing platform topology,
    affinity, resource, or pressure semantics owned by P2-P7.
 
-P1 owns the build and load boundary. It does not fix the known Windows native owner mismatch N01
-or the macOS return-type mismatch N02; P6 and P7 retain those corrections.
+P1 owns the build and load boundary. It does not fix the known Windows native owner mismatch N01 or
+the macOS return-type mismatch N02; P6 and P7 retain those corrections.
 
 ## Scope
 
@@ -88,8 +88,8 @@ The two children together may edit only:
   and this phase's closeout material; and
 - the temporary P1 status block in `AGENTS.md` during implementation through audit.
 
-The existing root workflow and deploy workflow Gradle commands remain byte-for-byte unchanged.
-Their full-reactor results are not P1 evidence.
+The existing root workflow and deploy workflow Gradle commands remain byte-for-byte unchanged. Their
+full-reactor results are not P1 evidence.
 
 ### Read-only inputs
 
@@ -122,20 +122,20 @@ Their full-reactor results are not P1 evidence.
 At blueprint time:
 
 - `build.zig` is under `src/main/resources`, scans platform folders shallowly, hardcodes targets,
-  silently skips missing folders, discovers `JAVA_HOME` through the environment or `mise`, scans
-  SDK paths, and installs into its source-tree prefix.
+  silently skips missing folders, discovers `JAVA_HOME` through the environment or `mise`, scans SDK
+  paths, and installs into its source-tree prefix.
 - the hardware POM runs `zig build ... --prefix .` during `initialize`;
 - source resources exclude some build extensions but do not exclude `bin/**` or headers;
-- `src/main/resources/bin` contains 22 ignored binaries: the eight intended aggregates plus 14
-  stale per-source products;
+- `src/main/resources/bin` contains 22 ignored binaries: the eight intended aggregates plus 14 stale
+  per-source products;
 - a current `target/classes` inventory contains those 22 binaries and three native headers;
 - no ignored binary or `.zig-cache` entry is tracked by Git; and
 - the tracked `build.sh` independently writes per-source outputs under source resources.
 
 The parent plan's earlier phrase "one-time version-controlled removal" does not describe the
 observed binaries. They are ignored, user-owned artifacts. P1 removes only the tracked obsolete
-script and relocates tracked source/build inputs. It excludes and fingerprints ignored artifacts
-but never deletes or moves them.
+script and relocates tracked source/build inputs. It excludes and fingerprints ignored artifacts but
+never deletes or moves them.
 
 ### JNI and loader behavior
 
@@ -154,25 +154,25 @@ io.euhedral_execution.hardware_utils.windows.WindowsSystemLayout
 The current native surface includes these deliberate P1 exceptions:
 
 - N01: Java declares
-  `Java_io_euhedral_1execution_hardware_1utils_windows_WindowsAffinity_ntSetTimerResolution`,
-  while the binary exports the `WindowsTimerResolution` owner;
-- N02: Java declares `OSXSystemLayout.getSysctlString(String)` with `jint` return, while native
-  code returns `jstring`; and
+  `Java_io_euhedral_1execution_hardware_1utils_windows_WindowsAffinity_ntSetTimerResolution`, while
+  the binary exports the `WindowsTimerResolution` owner;
+- N02: Java declares `OSXSystemLayout.getSysctlString(String)` with `jint` return, while native code
+  returns `jstring`; and
 - an otherwise unreferenced legacy macOS export
   `Java_io_euhedral_1execution_hardware_1utils_osx_OSXResources_getCoreTypeMask`.
 
-N01 and N02 remain exact gate exceptions. The legacy macOS export remains an explicit B06/P7
-carry, not an open wildcard. All other JNI exports must match generated declarations.
+N01 and N02 remain exact gate exceptions. The legacy macOS export remains an explicit B06/P7 carry,
+not an open wildcard. All other JNI exports must match generated declarations.
 
 P0 defect-ledger subjects that name the old resource build path remain historical branch-point
 anchors and are not rewritten merely because P1 relocates tracked inputs. Child A changes the P0
 native source scan root and adds P1 evidence; it does not regenerate the P0 API/native fixture or
 change its approved hash.
 
-`JNIClassLoader` currently maintains a second hardcoded product table, maps any non-x86
-architecture to arm64, applies POSIX permissions on every OS, catches `Exception` but not
-`LinkageError`, creates an unowned top-level temporary file, and registers a cleaner against a
-class object that remains live. P1 replaces those behaviors without changing the public
+`JNIClassLoader` currently maintains a second hardcoded product table, maps any non-x86 architecture
+to arm64, applies POSIX permissions on every OS, catches `Exception` but not
+`LinkageError`, creates an unowned top-level temporary file, and registers a cleaner against a class
+object that remains live. P1 replaces those behaviors without changing the public
 `JNIClassLoader.load()` trigger.
 
 ### Pinned-tool observations
@@ -192,9 +192,9 @@ macOS SDK: /home/bagotay/.local/share/mise/installs/macos-sdk/MacOSX26.1.sdk
 rcodesign: /home/bagotay/.local/share/mise/installs/apple-codesign/0.29.0/bin/rcodesign
 ```
 
-All three installed JDK `jni_md.h` files had the same SHA-256 digest because the existing
-workflow had copied the Linux header into the Darwin and Win32 locations. P1 must never consume
-those platform subdirectories.
+All three installed JDK `jni_md.h` files had the same SHA-256 digest because the existing workflow
+had copied the Linux header into the Darwin and Win32 locations. P1 must never consume those
+platform subdirectories.
 
 ### Linux libc-neutral disposition
 
@@ -299,15 +299,15 @@ euhedral-hardware-utils/src/main/native/
     `-- windows_system_layout.cpp
 ```
 
-The directory name is `macos`; compatibility resource paths and output stems retain `osx`.
-Platform umbrella headers become OS-support headers that include target-local `jni.h`. They must
-not reproduce Java declarations by hand. Translation units include their generated class header
-where N01/N02 permit it. The two known mismatches are isolated and checked as explicit exceptions
-rather than made to conflict at compile time.
+The directory name is `macos`; compatibility resource paths and output stems retain `osx`. Platform
+umbrella headers become OS-support headers that include target-local `jni.h`. They must not
+reproduce Java declarations by hand. Translation units include their generated class header where
+N01/N02 permit it. The two known mismatches are isolated and checked as explicit exceptions rather
+than made to conflict at compile time.
 
 `common/jni_onload.cpp` exports exactly `JNI_OnLoad(JavaVM *, void *)`, rejects no compatible VM
-state, performs no platform initialization, allocates nothing, and returns `JNI_VERSION_1_8`.
-All eight products compile that source.
+state, performs no platform initialization, allocates nothing, and returns `JNI_VERSION_1_8`. All
+eight products compile that source.
 
 The tracked source-resource `build.sh` is deleted after the new direct graph and module lifecycle
 pass. No replacement shell script is added.
@@ -335,18 +335,18 @@ is at most 1,048,576 bytes. Schema version 1 is strict:
 - only regular files with a compiled or passive extension may occur below a designated root;
 - product IDs, target tuples, resource paths, build orders, and component/architecture/libc
   combinations are unique;
-- a product's output filename is derived from its component stem, architecture ID, and extension
-  and must equal the last component of `resourcePath`;
+- a product's output filename is derived from its component stem, architecture ID, and extension and
+  must equal the last component of `resourcePath`;
 - `glibc`/`musl` are allowed only for Linux; every Linux product requires one of them and every
   non-Linux product requires `none`;
 - every component, architecture, gate policy, and OS referenced by a product exists;
 - load order is positive and unique within an OS/architecture pair; and
 - the product array is nonempty and internally consistent. The parser is generic; a separate
-  active-tree compatibility test, not build-graph logic, requires the checked-in manifest to
-  equal the eight P0 product paths.
+  active-tree compatibility test, not build-graph logic, requires the checked-in manifest to equal
+  the eight P0 product paths.
 
-Zig performs a duplicate-key scan before typed `std.json` parsing. It reports the JSON path and
-byte offset for syntax/duplicate failures and the product/component ID for semantic failures.
+Zig performs a duplicate-key scan before typed `std.json` parsing. It reports the JSON path and byte
+offset for syntax/duplicate failures and the product/component ID for semantic failures.
 
 ### Exact schema example
 
@@ -566,11 +566,11 @@ order. Passive files are validated but not compiled. Missing, empty, unreadable,
 unrecognized content is an error; there is no `continue` that drops a component or product.
 
 Every product receives a fresh immutable source list. Product compile steps share source
-`LazyPath` inputs but no mutable output directory. Products are declared in `buildOrder`, while
-Zig is free to schedule independent nodes concurrently.
+`LazyPath` inputs but no mutable output directory. Products are declared in `buildOrder`, while Zig
+is free to schedule independent nodes concurrently.
 
-Adding a source file beneath an existing designated root requires no build-graph edit. Adding a
-new root, component, or product changes only the manifest, subject to schema and active-tree P0
+Adding a source file beneath an existing designated root requires no build-graph edit. Adding a new
+root, component, or product changes only the manifest, subject to schema and active-tree P0
 product-set compatibility review.
 
 ## Generated JNI contract
@@ -597,8 +597,7 @@ io_euhedral_execution_hardware_utils_windows_WindowsSystemLayout.h
 ```
 
 The Zig graph requires those seven files and fails on a missing or unexpected generated header.
-Generated declarations are target-only inputs; no `.h` file is copied to `target/classes` or a
-jar.
+Generated declarations are target-only inputs; no `.h` file is copied to `target/classes` or a jar.
 
 The host JDK's target-independent `${java.home}/include/jni.h` is copied by a Zig `WriteFiles` node
 to:
@@ -608,8 +607,8 @@ target/generated-jni/include/jni.h
 ```
 
 The checked-in `src/main/native/include/jni_md.h` is copied next to it. Because `jni.h` includes
-`jni_md.h` with quotes, this adjacent target-local pair prevents use of the corrupted JDK
-platform subdirectories. The source JDK is read-only.
+`jni_md.h` with quotes, this adjacent target-local pair prevents use of the corrupted JDK platform
+subdirectories. The source JDK is read-only.
 
 ### Target-aware `jni_md.h`
 
@@ -618,8 +617,8 @@ The project-owned header selects only on compiler target macros:
 - `_WIN32`: `JNIEXPORT` is `__declspec(dllexport)`, `JNIIMPORT` is
   `__declspec(dllimport)`, `JNICALL` is `__stdcall`, `jint` is a 32-bit Windows `long`, and
   `jlong` is a 64-bit integer;
-- non-Windows: `JNIEXPORT` has default visibility, `JNIIMPORT` and `JNICALL` are empty, `jint` is
-  a 32-bit `int`, and `jlong` is a 64-bit `long` on the supported LP64 targets; and
+- non-Windows: `JNIEXPORT` has default visibility, `JNIIMPORT` and `JNICALL` are empty, `jint` is a
+  32-bit `int`, and `jlong` is a 64-bit `long` on the supported LP64 targets; and
 - `jbyte` is signed and exactly 8 bits on every target.
 
 Compile-time assertions require:
@@ -645,8 +644,8 @@ The allowed externally visible export set is:
    `getCoreTypeMask` carry described above.
 
 The expected N01 symbol remains missing and the observed wrong-owner symbol remains present until
-P6. N02's return descriptor remains classified unverified until P7 because a native symbol does
-not encode its return type. No prefix or count wildcard is allowed. PE CRT exports are forbidden.
+P6. N02's return descriptor remains classified unverified until P7 because a native symbol does not
+encode its return type. No prefix or count wildcard is allowed. PE CRT exports are forbidden.
 
 ## Zig graph and build policy
 
@@ -691,8 +690,8 @@ rcodesign              = ${env.RCODESIGN}
 
 The exec plugin executable is `${env.ZIG}` and must be an absolute executable reporting 0.16.0.
 
-There are no certificate, password, or signing-mode properties. Gradle and Zig always use the
-ad-hoc signing path described by the developer decision above.
+There are no certificate, password, or signing-mode properties. Gradle and Zig always use the ad-hoc
+signing path described by the developer decision above.
 
 `java-home` must contain readable `include/jni.h` and `release`; the release metadata must identify
 a 21.x JDK for the repository build. `macos-sdk` must directly contain the expected SDK `usr` and
@@ -727,9 +726,9 @@ compile/link unsigned product
   -> install signed output to output-root/resourcePath
 ```
 
-The install step explicitly depends on signature inspection. It never installs the unsigned
-compile output. Every signing node depends only on its own architecture product and immutable
-signing inputs; x64 and arm64 may run in parallel.
+The install step explicitly depends on signature inspection. It never installs the unsigned compile
+output. Every signing node depends only on its own architecture product and immutable signing
+inputs; x64 and arm64 may run in parallel.
 
 Default builds use deterministic ad-hoc signatures with:
 
@@ -745,8 +744,8 @@ The graph has no credentialed signing branch and accepts no certificate or passw
 always disables timestamping and emits an ad-hoc signature with the hardened-runtime flag.
 
 `rcodesign verify` 0.29.0 was observed to reject its own ad-hoc result because it expects CMS.
-Cross-build verification therefore uses `print-signature-info`, asserts the exact binary
-identifier, CodeDirectory, ad-hoc mode, and code hashes, and proves an
+Cross-build verification therefore uses `print-signature-info`, asserts the exact binary identifier,
+CodeDirectory, ad-hoc mode, and code hashes, and proves an
 `LC_CODE_SIGNATURE`. A macOS runner performs the authoritative:
 
 ```text
@@ -831,8 +830,8 @@ aliases sorted by alias, then products by manifest OS declaration order, manifes
 declaration order, load order, and product ID. Comparisons within a key use unsigned UTF-8 order.
 Fields are tab-separated and cannot contain tabs, CR, LF, NUL, or leading/trailing whitespace.
 
-The generator performs no wall-clock, host, absolute-path, cache, or signing-mode interpolation.
-Two runs from the same manifest produce byte-identical catalogs.
+The generator performs no wall-clock, host, absolute-path, cache, or signing-mode interpolation. Two
+runs from the same manifest produce byte-identical catalogs.
 
 ## Gradle build lifecycle and packaging
 
@@ -851,12 +850,12 @@ The hardware POM uses module-local plugin executions in this order:
 5. `package`/`verify`: the normal jar is built, then Failsafe package/binary/runtime integration
    tests inspect that exact jar.
 
-POM declaration order is part of the contract for executions sharing `process-classes`. The
-cleanup refuses an empty, source-root, workspace-root, or unresolved property and names only the
-three target-owned paths above. Its Ant delete/fileset configuration sets
-`followSymlinks="false"` and `removeNotFollowedSymlinks="true"`; a temporary sentinel test proves
-a symlink at or below any cleanup root is removed or rejected without touching its external
-target. `gradle clean` removes all target caches; warm builds preserve `target/zig-cache` and
+POM declaration order is part of the contract for executions sharing `process-classes`. The cleanup
+refuses an empty, source-root, workspace-root, or unresolved property and names only the three
+target-owned paths above. Its Ant delete/fileset configuration sets
+`followSymlinks="false"` and `removeNotFollowedSymlinks="true"`; a temporary sentinel test proves a
+symlink at or below any cleanup root is removed or rejected without touching its external target.
+`gradle clean` removes all target caches; warm builds preserve `target/zig-cache` and
 `target/zig-global-cache`.
 
 Source resources use an allowlist containing only:
@@ -872,8 +871,8 @@ bin/**
 META-INF/euhedral/native-products.tsv
 ```
 
-This makes ignored source `bin/**`, headers, build inputs, caches, and stale products
-unpackageable even if they remain on disk.
+This makes ignored source `bin/**`, headers, build inputs, caches, and stale products unpackageable
+even if they remain on disk.
 
 ### Exact jar resource contract
 
@@ -917,8 +916,8 @@ necessary POM context into a temporary isolated tree, performs a package build w
 removes one product from the copied manifest, then performs a warm package rebuild without
 `clean`, again with tests skipped. The generic schema accepts that internally consistent
 seven-product copy; active-tree P0/exact-eight assertions are deliberately not run there. The test
-proves the removed resource is absent from generated resources, `target/classes`, catalog, and
-jar. The active worktree and all ignored source artifacts remain byte-identical.
+proves the removed resource is absent from generated resources, `target/classes`, catalog, and jar.
+The active worktree and all ignored source artifacts remain byte-identical.
 
 ## Loader contract
 
@@ -930,8 +929,7 @@ types, with names allowed to follow the surrounding convention:
 - an immutable `NativeProductCatalog`;
 - an immutable `NativeProduct`;
 - a `NativeLibraryExtractor`;
-- a small `NativeLibrarySystem` load seam whose production implementation calls `System.load`;
-  and
+- a small `NativeLibrarySystem` load seam whose production implementation calls `System.load`; and
 - an immutable load result/failure aggregate used only during class initialization and tests.
 
 `JNIClassLoader.load()` triggers a holder class. JVM class initialization is the single
@@ -945,8 +943,8 @@ selection. It never scans the jar.
 
 ### OS, architecture, and fallback selection
 
-Normalize `os.name` and `os.arch` with `Locale.ROOT`, trim outer ASCII whitespace, collapse
-internal ASCII whitespace in OS names to one space, and lowercase. Apply only catalog alias rules:
+Normalize `os.name` and `os.arch` with `Locale.ROOT`, trim outer ASCII whitespace, collapse internal
+ASCII whitespace in OS names to one space, and lowercase. Apply only catalog alias rules:
 
 - exact rules win;
 - at most one prefix rule may match;
@@ -958,8 +956,8 @@ There is no `SystemInfo` call and no x64/arm64 default. This avoids a topology/c
 cycle.
 
 Select products by canonical OS and architecture, then sort by `loadOrder` and product ID. Linux
-therefore tries glibc and then musl. Windows and macOS have one candidate. For each candidate,
-catch only:
+therefore tries glibc and then musl. Windows and macOS have one candidate. For each candidate, catch
+only:
 
 - `IOException`;
 - `SecurityException`; and
@@ -967,8 +965,8 @@ catch only:
 
 Record the failure, clean that candidate's extraction where safe, and continue. Do not catch
 `VirtualMachineError`, `ThreadDeath`, or arbitrary `Error`. If all candidates fail, throw one
-`ExceptionInInitializerError` with a concise message and add candidate failures as suppressed
-causes in attempt order.
+`ExceptionInInitializerError` with a concise message and add candidate failures as suppressed causes
+in attempt order.
 
 ### Extraction location and ownership
 
@@ -978,28 +976,26 @@ The internal system property is:
 io.euhedral.native.extract.dir
 ```
 
-Its value, when present, must be an absolute existing writable directory. Otherwise use the
-absolute normalized `java.io.tmpdir`. Under that parent, use only:
+Its value, when present, must be an absolute existing writable directory. Otherwise use the absolute
+normalized `java.io.tmpdir`. Under that parent, use only:
 
 ```text
 euhedral-native-v1/load-<pid>-<32-lowercase-hex>/
 ```
 
 The run directory contains `owner.properties` and at most one candidate library at a time. The
-marker is UTF-8/LF and contains schema, PID, and creation epoch milliseconds. Create directories
-and files with `CREATE_NEW`, reject symlinks with `NOFOLLOW_LINKS`, and never replace an existing
-path.
+marker is UTF-8/LF and contains schema, PID, and creation epoch milliseconds. Create directories and
+files with `CREATE_NEW`, reject symlinks with `NOFOLLOW_LINKS`, and never replace an existing path.
 
-On a POSIX file store, set the base/run directory to `rwx------`, the marker to `rw-------`, and
-the library to `rwx------` through `PosixFileAttributeView`. On Windows, never request a POSIX
-view: require `AclFileAttributeView`, set the dedicated base/run/file ACL to one inheritable
-full-control allow entry for the current owner, then read it back and reject any effective
-non-owner entry. The random name is defense in depth, not the privacy boundary. If a supported
-POSIX OS lacks a POSIX view or Windows lacks an ACL view, fail with an actionable message rather
-than assume permissions.
+On a POSIX file store, set the base/run directory to `rwx------`, the marker to `rw-------`, and the
+library to `rwx------` through `PosixFileAttributeView`. On Windows, never request a POSIX view:
+require `AclFileAttributeView`, set the dedicated base/run/file ACL to one inheritable full-control
+allow entry for the current owner, then read it back and reject any effective non-owner entry. The
+random name is defense in depth, not the privacy boundary. If a supported POSIX OS lacks a POSIX
+view or Windows lacks an ACL view, fail with an actionable message rather than assume permissions.
 
-Copy through a fixed 64 KiB buffer. Reject an empty resource and any product larger than
-67,108,864 bytes. Count with `long`, reject overflow or extra bytes, close the stream before
+Copy through a fixed 64 KiB buffer. Reject an empty resource and any product larger than 67,108,864
+bytes. Count with `long`, reject overflow or extra bytes, close the stream before
 `System.load`, and compare the final size with the count.
 
 After a successful POSIX `System.load`, unlink the library and remove the marker/run directory
@@ -1017,8 +1013,8 @@ At startup, perform a bounded stale cleanup below `euhedral-native-v1`:
 - require age of at least 24 hours using saturating millisecond arithmetic;
 - skip a PID that `ProcessHandle` reports alive;
 - where owner attributes exist, require the child owner to equal the current base owner;
-- skip any directory with an unexpected entry, oversized file, unreadable marker, invalid
-  timestamp, or failed liveness check; and
+- skip any directory with an unexpected entry, oversized file, unreadable marker, invalid timestamp,
+  or failed liveness check; and
 - delete only the exact recognized library, marker, then empty directory.
 
 Cleanup failure is debug-level diagnostic and never turns a successful load into failure.
@@ -1051,12 +1047,12 @@ llvm-readobj --file-header --needed-libs --macho-version-min --symbols <Mach-O>
 llvm-objdump --macho --private-headers <Mach-O>
 ```
 
-The module test properties `llvm.readobj` and `llvm.objdump` are required absolute executable
-paths during `verify`. The POM defaults to the supported Ubuntu build-host paths under `/usr/bin`;
+The module test properties `llvm.readobj` and `llvm.objdump` are required absolute executable paths
+during `verify`. The POM defaults to the supported Ubuntu build-host paths under `/usr/bin`;
 independently activated module profiles allow absolute `LLVM_READOBJ` and `LLVM_OBJDUMP`
 environment values to override those defaults. `mise.toml` supplies the Ubuntu paths, and local
-validation on another build host passes both explicitly. Tests never search PATH or silently skip
-a missing inspector.
+validation on another build host passes both explicitly. Tests never search PATH or silently skip a
+missing inspector.
 
 For Mach-O, `llvm-objdump` is authoritative for distinguishing `LC_ID_DYLIB` from
 `LC_LOAD_DYLIB`; `llvm-readobj --needed-libs` is only a redundant inventory cross-check. For every
@@ -1082,25 +1078,24 @@ deletes them. It never reads ignored source binaries.
 Add a test-only `NativeLoadSmokeMain` with two modes:
 
 - `load-only`: call `JNIClassLoader.load()` and exit zero only after `JNI_OnLoad` succeeds;
-- `linux-get-cpu`: load and call `LinuxAffinity.INSTANCE.getCpu()`, requiring a non-negative
-  result.
+- `linux-get-cpu`: load and call `LinuxAffinity.INSTANCE.getCpu()`, requiring a non-negative result.
 
 The CI smoke artifact contains only the ordinary module jar, that compiled test main class at its
 package path, and the module's runtime dependency jars under `lib/`. A module-local
 `gradle-dependency-plugin` execution prepares the runtime jars under `target/native-smoke/lib`
-without attaching or publishing another artifact. The jobs run it on the classpath, cap the
-bundle at 64 files and 134,217,728 bytes, and reject any source, credential, cache, or unrelated
-test fixture.
+without attaching or publishing another artifact. The jobs run it on the classpath, cap the bundle
+at 64 files and 134,217,728 bytes, and reject any source, credential, cache, or unrelated test
+fixture.
 
 The required P1 runtime matrix is:
 
-| Environment | Gate |
-| --- | --- |
-| Linux x64 glibc build JDK 21 | Failsafe selects glibc and `linux-get-cpu` succeeds |
-| Linux x64 glibc JDK 17 | the same packaged jar selects glibc and `linux-get-cpu` succeeds |
+| Environment                                   | Gate                                                                               |
+|-----------------------------------------------|------------------------------------------------------------------------------------|
+| Linux x64 glibc build JDK 21                  | Failsafe selects glibc and `linux-get-cpu` succeeds                                |
+| Linux x64 glibc JDK 17                        | the same packaged jar selects glibc and `linux-get-cpu` succeeds                   |
 | Linux x64 musl JDK 17 in a bounded Docker job | glibc fails with `LinkageError`, musl fallback loads, and `linux-get-cpu` succeeds |
-| Windows x64 JDK 17 | packaged x64 DLL `load-only` succeeds without POSIX permission calls |
-| macOS hosted runner JDK 17 | host-architecture dylib `load-only` and `codesign --verify` succeed |
+| Windows x64 JDK 17                            | packaged x64 DLL `load-only` succeeds without POSIX permission calls               |
+| macOS hosted runner JDK 17                    | host-architecture dylib `load-only` and `codesign --verify` succeed                |
 
 Cross-built Linux arm64, Windows ARM64, and both architecture-specific full platform calls remain
 explicitly `unverified` B06 portions for P5-P7. The static architecture/import/export gates still
@@ -1135,8 +1130,8 @@ Add `.github/workflows/hardware-utils-native.yaml` with:
 - JDK 17 Windows and macOS load-only jobs consuming that same uploaded jar; and
 - macOS verification of both packaged dylib signatures.
 
-No job has a product-selection flag. Cross-package builds all eight products once; runner jobs
-test the applicable packaged product.
+No job has a product-selection flag. Cross-package builds all eight products once; runner jobs test
+the applicable packaged product.
 
 Remove only the invalid JDK-header-copy steps from both existing workflows. Normalize their SDK
 setup and native input environment only as required by the new explicit P1 contract. The deploy
@@ -1159,8 +1154,8 @@ absolute home paths unless needed for an extraction remedy, certificate contents
 environment maps, or binary bytes.
 
 Missing required input, an empty designated folder, a product compile failure, a failed signature
-inspection, or one missing product fails the universal build. No product is skipped because the
-host cannot execute it.
+inspection, or one missing product fails the universal build. No product is skipped because the host
+cannot execute it.
 
 ## Memory, ownership, contamination, and precision
 
@@ -1182,9 +1177,9 @@ owned by later phases.
 
 Before and after every implementation build, capture sorted path, type, size, and nanosecond mtime
 for existing ignored `src/main/resources/bin/**` and source `.zig-cache/**`; also capture SHA-256
-for the bounded native files under `bin/**`. Do not read every potentially large cache payload.
-The before/after fingerprints must match, and the fingerprint files live under a temporary
-directory, not the workspace.
+for the bounded native files under `bin/**`. Do not read every potentially large cache payload. The
+before/after fingerprints must match, and the fingerprint files live under a temporary directory,
+not the workspace.
 
 Also fingerprint tracked `src/main/java` and the source-resource allowlist. Except for reviewed
 tracked relocation/deletion in the implementation diff, builds change no source path. Search
@@ -1206,8 +1201,8 @@ and the release-secret environment variable names; no secret values may be mater
   strings.
 
 No generated metadata contains the current time. Credentialed signatures and jar timestamps make
-byte-for-byte release-jar reproducibility out of scope; deterministic inventory, ordering,
-inputs, catalog bytes, and staged-copy identity remain required.
+byte-for-byte release-jar reproducibility out of scope; deterministic inventory, ordering, inputs,
+catalog bytes, and staged-copy identity remain required.
 
 ## Implementation order and child ownership
 
@@ -1235,10 +1230,10 @@ Owned implementation, in dependency order:
    N01/N02 contract;
 7. delete only the tracked obsolete `build.sh`;
 8. remove the invalid header-copy blocks and normalize SDK, Zig, signer, and LLVM inputs in the
-   native setup of the two existing workflows, removing deploy certificate handling without
-   changing their Gradle commands; and
-9. add focused manifest/build/signature tests sufficient to validate Child A without loader or
-   new runner-workflow design.
+   native setup of the two existing workflows, removing deploy certificate handling without changing
+   their Gradle commands; and
+9. add focused manifest/build/signature tests sufficient to validate Child A without loader or new
+   runner-workflow design.
 
 Child A must leave a default selected-module `package` producing the exact catalog and eight
 products. It may not edit `JNIClassLoader`, add the hardware-specific workflow, or change any
@@ -1337,8 +1332,8 @@ Before Child A migration, use a temporary
 `git archive 03ff2060 -- pom.xml mise.toml euhedral-hardware-utils` tree outside the workspace to
 record `/usr/bin/time` wall time and maximum RSS for one clean and two warm current universal
 builds. Source writes in that disposable tree are expected and then discarded. Run the same one
-clean/two warm sequence for the completed P1 graph in the active module, whose source
-fingerprints must remain unchanged.
+clean/two warm sequence for the completed P1 graph in the active module, whose source fingerprints
+must remain unchanged.
 
 Record host CPU/memory, JDK, Gradle, Zig, SDK, signer, and cache state for both sequences. Compare
 descriptively. There is no speed threshold and no throughput claim.
@@ -1347,9 +1342,9 @@ descriptively. There is no speed threshold and no throughput claim.
 
 P1 root integration validation must classify every item:
 
-1. The strict checked-in JSON manifest is the sole source-root/product inventory; its generic
-   parser accepts internally consistent product removal, while the active-tree compatibility gate
-   requires the exact eight P0 products.
+1. The strict checked-in JSON manifest is the sole source-root/product inventory; its generic parser
+   accepts internally consistent product removal, while the active-tree compatibility gate requires
+   the exact eight P0 products.
 2. Recursive discovery is deterministic and fails on every specified malformed/missing/unknown
    condition.
 3. Default module lifecycle builds all products with no host/development selection and no source
@@ -1372,8 +1367,8 @@ P1 root integration validation must classify every item:
     entry.
 14. Packaged native bytes equal staged bytes; all static architecture/export/import/version/
     deployment/signature gates pass.
-15. Unknown OS/architecture values fail; Linux retries glibc then musl on the three allowed
-    failure classes and no arbitrary `Error`.
+15. Unknown OS/architecture values fail; Linux retries glibc then musl on the three allowed failure
+    classes and no arbitrary `Error`.
 16. POSIX and Windows permission paths, bounded extraction, ownership, immediate/deferred cleanup,
     and 64-entry stale scavenging pass deterministic tests.
 17. All-candidate failure provides the exact configurable extraction remedy and an honest noexec
@@ -1381,8 +1376,7 @@ P1 root integration validation must classify every item:
 18. Concurrent callers observe one safely published load result with no post-initialization hot
     path.
 19. The hardware-specific workflow uses selected-module commands, read-only permissions, no
-    persisted checkout credentials, no signing secrets, and required runner smoke/signature
-    gates.
+    persisted checkout credentials, no signing secrets, and required runner smoke/signature gates.
 20. Existing root build/deploy Gradle commands and unrelated workflow behavior are unchanged; only
     the invalid header blocks and explicit native inputs change.
 21. Clean/warm timing is recorded without an unsupported performance claim.
@@ -1391,23 +1385,23 @@ P1 root integration validation must classify every item:
 23. P0 compatibility and the hardware selected-module test suite pass with no training selection.
 24. `git diff --check`, scope checks, source fingerprints, and final `git status --short` pass.
 
-Any material deviation requires developer approval. `unverified` is permitted only for the exact
-B06 runtime portions assigned to P5-P7.
+Any material deviation requires developer approval. `unverified` is permitted only for the exact B06
+runtime portions assigned to P5-P7.
 
 ## Sizing and split gate
 
 A single implementation context is rejected. The native graph child combines strict parsing,
 recursive filesystem discovery, cross-target ABI definitions, eight compiler/linker products,
-signing DAG correctness, and Gradle build lifecycle ordering. The loader/package child combines class
-initialization, filesystem security, cross-OS permissions and cleanup, deterministic fallback,
+signing DAG correctness, and Gradle build lifecycle ordering. The loader/package child combines
+class initialization, filesystem security, cross-OS permissions and cleanup, deterministic fallback,
 binary parsing, runtime smoke, and release secret handling.
 
 Those responsibilities have a stable producer/consumer boundary (JSON manifest, TSV catalog,
 generated resource root, exact product set) and can be implemented sequentially. Combining them
 would require one pass to hold unrelated Zig 0.16 APIs, Java filesystem/lifecycle states, Gradle
 ordering, binary formats, and CI secret policy, making omissions difficult to localize. Splitting
-within either child would create more overlap than isolation, so both children pass their own
-sizing gate as written.
+within either child would create more overlap than isolation, so both children pass their own sizing
+gate as written.
 
 The mandatory order is:
 
@@ -1443,8 +1437,7 @@ logic, non-hardware modules, platform semantics, and training.
 ### Child A owned outputs
 
 - `docs/blueprints/hardware-utils/phase-1-native-graph-jni-signing.md` and completion record;
-- relocated native tree, manifest, JNI ABI header, `JNI_OnLoad`, Zig graph, tracked script
-  deletion;
+- relocated native tree, manifest, JNI ABI header, `JNI_OnLoad`, Zig graph, tracked script deletion;
 - module POM build/staging/resource configuration;
 - focused manifest/build/signing and relocated P0 compatibility tests;
 - exact native setup/header-removal and ad-hoc-only deploy edits to the two existing workflows;
@@ -1482,9 +1475,9 @@ unrelated workflow logic, and training.
 ### Context and coupling
 
 The original provisional root implementation is not safe. It would span strict serialization,
-filesystem migration, Zig 0.16 graph APIs, target ABI rules, signing dependencies, Gradle build lifecycle
-ordering, Java class initialization, cross-OS file security, cleanup recovery, three binary
-formats, and CI secrets in one pass.
+filesystem migration, Zig 0.16 graph APIs, target ABI rules, signing dependencies, Gradle build
+lifecycle ordering, Java class initialization, cross-OS file security, cleanup recovery, three
+binary formats, and CI secrets in one pass.
 
 Child A still requires coupled reasoning across a schema, recursive filesystem safety, compiler
 targets, JNI widths/calling conventions, signing input/output identity, and Gradle phase ordering.
@@ -1509,18 +1502,18 @@ effort or split again, but it may not silently downgrade. The selected root impl
 ## Risks and operational prerequisites
 
 - Zig 0.16 build APIs are a compile-time risk; children must consult the installed source.
-- `ReleaseSafe` plus strict Windows UCRT policy may expose an implementation conflict. The
-  allowlist is not broadened without returning to this blueprint.
+- `ReleaseSafe` plus strict Windows UCRT policy may expose an implementation conflict. The allowlist
+  is not broadened without returning to this blueprint.
 - rcodesign 0.29.0 cannot be treated as authoritative for ad-hoc CMS verification; the structural
   cross gate and Apple `codesign` gate are both required.
 - GitHub release signing requires the two named protected secrets before a non-snapshot release.
-- Docker and hosted Windows/macOS availability are environmental validation prerequisites. A
-  missing runner is `unverified`, not a pass.
+- Docker and hosted Windows/macOS availability are environmental validation prerequisites. A missing
+  runner is `unverified`, not a pass.
 - Ignored source binaries and caches are user-owned. Their presence is expected; any mutation is a
   blocker.
 
-There are no unresolved architectural decisions. Repository release-secret configuration remains
-an explicit operational prerequisite.
+There are no unresolved architectural decisions. Repository release-secret configuration remains an
+explicit operational prerequisite.
 
 ## Handoff condition
 
@@ -1534,17 +1527,16 @@ Handoff this parent blueprint for developer review only when:
 - only planning documentation differs on this branch; and
 - `git diff --check` and scope checks pass.
 
-Do not create Child A branches before this parent blueprint is reviewed and merged into the P1
-root. Do not start Child B before Child A's audit is reviewed and merged.
+Do not create Child A branches before this parent blueprint is reviewed and merged into the P1 root.
+Do not start Child B before Child A's audit is reviewed and merged.
 
 ## P1 root integration completion record
 
 Formal integration validation was removed from the workflow by developer direction. Direct root
-conformance on
-2026-08-01 made no correction and reran no Gradle/Zig/runtime command. It classified 21 criteria
+conformance on 2026-08-01 made no correction and reran no Gradle/Zig/runtime command. It classified
+21 criteria
 `satisfied`, criteria 19/24 `unverified`, and criterion 22 `deviated`; Child A is `ambiguous`
 because its artifact chain is absent and Child B is `satisfied`. B01-B05, B07, and the P1 B06
-framework are `satisfied`. Hosted Windows/macOS remain unverified. `git diff --check` passed.
-The developer declared P1 complete; the temporary status block was removed and no P2 work was
-created.
+framework are `satisfied`. Hosted Windows/macOS remain unverified. `git diff --check` passed. The
+developer declared P1 complete; the temporary status block was removed and no P2 work was created.
 See `docs/audits/hardware-utils/phase-1-native-build-jni-packaging-conformance.md`.

@@ -74,6 +74,7 @@ public class KafkaIngestSource implements LatticeSource {
     private boolean complete = false;
     private long lastPollNs = 0;
     private boolean lock = false;
+
     public KafkaIngestSource(String name, Map<String, Object> properties) {
         this.logger = LoggerFactory.getLogger(KafkaIngestSource.class.getSimpleName() + "-" + name);
         this.queue = new SpscQueue<>(4_096);

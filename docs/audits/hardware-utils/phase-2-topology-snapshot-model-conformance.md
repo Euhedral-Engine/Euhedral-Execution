@@ -45,14 +45,14 @@ be resolved when the child audit is committed/merged.
 ## Verification and correction
 
 - Passed: combined direct hardware fixture loop, 24 tests, zero failures.
-- Re-ran `ApiCompatibilityTest` after a minor settled correction: restored baseline `final` flags
-  on `SocketSnapshot.equals/hashCode` and `CoreSnapshot.hashCode`; `CoreSnapshot.equals` correctly
+- Re-ran `ApiCompatibilityTest` after a minor settled correction: restored baseline `final` flags on
+  `SocketSnapshot.equals/hashCode` and `CoreSnapshot.hashCode`; `CoreSnapshot.equals` correctly
   remains non-final. The report now has zero removals and only Java-17 module-version metadata plus
   six authorized additions.
 - `gradle :euhedral-hardware-utils:build` and the read-only
-  `gradle :euhedral-core:test` stop at the hardware `zig-build` lifecycle because `ZIG` is
-  unset. `mise` is unavailable; this host supplies OpenJDK 17.0.19 and Gradle 3.6.3 rather than the
-  pinned Java 21/Gradle 3.9.16 toolchain.
+  `gradle :euhedral-core:test` stop at the hardware `zig-build` lifecycle because `ZIG` is unset.
+  `mise` is unavailable; this host supplies OpenJDK 17.0.19 and Gradle 3.6.3 rather than the pinned
+  Java 21/Gradle 3.9.16 toolchain.
 
 ## Handoff
 

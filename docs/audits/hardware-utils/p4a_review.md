@@ -40,8 +40,9 @@
 | Deep-copy arrays/BitSet in compact constructors; accessors return copies | SATISFIED                                       | `FastHardwareSample`, `SlowHardwareSample`, `IntervalHardwareSample` all clone arrays and effectiveCpus |
 
 **L1 - `-0.0` not canonicalized.** `DoubleGaugeSignal` compact constructor: `-0.0 < 0.0` is `false`
-in Java (IEEE-754), so a VALID signal with value `-0.0` is stored as-is. The parent blueprint (Section 
-Numeric and precision contract) requires compact constructors to canonicalize `-0.0` to `+0.0`. Fix:
+in Java (IEEE-754), so a VALID signal with value `-0.0` is stored as-is. The parent blueprint
+(Section Numeric and precision contract) requires compact constructors to canonicalize `-0.0` to
+`+0.0`. Fix:
 add `if (value == 0.0) value = 0.0;` (which normalizes -0.0) after the validity check, or use
 `value + 0.0`.
 
@@ -77,9 +78,9 @@ caller passing `elapsedNs = 0` with `CURRENT` is accepted silently.
 | `CpuFastSignals`: 7 signals (scheduler-wait, PSI-stall, reported ratio, quota-throttle, steal, external contention, runnable-per-capacity) | SATISFIED |                                                                                                            |
 | `MemoryFastSignals`: 6 fields                                                                                                              | SATISFIED |                                                                                                            |
 | `IoFastSignals`: 5 fields                                                                                                                  | SATISFIED |                                                                                                            |
-| Ratio fields [0, 1]; out-of-range -> TRANSIENT_FAILURE (not clamped)                                                                        | SATISFIED | Upper bound checked in group constructors; lower bound caught by `DoubleGaugeSignal` primitive             |
+| Ratio fields [0, 1]; out-of-range -> TRANSIENT_FAILURE (not clamped)                                                                       | SATISFIED | Upper bound checked in group constructors; lower bound caught by `DoubleGaugeSignal` primitive             |
 | `runnablePerCapacity` and `maximumQueueDepth` exempt from [0,1] check (nonneg, may exceed 1)                                               | SATISFIED | Group constructors correctly skip these fields                                                             |
-| Span mismatch/null/short/long array -> exception (soft-converted by monitor catch)                                                          | SATISFIED | `IllegalArgumentException` propagates to monitor catch                                                     |
+| Span mismatch/null/short/long array -> exception (soft-converted by monitor catch)                                                         | SATISFIED | `IllegalArgumentException` propagates to monitor catch                                                     |
 | Out-of-span bit check                                                                                                                      | SATISFIED | `effectiveCpus.length() > logicalSpan` uses `BitSet.length()` which correctly detects out-of-span set bits |
 
 ---
@@ -102,7 +103,7 @@ caller passing `elapsedNs = 0` with `CURRENT` is accepted silently.
 | `DetailedSystemSnapshotProvider extends SystemSnapshotProvider`; adds `sampleFast`/`sampleSlow` without default `getSnapshot` | SATISFIED            |                                                                      |
 | Implementations may throw any `Exception`/`LinkageError`; must not return null                                                | SATISFIED (contract) | No null-prohibition comment on interface methods (H4 applies)        |
 | Call order (slow if due, then fast) is P4-D's responsibility                                                                  | SATISFIED            | P4-A only exposes the two methods                                    |
-| Leaf timestamp <= outer `observedAtNs` <= `evaluationNs`; violations -> transient failure                                        | [WARN] **M3**            | Engine checks leaf vs `evaluationNs`, not vs `sample.observedAtNs()` |
+| Leaf timestamp <= outer `observedAtNs` <= `evaluationNs`; violations -> transient failure                                     | [WARN] **M3**        | Engine checks leaf vs `evaluationNs`, not vs `sample.observedAtNs()` |
 
 **M3 - Leaf vs outer timestamp.** `CounterState.evaluate()` line 136: checks
 `if (tc - evaluationNs > 0) return UNAVAILABLE`. The spec says valid leaves must not be after the
@@ -115,20 +116,20 @@ as the ceiling.
 
 ### 6. Compatibility Adapter
 
-| Req                                                                                                                                                    | Status      | Notes                                                                        |
-|--------------------------------------------------------------------------------------------------------------------------------------------------------|-------------|------------------------------------------------------------------------------|
-| Profile enum: 4 values                                                                                                                                 | SATISFIED   |                                                                              |
-| Profile selected once at construction; no dynamic change                                                                                               | SATISFIED   | `profile` is final                                                           |
-| Selection order: `DetailedSystemSnapshotProvider` -> direct; then `CgroupV2`, `WindowsResources`, `OSXResources` by instanceof; else `CANONICAL_PUBLIC` | SATISFIED   | `wrap()` handles first case; constructor handles the rest                    |
-| `sampleFast` calls `getSnapshot()` exactly once; `timeNs` used for all valid-leaf timestamps                                                           | SATISFIED   |                                                                              |
-| `sampleSlow` returns all-UNSUPPORTED sample timestamped at `requestedAtNs` without calling delegate                                                    | SATISFIED   |                                                                              |
-| Checked microsecond->nanosecond conversion with `Math.multiplyExact`; reject negative before multiply                                                   | **C1 + M5** | See below                                                                    |
-| `memoryLimit == Long.MAX_VALUE` -> UNSUPPORTED; zero -> valid zero                                                                                       | SATISFIED   |                                                                              |
-| `LINUX_V2_LEGACY`: CPU/throttle as cumulative. `WINDOWS_LEGACY`/`MACOS_LEGACY`: mark CPU/throttle UNSUPPORTED                                          | SATISFIED   |                                                                              |
-| `CANONICAL_PUBLIC`: `pressurePerCpu` accepted as finite interval ratios                                                                                | SATISFIED   | `DoubleGaugeSignal` enforces finite+nonneg; group constructor enforces <= 1.0 |
-| Null provider -> fail construction                                                                                                                      | SATISFIED   | `Objects.requireNonNull(delegate)`                                           |
-| Null snapshot from `sampleFast` -> transient failure sample                                                                                             | **M2**      | Throws `IllegalStateException` instead                                       |
-| Construction-time `getSnapshot()` call                                                                                                                 | **M1**      | Not specified by blueprint; extra call                                       |
+| Req                                                                                                                                                     | Status      | Notes                                                                         |
+|---------------------------------------------------------------------------------------------------------------------------------------------------------|-------------|-------------------------------------------------------------------------------|
+| Profile enum: 4 values                                                                                                                                  | SATISFIED   |                                                                               |
+| Profile selected once at construction; no dynamic change                                                                                                | SATISFIED   | `profile` is final                                                            |
+| Selection order: `DetailedSystemSnapshotProvider` -> direct; then `CgroupV2`, `WindowsResources`, `OSXResources` by instanceof; else `CANONICAL_PUBLIC` | SATISFIED   | `wrap()` handles first case; constructor handles the rest                     |
+| `sampleFast` calls `getSnapshot()` exactly once; `timeNs` used for all valid-leaf timestamps                                                            | SATISFIED   |                                                                               |
+| `sampleSlow` returns all-UNSUPPORTED sample timestamped at `requestedAtNs` without calling delegate                                                     | SATISFIED   |                                                                               |
+| Checked microsecond->nanosecond conversion with `Math.multiplyExact`; reject negative before multiply                                                   | **C1 + M5** | See below                                                                     |
+| `memoryLimit == Long.MAX_VALUE` -> UNSUPPORTED; zero -> valid zero                                                                                      | SATISFIED   |                                                                               |
+| `LINUX_V2_LEGACY`: CPU/throttle as cumulative. `WINDOWS_LEGACY`/`MACOS_LEGACY`: mark CPU/throttle UNSUPPORTED                                           | SATISFIED   |                                                                               |
+| `CANONICAL_PUBLIC`: `pressurePerCpu` accepted as finite interval ratios                                                                                 | SATISFIED   | `DoubleGaugeSignal` enforces finite+nonneg; group constructor enforces <= 1.0 |
+| Null provider -> fail construction                                                                                                                      | SATISFIED   | `Objects.requireNonNull(delegate)`                                            |
+| Null snapshot from `sampleFast` -> transient failure sample                                                                                             | **M2**      | Throws `IllegalStateException` instead                                        |
+| Construction-time `getSnapshot()` call                                                                                                                  | **M1**      | Not specified by blueprint; extra call                                        |
 
 **C1 - Period x1000 applied unconditionally to all profiles.**
 `sampleFast()` line 79: `periodNs = Math.multiplyExact(snap.period(), 1000L)` runs for every
@@ -189,9 +190,9 @@ but the spec calls for the adapter to return a transient sample. Fix: return a c
 | Req                                                                                                           | Status    | Notes                                                                       |
 |---------------------------------------------------------------------------------------------------------------|-----------|-----------------------------------------------------------------------------|
 | No `Map`, static mutable state, `ThreadLocal`, or sidecars                                                    | SATISFIED | All state is instance fields                                                |
-| Counter rule: no baseline -> BASELINE; dt <= 0 -> BASELINE; c < p -> BASELINE; else -> CURRENT                     | SATISFIED | `CounterState.evaluate()` implements the exact table                        |
+| Counter rule: no baseline -> BASELINE; dt <= 0 -> BASELINE; c < p -> BASELINE; else -> CURRENT                | SATISFIED | `CounterState.evaluate()` implements the exact table                        |
 | Rebaseline refreshes affected signal's normalized input to zero                                               | SATISFIED | BASELINE resolution carries zero delta                                      |
-| `c - p` cannot overflow after nonneg + c >= p checks                                                           | SATISFIED | Both checks are applied before subtraction                                  |
+| `c - p` cannot overflow after nonneg + c >= p checks                                                          | SATISFIED | Both checks are applied before subtraction                                  |
 | Gauge refreshes only from strictly newer valid leaf timestamp                                                 | SATISFIED | `GaugeState.update*()`: `signal.observedAtNs() - observedAtNs > 0` required |
 | Duplicate timestamp with different payload does NOT refresh                                                   | SATISFIED | Strictly-newer check means equal timestamps are rejected                    |
 | Newly valid leaf older than TTL: stored but resolves UNAVAILABLE                                              | SATISFIED | Stored unconditionally (if strictly newer); TTL checked in resolve methods  |
@@ -251,13 +252,13 @@ methods, or make `resetState()` take a parameter.
 
 ### 9. Numeric and Precision Contract
 
-| Req                                                                                  | Status    | Notes                                          |
-|--------------------------------------------------------------------------------------|-----------|------------------------------------------------|
-| `unit()` / `nonnegativeTelemetry()` helpers                                          | N/A       | P4-B responsibility                            |
+| Req                                                                                    | Status    | Notes                                          |
+|----------------------------------------------------------------------------------------|-----------|------------------------------------------------|
+| `unit()` / `nonnegativeTelemetry()` helpers                                            | N/A       | P4-B responsibility                            |
 | Non-finite gauge -> `TRANSIENT_FAILURE`; negative counter/gauge -> `TRANSIENT_FAILURE` | SATISFIED | Primitive constructors enforce this            |
-| No long multiplication wrap before conversion                                        | SATISFIED | `c - p` is safe after nonneg + `c >= p` checks |
-| `-0.0` canonicalization                                                              | **L1**    | Not implemented in `DoubleGaugeSignal`         |
-| All floating-point in Java 17 strict evaluation order                                | SATISFIED | No `float`, `BigDecimal`, or fused ops used    |
+| No long multiplication wrap before conversion                                          | SATISFIED | `c - p` is safe after nonneg + `c >= p` checks |
+| `-0.0` canonicalization                                                                | **L1**    | Not implemented in `DoubleGaugeSignal`         |
+| All floating-point in Java 17 strict evaluation order                                  | SATISFIED | No `float`, `BigDecimal`, or fused ops used    |
 
 ---
 

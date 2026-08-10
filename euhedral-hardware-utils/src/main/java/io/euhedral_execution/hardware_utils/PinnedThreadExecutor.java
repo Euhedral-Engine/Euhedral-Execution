@@ -36,8 +36,10 @@ public final class PinnedThreadExecutor extends AbstractExecutorService implemen
     private final CleanupSlot cleanupSlot;
     private final TaskBinding taskBinding;
     private final ThreadConfigurator threadConfigurator;
+
     @Getter
     private final ThreadFactory pinnedFactory;
+
     @Getter
     private final int cpu;
     /// Constructs an executor whose registry identity is not published until cleanup is installed.

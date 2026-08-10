@@ -1,5 +1,5 @@
 <configuration>
 
-  <logger name="euhedral.spring.core" level="${AllEuhedralLogs:-${EuhedralSpringCoreLog:-INFO}}"/>
+  <logger level="${AllEuhedralLogs:-${EuhedralSpringCoreLog:-INFO}}" name="euhedral.spring.core"/>
 
 </configuration>

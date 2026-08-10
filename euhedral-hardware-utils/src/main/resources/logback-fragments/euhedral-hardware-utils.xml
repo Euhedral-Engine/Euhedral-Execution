@@ -1,3 +1,4 @@
 <included>
-  <logger name="euhedral.hardware_utils" level="${AllEuhedralLogs:-${EuhedralHardwareUtilsLog:-INFO}}"/>
+  <logger level="${AllEuhedralLogs:-${EuhedralHardwareUtilsLog:-INFO}}"
+    name="euhedral.hardware_utils"/>
 </included>

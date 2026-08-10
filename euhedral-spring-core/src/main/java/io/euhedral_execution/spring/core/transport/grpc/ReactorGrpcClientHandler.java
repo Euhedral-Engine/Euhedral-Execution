@@ -32,6 +32,7 @@ public class ReactorGrpcClientHandler extends Flux<GrpcMessage>
     private CoreSubscriber<? super GrpcMessage> downstream;
     private boolean complete = false;
     private boolean unlimited = false;
+
     @Getter
     private GrpcSubscriber subscriber;
 

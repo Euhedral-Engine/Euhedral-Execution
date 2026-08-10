@@ -32,7 +32,7 @@ public final class NativeSurface {
                         "native-exception",
                         "N01",
                         "expected=Java_io_euhedral_1execution_hardware_1utils_windows_WindowsAffinity_ntSetTimerResolution;"
-                            + "observed=Java_io_euhedral_1execution_hardware_1utils_windows_WindowsTimerResolution_ntSetTimerResolution"));
+                                + "observed=Java_io_euhedral_1execution_hardware_1utils_windows_WindowsTimerResolution_ntSetTimerResolution"));
         entries.add(new Entry(
                 "native-exception",
                 "N02",

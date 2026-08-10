@@ -84,6 +84,7 @@ public final class GrpcTransportServiceMd extends com.google.protobuf.GeneratedF
         com.google.protobuf.StructProto.getDescriptor();
         com.google.protobuf.AnyProto.getDescriptor();
     }
+
     private GrpcTransportServiceMd() {}
 
     public static void registerAllExtensions(com.google.protobuf.ExtensionRegistryLite registry) {}
@@ -95,6 +96,7 @@ public final class GrpcTransportServiceMd extends com.google.protobuf.GeneratedF
     public static com.google.protobuf.Descriptors.FileDescriptor getDescriptor() {
         return descriptor;
     }
+
     public interface GrpcMessageOrBuilder
             extends
             // @@protoc_insertion_point(interface_extends:io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcMessage)
@@ -220,9 +222,12 @@ public final class GrpcTransportServiceMd extends com.google.protobuf.GeneratedF
                     new io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage();
         }
 
-                private int messageCase_ = 0;;
+        private int messageCase_ = 0;
+        ;
+
         @SuppressWarnings("serial")
         private java.lang.Object message_;
+
         private boolean isOrdered_ = false;
         private byte memoizedIsInitialized = -1;
         // Use GrpcMessage.newBuilder() to construct.
@@ -557,7 +562,7 @@ public final class GrpcTransportServiceMd extends com.google.protobuf.GeneratedF
             return DEFAULT_INSTANCE;
         }
 
-public enum MessageCase
+        public enum MessageCase
                 implements
                         com.google.protobuf.Internal.EnumLite, com.google.protobuf.AbstractMessage.InternalOneOfEnum {
             SPRINGMESSAGE(2),

@@ -13,8 +13,8 @@ current-CPU rule. The corrected contract now treats truthful current-CPU queryin
 affinity mutation/restoration capability: Linux remains `UNSUPPORTED` for common affinity mutation
 but reports its validated native logical CPU; Windows and macOS remain unavailable until their
 platform phases. The controller, provider adapter, deterministic tests, and stale read-only core
-fixtures were corrected and all required gates pass. The audit is review-ready; P3-B must still
-wait for its merge.
+fixtures were corrected and all required gates pass. The audit is review-ready; P3-B must still wait
+for its merge.
 
 ## Child acceptance matrix
 
@@ -32,7 +32,7 @@ wait for its merge.
 | 10. Ownership and memory semantics                   | satisfied      | Provider, capability, supported mask, and base mask are final construction/class-initialization state. Requests and snapshots are cloned, and lease/owner state is ordinary thread-confined `ThreadLocal` state; no registry, atomics, VarHandles, or cross-thread mutable state was added.            |
 | 11. Deterministic test sufficiency                   | satisfied      | The expanded focused Java 21 suite covers A01, all overload ownership, maximum bounds, bit 63/cross-word masks, exact/locality/unsupported matrix behavior, original restoration, release/owner cleanup, independent current CPU, recoverable/fatal provider behavior, and facade zero/one-call seams. |
 | 12. Excluded scope remains excluded                  | satisfied      | No executor implementation, native body, topology/resource/core production, or training file changed. Two core test fixtures were updated only to supply the P2-required non-null immutable topology/snapshot inputs and clone before mutation.                                                        |
-| 13. Required verification and hygiene                | satisfied      | Focused suite, P0 gates, cache-disabled hardware verify, full read-only core tests, `git diff --check`, and scope checks pass under `mise` Java 21.0.2/Gradle 3.9.16.                                                                                                                                   |
+| 13. Required verification and hygiene                | satisfied      | Focused suite, P0 gates, cache-disabled hardware verify, full read-only core tests, `git diff --check`, and scope checks pass under `mise` Java 21.0.2/Gradle 3.9.16.                                                                                                                                  |
 
 ## Applicable parent criteria and A01
 
@@ -52,21 +52,25 @@ wait for its merge.
 
 ## Commands, results, skips, and limits
 
-All recorded commands used the project-default `mise` environment: OpenJDK 21.0.2 and Gradle
-3.9.16. `mise` emitted unrelated warnings for unavailable user-level tool entries but selected the
-project Java/Gradle defaults correctly.
+All recorded commands used the project-default `mise` environment: OpenJDK 21.0.2 and Gradle 3.9.16.
+`mise` emitted unrelated warnings for unavailable user-level tool entries but selected the project
+Java/Gradle defaults correctly.
 
 -
+
 `mise exec -- gradle -B -pl euhedral-hardware-utils ... -Dtest='ThreadToolsAffinityTest,LinuxAffinityTest,WindowsAffinityTest,OSXAffinityTest' surefire:test`:
 passed, 14 tests.
+
 -
+
 `mise exec -- gradle -B -pl euhedral-hardware-utils ... -Dtest='ApiCompatibilityTest,NativeCompatibilityTest,MaskFormattingCompatibilityTest,PinnedThreadExecutorCompatibilityTest' surefire:test`:
 passed, 4 tests.
+
 - `mise exec -- gradle :euhedral-hardware-utils:build`:
   passed. Native Zig build, 63 unit tests, and native packaging/load integration checks passed.
-- `mise exec -- gradle :euhedral-core:test`: passed. The
-  hardware module ran 63 tests and the core module ran 99 tests, all green; the Linux unmanaged
-  current-CPU caller paths and corrected immutable fixtures are included.
+- `mise exec -- gradle :euhedral-core:test`: passed. The hardware module ran 63 tests and the core
+  module ran 99 tests, all green; the Linux unmanaged current-CPU caller paths and corrected
+  immutable fixtures are included.
 - `git diff --check 7d3abea7..HEAD` and P3-A scope diffs for `euhedral-training`,
   `euhedral-core/src/main`, `module-info.java`, and `src/main/native`: passed/empty.
 

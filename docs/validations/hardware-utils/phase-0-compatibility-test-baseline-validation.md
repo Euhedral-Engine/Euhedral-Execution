@@ -17,8 +17,8 @@ validation. The intentional relocation of test helpers to
 within the owned compatibility surface; it changes no production or compatibility contract.
 
 No blueprint-settled implementation correction was required. The developer separately removed the
-stray LibreOffice lock file from the compatibility resources during validation; that deletion is
-not a validation-agent change.
+stray LibreOffice lock file from the compatibility resources during validation; that deletion is not
+a validation-agent change.
 
 ## Environment and commands
 
@@ -42,8 +42,8 @@ The following blueprint-prescribed operations passed:
    `/tmp/tmp.bX0RtZBJqz/baseline` and compiled it with direct `resources:resources
    compiler:compile` goals.
 4. Generated the API manifest twice through direct
-   `org.codehaus.mojo:exec-maven-plugin:3.6.3:java`; both generated files and the checked-in
-   fixture compared byte-for-byte.
+   `org.codehaus.mojo:exec-maven-plugin:3.6.3:java`; both generated files and the checked-in fixture
+   compared byte-for-byte.
 5. Ran
    `resources:resources compiler:compile resources:testResources compiler:testCompile
    surefire:test` twice. Each run passed 17 tests with 0 failures, 0 errors, and 0 skipped.
@@ -70,24 +70,24 @@ component entries, and all 35 known-defect IDs.
 
 ## Acceptance-criterion matrix
 
-| # | Result | Evidence |
-|---:|:------:|----------|
-| 1 | Pass | The isolated `900d8c50` archive compiled outside the workspace; two generated API manifests and the checked-in fixture were byte-identical. |
-| 2 | Pass | The report says `module SAME`; fixture inspection lists exactly the five required exports. |
-| 3 | Pass | `ApiCompatibilityTest` passed the ASM subset/exact-value comparison over types, members, descriptors, hierarchy, signatures, flags, exceptions, constants, nested metadata, and ordered records. |
-| 4 | Pass | Comparator self-tests preserve additions as informational while requiring the baseline subset. |
-| 5 | Pass | `ApiComparatorTest#rejectsChangedDescriptorsAndRecordComponentOrder` passed descriptor, record-order, and module mutations. |
-| 6 | Pass | The compiled fixture includes the `SystemInfo` static facade and Lombok-generated surface; the exact access comparison passed. |
-| 7 | Pass | `NativeCompatibilityTest` passed the exact eight-product and Java JNI declaration/name contract, including N01/N02 exceptions. |
-| 8 | Pass | `MaskFormattingCompatibilityTest#preservesCanonicalCpuMaskText` passed every golden and malformed case. |
-| 9 | Pass | `DefaultCadenceCompatibilityTest#defaultsToExactlyTwoHundredMilliseconds` proved the constructor delegation and exact `200_000_000L` value. |
-| 10 | Pass | `PinnedThreadExecutorCompatibilityTest#submissionsUseConcurrentFreshThreads` proved two distinct fresh threads entered concurrently and cleaned up. |
-| 11 | Pass | `CoreZeroReservationCompatibilityTest#reservesCoreZeroWhenAnotherCoreIsAvailable` passed reservation and nonempty fallback behavior. |
-| 12 | Pass | `DefectLedgerTest` passed exact ownership for all 35 B/T/A/R/N/C IDs; ledger parsing enforces exact subjects and later test IDs. |
-| 13 | Pass | Review found no invalid result golden; tests freeze contract boundaries and map intentional corrections to later regression IDs. |
-| 14 | Pass | Before/after fingerprints and the production source/resource Git diff were unchanged. |
-| 15 | Pass | Only direct Maven plugin goals ran; no native lifecycle, publication, root reactor, or training access occurred. |
-| 16 | Pass | Both 17-test runs and byte comparisons passed; `git diff --check` is clean. The only concurrent non-validation change was the developer's lock-file deletion. |
+|  # | Result | Evidence                                                                                                                                                                                         |
+|---:|:------:|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+|  1 |  Pass  | The isolated `900d8c50` archive compiled outside the workspace; two generated API manifests and the checked-in fixture were byte-identical.                                                      |
+|  2 |  Pass  | The report says `module SAME`; fixture inspection lists exactly the five required exports.                                                                                                       |
+|  3 |  Pass  | `ApiCompatibilityTest` passed the ASM subset/exact-value comparison over types, members, descriptors, hierarchy, signatures, flags, exceptions, constants, nested metadata, and ordered records. |
+|  4 |  Pass  | Comparator self-tests preserve additions as informational while requiring the baseline subset.                                                                                                   |
+|  5 |  Pass  | `ApiComparatorTest#rejectsChangedDescriptorsAndRecordComponentOrder` passed descriptor, record-order, and module mutations.                                                                      |
+|  6 |  Pass  | The compiled fixture includes the `SystemInfo` static facade and Lombok-generated surface; the exact access comparison passed.                                                                   |
+|  7 |  Pass  | `NativeCompatibilityTest` passed the exact eight-product and Java JNI declaration/name contract, including N01/N02 exceptions.                                                                   |
+|  8 |  Pass  | `MaskFormattingCompatibilityTest#preservesCanonicalCpuMaskText` passed every golden and malformed case.                                                                                          |
+|  9 |  Pass  | `DefaultCadenceCompatibilityTest#defaultsToExactlyTwoHundredMilliseconds` proved the constructor delegation and exact `200_000_000L` value.                                                      |
+| 10 |  Pass  | `PinnedThreadExecutorCompatibilityTest#submissionsUseConcurrentFreshThreads` proved two distinct fresh threads entered concurrently and cleaned up.                                              |
+| 11 |  Pass  | `CoreZeroReservationCompatibilityTest#reservesCoreZeroWhenAnotherCoreIsAvailable` passed reservation and nonempty fallback behavior.                                                             |
+| 12 |  Pass  | `DefectLedgerTest` passed exact ownership for all 35 B/T/A/R/N/C IDs; ledger parsing enforces exact subjects and later test IDs.                                                                 |
+| 13 |  Pass  | Review found no invalid result golden; tests freeze contract boundaries and map intentional corrections to later regression IDs.                                                                 |
+| 14 |  Pass  | Before/after fingerprints and the production source/resource Git diff were unchanged.                                                                                                            |
+| 15 |  Pass  | Only direct Maven plugin goals ran; no native lifecycle, publication, root reactor, or training access occurred.                                                                                 |
+| 16 |  Pass  | Both 17-test runs and byte comparisons passed; `git diff --check` is clean. The only concurrent non-validation change was the developer's lock-file deletion.                                    |
 
 ## Fixes, skipped checks, and limits
 

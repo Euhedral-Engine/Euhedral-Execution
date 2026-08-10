@@ -6,7 +6,6 @@ import java.util.Arrays;
 import java.util.StringJoiner;
 import java.util.function.DoubleBinaryOperator;
 import java.util.function.DoubleUnaryOperator;
-
 import org.jspecify.annotations.NonNull;
 
 @SuppressWarnings("unused")

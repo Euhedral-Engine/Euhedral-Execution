@@ -14,8 +14,7 @@
 
 This blueprint is subordinate to the parent plan and `AGENTS.md`. If this blueprint and the source
 at `900d8c50` disagree about an existing declaration, the source is authoritative and the
-implementation must correct this blueprint's derived inventory rather than changing production
-code.
+implementation must correct this blueprint's derived inventory rather than changing production code.
 
 ### Authorized toolchain-policy revision
 
@@ -35,11 +34,11 @@ Create a deterministic, checked-in compatibility gate for the hardware module. T
 4. prove canonical mask formatting, the exact 200 ms default, concurrent fresh-thread executor
    behavior, and the core-zero reservation;
 5. map every known correction to an exact defect-ledger record and later regression-test ID; and
-6. avoid executing the native-generating Gradle build lifecycle or mutating the active source/resource
-   tree.
+6. avoid executing the native-generating Gradle build lifecycle or mutating the active
+   source/resource tree.
 
-P0 freezes compatibility boundaries. It does not make an incorrect numeric result, unsafe
-lifecycle, broken platform path, or stale native artifact into required behavior.
+P0 freezes compatibility boundaries. It does not make an incorrect numeric result, unsafe lifecycle,
+broken platform path, or stale native artifact into required behavior.
 
 ## Scope
 
@@ -62,7 +61,8 @@ The implementation may organize several small test classes differently within th
 - `euhedral-hardware-utils/src/main/java/module-info.java`;
 - every Java source under the five exported packages and the unexported classes needed to derive JNI
   declarations;
-- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/JNIClassLoader.java`;
+-
+`euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/JNIClassLoader.java`;
 - `euhedral-hardware-utils/src/main/resources/build.zig`;
 - current Java/native JNI declarations and headers;
 - existing hardware tests; and
@@ -76,8 +76,8 @@ The implementation may organize several small test classes differently within th
 - Running a root reactor command or the hardware module's bound `initialize`/native build in the
   active worktree.
 - Publishing or installing a Gradle artifact.
-- Treating stale per-source binaries, incorrect numeric outputs, JNI mismatches, or unsafe
-  lifecycle behavior as compatibility requirements.
+- Treating stale per-source binaries, incorrect numeric outputs, JNI mismatches, or unsafe lifecycle
+  behavior as compatibility requirements.
 
 ## Baseline facts
 
@@ -127,8 +127,8 @@ this intended set. Their later removal is B01, not a compatibility failure.
 ### Tool choice
 
 Use a small test-scoped ASM 9.9.1 visitor and comparator owned by the hardware module. Add
-`org.ow2.asm:asm:9.9.1` with test scope to the hardware POM. Do not add japicmp, Revapi, an
-artifact repository, or a root build plugin.
+`org.ow2.asm:asm:9.9.1` with test scope to the hardware POM. Do not add japicmp, Revapi, an artifact
+repository, or a root build plugin.
 
 In the hardware POM's existing Surefire configuration, expose only these test system properties:
 
@@ -143,9 +143,9 @@ Tests normalize those paths for I/O but never emit an absolute path into a fixtu
 ASM is selected because the comparison must observe the compiled contract, including Lombok
 generated getters, JVM descriptors, generic `Signature` attributes, `Exceptions`, constant values,
 record components, nested-class access, permitted subclasses, and `module-info.class`. Source text
-alone does not faithfully include generated members. Reflection is rejected because loading
-hardware classes can initialize `SystemInfo`, load JNI, inspect the host, and contaminate the
-comparison with platform state.
+alone does not faithfully include generated members. Reflection is rejected because loading hardware
+classes can initialize `SystemInfo`, load JNI, inspect the host, and contaminate the comparison with
+platform state.
 
 The helper has a command-line entry point so the same implementation generates the branch-point
 fixture and analyzes current `target/classes`. It never loads a class from either tree.
@@ -277,13 +277,13 @@ For a baseline key, compare all recorded values exactly. Values include:
 
 API-relevant flags include public, protected, static, final, abstract, interface, annotation, enum,
 record, sealed/permitted metadata, native, synchronized, strict, volatile, transient, bridge,
-varargs, and synthetic where they apply. Ignore `ACC_SUPER` and classfile implementation flags
-that do not express a source/binary contract.
+varargs, and synthetic where they apply. Ignore `ACC_SUPER` and classfile implementation flags that
+do not express a source/binary contract.
 
 Constant encoding is typed so `int:1`, `long:1`, `float:0x1.0p0`, `double:0x1.0p0`,
-`char:U+0001`, `boolean:true`, and `string:<escaped>` cannot compare equal accidentally.
-Floating constants use `Float.toHexString`/`Double.toHexString`; NaN payloads, if ever present, use
-their raw bit representation.
+`char:U+0001`, `boolean:true`, and `string:<escaped>` cannot compare equal accidentally. Floating
+constants use `Float.toHexString`/`Double.toHexString`; NaN payloads, if ever present, use their raw
+bit representation.
 
 Record component order is contractual. Sorting the manifest must not erase it: the key contains a
 six-digit zero-padded index and the value contains the component name and descriptor.
@@ -356,8 +356,8 @@ ADDED	<stable-key>	<current-value>
 ```
 
 Sort detail lines by category in `REMOVED`, `CHANGED`, `ADDED` order and then by stable key.
-`ADDED` is informational. Failure output names every missing/changed key without truncation and
-the JUnit assertion points to the report. The same inputs must produce byte-identical fixtures and
+`ADDED` is informational. Failure output names every missing/changed key without truncation and the
+JUnit assertion points to the report. The same inputs must produce byte-identical fixtures and
 reports in two consecutive runs.
 
 ## Native compatibility contract
@@ -370,9 +370,9 @@ reports in two consecutive runs.
 - current native-source symbol exceptions that are explicitly tied to the defect ledger.
 
 Derive JNI escaping according to the JNI name rules (`_` -> `_1`, `;` -> `_2`, `[` -> `_3`, other
-non-alphanumeric UTF-16 code units -> `_0xxxx`). There are no overloaded baseline native methods,
-so the short name is the intended entry name. If an overload is later added, it is additive but
-must also record the long mangled name containing the encoded argument descriptor.
+non-alphanumeric UTF-16 code units -> `_0xxxx`). There are no overloaded baseline native methods, so
+the short name is the intended entry name. If an overload is later added, it is additive but must
+also record the long mangled name containing the encoded argument descriptor.
 
 `NativeCompatibilityTest` scans compiled class files with ASM and requires every baseline native
 declaration unchanged. It allows additive native declarations. It also asserts that the intended
@@ -381,15 +381,15 @@ fixture.
 
 The test scans checked-in native sources/headers for JNI symbol tokens. A missing intended Java
 symbol passes only when `defect-ledger.tsv` contains an exact subject for that symbol, its observed
-old symbol/descriptor, a later invariant, and a later test ID. Extra native symbols are reported
-as additions and do not become required baseline entries.
+old symbol/descriptor, a later invariant, and a later test ID. Extra native symbols are reported as
+additions and do not become required baseline entries.
 
 Known branch-point mismatches, including the Windows timer symbol owner and macOS declaration/header
-shape mismatches, are defects N01/N02. The fixture records the intended Java-owned JNI name; it
-does not redefine the mismatched native spelling as compatible.
+shape mismatches, are defects N01/N02. The fixture records the intended Java-owned JNI name; it does
+not redefine the mismatched native spelling as compatible.
 
-Physical aggregate binaries need not exist in a clean P0 checkout and are not generated by P0.
-P1 will prove build/package presence. P0 proves the lookup/name contract only.
+Physical aggregate binaries need not exist in a clean P0 checkout and are not generated by P0. P1
+will prove build/package presence. P0 proves the lookup/name contract only.
 
 ## Defect ledger contract
 
@@ -416,54 +416,53 @@ Rules:
 - duplicate `(defect_id, subject, regression_test_id)` tuples fail.
 
 The ledger test contains the exact expected ID-to-owner mapping. Missing and unknown IDs fail.
-Adding a newly discovered defect requires a blueprint/plan update before changing that expected
-set.
+Adding a newly discovered defect requires a blueprint/plan update before changing that expected set.
 
 ### Required mapping
 
 The implementation must encode at least these exact anchors and regression IDs. Split a row into
 more exact subjects when needed; do not broaden it.
 
-| ID | Owner | Exact subject anchor | Old behavior -> new invariant | Regression test ID |
-| --- | --- | --- | --- | --- |
-| B01 | P1 | `resource-tree:euhedral-hardware-utils/src/main/resources/bin` | Build output and stale binaries live under source resources -> builds stage only exact generated products under `target` and never mutate the source tree | `io.euhedral_execution.hardware_utils.compatibility.NativePackagingTest#neverWritesNativeProductsIntoSourceResources` |
-| B02 | P1 | `resource:euhedral-hardware-utils/src/main/resources/build.zig#native-folder-and-target-inventory` | Hardcoded shallow unsorted discovery skips failures -> one checked-in manifest drives recursive sorted fail-loud discovery | `io.euhedral_execution.hardware_utils.compatibility.NativeManifestTest#discoversEveryDeclaredFolderDeterministically` |
-| B03 | P1 | `resource:euhedral-hardware-utils/src/main/resources/build.zig#macos-sign-install-edge` | Signing follows install and may not sign the packaged copy -> staged copy is signed and verified before package install completes | `io.euhedral_execution.hardware_utils.compatibility.NativeSigningTest#packagesTheVerifiedSignedMacosCopy` |
-| B04 | P1 | `resource:.github/workflows/build.yaml#jni-platform-headers` | Linux `jni_md.h` is copied to Darwin/Win32 -> every target uses a target-correct generated ABI header | `io.euhedral_execution.hardware_utils.compatibility.JniHeaderTest#usesTargetCorrectPlatformHeaders` |
-| B05 | P1 | `io.euhedral_execution.hardware_utils.internal.JNIClassLoader::<clinit>()V` | Loader assumes POSIX, weakly handles fallback/temp/noexec cleanup -> platform-safe extraction, fallback, diagnosis, and cleanup | `io.euhedral_execution.hardware_utils.internal.JNIClassLoaderTest#loadsOrReportsEveryFallbackDeterministically` |
-| B06 | P1,P5,P6,P7 | `contract:native-products#architecture-export-import-runtime-floor` | Product metadata/runtime floors are not enforced -> every product has architecture/export/import/floor gates and real smoke evidence | `io.euhedral_execution.hardware_utils.compatibility.NativeBinaryGateTest#checksEveryManifestProduct` |
-| B07 | P1 | `resource:euhedral-hardware-utils/src/main/resources/build.zig#native-module-options` | ReleaseFast/O3 and disabled safety/diagnostic settings are inherited without evidence -> every optimization, hardening, unwind, runtime, SDK, and framework choice is explicit and gated | `io.euhedral_execution.hardware_utils.compatibility.NativeBuildPolicyTest#enforcesTheSelectedPortableBuildPolicy` |
-| T01 | P2,P7 | `io.euhedral_execution.hardware_utils.SystemInfo::<clinit>()V` | macOS empty maps dereference CPU/cache zero -> common initialization and macOS topology always provide a safe complete fallback | `io.euhedral_execution.hardware_utils.SystemInfoFallbackTest#initializesWithIncompletePlatformTopology` |
-| T02 | P2,P5 | `io.euhedral_execution.hardware_utils.linux.LinuxSystemLayout#init()V` | Local core IDs, sparse CPU IDs, filesystem order, and missing caches are mishandled -> globally unique deterministic complete Linux topology | `io.euhedral_execution.hardware_utils.linux.LinuxSystemLayoutFixtureTest#normalizesSparseMultisocketTopology` |
-| T03 | P2,P6 | `io.euhedral_execution.hardware_utils.windows.win32.SystemLogicalProcessorInformation#parse(Ljava/nio/ByteBuffer;)Ljava/util/List;` | Offsets/bounds/group IDs/bit 63 are incorrect -> bounded parsing and bijective processor-group identity | `io.euhedral_execution.hardware_utils.windows.WindowsTopologyFixtureTest#parsesMultipleGroupsAndBitSixtyThree` |
-| T04 | P2 | `io.euhedral_execution.hardware_utils.TopologyMapper#update(Lio/euhedral_execution/hardware_utils/common/SystemUtilization$HardwareUtilization;)V` | Masks alias, publication is unclear, updates drop, versions disagree -> owned immutable coalesced publication with consistent versions | `io.euhedral_execution.hardware_utils.TopologyMapperPublicationTest#publishesOwnedCoalescedTopology` |
-| T05 | P2,P4 | `io.euhedral_execution.hardware_utils.common.SystemUtilization$CoreSnapshot#equals(Ljava/lang/Object;)Z` | Published storage aliases and equality/value population disagree -> deep immutable snapshots with record-consistent equality/hash and named values | `io.euhedral_execution.hardware_utils.common.SnapshotOwnershipTest#publishedSnapshotsRemainStableAndValueConsistent` |
-| T06 | P2 | `io.euhedral_execution.hardware_utils.TopologyMapper#update(Lio/euhedral_execution/hardware_utils/common/SystemUtilization$HardwareUtilization;)V` | Core-zero reservation can empty the allowed topology -> reserve core zero only when another allowed core remains | `io.euhedral_execution.hardware_utils.TopologyMapperCoreZeroTest#fallsBackWhenCoreZeroIsTheOnlyAllowedCore` |
-| A01 | P3 | `io.euhedral_execution.hardware_utils.ThreadTools::<clinit>()V` | Base-mask probing mutates affinity, misses sparse IDs, and may dereference no pinner -> non-destructive capability-aware discovery restores the original mask | `io.euhedral_execution.hardware_utils.ThreadToolsAffinityTest#discoversAndRestoresTheOriginalMask` |
-| A02 | P3 | `io.euhedral_execution.hardware_utils.PinnedThreadExecutor#execute(Ljava/lang/Runnable;)V` | Acquisition, execute/shutdown, identity, cleaner/hook, termination, and interruption race -> one identity-safe lifecycle state machine preserving fresh concurrent threads | `io.euhedral_execution.hardware_utils.PinnedThreadExecutorLifecycleTest#linearizesExecuteShutdownAndCleanup` |
-| A03 | P6 | `io.euhedral_execution.hardware_utils.windows.WindowsAffinity#setAffinity([J)Z` | Multi-group status/current IDs/buffers are unsafe or overwritten -> exact representable success, stable logical ownership, and validated buffers | `io.euhedral_execution.hardware_utils.windows.WindowsAffinityTest#handlesProcessorGroupsWithoutPartialSuccess` |
-| A04 | P7 | `io.euhedral_execution.hardware_utils.osx.OSXAffinity#setAffinity([J)Z` | Locality tag is called hard affinity, release/current CPU/timer policy are unsafe -> honest locality hint, tag-zero release, managed ownership, and no realtime policy | `io.euhedral_execution.hardware_utils.osx.OSXAffinityTest#reportsAndReleasesOnlyRepresentableLocalityHints` |
-| R01 | P4,P5,P6,P7 | `io.euhedral_execution.hardware_utils.common.SystemSnapshotProvider#getSnapshot()Lio/euhedral_execution/hardware_utils/common/SystemUtilization$SystemSnapshot;` | Providers mix cumulative/delta/duration/ratio units -> canonical typed sample units with validity and common deltas | `io.euhedral_execution.hardware_utils.common.ProviderContractTest#normalizesEveryPlatformSampleUnit` |
-| R02 | P4,P5 | `io.euhedral_execution.hardware_utils.linux.CgroupV2Resources#updateCpuQuota()V` | Unlimited quota, pressure scaling, and zero-stall reset are incorrect -> effective CPU quota and single-scale interval pressure reset correctly | `io.euhedral_execution.hardware_utils.linux.CgroupPressureTest#handlesUnlimitedQuotaAndZeroStallIntervals` |
-| R03 | P4,P7 | `io.euhedral_execution.hardware_utils.osx.OSXResources#getSnapshot()Lio/euhedral_execution/hardware_utils/common/SystemUtilization$SystemSnapshot;` | macOS cumulative/delta CPU and inactive memory semantics conflict -> canonical cumulative counters and correct working-set inputs | `io.euhedral_execution.hardware_utils.osx.OSXResourcesContractTest#emitsCanonicalCumulativeCountersAndMemory` |
-| R04 | P4,P6 | `io.euhedral_execution.hardware_utils.windows.WindowsResources#getSnapshot()Lio/euhedral_execution/hardware_utils/common/SystemUtilization$SystemSnapshot;` | Cycle/time, quota, masks, and working set use incorrect units/bounds -> canonical counters, CPU capacity, complete masks, and saturating memory | `io.euhedral_execution.hardware_utils.windows.WindowsResourcesContractTest#emitsCanonicalBoundedResourceValues` |
-| R05 | P4 | `io.euhedral_execution.hardware_utils.ResourceMonitor#updateMemory(Lio/euhedral_execution/hardware_utils/common/SystemUtilization$SystemSnapshot;)V` | Per-CPU memory is dimensionless but named bytes and zero limits create invalid math -> byte-correct finite memory inputs and effective pressure | `io.euhedral_execution.hardware_utils.ResourceMonitorPressureTest#keepsMemoryUnitsFiniteAndDimensional` |
-| R06 | P4,P5 | `io.euhedral_execution.hardware_utils.ResourceMonitor#updateDiskIO(Lio/euhedral_execution/hardware_utils/common/SystemUtilization$SystemSnapshot;)V` | Healthy throughput is treated as pressure and Linux selects wrong devices -> throughput stays telemetry and supported stall evidence drives pressure | `io.euhedral_execution.hardware_utils.ResourceMonitorPressureTest#doesNotThrottleHealthyIoThroughput` |
-| R07 | P4 | `io.euhedral_execution.hardware_utils.common.SystemUtilization$HardwareUtilization#getCpuSnapshot(IDI)Lio/euhedral_execution/hardware_utils/common/SystemUtilization$CpuSnapshot;` | Prior quota and multiplied/omitted signals distort pressure -> independent normalized domain signals compose monotonically | `io.euhedral_execution.hardware_utils.common.PressureCompositionTest#isBoundedAndMonotonicPerSignal` |
-| R08 | P4 | `io.euhedral_execution.hardware_utils.ResourceMonitor#runLoop()V` | EWMA assumes 200 ms and poll cost is subtracted twice -> actual elapsed-time smoothing on an anchored skip-ahead grid | `io.euhedral_execution.hardware_utils.ResourceMonitorSchedulerTest#skipsFromZeroThroughFourFiftyToSixHundredMilliseconds` |
-| R09 | P4 | `io.euhedral_execution.hardware_utils.ResourceMonitor#updateListeners(Lio/euhedral_execution/hardware_utils/common/SystemUtilization$HardwareUtilization;)V` | Common-pool listeners backlog, overlap, reorder, deadlock, wedge, and outlive close -> bounded ordered latest-value delivery with safe reentrancy and Throwable isolation | `io.euhedral_execution.hardware_utils.ResourceMonitorListenerTest#coalescesOrdersAndClosesListenerDelivery` |
-| R10 | P4 | `io.euhedral_execution.hardware_utils.ResourceMonitor#start()V` | Priming, provider, stopped reads, timestamps, and close/self-join race -> complete idempotent lifecycle with one sampler owner | `io.euhedral_execution.hardware_utils.ResourceMonitorLifecycleTest#linearizesStartReadStopAndClose` |
-| R11 | P5 | `io.euhedral_execution.hardware_utils.linux.CgroupV2Resources#readToBuffer(Ljava/nio/channels/FileChannel;)I` | Channels leak, reads truncate, and missing paths log each poll -> explicit cleanup, bounded complete reads, and rate-limited diagnostics | `io.euhedral_execution.hardware_utils.linux.LinuxResourceReaderTest#readsCompletelyAndClosesEveryResource` |
-| R12 | P5 | `io.euhedral_execution.hardware_utils.linux.LinuxPaths#resolveCgroupPath(Ljava/lang/String;)Ljava/nio/file/Path;` | Discovery writes subtree control and changes scope, with no v1 -> read-only scope-preserving v1/v2/hybrid/bare discovery | `io.euhedral_execution.hardware_utils.linux.CgroupDiscoveryTest#neverWritesAndPreservesProcessScope` |
-| R13 | P4,P5,P6,P7 | `contract:internal-hardware-sample#valid-pressure-signal-set` | Reliable contention/capacity-loss signals are absent -> only supported validity-tracked scheduler, quota, memory, I/O, steal, thermal, frequency, power, and low-power signals contribute | `io.euhedral_execution.hardware_utils.common.PressureSignalAvailabilityTest#usesOnlySupportedFreshSignals` |
-| R14 | P4,P5 | `io.euhedral_execution.hardware_utils.linux.CgroupV2Resources#updatePerCpuPressure()V` | Aggregate cgroup PSI is apportioned by unrelated host activity -> global pressure propagates honestly or per-CPU attribution stays neutral | `io.euhedral_execution.hardware_utils.linux.CgroupPressureTest#doesNotApportionCgroupPsiByHostJiffies` |
-| N01 | P6 | `jni:Java_io_euhedral_1execution_hardware_1utils_windows_WindowsAffinity_ntSetTimerResolution` | Native owner/symbols, lengths, VLAs, and initialization are inconsistent -> Java-owned symbols, validated buffers, fixed storage, thread-safe fallback | `io.euhedral_execution.hardware_utils.windows.WindowsNativeBoundaryTest#validatesSymbolsBuffersAndConcurrentInitialization` |
-| N02 | P7 | `jni:Java_io_euhedral_1execution_hardware_1utils_osx_OSXSystemLayout_getSysctlString` | Mach buffers leak, topology ordering/shift/timebase assumptions are unsafe -> exact JNI descriptor, explicit deallocation, bounded shifts, conservative topology, and cleanup | `io.euhedral_execution.hardware_utils.osx.OSXNativeBoundaryTest#validatesDescriptorsBoundsAndMachCleanup` |
-| C01 | P8 | `io.euhedral_execution.core.control_plane.ControlPlaneFragment#cycle()V` | Hot loop assumes dense valid snapshots and attenuates P/E pressure without contract -> validated monotonic primitive cap with safe sparse input and documented memory modes | `io.euhedral_execution.core.control_plane.ControlPlaneFragmentPressureTest#mapsValidatedPressureMonotonicallyWithoutHotPathAllocation` |
-| C02 | P8 | `io.euhedral_execution.core.control_plane.ControlPlaneFragment#update(Lio/euhedral_execution/hardware_utils/common/SystemUtilization$CoreSnapshot;)V` | Fragment/cache can accept malformed or older pressure independently -> one linearized acceptance feeds both consumers and rejects invalid/older snapshots | `io.euhedral_execution.core.control_plane.ControlPlaneFragmentPressureTest#updatesFragmentAndCacheFromOneAcceptedSnapshot` |
+| ID  | Owner       | Exact subject anchor                                                                                                                                                               | Old behavior -> new invariant                                                                                                                                                             | Regression test ID                                                                                                                     |
+|-----|-------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------|
+| B01 | P1          | `resource-tree:euhedral-hardware-utils/src/main/resources/bin`                                                                                                                     | Build output and stale binaries live under source resources -> builds stage only exact generated products under `target` and never mutate the source tree                                 | `io.euhedral_execution.hardware_utils.compatibility.NativePackagingTest#neverWritesNativeProductsIntoSourceResources`                  |
+| B02 | P1          | `resource:euhedral-hardware-utils/src/main/resources/build.zig#native-folder-and-target-inventory`                                                                                 | Hardcoded shallow unsorted discovery skips failures -> one checked-in manifest drives recursive sorted fail-loud discovery                                                                | `io.euhedral_execution.hardware_utils.compatibility.NativeManifestTest#discoversEveryDeclaredFolderDeterministically`                  |
+| B03 | P1          | `resource:euhedral-hardware-utils/src/main/resources/build.zig#macos-sign-install-edge`                                                                                            | Signing follows install and may not sign the packaged copy -> staged copy is signed and verified before package install completes                                                         | `io.euhedral_execution.hardware_utils.compatibility.NativeSigningTest#packagesTheVerifiedSignedMacosCopy`                              |
+| B04 | P1          | `resource:.github/workflows/build.yaml#jni-platform-headers`                                                                                                                       | Linux `jni_md.h` is copied to Darwin/Win32 -> every target uses a target-correct generated ABI header                                                                                     | `io.euhedral_execution.hardware_utils.compatibility.JniHeaderTest#usesTargetCorrectPlatformHeaders`                                    |
+| B05 | P1          | `io.euhedral_execution.hardware_utils.internal.JNIClassLoader::<clinit>()V`                                                                                                        | Loader assumes POSIX, weakly handles fallback/temp/noexec cleanup -> platform-safe extraction, fallback, diagnosis, and cleanup                                                           | `io.euhedral_execution.hardware_utils.internal.JNIClassLoaderTest#loadsOrReportsEveryFallbackDeterministically`                        |
+| B06 | P1,P5,P6,P7 | `contract:native-products#architecture-export-import-runtime-floor`                                                                                                                | Product metadata/runtime floors are not enforced -> every product has architecture/export/import/floor gates and real smoke evidence                                                      | `io.euhedral_execution.hardware_utils.compatibility.NativeBinaryGateTest#checksEveryManifestProduct`                                   |
+| B07 | P1          | `resource:euhedral-hardware-utils/src/main/resources/build.zig#native-module-options`                                                                                              | ReleaseFast/O3 and disabled safety/diagnostic settings are inherited without evidence -> every optimization, hardening, unwind, runtime, SDK, and framework choice is explicit and gated  | `io.euhedral_execution.hardware_utils.compatibility.NativeBuildPolicyTest#enforcesTheSelectedPortableBuildPolicy`                      |
+| T01 | P2,P7       | `io.euhedral_execution.hardware_utils.SystemInfo::<clinit>()V`                                                                                                                     | macOS empty maps dereference CPU/cache zero -> common initialization and macOS topology always provide a safe complete fallback                                                           | `io.euhedral_execution.hardware_utils.SystemInfoFallbackTest#initializesWithIncompletePlatformTopology`                                |
+| T02 | P2,P5       | `io.euhedral_execution.hardware_utils.linux.LinuxSystemLayout#init()V`                                                                                                             | Local core IDs, sparse CPU IDs, filesystem order, and missing caches are mishandled -> globally unique deterministic complete Linux topology                                              | `io.euhedral_execution.hardware_utils.linux.LinuxSystemLayoutFixtureTest#normalizesSparseMultisocketTopology`                          |
+| T03 | P2,P6       | `io.euhedral_execution.hardware_utils.windows.win32.SystemLogicalProcessorInformation#parse(Ljava/nio/ByteBuffer;)Ljava/util/List;`                                                | Offsets/bounds/group IDs/bit 63 are incorrect -> bounded parsing and bijective processor-group identity                                                                                   | `io.euhedral_execution.hardware_utils.windows.WindowsTopologyFixtureTest#parsesMultipleGroupsAndBitSixtyThree`                         |
+| T04 | P2          | `io.euhedral_execution.hardware_utils.TopologyMapper#update(Lio/euhedral_execution/hardware_utils/common/SystemUtilization$HardwareUtilization;)V`                                 | Masks alias, publication is unclear, updates drop, versions disagree -> owned immutable coalesced publication with consistent versions                                                    | `io.euhedral_execution.hardware_utils.TopologyMapperPublicationTest#publishesOwnedCoalescedTopology`                                   |
+| T05 | P2,P4       | `io.euhedral_execution.hardware_utils.common.SystemUtilization$CoreSnapshot#equals(Ljava/lang/Object;)Z`                                                                           | Published storage aliases and equality/value population disagree -> deep immutable snapshots with record-consistent equality/hash and named values                                        | `io.euhedral_execution.hardware_utils.common.SnapshotOwnershipTest#publishedSnapshotsRemainStableAndValueConsistent`                   |
+| T06 | P2          | `io.euhedral_execution.hardware_utils.TopologyMapper#update(Lio/euhedral_execution/hardware_utils/common/SystemUtilization$HardwareUtilization;)V`                                 | Core-zero reservation can empty the allowed topology -> reserve core zero only when another allowed core remains                                                                          | `io.euhedral_execution.hardware_utils.TopologyMapperCoreZeroTest#fallsBackWhenCoreZeroIsTheOnlyAllowedCore`                            |
+| A01 | P3          | `io.euhedral_execution.hardware_utils.ThreadTools::<clinit>()V`                                                                                                                    | Base-mask probing mutates affinity, misses sparse IDs, and may dereference no pinner -> non-destructive capability-aware discovery restores the original mask                             | `io.euhedral_execution.hardware_utils.ThreadToolsAffinityTest#discoversAndRestoresTheOriginalMask`                                     |
+| A02 | P3          | `io.euhedral_execution.hardware_utils.PinnedThreadExecutor#execute(Ljava/lang/Runnable;)V`                                                                                         | Acquisition, execute/shutdown, identity, cleaner/hook, termination, and interruption race -> one identity-safe lifecycle state machine preserving fresh concurrent threads                | `io.euhedral_execution.hardware_utils.PinnedThreadExecutorLifecycleTest#linearizesExecuteShutdownAndCleanup`                           |
+| A03 | P6          | `io.euhedral_execution.hardware_utils.windows.WindowsAffinity#setAffinity([J)Z`                                                                                                    | Multi-group status/current IDs/buffers are unsafe or overwritten -> exact representable success, stable logical ownership, and validated buffers                                          | `io.euhedral_execution.hardware_utils.windows.WindowsAffinityTest#handlesProcessorGroupsWithoutPartialSuccess`                         |
+| A04 | P7          | `io.euhedral_execution.hardware_utils.osx.OSXAffinity#setAffinity([J)Z`                                                                                                            | Locality tag is called hard affinity, release/current CPU/timer policy are unsafe -> honest locality hint, tag-zero release, managed ownership, and no realtime policy                    | `io.euhedral_execution.hardware_utils.osx.OSXAffinityTest#reportsAndReleasesOnlyRepresentableLocalityHints`                            |
+| R01 | P4,P5,P6,P7 | `io.euhedral_execution.hardware_utils.common.SystemSnapshotProvider#getSnapshot()Lio/euhedral_execution/hardware_utils/common/SystemUtilization$SystemSnapshot;`                   | Providers mix cumulative/delta/duration/ratio units -> canonical typed sample units with validity and common deltas                                                                       | `io.euhedral_execution.hardware_utils.common.ProviderContractTest#normalizesEveryPlatformSampleUnit`                                   |
+| R02 | P4,P5       | `io.euhedral_execution.hardware_utils.linux.CgroupV2Resources#updateCpuQuota()V`                                                                                                   | Unlimited quota, pressure scaling, and zero-stall reset are incorrect -> effective CPU quota and single-scale interval pressure reset correctly                                           | `io.euhedral_execution.hardware_utils.linux.CgroupPressureTest#handlesUnlimitedQuotaAndZeroStallIntervals`                             |
+| R03 | P4,P7       | `io.euhedral_execution.hardware_utils.osx.OSXResources#getSnapshot()Lio/euhedral_execution/hardware_utils/common/SystemUtilization$SystemSnapshot;`                                | macOS cumulative/delta CPU and inactive memory semantics conflict -> canonical cumulative counters and correct working-set inputs                                                         | `io.euhedral_execution.hardware_utils.osx.OSXResourcesContractTest#emitsCanonicalCumulativeCountersAndMemory`                          |
+| R04 | P4,P6       | `io.euhedral_execution.hardware_utils.windows.WindowsResources#getSnapshot()Lio/euhedral_execution/hardware_utils/common/SystemUtilization$SystemSnapshot;`                        | Cycle/time, quota, masks, and working set use incorrect units/bounds -> canonical counters, CPU capacity, complete masks, and saturating memory                                           | `io.euhedral_execution.hardware_utils.windows.WindowsResourcesContractTest#emitsCanonicalBoundedResourceValues`                        |
+| R05 | P4          | `io.euhedral_execution.hardware_utils.ResourceMonitor#updateMemory(Lio/euhedral_execution/hardware_utils/common/SystemUtilization$SystemSnapshot;)V`                               | Per-CPU memory is dimensionless but named bytes and zero limits create invalid math -> byte-correct finite memory inputs and effective pressure                                           | `io.euhedral_execution.hardware_utils.ResourceMonitorPressureTest#keepsMemoryUnitsFiniteAndDimensional`                                |
+| R06 | P4,P5       | `io.euhedral_execution.hardware_utils.ResourceMonitor#updateDiskIO(Lio/euhedral_execution/hardware_utils/common/SystemUtilization$SystemSnapshot;)V`                               | Healthy throughput is treated as pressure and Linux selects wrong devices -> throughput stays telemetry and supported stall evidence drives pressure                                      | `io.euhedral_execution.hardware_utils.ResourceMonitorPressureTest#doesNotThrottleHealthyIoThroughput`                                  |
+| R07 | P4          | `io.euhedral_execution.hardware_utils.common.SystemUtilization$HardwareUtilization#getCpuSnapshot(IDI)Lio/euhedral_execution/hardware_utils/common/SystemUtilization$CpuSnapshot;` | Prior quota and multiplied/omitted signals distort pressure -> independent normalized domain signals compose monotonically                                                                | `io.euhedral_execution.hardware_utils.common.PressureCompositionTest#isBoundedAndMonotonicPerSignal`                                   |
+| R08 | P4          | `io.euhedral_execution.hardware_utils.ResourceMonitor#runLoop()V`                                                                                                                  | EWMA assumes 200 ms and poll cost is subtracted twice -> actual elapsed-time smoothing on an anchored skip-ahead grid                                                                     | `io.euhedral_execution.hardware_utils.ResourceMonitorSchedulerTest#skipsFromZeroThroughFourFiftyToSixHundredMilliseconds`              |
+| R09 | P4          | `io.euhedral_execution.hardware_utils.ResourceMonitor#updateListeners(Lio/euhedral_execution/hardware_utils/common/SystemUtilization$HardwareUtilization;)V`                       | Common-pool listeners backlog, overlap, reorder, deadlock, wedge, and outlive close -> bounded ordered latest-value delivery with safe reentrancy and Throwable isolation                 | `io.euhedral_execution.hardware_utils.ResourceMonitorListenerTest#coalescesOrdersAndClosesListenerDelivery`                            |
+| R10 | P4          | `io.euhedral_execution.hardware_utils.ResourceMonitor#start()V`                                                                                                                    | Priming, provider, stopped reads, timestamps, and close/self-join race -> complete idempotent lifecycle with one sampler owner                                                            | `io.euhedral_execution.hardware_utils.ResourceMonitorLifecycleTest#linearizesStartReadStopAndClose`                                    |
+| R11 | P5          | `io.euhedral_execution.hardware_utils.linux.CgroupV2Resources#readToBuffer(Ljava/nio/channels/FileChannel;)I`                                                                      | Channels leak, reads truncate, and missing paths log each poll -> explicit cleanup, bounded complete reads, and rate-limited diagnostics                                                  | `io.euhedral_execution.hardware_utils.linux.LinuxResourceReaderTest#readsCompletelyAndClosesEveryResource`                             |
+| R12 | P5          | `io.euhedral_execution.hardware_utils.linux.LinuxPaths#resolveCgroupPath(Ljava/lang/String;)Ljava/nio/file/Path;`                                                                  | Discovery writes subtree control and changes scope, with no v1 -> read-only scope-preserving v1/v2/hybrid/bare discovery                                                                  | `io.euhedral_execution.hardware_utils.linux.CgroupDiscoveryTest#neverWritesAndPreservesProcessScope`                                   |
+| R13 | P4,P5,P6,P7 | `contract:internal-hardware-sample#valid-pressure-signal-set`                                                                                                                      | Reliable contention/capacity-loss signals are absent -> only supported validity-tracked scheduler, quota, memory, I/O, steal, thermal, frequency, power, and low-power signals contribute | `io.euhedral_execution.hardware_utils.common.PressureSignalAvailabilityTest#usesOnlySupportedFreshSignals`                             |
+| R14 | P4,P5       | `io.euhedral_execution.hardware_utils.linux.CgroupV2Resources#updatePerCpuPressure()V`                                                                                             | Aggregate cgroup PSI is apportioned by unrelated host activity -> global pressure propagates honestly or per-CPU attribution stays neutral                                                | `io.euhedral_execution.hardware_utils.linux.CgroupPressureTest#doesNotApportionCgroupPsiByHostJiffies`                                 |
+| N01 | P6          | `jni:Java_io_euhedral_1execution_hardware_1utils_windows_WindowsAffinity_ntSetTimerResolution`                                                                                     | Native owner/symbols, lengths, VLAs, and initialization are inconsistent -> Java-owned symbols, validated buffers, fixed storage, thread-safe fallback                                    | `io.euhedral_execution.hardware_utils.windows.WindowsNativeBoundaryTest#validatesSymbolsBuffersAndConcurrentInitialization`            |
+| N02 | P7          | `jni:Java_io_euhedral_1execution_hardware_1utils_osx_OSXSystemLayout_getSysctlString`                                                                                              | Mach buffers leak, topology ordering/shift/timebase assumptions are unsafe -> exact JNI descriptor, explicit deallocation, bounded shifts, conservative topology, and cleanup             | `io.euhedral_execution.hardware_utils.osx.OSXNativeBoundaryTest#validatesDescriptorsBoundsAndMachCleanup`                              |
+| C01 | P8          | `io.euhedral_execution.core.control_plane.ControlPlaneFragment#cycle()V`                                                                                                           | Hot loop assumes dense valid snapshots and attenuates P/E pressure without contract -> validated monotonic primitive cap with safe sparse input and documented memory modes               | `io.euhedral_execution.core.control_plane.ControlPlaneFragmentPressureTest#mapsValidatedPressureMonotonicallyWithoutHotPathAllocation` |
+| C02 | P8          | `io.euhedral_execution.core.control_plane.ControlPlaneFragment#update(Lio/euhedral_execution/hardware_utils/common/SystemUtilization$CoreSnapshot;)V`                              | Fragment/cache can accept malformed or older pressure independently -> one linearized acceptance feeds both consumers and rejects invalid/older snapshots                                 | `io.euhedral_execution.core.control_plane.ControlPlaneFragmentPressureTest#updatesFragmentAndCacheFromOneAcceptedSnapshot`             |
 
-For B06 and R01/R13, one exact named contract anchor is allowed because the defect introduces a
-new internal contract not represented by a single branch-point member. It is not a wildcard:
+For B06 and R01/R13, one exact named contract anchor is allowed because the defect introduces a new
+internal contract not represented by a single branch-point member. It is not a wildcard:
 later phases must retain that exact anchor and may add member-specific rows.
 
 ### Intentional correction boundary
@@ -487,8 +486,8 @@ A later correction is accepted only when:
 1. the Java API comparator still passes or the change is additive;
 2. the exact ledger record already identifies its subject, old behavior, invariant, and test ID;
 3. the named regression test is added in the owning phase; and
-4. native/resource drift is either the preserved intended aggregate contract or the exact
-   correction identified by the ledger.
+4. native/resource drift is either the preserved intended aggregate contract or the exact correction
+   identified by the ledger.
 
 Unmatched drift fails.
 
@@ -498,14 +497,14 @@ Unmatched drift fails.
 
 The test uses exact case and padding assertions:
 
-| Set bits | `SystemInfo.toHexMask` |
-| --- | --- |
-| none | `0` |
-| `0` | `1` |
-| `31,32` | `1,80000000` |
-| `0,32,63` | `80000001,00000001` |
-| `0,64` | `1,00000000,00000001` |
-| `127` | `80000000,00000000,00000000,00000000` |
+| Set bits  | `SystemInfo.toHexMask`                |
+|-----------|---------------------------------------|
+| none      | `0`                                   |
+| `0`       | `1`                                   |
+| `31,32`   | `1,80000000`                          |
+| `0,32,63` | `80000001,00000001`                   |
+| `0,64`    | `1,00000000,00000001`                 |
+| `127`     | `80000000,00000000,00000000,00000000` |
 
 Each output must round-trip through `fromHexMask`. Preserve acceptance of `0x1` and
 `80000001,00000001`, rejection of malformed hex, lowercase output, 32-bit comma groups, no leading
@@ -514,8 +513,8 @@ zero group, and exactly eight digits for every non-head group.
 ### Exact default cadence
 
 Do not initialize `ResourceMonitor` or `SystemInfo`. Use ASM to inspect the public constructor
-`ResourceMonitor(TopologyMapper)` and require the semantic instruction sequence that passes the
-long constant `200L` to `Duration.ofMillis(long)` and delegates to
+`ResourceMonitor(TopologyMapper)` and require the semantic instruction sequence that passes the long
+constant `200L` to `Duration.ofMillis(long)` and delegates to
 `ResourceMonitor(TopologyMapper, Duration)`. Ignore labels, frames, line numbers, and the concrete
 constant opcode while matching that sequence. Also assert
 `Duration.ofMillis(200).toNanos() == 200_000_000L`.
@@ -528,9 +527,9 @@ values; those belong to P4. Any later constructor refactor must retain an equiva
 
 Use a valid CPU from `ThreadTools.BASE_MASK`, two submitted tasks, a start gate, an entered count,
 and a release gate. Both tasks must enter before either is released, and their `Thread` identities
-must differ. The executor's configured thread creator records each created thread, proving one
-fresh thread per `execute`. Assertions use bounded futures/latches only for failure termination;
-elapsed wall time is not a correctness assertion.
+must differ. The executor's configured thread creator records each created thread, proving one fresh
+thread per `execute`. Assertions use bounded futures/latches only for failure termination; elapsed
+wall time is not a correctness assertion.
 
 Always close the executor in `finally`, await termination, and verify the CPU registry no longer
 returns it. This test preserves concurrency and fresh-thread behavior only. P3 owns lifecycle race
@@ -550,8 +549,8 @@ expected &= allowed
 ```
 
 After `TopologyMapper.update`, the effective CPU set must equal `expected`. If another allowed core
-exists, no CPU belonging exclusively to core zero remains. If core zero is the only allowed core,
-it remains so the topology is nonempty. This P0 test freezes the reservation policy; P2 adds fully
+exists, no CPU belonging exclusively to core zero remains. If core zero is the only allowed core, it
+remains so the topology is nonempty. This P0 test freezes the reservation policy; P2 adds fully
 fixture-driven edge coverage and fixes allowed-set ordering defects.
 
 ## Failure behavior
@@ -568,24 +567,24 @@ fixture-driven edge coverage and fixes allowed-set ordering defects.
 - Missing/unknown defect ID, owner mismatch, wildcard subject, blank invariant, or malformed test
   ID: fail with ledger line number.
 - Runtime test timeout: fail and still clean up its executor/monitor.
-- Any source/resource fingerprint change during baseline generation: fail and preserve the
-  temporary evidence directory for inspection.
+- Any source/resource fingerprint change during baseline generation: fail and preserve the temporary
+  evidence directory for inspection.
 
 ## Memory, ownership, and contamination
 
 ### Memory semantics
 
-P0 changes no production publication mode. The API reader and comparator are single-threaded.
-Their mutable maps/lists are confined to the invoking thread and converted to sorted immutable
-values before comparison.
+P0 changes no production publication mode. The API reader and comparator are single-threaded. Their
+mutable maps/lists are confined to the invoking thread and converted to sorted immutable values
+before comparison.
 
-The executor behavior test uses `CountDownLatch`/`CompletableFuture` synchronization. A task's
-write before `countDown` happens-before the test's successful `await`; the release latch publishes
+The executor behavior test uses `CountDownLatch`/`CompletableFuture` synchronization. A task's write
+before `countDown` happens-before the test's successful `await`; the release latch publishes
 permission for both tasks to exit. No assertion depends on unsynchronized collections.
 
-The default-cadence test does not initialize the monitor or start delivery. The core-zero test consumes the
-volatile/atomic publication through the public mapper accessor exactly as existing consumers do;
-it does not claim to settle T04's future publication mode.
+The default-cadence test does not initialize the monitor or start delivery. The core-zero test
+consumes the volatile/atomic publication through the public mapper accessor exactly as existing
+consumers do; it does not claim to settle T04's future publication mode.
 
 ### Memory pollution and state contamination
 
@@ -605,9 +604,9 @@ it does not claim to settle T04's future publication mode.
   below.
 - Tests close monitors/executors and leave no registered executor, polling thread, or listener task.
 
-P0 intentionally does not measure heap allocations or native memory. The reader operates off the
-hot path and the runtime tests are bounded. Snapshot aliasing/native leaks are ledgered for their
-owning phases rather than normalized as baseline behavior.
+P0 intentionally does not measure heap allocations or native memory. The reader operates off the hot
+path and the runtime tests are bounded. Snapshot aliasing/native leaks are ledgered for their owning
+phases rather than normalized as baseline behavior.
 
 ## Mathematical precision
 
@@ -665,8 +664,8 @@ mise exec -- gradle -B \
   resources:resources compiler:compile
 ```
 
-This command may write only beneath the isolated temporary directory. It selects no training
-module and publishes no artifact.
+This command may write only beneath the isolated temporary directory. It selects no training module
+and publishes no artifact.
 
 ### 4. Generate twice and compare with the checked-in fixture
 
@@ -686,8 +685,8 @@ cmp "$P0_TMP/api-first.tsv" \
   euhedral-hardware-utils/src/test/resources/compatibility/api-900d8c50.tsv
 ```
 
-The direct `exec:java` goal runs only the Java baseline tool and does not execute the module's
-bound native `exec` goal.
+The direct `exec:java` goal runs only the Java baseline tool and does not execute the module's bound
+native `exec` goal.
 
 ### 5. Run the P0 tests without the native lifecycle
 
@@ -728,10 +727,10 @@ until the completion record captures fixture hashes and comparison results.
 
 ## Acceptance criteria
 
-1. The checked-in API fixture is generated from compiled `900d8c50` classes in an isolated
-   directory and is deterministic across two generations.
-2. The complete compiled module descriptor matches exactly and contains the module name and all
-   five exports.
+1. The checked-in API fixture is generated from compiled `900d8c50` classes in an isolated directory
+   and is deterministic across two generations.
+2. The complete compiled module descriptor matches exactly and contains the module name and all five
+   exports.
 3. Every baseline public/protected type/member, constructor, descriptor, hierarchy/interface,
    generic signature, API modifier, checked exception, constant value, nested relation, permitted
    subclass, and record component name/order is present and unchanged.
@@ -785,11 +784,11 @@ No child blueprint is required.
 - Splitting the extractor from its comparison/behavior gate would duplicate fixture and handoff
   reasoning without reducing implementation risk.
 
-The implementation should produce roughly one test-scoped dependency change, three resources, and
-a bounded set of helper/test classes. If implementation discovers that JPMS test compilation
-requires a production `module-info.java` change or that the current bytecode cannot express a
-required contract, that is a new design decision and must return to this blueprint rather than
-splitting opportunistically.
+The implementation should produce roughly one test-scoped dependency change, three resources, and a
+bounded set of helper/test classes. If implementation discovers that JPMS test compilation requires
+a production `module-info.java` change or that the current bytecode cannot express a required
+contract, that is a new design decision and must return to this blueprint rather than splitting
+opportunistically.
 
 ## Bounded implementation context envelope
 
@@ -844,22 +843,22 @@ surface and the parent plan's read-only downstream inventory are their compatibi
 
 ### Capability decision
 
-The implementation is bounded and its design is settled, but it is not a low-effort mechanical
-edit. A correct classfile visitor must preserve subtle record/module/nested/generic details, and
-the test command must avoid the bound native lifecycle. The executor behavior test also needs
-deterministic cleanup.
+The implementation is bounded and its design is settled, but it is not a low-effort mechanical edit.
+A correct classfile visitor must preserve subtle record/module/nested/generic details, and the test
+command must avoid the bound native lifecycle. The executor behavior test also needs deterministic
+cleanup.
 
 Select **`gpt-5.6-sol` with `medium` reasoning effort**. A lower-effort pass is not justified by
 prior evidence, and a split would add fixture coordination without reducing the subtle bytecode
-surface. High effort is unnecessary because the blueprint fixes the schemas, algorithms,
-commands, failure policy, and test contracts.
+surface. High effort is unnecessary because the blueprint fixes the schemas, algorithms, commands,
+failure policy, and test contracts.
 
 ## Handoff condition
 
 Hand off this blueprint for developer review and merge into the P0 root only when:
 
-- no compatibility meaning, tool choice, output format, defect disposition, or runtime test
-  contract remains for implementation to decide;
+- no compatibility meaning, tool choice, output format, defect disposition, or runtime test contract
+  remains for implementation to decide;
 - the P0 implementation prompt in the parent plan is finalized with the selected model and bounded
   context;
 - the phase artifact index remains the unsplit P0 entry; and
@@ -902,8 +901,8 @@ header, Zig, source resource, downstream module, CI, benchmark, or training file
 - Generated the native fixture twice from the same isolated compiled baseline: byte-identical.
 - Ran the complete direct-goal command
   `resources:resources compiler:compile resources:testResources compiler:testCompile
-  surefire:test` twice after final fixture generation: both runs passed, 17 tests, 0 failures,
-  0 errors, 0 skipped.
+  surefire:test` twice after final fixture generation: both runs passed, 17 tests, 0 failures, 0
+  errors, 0 skipped.
 - Compared the two compatibility reports: byte-identical.
 - Recomputed the active source/resource fingerprint and compared it with the initial fingerprint:
   byte-identical.
@@ -924,11 +923,11 @@ eea7d3e22c4d7ab1c5217debeb9aafb5e1c277165d8f3b3775436add90c575a2  compatibility-
 
 1. The compiled baseline came only from the isolated `900d8c50` archive and two generations are
    byte-identical.
-2. The module descriptor is compared as an exact set, including name, flags, version, all
-   requires, and all five exports.
+2. The module descriptor is compared as an exact set, including name, flags, version, all requires,
+   and all five exports.
 3. Baseline public/protected types and members retain descriptors, hierarchy, interfaces,
-   signatures, modifiers, exceptions, typed constants, nested/nest/permitted metadata, and
-   ordered record components.
+   signatures, modifiers, exceptions, typed constants, nested/nest/permitted metadata, and ordered
+   record components.
 4. Additive declarations pass and are reported; missing or changed baseline declarations fail.
 5. Comparator mutation coverage rejects a changed method descriptor, record-component order, and
    module descriptor with stable diagnostics.
@@ -939,14 +938,13 @@ eea7d3e22c4d7ab1c5217debeb9aafb5e1c277165d8f3b3775436add90c575a2  compatibility-
 8. Every canonical mask case, round trip, accepted prefix, and malformed input contract passes.
 9. ASM proves the default constructor delegates with `Duration.ofMillis(200)` and the test proves
    exactly `200_000_000L` ns.
-10. Two latch-controlled executor submissions enter concurrently on distinct freshly created
-    threads and cleanup removes the CPU registry entry.
-11. The host-derived core-zero reservation matches the settled rule and leaves a nonempty
-    topology.
+10. Two latch-controlled executor submissions enter concurrently on distinct freshly created threads
+    and cleanup removes the CPU registry entry.
+11. The host-derived core-zero reservation matches the settled rule and leaves a nonempty topology.
 12. The exact ledger contains B01-B07, T01-T06, A01-A04, R01-R14, N01-N02, and C01-C02 with the
     prescribed owner phases, subjects, invariants, and later regression IDs.
-13. No incorrect numeric, topology, pressure, lifecycle, affinity, native, or core-policy output
-    is frozen as a golden value.
+13. No incorrect numeric, topology, pressure, lifecycle, affinity, native, or core-policy output is
+    frozen as a golden value.
 14. Before/after production source/resource fingerprints are byte-identical.
 15. No artifact was installed or published; no Zig/native lifecycle, root reactor, or training
     path/command was invoked.
@@ -955,8 +953,8 @@ eea7d3e22c4d7ab1c5217debeb9aafb5e1c277165d8f3b3775436add90c575a2  compatibility-
 
 Approved deviations: none.
 
-Environmental limits: none for P0. The tests ran on the available Linux host and required no
-Docker, cross-platform runner, native generation, or network download.
+Environmental limits: none for P0. The tests ran on the available Linux host and required no Docker,
+cross-platform runner, native generation, or network download.
 
 ## Validation completion summary
 
@@ -983,11 +981,11 @@ The independent P0 audit completed on
 classified `satisfied`; no deviation, ambiguity, correction, or skipped check remains. The audit
 reran the direct compiler/test goals with pinned JDK 21.0.2 and Gradle 3.9.16, yielding 17 passing
 tests with no failures, errors, or skips. The published compatibility report is `PASS` with an
-identical SHA-256 (`eea7d3e22e4d7ab1c5217debeb9aafb5e1c277165d8f3b3775436add90c575a2`), and
-the active Java/resource fingerprint and production diff remained unchanged. Full command and
+identical SHA-256 (`eea7d3e22e4d7ab1c5217debeb9aafb5e1c277165d8f3b3775436add90c575a2`), and the
+active Java/resource fingerprint and production diff remained unchanged. Full command and
 requirement evidence is in
 `docs/audits/hardware-utils/phase-0-compatibility-test-baseline-conformance.md`.
 
-The developer authorized P0 root closeout on 2026-07-30. The audit child merge is `ed839216`; the
-P0 closeout commit tracks the conformance report and removes the temporary P0 status block. P1 must
+The developer authorized P0 root closeout on 2026-07-30. The audit child merge is `ed839216`; the P0
+closeout commit tracks the conformance report and removes the temporary P0 status block. P1 must
 branch from that completed root.

@@ -14,9 +14,9 @@ mise install
 gradle :euhedral-training:build
 ```
 
-The distribution is under `euhedral-training/build/libs/`. Run the jar directly for CPU work, or
-use `build/bin/euhedral-training-gpu`. Java 21 and the native Euhedral library are required for
-physical benchmarks.
+The distribution is under `euhedral-training/build/libs/`. Run the jar directly for CPU work, or use
+`build/bin/euhedral-training-gpu`. Java 21 and the native Euhedral library are required for physical
+benchmarks.
 
 The command-line entry point provides these commands:
 
@@ -128,12 +128,12 @@ schema_version,anchor_set_id,scenario_id,benchmark_run_id
 ```
 
 `fixed-anchors.csv` contains the same `anchor_set_id` and the selected policy vectors. Its header is
-`schema_version,anchor_set_id,policy_id` followed by `weight_00_bits` through `weight_27_bits`;
-each weight is encoded as 16 lower-case hexadecimal digits containing the raw IEEE-754 bits of one
-policy weight. The anchor policies are benchmarked in every listed scenario, and their measured
-values are used to align runs so that results from different environments are comparable. The
-scenario IDs in the plan must also appear as repeated `scenario.required` settings. If observations
-are supplied with `run.initial_observation_bundle`, they must be used together with this plan.
+`schema_version,anchor_set_id,policy_id` followed by `weight_00_bits` through `weight_27_bits`; each
+weight is encoded as 16 lower-case hexadecimal digits containing the raw IEEE-754 bits of one policy
+weight. The anchor policies are benchmarked in every listed scenario, and their measured values are
+used to align runs so that results from different environments are comparable. The scenario IDs in
+the plan must also appear as repeated `scenario.required` settings. If observations are supplied
+with `run.initial_observation_bundle`, they must be used together with this plan.
 
 To inspect the scenario-model hardware environment without training or benchmarking:
 

@@ -45,10 +45,13 @@ public class ControlPlaneShard {
     protected static final VarHandle HANDLE = MethodHandles.arrayElementVarHandle(LatticeEdge[].class);
     protected final Logger logger;
     protected final Duration shutdownTimeout;
+
     @Getter
     protected final int socket;
+
     @Getter
     protected final String shardName;
+
     protected final AtomicLong currentVersion = new AtomicLong(Integer.MIN_VALUE);
     protected final AtomicBoolean primed = new AtomicBoolean(false);
     protected final AtomicBoolean started = new AtomicBoolean(false);

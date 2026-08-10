@@ -22,10 +22,9 @@ required capabilities rather than permanently binding a phase to one model name.
 The current mapping may be `gpt-5.6-sol` at `max` for planning and complex blueprints, a coding
 model selected from the completed blueprint's actual demands for implementation, and Terra or Sol
 for a conformance audit. These are examples, not permanent workflow requirements. A
-`gpt-5.5 / low` implementation pass is appropriate only when the finished blueprint proves that
-the work is bounded and mechanical. Do not use a lower effort to make an architectural decision,
-and do not use an implementation prompt to reopen a decision that belongs in planning or a
-blueprint.
+`gpt-5.5 / low` implementation pass is appropriate only when the finished blueprint proves that the
+work is bounded and mechanical. Do not use a lower effort to make an architectural decision, and do
+not use an implementation prompt to reopen a decision that belongs in planning or a blueprint.
 
 ## Work model
 
@@ -37,19 +36,19 @@ blueprint.
 | Conformance/manual review | Pull request    | Evidence that the implementation satisfies its contract   |
 | Audit                     | QA              | Independent conformance and quality assessment            |
 
-The workflow forms an n-ary tree of context and results. Planning supplies the root context. A
-phase splits context into independently owned blueprints until each leaf is executable by a
-non-frontier implementation agent. Completion records, conformance evidence, and audits then flow
-up through parent blueprints and phases to the root plan. Parent artifacts summarize and link to
-their children; they must not force downstream agents to reread the full feature history.
+The workflow forms an n-ary tree of context and results. Planning supplies the root context. A phase
+splits context into independently owned blueprints until each leaf is executable by a non-frontier
+implementation agent. Completion records, conformance evidence, and audits then flow up through
+parent blueprints and phases to the root plan. Parent artifacts summarize and link to their
+children; they must not force downstream agents to reread the full feature history.
 
 ## Toolchain default
 
-Every Java command and Gradle build defaults to the exact versions declared in the
-repository's `mise.toml`. Use `mise exec --` for those commands when available. A restricted
-environment may use the documented explicit pinned-tool fallback only when `mise` cannot be used;
-record the substituted versions and any verification limit. A module's lower Java release target
-does not permit silently defaulting to an older JDK or Gradle.
+Every Java command and Gradle build defaults to the exact versions declared in the repository's
+`mise.toml`. Use `mise exec --` for those commands when available. A restricted environment may use
+the documented explicit pinned-tool fallback only when `mise` cannot be used; record the substituted
+versions and any verification limit. A module's lower Java release target does not permit silently
+defaulting to an older JDK or Gradle.
 
 ## Pipeline
 
@@ -69,9 +68,9 @@ that prompt are user-owned: never commit, revert, delete, or otherwise modify th
 the phase, stop and ask the developer for permission to resolve the conflict.
 
 Use the phase-branch format `feature_name/phase-N-title`. A root phase branch begins from the
-completed prior root phase. Sub-phase branches use the same feature and phase prefix with a
-specific child suffix, and must be merged into their root phase branch when their action item is
-complete. Do not begin a later root phase from an unmerged sub-phase result.
+completed prior root phase. Sub-phase branches use the same feature and phase prefix with a specific
+child suffix, and must be merged into their root phase branch when their action item is complete. Do
+not begin a later root phase from an unmerged sub-phase result.
 
 Do not merge, rebase, delete branches, commit, or push unless the developer has authorized that
 action. When authorized, a phase may include uncommitted changes carried from the current or
@@ -101,16 +100,15 @@ Create `docs/plans/<PLAN_NAME>.md`. The plan must be self-contained and include 
 developer requirements, scope, non-goals, constraints, affected components, success criteria,
 conformance/manual-review strategy, known risks, branch lineage, and all context later stages need.
 
-At its end, provide the prompts the developer should issue, grouped by phase. Rank them from most
-to least reasoning-intensive, label every blueprint, conformance, and manual-review prompt with its
-exact
-model and reasoning effort, and give each implementation prompt a clearly labeled provisional
-model and effort. Pair every blueprint with implementation, conformance, and manual-review
-action items. Each prompt must name its required input artifacts, allowed edits, prohibited work,
-output artifact, branch, parent artifact, and handoff condition. The plan must name the initial
-package or module ownership boundaries for each phase. The blueprint prompt must replace the
-provisional implementation selection after the capability assessment below; implementation must
-not begin while that selection remains provisional.
+At its end, provide the prompts the developer should issue, grouped by phase. Rank them from most to
+least reasoning-intensive, label every blueprint, conformance, and manual-review prompt with its
+exact model and reasoning effort, and give each implementation prompt a clearly labeled provisional
+model and effort. Pair every blueprint with implementation, conformance, and manual-review action
+items. Each prompt must name its required input artifacts, allowed edits, prohibited work, output
+artifact, branch, parent artifact, and handoff condition. The plan must name the initial package or
+module ownership boundaries for each phase. The blueprint prompt must replace the provisional
+implementation selection after the capability assessment below; implementation must not begin while
+that selection remains provisional.
 
 ## Phase 2: blueprint
 
@@ -123,8 +121,8 @@ blueprint directory. A complete blueprint specifies:
 
 - exact scope, non-goals, architecture, alternatives considered, and the selected design;
 - package and naming conventions, package ownership boundaries, and the data flow between them;
-- intricate or high-reasoning types, data schemas, public interfaces, formats, algorithms,
-  defaults, invariants, and failure behavior;
+- intricate or high-reasoning types, data schemas, public interfaces, formats, algorithms, defaults,
+  invariants, and failure behavior;
 - required mathematical precision, deterministic sorting and output order;
 - memory semantics, safety, ownership, and memory-contamination avoidance;
 - compatibility, migration, and deletion boundaries;
@@ -134,8 +132,8 @@ blueprint directory. A complete blueprint specifies:
 Do not enumerate every minor class or mechanically derived file. The blueprint constrains package
 structure, high-reasoning classes, data contracts, inputs, outputs, and the acceptance surface; the
 implementation agent owns local reasoning within those constraints. An implementation must be able
-to execute directly from the blueprint without making an architectural choice. If it would need
-one, the blueprint is incomplete.
+to execute directly from the blueprint without making an architectural choice. If it would need one,
+the blueprint is incomplete.
 
 ### Blueprint sizing and split gate
 
@@ -149,29 +147,28 @@ Before selecting the implementation model, evaluate every drafted blueprint:
 If any answer shows that the scope exceeds what a non-frontier implementation agent can reasonably
 execute, split the blueprint into child blueprints before handoff. Give each child a bounded
 responsibility, package ownership, inputs and outputs, acceptance criteria, and
-conformance/manual-review action item. Update the phase's subsequent prompts, branch lineage,
-parent blueprint, and plan so they address the children rather than the oversized parent; then
-re-run this gate for every child. A
-blueprint that cannot be split further is an exception and must explain why its coupling is
-irreducible.
+conformance/manual-review action item. Update the phase's subsequent prompts, branch lineage, parent
+blueprint, and plan so they address the children rather than the oversized parent; then re-run this
+gate for every child. A blueprint that cannot be split further is an exception and must explain why
+its coupling is irreducible.
 
 An explicit developer instruction may instead authorize one integrated conformance/manual-review
 action after all child implementations for a named phase. Record that exception in the parent
-blueprint, plan rules, branch lineage, artifact index, and every downstream prompt. Child
-blueprints and implementations must still be sequentially reviewed and merged, each implementation
-must run and record its owned tests, and the final conformance action must classify every child and
-parent acceptance criterion. Do not create intermediate validation/conformance/audit branches or
-artifacts for such a phase. Without that explicit recorded authorization, the per-child rule above
-remains the default.
+blueprint, plan rules, branch lineage, artifact index, and every downstream prompt. Child blueprints
+and implementations must still be sequentially reviewed and merged, each implementation must run and
+record its owned tests, and the final conformance action must classify every child and parent
+acceptance criterion. Do not create intermediate validation/conformance/audit branches or artifacts
+for such a phase. Without that explicit recorded authorization, the per-child rule above remains the
+default.
 
-When the per-child rule applies, conformance and audit action items consume only the child's
-context envelope and summarized parent context. They should require no frontier reasoning unless
-the child is demonstrably irreducible or reveals a new unsettled architectural decision.
+When the per-child rule applies, conformance and audit action items consume only the child's context
+envelope and summarized parent context. They should require no frontier reasoning unless the child
+is demonstrably irreducible or reveals a new unsettled architectural decision.
 
 On creation, append a concise developer-review summary to the parent plan or phase record:
 purpose, package boundaries, key contracts, child work units, selected implementation capability,
-risks, and unresolved items. This is the normal review surface; the full blueprint remains
-available for deep inspection.
+risks, and unresolved items. This is the normal review surface; the full blueprint remains available
+for deep inspection.
 
 ### Post-blueprint implementation-model gate
 
@@ -179,8 +176,8 @@ Model selection for implementation is a required blueprint output, not a plannin
 After the blueprint is complete, reassess the implementation pass before committing the blueprint.
 Record an `Implementation model reassessment` section that evaluates:
 
-- the number of modules, ownership boundaries, source files, schemas, and lifecycle states that
-  must be held together;
+- the number of modules, ownership boundaries, source files, schemas, and lifecycle states that must
+  be held together;
 - whether the work combines concurrency or memory semantics, mathematical precision, filesystem
   safety, topology, recovery, migration, or deterministic serialization;
 - how much prior context the implementation model must read and whether the blueprint provides a
@@ -205,8 +202,8 @@ Run every implementation prompt with the model and effort selected by the comple
 implementation-model gate. Confirm that the plan prompt is no longer labeled provisional. Read
 `AGENTS.md`, the plan, the applicable blueprint, and the completion notes and exact context envelope
 named by that blueprint. Modify only the files and contracts enumerated by the blueprint, compile,
-run the specified tests, fix defects within the settled design, and verify acceptance criteria
-and architectural consistency.
+run the specified tests, fix defects within the settled design, and verify acceptance criteria and
+architectural consistency.
 
 When creating a class or method, or when changing a method signature, add a Markdown-style `///`
 comment at the declaration. Explain the type's or method's purpose and define any non-obvious
@@ -226,18 +223,17 @@ root phase is complete and its child branches have been merged, delete that phas
 
 ## Phase 4: conformance check and manual review
 
-Use a strong coding/audit model. Check every
-acceptance criterion, then write `docs/audits/<PHASE>-<FEATURE>-conformance.md`, or the
-feature-specific audit path defined by the plan. Classify each requirement as satisfied, deviated,
-unverified, or ambiguous and include evidence, missing acceptance criteria, undocumented
-assumptions, and test limitations.
+Use a strong coding/audit model. Check every acceptance criterion, then write
+`docs/audits/<PHASE>-<FEATURE>-conformance.md`, or the feature-specific audit path defined by the
+plan. Classify each requirement as satisfied, deviated, unverified, or ambiguous and include
+evidence, missing acceptance criteria, undocumented assumptions, and test limitations.
 
 The combined step may make minor blueprint-settled corrections discovered during conformance or
 manual review, including missing deterministic coverage and naming/formatting defects. It must not
-redesign architecture or introduce a decision the blueprint did
-not settle. Record commands, results, fixes, skipped checks, and environmental limits in the
-blueprint completion record. A remaining material deviation returns work to the relevant blueprint
-prompt unless the developer explicitly approves a blueprint update.
+redesign architecture or introduce a decision the blueprint did not settle. Record commands,
+results, fixes, skipped checks, and environmental limits in the blueprint completion record. A
+remaining material deviation returns work to the relevant blueprint prompt unless the developer
+explicitly approves a blueprint update.
 
 ## Prompt templates
 
@@ -246,7 +242,8 @@ Use this skeleton for a planning prompt:
 > Use a frontier reasoning model at its maximum available reasoning effort. Read AGENTS.md, this
 > workflow, the relevant architecture and CI documentation, and affected README files. First
 > resolve material requirements with me; then write `docs/plans/<PLAN_NAME>.md`. Do not modify
-> production code. Produce a ranked, phased blueprint/implementation/conformance/manual-review prompt
+> production code. Produce a ranked, phased blueprint/implementation/conformance/manual-review
+> prompt
 > sequence. Give every action item its parent artifact, branch, allowed edits, output, handoff,
 > and initial package ownership. Use clearly provisional implementation selections that each
 > blueprint must finalize.

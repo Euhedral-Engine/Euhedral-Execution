@@ -38,6 +38,7 @@ public final class ObservationBundleWriter implements AutoCloseable {
     private Instant latestObservationEnd;
     private boolean observationsStarted;
     private boolean complete;
+
     private ObservationBundleWriter(
             Path directory, BenchmarkRunDescriptor run, FileChannel policiesChannel, FileChannel observationsChannel) {
         this.directory = directory;

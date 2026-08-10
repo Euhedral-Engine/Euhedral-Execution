@@ -48,6 +48,7 @@ public class MPMCBenchmarks {
         private final PinnedThreadExecutor[] executors = new PinnedThreadExecutor[32];
         private final Integer[] values = new Integer[2048];
         private QueueConsumer consumer;
+
         @Param({"1", "2", "4", "16", "64", "512", "1024", "2048"})
         private int batchSize;
 

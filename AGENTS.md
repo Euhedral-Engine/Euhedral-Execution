@@ -28,8 +28,8 @@ contain expensive local runs. Treat them as user-owned even when they are untrac
 All Java and Gradle build commands default to the exact tool versions selected by
 [`mise.toml`](mise.toml), currently Java 21 and Gradle 9.6.1. Individual artifacts retain lower
 release targets where possible; a lower target does not authorize a different default JDK or Gradle
-version. A restricted-environment fallback is allowed only under the documented exception below
-and must report the substituted versions and resulting limits.
+version. A restricted-environment fallback is allowed only under the documented exception below and
+must report the substituted versions and resulting limits.
 
 | Module                     | Release | Main responsibility                                   |
 |----------------------------|--------:|-------------------------------------------------------|
@@ -73,10 +73,10 @@ gradle build
 ```
 
 To run integration tests
+
 ```bash
 gradle build integrationTest
 ```
-
 
 For a focused Java change, select the module and include its required upstream modules:
 
@@ -94,9 +94,9 @@ gradle :euhedral-hardware-utils:build
 gradle :euhedral-spring-core:build
 ```
 
-The hardware module invokes Zig during Gradle's initialization phase, even for an ordinary compile. It
-cross-builds native libraries for Linux, Windows, and macOS. A missing `zig`, JNI platform header,
-or macOS SDK can fail the build before Java compilation begins. Use
+The hardware module invokes Zig during Gradle's initialization phase, even for an ordinary compile.
+It cross-builds native libraries for Linux, Windows, and macOS. A missing `zig`, JNI platform
+header, or macOS SDK can fail the build before Java compilation begins. Use
 [`.github/workflows/build.yaml`](.github/workflows/build.yaml) as the reference setup; it prepares
 the cross-target JNI headers and macOS SDK before running `gradle build`.
 
@@ -104,8 +104,8 @@ Hardware resource tests use Testcontainers and need a working Docker daemon. Aff
 depend on the CPUs exposed by the host or container. Report those environmental limits separately
 from Java compilation failures.
 
-For focused trainer work, the documented sequence builds upstream artifacts without compiling
-their tests, then runs trainer tests:
+For focused trainer work, the documented sequence builds upstream artifacts without compiling their
+tests, then runs trainer tests:
 
 ```bash
 gradle :euhedral-training:build -x test
@@ -211,12 +211,11 @@ draining, remote pulls, direct upstream pulls, and demand generation. Its
 `FragmentActionPicker` evaluates four actions from six normalized measurements plus a bias. That is
 four groups of seven weights, or 28 values.
 
-The runtime evaluates fixed weights only. Neural-network training belongs in `euhedral-training`.
-Do not add DJL, PyTorch, corpus handling, or candidate search dependencies to `euhedral-core`.
+The runtime evaluates fixed weights only. Neural-network training belongs in `euhedral-training`. Do
+not add DJL, PyTorch, corpus handling, or candidate search dependencies to `euhedral-core`.
 
 Local fragment caches are MPSC structures with an owner consumer. A reset that clears one must run
-on the owner thread and acknowledge completion. The `clear` path demonstrates this
-handoff.
+on the owner thread and acknowledge completion. The `clear` path demonstrates this handoff.
 
 ## Concurrency rules
 
@@ -286,8 +285,8 @@ Edit the proto, run the Spring module's generation phase, and review the generat
 edit generated Java.
 
 Native binaries under `euhedral-hardware-utils/src/main/resources/bin`, Zig caches, Gradle `build`
-directories, training outputs, and benchmark output are build or run artifacts. Do not add or
-remove them as part of an unrelated source change.
+directories, training outputs, and benchmark output are build or run artifacts. Do not add or remove
+them as part of an unrelated source change.
 
 ## Testing changes well
 

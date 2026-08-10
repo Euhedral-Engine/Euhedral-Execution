@@ -17,6 +17,7 @@ public class SingleUseSource implements LatticeSource {
     private final AbstractFrame frame;
     private LatticeReceiver downstream;
     private boolean complete;
+
     private SingleUseSource(AbstractFrame frame) {
         this.frame = frame;
     }

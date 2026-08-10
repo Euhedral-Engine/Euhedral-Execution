@@ -5,7 +5,6 @@ import io.euhedral_execution.hardware_utils.common.SystemUtilization.SystemSnaps
 import io.euhedral_execution.hardware_utils.common.UnmodifiableBitSet;
 import io.euhedral_execution.hardware_utils.internal.sampling.enums.SignalResolution;
 import io.euhedral_execution.hardware_utils.internal.sampling.samples.IntervalHardwareSample;
-
 import java.util.BitSet;
 
 final class PressureProjection {

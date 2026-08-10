@@ -48,6 +48,7 @@ final class NativeLibraryExtractor {
     private Path runDirectory;
     private Path marker;
     private Path retainedLibrary;
+
     NativeLibraryExtractor(
             String operatingSystem,
             Path parent,

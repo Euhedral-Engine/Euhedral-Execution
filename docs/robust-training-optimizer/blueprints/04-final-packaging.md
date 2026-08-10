@@ -21,8 +21,8 @@ Phase 4:
 4. writes deterministic Markdown reports and a top-level README that can be understood without
    opening the machine-readable artifacts;
 5. validates every source and staged artifact before one atomic directory move; and
-6. exposes a package-only reproduction command that rebuilds identical package bytes from the
-   same immutable workspace checkpoint.
+6. exposes a package-only reproduction command that rebuilds identical package bytes from the same
+   immutable workspace checkpoint.
 
 ### Explicit non-goals
 
@@ -34,8 +34,8 @@ Phase 4:
   reproduction command reproduces this package from immutable inputs; it does not repeat the
   physical experiment.
 - Do not archive every historical merge, model, schedule, or checkpoint. Package the checkpoint
-  snapshot and the latest checkpoint-consistent artifacts described below. Preserve all complete
-  raw evidence because it is the durable experimental input.
+  snapshot and the latest checkpoint-consistent artifacts described below. Preserve all complete raw
+  evidence because it is the durable experimental input.
 - Do not use ZIP, TAR, symlinks, hard links, or absolute paths inside package metadata.
 - Do not modify, rename, clean, or delete source workspace artifacts during packaging.
 
@@ -55,17 +55,17 @@ The stable inputs are:
 - Complete raw evidence bundles contain `run.csv`, `policies.csv`, `observations.csv`, and empty
   `COMPLETE`.
 - `ClosedLoopCheckpoint` is the authoritative snapshot. Package only artifacts selected from one
-  exact checkpoint revision; never select a file merely because it is newest by directory listing
-  or modification time.
+  exact checkpoint revision; never select a file merely because it is newest by directory listing or
+  modification time.
 
-The Phase 3 workspace is append-only after artifact publication. Packaging may therefore release
-and reacquire the workspace lock between closed-loop execution and copying: an exact checkpoint
-and every artifact it references remain immutable. The packager still acquires `WorkspaceLock`
+The Phase 3 workspace is append-only after artifact publication. Packaging may therefore release and
+reacquire the workspace lock between closed-loop execution and copying: an exact checkpoint and
+every artifact it references remain immutable. The packager still acquires `WorkspaceLock`
 while resolving and validating its source set so another process cannot create an ambiguous
 same-revision package concurrently.
 
-Phase 3 did not retain a `latestSchedule` reference after a completed merge. Phase 4 does not
-change checkpoint schema 1. It selects the schedule deterministically:
+Phase 3 did not retain a `latestSchedule` reference after a completed merge. Phase 4 does not change
+checkpoint schema 1. It selects the schedule deterministically:
 
 1. use `pendingSchedule` when present;
 2. otherwise, when `nextIteration > 1`, use
@@ -74,9 +74,9 @@ change checkpoint schema 1. It selects the schedule deterministically:
 
 The selected schedule must pass `ScheduleCodec.read` using the frozen packaging inputs and, when
 selected by rule 2, every schedule run ID must occur in checkpoint evidence with
-`EvidenceSource.ITERATION`. A complete or post-iteration checkpoint fails packaging if this
-derived schedule is absent or inconsistent. An initial/bootstrap partial package records a
-deterministic schedule omission instead.
+`EvidenceSource.ITERATION`. A complete or post-iteration checkpoint fails packaging if this derived
+schedule is absent or inconsistent. An initial/bootstrap partial package records a deterministic
+schedule omission instead.
 
 ## Lifecycle and package identity
 
@@ -94,16 +94,16 @@ public enum TrainingRunPackageStatus {
 
 The exact mapping is:
 
-| Checkpoint stage | Package status | Run complete |
-| --- | --- | --- |
-| `RUN_COMPLETE` | `COMPLETE` | `true` |
-| `MODEL_REJECTED` | `PARTIAL_TERMINAL` | `false` |
-| every other stage | `PARTIAL_RECOVERABLE` | `false` |
+| Checkpoint stage  | Package status        | Run complete |
+|-------------------|-----------------------|--------------|
+| `RUN_COMPLETE`    | `COMPLETE`            | `true`       |
+| `MODEL_REJECTED`  | `PARTIAL_TERMINAL`    | `false`      |
+| every other stage | `PARTIAL_RECOVERABLE` | `false`      |
 
 An exception before `ClosedLoopRunner` returns is not silently converted into a successful partial
 result. The last complete checkpoint remains packageable through the explicit `package-run`
-command. A clean stop or cross-environment bootstrap wait already returns a checkpoint-backed
-result and is packaged normally.
+command. A clean stop or cross-environment bootstrap wait already returns a checkpoint-backed result
+and is packaged normally.
 
 ### Identity and target name
 
@@ -115,8 +115,8 @@ PARTIAL_*:            <trainingRunId>.partial.r<eight-digit-checkpoint-revision>
 target directory:     training-run-<packageId>
 ```
 
-The default output root is `<workspace>/packages`. The output root is not included in any
-serialized bytes. A caller may select another output root.
+The default output root is `<workspace>/packages`. The output root is not included in any serialized
+bytes. A caller may select another output root.
 
 If the target does not exist, publish it. If it exists, validate it fully:
 
@@ -210,21 +210,21 @@ schema. Do not flatten or rename those schema-owned files.
   `robust-leaders.vectors.csv` and `incomplete-policies.vectors.csv`. The descriptive package
   filenames distinguish their use without changing schema-owned bytes.
 
-No absent artifact is represented by an empty placeholder. The manifest `omissions` array and
-README say that it is unavailable at this checkpoint.
+No absent artifact is represented by an empty placeholder. The manifest `omissions` array and README
+say that it is unavailable at this checkpoint.
 
 ## Derived machine-readable artifacts
 
-All derived text uses canonical UTF-8, no BOM, LF line endings, and a final LF. CSV is RFC 4180
-with LF record endings and `CanonicalCsv.row` escaping. No timestamp, absolute path, platform
-separator, locale-sensitive value, or filesystem order enters deterministic output.
+All derived text uses canonical UTF-8, no BOM, LF line endings, and a final LF. CSV is RFC 4180 with
+LF record endings and `CanonicalCsv.row` escaping. No timestamp, absolute path, platform separator,
+locale-sensitive value, or filesystem order enters deterministic output.
 
 ### `policy-scenario-measurements.csv`
 
-This is the unmistakable vectors-with-measurements dataset. Join every `scenario-results.csv` row
-to exactly one vector from the union of both Phase 1 vector files. Reject a missing vector,
-conflicting vector bits, duplicate policy, unknown policy, changed scenario order, or extra vector
-that is absent from `robust-ranking.csv`.
+This is the unmistakable vectors-with-measurements dataset. Join every `scenario-results.csv` row to
+exactly one vector from the union of both Phase 1 vector files. Reject a missing vector, conflicting
+vector bits, duplicate policy, unknown policy, changed scenario order, or extra vector that is
+absent from `robust-ranking.csv`.
 
 Rows retain the exact Phase 1 scenario/policy order. The header is:
 
@@ -232,8 +232,8 @@ Rows retain the exact Phase 1 scenario/policy order. The header is:
 schema_version,scenario_id,environment_id,source_count,available_physical_core_count,source_ratio_numerator,source_ratio_denominator,policy_id,weight_00_bits,...,weight_27_bits,status,total_run_count,accepted_run_count,weak_run_count,uncalibrated_run_count,successful_repetition_count,planned_repetition_count,throughput_p25,throughput_median,throughput_p75,throughput_iqr,median_within_run_relative_iqr,mean_timeout_rate,mean_failure_rate,mean_non_success_rate,bootstrap_median_ci_low,bootstrap_median_ci_high,quality
 ```
 
-All fields are copied byte-semantically from Phase 1 except the inserted raw-bit vector columns.
-Do not parse and reformat derived doubles.
+All fields are copied byte-semantically from Phase 1 except the inserted raw-bit vector columns. Do
+not parse and reformat derived doubles.
 
 ### `vectors/benchmark-ready.vectors.csv`
 
@@ -269,8 +269,8 @@ schema_version,benchmark_run_id,closed_loop_iteration,scenario_id,evidence_sourc
 
 ## Manifest schema
 
-`manifest.json` is canonical UTF-8 JSON, two-space indented, LF terminated, with the exact key
-order below. It contains no generation time or absolute path.
+`manifest.json` is canonical UTF-8 JSON, two-space indented, LF terminated, with the exact key order
+below. It contains no generation time or absolute path.
 
 ```text
 artifact_type                 "euhedral-training-run-package"
@@ -292,11 +292,11 @@ files                         array<object>
 omissions                     array<object>
 ```
 
-`producer` keys are `commit_sha` and `dirty_working_tree`. Required-scenario objects use the Phase
-2 canonical field order: `scenario_id`, `environment_id`, `source_count`,
+`producer` keys are `commit_sha` and `dirty_working_tree`. Required-scenario objects use the Phase 2
+canonical field order: `scenario_id`, `environment_id`, `source_count`,
 `available_physical_core_count`, `source_ratio_numerator`, and `source_ratio_denominator`.
-`winning_policy_ids` contains at most the first ten eligible policies in published rank order; it
-is empty when no merge is available.
+`winning_policy_ids` contains at most the first ten eligible policies in published rank order; it is
+empty when no merge is available.
 
 File entries are sorted by Unicode code-unit order of `/`-separated package-relative path:
 
@@ -366,10 +366,10 @@ For a file whose source run IDs are nonempty, origin is:
 Files without experimental source runs use `NOT_APPLICABLE`. Do not infer origin from
 `EvidenceSource.INITIAL`.
 
-CSV `schema_version` is the single exact integer in the first column of all data rows and must
-agree with the header; empty data CSVs still have the schema known by contract. Markdown, property
-files, binary parameters, and completion markers use `null`. `row_count` is the count of logical
-data records excluding a CSV header. It is `null` for non-CSV files and completion markers.
+CSV `schema_version` is the single exact integer in the first column of all data rows and must agree
+with the header; empty data CSVs still have the schema known by contract. Markdown, property files,
+binary parameters, and completion markers use `null`. `row_count` is the count of logical data
+records excluding a CSV header. It is `null` for non-CSV files and completion markers.
 
 Omissions are sorted by `semantic_group`:
 
@@ -380,8 +380,8 @@ required_for_complete_run      boolean
 ```
 
 Stable reasons are `NOT_YET_CALIBRATED`, `NOT_YET_TRAINED`,
-`NO_NORMAL_ITERATION_SCHEDULE_AT_CHECKPOINT`, and `MODEL_REJECTED_BEFORE_SCHEDULING`.
-A complete package has an empty omissions array.
+`NO_NORMAL_ITERATION_SCHEDULE_AT_CHECKPOINT`, and `MODEL_REJECTED_BEFORE_SCHEDULING`. A complete
+package has an empty omissions array.
 
 `PackageManifestCodec` must reject duplicate/unknown/missing keys, unknown enums or versions,
 noncanonical relative paths, unsorted arrays, duplicate files or run IDs, non-lowercase hashes,
@@ -390,32 +390,32 @@ list. Encoding a decoded canonical manifest must reproduce the original bytes.
 
 ## File-to-manifest mapping
 
-| Package files | Semantic type | Producing stage | Source run IDs |
-| --- | --- | --- | --- |
-| `README.md` | `PACKAGE_README` | `PACKAGE` | all checkpoint evidence |
-| six top-level copied merge CSVs | `MERGE_DATASET` | `MERGE` | all evidence in latest merge |
-| `policy-scenario-measurements.csv` | `VECTOR_WITH_MEASUREMENTS_DATASET` | `PACKAGE` | latest-merge evidence |
-| three files under `vectors/` | `VECTOR_ONLY_DATASET` | source phase or `PACKAGE` | merge or selected-schedule evidence |
-| `reports/*.md` | `HUMAN_READABLE_REPORT` | `PACKAGE` | latest-merge evidence |
-| `model/model-metadata.json` | `MODEL_METADATA` | `LEARNING` | evidence through the merge used to train that model |
-| model CSVs | `MODEL_EVALUATION_DATASET` | `LEARNING` | same as model metadata |
-| model `.params` | `MODEL_MEMBER_PARAMETERS` | `LEARNING` | same as model metadata |
-| scheduler CSVs | `SCHEDULE_DATASET` | `SCHEDULING` | evidence available before that schedule iteration |
-| scheduler `COMPLETE` | `COMPLETION_MARKER` | `SCHEDULING` | same as scheduler CSVs |
-| checkpoint `state.csv` | `CHECKPOINT_STATE` | `CHECKPOINT` | all checkpoint evidence |
-| other checkpoint CSVs | `CHECKPOINT_SIDECAR` | `CHECKPOINT` | all checkpoint evidence |
-| checkpoint `COMPLETE` | `COMPLETION_MARKER` | `CHECKPOINT` | all checkpoint evidence |
-| package inputs | `PACKAGE_REPRODUCTION_INPUT` | `PACKAGE` | none |
-| raw index | `RAW_DATA_INDEX` | `PACKAGE` | all checkpoint evidence |
-| bundle files | matching raw semantic type | `BENCHMARK_EVIDENCE` | that one run |
-| bundle `COMPLETE` | `COMPLETION_MARKER` | `BENCHMARK_EVIDENCE` | that one run |
+| Package files                      | Semantic type                      | Producing stage           | Source run IDs                                      |
+|------------------------------------|------------------------------------|---------------------------|-----------------------------------------------------|
+| `README.md`                        | `PACKAGE_README`                   | `PACKAGE`                 | all checkpoint evidence                             |
+| six top-level copied merge CSVs    | `MERGE_DATASET`                    | `MERGE`                   | all evidence in latest merge                        |
+| `policy-scenario-measurements.csv` | `VECTOR_WITH_MEASUREMENTS_DATASET` | `PACKAGE`                 | latest-merge evidence                               |
+| three files under `vectors/`       | `VECTOR_ONLY_DATASET`              | source phase or `PACKAGE` | merge or selected-schedule evidence                 |
+| `reports/*.md`                     | `HUMAN_READABLE_REPORT`            | `PACKAGE`                 | latest-merge evidence                               |
+| `model/model-metadata.json`        | `MODEL_METADATA`                   | `LEARNING`                | evidence through the merge used to train that model |
+| model CSVs                         | `MODEL_EVALUATION_DATASET`         | `LEARNING`                | same as model metadata                              |
+| model `.params`                    | `MODEL_MEMBER_PARAMETERS`          | `LEARNING`                | same as model metadata                              |
+| scheduler CSVs                     | `SCHEDULE_DATASET`                 | `SCHEDULING`              | evidence available before that schedule iteration   |
+| scheduler `COMPLETE`               | `COMPLETION_MARKER`                | `SCHEDULING`              | same as scheduler CSVs                              |
+| checkpoint `state.csv`             | `CHECKPOINT_STATE`                 | `CHECKPOINT`              | all checkpoint evidence                             |
+| other checkpoint CSVs              | `CHECKPOINT_SIDECAR`               | `CHECKPOINT`              | all checkpoint evidence                             |
+| checkpoint `COMPLETE`              | `COMPLETION_MARKER`                | `CHECKPOINT`              | all checkpoint evidence                             |
+| package inputs                     | `PACKAGE_REPRODUCTION_INPUT`       | `PACKAGE`                 | none                                                |
+| raw index                          | `RAW_DATA_INDEX`                   | `PACKAGE`                 | all checkpoint evidence                             |
+| bundle files                       | matching raw semantic type         | `BENCHMARK_EVIDENCE`      | that one run                                        |
+| bundle `COMPLETE`                  | `COMPLETION_MARKER`                | `BENCHMARK_EVIDENCE`      | that one run                                        |
 
 Model source run IDs are determined from the six-digit model iteration in its validated
 `models/model-NNNNNN` source path. Model iteration `i` was trained from merge `i - 1`; include
-checkpoint evidence whose bundle descriptor `closedLoopIteration < i`. Reject a model path that
-does not match this identity. Schedule source run IDs likewise have
-`closedLoopIteration < schedule.iteration`. These rules prevent the final post-benchmark merge
-from being falsely claimed as model training input.
+checkpoint evidence whose bundle descriptor `closedLoopIteration < i`. Reject a model path that does
+not match this identity. Schedule source run IDs likewise have
+`closedLoopIteration < schedule.iteration`. These rules prevent the final post-benchmark merge from
+being falsely claimed as model training input.
 
 ## README and reports
 
@@ -466,12 +466,12 @@ shell-evaluated while generating it:
 "$EUHEDRAL_TRAINER" package-run --workspace ../.. --inputs provenance/package-inputs.properties --output-root "$OUTPUT_ROOT"
 ```
 
-It explains that the command is run from the package directory, `EUHEDRAL_TRAINER` names the
-built launcher or `java -jar` wrapper, and `OUTPUT_ROOT` must be a writable destination. The
-properties file contains the original package ID and revision, so a reproduced package has
-byte-identical payload and manifest bytes. The source workspace and exact checkpoint must remain
-available. Phase 5 may add a command that reproduces/resumes the physical training run, but it must
-not change this package-only command's meaning.
+It explains that the command is run from the package directory, `EUHEDRAL_TRAINER` names the built
+launcher or `java -jar` wrapper, and `OUTPUT_ROOT` must be a writable destination. The properties
+file contains the original package ID and revision, so a reproduced package has byte-identical
+payload and manifest bytes. The source workspace and exact checkpoint must remain available. Phase 5
+may add a command that reproduces/resumes the physical training run, but it must not change this
+package-only command's meaning.
 
 ### `reports/robust-ranking.md`
 
@@ -515,8 +515,8 @@ ordered_frames=<true|false>
 required_scenario=<canonical scenario, repeated in natural order>
 ```
 
-The input record belongs to `io.euhedral_execution.training.packaging.config`; its codec belongs
-to `io.euhedral_execution.training.packaging.io`:
+The input record belongs to `io.euhedral_execution.training.packaging.config`; its codec belongs to
+`io.euhedral_execution.training.packaging.io`:
 
 ```java
 public record TrainingRunPackageInputs(
@@ -581,9 +581,9 @@ public static LoadedCheckpoint loadRevision(
         Path workspace, int revision) throws IOException;
 ```
 
-Add that method to `CheckpointSnapshotCodec`. It validates the complete contiguous chain through
-the requested revision, uses the existing strict snapshot parser and artifact fingerprint checks,
-and accepts a historical revision even when later immutable revisions exist. It never accepts a
+Add that method to `CheckpointSnapshotCodec`. It validates the complete contiguous chain through the
+requested revision, uses the existing strict snapshot parser and artifact fingerprint checks, and
+accepts a historical revision even when later immutable revisions exist. It never accepts a
 temporary or marker-less snapshot.
 
 Also add:
@@ -594,10 +594,10 @@ public static ClosedLoopCheckpoint readDetachedForAudit(
 ```
 
 This audit-only method validates exact inventory, empty `COMPLETE`, sidecar hashes, CSV schemas,
-sorting, checkpoint record invariants, and lexical workspace-relative reference paths, but does
-not dereference them. It exists because the byte-exact packaged checkpoint retains its original
-workspace paths while package artifacts have intentionally clearer paths. Resume code must
-continue to use `loadLatest`/`loadRevision`, never the detached reader.
+sorting, checkpoint record invariants, and lexical workspace-relative reference paths, but does not
+dereference them. It exists because the byte-exact packaged checkpoint retains its original
+workspace paths while package artifacts have intentionally clearer paths. Resume code must continue
+to use `loadLatest`/`loadRevision`, never the detached reader.
 
 The package validator maps detached references as follows and recomputes every original artifact
 fingerprint:
@@ -614,8 +614,8 @@ iterations/iteration-NNNNNN/schedule     -> scheduler/
 A virtual directory fingerprint feeds the existing directory-artifact framing with the original
 relative filenames, exact file sizes, and exact file hashes; it does not create files or read them
 whole into memory. Any other detached artifact path is rejected. This proves that the clearer
-package layout contains the exact checkpoint-referenced bytes without duplicating the workspace
-tree or rewriting checkpoint evidence.
+package layout contains the exact checkpoint-referenced bytes without duplicating the workspace tree
+or rewriting checkpoint evidence.
 
 Internal records/classes, with package-private visibility unless tests require otherwise:
 
@@ -630,14 +630,14 @@ PackageReportWriter       README and Markdown reports
 CanonicalFileSupport      streaming copy, SHA-256, force, row count, path checks
 ```
 
-Public package configuration belongs to `training.packaging.config`, the published package result
-to `training.packaging.data`, public enums to `training.packaging.enums`, and the public inputs
-codec to `training.packaging.io`. Package-private publication/validation helpers remain together
-in `training.packaging` so the cleanup does not widen their visibility.
+Public package configuration belongs to `training.packaging.config`, the published package result to
+`training.packaging.data`, public enums to `training.packaging.enums`, and the public inputs codec
+to `training.packaging.io`. Package-private publication/validation helpers remain together in
+`training.packaging` so the cleanup does not widen their visibility.
 
 Reuse `CanonicalCsv.read/row`, `ObservationBundleReader.stream`,
-`ScenarioModelMetadataCodec.read`, `scheduling.io.ScheduleCodec.read`, and checkpoint validation.
-Do not add Jackson, Gson, Commons CSV, an archive library, or a general serialization framework.
+`ScenarioModelMetadataCodec.read`, `scheduling.io.ScheduleCodec.read`, and checkpoint validation. Do
+not add Jackson, Gson, Commons CSV, an archive library, or a general serialization framework.
 
 ### `ClosedLoopRunner` integration
 
@@ -672,9 +672,9 @@ command is not the Phase 5 closed-loop configuration CLI.
 
 ## Atomic filesystem protocol
 
-Resolve workspace, output root, checkpoint, and target to absolute normalized paths. Reject
-symlinks at every explicitly traversed source or destination component. Package-relative paths
-must use `/`, must not be absolute, empty, `.`, `..`, or contain backslashes.
+Resolve workspace, output root, checkpoint, and target to absolute normalized paths. Reject symlinks
+at every explicitly traversed source or destination component. Package-relative paths must use `/`,
+must not be absolute, empty, `.`, `..`, or contain backslashes.
 
 For a new target:
 
@@ -694,7 +694,7 @@ For a new target:
 11. build manifest entries by streaming staged files, then write `manifest.json` last;
 12. force every regular file through `FileChannel.force(true)`;
 13. run `TrainingRunPackageValidator.validate` on the staged directory and compare its returned
-   manifest domain object with the intended object; and
+    manifest domain object with the intended object; and
 14. move the staging directory to the nonexistent target with `ATOMIC_MOVE`.
 
 There is no non-atomic fallback. `AtomicMoveNotSupportedException` is a packaging failure.
@@ -705,8 +705,8 @@ temporary sibling only when all of these are true:
 
 - its name matches the exact target-specific temporary prefix;
 - it is a non-symlink directory;
-- its ownership marker is a non-symlink regular file whose entire content is the expected package
-  ID plus LF; and
+- its ownership marker is a non-symlink regular file whose entire content is the expected package ID
+  plus LF; and
 - it is not the current invocation's directory.
 
 Otherwise leave it untouched and report the collision. The final target never contains the staging
@@ -722,9 +722,9 @@ The validator:
 3. confirms the actual regular-file inventory equals `files + manifest.json`;
 4. streams SHA-256 for every entry and recomputes canonical CSV row counts/schema versions;
 5. confirms every `COMPLETE` entry is empty;
-6. reads the packaged checkpoint through `readDetachedForAudit`, confirms
-   revision/stage/run/config identity, maps every detached reference by the exact rules above, and
-   recomputes its original directory/file fingerprint;
+6. reads the packaged checkpoint through `readDetachedForAudit`, confirms revision/stage/run/config
+   identity, maps every detached reference by the exact rules above, and recomputes its original
+   directory/file fingerprint;
 7. streams every raw bundle, validates its directory fingerprint, index row, identity, counts,
    provenance, and source-run mapping;
 8. strictly joins the packaged merge files and checks both derived vector datasets;
@@ -747,8 +747,8 @@ The validator:
 - Preserve Phase 1 row order and numeric strings. Do not parse/reformat doubles for copied/joined
   columns.
 - Use exact raw-bit vector strings and exact enum names.
-- Do not serialize wall-clock packaging time, file timestamps, absolute paths, UUIDs, OS
-  separators, locale-formatted values, environment variables, or Java implementation details.
+- Do not serialize wall-clock packaging time, file timestamps, absolute paths, UUIDs, OS separators,
+  locale-formatted values, environment variables, or Java implementation details.
 - UUIDs are temporary-directory names only and disappear before publication.
 - Publishing the same checkpoint and inputs to two empty output roots must produce identical bytes
   and identical recursive file checksums.
@@ -757,11 +757,11 @@ The validator:
 
 Packaging is offline, single-owner filesystem work under the workspace lifecycle lock. Mutable
 builders, digest buffers, CSV rows, and report accumulators are thread-confined. Atomic directory
-rename is the publication boundary. No VarHandle, opaque/acquire/release access, CAS, padded
-atomic, executor, parallel stream, or pinned thread belongs in this path.
+rename is the publication boundary. No VarHandle, opaque/acquire/release access, CAS, padded atomic,
+executor, parallel stream, or pinned thread belongs in this path.
 
-The existing engine pause/reset publication boundary remains unchanged. Packaging runs only after
-a checkpoint-backed return and never while benchmark work is flowing.
+The existing engine pause/reset publication boundary remains unchanged. Packaging runs only after a
+checkpoint-backed return and never while benchmark work is flowing.
 
 ### Memory pollution
 
@@ -786,8 +786,8 @@ Checksums use SHA-256 over exact bytes.
 
 - Package schema 1 accepts only Phase 1, model, schedule, and checkpoint schema 1 artifacts.
 - Existing Phase 1-3 artifact bytes and paths inside their source directories do not change.
-- `ArtifactFingerprint` is mechanically changed to streaming I/O but must produce identical
-  hashes for all existing files/directories.
+- `ArtifactFingerprint` is mechanically changed to streaming I/O but must produce identical hashes
+  for all existing files/directories.
 - `ClosedLoopCheckpoint` schema and its seven sidecars do not change.
 - `ClosedLoopResult` gains one field; update every constructor/test call.
 - Pooled-v0 commands and current stale training documentation remain Phase 5/7 work except for
@@ -799,32 +799,33 @@ Checksums use SHA-256 over exact bytes.
 Implement in this dependency order.
 
 1. `training/checkpoint/ArtifactFingerprint.java`
-   - stream file digests with a fixed 128 KiB buffer;
-   - retain exact directory fingerprint framing and sorted relative paths.
+    - stream file digests with a fixed 128 KiB buffer;
+    - retain exact directory fingerprint framing and sorted relative paths.
 2. `training/checkpoint/CheckpointSnapshotCodec.java`
-   - add strict `loadRevision` and `readDetachedForAudit`;
-   - share chain enumeration/validation with `loadLatest`.
+    - add strict `loadRevision` and `readDetachedForAudit`;
+    - share chain enumeration/validation with `loadLatest`.
 3. New `training/packaging/config`, `training/packaging/data`, and
    `training/packaging/enums` public types, with package-private manifest records retained under
    `training/packaging`
-   - inputs and request under `config`;
-   - the published package result under `data`;
-   - status, semantic type, producing stage, and origin under `enums`;
-   - manifest entry and omission remain package-private under `training/packaging`, while the
-     public collision exception remains beside the operational packager.
+    - inputs and request under `config`;
+    - the published package result under `data`;
+    - status, semantic type, producing stage, and origin under `enums`;
+    - manifest entry and omission remain package-private under `training/packaging`, while the
+      public collision exception remains beside the operational packager.
 4. New `training/packaging/io/TrainingRunPackageInputsCodec`
-   - implement the exact property schema and canonical round trip.
+    - implement the exact property schema and canonical round trip.
 5. New `PackageManifestCodec`
-   - implement strict schema-1 JSON and canonical round trip without a new dependency.
+    - implement strict schema-1 JSON and canonical round trip without a new dependency.
 6. New `CanonicalFileSupport`
-   - path validation, streaming SHA-256/copy, force, CSV metadata/counting, safe owned-temp cleanup.
+    - path validation, streaming SHA-256/copy, force, CSV metadata/counting, safe owned-temp
+      cleanup.
 7. New `PackageSourceSet`
-   - load checkpoint, resolve/fingerprint merge/model/schedule/evidence, derive source-run mappings,
-     stage requirements, status, and omissions.
+    - load checkpoint, resolve/fingerprint merge/model/schedule/evidence, derive source-run
+      mappings, stage requirements, status, and omissions.
 8. New `PackageDatasetWriter`
-   - write the exact joined measurement dataset, scheduled vector dataset, and raw index.
+    - write the exact joined measurement dataset, scheduled vector dataset, and raw index.
 9. New `PackageReportWriter`
-   - write exact README and both deterministic Markdown reports.
+    - write exact README and both deterministic Markdown reports.
 10. New `TrainingRunPackageValidator`
     - implement full inventory, schema, checksum, provenance, artifact, and lifecycle validation.
 11. New `TrainingRunPackager`
@@ -862,44 +863,45 @@ load DJL in packaging tests.
 Required fixtures/assertions:
 
 1. **Complete golden package**
-   - two required scenarios, at least three eligible and two incomplete policies;
-   - one native and one imported evidence bundle;
-   - strong, weak, reference, and failed calibration rows;
-   - accepted model, normal schedule, and `RUN_COMPLETE` checkpoint;
-   - assert exact inventory, manifest/report/property golden bytes, origin classification, top-ten
-     winners, row counts, checksums, model input run IDs, and zero omissions.
+    - two required scenarios, at least three eligible and two incomplete policies;
+    - one native and one imported evidence bundle;
+    - strong, weak, reference, and failed calibration rows;
+    - accepted model, normal schedule, and `RUN_COMPLETE` checkpoint;
+    - assert exact inventory, manifest/report/property golden bytes, origin classification, top-ten
+      winners, row counts, checksums, model input run IDs, and zero omissions.
 2. **Partial stage matrix**
-   - `BOOTSTRAP_PENDING`, first `READY_TO_TRAIN`, later `READY_TO_TRAIN`, `MODEL_READY`,
-     `MODEL_REJECTED`, `SCHEDULE_READY`, `BENCHMARKING`, and `READY_TO_MERGE`;
-   - assert status, deterministic package ID, required/present groups, exact omissions, and that
-     only complete checkpoint-indexed evidence is copied.
+    - `BOOTSTRAP_PENDING`, first `READY_TO_TRAIN`, later `READY_TO_TRAIN`, `MODEL_READY`,
+      `MODEL_REJECTED`, `SCHEDULE_READY`, `BENCHMARKING`, and `READY_TO_MERGE`;
+    - assert status, deterministic package ID, required/present groups, exact omissions, and that
+      only complete checkpoint-indexed evidence is copied.
 3. **Naming clarity**
-   - assert vector-only files live only under `vectors/` and have `.vectors.csv`;
-   - assert the joined file is exactly `policy-scenario-measurements.csv`;
-   - assert reports are `.md` under `reports/`.
+    - assert vector-only files live only under `vectors/` and have `.vectors.csv`;
+    - assert the joined file is exactly `policy-scenario-measurements.csv`;
+    - assert reports are `.md` under `reports/`.
 4. **Join rejection**
-   - missing/conflicting vector, duplicate policy, unknown scenario row, changed rank order,
-     duplicate schedule position, and schedule/evidence mismatch all fail before target publication.
+    - missing/conflicting vector, duplicate policy, unknown scenario row, changed rank order,
+      duplicate schedule position, and schedule/evidence mismatch all fail before target
+      publication.
 5. **Manifest rejection**
-   - unknown/missing/duplicate/out-of-order key, duplicate/unsorted path or run ID, uppercase hash,
-     traversal/backslash path, wrong schema, row count, checksum, status, origin, or omission.
+    - unknown/missing/duplicate/out-of-order key, duplicate/unsorted path or run ID, uppercase hash,
+      traversal/backslash path, wrong schema, row count, checksum, status, origin, or omission.
 6. **Artifact tampering**
-   - mutate every artifact family, add an unexpected file, replace a file with symlink, make a
-     `COMPLETE` marker nonempty, corrupt member bytes, and corrupt raw bundle identity; validation
-     fails with the target unchanged.
+    - mutate every artifact family, add an unexpected file, replace a file with symlink, make a
+      `COMPLETE` marker nonempty, corrupt member bytes, and corrupt raw bundle identity; validation
+      fails with the target unchanged.
 7. **Atomicity and cleanup**
-   - inject failure after source validation, during copy, before manifest, during staged validation,
-     and atomic move;
-   - source workspace and existing target hashes remain unchanged;
-   - only an owned exact-prefix staging directory is removed;
-   - unsupported atomic move is reported without fallback.
+    - inject failure after source validation, during copy, before manifest, during staged
+      validation, and atomic move;
+    - source workspace and existing target hashes remain unchanged;
+    - only an owned exact-prefix staging directory is removed;
+    - unsupported atomic move is reported without fallback.
 8. **Collision**
-   - identical existing package returns idempotently;
-   - same target with different revision/checkpoint/input/manifest fails and is byte-unchanged.
+    - identical existing package returns idempotently;
+    - same target with different revision/checkpoint/input/manifest fails and is byte-unchanged.
 9. **Deterministic bytes**
-   - shuffled source directory enumeration and two distinct empty output roots produce recursively
-     identical file bytes;
-   - temporary UUID and output-root path do not appear in any payload.
+    - shuffled source directory enumeration and two distinct empty output roots produce recursively
+      identical file bytes;
+    - temporary UUID and output-root path do not appear in any payload.
 10. **Streaming/memory boundary**
     - a multi-buffer file and directory hash equal the pre-change hash fixture;
     - an observation bundle larger than the buffer is indexed through the streaming visitor;
@@ -925,8 +927,7 @@ Prompt 4B is complete only when:
 - every normal public runner return has a validated package path;
 - complete and every recoverable/terminal partial checkpoint stage obey the exact status and
   omission matrix;
-- the package contains the exact available artifact groups and no stale/temporary/historical
-  group;
+- the package contains the exact available artifact groups and no stale/temporary/historical group;
 - manifest schema, semantic types, schemas, row counts, hashes, source run IDs, provenance,
   completion, winner IDs, and omissions validate from staged bytes;
 - vector-only, vector-with-measurements, machine-readable, and human-readable artifacts are
@@ -934,8 +935,8 @@ Prompt 4B is complete only when:
 - native versus imported evidence is determined from `EvidenceOrigin`, not filenames;
 - reports contain winners, required scenarios, coverage, calibration health, model status,
   provenance, guide, and exact package reproduction command;
-- package publication is forced, validated, atomic, collision-safe, idempotent for identical
-  input, and never overwrites;
+- package publication is forced, validated, atomic, collision-safe, idempotent for identical input,
+  and never overwrites;
 - all injected failures leave source and target untouched and remove only owned staging data;
 - same checkpoint plus inputs produces byte-identical packages in distinct roots;
 - hashing, copying, raw observation validation, and model-member validation are streaming;
@@ -996,10 +997,10 @@ or deterministic bytes requires another blueprint reasoning pass.
 
 ### Evidence and workload
 
-The original provisional implementation choice was `gpt-5.5 / low`. Phase 3 provides direct
-contrary evidence: its first pass implemented only the optimizer/scheduler foundations and omitted
-the checkpoint, native benchmark, closed-loop state machine, and specified acceptance matrix.
-Later frontier-level remediation was required before conformance.
+The original provisional implementation choice was `gpt-5.5 / low`. Phase 3 provides direct contrary
+evidence: its first pass implemented only the optimizer/scheduler foundations and omitted the
+checkpoint, native benchmark, closed-loop state machine, and specified acceptance matrix. Later
+frontier-level remediation was required before conformance.
 
 Phase 4 has a similarly coupled systems surface:
 
@@ -1013,15 +1014,15 @@ Phase 4 has a similarly coupled systems surface:
   and
 - the acceptance matrix requires cross-artifact tamper and failure-injection reasoning.
 
-This is not a mechanical translation whose complexity was eliminated merely by specifying types.
-The implementation agent must hold the cross-file invariants while repairing compile/test failures.
+This is not a mechanical translation whose complexity was eliminated merely by specifying types. The
+implementation agent must hold the cross-file invariants while repairing compile/test failures.
 
 ### Selected implementation and verification capability
 
 Prompt 4B must use **`gpt-5.6-sol` at `high` reasoning effort**. Do not dispatch Phase 4
-implementation to `gpt-5.5 / low`, and do not lower the effort because the blueprint is long.
-Prompt 4C should use **`gpt-5.6-sol` at `high`** or a demonstrably equivalent coding/verification
-model with comparable long-context systems reasoning. Prompt 4D remains an independent
+implementation to `gpt-5.5 / low`, and do not lower the effort because the blueprint is long. Prompt
+4C should use **`gpt-5.6-sol` at `high`** or a demonstrably equivalent coding/verification model
+with comparable long-context systems reasoning. Prompt 4D remains an independent
 `gpt-5.6-terra / high` conformance audit.
 
 To keep the implementation context tractable, Prompt 4B should read:
@@ -1047,8 +1048,8 @@ Implemented on branch `agent/phase4b-final-packaging`.
 
 ### Changed production and documentation files
 
-- `training/checkpoint/ArtifactFingerprint.java` now streams exact SHA-256 input through a
-  reusable 128 KiB buffer without changing directory-artifact framing.
+- `training/checkpoint/ArtifactFingerprint.java` now streams exact SHA-256 input through a reusable
+  128 KiB buffer without changing directory-artifact framing.
 - `training/checkpoint/CheckpointSnapshotCodec.java` now loads an exact historical revision and
   supports strict detached audit reads without dereferencing workspace artifacts.
 - New `training/packaging/config`, `training/packaging/data`, `training/packaging/enums`, and
@@ -1068,13 +1069,13 @@ Implemented on branch `agent/phase4b-final-packaging`.
 ### Test additions and evidence
 
 - Added the named Phase 4 test classes and extended `ClosedLoopRunnerTest` with a real checkpoint,
-  merge artifact, raw evidence, partial package publication, independent validation,
-  idempotent collision handling, unexpected-file tamper rejection, naming assertions, and
-  byte-identical reproduction into two distinct output roots.
+  merge artifact, raw evidence, partial package publication, independent validation, idempotent
+  collision handling, unexpected-file tamper rejection, naming assertions, and byte-identical
+  reproduction into two distinct output roots.
 - Extended checkpoint tests for historical revision loading and detached reads.
-- The large-file hash test crosses the 128 KiB streaming boundary. Package generation and
-  validation count raw observations through the streaming visitor and streaming CSV metadata
-  scanner; no DJL model or parameter tensor is instantiated by packaging.
+- The large-file hash test crosses the 128 KiB streaming boundary. Package generation and validation
+  count raw observations through the streaming visitor and streaming CSV metadata scanner; no DJL
+  model or parameter tensor is instantiated by packaging.
 
 Commands run:
 
@@ -1114,16 +1115,16 @@ The one skipped test is the pre-existing opt-in
 ### Lifecycle, failure, and workspace notes
 
 The exercised real package is a later `READY_TO_TRAIN` recoverable partial with merge and raw
-evidence present and model/schedule omissions. Production source selection and validator rules
-cover all checkpoint stages, including terminal model rejection and final schedule derivation.
-Staged validation failure, copy/generation failure, and atomic-move failure share one owned
-temporary-directory cleanup boundary; conflicting/unowned staging directories and final targets
-are never deleted. The focused test explicitly proves tampered inventory rejection, source
-immutability through deterministic reproduction, and idempotent identical-target behavior.
+evidence present and model/schedule omissions. Production source selection and validator rules cover
+all checkpoint stages, including terminal model rejection and final schedule derivation. Staged
+validation failure, copy/generation failure, and atomic-move failure share one owned
+temporary-directory cleanup boundary; conflicting/unowned staging directories and final targets are
+never deleted. The focused test explicitly proves tampered inventory rejection, source immutability
+through deterministic reproduction, and idempotent identical-target behavior.
 
 The pre-existing staged and untracked files under `euhedral-training/input`,
-`euhedral-training/output`, and the unrelated untracked core utility test directory were not read
-as package inputs, edited, removed, or included in the Phase 4 commit.
+`euhedral-training/output`, and the unrelated untracked core utility test directory were not read as
+package inputs, edited, removed, or included in the Phase 4 commit.
 
 No package identity, lifecycle, manifest, provenance, artifact-selection, atomicity, collision, or
 deterministic-byte contract was intentionally changed from the approved blueprint.
@@ -1135,10 +1136,10 @@ The 2026-07-29 cleanup changed organization and terminology only:
 - public package inputs and requests live under `training.packaging.config`, the published result
   under `training.packaging.data`, public enums under `training.packaging.enums`, and the public
   inputs codec under `training.packaging.io`;
-- package-private operational collaborators, including `PackageReportWriter`, remain together
-  under `training.packaging` so no visibility or ownership contract changed;
-- the shared CSV helper is `training.data.io.CanonicalCsv`, and scheduling/checkpoint references
-  use their `data`, `enums`, and `io` packages from the Phase 3 cleanup; and
+- package-private operational collaborators, including `PackageReportWriter`, remain together under
+  `training.packaging` so no visibility or ownership contract changed;
+- the shared CSV helper is `training.data.io.CanonicalCsv`, and scheduling/checkpoint references use
+  their `data`, `enums`, and `io` packages from the Phase 3 cleanup; and
 - `ProducingStage` uses domain values `MERGE`, `LEARNING`, `SCHEDULING`, and `CHECKPOINT` in place
   of phase-prefixed values.
 
@@ -1183,12 +1184,12 @@ rg -n "input/merger|output/results|latest-model|latest-training-data|state\\.pro
   no matches
 ```
 
-The skipped test is the existing opt-in `ScenarioOrdinalNetworkIntegrationTest`; it is outside
-the packaging surface and requires a DJL runtime. The focused package tests cover schema and
-naming, streamed checksums and memory-sensitive paths, deterministic output, collision handling,
-partial-run lifecycle classification, report contents, cleanup, and tamper rejection. The
-pre-existing staged/untracked training data, outputs, and unrelated core test directory remained
-untouched and excluded from this record's commit.
+The skipped test is the existing opt-in `ScenarioOrdinalNetworkIntegrationTest`; it is outside the
+packaging surface and requires a DJL runtime. The focused package tests cover schema and naming,
+streamed checksums and memory-sensitive paths, deterministic output, collision handling, partial-run
+lifecycle classification, report contents, cleanup, and tamper rejection. The pre-existing
+staged/untracked training data, outputs, and unrelated core test directory remained untouched and
+excluded from this record's commit.
 
 ### Repackage compatibility addendum (2026-07-29)
 
@@ -1196,6 +1197,6 @@ The Phase 4 package names and paths remain valid after the Phase 2-and-later rep
 `TrainingRunPackager`, `TrainingRunPackageValidator`, `PackageManifestCodec`,
 `PackageDatasetWriter`, and `PackageReportWriter` remain in
 `io.euhedral_execution.training.packaging`; public inputs/request types, result types, enums, and
-the inputs codec remain respectively in `packaging.config`, `packaging.data`, `packaging.enums`,
-and `packaging.io`. The listed packaging tests remain under the matching test package. No package
+the inputs codec remain respectively in `packaging.config`, `packaging.data`, `packaging.enums`, and
+`packaging.io`. The listed packaging tests remain under the matching test package. No package
 layout, manifest, lifecycle, checksum, or publication contract changed.

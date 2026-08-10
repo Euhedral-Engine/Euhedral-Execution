@@ -4,9 +4,9 @@ This blueprint is the implementation contract for Prompt 7B. It was prepared fro
 Phase 1-6 blueprints, completion records, conformance reports, the full
 `main...agent/phase6d-verification-audit` file inventory, and the live source-reference graph on
 2026-07-29. Prompt 7B performs only the deletions, extractions, documentation corrections, fixture
-changes, and validation listed here. It must not change a statistical definition, persisted
-schema, scheduler decision, checkpoint transition, package layout, benchmark lifecycle, or runtime
-memory contract.
+changes, and validation listed here. It must not change a statistical definition, persisted schema,
+scheduler decision, checkpoint transition, package layout, benchmark lifecycle, or runtime memory
+contract.
 
 ## Scope
 
@@ -21,15 +21,13 @@ Phase 7:
 5. removes the trainer's now-unused direct t-digest dependency;
 6. removes obsolete importer, pooled-command, system-property, and old-model documentation;
 7. proves that no temporary workflow or generated build output entered the branch;
-8. reruns the deterministic mathematical, lifecycle, package, CLI, and DJL validation surfaces;
-   and
+8. reruns the deterministic mathematical, lifecycle, package, CLI, and DJL validation surfaces; and
 9. records a concise final handoff with the complete result-package evidence.
 
 ### Explicit non-goals
 
-- Do not change anchor selection, calibration thresholds, weighted-median arithmetic,
-  hierarchical aggregation, type-7 quantiles, midrank quality, robust comparison, or coverage
-  eligibility.
+- Do not change anchor selection, calibration thresholds, weighted-median arithmetic, hierarchical
+  aggregation, type-7 quantiles, midrank quality, robust comparison, or coverage eligibility.
 - Do not change scenario features, ordinal targets, model architecture, grouped splits, LOSO/LOEO
   evaluation, acceptance thresholds, model metadata, or member serialization.
 - Do not change candidate-budget allocation, CMA-ES, score-band selection, Sobol advancement,
@@ -60,9 +58,9 @@ Implementation must not inspect the real current-workspace trees to prove this. 
 `bootstrap-policies.vectors.csv` and `import-report.csv` files remain usable evidence after the
 importer source is deleted; no package or checkpoint embeds a dependency on the importer class.
 
-Before editing, Prompt 7B must run `git status --short`. The three currently visible untracked
-trees are user-owned. It must stage only paths enumerated by this blueprint and must not use a
-recursive deletion command against a workspace, input, output, data, target, or repository root.
+Before editing, Prompt 7B must run `git status --short`. The three currently visible untracked trees
+are user-owned. It must stage only paths enumerated by this blueprint and must not use a recursive
+deletion command against a workspace, input, output, data, target, or repository root.
 
 The branch lineage is:
 
@@ -182,12 +180,12 @@ euhedral-training/src/test/java/io/euhedral_execution/training/utils/PolicyRanki
 Retain:
 
 - `training.utils.CommonFunctions`, because the robust `SequenceFinder`,
-  `optimization.CmaEsOptimizer`, and deterministic scheduling fixtures use its bit-preserving
-  policy normalization;
+  `optimization.CmaEsOptimizer`, and deterministic scheduling fixtures use its bit-preserving policy
+  normalization;
 - `training.utils.BenchmarkFrameSink`, because the native v1 `BenchmarkRunner` owns it and its
   acquire/release counter is part of the settled benchmark memory contract;
-- all `training.learning.statistics.*` distribution records, which are scenario-conditioned
-  ordinal outputs and have no relationship to pooled `training.utils.Distribution`; and
+- all `training.learning.statistics.*` distribution records, which are scenario-conditioned ordinal
+  outputs and have no relationship to pooled `training.utils.Distribution`; and
 - Apache Commons Math, which remains required by the robust Sobol and optimizer paths.
 
 ### `DataMerger` symbol-level cleanup
@@ -229,14 +227,14 @@ record shapes during cleanup. Any concern about those settled Phase 1 semantics 
 
 ### Dependency cleanup
 
-Remove the direct `com.tdunning:t-digest` dependency from `euhedral-training/pom.xml`. Keep the
-root dependency-management property and entry because `euhedral-core` still uses t-digest in
+Remove the direct `com.tdunning:t-digest` dependency from `euhedral-training/pom.xml`. Keep the root
+dependency-management property and entry because `euhedral-core` still uses t-digest in
 `FlowDistribution`. Do not change the core dependency or root POM.
 
 ## Retained training diagnostics
 
-`training-info` is useful to the supported GPU workflow and is not itself a pooled data contract.
-Do not delete the command. Extract only the environment-reporting body from
+`training-info` is useful to the supported GPU workflow and is not itself a pooled data contract. Do
+not delete the command. Extract only the environment-reporting body from
 `PolicyOrdinalNetwork.printEnvironment()` into:
 
 ```text
@@ -287,8 +285,8 @@ Remove both `importCurrentWorkspace` methods, their flag/count parser, importer 
 two temporary removal-marker comments, `CommandServices.importWorkspace`, and the production
 implementation of that service method.
 
-The `training-info` command takes no additional arguments. Reject extras before invoking the
-service with:
+The `training-info` command takes no additional arguments. Reject extras before invoking the service
+with:
 
 ```text
 training-info does not accept arguments
@@ -298,8 +296,8 @@ Rewrite usage to contain only the three supported commands. Do not retain a `Leg
 heading or mention pooled files, `-Dcycle.*` configuration beyond the existing statement that
 `closed-loop` does not read it, current-workspace import, or old standalone benchmarking.
 
-Unknown removed commands must continue through the existing `Unknown command: <name>` failure.
-Do not silently alias them to the robust closed loop.
+Unknown removed commands must continue through the existing `Unknown command: <name>` failure. Do
+not silently alias them to the robust closed loop.
 
 ## Test-fixture cleanup
 
@@ -326,8 +324,8 @@ Update `RecordingServices.totalCalls()` to include the diagnostic count and no i
 
 ### `AuditFixtures`
 
-Phase 6 intentionally used the importer to prove its final acceptance surface. After source
-removal, the end-to-end robust audit must start at the permanent Phase 3 bootstrap contract.
+Phase 6 intentionally used the importer to prove its final acceptance surface. After source removal,
+the end-to-end robust audit must start at the permanent Phase 3 bootstrap contract.
 
 Remove:
 
@@ -362,15 +360,15 @@ validated bootstrap path. This preserves the frozen configuration hash and the P
 oracle. If the fingerprint changes, treat it as a defect in the fixture translation rather than
 updating golden package checksums.
 
-Do not replace the importer test with a new migration test. Importer acceptance remains recorded
-in the Phase 5/6 completion and conformance artifacts.
+Do not replace the importer test with a new migration test. Importer acceptance remains recorded in
+the Phase 5/6 completion and conformance artifacts.
 
 ### Unchanged audit surface
 
 `EndToEndTest`, `PackageLifecycleAuditTest`, the golden package resources, and production
 package/checkpoint code should require no semantic edit. Imports or record accessor compile repair
-caused solely by the `Experiment` field removal is permitted, but current reference searches show
-no external use of those two fields.
+caused solely by the `Experiment` field removal is permitted, but current reference searches show no
+external use of those two fields.
 
 ## Documentation cleanup
 
@@ -387,8 +385,8 @@ Make these exact changes:
    native exact-scenario evidence before calibration or learning.
 5. Retain all typed configuration, robust ranking, coverage, resume, cross-environment, packaging,
    and reproduction documentation.
-6. Add one short `training-info` example that says it reports DJL/PyTorch/CUDA device visibility
-   and does not train or benchmark.
+6. Add one short `training-info` example that says it reports DJL/PyTorch/CUDA device visibility and
+   does not train or benchmark.
 7. Delete the complete `Legacy compatibility` section.
 8. Delete the complete `Removing the temporary importer` section and its marker/search recipe.
 
@@ -403,17 +401,16 @@ Replace the importer paragraph under `Evidence and identity` with the permanent 
 - bootstrap vectors carry no measurements and must be benchmarked natively;
 - no current-layout names, alternating rows, old model, or old checkpoint is a live input format.
 
-Retain the implemented flow, calibration, aggregation, complete/incomplete pools, lifecycle,
-memory ownership, and package descriptions. Do not add Phase 7 mechanics to this architecture
-document.
+Retain the implemented flow, calibration, aggregation, complete/incomplete pools, lifecycle, memory
+ownership, and package descriptions. Do not add Phase 7 mechanics to this architecture document.
 
 ### `euhedral-training/GPU_SETUP_UBUNTU.md`
 
 Keep the versioned Ubuntu/PyTorch/CUDA installation guidance and `training-info` diagnostic
 examples. Correct the supported operation:
 
-- update the repository toolchain line from stale Maven `3.9.6` to the `mise.toml` selection,
-  Maven `3.9.16`;
+- update the repository toolchain line from stale Maven `3.9.6` to the `mise.toml` selection, Maven
+  `3.9.16`;
 - identify `training-info` as the new `TrainingEnvironment` diagnostic, not an old model command;
 - remove the `train-vector-finder` command and the old `-Ddata`, `-Dmodel.output`, and
   `-Dtraining.batchSize` example;
@@ -428,8 +425,8 @@ examples. Correct the supported operation:
 Update
 `euhedral-training/src/main/scripts/euhedral-training-gpu`:
 
-- retain Python/PyTorch/CUDA validation, `PYTORCH_LIBRARY_PATH`, PyTorch version/flavor, `JAVA_OPTS`,
-  safe argument arrays, default DJL engine, and jar discovery;
+- retain Python/PyTorch/CUDA validation, `PYTORCH_LIBRARY_PATH`, PyTorch version/flavor,
+  `JAVA_OPTS`, safe argument arrays, default DJL engine, and jar discovery;
 - remove `TRAINING_DEVICE`, the injected `-Dtraining.device`, and the old
   `train-vector-finder`/trainer-property comment;
 - document that `training.device` belongs in the typed closed-loop configuration;
@@ -453,19 +450,19 @@ evidence. Removing those references would destroy the handoff trail.
 The prior naming passes already replaced phase-numbered shared helpers and organized configuration,
 data, enum, and I/O packages. Phase 7 settles the remaining ambiguous names as follows:
 
-| Current name | Disposition | Reason |
-| --- | --- | --- |
-| `merge-metadata` | delete alias | It actually invokes misspelled pooled quantile merging. |
-| `mergeQuentiles` | delete symbol | Misspelled, pooled, and caller-free after CLI cleanup. |
-| `mergeQuantiles` / `mergeVectors` | delete symbols | Names conceal legacy alternating-row semantics. |
-| `benchmark` | delete command | It is the pooled standalone benchmark, not native v1 scheduling. |
-| `train-vector-finder` | delete command | It selects the pooled model through system properties. |
-| `PolicyOrdinalNetwork` | delete class | Its name collides conceptually with scenario-conditioned v1. |
-| `training-info` | retain, re-own | The command is unambiguous once backed by `TrainingEnvironment`. |
-| `DataMerger` | retain | It is the established v1 facade used across the robust path. |
-| `BenchmarkRunner` / `SequenceFinder` | retain | They now exclusively own native-v1 and robust candidate APIs. |
-| `DataMergerV1Test` / `BenchmarkRunnerV1Test` | retain | `V1` denotes persisted schema version, not implementation phase. |
-| `AuditFixtures` / `EndToEndTest` | retain | Phase-number prefixes were already removed; names state behavior. |
+| Current name                                 | Disposition    | Reason                                                            |
+|----------------------------------------------|----------------|-------------------------------------------------------------------|
+| `merge-metadata`                             | delete alias   | It actually invokes misspelled pooled quantile merging.           |
+| `mergeQuentiles`                             | delete symbol  | Misspelled, pooled, and caller-free after CLI cleanup.            |
+| `mergeQuantiles` / `mergeVectors`            | delete symbols | Names conceal legacy alternating-row semantics.                   |
+| `benchmark`                                  | delete command | It is the pooled standalone benchmark, not native v1 scheduling.  |
+| `train-vector-finder`                        | delete command | It selects the pooled model through system properties.            |
+| `PolicyOrdinalNetwork`                       | delete class   | Its name collides conceptually with scenario-conditioned v1.      |
+| `training-info`                              | retain, re-own | The command is unambiguous once backed by `TrainingEnvironment`.  |
+| `DataMerger`                                 | retain         | It is the established v1 facade used across the robust path.      |
+| `BenchmarkRunner` / `SequenceFinder`         | retain         | They now exclusively own native-v1 and robust candidate APIs.     |
+| `DataMergerV1Test` / `BenchmarkRunnerV1Test` | retain         | `V1` denotes persisted schema version, not implementation phase.  |
+| `AuditFixtures` / `EndToEndTest`             | retain         | Phase-number prefixes were already removed; names state behavior. |
 
 No other production class, package, command, artifact, or report name requires a Phase 7 rename.
 
@@ -474,9 +471,9 @@ No other production class, package, command, artifact, or report name requires a
 ### Memory semantics
 
 The cleanup deletes the old pinned-thread P99 merger; it does not replace it. The v1 merger remains
-offline and single-owner. The new `TrainingEnvironment` only performs synchronous diagnostic
-reads. The direct-bootstrap audit helper is test-thread-confined and publishes one immutable file
-before parsing it.
+offline and single-owner. The new `TrainingEnvironment` only performs synchronous diagnostic reads.
+The direct-bootstrap audit helper is test-thread-confined and publishes one immutable file before
+parsing it.
 
 Do not edit `BenchmarkFrameSink`, VarHandles, atomics, queues, worker ownership, pause/reset
 barriers, or checkpoint/package atomic moves. No stronger or weaker memory access is justified by
@@ -504,9 +501,9 @@ The Phase 2 pooled-artifact rejection text remains exact.
 
 ### Filesystem and deletion safety
 
-Delete only the tracked files listed above. Do not follow symlinks or clean user directories.
-Do not delete ignored `target`, Zig, IDE, native-resource, input, output, or data paths. Maven may
-write normal ignored build output. Package tests continue to use `@TempDir`.
+Delete only the tracked files listed above. Do not follow symlinks or clean user directories. Do not
+delete ignored `target`, Zig, IDE, native-resource, input, output, or data paths. Maven may write
+normal ignored build output. Package tests continue to use `@TempDir`.
 
 ## File-by-file implementation checklist
 
@@ -525,8 +522,8 @@ Implement in this dependency order:
 8. Remove the direct trainer t-digest dependency.
 9. Update the GPU launcher, trainer README, GPU setup guide, and ML architecture document.
 10. Run the static deletion/dependency/name/workflow/generated-file proofs before compiling.
-11. Run focused compilation/tests, fix only mechanical references determined by this blueprint,
-    and do not change golden expectations.
+11. Run focused compilation/tests, fix only mechanical references determined by this blueprint, and
+    do not change golden expectations.
 12. Run the complete validation sequence and inspect the generated package evidence through the
     existing audit assertions.
 13. Append the completion record described below to this blueprint.
@@ -551,8 +548,7 @@ Prompt 7B is complete only when:
   required dependency;
 - `training-info` reports through `TrainingEnvironment` and no pooled model class remains;
 - `Runner` exposes exactly the three supported commands;
-- the GPU launcher and docs use typed closed-loop configuration rather than old training
-  properties;
+- the GPU launcher and docs use typed closed-loop configuration rather than old training properties;
 - the end-to-end audit begins from a strict validated bootstrap CSV and does not depend on a
   migration package;
 - bootstrap bytes, frozen configuration hash, robust winner, scenario rows, checkpoint restart
@@ -673,9 +669,9 @@ git ls-files | rg '(^|/)(target|\\.zig-cache|zig-out)/|euhedral-training/(input|
 git status --short --ignored
 ```
 
-The first two searches and both workflow diffs must be empty. The tracked-generated-file search
-must be empty for the named build/training artifacts. `git status --short --ignored` is an
-inspection command: ignored local build products are permitted but must not be staged or deleted.
+The first two searches and both workflow diffs must be empty. The tracked-generated-file search must
+be empty for the named build/training artifacts. `git status --short --ignored` is an inspection
+command: ignored local build products are permitted but must not be staged or deleted.
 
 Final repository review:
 
@@ -690,13 +686,13 @@ git diff --name-status main...HEAD
 ```
 
 Attempt full-repository `mvn -B verify` only if Docker and the native cross-build prerequisites are
-available. Otherwise repeat and record the exact `docker info` failure as an environment limit.
-The selected six-project `euhedral-training -am verify` remains mandatory.
+available. Otherwise repeat and record the exact `docker info` failure as an environment limit. The
+selected six-project `euhedral-training -am verify` remains mandatory.
 
 ## Final result-package evidence
 
-The existing `EndToEndTest` and `PackageLifecycleAuditTest` are the executable package proof.
-Prompt 7B must record that they still assert:
+The existing `EndToEndTest` and `PackageLifecycleAuditTest` are the executable package proof. Prompt
+7B must record that they still assert:
 
 - robust winner `R`, policy `p1-4e8bd733c51b5dab`, at published rank 1;
 - all four required exact scenarios and native scenario evidence;
@@ -719,8 +715,8 @@ first_bundle_sha256      852dc47e69bfdc8e0d57e3f17b2aa0b5389d5df11b87bb6c4c29577
 
 The direct-bootstrap fixture must preserve them. Do not update golden checksums or expected package
 bytes to make a changed bootstrap pass. If the test harness does not print hashes, a passing
-independent golden comparison plus the unchanged expected constants is sufficient evidence; do
-not add logging solely for handoff.
+independent golden comparison plus the unchanged expected constants is sufficient evidence; do not
+add logging solely for handoff.
 
 ## Final handoff summary contract
 
@@ -744,9 +740,9 @@ contract tests passed and that live lattice throughput was not measured.
 
 ### Actual implementation demands
 
-The cleanup removes 22 production/test files and edits the v1 facade, command/service
-surface, GPU launcher, three user-facing documents, POM, runner tests, and the 700-line integrated
-audit fixture. It crosses:
+The cleanup removes 22 production/test files and edits the v1 facade, command/service surface, GPU
+launcher, three user-facing documents, POM, runner tests, and the 700-line integrated audit fixture.
+It crosses:
 
 - CLI ownership and deterministic test services;
 - temporary migration and pooled dependency deletion;
@@ -757,10 +753,10 @@ audit fixture. It crosses:
 - filesystem deletion safety and user-owned workspace isolation; and
 - a broad compile/test/reference-repair surface across the training module.
 
-There is no new statistical, scheduler, checkpoint, package, concurrency, or lifecycle design.
-Most edits are deletion or exact extraction, but a low-effort pass is inappropriate because the
-audit fixture translation must preserve configuration/package fingerprints while the deletion
-removes widely referenced compatibility types.
+There is no new statistical, scheduler, checkpoint, package, concurrency, or lifecycle design. Most
+edits are deletion or exact extraction, but a low-effort pass is inappropriate because the audit
+fixture translation must preserve configuration/package fingerprints while the deletion removes
+widely referenced compatibility types.
 
 Earlier Phase 3 evidence shows that a lower-capability/low-effort implementation omitted a coupled
 state-machine surface even with a detailed blueprint. Phase 6 demonstrates that frontier-level
@@ -814,8 +810,8 @@ Deleted the complete ten-file
 `training.legacy` package, `PolicyOrdinalNetwork`, the five pooled-only utilities, and
 `PolicyRankingTest`. Removed the pooled merger API/helpers from `DataMerger` and the trainer's
 direct t-digest dependency. Added only
-`learning/TrainingEnvironment.java`, preserving the former DJL/PyTorch/CUDA environment
-diagnostic without retaining a pooled model.
+`learning/TrainingEnvironment.java`, preserving the former DJL/PyTorch/CUDA environment diagnostic
+without retaining a pooled model.
 
 Edited `Runner`/`RunnerTest`, `AuditFixtures`, the GPU launcher, the trainer README and GPU guide,
 and `docs/ML_CLOSED_LOOP_ARCHITECTURE.md` exactly within the enumerated cleanup boundary. `Runner`
@@ -863,8 +859,8 @@ blueprint-required parent creation fixed it; the complete command was rerun and 
 above. No production or golden output changed.
 
 `EndToEndTest` and `PackageLifecycleAuditTest` continue to prove winner `R`
-(`p1-4e8bd733c51b5dab`) at rank 1 across all four exact scenarios, `RUN_COMPLETE` revision 24,
-70 complete-package paths with 69 manifest entries, 58 interrupted-package paths with 57 manifest
+(`p1-4e8bd733c51b5dab`) at rank 1 across all four exact scenarios, `RUN_COMPLETE` revision 24, 70
+complete-package paths with 69 manifest entries, 58 interrupted-package paths with 57 manifest
 entries, byte-identical control/resumed/package-run reproduction, source/checksum joins, report
 contents, collision/cleanup/tamper behavior, and exclusion of the incomplete failed policy from
 robust leadership. The unchanged golden comparisons preserve:
@@ -879,15 +875,15 @@ first_bundle_sha256      852dc47e69bfdc8e0d57e3f17b2aa0b5389d5df11b87bb6c4c29577
 
 #### Static and repository review
 
-The importer/removal-marker, pooled implementation/name, stale P99/t-digest, trainer dependency,
-and obsolete GPU property searches are empty. The only live `pooled` matches are the required
-schema-v1 incompatible-artifact diagnostic and its focused test. Direct path checks prove all
-enumerated deleted files/directories are absent.
+The importer/removal-marker, pooled implementation/name, stale P99/t-digest, trainer dependency, and
+obsolete GPU property searches are empty. The only live `pooled` matches are the required schema-v1
+incompatible-artifact diagnostic and its focused test. Direct path checks prove all enumerated
+deleted files/directories are absent.
 
 Both permanent workflow diffs are empty. The tracked generated/build/training-artifact search is
-empty. `git diff --check` is clean. The Phase 7 diff contains only the enumerated source, test,
-POM, script, documentation, deletion, and completion-record paths. Ignored Maven/Zig/IDE outputs
-remain unstaged.
+empty. `git diff --check` is clean. The Phase 7 diff contains only the enumerated source, test, POM,
+script, documentation, deletion, and completion-record paths. Ignored Maven/Zig/IDE outputs remain
+unstaged.
 
 `docker info` reports:
 
@@ -896,9 +892,9 @@ permission denied while trying to connect to the docker API at
 unix:///run/user/911603815/docker.sock
 ```
 
-The Docker/Testcontainers and full native repository verification path is therefore unavailable;
-the mandatory six-project `euhedral-training -am verify` passed. No live lattice throughput was
-measured or claimed.
+The Docker/Testcontainers and full native repository verification path is therefore unavailable; the
+mandatory six-project `euhedral-training -am verify` passed. No live lattice throughput was measured
+or claimed.
 
 The pre-existing untracked `euhedral-training/input`, `euhedral-training/output`, and
 `euhedral-core/src/test/java/io/euhedral_execution/core/utils` trees were not inspected, edited,
@@ -915,8 +911,8 @@ Verification ran on `agent/phase7c-cleanup-handoff-verification` from Phase 7B c
 POM, package-resource, or user-facing documentation change was needed.
 
 At verification start the index already contained a one-line Phase 7 blueprint wording correction
-and an added `euhedral-core/src/test/java/io/euhedral_execution/core/utils/FlowThreadTest.java`.
-The core utils test file is outside the Phase 7 cleanup boundary and was not edited, deleted, or
+and an added `euhedral-core/src/test/java/io/euhedral_execution/core/utils/FlowThreadTest.java`. The
+core utils test file is outside the Phase 7 cleanup boundary and was not edited, deleted, or
 included as Phase 7 evidence. The Phase 7 verification commit stages only the Phase 7 blueprint
 file; it does not include the core utils test.
 
@@ -978,8 +974,8 @@ artifact search returned no prohibited matches. The direct path checks proved th
 `Distribution`, `PolicyOrdinalNetwork`, `training.legacy`, and current-workspace importer
 production/test paths remain absent.
 
-The word-level `pooled` search returned only the required schema-v1 incompatible-artifact
-diagnostic in `ScenarioModelMetadataCodec` and its focused assertion in
+The word-level `pooled` search returned only the required schema-v1 incompatible-artifact diagnostic
+in `ScenarioModelMetadataCodec` and its focused assertion in
 `ScenarioConditionedModelTest`.
 
 Workflow review was clean:
@@ -991,10 +987,10 @@ git diff -- .github/workflows
 
 both returned no output. `git diff --check` and `git diff --cached --check` were clean.
 
-`EndToEndTest` and `PackageLifecycleAuditTest` passed in both the focused package/CLI/audit
-list and the full `euhedral-training test` run. They continue to prove winner `R`
-(`p1-4e8bd733c51b5dab`) at rank 1 across all four exact scenarios, `RUN_COMPLETE` revision 24,
-70 complete-package paths with 69 manifest entries, 58 interrupted-package paths with 57 manifest
+`EndToEndTest` and `PackageLifecycleAuditTest` passed in both the focused package/CLI/audit list and
+the full `euhedral-training test` run. They continue to prove winner `R`
+(`p1-4e8bd733c51b5dab`) at rank 1 across all four exact scenarios, `RUN_COMPLETE` revision 24, 70
+complete-package paths with 69 manifest entries, 58 interrupted-package paths with 57 manifest
 entries, byte-identical control/resumed/package-run reproduction, source/checksum joins, report
 contents, collision/cleanup/tamper behavior, and exclusion of the incomplete failed policy from
 robust leadership. The unchanged golden comparisons preserve the recorded Phase 6 fingerprints.

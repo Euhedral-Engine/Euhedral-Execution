@@ -43,8 +43,10 @@ public final class MacosResources implements SystemSnapshotProvider {
     }
 
     private final MacosResourceProbe probe;
+
     @SuppressWarnings("unused")
     private volatile int lockState = 0;
+
     private long lastZeroDivLoggedNs = 0;
 
     /// Constructs a MacosResources provider with default native probes.

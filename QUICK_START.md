@@ -81,7 +81,7 @@ With `parallel` set to `false`, the results are emitted in input order:
 `addUpstream` starts the lattice lazily. Calling `lattice.start()` first is also an option when
 explicit startup is a better fit for your application lifecycle.
 
-`ConsumerIngestSink` provides the same setup for a `Consumer<T>` function that does not produce 
+`ConsumerIngestSink` provides the same setup for a `Consumer<T>` function that does not produce
 results.
 
 ## Choose ordered or distributed execution
@@ -228,8 +228,8 @@ final class MessageFrame extends AbstractFrame {
 }
 ```
 
-`AbstractFrame` already implements the normal liveness, cancellation, and recycling behavior when
-it receives a manager and kill switch. Override those methods only when your frame needs a different
+`AbstractFrame` already implements the normal liveness, cancellation, and recycling behavior when it
+receives a manager and kill switch. Override those methods only when your frame needs a different
 contract.
 
 `FrameFactory.replace()` restores `routingHash` to `idHash` before invoking the replacement
