@@ -104,7 +104,7 @@ jobs:
       - name: Build and Verify
         if: github.event_name != 'push' || steps.check_version.outputs.is_snapshot == 'true'
         run: |
-          mise exec -- gradle format build integrationTest
+          mise exec -- gradle build integrationTest
 
       - name: Install GPG Private Key
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.check_version.outputs.is_snapshot == 'false'
@@ -116,7 +116,7 @@ jobs:
       - name: Build and Deploy to Apache Maven Central
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.check_version.outputs.is_snapshot == 'false'
         run: |
-          mise exec -- gradle format integrationTest publish -Prelease -x test
+          mise exec -- gradle integrationTest publish -Prelease -x test
         env:
           RELEASE_MODE: "true"
           ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.CENTRAL_USERNAME }}
