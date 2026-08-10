@@ -99,7 +99,7 @@ public final class BenchmarkRunner {
                                 + "role={}, sampleMs={}",
                         plan.benchmarkRunId(),
                         plan.scenario(),
-                        plan.iteration(),
+                        plan.iteration() + 1,
                         plan.executionConfig().expectedRepetitions(),
                         ++currentP,
                         policies,

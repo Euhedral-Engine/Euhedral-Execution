@@ -98,7 +98,7 @@ public final class ClosedLoopRunner {
         int revision = Integer.parseInt(
                 result.latestCheckpoint().getFileName().toString().substring("checkpoint-".length()));
         String packageId = result.stage() == CheckpointStage.RUN_COMPLETE
-                ? config.trainingRunId()
+                ? completePackageId(config, revision)
                 : "%s.partial.r%08d".formatted(config.trainingRunId(), revision);
         TrainingRunPackage packaged = TrainingRunPackager.publish(new TrainingRunPackageRequest(
                 config.workspace(),
@@ -139,14 +139,18 @@ public final class ClosedLoopRunner {
                 StagedInitialCalibrationPlan stagedPlan = stageInitialCalibrationPlan(config)) {
             ClosedLoopConfig effectiveConfig = stagedPlan.config();
             String configHash = ClosedLoopConfigFingerprint.sha256(effectiveConfig);
-            Optional<LoadedCheckpoint> loaded = CheckpointSnapshotCodec.loadLatest(
-                    effectiveConfig.workspace(), effectiveConfig.trainingRunId(), configHash);
+            Optional<LoadedCheckpoint> loaded =
+                    CheckpointSnapshotCodec.loadLatest(effectiveConfig.workspace(), effectiveConfig.trainingRunId());
             if (!effectiveConfig.resume() && loaded.isPresent()) {
                 LOGGER.error(
                         "Resume is false but checkpoint exists: workspace={}, loadedCheckpoint={}",
                         effectiveConfig.workspace(),
                         loaded.get().snapshotDirectory());
                 throw new IllegalArgumentException("A complete Phase 3 checkpoint already exists");
+            }
+            if (loaded.isPresent()
+                    && !loaded.orElseThrow().checkpoint().configSha256().equals(configHash)) {
+                loaded = Optional.of(continueCompletedRun(effectiveConfig, loaded.orElseThrow(), configHash));
             }
             LoadedCheckpoint current = loaded.orElseGet(() -> {
                 try {
@@ -210,6 +214,33 @@ public final class ClosedLoopRunner {
             }
             throw failure;
         }
+    }
+
+    /// Selects the stable ID for the first completion and a revision-qualified ID thereafter.
+    private static String completePackageId(ClosedLoopConfig config, int revision) throws IOException {
+        return CheckpointSnapshotCodec.hasRunCompleteBefore(config.workspace(), revision)
+                ? "%s.complete.r%08d".formatted(config.trainingRunId(), revision)
+                : config.trainingRunId();
+    }
+
+    /// Verifies that only the completed run's iteration target increased, then reactivates it.
+    private static LoadedCheckpoint continueCompletedRun(
+            ClosedLoopConfig config, LoadedCheckpoint loaded, String newConfigHash) throws Exception {
+        ClosedLoopCheckpoint checkpoint = loaded.checkpoint();
+        int completedIterations = checkpoint.nextIteration() - 1;
+        if (checkpoint.stage() != CheckpointStage.RUN_COMPLETE
+                || config.iterations() <= completedIterations
+                || !checkpoint
+                        .configSha256()
+                        .equals(ClosedLoopConfigFingerprint.sha256(withIterations(config, completedIterations)))) {
+            throw new IllegalArgumentException("Checkpoint frozen configuration mismatch");
+        }
+        LOGGER.info(
+                "Continuing completed training run: run={}, completedIterations={}, " + "newIterationTarget={}",
+                config.trainingRunId(),
+                completedIterations,
+                config.iterations());
+        return CheckpointSnapshotCodec.continueCompletedRun(config.workspace(), loaded, newConfigHash);
     }
 
     private static LoadedCheckpoint initialize(ClosedLoopConfig config, ClosedLoopServices services, String configHash)
@@ -329,6 +360,36 @@ public final class ClosedLoopRunner {
                 config.initialSobolCursor(),
                 config.bootstrapPolicies(),
                 Optional.of(initialCalibrationPlan.toAbsolutePath().normalize()),
+                config.initialObservationBundleDirectory(),
+                config.initialObservationBundles(),
+                config.referenceOverrides(),
+                config.commitSha(),
+                config.dirtyWorkingTree(),
+                config.budgetConfig(),
+                config.generationConfig(),
+                config.benchmarkConfig(),
+                config.anchorSelectionConfig(),
+                config.calibrationConfig(),
+                config.aggregationConfig(),
+                config.trainingConfig(),
+                config.resume(),
+                config.stopFile());
+    }
+
+    /// Reconstructs the otherwise identical configuration at a prior iteration target.
+    private static ClosedLoopConfig withIterations(ClosedLoopConfig config, int iterations) {
+        return new ClosedLoopConfig(
+                config.workspace(),
+                config.trainingRunId(),
+                iterations,
+                config.candidateBudget(),
+                config.requiredScenarios(),
+                config.activeEnvironmentId(),
+                config.scenariosPerIteration(),
+                config.schedulerSeed(),
+                config.initialSobolCursor(),
+                config.bootstrapPolicies(),
+                config.initialCalibrationPlan(),
                 config.initialObservationBundleDirectory(),
                 config.initialObservationBundles(),
                 config.referenceOverrides(),

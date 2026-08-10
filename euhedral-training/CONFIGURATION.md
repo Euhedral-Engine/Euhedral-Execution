@@ -150,6 +150,7 @@ These settings control workspace persistence, machine environment binding, itera
 - **Validation**: Strictly positive decimal integer ($> 0$).
 - **Code Reference**: [`ClosedLoopRunner.java`](file:///home/brandon/src/Euhedral-Execution/euhedral-training/src/main/java/io/euhedral_execution/training/ClosedLoopRunner.java)
 - **Explanation**: Number of full closed-loop iterations to execute. Each iteration runs scheduling, benchmarking, calibration, model training, and checkpointing.
+- **Continuation**: With no trainer holding the workspace lock, a `RUN_COMPLETE` workspace may be resumed by setting `run.resume=true` and increasing this value. Decreases, changes to incomplete runs, and simultaneous changes to frozen settings are rejected. The first immutable completed package keeps the training-run ID; later completions use a checkpoint-revision suffix.
 
 ### `run.candidate_budget`
 - **Type**: `int` | **Default**: *Required*

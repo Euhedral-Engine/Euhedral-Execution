@@ -140,7 +140,7 @@ public final class TrainingRunPackageValidator {
                     case MODEL_REJECTED -> TrainingRunPackageStatus.PARTIAL_TERMINAL;
                     default -> TrainingRunPackageStatus.PARTIAL_RECOVERABLE;
                 };
-        if (manifest.status() != expected || !manifest.packageId().equals(PackageSourceSet.packageId(checkpoint))) {
+        if (manifest.status() != expected || !PackageSourceSet.matchesPackageId(checkpoint, manifest.packageId())) {
             throw new IOException("Package lifecycle mismatch");
         }
     }

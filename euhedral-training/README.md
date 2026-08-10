@@ -138,7 +138,7 @@ For detailed component mappings, default values, and tuning advice, see [CONFIGU
 | :--- | :--- | :--- | :--- |
 | `run.workspace` | Path | *Required* | Directory containing checkpoints, evidence, models, and packages. |
 | `run.training_run_id` | String | *Required* | Canonical logical identifier for the training run (`[a-z0-9._-]{1,96}`). |
-| `run.iterations` | Integer | *Required* | Total closed-loop iterations to execute ($> 0$). |
+| `run.iterations` | Integer | *Required* | Total closed-loop iterations to execute ($> 0$); increase it with `run.resume=true` to continue a completed workspace. |
 | `run.candidate_budget` | Integer | *Required* | Total policy-vector evaluation budget per iteration. |
 | `run.active_environment_id` | String | *Required* | Local host environment identifier (`[a-z0-9._-]{1,64}`). |
 | `scenario.required` | Set | *Required* | Required execution topology scenario IDs (repeated key). |
@@ -248,6 +248,11 @@ For detailed component mappings, default values, and tuning advice, see [CONFIGU
 ## Training-Run Packages
 
 Every successful run publishes an immutable, reproducible package under `<workspace>/packages/training-run-<package-id>`.
+
+To continue a completed workspace, stop the trainer, increase `run.iterations`, keep every other
+frozen setting unchanged, set `run.resume=true`, and launch `closed-loop` again. The original
+completed package remains unchanged; each later completion is published with a
+`.complete.r<checkpoint-revision>` suffix.
 
 Package directories contain:
 - `manifest.json`: Machine-readable package metadata, checksums, and stage provenance.

@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import io.euhedral_execution.training.benchmark.config.BenchmarkExecutionConfig;
 import io.euhedral_execution.training.benchmark.data.NativeBenchmarkRunPlan;
 import io.euhedral_execution.training.checkpoint.ArtifactFingerprint;
+import io.euhedral_execution.training.checkpoint.CheckpointSnapshotCodec;
 import io.euhedral_execution.training.checkpoint.enums.CheckpointStage;
 import io.euhedral_execution.training.config.ClosedLoopConfig;
 import io.euhedral_execution.training.data.BenchmarkObservation;
@@ -54,6 +55,138 @@ import org.junit.jupiter.api.io.TempDir;
 class ClosedLoopRunnerTest {
     @TempDir
     Path temp;
+
+    @Test
+    void completedWorkspaceContinuesWithHigherIterationTarget() throws Exception {
+        Path bootstrap = temp.resolve("bootstrap.csv");
+        writeBootstrap(bootstrap, 6);
+        SourceScenario scenario = SourceScenario.of("env-a", 1, 4);
+        TreeSet<SourceScenario> required = new TreeSet<>(List.of(scenario));
+
+        ClosedLoopRunner.run(config(bootstrap, required, "env-a", false, 1), new BootstrapOnlyServices());
+        ClosedLoopResult first = ClosedLoopRunner.run(
+                config(bootstrap, required, "env-a", true, 1), new RejectingTrainingServices(false));
+        var completedCheckpoint = CheckpointSnapshotCodec.loadRevision(
+                first.latestCheckpoint().getParent().getParent(), revision(first));
+        int evidenceBefore = completedCheckpoint.checkpoint().evidence().size();
+
+        RejectingTrainingServices continuedServices = new RejectingTrainingServices(false, true);
+        ClosedLoopResult continued =
+                ClosedLoopRunner.run(config(bootstrap, required, "env-a", true, 2), continuedServices);
+
+        assertThat(continued.stage()).isEqualTo(CheckpointStage.RUN_COMPLETE);
+        assertThat(continued.nextIteration()).isEqualTo(3);
+        assertThat(continuedServices.seenConfigs).hasSize(2);
+        assertThat(continuedServices.seenConfigs.getFirst().requireTargetVariation())
+                .isTrue();
+        assertThat(continuedServices.seenConfigs.getLast().requireTargetVariation())
+                .isFalse();
+        var continuation = CheckpointSnapshotCodec.loadRevision(
+                        continued.latestCheckpoint().getParent().getParent(), revision(first) + 1)
+                .checkpoint();
+        assertThat(continuation.stage()).isEqualTo(CheckpointStage.READY_TO_TRAIN);
+        assertThat(continuation.nextIteration()).isEqualTo(2);
+        assertThat(continuation.evidence())
+                .isEqualTo(completedCheckpoint.checkpoint().evidence());
+        assertThat(continuation.sobolCursor())
+                .isEqualTo(completedCheckpoint.checkpoint().sobolCursor());
+        assertThat(continuation.configSha256())
+                .isNotEqualTo(completedCheckpoint.checkpoint().configSha256());
+        assertThat(CheckpointSnapshotCodec.loadRevision(
+                                continued.latestCheckpoint().getParent().getParent(), revision(continued))
+                        .checkpoint()
+                        .evidence())
+                .hasSizeGreaterThan(evidenceBefore);
+
+        int finalRevision = revision(continued);
+        ClosedLoopResult repeated = ClosedLoopRunner.run(
+                config(bootstrap, required, "env-a", true, 2), new RejectingTrainingServices(false, true));
+        assertThat(revision(repeated)).isEqualTo(finalRevision);
+    }
+
+    @Test
+    void completedWorkspaceRejectsInvalidIterationChanges() throws Exception {
+        Path bootstrap = temp.resolve("bootstrap.csv");
+        writeBootstrap(bootstrap, 6);
+        SourceScenario scenario = SourceScenario.of("env-a", 1, 4);
+        TreeSet<SourceScenario> required = new TreeSet<>(List.of(scenario));
+
+        ClosedLoopRunner.run(config(bootstrap, required, "env-a", false, 2), new BootstrapOnlyServices());
+        ClosedLoopResult completed = ClosedLoopRunner.run(
+                config(bootstrap, required, "env-a", true, 2), new RejectingTrainingServices(false, true, false));
+
+        assertThatThrownBy(() -> ClosedLoopRunner.run(
+                        config(bootstrap, required, "env-a", true, 1), new RejectingTrainingServices(false)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("frozen configuration mismatch");
+        assertThatThrownBy(() -> ClosedLoopRunner.run(
+                        config(bootstrap, required, "env-a", false, 3), new RejectingTrainingServices(false)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("checkpoint already exists");
+
+        ClosedLoopConfig changedCommit = withCommitSha(config(bootstrap, required, "env-a", true, 3), "a".repeat(40));
+        assertThatThrownBy(() -> ClosedLoopRunner.run(changedCommit, new RejectingTrainingServices(false)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("frozen configuration mismatch");
+
+        var stale = CheckpointSnapshotCodec.loadRevision(
+                completed.latestCheckpoint().getParent().getParent(), revision(completed));
+        ClosedLoopRunner.run(config(bootstrap, required, "env-a", true, 3), new RejectingTrainingServices(false, true));
+        assertThatThrownBy(() -> CheckpointSnapshotCodec.continueCompletedRun(
+                        stale.snapshotDirectory().getParent().getParent(), stale, "f".repeat(64)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Invalid completed-run continuation");
+    }
+
+    @Test
+    void incompleteWorkspaceRejectsIterationTargetChange() throws Exception {
+        Path bootstrap = temp.resolve("bootstrap.csv");
+        writeBootstrap(bootstrap, 6);
+        SourceScenario scenario = SourceScenario.of("env-a", 1, 4);
+        TreeSet<SourceScenario> required = new TreeSet<>(List.of(scenario));
+
+        ClosedLoopResult incomplete =
+                ClosedLoopRunner.run(config(bootstrap, required, "env-a", false, 1), new BootstrapOnlyServices());
+        assertThat(incomplete.stage()).isEqualTo(CheckpointStage.READY_TO_TRAIN);
+
+        assertThatThrownBy(() -> ClosedLoopRunner.run(
+                        config(bootstrap, required, "env-a", true, 2), new RejectingTrainingServices(false)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("frozen configuration mismatch");
+    }
+
+    @Test
+    void laterCompletedRunPublishesRevisionQualifiedImmutablePackage() throws Exception {
+        Path bootstrap = temp.resolve("bootstrap.csv");
+        writeBootstrap(bootstrap, 6);
+        SourceScenario scenario = SourceScenario.of("env-a", 1, 4);
+        TreeSet<SourceScenario> required = new TreeSet<>(List.of(scenario));
+        Path packages = temp.resolve("packages");
+
+        ClosedLoopRunner.run(config(bootstrap, required, "env-a", false, 1), new BootstrapOnlyServices());
+        ClosedLoopResult first = ClosedLoopRunner.runAndPackage(
+                config(bootstrap, required, "env-a", true, 1), new RejectingTrainingServices(false), packages);
+        Path firstPackage = first.packageDirectory().orElseThrow();
+        String firstHash = ArtifactFingerprint.sha256(firstPackage);
+
+        ClosedLoopResult continued = ClosedLoopRunner.runAndPackage(
+                config(bootstrap, required, "env-a", true, 2), new RejectingTrainingServices(false, true), packages);
+        Path continuedPackage = continued.packageDirectory().orElseThrow();
+
+        assertThat(firstPackage.getFileName().toString()).isEqualTo("training-run-training");
+        assertThat(continuedPackage.getFileName().toString())
+                .isEqualTo("training-run-training.complete.r%08d".formatted(revision(continued)));
+        assertThat(ArtifactFingerprint.sha256(firstPackage)).isEqualTo(firstHash);
+        assertThat(TrainingRunPackageValidator.validate(firstPackage).directory())
+                .isEqualTo(firstPackage);
+        assertThat(TrainingRunPackageValidator.validate(continuedPackage).directory())
+                .isEqualTo(continuedPackage);
+
+        ClosedLoopResult repeated = ClosedLoopRunner.runAndPackage(
+                config(bootstrap, required, "env-a", true, 2), new RejectingTrainingServices(false), packages);
+        assertThat(repeated.packageDirectory()).contains(continuedPackage);
+        assertThat(ArtifactFingerprint.sha256(firstPackage)).isEqualTo(firstHash);
+    }
 
     @Test
     void bootstrapResumesAcrossRequiredEnvironmentsAndPostMergesBeforeTraining() throws Exception {
@@ -405,6 +538,40 @@ class ClosedLoopRunnerTest {
                 workspace.resolve("STOP"));
     }
 
+    private static ClosedLoopConfig withCommitSha(ClosedLoopConfig config, String commitSha) {
+        return new ClosedLoopConfig(
+                config.workspace(),
+                config.trainingRunId(),
+                config.iterations(),
+                config.candidateBudget(),
+                config.requiredScenarios(),
+                config.activeEnvironmentId(),
+                config.scenariosPerIteration(),
+                config.schedulerSeed(),
+                config.initialSobolCursor(),
+                config.bootstrapPolicies(),
+                config.initialCalibrationPlan(),
+                config.initialObservationBundleDirectory(),
+                config.initialObservationBundles(),
+                config.referenceOverrides(),
+                commitSha,
+                config.dirtyWorkingTree(),
+                config.budgetConfig(),
+                config.generationConfig(),
+                config.benchmarkConfig(),
+                config.anchorSelectionConfig(),
+                config.calibrationConfig(),
+                config.aggregationConfig(),
+                config.trainingConfig(),
+                config.resume(),
+                config.stopFile());
+    }
+
+    private static int revision(ClosedLoopResult result) {
+        return Integer.parseInt(
+                result.latestCheckpoint().getFileName().toString().substring("checkpoint-".length()));
+    }
+
     private static void writeBootstrap(Path file, int count) throws Exception {
         List<String> header = new ArrayList<>(List.of("schema_version", "bootstrap_position", "policy_id"));
         for (int i = 0; i < 28; i++) {
@@ -705,13 +872,16 @@ class ClosedLoopRunnerTest {
             }
             ScenarioTrainingConfig storedConfig =
                     withBatchSize(storeStrictMetadata ? ScenarioTrainingConfig.defaults() : request.config(), 4);
-            return io.euhedral_execution.training.learning.AuditScenarioModelFixture.writeRejected(
-                    request.modelDirectory(),
-                    request.requiredScenarios(),
-                    storedConfig,
-                    SchedulingFixtures.policy(999),
-                    request.commitSha(),
-                    request.dirtyWorkingTree());
+            ScenarioTrainingArtifacts artifacts =
+                    io.euhedral_execution.training.learning.AuditScenarioModelFixture.writeRejected(
+                            request.modelDirectory(),
+                            request.requiredScenarios(),
+                            storedConfig,
+                            SchedulingFixtures.policy(999),
+                            request.commitSha(),
+                            request.dirtyWorkingTree());
+            completeModelInventory(request.modelDirectory());
+            return artifacts;
         }
 
         @Override
@@ -780,6 +950,20 @@ class ClosedLoopRunnerTest {
         @Override
         public String activeCpuSetHex() {
             return "f";
+        }
+
+        private static void completeModelInventory(Path modelDirectory) throws Exception {
+            List<Path> indexes;
+            try (var stream = Files.walk(modelDirectory)) {
+                indexes = stream.filter(path -> path.getFileName().toString().endsWith(".index"))
+                        .toList();
+            }
+            for (Path index : indexes) {
+                String name = index.getFileName().toString();
+                Files.writeString(index.resolveSibling(name.replace(".index", ".data-00000-of-00001")), "data\n");
+                Files.writeString(index.resolveSibling(name.replace(".index", ".properties")), "properties\n");
+                Files.writeString(index.resolveSibling("checkpoint"), "checkpoint\n");
+            }
         }
     }
 

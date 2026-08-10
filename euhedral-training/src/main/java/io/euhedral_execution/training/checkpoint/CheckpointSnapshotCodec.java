@@ -96,6 +96,18 @@ public final class CheckpointSnapshotCodec {
 
     public static Optional<LoadedCheckpoint> loadLatest(
             Path workspace, String expectedTrainingRunId, String expectedConfigSha256) throws IOException {
+        Optional<LoadedCheckpoint> loaded = loadLatest(workspace, expectedTrainingRunId);
+        if (loaded.isPresent()
+                && !loaded.orElseThrow().checkpoint().configSha256().equals(expectedConfigSha256)) {
+            throw new IllegalArgumentException("Checkpoint frozen configuration mismatch");
+        }
+        return loaded;
+    }
+
+    /// Loads the latest structurally valid checkpoint and verifies its training-run identity.
+    /// Configuration compatibility must be checked by the caller before using the checkpoint.
+    public static Optional<LoadedCheckpoint> loadLatest(Path workspace, String expectedTrainingRunId)
+            throws IOException {
         Path root = workspace.toAbsolutePath().normalize();
         Path checkpoints = root.resolve("checkpoints");
         if (!Files.isDirectory(checkpoints, LinkOption.NOFOLLOW_LINKS)) {
@@ -122,10 +134,63 @@ public final class CheckpointSnapshotCodec {
         if (!checkpoint.trainingRunId().equals(expectedTrainingRunId)) {
             throw new IllegalArgumentException("Checkpoint training run ID mismatch");
         }
-        if (!checkpoint.configSha256().equals(expectedConfigSha256)) {
-            throw new IllegalArgumentException("Checkpoint frozen configuration mismatch");
-        }
         return Optional.of(new LoadedCheckpoint(latest, checkpoint));
+    }
+
+    /// Reactivates the latest completed run without changing any accumulated training state.
+    /// The new configuration hash represents an approved increase to the iteration target.
+    public static LoadedCheckpoint continueCompletedRun(
+            Path workspace, LoadedCheckpoint completed, String newConfigSha256) throws IOException {
+        if (completed == null || newConfigSha256 == null || !newConfigSha256.matches("[0-9a-f]{64}")) {
+            throw new IllegalArgumentException("Invalid completed-run continuation");
+        }
+        ClosedLoopCheckpoint previous = completed.checkpoint();
+        if (previous.stage() != CheckpointStage.RUN_COMPLETE
+                || previous.configSha256().equals(newConfigSha256)) {
+            throw new IllegalArgumentException("Invalid completed-run continuation");
+        }
+        ClosedLoopCheckpoint next = new ClosedLoopCheckpoint(
+                previous.schemaVersion(),
+                previous.trainingRunId(),
+                previous.revision() + 1,
+                CheckpointStage.READY_TO_TRAIN,
+                previous.nextIteration(),
+                previous.sobolCursor(),
+                newConfigSha256,
+                previous.requiredScenarios(),
+                previous.rotationCursors(),
+                previous.evidence(),
+                previous.carryForward(),
+                previous.anchorSetId(),
+                previous.calibrationPlan(),
+                previous.latestMerge(),
+                previous.latestModel(),
+                previous.pendingSchedule(),
+                previous.pendingRuns());
+        return write(workspace, next, completed);
+    }
+
+    /// Reports whether an earlier checkpoint revision completed this training run.
+    public static boolean hasRunCompleteBefore(Path workspace, int requestedRevision) throws IOException {
+        if (requestedRevision <= 1) {
+            return false;
+        }
+        Path root = workspace.toAbsolutePath().normalize();
+        List<Path> complete = completeCheckpoints(root.resolve("checkpoints"));
+        if (complete.size() < requestedRevision) {
+            throw new IllegalArgumentException("Checkpoint revision is absent");
+        }
+        for (int index = 0; index < complete.size(); index++) {
+            if (revision(complete.get(index)) != index + 1) {
+                throw new IllegalArgumentException("Checkpoint revisions are not contiguous");
+            }
+        }
+        for (int index = 0; index < requestedRevision - 1; index++) {
+            if (read(root, complete.get(index), false).stage() == CheckpointStage.RUN_COMPLETE) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public static LoadedCheckpoint loadRevision(Path workspace, int requestedRevision) throws IOException {
@@ -156,11 +221,22 @@ public final class CheckpointSnapshotCodec {
     }
 
     public static LoadedCheckpoint writeNext(Path workspace, ClosedLoopCheckpoint checkpoint) throws IOException {
+        return write(workspace, checkpoint, null);
+    }
+
+    /// Publishes either a normal checkpoint or the one constrained completed-run continuation.
+    private static LoadedCheckpoint write(
+            Path workspace, ClosedLoopCheckpoint checkpoint, LoadedCheckpoint completedContinuation)
+            throws IOException {
         long started = System.nanoTime();
         Path root = workspace.toAbsolutePath().normalize();
         Path checkpoints = root.resolve("checkpoints");
         Files.createDirectories(checkpoints);
-        validatePrevious(root, checkpoint);
+        if (completedContinuation == null) {
+            validatePrevious(root, checkpoint);
+        } else {
+            validateCompletedContinuation(root, completedContinuation, checkpoint);
+        }
         LOGGER.info("Validated checkpoint transition: revision={}", checkpoint.revision());
         Path target = checkpoints.resolve("checkpoint-%08d".formatted(checkpoint.revision()));
         if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
@@ -196,6 +272,45 @@ public final class CheckpointSnapshotCodec {
             deleteTree(temp);
             throw error;
         }
+    }
+
+    /// Verifies that the supplied completed checkpoint is still latest and only terminal state,
+    /// revision, and configuration identity change during reactivation.
+    private static void validateCompletedContinuation(
+            Path workspace, LoadedCheckpoint expectedPrevious, ClosedLoopCheckpoint next) throws IOException {
+        List<Path> complete = completeCheckpoints(workspace.resolve("checkpoints"));
+        if (complete.isEmpty()) {
+            throw new IllegalArgumentException("Completed checkpoint is absent");
+        }
+        Path latest = complete.getLast().toAbsolutePath().normalize();
+        ClosedLoopCheckpoint previous = read(workspace, latest, false);
+        if (!latest.equals(expectedPrevious.snapshotDirectory().toAbsolutePath().normalize())
+                || !previous.equals(expectedPrevious.checkpoint())
+                || previous.stage() != CheckpointStage.RUN_COMPLETE
+                || next.revision() != previous.revision() + 1
+                || next.stage() != CheckpointStage.READY_TO_TRAIN
+                || next.nextIteration() != previous.nextIteration()
+                || next.sobolCursor() != previous.sobolCursor()
+                || next.configSha256().equals(previous.configSha256())
+                || !sameContinuationState(previous, next)) {
+            throw new IllegalArgumentException("Invalid completed-run continuation");
+        }
+    }
+
+    /// Compares every persisted field that must survive a completed-run continuation unchanged.
+    private static boolean sameContinuationState(ClosedLoopCheckpoint previous, ClosedLoopCheckpoint next) {
+        return next.schemaVersion() == previous.schemaVersion()
+                && next.trainingRunId().equals(previous.trainingRunId())
+                && next.requiredScenarios().equals(previous.requiredScenarios())
+                && next.rotationCursors().equals(previous.rotationCursors())
+                && next.evidence().equals(previous.evidence())
+                && next.carryForward().equals(previous.carryForward())
+                && next.anchorSetId().equals(previous.anchorSetId())
+                && next.calibrationPlan().equals(previous.calibrationPlan())
+                && next.latestMerge().equals(previous.latestMerge())
+                && next.latestModel().equals(previous.latestModel())
+                && next.pendingSchedule().equals(previous.pendingSchedule())
+                && next.pendingRuns().equals(previous.pendingRuns());
     }
 
     private static long elapsedMillis(long started) {
