@@ -1,8 +1,6 @@
 package io.euhedral_execution.core.control_plane;
 
 import io.euhedral_execution.core.config.CloneConfig;
-import io.euhedral_execution.core.config.FragmentActionPicker;
-import io.euhedral_execution.core.config.FragmentActionPicker.Action;
 import io.euhedral_execution.core.config.FragmentConfig;
 import io.euhedral_execution.core.flow_control.LatticeHotSource;
 import io.euhedral_execution.core.frames.AbstractFrame;
@@ -32,9 +30,9 @@ import org.slf4j.LoggerFactory;
 
 /// ## The core of Euhedral Core
 ///
-/// `ControlPlaneFragment` is the control loop that sits between ingress and execution. It
-/// continuously tunes batch sizes, dispatch rate, and idle behavior based on how the system is
-/// behaving.
+/// `ControlPlaneFragment` is the control loop that sits between ingress and execution. Normal mode
+/// uses a deterministic latency-aware direct/staged policy, while benchmark mode evaluates the
+/// existing action-picker vectors on an independent loop.
 public final class ControlPlaneFragment extends WorkRequester {
 
     private static final VarHandle DRAIN;
@@ -61,7 +59,6 @@ public final class ControlPlaneFragment extends WorkRequester {
     public final int cpu;
     public final boolean isPCore;
     final boolean benchmarkMode;
-    final FragmentActionPicker actionPicker;
     final LatticeHotSource outputStream;
     private final Logger logger;
     private final ExecutionMetrics metrics;
@@ -74,6 +71,7 @@ public final class ControlPlaneFragment extends WorkRequester {
     private final AtomicLong resetCompleted = new AtomicLong();
     private final AtomicLong resetCleared = new AtomicLong();
     private final PinnedThreadExecutor mainExecutor;
+    private final FragmentControlPolicy controlPolicy;
     private final CycleState state;
     boolean drainMode = false;
     CoreSnapshot coreSnapshot = null;
@@ -86,13 +84,13 @@ public final class ControlPlaneFragment extends WorkRequester {
         super(config.cacheConfig());
         this.config = config;
         this.benchmarkMode = config.benchmarkMode();
-        this.actionPicker = config.actionPicker();
 
         if (config.cloneConfig() == null) {
             this.socket = -1;
             this.core = -1;
             this.cpu = -1;
             this.logger = LoggerFactory.getLogger(Constants.getLoggerName(ControlPlaneFragment.class));
+            this.controlPolicy = null;
             this.state = null;
             this.mainExecutor = null;
             this.isPCore = false;
@@ -112,6 +110,7 @@ public final class ControlPlaneFragment extends WorkRequester {
             this.socket = info.socket();
             this.core = info.core();
 
+            this.controlPolicy = this.benchmarkMode ? null : new FragmentControlPolicy();
             this.state = new CycleState();
 
             this.mainExecutor = PinnedThreadExecutor.getOrSetIfAbsent(
@@ -199,67 +198,109 @@ public final class ControlPlaneFragment extends WorkRequester {
         try {
             FlowThread.FlowContext context = FlowThread.initializeContext();
             context.upstream = getThreadUpstreamQueue();
-
             while (keepRunning()) {
                 serviceResetRequest();
-                if (this.benchmarkMode && this.actionPicker.halted()) {
-                    Thread.onSpinWait();
-                    continue;
-                }
 
                 long newUpCount = context.upstream.getCachedUpCount();
-                if (this.state.upstreamCount != newUpCount && newUpCount > 0) {
-                    this.state.upstreamCount = newUpCount;
-                    GlobalState.resetThroughput(this.socket, this.cpu);
-                } else if (this.state.upstreamCount != newUpCount || this.state.upstreamCount == 0) {
-                    this.state.upstreamCount = 0;
+                if (this.state.upstreamCount != newUpCount) {
                     this.state.reset();
+                    this.state.upstreamCount = newUpCount;
+                }
+                if (this.state.upstreamCount == 0
+                        && super.getLocalCacheCount() == 0
+                        && super.getUpstreamCacheCount() == 0) {
                     this.state.upstreamCount = idleSpin(context);
                 }
 
                 long limit = this.state.batchSize - this.state.completed;
-                long processed = 0;
-                double maxCacheInv = 1.0 / Math.max(1.0, super.getUpstreamCacheCapacity());
-                this.state.actionInputs[0] = this.state.completed;
-                this.state.actionInputs[1] = this.state.batchSize;
-                this.state.actionInputs[2] = this.state.latencyRecorder.averageUnitsOverTime();
-                this.state.actionInputs[3] = this.state.latencyRecorder.unitsOverTimeCV();
-                this.state.actionInputs[4] =
-                        (double) context.upstream.getTrueUpstreamCount() / Math.max(1, super.getThreadCount());
-                this.state.actionInputs[5] = super.getUpstreamCacheCount() * maxCacheInv;
-                this.actionPicker.normalize(this.state.actionInputs);
+                long processed = 0L;
+                long executionFrames = 0L;
+                long executionElapsedNs = 0L;
 
-                long start = System.nanoTime();
-                boolean act = this.actionPicker.performAction(Action.REQUEST, this.state.actionInputs);
-                if (act) {
-                    super.request(context);
-                }
-                if (limit > 0 && super.getLocalCacheCount() > 0) {
+                if (limit > 0L && super.getLocalCacheCount() > 0L) {
+                    long start = System.nanoTime();
                     long count = localCacheExecute(limit);
-                    processed += count;
-                    limit -= processed;
+                    long end = System.nanoTime();
+                    if (count > 0L) {
+                        executionFrames += count;
+                        executionElapsedNs += end - start;
+                        processed += count;
+                        limit -= count;
+                    }
                 }
-                act = this.actionPicker.performAction(Action.REMOTE_CACHE_EXECUTE, this.state.actionInputs);
-                if (limit > 0 && act) {
-                    long count = remoteCacheExecute(limit);
-                    processed += count;
-                    limit -= count;
+
+                if (this.controlPolicy.mode() == FragmentControlPolicy.Mode.DIRECT) {
+                    if (limit > 0L) {
+                        long start = System.nanoTime();
+                        long count = remoteCacheExecute(limit);
+                        long end = System.nanoTime();
+                        if (count > 0L) {
+                            executionFrames += count;
+                            executionElapsedNs += end - start;
+                            processed += count;
+                            limit -= count;
+                        }
+                    }
+                    if (limit > 0L) {
+                        long start = System.nanoTime();
+                        long count = remoteExecute(context, limit);
+                        long end = System.nanoTime();
+                        if (count > 0L) {
+                            executionFrames += count;
+                            executionElapsedNs += end - start;
+                            processed += count;
+                        }
+                    }
+                    if (processed == 0L) {
+                        super.requestAndPull(context, this.state.batchSize);
+                    }
+                } else {
+                    if (limit > 0L) {
+                        super.request(context);
+                    }
+                    if (limit > 0L && super.getLocalCacheCount() > 0L) {
+                        long start = System.nanoTime();
+                        long count = localCacheExecute(limit);
+                        long end = System.nanoTime();
+                        if (count > 0L) {
+                            executionFrames += count;
+                            executionElapsedNs += end - start;
+                            processed += count;
+                            limit -= count;
+                        }
+                    }
+                    if (limit > 0L) {
+                        long start = System.nanoTime();
+                        long count = remoteCacheExecute(limit);
+                        long end = System.nanoTime();
+                        if (count > 0L) {
+                            executionFrames += count;
+                            executionElapsedNs += end - start;
+                            processed += count;
+                            limit -= count;
+                        }
+                    }
+                    if (limit > 0L) {
+                        long start = System.nanoTime();
+                        long count = remoteExecute(context, limit);
+                        long end = System.nanoTime();
+                        if (count > 0L) {
+                            executionFrames += count;
+                            executionElapsedNs += end - start;
+                            processed += count;
+                        }
+                    }
                 }
-                act = this.actionPicker.performAction(Action.REMOTE_EXECUTE, this.state.actionInputs);
-                if (limit > 0 && act) {
-                    long count = remoteExecute(context, limit);
-                    processed += count;
-                }
+
                 this.state.completed += processed;
                 this.state.totalExecutions += processed;
-                long end = System.nanoTime();
-                if (processed > 0) {
-                    updateLimits(end, (end - start) / processed);
-                }
-
-                this.state.actionInputs[0] = this.state.completed;
-                if (this.actionPicker.performAction(Action.SLEEP, this.state.actionInputs)) {
-                    LockSupport.parkNanos(20_000);
+                long nowNs = System.nanoTime();
+                if (processed > 0L) {
+                    recordProgress(nowNs, executionElapsedNs, executionFrames, processed);
+                    this.controlPolicy.recordProgress();
+                    Thread.onSpinWait();
+                } else if (this.controlPolicy.missRequiresPark()) {
+                    LockSupport.parkNanos(1_000L);
                 } else {
                     Thread.onSpinWait();
                 }
@@ -283,57 +324,37 @@ public final class ControlPlaneFragment extends WorkRequester {
         return super.upstreamPull(context.upstream, this.outputStream, limit);
     }
 
-    private void updateLimits(long nowNs, long lastLatency) {
-        this.state.latencyRecorder.recordUnits(nowNs, lastLatency);
+    /// Records loop execution telemetry and advances policy only at a batch boundary.
+    private void recordProgress(long nowNs, long executionElapsedNs, long executionFrames, long processed) {
+        this.controlPolicy.recordExecution(executionElapsedNs, executionFrames);
+        if (executionElapsedNs > 0L && executionFrames > 0L) {
+            long serviceTime = Math.max(1L, executionElapsedNs / executionFrames);
+            this.state.serviceTimeRecorder.recordUnits(nowNs, serviceTime);
+        }
+        this.state.throughputRecorder.recordUnits(nowNs, processed);
 
         if (this.state.completed < this.state.batchSize) {
             return;
         }
-        this.state.completed = 0;
+        this.state.completed = 0L;
+        this.state.batchSize = this.controlPolicy.completeBatch(getBatchLimit());
+        reportMetrics();
+    }
 
-        this.state.batchRecorder.recordUnits(nowNs, this.state.batchSize);
-        if (this.state.batchStart == 0) {
-            this.state.batchStart = nowNs;
+    /// Publishes telemetry from the existing service and throughput recorders when configured.
+    private void reportMetrics() {
+        if (this.config.registry() == null) {
             return;
         }
-
-        if (this.config.registry() != null) {
-            double throughput = this.state.latencyRecorder.averageUnitsOverTime();
+        double throughput = this.state.throughputRecorder.averageUnitsOverTime();
+        if (Double.isFinite(throughput) && throughput > 0) {
             this.metrics.reportThroughput(throughput);
-
-            double latency = 1.0 / throughput;
-            if (Double.isFinite(latency)) {
-                this.metrics.reportLatency(Math.round(latency));
-            }
         }
 
-        long currentBatch = this.state.batchSize;
-
-        FlowRecorder recorder = this.state.latencyRecorder;
-
-        double avgThroughput = recorder.averageUnitsOverTime();
-
-        double diffUpper = recorder.getMaxUoT() - avgThroughput;
-        double diffLower = avgThroughput - recorder.getMinUoT();
-
-        double averageBatch = Math.round(this.state.batchRecorder.averageUnits());
-        if (currentBatch == averageBatch) {
-            if (avgThroughput < 0.90) {
-                currentBatch += Math.round(Math.max(Math.sqrt(currentBatch), 1));
-            } else if (avgThroughput > 1.0) {
-                currentBatch -= Math.round(Math.max(Math.sqrt(currentBatch), 1));
-            } else if (diffLower < diffUpper) {
-                currentBatch++;
-            } else {
-                currentBatch--;
-            }
+        double latency = this.state.serviceTimeRecorder.averageUnits();
+        if (Double.isFinite(latency) && latency > 0) {
+            this.metrics.reportLatency(Math.round(latency));
         }
-
-        currentBatch = MathFunctions.clampLong(currentBatch, 2, this.config.maxBatchSize());
-        currentBatch = Math.min(currentBatch, getBatchLimit());
-
-        this.state.batchStart = nowNs;
-        this.state.batchSize = currentBatch;
     }
 
     private long getBatchLimit() {
@@ -350,12 +371,10 @@ public final class ControlPlaneFragment extends WorkRequester {
         return (long) ADAPTIVE_BATCH_CAP.getOpaque(this);
     }
 
+    /// Waits with the established idle delay while there is no source or cached work.
     private long idleSpin(FlowThread.FlowContext threadContext) {
         while (keepRunning()) {
             serviceResetRequest();
-            if (this.benchmarkMode && this.actionPicker.halted()) {
-                return 0;
-            }
             long upCount = threadContext.upstream.getTrueUpstreamCount();
             if (upCount > 0) {
                 return upCount;
@@ -499,7 +518,8 @@ public final class ControlPlaneFragment extends WorkRequester {
     private class CycleState {
 
         final FlowRecorder batchRecorder = new FlowRecorder();
-        final FlowRecorder latencyRecorder = new FlowRecorder();
+        final FlowRecorder serviceTimeRecorder = new FlowRecorder();
+        final FlowRecorder throughputRecorder = new FlowRecorder();
         final double[] actionInputs = new double[6];
 
         long batchStart = 0;
@@ -512,13 +532,17 @@ public final class ControlPlaneFragment extends WorkRequester {
         void reset() {
             GlobalState.resetThroughput(ControlPlaneFragment.this.socket, ControlPlaneFragment.this.cpu);
             this.batchRecorder.reset();
-            this.latencyRecorder.reset();
+            this.serviceTimeRecorder.reset();
+            this.throughputRecorder.reset();
 
             this.batchStart = 0;
             this.batchSize = 2;
             this.completed = 0;
             this.upstreamCount = 0;
             this.totalExecutions = 0;
+            if (ControlPlaneFragment.this.controlPolicy != null) {
+                ControlPlaneFragment.this.controlPolicy.reset();
+            }
             Arrays.fill(this.actionInputs, 0.0);
         }
     }

@@ -43,7 +43,7 @@ public class BenchRunner {
             "java.base/jdk.internal.platform=ALL-UNNAMED",
             "--add-exports",
             "java.base/jdk.internal.vm.annotation=ALL-UNNAMED",
-            "-Dorg.slf4j.simpleLogger.defaultLogLevel=error");
+            "-Dlogback.configurationFile=benchmark-logback.xml");
 
     private static Set<String> getBenchmarks(String[] args) {
         Set<String> tasks = new LinkedHashSet<>();
