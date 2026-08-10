@@ -41,6 +41,7 @@ class BenchmarkRunnerTest {
         NativeBenchmarkRunPlan plan = new NativeBenchmarkRunPlan(
                 "training",
                 0,
+                1,
                 run.benchmarkRunId(),
                 run.candidateCohortId(),
                 run.scenario(),
@@ -87,6 +88,7 @@ class BenchmarkRunnerTest {
         NativeBenchmarkRunPlan plan = new NativeBenchmarkRunPlan(
                 "training",
                 0,
+                1,
                 run.benchmarkRunId(),
                 run.candidateCohortId(),
                 run.scenario(),

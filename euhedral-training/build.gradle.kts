@@ -42,6 +42,16 @@ tasks.named("assemble") {
     dependsOn(assembleTrainerDistribution)
 }
 
+tasks.withType<Test>().configureEach {
+    // Unit tests exercise CPU-pinned networks; prevent the GPU-native TensorFlow runtime from
+    // initializing every visible accelerator while the Gradle test JVM starts.
+    environment("TF_CPP_MIN_LOG_LEVEL", "2")
+    environment("TF_ENABLE_ONEDNN_OPTS", "0")
+    classpath = classpath.filter { file ->
+        !file.name.endsWith("-linux-x86_64-gpu.jar")
+    }
+}
+
 tasks.named<ProcessResources>("processResources") {
     from(project(":euhedral-core").file("src/main/resources")) {
         include("logback-fragments/**")
@@ -62,6 +72,7 @@ dependencies {
     api(libs.org.tensorflow.tensorflow.framework)
     api(libs.org.slf4j.slf4j.api)
     runtimeOnly(variantOf(libs.org.tensorflow.tensorflow.core.native) { classifier("linux-x86_64-gpu") })
+    testRuntimeOnly(variantOf(libs.org.tensorflow.tensorflow.core.native) { classifier("linux-x86_64") })
     runtimeOnly(libs.ch.qos.logback.logback.classic)
     testImplementation(libs.org.junit.jupiter.junit.jupiter)
     testImplementation(libs.org.assertj.assertj.core)

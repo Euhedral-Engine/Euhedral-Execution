@@ -95,11 +95,12 @@ public final class BenchmarkRunner {
             int policies = plan.policies().size();
             for (ScheduledPolicy policy : plan.policies()) {
                 LOGGER.info(
-                        "Benchmarking policy: run={}, scenario={}, iteration={}/{}, policy={}/{}, "
-                                + "role={}, sampleMs={}",
+                        "Benchmarking policy: run={}, scenario={}, iteration={}/{}, "
+                                + "repetitions={}, policy={}/{}, role={}, sampleMs={}",
                         plan.benchmarkRunId(),
                         plan.scenario(),
-                        plan.iteration() + 1,
+                        plan.iteration(),
+                        plan.totalIterations(),
                         plan.executionConfig().expectedRepetitions(),
                         ++currentP,
                         policies,

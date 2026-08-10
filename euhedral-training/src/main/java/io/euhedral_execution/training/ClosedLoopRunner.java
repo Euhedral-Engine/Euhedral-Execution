@@ -1077,6 +1077,7 @@ public final class ClosedLoopRunner {
         return new NativeBenchmarkRunPlan(
                 config.trainingRunId(),
                 schedule.iteration(),
+                config.iterations(),
                 run.benchmarkRunId(),
                 run.candidateCohortId(),
                 run.scenario(),
