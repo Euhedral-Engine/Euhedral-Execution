@@ -28,8 +28,12 @@ class ResourceMonitorTest {
         AtomicInteger topologyUpdates = new AtomicInteger();
 
         try (ResourceMonitor monitor = new ResourceMonitor(
-                utilization -> topologyUpdates.incrementAndGet(), Duration.ofMillis(200),
-                snapshots, clock, (deadline, clk) -> {}, Thread::new)) {
+                utilization -> topologyUpdates.incrementAndGet(),
+                Duration.ofMillis(200),
+                snapshots,
+                clock,
+                (deadline, clk) -> {},
+                Thread::new)) {
             HardwareUtilization first = monitor.getUtilization();
             int samplesAfterFirstRead = snapshots.samples.get();
 
