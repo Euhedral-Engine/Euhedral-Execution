@@ -61,12 +61,15 @@ public final class LatestValueDispatcher {
         }
     }
 
-    /// Adds a listener using object identity deduplication.
+    /// Adds a listener using object identity deduplication while the dispatcher is open.
     public void addListener(@NonNull MonitorListener listener) {
         Objects.requireNonNull(listener);
 
         acquireLock();
         try {
+            if ((boolean) CLOSING.getAcquire(this)) {
+                return;
+            }
             for (MonitorListener existing : listeners) {
                 if (existing == listener) {
                     return;
@@ -124,16 +127,18 @@ public final class LatestValueDispatcher {
         awaitWhile(() -> !(boolean) CLOSED.getAcquire(this));
     }
 
-    /// Initiates shutdown. Rejects new offers and sets the termination hook.
+    /// Initiates shutdown, publishing the termination hook before rejecting new work.
     public void beginClose(@Nullable Runnable terminationHook) {
-        if (CLOSING.compareAndSet(this, false, true)) {
-            acquireLock();
-            try {
+        acquireLock();
+        try {
+            if (!(boolean) CLOSING.getAcquire(this)) {
                 this.terminationHook = terminationHook;
-            } finally {
-                releaseLock();
+                CLOSING.setRelease(this, true);
             }
+        } finally {
+            releaseLock();
         }
+        LockSupport.unpark(this.dispatchThread);
     }
 
     private void dispatchLoop() {

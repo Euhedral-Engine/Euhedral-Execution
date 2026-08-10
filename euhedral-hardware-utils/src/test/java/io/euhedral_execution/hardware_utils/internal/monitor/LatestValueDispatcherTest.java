@@ -135,11 +135,15 @@ class LatestValueDispatcherTest {
     void testExactlyOnceUnlockedTerminationNotification() throws InterruptedException {
         AtomicInteger hookCalls = new AtomicInteger();
         CountDownLatch hookLatch = new CountDownLatch(1);
+        MonitorListener listener = util -> {};
+        dispatcher.addListener(listener);
 
         dispatcher.beginClose(() -> {
+            dispatcher.removeListener(listener);
             hookCalls.incrementAndGet();
             hookLatch.countDown();
         });
+        dispatcher.beginClose(() -> hookCalls.addAndGet(100));
 
         assertTrue(hookLatch.await(5, TimeUnit.SECONDS));
         dispatcher.awaitClosed();
