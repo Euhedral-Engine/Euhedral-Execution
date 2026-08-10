@@ -21,8 +21,7 @@ import reactor.core.publisher.Sinks.EmitResult;
 
 public class FrameSequencer<T, R> {
 
-    private static final Logger LOGGER =
-            LoggerFactory.getLogger(Constants.getLoggerName(FrameSequencer.class));
+    private static final Logger LOGGER = LoggerFactory.getLogger(Constants.getLoggerName(FrameSequencer.class));
 
     private final long ingestPassword;
     private final long sequencePassword;
@@ -30,8 +29,7 @@ public class FrameSequencer<T, R> {
     private final PaddedAtomicLong wip = new PaddedAtomicLong(0);
     private final AtomicBoolean inputComplete = new AtomicBoolean(false);
     private final AtomicBoolean terminated = new AtomicBoolean(false);
-    private final PartitionedSpscQueue<SequencedFrame<T, R>> sequence =
-            new PartitionedSpscQueue<>(1, 32_768, 1);
+    private final PartitionedSpscQueue<SequencedFrame<T, R>> sequence = new PartitionedSpscQueue<>(1, 32_768, 1);
 
     private final Sinks.Many<R> output =
             Sinks.unsafe().many().unicast().onBackpressureBuffer(new PartitionedSpscQueue<>(8_192));
@@ -40,8 +38,7 @@ public class FrameSequencer<T, R> {
 
     public FrameSequencer(long ingestPassword) {
         this.ingestPassword = ingestPassword;
-        this.sequencePassword =
-                HasherApi.combine(ingestPassword, ingestPassword + HasherApi.BASE_SEED);
+        this.sequencePassword = HasherApi.combine(ingestPassword, ingestPassword + HasherApi.BASE_SEED);
     }
 
     public void drain(long password) {
@@ -55,20 +52,17 @@ public class FrameSequencer<T, R> {
         return flux -> flatMapSequential(flux, function, recycleCapacity);
     }
 
-    public Flux<SequencedFrame<T, R>> flatMapSequential(Flux<T> flux, Function<T, R> function,
-            int recycleCapacity) {
+    public Flux<SequencedFrame<T, R>> flatMapSequential(Flux<T> flux, Function<T, R> function, int recycleCapacity) {
         final AtomicBoolean killSwitch = new AtomicBoolean(false);
 
         long[] seed = {ThreadLocalRandom.current().nextLong()};
-        FrameManager<T, SequencedFrame<T, R>> recycler =
-                new FrameManager<>(recycleCapacity, ingestPassword);
+        FrameManager<T, SequencedFrame<T, R>> recycler = new FrameManager<>(recycleCapacity, ingestPassword);
         if (this.recycler != null) {
             throw new IllegalStateException("A FrameSequencer can only transform one Flux");
         }
         this.recycler = recycler;
         FrameCreate<T, SequencedFrame<T, R>> frameCreate = (idHash, data) -> {
-            SequencedFrame<T, R> frame =
-                    new SequencedFrame<>(idHash, data, function, killSwitch, this, recycler);
+            SequencedFrame<T, R> frame = new SequencedFrame<>(idHash, data, function, killSwitch, this, recycler);
             frame.randomizeHash(seed[0]++);
             registerFrame(frame);
             return frame;

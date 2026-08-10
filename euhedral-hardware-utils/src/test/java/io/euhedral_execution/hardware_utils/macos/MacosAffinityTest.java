@@ -29,42 +29,42 @@ class MacosAffinityTest {
         AtomicReference<long[]> seen = new AtomicReference<>();
 
         // Multi-locality request with 2 set bits (0b11 = 3L) -> rejected
-        assertFalse(MacosAffinityCalls.applyOrdinal(new long[]{3L}, mask -> {
+        assertFalse(MacosAffinityCalls.applyOrdinal(new long[] {3L}, mask -> {
             seen.set(mask);
             return 0;
         }));
 
         // Zero set bits (0L) -> rejected
-        assertFalse(MacosAffinityCalls.applyOrdinal(new long[]{0L}, mask -> {
+        assertFalse(MacosAffinityCalls.applyOrdinal(new long[] {0L}, mask -> {
             seen.set(mask);
             return 0;
         }));
 
         // Single-locality request with 1 set bit (bit 0 = 1L -> ordinal 0 -> tag 1) -> accepted
-        assertTrue(MacosAffinityCalls.applyOrdinal(new long[]{1L}, mask -> {
+        assertTrue(MacosAffinityCalls.applyOrdinal(new long[] {1L}, mask -> {
             seen.set(mask.clone());
             return 0;
         }));
-        assertArrayEquals(new long[]{1L}, seen.get());
+        assertArrayEquals(new long[] {1L}, seen.get());
 
         // Single-locality request for ordinal 2 (1L << 2 = 4L -> ordinal 2 -> tag 3) -> accepted
-        assertTrue(MacosAffinityCalls.applyOrdinal(new long[]{4L}, mask -> {
+        assertTrue(MacosAffinityCalls.applyOrdinal(new long[] {4L}, mask -> {
             seen.set(mask.clone());
             return 0;
         }));
-        assertArrayEquals(new long[]{3L}, seen.get());
+        assertArrayEquals(new long[] {3L}, seen.get());
     }
 
     @Test
     void validatesTagZeroRelease() {
         AtomicReference<long[]> seen = new AtomicReference<>();
-        assertTrue(MacosAffinityCalls.raw(new long[]{0L}, mask -> {
+        assertTrue(MacosAffinityCalls.raw(new long[] {0L}, mask -> {
             seen.set(mask.clone());
             return 0;
         }));
-        assertArrayEquals(new long[]{0L}, seen.get());
+        assertArrayEquals(new long[] {0L}, seen.get());
 
-        assertFalse(MacosAffinityCalls.raw(new long[]{0L}, mask -> {
+        assertFalse(MacosAffinityCalls.raw(new long[] {0L}, mask -> {
             throw new UnsatisfiedLinkError("configured link error");
         }));
     }

@@ -17,7 +17,8 @@ import org.slf4j.LoggerFactory;
 public abstract class AbstractExecutor implements CloneableObject {
 
     protected final int cpu;
-    private final Logger logger = LoggerFactory.getLogger(Constants.getLoggerName(this.getClass().getSimpleName()));
+    private final Logger logger =
+            LoggerFactory.getLogger(Constants.getLoggerName(this.getClass().getSimpleName()));
 
     protected AbstractExecutor(int cpu) {
         this.cpu = cpu;

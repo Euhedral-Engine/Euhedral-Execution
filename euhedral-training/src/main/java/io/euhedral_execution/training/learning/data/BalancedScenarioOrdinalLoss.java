@@ -10,11 +10,24 @@ import io.euhedral_execution.training.learning.utils.ScenarioOrdinalTargets;
 
 public final class BalancedScenarioOrdinalLoss extends Loss {
 
+    private final NDArray positiveWeights;
+    private final NDArray negativeWeights;
+    private final float labelSmoothing;
+
+    public BalancedScenarioOrdinalLoss(NDManager manager, ClassBalance balance, float labelSmoothing) {
+        super("BalancedScenarioOrdinalBinaryCrossEntropy");
+        if (labelSmoothing < 0 || labelSmoothing >= 0.5f) {
+            throw new IllegalArgumentException("Label smoothing must be in [0, 0.5)");
+        }
+        this.labelSmoothing = labelSmoothing;
+        positiveWeights = manager.create(balance.positiveWeights()).reshape(1, 9);
+        negativeWeights = manager.create(balance.negativeWeights()).reshape(1, 9);
+    }
+
     public static ClassBalance fit(ScenarioLearningMatrix matrix) {
         int rows = matrix.rows();
         if (rows < 2) {
-            throw new InsufficientScenarioLearningDataException(
-                    "Class balancing requires at least two fitting rows");
+            throw new InsufficientScenarioLearningDataException("Class balancing requires at least two fitting rows");
         }
         float[] labels = matrix.ordinalLabels();
         float[] rowWeights = matrix.rowWeights();
@@ -33,8 +46,7 @@ public final class BalancedScenarioOrdinalLoss extends Loss {
                 }
                 sum.add(rowWeights[row] * label);
             }
-            double rate = StrictMath.max(floor,
-                    StrictMath.min(1.0 - floor, sum.value() / totalWeight));
+            double rate = StrictMath.max(floor, StrictMath.min(1.0 - floor, sum.value() / totalWeight));
             rates[output] = (float) rate;
             positive[output] = (float) (0.5 / rate);
             negative[output] = (float) (0.5 / (1.0 - rate));
@@ -42,8 +54,8 @@ public final class BalancedScenarioOrdinalLoss extends Loss {
         return new ClassBalance(positive, negative, rates);
     }
 
-    public static double weightedBce(float[] logits, ScenarioLearningMatrix matrix,
-            ClassBalance balance, float smoothing) {
+    public static double weightedBce(
+            float[] logits, ScenarioLearningMatrix matrix, ClassBalance balance, float smoothing) {
         if (logits.length != matrix.rows() * 9) {
             throw new IllegalArgumentException("Logit shape mismatch");
         }
@@ -60,7 +72,8 @@ public final class BalancedScenarioOrdinalLoss extends Loss {
                 double logit = logits[index];
                 double hard = labels[index];
                 double target = hard * (1 - 2 * smoothing) + smoothing;
-                double bce = StrictMath.max(logit, 0) - logit * target
+                double bce = StrictMath.max(logit, 0)
+                        - logit * target
                         + StrictMath.log1p(StrictMath.exp(-StrictMath.abs(logit)));
                 double classWeight = hard == 1 ? positive[output] : negative[output];
                 total.add(rowWeights[row] * classWeight * bce);
@@ -81,20 +94,6 @@ public final class BalancedScenarioOrdinalLoss extends Loss {
         return sum.value();
     }
 
-    private final NDArray positiveWeights;
-    private final NDArray negativeWeights;
-    private final float labelSmoothing;
-
-    public BalancedScenarioOrdinalLoss(NDManager manager, ClassBalance balance, float labelSmoothing) {
-        super("BalancedScenarioOrdinalBinaryCrossEntropy");
-        if (labelSmoothing < 0 || labelSmoothing >= 0.5f) {
-            throw new IllegalArgumentException("Label smoothing must be in [0, 0.5)");
-        }
-        this.labelSmoothing = labelSmoothing;
-        positiveWeights = manager.create(balance.positiveWeights()).reshape(1, 9);
-        negativeWeights = manager.create(balance.negativeWeights()).reshape(1, 9);
-    }
-
     @Override
     public NDArray evaluate(NDList labels, NDList predictions) {
         if (labels.size() != 2 || predictions.size() != 1) {
@@ -103,12 +102,13 @@ public final class BalancedScenarioOrdinalLoss extends Loss {
         NDArray hardLabel = labels.get(0);
         NDArray rowWeight = labels.get(1);
         NDArray logit = predictions.singletonOrThrow();
-        NDArray classWeight = hardLabel.mul(positiveWeights)
-                .add(hardLabel.neg().add(1.0f).mul(negativeWeights));
+        NDArray classWeight =
+                hardLabel.mul(positiveWeights).add(hardLabel.neg().add(1.0f).mul(negativeWeights));
         NDArray target = labelSmoothing == 0
                 ? hardLabel
                 : hardLabel.mul(1.0f - 2.0f * labelSmoothing).add(labelSmoothing);
-        NDArray stableBce = Activation.relu(logit).sub(logit.mul(target))
+        NDArray stableBce = Activation.relu(logit)
+                .sub(logit.mul(target))
                 .add(Activation.softPlus(logit.abs().neg()));
         NDArray denominator = rowWeight.sum().mul(ScenarioOrdinalTargets.OUTPUT_WIDTH);
         return stableBce.mul(classWeight).mul(rowWeight).sum().div(denominator);
@@ -120,8 +120,7 @@ public final class BalancedScenarioOrdinalLoss extends Loss {
             positiveWeights = positiveWeights.clone();
             negativeWeights = negativeWeights.clone();
             positiveRates = positiveRates.clone();
-            if (positiveWeights.length != 9 || negativeWeights.length != 9
-                    || positiveRates.length != 9) {
+            if (positiveWeights.length != 9 || negativeWeights.length != 9 || positiveRates.length != 9) {
                 throw new IllegalArgumentException("Class balance width mismatch");
             }
         }
@@ -149,8 +148,7 @@ public final class BalancedScenarioOrdinalLoss extends Loss {
 
         void add(double value) {
             double next = sum + value;
-            correction += StrictMath.abs(sum) >= StrictMath.abs(value)
-                    ? (sum - next) + value : (value - next) + sum;
+            correction += StrictMath.abs(sum) >= StrictMath.abs(value) ? (sum - next) + value : (value - next) + sum;
             sum = next;
         }
 

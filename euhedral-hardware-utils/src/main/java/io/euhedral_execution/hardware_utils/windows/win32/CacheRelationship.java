@@ -7,10 +7,31 @@ import java.util.List;
 
 public final class CacheRelationship extends SystemLogicalProcessorInformation {
 
+    public final byte level;
+    public final byte associativity;
+    public final short lineSize;
+    public final int cacheSizeBytes;
+    public final CacheType type;
+    public final List<GroupAffinity> groupAffinities;
+    public CacheRelationship(
+            byte level,
+            byte associativity,
+            short lineSize,
+            int cacheSizeBytes,
+            CacheType type,
+            List<GroupAffinity> groupAffinities) {
+        super(Relationship.CACHE);
+        this.level = level;
+        this.associativity = associativity;
+        this.lineSize = lineSize;
+        this.cacheSizeBytes = cacheSizeBytes;
+        this.type = type;
+        this.groupAffinities = groupAffinities;
+    }
+
     public static CacheRelationship parse(ByteBuffer buffer, int payloadPos, int payloadLen) {
         if (payloadLen < 32) {
-            throw new IllegalArgumentException(
-                    "Malformed CacheRelationship payload length: " + payloadLen);
+            throw new IllegalArgumentException("Malformed CacheRelationship payload length: " + payloadLen);
         }
         byte level = buffer.get(payloadPos);
         byte associativity = buffer.get(payloadPos + 1);
@@ -20,8 +41,8 @@ public final class CacheRelationship extends SystemLogicalProcessorInformation {
         int groupCount = Short.toUnsignedInt(buffer.getShort(payloadPos + 30));
 
         if (payloadLen < 32 + groupCount * 16) {
-            throw new IllegalArgumentException("Malformed CacheRelationship payload length "
-                    + payloadLen + " for groupCount " + groupCount);
+            throw new IllegalArgumentException(
+                    "Malformed CacheRelationship payload length " + payloadLen + " for groupCount " + groupCount);
         }
 
         List<GroupAffinity> groupAffinities = new ArrayList<>(groupCount);
@@ -31,26 +52,13 @@ public final class CacheRelationship extends SystemLogicalProcessorInformation {
             groupPos += 16;
         }
 
-        return new CacheRelationship(level, associativity, lineSize, cacheSizeBytes, CacheType.from(type),
+        return new CacheRelationship(
+                level,
+                associativity,
+                lineSize,
+                cacheSizeBytes,
+                CacheType.from(type),
                 Collections.unmodifiableList(groupAffinities));
-    }
-
-    public final byte level;
-    public final byte associativity;
-    public final short lineSize;
-    public final int cacheSizeBytes;
-    public final CacheType type;
-    public final List<GroupAffinity> groupAffinities;
-
-    public CacheRelationship(byte level, byte associativity, short lineSize, int cacheSizeBytes,
-            CacheType type, List<GroupAffinity> groupAffinities) {
-        super(Relationship.CACHE);
-        this.level = level;
-        this.associativity = associativity;
-        this.lineSize = lineSize;
-        this.cacheSizeBytes = cacheSizeBytes;
-        this.type = type;
-        this.groupAffinities = groupAffinities;
     }
 
     public enum CacheType {

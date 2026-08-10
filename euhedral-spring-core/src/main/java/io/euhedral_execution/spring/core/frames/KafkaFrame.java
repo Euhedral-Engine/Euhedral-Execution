@@ -23,7 +23,8 @@ public class KafkaFrame extends AbstractFrame {
     @Getter
     private OffsetMd ack;
 
-    public KafkaFrame(long idHash,
+    public KafkaFrame(
+            long idHash,
             ConsumerRecord<?, ?> cRecord,
             OffsetCollector.OffsetMd ack,
             @Nullable FrameManager<ConsumerRecord<?, ?>, KafkaFrame> recycler,
@@ -50,8 +51,8 @@ public class KafkaFrame extends AbstractFrame {
         recycle();
     }
 
-    public void replace(ConsumerRecord<?, ?> cRecord, OffsetCollector.OffsetMd ack,
-            @NonNull KillSwitch partitionKillSwitch) {
+    public void replace(
+            ConsumerRecord<?, ?> cRecord, OffsetCollector.OffsetMd ack, @NonNull KillSwitch partitionKillSwitch) {
         this.cRecord = cRecord;
         this.ack = ack;
         this.ready = false;

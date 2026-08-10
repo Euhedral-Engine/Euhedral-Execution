@@ -34,7 +34,7 @@ public class MpscQueue<T> extends BaseConcurrentQueue<T> implements ConcurrentQu
             this.allocator = null;
             this.maxPooledChunks = 0;
         }
-        if(bounded) {
+        if (bounded) {
             this.capacity = (QueueUtils.chunkMask(chunkSize) >>> QueueUtils.SHIFT);
         } else {
             this.capacity = Long.MAX_VALUE;
@@ -86,10 +86,10 @@ public class MpscQueue<T> extends BaseConcurrentQueue<T> implements ConcurrentQu
     }
 
     public final long drain(BaseConcurrentQueue<T> receiver, Consumer<T> sideEffect, long limit) {
-        if(receiver instanceof SpscQueue) {
+        if (receiver instanceof SpscQueue) {
             return scToSpTransfer(receiver, sideEffect, limit);
         }
-        if(receiver instanceof SpmcQueue) {
+        if (receiver instanceof SpmcQueue) {
             return scToSpTransfer(receiver, sideEffect, limit);
         }
         return scToMpTransfer(receiver, sideEffect, limit);

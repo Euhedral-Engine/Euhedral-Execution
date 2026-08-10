@@ -26,44 +26,79 @@ import java.util.Set;
 import java.util.TreeSet;
 
 public final class ClosedLoopConfigCodec {
-    private static final java.util.regex.Pattern DECIMAL = java.util.regex.Pattern.compile(
-            "[+-]?(?:(?:[0-9]+(?:\\.[0-9]*)?)|(?:\\.[0-9]+))(?:[eE][+-]?[0-9]+)?");
-    private static final Set<String> REPEATED = Set.of("scenario.required",
-            "run.initial_observation_bundle", "calibration.reference_override");
+    private static final java.util.regex.Pattern DECIMAL =
+            java.util.regex.Pattern.compile("[+-]?(?:(?:[0-9]+(?:\\.[0-9]*)?)|(?:\\.[0-9]+))(?:[eE][+-]?[0-9]+)?");
+    private static final Set<String> REPEATED =
+            Set.of("scenario.required", "run.initial_observation_bundle", "calibration.reference_override");
     private static final Set<String> KNOWN = Set.of(
-            "run.workspace", "run.training_run_id", "run.iterations",
-            "run.candidate_budget", "run.active_environment_id",
-            "run.scenarios_per_iteration", "run.scheduler_seed_hex",
-            "run.initial_sobol_cursor", "run.bootstrap_policies",
-            "run.initial_calibration_plan", "run.initial_observation_bundle",
-            "run.commit_sha", "run.dirty_working_tree", "run.resume", "run.stop_file",
-            "scenario.required", "calibration.reference_override",
-            "budget.exploration_weight", "budget.carry_forward_weight",
-            "budget.leader_revalidation_weight", "budget.disagreement_audit_weight",
-            "candidate.screen_rows", "candidate.maximum_prediction_rows",
-            "candidate.score_band_weights", "candidate.cma_weight",
-            "candidate.score_band_weight", "candidate.direct_sobol_weight",
-            "candidate.cma.enabled", "candidate.cma.islands",
-            "candidate.cma.generations", "candidate.cma.population_size",
-            "candidate.cma.initial_sigma", "candidate.cma.minimum_seed_policies",
-            "benchmark.expected_repetitions", "benchmark.sample_duration_nanos",
-            "benchmark.liveness_timeout_nanos", "benchmark.frames_per_source",
-            "benchmark.reset_timeout_nanos", "benchmark.ordered_frames",
-            "anchors.fixed_fraction", "anchors.minimum_fixed_anchors",
+            "run.workspace",
+            "run.training_run_id",
+            "run.iterations",
+            "run.candidate_budget",
+            "run.active_environment_id",
+            "run.scenarios_per_iteration",
+            "run.scheduler_seed_hex",
+            "run.initial_sobol_cursor",
+            "run.bootstrap_policies",
+            "run.initial_calibration_plan",
+            "run.initial_observation_bundle",
+            "run.commit_sha",
+            "run.dirty_working_tree",
+            "run.resume",
+            "run.stop_file",
+            "scenario.required",
+            "calibration.reference_override",
+            "budget.exploration_weight",
+            "budget.carry_forward_weight",
+            "budget.leader_revalidation_weight",
+            "budget.disagreement_audit_weight",
+            "candidate.screen_rows",
+            "candidate.maximum_prediction_rows",
+            "candidate.score_band_weights",
+            "candidate.cma_weight",
+            "candidate.score_band_weight",
+            "candidate.direct_sobol_weight",
+            "candidate.cma.enabled",
+            "candidate.cma.islands",
+            "candidate.cma.generations",
+            "candidate.cma.population_size",
+            "candidate.cma.initial_sigma",
+            "candidate.cma.minimum_seed_policies",
+            "benchmark.expected_repetitions",
+            "benchmark.sample_duration_nanos",
+            "benchmark.liveness_timeout_nanos",
+            "benchmark.frames_per_source",
+            "benchmark.reset_timeout_nanos",
+            "benchmark.ordered_frames",
+            "anchors.fixed_fraction",
+            "anchors.minimum_fixed_anchors",
             "anchors.maximum_bootstrap_non_success_rate",
             "anchors.maximum_bootstrap_relative_iqr",
-            "anchors.allow_imported_bootstrap", "calibration.minimum_strong_anchors",
-            "calibration.minimum_weak_anchors", "calibration.maximum_strong_residual",
-            "calibration.maximum_weak_residual", "calibration.minimum_log_sigma",
+            "anchors.allow_imported_bootstrap",
+            "calibration.minimum_strong_anchors",
+            "calibration.minimum_weak_anchors",
+            "calibration.maximum_strong_residual",
+            "calibration.maximum_weak_residual",
+            "calibration.minimum_log_sigma",
             "calibration.maximum_anchor_weight_share",
             "aggregation.minimum_successful_repetitions",
-            "aggregation.minimum_success_fraction", "aggregation.bootstrap_replicates",
-            "aggregation.bootstrap_seed_hex", "aggregation.calibration_acceptance",
-            "training.split_seed_hex", "training.model_seed_hex", "training.device",
-            "training.ensemble_members", "training.loso_evaluation_members",
-            "training.ablation_members", "training.max_epochs", "training.patience",
-            "training.batch_size", "training.learning_rate", "training.weight_decay",
-            "training.label_smoothing", "training.minimum_train_policy_groups",
+            "aggregation.minimum_success_fraction",
+            "aggregation.bootstrap_replicates",
+            "aggregation.bootstrap_seed_hex",
+            "aggregation.calibration_acceptance",
+            "training.split_seed_hex",
+            "training.model_seed_hex",
+            "training.device",
+            "training.ensemble_members",
+            "training.loso_evaluation_members",
+            "training.ablation_members",
+            "training.max_epochs",
+            "training.patience",
+            "training.batch_size",
+            "training.learning_rate",
+            "training.weight_decay",
+            "training.label_smoothing",
+            "training.minimum_train_policy_groups",
             "training.minimum_validation_policy_groups",
             "training.minimum_test_policy_groups",
             "training.minimum_train_rows_per_scenario",
@@ -85,14 +120,15 @@ public final class ClosedLoopConfigCodec {
             "evaluation.maximum_counts_spearman_regression",
             "evaluation.maximum_counts_worst_environment_mae_regression");
 
+    private ClosedLoopConfigCodec() {}
+
     public static ClosedLoopConfig read(Path path) throws IOException {
         Path file = path.toAbsolutePath().normalize();
         byte[] bytes = java.nio.file.Files.readAllBytes(file);
         if (bytes.length == 0 || bytes[bytes.length - 1] != '\n') {
             throw new IllegalArgumentException("Configuration requires a final LF");
         }
-        if (bytes.length >= 3 && (bytes[0] & 0xff) == 0xef
-                && (bytes[1] & 0xff) == 0xbb && (bytes[2] & 0xff) == 0xbf) {
+        if (bytes.length >= 3 && (bytes[0] & 0xff) == 0xef && (bytes[1] & 0xff) == 0xbb && (bytes[2] & 0xff) == 0xbf) {
             throw new IllegalArgumentException("Configuration must not contain a BOM");
         }
         for (byte value : bytes) {
@@ -110,17 +146,17 @@ public final class ClosedLoopConfigCodec {
 
     public static String example() {
         return """
-                run.workspace=workspace
-                run.training_run_id=example
-                run.iterations=3
-                run.candidate_budget=1024
-                run.active_environment_id=machine-a
-                run.bootstrap_policies=bootstrap-policies.vectors.csv
-                run.commit_sha=0000000000000000000000000000000000000000
-                run.dirty_working_tree=false
-                scenario.required=s1-machine-a-src1-core32-r1of32
-                scenario.required=s1-machine-a-src32-core32-r1of1
-                """;
+            run.workspace=workspace
+            run.training_run_id=example
+            run.iterations=3
+            run.candidate_budget=1024
+            run.active_environment_id=machine-a
+            run.bootstrap_policies=bootstrap-policies.vectors.csv
+            run.commit_sha=0000000000000000000000000000000000000000
+            run.dirty_working_tree=false
+            scenario.required=s1-machine-a-src1-core32-r1of32
+            scenario.required=s1-machine-a-src32-core32-r1of1
+            """;
     }
 
     private static LinkedHashMap<String, List<Value>> parse(String text) {
@@ -151,8 +187,7 @@ public final class ClosedLoopConfigCodec {
             if (!REPEATED.contains(key) && !entries.isEmpty()) {
                 throw line(index, "Duplicate key " + key);
             }
-            if (REPEATED.contains(key)
-                    && entries.stream().anyMatch(entry -> entry.text.equals(value))) {
+            if (REPEATED.contains(key) && entries.stream().anyMatch(entry -> entry.text.equals(value))) {
                 throw line(index, "Duplicate list value for " + key);
             }
             entries.add(new Value(value, index + 1));
@@ -160,8 +195,7 @@ public final class ClosedLoopConfigCodec {
         return result;
     }
 
-    private static ClosedLoopConfig build(Path base,
-            LinkedHashMap<String, List<Value>> values) {
+    private static ClosedLoopConfig build(Path base, LinkedHashMap<String, List<Value>> values) {
         Parser parser = new Parser(base, values);
         Path workspace = parser.requiredPath("run.workspace");
         String runId = parser.required("run.training_run_id");
@@ -170,8 +204,11 @@ public final class ClosedLoopConfigCodec {
         String environment = parser.required("run.active_environment_id");
         TreeSet<SourceScenario> scenarios = new TreeSet<>();
         for (Value value : parser.requiredList("scenario.required")) {
-            parser.addUnique(scenarios, parser.at(value,
-                    () -> SourceScenario.parse(value.text)), "scenario.required", value.line);
+            parser.addUnique(
+                    scenarios,
+                    parser.at(value, () -> SourceScenario.parse(value.text)),
+                    "scenario.required",
+                    value.line);
         }
         Optional<Path> bootstrap = parser.optionalPath("run.bootstrap_policies");
         Optional<Path> calibrationPlan = parser.optionalPath("run.initial_calibration_plan");
@@ -181,8 +218,7 @@ public final class ClosedLoopConfigCodec {
         }
         List<Path> bundles = parser.paths("run.initial_observation_bundle");
         if (!bundles.isEmpty() && calibrationPlan.isEmpty()) {
-            throw new IllegalArgumentException(
-                    "run.initial_observation_bundle requires run.initial_calibration_plan");
+            throw new IllegalArgumentException("run.initial_observation_bundle requires run.initial_calibration_plan");
         }
         Map<SourceScenario, String> overrides = parser.referenceOverrides();
 
@@ -201,11 +237,11 @@ public final class ClosedLoopConfigCodec {
         CandidateGenerationConfig generation = new CandidateGenerationConfig(
                 parser.integer("candidate.screen_rows", 2_097_152),
                 parser.integer("candidate.maximum_prediction_rows", 16_384),
-                parser.intList("candidate.score_band_weights",
-                        new int[]{1, 1, 1, 1, 2, 2, 3, 5, 8, 16}),
+                parser.intList("candidate.score_band_weights", new int[] {1, 1, 1, 1, 2, 2, 3, 5, 8, 16}),
                 parser.integer("candidate.cma_weight", 8),
                 parser.integer("candidate.score_band_weight", 7),
-                parser.integer("candidate.direct_sobol_weight", 1), cma);
+                parser.integer("candidate.direct_sobol_weight", 1),
+                cma);
         BenchmarkExecutionConfig benchmark = new BenchmarkExecutionConfig(
                 parser.integer("benchmark.expected_repetitions", 10),
                 parser.longInteger("benchmark.sample_duration_nanos", 200_000_000L),
@@ -231,8 +267,10 @@ public final class ClosedLoopConfigCodec {
                 parser.decimal("aggregation.minimum_success_fraction", .5),
                 parser.integer("aggregation.bootstrap_replicates", 1000),
                 parser.seed("aggregation.bootstrap_seed_hex", 0x6a09e667f3bcc909L),
-                parser.enumeration("aggregation.calibration_acceptance",
-                        CalibrationAcceptance.STRONG_ONLY, CalibrationAcceptance.class));
+                parser.enumeration(
+                        "aggregation.calibration_acceptance",
+                        CalibrationAcceptance.STRONG_ONLY,
+                        CalibrationAcceptance.class));
         EvaluationThresholds thresholds = new EvaluationThresholds(
                 parser.decimal("evaluation.maximum_grouped_macro_mae", .20),
                 parser.decimal("evaluation.minimum_grouped_macro_spearman", .50),
@@ -244,11 +282,9 @@ public final class ClosedLoopConfigCodec {
                 parser.decimal("evaluation.minimum_context_spearman_improvement", .05),
                 parser.decimal("evaluation.maximum_context_mae_regression", .01),
                 parser.decimal("evaluation.maximum_context_spearman_regression", .02),
-                parser.decimal("evaluation.minimum_counts_cross_environment_mae_improvement",
-                        .01),
+                parser.decimal("evaluation.minimum_counts_cross_environment_mae_improvement", .01),
                 parser.decimal("evaluation.maximum_counts_spearman_regression", .02),
-                parser.decimal("evaluation.maximum_counts_worst_environment_mae_regression",
-                        .02));
+                parser.decimal("evaluation.maximum_counts_worst_environment_mae_regression", .02));
         ScenarioTrainingConfig training = new ScenarioTrainingConfig(
                 parser.seed("training.split_seed_hex", 0x243f6a8885a308d3L),
                 parser.seed("training.model_seed_hex", 0x13198a2e03707344L),
@@ -270,22 +306,37 @@ public final class ClosedLoopConfigCodec {
                 parser.integer("training.minimum_test_rows_per_scenario", 5),
                 parser.bool("training.include_weak_calibration_rows", false),
                 parser.bool("training.require_target_variation", true),
-                parser.enumeration("training.feature_selection_mode",
-                        FeatureSelectionMode.RATIO_ONLY, FeatureSelectionMode.class), thresholds);
+                parser.enumeration(
+                        "training.feature_selection_mode", FeatureSelectionMode.RATIO_ONLY, FeatureSelectionMode.class),
+                thresholds);
         try {
-            return new ClosedLoopConfig(workspace, runId, iterations, candidateBudget, scenarios,
-                    environment, parser.integer("run.scenarios_per_iteration", 2),
+            return new ClosedLoopConfig(
+                    workspace,
+                    runId,
+                    iterations,
+                    candidateBudget,
+                    scenarios,
+                    environment,
+                    parser.integer("run.scenarios_per_iteration", 2),
                     parser.seed("run.scheduler_seed_hex", 0x6a09e667f3bcc909L),
                     parser.longInteger("run.initial_sobol_cursor", 131_072L),
-                    bootstrap, calibrationPlan, bundles, overrides,
+                    bootstrap,
+                    calibrationPlan,
+                    bundles,
+                    overrides,
                     parser.required("run.commit_sha"),
-                    parser.requiredBoolean("run.dirty_working_tree"), budget, generation,
-                    benchmark, anchors, calibration, aggregation, training,
+                    parser.requiredBoolean("run.dirty_working_tree"),
+                    budget,
+                    generation,
+                    benchmark,
+                    anchors,
+                    calibration,
+                    aggregation,
+                    training,
                     parser.bool("run.resume", true),
                     parser.path("run.stop_file", workspace.resolve("STOP")));
         } catch (IllegalArgumentException | ArithmeticException error) {
-            throw new IllegalArgumentException("Invalid closed-loop configuration: "
-                    + error.getMessage(), error);
+            throw new IllegalArgumentException("Invalid closed-loop configuration: " + error.getMessage(), error);
         }
     }
 
@@ -293,8 +344,12 @@ public final class ClosedLoopConfigCodec {
         return new IllegalArgumentException("Line " + (zeroBasedLine + 1) + ": " + message);
     }
 
-    private record Value(String text, int line) {
+    @FunctionalInterface
+    private interface CheckedSupplier<T> {
+        T get();
     }
+
+    private record Value(String text, int line) {}
 
     private static final class Parser {
         private final Path base;
@@ -303,6 +358,18 @@ public final class ClosedLoopConfigCodec {
         private Parser(Path base, Map<String, List<Value>> values) {
             this.base = base;
             this.values = values;
+        }
+
+        private static void requireDecimal(String value) {
+            if (!value.matches("-?[0-9]+")) {
+                throw new IllegalArgumentException("Expected decimal integer");
+            }
+        }
+
+        private static void requireFloatingDecimal(String value) {
+            if (!DECIMAL.matcher(value).matches()) {
+                throw new IllegalArgumentException("Expected finite decimal number");
+            }
         }
 
         private String required(String key) {
@@ -335,42 +402,50 @@ public final class ClosedLoopConfigCodec {
 
         private int integer(String key, int defaultValue) {
             Value value = one(key);
-            return value == null ? defaultValue : at(value, () -> {
-                requireDecimal(value.text);
-                return Integer.parseInt(value.text);
-            });
+            return value == null
+                    ? defaultValue
+                    : at(value, () -> {
+                        requireDecimal(value.text);
+                        return Integer.parseInt(value.text);
+                    });
         }
 
         private long longInteger(String key, long defaultValue) {
             Value value = one(key);
-            return value == null ? defaultValue : at(value, () -> {
-                requireDecimal(value.text);
-                return Long.parseLong(value.text);
-            });
+            return value == null
+                    ? defaultValue
+                    : at(value, () -> {
+                        requireDecimal(value.text);
+                        return Long.parseLong(value.text);
+                    });
         }
 
         private double decimal(String key, double defaultValue) {
             Value value = one(key);
-            return value == null ? defaultValue : at(value, () -> {
-                requireFloatingDecimal(value.text);
-                double result = Double.parseDouble(value.text);
-                if (!Double.isFinite(result)) {
-                    throw new IllegalArgumentException("Non-finite decimal");
-                }
-                return result;
-            });
+            return value == null
+                    ? defaultValue
+                    : at(value, () -> {
+                        requireFloatingDecimal(value.text);
+                        double result = Double.parseDouble(value.text);
+                        if (!Double.isFinite(result)) {
+                            throw new IllegalArgumentException("Non-finite decimal");
+                        }
+                        return result;
+                    });
         }
 
         private float floating(String key, float defaultValue) {
             Value value = one(key);
-            return value == null ? defaultValue : at(value, () -> {
-                requireFloatingDecimal(value.text);
-                float result = Float.parseFloat(value.text);
-                if (!Float.isFinite(result)) {
-                    throw new IllegalArgumentException("Non-finite float");
-                }
-                return result;
-            });
+            return value == null
+                    ? defaultValue
+                    : at(value, () -> {
+                        requireFloatingDecimal(value.text);
+                        float result = Float.parseFloat(value.text);
+                        if (!Float.isFinite(result)) {
+                            throw new IllegalArgumentException("Non-finite float");
+                        }
+                        return result;
+                    });
         }
 
         private boolean bool(String key, boolean defaultValue) {
@@ -379,20 +454,21 @@ public final class ClosedLoopConfigCodec {
                 return defaultValue;
             }
             if (!value.text.equals("true") && !value.text.equals("false")) {
-                throw at(value, () -> new IllegalArgumentException(
-                        "Expected true or false for " + key));
+                throw at(value, () -> new IllegalArgumentException("Expected true or false for " + key));
             }
             return Boolean.parseBoolean(value.text);
         }
 
         private long seed(String key, long defaultValue) {
             Value value = one(key);
-            return value == null ? defaultValue : at(value, () -> {
-                if (!value.text.matches("[0-9a-f]{16}")) {
-                    throw new IllegalArgumentException("Expected 16 lower-case hex digits");
-                }
-                return Long.parseUnsignedLong(value.text, 16);
-            });
+            return value == null
+                    ? defaultValue
+                    : at(value, () -> {
+                        if (!value.text.matches("[0-9a-f]{16}")) {
+                            throw new IllegalArgumentException("Expected 16 lower-case hex digits");
+                        }
+                        return Long.parseUnsignedLong(value.text, 16);
+                    });
         }
 
         private int[] intList(String key, int[] defaults) {
@@ -416,8 +492,7 @@ public final class ClosedLoopConfigCodec {
 
         private <E extends Enum<E>> E enumeration(String key, E defaultValue, Class<E> type) {
             Value value = one(key);
-            return value == null ? defaultValue : at(value,
-                    () -> Enum.valueOf(type, value.text));
+            return value == null ? defaultValue : at(value, () -> Enum.valueOf(type, value.text));
         }
 
         private Path path(String key, Path defaultValue) {
@@ -439,8 +514,7 @@ public final class ClosedLoopConfigCodec {
             for (Value value : values.getOrDefault(key, List.of())) {
                 Path path = at(value, () -> resolve(value.text));
                 if (!unique.add(path)) {
-                    throw new IllegalArgumentException("Line " + value.line
-                            + ": duplicate path for " + key);
+                    throw new IllegalArgumentException("Line " + value.line + ": duplicate path for " + key);
                 }
                 result.add(path);
             }
@@ -457,19 +531,17 @@ public final class ClosedLoopConfigCodec {
 
         private Map<SourceScenario, String> referenceOverrides() {
             HashMap<SourceScenario, String> result = new HashMap<>();
-            for (Value value : values.getOrDefault(
-                    "calibration.reference_override", List.of())) {
+            for (Value value : values.getOrDefault("calibration.reference_override", List.of())) {
                 at(value, () -> {
                     int separator = value.text.indexOf('|');
-                    if (separator <= 0 || separator != value.text.lastIndexOf('|')
+                    if (separator <= 0
+                            || separator != value.text.lastIndexOf('|')
                             || separator == value.text.length() - 1) {
                         throw new IllegalArgumentException("Malformed reference override");
                     }
-                    SourceScenario scenario = SourceScenario.parse(
-                            value.text.substring(0, separator));
+                    SourceScenario scenario = SourceScenario.parse(value.text.substring(0, separator));
                     String run = value.text.substring(separator + 1);
-                    if (!run.matches("[a-z0-9][a-z0-9._-]{0,95}")
-                            || result.putIfAbsent(scenario, run) != null) {
+                    if (!run.matches("[a-z0-9][a-z0-9._-]{0,95}") || result.putIfAbsent(scenario, run) != null) {
                         throw new IllegalArgumentException("Duplicate or malformed override");
                     }
                     return null;
@@ -481,7 +553,8 @@ public final class ClosedLoopConfigCodec {
         private Path resolve(String text) {
             Path value = Path.of(text);
             return (value.isAbsolute() ? value : base.resolve(value))
-                    .toAbsolutePath().normalize();
+                    .toAbsolutePath()
+                    .normalize();
         }
 
         private Value one(String key) {
@@ -493,36 +566,14 @@ public final class ClosedLoopConfigCodec {
             try {
                 return supplier.get();
             } catch (RuntimeException error) {
-                throw new IllegalArgumentException("Line " + value.line + ": "
-                        + error.getMessage(), error);
+                throw new IllegalArgumentException("Line " + value.line + ": " + error.getMessage(), error);
             }
         }
 
         private <T> void addUnique(Set<T> target, T value, String key, int line) {
             if (!target.add(value)) {
-                throw new IllegalArgumentException("Line " + line
-                        + ": duplicate value for " + key);
+                throw new IllegalArgumentException("Line " + line + ": duplicate value for " + key);
             }
         }
-
-        private static void requireDecimal(String value) {
-            if (!value.matches("-?[0-9]+")) {
-                throw new IllegalArgumentException("Expected decimal integer");
-            }
-        }
-
-        private static void requireFloatingDecimal(String value) {
-            if (!DECIMAL.matcher(value).matches()) {
-                throw new IllegalArgumentException("Expected finite decimal number");
-            }
-        }
-    }
-
-    @FunctionalInterface
-    private interface CheckedSupplier<T> {
-        T get();
-    }
-
-    private ClosedLoopConfigCodec() {
     }
 }

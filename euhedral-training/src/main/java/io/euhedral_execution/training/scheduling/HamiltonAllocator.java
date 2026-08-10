@@ -3,6 +3,8 @@ package io.euhedral_execution.training.scheduling;
 import java.util.Arrays;
 
 public final class HamiltonAllocator {
+    private HamiltonAllocator() {}
+
     public static int[] allocate(int total, int[] weights, int[] tieOrder) {
         if (total < 0 || weights.length == 0 || tieOrder.length != weights.length) {
             throw new IllegalArgumentException("Invalid Hamilton allocation inputs");
@@ -51,8 +53,5 @@ public final class HamiltonAllocator {
             throw new IllegalStateException("Hamilton allocation did not sum to total");
         }
         return result;
-    }
-
-    private HamiltonAllocator() {
     }
 }

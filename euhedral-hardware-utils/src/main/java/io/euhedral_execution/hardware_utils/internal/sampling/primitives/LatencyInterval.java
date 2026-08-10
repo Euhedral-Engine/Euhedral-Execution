@@ -20,8 +20,8 @@ import io.euhedral_execution.hardware_utils.internal.sampling.enums.SignalResolu
 ///   BASELINE/UNAVAILABLE => latencyDelta = 0, operationsDelta = 0, elapsedNs = 0
 ///   CURRENT/CACHED       => elapsedNs must be strictly positive (IllegalArgumentException)
 ///   Both deltas must be nonnegative for CURRENT/CACHED
-public record LatencyInterval(long latencyDelta, long operationsDelta, long elapsedNs,
-                              long observedAtNs, SignalResolution resolution) {
+public record LatencyInterval(
+        long latencyDelta, long operationsDelta, long elapsedNs, long observedAtNs, SignalResolution resolution) {
     public LatencyInterval {
         if (resolution == SignalResolution.BASELINE || resolution == SignalResolution.UNAVAILABLE) {
             latencyDelta = 0L;
@@ -30,15 +30,14 @@ public record LatencyInterval(long latencyDelta, long operationsDelta, long elap
         } else {
             if (elapsedNs <= 0) {
                 throw new IllegalArgumentException(
-                    "LatencyInterval elapsedNs must be > 0 for CURRENT/CACHED; got " + elapsedNs);
+                        "LatencyInterval elapsedNs must be > 0 for CURRENT/CACHED; got " + elapsedNs);
             }
             if (latencyDelta < 0) {
-                throw new IllegalArgumentException(
-                    "LatencyInterval latencyDelta must be >= 0; got " + latencyDelta);
+                throw new IllegalArgumentException("LatencyInterval latencyDelta must be >= 0; got " + latencyDelta);
             }
             if (operationsDelta < 0) {
                 throw new IllegalArgumentException(
-                    "LatencyInterval operationsDelta must be >= 0; got " + operationsDelta);
+                        "LatencyInterval operationsDelta must be >= 0; got " + operationsDelta);
             }
         }
     }

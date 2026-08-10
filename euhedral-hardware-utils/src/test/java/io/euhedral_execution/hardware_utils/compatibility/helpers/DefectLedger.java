@@ -15,8 +15,13 @@ public final class DefectLedger {
     private static final String HEADER =
             "defect_id\towner_phase\tsubject\told_behavior\tnew_invariant\tregression_test_id";
     private static final Pattern OWNERS = Pattern.compile("P[1-8](,P[1-8])*");
-    private static final Pattern TEST_ID = Pattern.compile(
-            "[a-zA-Z_$][\\w$]*(\\.[a-zA-Z_$][\\w$]*)+#[a-zA-Z_$][\\w$]*");
+    private static final Pattern TEST_ID =
+            Pattern.compile("[a-zA-Z_$][\\w$]*(\\.[a-zA-Z_$][\\w$]*)+#[a-zA-Z_$][\\w$]*");
+    private final List<Defect> defects;
+
+    private DefectLedger(List<Defect> defects) {
+        this.defects = List.copyOf(defects);
+    }
 
     public static DefectLedger read(Path path) throws IOException {
         String text = Files.readString(path, StandardCharsets.UTF_8);
@@ -52,7 +57,9 @@ public final class DefectLedger {
                 throw new IOException(path + ":" + (index + 1) + ": invalid owner phases");
             }
             String subject = columns[2];
-            if (subject.contains("*") || subject.contains("...") || subject.equalsIgnoreCase("all")
+            if (subject.contains("*")
+                    || subject.contains("...")
+                    || subject.equalsIgnoreCase("all")
                     || subject.endsWith(".*")) {
                 throw new IOException(path + ":" + (index + 1) + ": inexact subject");
             }
@@ -70,15 +77,9 @@ public final class DefectLedger {
             if (!tuples.add(tuple)) {
                 throw new IOException(path + ":" + (index + 1) + ": duplicate defect tuple");
             }
-            defects.add(new Defect(columns[0], columns[1], subject, columns[3], columns[4],
-                    columns[5]));
+            defects.add(new Defect(columns[0], columns[1], subject, columns[3], columns[4], columns[5]));
         }
         return new DefectLedger(defects);
-    }
-    private final List<Defect> defects;
-
-    private DefectLedger(List<Defect> defects) {
-        this.defects = List.copyOf(defects);
     }
 
     public List<Defect> defects() {
@@ -89,8 +90,11 @@ public final class DefectLedger {
         return this.defects.stream().anyMatch(defect -> defect.subject().equals(subject));
     }
 
-    public record Defect(String id, String ownerPhases, String subject, String oldBehavior,
-                  String newInvariant, String regressionTestId) {
-
-    }
+    public record Defect(
+            String id,
+            String ownerPhases,
+            String subject,
+            String oldBehavior,
+            String newInvariant,
+            String regressionTestId) {}
 }

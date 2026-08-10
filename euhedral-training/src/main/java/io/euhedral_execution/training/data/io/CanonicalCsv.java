@@ -9,6 +9,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 public final class CanonicalCsv {
+    private CanonicalCsv() {}
+
     public static List<List<String>> read(Path file) throws IOException {
         if (Files.isSymbolicLink(file) || !Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) {
             throw new IllegalArgumentException("CSV must be a regular non-symlink file: " + file);
@@ -16,7 +18,8 @@ public final class CanonicalCsv {
         byte[] bytes = Files.readAllBytes(file);
         String text = new String(bytes, StandardCharsets.UTF_8);
         if (!java.util.Arrays.equals(bytes, text.getBytes(StandardCharsets.UTF_8))
-                || text.startsWith("\ufeff") || text.indexOf('\r') >= 0
+                || text.startsWith("\ufeff")
+                || text.indexOf('\r') >= 0
                 || !text.endsWith("\n")) {
             throw new IllegalArgumentException("CSV must be canonical UTF-8 with LF endings");
         }
@@ -30,8 +33,10 @@ public final class CanonicalCsv {
                 result.append(',');
             }
             String field = fields.get(i);
-            if (field.indexOf(',') >= 0 || field.indexOf('"') >= 0
-                    || field.indexOf('\r') >= 0 || field.indexOf('\n') >= 0) {
+            if (field.indexOf(',') >= 0
+                    || field.indexOf('"') >= 0
+                    || field.indexOf('\r') >= 0
+                    || field.indexOf('\n') >= 0) {
                 result.append('"').append(field.replace("\"", "\"\"")).append('"');
             } else {
                 result.append(field);
@@ -92,8 +97,5 @@ public final class CanonicalCsv {
             throw new IllegalArgumentException("Incomplete CSV");
         }
         return List.copyOf(rows);
-    }
-
-    private CanonicalCsv() {
     }
 }

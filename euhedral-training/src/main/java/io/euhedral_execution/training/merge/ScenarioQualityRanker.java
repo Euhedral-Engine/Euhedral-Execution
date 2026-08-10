@@ -18,6 +18,8 @@ public final class ScenarioQualityRanker {
 
     public static final double QUALITY_EPSILON = 1.0e-12;
 
+    private ScenarioQualityRanker() {}
+
     public static List<ScenarioResult> assignQualities(List<ScenarioResult> scenarioResults) {
         Map<SourceScenario, List<ScenarioResult>> grouped = new HashMap<>();
         java.util.Set<Key> seen = new java.util.HashSet<>();
@@ -36,13 +38,14 @@ public final class ScenarioQualityRanker {
             int start = 0;
             while (start < rows.size()) {
                 int end = start;
-                while (end + 1 < rows.size() && Double.compare(
-                        rows.get(start).throughputMedian().getAsDouble(),
-                        rows.get(end + 1).throughputMedian().getAsDouble()) == 0) {
+                while (end + 1 < rows.size()
+                        && Double.compare(
+                                        rows.get(start).throughputMedian().getAsDouble(),
+                                        rows.get(end + 1).throughputMedian().getAsDouble())
+                                == 0) {
                     end++;
                 }
-                double quality = rows.size() == 1 ? 0.5
-                        : (start + end) / (2.0 * (rows.size() - 1));
+                double quality = rows.size() == 1 ? 0.5 : (start + end) / (2.0 * (rows.size() - 1));
                 for (int i = start; i <= end; i++) {
                     qualities.put(new Key(rows.get(i).scenario(), rows.get(i).policy()), quality);
                 }
@@ -59,8 +62,10 @@ public final class ScenarioQualityRanker {
         return List.copyOf(result);
     }
 
-    public static List<RobustPolicySummary> summarize(Collection<PolicyVector> policies,
-            List<ScenarioResult> scenarioResults, SortedSet<SourceScenario> requiredScenarios) {
+    public static List<RobustPolicySummary> summarize(
+            Collection<PolicyVector> policies,
+            List<ScenarioResult> scenarioResults,
+            SortedSet<SourceScenario> requiredScenarios) {
         if (requiredScenarios.isEmpty()) {
             throw new IllegalArgumentException("No required scenarios");
         }
@@ -71,8 +76,7 @@ public final class ScenarioQualityRanker {
             }
         }
         List<RobustPolicySummary> summaries = new ArrayList<>();
-        java.util.Set<io.euhedral_execution.training.data.PolicyId> policyIds
-                = new java.util.HashSet<>();
+        java.util.Set<io.euhedral_execution.training.data.PolicyId> policyIds = new java.util.HashSet<>();
         for (PolicyVector policy : policies) {
             if (!policyIds.add(policy.id())) {
                 throw new IllegalArgumentException("Duplicate policy");
@@ -101,8 +105,9 @@ public final class ScenarioQualityRanker {
             OptionalDouble worst = empty, p25 = empty, geometric = empty, mad = empty;
             OptionalDouble relativeIqr = empty, nonSuccess = empty, timeout = empty;
             if (eligible) {
-                double[] qualities = valid.stream().mapToDouble(
-                        row -> row.quality().getAsDouble()).toArray();
+                double[] qualities = valid.stream()
+                        .mapToDouble(row -> row.quality().getAsDouble())
+                        .toArray();
                 double[] logs = new double[qualities.length];
                 double[] iqrs = new double[qualities.length];
                 double[] nonSuccesses = new double[qualities.length];
@@ -113,28 +118,36 @@ public final class ScenarioQualityRanker {
                     nonSuccesses[i] = valid.get(i).meanNonSuccessRate().getAsDouble();
                     timeouts[i] = valid.get(i).meanTimeoutRate().getAsDouble();
                 }
-                worst = OptionalDouble.of(java.util.Arrays.stream(qualities).min().orElseThrow());
+                worst = OptionalDouble.of(
+                        java.util.Arrays.stream(qualities).min().orElseThrow());
                 p25 = OptionalDouble.of(VectorStatistics.quantileType7(qualities, 0.25));
-                geometric = OptionalDouble.of(
-                        StrictMath.exp(VectorStatistics.compensatedMean(logs)));
+                geometric = OptionalDouble.of(StrictMath.exp(VectorStatistics.compensatedMean(logs)));
                 mad = OptionalDouble.of(VectorStatistics.mad(qualities));
                 relativeIqr = OptionalDouble.of(VectorStatistics.median(iqrs));
                 nonSuccess = OptionalDouble.of(VectorStatistics.compensatedMean(nonSuccesses));
                 timeout = OptionalDouble.of(VectorStatistics.compensatedMean(timeouts));
             }
-            summaries.add(new RobustPolicySummary(policy, eligible, requiredScenarios.size(),
-                    observed, valid.size(), valid.size() / (double) requiredScenarios.size(),
-                    worst, p25, geometric, mad, relativeIqr, nonSuccess, timeout,
-                    measured, missing, rejected));
+            summaries.add(new RobustPolicySummary(
+                    policy,
+                    eligible,
+                    requiredScenarios.size(),
+                    observed,
+                    valid.size(),
+                    valid.size() / (double) requiredScenarios.size(),
+                    worst,
+                    p25,
+                    geometric,
+                    mad,
+                    relativeIqr,
+                    nonSuccess,
+                    timeout,
+                    measured,
+                    missing,
+                    rejected));
         }
         summaries.sort(PolicyComparator.PUBLISHED_ORDER);
         return List.copyOf(summaries);
     }
 
-    private ScenarioQualityRanker() {
-    }
-
-    private record Key(SourceScenario scenario, PolicyVector policy) {
-
-    }
+    private record Key(SourceScenario scenario, PolicyVector policy) {}
 }

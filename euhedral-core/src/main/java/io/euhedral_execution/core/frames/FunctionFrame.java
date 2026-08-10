@@ -18,13 +18,17 @@ public final class FunctionFrame<P, R> extends AbstractFrame {
 
     private P payload;
 
-    public FunctionFrame(long idHash, Function<P, R> function,
-            Consumer<R> consumer, P payload) {
+    public FunctionFrame(long idHash, Function<P, R> function, Consumer<R> consumer, P payload) {
         this(idHash, function, consumer, payload, null, null);
     }
 
-    public FunctionFrame(long idHash, Function<P, R> function,
-            Consumer<R> consumer, P payload, FrameManager<P, FunctionFrame<P, R>> recycler, AtomicBoolean killSwitch) {
+    public FunctionFrame(
+            long idHash,
+            Function<P, R> function,
+            Consumer<R> consumer,
+            P payload,
+            FrameManager<P, FunctionFrame<P, R>> recycler,
+            AtomicBoolean killSwitch) {
         super(idHash, recycler, killSwitch);
         Objects.requireNonNull(function);
         Objects.requireNonNull(consumer);

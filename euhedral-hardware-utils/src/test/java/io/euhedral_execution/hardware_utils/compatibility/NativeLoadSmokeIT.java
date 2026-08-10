@@ -22,12 +22,13 @@ class NativeLoadSmokeIT {
         List<Path> entries = new ArrayList<>();
         entries.add(smoke);
         try (Stream<Path> paths = Files.walk(smoke)) {
-            paths.filter(path -> Files.isRegularFile(path) && path.getFileName().toString()
-                            .endsWith(".jar"))
+            paths.filter(path -> Files.isRegularFile(path)
+                            && path.getFileName().toString().endsWith(".jar"))
                     .sorted(Comparator.comparing(Path::toString))
                     .forEach(entries::add);
         }
-        return String.join(System.getProperty("path.separator"),
+        return String.join(
+                System.getProperty("path.separator"),
                 entries.stream().map(Path::toString).toList());
     }
 
@@ -35,7 +36,8 @@ class NativeLoadSmokeIT {
     @EnabledOnOs(OS.LINUX)
     void packagedGlibcProductLoadsAndCallsGetCpu() throws Exception {
         String architecture = System.getProperty("os.arch", "").toLowerCase(Locale.ROOT);
-        assertTrue(architecture.equals("amd64") || architecture.equals("x86_64"),
+        assertTrue(
+                architecture.equals("amd64") || architecture.equals("x86_64"),
                 "Test build-host smoke requires Linux x64");
         Path smoke = Path.of(System.getProperty("smoke.directory"));
         List<String> command = new ArrayList<>();

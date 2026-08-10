@@ -45,73 +45,41 @@ public class KafkaIngestSource implements LatticeSource {
     public static final String MIN_COMMIT_INTERVAL = "min.commit.interval.micros";
     public static final String MAX_COMMIT_INTERVAL = "max.commit.interval.micros";
 
-    private static final Set<String> HOT_SWAPPABLE = Set.of(MIN_COMMIT_BATCH, MAX_COMMIT_BATCH,
-            MIN_COMMIT_INTERVAL, MAX_COMMIT_INTERVAL);
-    private static final VarHandle COMPLETE = CommonVarHandles.complete(MethodHandles.lookup(),
-            KafkaIngestSource.class);
-    private static final VarHandle DOWNSTREAM = CommonVarHandles.downstream(MethodHandles.lookup(),
-            KafkaIngestSource.class);
-    private static final VarHandle HEARTBEAT = CommonVarHandles.makeHandle(MethodHandles.lookup(),
-            KafkaIngestSource.class, "heartbeatNs", long.class);
-    private static final VarHandle LAST_POLL = CommonVarHandles.makeHandle(MethodHandles.lookup(),
-            KafkaIngestSource.class, "lastPollNs", long.class);
-    private static final VarHandle LOCK = CommonVarHandles.makeHandle(MethodHandles.lookup(),
-            KafkaIngestSource.class, "lock", boolean.class);
-
-    public static long getPartitionHash(TopicPartition partition) {
-        return HasherApi.getHash(partition.topic(), partition.partition());
-    }
-
-    public static long getPartitionHash(ConsumerRecord<?, ?> cRecord) {
-        return HasherApi.getHash(cRecord.topic(), cRecord.partition());
-    }
-
-    private static CommitPolicy getCommitPolicy(Map<String, Object> props) {
-        long minTime, maxTime, minBatch, maxBatch;
-
-        minTime = Long.parseLong(props.getOrDefault(MIN_COMMIT_INTERVAL, "0").toString()) * 1_000;
-        maxTime =
-                Long.parseLong(props.getOrDefault(MAX_COMMIT_INTERVAL, "0").toString()) * 1_000;
-        minBatch = Long.parseLong(props.getOrDefault(MIN_COMMIT_BATCH, "0").toString());
-        maxBatch = Long.parseLong(props.getOrDefault(MAX_COMMIT_BATCH, "0").toString());
-
-        props.put(MIN_COMMIT_INTERVAL, minTime);
-        props.put(MAX_COMMIT_INTERVAL, maxTime);
-        props.put(MIN_COMMIT_BATCH, minBatch);
-        props.put(MAX_COMMIT_BATCH, maxBatch);
-        return new CommitPolicy(minTime, maxTime, minBatch, maxBatch);
-    }
-
+    private static final Set<String> HOT_SWAPPABLE =
+            Set.of(MIN_COMMIT_BATCH, MAX_COMMIT_BATCH, MIN_COMMIT_INTERVAL, MAX_COMMIT_INTERVAL);
+    private static final VarHandle COMPLETE =
+            CommonVarHandles.complete(MethodHandles.lookup(), KafkaIngestSource.class);
+    private static final VarHandle DOWNSTREAM =
+            CommonVarHandles.downstream(MethodHandles.lookup(), KafkaIngestSource.class);
+    private static final VarHandle HEARTBEAT =
+            CommonVarHandles.makeHandle(MethodHandles.lookup(), KafkaIngestSource.class, "heartbeatNs", long.class);
+    private static final VarHandle LAST_POLL =
+            CommonVarHandles.makeHandle(MethodHandles.lookup(), KafkaIngestSource.class, "lastPollNs", long.class);
+    private static final VarHandle LOCK =
+            CommonVarHandles.makeHandle(MethodHandles.lookup(), KafkaIngestSource.class, "lock", boolean.class);
     private final Logger logger;
-
-    private final long ingestPassword = HasherApi.mix(ThreadLocalRandom.current().nextLong());
+    private final long ingestPassword =
+            HasherApi.mix(ThreadLocalRandom.current().nextLong());
     private final Map<String, Object> consumerProperties = new HashMap<>();
-
     private final AtomicReference<KafkaConsumer<?, ?>> kafkaConsumer = new AtomicReference<>();
     private final OffsetCollector offsetCollector;
     private final Set<String> topics = new HashSet<>();
-
     private final Long2ObjectArrayMap<PartitionIngestor> ingestors = new Long2ObjectArrayMap<>();
     private final SpscQueue<ConsumerRecord<?, ?>> queue;
     private final FrameManager<ConsumerRecord<?, ?>, KafkaFrame> manager;
     private final IngestEventHandler eventHandler = new IngestEventHandler(this.topics);
     private final Thread heartbeat;
-
     private LatticeReceiver downstream;
-
     private long heartbeatNs = 3_000_000;
     private boolean complete = false;
-
     private long lastPollNs = 0;
     private boolean lock = false;
-
     public KafkaIngestSource(String name, Map<String, Object> properties) {
         this.logger = LoggerFactory.getLogger(KafkaIngestSource.class.getSimpleName() + "-" + name);
         this.queue = new SpscQueue<>(4_096);
         this.manager = createFrameManager();
         this.kafkaConsumer.set(new KafkaConsumer<>(properties));
-        this.offsetCollector = new OffsetCollector(this.kafkaConsumer,
-                getCommitPolicy(properties), ingestPassword);
+        this.offsetCollector = new OffsetCollector(this.kafkaConsumer, getCommitPolicy(properties), ingestPassword);
         updateInternal(properties);
         subscribe();
 
@@ -141,6 +109,29 @@ public class KafkaIngestSource implements LatticeSource {
             }
         });
         this.heartbeat.start();
+    }
+
+    public static long getPartitionHash(TopicPartition partition) {
+        return HasherApi.getHash(partition.topic(), partition.partition());
+    }
+
+    public static long getPartitionHash(ConsumerRecord<?, ?> cRecord) {
+        return HasherApi.getHash(cRecord.topic(), cRecord.partition());
+    }
+
+    private static CommitPolicy getCommitPolicy(Map<String, Object> props) {
+        long minTime, maxTime, minBatch, maxBatch;
+
+        minTime = Long.parseLong(props.getOrDefault(MIN_COMMIT_INTERVAL, "0").toString()) * 1_000;
+        maxTime = Long.parseLong(props.getOrDefault(MAX_COMMIT_INTERVAL, "0").toString()) * 1_000;
+        minBatch = Long.parseLong(props.getOrDefault(MIN_COMMIT_BATCH, "0").toString());
+        maxBatch = Long.parseLong(props.getOrDefault(MAX_COMMIT_BATCH, "0").toString());
+
+        props.put(MIN_COMMIT_INTERVAL, minTime);
+        props.put(MAX_COMMIT_INTERVAL, maxTime);
+        props.put(MIN_COMMIT_BATCH, minBatch);
+        props.put(MAX_COMMIT_BATCH, maxBatch);
+        return new CommitPolicy(minTime, maxTime, minBatch, maxBatch);
     }
 
     @Override
@@ -213,8 +204,7 @@ public class KafkaIngestSource implements LatticeSource {
         if (this.eventHandler.partitionUpdate) {
             buildPartitionMap();
         }
-        if (this.eventHandler.newProperties != null && updateInternal(
-                this.eventHandler.newProperties)) {
+        if (this.eventHandler.newProperties != null && updateInternal(this.eventHandler.newProperties)) {
             return true;
         }
         if (this.eventHandler.topicUpdate) {
@@ -236,12 +226,11 @@ public class KafkaIngestSource implements LatticeSource {
             boolean timedOut = now >= drainDeadline;
             if (drained || timedOut) {
                 if (!drained) {
-                    this.logger.warn(
-                            "Forcing Kafka consumer swap due to offset commit drain timeout.");
+                    this.logger.warn("Forcing Kafka consumer swap due to offset commit drain timeout.");
                 }
                 this.ingestors.values().forEach(ingestor -> {
-                    this.logger.info("Removing partition: {}-{}", ingestor.partition.topic(),
-                            ingestor.partition.partition());
+                    this.logger.info(
+                            "Removing partition: {}-{}", ingestor.partition.topic(), ingestor.partition.partition());
                     ingestor.killSwitch.boop();
                 });
                 this.kafkaConsumer.set(new KafkaConsumer<>(consumerProperties));
@@ -275,8 +264,7 @@ public class KafkaIngestSource implements LatticeSource {
 
     private void subscribe() {
         KafkaConsumer<?, ?> consumer = this.kafkaConsumer.getOpaque();
-        consumer.subscribe(this.topics,
-                new RebalanceListener(this.kafkaConsumer, consumer, this.eventHandler));
+        consumer.subscribe(this.topics, new RebalanceListener(this.kafkaConsumer, consumer, this.eventHandler));
     }
 
     private boolean updateInternal(Map<String, Object> properties) {
@@ -287,8 +275,8 @@ public class KafkaIngestSource implements LatticeSource {
             Object oldVal = this.consumerProperties.get(entry.getKey());
             Object newVal = entry.getValue();
 
-            boolean equal = Objects.equals(newVal, oldVal)
-                    || entry.getKey().equals(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG);
+            boolean equal =
+                    Objects.equals(newVal, oldVal) || entry.getKey().equals(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG);
 
             if (!equal) {
                 requiresLightUpdate = true;
@@ -330,23 +318,19 @@ public class KafkaIngestSource implements LatticeSource {
         this.consumerProperties.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
         this.consumerProperties.putIfAbsent(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 1024);
 
-        long heartbeatNs = Long.parseLong(
-                this.consumerProperties.getOrDefault(
-                        ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "3000"
-                ).toString()
-        ) * 1_000_000;
+        long heartbeatNs = Long.parseLong(this.consumerProperties
+                        .getOrDefault(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "3000")
+                        .toString())
+                * 1_000_000;
 
-        long sessionTimeoutNs = Long.parseLong(
-                this.consumerProperties.getOrDefault(
-                        ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "45000"
-                ).toString()
-        ) * 1_000_000;
+        long sessionTimeoutNs = Long.parseLong(this.consumerProperties
+                        .getOrDefault(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "45000")
+                        .toString())
+                * 1_000_000;
         HEARTBEAT.setRelease(this, Math.min(heartbeatNs, sessionTimeoutNs));
 
-        this.consumerProperties.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG,
-                heartbeatNs / 1_000_000);
-        this.consumerProperties.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG,
-                sessionTimeoutNs / 1_000_000);
+        this.consumerProperties.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, heartbeatNs / 1_000_000);
+        this.consumerProperties.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, sessionTimeoutNs / 1_000_000);
 
         this.offsetCollector.setCommitPolicy(getCommitPolicy(this.consumerProperties));
     }
@@ -369,21 +353,18 @@ public class KafkaIngestSource implements LatticeSource {
         }
         old.forEach(hash -> {
             PartitionIngestor rem = this.ingestors.remove(hash);
-            this.logger.info("Removing partition: {}-{}", rem.partition.topic(),
-                    rem.partition.partition());
+            this.logger.info("Removing partition: {}-{}", rem.partition.topic(), rem.partition.partition());
             rem.killSwitch.boop();
         });
     }
 
     private FrameManager<ConsumerRecord<?, ?>, KafkaFrame> createFrameManager() {
-        FrameManager<ConsumerRecord<?, ?>, KafkaFrame> manager = new FrameManager<>(8_192,
-                this.ingestPassword);
+        FrameManager<ConsumerRecord<?, ?>, KafkaFrame> manager = new FrameManager<>(8_192, this.ingestPassword);
 
         FrameCreate<ConsumerRecord<?, ?>, KafkaFrame> create = (idHash, cRecord) -> {
             long partHash = getPartitionHash(cRecord);
             PartitionIngestor sender = ingestors.get(partHash);
-            return new KafkaFrame(idHash, cRecord, new OffsetMd(cRecord.offset()), manager,
-                    sender.killSwitch);
+            return new KafkaFrame(idHash, cRecord, new OffsetMd(cRecord.offset()), manager, sender.killSwitch);
         };
         FrameReplace<ConsumerRecord<?, ?>, KafkaFrame> replace = (cRecord, frame) -> {
             long partHash = getPartitionHash(cRecord);
@@ -397,14 +378,12 @@ public class KafkaIngestSource implements LatticeSource {
     @Override
     public void addDownstream(LatticeReceiver downstream) {
         if (!DOWNSTREAM.compareAndSet(this, null, downstream)) {
-            downstream.onError(
-                    new IllegalAccessException("This class can only have one downstream"));
+            downstream.onError(new IllegalAccessException("This class can only have one downstream"));
         }
     }
 
     @Override
-    public long pull(Consumer<AbstractFrame> consumer,
-            Function<AbstractFrame, Boolean> stopCondition, long demand) {
+    public long pull(Consumer<AbstractFrame> consumer, Function<AbstractFrame, Boolean> stopCondition, long demand) {
         return 0;
     }
 
@@ -439,8 +418,5 @@ public class KafkaIngestSource implements LatticeSource {
         return (boolean) COMPLETE.getAcquire(this);
     }
 
-    private record PartitionIngestor(TopicPartition partition, long partitionHash,
-                                     KillSwitch killSwitch) {
-
-    }
+    private record PartitionIngestor(TopicPartition partition, long partitionHash, KillSwitch killSwitch) {}
 }

@@ -32,11 +32,44 @@ final class NativeLibraryExtractor {
     private static final int MAX_STALE_ENTRIES = 64;
     private static final int COPY_BUFFER_SIZE = 64 * 1_024;
     private static final Pattern RUN_DIRECTORY = Pattern.compile("load-([1-9][0-9]*)-[0-9a-f]{32}");
-    private static final Pattern LIBRARY_NAME = Pattern.compile(
-            "(?:linux|osx|windows)_jni_(?:x64|arm64)\\.(?:so|dylib|dll)");
+    private static final Pattern LIBRARY_NAME =
+            Pattern.compile("(?:linux|osx|windows)_jni_(?:x64|arm64)\\.(?:so|dylib|dll)");
+    private final String operatingSystem;
+    private final Path parent;
+    private final NativeFileSecurity security;
+    private final ResourceInput resources;
+    private final Clock clock;
+    private final LongPredicate processAlive;
+    private final SecureRandom random;
+    private final Logger logger;
+    private final long processId;
+    private final AtomicBoolean hookRegistered = new AtomicBoolean();
+    private Path baseDirectory;
+    private Path runDirectory;
+    private Path marker;
+    private Path retainedLibrary;
+    NativeLibraryExtractor(
+            String operatingSystem,
+            Path parent,
+            NativeFileSecurity security,
+            ResourceInput resources,
+            Clock clock,
+            LongPredicate processAlive,
+            SecureRandom random,
+            long processId,
+            Logger logger) {
+        this.operatingSystem = Objects.requireNonNull(operatingSystem, "operatingSystem");
+        this.parent = Objects.requireNonNull(parent, "parent").toAbsolutePath().normalize();
+        this.security = Objects.requireNonNull(security, "security");
+        this.resources = Objects.requireNonNull(resources, "resources");
+        this.clock = Objects.requireNonNull(clock, "clock");
+        this.processAlive = Objects.requireNonNull(processAlive, "processAlive");
+        this.random = Objects.requireNonNull(random, "random");
+        this.processId = processId;
+        this.logger = Objects.requireNonNull(logger, "logger");
+    }
 
-    static NativeLibraryExtractor create(String canonicalOperatingSystem, Logger logger)
-            throws IOException {
+    static NativeLibraryExtractor create(String canonicalOperatingSystem, Logger logger) throws IOException {
         return new NativeLibraryExtractor(
                 canonicalOperatingSystem,
                 resolveParent(),
@@ -57,16 +90,18 @@ final class NativeLibraryExtractor {
         }
         Path path = Path.of(value);
         if (configured != null && !path.isAbsolute()) {
-            throw new IOException(
-                    "native-loader: " + EXTRACT_DIRECTORY_PROPERTY + " must be absolute");
+            throw new IOException("native-loader: " + EXTRACT_DIRECTORY_PROPERTY + " must be absolute");
         }
         return path.toAbsolutePath().normalize();
     }
 
     private static Marker parseMarker(String contents) throws IOException {
         String[] lines = contents.split("\n", -1);
-        if (lines.length != 4 || !"schema=1".equals(lines[0]) || !lines[1].startsWith("pid=")
-                || !lines[2].startsWith("createdEpochMillis=") || !lines[3].isEmpty()) {
+        if (lines.length != 4
+                || !"schema=1".equals(lines[0])
+                || !lines[1].startsWith("pid=")
+                || !lines[2].startsWith("createdEpochMillis=")
+                || !lines[3].isEmpty()) {
             throw new IOException("native-loader: invalid owner marker");
         }
         try {
@@ -90,51 +125,15 @@ final class NativeLibraryExtractor {
     }
 
     private static boolean sameOwner(Path child, Path base) throws IOException {
-        FileOwnerAttributeView childView = Files.getFileAttributeView(
-                child, FileOwnerAttributeView.class, LinkOption.NOFOLLOW_LINKS);
-        FileOwnerAttributeView baseView = Files.getFileAttributeView(
-                base, FileOwnerAttributeView.class, LinkOption.NOFOLLOW_LINKS);
+        FileOwnerAttributeView childView =
+                Files.getFileAttributeView(child, FileOwnerAttributeView.class, LinkOption.NOFOLLOW_LINKS);
+        FileOwnerAttributeView baseView =
+                Files.getFileAttributeView(base, FileOwnerAttributeView.class, LinkOption.NOFOLLOW_LINKS);
         if (childView == null || baseView == null) {
             return true;
         }
         UserPrincipal childOwner = childView.getOwner();
         return childOwner.equals(baseView.getOwner());
-    }
-
-    private final String operatingSystem;
-    private final Path parent;
-    private final NativeFileSecurity security;
-    private final ResourceInput resources;
-    private final Clock clock;
-    private final LongPredicate processAlive;
-    private final SecureRandom random;
-    private final Logger logger;
-    private final long processId;
-    private final AtomicBoolean hookRegistered = new AtomicBoolean();
-    private Path baseDirectory;
-    private Path runDirectory;
-    private Path marker;
-    private Path retainedLibrary;
-
-    NativeLibraryExtractor(
-            String operatingSystem,
-            Path parent,
-            NativeFileSecurity security,
-            ResourceInput resources,
-            Clock clock,
-            LongPredicate processAlive,
-            SecureRandom random,
-            long processId,
-            Logger logger) {
-        this.operatingSystem = Objects.requireNonNull(operatingSystem, "operatingSystem");
-        this.parent = Objects.requireNonNull(parent, "parent").toAbsolutePath().normalize();
-        this.security = Objects.requireNonNull(security, "security");
-        this.resources = Objects.requireNonNull(resources, "resources");
-        this.clock = Objects.requireNonNull(clock, "clock");
-        this.processAlive = Objects.requireNonNull(processAlive, "processAlive");
-        this.random = Objects.requireNonNull(random, "random");
-        this.processId = processId;
-        this.logger = Objects.requireNonNull(logger, "logger");
     }
 
     Path prepare(NativeProduct firstProduct) throws IOException {
@@ -166,11 +165,10 @@ final class NativeLibraryExtractor {
         long count = 0;
         try (InputStream input = resources.open(product.resourcePath())) {
             if (input == null) {
-                throw new IOException(
-                        "native-loader: missing product resource " + product.resourcePath());
+                throw new IOException("native-loader: missing product resource " + product.resourcePath());
             }
-            try (var output = Files.newOutputStream(destination, StandardOpenOption.CREATE_NEW,
-                    StandardOpenOption.WRITE)) {
+            try (var output =
+                    Files.newOutputStream(destination, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
                 byte[] buffer = new byte[COPY_BUFFER_SIZE];
                 int read;
                 while ((read = input.read(buffer)) != -1) {
@@ -179,16 +177,14 @@ final class NativeLibraryExtractor {
                     }
                     if (count > MAX_LIBRARY_BYTES - read) {
                         throw new IOException(
-                                "native-loader: product exceeds " + MAX_LIBRARY_BYTES + " bytes: "
-                                        + product.id());
+                                "native-loader: product exceeds " + MAX_LIBRARY_BYTES + " bytes: " + product.id());
                     }
                     output.write(buffer, 0, read);
                     count += read;
                 }
             }
             if (count == 0) {
-                throw new IOException(
-                        "native-loader: empty product resource " + product.resourcePath());
+                throw new IOException("native-loader: empty product resource " + product.resourcePath());
             }
             if (Files.size(destination) != count) {
                 throw new IOException("native-loader: extracted size mismatch for " + product.id());
@@ -217,8 +213,7 @@ final class NativeLibraryExtractor {
                 marker = null;
                 runDirectory = null;
             } catch (IOException | SecurityException e) {
-                logger.debug("native-loader: immediate extraction cleanup failed for {}", library,
-                        e);
+                logger.debug("native-loader: immediate extraction cleanup failed for {}", library, e);
             }
         }
     }
@@ -228,12 +223,12 @@ final class NativeLibraryExtractor {
     }
 
     private void validateParent() throws IOException {
-        if (!parent.isAbsolute() || Files.isSymbolicLink(parent) || !Files.isDirectory(parent,
-                LinkOption.NOFOLLOW_LINKS)
+        if (!parent.isAbsolute()
+                || Files.isSymbolicLink(parent)
+                || !Files.isDirectory(parent, LinkOption.NOFOLLOW_LINKS)
                 || !Files.isWritable(parent)) {
             throw new IOException(
-                    "native-loader: extraction parent must be an absolute existing writable directory: "
-                            + parent);
+                    "native-loader: extraction parent must be an absolute existing writable directory: " + parent);
         }
     }
 
@@ -241,11 +236,8 @@ final class NativeLibraryExtractor {
         try {
             Files.createDirectory(directory);
         } catch (FileAlreadyExistsException ignored) {
-            if (Files.isSymbolicLink(directory) || !Files.isDirectory(directory,
-                    LinkOption.NOFOLLOW_LINKS)) {
-                throw new IOException(
-                        "native-loader: extraction directory is not a safe directory: "
-                                + directory);
+            if (Files.isSymbolicLink(directory) || !Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) {
+                throw new IOException("native-loader: extraction directory is not a safe directory: " + directory);
             }
         }
     }
@@ -264,10 +256,13 @@ final class NativeLibraryExtractor {
                 runDirectory = candidate;
                 security.secureDirectory(runDirectory);
                 marker = runDirectory.resolve("owner.properties");
-                String contents = "schema=1\npid=" + processId + "\ncreatedEpochMillis="
-                        + clock.millis() + "\n";
-                Files.writeString(marker, contents, StandardCharsets.UTF_8,
-                        StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+                String contents = "schema=1\npid=" + processId + "\ncreatedEpochMillis=" + clock.millis() + "\n";
+                Files.writeString(
+                        marker,
+                        contents,
+                        StandardCharsets.UTF_8,
+                        StandardOpenOption.CREATE_NEW,
+                        StandardOpenOption.WRITE);
                 security.secureMarker(marker);
                 return;
             } catch (FileAlreadyExistsException ignored) {
@@ -285,8 +280,7 @@ final class NativeLibraryExtractor {
             return;
         }
         try {
-            Runtime.getRuntime()
-                    .addShutdownHook(new Thread(this::cleanupOwnedRun, "euhedral-native-cleanup"));
+            Runtime.getRuntime().addShutdownHook(new Thread(this::cleanupOwnedRun, "euhedral-native-cleanup"));
         } catch (IllegalStateException | SecurityException e) {
             hookRegistered.set(false);
             throw new IOException("native-loader: could not register extraction cleanup", e);
@@ -309,8 +303,7 @@ final class NativeLibraryExtractor {
 
     private void cleanupStaleDirectory(Path directory) {
         try {
-            if (Files.isSymbolicLink(directory) || !Files.isDirectory(directory,
-                    LinkOption.NOFOLLOW_LINKS)) {
+            if (Files.isSymbolicLink(directory) || !Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) {
                 return;
             }
             Matcher matcher = RUN_DIRECTORY.matcher(directory.getFileName().toString());
@@ -319,20 +312,23 @@ final class NativeLibraryExtractor {
             }
             long directoryPid = Long.parseLong(matcher.group(1));
             Path staleMarker = directory.resolve("owner.properties");
-            if (Files.isSymbolicLink(staleMarker) || !Files.isRegularFile(staleMarker,
-                    LinkOption.NOFOLLOW_LINKS)
+            if (Files.isSymbolicLink(staleMarker)
+                    || !Files.isRegularFile(staleMarker, LinkOption.NOFOLLOW_LINKS)
                     || Files.size(staleMarker) > 4_096) {
                 return;
             }
             Marker parsed = parseMarker(Files.readString(staleMarker, StandardCharsets.UTF_8));
-            if (parsed.pid() != directoryPid || parsed.createdEpochMillis() < 0
+            if (parsed.pid() != directoryPid
+                    || parsed.createdEpochMillis() < 0
                     || age(clock.millis(), parsed.createdEpochMillis()) < STALE_AGE_MILLIS
-                    || processAlive.test(directoryPid) || !sameOwner(directory, baseDirectory)) {
+                    || processAlive.test(directoryPid)
+                    || !sameOwner(directory, baseDirectory)) {
                 return;
             }
             List<Path> entries;
             try (var paths = Files.list(directory)) {
-                entries = paths.sorted(Comparator.comparing(path -> path.getFileName().toString()))
+                entries = paths.sorted(
+                                Comparator.comparing(path -> path.getFileName().toString()))
                         .toList();
             }
             Path library = null;
@@ -340,11 +336,12 @@ final class NativeLibraryExtractor {
                 if (entry.equals(staleMarker)) {
                     continue;
                 }
-                if (library != null || Files.isSymbolicLink(entry)
+                if (library != null
+                        || Files.isSymbolicLink(entry)
                         || !Files.isRegularFile(entry, LinkOption.NOFOLLOW_LINKS)
                         || !LIBRARY_NAME.matcher(entry.getFileName().toString()).matches()
-                        || Files.size(entry) > MAX_LIBRARY_BYTES || !sameOwner(entry,
-                        baseDirectory)) {
+                        || Files.size(entry) > MAX_LIBRARY_BYTES
+                        || !sameOwner(entry, baseDirectory)) {
                     return;
                 }
                 library = entry;
@@ -375,7 +372,8 @@ final class NativeLibraryExtractor {
 
     private void cleanupOwnedRun() {
         Path ownedRun = runDirectory;
-        if (ownedRun == null || !ownedRun.getParent().equals(baseDirectory)
+        if (ownedRun == null
+                || !ownedRun.getParent().equals(baseDirectory)
                 || !RUN_DIRECTORY.matcher(ownedRun.getFileName().toString()).matches()) {
             return;
         }
@@ -398,7 +396,5 @@ final class NativeLibraryExtractor {
         InputStream open(String resourcePath) throws IOException;
     }
 
-    private record Marker(long pid, long createdEpochMillis) {
-
-    }
+    private record Marker(long pid, long createdEpochMillis) {}
 }

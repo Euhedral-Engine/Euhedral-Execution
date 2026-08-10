@@ -4,7 +4,8 @@ import io.euhedral_execution.core.config.CloneConfig;
 import io.euhedral_execution.hardware_utils.PinnedThreadExecutor;
 import io.euhedral_execution.hardware_utils.common.SystemUtilization.CoreSnapshot;
 
-/// ## Base interface for everything below the [`ControlPlaneShard`][io.euhedral_execution.core.control_plane.ControlPlaneShard]
+/// ## Base interface for everything below the
+/// [`ControlPlaneShard`][io.euhedral_execution.core.control_plane.ControlPlaneShard]
 ///
 /// Method Call Sequence if Using [`BaseCloneableObject`][io.euhedral_execution.core.impl.BaseCloneableObject]:
 /// - clone()
@@ -19,15 +20,13 @@ public interface CloneableObject {
 
     CloneableObject clone(CloneConfig cloneConfig);
 
-    default void start() {
-    }
+    default void start() {}
 
     /// Used by CloneableObjects that create objects on instantiation. This method will be called
     /// once before start(). Implementations should fill their queues, touch all their state
     /// objects, and then reset them. On Linux, this ensures data structures are allocated on the
     /// NUMA node closest to the cpu that needs them.
-    default void firstTouch() {
-    }
+    default void firstTouch() {}
 
     default boolean isStarted() {
         return true;
@@ -37,11 +36,9 @@ public interface CloneableObject {
         return true;
     }
 
-    default void update(CoreSnapshot coreSnapshot) {
-    }
+    default void update(CoreSnapshot coreSnapshot) {}
 
-    default void input(LatticeSource stream) {
-    }
+    default void input(LatticeSource stream) {}
 
     default LatticeSource output() {
         return null;
@@ -51,9 +48,7 @@ public interface CloneableObject {
         return true;
     }
 
-    default void setDrainMode(boolean value) {
-
-    }
+    default void setDrainMode(boolean value) {}
 
     /**
      * Clears trial-specific buffered work and controller state before another benchmark policy is
@@ -66,14 +61,11 @@ public interface CloneableObject {
         return 0;
     }
 
-    default void dumpLocks() {
-
-    }
+    default void dumpLocks() {}
 
     default int getCore() {
         return -1;
     }
 
-    default void close() {
-    }
+    default void close() {}
 }

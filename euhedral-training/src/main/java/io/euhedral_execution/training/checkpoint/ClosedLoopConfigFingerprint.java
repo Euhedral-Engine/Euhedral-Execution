@@ -11,6 +11,8 @@ import java.util.HexFormat;
 import java.util.Map;
 
 public final class ClosedLoopConfigFingerprint {
+    private ClosedLoopConfigFingerprint() {}
+
     public static String sha256(ClosedLoopConfig config) throws IOException {
         StringBuilder material = new StringBuilder("closed-loop-config-v1\n");
         append(material, "trainingRunId", config.trainingRunId());
@@ -29,37 +31,40 @@ public final class ClosedLoopConfigFingerprint {
         for (SourceScenario scenario : config.requiredScenarios()) {
             append(material, "requiredScenario", scenario.canonical());
         }
-        config.referenceOverrides().entrySet().stream().sorted(Map.Entry.comparingByKey())
-                .forEach(entry -> append(material,
-                        "referenceOverride." + entry.getKey().canonical(), entry.getValue()));
+        config.referenceOverrides().entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .forEach(entry ->
+                        append(material, "referenceOverride." + entry.getKey().canonical(), entry.getValue()));
         append(material, "commitSha", config.commitSha());
         append(material, "dirtyWorkingTree", config.dirtyWorkingTree());
         if (config.bootstrapPolicies().isPresent()) {
-            append(material, "bootstrapPolicySha256",
+            append(
+                    material,
+                    "bootstrapPolicySha256",
                     ArtifactFingerprint.sha256(config.bootstrapPolicies().get()));
         } else if (config.initialCalibrationPlan().isPresent()) {
-            append(material, "calibrationPlanSha256",
+            append(
+                    material,
+                    "calibrationPlanSha256",
                     ArtifactFingerprint.sha256(config.initialCalibrationPlan().get()));
         } else {
             append(material, "bootstrapSourceSha256", "none");
         }
         java.util.TreeMap<String, java.nio.file.Path> bundles = new java.util.TreeMap<>();
         for (var bundle : config.initialObservationBundles()) {
-            String runId = ObservationBundleReader.read(bundle).run().descriptor()
-                    .benchmarkRunId();
+            String runId =
+                    ObservationBundleReader.read(bundle).run().descriptor().benchmarkRunId();
             if (bundles.put(runId, bundle) != null) {
                 throw new IllegalArgumentException("Duplicate initial benchmark run");
             }
         }
         for (var entry : bundles.entrySet()) {
             append(material, "initialObservationBundleRunId", entry.getKey());
-            append(material, "initialObservationBundleSha256",
-                    ArtifactFingerprint.sha256(entry.getValue()));
+            append(material, "initialObservationBundleSha256", ArtifactFingerprint.sha256(entry.getValue()));
         }
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            return HexFormat.of().formatHex(digest.digest(
-                    material.toString().getBytes(StandardCharsets.UTF_8)));
+            return HexFormat.of().formatHex(digest.digest(material.toString().getBytes(StandardCharsets.UTF_8)));
         } catch (java.security.NoSuchAlgorithmException error) {
             throw new IllegalStateException(error);
         }
@@ -110,8 +115,5 @@ public final class ClosedLoopConfigFingerprint {
 
     private static void append(StringBuilder material, String name, Object value) {
         material.append(name).append('=').append(value).append('\n');
-    }
-
-    private ClosedLoopConfigFingerprint() {
     }
 }

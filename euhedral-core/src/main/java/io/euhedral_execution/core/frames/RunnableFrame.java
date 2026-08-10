@@ -14,8 +14,8 @@ public final class RunnableFrame extends AbstractFrame {
         this.runnable = runnable;
     }
 
-    public RunnableFrame(long idHash, Runnable runnable,
-            FrameManager<Void, RunnableFrame> recycler, AtomicBoolean killSwitch) {
+    public RunnableFrame(
+            long idHash, Runnable runnable, FrameManager<Void, RunnableFrame> recycler, AtomicBoolean killSwitch) {
         super(idHash, recycler, killSwitch);
         this.runnable = runnable;
     }

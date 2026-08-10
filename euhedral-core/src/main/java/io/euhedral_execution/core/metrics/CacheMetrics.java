@@ -15,10 +15,9 @@ import java.util.function.Supplier;
 
 public final class CacheMetrics implements AutoCloseable {
 
-    private final MeterRegistry registry;
-
-    private final List<Meter> meters;
     public final DistributionSummary capFactor;
+    private final MeterRegistry registry;
+    private final List<Meter> meters;
 
     public CacheMetrics(CacheConfig config, Supplier<Long> cacheCount) {
         String prefix = config.metricPrefix();
@@ -31,16 +30,16 @@ public final class CacheMetrics implements AutoCloseable {
             this.meters = new ArrayList<>();
             String tag = String.valueOf(config.cloneConfig().coreId());
 
-            this.meters.add(
-                    Gauge.builder(metricName(prefix, MetricsAggregator.CACHE_BACKLOG_SUFFIX),
-                                    cacheCount)
-                            .description("Number of frames stored in the fragment cache.")
-                            .baseUnit("frames").tag(CORE_TAG, tag).register(registry));
+            this.meters.add(Gauge.builder(metricName(prefix, MetricsAggregator.CACHE_BACKLOG_SUFFIX), cacheCount)
+                    .description("Number of frames stored in the fragment cache.")
+                    .baseUnit("frames")
+                    .tag(CORE_TAG, tag)
+                    .register(registry));
 
-            this.capFactor = DistributionSummary.builder(
-                            metricName(prefix, MetricsAggregator.CAP_FACTOR_SUFFIX)).description(
-                            "Current buffer capacity multiplier. Higher is better. (0.15 to 1.0)")
-                    .tag(CORE_TAG, tag).register(registry);
+            this.capFactor = DistributionSummary.builder(metricName(prefix, MetricsAggregator.CAP_FACTOR_SUFFIX))
+                    .description("Current buffer capacity multiplier. Higher is better. (0.15 to 1.0)")
+                    .tag(CORE_TAG, tag)
+                    .register(registry);
             this.meters.add(this.capFactor);
 
         } else {

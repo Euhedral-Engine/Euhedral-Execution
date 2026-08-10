@@ -43,19 +43,37 @@ import org.slf4j.LoggerFactory;
 /// propagation, unlimited quota calculation, block-device filtering, and rate-limited logging.
 public class LinuxResourceProvider implements DetailedSystemSnapshotProvider, AutoCloseable {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(
-            Constants.getLoggerName(LinuxResourceProvider.class));
+    private static final Logger LOGGER = LoggerFactory.getLogger(Constants.getLoggerName(LinuxResourceProvider.class));
 
     private static final long LOG_RATE_LIMIT_NS = 60_000_000_000L; // 60s
     private static final VarHandle LOCK_STATE;
 
     static {
         try {
-            LOCK_STATE = MethodHandles.lookup().findVarHandle(LinuxResourceProvider.class,
-                    "lockState", int.class);
+            LOCK_STATE = MethodHandles.lookup().findVarHandle(LinuxResourceProvider.class, "lockState", int.class);
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }
+    }
+
+    private final Map<String, Long> lastLoggedNs = new ConcurrentHashMap<>();
+    private final LinuxPaths paths;
+    private final ByteBuffer buffer = ByteBuffer.allocateDirect(65_536);
+    // Fast state
+    private final BitSet effectiveCpus = new BitSet(SystemInfo.getCpuCount());
+    private final long[] lastCpuIowaitJiffies = new long[SystemInfo.getCpuCount()];
+    private final long[] lastCpuStealJiffies = new long[SystemInfo.getCpuCount()];
+    private final double[] perCpuWaitStallNs = new double[SystemInfo.getCpuCount()];
+    private long lastCgroupTotalStallNs = 0;
+    @SuppressWarnings("unused")
+    private volatile int lockState = 0;
+
+    public LinuxResourceProvider() {
+        this(new LinuxPaths());
+    }
+
+    public LinuxResourceProvider(LinuxPaths paths) {
+        this.paths = paths;
     }
 
     public static boolean isFilteredBlockDevice(int major, String name) {
@@ -69,31 +87,13 @@ public class LinuxResourceProvider implements DetailedSystemSnapshotProvider, Au
             return false;
         }
 
-        return name.startsWith("sd") || name.startsWith("nvme") || name.startsWith("vd")
-                || name.startsWith("xvd") || name.startsWith("mmcblk") || name.startsWith("md")
+        return name.startsWith("sd")
+                || name.startsWith("nvme")
+                || name.startsWith("vd")
+                || name.startsWith("xvd")
+                || name.startsWith("mmcblk")
+                || name.startsWith("md")
                 || name.startsWith("dm-");
-    }
-
-    private final Map<String, Long> lastLoggedNs = new ConcurrentHashMap<>();
-    private final LinuxPaths paths;
-    private final ByteBuffer buffer = ByteBuffer.allocateDirect(65_536);
-
-    // Fast state
-    private final BitSet effectiveCpus = new BitSet(SystemInfo.getCpuCount());
-    private final long[] lastCpuIowaitJiffies = new long[SystemInfo.getCpuCount()];
-    private final long[] lastCpuStealJiffies = new long[SystemInfo.getCpuCount()];
-    private final double[] perCpuWaitStallNs = new double[SystemInfo.getCpuCount()];
-    private long lastCgroupTotalStallNs = 0;
-
-    @SuppressWarnings("unused")
-    private volatile int lockState = 0;
-
-    public LinuxResourceProvider() {
-        this(new LinuxPaths());
-    }
-
-    public LinuxResourceProvider(LinuxPaths paths) {
-        this.paths = paths;
     }
 
     private void acquireLock() {
@@ -127,11 +127,9 @@ public class LinuxResourceProvider implements DetailedSystemSnapshotProvider, Au
             long[] memStats = readMemoryStats();
             long diskIo = readFilteredDiskIoBytes();
 
-            long[] memSnap = new long[]{
-                    memStats[0] <= 0 ? Long.MAX_VALUE : memStats[0],
-                    memStats[1],
-                    0L // inactive_file
-            };
+            long[] memSnap =
+                    new long[] {memStats[0] <= 0 ? Long.MAX_VALUE : memStats[0], memStats[1], 0L // inactive_file
+                    };
 
             return SystemSnapshot.create(
                     now,
@@ -143,8 +141,7 @@ public class LinuxResourceProvider implements DetailedSystemSnapshotProvider, Au
                     UnmodifiableBitSet.wrap((BitSet) effectiveCpus.clone()),
                     perCpuWaitStallNs.clone(),
                     memSnap,
-                    diskIo
-            );
+                    diskIo);
         } finally {
             releaseLock();
         }
@@ -179,27 +176,25 @@ public class LinuxResourceProvider implements DetailedSystemSnapshotProvider, Au
                         CounterSignal.unsupported(requestedAtNs),
                         CounterSignal.unsupported(requestedAtNs),
                         DoubleGaugeSignal.unsupported(requestedAtNs),
-                        DoubleGaugeSignal.unsupported(requestedAtNs)
-                );
+                        DoubleGaugeSignal.unsupported(requestedAtNs));
             }
 
             MemoryFastSignals memorySignals = new MemoryFastSignals(
-                    memoryMax > 0 ? LongGaugeSignal.valid(memoryMax, requestedAtNs)
+                    memoryMax > 0
+                            ? LongGaugeSignal.valid(memoryMax, requestedAtNs)
                             : LongGaugeSignal.unsupported(requestedAtNs),
                     LongGaugeSignal.unsupported(requestedAtNs),
                     LongGaugeSignal.valid(memoryCurrent, requestedAtNs),
                     LongGaugeSignal.unsupported(requestedAtNs),
                     CounterSignal.unsupported(requestedAtNs),
-                    CounterSignal.unsupported(requestedAtNs)
-            );
+                    CounterSignal.unsupported(requestedAtNs));
 
             IoFastSignals ioSignals = new IoFastSignals(
                     CounterSignal.valid(diskIoBytes, requestedAtNs),
                     CounterSignal.unsupported(requestedAtNs),
                     CounterSignal.unsupported(requestedAtNs),
                     CounterSignal.valid(ioStallNs, requestedAtNs),
-                    DoubleGaugeSignal.unsupported(requestedAtNs)
-            );
+                    DoubleGaugeSignal.unsupported(requestedAtNs));
 
             return new FastHardwareSample(
                     requestedAtNs,
@@ -214,8 +209,7 @@ public class LinuxResourceProvider implements DetailedSystemSnapshotProvider, Au
                     DoubleGaugeSignal.unsupported(requestedAtNs),
                     cpuSignals,
                     memorySignals,
-                    ioSignals
-            );
+                    ioSignals);
         } finally {
             releaseLock();
         }
@@ -237,29 +231,24 @@ public class LinuxResourceProvider implements DetailedSystemSnapshotProvider, Au
                 cpuSlow[i] = new CpuSlowSignals(
                         DoubleGaugeSignal.unsupported(requestedAtNs),
                         DoubleGaugeSignal.unsupported(requestedAtNs),
-                        validFreq ? LongGaugeSignal.valid((long) currentFreqHz, requestedAtNs)
+                        validFreq
+                                ? LongGaugeSignal.valid((long) currentFreqHz, requestedAtNs)
                                 : LongGaugeSignal.unsupported(requestedAtNs),
                         LongGaugeSignal.unsupported(requestedAtNs),
-                        new ThermalSignal(ThermalSeverity.NOMINAL, requestedAtNs,
-                                SignalValidity.UNSUPPORTED),
-                        new BooleanSignal(false, requestedAtNs, SignalValidity.UNSUPPORTED)
-                );
+                        new ThermalSignal(ThermalSeverity.NOMINAL, requestedAtNs, SignalValidity.UNSUPPORTED),
+                        new BooleanSignal(false, requestedAtNs, SignalValidity.UNSUPPORTED));
             }
 
             SystemSlowSignals systemSlow = new SystemSlowSignals(
                     DoubleGaugeSignal.unsupported(requestedAtNs),
                     DoubleGaugeSignal.unsupported(requestedAtNs),
-                    new ThermalSignal(ThermalSeverity.NOMINAL, requestedAtNs,
+                    new ThermalSignal(
+                            ThermalSeverity.NOMINAL,
+                            requestedAtNs,
                             validTemp ? SignalValidity.VALID : SignalValidity.UNSUPPORTED),
-                    new BooleanSignal(false, requestedAtNs, SignalValidity.UNSUPPORTED)
-            );
+                    new BooleanSignal(false, requestedAtNs, SignalValidity.UNSUPPORTED));
 
-            return new SlowHardwareSample(
-                    requestedAtNs,
-                    span,
-                    cpuSlow,
-                    systemSlow
-            );
+            return new SlowHardwareSample(requestedAtNs, span, cpuSlow, systemSlow);
         } finally {
             releaseLock();
         }
@@ -268,8 +257,7 @@ public class LinuxResourceProvider implements DetailedSystemSnapshotProvider, Au
     private void updateEffectiveCpus() {
         effectiveCpus.clear();
         Path cpusetFile = null;
-        if (paths.getMode() == LinuxPaths.CgroupMode.CGROUP_V2
-                || paths.getMode() == LinuxPaths.CgroupMode.HYBRID) {
+        if (paths.getMode() == LinuxPaths.CgroupMode.CGROUP_V2 || paths.getMode() == LinuxPaths.CgroupMode.HYBRID) {
             cpusetFile = paths.resolveV2Path("cpuset.cpus.effective");
         } else if (paths.getMode() == LinuxPaths.CgroupMode.CGROUP_V1) {
             cpusetFile = paths.resolveV1Path("cpuset", "cpuset.cpus");
@@ -317,8 +305,7 @@ public class LinuxResourceProvider implements DetailedSystemSnapshotProvider, Au
     }
 
     private double calculateQuotaCpus() {
-        if (paths.getMode() == LinuxPaths.CgroupMode.CGROUP_V2
-                || paths.getMode() == LinuxPaths.CgroupMode.HYBRID) {
+        if (paths.getMode() == LinuxPaths.CgroupMode.CGROUP_V2 || paths.getMode() == LinuxPaths.CgroupMode.HYBRID) {
             Path cpuMax = paths.resolveV2Path("cpu.max");
             if (cpuMax != null) {
                 String content = readFileBounded(cpuMax);
@@ -363,8 +350,7 @@ public class LinuxResourceProvider implements DetailedSystemSnapshotProvider, Au
     }
 
     private long readCpuUsageNs() {
-        if (paths.getMode() == LinuxPaths.CgroupMode.CGROUP_V2
-                || paths.getMode() == LinuxPaths.CgroupMode.HYBRID) {
+        if (paths.getMode() == LinuxPaths.CgroupMode.CGROUP_V2 || paths.getMode() == LinuxPaths.CgroupMode.HYBRID) {
             Path cpuStat = paths.resolveV2Path("cpu.stat");
             if (cpuStat != null) {
                 String content = readFileBounded(cpuStat);
@@ -395,8 +381,7 @@ public class LinuxResourceProvider implements DetailedSystemSnapshotProvider, Au
     }
 
     private long readCpuThrottleNs() {
-        if (paths.getMode() == LinuxPaths.CgroupMode.CGROUP_V2
-                || paths.getMode() == LinuxPaths.CgroupMode.HYBRID) {
+        if (paths.getMode() == LinuxPaths.CgroupMode.CGROUP_V2 || paths.getMode() == LinuxPaths.CgroupMode.HYBRID) {
             Path cpuStat = paths.resolveV2Path("cpu.stat");
             if (cpuStat != null) {
                 String content = readFileBounded(cpuStat);
@@ -435,8 +420,7 @@ public class LinuxResourceProvider implements DetailedSystemSnapshotProvider, Au
             String procStat = readFileBounded(LinuxPaths.PROC_STAT);
             if (procStat != null) {
                 for (String line : procStat.split("\n")) {
-                    if (line.startsWith("cpu") && line.length() > 3 && Character.isDigit(
-                            line.charAt(3))) {
+                    if (line.startsWith("cpu") && line.length() > 3 && Character.isDigit(line.charAt(3))) {
                         String[] parts = line.split("\\s+");
                         int cpuId = Integer.parseInt(parts[0].substring(3));
                         if (cpuId < SystemInfo.getCpuCount()) {
@@ -466,7 +450,8 @@ public class LinuxResourceProvider implements DetailedSystemSnapshotProvider, Au
                             int totalIdx = line.indexOf("total=");
                             if (totalIdx != -1) {
                                 try {
-                                    String totalStr = line.substring(totalIdx + 6).split("\\s+")[0];
+                                    String totalStr =
+                                            line.substring(totalIdx + 6).split("\\s+")[0];
                                     currentTotalStallNs = Long.parseLong(totalStr) * 1000L;
                                 } catch (Exception ignored) {
                                 }
@@ -493,8 +478,7 @@ public class LinuxResourceProvider implements DetailedSystemSnapshotProvider, Au
         long max = -1;
         long current = 0;
 
-        if (paths.getMode() == LinuxPaths.CgroupMode.CGROUP_V2
-                || paths.getMode() == LinuxPaths.CgroupMode.HYBRID) {
+        if (paths.getMode() == LinuxPaths.CgroupMode.CGROUP_V2 || paths.getMode() == LinuxPaths.CgroupMode.HYBRID) {
             Path memMaxPath = paths.resolveV2Path("memory.max");
             if (memMaxPath != null) {
                 String content = readFileBounded(memMaxPath);
@@ -555,7 +539,7 @@ public class LinuxResourceProvider implements DetailedSystemSnapshotProvider, Au
             }
         }
 
-        return new long[]{max, current};
+        return new long[] {max, current};
     }
 
     private long parseKbToBytes(String line) {
@@ -600,7 +584,8 @@ public class LinuxResourceProvider implements DetailedSystemSnapshotProvider, Au
                         int totalIdx = line.indexOf("total=");
                         if (totalIdx != -1) {
                             try {
-                                return Long.parseLong(line.substring(totalIdx + 6).split("\\s+")[0])
+                                return Long.parseLong(
+                                                line.substring(totalIdx + 6).split("\\s+")[0])
                                         * 1000L;
                             } catch (Exception ignored) {
                             }
@@ -646,7 +631,8 @@ public class LinuxResourceProvider implements DetailedSystemSnapshotProvider, Au
             if (Files.exists(LinuxPaths.THERMAL_BASE)) {
                 try (var stream = Files.list(LinuxPaths.THERMAL_BASE)) {
                     for (Path zone : stream.filter(
-                            p -> p.getFileName().toString().startsWith("thermal_zone")).toList()) {
+                                    p -> p.getFileName().toString().startsWith("thermal_zone"))
+                            .toList()) {
                         Path tempFile = zone.resolve("temp");
                         if (Files.exists(tempFile)) {
                             String content = readFileBounded(tempFile);
@@ -698,7 +684,5 @@ public class LinuxResourceProvider implements DetailedSystemSnapshotProvider, Au
     }
 
     @Override
-    public void close() {
-    }
+    public void close() {}
 }
-

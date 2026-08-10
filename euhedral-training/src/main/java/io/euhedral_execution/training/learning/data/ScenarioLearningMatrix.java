@@ -3,10 +3,15 @@ package io.euhedral_execution.training.learning.data;
 import io.euhedral_execution.training.data.PolicyId;
 import io.euhedral_execution.training.data.SourceScenario;
 
-public record ScenarioLearningMatrix(int rows, int featureWidth, float[] features,
-                                     float[] ordinalLabels, float[] rowWeights, double[] qualities,
-                                     PolicyId[] policyIds,
-                                     SourceScenario[] scenarios) {
+public record ScenarioLearningMatrix(
+        int rows,
+        int featureWidth,
+        float[] features,
+        float[] ordinalLabels,
+        float[] rowWeights,
+        double[] qualities,
+        PolicyId[] policyIds,
+        SourceScenario[] scenarios) {
 
     public ScenarioLearningMatrix {
         features = features.clone();
@@ -15,10 +20,13 @@ public record ScenarioLearningMatrix(int rows, int featureWidth, float[] feature
         qualities = qualities.clone();
         policyIds = policyIds.clone();
         scenarios = scenarios.clone();
-        if (rows <= 0 || featureWidth <= 0
+        if (rows <= 0
+                || featureWidth <= 0
                 || features.length != (long) rows * featureWidth
-                || ordinalLabels.length != (long) rows * 9 || rowWeights.length != rows
-                || qualities.length != rows || policyIds.length != rows
+                || ordinalLabels.length != (long) rows * 9
+                || rowWeights.length != rows
+                || qualities.length != rows
+                || policyIds.length != rows
                 || scenarios.length != rows) {
             throw new IllegalArgumentException("Invalid matrix shape");
         }
@@ -33,10 +41,13 @@ public record ScenarioLearningMatrix(int rows, int featureWidth, float[] feature
             }
         }
         for (int row = 0; row < rows; row++) {
-            if (!Float.isFinite(rowWeights[row]) || rowWeights[row] <= 0
+            if (!Float.isFinite(rowWeights[row])
+                    || rowWeights[row] <= 0
                     || !Double.isFinite(qualities[row])
-                    || qualities[row] < 0 || qualities[row] > 1
-                    || policyIds[row] == null || scenarios[row] == null) {
+                    || qualities[row] < 0
+                    || qualities[row] > 1
+                    || policyIds[row] == null
+                    || scenarios[row] == null) {
                 throw new IllegalArgumentException("Invalid matrix row");
             }
         }

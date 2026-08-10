@@ -4,6 +4,8 @@ import java.nio.file.Path;
 
 public final class TestPaths {
 
+    private TestPaths() {}
+
     public static Path projectDirectory() {
         return requiredPath("project.basedir");
     }
@@ -26,8 +28,5 @@ public final class TestPaths {
             throw new IllegalStateException("missing test system property " + property);
         }
         return Path.of(value).toAbsolutePath().normalize();
-    }
-
-    private TestPaths() {
     }
 }

@@ -45,69 +45,12 @@ import io.euhedral_execution.hardware_utils.internal.sampling.signals.ThermalSig
 ///   - outer sample observedAtNs is after evaluationNs.
 public final class SampleStateEngine {
 
-    /// Saturating multiply: returns value * multiplier, saturating at Long.MAX_VALUE.
-    /// Both operands are treated as nonnegative.
-    private static long saturatedMultiply(long value, int multiplier) {
-        long left = Math.max(value, 0);
-        long right = Math.max(multiplier, 0);
-        if (left == 0 || right == 0) return 0;
-        return left > Long.MAX_VALUE / right ? Long.MAX_VALUE : left * right;
-    }
-
-    private static ResolvedDouble resolveDoubleSignal(DoubleGaugeSignal sig, SignalResolution res) {
-        if (sig.validity() == SignalValidity.VALID) {
-            return new ResolvedDouble(sig.value(), sig.observedAtNs(), res);
-        }
-        return new ResolvedDouble(0, sig.observedAtNs(), SignalResolution.UNAVAILABLE);
-    }
-    private static ResolvedLong resolveLongSignal(LongGaugeSignal sig, SignalResolution res) {
-        if (sig.validity() == SignalValidity.VALID) {
-            return new ResolvedLong(sig.value(), sig.observedAtNs(), res);
-        }
-        return new ResolvedLong(0, sig.observedAtNs(), SignalResolution.UNAVAILABLE);
-    }
-
-    private static CpuIntervalSignals unavailableCpuInterval() {
-        return new CpuIntervalSignals(
-                new CounterDelta(0, 0, 0, SignalResolution.UNAVAILABLE),
-                new CounterDelta(0, 0, 0, SignalResolution.UNAVAILABLE),
-                new ResolvedDouble(0, 0, SignalResolution.UNAVAILABLE),
-                new CounterDelta(0, 0, 0, SignalResolution.UNAVAILABLE),
-                new CounterDelta(0, 0, 0, SignalResolution.UNAVAILABLE),
-                new ResolvedDouble(0, 0, SignalResolution.UNAVAILABLE),
-                new ResolvedDouble(0, 0, SignalResolution.UNAVAILABLE)
-        );
-    }
-
-    private static CpuSlowIntervalSignals unavailableCpuSlowInterval() {
-        return new CpuSlowIntervalSignals(
-                new ResolvedDouble(0, 0, SignalResolution.UNAVAILABLE),
-                new ResolvedDouble(0, 0, SignalResolution.UNAVAILABLE),
-                new ResolvedLong(0, 0, SignalResolution.UNAVAILABLE),
-                new ResolvedLong(0, 0, SignalResolution.UNAVAILABLE),
-                ThermalSeverity.NOMINAL, false, 0, SignalResolution.UNAVAILABLE
-        );
-    }
-
-    private static SystemSlowIntervalSignals unavailableSystemSlowInterval() {
-        return new SystemSlowIntervalSignals(
-                new ResolvedDouble(0, 0, SignalResolution.UNAVAILABLE),
-                new ResolvedDouble(0, 0, SignalResolution.UNAVAILABLE),
-                ThermalSeverity.NOMINAL, false, 0, SignalResolution.UNAVAILABLE
-        );
-    }
-
     // Timing
     private final int logicalSpan;
     private final long fastTtlNs;
-
-    private long lastEvaluationNs;
-    private UnmodifiableBitSet lastMembership;
-    private long lastMembershipObservedAtNs;
     private final CounterState scopeThrottledNs = new CounterState();
     private final CounterState scopeWaitNs = new CounterState();
     private final CounterState scopePsiNs = new CounterState();
-
     // Global counter states.
     private final CounterState quotaCpuNs = new CounterState();
     private final GaugeState scopeReportedRatio = new GaugeState();
@@ -131,20 +74,20 @@ public final class SampleStateEngine {
     private final GaugeState ioQueue = new GaugeState();
     // Per-logical-CPU states (indexed by stable Euhedral logical CPU ID).
     private final CounterState[] cpuWait;
-
     // -------------------------------------------------------------------------
     // Inner state classes
     // -------------------------------------------------------------------------
     private final GaugeState[] cpuReportedRatio;
     private final GaugeState[] cpuExternal;
-
     // -------------------------------------------------------------------------
     // Public API
     // -------------------------------------------------------------------------
     private final GaugeState[] cpuRunnable;
     /// Slow-sample cache with its own 5-second anchored attempt grid.
     private final SlowSampleCache slowCache = new SlowSampleCache();
-
+    private long lastEvaluationNs;
+    private UnmodifiableBitSet lastMembership;
+    private long lastMembershipObservedAtNs;
     /// Constructs an engine for the given fixed logical CPU span and fast period.
     ///
     /// logicalSpan must be strictly positive; derived from SystemInfo.getCpuCount()
@@ -177,6 +120,62 @@ public final class SampleStateEngine {
             cpuExternal[i] = new GaugeState();
             cpuRunnable[i] = new GaugeState();
         }
+    }
+
+    /// Saturating multiply: returns value * multiplier, saturating at Long.MAX_VALUE.
+    /// Both operands are treated as nonnegative.
+    private static long saturatedMultiply(long value, int multiplier) {
+        long left = Math.max(value, 0);
+        long right = Math.max(multiplier, 0);
+        if (left == 0 || right == 0) return 0;
+        return left > Long.MAX_VALUE / right ? Long.MAX_VALUE : left * right;
+    }
+
+    private static ResolvedDouble resolveDoubleSignal(DoubleGaugeSignal sig, SignalResolution res) {
+        if (sig.validity() == SignalValidity.VALID) {
+            return new ResolvedDouble(sig.value(), sig.observedAtNs(), res);
+        }
+        return new ResolvedDouble(0, sig.observedAtNs(), SignalResolution.UNAVAILABLE);
+    }
+
+    private static ResolvedLong resolveLongSignal(LongGaugeSignal sig, SignalResolution res) {
+        if (sig.validity() == SignalValidity.VALID) {
+            return new ResolvedLong(sig.value(), sig.observedAtNs(), res);
+        }
+        return new ResolvedLong(0, sig.observedAtNs(), SignalResolution.UNAVAILABLE);
+    }
+
+    private static CpuIntervalSignals unavailableCpuInterval() {
+        return new CpuIntervalSignals(
+                new CounterDelta(0, 0, 0, SignalResolution.UNAVAILABLE),
+                new CounterDelta(0, 0, 0, SignalResolution.UNAVAILABLE),
+                new ResolvedDouble(0, 0, SignalResolution.UNAVAILABLE),
+                new CounterDelta(0, 0, 0, SignalResolution.UNAVAILABLE),
+                new CounterDelta(0, 0, 0, SignalResolution.UNAVAILABLE),
+                new ResolvedDouble(0, 0, SignalResolution.UNAVAILABLE),
+                new ResolvedDouble(0, 0, SignalResolution.UNAVAILABLE));
+    }
+
+    private static CpuSlowIntervalSignals unavailableCpuSlowInterval() {
+        return new CpuSlowIntervalSignals(
+                new ResolvedDouble(0, 0, SignalResolution.UNAVAILABLE),
+                new ResolvedDouble(0, 0, SignalResolution.UNAVAILABLE),
+                new ResolvedLong(0, 0, SignalResolution.UNAVAILABLE),
+                new ResolvedLong(0, 0, SignalResolution.UNAVAILABLE),
+                ThermalSeverity.NOMINAL,
+                false,
+                0,
+                SignalResolution.UNAVAILABLE);
+    }
+
+    private static SystemSlowIntervalSignals unavailableSystemSlowInterval() {
+        return new SystemSlowIntervalSignals(
+                new ResolvedDouble(0, 0, SignalResolution.UNAVAILABLE),
+                new ResolvedDouble(0, 0, SignalResolution.UNAVAILABLE),
+                ThermalSeverity.NOMINAL,
+                false,
+                0,
+                SignalResolution.UNAVAILABLE);
     }
 
     // -------------------------------------------------------------------------
@@ -243,14 +242,14 @@ public final class SampleStateEngine {
         quotaCapacity.updateLong(sample.quotaCapacityCpus());
         quotaPeriod.updateLong(sample.quotaPeriodNs());
 
-        CounterDelta productive = quotaCpuNs.evaluate(
-                sample.productiveCpuNs(), outerObservedAtNs, evaluationNs, fastTtlNs);
-        CounterDelta scopeThrottled = scopeThrottledNs.evaluate(
-                sample.scopeQuotaThrottledNs(), outerObservedAtNs, evaluationNs, fastTtlNs);
-        CounterDelta scopeWait = scopeWaitNs.evaluate(
-                sample.scopeSchedulerWaitNs(), outerObservedAtNs, evaluationNs, fastTtlNs);
-        CounterDelta scopePsi = scopePsiNs.evaluate(
-                sample.scopePsiStallNs(), outerObservedAtNs, evaluationNs, fastTtlNs);
+        CounterDelta productive =
+                quotaCpuNs.evaluate(sample.productiveCpuNs(), outerObservedAtNs, evaluationNs, fastTtlNs);
+        CounterDelta scopeThrottled =
+                scopeThrottledNs.evaluate(sample.scopeQuotaThrottledNs(), outerObservedAtNs, evaluationNs, fastTtlNs);
+        CounterDelta scopeWait =
+                scopeWaitNs.evaluate(sample.scopeSchedulerWaitNs(), outerObservedAtNs, evaluationNs, fastTtlNs);
+        CounterDelta scopePsi =
+                scopePsiNs.evaluate(sample.scopePsiStallNs(), outerObservedAtNs, evaluationNs, fastTtlNs);
 
         scopeReportedRatio.updateDouble(sample.scopeReportedSchedulerStallRatio());
         ResolvedDouble resolvedScopeRatio = scopeReportedRatio.resolveDouble(evaluationNs, fastTtlNs);
@@ -261,45 +260,42 @@ public final class SampleStateEngine {
         memUsage.updateLong(sample.memorySignals().usageBytes());
         memInactive.updateLong(sample.memorySignals().inactiveFileBytes());
         CounterDelta memReclaimDelta = memReclaim.evaluate(
-                sample.memorySignals().cumulativeReclaimBytes(), outerObservedAtNs, evaluationNs,
-                fastTtlNs);
-        CounterDelta memStallDelta = memStall.evaluate(
-                sample.memorySignals().memoryStallNs(), outerObservedAtNs, evaluationNs, fastTtlNs);
+                sample.memorySignals().cumulativeReclaimBytes(), outerObservedAtNs, evaluationNs, fastTtlNs);
+        CounterDelta memStallDelta =
+                memStall.evaluate(sample.memorySignals().memoryStallNs(), outerObservedAtNs, evaluationNs, fastTtlNs);
 
         MemoryIntervalSignals memInterval = new MemoryIntervalSignals(
-            memHard.resolveLong(evaluationNs, fastTtlNs),
-            memHigh.resolveLong(evaluationNs, fastTtlNs),
-            memUsage.resolveLong(evaluationNs, fastTtlNs),
-            memInactive.resolveLong(evaluationNs, fastTtlNs),
-            memReclaimDelta,
-            memStallDelta
-        );
+                memHard.resolveLong(evaluationNs, fastTtlNs),
+                memHigh.resolveLong(evaluationNs, fastTtlNs),
+                memUsage.resolveLong(evaluationNs, fastTtlNs),
+                memInactive.resolveLong(evaluationNs, fastTtlNs),
+                memReclaimDelta,
+                memStallDelta);
 
         // I/O signals.
-        CounterDelta ioBytesDelta = ioBytes.evaluate(
-                sample.ioSignals().productiveBytes(), outerObservedAtNs, evaluationNs, fastTtlNs);
-        CounterDelta ioStallDelta = ioStall.evaluate(
-                sample.ioSignals().stallNs(), outerObservedAtNs, evaluationNs, fastTtlNs);
-        CounterDelta ioLatDelta = ioLatency.evaluate(
-                sample.ioSignals().operationLatencyNs(), outerObservedAtNs, evaluationNs,
-                fastTtlNs);
-        CounterDelta ioOpsDelta = ioOps.evaluate(
-                sample.ioSignals().completedOperations(), outerObservedAtNs, evaluationNs,
-                fastTtlNs);
+        CounterDelta ioBytesDelta =
+                ioBytes.evaluate(sample.ioSignals().productiveBytes(), outerObservedAtNs, evaluationNs, fastTtlNs);
+        CounterDelta ioStallDelta =
+                ioStall.evaluate(sample.ioSignals().stallNs(), outerObservedAtNs, evaluationNs, fastTtlNs);
+        CounterDelta ioLatDelta =
+                ioLatency.evaluate(sample.ioSignals().operationLatencyNs(), outerObservedAtNs, evaluationNs, fastTtlNs);
+        CounterDelta ioOpsDelta =
+                ioOps.evaluate(sample.ioSignals().completedOperations(), outerObservedAtNs, evaluationNs, fastTtlNs);
         ioQueue.updateDouble(sample.ioSignals().maximumQueueDepth());
 
         // Paired latency: valid only when both members produce a CURRENT delta over
         // the same interval (matching elapsedNs). If either fails, both are rebased
         // so the next interval starts fresh on both counters (H3 fix).
         LatencyInterval ioLatInt;
-        boolean latencyPairValid =
-                ioLatDelta.resolution() == SignalResolution.CURRENT
-                        && ioOpsDelta.resolution() == SignalResolution.CURRENT
-                        && ioLatDelta.elapsedNs() == ioOpsDelta.elapsedNs();
+        boolean latencyPairValid = ioLatDelta.resolution() == SignalResolution.CURRENT
+                && ioOpsDelta.resolution() == SignalResolution.CURRENT
+                && ioLatDelta.elapsedNs() == ioOpsDelta.elapsedNs();
         if (latencyPairValid) {
             ioLatInt = new LatencyInterval(
-                    ioLatDelta.delta(), ioOpsDelta.delta(),
-                    ioLatDelta.elapsedNs(), ioLatDelta.observedAtNs(),
+                    ioLatDelta.delta(),
+                    ioOpsDelta.delta(),
+                    ioLatDelta.elapsedNs(),
+                    ioLatDelta.observedAtNs(),
                     SignalResolution.CURRENT);
         } else {
             // Rebase both members so neither carries a stale baseline.
@@ -309,11 +305,7 @@ public final class SampleStateEngine {
         }
 
         IoIntervalSignals ioInterval = new IoIntervalSignals(
-            ioBytesDelta,
-            ioStallDelta,
-            ioLatInt,
-            ioQueue.resolveDouble(evaluationNs, fastTtlNs)
-        );
+                ioBytesDelta, ioStallDelta, ioLatInt, ioQueue.resolveDouble(evaluationNs, fastTtlNs));
 
         // Per-CPU signals.
         CpuIntervalSignals[] cpuIntervals = new CpuIntervalSignals[logicalSpan];
@@ -332,23 +324,22 @@ public final class SampleStateEngine {
                 continue;
             }
             CpuFastSignals sig = fastSigs[i];
-            CounterDelta w = cpuWait[i].evaluate(sig.schedulerWait(), outerObservedAtNs,
-                    evaluationNs, fastTtlNs);
-            CounterDelta p = cpuPsi[i].evaluate(sig.psiStall(), outerObservedAtNs, evaluationNs,
-                    fastTtlNs);
+            CounterDelta w = cpuWait[i].evaluate(sig.schedulerWait(), outerObservedAtNs, evaluationNs, fastTtlNs);
+            CounterDelta p = cpuPsi[i].evaluate(sig.psiStall(), outerObservedAtNs, evaluationNs, fastTtlNs);
             cpuReportedRatio[i].updateDouble(sig.reportedSchedulerStallRatio());
-            CounterDelta t = cpuThrottle[i].evaluate(sig.quotaThrottle(), outerObservedAtNs,
-                    evaluationNs, fastTtlNs);
-            CounterDelta st = cpuSteal[i].evaluate(sig.steal(), outerObservedAtNs, evaluationNs,
-                    fastTtlNs);
+            CounterDelta t = cpuThrottle[i].evaluate(sig.quotaThrottle(), outerObservedAtNs, evaluationNs, fastTtlNs);
+            CounterDelta st = cpuSteal[i].evaluate(sig.steal(), outerObservedAtNs, evaluationNs, fastTtlNs);
             cpuExternal[i].updateDouble(sig.externalContentionRatio());
             cpuRunnable[i].updateDouble(sig.runnablePerCapacity());
 
             cpuIntervals[i] = new CpuIntervalSignals(
-                w, p, cpuReportedRatio[i].resolveDouble(evaluationNs, fastTtlNs),
-                t, st, cpuExternal[i].resolveDouble(evaluationNs, fastTtlNs),
-                cpuRunnable[i].resolveDouble(evaluationNs, fastTtlNs)
-            );
+                    w,
+                    p,
+                    cpuReportedRatio[i].resolveDouble(evaluationNs, fastTtlNs),
+                    t,
+                    st,
+                    cpuExternal[i].resolveDouble(evaluationNs, fastTtlNs),
+                    cpuRunnable[i].resolveDouble(evaluationNs, fastTtlNs));
         }
 
         // Slow signals from cache.
@@ -362,15 +353,15 @@ public final class SampleStateEngine {
 
             SystemSlowSignals sysSig = slow.systemSignals();
             slowSys = new SystemSlowIntervalSignals(
-                resolveDoubleSignal(sysSig.availableCapacityUnits(), res),
+                    resolveDoubleSignal(sysSig.availableCapacityUnits(), res),
                     resolveDoubleSignal(sysSig.nominalCapacityUnits(), res),
                     sysSig.thermalSeverity().validity() == SignalValidity.VALID
-                            ? sysSig.thermalSeverity().value() : ThermalSeverity.NOMINAL,
+                            ? sysSig.thermalSeverity().value()
+                            : ThermalSeverity.NOMINAL,
                     sysSig.lowPowerMode().validity() == SignalValidity.VALID
                             && sysSig.lowPowerMode().value(),
                     slow.observedAtNs(),
-                res
-            );
+                    res);
 
             CpuSlowSignals[] cSigs = slow.cpuSignals();
             for (int i = 0; i < logicalSpan; i++) {
@@ -380,17 +371,17 @@ public final class SampleStateEngine {
                 }
                 CpuSlowSignals cs = cSigs[i];
                 slowCpu[i] = new CpuSlowIntervalSignals(
-                    resolveDoubleSignal(cs.availableCapacityUnits(), res),
+                        resolveDoubleSignal(cs.availableCapacityUnits(), res),
                         resolveDoubleSignal(cs.nominalCapacityUnits(), res),
                         resolveLongSignal(cs.constrainedFrequencyHz(), res),
                         resolveLongSignal(cs.nominalFrequencyHz(), res),
                         cs.thermalSeverity().validity() == SignalValidity.VALID
-                                ? cs.thermalSeverity().value() : ThermalSeverity.NOMINAL,
-                        cs.lowPowerMode().validity() == SignalValidity.VALID && cs.lowPowerMode()
-                                .value(),
+                                ? cs.thermalSeverity().value()
+                                : ThermalSeverity.NOMINAL,
+                        cs.lowPowerMode().validity() == SignalValidity.VALID
+                                && cs.lowPowerMode().value(),
                         slow.observedAtNs(),
-                    res
-                );
+                        res);
             }
         } else {
             slowSys = unavailableSystemSlowInterval();
@@ -400,22 +391,21 @@ public final class SampleStateEngine {
         }
 
         return new IntervalHardwareSample(
-            evaluationNs,
+                evaluationNs,
                 logicalSpan,
                 lastMembership,
-            quotaCapacity.resolveLong(evaluationNs, fastTtlNs),
-            quotaPeriod.resolveLong(evaluationNs, fastTtlNs),
-            productive,
-            scopeThrottled,
-            scopeWait,
-            scopePsi,
-            resolvedScopeRatio,
-            cpuIntervals,
-            memInterval,
-            ioInterval,
-            slowCpu,
-            slowSys
-        );
+                quotaCapacity.resolveLong(evaluationNs, fastTtlNs),
+                quotaPeriod.resolveLong(evaluationNs, fastTtlNs),
+                productive,
+                scopeThrottled,
+                scopeWait,
+                scopePsi,
+                resolvedScopeRatio,
+                cpuIntervals,
+                memInterval,
+                ioInterval,
+                slowCpu,
+                slowSys);
     }
 
     // -------------------------------------------------------------------------
@@ -498,8 +488,7 @@ public final class SampleStateEngine {
         ///
         /// UNSUPPORTED clears the baseline immediately.
         /// TRANSIENT_FAILURE retains the baseline for TTL but produces no contribution.
-        CounterDelta evaluate(CounterSignal signal, long outerObservedAtNs, long evaluationNs,
-                long ttl) {
+        CounterDelta evaluate(CounterSignal signal, long outerObservedAtNs, long evaluationNs, long ttl) {
             if (signal == null || signal.validity() != SignalValidity.VALID) {
                 if (signal != null && signal.validity() == SignalValidity.UNSUPPORTED) {
                     hasBaseline = false;
@@ -636,34 +625,31 @@ public final class SampleStateEngine {
         /// hasValue is false, age < 0 (invalid), or age > ttl (expired).
         /// Age in [0, ttl] is fresh (boundary is included). Clears hasValue on expiry.
         ResolvedDouble resolveDouble(long evaluationNs, long ttl) {
-            if (!hasValue)
-                return new ResolvedDouble(0, 0, SignalResolution.UNAVAILABLE);
+            if (!hasValue) return new ResolvedDouble(0, 0, SignalResolution.UNAVAILABLE);
             long age = evaluationNs - observedAtNs;
             if (age < 0 || age > ttl) {
                 hasValue = false;
                 return new ResolvedDouble(0, 0, SignalResolution.UNAVAILABLE);
             }
-            return new ResolvedDouble(doubleVal, observedAtNs,
-                    age == 0 ? SignalResolution.CURRENT : SignalResolution.CACHED);
+            return new ResolvedDouble(
+                    doubleVal, observedAtNs, age == 0 ? SignalResolution.CURRENT : SignalResolution.CACHED);
         }
 
         /// Resolves the stored long value against the TTL.
         ResolvedLong resolveLong(long evaluationNs, long ttl) {
-            if (!hasValue)
-                return new ResolvedLong(0, 0, SignalResolution.UNAVAILABLE);
+            if (!hasValue) return new ResolvedLong(0, 0, SignalResolution.UNAVAILABLE);
             long age = evaluationNs - observedAtNs;
             if (age < 0 || age > ttl) {
                 hasValue = false;
                 return new ResolvedLong(0, 0, SignalResolution.UNAVAILABLE);
             }
-            return new ResolvedLong(longVal, observedAtNs,
-                    age == 0 ? SignalResolution.CURRENT : SignalResolution.CACHED);
+            return new ResolvedLong(
+                    longVal, observedAtNs, age == 0 ? SignalResolution.CURRENT : SignalResolution.CACHED);
         }
 
         /// Resolves the stored ThermalSeverity, returning NOMINAL on expiry.
         ThermalSeverity resolveThermal(long evaluationNs, long ttl) {
-            if (!hasValue)
-                return ThermalSeverity.NOMINAL;
+            if (!hasValue) return ThermalSeverity.NOMINAL;
             long age = evaluationNs - observedAtNs;
             if (age < 0 || age > ttl) {
                 hasValue = false;
@@ -674,8 +660,7 @@ public final class SampleStateEngine {
 
         /// Resolves the stored boolean, returning false on expiry.
         boolean resolveBoolean(long evaluationNs, long ttl) {
-            if (!hasValue)
-                return false;
+            if (!hasValue) return false;
             long age = evaluationNs - observedAtNs;
             if (age < 0 || age > ttl) {
                 hasValue = false;
@@ -686,8 +671,7 @@ public final class SampleStateEngine {
 
         /// Returns the resolution for the stored value without materializing the payload.
         SignalResolution resolveResolution(long evaluationNs, long ttl) {
-            if (!hasValue)
-                return SignalResolution.UNAVAILABLE;
+            if (!hasValue) return SignalResolution.UNAVAILABLE;
             long age = evaluationNs - observedAtNs;
             if (age < 0 || age > ttl) return SignalResolution.UNAVAILABLE;
             return age == 0 ? SignalResolution.CURRENT : SignalResolution.CACHED;

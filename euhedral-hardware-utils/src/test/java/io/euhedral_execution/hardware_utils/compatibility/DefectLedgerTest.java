@@ -20,12 +20,15 @@ class DefectLedgerTest {
     @Test
     void mapsEveryKnownCorrectionToAnExactLaterRegression() throws Exception {
         DefectLedger ledger = DefectLedger.read(TestPaths.resource("defect-ledger.tsv"));
-        Map<String, String> actual = ledger.defects().stream().collect(Collectors.toMap(
-                DefectLedger.Defect::id, DefectLedger.Defect::ownerPhases,
-                (left, right) -> {
-                    assertEquals(left, right, "one defect ID has inconsistent owners");
-                    return left;
-                }, TreeMap::new));
+        Map<String, String> actual = ledger.defects().stream()
+                .collect(Collectors.toMap(
+                        DefectLedger.Defect::id,
+                        DefectLedger.Defect::ownerPhases,
+                        (left, right) -> {
+                            assertEquals(left, right, "one defect ID has inconsistent owners");
+                            return left;
+                        },
+                        TreeMap::new));
 
         Map<String, String> expected = new TreeMap<>();
         add(expected, "P1", "B01", "B02", "B03", "B04", "B05", "B07");

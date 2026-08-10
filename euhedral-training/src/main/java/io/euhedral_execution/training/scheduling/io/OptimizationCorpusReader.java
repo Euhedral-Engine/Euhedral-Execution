@@ -22,19 +22,38 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 
 public final class OptimizationCorpusReader {
-    private static final List<String> RANKING_HEADER = List.of("schema_version",
-            "published_rank", "policy_id", "eligible", "required_scenario_count",
-            "observed_required_scenario_count", "valid_required_scenario_count",
-            "coverage_fraction", "worst_quality", "quality_p25", "geometric_mean_quality",
-            "cross_scenario_quality_mad", "median_relative_iqr", "mean_non_success_rate",
-            "mean_timeout_rate", "missing_scenarios");
-    private static final List<String> COVERAGE_HEADER = List.of("schema_version", "policy_id",
-            "eligible", "required_scenario_count", "observed_required_scenario_count",
-            "valid_required_scenario_count", "measured_scenarios", "missing_scenarios",
+    private static final List<String> RANKING_HEADER = List.of(
+            "schema_version",
+            "published_rank",
+            "policy_id",
+            "eligible",
+            "required_scenario_count",
+            "observed_required_scenario_count",
+            "valid_required_scenario_count",
+            "coverage_fraction",
+            "worst_quality",
+            "quality_p25",
+            "geometric_mean_quality",
+            "cross_scenario_quality_mad",
+            "median_relative_iqr",
+            "mean_non_success_rate",
+            "mean_timeout_rate",
+            "missing_scenarios");
+    private static final List<String> COVERAGE_HEADER = List.of(
+            "schema_version",
+            "policy_id",
+            "eligible",
+            "required_scenario_count",
+            "observed_required_scenario_count",
+            "valid_required_scenario_count",
+            "measured_scenarios",
+            "missing_scenarios",
             "rejected_scenarios");
 
-    public static OptimizationCorpusView read(DataMerger.MergeArtifacts artifacts,
-            SortedSet<SourceScenario> requiredScenarios) throws IOException {
+    private OptimizationCorpusReader() {}
+
+    public static OptimizationCorpusView read(
+            DataMerger.MergeArtifacts artifacts, SortedSet<SourceScenario> requiredScenarios) throws IOException {
         PolicyRegistry registry = new PolicyRegistry();
         TreeMap<PolicyId, PolicyVector> policies = new TreeMap<>();
         readVectors(artifacts.robustLeaderVectors(), registry, policies, true);
@@ -47,8 +66,11 @@ public final class OptimizationCorpusReader {
             List<String> row = requireWidth(coverageRows.get(i), 9);
             version(row.get(0));
             PolicyId id = PolicyId.parse(row.get(1));
-            CoverageRow value = new CoverageRow(bool(row.get(2)), integer(row.get(3)),
-                    integer(row.get(4)), integer(row.get(5)),
+            CoverageRow value = new CoverageRow(
+                    bool(row.get(2)),
+                    integer(row.get(3)),
+                    integer(row.get(4)),
+                    integer(row.get(5)),
                     scenarios(row.get(6), requiredScenarios),
                     scenarios(row.get(7), requiredScenarios),
                     scenarios(row.get(8), requiredScenarios));
@@ -75,7 +97,8 @@ public final class OptimizationCorpusReader {
             }
             validateCoverage(c, coverage.get(id), requiredScenarios);
             boolean isEligible = bool(row.get(3));
-            if (isEligible != c.eligible() || integer(row.get(4)) != c.required()
+            if (isEligible != c.eligible()
+                    || integer(row.get(4)) != c.required()
                     || integer(row.get(5)) != c.observed()
                     || integer(row.get(6)) != c.valid()) {
                 throw new IllegalArgumentException("Ranking/coverage disagreement for " + id);
@@ -91,11 +114,22 @@ public final class OptimizationCorpusReader {
             if (!scenarios(row.get(15), requiredScenarios).equals(c.missing())) {
                 throw new IllegalArgumentException("Missing scenario disagreement");
             }
-            RobustPolicySummary summary = new RobustPolicySummary(policy, isEligible,
-                    integer(row.get(4)), integer(row.get(5)), integer(row.get(6)),
-                    finite(row.get(7)), optional(row.get(8)), optional(row.get(9)),
-                    optional(row.get(10)), optional(row.get(11)), optional(row.get(12)),
-                    optional(row.get(13)), optional(row.get(14)), c.measured(), c.missing(),
+            RobustPolicySummary summary = new RobustPolicySummary(
+                    policy,
+                    isEligible,
+                    integer(row.get(4)),
+                    integer(row.get(5)),
+                    integer(row.get(6)),
+                    finite(row.get(7)),
+                    optional(row.get(8)),
+                    optional(row.get(9)),
+                    optional(row.get(10)),
+                    optional(row.get(11)),
+                    optional(row.get(12)),
+                    optional(row.get(13)),
+                    optional(row.get(14)),
+                    c.measured(),
+                    c.missing(),
                     c.rejected());
             if (summaries.put(id, summary) != null) {
                 throw new IllegalArgumentException("Duplicate ranking policy");
@@ -109,22 +143,31 @@ public final class OptimizationCorpusReader {
                 || !summaries.keySet().equals(coverage.keySet())) {
             throw new IllegalArgumentException("Phase 1 datasets do not have the same policies");
         }
-        List<RobustPolicySummary> sortedEligible = eligible.stream()
-                .sorted(PolicyComparator.BEST_FIRST).toList();
+        List<RobustPolicySummary> sortedEligible =
+                eligible.stream().sorted(PolicyComparator.BEST_FIRST).toList();
         if (!eligible.equals(sortedEligible)) {
             throw new IllegalArgumentException("Robust ranking is not in authoritative order");
         }
-        return new OptimizationCorpusView(policies, sortedEligible, summaries, coverage,
+        return new OptimizationCorpusView(
+                policies,
+                sortedEligible,
+                summaries,
+                coverage,
                 ArtifactFingerprint.sha256(artifacts.robustRanking().getParent()));
     }
 
-    private static void readVectors(Path file, PolicyRegistry registry,
-            SortedMap<PolicyId, PolicyVector> policies, boolean eligible) throws IOException {
+    private static void readVectors(
+            Path file, PolicyRegistry registry, SortedMap<PolicyId, PolicyVector> policies, boolean eligible)
+            throws IOException {
         List<List<String>> rows = CanonicalCsv.read(file);
-        ArrayList<String> expectedHeader = new ArrayList<>(eligible
-                ? List.of("schema_version", "robust_rank", "policy_id")
-                : List.of("schema_version", "valid_required_scenario_count",
-                        "observed_required_scenario_count", "policy_id"));
+        ArrayList<String> expectedHeader = new ArrayList<>(
+                eligible
+                        ? List.of("schema_version", "robust_rank", "policy_id")
+                        : List.of(
+                                "schema_version",
+                                "valid_required_scenario_count",
+                                "observed_required_scenario_count",
+                                "policy_id"));
         for (int i = 0; i < PolicyVector.WIDTH; i++) {
             expectedHeader.add("weight_%02d_bits".formatted(i));
         }
@@ -150,18 +193,17 @@ public final class OptimizationCorpusReader {
                 throw new IllegalArgumentException("Duplicate vector policy");
             }
             if (!eligible) {
-                IncompleteOrder current = new IncompleteOrder(integer(row.get(1)),
-                        integer(row.get(2)), policy.id());
+                IncompleteOrder current = new IncompleteOrder(integer(row.get(1)), integer(row.get(2)), policy.id());
                 if (previous != null && previous.compareTo(current) >= 0) {
-                    throw new IllegalArgumentException(
-                            "Incomplete vectors are not deterministic");
+                    throw new IllegalArgumentException("Incomplete vectors are not deterministic");
                 }
                 previous = current;
             }
         }
     }
 
-    private static void validateCoverage(CoverageRow declared,
+    private static void validateCoverage(
+            CoverageRow declared,
             SortedMap<SourceScenario, ScenarioResultStatus> statuses,
             SortedSet<SourceScenario> required) {
         TreeSet<SourceScenario> measured = new TreeSet<>();
@@ -191,19 +233,18 @@ public final class OptimizationCorpusReader {
         }
     }
 
-    private static TreeMap<PolicyId, SortedMap<SourceScenario, ScenarioResultStatus>>
-            readScenarioStatuses(Path file, SortedSet<SourceScenario> required)
-            throws IOException {
+    private static TreeMap<PolicyId, SortedMap<SourceScenario, ScenarioResultStatus>> readScenarioStatuses(
+            Path file, SortedSet<SourceScenario> required) throws IOException {
         List<List<String>> rows = CanonicalCsv.read(file);
-        if (rows.isEmpty() || rows.getFirst().size() != 26
+        if (rows.isEmpty()
+                || rows.getFirst().size() != 26
                 || !rows.getFirst().get(0).equals("schema_version")
                 || !rows.getFirst().get(1).equals("scenario_id")
                 || !rows.getFirst().get(7).equals("policy_id")
                 || !rows.getFirst().get(8).equals("status")) {
             throw new IllegalArgumentException("Invalid scenario-results header");
         }
-        TreeMap<PolicyId, SortedMap<SourceScenario, ScenarioResultStatus>> result =
-                new TreeMap<>();
+        TreeMap<PolicyId, SortedMap<SourceScenario, ScenarioResultStatus>> result = new TreeMap<>();
         SourceScenario previousScenario = null;
         PolicyId previousPolicy = null;
         for (int i = 1; i < rows.size(); i++) {
@@ -214,22 +255,22 @@ public final class OptimizationCorpusReader {
             if (!required.contains(scenario)) {
                 throw new IllegalArgumentException("Unexpected scenario result");
             }
-            if (previousScenario != null && (scenario.compareTo(previousScenario) < 0
-                    || scenario.equals(previousScenario)
-                    && policy.compareTo(previousPolicy) <= 0)) {
+            if (previousScenario != null
+                    && (scenario.compareTo(previousScenario) < 0
+                            || scenario.equals(previousScenario) && policy.compareTo(previousPolicy) <= 0)) {
                 throw new IllegalArgumentException("Scenario results are not deterministic");
             }
             previousScenario = scenario;
             previousPolicy = policy;
-            if (result.computeIfAbsent(policy, ignored -> new TreeMap<>()).put(scenario,
-                    ScenarioResultStatus.valueOf(row.get(8))) != null) {
+            if (result.computeIfAbsent(policy, ignored -> new TreeMap<>())
+                            .put(scenario, ScenarioResultStatus.valueOf(row.get(8)))
+                    != null) {
                 throw new IllegalArgumentException("Duplicate scenario result");
             }
         }
         for (var entry : result.entrySet()) {
             if (!entry.getValue().keySet().equals(required)) {
-                throw new IllegalArgumentException("Incomplete scenario grid for "
-                        + entry.getKey());
+                throw new IllegalArgumentException("Incomplete scenario grid for " + entry.getKey());
             }
         }
         return result;
@@ -248,8 +289,7 @@ public final class OptimizationCorpusReader {
         return row;
     }
 
-    private static SortedSet<SourceScenario> scenarios(String value,
-            SortedSet<SourceScenario> required) {
+    private static SortedSet<SourceScenario> scenarios(String value, SortedSet<SourceScenario> required) {
         TreeSet<SourceScenario> result = new TreeSet<>();
         if (!value.isEmpty()) {
             for (String item : value.split(";")) {
@@ -298,13 +338,16 @@ public final class OptimizationCorpusReader {
         return Long.parseUnsignedLong(value, 16);
     }
 
-    private record CoverageRow(boolean eligible, int required, int observed, int valid,
-            SortedSet<SourceScenario> measured, SortedSet<SourceScenario> missing,
-            SortedSet<SourceScenario> rejected) {
-    }
+    private record CoverageRow(
+            boolean eligible,
+            int required,
+            int observed,
+            int valid,
+            SortedSet<SourceScenario> measured,
+            SortedSet<SourceScenario> missing,
+            SortedSet<SourceScenario> rejected) {}
 
-    private record IncompleteOrder(int valid, int observed, PolicyId policy)
-            implements Comparable<IncompleteOrder> {
+    private record IncompleteOrder(int valid, int observed, PolicyId policy) implements Comparable<IncompleteOrder> {
         @Override
         public int compareTo(IncompleteOrder other) {
             int result = Integer.compare(other.valid, valid);
@@ -313,8 +356,5 @@ public final class OptimizationCorpusReader {
             }
             return result != 0 ? result : policy.compareTo(other.policy);
         }
-    }
-
-    private OptimizationCorpusReader() {
     }
 }

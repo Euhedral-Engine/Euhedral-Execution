@@ -7,8 +7,9 @@ import org.slf4j.LoggerFactory;
 /// Loads the manifest-selected JNI product exactly once through JVM class initialization.
 public final class JNIClassLoader {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(
-            Constants.getLoggerName(JNIClassLoader.class));
+    private static final Logger LOGGER = LoggerFactory.getLogger(Constants.getLoggerName(JNIClassLoader.class));
+
+    private JNIClassLoader() {}
 
     public static void load() {
         NativeLoadResult ignored = Holder.RESULT;
@@ -21,21 +22,20 @@ public final class JNIClassLoader {
             String osArch = System.getProperty("os.arch");
             String canonicalOs = catalog.canonicalOs(osName);
             NativeLibraryExtractor extractor = NativeLibraryExtractor.create(canonicalOs, LOGGER);
-            NativeLoadResult result = new NativeLibraryLoader(
-                    catalog, extractor, NativeLibrarySystem.SYSTEM, LOGGER).load(osName, osArch);
-            LOGGER.info("Using JNI product {} for {}/{}", result.product().id(), canonicalOs,
+            NativeLoadResult result = new NativeLibraryLoader(catalog, extractor, NativeLibrarySystem.SYSTEM, LOGGER)
+                    .load(osName, osArch);
+            LOGGER.info(
+                    "Using JNI product {} for {}/{}",
+                    result.product().id(),
+                    canonicalOs,
                     result.product().architecture());
             return result;
         } catch (IOException | IllegalArgumentException | SecurityException failure) {
             ExceptionInInitializerError error = new ExceptionInInitializerError(
-                    failure.getMessage() == null ? "native-loader: initialization failed"
-                            : failure.getMessage());
+                    failure.getMessage() == null ? "native-loader: initialization failed" : failure.getMessage());
             error.addSuppressed(failure);
             throw error;
         }
-    }
-
-    private JNIClassLoader() {
     }
 
     private static final class Holder {

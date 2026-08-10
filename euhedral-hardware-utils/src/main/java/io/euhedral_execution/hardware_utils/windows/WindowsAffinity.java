@@ -17,7 +17,6 @@ public final class WindowsAffinity extends ThreadPinner {
     public static final WindowsAffinity INSTANCE;
     private static final Logger LOGGER = LoggerFactory.getLogger(Constants.getLoggerName(WindowsAffinity.class));
     private static final AtomicBoolean WIN_RES_SET = new AtomicBoolean(false);
-    private final AtomicInteger windowsResolution100ns = new AtomicInteger(-1);
 
     static {
         boolean loaded = false;
@@ -35,9 +34,17 @@ public final class WindowsAffinity extends ThreadPinner {
         INSTANCE = instance;
     }
 
+    private final AtomicInteger windowsResolution100ns = new AtomicInteger(-1);
+
     private WindowsAffinity(boolean jniLoaded) {
         super(jniLoaded ? AffinityCapability.EXACT : AffinityCapability.UNSUPPORTED, null, jniLoaded);
     }
+
+    private static native int setThreadAffinity(long[] masks);
+
+    private static native int getThreadAffinity(long[] masks);
+
+    private static native int ntSetTimerResolution(int resolution, boolean set);
 
     /// Returns the global logical CPU ID of the calling thread.
     @Override
@@ -108,16 +115,18 @@ public final class WindowsAffinity extends ThreadPinner {
         }
 
         try {
-            LOGGER.info("Windows: Requested resolution: {} Applied Resolution: {}",
-                    res, applied * 100L);
+            LOGGER.info("Windows: Requested resolution: {} Applied Resolution: {}", res, applied * 100L);
 
-            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-                try {
-                    ntSetTimerResolution(this.windowsResolution100ns.getAcquire(), false);
-                } catch (Exception ignored) {
-                    // Ignore on shutdown
-                }
-            }, "win-timer-release"));
+            Runtime.getRuntime()
+                    .addShutdownHook(new Thread(
+                            () -> {
+                                try {
+                                    ntSetTimerResolution(this.windowsResolution100ns.getAcquire(), false);
+                                } catch (Exception ignored) {
+                                    // Ignore on shutdown
+                                }
+                            },
+                            "win-timer-release"));
         } catch (Exception e) {
             LOGGER.error("Failed to set Windows timer resolution.", e);
             WIN_RES_SET.set(false);
@@ -125,10 +134,4 @@ public final class WindowsAffinity extends ThreadPinner {
         }
         return true;
     }
-
-    private static native int setThreadAffinity(long[] masks);
-
-    private static native int getThreadAffinity(long[] masks);
-
-    private static native int ntSetTimerResolution(int resolution, boolean set);
 }

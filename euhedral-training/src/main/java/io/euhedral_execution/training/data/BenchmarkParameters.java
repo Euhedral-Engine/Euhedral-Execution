@@ -16,9 +16,12 @@ public record BenchmarkParameters(
     public BenchmarkParameters {
         Objects.requireNonNull(cpuSetHex);
         frameSourceSeeds = List.copyOf(frameSourceSeeds);
-        if (expectedRepetitions < 1 || expectedRepetitions > 999_999
-                || sampleDurationNanos <= 0 || livenessTimeoutNanos <= 0
-                || framesPerSource <= 0 || resetTimeoutNanos <= 0
+        if (expectedRepetitions < 1
+                || expectedRepetitions > 999_999
+                || sampleDurationNanos <= 0
+                || livenessTimeoutNanos <= 0
+                || framesPerSource <= 0
+                || resetTimeoutNanos <= 0
                 || !cpuSetHex.matches("[0-9a-f]+(?:,[0-9a-f]{8})*")) {
             throw new IllegalArgumentException("Invalid benchmark parameters");
         }

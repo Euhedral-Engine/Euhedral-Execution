@@ -40,8 +40,7 @@ class PinnedThreadExecutorLifecycleTest {
     private static final long WAIT_SECONDS = 5;
 
     /// Runs one bounded execute-versus-shutdown stress schedule.
-    private static void stressExecuteAgainstShutdown(Harness harness, int cpu, int round)
-            throws Exception {
+    private static void stressExecuteAgainstShutdown(Harness harness, int cpu, int round) throws Exception {
         PinnedThreadExecutor executor = harness.acquire(cpu, Thread::new);
         CyclicBarrier barrier = new CyclicBarrier(9);
         CountDownLatch release = new CountDownLatch(1);
@@ -50,24 +49,26 @@ class PinnedThreadExecutorLifecycleTest {
         ConcurrentLinkedQueue<Throwable> failures = new ConcurrentLinkedQueue<>();
         List<Thread> submitters = new CopyOnWriteArrayList<>();
         for (int i = 0; i < 8; i++) {
-            Thread submitter = new Thread(() -> {
-                await(barrier);
-                try {
-                    executor.execute(() -> {
-                        int live = liveCommands.incrementAndGet();
-                        maximumCommands.accumulateAndGet(live, Math::max);
+            Thread submitter = new Thread(
+                    () -> {
+                        await(barrier);
                         try {
-                            awaitIgnoringInterrupt(release);
-                        } finally {
-                            liveCommands.decrementAndGet();
+                            executor.execute(() -> {
+                                int live = liveCommands.incrementAndGet();
+                                maximumCommands.accumulateAndGet(live, Math::max);
+                                try {
+                                    awaitIgnoringInterrupt(release);
+                                } finally {
+                                    liveCommands.decrementAndGet();
+                                }
+                            });
+                        } catch (RejectedExecutionException expected) {
+                            // The shutdown side won this bounded acceptance race.
+                        } catch (Throwable failure) {
+                            failures.add(failure);
                         }
-                    });
-                } catch (RejectedExecutionException expected) {
-                    // The shutdown side won this bounded acceptance race.
-                } catch (Throwable failure) {
-                    failures.add(failure);
-                }
-            }, "stress-submit-" + round + "-" + i);
+                    },
+                    "stress-submit-" + round + "-" + i);
             submitters.add(submitter);
             submitter.start();
         }
@@ -83,8 +84,7 @@ class PinnedThreadExecutorLifecycleTest {
     }
 
     /// Runs one bounded close-versus-acquisition stress schedule.
-    private static void stressCloseAgainstAcquire(Harness harness, int cpu, int round)
-            throws Exception {
+    private static void stressCloseAgainstAcquire(Harness harness, int cpu, int round) throws Exception {
         PinnedThreadExecutor executor = harness.acquire(cpu, Thread::new);
         CountDownLatch entered = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
@@ -99,16 +99,18 @@ class PinnedThreadExecutorLifecycleTest {
         ConcurrentLinkedQueue<Throwable> failures = new ConcurrentLinkedQueue<>();
         List<Thread> acquirers = new CopyOnWriteArrayList<>();
         for (int i = 0; i < 8; i++) {
-            Thread acquirer = new Thread(() -> {
-                await(barrier);
-                try {
-                    returned.add(harness.acquire(cpu, Thread::new));
-                } catch (RejectedExecutionException expected) {
-                    // The close side won after making the old active entry a tombstone.
-                } catch (Throwable failure) {
-                    failures.add(failure);
-                }
-            }, "stress-acquire-" + round + "-" + i);
+            Thread acquirer = new Thread(
+                    () -> {
+                        await(barrier);
+                        try {
+                            returned.add(harness.acquire(cpu, Thread::new));
+                        } catch (RejectedExecutionException expected) {
+                            // The close side won after making the old active entry a tombstone.
+                        } catch (Throwable failure) {
+                            failures.add(failure);
+                        }
+                    },
+                    "stress-acquire-" + round + "-" + i);
             acquirers.add(acquirer);
             acquirer.start();
         }
@@ -187,7 +189,8 @@ class PinnedThreadExecutorLifecycleTest {
         long started = System.nanoTime();
         long budget = SECONDS.toNanos(WAIT_SECONDS);
         while (thread.getState() != expected) {
-            assertTrue(System.nanoTime() - started < budget,
+            assertTrue(
+                    System.nanoTime() - started < budget,
                     () -> "thread state was " + thread.getState() + ", expected " + expected);
             Thread.onSpinWait();
         }
@@ -197,10 +200,8 @@ class PinnedThreadExecutorLifecycleTest {
     private static void awaitWaiting(Thread thread) {
         long started = System.nanoTime();
         long budget = SECONDS.toNanos(WAIT_SECONDS);
-        while (thread.getState() != Thread.State.WAITING
-                && thread.getState() != Thread.State.TIMED_WAITING) {
-            assertTrue(System.nanoTime() - started < budget,
-                    () -> "thread did not enter a wait: " + thread.getState());
+        while (thread.getState() != Thread.State.WAITING && thread.getState() != Thread.State.TIMED_WAITING) {
+            assertTrue(System.nanoTime() - started < budget, () -> "thread did not enter a wait: " + thread.getState());
             Thread.onSpinWait();
         }
     }
@@ -222,16 +223,18 @@ class PinnedThreadExecutorLifecycleTest {
         pending.add(root);
         while (!pending.isEmpty()) {
             Object value = pending.removeFirst();
-            if (!seen.add(value) || value instanceof Reference<?> || value instanceof String
-                    || value instanceof Number || value instanceof Boolean
-                    || value instanceof Character || value.getClass().isEnum()
+            if (!seen.add(value)
+                    || value instanceof Reference<?>
+                    || value instanceof String
+                    || value instanceof Number
+                    || value instanceof Boolean
+                    || value instanceof Character
+                    || value.getClass().isEnum()
                     || value instanceof Class<?>) {
                 continue;
             }
-            assertFalse(value instanceof PinnedThreadExecutor,
-                    "cleanup graph retained an executor");
-            assertFalse(value instanceof java.util.concurrent.ThreadFactory,
-                    "cleanup graph retained a pinned factory");
+            assertFalse(value instanceof PinnedThreadExecutor, "cleanup graph retained an executor");
+            assertFalse(value instanceof java.util.concurrent.ThreadFactory, "cleanup graph retained a pinned factory");
             assertFalse(value instanceof Thread, "cleanup graph retained a task thread");
             if (value instanceof Iterable<?> iterable) {
                 iterable.forEach(element -> addIfNotNull(pending, element));
@@ -250,8 +253,7 @@ class PinnedThreadExecutorLifecycleTest {
                 if (Modifier.isStatic(field.getModifiers())) {
                     continue;
                 }
-                assertFalse(field.getName().startsWith("this$"),
-                        () -> "synthetic outer reference: " + field);
+                assertFalse(field.getName().startsWith("this$"), () -> "synthetic outer reference: " + field);
                 try {
                     field.setAccessible(true);
                     addIfNotNull(pending, field.get(value));
@@ -282,14 +284,16 @@ class PinnedThreadExecutorLifecycleTest {
 
         try {
             for (int i = 0; i < callers; i++) {
-                Thread caller = new Thread(() -> {
-                    try {
-                        barrier.await(WAIT_SECONDS, SECONDS);
-                        results.add(harness.acquire(cpu, Thread::new));
-                    } catch (Throwable failure) {
-                        failures.add(failure);
-                    }
-                }, "e1-acquirer-" + i);
+                Thread caller = new Thread(
+                        () -> {
+                            try {
+                                barrier.await(WAIT_SECONDS, SECONDS);
+                                results.add(harness.acquire(cpu, Thread::new));
+                            } catch (Throwable failure) {
+                                failures.add(failure);
+                            }
+                        },
+                        "e1-acquirer-" + i);
                 threads.add(caller);
                 caller.start();
             }
@@ -347,14 +351,15 @@ class PinnedThreadExecutorLifecycleTest {
 
         PinnedThreadExecutor executor = harness.acquire(cpu, creator);
         AtomicReference<Throwable> e2Outcome = new AtomicReference<>();
-        Thread e2Execute = new Thread(() -> {
-            try {
-                executor.execute(() -> {
-                });
-            } catch (Throwable failure) {
-                e2Outcome.set(failure);
-            }
-        }, "e2-execute");
+        Thread e2Execute = new Thread(
+                () -> {
+                    try {
+                        executor.execute(() -> {});
+                    } catch (Throwable failure) {
+                        e2Outcome.set(failure);
+                    }
+                },
+                "e2-execute");
         e2Execute.start();
         assertTrue(firstCreated.await(WAIT_SECONDS, SECONDS));
         executor.shutdown();
@@ -365,10 +370,12 @@ class PinnedThreadExecutorLifecycleTest {
         assertEquals(0, harness.control(cpu).activeTaskCount());
 
         assertSame(executor, harness.acquire(cpu, Thread::new));
-        Thread e3Execute = new Thread(() -> executor.execute(() -> {
-            taskEntered.countDown();
-            await(taskRelease);
-        }), "e3-execute");
+        Thread e3Execute = new Thread(
+                () -> executor.execute(() -> {
+                    taskEntered.countDown();
+                    await(taskRelease);
+                }),
+                "e3-execute");
         e3Execute.start();
         assertTrue(startEntered.await(WAIT_SECONDS, SECONDS));
 
@@ -397,27 +404,24 @@ class PinnedThreadExecutorLifecycleTest {
         try (PinnedThreadExecutor executor = harness.acquire(cpu, Thread::new)) {
             executor.shutdown();
             executor.start("restarted", 99, true);
-            Thread restarted = executor.getPinnedFactory().newThread(() -> {
-            });
+            Thread restarted = executor.getPinnedFactory().newThread(() -> {});
             assertEquals("restarted", restarted.getName());
             assertEquals(Thread.MAX_PRIORITY, restarted.getPriority());
             assertTrue(restarted.isDaemon());
 
             executor.start("ignored-running", Thread.MIN_PRIORITY, false);
-            assertEquals("restarted", executor.getPinnedFactory().newThread(() -> {
-            }).getName());
+            assertEquals(
+                    "restarted", executor.getPinnedFactory().newThread(() -> {}).getName());
 
             executor.shutdown();
             harness.control(cpu).setEpochForTest(Long.MAX_VALUE);
-            assertThrows(IllegalStateException.class,
-                    () -> executor.start("overflow", Thread.MIN_PRIORITY, false));
+            assertThrows(IllegalStateException.class, () -> executor.start("overflow", Thread.MIN_PRIORITY, false));
             assertTrue(executor.isShutdown());
-            assertEquals("restarted", executor.getPinnedFactory().newThread(() -> {
-            }).getName());
+            assertEquals(
+                    "restarted", executor.getPinnedFactory().newThread(() -> {}).getName());
 
             executor.close();
-            assertThrows(IllegalStateException.class,
-                    () -> executor.start("closed", Thread.NORM_PRIORITY, false));
+            assertThrows(IllegalStateException.class, () -> executor.start("closed", Thread.NORM_PRIORITY, false));
         } finally {
             harness.closeAll();
         }
@@ -529,8 +533,7 @@ class PinnedThreadExecutorLifecycleTest {
         awaitCondition(() -> harness.control(cpu).activeTaskCount() == 0);
 
         harness.bindings.releaseFatal.set(true);
-        executor.execute(() -> {
-        });
+        executor.execute(() -> {});
         assertTrue(failures.await(WAIT_SECONDS, SECONDS));
         assertEquals(2, uncaught.size());
         assertTrue(uncaught.stream().anyMatch(OutOfMemoryError.class::isInstance));
@@ -569,8 +572,7 @@ class PinnedThreadExecutorLifecycleTest {
             List<Runnable> queued = executor.shutdownNow();
             assertTrue(Thread.currentThread().isInterrupted());
             assertTrue(queued.isEmpty());
-            assertThrows(UnsupportedOperationException.class, () -> queued.add(() -> {
-            }));
+            assertThrows(UnsupportedOperationException.class, () -> queued.add(() -> {}));
         } finally {
             Thread.interrupted();
         }
@@ -604,8 +606,8 @@ class PinnedThreadExecutorLifecycleTest {
         assertFalse(executor.awaitTermination(1, MILLISECONDS));
 
         AtomicReference<Boolean> spuriousResult = new AtomicReference<>();
-        Thread spuriousWaiter = new Thread(() -> spuriousResult.set(
-                executor.awaitTermination(WAIT_SECONDS, SECONDS)), "e9-spurious");
+        Thread spuriousWaiter =
+                new Thread(() -> spuriousResult.set(executor.awaitTermination(WAIT_SECONDS, SECONDS)), "e9-spurious");
         spuriousWaiter.start();
         awaitWaiting(spuriousWaiter);
         harness.control(cpu).signalForTest();
@@ -613,8 +615,8 @@ class PinnedThreadExecutorLifecycleTest {
         assertNull(spuriousResult.get());
 
         AtomicReference<Boolean> restartResult = new AtomicReference<>();
-        Thread saturatedWaiter = new Thread(() -> restartResult.set(
-                executor.awaitTermination(Long.MAX_VALUE, SECONDS)), "e9-saturated");
+        Thread saturatedWaiter =
+                new Thread(() -> restartResult.set(executor.awaitTermination(Long.MAX_VALUE, SECONDS)), "e9-saturated");
         saturatedWaiter.start();
         awaitWaiting(saturatedWaiter);
         executor.start("e9-restarted", Thread.NORM_PRIORITY, true);
@@ -626,10 +628,12 @@ class PinnedThreadExecutorLifecycleTest {
         executor.shutdown();
         AtomicReference<Boolean> interruptedResult = new AtomicReference<>();
         AtomicBoolean interruptRestored = new AtomicBoolean();
-        Thread interruptedWaiter = new Thread(() -> {
-            interruptedResult.set(executor.awaitTermination(Long.MAX_VALUE, SECONDS));
-            interruptRestored.set(Thread.currentThread().isInterrupted());
-        }, "e9-interrupted");
+        Thread interruptedWaiter = new Thread(
+                () -> {
+                    interruptedResult.set(executor.awaitTermination(Long.MAX_VALUE, SECONDS));
+                    interruptRestored.set(Thread.currentThread().isInterrupted());
+                },
+                "e9-interrupted");
         interruptedWaiter.start();
         awaitWaiting(interruptedWaiter);
         interruptedWaiter.interrupt();
@@ -638,8 +642,8 @@ class PinnedThreadExecutorLifecycleTest {
         assertTrue(interruptRestored.get());
 
         AtomicReference<Boolean> completionResult = new AtomicReference<>();
-        Thread completionWaiter = new Thread(() -> completionResult.set(
-                executor.awaitTermination(WAIT_SECONDS, SECONDS)), "e9-completion");
+        Thread completionWaiter = new Thread(
+                () -> completionResult.set(executor.awaitTermination(WAIT_SECONDS, SECONDS)), "e9-completion");
         completionWaiter.start();
         awaitWaiting(completionWaiter);
         release.countDown();
@@ -742,21 +746,25 @@ class PinnedThreadExecutorLifecycleTest {
 
         CountDownLatch snapshotClosed = new CountDownLatch(1);
         CountDownLatch releaseRegistry = new CountDownLatch(1);
-        Thread closeAll = new Thread(() -> harness.registry.closeAll(() -> {
-            snapshotClosed.countDown();
-            await(releaseRegistry);
-        }), "e12-close-all");
+        Thread closeAll = new Thread(
+                () -> harness.registry.closeAll(() -> {
+                    snapshotClosed.countDown();
+                    await(releaseRegistry);
+                }),
+                "e12-close-all");
         closeAll.start();
         assertTrue(snapshotClosed.await(WAIT_SECONDS, SECONDS));
 
         AtomicReference<Throwable> acquisition = new AtomicReference<>();
-        Thread acquirer = new Thread(() -> {
-            try {
-                harness.acquire(cpu, Thread::new);
-            } catch (Throwable failure) {
-                acquisition.set(failure);
-            }
-        }, "e12-acquirer");
+        Thread acquirer = new Thread(
+                () -> {
+                    try {
+                        harness.acquire(cpu, Thread::new);
+                    } catch (Throwable failure) {
+                        acquisition.set(failure);
+                    }
+                },
+                "e12-acquirer");
         acquirer.start();
         awaitThreadState(acquirer, Thread.State.BLOCKED);
         releaseRegistry.countDown();
@@ -778,24 +786,22 @@ class PinnedThreadExecutorLifecycleTest {
     @Test
     void validatesFactoryCreatorConfigurationStartAndApiBoundaries() throws Exception {
         int cpu = testCpu();
-        assertThrows(NullPointerException.class, () -> PinnedThreadExecutor.getOrSetIfAbsent(
-                null, cpu, "null", Thread.NORM_PRIORITY, false));
-        assertThrows(NullPointerException.class, () -> PinnedThreadExecutor.getOrSetIfAbsent(
-                Thread::new, cpu, null, Thread.NORM_PRIORITY, false));
+        assertThrows(
+                NullPointerException.class,
+                () -> PinnedThreadExecutor.getOrSetIfAbsent(null, cpu, "null", Thread.NORM_PRIORITY, false));
+        assertThrows(
+                NullPointerException.class,
+                () -> PinnedThreadExecutor.getOrSetIfAbsent(Thread::new, cpu, null, Thread.NORM_PRIORITY, false));
         assertThrows(IllegalArgumentException.class, () -> PinnedThreadExecutor.get(-1));
-        assertThrows(IllegalArgumentException.class,
-                () -> PinnedThreadExecutor.get(SystemInfo.getCpuCount()));
-        assertThrows(IllegalArgumentException.class,
-                () -> PinnedThreadExecutor.get(Long.MAX_VALUE));
+        assertThrows(IllegalArgumentException.class, () -> PinnedThreadExecutor.get(SystemInfo.getCpuCount()));
+        assertThrows(IllegalArgumentException.class, () -> PinnedThreadExecutor.get(Long.MAX_VALUE));
 
         Harness direct = new Harness();
         PinnedThreadExecutor executor = direct.acquire(cpu, Thread::new);
-        assertThrows(NullPointerException.class,
-                () -> executor.getPinnedFactory().newThread(null));
-        Thread first = executor.getPinnedFactory().newThread(() -> {
-        });
-        Thread second = executor.getPinnedFactory().newThread(() -> {
-        });
+        assertThrows(
+                NullPointerException.class, () -> executor.getPinnedFactory().newThread(null));
+        Thread first = executor.getPinnedFactory().newThread(() -> {});
+        Thread second = executor.getPinnedFactory().newThread(() -> {});
         assertNotSame(first, second);
         assertEquals(Thread.State.NEW, first.getState());
         assertEquals(0, direct.control(cpu).activeTaskCount());
@@ -805,23 +811,20 @@ class PinnedThreadExecutorLifecycleTest {
         afterClose.start();
         join(afterClose);
         assertTrue(directRan.await(WAIT_SECONDS, SECONDS));
-        assertEquals(0, direct.controlOrNull(cpu) == null
-                ? 0 : direct.control(cpu).activeTaskCount());
+        assertEquals(
+                0, direct.controlOrNull(cpu) == null ? 0 : direct.control(cpu).activeTaskCount());
         direct.assertClean();
 
         Harness nullCreator = new Harness();
         PinnedThreadExecutor returnsNull = nullCreator.acquire(cpu, ignored -> null);
-        assertThrows(RejectedExecutionException.class, () -> returnsNull.execute(() -> {
-        }));
+        assertThrows(RejectedExecutionException.class, () -> returnsNull.execute(() -> {}));
         assertEquals(0, nullCreator.control(cpu).activeTaskCount());
         returnsNull.close();
         nullCreator.assertClean();
 
         Harness nonNew = new Harness();
-        PinnedThreadExecutor returnsRunning = nonNew.acquire(cpu,
-                ignored -> Thread.currentThread());
-        assertThrows(RejectedExecutionException.class, () -> returnsRunning.execute(() -> {
-        }));
+        PinnedThreadExecutor returnsRunning = nonNew.acquire(cpu, ignored -> Thread.currentThread());
+        assertThrows(RejectedExecutionException.class, () -> returnsRunning.execute(() -> {}));
         returnsRunning.close();
         nonNew.assertClean();
 
@@ -830,9 +833,7 @@ class PinnedThreadExecutorLifecycleTest {
         PinnedThreadExecutor creatorThrows = throwingCreator.acquire(cpu, ignored -> {
             throw creatorFailure;
         });
-        assertSame(creatorFailure, assertThrows(IllegalArgumentException.class,
-                () -> creatorThrows.execute(() -> {
-                })));
+        assertSame(creatorFailure, assertThrows(IllegalArgumentException.class, () -> creatorThrows.execute(() -> {})));
         creatorThrows.close();
         throwingCreator.assertClean();
 
@@ -840,16 +841,15 @@ class PinnedThreadExecutorLifecycleTest {
         FakeCleanupRegistrar cleanups = new FakeCleanupRegistrar();
         FakeHookRegistrar hooks = new FakeHookRegistrar();
         FakeTaskBinding bindings = new FakeTaskBinding();
-        PinnedThreadExecutor.Registry configurationRegistry = PinnedThreadExecutor.newTestRegistry(
-                cleanups, hooks, bindings,
-                (thread, name, priority, daemon) -> {
+        PinnedThreadExecutor.Registry configurationRegistry =
+                PinnedThreadExecutor.newTestRegistry(cleanups, hooks, bindings, (thread, name, priority, daemon) -> {
                     throw configurationFailure;
                 });
-        PinnedThreadExecutor configurationThrows = configurationRegistry.acquire(
-                Thread::new, cpu, "configuration", Thread.NORM_PRIORITY, false);
-        assertSame(configurationFailure, assertThrows(IllegalStateException.class,
-                () -> configurationThrows.execute(() -> {
-                })));
+        PinnedThreadExecutor configurationThrows =
+                configurationRegistry.acquire(Thread::new, cpu, "configuration", Thread.NORM_PRIORITY, false);
+        assertSame(
+                configurationFailure,
+                assertThrows(IllegalStateException.class, () -> configurationThrows.execute(() -> {})));
         assertEquals(0, configurationRegistry.controlForTest(cpu).activeTaskCount());
         configurationThrows.close();
         assertEquals(0, cleanups.live.get());
@@ -857,17 +857,14 @@ class PinnedThreadExecutorLifecycleTest {
 
         Harness startFailure = new Harness();
         IllegalStateException startException = new IllegalStateException("start");
-        PinnedThreadExecutor cannotStart = startFailure.acquire(cpu,
-                command -> new Thread(command) {
-                    /// Injects a deterministic candidate-start failure before a task becomes active.
-                    @Override
-                    public synchronized void start() {
-                        throw startException;
-                    }
-                });
-        assertSame(startException, assertThrows(IllegalStateException.class,
-                () -> cannotStart.execute(() -> {
-                })));
+        PinnedThreadExecutor cannotStart = startFailure.acquire(cpu, command -> new Thread(command) {
+            /// Injects a deterministic candidate-start failure before a task becomes active.
+            @Override
+            public synchronized void start() {
+                throw startException;
+            }
+        });
+        assertSame(startException, assertThrows(IllegalStateException.class, () -> cannotStart.execute(() -> {})));
         assertEquals(0, startFailure.control(cpu).activeTaskCount());
         cannotStart.close();
         startFailure.assertClean();
@@ -880,10 +877,17 @@ class PinnedThreadExecutorLifecycleTest {
             return new Thread(command);
         });
         retained.shutdown();
-        assertSame(retained, retainedCreator.registry.acquire(command -> {
-            replacementCreations.incrementAndGet();
-            return new Thread(command);
-        }, cpu, "restart", Thread.NORM_PRIORITY, false));
+        assertSame(
+                retained,
+                retainedCreator.registry.acquire(
+                        command -> {
+                            replacementCreations.incrementAndGet();
+                            return new Thread(command);
+                        },
+                        cpu,
+                        "restart",
+                        Thread.NORM_PRIORITY,
+                        false));
         CountDownLatch ran = new CountDownLatch(1);
         retained.execute(ran::countDown);
         assertTrue(ran.await(WAIT_SECONDS, SECONDS));
@@ -901,20 +905,22 @@ class PinnedThreadExecutorLifecycleTest {
         FakeCleanupRegistrar failedCleanup = new FakeCleanupRegistrar();
         failedCleanup.failRegistration.set(true);
         FakeHookRegistrar cleanupHooks = new FakeHookRegistrar();
-        PinnedThreadExecutor.Registry cleanupRegistry = PinnedThreadExecutor.newTestRegistry(
-                failedCleanup, cleanupHooks, new FakeTaskBinding());
-        assertThrows(IllegalStateException.class, () -> cleanupRegistry.acquire(
-                Thread::new, cpu, "cleanup-failure", Thread.NORM_PRIORITY, false));
+        PinnedThreadExecutor.Registry cleanupRegistry =
+                PinnedThreadExecutor.newTestRegistry(failedCleanup, cleanupHooks, new FakeTaskBinding());
+        assertThrows(
+                IllegalStateException.class,
+                () -> cleanupRegistry.acquire(Thread::new, cpu, "cleanup-failure", Thread.NORM_PRIORITY, false));
         assertEquals(0, cleanupRegistry.entryCount());
         assertEquals(0, cleanupHooks.adds.get());
 
         FakeCleanupRegistrar hookCleanups = new FakeCleanupRegistrar();
         FakeHookRegistrar failedHook = new FakeHookRegistrar();
         failedHook.failAdd.set(true);
-        PinnedThreadExecutor.Registry hookRegistry = PinnedThreadExecutor.newTestRegistry(
-                hookCleanups, failedHook, new FakeTaskBinding());
-        assertThrows(IllegalStateException.class, () -> hookRegistry.acquire(
-                Thread::new, cpu, "hook-failure", Thread.NORM_PRIORITY, false));
+        PinnedThreadExecutor.Registry hookRegistry =
+                PinnedThreadExecutor.newTestRegistry(hookCleanups, failedHook, new FakeTaskBinding());
+        assertThrows(
+                IllegalStateException.class,
+                () -> hookRegistry.acquire(Thread::new, cpu, "hook-failure", Thread.NORM_PRIORITY, false));
         assertEquals(0, hookRegistry.entryCount());
         assertEquals(0, hookCleanups.live.get());
         assertEquals(0, failedHook.live.get());
@@ -954,14 +960,12 @@ class PinnedThreadExecutorLifecycleTest {
         private final FakeCleanupRegistrar cleanups = new FakeCleanupRegistrar();
         private final FakeHookRegistrar hooks = new FakeHookRegistrar();
         private final FakeTaskBinding bindings = new FakeTaskBinding();
-        private final PinnedThreadExecutor.Registry registry = PinnedThreadExecutor.newTestRegistry(
-                this.cleanups, this.hooks, this.bindings);
+        private final PinnedThreadExecutor.Registry registry =
+                PinnedThreadExecutor.newTestRegistry(this.cleanups, this.hooks, this.bindings);
 
         /// Acquires from the isolated registry with stable test configuration.
-        private PinnedThreadExecutor acquire(int cpu,
-                Function<Runnable, ? extends Thread> creator) {
-            return this.registry.acquire(creator, cpu, "lifecycle-" + cpu,
-                    Thread.NORM_PRIORITY, true);
+        private PinnedThreadExecutor acquire(int cpu, Function<Runnable, ? extends Thread> creator) {
+            return this.registry.acquire(creator, cpu, "lifecycle-" + cpu, Thread.NORM_PRIORITY, true);
         }
 
         /// Returns the required mapped control for direct predicate assertions.
@@ -991,8 +995,7 @@ class PinnedThreadExecutorLifecycleTest {
     }
 
     /// Captures nonreferent cleanup actions and exact live-registration counts.
-    private static final class FakeCleanupRegistrar
-            implements PinnedThreadExecutor.CleanupRegistrar {
+    private static final class FakeCleanupRegistrar implements PinnedThreadExecutor.CleanupRegistrar {
 
         private final AtomicInteger registrations = new AtomicInteger();
         private final AtomicInteger live = new AtomicInteger();
@@ -1049,15 +1052,19 @@ class PinnedThreadExecutorLifecycleTest {
         @Override
         public PinnedThreadExecutor.HookRegistration prepare(Runnable action) {
             this.prepared.incrementAndGet();
-            return new FakeHookRegistration(this.adds, this.removes, this.live,
-                    this.maximumLive, this.failAdd, this.failRemove,
+            return new FakeHookRegistration(
+                    this.adds,
+                    this.removes,
+                    this.live,
+                    this.maximumLive,
+                    this.failAdd,
+                    this.failRemove,
                     this.shutdownOnRemove);
         }
     }
 
     /// Counts add/remove operations for one exact fake hook identity.
-    private static final class FakeHookRegistration
-            implements PinnedThreadExecutor.HookRegistration {
+    private static final class FakeHookRegistration implements PinnedThreadExecutor.HookRegistration {
 
         private final AtomicInteger adds;
         private final AtomicInteger removes;
@@ -1069,9 +1076,14 @@ class PinnedThreadExecutorLifecycleTest {
         private final AtomicBoolean added = new AtomicBoolean();
 
         /// Creates one fake identity sharing registrar counters and failure controls.
-        private FakeHookRegistration(AtomicInteger adds, AtomicInteger removes,
-                AtomicInteger live, AtomicInteger maximumLive, AtomicBoolean failAdd,
-                AtomicBoolean failRemove, AtomicBoolean shutdownOnRemove) {
+        private FakeHookRegistration(
+                AtomicInteger adds,
+                AtomicInteger removes,
+                AtomicInteger live,
+                AtomicInteger maximumLive,
+                AtomicBoolean failAdd,
+                AtomicBoolean failRemove,
+                AtomicBoolean shutdownOnRemove) {
             this.adds = adds;
             this.removes = removes;
             this.live = live;
@@ -1169,7 +1181,5 @@ class PinnedThreadExecutorLifecycleTest {
     }
 
     /// Distinguishes the exact original command failure at the uncaught handler.
-    private static final class CommandFailure extends RuntimeException {
-
-    }
+    private static final class CommandFailure extends RuntimeException {}
 }

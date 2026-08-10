@@ -32,8 +32,7 @@ public final class BaseCloneableObject implements CloneableObject {
         this(FragmentConfig.ofDefaults(), new DefaultExecutor(-1));
     }
 
-    public BaseCloneableObject(String metricPrefix,
-            MeterRegistry meterRegistry) {
+    public BaseCloneableObject(String metricPrefix, MeterRegistry meterRegistry) {
         this(FragmentConfig.ofDefaults(metricPrefix, meterRegistry), new DefaultExecutor(-1));
     }
 
@@ -41,8 +40,7 @@ public final class BaseCloneableObject implements CloneableObject {
         this(FragmentConfig.ofDefaults(), executor);
     }
 
-    public BaseCloneableObject(String metricPrefix,
-            MeterRegistry meterRegistry, AbstractExecutor executor) {
+    public BaseCloneableObject(String metricPrefix, MeterRegistry meterRegistry, AbstractExecutor executor) {
         this(FragmentConfig.ofDefaults(metricPrefix, meterRegistry), executor);
     }
 
@@ -54,8 +52,7 @@ public final class BaseCloneableObject implements CloneableObject {
         this(null, new ControlPlaneFragment(fragmentConfig), executor);
     }
 
-    private BaseCloneableObject(CloneConfig config,
-            ControlPlaneFragment fragment, AbstractExecutor executor) {
+    private BaseCloneableObject(CloneConfig config, ControlPlaneFragment fragment, AbstractExecutor executor) {
         String name;
         if (config != null) {
             name = config.shardName() + "-pipeline-" + config.coreId();
@@ -149,9 +146,9 @@ public final class BaseCloneableObject implements CloneableObject {
     }
 
     @Override
-    public BaseCloneableObject clone(CloneConfig cloneConfig,
-            PinnedThreadExecutor executor) {
-        return new BaseCloneableObject(cloneConfig,
+    public BaseCloneableObject clone(CloneConfig cloneConfig, PinnedThreadExecutor executor) {
+        return new BaseCloneableObject(
+                cloneConfig,
                 (ControlPlaneFragment) this.fragment.clone(cloneConfig, executor),
                 this.executor.clone(cloneConfig));
     }
@@ -164,16 +161,19 @@ public final class BaseCloneableObject implements CloneableObject {
         PinnedThreadExecutor executor = PinnedThreadExecutor.get(cpu);
 
         if (executor == null) {
-            executor = PinnedThreadExecutor.getOrSetIfAbsent(FlowThread.getFactory(), cpu,
+            executor = PinnedThreadExecutor.getOrSetIfAbsent(
+                    FlowThread.getFactory(),
+                    cpu,
                     cloneConfig.shardName() + "-" + BaseCloneableObject.class,
-                    Thread.MAX_PRIORITY, true);
+                    Thread.MAX_PRIORITY,
+                    true);
             createdExecutor = true;
         }
 
         Future<BaseCloneableObject> allocated = executor.submit(() -> {
             ControlPlaneFragment fragment = this.fragment.clone(cloneConfig);
-            BaseCloneableObject pipeline = new BaseCloneableObject(cloneConfig, fragment,
-                    this.executor.clone(cloneConfig));
+            BaseCloneableObject pipeline =
+                    new BaseCloneableObject(cloneConfig, fragment, this.executor.clone(cloneConfig));
             pipeline.firstTouch();
             return pipeline;
         });
@@ -182,8 +182,7 @@ public final class BaseCloneableObject implements CloneableObject {
         try {
             retVal = allocated.get();
         } catch (Exception e) {
-            throw new RuntimeException(
-                    "Failed to construct the BaseCloneableObject.", e);
+            throw new RuntimeException("Failed to construct the BaseCloneableObject.", e);
         }
 
         if (createdExecutor) {

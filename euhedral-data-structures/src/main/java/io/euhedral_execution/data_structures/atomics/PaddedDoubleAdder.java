@@ -49,7 +49,7 @@ public final class PaddedDoubleAdder extends PaddedAtomicDoubleArray {
         if (super.boundsCheck) {
             for (int i = 0; i < super.length(); i++) {
                 double temp = super.array[((i + 1) * super.padding) + i];
-                if(!Double.isFinite(temp)) {
+                if (!Double.isFinite(temp)) {
                     continue;
                 }
                 min = Math.min(min, temp);
@@ -57,7 +57,7 @@ public final class PaddedDoubleAdder extends PaddedAtomicDoubleArray {
             VarHandle.acquireFence();
         } else {
             for (double d : super.array) {
-                if(!Double.isFinite(d)) {
+                if (!Double.isFinite(d)) {
                     continue;
                 }
                 min = Math.min(min, d);
@@ -72,7 +72,7 @@ public final class PaddedDoubleAdder extends PaddedAtomicDoubleArray {
         if (super.boundsCheck) {
             for (int i = 0; i < super.length(); i++) {
                 double temp = super.array[((i + 1) * super.padding) + i];
-                if(!Double.isFinite(temp)) {
+                if (!Double.isFinite(temp)) {
                     continue;
                 }
                 max = Math.max(max, temp);
@@ -80,7 +80,7 @@ public final class PaddedDoubleAdder extends PaddedAtomicDoubleArray {
             VarHandle.acquireFence();
         } else {
             for (double d : super.array) {
-                if(!Double.isFinite(d)) {
+                if (!Double.isFinite(d)) {
                     continue;
                 }
                 max = Math.max(max, d);
@@ -96,7 +96,7 @@ public final class PaddedDoubleAdder extends PaddedAtomicDoubleArray {
         if (super.boundsCheck) {
             for (int i = 0; i < super.length(); i++) {
                 double temp = super.array[((i + 1) * super.padding) + i];
-                if(Double.isFinite(temp)) {
+                if (Double.isFinite(temp)) {
                     sum += temp;
                     count++;
                 }
@@ -104,7 +104,7 @@ public final class PaddedDoubleAdder extends PaddedAtomicDoubleArray {
             VarHandle.acquireFence();
         } else {
             for (double d : super.array) {
-                if(!Double.isFinite(d)) {
+                if (!Double.isFinite(d)) {
                     continue;
                 }
                 sum += d;
@@ -120,14 +120,14 @@ public final class PaddedDoubleAdder extends PaddedAtomicDoubleArray {
         if (super.boundsCheck) {
             for (int i = 0; i < super.length(); i++) {
                 double temp = super.array[((i + 1) * super.padding) + i];
-                if(Double.isFinite(temp)) {
+                if (Double.isFinite(temp)) {
                     sum += temp;
                 }
             }
             VarHandle.acquireFence();
         } else {
             for (double d : super.array) {
-                if(!Double.isFinite(d)) {
+                if (!Double.isFinite(d)) {
                     continue;
                 }
                 sum += d;
@@ -142,14 +142,14 @@ public final class PaddedDoubleAdder extends PaddedAtomicDoubleArray {
         if (boundsCheck) {
             for (int i = 0; i < super.length(); i++) {
                 double temp = super.getAndSet(i, 0);
-                if(Double.isFinite(temp)) {
+                if (Double.isFinite(temp)) {
                     sum += temp;
                 }
             }
         } else {
             for (int i = 0; i < super.array.length; i++) {
                 double temp = super.getAndSet(i, 0);
-                if(Double.isFinite(temp)) {
+                if (Double.isFinite(temp)) {
                     sum += temp;
                 }
             }

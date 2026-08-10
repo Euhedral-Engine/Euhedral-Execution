@@ -29,18 +29,19 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 class AnchorBootstrapperTest {
-    @TempDir java.nio.file.Path temporary;
     private final SourceScenario one = SourceScenario.of("host-a", 1, 32);
     private final SourceScenario two = SourceScenario.of("host-a", 4, 32);
-    private final List<PolicyVector> policies = List.of(policy(1), policy(2), policy(3),
-            policy(4), policy(5), policy(6));
+    private final List<PolicyVector> policies =
+            List.of(policy(1), policy(2), policy(3), policy(4), policy(5), policy(6));
+    @TempDir
+    java.nio.file.Path temporary;
 
     @Test
     void computesSettledTargetCount() {
         assertThat(AnchorSelectionConfig.defaults().targetCount(6)).isEqualTo(5);
         assertThat(AnchorSelectionConfig.defaults().targetCount(300)).isEqualTo(6);
-        assertThatIllegalArgumentException().isThrownBy(
-                () -> AnchorSelectionConfig.defaults().targetCount(5));
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> AnchorSelectionConfig.defaults().targetCount(5));
     }
 
     @Test
@@ -48,8 +49,10 @@ class AnchorBootstrapperTest {
         List<RunAggregate> rows = corpus();
         CalibrationPlan plan = bootstrap(rows, Map.of());
         assertThat(plan.references().referenceRunIds())
-                .containsEntry(one, "one-a").containsEntry(two, "two-a");
-        assertThat(plan.anchors().fixedAnchors()).hasSize(5)
+                .containsEntry(one, "one-a")
+                .containsEntry(two, "two-a");
+        assertThat(plan.anchors().fixedAnchors())
+                .hasSize(5)
                 .isSortedAccordingTo(Comparator.comparing(PolicyVector::id));
         assertThat(plan.anchors().fixedAnchors()).doesNotContain(policies.getLast());
         List<RunAggregate> shuffled = new ArrayList<>(rows);
@@ -70,8 +73,7 @@ class AnchorBootstrapperTest {
     void persistedPlanCannotBeMutated() throws Exception {
         CalibrationPlan plan = bootstrap(corpus(), Map.of());
         CalibrationPlanCsv.write(temporary, plan);
-        assertThatIllegalArgumentException().isThrownBy(
-                () -> CalibrationPlanCsv.write(temporary, plan));
+        assertThatIllegalArgumentException().isThrownBy(() -> CalibrationPlanCsv.write(temporary, plan));
         assertThat(CalibrationPlanCsv.read(temporary, List.of(one, two))).isEqualTo(plan);
     }
 
@@ -83,57 +85,80 @@ class AnchorBootstrapperTest {
 
     @Test
     void selectsDocumentedStratumMidpoints() {
-        AnchorSelectionConfig permissive = new AnchorSelectionConfig(0.02, 5,
-                0.10, 1.0, false);
-        CalibrationPlan plan = AnchorBootstrapper.bootstrap(corpus(),
-                new TreeSet<>(Set.of(one, two)), 6, Map.of(), permissive,
-                AggregationConfig.defaults());
-        assertThat(plan.anchors().fixedAnchors()).containsExactlyInAnyOrder(
-                policies.get(0), policies.get(1), policies.get(3),
-                policies.get(4), policies.get(5));
+        AnchorSelectionConfig permissive = new AnchorSelectionConfig(0.02, 5, 0.10, 1.0, false);
+        CalibrationPlan plan = AnchorBootstrapper.bootstrap(
+                corpus(), new TreeSet<>(Set.of(one, two)), 6, Map.of(), permissive, AggregationConfig.defaults());
+        assertThat(plan.anchors().fixedAnchors())
+                .containsExactlyInAnyOrder(
+                        policies.get(0), policies.get(1), policies.get(3), policies.get(4), policies.get(5));
     }
 
     @Test
     void coldStartsFromGeneratedBootstrapWhenValidIntersectionIsBelowTarget() {
-        CalibrationPlan plan = AnchorBootstrapper.bootstrap(corpus(),
-                new TreeSet<>(Set.of(one, two)), 1024, Map.of(),
-                AnchorSelectionConfig.defaults(), AggregationConfig.defaults());
+        CalibrationPlan plan = AnchorBootstrapper.bootstrap(
+                corpus(),
+                new TreeSet<>(Set.of(one, two)),
+                1024,
+                Map.of(),
+                AnchorSelectionConfig.defaults(),
+                AggregationConfig.defaults());
 
         assertThat(plan.references().referenceRunIds())
                 .containsEntry(one, "one-a")
                 .containsEntry(two, "two-a");
-        assertThat(plan.anchors().fixedAnchors()).hasSize(5)
+        assertThat(plan.anchors().fixedAnchors())
+                .hasSize(5)
                 .containsExactlyInAnyOrder(
-                        policies.get(0), policies.get(1), policies.get(2),
-                        policies.get(3), policies.get(4));
+                        policies.get(0), policies.get(1), policies.get(2), policies.get(3), policies.get(4));
     }
 
     @Test
     void rejectsShortIntersectionAndImportedDefaultReference() {
         List<RunAggregate> shortRows = new ArrayList<>(corpus());
         shortRows.removeIf(row -> row.run().descriptor().scenario().equals(one)
-                && row.policy().equals(policies.get(5))
+                        && row.policy().equals(policies.get(5))
                 || row.run().descriptor().scenario().equals(two)
-                && (row.policy().equals(policies.get(0))
-                || row.policy().equals(policies.get(5))));
-        shortRows.add(aggregate(policies.get(5), "two-a", two,
-                new double[]{1188, 1200, 1212}, 3, 0, 0, 0,
-                CalibrationRole.CANDIDATE, START));
-        shortRows.add(aggregate(policies.get(5), "two-z", two,
-                new double[]{1247.4, 1260, 1272.6}, 3, 0, 0, 0,
-                CalibrationRole.CANDIDATE, START.plusSeconds(10)));
-        assertThatIllegalArgumentException().isThrownBy(() -> bootstrap(shortRows, Map.of()))
+                        && (row.policy().equals(policies.get(0)) || row.policy().equals(policies.get(5))));
+        shortRows.add(aggregate(
+                policies.get(5),
+                "two-a",
+                two,
+                new double[] {1188, 1200, 1212},
+                3,
+                0,
+                0,
+                0,
+                CalibrationRole.CANDIDATE,
+                START));
+        shortRows.add(aggregate(
+                policies.get(5),
+                "two-z",
+                two,
+                new double[] {1247.4, 1260, 1272.6},
+                3,
+                0,
+                0,
+                0,
+                CalibrationRole.CANDIDATE,
+                START.plusSeconds(10)));
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> bootstrap(shortRows, Map.of()))
                 .withMessageContaining("intersection");
 
         List<RunAggregate> imported = corpus().stream().map(this::asImported).toList();
-        assertThatIllegalArgumentException().isThrownBy(() -> bootstrap(imported, Map.of()))
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> bootstrap(imported, Map.of()))
                 .withMessageContaining("No valid bootstrap evidence exists");
     }
 
-    private CalibrationPlan bootstrap(List<RunAggregate> rows,
-            Map<SourceScenario, String> overrides) {
-        return AnchorBootstrapper.bootstrap(rows, new TreeSet<>(Set.of(one, two)), 6,
-                overrides, AnchorSelectionConfig.defaults(), AggregationConfig.defaults());
+    private CalibrationPlan bootstrap(List<RunAggregate> rows, Map<SourceScenario, String> overrides) {
+        return AnchorBootstrapper.bootstrap(
+                rows,
+                new TreeSet<>(Set.of(one, two)),
+                6,
+                overrides,
+                AnchorSelectionConfig.defaults(),
+                AggregationConfig.defaults());
     }
 
     private List<RunAggregate> corpus() {
@@ -145,28 +170,53 @@ class AnchorBootstrapperTest {
         return rows;
     }
 
-    private void addRun(List<RunAggregate> rows, String runId, SourceScenario scenario,
-            java.time.Instant start, double multiplier) {
+    private void addRun(
+            List<RunAggregate> rows,
+            String runId,
+            SourceScenario scenario,
+            java.time.Instant start,
+            double multiplier) {
         for (int i = 0; i < policies.size(); i++) {
             double value = (i + 1) * 100 * multiplier;
             double[] repetitions = i == policies.size() - 1
-                    ? new double[]{value * .5, value, value * 1.5}
-                    : new double[]{value * .99, value, value * 1.01};
-            rows.add(aggregate(policies.get(i), runId, scenario, repetitions, 3, 0, 0, 0,
-                    CalibrationRole.CANDIDATE, start));
+                    ? new double[] {value * .5, value, value * 1.5}
+                    : new double[] {value * .99, value, value * 1.01};
+            rows.add(aggregate(
+                    policies.get(i), runId, scenario, repetitions, 3, 0, 0, 0, CalibrationRole.CANDIDATE, start));
         }
     }
 
     private RunAggregate asImported(RunAggregate row) {
         BenchmarkRunDescriptor old = row.run().descriptor();
-        BenchmarkRunDescriptor descriptor = new BenchmarkRunDescriptor(1, old.benchmarkRunId(),
-                old.closedLoopIteration(), old.candidateCohortId(), old.scenario(),
-                "imported", false, EvidenceOrigin.IMPORTED, old.startedAt(), old.parameters());
-        return new RunAggregate(row.policy(), new BenchmarkRunContext(descriptor,
-                row.run().completedAt()), row.roles(), row.plannedRepetitionCount(),
-                row.successfulRepetitionCount(), row.timeoutCount(), row.failedCount(),
-                row.skippedCount(), row.successRate(), row.timeoutRate(), row.failureRate(),
-                row.nonSuccessRate(), row.status(), row.rawP25(), row.rawMedian(), row.rawP75(),
-                row.rawIqr(), row.rawLogIqr());
+        BenchmarkRunDescriptor descriptor = new BenchmarkRunDescriptor(
+                1,
+                old.benchmarkRunId(),
+                old.closedLoopIteration(),
+                old.candidateCohortId(),
+                old.scenario(),
+                "imported",
+                false,
+                EvidenceOrigin.IMPORTED,
+                old.startedAt(),
+                old.parameters());
+        return new RunAggregate(
+                row.policy(),
+                new BenchmarkRunContext(descriptor, row.run().completedAt()),
+                row.roles(),
+                row.plannedRepetitionCount(),
+                row.successfulRepetitionCount(),
+                row.timeoutCount(),
+                row.failedCount(),
+                row.skippedCount(),
+                row.successRate(),
+                row.timeoutRate(),
+                row.failureRate(),
+                row.nonSuccessRate(),
+                row.status(),
+                row.rawP25(),
+                row.rawMedian(),
+                row.rawP75(),
+                row.rawIqr(),
+                row.rawLogIqr());
     }
 }

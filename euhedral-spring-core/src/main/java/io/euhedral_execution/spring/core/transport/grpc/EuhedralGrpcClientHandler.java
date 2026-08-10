@@ -24,38 +24,32 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 @SuppressWarnings("unused")
-public class EuhedralGrpcClientHandler implements LatticeSource,
-        ClientResponseObserver<GrpcMessage, GrpcMessage> {
+public class EuhedralGrpcClientHandler implements LatticeSource, ClientResponseObserver<GrpcMessage, GrpcMessage> {
 
-    private static final VarHandle COMPLETE = CommonVarHandles.complete(MethodHandles.lookup(),
-            EuhedralGrpcClientHandler.class);
-    private static final VarHandle DOWNSTREAM = CommonVarHandles.downstream(MethodHandles.lookup(),
-            EuhedralGrpcClientHandler.class);
-
-    private static long addPending(long num1, long num2) {
-        long sum = num1 + num2;
-        return sum < 0 || sum > Integer.MAX_VALUE ? Integer.MAX_VALUE : sum;
-    }
-
+    private static final VarHandle COMPLETE =
+            CommonVarHandles.complete(MethodHandles.lookup(), EuhedralGrpcClientHandler.class);
+    private static final VarHandle DOWNSTREAM =
+            CommonVarHandles.downstream(MethodHandles.lookup(), EuhedralGrpcClientHandler.class);
     private final FrameManager<GrpcMessage, GrpcFrame> manager;
     private final MpmcQueue<GrpcMessage> sendQueue;
     private final CommunicationMethod method;
     private final long ingestPassword;
-
     private final AtomicLong pending = new AtomicLong(0);
-
     private ClientCallStreamObserver<GrpcMessage> upstream;
     private LatticeReceiver downstream = null;
     private boolean complete = false;
-
     private long seed = HasherApi.mix(ThreadLocalRandom.current().nextLong());
 
-    public EuhedralGrpcClientHandler(CommunicationMethod method, int recycleCapacity,
-            int sendQueueChunkSize) {
+    public EuhedralGrpcClientHandler(CommunicationMethod method, int recycleCapacity, int sendQueueChunkSize) {
         this.ingestPassword = HasherApi.mix(ThreadLocalRandom.current().nextLong());
         this.manager = new FrameManager<>(recycleCapacity, ingestPassword);
         this.sendQueue = new MpmcQueue<>(sendQueueChunkSize);
         this.method = method;
+    }
+
+    private static long addPending(long num1, long num2) {
+        long sum = num1 + num2;
+        return sum < 0 || sum > Integer.MAX_VALUE ? Integer.MAX_VALUE : sum;
     }
 
     @Override
@@ -66,8 +60,8 @@ public class EuhedralGrpcClientHandler implements LatticeSource,
         stream.setOnReadyHandler(this::onReady);
 
         FrameCreate<GrpcMessage, GrpcFrame> create = (id, message) -> {
-            GrpcFrame frame = new GrpcFrame(id, message, method, this::send, this::complete,
-                    this::onError, this.manager, killSwitch);
+            GrpcFrame frame = new GrpcFrame(
+                    id, message, method, this::send, this::complete, this::onError, this.manager, killSwitch);
             if (!message.getIsOrdered()) {
                 frame.randomizeHash(this.seed++);
             }
@@ -95,8 +89,7 @@ public class EuhedralGrpcClientHandler implements LatticeSource,
             GrpcFrame frame = this.manager.getOrCreate(message, this.ingestPassword);
             receiver.push(frame);
         }
-        if (this.method == CommunicationMethod.CLIENT_STREAM
-                || this.method == CommunicationMethod.SINGLE_RESPONSE) {
+        if (this.method == CommunicationMethod.CLIENT_STREAM || this.method == CommunicationMethod.SINGLE_RESPONSE) {
             complete();
         }
     }
@@ -174,8 +167,7 @@ public class EuhedralGrpcClientHandler implements LatticeSource,
     }
 
     @Override
-    public long pull(Consumer<AbstractFrame> consumer,
-            Function<AbstractFrame, Boolean> stopCondition, long demand) {
+    public long pull(Consumer<AbstractFrame> consumer, Function<AbstractFrame, Boolean> stopCondition, long demand) {
         return 0;
     }
 

@@ -12,8 +12,7 @@ public class AtomicDouble {
 
     static {
         try {
-            HANDLE = MethodHandles.lookup()
-                    .findVarHandle(AtomicDouble.class, "value", double.class);
+            HANDLE = MethodHandles.lookup().findVarHandle(AtomicDouble.class, "value", double.class);
         } catch (Exception e) {
             throw new ExceptionInInitializerError(e);
         }
@@ -44,15 +43,23 @@ public class AtomicDouble {
         return (double) HANDLE.getOpaque(this);
     }
 
+    public void setOpaque(double val) {
+        HANDLE.setOpaque(this, val);
+    }
+
     public double getPlain() {
         return this.value;
+    }
+
+    // ----- Set -----
+
+    public void setPlain(double val) {
+        HANDLE.set(this, val);
     }
 
     public double getAndSet(double val) {
         return (double) HANDLE.getAndSet(this, val);
     }
-
-    // ----- Set -----
 
     /// Atomic set
     public void set(double val) {
@@ -65,14 +72,6 @@ public class AtomicDouble {
 
     public void setRelease(double val) {
         HANDLE.setRelease(this, val);
-    }
-
-    public void setOpaque(double val) {
-        HANDLE.setOpaque(this, val);
-    }
-
-    public void setPlain(double val) {
-        HANDLE.set(this, val);
     }
 
     // ----- RMW -----

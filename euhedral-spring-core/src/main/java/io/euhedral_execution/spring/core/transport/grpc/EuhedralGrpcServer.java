@@ -17,8 +17,7 @@ public abstract class EuhedralGrpcServer extends GrpcTransportServiceImplBase {
     private final int recycleCapacity;
     private final int responseQueueChunkSize;
 
-    protected EuhedralGrpcServer(ControlPlaneLattice controlPlane, int recycleCapacity,
-            int responseQueueChunkSize) {
+    protected EuhedralGrpcServer(ControlPlaneLattice controlPlane, int recycleCapacity, int responseQueueChunkSize) {
         this.controlPlane = controlPlane;
         this.recycleCapacity = recycleCapacity;
         this.responseQueueChunkSize = responseQueueChunkSize;
@@ -38,34 +37,38 @@ public abstract class EuhedralGrpcServer extends GrpcTransportServiceImplBase {
         ServerCallStreamObserver<GrpcMessage> serverCallObserver =
                 (ServerCallStreamObserver<GrpcMessage>) responseObserver;
 
-        GrpcFrame frame =
-                new GrpcFrame(idHash, message, CommunicationMethod.SINGLE_RESPONSE,
-                        serverCallObserver::onNext, () -> {
+        GrpcFrame frame = new GrpcFrame(
+                idHash,
+                message,
+                CommunicationMethod.SINGLE_RESPONSE,
+                serverCallObserver::onNext,
+                () -> {
                     try {
                         serverCallObserver.onCompleted();
                     } catch (Exception ignored) {
                         // Ignore repeated complete attempts.
                     }
-                }, err -> {
+                },
+                err -> {
                     try {
                         serverCallObserver.onError(err);
                     } catch (Exception ignored) {
                         // Sent error after complete
                     }
-                }, null, null);
+                },
+                null,
+                null);
         processSingle(frame);
     }
 
     @Override
-    public StreamObserver<GrpcMessage> clientStreamMethod(
-            StreamObserver<GrpcMessage> responseObserver) {
+    public StreamObserver<GrpcMessage> clientStreamMethod(StreamObserver<GrpcMessage> responseObserver) {
         ServerCallStreamObserver<GrpcMessage> serverCallObserver =
                 (ServerCallStreamObserver<GrpcMessage>) responseObserver;
         serverCallObserver.disableAutoRequest();
 
-        EuhedralGrpcServerHandler serverHandler =
-                new EuhedralGrpcServerHandler(serverCallObserver, CommunicationMethod.CLIENT_STREAM,
-                        this.recycleCapacity, 4);
+        EuhedralGrpcServerHandler serverHandler = new EuhedralGrpcServerHandler(
+                serverCallObserver, CommunicationMethod.CLIENT_STREAM, this.recycleCapacity, 4);
 
         processStream(serverHandler);
 
@@ -73,41 +76,44 @@ public abstract class EuhedralGrpcServer extends GrpcTransportServiceImplBase {
     }
 
     @Override
-    public void serverStreamMethod(GrpcMessage message,
-            StreamObserver<GrpcMessage> responseObserver) {
+    public void serverStreamMethod(GrpcMessage message, StreamObserver<GrpcMessage> responseObserver) {
         long idHash = HasherApi.mix(ThreadLocalRandom.current().nextLong());
         ServerCallStreamObserver<GrpcMessage> serverCallObserver =
                 (ServerCallStreamObserver<GrpcMessage>) responseObserver;
 
-        GrpcFrame frame =
-                new GrpcFrame(idHash, message, CommunicationMethod.SERVER_STREAM,
-                        serverCallObserver::onNext, () -> {
+        GrpcFrame frame = new GrpcFrame(
+                idHash,
+                message,
+                CommunicationMethod.SERVER_STREAM,
+                serverCallObserver::onNext,
+                () -> {
                     try {
                         serverCallObserver.onCompleted();
                     } catch (Exception ignored) {
                         // Ignore repeated complete attempts.
                     }
-                }, err -> {
+                },
+                err -> {
                     try {
                         serverCallObserver.onError(err);
                     } catch (Exception ignored) {
                         // Sent error after complete
                     }
-                }, null, null);
+                },
+                null,
+                null);
 
         processSingle(frame);
     }
 
     @Override
-    public StreamObserver<GrpcMessage> bidirectionalMethod(
-            StreamObserver<GrpcMessage> responseObserver) {
+    public StreamObserver<GrpcMessage> bidirectionalMethod(StreamObserver<GrpcMessage> responseObserver) {
         ServerCallStreamObserver<GrpcMessage> serverCallObserver =
                 (ServerCallStreamObserver<GrpcMessage>) responseObserver;
         serverCallObserver.disableAutoRequest();
 
-        EuhedralGrpcServerHandler serverHandler =
-                new EuhedralGrpcServerHandler(serverCallObserver, CommunicationMethod.BIDI,
-                        this.recycleCapacity, this.responseQueueChunkSize);
+        EuhedralGrpcServerHandler serverHandler = new EuhedralGrpcServerHandler(
+                serverCallObserver, CommunicationMethod.BIDI, this.recycleCapacity, this.responseQueueChunkSize);
 
         processStream(serverHandler);
         return serverHandler;

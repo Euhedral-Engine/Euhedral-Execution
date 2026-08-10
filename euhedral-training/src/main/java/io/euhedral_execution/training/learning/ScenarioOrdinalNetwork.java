@@ -42,8 +42,20 @@ final class ScenarioOrdinalNetwork implements OrdinalMember {
     private static final Object TRAINING_MONITOR = new Object();
 
     static {
-        System.setProperty("ai.djl.default_engine",
-                System.getProperty("ai.djl.default_engine", ENGINE_NAME));
+        System.setProperty("ai.djl.default_engine", System.getProperty("ai.djl.default_engine", ENGINE_NAME));
+    }
+
+    private final int featureWidth;
+    private final Device device;
+    private final Model model;
+    private final ParameterStore inferenceParameters;
+    private boolean closed;
+    private ScenarioOrdinalNetwork(int featureWidth, Device device) {
+        this.featureWidth = featureWidth;
+        this.device = device;
+        model = Model.newInstance(ScenarioModelMetadata.MEMBER_MODEL_NAME, device, ENGINE_NAME);
+        model.setBlock(buildBlock());
+        inferenceParameters = new ParameterStore(model.getNDManager(), false);
     }
 
     static Device resolveDevice(String requested) {
@@ -54,8 +66,9 @@ final class ScenarioOrdinalNetwork implements OrdinalMember {
         return Device.fromName(requested, engine);
     }
 
-    static ScenarioOrdinalNetwork load(Path memberDirectory, ScenarioFeatureSet featureSet,
-            MemberMetadata metadata, Device device) throws IOException {
+    static ScenarioOrdinalNetwork load(
+            Path memberDirectory, ScenarioFeatureSet featureSet, MemberMetadata metadata, Device device)
+            throws IOException {
         ScenarioOrdinalNetwork network = new ScenarioOrdinalNetwork(featureSet.width(), device);
         try {
             network.model.load(memberDirectory, ScenarioModelMetadata.MEMBER_MODEL_NAME);
@@ -63,25 +76,36 @@ final class ScenarioOrdinalNetwork implements OrdinalMember {
             return network;
         } catch (Exception error) {
             network.close();
-            throw new IOException("Failed to load scenario ordinal member " + metadata.index(),
-                    error);
+            throw new IOException("Failed to load scenario ordinal member " + metadata.index(), error);
         }
     }
 
-    static TrainingResult train(ScenarioLearningMatrix fitting,
-            ScenarioLearningMatrix validation, ScenarioFeatureSet featureSet,
-            ScenarioTrainingConfig config, Device device, String trainingKind, String foldId,
-            int memberIndex, Path memberDirectory) throws Exception {
-        long memberSeed = ScenarioMemberSeeds.derive(config.modelSeed(), trainingKind,
-                featureSet, foldId, memberIndex);
+    static TrainingResult train(
+            ScenarioLearningMatrix fitting,
+            ScenarioLearningMatrix validation,
+            ScenarioFeatureSet featureSet,
+            ScenarioTrainingConfig config,
+            Device device,
+            String trainingKind,
+            String foldId,
+            int memberIndex,
+            Path memberDirectory)
+            throws Exception {
+        long memberSeed = ScenarioMemberSeeds.derive(config.modelSeed(), trainingKind, featureSet, foldId, memberIndex);
         synchronized (TRAINING_MONITOR) {
-            Engine.getEngine(ENGINE_NAME).setRandomSeed(
-                    ScenarioMemberSeeds.engineSeed(memberSeed));
-            ScenarioOrdinalNetwork network =
-                    new ScenarioOrdinalNetwork(featureSet.width(), device);
+            Engine.getEngine(ENGINE_NAME).setRandomSeed(ScenarioMemberSeeds.engineSeed(memberSeed));
+            ScenarioOrdinalNetwork network = new ScenarioOrdinalNetwork(featureSet.width(), device);
             try {
-                return network.fit(fitting, validation, featureSet, config, trainingKind, foldId,
-                        memberIndex, memberSeed, memberDirectory);
+                return network.fit(
+                        fitting,
+                        validation,
+                        featureSet,
+                        config,
+                        trainingKind,
+                        foldId,
+                        memberIndex,
+                        memberSeed,
+                        memberDirectory);
             } catch (Throwable error) {
                 network.close();
                 throw error;
@@ -99,33 +123,27 @@ final class ScenarioOrdinalNetwork implements OrdinalMember {
                 .add(Activation::gelu)
                 .add(Linear.builder().setUnits(9).build());
     }
-    private final int featureWidth;
-    private final Device device;
-    private final Model model;
-    private final ParameterStore inferenceParameters;
-    private boolean closed;
 
-    private ScenarioOrdinalNetwork(int featureWidth, Device device) {
-        this.featureWidth = featureWidth;
-        this.device = device;
-        model = Model.newInstance(ScenarioModelMetadata.MEMBER_MODEL_NAME, device, ENGINE_NAME);
-        model.setBlock(buildBlock());
-        inferenceParameters = new ParameterStore(model.getNDManager(), false);
-    }
-
-    private TrainingResult fit(ScenarioLearningMatrix fitting,
-            ScenarioLearningMatrix validation, ScenarioFeatureSet featureSet,
-            ScenarioTrainingConfig config, String trainingKind, String foldId, int memberIndex,
-            long memberSeed, Path memberDirectory) throws Exception {
-        if (fitting.featureWidth() != featureWidth || validation.featureWidth() != featureWidth
+    private TrainingResult fit(
+            ScenarioLearningMatrix fitting,
+            ScenarioLearningMatrix validation,
+            ScenarioFeatureSet featureSet,
+            ScenarioTrainingConfig config,
+            String trainingKind,
+            String foldId,
+            int memberIndex,
+            long memberSeed,
+            Path memberDirectory)
+            throws Exception {
+        if (fitting.featureWidth() != featureWidth
+                || validation.featureWidth() != featureWidth
                 || featureSet.width() != featureWidth) {
             throw new IllegalArgumentException("Feature widths disagree");
         }
         Files.createDirectories(memberDirectory);
-        BalancedScenarioOrdinalLoss.ClassBalance balance =
-                BalancedScenarioOrdinalLoss.fit(fitting);
-        BalancedScenarioOrdinalLoss loss = new BalancedScenarioOrdinalLoss(model.getNDManager(),
-                balance, config.labelSmoothing());
+        BalancedScenarioOrdinalLoss.ClassBalance balance = BalancedScenarioOrdinalLoss.fit(fitting);
+        BalancedScenarioOrdinalLoss loss =
+                new BalancedScenarioOrdinalLoss(model.getNDManager(), balance, config.labelSmoothing());
         Optimizer optimizer = Optimizer.adamW()
                 .optLearningRateTracker(Tracker.fixed(config.learningRate()))
                 .optWeightDecays(config.weightDecay())
@@ -133,14 +151,13 @@ final class ScenarioOrdinalNetwork implements OrdinalMember {
                 .build();
         DefaultTrainingConfig training = new DefaultTrainingConfig(loss)
                 .optOptimizer(optimizer)
-                .optDevices(new Device[]{device})
+                .optDevices(new Device[] {device})
                 .optInitializer(new XavierInitializer(), Parameter.Type.WEIGHT);
         int effectiveBatch = StrictMath.min(config.batchSize(), fitting.rows());
         if (effectiveBatch <= 0) {
             effectiveBatch = StrictMath.min(device.isGpu() ? 4_096 : 512, fitting.rows());
         }
-        DeterministicBatchSampler sampler =
-                new DeterministicBatchSampler(fitting.rows(), memberSeed);
+        DeterministicBatchSampler sampler = new DeterministicBatchSampler(fitting.rows(), memberSeed);
         ArrayList<TrainingHistoryEntry> history = new ArrayList<>();
         double bestMae = Double.POSITIVE_INFINITY;
         double bestSpearman = Double.NEGATIVE_INFINITY;
@@ -161,22 +178,28 @@ final class ScenarioOrdinalNetwork implements OrdinalMember {
                     }
                 }
                 float[] logits = evaluate(trainer, validation);
-                EvaluationSummary metrics = ScenarioModelEvaluator.evaluateMatrix(
-                        "EARLY_STOP", foldId, featureSet, validation, logits);
-                double macroMae = metrics.macroMae().orElseThrow(() ->
-                        new InsufficientScenarioLearningDataException(
-                                "Validation macro MAE is unavailable"));
-                double macroSpearman = metrics.macroSpearman()
-                        .orElse(Double.NEGATIVE_INFINITY);
-                double bce = BalancedScenarioOrdinalLoss.weightedBce(
-                        logits, validation, balance, config.labelSmoothing());
+                EvaluationSummary metrics =
+                        ScenarioModelEvaluator.evaluateMatrix("EARLY_STOP", foldId, featureSet, validation, logits);
+                double macroMae = metrics.macroMae()
+                        .orElseThrow(() ->
+                                new InsufficientScenarioLearningDataException("Validation macro MAE is unavailable"));
+                double macroSpearman = metrics.macroSpearman().orElse(Double.NEGATIVE_INFINITY);
+                double bce =
+                        BalancedScenarioOrdinalLoss.weightedBce(logits, validation, balance, config.labelSmoothing());
                 boolean improved = macroMae < bestMae - 1.0e-9
                         || StrictMath.abs(macroMae - bestMae) <= 1.0e-9
-                        && (macroSpearman > bestSpearman + 1.0e-9
-                        || StrictMath.abs(macroSpearman - bestSpearman) <= 1.0e-9
-                        && bce < bestBce);
-                history.add(new TrainingHistoryEntry(trainingKind, foldId, featureSet,
-                        memberIndex, memberSeed, epoch, macroMae, metrics.macroSpearman(), bce,
+                                && (macroSpearman > bestSpearman + 1.0e-9
+                                        || StrictMath.abs(macroSpearman - bestSpearman) <= 1.0e-9 && bce < bestBce);
+                history.add(new TrainingHistoryEntry(
+                        trainingKind,
+                        foldId,
+                        featureSet,
+                        memberIndex,
+                        memberSeed,
+                        epoch,
+                        macroMae,
+                        metrics.macroSpearman(),
+                        bce,
                         false));
                 if (improved) {
                     bestMae = macroMae;
@@ -194,21 +217,30 @@ final class ScenarioOrdinalNetwork implements OrdinalMember {
             throw new IllegalStateException("No model epoch was selected");
         }
         close();
-        ScenarioOrdinalNetwork best = load(memberDirectory, featureSet,
-                new MemberMetadata(memberIndex, memberSeed, bestEpoch,
-                        MemberMetadata.expectedPath(memberIndex), "0".repeat(64)), device);
+        ScenarioOrdinalNetwork best = load(
+                memberDirectory,
+                featureSet,
+                new MemberMetadata(
+                        memberIndex, memberSeed, bestEpoch, MemberMetadata.expectedPath(memberIndex), "0".repeat(64)),
+                device);
         ArrayList<TrainingHistoryEntry> selectedHistory = new ArrayList<>(history.size());
         for (TrainingHistoryEntry entry : history) {
-            selectedHistory.add(new TrainingHistoryEntry(entry.trainingKind(), entry.foldId(),
-                    entry.featureSet(), entry.memberIndex(), entry.memberSeed(), entry.epoch(),
-                    entry.validationMacroMae(), entry.validationMacroSpearman(),
-                    entry.validationWeightedBce(), entry.epoch() == bestEpoch));
+            selectedHistory.add(new TrainingHistoryEntry(
+                    entry.trainingKind(),
+                    entry.foldId(),
+                    entry.featureSet(),
+                    entry.memberIndex(),
+                    entry.memberSeed(),
+                    entry.epoch(),
+                    entry.validationMacroMae(),
+                    entry.validationMacroSpearman(),
+                    entry.validationWeightedBce(),
+                    entry.epoch() == bestEpoch));
         }
         return new TrainingResult(best, memberSeed, bestEpoch, List.copyOf(selectedHistory));
     }
 
-    private ArrayDataset dataset(NDManager manager, ScenarioLearningMatrix matrix, int[] order,
-            int batchSize) {
+    private ArrayDataset dataset(NDManager manager, ScenarioLearningMatrix matrix, int[] order, int batchSize) {
         float[] originalFeatures = matrix.features();
         float[] originalLabels = matrix.ordinalLabels();
         float[] originalWeights = matrix.rowWeights();
@@ -217,16 +249,20 @@ final class ScenarioOrdinalNetwork implements OrdinalMember {
         float[] weights = new float[originalWeights.length];
         for (int target = 0; target < order.length; target++) {
             int source = order[target];
-            System.arraycopy(originalFeatures, source * featureWidth,
-                    features, target * featureWidth, featureWidth);
+            System.arraycopy(originalFeatures, source * featureWidth, features, target * featureWidth, featureWidth);
             System.arraycopy(originalLabels, source * 9, labels, target * 9, 9);
             weights[target] = originalWeights[source];
         }
         NDArray data = manager.create(features, new Shape(matrix.rows(), featureWidth));
         NDArray target = manager.create(labels, new Shape(matrix.rows(), 9));
         NDArray rowWeight = manager.create(weights, new Shape(matrix.rows(), 1));
-        return new ArrayDataset.Builder().setData(data).optLabels(target, rowWeight)
-                .setSampling(batchSize, false).optPrefetchNumber(0).optDevice(device).build();
+        return new ArrayDataset.Builder()
+                .setData(data)
+                .optLabels(target, rowWeight)
+                .setSampling(batchSize, false)
+                .optPrefetchNumber(0)
+                .optDevice(device)
+                .build();
     }
 
     private float[] evaluate(Trainer trainer, ScenarioLearningMatrix matrix) {
@@ -238,12 +274,11 @@ final class ScenarioOrdinalNetwork implements OrdinalMember {
         }
     }
 
-    private void save(Path directory, ScenarioFeatureSet featureSet, int memberIndex,
-            long memberSeed) throws IOException {
+    private void save(Path directory, ScenarioFeatureSet featureSet, int memberIndex, long memberSeed)
+            throws IOException {
         model.setProperty("Epoch", "0");
         model.setProperty("artifact_type", ScenarioModelMetadata.ARTIFACT_TYPE);
-        model.setProperty("schema_version",
-                Integer.toString(ScenarioModelMetadata.SCHEMA_VERSION));
+        model.setProperty("schema_version", Integer.toString(ScenarioModelMetadata.SCHEMA_VERSION));
         model.setProperty("objective_version", ScenarioModelMetadata.OBJECTIVE_VERSION);
         model.setProperty("feature_schema_id", featureSet.schemaId());
         model.setProperty("feature_width", Integer.toString(featureWidth));
@@ -257,8 +292,7 @@ final class ScenarioOrdinalNetwork implements OrdinalMember {
     private void verifyProperties(ScenarioFeatureSet featureSet, MemberMetadata metadata) {
         requireProperty("Epoch", "0");
         requireProperty("artifact_type", ScenarioModelMetadata.ARTIFACT_TYPE);
-        requireProperty("schema_version",
-                Integer.toString(ScenarioModelMetadata.SCHEMA_VERSION));
+        requireProperty("schema_version", Integer.toString(ScenarioModelMetadata.SCHEMA_VERSION));
         requireProperty("objective_version", ScenarioModelMetadata.OBJECTIVE_VERSION);
         requireProperty("feature_schema_id", featureSet.schemaId());
         requireProperty("feature_width", Integer.toString(featureWidth));
@@ -282,8 +316,7 @@ final class ScenarioOrdinalNetwork implements OrdinalMember {
     @Override
     public void predictLogits(float[] features, int rows, float[] destination) {
         ensureOpen();
-        if (rows < 0 || features.length != rows * featureWidth
-                || destination.length != rows * 9) {
+        if (rows < 0 || features.length != rows * featureWidth || destination.length != rows * 9) {
             throw new IllegalArgumentException("Invalid inference buffers");
         }
         if (rows == 0) {
@@ -292,7 +325,8 @@ final class ScenarioOrdinalNetwork implements OrdinalMember {
         try (NDManager manager = model.getNDManager().newSubManager(device)) {
             NDArray input = manager.create(features, new Shape(rows, featureWidth));
             NDArray output = model.getBlock()
-                    .forward(inferenceParameters, new NDList(input), false).singletonOrThrow();
+                    .forward(inferenceParameters, new NDList(input), false)
+                    .singletonOrThrow();
             float[] values = output.toFloatArray();
             System.arraycopy(values, 0, destination, 0, values.length);
         }
@@ -312,8 +346,6 @@ final class ScenarioOrdinalNetwork implements OrdinalMember {
         }
     }
 
-    record TrainingResult(ScenarioOrdinalNetwork member, long seed, int bestEpoch,
-                          List<TrainingHistoryEntry> history) {
-
-    }
+    record TrainingResult(
+            ScenarioOrdinalNetwork member, long seed, int bestEpoch, List<TrainingHistoryEntry> history) {}
 }

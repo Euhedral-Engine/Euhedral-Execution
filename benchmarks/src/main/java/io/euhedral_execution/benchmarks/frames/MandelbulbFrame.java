@@ -12,9 +12,58 @@ import org.openjdk.jmh.infra.Blackhole;
 
 public class MandelbulbFrame extends AbstractFrame {
 
-    public static MandelbulbFrame[][] generate(int rows, int cols, int width, int height,
-            double centerX, double centerY, double hDiameter, int maxRaySteps, int iterations,
-            double bailoutRadiusSq, Blackhole blackhole, PaddedLongAdder counters, RoutingPolicy policy) {
+    private static final double POWER = 8.0;
+    public final PaddedLongAdder counters;
+    protected final int width;
+    protected final int height;
+    protected final int maxRaySteps;
+    protected final int iterationCap;
+    protected final Blackhole blackhole;
+    private final double bailoutRadiusSq;
+    private final double x;
+    private final double y;
+    public int cpu;
+
+    public MandelbulbFrame(
+            long idHash,
+            FrameManager<Void, AbstractFrame> recycler,
+            double x,
+            double y,
+            int width,
+            int height,
+            int maxRaySteps,
+            int iterationCap,
+            double bailoutRadiusSq,
+            Blackhole blackhole,
+            PaddedLongAdder counters) {
+        super(idHash, recycler, null);
+        this.width = width;
+        this.height = height;
+        this.maxRaySteps = maxRaySteps;
+        this.iterationCap = iterationCap;
+        this.blackhole = blackhole;
+        this.counters = counters;
+
+        this.bailoutRadiusSq = bailoutRadiusSq;
+
+        this.x = x;
+        this.y = y;
+    }
+
+    public static MandelbulbFrame[][] generate(
+            int rows,
+            int cols,
+            int width,
+            int height,
+            double centerX,
+            double centerY,
+            double hDiameter,
+            int maxRaySteps,
+            int iterations,
+            double bailoutRadiusSq,
+            Blackhole blackhole,
+            PaddedLongAdder counters,
+            RoutingPolicy policy) {
         CpuInfo info = ThreadTools.getCpuInfo();
 
         MandelbulbFrame[][] frames = new MandelbulbFrame[rows][cols];
@@ -39,8 +88,17 @@ public class MandelbulbFrame extends AbstractFrame {
                 double tx = (double) x / (width - 1);
                 double cX = xMin + tx * (xMax - xMin);
 
-                frames[rCount][cCount] = new MandelbulbFrame(idHash, null, cX, cY,
-                         width, height, maxRaySteps, iterations, bailoutRadiusSq, blackhole,
+                frames[rCount][cCount] = new MandelbulbFrame(
+                        idHash,
+                        null,
+                        cX,
+                        cY,
+                        width,
+                        height,
+                        maxRaySteps,
+                        iterations,
+                        bailoutRadiusSq,
+                        blackhole,
                         counters);
                 frames[rCount][cCount].setOrigin(info);
                 frames[rCount][cCount].setRoutingPolicy(policy);
@@ -54,46 +112,13 @@ public class MandelbulbFrame extends AbstractFrame {
         return frames;
     }
 
-    private static final double POWER = 8.0;
-
-    public final PaddedLongAdder counters;
-    protected final int width;
-    protected final int height;
-    protected final int maxRaySteps;
-    protected final int iterationCap;
-    protected final Blackhole blackhole;
-    private final double bailoutRadiusSq;
-
-    private final double x;
-    private final double y;
-
-    public int cpu;
-
-    public MandelbulbFrame(long idHash, FrameManager<Void, AbstractFrame> recycler,
-            double x, double y,
-            int width, int height, int maxRaySteps, int iterationCap,
-            double bailoutRadiusSq, Blackhole blackhole, PaddedLongAdder counters) {
-        super(idHash, recycler, null);
-        this.width = width;
-        this.height = height;
-        this.maxRaySteps = maxRaySteps;
-        this.iterationCap = iterationCap;
-        this.blackhole = blackhole;
-        this.counters = counters;
-
-        this.bailoutRadiusSq = bailoutRadiusSq;
-
-        this.x = x;
-        this.y = y;
-    }
-
     @Override
     public void execute() {
         int rSum = 0, gSum = 0, bSum = 0;
         int ssaa = 2;
 
-        for(int sx = 0; sx < ssaa; sx++) {
-            for(int sy = 0; sy < ssaa; sy++) {
+        for (int sx = 0; sx < ssaa; sx++) {
+            for (int sy = 0; sy < ssaa; sy++) {
                 double px = ((this.x + (sx + 0.5) / ssaa) / this.width) * 2.0 - 1.0;
                 double py = ((this.y + (sy + 0.5) / ssaa) / this.height) * 2.0 - 1.0;
                 py *= (double) this.height / width;
@@ -131,7 +156,7 @@ public class MandelbulbFrame extends AbstractFrame {
             double distance = evaluateDistance(px, py, pz);
 
             // Hit condition: Ray is close enough to the surface
-            if(distance < 0.001) {
+            if (distance < 0.001) {
                 int intensity = (int) Math.min(255, (step / (double) this.maxRaySteps) * 510);
                 int r = Math.min(255, intensity);
                 int g = Math.max(0, intensity - 255);
@@ -141,16 +166,16 @@ public class MandelbulbFrame extends AbstractFrame {
 
             t += distance;
             // Miss condition
-            if(t > 4.0) {
+            if (t > 4.0) {
                 break;
             }
         }
 
         double skyY = 0.5 * (dy + 1.0);
-        int rSky = (int)(((1.0 - skyY) * 1.0 + skyY * 0.3) * 255);
-        int gSky = (int)(((1.0 - skyY) * 1.0 + skyY * 0.5) * 255);
-        int bSky = (int)(((1.0 - skyY) * 1.0 + skyY * 0.8) * 255);
-        return  (rSky << 16) | (gSky << 8) | bSky;
+        int rSky = (int) (((1.0 - skyY) * 1.0 + skyY * 0.3) * 255);
+        int gSky = (int) (((1.0 - skyY) * 1.0 + skyY * 0.5) * 255);
+        int bSky = (int) (((1.0 - skyY) * 1.0 + skyY * 0.8) * 255);
+        return (rSky << 16) | (gSky << 8) | bSky;
     }
 
     private double evaluateDistance(double px, double py, double pz) {
@@ -163,7 +188,7 @@ public class MandelbulbFrame extends AbstractFrame {
 
         for (int i = 0; i < this.iterationCap; i++) {
             r = Math.sqrt(zx * zx + zy * zy + zz * zz);
-            if(r > this.bailoutRadiusSq) {
+            if (r > this.bailoutRadiusSq) {
                 break;
             }
 
@@ -192,9 +217,7 @@ public class MandelbulbFrame extends AbstractFrame {
     }
 
     @Override
-    public void kill() {
-
-    }
+    public void kill() {}
 
     @Override
     public void doFinally() {

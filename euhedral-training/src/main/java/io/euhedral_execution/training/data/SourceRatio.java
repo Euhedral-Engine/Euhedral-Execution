@@ -2,6 +2,12 @@ package io.euhedral_execution.training.data;
 
 public record SourceRatio(int numerator, int denominator) {
 
+    public SourceRatio {
+        if (numerator <= 0 || denominator <= 0 || gcd(numerator, denominator) != 1) {
+            throw new IllegalArgumentException("Ratio must be positive and reduced");
+        }
+    }
+
     public static SourceRatio of(int sourceCount, int coreCount) {
         if (sourceCount <= 0 || coreCount <= 0) {
             throw new IllegalArgumentException("Counts must be positive");
@@ -17,12 +23,6 @@ public record SourceRatio(int numerator, int denominator) {
             right = remainder;
         }
         return Math.abs(left);
-    }
-
-    public SourceRatio {
-        if (numerator <= 0 || denominator <= 0 || gcd(numerator, denominator) != 1) {
-            throw new IllegalArgumentException("Ratio must be positive and reduced");
-        }
     }
 
     public double asDouble() {

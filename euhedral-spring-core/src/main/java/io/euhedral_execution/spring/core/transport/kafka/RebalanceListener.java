@@ -13,8 +13,10 @@ public class RebalanceListener implements ConsumerRebalanceListener {
     private final Consumer<?, ?> consumer;
     private final IngestEventHandler eventHandler;
 
-    public RebalanceListener(AtomicReference<? extends Consumer<?, ?>> actualConsumer,
-            Consumer<?, ?> consumer, IngestEventHandler eventHandler) {
+    public RebalanceListener(
+            AtomicReference<? extends Consumer<?, ?>> actualConsumer,
+            Consumer<?, ?> consumer,
+            IngestEventHandler eventHandler) {
         this.actualConsumer = actualConsumer;
         this.consumer = consumer;
         this.eventHandler = eventHandler;

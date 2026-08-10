@@ -15,7 +15,6 @@ import java.util.TreeMap;
 
 public final class ApiSurface {
 
-    static final String BASELINE = "900d8c50";
     public static final Comparator<String> UTF8_ORDER = (left, right) -> {
         byte[] a = left.getBytes(StandardCharsets.UTF_8);
         byte[] b = right.getBytes(StandardCharsets.UTF_8);
@@ -28,6 +27,19 @@ public final class ApiSurface {
         }
         return Integer.compare(a.length, b.length);
     };
+    static final String BASELINE = "900d8c50";
+    private final NavigableMap<String, Entry> entries;
+
+    public ApiSurface(Collection<Entry> entries) {
+        NavigableMap<String, Entry> collected = new TreeMap<>(UTF8_ORDER);
+        for (Entry entry : entries) {
+            Entry old = collected.putIfAbsent(entry.identity(), entry);
+            if (old != null) {
+                throw new IllegalArgumentException("duplicate manifest key: " + entry.identity());
+            }
+        }
+        this.entries = java.util.Collections.unmodifiableNavigableMap(collected);
+    }
 
     static ApiSurface read(Path path) throws IOException {
         byte[] bytes = Files.readAllBytes(path);
@@ -36,8 +48,7 @@ public final class ApiSurface {
             throw new IOException(path + ": CRLF is not canonical");
         }
         String[] lines = text.split("\n", -1);
-        if (lines.length < 3 || !"format\t1".equals(lines[0])
-                || !("baseline\t" + BASELINE).equals(lines[1])) {
+        if (lines.length < 3 || !"format\t1".equals(lines[0]) || !("baseline\t" + BASELINE).equals(lines[1])) {
             throw new IOException(path + ": unknown compatibility manifest header");
         }
         List<Entry> entries = new ArrayList<>();
@@ -53,8 +64,7 @@ public final class ApiSurface {
             if (columns.length != 3) {
                 throw new IOException(path + ":" + (i + 1) + ": expected three columns");
             }
-            String canonical = escape(columns[0]) + '\t' + escape(columns[1]) + '\t'
-                    + escape(columns[2]);
+            String canonical = escape(columns[0]) + '\t' + escape(columns[1]) + '\t' + escape(columns[2]);
             if (!canonical.equals(lines[i])) {
                 throw new IOException(path + ":" + (i + 1) + ": noncanonical escaping");
             }
@@ -67,22 +77,22 @@ public final class ApiSurface {
         return new ApiSurface(entries);
     }
 
-    private static String[] splitEscaped(String line, Path path, int lineNumber)
-            throws IOException {
+    private static String[] splitEscaped(String line, Path path, int lineNumber) throws IOException {
         List<String> columns = new ArrayList<>(3);
         StringBuilder value = new StringBuilder();
         boolean escaped = false;
         for (int i = 0; i < line.length(); i++) {
             char character = line.charAt(i);
             if (escaped) {
-                value.append(switch (character) {
-                    case '\\' -> '\\';
-                    case 't' -> '\t';
-                    case 'n' -> '\n';
-                    case 'r' -> '\r';
-                    default -> throw new IOException(
-                            path + ":" + lineNumber + ": invalid escape \\" + character);
-                });
+                value.append(
+                        switch (character) {
+                            case '\\' -> '\\';
+                            case 't' -> '\t';
+                            case 'n' -> '\n';
+                            case 'r' -> '\r';
+                            default ->
+                                throw new IOException(path + ":" + lineNumber + ": invalid escape \\" + character);
+                        });
                 escaped = false;
             } else if (character == '\\') {
                 escaped = true;
@@ -115,18 +125,6 @@ public final class ApiSurface {
         Path output = Path.of(arguments[1]).toAbsolutePath().normalize();
         ApiSurfaceReader.read(classes).writeCreateNew(output);
     }
-    private final NavigableMap<String, Entry> entries;
-
-    public ApiSurface(Collection<Entry> entries) {
-        NavigableMap<String, Entry> collected = new TreeMap<>(UTF8_ORDER);
-        for (Entry entry : entries) {
-            Entry old = collected.putIfAbsent(entry.identity(), entry);
-            if (old != null) {
-                throw new IllegalArgumentException("duplicate manifest key: " + entry.identity());
-            }
-        }
-        this.entries = java.util.Collections.unmodifiableNavigableMap(collected);
-    }
 
     public NavigableMap<String, Entry> entries() {
         return this.entries;
@@ -148,8 +146,8 @@ public final class ApiSurface {
     }
 
     void writeCreateNew(Path path) throws IOException {
-        Files.writeString(path, render(), StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW,
-                StandardOpenOption.WRITE);
+        Files.writeString(
+                path, render(), StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
         ApiSurface reread = read(path);
         if (!this.entries.equals(reread.entries)) {
             throw new IOException("generated manifest did not round-trip: " + path);

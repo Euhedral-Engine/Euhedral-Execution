@@ -7,11 +7,11 @@ import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.List;
 
-public record CompatibilityReport(boolean moduleSame, List<Difference> removed, List<Difference> changed,
-                                  List<Difference> added) {
+public record CompatibilityReport(
+        boolean moduleSame, List<Difference> removed, List<Difference> changed, List<Difference> added) {
 
-    public CompatibilityReport(boolean moduleSame, List<Difference> removed, List<Difference> changed,
-            List<Difference> added) {
+    public CompatibilityReport(
+            boolean moduleSame, List<Difference> removed, List<Difference> changed, List<Difference> added) {
         Comparator<Difference> order = Comparator.comparing(Difference::key, ApiSurface.UTF8_ORDER);
         this.moduleSame = moduleSame;
         this.removed = removed.stream().sorted(order).toList();
@@ -33,15 +33,22 @@ public record CompatibilityReport(boolean moduleSame, List<Difference> removed, 
         output.append("changed\t").append(this.changed.size()).append('\n');
         output.append("added\t").append(this.added.size()).append('\n');
         this.removed.forEach(difference -> output.append("REMOVED\t")
-                .append(ApiSurface.escape(difference.key())).append('\t')
-                .append(ApiSurface.escape(difference.baselineValue())).append('\n'));
+                .append(ApiSurface.escape(difference.key()))
+                .append('\t')
+                .append(ApiSurface.escape(difference.baselineValue()))
+                .append('\n'));
         this.changed.forEach(difference -> output.append("CHANGED\t")
-                .append(ApiSurface.escape(difference.key())).append('\t')
-                .append(ApiSurface.escape(difference.baselineValue())).append('\t')
-                .append(ApiSurface.escape(difference.currentValue())).append('\n'));
+                .append(ApiSurface.escape(difference.key()))
+                .append('\t')
+                .append(ApiSurface.escape(difference.baselineValue()))
+                .append('\t')
+                .append(ApiSurface.escape(difference.currentValue()))
+                .append('\n'));
         this.added.forEach(difference -> output.append("ADDED\t")
-                .append(ApiSurface.escape(difference.key())).append('\t')
-                .append(ApiSurface.escape(difference.currentValue())).append('\n'));
+                .append(ApiSurface.escape(difference.key()))
+                .append('\t')
+                .append(ApiSurface.escape(difference.currentValue()))
+                .append('\n'));
         return output.toString();
     }
 
@@ -50,7 +57,5 @@ public record CompatibilityReport(boolean moduleSame, List<Difference> removed, 
         Files.writeString(path, render(), StandardCharsets.UTF_8);
     }
 
-    public record Difference(String key, String baselineValue, String currentValue) {
-
-    }
+    public record Difference(String key, String baselineValue, String currentValue) {}
 }

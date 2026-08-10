@@ -30,6 +30,8 @@ public final class ScenarioModelMetadataCodec {
 
     public static final String FILE_NAME = "model-metadata.json";
 
+    private ScenarioModelMetadataCodec() {}
+
     public static void write(Path path, ScenarioModelMetadata metadata) throws IOException {
         Files.writeString(path, encode(metadata), StandardCharsets.UTF_8);
     }
@@ -116,17 +118,44 @@ public final class ScenarioModelMetadataCodec {
             throw new IOException("Invalid scenario model metadata JSON", error);
         }
         Map<String, Object> root = object(value, "metadata");
-        requireKeys(root, List.of("artifact_type", "schema_version", "objective_version",
-                "learning_schema_version", "policy_id_scheme", "policy_width",
-                "feature_schema_id", "feature_width", "feature_names", "feature_mean_bits",
-                "feature_scale_bits", "feature_constant", "output_width",
-                "ordinal_threshold_bits", "architecture", "ensemble_members",
-                "member_model_name", "members", "split_algorithm", "split_seed_hex",
-                "model_seed_hex", "dataset_fingerprint_sha256",
-                "include_weak_calibration_rows", "required_scenarios", "training_scenarios",
-                "partition_counts", "training_config", "evaluation_thresholds",
-                "feature_selection", "evaluation_summary", "acceptance_status",
-                "acceptance_reasons", "producer", "metadata_probe"), "metadata");
+        requireKeys(
+                root,
+                List.of(
+                        "artifact_type",
+                        "schema_version",
+                        "objective_version",
+                        "learning_schema_version",
+                        "policy_id_scheme",
+                        "policy_width",
+                        "feature_schema_id",
+                        "feature_width",
+                        "feature_names",
+                        "feature_mean_bits",
+                        "feature_scale_bits",
+                        "feature_constant",
+                        "output_width",
+                        "ordinal_threshold_bits",
+                        "architecture",
+                        "ensemble_members",
+                        "member_model_name",
+                        "members",
+                        "split_algorithm",
+                        "split_seed_hex",
+                        "model_seed_hex",
+                        "dataset_fingerprint_sha256",
+                        "include_weak_calibration_rows",
+                        "required_scenarios",
+                        "training_scenarios",
+                        "partition_counts",
+                        "training_config",
+                        "evaluation_thresholds",
+                        "feature_selection",
+                        "evaluation_summary",
+                        "acceptance_status",
+                        "acceptance_reasons",
+                        "producer",
+                        "metadata_probe"),
+                "metadata");
         requireString(root, "artifact_type", ScenarioModelMetadata.ARTIFACT_TYPE);
         int schema = integer(root, "schema_version");
         if (schema != ScenarioModelMetadata.SCHEMA_VERSION) {
@@ -146,8 +175,7 @@ public final class ScenarioModelMetadataCodec {
         double[] scales = doublesFromBits(strings(root, "feature_scale_bits"));
         boolean[] constants = booleans(root, "feature_constant");
         FeatureNormalizer normalizer =
-                new FeatureNormalizer(featureSet.schemaId(), featureNames, means, scales,
-                        constants);
+                new FeatureNormalizer(featureSet.schemaId(), featureNames, means, scales, constants);
         requireInteger(root, "output_width", 9);
         List<String> thresholds = strings(root, "ordinal_threshold_bits");
         requireString(root, "architecture", ScenarioModelMetadata.ARCHITECTURE);
@@ -162,31 +190,46 @@ public final class ScenarioModelMetadataCodec {
         long modelSeed = parseHex64(string(root, "model_seed_hex"));
         String fingerprint = string(root, "dataset_fingerprint_sha256");
         boolean includeWeak = bool(root, "include_weak_calibration_rows");
-        SortedSet<SourceScenario> required =
-                readScenarios(array(root, "required_scenarios"), "required_scenarios");
-        SortedSet<SourceScenario> training =
-                readScenarios(array(root, "training_scenarios"), "training_scenarios");
-        PartitionCounts partitionCounts =
-                readPartitionCounts(object(root.get("partition_counts"), "partition_counts"));
+        SortedSet<SourceScenario> required = readScenarios(array(root, "required_scenarios"), "required_scenarios");
+        SortedSet<SourceScenario> training = readScenarios(array(root, "training_scenarios"), "training_scenarios");
+        PartitionCounts partitionCounts = readPartitionCounts(object(root.get("partition_counts"), "partition_counts"));
         EvaluationThresholds evaluationThresholds =
                 readThresholds(object(root.get("evaluation_thresholds"), "evaluation_thresholds"));
-        ScenarioTrainingConfig config = readTrainingConfig(
-                object(root.get("training_config"), "training_config"), evaluationThresholds);
-        FeatureSelectionDecision selection = readFeatureSelection(
-                object(root.get("feature_selection"), "feature_selection"));
-        EvaluationSummaryMetadata summary = readEvaluationSummary(
-                object(root.get("evaluation_summary"), "evaluation_summary"));
-        ModelAcceptanceStatus acceptance =
-                enumValue(ModelAcceptanceStatus.class, string(root, "acceptance_status"));
+        ScenarioTrainingConfig config =
+                readTrainingConfig(object(root.get("training_config"), "training_config"), evaluationThresholds);
+        FeatureSelectionDecision selection =
+                readFeatureSelection(object(root.get("feature_selection"), "feature_selection"));
+        EvaluationSummaryMetadata summary =
+                readEvaluationSummary(object(root.get("evaluation_summary"), "evaluation_summary"));
+        ModelAcceptanceStatus acceptance = enumValue(ModelAcceptanceStatus.class, string(root, "acceptance_status"));
         List<String> reasons = strings(root, "acceptance_reasons");
         ProducerMetadata producer = readProducer(object(root.get("producer"), "producer"));
         MetadataProbe probe = readProbe(object(root.get("metadata_probe"), "metadata_probe"));
         try {
-            return new ScenarioModelMetadata(schema, objective, featureSet, normalizer, thresholds,
-                    ScenarioModelMetadata.ARCHITECTURE, ScenarioModelMetadata.MEMBER_MODEL_NAME,
-                    members, ScenarioModelMetadata.SPLIT_ALGORITHM, splitSeed, modelSeed,
-                    fingerprint, includeWeak, required, training, partitionCounts, config,
-                    selection, summary, acceptance, reasons, producer, probe);
+            return new ScenarioModelMetadata(
+                    schema,
+                    objective,
+                    featureSet,
+                    normalizer,
+                    thresholds,
+                    ScenarioModelMetadata.ARCHITECTURE,
+                    ScenarioModelMetadata.MEMBER_MODEL_NAME,
+                    members,
+                    ScenarioModelMetadata.SPLIT_ALGORITHM,
+                    splitSeed,
+                    modelSeed,
+                    fingerprint,
+                    includeWeak,
+                    required,
+                    training,
+                    partitionCounts,
+                    config,
+                    selection,
+                    summary,
+                    acceptance,
+                    reasons,
+                    producer,
+                    probe);
         } catch (RuntimeException error) {
             throw new IOException("Invalid scenario model metadata", error);
         }
@@ -206,11 +249,13 @@ public final class ScenarioModelMetadataCodec {
         ArrayList<MemberMetadata> members = new ArrayList<>();
         for (Object value : values) {
             Map<String, Object> member = object(value, "member");
-            requireKeys(member, List.of("index", "seed_hex", "best_epoch", "path", "sha256"),
-                    "member");
-            members.add(new MemberMetadata(integer(member, "index"),
-                    parseHex64(string(member, "seed_hex")), integer(member, "best_epoch"),
-                    string(member, "path"), string(member, "sha256")));
+            requireKeys(member, List.of("index", "seed_hex", "best_epoch", "path", "sha256"), "member");
+            members.add(new MemberMetadata(
+                    integer(member, "index"),
+                    parseHex64(string(member, "seed_hex")),
+                    integer(member, "best_epoch"),
+                    string(member, "path"),
+                    string(member, "sha256")));
         }
         return List.copyOf(members);
     }
@@ -222,8 +267,7 @@ public final class ScenarioModelMetadataCodec {
             writer.field("scenario_id", scenario.canonical());
             writer.field("environment_id", scenario.environmentId());
             writer.field("source_count", scenario.sourceCount());
-            writer.field("available_physical_core_count",
-                    scenario.availablePhysicalCoreCount());
+            writer.field("available_physical_core_count", scenario.availablePhysicalCoreCount());
             writer.field("source_ratio_numerator", scenario.ratio().numerator());
             writer.field("source_ratio_denominator", scenario.ratio().denominator());
             writer.endObject();
@@ -231,20 +275,27 @@ public final class ScenarioModelMetadataCodec {
         writer.endArray();
     }
 
-    private static SortedSet<SourceScenario> readScenarios(List<Object> values, String name)
-            throws IOException {
+    private static SortedSet<SourceScenario> readScenarios(List<Object> values, String name) throws IOException {
         TreeSet<SourceScenario> scenarios = new TreeSet<>();
         SourceScenario previous = null;
         for (Object value : values) {
             Map<String, Object> object = object(value, name);
-            requireKeys(object, List.of("scenario_id", "environment_id", "source_count",
-                    "available_physical_core_count", "source_ratio_numerator",
-                    "source_ratio_denominator"), name);
-            SourceScenario scenario = new SourceScenario(string(object, "environment_id"),
+            requireKeys(
+                    object,
+                    List.of(
+                            "scenario_id",
+                            "environment_id",
+                            "source_count",
+                            "available_physical_core_count",
+                            "source_ratio_numerator",
+                            "source_ratio_denominator"),
+                    name);
+            SourceScenario scenario = new SourceScenario(
+                    string(object, "environment_id"),
                     integer(object, "source_count"),
                     integer(object, "available_physical_core_count"),
-                    new SourceRatio(integer(object, "source_ratio_numerator"),
-                            integer(object, "source_ratio_denominator")));
+                    new SourceRatio(
+                            integer(object, "source_ratio_numerator"), integer(object, "source_ratio_denominator")));
             if (!scenario.canonical().equals(string(object, "scenario_id"))
                     || previous != null && previous.compareTo(scenario) >= 0
                     || !scenarios.add(scenario)) {
@@ -263,8 +314,8 @@ public final class ScenarioModelMetadataCodec {
         writeStringIntegerMap(writer, counts.rowCounts());
         writer.name("scenario_row_counts");
         writer.beginObject();
-        for (Map.Entry<String, SortedMap<SourceScenario, Integer>> entry
-                : counts.scenarioRowCounts().entrySet()) {
+        for (Map.Entry<String, SortedMap<SourceScenario, Integer>> entry :
+                counts.scenarioRowCounts().entrySet()) {
             writer.name(entry.getKey());
             writer.beginObject();
             for (Map.Entry<SourceScenario, Integer> count : entry.getValue().entrySet()) {
@@ -276,21 +327,16 @@ public final class ScenarioModelMetadataCodec {
         writer.endObject();
     }
 
-    private static PartitionCounts readPartitionCounts(Map<String, Object> value)
-            throws IOException {
-        requireKeys(value, List.of("policy_counts", "row_counts", "scenario_row_counts"),
-                "partition_counts");
-        SortedMap<String, Integer> policies =
-                readStringIntegerMap(object(value.get("policy_counts"), "policy_counts"));
-        SortedMap<String, Integer> rows =
-                readStringIntegerMap(object(value.get("row_counts"), "row_counts"));
+    private static PartitionCounts readPartitionCounts(Map<String, Object> value) throws IOException {
+        requireKeys(value, List.of("policy_counts", "row_counts", "scenario_row_counts"), "partition_counts");
+        SortedMap<String, Integer> policies = readStringIntegerMap(object(value.get("policy_counts"), "policy_counts"));
+        SortedMap<String, Integer> rows = readStringIntegerMap(object(value.get("row_counts"), "row_counts"));
         TreeMap<String, SortedMap<SourceScenario, Integer>> scenarios = new TreeMap<>();
-        Map<String, Object> outer =
-                object(value.get("scenario_row_counts"), "scenario_row_counts");
+        Map<String, Object> outer = object(value.get("scenario_row_counts"), "scenario_row_counts");
         for (Map.Entry<String, Object> entry : outer.entrySet()) {
             TreeMap<SourceScenario, Integer> counts = new TreeMap<>();
-            for (Map.Entry<String, Object> count
-                    : object(entry.getValue(), entry.getKey()).entrySet()) {
+            for (Map.Entry<String, Object> count :
+                    object(entry.getValue(), entry.getKey()).entrySet()) {
                 SourceScenario scenario = parseScenarioCanonical(count.getKey());
                 counts.put(scenario, exactInteger(count.getValue(), count.getKey()));
             }
@@ -314,37 +360,55 @@ public final class ScenarioModelMetadataCodec {
         writer.field("weight_decay_bits", floatBits(config.weightDecay()));
         writer.field("label_smoothing_bits", floatBits(config.labelSmoothing()));
         writer.field("minimum_train_policy_groups", config.minimumTrainPolicyGroups());
-        writer.field("minimum_validation_policy_groups",
-                config.minimumValidationPolicyGroups());
+        writer.field("minimum_validation_policy_groups", config.minimumValidationPolicyGroups());
         writer.field("minimum_test_policy_groups", config.minimumTestPolicyGroups());
-        writer.field("minimum_train_rows_per_scenario",
-                config.minimumTrainRowsPerScenario());
-        writer.field("minimum_validation_rows_per_scenario",
-                config.minimumValidationRowsPerScenario());
-        writer.field("minimum_test_rows_per_scenario",
-                config.minimumTestRowsPerScenario());
+        writer.field("minimum_train_rows_per_scenario", config.minimumTrainRowsPerScenario());
+        writer.field("minimum_validation_rows_per_scenario", config.minimumValidationRowsPerScenario());
+        writer.field("minimum_test_rows_per_scenario", config.minimumTestRowsPerScenario());
         writer.field("include_weak_calibration_rows", config.includeWeakCalibrationRows());
         writer.field("require_target_variation", config.requireTargetVariation());
         writer.field("feature_selection_mode", config.featureSelectionMode().name());
         writer.endObject();
     }
 
-    private static ScenarioTrainingConfig readTrainingConfig(Map<String, Object> value,
-            EvaluationThresholds thresholds) throws IOException {
-        requireKeys(value, List.of("split_seed_hex", "model_seed_hex", "device",
-                "ensemble_members", "loso_evaluation_members", "ablation_members", "max_epochs",
-                "patience", "effective_batch_size", "learning_rate_bits", "weight_decay_bits",
-                "label_smoothing_bits", "minimum_train_policy_groups",
-                "minimum_validation_policy_groups", "minimum_test_policy_groups",
-                "minimum_train_rows_per_scenario", "minimum_validation_rows_per_scenario",
-                "minimum_test_rows_per_scenario", "include_weak_calibration_rows",
-                "require_target_variation", "feature_selection_mode"), "training_config");
+    private static ScenarioTrainingConfig readTrainingConfig(Map<String, Object> value, EvaluationThresholds thresholds)
+            throws IOException {
+        requireKeys(
+                value,
+                List.of(
+                        "split_seed_hex",
+                        "model_seed_hex",
+                        "device",
+                        "ensemble_members",
+                        "loso_evaluation_members",
+                        "ablation_members",
+                        "max_epochs",
+                        "patience",
+                        "effective_batch_size",
+                        "learning_rate_bits",
+                        "weight_decay_bits",
+                        "label_smoothing_bits",
+                        "minimum_train_policy_groups",
+                        "minimum_validation_policy_groups",
+                        "minimum_test_policy_groups",
+                        "minimum_train_rows_per_scenario",
+                        "minimum_validation_rows_per_scenario",
+                        "minimum_test_rows_per_scenario",
+                        "include_weak_calibration_rows",
+                        "require_target_variation",
+                        "feature_selection_mode"),
+                "training_config");
         try {
-            return new ScenarioTrainingConfig(parseHex64(string(value, "split_seed_hex")),
-                    parseHex64(string(value, "model_seed_hex")), string(value, "device"),
-                    integer(value, "ensemble_members"), integer(value, "loso_evaluation_members"),
-                    integer(value, "ablation_members"), integer(value, "max_epochs"),
-                    integer(value, "patience"), integer(value, "effective_batch_size"),
+            return new ScenarioTrainingConfig(
+                    parseHex64(string(value, "split_seed_hex")),
+                    parseHex64(string(value, "model_seed_hex")),
+                    string(value, "device"),
+                    integer(value, "ensemble_members"),
+                    integer(value, "loso_evaluation_members"),
+                    integer(value, "ablation_members"),
+                    integer(value, "max_epochs"),
+                    integer(value, "patience"),
+                    integer(value, "effective_batch_size"),
                     parseFloatBits(string(value, "learning_rate_bits")),
                     parseFloatBits(string(value, "weight_decay_bits")),
                     parseFloatBits(string(value, "label_smoothing_bits")),
@@ -356,8 +420,8 @@ public final class ScenarioModelMetadataCodec {
                     integer(value, "minimum_test_rows_per_scenario"),
                     bool(value, "include_weak_calibration_rows"),
                     bool(value, "require_target_variation"),
-                    enumValue(FeatureSelectionMode.class,
-                            string(value, "feature_selection_mode")), thresholds);
+                    enumValue(FeatureSelectionMode.class, string(value, "feature_selection_mode")),
+                    thresholds);
         } catch (RuntimeException error) {
             throw new IOException("Invalid training configuration metadata", error);
         }
@@ -367,52 +431,57 @@ public final class ScenarioModelMetadataCodec {
         writer.beginObject();
         writer.field("maximum_grouped_macro_mae", thresholds.maximumGroupedMacroMae());
         writer.field("minimum_grouped_macro_spearman", thresholds.minimumGroupedMacroSpearman());
-        writer.field("minimum_grouped_macro_precision_at_ten",
-                thresholds.minimumGroupedMacroPrecisionAtTen());
+        writer.field("minimum_grouped_macro_precision_at_ten", thresholds.minimumGroupedMacroPrecisionAtTen());
         writer.field("maximum_loso_macro_mae", thresholds.maximumLosoMacroMae());
         writer.field("minimum_loso_macro_spearman", thresholds.minimumLosoMacroSpearman());
-        writer.field("maximum_loso_worst_scenario_mae",
-                thresholds.maximumLosoWorstScenarioMae());
-        writer.field("minimum_context_mae_improvement",
-                thresholds.minimumContextMaeImprovement());
-        writer.field("minimum_context_spearman_improvement",
-                thresholds.minimumContextSpearmanImprovement());
-        writer.field("maximum_context_mae_regression",
-                thresholds.maximumContextMaeRegression());
-        writer.field("maximum_context_spearman_regression",
-                thresholds.maximumContextSpearmanRegression());
-        writer.field("minimum_counts_cross_environment_mae_improvement",
+        writer.field("maximum_loso_worst_scenario_mae", thresholds.maximumLosoWorstScenarioMae());
+        writer.field("minimum_context_mae_improvement", thresholds.minimumContextMaeImprovement());
+        writer.field("minimum_context_spearman_improvement", thresholds.minimumContextSpearmanImprovement());
+        writer.field("maximum_context_mae_regression", thresholds.maximumContextMaeRegression());
+        writer.field("maximum_context_spearman_regression", thresholds.maximumContextSpearmanRegression());
+        writer.field(
+                "minimum_counts_cross_environment_mae_improvement",
                 thresholds.minimumCountsCrossEnvironmentMaeImprovement());
-        writer.field("maximum_counts_spearman_regression",
-                thresholds.maximumCountsSpearmanRegression());
-        writer.field("maximum_counts_worst_environment_mae_regression",
+        writer.field("maximum_counts_spearman_regression", thresholds.maximumCountsSpearmanRegression());
+        writer.field(
+                "maximum_counts_worst_environment_mae_regression",
                 thresholds.maximumCountsWorstEnvironmentMaeRegression());
         writer.endObject();
     }
 
-    private static EvaluationThresholds readThresholds(Map<String, Object> value)
-            throws IOException {
-        List<String> keys = List.of("maximum_grouped_macro_mae",
-                "minimum_grouped_macro_spearman", "minimum_grouped_macro_precision_at_ten",
-                "maximum_loso_macro_mae", "minimum_loso_macro_spearman",
-                "maximum_loso_worst_scenario_mae", "minimum_context_mae_improvement",
-                "minimum_context_spearman_improvement", "maximum_context_mae_regression",
+    private static EvaluationThresholds readThresholds(Map<String, Object> value) throws IOException {
+        List<String> keys = List.of(
+                "maximum_grouped_macro_mae",
+                "minimum_grouped_macro_spearman",
+                "minimum_grouped_macro_precision_at_ten",
+                "maximum_loso_macro_mae",
+                "minimum_loso_macro_spearman",
+                "maximum_loso_worst_scenario_mae",
+                "minimum_context_mae_improvement",
+                "minimum_context_spearman_improvement",
+                "maximum_context_mae_regression",
                 "maximum_context_spearman_regression",
                 "minimum_counts_cross_environment_mae_improvement",
                 "maximum_counts_spearman_regression",
                 "maximum_counts_worst_environment_mae_regression");
         requireKeys(value, keys, "evaluation_thresholds");
-        return new EvaluationThresholds(number(value, keys.get(0)), number(value, keys.get(1)),
-                number(value, keys.get(2)), number(value, keys.get(3)),
-                number(value, keys.get(4)), number(value, keys.get(5)),
-                number(value, keys.get(6)), number(value, keys.get(7)),
-                number(value, keys.get(8)), number(value, keys.get(9)),
-                number(value, keys.get(10)), number(value, keys.get(11)),
+        return new EvaluationThresholds(
+                number(value, keys.get(0)),
+                number(value, keys.get(1)),
+                number(value, keys.get(2)),
+                number(value, keys.get(3)),
+                number(value, keys.get(4)),
+                number(value, keys.get(5)),
+                number(value, keys.get(6)),
+                number(value, keys.get(7)),
+                number(value, keys.get(8)),
+                number(value, keys.get(9)),
+                number(value, keys.get(10)),
+                number(value, keys.get(11)),
                 number(value, keys.get(12)));
     }
 
-    private static void writeFeatureSelection(JsonWriter writer,
-            FeatureSelectionDecision selection) {
+    private static void writeFeatureSelection(JsonWriter writer, FeatureSelectionDecision selection) {
         writer.beginObject();
         writer.field("requested_mode", selection.requestedMode().name());
         writer.field("selected_feature_set", selection.selectedFeatureSet().schemaId());
@@ -440,57 +509,84 @@ public final class ScenarioModelMetadataCodec {
         writer.endObject();
     }
 
-    private static FeatureSelectionDecision readFeatureSelection(Map<String, Object> value)
-            throws IOException {
-        requireKeys(value, List.of("requested_mode", "selected_feature_set", "reason", "metrics"),
-                "feature_selection");
+    private static FeatureSelectionDecision readFeatureSelection(Map<String, Object> value) throws IOException {
+        requireKeys(value, List.of("requested_mode", "selected_feature_set", "reason", "metrics"), "feature_selection");
         ArrayList<AblationMetric> metrics = new ArrayList<>();
         for (Object item : array(value, "metrics")) {
             Map<String, Object> metric = object(item, "ablation metric");
-            requireKeys(metric, List.of("evaluation_kind", "fold_id", "feature_schema_id",
-                    "comparison_schema_id", "scenario_or_environment", "row_count", "mae",
-                    "spearman", "mae_delta", "spearman_delta", "selected", "gate_status",
-                    "reason"), "ablation metric");
-            metrics.add(new AblationMetric(string(metric, "evaluation_kind"),
-                    string(metric, "fold_id"), featureSet(string(metric, "feature_schema_id")),
+            requireKeys(
+                    metric,
+                    List.of(
+                            "evaluation_kind",
+                            "fold_id",
+                            "feature_schema_id",
+                            "comparison_schema_id",
+                            "scenario_or_environment",
+                            "row_count",
+                            "mae",
+                            "spearman",
+                            "mae_delta",
+                            "spearman_delta",
+                            "selected",
+                            "gate_status",
+                            "reason"),
+                    "ablation metric");
+            metrics.add(new AblationMetric(
+                    string(metric, "evaluation_kind"),
+                    string(metric, "fold_id"),
+                    featureSet(string(metric, "feature_schema_id")),
                     featureSet(string(metric, "comparison_schema_id")),
-                    string(metric, "scenario_or_environment"), integer(metric, "row_count"),
-                    optional(metric, "mae"), optional(metric, "spearman"),
-                    optional(metric, "mae_delta"), optional(metric, "spearman_delta"),
-                    bool(metric, "selected"), string(metric, "gate_status"),
+                    string(metric, "scenario_or_environment"),
+                    integer(metric, "row_count"),
+                    optional(metric, "mae"),
+                    optional(metric, "spearman"),
+                    optional(metric, "mae_delta"),
+                    optional(metric, "spearman_delta"),
+                    bool(metric, "selected"),
+                    string(metric, "gate_status"),
                     string(metric, "reason")));
         }
-        return new FeatureSelectionDecision(enumValue(FeatureSelectionMode.class,
-                string(value, "requested_mode")),
-                featureSet(string(value, "selected_feature_set")), metrics,
+        return new FeatureSelectionDecision(
+                enumValue(FeatureSelectionMode.class, string(value, "requested_mode")),
+                featureSet(string(value, "selected_feature_set")),
+                metrics,
                 string(value, "reason"));
     }
 
-    private static void writeEvaluationSummary(JsonWriter writer,
-            EvaluationSummaryMetadata summary) {
+    private static void writeEvaluationSummary(JsonWriter writer, EvaluationSummaryMetadata summary) {
         writer.beginObject();
         writer.field("grouped_report", summary.groupedReport());
         writer.field("loso_report", summary.losoReport());
         writer.fieldOptional("grouped_macro_mae", summary.groupedMacroMae());
         writer.fieldOptional("grouped_macro_spearman", summary.groupedMacroSpearman());
-        writer.fieldOptional("grouped_macro_precision_at_ten",
-                summary.groupedMacroPrecisionAtTen());
+        writer.fieldOptional("grouped_macro_precision_at_ten", summary.groupedMacroPrecisionAtTen());
         writer.fieldOptional("loso_macro_mae", summary.losoMacroMae());
         writer.fieldOptional("loso_macro_spearman", summary.losoMacroSpearman());
         writer.fieldOptional("loso_worst_scenario_mae", summary.losoWorstScenarioMae());
         writer.endObject();
     }
 
-    private static EvaluationSummaryMetadata readEvaluationSummary(Map<String, Object> value)
-            throws IOException {
-        requireKeys(value, List.of("grouped_report", "loso_report", "grouped_macro_mae",
-                "grouped_macro_spearman", "grouped_macro_precision_at_ten", "loso_macro_mae",
-                "loso_macro_spearman", "loso_worst_scenario_mae"), "evaluation_summary");
-        return new EvaluationSummaryMetadata(string(value, "grouped_report"),
-                string(value, "loso_report"), optional(value, "grouped_macro_mae"),
+    private static EvaluationSummaryMetadata readEvaluationSummary(Map<String, Object> value) throws IOException {
+        requireKeys(
+                value,
+                List.of(
+                        "grouped_report",
+                        "loso_report",
+                        "grouped_macro_mae",
+                        "grouped_macro_spearman",
+                        "grouped_macro_precision_at_ten",
+                        "loso_macro_mae",
+                        "loso_macro_spearman",
+                        "loso_worst_scenario_mae"),
+                "evaluation_summary");
+        return new EvaluationSummaryMetadata(
+                string(value, "grouped_report"),
+                string(value, "loso_report"),
+                optional(value, "grouped_macro_mae"),
                 optional(value, "grouped_macro_spearman"),
                 optional(value, "grouped_macro_precision_at_ten"),
-                optional(value, "loso_macro_mae"), optional(value, "loso_macro_spearman"),
+                optional(value, "loso_macro_mae"),
+                optional(value, "loso_macro_spearman"),
                 optional(value, "loso_worst_scenario_mae"));
     }
 
@@ -505,11 +601,16 @@ public final class ScenarioModelMetadataCodec {
     }
 
     private static ProducerMetadata readProducer(Map<String, Object> value) throws IOException {
-        requireKeys(value, List.of("commit_sha", "dirty_working_tree", "djl_engine",
-                "djl_engine_version", "training_device"), "producer");
-        return new ProducerMetadata(string(value, "commit_sha"),
-                bool(value, "dirty_working_tree"), string(value, "djl_engine"),
-                string(value, "djl_engine_version"), string(value, "training_device"));
+        requireKeys(
+                value,
+                List.of("commit_sha", "dirty_working_tree", "djl_engine", "djl_engine_version", "training_device"),
+                "producer");
+        return new ProducerMetadata(
+                string(value, "commit_sha"),
+                bool(value, "dirty_working_tree"),
+                string(value, "djl_engine"),
+                string(value, "djl_engine_version"),
+                string(value, "training_device"));
     }
 
     private static void writeProbe(JsonWriter writer, MetadataProbe probe) {
@@ -522,11 +623,15 @@ public final class ScenarioModelMetadataCodec {
     }
 
     private static MetadataProbe readProbe(Map<String, Object> value) throws IOException {
-        requireKeys(value, List.of("policy_id", "scenario_id", "prediction_raw_bits",
-                "producing_device"), "metadata_probe");
-        return new MetadataProbe(PolicyId.parse(string(value, "policy_id")),
+        requireKeys(
+                value,
+                List.of("policy_id", "scenario_id", "prediction_raw_bits", "producing_device"),
+                "metadata_probe");
+        return new MetadataProbe(
+                PolicyId.parse(string(value, "policy_id")),
                 parseScenarioCanonical(string(value, "scenario_id")),
-                strings(value, "prediction_raw_bits"), string(value, "producing_device"));
+                strings(value, "prediction_raw_bits"),
+                string(value, "producing_device"));
     }
 
     private static SourceScenario parseScenarioCanonical(String canonical) throws IOException {
@@ -544,8 +649,12 @@ public final class ScenarioModelMetadataCodec {
             String environment = canonical.substring(3, source);
             int sourceCount = Integer.parseInt(canonical.substring(source + 4, core));
             int coreCount = Integer.parseInt(canonical.substring(core + 5, ratio));
-            SourceScenario scenario = new SourceScenario(environment, sourceCount, coreCount,
-                    new SourceRatio(Integer.parseInt(canonical.substring(ratio + 2, of)),
+            SourceScenario scenario = new SourceScenario(
+                    environment,
+                    sourceCount,
+                    coreCount,
+                    new SourceRatio(
+                            Integer.parseInt(canonical.substring(ratio + 2, of)),
                             Integer.parseInt(canonical.substring(of + 2))));
             if (!scenario.canonical().equals(canonical)) {
                 throw new IllegalArgumentException();
@@ -556,8 +665,7 @@ public final class ScenarioModelMetadataCodec {
         }
     }
 
-    private static SortedMap<String, Integer> readStringIntegerMap(Map<String, Object> source)
-            throws IOException {
+    private static SortedMap<String, Integer> readStringIntegerMap(Map<String, Object> source) throws IOException {
         TreeMap<String, Integer> result = new TreeMap<>();
         for (Map.Entry<String, Object> entry : source.entrySet()) {
             result.put(entry.getKey(), exactInteger(entry.getValue(), entry.getKey()));
@@ -575,7 +683,8 @@ public final class ScenarioModelMetadataCodec {
 
     private static List<String> rawBits(double[] values) {
         return Arrays.stream(values)
-                .mapToObj(value -> "%016x".formatted(Double.doubleToRawLongBits(value))).toList();
+                .mapToObj(value -> "%016x".formatted(Double.doubleToRawLongBits(value)))
+                .toList();
     }
 
     private static double[] doublesFromBits(List<String> values) throws IOException {
@@ -614,12 +723,12 @@ public final class ScenarioModelMetadataCodec {
 
     private static ScenarioFeatureSet featureSet(String schemaId) throws IOException {
         return Arrays.stream(ScenarioFeatureSet.values())
-                .filter(value -> value.schemaId().equals(schemaId)).findFirst()
+                .filter(value -> value.schemaId().equals(schemaId))
+                .findFirst()
                 .orElseThrow(() -> new IOException("Unknown feature schema " + schemaId));
     }
 
-    private static <E extends Enum<E>> E enumValue(Class<E> type, String value)
-            throws IOException {
+    private static <E extends Enum<E>> E enumValue(Class<E> type, String value) throws IOException {
         try {
             return Enum.valueOf(type, value);
         } catch (IllegalArgumentException error) {
@@ -627,8 +736,7 @@ public final class ScenarioModelMetadataCodec {
         }
     }
 
-    private static void requireKeys(Map<String, Object> object, List<String> keys, String name)
-            throws IOException {
+    private static void requireKeys(Map<String, Object> object, List<String> keys, String name) throws IOException {
         if (object.size() != keys.size() || !object.keySet().containsAll(keys)) {
             throw new IOException("Unexpected or missing fields in " + name);
         }
@@ -643,8 +751,7 @@ public final class ScenarioModelMetadataCodec {
         return result;
     }
 
-    private static List<Object> array(Map<String, Object> object, String key)
-            throws IOException {
+    private static List<Object> array(Map<String, Object> object, String key) throws IOException {
         return array(object.get(key), key);
     }
 
@@ -665,8 +772,7 @@ public final class ScenarioModelMetadataCodec {
         return text;
     }
 
-    private static List<String> strings(Map<String, Object> object, String key)
-            throws IOException {
+    private static List<String> strings(Map<String, Object> object, String key) throws IOException {
         ArrayList<String> result = new ArrayList<>();
         for (Object value : array(object, key)) {
             if (!(value instanceof String text)) {
@@ -677,8 +783,7 @@ public final class ScenarioModelMetadataCodec {
         return List.copyOf(result);
     }
 
-    private static boolean[] booleans(Map<String, Object> object, String key)
-            throws IOException {
+    private static boolean[] booleans(Map<String, Object> object, String key) throws IOException {
         List<Object> values = array(object, key);
         boolean[] result = new boolean[values.size()];
         for (int i = 0; i < values.size(); i++) {
@@ -695,8 +800,7 @@ public final class ScenarioModelMetadataCodec {
     }
 
     private static int exactInteger(Object value, String name) throws IOException {
-        if (!(value instanceof Long number) || number < Integer.MIN_VALUE
-                || number > Integer.MAX_VALUE) {
+        if (!(value instanceof Long number) || number < Integer.MIN_VALUE || number > Integer.MAX_VALUE) {
             throw new IOException(name + " must be an integer");
         }
         return number.intValue();
@@ -718,8 +822,7 @@ public final class ScenarioModelMetadataCodec {
         return result;
     }
 
-    private static OptionalDouble optional(Map<String, Object> object, String key)
-            throws IOException {
+    private static OptionalDouble optional(Map<String, Object> object, String key) throws IOException {
         Object value = object.get(key);
         if (value == null) {
             return OptionalDouble.empty();
@@ -730,21 +833,16 @@ public final class ScenarioModelMetadataCodec {
         return OptionalDouble.of(number.doubleValue());
     }
 
-    private static void requireString(Map<String, Object> object, String key, String expected)
-            throws IOException {
+    private static void requireString(Map<String, Object> object, String key, String expected) throws IOException {
         if (!string(object, key).equals(expected)) {
             throw new IOException("Unexpected " + key);
         }
     }
 
-    private static void requireInteger(Map<String, Object> object, String key, int expected)
-            throws IOException {
+    private static void requireInteger(Map<String, Object> object, String key, int expected) throws IOException {
         if (integer(object, key) != expected) {
             throw new IOException("Unexpected " + key);
         }
-    }
-
-    private ScenarioModelMetadataCodec() {
     }
 
     private static final class JsonWriter {
@@ -1077,12 +1175,10 @@ public final class ScenarioModelMetadataCodec {
                 floating = true;
                 digits();
             }
-            if (index < input.length() && (input.charAt(index) == 'e'
-                    || input.charAt(index) == 'E')) {
+            if (index < input.length() && (input.charAt(index) == 'e' || input.charAt(index) == 'E')) {
                 floating = true;
                 index++;
-                if (index < input.length() && (input.charAt(index) == '+'
-                        || input.charAt(index) == '-')) {
+                if (index < input.length() && (input.charAt(index) == '+' || input.charAt(index) == '-')) {
                     index++;
                 }
                 digits();
@@ -1121,10 +1217,11 @@ public final class ScenarioModelMetadataCodec {
         }
 
         private void whitespace() {
-            while (index < input.length() && switch (input.charAt(index)) {
-                case ' ', '\t', '\r', '\n' -> true;
-                default -> false;
-            }) {
+            while (index < input.length()
+                    && switch (input.charAt(index)) {
+                        case ' ', '\t', '\r', '\n' -> true;
+                        default -> false;
+                    }) {
                 index++;
             }
         }

@@ -6,10 +6,9 @@ public final class TopologyValidationException extends IllegalArgumentException 
     private final String category;
     private final String offendingValue;
 
-    public TopologyValidationException(String providerName, String category, String offendingValue,
-            String reason) {
-        super("topology provider=" + providerName + " category=" + category + " value="
-                + offendingValue + ": " + reason);
+    public TopologyValidationException(String providerName, String category, String offendingValue, String reason) {
+        super("topology provider=" + providerName + " category=" + category + " value=" + offendingValue + ": "
+                + reason);
         this.providerName = providerName;
         this.category = category;
         this.offendingValue = offendingValue;

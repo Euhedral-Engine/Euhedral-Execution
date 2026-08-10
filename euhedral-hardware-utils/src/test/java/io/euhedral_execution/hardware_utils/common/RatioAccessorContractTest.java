@@ -25,21 +25,18 @@ class RatioAccessorContractTest {
             "CpuSnapshot.throttleRatio",
             "CpuSnapshot.pressure",
             "CoreSnapshot.memoryUtilization",
-            "SocketSnapshot.memoryUtilization"
-    );
+            "SocketSnapshot.memoryUtilization");
 
-    private static final Set<String> ALLOWED_RATES = Set.of(
-            "HardwareUtilization.diskIOBytesPerSecond"
-    );
+    private static final Set<String> ALLOWED_RATES = Set.of("HardwareUtilization.diskIOBytesPerSecond");
 
     @Test
     void testAccessorContract() {
         Class<?>[] classes = {
-                SystemUtilization.SystemSnapshot.class,
-                SystemUtilization.HardwareUtilization.class,
-                SystemUtilization.CpuSnapshot.class,
-                SystemUtilization.CoreSnapshot.class,
-                SystemUtilization.SocketSnapshot.class
+            SystemUtilization.SystemSnapshot.class,
+            SystemUtilization.HardwareUtilization.class,
+            SystemUtilization.CpuSnapshot.class,
+            SystemUtilization.CoreSnapshot.class,
+            SystemUtilization.SocketSnapshot.class
         };
 
         for (Class<?> clazz : classes) {
@@ -56,9 +53,9 @@ class RatioAccessorContractTest {
                     }
                 } else if (m.getReturnType() == UnmodifiableDoubleArray.class) {
                     // Ratio arrays
-                    assertTrue(fullName.equals("SystemSnapshot.pressurePerCpu") ||
-                            fullName.equals("HardwareUtilization.perQuotaCpuThrottleRatio") ||
-                            fullName.equals("HardwareUtilization.perQuotaCpuPressure"));
+                    assertTrue(fullName.equals("SystemSnapshot.pressurePerCpu")
+                            || fullName.equals("HardwareUtilization.perQuotaCpuThrottleRatio")
+                            || fullName.equals("HardwareUtilization.perQuotaCpuPressure"));
                 }
             }
         }

@@ -42,8 +42,11 @@ import org.springframework.messaging.MessageHandler;
 import org.springframework.stereotype.Service;
 
 @Service
-public class EuhedralKafkaBinder extends
-        AbstractMessageChannelBinder<ExtendedConsumerProperties<KafkaConsumerProperties>, ExtendedProducerProperties<KafkaProducerProperties>, KafkaTopicProvisioner> {
+public class EuhedralKafkaBinder
+        extends AbstractMessageChannelBinder<
+                ExtendedConsumerProperties<KafkaConsumerProperties>,
+                ExtendedProducerProperties<KafkaProducerProperties>,
+                KafkaTopicProvisioner> {
 
     public static final String EUHEDRAL_BINDER = "euhedral-kafka";
     private static final String BINDER_NAMES = "binder-names";
@@ -65,8 +68,10 @@ public class EuhedralKafkaBinder extends
     private final ObjectProvider<KafkaBinderConfigurationProperties> binderConfig;
     private final ObjectProvider<KafkaExtendedBindingProperties> extendedBindingProperties;
 
-    public EuhedralKafkaBinder(ControlPlaneLattice controlPlane,
-            KafkaMessageChannelBinder kafkaBinder, KafkaTopicProvisioner kafkaProvisioner,
+    public EuhedralKafkaBinder(
+            ControlPlaneLattice controlPlane,
+            KafkaMessageChannelBinder kafkaBinder,
+            KafkaTopicProvisioner kafkaProvisioner,
             ObjectProvider<BindingService> bindingService,
             ObjectProvider<KafkaProperties> kafkaProperties,
             ObjectProvider<KafkaBinderConfigurationProperties> binderConfig,
@@ -95,12 +100,12 @@ public class EuhedralKafkaBinder extends
     }
 
     @Override
-    protected MessageHandler createProducerMessageHandler(ProducerDestination destination,
+    protected MessageHandler createProducerMessageHandler(
+            ProducerDestination destination,
             ExtendedProducerProperties<KafkaProducerProperties> properties,
             MessageChannel errorChannel) {
 
-        destination =
-                kafkaProvisioner.provisionProducerDestination(destination.getName(), properties);
+        destination = kafkaProvisioner.provisionProducerDestination(destination.getName(), properties);
 
         DirectChannel channel = new DirectChannel();
         kafkaBinder.bindProducer(destination.getName(), channel, properties);
@@ -109,7 +114,9 @@ public class EuhedralKafkaBinder extends
     }
 
     @Override
-    protected MessageProducer createConsumerEndpoint(ConsumerDestination destination, String group,
+    protected MessageProducer createConsumerEndpoint(
+            ConsumerDestination destination,
+            String group,
             ExtendedConsumerProperties<KafkaConsumerProperties> properties) {
         this.log.debug("Adding group: {}", group);
 
@@ -124,9 +131,7 @@ public class EuhedralKafkaBinder extends
 
             this.provisionedConsumers.add(rawName);
 
-            destination =
-                    this.kafkaProvisioner.provisionConsumerDestination(destination.getName(), group,
-                            properties);
+            destination = this.kafkaProvisioner.provisionConsumerDestination(destination.getName(), group, properties);
 
             String topic = destination.getName();
             long groupHash = HasherApi.getHash(group);
@@ -162,11 +167,9 @@ public class EuhedralKafkaBinder extends
         } finally {
             releaseLock();
         }
-
     }
 
-    private Map<String, Object> buildConsumerProps(String group,
-            KafkaConsumerProperties properties) {
+    private Map<String, Object> buildConsumerProps(String group, KafkaConsumerProperties properties) {
         Map<String, Object> props = getBaseKafkaConsumerProperties();
 
         if (properties != null && properties.getConfiguration() != null) {
@@ -214,8 +217,7 @@ public class EuhedralKafkaBinder extends
 
         acquireLock();
         try {
-            KafkaExtendedBindingProperties extendedProps =
-                    this.extendedBindingProperties.getIfAvailable();
+            KafkaExtendedBindingProperties extendedProps = this.extendedBindingProperties.getIfAvailable();
             LongArraySet active = new LongArraySet(merged.size());
 
             for (var entry : merged.entrySet()) {
@@ -238,14 +240,12 @@ public class EuhedralKafkaBinder extends
 
                 Set<String> binders = (Set<String>) props.get(BINDER_NAMES);
                 for (String name : binders) {
-                    KafkaConsumerProperties consumerProps =
-                            extendedProps.getExtendedConsumerProperties(name);
+                    KafkaConsumerProperties consumerProps = extendedProps.getExtendedConsumerProperties(name);
                     if (consumerProps != null && !this.provisionedConsumers.contains(name)) {
                         this.provisionedConsumers.add(name);
-                        this.kafkaProvisioner.provisionConsumerDestination(name, entry.getKey(),
-                                new ExtendedConsumerProperties<>(consumerProps));
+                        this.kafkaProvisioner.provisionConsumerDestination(
+                                name, entry.getKey(), new ExtendedConsumerProperties<>(consumerProps));
                     }
-
                 }
             }
 
@@ -276,10 +276,8 @@ public class EuhedralKafkaBinder extends
             return merged;
         }
 
-        KafkaExtendedBindingProperties extendedBindingProperties =
-                this.extendedBindingProperties.getIfAvailable();
-        BindingServiceProperties bindingServiceProperties =
-                bindingService.getBindingServiceProperties();
+        KafkaExtendedBindingProperties extendedBindingProperties = this.extendedBindingProperties.getIfAvailable();
+        BindingServiceProperties bindingServiceProperties = bindingService.getBindingServiceProperties();
 
         String defaultBinder = bindingServiceProperties.getDefaultBinder();
         Map<String, BindingProperties> bindings = bindingServiceProperties.getBindings();
@@ -301,22 +299,22 @@ public class EuhedralKafkaBinder extends
 
             String bindingName = entry.getKey();
 
-            Map<String, Object> groupProps =
-                    merged.computeIfAbsent(group, k -> new HashMap<>(base));
+            Map<String, Object> groupProps = merged.computeIfAbsent(group, k -> new HashMap<>(base));
 
             if (extendedBindingProperties != null) {
-                Map<String, String> props = Optional.ofNullable(
-                        extendedBindingProperties.getExtendedConsumerProperties(bindingName)
-                                .getConfiguration()).orElse(Map.of());
+                Map<String, String> props = Optional.ofNullable(extendedBindingProperties
+                                .getExtendedConsumerProperties(bindingName)
+                                .getConfiguration())
+                        .orElse(Map.of());
                 groupProps.putAll(props);
             }
 
-            Set<String> binderNames = (Set<String>) groupProps.computeIfAbsent(BINDER_NAMES,
-                    ignored -> new HashSet<String>());
+            Set<String> binderNames =
+                    (Set<String>) groupProps.computeIfAbsent(BINDER_NAMES, ignored -> new HashSet<String>());
             binderNames.add(bindingName);
 
-            Set<String> topicNames = (Set<String>) groupProps.computeIfAbsent(TOPIC_NAMES,
-                    ignored -> new HashSet<String>());
+            Set<String> topicNames =
+                    (Set<String>) groupProps.computeIfAbsent(TOPIC_NAMES, ignored -> new HashSet<String>());
             topicNames.add(topic);
         }
 

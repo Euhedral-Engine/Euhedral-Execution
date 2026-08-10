@@ -4,11 +4,7 @@ import io.euhedral_execution.hardware_utils.internal.sampling.signals.CpuSlowSig
 import io.euhedral_execution.hardware_utils.internal.sampling.signals.SystemSlowSignals;
 
 public record SlowHardwareSample(
-    long observedAtNs,
-    int logicalSpan,
-    CpuSlowSignals[] cpuSignals,
-    SystemSlowSignals systemSignals
-) {
+        long observedAtNs, int logicalSpan, CpuSlowSignals[] cpuSignals, SystemSlowSignals systemSignals) {
     public SlowHardwareSample {
         if (logicalSpan <= 0) {
             throw new IllegalArgumentException("Logical span must be positive");
@@ -18,7 +14,7 @@ public record SlowHardwareSample(
         }
         cpuSignals = cpuSignals.clone();
     }
-    
+
     @Override
     public CpuSlowSignals[] cpuSignals() {
         return cpuSignals.clone();

@@ -17,13 +17,12 @@ import java.util.List;
 
 interface NativeFileSecurity {
 
-    static NativeFileSecurity forOperatingSystem(String canonicalOperatingSystem)
-            throws IOException {
+    static NativeFileSecurity forOperatingSystem(String canonicalOperatingSystem) throws IOException {
         return switch (canonicalOperatingSystem) {
             case "windows" -> new WindowsSecurity();
             case "linux", "macos" -> new PosixSecurity();
-            default -> throw new IOException("native-loader: unsupported filesystem policy for "
-                    + canonicalOperatingSystem);
+            default ->
+                throw new IOException("native-loader: unsupported filesystem policy for " + canonicalOperatingSystem);
         };
     }
 
@@ -36,11 +35,10 @@ interface NativeFileSecurity {
     final class PosixSecurity implements NativeFileSecurity {
 
         private static void set(Path path, String permissions) throws IOException {
-            PosixFileAttributeView view = Files.getFileAttributeView(
-                    path, PosixFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
+            PosixFileAttributeView view =
+                    Files.getFileAttributeView(path, PosixFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
             if (view == null) {
-                throw new IOException(
-                        "native-loader: POSIX file attributes are unavailable for " + path);
+                throw new IOException("native-loader: POSIX file attributes are unavailable for " + path);
             }
             view.setPermissions(PosixFilePermissions.fromString(permissions));
         }
@@ -64,11 +62,10 @@ interface NativeFileSecurity {
     final class WindowsSecurity implements NativeFileSecurity {
 
         private static void secure(Path path, boolean directory) throws IOException {
-            AclFileAttributeView view = Files.getFileAttributeView(
-                    path, AclFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
+            AclFileAttributeView view =
+                    Files.getFileAttributeView(path, AclFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
             if (view == null) {
-                throw new IOException(
-                        "native-loader: Windows ACL file attributes are unavailable for " + path);
+                throw new IOException("native-loader: Windows ACL file attributes are unavailable for " + path);
             }
             UserPrincipal owner = view.getOwner();
             AclEntry.Builder entry = AclEntry.newBuilder()
@@ -80,10 +77,10 @@ interface NativeFileSecurity {
             }
             view.setAcl(List.of(entry.build()));
             List<AclEntry> actual = view.getAcl();
-            if (actual.size() != 1 || actual.get(0).type() != AclEntryType.ALLOW
+            if (actual.size() != 1
+                    || actual.get(0).type() != AclEntryType.ALLOW
                     || !actual.get(0).principal().equals(owner)) {
-                throw new IOException(
-                        "native-loader: Windows ACL contains a non-owner entry for " + path);
+                throw new IOException("native-loader: Windows ACL contains a non-owner entry for " + path);
             }
         }
 

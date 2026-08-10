@@ -51,15 +51,14 @@ public final class EuhedralOperator {
 
     private final int responseQueueSize;
 
-    private final PaddedAtomicLong seed = new PaddedAtomicLong(
-            ThreadLocalRandom.current().nextLong());
+    private final PaddedAtomicLong seed =
+            new PaddedAtomicLong(ThreadLocalRandom.current().nextLong());
 
     public EuhedralOperator(EuhedralScheduler scheduler) {
         this(scheduler, 2_048, 4_096);
     }
 
-    public EuhedralOperator(EuhedralScheduler scheduler, int recycleCapacity,
-            int responseQueueSize) {
+    public EuhedralOperator(EuhedralScheduler scheduler, int recycleCapacity, int responseQueueSize) {
         Objects.requireNonNull(scheduler, "Scheduler must not be null");
         if (recycleCapacity < 0) {
             throw new IllegalArgumentException("Recycle capacity must be non-negative");
@@ -73,8 +72,7 @@ public final class EuhedralOperator {
         return flux -> flatMap(flux, mapper);
     }
 
-    public @NonNull <T, R> Function<Flux<T>, Publisher<R>> flatMapSequential(
-            Function<T, R> mapper) {
+    public @NonNull <T, R> Function<Flux<T>, Publisher<R>> flatMapSequential(Function<T, R> mapper) {
         return flux -> flatMapSequential(flux, mapper);
     }
 
@@ -82,15 +80,13 @@ public final class EuhedralOperator {
         return flux -> concatMap(flux, mapper);
     }
 
-    public @NonNull <T, R> Publisher<R> flatMap(@NonNull Flux<T> flux,
-            @NonNull Function<T, R> mapper) {
+    public @NonNull <T, R> Publisher<R> flatMap(@NonNull Flux<T> flux, @NonNull Function<T, R> mapper) {
         Objects.requireNonNull(flux);
         Objects.requireNonNull(mapper);
         return map(flux, mapper, false);
     }
 
-    public @NonNull <T, R> Publisher<R> flatMapSequential(@NonNull Flux<T> flux,
-            @NonNull Function<T, R> mapper) {
+    public @NonNull <T, R> Publisher<R> flatMapSequential(@NonNull Flux<T> flux, @NonNull Function<T, R> mapper) {
         Objects.requireNonNull(flux);
         Objects.requireNonNull(mapper);
 
@@ -100,8 +96,8 @@ public final class EuhedralOperator {
         FrameSequencer<T, R> sequencer = new FrameSequencer<>(password);
         EuhedralSubscriber subscriber = new EuhedralSubscriber();
 
-        Flux<SequencedFrame<T, R>> framed = flux.transform(
-                sequencer.flatMapSequentialTransformer(mapper, this.recycleCapacity));
+        Flux<SequencedFrame<T, R>> framed =
+                flux.transform(sequencer.flatMapSequentialTransformer(mapper, this.recycleCapacity));
 
         return sequencer.output().doOnSubscribe(sub -> {
             framed.subscribe(subscriber);
@@ -109,16 +105,14 @@ public final class EuhedralOperator {
         });
     }
 
-    public @NonNull <T, R> Publisher<R> concatMap(@NonNull Flux<T> flux,
-            @NonNull Function<T, R> mapper) {
+    public @NonNull <T, R> Publisher<R> concatMap(@NonNull Flux<T> flux, @NonNull Function<T, R> mapper) {
         Objects.requireNonNull(flux);
         Objects.requireNonNull(mapper);
         return map(flux, mapper, true);
     }
 
     private <T, R> Publisher<R> map(Flux<T> raw, Function<T, R> function, boolean ordered) {
-        EuhedralSink<T, R> response = new EuhedralSink<>(
-                new BoundedMpmcQueue<>(this.responseQueueSize));
+        EuhedralSink<T, R> response = new EuhedralSink<>(new BoundedMpmcQueue<>(this.responseQueueSize));
 
         long[] seed = {this.seed.getAndAddRelease(1)};
         final long password = HasherApi.mix(seed[0]++);
@@ -126,12 +120,10 @@ public final class EuhedralOperator {
         AtomicBoolean senderSwitch = new AtomicBoolean();
         Sinks.One<Void> killSwitch = Sinks.unsafe().one();
 
-        FrameManager<T, CallbackFrame<T, R>> recycler = new FrameManager<>(this.recycleCapacity,
-                password);
+        FrameManager<T, CallbackFrame<T, R>> recycler = new FrameManager<>(this.recycleCapacity, password);
 
         FrameCreate<T, CallbackFrame<T, R>> frameCreate = (idHash, data) -> {
-            CallbackFrame<T, R> frame = new CallbackFrame<>(idHash, data, function, response,
-                    recycler, senderSwitch);
+            CallbackFrame<T, R> frame = new CallbackFrame<>(idHash, data, function, response, recycler, senderSwitch);
             if (!ordered) {
                 frame.randomizeHash(seed[0]++);
             }
@@ -146,22 +138,28 @@ public final class EuhedralOperator {
         recycler.setFactory(new FrameFactory<>(frameCreate, frameReplace));
 
         EuhedralSubscriber subscriber = new EuhedralSubscriber();
-        return response.asFlux().doOnSubscribe(sub -> {
-            raw.takeUntilOther(killSwitch.asMono()).map(obj -> recycler.getOrCreate(obj, password))
-                    .doOnCancel(() -> {
-                        senderSwitch.setRelease(true);
-                        killSwitch.tryEmitEmpty();
-                    }).doOnError(err -> {
-                        senderSwitch.setRelease(true);
-                        killSwitch.tryEmitEmpty();
-                    }).subscribe(subscriber);
-            this.scheduler.ingest(subscriber);
-        }).doOnCancel(() -> {
-            senderSwitch.setRelease(true);
-            killSwitch.tryEmitEmpty();
-        }).doOnError(err -> {
-            senderSwitch.setRelease(true);
-            killSwitch.tryEmitEmpty();
-        });
+        return response.asFlux()
+                .doOnSubscribe(sub -> {
+                    raw.takeUntilOther(killSwitch.asMono())
+                            .map(obj -> recycler.getOrCreate(obj, password))
+                            .doOnCancel(() -> {
+                                senderSwitch.setRelease(true);
+                                killSwitch.tryEmitEmpty();
+                            })
+                            .doOnError(err -> {
+                                senderSwitch.setRelease(true);
+                                killSwitch.tryEmitEmpty();
+                            })
+                            .subscribe(subscriber);
+                    this.scheduler.ingest(subscriber);
+                })
+                .doOnCancel(() -> {
+                    senderSwitch.setRelease(true);
+                    killSwitch.tryEmitEmpty();
+                })
+                .doOnError(err -> {
+                    senderSwitch.setRelease(true);
+                    killSwitch.tryEmitEmpty();
+                });
     }
 }

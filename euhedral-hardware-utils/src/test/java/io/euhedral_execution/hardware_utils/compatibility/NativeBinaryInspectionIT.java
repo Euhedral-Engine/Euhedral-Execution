@@ -21,19 +21,16 @@ import org.junit.jupiter.api.Test;
 
 class NativeBinaryInspectionIT {
 
-    private static final Pattern JNI_NAME = Pattern.compile(
-            "Name: _?(JNI_OnLoad|Java_[A-Za-z0-9_]+)");
+    private static final Pattern JNI_NAME = Pattern.compile("Name: _?(JNI_OnLoad|Java_[A-Za-z0-9_]+)");
     private static final Pattern HEADER_JNI = Pattern.compile("JNICALL (Java_[A-Za-z0-9_]+)");
     private static final Pattern GLIBC_VERSION = Pattern.compile("GLIBC_([0-9]+)\\.([0-9]+)");
     private static final Pattern PE_IMPORT = Pattern.compile("Import \\{\\s+Name: ([^\\s]+)");
 
-    private static void assertExports(String resource, String output, String osToken)
-            throws Exception {
+    private static void assertExports(String resource, String output, String osToken) throws Exception {
         Set<String> expected = expectedJniExports(osToken);
         expected.add("JNI_OnLoad");
         if (osToken.equals("osx") || osToken.equals("macos")) {
-            expected.add(
-                    "Java_io_euhedral_1execution_hardware_1utils_macos_MacosResources_getCoreTypeMask");
+            expected.add("Java_io_euhedral_1execution_hardware_1utils_macos_MacosResources_getCoreTypeMask");
         }
         String symbolInventory = output;
         int versionSymbols = output.indexOf("VersionSymbols [");
@@ -58,10 +55,11 @@ class NativeBinaryInspectionIT {
         Set<String> exports = new HashSet<>();
         try (Stream<Path> paths = Files.list(declarations)) {
             for (Path header : paths.filter(
-                    path -> path.getFileName().toString().contains('_' + osToken + '_')
-                            || (osToken.equals("osx") && path.getFileName().toString().contains("_macos_"))).toList()) {
-                Matcher matcher = HEADER_JNI.matcher(
-                        Files.readString(header, StandardCharsets.UTF_8));
+                            path -> path.getFileName().toString().contains('_' + osToken + '_')
+                                    || (osToken.equals("osx")
+                                            && path.getFileName().toString().contains("_macos_")))
+                    .toList()) {
+                Matcher matcher = HEADER_JNI.matcher(Files.readString(header, StandardCharsets.UTF_8));
                 while (matcher.find()) {
                     exports.add(matcher.group(1));
                 }
@@ -75,8 +73,11 @@ class NativeBinaryInspectionIT {
         int end = output.indexOf(']', start);
         assertTrue(start >= 0 && end > start, output);
         Set<String> libraries = new HashSet<>();
-        output.substring(start + "NeededLibraries [".length(), end).lines()
-                .map(String::trim).filter(line -> !line.isEmpty()).forEach(libraries::add);
+        output.substring(start + "NeededLibraries [".length(), end)
+                .lines()
+                .map(String::trim)
+                .filter(line -> !line.isEmpty())
+                .forEach(libraries::add);
         return libraries;
     }
 
@@ -125,8 +126,7 @@ class NativeBinaryInspectionIT {
         command.addAll(List.of(arguments));
         Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
         byte[] bytes = process.getInputStream().readNBytes(4 * 1_024 * 1_024 + 1);
-        assertTrue(bytes.length <= 4 * 1_024 * 1_024,
-                "native-package: inspector output is oversized");
+        assertTrue(bytes.length <= 4 * 1_024 * 1_024, "native-package: inspector output is oversized");
         assertTrue(process.waitFor(30, TimeUnit.SECONDS), "native-package: inspector timed out");
         String output = new String(bytes, StandardCharsets.UTF_8);
         assertEquals(0, process.exitValue(), output);
@@ -148,22 +148,30 @@ class NativeBinaryInspectionIT {
                 "bin/windows/windows_jni_x64.dll", "Machine: IMAGE_FILE_MACHINE_AMD64",
                 "bin/windows/windows_jni_arm64.dll", "Machine: IMAGE_FILE_MACHINE_ARM64");
 
-        for (String resource : NativeManifestTest.PRODUCT_PATHS.stream().sorted().toList()) {
+        for (String resource :
+                NativeManifestTest.PRODUCT_PATHS.stream().sorted().toList()) {
             Path product = generated.resolve(resource);
             String output;
             if (resource.endsWith(".so")) {
-                output = run(readobj, "--file-header", "--needed-libs", "--dyn-symbols",
+                output = run(
+                        readobj,
+                        "--file-header",
+                        "--needed-libs",
+                        "--dyn-symbols",
                         "--version-info",
                         product.toString());
                 assertTrue(output.contains("Format: elf64-"), resource);
-                assertEquals(resource.contains("/glibc/") ? Set.of("libc.so.6") : Set.of("libc.so"),
-                        neededLibraries(output), resource);
+                assertEquals(
+                        resource.contains("/glibc/") ? Set.of("libc.so.6") : Set.of("libc.so"),
+                        neededLibraries(output),
+                        resource);
                 if (resource.contains("/glibc/")) {
                     Matcher versions = GLIBC_VERSION.matcher(output);
                     while (versions.find()) {
                         int major = Integer.parseInt(versions.group(1));
                         int minor = Integer.parseInt(versions.group(2));
-                        assertTrue(major < 2 || major == 2 && minor <= 17,
+                        assertTrue(
+                                major < 2 || major == 2 && minor <= 17,
                                 () -> "native-package: GLIBC floor exceeded in " + resource);
                     }
                 } else {
@@ -171,36 +179,37 @@ class NativeBinaryInspectionIT {
                 }
                 assertExports(resource, output, "linux");
             } else if (resource.endsWith(".dll")) {
-                output = run(readobj, "--file-header", "--coff-imports", "--coff-exports",
-                        product.toString());
+                output = run(readobj, "--file-header", "--coff-imports", "--coff-exports", product.toString());
                 assertTrue(output.contains("Format: COFF-"), resource);
-                assertEquals(Set.of(
-                                "KERNEL32.dll",
-                                "api-ms-win-crt-heap-l1-1-0.dll",
-                                "api-ms-win-crt-runtime-l1-1-0.dll"),
-                        peImports(output), resource);
+                assertEquals(
+                        Set.of("KERNEL32.dll", "api-ms-win-crt-heap-l1-1-0.dll", "api-ms-win-crt-runtime-l1-1-0.dll"),
+                        peImports(output),
+                        resource);
                 String lowercase = output.toLowerCase();
                 for (String forbidden : List.of("stdio", "libgcc", "libstdc++", "libc++")) {
                     assertFalse(lowercase.contains(forbidden), resource + " contains " + forbidden);
                 }
                 assertExports(resource, output, "windows");
             } else {
-                output = run(readobj, "--file-header", "--needed-libs", "--macho-version-min",
+                output = run(
+                        readobj,
+                        "--file-header",
+                        "--needed-libs",
+                        "--macho-version-min",
                         "--symbols",
                         product.toString());
                 assertTrue(output.contains("Format: Mach-O "), resource);
                 assertTrue(output.contains("Version: 11.0"), resource);
-                String privateHeaders = run(objdump, "--macho", "--private-headers",
-                        product.toString());
+                String privateHeaders = run(objdump, "--macho", "--private-headers", product.toString());
                 String filename = product.getFileName().toString();
-                assertEquals("@rpath/" + filename, loadCommandName(privateHeaders, "LC_ID_DYLIB"),
+                assertEquals("@rpath/" + filename, loadCommandName(privateHeaders, "LC_ID_DYLIB"), resource);
+                assertEquals(
+                        Set.of("/usr/lib/libSystem.B.dylib"),
+                        loadCommandNames(privateHeaders, "LC_LOAD_DYLIB"),
                         resource);
-                assertEquals(Set.of("/usr/lib/libSystem.B.dylib"),
-                        loadCommandNames(privateHeaders, "LC_LOAD_DYLIB"), resource);
                 assertExports(resource, output, "osx");
             }
-            assertTrue(output.contains(machines.get(resource)),
-                    resource + System.lineSeparator() + output);
+            assertTrue(output.contains(machines.get(resource)), resource + System.lineSeparator() + output);
         }
     }
 
@@ -209,7 +218,8 @@ class NativeBinaryInspectionIT {
         Path signer = executableProperty("rcodesign");
         Path jar = Path.of(System.getProperty("test.jar"));
         Map<String, String> identifiers = Map.of(
-                "bin/osx/osx_jni_x64.dylib", "io.euhedral.execution.hardware-utils.osx-jni-x64",
+                "bin/osx/osx_jni_x64.dylib",
+                "io.euhedral.execution.hardware-utils.osx-jni-x64",
                 "bin/osx/osx_jni_arm64.dylib",
                 "io.euhedral.execution.hardware-utils.osx-jni-arm64");
         Path extraction = Files.createTempDirectory(TestPaths.buildDirectory(), "packaged-macos-");
@@ -225,7 +235,8 @@ class NativeBinaryInspectionIT {
             }
         } finally {
             try (Stream<Path> paths = Files.walk(extraction)) {
-                for (Path path : paths.sorted(java.util.Comparator.reverseOrder()).toList()) {
+                for (Path path :
+                        paths.sorted(java.util.Comparator.reverseOrder()).toList()) {
                     Files.deleteIfExists(path);
                 }
             }

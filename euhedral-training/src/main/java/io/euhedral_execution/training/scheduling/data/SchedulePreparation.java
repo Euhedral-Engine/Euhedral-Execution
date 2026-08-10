@@ -6,12 +6,18 @@ import io.euhedral_execution.training.merge.data.MergeRecords.RobustPolicySummar
 import io.euhedral_execution.training.optimization.data.ScheduledPolicyPrediction;
 import java.util.List;
 
-public record SchedulePreparation(int iteration, int candidateBudget,
-                                  BudgetAllocation requestedAllocation, List<SourceScenario> scenarios,
-                                  List<PolicyVector> fixedAnchors,
-                                  java.util.SortedMap<SourceScenario, List<CarryForwardEntry>> carryByScenario,
-                                  List<RobustPolicySummary> leaders, List<ScheduledPolicyPrediction> measuredPredictions,
-                                  int baseExplorationCount, int preAuditOverflowCount, int disagreementAuditCount) {
+public record SchedulePreparation(
+        int iteration,
+        int candidateBudget,
+        BudgetAllocation requestedAllocation,
+        List<SourceScenario> scenarios,
+        List<PolicyVector> fixedAnchors,
+        java.util.SortedMap<SourceScenario, List<CarryForwardEntry>> carryByScenario,
+        List<RobustPolicySummary> leaders,
+        List<ScheduledPolicyPrediction> measuredPredictions,
+        int baseExplorationCount,
+        int preAuditOverflowCount,
+        int disagreementAuditCount) {
     public SchedulePreparation {
         scenarios = List.copyOf(scenarios);
         fixedAnchors = List.copyOf(fixedAnchors);

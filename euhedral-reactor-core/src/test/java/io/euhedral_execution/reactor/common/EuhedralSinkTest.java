@@ -27,8 +27,7 @@ class EuhedralSinkTest {
     @Test
     void callbackFramesEmitTheirMappedResult() {
         EuhedralSink<Integer, String> sink = new EuhedralSink<>(new MpmcQueue<>(8));
-        CallbackFrame<Integer, String> frame =
-                new CallbackFrame<>(1, 7, value -> "value-" + value, sink);
+        CallbackFrame<Integer, String> frame = new CallbackFrame<>(1, 7, value -> "value-" + value, sink);
 
         StepVerifier.create(sink.asFlux())
                 .then(frame::execute)
@@ -41,8 +40,7 @@ class EuhedralSinkTest {
     void cancelledFramesStopBeforeEmitting() {
         EuhedralSink<Integer, Integer> sink = new EuhedralSink<>(new MpmcQueue<>(8));
         AtomicBoolean cancelled = new AtomicBoolean(true);
-        CallbackFrame<Integer, Integer> frame =
-                new CallbackFrame<>(1, 7, value -> value, sink, null, cancelled);
+        CallbackFrame<Integer, Integer> frame = new CallbackFrame<>(1, 7, value -> value, sink, null, cancelled);
 
         assertThrows(CancelSignal.class, () -> sink.push(frame));
     }

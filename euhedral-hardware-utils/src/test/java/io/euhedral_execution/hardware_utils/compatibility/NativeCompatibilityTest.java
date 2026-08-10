@@ -34,9 +34,10 @@ class NativeCompatibilityTest {
         StringBuilder contents = new StringBuilder();
         try (Stream<Path> paths = Files.walk(resources)) {
             for (Path path : paths.filter(Files::isRegularFile)
-                    .filter(file -> file.toString().endsWith(".cpp")
-                            || file.toString().endsWith(".h"))
-                    .sorted().toList()) {
+                    .filter(file ->
+                            file.toString().endsWith(".cpp") || file.toString().endsWith(".h"))
+                    .sorted()
+                    .toList()) {
                 contents.append(Files.readString(path, StandardCharsets.UTF_8)).append('\n');
             }
         }
@@ -56,36 +57,41 @@ class NativeCompatibilityTest {
         ApiSurface baselineNatives = new ApiSurface(contract.entries().values().stream()
                 .filter(entry -> entry.kind().equals("native"))
                 .toList());
-        ApiSurface currentNatives = new ApiSurface(
-                ApiSurfaceReader.readNativeDeclarations(TestPaths.classesDirectory()));
+        ApiSurface currentNatives =
+                new ApiSurface(ApiSurfaceReader.readNativeDeclarations(TestPaths.classesDirectory()));
         CompatibilityReport report = ApiSurfaceComparator.compare(baselineNatives, currentNatives);
         assertTrue(report.passes(), report::render);
         currentNatives.entries().values().stream()
                 .collect(java.util.stream.Collectors.groupingBy(
                         entry -> entry.key().substring(0, entry.key().indexOf('('))))
-                .values().stream()
+                .values()
+                .stream()
                 .filter(overloads -> overloads.size() > 1)
                 .flatMap(List::stream)
-                .forEach(entry -> assertTrue(entry.value().contains(";long-jni="),
+                .forEach(entry -> assertTrue(
+                        entry.value().contains(";long-jni="),
                         () -> "overloaded native lacks a long JNI name: " + entry.key()));
 
         String nativeSources = readNativeSources();
         DefectLedger ledger = DefectLedger.read(TestPaths.resource("defect-ledger.tsv"));
         for (Entry declaration : baselineNatives.entries().values()) {
-            String symbolAndSuffix = declaration.value().substring(
-                    declaration.value().indexOf(";jni=") + 5);
+            String symbolAndSuffix =
+                    declaration.value().substring(declaration.value().indexOf(";jni=") + 5);
             int suffix = symbolAndSuffix.indexOf(';');
             String symbol = suffix < 0 ? symbolAndSuffix : symbolAndSuffix.substring(0, suffix);
-            assertTrue(nativeSources.contains(symbol) || ledger.hasSubject("jni:" + symbol),
+            assertTrue(
+                    nativeSources.contains(symbol) || ledger.hasSubject("jni:" + symbol),
                     () -> "missing native symbol without exact ledger record: " + symbol);
         }
         assertTrue(ledger.hasSubject(
                 "jni:Java_io_euhedral_1execution_hardware_1utils_windows_WindowsAffinity_ntSetTimerResolution"));
         assertTrue(ledger.hasSubject(
                 "jni:Java_io_euhedral_1execution_hardware_1utils_osx_OSXSystemLayout_getSysctlString"));
-        assertEquals(Set.of("N01", "N02"), contract.entries().values().stream()
-                .filter(entry -> entry.kind().equals("native-exception"))
-                .map(Entry::key)
-                .collect(java.util.stream.Collectors.toSet()));
+        assertEquals(
+                Set.of("N01", "N02"),
+                contract.entries().values().stream()
+                        .filter(entry -> entry.kind().equals("native-exception"))
+                        .map(Entry::key)
+                        .collect(java.util.stream.Collectors.toSet()));
     }
 }

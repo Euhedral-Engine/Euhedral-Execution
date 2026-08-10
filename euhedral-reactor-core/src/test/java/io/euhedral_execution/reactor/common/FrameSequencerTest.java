@@ -14,6 +14,11 @@ import reactor.test.StepVerifier;
 
 class FrameSequencerTest {
 
+    private static void execute(SequencedFrame<?, ?> frame) {
+        frame.execute();
+        frame.doFinally();
+    }
+
     @Test
     void emitsResultsInInputOrderAfterOutOfOrderExecution() {
         FrameSequencer<Integer, String> sequencer = new FrameSequencer<>(123);
@@ -39,12 +44,9 @@ class FrameSequencerTest {
         IllegalStateException failure = new IllegalStateException("boom");
         List<SequencedFrame<Integer, Integer>> frames = new ArrayList<>();
 
-        sequencer.flatMapSequential(
-                        Flux.concat(Flux.just(1), Flux.error(failure)),
-                        value -> value * 2,
-                        1)
-                .subscribe(frames::add, ignored -> {
-                });
+        sequencer
+                .flatMapSequential(Flux.concat(Flux.just(1), Flux.error(failure)), value -> value * 2, 1)
+                .subscribe(frames::add, ignored -> {});
 
         assertEquals(1, frames.size());
         assertFalse(frames.get(0).isAlive());
@@ -58,12 +60,6 @@ class FrameSequencerTest {
         FrameSequencer<Integer, Integer> sequencer = new FrameSequencer<>(789);
         sequencer.flatMapSequential(Flux.empty(), value -> value, 0).blockLast();
 
-        assertThrows(IllegalStateException.class,
-                () -> sequencer.flatMapSequential(Flux.empty(), value -> value, 0));
-    }
-
-    private static void execute(SequencedFrame<?, ?> frame) {
-        frame.execute();
-        frame.doFinally();
+        assertThrows(IllegalStateException.class, () -> sequencer.flatMapSequential(Flux.empty(), value -> value, 0));
     }
 }

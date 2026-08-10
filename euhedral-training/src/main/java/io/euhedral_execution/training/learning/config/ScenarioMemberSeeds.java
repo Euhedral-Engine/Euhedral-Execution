@@ -7,13 +7,14 @@ import java.util.Set;
 
 public final class ScenarioMemberSeeds {
 
-    static final Set<String> TRAINING_KINDS = Set.of("PRODUCTION", "TEST_LOSO",
-            "VALIDATION_CONTEXT_LOSO", "VALIDATION_COUNTS_LOEO");
+    static final Set<String> TRAINING_KINDS =
+            Set.of("PRODUCTION", "TEST_LOSO", "VALIDATION_CONTEXT_LOSO", "VALIDATION_COUNTS_LOEO");
 
-    public static long derive(long modelSeed, String trainingKind, ScenarioFeatureSet featureSet,
-            String foldId, int memberIndex) {
-        if (!TRAINING_KINDS.contains(trainingKind) || foldId == null || foldId.isBlank()
-                || memberIndex < 0) {
+    private ScenarioMemberSeeds() {}
+
+    public static long derive(
+            long modelSeed, String trainingKind, ScenarioFeatureSet featureSet, String foldId, int memberIndex) {
+        if (!TRAINING_KINDS.contains(trainingKind) || foldId == null || foldId.isBlank() || memberIndex < 0) {
             throw new IllegalArgumentException("Invalid member seed identity");
         }
         String material = "scenario-ordinal-member-seed-v1\n"
@@ -26,8 +27,5 @@ public final class ScenarioMemberSeeds {
 
     public static int engineSeed(long memberSeed) {
         return Long.hashCode(memberSeed);
-    }
-
-    private ScenarioMemberSeeds() {
     }
 }

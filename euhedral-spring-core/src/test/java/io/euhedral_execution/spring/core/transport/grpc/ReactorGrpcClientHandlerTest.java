@@ -19,7 +19,7 @@ import reactor.util.context.Context;
 class ReactorGrpcClientHandlerTest {
 
     private static GrpcMessage message(int value) {
-        return GrpcUtils.toGrpc(null, new byte[]{(byte) value}, true);
+        return GrpcUtils.toGrpc(null, new byte[] {(byte) value}, true);
     }
 
     @Test

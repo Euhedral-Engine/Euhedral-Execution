@@ -27,9 +27,14 @@ import java.util.TreeMap;
 
 public final class AnchorBootstrapper {
 
-    public static CalibrationPlan bootstrap(List<RunAggregate> rawRunAggregates,
-            SortedSet<SourceScenario> requiredScenarios, int policyBudget,
-            Map<SourceScenario, String> referenceOverrides, AnchorSelectionConfig anchorConfig,
+    private AnchorBootstrapper() {}
+
+    public static CalibrationPlan bootstrap(
+            List<RunAggregate> rawRunAggregates,
+            SortedSet<SourceScenario> requiredScenarios,
+            int policyBudget,
+            Map<SourceScenario, String> referenceOverrides,
+            AnchorSelectionConfig anchorConfig,
             AggregationConfig aggregationConfig) {
         Objects.requireNonNull(rawRunAggregates);
         Objects.requireNonNull(requiredScenarios);
@@ -48,26 +53,24 @@ public final class AnchorBootstrapper {
             if (override != null) {
                 List<RunAggregate> run = requireRun(byRun, override, scenario);
                 if (!bootstrapOriginAllowed(run.getFirst(), anchorConfig)) {
-                    throw new IllegalArgumentException(
-                            "Imported reference is not allowed: " + override);
+                    throw new IllegalArgumentException("Imported reference is not allowed: " + override);
                 }
                 references.put(scenario, override);
                 continue;
             }
             String selected = byRun.values().stream()
-                    .filter(rows -> rows.getFirst().run().descriptor().scenario().equals(scenario))
-                    .filter(rows -> bootstrapOriginAllowed(rows.getFirst(), anchorConfig))
                     .filter(rows ->
-                            rows.stream().anyMatch(row -> validBootstrap(row, anchorConfig)))
-                    .sorted(Comparator.comparing(
-                                    (List<RunAggregate> rows) -> rows.getFirst().run().descriptor()
-                                            .startedAt())
+                            rows.getFirst().run().descriptor().scenario().equals(scenario))
+                    .filter(rows -> bootstrapOriginAllowed(rows.getFirst(), anchorConfig))
+                    .filter(rows -> rows.stream().anyMatch(row -> validBootstrap(row, anchorConfig)))
+                    .sorted(Comparator.comparing((List<RunAggregate> rows) ->
+                                    rows.getFirst().run().descriptor().startedAt())
                             .thenComparing(
                                     rows -> rows.getFirst().run().descriptor().benchmarkRunId()))
                     .map(rows -> rows.getFirst().run().descriptor().benchmarkRunId())
-                    .findFirst().orElseThrow(() -> new IllegalArgumentException(
-                            "No valid bootstrap evidence exists to seed a reference run for "
-                                    + scenario.canonical()));
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            "No valid bootstrap evidence exists to seed a reference run for " + scenario.canonical()));
             references.put(scenario, selected);
         }
         SortedMap<PolicyId, PolicyVector> common = null;
@@ -103,8 +106,8 @@ public final class AnchorBootstrapper {
             }
         }
         List<ScenarioResult> ranked = ScenarioQualityRanker.assignQualities(provisional);
-        List<MergeRecords.RobustPolicySummary> summaries = new ArrayList<>(
-                ScenarioQualityRanker.summarize(common.values(), ranked, requiredScenarios));
+        List<MergeRecords.RobustPolicySummary> summaries =
+                new ArrayList<>(ScenarioQualityRanker.summarize(common.values(), ranked, requiredScenarios));
         summaries.sort(AnchorBootstrapper::compareWorstFirst);
         int population = summaries.size();
         SortedMap<PolicyId, PolicyVector> selected = new TreeMap<>();
@@ -117,38 +120,49 @@ public final class AnchorBootstrapper {
             throw new IllegalStateException("Strata selected duplicates");
         }
         AnchorCatalog catalog = AnchorCatalog.of(List.copyOf(selected.values()));
-        return new CalibrationPlan(catalog,
-                new ReferenceRunCatalog(1, catalog.anchorSetId(), references));
+        return new CalibrationPlan(catalog, new ReferenceRunCatalog(1, catalog.anchorSetId(), references));
     }
 
     private static ScenarioResult provisional(RunAggregate row) {
-        return new ScenarioResult(row.run().descriptor().scenario(), row.policy(),
-                ScenarioResultStatus.VALID_STRONG, 1, 1, 0, 0,
-                row.successfulRepetitionCount(), row.plannedRepetitionCount(),
-                row.rawP25(), row.rawMedian(), row.rawP75(), row.rawIqr(),
+        return new ScenarioResult(
+                row.run().descriptor().scenario(),
+                row.policy(),
+                ScenarioResultStatus.VALID_STRONG,
+                1,
+                1,
+                0,
+                0,
+                row.successfulRepetitionCount(),
+                row.plannedRepetitionCount(),
+                row.rawP25(),
+                row.rawMedian(),
+                row.rawP75(),
+                row.rawIqr(),
                 OptionalDouble.of(row.rawIqr().getAsDouble() / row.rawMedian().getAsDouble()),
-                OptionalDouble.of(row.timeoutRate()), OptionalDouble.of(row.failureRate()),
-                OptionalDouble.of(row.nonSuccessRate()), row.rawMedian(), row.rawMedian(),
+                OptionalDouble.of(row.timeoutRate()),
+                OptionalDouble.of(row.failureRate()),
+                OptionalDouble.of(row.nonSuccessRate()),
+                row.rawMedian(),
+                row.rawMedian(),
                 OptionalDouble.empty());
     }
 
     private static boolean validBootstrap(RunAggregate row, AnchorSelectionConfig config) {
         return row.status() == RunAggregateStatus.VALID
-                && row.successfulRepetitionCount() >= 3 && row.successRate() >= 0.5
+                && row.successfulRepetitionCount() >= 3
+                && row.successRate() >= 0.5
                 && row.nonSuccessRate() <= config.maximumBootstrapNonSuccessRate()
-                && row.rawMedian().isPresent() && row.rawMedian().getAsDouble() > 0
-                && row.rawIqr().getAsDouble() / row.rawMedian().getAsDouble()
-                <= config.maximumBootstrapRelativeIqr();
+                && row.rawMedian().isPresent()
+                && row.rawMedian().getAsDouble() > 0
+                && row.rawIqr().getAsDouble() / row.rawMedian().getAsDouble() <= config.maximumBootstrapRelativeIqr();
     }
 
-    private static boolean bootstrapOriginAllowed(RunAggregate row,
-            AnchorSelectionConfig config) {
-        return row.run().descriptor().evidenceOrigin() == EvidenceOrigin.NATIVE
-                || config.allowImportedBootstrap();
+    private static boolean bootstrapOriginAllowed(RunAggregate row, AnchorSelectionConfig config) {
+        return row.run().descriptor().evidenceOrigin() == EvidenceOrigin.NATIVE || config.allowImportedBootstrap();
     }
 
-    private static List<RunAggregate> requireRun(Map<String, List<RunAggregate>> byRun,
-            String runId, SourceScenario scenario) {
+    private static List<RunAggregate> requireRun(
+            Map<String, List<RunAggregate>> byRun, String runId, SourceScenario scenario) {
         List<RunAggregate> rows = byRun.get(runId);
         if (rows == null || !rows.getFirst().run().descriptor().scenario().equals(scenario)) {
             throw new IllegalArgumentException("Reference override does not match scenario");
@@ -159,11 +173,12 @@ public final class AnchorBootstrapper {
     private static Map<String, List<RunAggregate>> groupByRun(List<RunAggregate> rows) {
         Map<String, List<RunAggregate>> result = new TreeMap<>();
         for (RunAggregate row : rows) {
-            List<RunAggregate> group = result.computeIfAbsent(
-                    row.run().descriptor().benchmarkRunId(), ignored -> new ArrayList<>());
+            List<RunAggregate> group =
+                    result.computeIfAbsent(row.run().descriptor().benchmarkRunId(), ignored -> new ArrayList<>());
             if ((!group.isEmpty() && !group.getFirst().run().equals(row.run()))
-                    || group.stream().anyMatch(existing ->
-                    existing.policy().id().equals(row.policy().id()))) {
+                    || group.stream()
+                            .anyMatch(existing ->
+                                    existing.policy().id().equals(row.policy().id()))) {
                 throw new IllegalArgumentException("Ambiguous bootstrap run aggregate");
             }
             group.add(row);
@@ -171,33 +186,36 @@ public final class AnchorBootstrapper {
         return result;
     }
 
-    private static int compareWorstFirst(MergeRecords.RobustPolicySummary left,
-            MergeRecords.RobustPolicySummary right) {
-        int result = Double.compare(left.worstQuality().getAsDouble(),
-                right.worstQuality().getAsDouble());
+    private static int compareWorstFirst(
+            MergeRecords.RobustPolicySummary left, MergeRecords.RobustPolicySummary right) {
+        int result = Double.compare(
+                left.worstQuality().getAsDouble(), right.worstQuality().getAsDouble());
         if (result == 0) {
-            result = Double.compare(left.qualityP25().getAsDouble(),
-                    right.qualityP25().getAsDouble());
+            result = Double.compare(
+                    left.qualityP25().getAsDouble(), right.qualityP25().getAsDouble());
         }
         if (result == 0) {
-            result = Double.compare(left.geometricMeanQuality().getAsDouble(),
+            result = Double.compare(
+                    left.geometricMeanQuality().getAsDouble(),
                     right.geometricMeanQuality().getAsDouble());
         }
         if (result == 0) {
-            result = Double.compare(right.crossScenarioQualityMad().getAsDouble(),
+            result = Double.compare(
+                    right.crossScenarioQualityMad().getAsDouble(),
                     left.crossScenarioQualityMad().getAsDouble());
         }
         if (result == 0) {
-            result = Double.compare(right.medianRelativeIqr().getAsDouble(),
+            result = Double.compare(
+                    right.medianRelativeIqr().getAsDouble(),
                     left.medianRelativeIqr().getAsDouble());
         }
         if (result == 0) {
-            result = Double.compare(right.meanNonSuccessRate().getAsDouble(),
+            result = Double.compare(
+                    right.meanNonSuccessRate().getAsDouble(),
                     left.meanNonSuccessRate().getAsDouble());
         }
-        return result != 0 ? result : left.policy().id().compareTo(right.policy().id());
-    }
-
-    private AnchorBootstrapper() {
+        return result != 0
+                ? result
+                : left.policy().id().compareTo(right.policy().id());
     }
 }

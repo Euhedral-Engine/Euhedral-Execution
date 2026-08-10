@@ -5,6 +5,8 @@ import java.util.List;
 
 final class StrictCsv {
 
+    private StrictCsv() {}
+
     static String row(List<String> fields) {
         StringBuilder result = new StringBuilder();
         for (int i = 0; i < fields.size(); i++) {
@@ -12,8 +14,10 @@ final class StrictCsv {
                 result.append(',');
             }
             String field = fields.get(i);
-            if (field.indexOf(',') >= 0 || field.indexOf('"') >= 0
-                    || field.indexOf('\r') >= 0 || field.indexOf('\n') >= 0) {
+            if (field.indexOf(',') >= 0
+                    || field.indexOf('"') >= 0
+                    || field.indexOf('\r') >= 0
+                    || field.indexOf('\n') >= 0) {
                 result.append('"').append(field.replace("\"", "\"\"")).append('"');
             } else {
                 result.append(field);
@@ -81,8 +85,5 @@ final class StrictCsv {
 
     static String hex(long value) {
         return String.format("%016x", value);
-    }
-
-    private StrictCsv() {
     }
 }

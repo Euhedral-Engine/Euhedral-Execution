@@ -47,12 +47,12 @@ public class RepeatingSink extends AbstractIngestSink {
         }
 
         @Override
-        public long hookOnPull(Consumer<AbstractFrame> consumer,
-                Function<AbstractFrame, Boolean> stopCondition, long demand) {
+        public long hookOnPull(
+                Consumer<AbstractFrame> consumer, Function<AbstractFrame, Boolean> stopCondition, long demand) {
             long total = 0;
             while (total < demand && !this.complete.getOpaque()) {
                 AbstractFrame frame = this.array[this.start];
-                if(stopCondition.apply(frame)) {
+                if (stopCondition.apply(frame)) {
                     break;
                 }
                 this.start++;

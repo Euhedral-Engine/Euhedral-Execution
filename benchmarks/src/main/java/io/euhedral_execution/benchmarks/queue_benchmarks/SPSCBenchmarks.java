@@ -24,8 +24,8 @@ import org.openjdk.jmh.infra.Blackhole;
 @State(Scope.Benchmark)
 public class SPSCBenchmarks {
 
-    private record QueueConsumer(Blackhole blackhole) implements Consumer<Integer>,
-            MessagePassingQueue.Consumer<Integer> {
+    private record QueueConsumer(Blackhole blackhole)
+            implements Consumer<Integer>, MessagePassingQueue.Consumer<Integer> {
 
         @Override
         public void accept(Integer integer) {
@@ -41,10 +41,8 @@ public class SPSCBenchmarks {
     @Fork(3)
     public static class OfferWhileDrain {
 
-        private final SpscUnboundedVarHandleArrayQueue<Integer> jcTools = new SpscUnboundedVarHandleArrayQueue<>(
-                1024);
-        private final SpscQueue<Integer> euhedral = new SpscQueue<>(
-                1024, 2);
+        private final SpscUnboundedVarHandleArrayQueue<Integer> jcTools = new SpscUnboundedVarHandleArrayQueue<>(1024);
+        private final SpscQueue<Integer> euhedral = new SpscQueue<>(1024, 2);
         private PinnedThreadExecutor executor;
         private QueueConsumer consumer;
 
@@ -116,8 +114,7 @@ public class SPSCBenchmarks {
     @Fork(3)
     public static class BatchDrain {
 
-        private final SpscUnboundedVarHandleArrayQueue<Integer> jcTools = new SpscUnboundedVarHandleArrayQueue<>(
-                1024);
+        private final SpscUnboundedVarHandleArrayQueue<Integer> jcTools = new SpscUnboundedVarHandleArrayQueue<>(1024);
         private final SpscQueue<Integer> euhedral = new SpscQueue<>(1024);
 
         private QueueConsumer consumer;

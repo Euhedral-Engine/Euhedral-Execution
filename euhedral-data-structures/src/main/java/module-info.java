@@ -1,6 +1,5 @@
 module euhedral.data_structures {
     requires static lombok;
-
     requires java.management;
     requires jdk.management;
     requires org.jspecify;

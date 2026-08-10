@@ -8,6 +8,8 @@ import java.util.HexFormat;
 
 final class FilesSupport {
 
+    private FilesSupport() {}
+
     static String sha256(Path path) throws Exception {
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
         try (InputStream input = Files.newInputStream(path)) {
@@ -18,8 +20,5 @@ final class FilesSupport {
             }
         }
         return HexFormat.of().formatHex(digest.digest());
-    }
-
-    private FilesSupport() {
     }
 }

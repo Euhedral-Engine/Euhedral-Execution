@@ -13,7 +13,7 @@ class WindowsAffinityTest {
     @Test
     void passesValidMaskToRawCall() {
         AtomicInteger calls = new AtomicInteger();
-        assertTrue(WindowsAffinityCalls.apply(new long[]{1}, mask -> {
+        assertTrue(WindowsAffinityCalls.apply(new long[] {1}, mask -> {
             calls.incrementAndGet();
             return 0;
         }));
@@ -23,7 +23,7 @@ class WindowsAffinityTest {
     @Test
     void returnsFalseWhenRawCallFails() {
         AtomicInteger calls = new AtomicInteger();
-        assertFalse(WindowsAffinityCalls.apply(new long[]{1}, mask -> {
+        assertFalse(WindowsAffinityCalls.apply(new long[] {1}, mask -> {
             calls.incrementAndGet();
             return -1; // Native error code / failure
         }));
@@ -33,11 +33,11 @@ class WindowsAffinityTest {
     @Test
     void rejectsEmptyOrInvalidMasks() {
         AtomicInteger calls = new AtomicInteger();
-        assertFalse(WindowsAffinityCalls.apply(new long[]{0}, mask -> {
+        assertFalse(WindowsAffinityCalls.apply(new long[] {0}, mask -> {
             calls.incrementAndGet();
             return 0;
         }));
-        assertFalse(WindowsAffinityCalls.apply(new long[]{}, mask -> {
+        assertFalse(WindowsAffinityCalls.apply(new long[] {}, mask -> {
             calls.incrementAndGet();
             return 0;
         }));

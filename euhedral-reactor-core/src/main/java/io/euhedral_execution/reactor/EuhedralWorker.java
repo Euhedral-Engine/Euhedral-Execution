@@ -19,16 +19,15 @@ import reactor.core.scheduler.Scheduler.Worker;
 @SuppressWarnings("unused")
 public final class EuhedralWorker extends AbstractIngestSink implements Worker {
 
-    static EuhedralWorker spawn(int chunkSize, int maxPooledChunks) {
-        return new EuhedralWorker(chunkSize, maxPooledChunks);
-    }
-
     private final Delegate delegate;
     private final long idHash;
-
     EuhedralWorker(int chunkSize, int maxPooledChunks) {
         this.delegate = new Delegate(chunkSize, maxPooledChunks);
         this.idHash = HasherApi.mix(ThreadLocalRandom.current().nextLong());
+    }
+
+    static EuhedralWorker spawn(int chunkSize, int maxPooledChunks) {
+        return new EuhedralWorker(chunkSize, maxPooledChunks);
     }
 
     public void submit(TaskFrame frame) {
@@ -44,16 +43,15 @@ public final class EuhedralWorker extends AbstractIngestSink implements Worker {
     }
 
     @Override
-    public @NonNull Disposable schedule(@NonNull Runnable task, long delay,
-            @NonNull TimeUnit unit) {
+    public @NonNull Disposable schedule(@NonNull Runnable task, long delay, @NonNull TimeUnit unit) {
         Objects.requireNonNull(task);
         Objects.requireNonNull(unit);
         return schedulePeriodically(task, delay, 0, unit);
     }
 
     @Override
-    public @NonNull Disposable schedulePeriodically(@NonNull Runnable task, long delay, long period,
-            @NonNull TimeUnit unit) {
+    public @NonNull Disposable schedulePeriodically(
+            @NonNull Runnable task, long delay, long period, @NonNull TimeUnit unit) {
         Objects.requireNonNull(task);
         Objects.requireNonNull(unit);
         return TaskFrame.create(this.idHash, task, this, delay, period, unit);
@@ -88,14 +86,13 @@ public final class EuhedralWorker extends AbstractIngestSink implements Worker {
 
         private final PartitionedMpscQueue<TaskFrame> queue;
 
-
         Delegate(int chunkSize, int maxPooledChunks) {
             this.queue = new PartitionedMpscQueue<>(1, chunkSize, maxPooledChunks);
         }
 
         @Override
-        public long hookOnPull(Consumer<AbstractFrame> consumer,
-                Function<AbstractFrame, Boolean> stopCondition, long demand) {
+        public long hookOnPull(
+                Consumer<AbstractFrame> consumer, Function<AbstractFrame, Boolean> stopCondition, long demand) {
             return 0;
         }
 

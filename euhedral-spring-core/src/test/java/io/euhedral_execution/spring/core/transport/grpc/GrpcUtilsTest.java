@@ -25,16 +25,15 @@ class GrpcUtilsTest {
         headers.put("enabled", true);
         headers.put("nested", Map.of("values", List.of("one", 2)));
 
-        GrpcMessage encoded = GrpcUtils.toGrpc(headers, new byte[]{1, 2, 3}, true);
+        GrpcMessage encoded = GrpcUtils.toGrpc(headers, new byte[] {1, 2, 3}, true);
         Message<byte[]> decoded = GrpcUtils.toSpringMessage(encoded);
 
         assertTrue(encoded.getIsOrdered());
-        assertArrayEquals(new byte[]{1, 2, 3}, decoded.getPayload());
+        assertArrayEquals(new byte[] {1, 2, 3}, decoded.getPayload());
         assertEquals("sample", decoded.getHeaders().get("name"));
         assertEquals(3L, decoded.getHeaders().get("attempt"));
         assertEquals(true, decoded.getHeaders().get("enabled"));
-        assertEquals(Map.of("values", List.of("one", 2L)),
-                decoded.getHeaders().get("nested"));
+        assertEquals(Map.of("values", List.of("one", 2L)), decoded.getHeaders().get("nested"));
     }
 
     @Test
@@ -55,18 +54,18 @@ class GrpcUtilsTest {
 
     @Test
     void nullHeadersProduceAnUnorderedMessageWithNoApplicationHeaders() {
-        GrpcMessage encoded = GrpcUtils.toGrpc(null, new byte[]{9}, false);
+        GrpcMessage encoded = GrpcUtils.toGrpc(null, new byte[] {9}, false);
         Message<byte[]> decoded = GrpcUtils.toSpringMessage(encoded);
 
         assertFalse(encoded.getIsOrdered());
-        assertArrayEquals(new byte[]{9}, decoded.getPayload());
+        assertArrayEquals(new byte[] {9}, decoded.getPayload());
         assertTrue(encoded.getSpringMessage().getHeaders().getFieldsMap().isEmpty());
     }
 
     @Test
     void rejectsGrpcEnvelopeWithoutSpringMessage() {
-        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
-                () -> GrpcUtils.toSpringMessage(GrpcMessage.getDefaultInstance()));
+        IllegalArgumentException error = assertThrows(
+                IllegalArgumentException.class, () -> GrpcUtils.toSpringMessage(GrpcMessage.getDefaultInstance()));
 
         assertEquals("Provided message does not contain a Spring message", error.getMessage());
     }

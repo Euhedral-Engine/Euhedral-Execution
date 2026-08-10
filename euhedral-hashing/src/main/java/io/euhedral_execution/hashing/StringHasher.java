@@ -2,6 +2,8 @@ package io.euhedral_execution.hashing;
 
 public final class StringHasher extends AbstractHasher {
 
+    private StringHasher() {}
+
     public static long getHash(String s1, String s2) {
         return StringHasher.getHash(s2, getHash(s1));
     }
@@ -54,17 +56,13 @@ public final class StringHasher extends AbstractHasher {
     }
 
     private static long readLongFromChars(String s, int i) {
-        return s.charAt(i) |
-                ((long) s.charAt(i + 1) << 16) |
-                ((long) s.charAt(i + 2) << 32) |
-                ((long) s.charAt(i + 3) << 48);
+        return s.charAt(i)
+                | ((long) s.charAt(i + 1) << 16)
+                | ((long) s.charAt(i + 2) << 32)
+                | ((long) s.charAt(i + 3) << 48);
     }
 
     private static int readIntFromChars(String s, int i) {
         return s.charAt(i) | (s.charAt(i + 1) << 16);
-    }
-
-    private StringHasher() {
-
     }
 }

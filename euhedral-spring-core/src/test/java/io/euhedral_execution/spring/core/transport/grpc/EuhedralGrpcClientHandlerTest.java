@@ -17,15 +17,14 @@ import org.junit.jupiter.api.Test;
 class EuhedralGrpcClientHandlerTest {
 
     private static GrpcMessage message(int value, boolean ordered) {
-        return GrpcUtils.toGrpc(null, new byte[]{(byte) value}, ordered);
+        return GrpcUtils.toGrpc(null, new byte[] {(byte) value}, ordered);
     }
 
     @Test
     void demandCreatesFramesAndResponsesWaitForTransportReadiness() {
         RecordingClientObserver transport = new RecordingClientObserver();
         RecordingReceiver receiver = new RecordingReceiver();
-        EuhedralGrpcClientHandler handler =
-                new EuhedralGrpcClientHandler(CommunicationMethod.BIDI, 8, 4);
+        EuhedralGrpcClientHandler handler = new EuhedralGrpcClientHandler(CommunicationMethod.BIDI, 8, 4);
         handler.beforeStart(transport);
         handler.addDownstream(receiver);
 
@@ -56,8 +55,7 @@ class EuhedralGrpcClientHandlerTest {
     void completionAndErrorAreDeliveredAtMostOnce() {
         RecordingClientObserver completedTransport = new RecordingClientObserver();
         RecordingReceiver completedReceiver = new RecordingReceiver();
-        EuhedralGrpcClientHandler completed =
-                new EuhedralGrpcClientHandler(CommunicationMethod.BIDI, 4, 4);
+        EuhedralGrpcClientHandler completed = new EuhedralGrpcClientHandler(CommunicationMethod.BIDI, 4, 4);
         completed.beforeStart(completedTransport);
         completed.addDownstream(completedReceiver);
 
@@ -70,8 +68,7 @@ class EuhedralGrpcClientHandlerTest {
 
         RecordingClientObserver failedTransport = new RecordingClientObserver();
         RecordingReceiver failedReceiver = new RecordingReceiver();
-        EuhedralGrpcClientHandler failed =
-                new EuhedralGrpcClientHandler(CommunicationMethod.BIDI, 4, 4);
+        EuhedralGrpcClientHandler failed = new EuhedralGrpcClientHandler(CommunicationMethod.BIDI, 4, 4);
         failed.beforeStart(failedTransport);
         failed.addDownstream(failedReceiver);
         IllegalStateException failure = new IllegalStateException("failure");
@@ -86,8 +83,7 @@ class EuhedralGrpcClientHandlerTest {
 
     @Test
     void onlyOneDownstreamCanBeRegistered() {
-        EuhedralGrpcClientHandler handler =
-                new EuhedralGrpcClientHandler(CommunicationMethod.BIDI, 4, 4);
+        EuhedralGrpcClientHandler handler = new EuhedralGrpcClientHandler(CommunicationMethod.BIDI, 4, 4);
         handler.beforeStart(new RecordingClientObserver());
         RecordingReceiver first = new RecordingReceiver();
         RecordingReceiver second = new RecordingReceiver();
@@ -103,8 +99,7 @@ class EuhedralGrpcClientHandlerTest {
     void cancelPropagatesCauseAndCompletesTheSource() {
         RecordingClientObserver transport = new RecordingClientObserver();
         RecordingReceiver receiver = new RecordingReceiver();
-        EuhedralGrpcClientHandler handler =
-                new EuhedralGrpcClientHandler(CommunicationMethod.BIDI, 4, 4);
+        EuhedralGrpcClientHandler handler = new EuhedralGrpcClientHandler(CommunicationMethod.BIDI, 4, 4);
         handler.beforeStart(transport);
         handler.addDownstream(receiver);
         RuntimeException cause = new RuntimeException("cancelled");

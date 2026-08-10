@@ -27,34 +27,26 @@ import java.util.function.Function;
 @SuppressWarnings("unused")
 public class EuhedralGrpcServerHandler implements LatticeSource, StreamObserver<GrpcMessage> {
 
-    private static final VarHandle COMPLETE = CommonVarHandles.complete(MethodHandles.lookup(),
-            EuhedralGrpcServerHandler.class);
-    private static final VarHandle DOWNSTREAM = CommonVarHandles.downstream(MethodHandles.lookup(),
-            EuhedralGrpcServerHandler.class);
-
-    private static long addPending(long num1, long num2) {
-        long sum = num1 + num2;
-        return sum < 0 || sum > Integer.MAX_VALUE ? Integer.MAX_VALUE : sum;
-    }
-
+    private static final VarHandle COMPLETE =
+            CommonVarHandles.complete(MethodHandles.lookup(), EuhedralGrpcServerHandler.class);
+    private static final VarHandle DOWNSTREAM =
+            CommonVarHandles.downstream(MethodHandles.lookup(), EuhedralGrpcServerHandler.class);
     private final CallStreamObserver<GrpcMessage> client;
     private final CommunicationMethod method;
     private final long ingestPassword;
     private final FrameManager<GrpcMessage, GrpcFrame> manager;
-
     private final MpmcQueue<GrpcMessage> responseQueue;
-
     private final AtomicLong pending = new AtomicLong(0);
-
     private Runnable onCompleteCallback;
-
     private LatticeReceiver downstream = null;
     private boolean complete = false;
-
     private long seed = HasherApi.mix(ThreadLocalRandom.current().nextLong());
 
-    public EuhedralGrpcServerHandler(ServerCallStreamObserver<GrpcMessage> client,
-            CommunicationMethod method, int recycleCapacity, int responseQueueChunkSize) {
+    public EuhedralGrpcServerHandler(
+            ServerCallStreamObserver<GrpcMessage> client,
+            CommunicationMethod method,
+            int recycleCapacity,
+            int responseQueueChunkSize) {
         this.client = client;
         this.method = method;
         this.ingestPassword = HasherApi.mix(ThreadLocalRandom.current().nextLong());
@@ -70,10 +62,18 @@ public class EuhedralGrpcServerHandler implements LatticeSource, StreamObserver<
         client.setOnReadyHandler(this::onReady);
 
         FrameCreate<GrpcMessage, GrpcFrame> create = (id, message) -> {
-            GrpcFrame frame = new GrpcFrame(id, message, method, msg -> {
-                this.responseQueue.offer(msg);
-                onReady();
-            }, this::complete, this::onError, this.manager, killSwitch);
+            GrpcFrame frame = new GrpcFrame(
+                    id,
+                    message,
+                    method,
+                    msg -> {
+                        this.responseQueue.offer(msg);
+                        onReady();
+                    },
+                    this::complete,
+                    this::onError,
+                    this.manager,
+                    killSwitch);
             if (!message.getIsOrdered()) {
                 frame.randomizeHash(this.seed++);
             }
@@ -88,6 +88,11 @@ public class EuhedralGrpcServerHandler implements LatticeSource, StreamObserver<
         this.manager.setFactory(new FrameFactory<>(create, replace));
     }
 
+    private static long addPending(long num1, long num2) {
+        long sum = num1 + num2;
+        return sum < 0 || sum > Integer.MAX_VALUE ? Integer.MAX_VALUE : sum;
+    }
+
     @Override
     public void onNext(GrpcMessage message) {
         if (!canSend()) {
@@ -98,8 +103,7 @@ public class EuhedralGrpcServerHandler implements LatticeSource, StreamObserver<
         this.downstream.push(frame);
 
         this.pending.decrementAndGet();
-        if (this.method == CommunicationMethod.SERVER_STREAM
-                || this.method == CommunicationMethod.SINGLE_RESPONSE) {
+        if (this.method == CommunicationMethod.SERVER_STREAM || this.method == CommunicationMethod.SINGLE_RESPONSE) {
             complete();
         }
     }
@@ -174,8 +178,7 @@ public class EuhedralGrpcServerHandler implements LatticeSource, StreamObserver<
     }
 
     @Override
-    public long pull(Consumer<AbstractFrame> consumer,
-            Function<AbstractFrame, Boolean> stopCondition, long demand) {
+    public long pull(Consumer<AbstractFrame> consumer, Function<AbstractFrame, Boolean> stopCondition, long demand) {
         return 0;
     }
 

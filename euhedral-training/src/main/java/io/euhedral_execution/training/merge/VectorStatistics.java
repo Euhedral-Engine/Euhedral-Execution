@@ -9,9 +9,10 @@ import java.util.List;
 
 public final class VectorStatistics {
 
+    private VectorStatistics() {}
+
     public static double quantileType7(double[] values, double probability) {
-        if (values.length == 0 || !Double.isFinite(probability)
-                || probability < 0 || probability > 1) {
+        if (values.length == 0 || !Double.isFinite(probability) || probability < 0 || probability > 1) {
             throw new IllegalArgumentException("Invalid quantile input");
         }
         double[] sorted = values.clone();
@@ -26,8 +27,7 @@ public final class VectorStatistics {
         }
         double h = (sorted.length - 1) * probability;
         int index = (int) StrictMath.floor(h);
-        double result = sorted[index] + (h - index)
-                * (sorted[Math.min(index + 1, sorted.length - 1)] - sorted[index]);
+        double result = sorted[index] + (h - index) * (sorted[Math.min(index + 1, sorted.length - 1)] - sorted[index]);
         if (!Double.isFinite(result)) {
             throw new IllegalArgumentException("Non-finite quantile result");
         }
@@ -58,8 +58,7 @@ public final class VectorStatistics {
                 throw new IllegalArgumentException("Non-finite value");
             }
             double next = sum + value;
-            correction += StrictMath.abs(sum) >= StrictMath.abs(value)
-                    ? (sum - next) + value : (value - next) + sum;
+            correction += StrictMath.abs(sum) >= StrictMath.abs(value) ? (sum - next) + value : (value - next) + sum;
             sum = next;
         }
         double result = (sum + correction) / values.length;
@@ -74,15 +73,17 @@ public final class VectorStatistics {
             throw new IllegalArgumentException("Empty values");
         }
         List<WeightedValue<PolicyId>> sorted = new ArrayList<>(values);
-        sorted.sort(Comparator.comparingDouble(WeightedValue<PolicyId>::value)
-                .thenComparing(WeightedValue::tieBreaker));
-        double total = compensatedSum(sorted.stream().mapToDouble(WeightedValue::weight).toArray());
+        sorted.sort(
+                Comparator.comparingDouble(WeightedValue<PolicyId>::value).thenComparing(WeightedValue::tieBreaker));
+        double total = compensatedSum(
+                sorted.stream().mapToDouble(WeightedValue::weight).toArray());
         double sum = 0;
         double correction = 0;
         for (WeightedValue<PolicyId> value : sorted) {
             double next = sum + value.weight();
             correction += StrictMath.abs(sum) >= StrictMath.abs(value.weight())
-                    ? (sum - next) + value.weight() : (value.weight() - next) + sum;
+                    ? (sum - next) + value.weight()
+                    : (value.weight() - next) + sum;
             sum = next;
             if (sum + correction >= total / 2) {
                 return value.value();
@@ -92,8 +93,10 @@ public final class VectorStatistics {
     }
 
     public static double[] capAndNormalizeWeights(double[] rawWeights, double maximumShare) {
-        if (rawWeights.length == 0 || !Double.isFinite(maximumShare)
-                || maximumShare <= 0 || maximumShare * rawWeights.length < 1) {
+        if (rawWeights.length == 0
+                || !Double.isFinite(maximumShare)
+                || maximumShare <= 0
+                || maximumShare * rawWeights.length < 1) {
             throw new IllegalArgumentException("Invalid weights or cap");
         }
         double[] result = new double[rawWeights.length];
@@ -139,8 +142,10 @@ public final class VectorStatistics {
                 break;
             }
         }
-        if (remainder != 0 || Arrays.stream(result).anyMatch(weight ->
-                !Double.isFinite(weight) || weight <= 0 || weight > Math.nextUp(maximumShare))
+        if (remainder != 0
+                || Arrays.stream(result)
+                        .anyMatch(
+                                weight -> !Double.isFinite(weight) || weight <= 0 || weight > Math.nextUp(maximumShare))
                 || compensatedSum(result) != 1.0) {
             throw new IllegalStateException("Unable to cap and normalize anchor weights");
         }
@@ -151,8 +156,7 @@ public final class VectorStatistics {
         double sum = 0, correction = 0;
         for (double value : values) {
             double next = sum + value;
-            correction += StrictMath.abs(sum) >= StrictMath.abs(value)
-                    ? (sum - next) + value : (value - next) + sum;
+            correction += StrictMath.abs(sum) >= StrictMath.abs(value) ? (sum - next) + value : (value - next) + sum;
             sum = next;
         }
         return sum + correction;
@@ -160,8 +164,5 @@ public final class VectorStatistics {
 
     private static double canonicalZero(double value) {
         return value == 0 ? 0.0 : value;
-    }
-
-    private VectorStatistics() {
     }
 }

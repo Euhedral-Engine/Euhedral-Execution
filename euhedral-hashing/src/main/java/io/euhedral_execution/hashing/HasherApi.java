@@ -2,6 +2,8 @@ package io.euhedral_execution.hashing;
 
 public final class HasherApi extends AbstractHasher {
 
+    private HasherApi() {}
+
     public static long getHash(byte[] data) {
         return ByteHasher.getHash(data);
     }
@@ -79,9 +81,5 @@ public final class HasherApi extends AbstractHasher {
         hash *= P3;
         hash ^= hash >>> 32;
         return hash;
-    }
-
-    private HasherApi() {
-
     }
 }

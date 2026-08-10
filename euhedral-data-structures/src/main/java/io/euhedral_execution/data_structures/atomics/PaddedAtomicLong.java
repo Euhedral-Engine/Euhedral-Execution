@@ -12,8 +12,7 @@ public class PaddedAtomicLong extends PaddedLong {
 
     static {
         try {
-            HANDLE = MethodHandles.lookup()
-                    .findVarHandle(PaddedAtomicLong.class, "value", long.class);
+            HANDLE = MethodHandles.lookup().findVarHandle(PaddedAtomicLong.class, "value", long.class);
         } catch (Exception e) {
             throw new ExceptionInInitializerError(e);
         }
@@ -42,15 +41,23 @@ public class PaddedAtomicLong extends PaddedLong {
         return (long) HANDLE.getOpaque(this);
     }
 
+    public void setOpaque(long val) {
+        HANDLE.setOpaque(this, val);
+    }
+
     public long getPlain() {
         return super.value;
+    }
+
+    // ----- Set -----
+
+    public void setPlain(long val) {
+        super.value = val;
     }
 
     public long getAndSet(long val) {
         return (long) HANDLE.getAndSet(this, val);
     }
-
-    // ----- Set -----
 
     /// Atomic set
     public void set(long val) {
@@ -63,14 +70,6 @@ public class PaddedAtomicLong extends PaddedLong {
 
     public void setRelease(long val) {
         HANDLE.setRelease(this, val);
-    }
-
-    public void setOpaque(long val) {
-        HANDLE.setOpaque(this, val);
-    }
-
-    public void setPlain(long val) {
-        super.value = val;
     }
 
     // ----- RMW -----

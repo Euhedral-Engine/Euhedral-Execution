@@ -40,6 +40,39 @@ class ControlPlaneShardTest {
         new LatticeEdge(new AtomicBoolean());
     }
 
+    private static SocketSnapshot getSocketSnapshot(EffectiveSocketTopology topology) {
+        CoreSnapshot[] coreSnapshots =
+                new CoreSnapshot[topology.effectiveCores().length()];
+        for (int i = 0; i < coreSnapshots.length; i++) {
+            coreSnapshots[i] = new CoreSnapshot(
+                    i, 0, 100_000, 0, 0, 0, 0, 0, topology.effectiveCoreToCpu().get(i), new CpuSnapshot[0]);
+        }
+
+        return new SocketSnapshot(0, topology.effectiveCores(), 0, 0, 0, 0, coreSnapshots, 0);
+    }
+
+    private static EffectiveSocketTopology getTopology() {
+        BitSet effectiveCores = new BitSet(2);
+        BitSet effectiveCpus = new BitSet(4);
+        List<BitSet> effectiveCoreToCpu = new ArrayList<>();
+        effectiveCoreToCpu.add(new BitSet(4));
+        effectiveCoreToCpu.add(new BitSet(4));
+
+        effectiveCores.set(0, 2);
+        effectiveCpus.set(0, 4);
+        effectiveCoreToCpu.get(0).set(0, 2);
+        effectiveCoreToCpu.get(1).set(2, 4);
+        return new EffectiveSocketTopology(0, 0, effectiveCores, effectiveCpus, effectiveCoreToCpu);
+    }
+
+    private static CloneConfig[] getConfigs(SocketSnapshot snapshot, EffectiveSocketTopology topology) {
+        CloneConfig[] configs = new CloneConfig[topology.effectiveCores().cardinality()];
+        for (int i = 0; i < configs.length; i++) {
+            configs[i] = new CloneConfig("TestShard", i, snapshot.coreSnapshots()[i].effectiveCpus());
+        }
+        return configs;
+    }
+
     @BeforeEach
     void setUp() {
         mockSysInfo = Mockito.mockStatic(SystemInfo.class);
@@ -47,8 +80,7 @@ class ControlPlaneShardTest {
         BitSet cores = new BitSet(2);
         cores.set(0, 2);
         mockSysInfo.when(() -> SystemInfo.fromHexMask("3")).thenReturn(cores);
-        mockSysInfo.when(() -> SystemInfo.getSocketInfo(0))
-                .thenReturn(new SocketInfo("f", "3", 0));
+        mockSysInfo.when(() -> SystemInfo.getSocketInfo(0)).thenReturn(new SocketInfo("f", "3", 0));
         mockSysInfo.when(() -> SystemInfo.socketL3Cache(0)).thenReturn(0L);
     }
 
@@ -92,31 +124,17 @@ class ControlPlaneShardTest {
         assertTrue(shard.isStarted(), "Expected the shard to be marked started");
     }
 
-    private static SocketSnapshot getSocketSnapshot(EffectiveSocketTopology topology) {
-        CoreSnapshot[] coreSnapshots = new CoreSnapshot[topology.effectiveCores().length()];
-        for (int i = 0; i < coreSnapshots.length; i++) {
-            coreSnapshots[i] = new CoreSnapshot(i, 0, 100_000, 0, 0, 0, 0, 0,
-                    topology.effectiveCoreToCpu().get(i),
-                    new CpuSnapshot[0]);
-        }
-
-        return new SocketSnapshot(0, topology.effectiveCores(), 0, 0, 0, 0, coreSnapshots, 0);
-    }
-
     @Test
     void shutdownClosesEveryCloneAndAcknowledgesOnce() {
         RecordingClone factory = new RecordingClone();
         shard = new ControlPlaneShard(0, "TestShard", factory, Duration.ZERO);
         EffectiveSocketTopology topology = getTopology();
-        shard.start(getSocketSnapshot(topology), topology,
-                new LatticeEdge(new AtomicBoolean()));
+        shard.start(getSocketSnapshot(topology), topology, new LatticeEdge(new AtomicBoolean()));
         AtomicInteger shutdownsRemaining = new AtomicInteger(1);
 
         shard.shutDownShard(shutdownsRemaining);
 
-        Awaitility.await()
-                .atMost(2, TimeUnit.SECONDS)
-                .until(() -> shutdownsRemaining.get() == 0);
+        Awaitility.await().atMost(2, TimeUnit.SECONDS).until(() -> shutdownsRemaining.get() == 0);
         assertFalse(shard.isStarted());
         assertEquals(0, shard.getActiveCores());
         assertTrue(factory.created.stream().allMatch(clone -> clone.closed));
@@ -124,8 +142,7 @@ class ControlPlaneShardTest {
 
     @Test
     void unstartedShardAcknowledgesShutdownImmediately() {
-        shard = new ControlPlaneShard(
-                0, "TestShard", new RecordingClone(), Duration.ZERO);
+        shard = new ControlPlaneShard(0, "TestShard", new RecordingClone(), Duration.ZERO);
         AtomicInteger shutdownsRemaining = new AtomicInteger(1);
 
         shard.shutDownShard(shutdownsRemaining);
@@ -133,26 +150,11 @@ class ControlPlaneShardTest {
         assertEquals(0, shutdownsRemaining.get());
     }
 
-    private static EffectiveSocketTopology getTopology() {
-        BitSet effectiveCores = new BitSet(2);
-        BitSet effectiveCpus = new BitSet(4);
-        List<BitSet> effectiveCoreToCpu = new ArrayList<>();
-        effectiveCoreToCpu.add(new BitSet(4));
-        effectiveCoreToCpu.add(new BitSet(4));
-
-        effectiveCores.set(0, 2);
-        effectiveCpus.set(0, 4);
-        effectiveCoreToCpu.get(0).set(0, 2);
-        effectiveCoreToCpu.get(1).set(2, 4);
-        return new EffectiveSocketTopology(0, 0, effectiveCores, effectiveCpus, effectiveCoreToCpu);
-    }
-
     @Test
     void closesOnlyClonesRemovedByARebalance() {
         LatticeEdge upstream = new LatticeEdge(new AtomicBoolean());
         RecordingClone factory = new RecordingClone();
-        shard =
-                new ControlPlaneShard(0, "TestShard", factory, Duration.ofSeconds(1));
+        shard = new ControlPlaneShard(0, "TestShard", factory, Duration.ofSeconds(1));
 
         EffectiveSocketTopology topo1 = getTopology(); // Version 0, Core 0 and 1 active
 
@@ -175,31 +177,18 @@ class ControlPlaneShardTest {
         retainedCores.clear(0);
         retainedCpus.clear(0, 2);
         retainedCoreToCpu.get(0).clear();
-        EffectiveSocketTopology topo2 = new EffectiveSocketTopology(topo1.version() + 1,
-                topo1.socketId(),
-                retainedCores, retainedCpus, retainedCoreToCpu);
+        EffectiveSocketTopology topo2 = new EffectiveSocketTopology(
+                topo1.version() + 1, topo1.socketId(), retainedCores, retainedCpus, retainedCoreToCpu);
 
         SocketSnapshot snap2 = getSocketSnapshot(topo2);
 
         shard.update(snap2, topo2);
 
-        Awaitility.await()
-                .atMost(2, TimeUnit.SECONDS)
-                .until(() -> !shard.isRebalancing());
+        Awaitility.await().atMost(2, TimeUnit.SECONDS).until(() -> !shard.isRebalancing());
 
         assertTrue(first.closed, "The removed core should be closed");
         assertFalse(second.closed, "The retained core should stay open");
         assertEquals(1, shard.getActiveCores());
-    }
-
-    private static CloneConfig[] getConfigs(SocketSnapshot snapshot,
-            EffectiveSocketTopology topology) {
-        CloneConfig[] configs = new CloneConfig[topology.effectiveCores().cardinality()];
-        for (int i = 0; i < configs.length; i++) {
-            configs[i] = new CloneConfig("TestShard", i,
-                    snapshot.coreSnapshots()[i].effectiveCpus());
-        }
-        return configs;
     }
 
     private static final class RecordingClone implements CloneableObject {

@@ -17,10 +17,19 @@ import java.util.function.Function;
 import org.jspecify.annotations.NonNull;
 
 @SuppressWarnings({"rawtypes", "unchecked", "unused"})
-public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue<T> implements
-        BatchableQueue<T> {
+public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue<T> implements BatchableQueue<T> {
 
     private static final String NULL_ELEMENTS_ERROR = "null elements cannot be inserted into this queue";
+    protected final long chunkMask;
+    protected final int linkIndex;
+    protected final boolean bounded;
+    protected final ThreadSafeIterator iterator = new ThreadSafeIterator();
+    protected BaseConcurrentQueue(int chunkSize, boolean bounded) {
+        super(new Object[QueueUtils.queueSize(Math.max(chunkSize, 2))]);
+        this.chunkMask = QueueUtils.chunkMask(Math.max(chunkSize, 2));
+        this.linkIndex = this.headQueue.length - 1;
+        this.bounded = bounded;
+    }
 
     private static void linkChunk(Object[] oldQueue, Object[] nextQueue, int cIdx) {
         oldQueue[oldQueue.length - 1] = nextQueue;
@@ -52,24 +61,11 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue<T> 
         return true;
     }
 
-    protected final long chunkMask;
-    protected final int linkIndex;
-    protected final boolean bounded;
-    protected final ThreadSafeIterator iterator = new ThreadSafeIterator();
-
-    protected BaseConcurrentQueue(int chunkSize, boolean bounded) {
-        super(new Object[QueueUtils.queueSize(Math.max(chunkSize, 2))]);
-        this.chunkMask = QueueUtils.chunkMask(Math.max(chunkSize, 2));
-        this.linkIndex = this.headQueue.length - 1;
-        this.bounded = bounded;
-    }
-
     protected Object[] allocateChunk(int chunkSize) {
         return new Object[chunkSize];
     }
 
-    protected void freeChunk(Object[] chunk) {
-    }
+    protected void freeChunk(Object[] chunk) {}
 
     // ----- Single Producer -----
 
@@ -295,8 +291,7 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue<T> 
         return obj;
     }
 
-    protected final long scToSpTransfer(BaseConcurrentQueue<T> receiver, Consumer<T> sideEffect,
-            long limit) {
+    protected final long scToSpTransfer(BaseConcurrentQueue<T> receiver, Consumer<T> sideEffect, long limit) {
         Objects.requireNonNull(receiver);
         if (limit <= 0) {
             return 0;
@@ -355,7 +350,7 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue<T> 
                 theirTail += INCREMENT;
                 total++;
 
-                if(sideEffect != null) {
+                if (sideEffect != null) {
                     sideEffect.accept((T) obj);
                 }
             }
@@ -385,7 +380,7 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue<T> 
         while (size > 0) {
             int cIdx = QueueUtils.chunkIndex(head, this.chunkMask);
             Object obj = queue[cIdx];
-            if(obj == null) {
+            if (obj == null) {
                 break;
             }
             if (obj == QueueUtils.SENTINEL) {
@@ -398,17 +393,17 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue<T> 
 
                 freeChunk(temp);
             }
-            if(obj == null) {
+            if (obj == null) {
                 break;
             }
 
-            if(!receiver.offer((T) obj)) {
+            if (!receiver.offer((T) obj)) {
                 break;
             }
             total++;
             head += INCREMENT;
             size -= INCREMENT;
-            if(sideEffect != null) {
+            if (sideEffect != null) {
                 sideEffect.accept((T) obj);
             }
         }
@@ -536,8 +531,7 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue<T> 
 
                 Object[] nextQueue = allocateChunk(queue.length);
                 nextQueue[cIdx] = iter.next();
-                Objects.requireNonNull(nextQueue[cIdx],
-                        NULL_ELEMENTS_ERROR);
+                Objects.requireNonNull(nextQueue[cIdx], NULL_ELEMENTS_ERROR);
                 setTailQueuePlain(this, nextQueue);
                 setTailEpochPlain(this, tail + this.chunkMask);
                 getAndAddTail(this, HALF_INCREMENT);
@@ -649,7 +643,7 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue<T> 
     }
 
     /// Use `sizeLong()` for an accurate count
-    @Deprecated(since="0.0.1")
+    @Deprecated(since = "0.0.1")
     public final int size() {
         return (int) Math.min(sizeLong(), Integer.MAX_VALUE);
     }
@@ -671,11 +665,16 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue<T> 
 
         static {
             try {
-                MC_FLAG = MethodHandles.lookup()
-                        .findVarHandle(MCAccessFlag.class, "mcFlag", long.class);
+                MC_FLAG = MethodHandles.lookup().findVarHandle(MCAccessFlag.class, "mcFlag", long.class);
             } catch (Exception e) {
                 throw new ExceptionInInitializerError(e);
             }
+        }
+
+        long mcFlag = 0;
+
+        MCAccessFlag(int chunkSize, boolean bounded) {
+            super(chunkSize, bounded);
         }
 
         protected static boolean acquireMcLock(BaseConcurrentQueue impl) {
@@ -684,12 +683,6 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue<T> 
 
         protected static void releaseMcLock(BaseConcurrentQueue impl) {
             MC_FLAG.setRelease(impl, 0);
-        }
-
-        long mcFlag = 0;
-
-        MCAccessFlag(int chunkSize, boolean bounded) {
-            super(chunkSize, bounded);
         }
     }
 
@@ -736,7 +729,7 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue<T> 
             pos += INCREMENT;
             T obj = (T) queue[cIdx];
 
-            if(obj == null) {
+            if (obj == null) {
                 throw new NoSuchElementException();
             }
             return obj;

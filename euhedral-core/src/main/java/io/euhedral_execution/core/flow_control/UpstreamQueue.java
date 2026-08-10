@@ -31,9 +31,18 @@ import java.util.function.Function;
 public class UpstreamQueue {
 
     public static final ThreadLocal<UpstreamQueue> UP_QUEUE = new ThreadLocal<>();
+    public final int core;
+    private final MpscQueue<UpstreamHandle> upstreams;
+    private final PaddedAtomicLong upstreamCount;
+    long cachedUpCount = 0L;
+    public UpstreamQueue(int core, MpscQueue<UpstreamHandle> upstreams, PaddedAtomicLong upstreamCount) {
+        this.core = core;
+        this.upstreams = upstreams;
+        this.upstreamCount = upstreamCount;
+    }
 
-    public static UpstreamQueue get(MpscQueue<UpstreamHandle>[] upstreams,
-            PaddedAtomicLong upstreamCount, AtomicLong counter) {
+    public static UpstreamQueue get(
+            MpscQueue<UpstreamHandle>[] upstreams, PaddedAtomicLong upstreamCount, AtomicLong counter) {
         UpstreamQueue queue = UP_QUEUE.get();
         if (queue == null) {
             int core = SystemInfo.getCpuInfo(ThreadTools.getCpu()).core();
@@ -44,7 +53,9 @@ public class UpstreamQueue {
         return queue;
     }
 
-    protected static long drain(UpstreamHandle handle, Consumer<AbstractFrame> consumer,
+    protected static long drain(
+            UpstreamHandle handle,
+            Consumer<AbstractFrame> consumer,
             Function<AbstractFrame, Boolean> stopCondition,
             long demand) {
         if (consumer != null) {
@@ -52,19 +63,6 @@ public class UpstreamQueue {
         }
         handle.request(demand);
         return 0;
-    }
-
-    public final int core;
-    private final MpscQueue<UpstreamHandle> upstreams;
-    private final PaddedAtomicLong upstreamCount;
-
-    long cachedUpCount = 0L;
-
-    public UpstreamQueue(int core, MpscQueue<UpstreamHandle> upstreams,
-            PaddedAtomicLong upstreamCount) {
-        this.core = core;
-        this.upstreams = upstreams;
-        this.upstreamCount = upstreamCount;
     }
 
     public boolean inSync() {
@@ -89,8 +87,7 @@ public class UpstreamQueue {
 
     /// Pulls work without requesting from the [UpstreamHandles][UpstreamHandle]. If the consumer is
     /// `null`, it will **request** the work.
-    public long pull(Consumer<AbstractFrame> consumer,
-            Function<AbstractFrame, Boolean> stopCondition, long demand) {
+    public long pull(Consumer<AbstractFrame> consumer, Function<AbstractFrame, Boolean> stopCondition, long demand) {
         getTrueUpstreamCount();
 
         if (demand <= 0 || this.cachedUpCount == 0) {
@@ -115,7 +112,7 @@ public class UpstreamQueue {
                 continue;
             }
 
-            if(!handle.acquireLock()) {
+            if (!handle.acquireLock()) {
                 cycles++;
                 continue;
             }
@@ -167,8 +164,6 @@ public class UpstreamQueue {
             return true;
         }
 
-        public void releaseLock() {
-
-        }
+        public void releaseLock() {}
     }
 }

@@ -8,29 +8,35 @@ public final class PolicyComparator {
     public static final Comparator<RobustPolicySummary> BEST_FIRST = (left, right) -> {
         requireEligible(left);
         requireEligible(right);
-        int result = compareDescending(left.worstQuality().getAsDouble(),
-                right.worstQuality().getAsDouble());
+        int result = compareDescending(
+                left.worstQuality().getAsDouble(), right.worstQuality().getAsDouble());
         if (result == 0) {
-            result = compareDescending(left.qualityP25().getAsDouble(),
-                    right.qualityP25().getAsDouble());
+            result = compareDescending(
+                    left.qualityP25().getAsDouble(), right.qualityP25().getAsDouble());
         }
         if (result == 0) {
-            result = compareDescending(left.geometricMeanQuality().getAsDouble(),
+            result = compareDescending(
+                    left.geometricMeanQuality().getAsDouble(),
                     right.geometricMeanQuality().getAsDouble());
         }
         if (result == 0) {
-            result = Double.compare(left.crossScenarioQualityMad().getAsDouble(),
+            result = Double.compare(
+                    left.crossScenarioQualityMad().getAsDouble(),
                     right.crossScenarioQualityMad().getAsDouble());
         }
         if (result == 0) {
-            result = Double.compare(left.medianRelativeIqr().getAsDouble(),
+            result = Double.compare(
+                    left.medianRelativeIqr().getAsDouble(),
                     right.medianRelativeIqr().getAsDouble());
         }
         if (result == 0) {
-            result = Double.compare(left.meanNonSuccessRate().getAsDouble(),
+            result = Double.compare(
+                    left.meanNonSuccessRate().getAsDouble(),
                     right.meanNonSuccessRate().getAsDouble());
         }
-        return result != 0 ? result : left.policy().id().compareTo(right.policy().id());
+        return result != 0
+                ? result
+                : left.policy().id().compareTo(right.policy().id());
     };
 
     public static final Comparator<RobustPolicySummary> PUBLISHED_ORDER = (left, right) -> {
@@ -40,14 +46,16 @@ public final class PolicyComparator {
         if (left.eligible()) {
             return BEST_FIRST.compare(left, right);
         }
-        int result = Integer.compare(right.validRequiredScenarioCount(),
-                left.validRequiredScenarioCount());
+        int result = Integer.compare(right.validRequiredScenarioCount(), left.validRequiredScenarioCount());
         if (result == 0) {
-            result = Integer.compare(right.observedRequiredScenarioCount(),
-                    left.observedRequiredScenarioCount());
+            result = Integer.compare(right.observedRequiredScenarioCount(), left.observedRequiredScenarioCount());
         }
-        return result != 0 ? result : left.policy().id().compareTo(right.policy().id());
+        return result != 0
+                ? result
+                : left.policy().id().compareTo(right.policy().id());
     };
+
+    private PolicyComparator() {}
 
     private static int compareDescending(double left, double right) {
         return Double.compare(right, left);
@@ -57,8 +65,5 @@ public final class PolicyComparator {
         if (!summary.eligible()) {
             throw new IllegalArgumentException("Summary is incomplete");
         }
-    }
-
-    private PolicyComparator() {
     }
 }

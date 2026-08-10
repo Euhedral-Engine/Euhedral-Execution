@@ -93,8 +93,48 @@ import org.slf4j.LoggerFactory;
 public final class ControlPlaneLattice implements LatticeTerminal {
 
     private static final AtomicReference<ControlPlaneLattice> INSTANCE = new AtomicReference<>();
-    private static final VarHandle HANDLES = MethodHandles.arrayElementVarHandle(
-            LatticeEdge[].class);
+    private static final VarHandle HANDLES = MethodHandles.arrayElementVarHandle(LatticeEdge[].class);
+    final String name;
+    final Logger logger;
+    final LatticeConfig config;
+    final TopologyMapper topology;
+    final ResourceMonitor resourceMonitor;
+    final ExecutorService controlPlaneExecutor;
+    final Thread shutdownHook;
+    final AtomicBoolean closed = new AtomicBoolean(false);
+    final AtomicBoolean started = new AtomicBoolean(false);
+    final AtomicBoolean ready = new AtomicBoolean(false);
+    final AtomicBoolean primed = new AtomicBoolean(false);
+    final AtomicBoolean rebalancing = new AtomicBoolean(false);
+    final AtomicBoolean resetting = new AtomicBoolean(false);
+    final ControlPlaneShard[] shards;
+    final LatticeEdge[] shardHandles;
+    final AtomicReference<LatticeVertex> ingestController = new AtomicReference<>();
+    final AtomicReference<int[]> activeShardIds = new AtomicReference<>(new int[0]);
+    final AtomicReference<int[]> weightedShardMap = new AtomicReference<>(new int[0]);
+    volatile int currentGlobalVersion = Integer.MIN_VALUE;
+    volatile EffectiveSystemTopology effectiveTopology;
+    ControlPlaneLattice(LatticeConfig config) {
+        this.name = config.name() == null || config.name().isBlank()
+                ? this.getClass().getSimpleName()
+                : config.name();
+        this.logger = LoggerFactory.getLogger(Constants.getLoggerName(this.name));
+        this.config = config;
+
+        this.topology = new TopologyMapper(config.allowedCpus());
+        this.resourceMonitor = new ResourceMonitor(this.topology, Duration.ofMillis(200));
+        this.controlPlaneExecutor =
+                Executors.newFixedThreadPool(SystemInfo.getMaxSocketId() + 1, r -> new Thread(r, this.name));
+        this.shutdownHook = new Thread(this::close);
+
+        this.shards = new ControlPlaneShard[SystemInfo.getMaxSocketId() + 1];
+        this.shardHandles = new LatticeEdge[this.shards.length];
+
+        this.effectiveTopology = this.topology.getEffectiveTopology();
+
+        this.resourceMonitor.addListener(this::update);
+        Runtime.getRuntime().addShutdownHook(this.shutdownHook);
+    }
 
     public static ControlPlaneLattice getOrCreate() {
         return getOrCreate("EuhedralLattice", "EuhedralShard");
@@ -119,55 +159,6 @@ public final class ControlPlaneLattice implements LatticeTerminal {
         });
     }
 
-    final String name;
-    final Logger logger;
-    final LatticeConfig config;
-
-    final TopologyMapper topology;
-    final ResourceMonitor resourceMonitor;
-    final ExecutorService controlPlaneExecutor;
-    final Thread shutdownHook;
-
-    final AtomicBoolean closed = new AtomicBoolean(false);
-    final AtomicBoolean started = new AtomicBoolean(false);
-    final AtomicBoolean ready = new AtomicBoolean(false);
-    final AtomicBoolean primed = new AtomicBoolean(false);
-    final AtomicBoolean rebalancing = new AtomicBoolean(false);
-    final AtomicBoolean resetting = new AtomicBoolean(false);
-
-    final ControlPlaneShard[] shards;
-    final LatticeEdge[] shardHandles;
-    final AtomicReference<LatticeVertex> ingestController = new AtomicReference<>();
-
-    final AtomicReference<int[]> activeShardIds = new AtomicReference<>(new int[0]);
-    final AtomicReference<int[]> weightedShardMap = new AtomicReference<>(new int[0]);
-
-    volatile int currentGlobalVersion = Integer.MIN_VALUE;
-    volatile EffectiveSystemTopology effectiveTopology;
-
-    ControlPlaneLattice(LatticeConfig config) {
-        this.name =
-                config.name() == null || config.name().isBlank() ? this.getClass().getSimpleName()
-                        : config.name();
-        this.logger = LoggerFactory.getLogger(Constants.getLoggerName(this.name));
-        this.config = config;
-
-        this.topology = new TopologyMapper(config.allowedCpus());
-        this.resourceMonitor = new ResourceMonitor(this.topology, Duration.ofMillis(200));
-        this.controlPlaneExecutor =
-                Executors.newFixedThreadPool(SystemInfo.getMaxSocketId() + 1,
-                        r -> new Thread(r, this.name));
-        this.shutdownHook = new Thread(this::close);
-
-        this.shards = new ControlPlaneShard[SystemInfo.getMaxSocketId() + 1];
-        this.shardHandles = new LatticeEdge[this.shards.length];
-
-        this.effectiveTopology = this.topology.getEffectiveTopology();
-
-        this.resourceMonitor.addListener(this::update);
-        Runtime.getRuntime().addShutdownHook(this.shutdownHook);
-    }
-
     public void start() {
         if (this.started.compareAndSet(false, true)) {
             this.logger.info("Starting...");
@@ -189,8 +180,8 @@ public final class ControlPlaneLattice implements LatticeTerminal {
 
     private boolean ready() {
         int count = this.ingestController.getOpaque().getThreadCount();
-        for(ControlPlaneShard shard : this.shards) {
-            if(shard != null && !shard.isStarted()) {
+        for (ControlPlaneShard shard : this.shards) {
+            if (shard != null && !shard.isStarted()) {
                 return false;
             }
         }
@@ -232,13 +223,15 @@ public final class ControlPlaneLattice implements LatticeTerminal {
             if (info == null) {
                 continue;
             }
-            this.shards[i] = this.config.baseShard()
-                    .clone(i, this.name, this.config.shutdownTimeout());
+            this.shards[i] = this.config.baseShard().clone(i, this.name, this.config.shutdownTimeout());
             this.logger.info("Created ControlPlaneShard on socket: {}", i);
         }
 
-        LatticeVertex controller = new LatticeVertex(this.name + "-GlobalDistributor",
-                SystemInfo.getMaxSocketId() + 1, this::route, 0,
+        LatticeVertex controller = new LatticeVertex(
+                this.name + "-GlobalDistributor",
+                SystemInfo.getMaxSocketId() + 1,
+                this::route,
+                0,
                 RoutingPolicy.ANYWHERE);
         this.ingestController.set(controller);
     }
@@ -269,8 +262,7 @@ public final class ControlPlaneLattice implements LatticeTerminal {
 
         if (this.currentGlobalVersion != nextVersion) {
             if (!this.primed.getOpaque()) {
-                this.logger.info("Initializing the ControlPlaneLattice for global topology V{}",
-                        nextVersion);
+                this.logger.info("Initializing the ControlPlaneLattice for global topology V{}", nextVersion);
             } else {
                 this.logger.warn(
                         "Detected change in global topology. Initiating global rebalance for topology V{}",
@@ -289,17 +281,18 @@ public final class ControlPlaneLattice implements LatticeTerminal {
                         this.effectiveTopology.socketTopologies().get(socketId);
                 ControlPlaneShard shard = this.shards[socketId];
 
-                SocketSnapshot snapshot =
-                        utilization.getSocketSnapshot(socketId, topology.effectiveCoreToCpu(),
-                                getShardQuota(socketId, quotaPool));
-                CompletableFuture.runAsync(() -> {
-                    if (!shard.isStarted()) {
-                        this.logger.info("Starting shard");
-                        startShard(socketId, snapshot, topology);
-                    } else {
-                        shard.update(snapshot, topology);
-                    }
-                }, this.controlPlaneExecutor);
+                SocketSnapshot snapshot = utilization.getSocketSnapshot(
+                        socketId, topology.effectiveCoreToCpu(), getShardQuota(socketId, quotaPool));
+                CompletableFuture.runAsync(
+                        () -> {
+                            if (!shard.isStarted()) {
+                                this.logger.info("Starting shard");
+                                startShard(socketId, snapshot, topology);
+                            } else {
+                                shard.update(snapshot, topology);
+                            }
+                        },
+                        this.controlPlaneExecutor);
             }
         }
     }
@@ -316,11 +309,9 @@ public final class ControlPlaneLattice implements LatticeTerminal {
         LatticeVertex controller = this.ingestController.get();
 
         BitSet newShards = this.effectiveTopology.effectiveSockets();
-        for (int socket = newShards.nextSetBit(0); socket >= 0;
-                socket = newShards.nextSetBit(socket + 1)) {
+        for (int socket = newShards.nextSetBit(0); socket >= 0; socket = newShards.nextSetBit(socket + 1)) {
             if (this.shardHandles[socket] == null) {
-                HANDLES.setRelease(this.shardHandles, socket,
-                        new LatticeEdge(controller.getDrainFlag()));
+                HANDLES.setRelease(this.shardHandles, socket, new LatticeEdge(controller.getDrainFlag()));
             }
         }
         BitSet retiredShards = new BitSet(this.shardHandles.length);
@@ -337,8 +328,7 @@ public final class ControlPlaneLattice implements LatticeTerminal {
         // Divide the quota proportionally based on cpu count
         double quotaPool = utilization.quotaCpus();
         this.logger.trace("Dividing quota pool of {} quota cpus", quotaPool);
-        for (int socket = newShards.nextSetBit(0); socket >= 0;
-                socket = newShards.nextSetBit(socket + 1)) {
+        for (int socket = newShards.nextSetBit(0); socket >= 0; socket = newShards.nextSetBit(socket + 1)) {
             if (this.shards[socket] == null) {
                 continue;
             }
@@ -347,9 +337,7 @@ public final class ControlPlaneLattice implements LatticeTerminal {
                     this.effectiveTopology.socketTopologies().get(socket);
 
             double shardQuota = getShardQuota(socket, quotaPool);
-            SocketSnapshot snapshot =
-                    utilization.getSocketSnapshot(socket, topology.effectiveCoreToCpu(),
-                            shardQuota);
+            SocketSnapshot snapshot = utilization.getSocketSnapshot(socket, topology.effectiveCoreToCpu(), shardQuota);
 
             this.logger.trace("Shard {} has been allocated {} quota cpus", socket, shardQuota);
             if (!this.shards[socket].isStarted()) {
@@ -378,24 +366,25 @@ public final class ControlPlaneLattice implements LatticeTerminal {
         // Shutdown decommissioned shards and restart ingest on complete.
         if (shutDown.getPlain() > 0) {
             this.logger.info("Shutting down {} old shards.", shutDown.getPlain());
-            CompletableFuture.runAsync(() -> {
-                for (int i = retiredShards.nextSetBit(0); i >= 0;
-                        i = retiredShards.nextSetBit(i + 1)) {
-                    ControlPlaneShard shard = this.shards[i];
-                    if (shard == null) {
-                        shutDown.decrementAndGet();
-                    } else {
-                        shard.shutDownShard(shutDown);
-                    }
-                }
-                while (shutDown.get() != 0 && !this.closed.getAcquire()) {
-                    LockSupport.parkNanos(1_000);
-                }
-                if (!this.closed.getAcquire()) {
-                    controller.setDrain(false);
-                }
-                this.rebalancing.lazySet(false);
-            }, this.controlPlaneExecutor);
+            CompletableFuture.runAsync(
+                    () -> {
+                        for (int i = retiredShards.nextSetBit(0); i >= 0; i = retiredShards.nextSetBit(i + 1)) {
+                            ControlPlaneShard shard = this.shards[i];
+                            if (shard == null) {
+                                shutDown.decrementAndGet();
+                            } else {
+                                shard.shutDownShard(shutDown);
+                            }
+                        }
+                        while (shutDown.get() != 0 && !this.closed.getAcquire()) {
+                            LockSupport.parkNanos(1_000);
+                        }
+                        if (!this.closed.getAcquire()) {
+                            controller.setDrain(false);
+                        }
+                        this.rebalancing.lazySet(false);
+                    },
+                    this.controlPlaneExecutor);
         } else {
             controller.setDrain(false);
             this.rebalancing.lazySet(false);
@@ -428,8 +417,7 @@ public final class ControlPlaneLattice implements LatticeTerminal {
         this.weightedShardMap.lazySet(weightedShardMap);
     }
 
-    private void startShard(int shardId, SocketSnapshot snapshot,
-            EffectiveSocketTopology topology) {
+    private void startShard(int shardId, SocketSnapshot snapshot, EffectiveSocketTopology topology) {
         if (this.shards[shardId].isStarted()) {
             return;
         }
@@ -440,9 +428,11 @@ public final class ControlPlaneLattice implements LatticeTerminal {
     /// Calculates the proportional quota for a shard based on their CPU count.
     private double getShardQuota(int socketId, double systemQuotaPool) {
         int totalEffectiveCpus = this.effectiveTopology.effectiveCpus().cardinality();
-        int socketEffectiveCpus =
-                this.effectiveTopology.socketTopologies().get(socketId).effectiveCpus()
-                        .cardinality();
+        int socketEffectiveCpus = this.effectiveTopology
+                .socketTopologies()
+                .get(socketId)
+                .effectiveCpus()
+                .cardinality();
 
         return ((double) socketEffectiveCpus / Math.max(1, totalEffectiveCpus)) * systemQuotaPool;
     }
@@ -473,8 +463,7 @@ public final class ControlPlaneLattice implements LatticeTerminal {
                 LockSupport.parkNanos(5_000L);
             }
             if (this.rebalancing.getAcquire()) {
-                throw new IllegalStateException(
-                        "Timed out waiting for global rebalance before trial reset");
+                throw new IllegalStateException("Timed out waiting for global rebalance before trial reset");
             }
 
             if (controller != null) {
@@ -548,9 +537,6 @@ public final class ControlPlaneLattice implements LatticeTerminal {
         this.logger.info("Closed.");
     }
 
-    public record CacheReset(long clearedFrames, int activeWorkers) {
-    }
-
     /// Whether all queues are empty and all in-progress work is completed for all CPUs managed by
     /// this ControlPlaneLattice.
     public boolean isDrained() {
@@ -566,4 +552,6 @@ public final class ControlPlaneLattice implements LatticeTerminal {
         }
         return true;
     }
+
+    public record CacheReset(long clearedFrames, int activeWorkers) {}
 }

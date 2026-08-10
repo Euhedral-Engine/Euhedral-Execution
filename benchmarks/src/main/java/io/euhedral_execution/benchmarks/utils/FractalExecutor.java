@@ -11,7 +11,7 @@ public class FractalExecutor extends AbstractExecutor {
 
     private final Blackhole blackhole;
 
-    public  FractalExecutor(Blackhole blackhole) {
+    public FractalExecutor(Blackhole blackhole) {
         super(-1);
         this.blackhole = blackhole;
     }

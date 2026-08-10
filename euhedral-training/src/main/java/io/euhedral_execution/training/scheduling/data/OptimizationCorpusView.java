@@ -9,7 +9,8 @@ import java.util.List;
 import java.util.SortedMap;
 import java.util.TreeMap;
 
-public record OptimizationCorpusView(SortedMap<PolicyId, PolicyVector> policies,
+public record OptimizationCorpusView(
+        SortedMap<PolicyId, PolicyVector> policies,
         List<RobustPolicySummary> eligiblePolicies,
         SortedMap<PolicyId, RobustPolicySummary> summaries,
         SortedMap<PolicyId, SortedMap<SourceScenario, ScenarioResultStatus>> coverage,
@@ -19,8 +20,8 @@ public record OptimizationCorpusView(SortedMap<PolicyId, PolicyVector> policies,
         eligiblePolicies = List.copyOf(eligiblePolicies);
         summaries = java.util.Collections.unmodifiableSortedMap(new TreeMap<>(summaries));
         TreeMap<PolicyId, SortedMap<SourceScenario, ScenarioResultStatus>> copy = new TreeMap<>();
-        coverage.forEach((policy, rows) -> copy.put(policy,
-                java.util.Collections.unmodifiableSortedMap(new TreeMap<>(rows))));
+        coverage.forEach(
+                (policy, rows) -> copy.put(policy, java.util.Collections.unmodifiableSortedMap(new TreeMap<>(rows))));
         coverage = java.util.Collections.unmodifiableSortedMap(copy);
         if (mergeArtifactSha256 == null || mergeArtifactSha256.isBlank()) {
             throw new IllegalArgumentException("Merge artifact fingerprint is required");

@@ -40,8 +40,8 @@ import org.slf4j.LoggerFactory;
 public class LatticeEdge extends UpstreamHandle {
 
     protected static final VarHandle DOWNSTREAM = CommonVarHandles.downstream(LatticeEdge.class);
-    protected static final VarHandle PARENT = CommonVarHandles.makeHandle(LatticeEdge.class,
-            "parent", LatticeEdge.class);
+    protected static final VarHandle PARENT =
+            CommonVarHandles.makeHandle(LatticeEdge.class, "parent", LatticeEdge.class);
 
     protected static final MpscQueue<UpstreamHandle>[] UPSTREAMS;
     protected static final AtomicLongArray ACTIVE_PARTITIONS;
@@ -50,9 +50,7 @@ public class LatticeEdge extends UpstreamHandle {
     protected static final PaddedAtomicLong UPSTREAM_COUNT = new PaddedAtomicLong(0);
 
     private static final VarHandle CLOSED = CommonVarHandles.closed(LatticeEdge.class);
-    private static final Logger LOGGER = LoggerFactory.getLogger(
-            Constants.getLoggerName(LatticeEdge.class));
-
+    private static final Logger LOGGER = LoggerFactory.getLogger(Constants.getLoggerName(LatticeEdge.class));
 
     static {
         try {
@@ -201,8 +199,7 @@ public class LatticeEdge extends UpstreamHandle {
     /// Pulls available work from the [UpstreamHandles][UpstreamHandle] without requesting more
     /// work.
     @Override
-    public long pull(Consumer<AbstractFrame> consumer,
-            Function<AbstractFrame, Boolean> stopCondition, long demand) {
+    public long pull(Consumer<AbstractFrame> consumer, Function<AbstractFrame, Boolean> stopCondition, long demand) {
         if (demand <= 0 || (boolean) CLOSED.getOpaque(this) || this.drain.getOpaque()) {
             return 0;
         }
@@ -283,24 +280,21 @@ public class LatticeEdge extends UpstreamHandle {
         if (witness instanceof LatticeEdge existingEdge) {
             existingEdge.addDownstream(downstream);
         } else {
-            downstream.onError(new IllegalStateException(
-                    "Already added as an upstream by a terminal downstream"));
+            downstream.onError(new IllegalStateException("Already added as an upstream by a terminal downstream"));
         }
     }
 
     /// Sets the terminal as the floor of the chain if it hasn't been set. Sends it down the chain
     /// if the downstream is another LatticeEdge.
     public void addDownstream(LatticeReceiver terminal) {
-        LatticeReceiver down =
-                (LatticeReceiver) DOWNSTREAM.compareAndExchange(this, null, terminal);
+        LatticeReceiver down = (LatticeReceiver) DOWNSTREAM.compareAndExchange(this, null, terminal);
         if (down == null) {
             return;
         }
         if (down instanceof LatticeInterceptor rs) {
             rs.addDownstream(terminal);
         }
-        terminal.onError(
-                new IllegalStateException("Already added as an upstream by a terminal downstream"));
+        terminal.onError(new IllegalStateException("Already added as an upstream by a terminal downstream"));
     }
 
     @Override

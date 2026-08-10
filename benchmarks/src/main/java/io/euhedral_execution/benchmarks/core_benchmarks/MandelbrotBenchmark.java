@@ -58,6 +58,8 @@ public class MandelbrotBenchmark {
     private static final double CENTER_Y = 0.131_825_253_6;
     private static final double H_DIAMETER = 0.000_002_936;
 
+    private MandelbrotBenchmark() {}
+
     private static void shuffle(MandelbrotPixel[] pixels) {
         long seed = SEED;
         for (int i = CANVAS - 1; i > 0; i--) {
@@ -97,10 +99,6 @@ public class MandelbrotBenchmark {
         }
     }
 
-    private MandelbrotBenchmark() {
-
-    }
-
     @BenchmarkMode({Mode.AverageTime})
     @OutputTimeUnit(TimeUnit.NANOSECONDS)
     @State(Scope.Benchmark)
@@ -124,9 +122,18 @@ public class MandelbrotBenchmark {
                 throw new RuntimeException("degree is not set. Please run with -Ddegree=N");
             }
 
-            MandelbrotCanvas.generate(WIDTH, HEIGHT, CENTER_X, CENTER_Y, H_DIAMETER,
-                    ITERATION_CAP, BAILOUT_RADIUS_SQ, Integer.parseInt(degree), this.magnitudes,
-                    this.escapes, this.counters,
+            MandelbrotCanvas.generate(
+                    WIDTH,
+                    HEIGHT,
+                    CENTER_X,
+                    CENTER_Y,
+                    H_DIAMETER,
+                    ITERATION_CAP,
+                    BAILOUT_RADIUS_SQ,
+                    Integer.parseInt(degree),
+                    this.magnitudes,
+                    this.escapes,
+                    this.counters,
                     this.pixels);
             shuffle(this.pixels);
             for (int i = 0; i < CANVAS; i++) {
@@ -152,7 +159,8 @@ public class MandelbrotBenchmark {
             LOGGER.info(TOTAL_TASKS);
 
             Flux.fromArray(this.monos)
-                    .flatMap(m -> m.subscribeOn(Schedulers.parallel()),
+                    .flatMap(
+                            m -> m.subscribeOn(Schedulers.parallel()),
                             Runtime.getRuntime().availableProcessors())
                     .subscribe();
 
@@ -167,7 +175,8 @@ public class MandelbrotBenchmark {
             LOGGER.info(TOTAL_TASKS);
 
             Flux.fromArray(this.monos)
-                    .flatMap(m -> m.subscribeOn(Schedulers.boundedElastic()),
+                    .flatMap(
+                            m -> m.subscribeOn(Schedulers.boundedElastic()),
                             Runtime.getRuntime().availableProcessors())
                     .subscribe();
 
@@ -209,8 +218,7 @@ public class MandelbrotBenchmark {
         @Setup(Level.Trial)
         public void setup(Blackhole blackhole) {
             this.outputImage = new BufferedImage(WIDTH, HEIGHT, BufferedImage.TYPE_INT_RGB);
-            this.rawImageBuffer =
-                    ((DataBufferInt) this.outputImage.getRaster().getDataBuffer()).getData();
+            this.rawImageBuffer = ((DataBufferInt) this.outputImage.getRaster().getDataBuffer()).getData();
             String degree = System.getProperty("degree");
             if (degree == null || degree.isBlank()) {
                 throw new RuntimeException("degree is not set. Please run with -Ddegree=N");
@@ -225,8 +233,17 @@ public class MandelbrotBenchmark {
             this.controlPlane = ControlPlaneLattice.getOrCreate(config);
             this.controlPlane.start();
 
-            MandelbrotCanvas.generate(WIDTH, HEIGHT, CENTER_X, CENTER_Y, H_DIAMETER,
-                    ITERATION_CAP, BAILOUT_RADIUS_SQ, this.degree, this.magnitudes, this.escapes,
+            MandelbrotCanvas.generate(
+                    WIDTH,
+                    HEIGHT,
+                    CENTER_X,
+                    CENTER_Y,
+                    H_DIAMETER,
+                    ITERATION_CAP,
+                    BAILOUT_RADIUS_SQ,
+                    this.degree,
+                    this.magnitudes,
+                    this.escapes,
                     this.counters,
                     this.pixels);
 
@@ -269,16 +286,26 @@ public class MandelbrotBenchmark {
             String histString = "Avg:   %.3f\nP0:    %d\nP50:   %d\nP90:   %d\nP99:   %d\nP99.9: %d\nP100:  %d\n\n";
 
             Histogram mHist = mag.getIntervalHistogram();
-            String mString = String.format(histString, mHist.getMean(), mHist.getValueAtPercentile(0),
-                    mHist.getValueAtPercentile(50), mHist.getValueAtPercentile(90),
-                    mHist.getValueAtPercentile(99), mHist.getValueAtPercentile(99.9),
+            String mString = String.format(
+                    histString,
+                    mHist.getMean(),
+                    mHist.getValueAtPercentile(0),
+                    mHist.getValueAtPercentile(50),
+                    mHist.getValueAtPercentile(90),
+                    mHist.getValueAtPercentile(99),
+                    mHist.getValueAtPercentile(99.9),
                     mHist.getValueAtPercentile(100));
             LOGGER.info("\nMagnitude Histogram:\n{}", mString);
 
             Histogram eHist = escape.getIntervalHistogram();
-            String eString = String.format(histString, eHist.getMean(), eHist.getValueAtPercentile(0),
-                    eHist.getValueAtPercentile(50), eHist.getValueAtPercentile(90),
-                    eHist.getValueAtPercentile(99), eHist.getValueAtPercentile(99.9),
+            String eString = String.format(
+                    histString,
+                    eHist.getMean(),
+                    eHist.getValueAtPercentile(0),
+                    eHist.getValueAtPercentile(50),
+                    eHist.getValueAtPercentile(90),
+                    eHist.getValueAtPercentile(99),
+                    eHist.getValueAtPercentile(99.9),
                     eHist.getValueAtPercentile(100));
 
             LOGGER.info("\nEscape Histogram:\n{}", eString);
@@ -294,12 +321,10 @@ public class MandelbrotBenchmark {
             path = path.resolve(this.outputFileName);
 
             LOGGER.info("Rendering final image");
-            MandelbrotCanvas.render(rawImageBuffer, magnitudes, escapes, degree, ITERATION_CAP,
-                    BAILOUT_RADIUS_SQ);
+            MandelbrotCanvas.render(rawImageBuffer, magnitudes, escapes, degree, ITERATION_CAP, BAILOUT_RADIUS_SQ);
 
             LOGGER.info("Exporting Mandelbrot d={} image to disk...", this.degree);
             ImageIO.write(this.outputImage, "png", path.toFile());
         }
     }
-
 }

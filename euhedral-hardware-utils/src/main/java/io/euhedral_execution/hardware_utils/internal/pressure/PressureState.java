@@ -48,8 +48,7 @@ public final class PressureState {
         this.lastEvaluationNs = new long[totalCells];
     }
 
-    private PressureState(int logicalSpan, boolean[] initialized, double[] previous,
-            long[] lastEvaluationNs) {
+    private PressureState(int logicalSpan, boolean[] initialized, double[] previous, long[] lastEvaluationNs) {
         this.logicalSpan = logicalSpan;
         this.initialized = initialized.clone();
         this.previous = previous.clone();

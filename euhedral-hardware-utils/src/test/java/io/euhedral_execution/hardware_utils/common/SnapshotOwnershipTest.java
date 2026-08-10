@@ -28,8 +28,8 @@ class SnapshotOwnershipTest {
         BitSet source = new BitSet();
         source.set(1);
         double[] pressures = {0, 0.5};
-        SystemSnapshot snapshot = SystemSnapshot.create(1, 2, 1, 1, 1, 1,
-                new UnmodifiableBitSet(source), pressures, new long[]{10, 5, 0}, 0);
+        SystemSnapshot snapshot = SystemSnapshot.create(
+                1, 2, 1, 1, 1, 1, new UnmodifiableBitSet(source), pressures, new long[] {10, 5, 0}, 0);
         source.set(0);
         pressures[1] = 9;
         assertEquals(bits(1), snapshot.effectiveCpus());
@@ -37,11 +37,9 @@ class SnapshotOwnershipTest {
 
         CpuSnapshot cpu = new CpuSnapshot(1, 1, 1, 1, 10, 5, 2, 0.5, 0.1, 0.2, 0.3, 4);
         CpuSnapshot[] cpuArray = {null, cpu};
-        CoreSnapshot core = new CoreSnapshot(2, 1, 1, 1, 10, 5, 2, 0.5,
-                bits(1), cpuArray);
+        CoreSnapshot core = new CoreSnapshot(2, 1, 1, 1, 10, 5, 2, 0.5, bits(1), cpuArray);
         cpuArray[1] = null;
-        CoreSnapshot equalCore = new CoreSnapshot(2, 1, 1, 1, 10, 5, 2, 0.5,
-                bits(1), new CpuSnapshot[]{null, cpu});
+        CoreSnapshot equalCore = new CoreSnapshot(2, 1, 1, 1, 10, 5, 2, 0.5, bits(1), new CpuSnapshot[] {null, cpu});
         assertEquals(equalCore, core);
         assertEquals(equalCore.hashCode(), core.hashCode());
         CpuSnapshot[] accessor = core.cpuSnapshots();
@@ -55,18 +53,18 @@ class SnapshotOwnershipTest {
         socketAccessor[2] = null;
         assertEquals(core, socket.coreSnapshots()[2]);
         assertNull(socket.coreSnapshots()[0]);
-        assertNotEquals(socket, new SocketSnapshot(0, bits(2), 10, 6, 2, 0.5,
-                new CoreSnapshot[]{null, null, core}, 4));
+        assertNotEquals(
+                socket, new SocketSnapshot(0, bits(2), 10, 6, 2, 0.5, new CoreSnapshot[] {null, null, core}, 4));
 
-        assertThrows(NullPointerException.class, () -> new CoreSnapshot(0, 0, 0, 0,
-                0, 0, 0, 0, null, new CpuSnapshot[0]));
+        assertThrows(
+                NullPointerException.class, () -> new CoreSnapshot(0, 0, 0, 0, 0, 0, 0, 0, null, new CpuSnapshot[0]));
     }
 
     @Test
     void validatesAndSanitizesRatioFields() {
         double[] pressures = {Double.NaN, -0.5, 1.5, -0.0};
-        SystemSnapshot snapshot = SystemSnapshot.create(1, 4, 1, 1, -10, -5,
-                bits(0, 1, 2, 3), pressures, new long[]{-10, -5, -1}, -20);
+        SystemSnapshot snapshot =
+                SystemSnapshot.create(1, 4, 1, 1, -10, -5, bits(0, 1, 2, 3), pressures, new long[] {-10, -5, -1}, -20);
 
         assertEquals(0, snapshot.cpuUsage());
         assertEquals(0, snapshot.cpuThrottle());
@@ -79,12 +77,26 @@ class SnapshotOwnershipTest {
         assertEquals(0.0, snapshot.pressurePerCpu().get(1));
         assertEquals(1.0, snapshot.pressurePerCpu().get(2));
         assertEquals(0.0, snapshot.pressurePerCpu().get(3)); // -0.0 -> +0.0
-        assertEquals(Double.doubleToRawLongBits(+0.0),
+        assertEquals(
+                Double.doubleToRawLongBits(+0.0),
                 Double.doubleToRawLongBits(snapshot.pressurePerCpu().get(3)));
 
         HardwareUtilization util = HardwareUtilization.create(
-                1, 1, Double.NaN, 1, bits(0, 1, 2, 3), -0.0,
-                pressures, pressures, -10, -5, 1.5, -2, -0.5, Double.NaN, snapshot);
+                1,
+                1,
+                Double.NaN,
+                1,
+                bits(0, 1, 2, 3),
+                -0.0,
+                pressures,
+                pressures,
+                -10,
+                -5,
+                1.5,
+                -2,
+                -0.5,
+                Double.NaN,
+                snapshot);
 
         assertEquals(0.0, util.quotaCpuUsage());
         assertEquals(0.0, util.cpuThrottleRatio());

@@ -38,6 +38,8 @@ public class EndToEndLatencyBenchmark {
     private static final Logger LOGGER = LoggerFactory.getLogger(EndToEndLatencyBenchmark.class);
     private static final int BATCH_SIZE = 100_000;
 
+    private EndToEndLatencyBenchmark() {}
+
     private static void await(PaddedLongAdder counters) {
         int spin = 0;
         long sum;
@@ -63,10 +65,6 @@ public class EndToEndLatencyBenchmark {
         }
     }
 
-    private EndToEndLatencyBenchmark() {
-
-    }
-
     @State(Scope.Benchmark)
     @BenchmarkMode({Mode.SampleTime})
     @OutputTimeUnit(TimeUnit.NANOSECONDS)
@@ -75,8 +73,8 @@ public class EndToEndLatencyBenchmark {
     @Fork(3)
     public static class PCore {
 
-        final PaddedLongAdder counters = new PaddedLongAdder(
-                Runtime.getRuntime().availableProcessors());
+        final PaddedLongAdder counters =
+                new PaddedLongAdder(Runtime.getRuntime().availableProcessors());
         RepeatingSink ingestSink;
         private ControlPlaneLattice controlPlane;
         private boolean skip = false;
@@ -101,8 +99,8 @@ public class EndToEndLatencyBenchmark {
 
             LOGGER.info("Benchmark is using P cpus {}", cpus);
             BaseCloneableObject base = new BaseCloneableObject(new NoOpExecutor(blackhole));
-            LatticeConfig config = new LatticeConfig("EndToEndLatencyBenchmark", cpus,
-                    Duration.ofSeconds(1), ControlPlaneShard.createBaseShard(base));
+            LatticeConfig config = new LatticeConfig(
+                    "EndToEndLatencyBenchmark", cpus, Duration.ofSeconds(1), ControlPlaneShard.createBaseShard(base));
             this.controlPlane = ControlPlaneLattice.getOrCreate(config);
             this.controlPlane.start();
             this.controlPlane.addUpstream(this.ingestSink);
@@ -135,8 +133,8 @@ public class EndToEndLatencyBenchmark {
     @Fork(3)
     public static class ECore {
 
-        final PaddedLongAdder counters = new PaddedLongAdder(
-                Runtime.getRuntime().availableProcessors());
+        final PaddedLongAdder counters =
+                new PaddedLongAdder(Runtime.getRuntime().availableProcessors());
         RepeatingSink ingestSink;
         private ControlPlaneLattice controlPlane;
         private boolean skip = false;
@@ -171,8 +169,8 @@ public class EndToEndLatencyBenchmark {
 
             LOGGER.info("Benchmark is using E cpus {}", cpus);
             BaseCloneableObject base = new BaseCloneableObject(new NoOpExecutor(blackhole));
-            LatticeConfig config = new LatticeConfig("EndToEndLatencyBenchmark", cpus,
-                    Duration.ofSeconds(1), ControlPlaneShard.createBaseShard(base));
+            LatticeConfig config = new LatticeConfig(
+                    "EndToEndLatencyBenchmark", cpus, Duration.ofSeconds(1), ControlPlaneShard.createBaseShard(base));
             this.controlPlane = ControlPlaneLattice.getOrCreate(config);
             this.controlPlane.start();
             this.controlPlane.addUpstream(this.ingestSink);
@@ -197,4 +195,3 @@ public class EndToEndLatencyBenchmark {
         }
     }
 }
-

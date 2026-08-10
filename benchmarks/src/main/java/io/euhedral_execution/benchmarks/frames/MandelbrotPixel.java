@@ -6,14 +6,12 @@ import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
 
 public class MandelbrotPixel extends AbstractFrame {
 
+    public final PaddedLongAdder counters;
     protected final int width;
     protected final int height;
     protected final int iterationCap;
     protected final double[] magnitudes;
     protected final int[] escapes;
-
-    public final PaddedLongAdder counters;
-
     private final double bailoutRadiusSq;
     private final int degree;
 
@@ -26,11 +24,22 @@ public class MandelbrotPixel extends AbstractFrame {
 
     public int cpu;
 
-    public MandelbrotPixel(long idHash, FrameManager<Void, AbstractFrame> recycler,
-            int taskIndex, int degree, double cr, double ci,
-            double pixelWidthStep, double pixelHeightStep,
-            int width, int height, int iterationCap,
-            double bailoutRadiusSq, double[] magnitudes, int[] escapes, PaddedLongAdder counters) {
+    public MandelbrotPixel(
+            long idHash,
+            FrameManager<Void, AbstractFrame> recycler,
+            int taskIndex,
+            int degree,
+            double cr,
+            double ci,
+            double pixelWidthStep,
+            double pixelHeightStep,
+            int width,
+            int height,
+            int iterationCap,
+            double bailoutRadiusSq,
+            double[] magnitudes,
+            int[] escapes,
+            PaddedLongAdder counters) {
         super(idHash, recycler, null);
         this.width = width;
         this.height = height;
@@ -51,8 +60,12 @@ public class MandelbrotPixel extends AbstractFrame {
 
     @Override
     public void execute() {
-        double[] subOffsetsX = {-0.25 * pixelWidthStep, 0.25 * pixelWidthStep, -0.25 * pixelWidthStep, 0.25 * pixelWidthStep};
-        double[] subOffsetsY = {-0.25 * pixelHeightStep, -0.25 * pixelHeightStep, 0.25 * pixelHeightStep, 0.25 * pixelHeightStep};
+        double[] subOffsetsX = {
+            -0.25 * pixelWidthStep, 0.25 * pixelWidthStep, -0.25 * pixelWidthStep, 0.25 * pixelWidthStep
+        };
+        double[] subOffsetsY = {
+            -0.25 * pixelHeightStep, -0.25 * pixelHeightStep, 0.25 * pixelHeightStep, 0.25 * pixelHeightStep
+        };
 
         int baseArrayOffset = this.taskIndex * 4;
 
@@ -154,9 +167,7 @@ public class MandelbrotPixel extends AbstractFrame {
     }
 
     @Override
-    public void kill() {
-
-    }
+    public void kill() {}
 
     @Override
     public void doFinally() {

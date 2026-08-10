@@ -2,12 +2,21 @@ package io.euhedral_execution.training.optimization.config;
 
 import java.util.Arrays;
 
-public record CandidateGenerationConfig(int screenRows, int maximumPredictionRows,
-        int[] scoreBandWeights, int cmaWeight, int scoreBandWeight, int directSobolWeight,
+public record CandidateGenerationConfig(
+        int screenRows,
+        int maximumPredictionRows,
+        int[] scoreBandWeights,
+        int cmaWeight,
+        int scoreBandWeight,
+        int directSobolWeight,
         CmaEsConfig cma) {
     public CandidateGenerationConfig {
-        if (screenRows <= 0 || maximumPredictionRows <= 0 || scoreBandWeights.length != 10
-                || cmaWeight < 0 || scoreBandWeight < 0 || directSobolWeight < 0
+        if (screenRows <= 0
+                || maximumPredictionRows <= 0
+                || scoreBandWeights.length != 10
+                || cmaWeight < 0
+                || scoreBandWeight < 0
+                || directSobolWeight < 0
                 || cmaWeight + scoreBandWeight + directSobolWeight <= 0) {
             throw new IllegalArgumentException("Invalid candidate generation config");
         }
@@ -24,14 +33,13 @@ public record CandidateGenerationConfig(int screenRows, int maximumPredictionRow
         scoreBandWeights = Arrays.copyOf(scoreBandWeights, scoreBandWeights.length);
     }
 
+    public static CandidateGenerationConfig defaults() {
+        return new CandidateGenerationConfig(
+                2_097_152, 16_384, new int[] {1, 1, 1, 1, 2, 2, 3, 5, 8, 16}, 8, 7, 1, CmaEsConfig.defaults());
+    }
+
     @Override
     public int[] scoreBandWeights() {
         return Arrays.copyOf(scoreBandWeights, scoreBandWeights.length);
-    }
-
-    public static CandidateGenerationConfig defaults() {
-        return new CandidateGenerationConfig(2_097_152, 16_384,
-                new int[]{1, 1, 1, 1, 2, 2, 3, 5, 8, 16}, 8, 7, 1,
-                CmaEsConfig.defaults());
     }
 }

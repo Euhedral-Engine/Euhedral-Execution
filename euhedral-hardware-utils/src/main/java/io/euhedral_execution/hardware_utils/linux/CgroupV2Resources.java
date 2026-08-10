@@ -36,8 +36,7 @@ public class CgroupV2Resources implements SystemSnapshotProvider {
     private static final LongSet DEVICE_KEYS = new LongArraySet();
     private static final byte[] RBYTES_KEY = "rbytes".getBytes(StandardCharsets.US_ASCII);
     private static final byte[] WBYTES_KEY = "wbytes".getBytes(StandardCharsets.US_ASCII);
-    private static final byte[] INACTIVE_FILE =
-            "inactive_file".getBytes(StandardCharsets.US_ASCII);
+    private static final byte[] INACTIVE_FILE = "inactive_file".getBytes(StandardCharsets.US_ASCII);
 
     static {
         Path devicesPath = Paths.get("/proc/devices");
@@ -101,8 +100,7 @@ public class CgroupV2Resources implements SystemSnapshotProvider {
             // Throws if not supported.
         }
         try {
-            effectiveCpuChannel = FileChannel.open(LinuxPaths.EFFECTIVE_CPU,
-                    StandardOpenOption.READ);
+            effectiveCpuChannel = FileChannel.open(LinuxPaths.EFFECTIVE_CPU, StandardOpenOption.READ);
         } catch (Exception ignored) {
             // Throws if not supported.
         }
@@ -127,8 +125,7 @@ public class CgroupV2Resources implements SystemSnapshotProvider {
             // Throws if not supported.
         }
         try {
-            memoryCurrentChannel = FileChannel.open(LinuxPaths.MEMORY_CURRENT,
-                    StandardOpenOption.READ);
+            memoryCurrentChannel = FileChannel.open(LinuxPaths.MEMORY_CURRENT, StandardOpenOption.READ);
         } catch (Exception ignored) {
             // Throws if not supported.
         }
@@ -187,15 +184,17 @@ public class CgroupV2Resources implements SystemSnapshotProvider {
             updateMemory();
             long ioBytes = getDiskIoBytes();
 
-            snapshot =
-                    SystemSnapshot.create(now,
-                            availableCpus, quotaCpus, period,
-                            cpuUsage, cpuThrottle,
-                            UnmodifiableBitSet.wrap((BitSet) effectiveCpus.clone()),
-                            pressure,
-                            memorySnapshot,
-                            ioBytes
-                    );
+            snapshot = SystemSnapshot.create(
+                    now,
+                    availableCpus,
+                    quotaCpus,
+                    period,
+                    cpuUsage,
+                    cpuThrottle,
+                    UnmodifiableBitSet.wrap((BitSet) effectiveCpus.clone()),
+                    pressure,
+                    memorySnapshot,
+                    ioBytes);
         } catch (Exception e) {
             LOGGER.error("Error generating SystemSnapshot.", e);
         } finally {
@@ -562,16 +561,19 @@ public class CgroupV2Resources implements SystemSnapshotProvider {
             pos++;
         }
         byte cursor = this.buffer.get(pos);
-        return cursor == ' ' || cursor == '=' || cursor == ',' || cursor == '\t' || cursor == '\r'
-                || cursor == '\n' || cursor == '\0';
+        return cursor == ' '
+                || cursor == '='
+                || cursor == ','
+                || cursor == '\t'
+                || cursor == '\r'
+                || cursor == '\n'
+                || cursor == '\0';
     }
 
     private class CpuMetrics {
 
-        private static final byte[] USAGE_USEC =
-                "usage_usec".getBytes(StandardCharsets.US_ASCII);
-        private static final byte[] THROTTLED_USEC =
-                "throttled_usec".getBytes(StandardCharsets.US_ASCII);
+        private static final byte[] USAGE_USEC = "usage_usec".getBytes(StandardCharsets.US_ASCII);
+        private static final byte[] THROTTLED_USEC = "throttled_usec".getBytes(StandardCharsets.US_ASCII);
 
         private long usageNs;
         private long throttledNs;

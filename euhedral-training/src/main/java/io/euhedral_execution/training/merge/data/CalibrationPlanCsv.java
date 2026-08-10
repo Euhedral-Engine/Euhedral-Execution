@@ -20,6 +20,8 @@ import java.util.TreeMap;
 
 public final class CalibrationPlanCsv {
 
+    private CalibrationPlanCsv() {}
+
     public static void write(Path directory, CalibrationPlan plan) throws IOException {
         Files.createDirectories(directory);
         if (Files.exists(directory.resolve("fixed-anchors.csv"))
@@ -32,34 +34,46 @@ public final class CalibrationPlanCsv {
         }
         anchors.append('\n');
         for (PolicyVector policy : plan.anchors().fixedAnchors().stream()
-                .sorted(Comparator.comparing(PolicyVector::id)).toList()) {
-            anchors.append("1,").append(plan.anchors().anchorSetId()).append(',')
+                .sorted(Comparator.comparing(PolicyVector::id))
+                .toList()) {
+            anchors.append("1,")
+                    .append(plan.anchors().anchorSetId())
+                    .append(',')
                     .append(policy.id().canonical());
             for (double weight : policy.copyWeights()) {
-                anchors.append(',')
-                        .append(String.format("%016x", Double.doubleToRawLongBits(weight)));
+                anchors.append(',').append(String.format("%016x", Double.doubleToRawLongBits(weight)));
             }
             anchors.append('\n');
         }
-        StringBuilder references = new StringBuilder(
-                "schema_version,anchor_set_id,scenario_id,benchmark_run_id\n");
-        plan.references().referenceRunIds().forEach((scenario, runId) -> references.append("1,")
-                .append(plan.anchors().anchorSetId()).append(',').append(scenario.canonical())
-                .append(',').append(runId).append('\n'));
-        Files.writeString(directory.resolve("fixed-anchors.csv"), anchors, StandardCharsets.UTF_8,
+        StringBuilder references = new StringBuilder("schema_version,anchor_set_id,scenario_id,benchmark_run_id\n");
+        plan.references()
+                .referenceRunIds()
+                .forEach((scenario, runId) -> references
+                        .append("1,")
+                        .append(plan.anchors().anchorSetId())
+                        .append(',')
+                        .append(scenario.canonical())
+                        .append(',')
+                        .append(runId)
+                        .append('\n'));
+        Files.writeString(
+                directory.resolve("fixed-anchors.csv"),
+                anchors,
+                StandardCharsets.UTF_8,
                 java.nio.file.StandardOpenOption.CREATE_NEW);
-        Files.writeString(directory.resolve("reference-runs.csv"), references,
-                StandardCharsets.UTF_8, java.nio.file.StandardOpenOption.CREATE_NEW);
+        Files.writeString(
+                directory.resolve("reference-runs.csv"),
+                references,
+                StandardCharsets.UTF_8,
+                java.nio.file.StandardOpenOption.CREATE_NEW);
     }
 
-    public static CalibrationPlan read(Path directory, Collection<SourceScenario> knownScenarios)
-            throws IOException {
+    public static CalibrationPlan read(Path directory, Collection<SourceScenario> knownScenarios) throws IOException {
         List<String> anchorLines = strictLines(directory.resolve("fixed-anchors.csv"));
         if (anchorLines.size() < 2) {
             throw new IllegalArgumentException("Empty anchor catalog");
         }
-        StringBuilder expectedAnchorHeader = new StringBuilder(
-                "schema_version,anchor_set_id,policy_id");
+        StringBuilder expectedAnchorHeader = new StringBuilder("schema_version,anchor_set_id,policy_id");
         for (int i = 0; i < PolicyVector.WIDTH; i++) {
             expectedAnchorHeader.append(String.format(",weight_%02d_bits", i));
         }
@@ -82,8 +96,7 @@ public final class CalibrationPlanCsv {
             }
             double[] weights = new double[PolicyVector.WIDTH];
             for (int i = 0; i < weights.length; i++) {
-                weights[i] = Double.longBitsToDouble(
-                        Long.parseUnsignedLong(fields[i + 3], 16));
+                weights[i] = Double.longBitsToDouble(Long.parseUnsignedLong(fields[i + 3], 16));
             }
             PolicyVector policy = PolicyVector.of(weights);
             if (!policy.id().equals(PolicyId.parse(fields[2]))) {
@@ -99,15 +112,14 @@ public final class CalibrationPlanCsv {
         knownScenarios.forEach(item -> scenarioById.put(item.canonical(), item));
         SortedMap<SourceScenario, String> references = new TreeMap<>();
         List<String> referenceLines = strictLines(directory.resolve("reference-runs.csv"));
-        if (referenceLines.isEmpty() || !referenceLines.getFirst().equals(
-                "schema_version,anchor_set_id,scenario_id,benchmark_run_id")) {
+        if (referenceLines.isEmpty()
+                || !referenceLines.getFirst().equals("schema_version,anchor_set_id,scenario_id,benchmark_run_id")) {
             throw new IllegalArgumentException("Invalid reference header");
         }
         SourceScenario previousScenario = null;
         for (int line = 1; line < referenceLines.size(); line++) {
             String[] fields = referenceLines.get(line).split(",", -1);
-            if (fields.length != 4 || !"1".equals(fields[0]) || !Objects.equals(anchorSetId,
-                    fields[1])) {
+            if (fields.length != 4 || !"1".equals(fields[0]) || !Objects.equals(anchorSetId, fields[1])) {
                 throw new IllegalArgumentException("Invalid reference catalog");
             }
             SourceScenario scenario = scenarioById.get(fields[2]);
@@ -119,8 +131,8 @@ public final class CalibrationPlanCsv {
             }
             previousScenario = scenario;
         }
-        return new CalibrationPlan(new AnchorCatalog(1, anchorSetId, anchors),
-                new ReferenceRunCatalog(1, anchorSetId, references));
+        return new CalibrationPlan(
+                new AnchorCatalog(1, anchorSetId, anchors), new ReferenceRunCatalog(1, anchorSetId, references));
     }
 
     private static List<String> strictLines(Path path) throws IOException {
@@ -129,8 +141,5 @@ public final class CalibrationPlanCsv {
             throw new IllegalArgumentException("CSV must use UTF-8 and LF line endings");
         }
         return Arrays.asList(text.substring(0, text.length() - 1).split("\n", -1));
-    }
-
-    private CalibrationPlanCsv() {
     }
 }

@@ -24,45 +24,60 @@ import java.util.TreeSet;
 
 final class ScenarioFoldRunner {
 
-    static FoldResult run(String trainingKind, String evaluationKind, String foldId,
-            ScenarioFeatureSet featureSet, List<ScenarioLearningRow> fittingRows,
-            List<ScenarioLearningRow> earlyStopRows, List<ScenarioLearningRow> scoreRows,
-            int memberCount, ScenarioTrainingConfig config, Device device, Path directory,
-            boolean insufficientContextVariation) throws Exception {
+    private ScenarioFoldRunner() {}
+
+    static FoldResult run(
+            String trainingKind,
+            String evaluationKind,
+            String foldId,
+            ScenarioFeatureSet featureSet,
+            List<ScenarioLearningRow> fittingRows,
+            List<ScenarioLearningRow> earlyStopRows,
+            List<ScenarioLearningRow> scoreRows,
+            int memberCount,
+            ScenarioTrainingConfig config,
+            Device device,
+            Path directory,
+            boolean insufficientContextVariation)
+            throws Exception {
         validateRowSets(fittingRows, earlyStopRows, scoreRows);
         SortedSet<SourceScenario> fittingScenarios = scenarios(fittingRows);
         SortedSet<SourceScenario> scoreScenarios = scenarios(scoreRows);
-        FeatureNormalizer normalizer =
-                ScenarioFeatureEncoder.fit(fittingRows, featureSet);
-        ScenarioLearningMatrix fitting = ScenarioFeatureEncoder.matrix(
-                fittingRows, fittingScenarios, normalizer);
-        ScenarioLearningMatrix validation = ScenarioFeatureEncoder.matrix(
-                earlyStopRows, fittingScenarios, normalizer);
+        FeatureNormalizer normalizer = ScenarioFeatureEncoder.fit(fittingRows, featureSet);
+        ScenarioLearningMatrix fitting = ScenarioFeatureEncoder.matrix(fittingRows, fittingScenarios, normalizer);
+        ScenarioLearningMatrix validation = ScenarioFeatureEncoder.matrix(earlyStopRows, fittingScenarios, normalizer);
         ArrayList<OrdinalMember> members = new ArrayList<>(memberCount);
         ArrayList<TrainingHistoryEntry> history = new ArrayList<>();
         try {
             for (int memberIndex = 0; memberIndex < memberCount; memberIndex++) {
-                Path memberDirectory = directory.resolve(
-                        "member-%03d".formatted(memberIndex));
+                Path memberDirectory = directory.resolve("member-%03d".formatted(memberIndex));
                 ScenarioOrdinalNetwork.TrainingResult trained = ScenarioOrdinalNetwork.train(
-                        fitting, validation, featureSet, config, device, trainingKind, foldId,
-                        memberIndex, memberDirectory);
+                        fitting,
+                        validation,
+                        featureSet,
+                        config,
+                        device,
+                        trainingKind,
+                        foldId,
+                        memberIndex,
+                        memberDirectory);
                 members.add(trained.member());
                 history.addAll(trained.history());
             }
             List<PolicyVector> policies = policies(scoreRows);
-            try (ScenarioConditionedModel model = ScenarioConditionedModel.forTest(
-                    normalizer, scoreScenarios, members)) {
+            try (ScenarioConditionedModel model =
+                    ScenarioConditionedModel.forTest(normalizer, scoreScenarios, members)) {
                 List<PolicyPredictionCurve> predictions =
-                        model.predictCurves(policies, scoreScenarios,
-                                device.isGpu() ? 65_536 : 16_384);
+                        model.predictCurves(policies, scoreScenarios, device.isGpu() ? 65_536 : 16_384);
                 EvaluationSummary evaluation = ScenarioModelEvaluator.evaluate(
-                        evaluationKind, foldId, featureSet, scoreRows,
+                        evaluationKind,
+                        foldId,
+                        featureSet,
+                        scoreRows,
                         retainPredictionsForRows(predictions, scoreRows),
                         insufficientContextVariation);
                 members.clear(); // ownership moved to and closed by the model
-                return new FoldResult(evaluation, List.copyOf(history), normalizer,
-                        fittingScenarios, scoreScenarios);
+                return new FoldResult(evaluation, List.copyOf(history), normalizer, fittingScenarios, scoreScenarios);
             }
         } finally {
             for (OrdinalMember member : members) {
@@ -86,8 +101,10 @@ final class ScenarioFoldRunner {
         return (int) rows.stream().map(row -> row.scenario().ratio()).distinct().count();
     }
 
-    static void validateRowSets(List<ScenarioLearningRow> fittingRows,
-            List<ScenarioLearningRow> earlyStopRows, List<ScenarioLearningRow> scoreRows) {
+    static void validateRowSets(
+            List<ScenarioLearningRow> fittingRows,
+            List<ScenarioLearningRow> earlyStopRows,
+            List<ScenarioLearningRow> scoreRows) {
         requireDisjointPolicies(fittingRows, earlyStopRows, scoreRows);
         if (!scenarios(earlyStopRows).equals(scenarios(fittingRows))) {
             throw new InsufficientScenarioLearningDataException(
@@ -110,7 +127,8 @@ final class ScenarioFoldRunner {
                 throw new IllegalArgumentException("Prediction has no scoring policy row");
             }
             List<ScenarioPrediction> selected = curve.scenarios().stream()
-                    .filter(prediction -> scenarios.contains(prediction.scenario())).toList();
+                    .filter(prediction -> scenarios.contains(prediction.scenario()))
+                    .toList();
             if (selected.size() != scenarios.size()) {
                 throw new IllegalArgumentException("Prediction lacks a scoring scenario row");
             }
@@ -130,8 +148,8 @@ final class ScenarioFoldRunner {
         return List.copyOf(policies.values());
     }
 
-    private static void requireDisjointPolicies(List<ScenarioLearningRow> fitting,
-            List<ScenarioLearningRow> earlyStop, List<ScenarioLearningRow> score) {
+    private static void requireDisjointPolicies(
+            List<ScenarioLearningRow> fitting, List<ScenarioLearningRow> earlyStop, List<ScenarioLearningRow> score) {
         HashSet<PolicyId> fit = ids(fitting);
         HashSet<PolicyId> early = ids(earlyStop);
         HashSet<PolicyId> scoring = ids(score);
@@ -150,12 +168,10 @@ final class ScenarioFoldRunner {
         return result;
     }
 
-    private ScenarioFoldRunner() {
-    }
-
-    record FoldResult(EvaluationSummary evaluation, List<TrainingHistoryEntry> history,
-                      FeatureNormalizer normalizer, SortedSet<SourceScenario> fittingScenarios,
-                      SortedSet<SourceScenario> scoreScenarios) {
-
-    }
+    record FoldResult(
+            EvaluationSummary evaluation,
+            List<TrainingHistoryEntry> history,
+            FeatureNormalizer normalizer,
+            SortedSet<SourceScenario> fittingScenarios,
+            SortedSet<SourceScenario> scoreScenarios) {}
 }

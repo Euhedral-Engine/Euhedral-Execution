@@ -4,10 +4,11 @@ import io.euhedral_execution.hardware_utils.linux.LinuxAffinity;
 
 public final class NativeLoadSmokeMain {
 
+    private NativeLoadSmokeMain() {}
+
     public static void main(String[] arguments) {
         if (arguments.length != 1) {
-            throw new IllegalArgumentException(
-                    "usage: NativeLoadSmokeMain <load-only|linux-get-cpu>");
+            throw new IllegalArgumentException("usage: NativeLoadSmokeMain <load-only|linux-get-cpu>");
         }
         JNIClassLoader.load();
         switch (arguments[0]) {
@@ -22,8 +23,5 @@ public final class NativeLoadSmokeMain {
             }
             default -> throw new IllegalArgumentException("unknown smoke mode: " + arguments[0]);
         }
-    }
-
-    private NativeLoadSmokeMain() {
     }
 }

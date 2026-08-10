@@ -17,8 +17,7 @@ import org.junit.jupiter.api.Test;
 
 class WindowsTopologyFixtureTest {
 
-    private static ProcessorRelationship relationship(Relationship relationship,
-            GroupAffinity... affinities) {
+    private static ProcessorRelationship relationship(Relationship relationship, GroupAffinity... affinities) {
         return new ProcessorRelationship(relationship, false, true, List.of(affinities));
     }
 
@@ -26,8 +25,7 @@ class WindowsTopologyFixtureTest {
         return new GroupAffinity(mask, (short) group);
     }
 
-    private static byte[] createProcessorRecord(int relationship, byte eClass,
-            GroupAffinity... groups) {
+    private static byte[] createProcessorRecord(int relationship, byte eClass, GroupAffinity... groups) {
         int groupCount = groups.length;
         int payloadLen = 24 + groupCount * 16;
         int size = 8 + payloadLen;
@@ -50,8 +48,7 @@ class WindowsTopologyFixtureTest {
         return buf.array();
     }
 
-    private static byte[] createCacheRecord(byte level, byte assoc, int cacheSize,
-            int type, GroupAffinity... groups) {
+    private static byte[] createCacheRecord(byte level, byte assoc, int cacheSize, int type, GroupAffinity... groups) {
         int groupCount = groups.length;
         int payloadLen = 32 + groupCount * 16;
         int size = 8 + payloadLen;
@@ -93,12 +90,16 @@ class WindowsTopologyFixtureTest {
 
     @Test
     void mapsGroupsAndBitSixtyThreeBijectively() {
-        ProcessorRelationship packageValue = relationship(Relationship.PROCESSOR_PACKAGE,
-                affinity(1, 0), affinity(Long.MIN_VALUE, 0), affinity(1, 1),
+        ProcessorRelationship packageValue = relationship(
+                Relationship.PROCESSOR_PACKAGE,
+                affinity(1, 0),
+                affinity(Long.MIN_VALUE, 0),
+                affinity(1, 1),
                 affinity(Long.MIN_VALUE, 1));
         WindowsSystemLayout layout = new WindowsSystemLayout(List.of(
                 relationship(Relationship.PROCESSOR_CORE, affinity(Long.MIN_VALUE, 1)),
-                relationship(Relationship.PROCESSOR_CORE, affinity(1, 0)), packageValue,
+                relationship(Relationship.PROCESSOR_CORE, affinity(1, 0)),
+                packageValue,
                 relationship(Relationship.PROCESSOR_CORE, affinity(1, 1)),
                 relationship(Relationship.PROCESSOR_CORE, affinity(Long.MIN_VALUE, 0))));
 
@@ -116,12 +117,10 @@ class WindowsTopologyFixtureTest {
         byte[] core1 = createProcessorRecord(0, (byte) 1, affinity(2L, 0));
         byte[] core2 = createProcessorRecord(0, (byte) 1, affinity(4L, 0));
         byte[] core3 = createProcessorRecord(0, (byte) 1, affinity(8L, 0));
-        byte[] l3Cache = createCacheRecord((byte) 3, (byte) 16, 16384 * 1024, 0,
-                affinity(0x0FL, 0));
+        byte[] l3Cache = createCacheRecord((byte) 3, (byte) 16, 16384 * 1024, 0, affinity(0x0FL, 0));
 
         byte[] rawBuffer = concat(packageRec, core0, core1, core2, core3, l3Cache);
-        List<SystemLogicalProcessorInformation> parsed = SystemLogicalProcessorInformation.parse(
-                rawBuffer);
+        List<SystemLogicalProcessorInformation> parsed = SystemLogicalProcessorInformation.parse(rawBuffer);
         assertEquals(6, parsed.size());
 
         WindowsSystemLayout layout = new WindowsSystemLayout(parsed);
@@ -132,16 +131,14 @@ class WindowsTopologyFixtureTest {
     @Test
     void parsesMultiGroupBinaryBufferFixture() {
         // Group 0 (mask 0x03 -> CPUs 0, 1) and Group 1 (mask 0x03 -> CPUs 64, 65)
-        byte[] packageRec = createProcessorRecord(3, (byte) 0, affinity(3L, 0),
-                affinity(3L, 1));
+        byte[] packageRec = createProcessorRecord(3, (byte) 0, affinity(3L, 0), affinity(3L, 1));
         byte[] core0 = createProcessorRecord(0, (byte) 0, affinity(1L, 0));
         byte[] core1 = createProcessorRecord(0, (byte) 0, affinity(2L, 0));
         byte[] core2 = createProcessorRecord(0, (byte) 0, affinity(1L, 1));
         byte[] core3 = createProcessorRecord(0, (byte) 0, affinity(2L, 1));
 
         byte[] rawBuffer = concat(packageRec, core0, core1, core2, core3);
-        List<SystemLogicalProcessorInformation> parsed = SystemLogicalProcessorInformation.parse(
-                rawBuffer);
+        List<SystemLogicalProcessorInformation> parsed = SystemLogicalProcessorInformation.parse(rawBuffer);
         assertEquals(5, parsed.size());
 
         WindowsSystemLayout layout = new WindowsSystemLayout(parsed);
@@ -152,8 +149,7 @@ class WindowsTopologyFixtureTest {
     @Test
     void parsesMoreThan64CpusBinaryBufferFixture() {
         // Full group 0 (64 CPUs) + 2 CPUs in group 1 -> total 66 CPUs
-        byte[] packageRec = createProcessorRecord(3, (byte) 0, affinity(-1L, 0),
-                affinity(3L, 1));
+        byte[] packageRec = createProcessorRecord(3, (byte) 0, affinity(-1L, 0), affinity(3L, 1));
         byte[] rawCores = new byte[0];
         // Create 64 single-thread cores in Group 0
         for (int i = 0; i < 64; i++) {
@@ -165,8 +161,7 @@ class WindowsTopologyFixtureTest {
         byte[] g1c1 = createProcessorRecord(0, (byte) 0, affinity(2L, 1));
 
         byte[] rawBuffer = concat(packageRec, rawCores, g1c0, g1c1);
-        List<SystemLogicalProcessorInformation> parsed = SystemLogicalProcessorInformation.parse(
-                rawBuffer);
+        List<SystemLogicalProcessorInformation> parsed = SystemLogicalProcessorInformation.parse(rawBuffer);
         assertEquals(67, parsed.size());
 
         WindowsSystemLayout layout = new WindowsSystemLayout(parsed);
@@ -180,16 +175,15 @@ class WindowsTopologyFixtureTest {
     @Test
     void parsesBit63InBinaryBufferFixture() {
         // Bit 63 set in Group 0 (CPU 63) and Group 1 (CPU 127)
-        byte[] packageRec = createProcessorRecord(3, (byte) 0,
-                affinity(Long.MIN_VALUE, 0), affinity(Long.MIN_VALUE, 1));
+        byte[] packageRec =
+                createProcessorRecord(3, (byte) 0, affinity(Long.MIN_VALUE, 0), affinity(Long.MIN_VALUE, 1));
         byte[] core0 = createProcessorRecord(0, (byte) 0, affinity(Long.MIN_VALUE, 0));
         byte[] core1 = createProcessorRecord(0, (byte) 0, affinity(Long.MIN_VALUE, 1));
-        byte[] l3Cache = createCacheRecord((byte) 3, (byte) 16, 32768 * 1024, 0,
-                affinity(Long.MIN_VALUE, 0), affinity(Long.MIN_VALUE, 1));
+        byte[] l3Cache = createCacheRecord(
+                (byte) 3, (byte) 16, 32768 * 1024, 0, affinity(Long.MIN_VALUE, 0), affinity(Long.MIN_VALUE, 1));
 
         byte[] rawBuffer = concat(packageRec, core0, core1, l3Cache);
-        List<SystemLogicalProcessorInformation> parsed = SystemLogicalProcessorInformation.parse(
-                rawBuffer);
+        List<SystemLogicalProcessorInformation> parsed = SystemLogicalProcessorInformation.parse(rawBuffer);
         assertEquals(4, parsed.size());
 
         WindowsSystemLayout layout = new WindowsSystemLayout(parsed);
@@ -200,14 +194,11 @@ class WindowsTopologyFixtureTest {
     @Test
     void parsesHeterogeneousPECoreClassification() {
         byte[] packageRec = createProcessorRecord(3, (byte) 0, affinity(3L, 0));
-        byte[] pCore = createProcessorRecord(0, (byte) 1,
-                affinity(1L, 0)); // EfficiencyClass = 1 -> P-core
-        byte[] eCore = createProcessorRecord(0, (byte) 0,
-                affinity(2L, 0)); // EfficiencyClass = 0 -> E-core
+        byte[] pCore = createProcessorRecord(0, (byte) 1, affinity(1L, 0)); // EfficiencyClass = 1 -> P-core
+        byte[] eCore = createProcessorRecord(0, (byte) 0, affinity(2L, 0)); // EfficiencyClass = 0 -> E-core
 
         byte[] rawBuffer = concat(packageRec, pCore, eCore);
-        List<SystemLogicalProcessorInformation> parsed = SystemLogicalProcessorInformation.parse(
-                rawBuffer);
+        List<SystemLogicalProcessorInformation> parsed = SystemLogicalProcessorInformation.parse(rawBuffer);
         WindowsSystemLayout layout = new WindowsSystemLayout(parsed);
 
         assertTrue(layout.getCoreInfoMap().get(0).pCore());
@@ -218,14 +209,12 @@ class WindowsTopologyFixtureTest {
     void parsesInstructionCacheExclusion() {
         byte[] packageRec = createProcessorRecord(3, (byte) 0, affinity(1L, 0));
         byte[] coreRec = createProcessorRecord(0, (byte) 0, affinity(1L, 0));
-        byte[] instCache = createCacheRecord((byte) 1, (byte) 8, 32 * 1024, 1,
-                affinity(1L, 0)); // type = 1 (INSTRUCTION)
-        byte[] dataCache = createCacheRecord((byte) 1, (byte) 8, 32 * 1024, 2,
-                affinity(1L, 0)); // type = 2 (DATA)
+        byte[] instCache =
+                createCacheRecord((byte) 1, (byte) 8, 32 * 1024, 1, affinity(1L, 0)); // type = 1 (INSTRUCTION)
+        byte[] dataCache = createCacheRecord((byte) 1, (byte) 8, 32 * 1024, 2, affinity(1L, 0)); // type = 2 (DATA)
 
         byte[] rawBuffer = concat(packageRec, coreRec, instCache, dataCache);
-        List<SystemLogicalProcessorInformation> parsed = SystemLogicalProcessorInformation.parse(
-                rawBuffer);
+        List<SystemLogicalProcessorInformation> parsed = SystemLogicalProcessorInformation.parse(rawBuffer);
         assertEquals(4, parsed.size());
 
         WindowsSystemLayout layout = new WindowsSystemLayout(parsed);
@@ -235,22 +224,20 @@ class WindowsTopologyFixtureTest {
     @Test
     void rejectsMalformedBuffers() {
         // Truncated header (< 8 bytes)
-        assertThrows(IllegalArgumentException.class,
-                () -> SystemLogicalProcessorInformation.parse(new byte[]{0, 0, 0, 0}));
+        assertThrows(
+                IllegalArgumentException.class, () -> SystemLogicalProcessorInformation.parse(new byte[] {0, 0, 0, 0}));
 
         // Record size < 8
         ByteBuffer bufSmall = ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN);
         bufSmall.putInt(0); // relationship
         bufSmall.putInt(4); // size < 8
-        assertThrows(IllegalArgumentException.class,
-                () -> SystemLogicalProcessorInformation.parse(bufSmall.array()));
+        assertThrows(IllegalArgumentException.class, () -> SystemLogicalProcessorInformation.parse(bufSmall.array()));
 
         // Size exceeds buffer limit
         ByteBuffer bufBig = ByteBuffer.allocate(16).order(ByteOrder.LITTLE_ENDIAN);
         bufBig.putInt(0);
         bufBig.putInt(64); // size = 64 > limit 16
-        assertThrows(IllegalArgumentException.class,
-                () -> SystemLogicalProcessorInformation.parse(bufBig.array()));
+        assertThrows(IllegalArgumentException.class, () -> SystemLogicalProcessorInformation.parse(bufBig.array()));
 
         // GroupCount overflow in payload
         ByteBuffer bufGroupOver = ByteBuffer.allocate(48).order(ByteOrder.LITTLE_ENDIAN);
@@ -262,14 +249,14 @@ class WindowsTopologyFixtureTest {
             bufGroupOver.put((byte) 0);
         }
         bufGroupOver.putShort((short) 10); // groupCount = 10, requires 24 + 160 bytes!
-        assertThrows(IllegalArgumentException.class,
-                () -> SystemLogicalProcessorInformation.parse(bufGroupOver.array()));
+        assertThrows(
+                IllegalArgumentException.class, () -> SystemLogicalProcessorInformation.parse(bufGroupOver.array()));
     }
 
     @Test
     void rejectsMissingPackageOwner() {
-        assertThrows(IllegalArgumentException.class, () -> new WindowsSystemLayout(List.of(
-                relationship(Relationship.PROCESSOR_CORE, affinity(1, 0)))));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new WindowsSystemLayout(List.of(relationship(Relationship.PROCESSOR_CORE, affinity(1, 0)))));
     }
 }
-

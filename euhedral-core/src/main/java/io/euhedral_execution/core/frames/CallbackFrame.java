@@ -16,10 +16,12 @@ public final class CallbackFrame<T, R> extends AbstractFrame {
 
     @Getter
     private T payload;
+
     @Getter
     private R retVal;
 
-    public CallbackFrame(long idHash,
+    public CallbackFrame(
+            long idHash,
             T payload,
             @NonNull Function<T, R> function,
             @NonNull FramePusher<CallbackFrame<T, R>> responseReceiver) {
@@ -29,7 +31,8 @@ public final class CallbackFrame<T, R> extends AbstractFrame {
         this.payload = payload;
     }
 
-    public CallbackFrame(long idHash,
+    public CallbackFrame(
+            long idHash,
             T payload,
             @NonNull Function<T, R> function,
             @NonNull FramePusher<CallbackFrame<T, R>> responseReceiver,

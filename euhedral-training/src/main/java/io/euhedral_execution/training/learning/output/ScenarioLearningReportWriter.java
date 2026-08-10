@@ -31,79 +31,118 @@ public final class ScenarioLearningReportWriter {
             + "feature_schema_id,member_index,member_seed_hex,epoch,validation_macro_mae,"
             + "validation_macro_spearman,validation_weighted_bce,selected_epoch\n";
 
+    private ScenarioLearningReportWriter() {}
+
     public static void writeGrouped(Path path, EvaluationSummary summary) throws IOException {
         StringBuilder output = new StringBuilder(GROUPED_HEADER);
-        summary.scenarios().stream().sorted(Comparator.comparing(
-                ScenarioEvaluationMetrics::scenario)).forEach(metric ->
-                output.append(groupedRow(metric)));
+        summary.scenarios().stream()
+                .sorted(Comparator.comparing(ScenarioEvaluationMetrics::scenario))
+                .forEach(metric -> output.append(groupedRow(metric)));
         write(path, output);
     }
 
     public static void writeLoso(Path path, List<LosoEvaluationMetrics> rows) throws IOException {
         StringBuilder output = new StringBuilder(LOSO_HEADER);
-        rows.stream().sorted(Comparator.comparing(row -> row.metrics().scenario()))
+        rows.stream()
+                .sorted(Comparator.comparing(row -> row.metrics().scenario()))
                 .forEach(row -> output.append(losoRow(row)));
         write(path, output);
     }
 
     public static void writeAblation(Path path, List<AblationMetric> rows) throws IOException {
         StringBuilder output = new StringBuilder(ABLATION_HEADER);
-        rows.stream().sorted(Comparator.comparing(AblationMetric::evaluationKind)
+        rows.stream()
+                .sorted(Comparator.comparing(AblationMetric::evaluationKind)
                         .thenComparing(AblationMetric::foldId)
                         .thenComparing(metric -> metric.featureSet().schemaId()))
-                .forEach(metric -> output.append(csv("1", metric.evaluationKind(),
-                        metric.foldId(), metric.featureSet().schemaId(),
+                .forEach(metric -> output.append(csv(
+                        "1",
+                        metric.evaluationKind(),
+                        metric.foldId(),
+                        metric.featureSet().schemaId(),
                         metric.comparisonFeatureSet().schemaId(),
-                        metric.scenarioOrEnvironment(), Integer.toString(metric.rowCount()),
-                        optional(metric.mae()), optional(metric.spearman()),
-                        optional(metric.maeDelta()), optional(metric.spearmanDelta()),
-                        Boolean.toString(metric.selected()), metric.gateStatus(),
+                        metric.scenarioOrEnvironment(),
+                        Integer.toString(metric.rowCount()),
+                        optional(metric.mae()),
+                        optional(metric.spearman()),
+                        optional(metric.maeDelta()),
+                        optional(metric.spearmanDelta()),
+                        Boolean.toString(metric.selected()),
+                        metric.gateStatus(),
                         metric.reason())));
         write(path, output);
     }
 
     public static void writeHistory(Path path, List<TrainingHistoryEntry> rows) throws IOException {
         StringBuilder output = new StringBuilder(HISTORY_HEADER);
-        rows.stream().sorted().forEach(row -> output.append(csv("1", row.trainingKind(),
-                row.foldId(), row.featureSet().schemaId(), Integer.toString(row.memberIndex()),
-                "%016x".formatted(row.memberSeed()), Integer.toString(row.epoch()),
-                Double.toString(row.validationMacroMae()),
-                optional(row.validationMacroSpearman()),
-                Double.toString(row.validationWeightedBce()),
-                Boolean.toString(row.selectedEpoch()))));
+        rows.stream()
+                .sorted()
+                .forEach(row -> output.append(csv(
+                        "1",
+                        row.trainingKind(),
+                        row.foldId(),
+                        row.featureSet().schemaId(),
+                        Integer.toString(row.memberIndex()),
+                        "%016x".formatted(row.memberSeed()),
+                        Integer.toString(row.epoch()),
+                        Double.toString(row.validationMacroMae()),
+                        optional(row.validationMacroSpearman()),
+                        Double.toString(row.validationWeightedBce()),
+                        Boolean.toString(row.selectedEpoch()))));
         write(path, output);
     }
 
     private static String groupedRow(ScenarioEvaluationMetrics metric) {
-        return csv("1", metric.evaluationKind(), metric.featureSet().schemaId(),
-                metric.foldId(), metric.scenario().canonical(),
-                Integer.toString(metric.rowCount()), Integer.toString(metric.policyCount()),
-                Double.toString(metric.mae()), Double.toString(metric.rmse()),
-                Double.toString(metric.meanBias()), optional(metric.spearman()),
+        return csv(
+                "1",
+                metric.evaluationKind(),
+                metric.featureSet().schemaId(),
+                metric.foldId(),
+                metric.scenario().canonical(),
+                Integer.toString(metric.rowCount()),
+                Integer.toString(metric.policyCount()),
+                Double.toString(metric.mae()),
+                Double.toString(metric.rmse()),
+                Double.toString(metric.meanBias()),
+                optional(metric.spearman()),
                 Integer.toString(metric.actualTopDecileCount()),
-                Integer.toString(metric.selectedCount()), optional(metric.precisionAtTen()),
-                optional(metric.recallAtTen()), Double.toString(metric.meanIntervalWidth()),
+                Integer.toString(metric.selectedCount()),
+                optional(metric.precisionAtTen()),
+                optional(metric.recallAtTen()),
+                Double.toString(metric.meanIntervalWidth()),
                 Double.toString(metric.intervalCoverage95()),
                 Double.toString(metric.meanEpistemicStdDev()),
-                Double.toString(metric.meanDisagreementRange()), metric.status().name());
+                Double.toString(metric.meanDisagreementRange()),
+                metric.status().name());
     }
 
     private static String losoRow(LosoEvaluationMetrics row) {
         ScenarioEvaluationMetrics metric = row.metrics();
-        return csv("1", metric.evaluationKind(), metric.featureSet().schemaId(),
-                metric.foldId(), metric.scenario().canonical(),
-                Double.toString(row.heldOutRatio()), Boolean.toString(row.ratioSeenInFit()),
+        return csv(
+                "1",
+                metric.evaluationKind(),
+                metric.featureSet().schemaId(),
+                metric.foldId(),
+                metric.scenario().canonical(),
+                Double.toString(row.heldOutRatio()),
+                Boolean.toString(row.ratioSeenInFit()),
                 Integer.toString(row.fittingScenarioCount()),
                 Integer.toString(row.fittingDistinctRatioCount()),
-                Integer.toString(metric.rowCount()), Integer.toString(metric.policyCount()),
-                Double.toString(metric.mae()), Double.toString(metric.rmse()),
-                Double.toString(metric.meanBias()), optional(metric.spearman()),
+                Integer.toString(metric.rowCount()),
+                Integer.toString(metric.policyCount()),
+                Double.toString(metric.mae()),
+                Double.toString(metric.rmse()),
+                Double.toString(metric.meanBias()),
+                optional(metric.spearman()),
                 Integer.toString(metric.actualTopDecileCount()),
-                Integer.toString(metric.selectedCount()), optional(metric.precisionAtTen()),
-                optional(metric.recallAtTen()), Double.toString(metric.meanIntervalWidth()),
+                Integer.toString(metric.selectedCount()),
+                optional(metric.precisionAtTen()),
+                optional(metric.recallAtTen()),
+                Double.toString(metric.meanIntervalWidth()),
                 Double.toString(metric.intervalCoverage95()),
                 Double.toString(metric.meanEpistemicStdDev()),
-                Double.toString(metric.meanDisagreementRange()), metric.status().name());
+                Double.toString(metric.meanDisagreementRange()),
+                metric.status().name());
     }
 
     private static String optional(OptionalDouble value) {
@@ -117,8 +156,10 @@ public final class ScenarioLearningReportWriter {
                 row.append(',');
             }
             String field = fields[index];
-            if (field.indexOf(',') >= 0 || field.indexOf('"') >= 0
-                    || field.indexOf('\n') >= 0 || field.indexOf('\r') >= 0) {
+            if (field.indexOf(',') >= 0
+                    || field.indexOf('"') >= 0
+                    || field.indexOf('\n') >= 0
+                    || field.indexOf('\r') >= 0) {
                 row.append('"').append(field.replace("\"", "\"\"")).append('"');
             } else {
                 row.append(field);
@@ -129,8 +170,5 @@ public final class ScenarioLearningReportWriter {
 
     private static void write(Path path, StringBuilder output) throws IOException {
         Files.writeString(path, output.toString(), StandardCharsets.UTF_8);
-    }
-
-    private ScenarioLearningReportWriter() {
     }
 }

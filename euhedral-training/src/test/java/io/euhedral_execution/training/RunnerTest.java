@@ -26,49 +26,91 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.TreeSet;
-import org.junit.jupiter.api.parallel.Isolated;
-import org.slf4j.LoggerFactory;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.parallel.Isolated;
+import org.slf4j.LoggerFactory;
 
 @Isolated
 class RunnerTest {
     @TempDir
     Path temp;
 
+    private static List<String[]> concat(List<String[]> first, List<String[]> second) {
+        ArrayList<String[]> result = new ArrayList<>(first);
+        result.addAll(second);
+        return result;
+    }
+
+    private static List<String> captureLogs(ThrowingRunnable action) throws Exception {
+        Object logger = LoggerFactory.getLogger(Runner.class);
+        Class<?> appenderType = Class.forName("ch.qos.logback.core.Appender");
+        Class<?> listAppenderType = Class.forName("ch.qos.logback.core.read.ListAppender");
+        Object appender = listAppenderType.getConstructor().newInstance();
+        listAppenderType.getMethod("start").invoke(appender);
+        logger.getClass().getMethod("addAppender", appenderType).invoke(logger, appender);
+        try {
+            action.run();
+            @SuppressWarnings("unchecked")
+            List<Object> events =
+                    (List<Object>) listAppenderType.getField("list").get(appender);
+            ArrayList<String> result = new ArrayList<>();
+            for (Object event : events) {
+                result.add((String)
+                        event.getClass().getMethod("getFormattedMessage").invoke(event));
+            }
+            return List.copyOf(result);
+        } finally {
+            logger.getClass().getMethod("detachAppender", appenderType).invoke(logger, appender);
+            listAppenderType.getMethod("stop").invoke(appender);
+        }
+    }
+
     @Test
     void dispatchesOnlyTheExplicitCommandAndLogsExactResults() throws Exception {
         RecordingServices services = services();
-        List<String> closedLogs = captureLogs(() -> Runner.dispatch(new String[]{
-                "closed-loop", "--config", temp.resolve("closed.conf").toString()},
+        List<String> closedLogs = captureLogs(() -> Runner.dispatch(
+                new String[] {
+                    "closed-loop", "--config", temp.resolve("closed.conf").toString()
+                },
                 services));
         assertThat(services.configReads).isEqualTo(1);
         assertThat(services.closedLoopRuns).isEqualTo(1);
         assertThat(services.trainingDiagnostics).isZero();
         assertThat(services.packageInputReads).isZero();
-        assertThat(closedLogs).containsExactly(
-                "stage=BOOTSTRAP_PENDING",
-                "checkpoint=" + temp.resolve("checkpoint").toAbsolutePath().normalize(),
-                "package=" + temp.resolve("package").toAbsolutePath().normalize(),
-                "awaiting_scenario=s1-env-a-src1-core4-r1of4",
-                "awaiting_scenario=s1-env-b-src4-core4-r1of1");
+        assertThat(closedLogs)
+                .containsExactly(
+                        "stage=BOOTSTRAP_PENDING",
+                        "checkpoint="
+                                + temp.resolve("checkpoint").toAbsolutePath().normalize(),
+                        "package=" + temp.resolve("package").toAbsolutePath().normalize(),
+                        "awaiting_scenario=s1-env-a-src1-core4-r1of4",
+                        "awaiting_scenario=s1-env-b-src4-core4-r1of1");
 
-        Runner.dispatch(new String[]{"training-info"}, services);
+        Runner.dispatch(new String[] {"training-info"}, services);
         assertThat(services.trainingDiagnostics).isEqualTo(1);
 
         Path workspace = temp.resolve("package-workspace");
         Path inputs = temp.resolve("package-inputs.properties");
         Path output = temp.resolve("package-output");
-        List<String> packageLogs = captureLogs(() -> Runner.dispatch(new String[]{
-                "package-run", "--workspace", workspace.toString(),
-                "--inputs", inputs.toString(), "--output-root", output.toString()},
+        List<String> packageLogs = captureLogs(() -> Runner.dispatch(
+                new String[] {
+                    "package-run",
+                    "--workspace",
+                    workspace.toString(),
+                    "--inputs",
+                    inputs.toString(),
+                    "--output-root",
+                    output.toString()
+                },
                 services));
         assertThat(services.packageInputReads).isEqualTo(1);
         assertThat(services.packages).isEqualTo(1);
         assertThat(services.lastPackage.workspace()).isEqualTo(workspace);
         assertThat(services.lastPackage.outputRoot()).isEqualTo(output);
-        assertThat(packageLogs).containsExactly(
-                temp.resolve("published").toAbsolutePath().normalize().toString());
+        assertThat(packageLogs)
+                .containsExactly(
+                        temp.resolve("published").toAbsolutePath().normalize().toString());
         assertThat(services.trainingDiagnostics).isEqualTo(1);
     }
 
@@ -76,21 +118,18 @@ class RunnerTest {
     void rejectsEveryMissingDuplicateReorderedAndExtraFlagForm() throws Exception {
         RecordingServices services = services();
         List<String[]> closed = List.of(
-                new String[]{"closed-loop"},
-                new String[]{"closed-loop", "--config"},
-                new String[]{"closed-loop", "config", "x"},
-                new String[]{"closed-loop", "x", "--config"},
-                new String[]{"closed-loop", "--config", "x", "extra"},
-                new String[]{"closed-loop", "--config", "--config"});
+                new String[] {"closed-loop"},
+                new String[] {"closed-loop", "--config"},
+                new String[] {"closed-loop", "config", "x"},
+                new String[] {"closed-loop", "x", "--config"},
+                new String[] {"closed-loop", "--config", "x", "extra"},
+                new String[] {"closed-loop", "--config", "--config"});
         List<String[]> packages = List.of(
-                new String[]{"package-run"},
-                new String[]{"package-run", "--workspace", "a", "--output-root", "c",
-                        "--inputs", "b"},
-                new String[]{"package-run", "--workspace", "a", "--inputs", "b"},
-                new String[]{"package-run", "--workspace", "a", "--inputs", "b",
-                        "--output-root", "c", "extra"},
-                new String[]{"package-run", "--workspace", "a", "--workspace", "b",
-                        "--output-root", "c"});
+                new String[] {"package-run"},
+                new String[] {"package-run", "--workspace", "a", "--output-root", "c", "--inputs", "b"},
+                new String[] {"package-run", "--workspace", "a", "--inputs", "b"},
+                new String[] {"package-run", "--workspace", "a", "--inputs", "b", "--output-root", "c", "extra"},
+                new String[] {"package-run", "--workspace", "a", "--workspace", "b", "--output-root", "c"});
         for (String[] args : concat(closed, packages)) {
             assertThatThrownBy(() -> Runner.dispatch(args, services))
                     .as(String.join(" ", args))
@@ -106,14 +145,17 @@ class RunnerTest {
     @Test
     void rejectsTrainingInfoArgumentsAndRemovedCommands() {
         RecordingServices services = services();
-        assertThatThrownBy(() -> Runner.dispatch(
-                new String[]{"training-info", "extra"}, services))
+        assertThatThrownBy(() -> Runner.dispatch(new String[] {"training-info", "extra"}, services))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("training-info does not accept arguments");
-        for (String command : List.of("merge-" + "metadata", "merge-" + "quantiles",
-                "merge-" + "vectors", "train-vector-" + "finder", "benchmark",
+        for (String command : List.of(
+                "merge-" + "metadata",
+                "merge-" + "quantiles",
+                "merge-" + "vectors",
+                "train-vector-" + "finder",
+                "benchmark",
                 "import-current-" + "workspace")) {
-            assertThatThrownBy(() -> Runner.dispatch(new String[]{command}, services))
+            assertThatThrownBy(() -> Runner.dispatch(new String[] {command}, services))
                     .as(command)
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessage("Unknown command: " + command);
@@ -126,24 +168,28 @@ class RunnerTest {
         RecordingServices services = services();
         List<String> logs = captureLogs(() -> Runner.dispatch(new String[0], services));
         assertThat(logs).hasSize(1);
-        assertThat(logs.getFirst()).contains(
-                "Usage: Runner <command>",
-                "closed-loop --config <path>",
-                "training-info",
-                "scenario-model DJL, PyTorch, CUDA, and device details",
-                "package-run --workspace <path> --inputs <path> --output-root <path>",
-                "Reproduce a checkpoint-backed package; this does not rerun")
-                .doesNotContain("merge-" + "metadata", "merge-" + "quantiles",
-                        "merge-" + "vectors", "train-vector-" + "finder",
-                        "benchmark [file]", "import-current-" + "workspace",
+        assertThat(logs.getFirst())
+                .contains(
+                        "Usage: Runner <command>",
+                        "closed-loop --config <path>",
+                        "training-info",
+                        "scenario-model DJL, PyTorch, CUDA, and device details",
+                        "package-run --workspace <path> --inputs <path> --output-root <path>",
+                        "Reproduce a checkpoint-backed package; this does not rerun")
+                .doesNotContain(
+                        "merge-" + "metadata",
+                        "merge-" + "quantiles",
+                        "merge-" + "vectors",
+                        "train-vector-" + "finder",
+                        "benchmark [file]",
+                        "import-current-" + "workspace",
                         "current-" + "workspace",
                         "Legacy compatibility");
         assertThat(services.totalCalls()).isZero();
     }
 
     @Test
-    void stopFileBoundaryDistinguishesRegularMissingSymlinkAndIoFailure()
-            throws Exception {
+    void stopFileBoundaryDistinguishesRegularMissingSymlinkAndIoFailure() throws Exception {
         Path regular = temp.resolve("STOP");
         Files.writeString(regular, "");
         assertThat(ClosedLoopRunner.stopRequested(regular)).isTrue();
@@ -153,66 +199,55 @@ class RunnerTest {
         assertThat(ClosedLoopRunner.stopRequested(symlink)).isFalse();
         Path notDirectory = temp.resolve("not-directory");
         Files.writeString(notDirectory, "");
-        assertThatThrownBy(() -> ClosedLoopRunner.stopRequested(
-                notDirectory.resolve("STOP")))
+        assertThatThrownBy(() -> ClosedLoopRunner.stopRequested(notDirectory.resolve("STOP")))
                 .isInstanceOf(UncheckedIOException.class);
     }
 
     private RecordingServices services() {
-        var scenarios = new TreeSet<>(List.of(
-                SourceScenario.of("env-a", 1, 4),
-                SourceScenario.of("env-b", 4, 4)));
-        ClosedLoopConfig config = new ClosedLoopConfig(temp.resolve("workspace"),
-                "test", 1, 32, scenarios, "env-a", 2,
-                0x6a09e667f3bcc909L, 131_072,
-                Optional.of(temp.resolve("boot")), Optional.empty(), List.of(), Map.of(),
-                "0".repeat(40), false, CandidateBudgetConfig.defaults(),
-                CandidateGenerationConfig.defaults(), BenchmarkExecutionConfig.defaults(),
-                AnchorSelectionConfig.defaults(), CalibrationConfig.defaults(),
-                AggregationConfig.defaults(), ScenarioTrainingConfig.defaults(),
-                true, temp.resolve("STOP"));
+        var scenarios = new TreeSet<>(List.of(SourceScenario.of("env-a", 1, 4), SourceScenario.of("env-b", 4, 4)));
+        ClosedLoopConfig config = new ClosedLoopConfig(
+                temp.resolve("workspace"),
+                "test",
+                1,
+                32,
+                scenarios,
+                "env-a",
+                2,
+                0x6a09e667f3bcc909L,
+                131_072,
+                Optional.of(temp.resolve("boot")),
+                Optional.empty(),
+                List.of(),
+                Map.of(),
+                "0".repeat(40),
+                false,
+                CandidateBudgetConfig.defaults(),
+                CandidateGenerationConfig.defaults(),
+                BenchmarkExecutionConfig.defaults(),
+                AnchorSelectionConfig.defaults(),
+                CalibrationConfig.defaults(),
+                AggregationConfig.defaults(),
+                ScenarioTrainingConfig.defaults(),
+                true,
+                temp.resolve("STOP"));
         ClosedLoopResult result = new ClosedLoopResult(
-                CheckpointStage.BOOTSTRAP_PENDING, 1, temp.resolve("checkpoint"),
-                Optional.empty(), Optional.empty(), scenarios,
+                CheckpointStage.BOOTSTRAP_PENDING,
+                1,
+                temp.resolve("checkpoint"),
+                Optional.empty(),
+                Optional.empty(),
+                scenarios,
                 Optional.of(temp.resolve("package")));
         TrainingRunPackageInputs inputs = new TrainingRunPackageInputs(
-                "test.partial.r00000001", "test", 1,
-                0x6a09e667f3bcc909L, "0".repeat(40), false,
-                BenchmarkExecutionConfig.defaults(), scenarios);
+                "test.partial.r00000001",
+                "test",
+                1,
+                0x6a09e667f3bcc909L,
+                "0".repeat(40),
+                false,
+                BenchmarkExecutionConfig.defaults(),
+                scenarios);
         return new RecordingServices(config, result, inputs);
-    }
-
-    private static List<String[]> concat(List<String[]> first, List<String[]> second) {
-        ArrayList<String[]> result = new ArrayList<>(first);
-        result.addAll(second);
-        return result;
-    }
-
-    private static List<String> captureLogs(ThrowingRunnable action) throws Exception {
-        Object logger = LoggerFactory.getLogger(Runner.class);
-        Class<?> appenderType = Class.forName("ch.qos.logback.core.Appender");
-        Class<?> listAppenderType =
-                Class.forName("ch.qos.logback.core.read.ListAppender");
-        Object appender = listAppenderType.getConstructor().newInstance();
-        listAppenderType.getMethod("start").invoke(appender);
-        logger.getClass().getMethod("addAppender", appenderType)
-                .invoke(logger, appender);
-        try {
-            action.run();
-            @SuppressWarnings("unchecked")
-            List<Object> events = (List<Object>) listAppenderType.getField("list")
-                    .get(appender);
-            ArrayList<String> result = new ArrayList<>();
-            for (Object event : events) {
-                result.add((String) event.getClass()
-                        .getMethod("getFormattedMessage").invoke(event));
-            }
-            return List.copyOf(result);
-        } finally {
-            logger.getClass().getMethod("detachAppender", appenderType)
-                    .invoke(logger, appender);
-            listAppenderType.getMethod("stop").invoke(appender);
-        }
     }
 
     @FunctionalInterface
@@ -231,8 +266,7 @@ class RunnerTest {
         private int packages;
         private TrainingRunPackageRequest lastPackage;
 
-        private RecordingServices(ClosedLoopConfig config, ClosedLoopResult result,
-                TrainingRunPackageInputs inputs) {
+        private RecordingServices(ClosedLoopConfig config, ClosedLoopResult result, TrainingRunPackageInputs inputs) {
             this.config = config;
             this.result = result;
             this.inputs = inputs;
@@ -266,13 +300,15 @@ class RunnerTest {
             packages++;
             lastPackage = request;
             Path directory = temp.resolve("published");
-            return new TrainingRunPackage(directory, directory.resolve("manifest.json"),
-                    inputs.packageId(), TrainingRunPackageStatus.PARTIAL_RECOVERABLE);
+            return new TrainingRunPackage(
+                    directory,
+                    directory.resolve("manifest.json"),
+                    inputs.packageId(),
+                    TrainingRunPackageStatus.PARTIAL_RECOVERABLE);
         }
 
         private int totalCalls() {
-            return configReads + closedLoopRuns + trainingDiagnostics
-                    + packageInputReads + packages;
+            return configReads + closedLoopRuns + trainingDiagnostics + packageInputReads + packages;
         }
     }
 }

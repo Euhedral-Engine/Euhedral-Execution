@@ -8,12 +8,12 @@ import io.euhedral_execution.hardware_utils.common.SystemSnapshotProvider;
 import io.euhedral_execution.hardware_utils.common.SystemUtilization.HardwareUtilization;
 import io.euhedral_execution.hardware_utils.common.SystemUtilization.SystemSnapshot;
 import io.euhedral_execution.hardware_utils.common.UnmodifiableBitSet;
-import java.time.Duration;
-import java.util.BitSet;
-import java.util.concurrent.atomic.AtomicInteger;
 import io.euhedral_execution.hardware_utils.internal.monitor.DeadlineWaiter;
 import io.euhedral_execution.hardware_utils.internal.monitor.MonotonicClock;
 import io.euhedral_execution.hardware_utils.internal.monitor.TopologyUpdater;
+import java.time.Duration;
+import java.util.BitSet;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Isolated;
 
@@ -33,9 +33,16 @@ class ResourceMonitorTest {
         int[] publishCount = {0};
 
         try (ResourceMonitor monitor = new ResourceMonitor(
-                TopologyUpdater.from(new TopologyMapper(new BitSet())), Duration.ofMillis(200),
-                snapshots, clock, noWait, Thread::new)) {
-            monitor.addListener(u -> { captured[0] = u; publishCount[0]++; });
+                TopologyUpdater.from(new TopologyMapper(new BitSet())),
+                Duration.ofMillis(200),
+                snapshots,
+                clock,
+                noWait,
+                Thread::new)) {
+            monitor.addListener(u -> {
+                captured[0] = u;
+                publishCount[0]++;
+            });
             monitor.start();
 
             // Wait until at least 4 publications so EWMA converges (waiter is immediate, fast).
@@ -64,6 +71,14 @@ class ResourceMonitorTest {
         private final BitSet effectiveCpus = effectiveCpus();
         private final AtomicInteger samples = new AtomicInteger();
 
+        private static BitSet effectiveCpus() {
+            BitSet cpus = (BitSet) SystemInfo.getCpuSet().clone();
+            if (cpus.isEmpty()) {
+                cpus.set(0);
+            }
+            return cpus;
+        }
+
         @Override
         public SystemSnapshot getSnapshot() {
             int sample = this.samples.getAndIncrement();
@@ -77,16 +92,8 @@ class ResourceMonitorTest {
                     SECONDS.toNanos(sample) / 10,
                     UnmodifiableBitSet.wrap((BitSet) this.effectiveCpus.clone()),
                     new double[pressureLength],
-                    new long[]{1_000, 600, 100},
+                    new long[] {1_000, 600, 100},
                     sample * 200L);
-        }
-
-        private static BitSet effectiveCpus() {
-            BitSet cpus = (BitSet) SystemInfo.getCpuSet().clone();
-            if (cpus.isEmpty()) {
-                cpus.set(0);
-            }
-            return cpus;
         }
     }
 }

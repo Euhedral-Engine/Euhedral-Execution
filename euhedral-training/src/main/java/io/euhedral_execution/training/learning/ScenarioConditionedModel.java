@@ -30,12 +30,36 @@ import java.util.TreeSet;
 
 public final class ScenarioConditionedModel implements AutoCloseable {
 
+    private final ScenarioModelMetadata metadata;
+    private final FeatureNormalizer normalizer;
+    private final SortedSet<SourceScenario> configuredScenarios;
+    private final List<OrdinalMember> members;
+    private boolean closed;
+
+    private ScenarioConditionedModel(
+            ScenarioModelMetadata metadata,
+            FeatureNormalizer normalizer,
+            SortedSet<SourceScenario> scenarios,
+            List<OrdinalMember> members) {
+        this.metadata = metadata;
+        this.normalizer = Objects.requireNonNull(normalizer);
+        configuredScenarios = Collections.unmodifiableSortedSet(new TreeSet<>(scenarios));
+        this.members = List.copyOf(members);
+        if (configuredScenarios.isEmpty()
+                || members.isEmpty()
+                || metadata != null && members.size() != metadata.members().size()
+                || members.stream()
+                        .anyMatch(member -> member.featureWidth()
+                                != normalizer.featureNames().size())) {
+            throw new IllegalArgumentException("Invalid scenario-conditioned model");
+        }
+    }
+
     public static ScenarioConditionedModel load(Path modelDirectory) throws IOException {
         return load(modelDirectory, "auto");
     }
 
-    public static ScenarioConditionedModel load(Path modelDirectory, String device)
-            throws IOException {
+    public static ScenarioConditionedModel load(Path modelDirectory, String device) throws IOException {
         return loadInternal(modelDirectory, device, false);
     }
 
@@ -43,28 +67,26 @@ public final class ScenarioConditionedModel implements AutoCloseable {
         return loadForAudit(modelDirectory, "auto");
     }
 
-    public static ScenarioConditionedModel loadForAudit(Path modelDirectory, String device)
-            throws IOException {
+    public static ScenarioConditionedModel loadForAudit(Path modelDirectory, String device) throws IOException {
         return loadInternal(modelDirectory, device, true);
     }
 
-    private static ScenarioConditionedModel loadInternal(Path modelDirectory, String device,
-            boolean audit) throws IOException {
+    private static ScenarioConditionedModel loadInternal(Path modelDirectory, String device, boolean audit)
+            throws IOException {
         Objects.requireNonNull(modelDirectory);
         Objects.requireNonNull(device);
         Path directory = modelDirectory.toAbsolutePath().normalize();
         ScenarioModelMetadata metadata =
-                ScenarioModelMetadataCodec.read(directory.resolve(
-                        ScenarioModelMetadataCodec.FILE_NAME));
+                ScenarioModelMetadataCodec.read(directory.resolve(ScenarioModelMetadataCodec.FILE_NAME));
         if (!audit && !metadata.deploymentEligible()) {
             throw new IOException("Scenario model is rejected: " + metadata.acceptanceStatus());
         }
         for (MemberMetadata member : metadata.members()) {
             Path file = directory.resolve(member.relativePath()).normalize();
-            if (!file.startsWith(directory) || !Files.isRegularFile(file)
+            if (!file.startsWith(directory)
+                    || !Files.isRegularFile(file)
                     || !sha256(file).equals(member.sha256())) {
-                throw new IOException("Missing or checksum-mismatched member "
-                        + member.index());
+                throw new IOException("Missing or checksum-mismatched member " + member.index());
             }
         }
         Device resolved;
@@ -77,11 +99,9 @@ public final class ScenarioConditionedModel implements AutoCloseable {
         try {
             for (MemberMetadata member : metadata.members()) {
                 Path file = directory.resolve(member.relativePath()).normalize();
-                members.add(ScenarioOrdinalNetwork.load(file.getParent(),
-                        metadata.featureSet(), member, resolved));
+                members.add(ScenarioOrdinalNetwork.load(file.getParent(), metadata.featureSet(), member, resolved));
             }
-            return new ScenarioConditionedModel(metadata, metadata.normalizer(),
-                    metadata.requiredScenarios(), members);
+            return new ScenarioConditionedModel(metadata, metadata.normalizer(), metadata.requiredScenarios(), members);
         } catch (Throwable error) {
             closeMembers(members);
             if (error instanceof IOException io) {
@@ -91,25 +111,22 @@ public final class ScenarioConditionedModel implements AutoCloseable {
         }
     }
 
-    static ScenarioConditionedModel forTest(ScenarioModelMetadata metadata,
-            List<OrdinalMember> members) {
+    static ScenarioConditionedModel forTest(ScenarioModelMetadata metadata, List<OrdinalMember> members) {
         Objects.requireNonNull(metadata);
-        return new ScenarioConditionedModel(metadata, metadata.normalizer(),
-                metadata.requiredScenarios(), members);
+        return new ScenarioConditionedModel(metadata, metadata.normalizer(), metadata.requiredScenarios(), members);
     }
 
     // Kept package-private for focused feature propagation tests that do not construct artifacts.
-    static ScenarioConditionedModel forTest(FeatureNormalizer normalizer,
-            SortedSet<SourceScenario> scenarios, List<OrdinalMember> members) {
+    static ScenarioConditionedModel forTest(
+            FeatureNormalizer normalizer, SortedSet<SourceScenario> scenarios, List<OrdinalMember> members) {
         return new ScenarioConditionedModel(null, normalizer, scenarios, members);
     }
 
-    private static void neumaierAdd(double[] sums, double[] corrections, int index,
-            double value) {
+    private static void neumaierAdd(double[] sums, double[] corrections, int index, double value) {
         double current = sums[index];
         double next = current + value;
-        corrections[index] += StrictMath.abs(current) >= StrictMath.abs(value)
-                ? (current - next) + value : (value - next) + current;
+        corrections[index] +=
+                StrictMath.abs(current) >= StrictMath.abs(value) ? (current - next) + value : (value - next) + current;
         sums[index] = next;
     }
 
@@ -149,27 +166,6 @@ public final class ScenarioConditionedModel implements AutoCloseable {
         }
     }
 
-    private final ScenarioModelMetadata metadata;
-    private final FeatureNormalizer normalizer;
-    private final SortedSet<SourceScenario> configuredScenarios;
-    private final List<OrdinalMember> members;
-    private boolean closed;
-
-    private ScenarioConditionedModel(ScenarioModelMetadata metadata,
-            FeatureNormalizer normalizer, SortedSet<SourceScenario> scenarios,
-            List<OrdinalMember> members) {
-        this.metadata = metadata;
-        this.normalizer = Objects.requireNonNull(normalizer);
-        configuredScenarios = Collections.unmodifiableSortedSet(new TreeSet<>(scenarios));
-        this.members = List.copyOf(members);
-        if (configuredScenarios.isEmpty() || members.isEmpty()
-                || metadata != null && members.size() != metadata.members().size()
-                || members.stream().anyMatch(member ->
-                member.featureWidth() != normalizer.featureNames().size())) {
-            throw new IllegalArgumentException("Invalid scenario-conditioned model");
-        }
-    }
-
     public ScenarioModelMetadata metadata() {
         ensureOpen();
         if (metadata == null) {
@@ -182,8 +178,8 @@ public final class ScenarioConditionedModel implements AutoCloseable {
         return predictCurves(policies, configuredScenarios, recommendedInferenceBatchRows());
     }
 
-    public List<PolicyPredictionCurve> predictCurves(List<PolicyVector> policies,
-            SortedSet<SourceScenario> scenarios, int maximumBatchRows) {
+    public List<PolicyPredictionCurve> predictCurves(
+            List<PolicyVector> policies, SortedSet<SourceScenario> scenarios, int maximumBatchRows) {
         ensureOpen();
         Objects.requireNonNull(policies);
         Objects.requireNonNull(scenarios);
@@ -217,8 +213,12 @@ public final class ScenarioConditionedModel implements AutoCloseable {
         return List.copyOf(result);
     }
 
-    private void predictBatch(List<PolicyVector> policies, int policyStart, int policyCount,
-            List<SourceScenario> scenarios, ArrayList<PolicyPredictionCurve> destination) {
+    private void predictBatch(
+            List<PolicyVector> policies,
+            int policyStart,
+            int policyCount,
+            List<SourceScenario> scenarios,
+            ArrayList<PolicyPredictionCurve> destination) {
         int scenarioCount = scenarios.size();
         int rows = policyCount * scenarioCount;
         int featureWidth = normalizer.featureNames().size();
@@ -227,8 +227,7 @@ public final class ScenarioConditionedModel implements AutoCloseable {
             PolicyVector policy = policies.get(policyStart + policyIndex);
             for (int scenarioIndex = 0; scenarioIndex < scenarioCount; scenarioIndex++) {
                 int row = policyIndex * scenarioCount + scenarioIndex;
-                normalizer.encode(policy, scenarios.get(scenarioIndex), features,
-                        row * featureWidth);
+                normalizer.encode(policy, scenarios.get(scenarioIndex), features, row * featureWidth);
             }
         }
         double[] massSums = new double[rows * 10];
@@ -256,8 +255,7 @@ public final class ScenarioConditionedModel implements AutoCloseable {
                 for (int bin = 0; bin < 10; bin++) {
                     neumaierAdd(massSums, massCorrections, row * 10 + bin, masses[bin]);
                 }
-                neumaierAdd(topSums, topCorrections, row,
-                        distribution.topDecileProbability());
+                neumaierAdd(topSums, topCorrections, row, distribution.topDecileProbability());
                 double memberMean = distribution.meanQuality();
                 double delta = memberMean - runningMeans[row];
                 runningMeans[row] += delta / sampleCount;
@@ -273,24 +271,28 @@ public final class ScenarioConditionedModel implements AutoCloseable {
                 double[] meanMasses = new double[10];
                 for (int bin = 0; bin < 10; bin++) {
                     int index = row * 10 + bin;
-                    meanMasses[bin] =
-                            (massSums[index] + massCorrections[index]) / members.size();
+                    meanMasses[bin] = (massSums[index] + massCorrections[index]) / members.size();
                 }
-                double epistemic = members.size() == 1 ? 0
-                        : StrictMath.sqrt(StrictMath.max(0,
-                                runningM2[row] / (members.size() - 1)));
-                EnsembleOrdinalDistribution distribution =
-                        ScenarioOrdinalTargets.combineAggregatedUncertainty(meanMasses,
-                                (topSums[row] + topCorrections[row]) / members.size(),
-                                epistemic, maximumMeans[row] - minimumMeans[row]);
-                predictions.add(new ScenarioPrediction(scenarios.get(scenarioIndex),
-                        distribution.predictedQuality(), distribution.ordinalStdDev(),
-                        distribution.qualityIntervalLow(), distribution.qualityIntervalHigh(),
-                        distribution.ordinalEntropy(), distribution.topDecileProbability(),
-                        distribution.epistemicStdDev(), distribution.disagreementRange()));
+                double epistemic = members.size() == 1
+                        ? 0
+                        : StrictMath.sqrt(StrictMath.max(0, runningM2[row] / (members.size() - 1)));
+                EnsembleOrdinalDistribution distribution = ScenarioOrdinalTargets.combineAggregatedUncertainty(
+                        meanMasses,
+                        (topSums[row] + topCorrections[row]) / members.size(),
+                        epistemic,
+                        maximumMeans[row] - minimumMeans[row]);
+                predictions.add(new ScenarioPrediction(
+                        scenarios.get(scenarioIndex),
+                        distribution.predictedQuality(),
+                        distribution.ordinalStdDev(),
+                        distribution.qualityIntervalLow(),
+                        distribution.qualityIntervalHigh(),
+                        distribution.ordinalEntropy(),
+                        distribution.topDecileProbability(),
+                        distribution.epistemicStdDev(),
+                        distribution.disagreementRange()));
             }
-            destination.add(new PolicyPredictionCurve(
-                    policies.get(policyStart + policyIndex), predictions));
+            destination.add(new PolicyPredictionCurve(policies.get(policyStart + policyIndex), predictions));
         }
     }
 

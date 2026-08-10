@@ -55,8 +55,9 @@ import org.slf4j.LoggerFactory;
 public final class ScenarioModelTrainer {
     private static final Logger LOGGER = LoggerFactory.getLogger(ScenarioModelTrainer.class);
 
-    public static ScenarioTrainingArtifacts train(ScenarioTrainingRequest request)
-            throws Exception {
+    private ScenarioModelTrainer() {}
+
+    public static ScenarioTrainingArtifacts train(ScenarioTrainingRequest request) throws Exception {
         Path target = request.modelDirectory();
         if (Files.exists(target)) {
             throw new IllegalArgumentException("Model directory already exists: " + target);
@@ -72,17 +73,18 @@ public final class ScenarioModelTrainer {
         Files.createDirectory(foldWorkspace);
         boolean published = false;
         try {
-            ScenarioTrainingArtifacts artifacts =
-                    trainInto(request, temporary, foldWorkspace);
+            ScenarioTrainingArtifacts artifacts = trainInto(request, temporary, foldWorkspace);
             deleteTree(foldWorkspace);
             publish(temporary, target);
             published = true;
-            return new ScenarioTrainingArtifacts(target,
+            return new ScenarioTrainingArtifacts(
+                    target,
                     target.resolve(ScenarioModelMetadataCodec.FILE_NAME),
                     target.resolve("grouped-evaluation.csv"),
                     target.resolve("loso-evaluation.csv"),
                     target.resolve("ablation-evaluation.csv"),
-                    target.resolve("training-history.csv"), artifacts.acceptanceStatus(),
+                    target.resolve("training-history.csv"),
+                    artifacts.acceptanceStatus(),
                     artifacts.selectedFeatureSet());
         } finally {
             if (!published) {
@@ -92,22 +94,28 @@ public final class ScenarioModelTrainer {
         }
     }
 
-    private static ScenarioTrainingArtifacts trainInto(ScenarioTrainingRequest request,
-            Path directory, Path foldWorkspace) throws Exception {
+    private static ScenarioTrainingArtifacts trainInto(
+            ScenarioTrainingRequest request, Path directory, Path foldWorkspace) throws Exception {
         ScenarioTrainingConfig requestedConfig = request.config();
-        ScenarioLearningTable table = ScenarioLearningReader.read(request.inputs(),
-                request.requiredScenarios(), requestedConfig.includeWeakCalibrationRows());
-        PolicyGroupedSplit split = PolicyGroupedSplitter.split(
-                table, requestedConfig.splitSeed(), requestedConfig);
-        LOGGER.info("Training scenario model: policies={}, rows={}, train={}, validation={}, "
-                        + "test={}, device={}, targetVariation={}", table.policies().size(),
-                table.rows().size(), split.trainingRows().size(), split.validationRows().size(),
-                split.testRows().size(), requestedConfig.device(),
+        ScenarioLearningTable table = ScenarioLearningReader.read(
+                request.inputs(), request.requiredScenarios(), requestedConfig.includeWeakCalibrationRows());
+        PolicyGroupedSplit split = PolicyGroupedSplitter.split(table, requestedConfig.splitSeed(), requestedConfig);
+        LOGGER.info(
+                "Training scenario model: policies={}, rows={}, train={}, validation={}, "
+                        + "test={}, device={}, targetVariation={}",
+                table.policies().size(),
+                table.rows().size(),
+                split.trainingRows().size(),
+                split.validationRows().size(),
+                split.testRows().size(),
+                requestedConfig.device(),
                 requestedConfig.requireTargetVariation());
         Device device = ScenarioOrdinalNetwork.resolveDevice(requestedConfig.device());
         int effectiveBatch = requestedConfig.batchSize() > 0
-                ? StrictMath.min(requestedConfig.batchSize(), split.trainingRows().size())
-                : StrictMath.min(device.isGpu() ? 4_096 : 512, split.trainingRows().size());
+                ? StrictMath.min(
+                        requestedConfig.batchSize(), split.trainingRows().size())
+                : StrictMath.min(
+                        device.isGpu() ? 4_096 : 512, split.trainingRows().size());
         ScenarioTrainingConfig config = withEffectiveBatch(requestedConfig, effectiveBatch);
         ArrayList<TrainingHistoryEntry> history = new ArrayList<>();
 
@@ -117,10 +125,10 @@ public final class ScenarioModelTrainer {
             for (SourceScenario heldOut : table.requiredScenarios()) {
                 List<ScenarioLearningRow> fitting =
                         PolicyGroupedSplitter.withoutScenario(split.trainingRows(), heldOut);
-                List<ScenarioLearningRow> early = PolicyGroupedSplitter.withoutScenario(
-                        split.ablationEarlyStopRows(), heldOut);
-                List<ScenarioLearningRow> score = PolicyGroupedSplitter.onlyScenario(
-                        split.ablationScoreRows(), heldOut);
+                List<ScenarioLearningRow> early =
+                        PolicyGroupedSplitter.withoutScenario(split.ablationEarlyStopRows(), heldOut);
+                List<ScenarioLearningRow> score =
+                        PolicyGroupedSplitter.onlyScenario(split.ablationScoreRows(), heldOut);
                 ScenarioFoldRunner.validateRowSets(fitting, early, score);
                 if (ScenarioFoldRunner.distinctRatios(fitting) < 2) {
                     throw new InsufficientScenarioLearningDataException(
@@ -130,22 +138,36 @@ public final class ScenarioModelTrainer {
             for (SourceScenario heldOut : table.requiredScenarios()) {
                 List<ScenarioLearningRow> fitting =
                         PolicyGroupedSplitter.withoutScenario(split.trainingRows(), heldOut);
-                List<ScenarioLearningRow> early = PolicyGroupedSplitter.withoutScenario(
-                        split.ablationEarlyStopRows(), heldOut);
-                List<ScenarioLearningRow> score = PolicyGroupedSplitter.onlyScenario(
-                        split.ablationScoreRows(), heldOut);
+                List<ScenarioLearningRow> early =
+                        PolicyGroupedSplitter.withoutScenario(split.ablationEarlyStopRows(), heldOut);
+                List<ScenarioLearningRow> score =
+                        PolicyGroupedSplitter.onlyScenario(split.ablationScoreRows(), heldOut);
                 ScenarioFoldRunner.FoldResult policyFold = ScenarioFoldRunner.run(
-                        "VALIDATION_CONTEXT_LOSO", "VALIDATION_CONTEXT_LOSO",
-                        heldOut.canonical(), ScenarioFeatureSet.POLICY_ONLY, fitting, early, score,
-                        config.ablationMembers(), config, device,
+                        "VALIDATION_CONTEXT_LOSO",
+                        "VALIDATION_CONTEXT_LOSO",
+                        heldOut.canonical(),
+                        ScenarioFeatureSet.POLICY_ONLY,
+                        fitting,
+                        early,
+                        score,
+                        config.ablationMembers(),
+                        config,
+                        device,
                         foldWorkspace.resolve("context-policy").resolve(heldOut.canonical()),
                         false);
                 policyContext.add(policyFold.evaluation());
                 history.addAll(policyFold.history());
                 ScenarioFoldRunner.FoldResult ratioFold = ScenarioFoldRunner.run(
-                        "VALIDATION_CONTEXT_LOSO", "VALIDATION_CONTEXT_LOSO",
-                        heldOut.canonical(), ScenarioFeatureSet.RATIO_ONLY, fitting, early, score,
-                        config.ablationMembers(), config, device,
+                        "VALIDATION_CONTEXT_LOSO",
+                        "VALIDATION_CONTEXT_LOSO",
+                        heldOut.canonical(),
+                        ScenarioFeatureSet.RATIO_ONLY,
+                        fitting,
+                        early,
+                        score,
+                        config.ablationMembers(),
+                        config,
+                        device,
                         foldWorkspace.resolve("context-ratio").resolve(heldOut.canonical()),
                         false);
                 ratioContext.add(ratioFold.evaluation());
@@ -159,31 +181,44 @@ public final class ScenarioModelTrainer {
         }
         ArrayList<EvaluationSummary> ratioEnvironments = new ArrayList<>();
         ArrayList<EvaluationSummary> countEnvironments = new ArrayList<>();
-        if (config.featureSelectionMode() != FeatureSelectionMode.RATIO_ONLY
-                && environments.size() >= 2) {
+        if (config.featureSelectionMode() != FeatureSelectionMode.RATIO_ONLY && environments.size() >= 2) {
             try {
                 for (String heldEnvironment : environments) {
-                    List<ScenarioLearningRow> fitting = PolicyGroupedSplitter.withoutEnvironment(
-                            split.trainingRows(), heldEnvironment);
-                    List<ScenarioLearningRow> early = PolicyGroupedSplitter.withoutEnvironment(
-                            split.ablationEarlyStopRows(), heldEnvironment);
+                    List<ScenarioLearningRow> fitting =
+                            PolicyGroupedSplitter.withoutEnvironment(split.trainingRows(), heldEnvironment);
+                    List<ScenarioLearningRow> early =
+                            PolicyGroupedSplitter.withoutEnvironment(split.ablationEarlyStopRows(), heldEnvironment);
                     List<ScenarioLearningRow> score = split.ablationScoreRows().stream()
-                            .filter(row -> row.scenario().environmentId()
-                                    .equals(heldEnvironment)).toList();
+                            .filter(row -> row.scenario().environmentId().equals(heldEnvironment))
+                            .toList();
                     ScenarioFoldRunner.FoldResult ratioFold = ScenarioFoldRunner.run(
-                            "VALIDATION_COUNTS_LOEO", "VALIDATION_COUNTS_LOEO",
-                            heldEnvironment, ScenarioFeatureSet.RATIO_ONLY, fitting, early, score,
-                            config.ablationMembers(), config, device,
-                            foldWorkspace.resolve("environment-ratio")
-                                    .resolve(heldEnvironment), false);
+                            "VALIDATION_COUNTS_LOEO",
+                            "VALIDATION_COUNTS_LOEO",
+                            heldEnvironment,
+                            ScenarioFeatureSet.RATIO_ONLY,
+                            fitting,
+                            early,
+                            score,
+                            config.ablationMembers(),
+                            config,
+                            device,
+                            foldWorkspace.resolve("environment-ratio").resolve(heldEnvironment),
+                            false);
                     ratioEnvironments.add(ratioFold.evaluation());
                     history.addAll(ratioFold.history());
                     ScenarioFoldRunner.FoldResult countFold = ScenarioFoldRunner.run(
-                            "VALIDATION_COUNTS_LOEO", "VALIDATION_COUNTS_LOEO",
-                            heldEnvironment, ScenarioFeatureSet.RATIO_AND_COUNTS,
-                            fitting, early, score, config.ablationMembers(), config, device,
-                            foldWorkspace.resolve("environment-counts")
-                                    .resolve(heldEnvironment), false);
+                            "VALIDATION_COUNTS_LOEO",
+                            "VALIDATION_COUNTS_LOEO",
+                            heldEnvironment,
+                            ScenarioFeatureSet.RATIO_AND_COUNTS,
+                            fitting,
+                            early,
+                            score,
+                            config.ablationMembers(),
+                            config,
+                            device,
+                            foldWorkspace.resolve("environment-counts").resolve(heldEnvironment),
+                            false);
                     countEnvironments.add(countFold.evaluation());
                     history.addAll(countFold.history());
                 }
@@ -193,55 +228,69 @@ public final class ScenarioModelTrainer {
             }
         }
         ScenarioAblationPlanner.Decision ablation = ScenarioAblationPlanner.decide(
-                config.featureSelectionMode(), policyContext, ratioContext,
-                ratioEnvironments, countEnvironments, environments.size(), config.thresholds());
-        ScenarioFeatureSet selectedFeatureSet =
-                ablation.selection().selectedFeatureSet();
+                config.featureSelectionMode(),
+                policyContext,
+                ratioContext,
+                ratioEnvironments,
+                countEnvironments,
+                environments.size(),
+                config.thresholds());
+        ScenarioFeatureSet selectedFeatureSet = ablation.selection().selectedFeatureSet();
 
-        FeatureNormalizer normalizer = ScenarioFeatureEncoder.fit(
-                split.trainingRows(), selectedFeatureSet);
-        ScenarioLearningMatrix training = ScenarioFeatureEncoder.matrix(split.trainingRows(),
-                table.requiredScenarios(), normalizer);
-        ScenarioLearningMatrix validation = ScenarioFeatureEncoder.matrix(
-                split.validationRows(), table.requiredScenarios(), normalizer);
+        FeatureNormalizer normalizer = ScenarioFeatureEncoder.fit(split.trainingRows(), selectedFeatureSet);
+        ScenarioLearningMatrix training =
+                ScenarioFeatureEncoder.matrix(split.trainingRows(), table.requiredScenarios(), normalizer);
+        ScenarioLearningMatrix validation =
+                ScenarioFeatureEncoder.matrix(split.validationRows(), table.requiredScenarios(), normalizer);
         ArrayList<OrdinalMember> productionMembers = new ArrayList<>();
         ArrayList<ScenarioOrdinalNetwork.TrainingResult> productionResults = new ArrayList<>();
         try {
             for (int memberIndex = 0; memberIndex < config.ensembleMembers(); memberIndex++) {
-                LOGGER.info("Training production model member {}/{}", memberIndex + 1,
-                        config.ensembleMembers());
-                Path memberDirectory = directory.resolve("members")
-                        .resolve("member-%03d".formatted(memberIndex));
+                LOGGER.info("Training production model member {}/{}", memberIndex + 1, config.ensembleMembers());
+                Path memberDirectory = directory.resolve("members").resolve("member-%03d".formatted(memberIndex));
                 ScenarioOrdinalNetwork.TrainingResult result = ScenarioOrdinalNetwork.train(
-                        training, validation, selectedFeatureSet, config, device, "PRODUCTION",
-                        "all", memberIndex, memberDirectory);
+                        training,
+                        validation,
+                        selectedFeatureSet,
+                        config,
+                        device,
+                        "PRODUCTION",
+                        "all",
+                        memberIndex,
+                        memberDirectory);
                 productionResults.add(result);
                 productionMembers.add(result.member());
                 history.addAll(result.history());
-                LOGGER.info("Finished production model member {}/{} (bestEpoch={})",
-                        memberIndex + 1, config.ensembleMembers(), result.bestEpoch());
+                LOGGER.info(
+                        "Finished production model member {}/{} (bestEpoch={})",
+                        memberIndex + 1,
+                        config.ensembleMembers(),
+                        result.bestEpoch());
             }
 
             EvaluationSummary grouped;
             MetadataProbe probe;
-            try (ScenarioConditionedModel model = ScenarioConditionedModel.forTest(
-                    normalizer, table.requiredScenarios(), productionMembers)) {
-                List<PolicyPredictionCurve> testPredictions = model.predictConfiguredCurves(
-                        policies(split.testRows()));
-                grouped = ScenarioModelEvaluator.evaluate("GROUPED_TEST", selectedFeatureSet,
-                        split.testRows(), ScenarioFoldRunner.retainPredictionsForRows(
-                                testPredictions, split.testRows()));
+            try (ScenarioConditionedModel model =
+                    ScenarioConditionedModel.forTest(normalizer, table.requiredScenarios(), productionMembers)) {
+                List<PolicyPredictionCurve> testPredictions = model.predictConfiguredCurves(policies(split.testRows()));
+                grouped = ScenarioModelEvaluator.evaluate(
+                        "GROUPED_TEST",
+                        selectedFeatureSet,
+                        split.testRows(),
+                        ScenarioFoldRunner.retainPredictionsForRows(testPredictions, split.testRows()));
                 PolicyVector probePolicy = table.policies().get(table.policies().firstKey());
                 SourceScenario probeScenario = table.requiredScenarios().first();
-                ScenarioPrediction prediction = model.predictCurves(List.of(probePolicy),
-                                new TreeSet<>(List.of(probeScenario)), 1).getFirst()
-                        .scenarios().getFirst();
+                ScenarioPrediction prediction = model.predictCurves(
+                                List.of(probePolicy), new TreeSet<>(List.of(probeScenario)), 1)
+                        .getFirst()
+                        .scenarios()
+                        .getFirst();
                 probe = MetadataProbe.from(probePolicy.id(), prediction, deviceName(device));
                 productionMembers.clear();
             }
 
-            LosoResult loso = runLoso(table, split, selectedFeatureSet, config, device,
-                    foldWorkspace.resolve("test-loso"));
+            LosoResult loso =
+                    runLoso(table, split, selectedFeatureSet, config, device, foldWorkspace.resolve("test-loso"));
             history.addAll(loso.history());
             Acceptance acceptance = acceptance(ablation, grouped, loso.summary(), config);
 
@@ -260,37 +309,61 @@ public final class ScenarioModelTrainer {
                 ScenarioOrdinalNetwork.TrainingResult result = productionResults.get(index);
                 String relative = MemberMetadata.expectedPath(index);
                 Path file = directory.resolve(relative);
-                members.add(new MemberMetadata(index, result.seed(), result.bestEpoch(),
-                        relative, ScenarioConditionedModel.sha256(file)));
+                members.add(new MemberMetadata(
+                        index, result.seed(), result.bestEpoch(), relative, ScenarioConditionedModel.sha256(file)));
             }
-            PartitionCounts partitionCounts = partitionCounts(split,
-                    table.requiredScenarios());
+            PartitionCounts partitionCounts = partitionCounts(split, table.requiredScenarios());
             EvaluationSummaryMetadata summaryMetadata = new EvaluationSummaryMetadata(
-                    "grouped-evaluation.csv", "loso-evaluation.csv", grouped.macroMae(),
-                    grouped.macroSpearman(), grouped.macroPrecisionAtTen(),
-                    loso.summary().macroMae(), loso.summary().macroSpearman(),
+                    "grouped-evaluation.csv",
+                    "loso-evaluation.csv",
+                    grouped.macroMae(),
+                    grouped.macroSpearman(),
+                    grouped.macroPrecisionAtTen(),
+                    loso.summary().macroMae(),
+                    loso.summary().macroSpearman(),
                     loso.summary().worstScenarioMae());
-            ProducerMetadata producer = new ProducerMetadata(request.commitSha(),
-                    request.dirtyWorkingTree(), ScenarioOrdinalNetwork.ENGINE_NAME,
+            ProducerMetadata producer = new ProducerMetadata(
+                    request.commitSha(),
+                    request.dirtyWorkingTree(),
+                    ScenarioOrdinalNetwork.ENGINE_NAME,
                     Engine.getEngine(ScenarioOrdinalNetwork.ENGINE_NAME).getVersion(),
                     deviceName(device));
             ScenarioModelMetadata metadata = new ScenarioModelMetadata(
                     ScenarioModelMetadata.SCHEMA_VERSION,
-                    ScenarioModelMetadata.OBJECTIVE_VERSION, selectedFeatureSet, normalizer,
+                    ScenarioModelMetadata.OBJECTIVE_VERSION,
+                    selectedFeatureSet,
+                    normalizer,
                     ScenarioModelMetadata.expectedThresholdBits(),
                     ScenarioModelMetadata.ARCHITECTURE,
-                    ScenarioModelMetadata.MEMBER_MODEL_NAME, members,
-                    ScenarioModelMetadata.SPLIT_ALGORITHM, config.splitSeed(),
-                    config.modelSeed(), table.datasetFingerprintSha256(),
-                    config.includeWeakCalibrationRows(), table.requiredScenarios(),
-                    ScenarioFoldRunner.scenarios(split.trainingRows()), partitionCounts, config,
-                    ablation.selection(), summaryMetadata, acceptance.status(),
-                    acceptance.reasons(), producer, probe);
+                    ScenarioModelMetadata.MEMBER_MODEL_NAME,
+                    members,
+                    ScenarioModelMetadata.SPLIT_ALGORITHM,
+                    config.splitSeed(),
+                    config.modelSeed(),
+                    table.datasetFingerprintSha256(),
+                    config.includeWeakCalibrationRows(),
+                    table.requiredScenarios(),
+                    ScenarioFoldRunner.scenarios(split.trainingRows()),
+                    partitionCounts,
+                    config,
+                    ablation.selection(),
+                    summaryMetadata,
+                    acceptance.status(),
+                    acceptance.reasons(),
+                    producer,
+                    probe);
             Path metadataPath = directory.resolve(ScenarioModelMetadataCodec.FILE_NAME);
             ScenarioModelMetadataCodec.write(metadataPath, metadata);
             validateArtifact(directory, metadata, table);
-            return new ScenarioTrainingArtifacts(directory, metadataPath, groupedPath, losoPath,
-                    ablationPath, historyPath, acceptance.status(), selectedFeatureSet);
+            return new ScenarioTrainingArtifacts(
+                    directory,
+                    metadataPath,
+                    groupedPath,
+                    losoPath,
+                    ablationPath,
+                    historyPath,
+                    acceptance.status(),
+                    selectedFeatureSet);
         } finally {
             for (OrdinalMember member : productionMembers) {
                 member.close();
@@ -298,45 +371,62 @@ public final class ScenarioModelTrainer {
         }
     }
 
-    private static LosoResult runLoso(ScenarioLearningTable table, PolicyGroupedSplit split,
-            ScenarioFeatureSet featureSet, ScenarioTrainingConfig config, Device device,
-            Path directory) throws Exception {
+    private static LosoResult runLoso(
+            ScenarioLearningTable table,
+            PolicyGroupedSplit split,
+            ScenarioFeatureSet featureSet,
+            ScenarioTrainingConfig config,
+            Device device,
+            Path directory)
+            throws Exception {
         ArrayList<LosoEvaluationMetrics> rows = new ArrayList<>();
         ArrayList<ScenarioEvaluationMetrics> metrics = new ArrayList<>();
         ArrayList<TrainingHistoryEntry> history = new ArrayList<>();
         for (SourceScenario heldOut : table.requiredScenarios()) {
-            List<ScenarioLearningRow> fitting =
-                    PolicyGroupedSplitter.withoutScenario(split.trainingRows(), heldOut);
-            List<ScenarioLearningRow> early =
-                    PolicyGroupedSplitter.withoutScenario(split.validationRows(), heldOut);
-            List<ScenarioLearningRow> score =
-                    PolicyGroupedSplitter.onlyScenario(split.testRows(), heldOut);
-            if (!config.requireTargetVariation()
-                    && (fitting.isEmpty() || early.isEmpty() || score.isEmpty())) {
+            List<ScenarioLearningRow> fitting = PolicyGroupedSplitter.withoutScenario(split.trainingRows(), heldOut);
+            List<ScenarioLearningRow> early = PolicyGroupedSplitter.withoutScenario(split.validationRows(), heldOut);
+            List<ScenarioLearningRow> score = PolicyGroupedSplitter.onlyScenario(split.testRows(), heldOut);
+            if (!config.requireTargetVariation() && (fitting.isEmpty() || early.isEmpty() || score.isEmpty())) {
                 continue;
             }
             int distinctRatios = ScenarioFoldRunner.distinctRatios(fitting);
-            boolean insufficientContext = featureSet != ScenarioFeatureSet.POLICY_ONLY
-                    && distinctRatios < 2;
-            ScenarioFoldRunner.FoldResult fold = ScenarioFoldRunner.run("TEST_LOSO", "TEST_LOSO",
-                    heldOut.canonical(), featureSet, fitting, early, score,
-                    config.losoEvaluationMembers(), config, device,
-                    directory.resolve(heldOut.canonical()), insufficientContext);
+            boolean insufficientContext = featureSet != ScenarioFeatureSet.POLICY_ONLY && distinctRatios < 2;
+            ScenarioFoldRunner.FoldResult fold = ScenarioFoldRunner.run(
+                    "TEST_LOSO",
+                    "TEST_LOSO",
+                    heldOut.canonical(),
+                    featureSet,
+                    fitting,
+                    early,
+                    score,
+                    config.losoEvaluationMembers(),
+                    config,
+                    device,
+                    directory.resolve(heldOut.canonical()),
+                    insufficientContext);
             ScenarioEvaluationMetrics metric = fold.evaluation().scenarios().getFirst();
             metrics.add(metric);
             history.addAll(fold.history());
-            boolean ratioSeen = fitting.stream().anyMatch(row ->
-                    row.scenario().ratio().equals(heldOut.ratio()));
-            rows.add(new LosoEvaluationMetrics(metric, heldOut.ratio().asDouble(), ratioSeen,
-                    fold.fittingScenarios().size(), distinctRatios));
+            boolean ratioSeen =
+                    fitting.stream().anyMatch(row -> row.scenario().ratio().equals(heldOut.ratio()));
+            rows.add(new LosoEvaluationMetrics(
+                    metric,
+                    heldOut.ratio().asDouble(),
+                    ratioSeen,
+                    fold.fittingScenarios().size(),
+                    distinctRatios));
         }
-        return new LosoResult(List.copyOf(rows),
+        return new LosoResult(
+                List.copyOf(rows),
                 ScenarioModelEvaluator.summarize("TEST_LOSO", featureSet, metrics),
                 List.copyOf(history));
     }
 
-    static Acceptance acceptance(ScenarioAblationPlanner.Decision ablation,
-            EvaluationSummary grouped, EvaluationSummary loso, ScenarioTrainingConfig config) {
+    static Acceptance acceptance(
+            ScenarioAblationPlanner.Decision ablation,
+            EvaluationSummary grouped,
+            EvaluationSummary loso,
+            ScenarioTrainingConfig config) {
         ArrayList<String> reasons = new ArrayList<>();
         ModelAcceptanceStatus status = ModelAcceptanceStatus.ACCEPTED;
         if (!ablation.contextPassed()) {
@@ -352,36 +442,36 @@ public final class ScenarioModelTrainer {
                     + "_SPEARMAN_REGRESSION_MAX_"
                     + Double.toString(thresholds.maximumContextSpearmanRegression()));
         }
-        if (config.featureSelectionMode() == FeatureSelectionMode.REQUIRE_COUNTS
-                && !ablation.countsPassed()) {
+        if (config.featureSelectionMode() == FeatureSelectionMode.REQUIRE_COUNTS && !ablation.countsPassed()) {
             if (status == ModelAcceptanceStatus.ACCEPTED) {
                 status = ModelAcceptanceStatus.REQUIRED_COUNTS_GATE_FAILED;
             }
             EvaluationThresholds thresholds = config.thresholds();
             reasons.add("REQUIRED_COUNTS_GATE_FAILED"
                     + "_MAE_IMPROVEMENT_MIN_"
-                    + Double.toString(
-                    thresholds.minimumCountsCrossEnvironmentMaeImprovement())
+                    + Double.toString(thresholds.minimumCountsCrossEnvironmentMaeImprovement())
                     + "_SPEARMAN_REGRESSION_MAX_"
                     + Double.toString(thresholds.maximumCountsSpearmanRegression())
                     + "_WORST_ENVIRONMENT_MAE_REGRESSION_MAX_"
-                    + Double.toString(
-                    thresholds.maximumCountsWorstEnvironmentMaeRegression()));
+                    + Double.toString(thresholds.maximumCountsWorstEnvironmentMaeRegression()));
         }
         EvaluationThresholds thresholds = config.thresholds();
         boolean groupedOk = allOk(grouped)
                 && atMost(grouped.macroMae(), thresholds.maximumGroupedMacroMae())
                 && atLeast(grouped.macroSpearman(), thresholds.minimumGroupedMacroSpearman())
-                && atLeast(grouped.macroPrecisionAtTen(),
-                thresholds.minimumGroupedMacroPrecisionAtTen());
+                && atLeast(grouped.macroPrecisionAtTen(), thresholds.minimumGroupedMacroPrecisionAtTen());
         if (!groupedOk) {
             if (status == ModelAcceptanceStatus.ACCEPTED) {
                 status = ModelAcceptanceStatus.GROUPED_QUALITY_GATE_FAILED;
             }
-            addQualityReasons(reasons, "GROUPED", grouped,
+            addQualityReasons(
+                    reasons,
+                    "GROUPED",
+                    grouped,
                     thresholds.maximumGroupedMacroMae(),
                     thresholds.minimumGroupedMacroSpearman(),
-                    thresholds.minimumGroupedMacroPrecisionAtTen(), OptionalDouble.empty());
+                    thresholds.minimumGroupedMacroPrecisionAtTen(),
+                    OptionalDouble.empty());
         }
         boolean losoOk = allOk(loso)
                 && atMost(loso.macroMae(), thresholds.maximumLosoMacroMae())
@@ -391,16 +481,26 @@ public final class ScenarioModelTrainer {
             if (status == ModelAcceptanceStatus.ACCEPTED) {
                 status = ModelAcceptanceStatus.LOSO_QUALITY_GATE_FAILED;
             }
-            addQualityReasons(reasons, "LOSO", loso, thresholds.maximumLosoMacroMae(),
-                    thresholds.minimumLosoMacroSpearman(), Double.NaN,
+            addQualityReasons(
+                    reasons,
+                    "LOSO",
+                    loso,
+                    thresholds.maximumLosoMacroMae(),
+                    thresholds.minimumLosoMacroSpearman(),
+                    Double.NaN,
                     OptionalDouble.of(thresholds.maximumLosoWorstScenarioMae()));
         }
         return new Acceptance(status, List.copyOf(reasons));
     }
 
-    private static void addQualityReasons(List<String> reasons, String prefix,
-            EvaluationSummary summary, double maximumMae, double minimumSpearman,
-            double minimumPrecision, OptionalDouble maximumWorst) {
+    private static void addQualityReasons(
+            List<String> reasons,
+            String prefix,
+            EvaluationSummary summary,
+            double maximumMae,
+            double minimumSpearman,
+            double minimumPrecision,
+            OptionalDouble maximumWorst) {
         if (!allOk(summary)) {
             reasons.add(prefix + "_NON_OK_SCENARIO");
         }
@@ -410,21 +510,17 @@ public final class ScenarioModelTrainer {
         if (!atLeast(summary.macroSpearman(), minimumSpearman)) {
             reasons.add(prefix + "_MACRO_SPEARMAN_MIN_" + Double.toString(minimumSpearman));
         }
-        if (Double.isFinite(minimumPrecision)
-                && !atLeast(summary.macroPrecisionAtTen(), minimumPrecision)) {
-            reasons.add(prefix + "_MACRO_PRECISION_AT_10_MIN_"
-                    + Double.toString(minimumPrecision));
+        if (Double.isFinite(minimumPrecision) && !atLeast(summary.macroPrecisionAtTen(), minimumPrecision)) {
+            reasons.add(prefix + "_MACRO_PRECISION_AT_10_MIN_" + Double.toString(minimumPrecision));
         }
-        if (maximumWorst.isPresent()
-                && !atMost(summary.worstScenarioMae(), maximumWorst.getAsDouble())) {
-            reasons.add(prefix + "_WORST_SCENARIO_MAE_MAX_"
-                    + Double.toString(maximumWorst.getAsDouble()));
+        if (maximumWorst.isPresent() && !atMost(summary.worstScenarioMae(), maximumWorst.getAsDouble())) {
+            reasons.add(prefix + "_WORST_SCENARIO_MAE_MAX_" + Double.toString(maximumWorst.getAsDouble()));
         }
     }
 
     private static boolean allOk(EvaluationSummary summary) {
-        return !summary.scenarios().isEmpty() && summary.scenarios().stream()
-                .allMatch(metric -> metric.status() == EvaluationStatus.OK);
+        return !summary.scenarios().isEmpty()
+                && summary.scenarios().stream().allMatch(metric -> metric.status() == EvaluationStatus.OK);
     }
 
     private static boolean atMost(OptionalDouble value, double threshold) {
@@ -435,28 +531,30 @@ public final class ScenarioModelTrainer {
         return value.isPresent() && value.getAsDouble() >= threshold;
     }
 
-    private static void validateArtifact(Path directory, ScenarioModelMetadata metadata,
-            ScenarioLearningTable table) throws Exception {
+    private static void validateArtifact(Path directory, ScenarioModelMetadata metadata, ScenarioLearningTable table)
+            throws Exception {
         PolicyVector probePolicy = table.policies().get(metadata.metadataProbe().policyId());
         if (probePolicy == null) {
             throw new IOException("Metadata probe policy is absent");
         }
         try (ScenarioConditionedModel loaded = ScenarioConditionedModel.loadForAudit(
                 directory, metadata.producer().trainingDevice())) {
-            ScenarioPrediction prediction = loaded.predictCurves(List.of(probePolicy),
-                            new TreeSet<>(List.of(metadata.metadataProbe().scenario())), 1)
-                    .getFirst().scenarios().getFirst();
-            MetadataProbe reproduced = MetadataProbe.from(probePolicy.id(), prediction,
-                    metadata.producer().trainingDevice());
-            if (!reproduced.predictionRawBits().equals(
-                    metadata.metadataProbe().predictionRawBits())) {
+            ScenarioPrediction prediction = loaded.predictCurves(
+                            List.of(probePolicy),
+                            new TreeSet<>(List.of(metadata.metadataProbe().scenario())),
+                            1)
+                    .getFirst()
+                    .scenarios()
+                    .getFirst();
+            MetadataProbe reproduced = MetadataProbe.from(
+                    probePolicy.id(), prediction, metadata.producer().trainingDevice());
+            if (!reproduced.predictionRawBits().equals(metadata.metadataProbe().predictionRawBits())) {
                 throw new IOException("Metadata probe did not reproduce bit-for-bit");
             }
         }
     }
 
-    private static PartitionCounts partitionCounts(PolicyGroupedSplit split,
-            SortedSet<SourceScenario> scenarios) {
+    private static PartitionCounts partitionCounts(PolicyGroupedSplit split, SortedSet<SourceScenario> scenarios) {
         TreeMap<String, List<ScenarioLearningRow>> partitions = new TreeMap<>();
         partitions.put("TRAIN", split.trainingRows());
         partitions.put("VALIDATION", split.validationRows());
@@ -468,7 +566,9 @@ public final class ScenarioModelTrainer {
         TreeMap<String, SortedMap<SourceScenario, Integer>> scenarioRows = new TreeMap<>();
         for (Map.Entry<String, List<ScenarioLearningRow>> entry : partitions.entrySet()) {
             policies.put(entry.getKey(), (int) entry.getValue().stream()
-                    .map(row -> row.policy().id()).distinct().count());
+                    .map(row -> row.policy().id())
+                    .distinct()
+                    .count());
             rows.put(entry.getKey(), entry.getValue().size());
             TreeMap<SourceScenario, Integer> counts = new TreeMap<>();
             for (SourceScenario scenario : scenarios) {
@@ -490,17 +590,30 @@ public final class ScenarioModelTrainer {
         return List.copyOf(policies.values());
     }
 
-    private static ScenarioTrainingConfig withEffectiveBatch(ScenarioTrainingConfig source,
-            int effectiveBatch) {
-        return new ScenarioTrainingConfig(source.splitSeed(), source.modelSeed(),
-                source.device(), source.ensembleMembers(), source.losoEvaluationMembers(),
-                source.ablationMembers(), source.maxEpochs(), source.patience(), effectiveBatch,
-                source.learningRate(), source.weightDecay(), source.labelSmoothing(),
-                source.minimumTrainPolicyGroups(), source.minimumValidationPolicyGroups(),
-                source.minimumTestPolicyGroups(), source.minimumTrainRowsPerScenario(),
-                source.minimumValidationRowsPerScenario(), source.minimumTestRowsPerScenario(),
-                source.includeWeakCalibrationRows(), source.requireTargetVariation(),
-                source.featureSelectionMode(), source.thresholds());
+    private static ScenarioTrainingConfig withEffectiveBatch(ScenarioTrainingConfig source, int effectiveBatch) {
+        return new ScenarioTrainingConfig(
+                source.splitSeed(),
+                source.modelSeed(),
+                source.device(),
+                source.ensembleMembers(),
+                source.losoEvaluationMembers(),
+                source.ablationMembers(),
+                source.maxEpochs(),
+                source.patience(),
+                effectiveBatch,
+                source.learningRate(),
+                source.weightDecay(),
+                source.labelSmoothing(),
+                source.minimumTrainPolicyGroups(),
+                source.minimumValidationPolicyGroups(),
+                source.minimumTestPolicyGroups(),
+                source.minimumTrainRowsPerScenario(),
+                source.minimumValidationRowsPerScenario(),
+                source.minimumTestRowsPerScenario(),
+                source.includeWeakCalibrationRows(),
+                source.requireTargetVariation(),
+                source.featureSelectionMode(),
+                source.thresholds());
     }
 
     private static String deviceName(Device device) {
@@ -522,15 +635,8 @@ public final class ScenarioModelTrainer {
         }
     }
 
-    private ScenarioModelTrainer() {
-    }
+    private record LosoResult(
+            List<LosoEvaluationMetrics> rows, EvaluationSummary summary, List<TrainingHistoryEntry> history) {}
 
-    private record LosoResult(List<LosoEvaluationMetrics> rows, EvaluationSummary summary,
-                              List<TrainingHistoryEntry> history) {
-
-    }
-
-    record Acceptance(ModelAcceptanceStatus status, List<String> reasons) {
-
-    }
+    record Acceptance(ModelAcceptanceStatus status, List<String> reasons) {}
 }

@@ -8,18 +8,15 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 public class QueueUtils {
-    private static final VarHandle QUEUE = MethodHandles.arrayElementVarHandle(Object[].class);
     public static final int MAX_SIZE = 1 << 30;
-
     public static final int SHIFT = 1;
     public static final long INCREMENT = 1L << SHIFT;
     public static final long HALF_INCREMENT = INCREMENT >>> 1;
-
     public static final Object SENTINEL = new Object();
     public static final Consumer<Object> NO_OP = o -> {};
     public static final Function<Object, Boolean> NO_STOP = o -> false;
-
     public static final int REFERENCE_SIZE;
+    private static final VarHandle QUEUE = MethodHandles.arrayElementVarHandle(Object[].class);
 
     static {
         int ref;
@@ -27,8 +24,7 @@ public class QueueUtils {
             ref = 4;
         } else {
             try {
-                HotSpotDiagnosticMXBean bean = ManagementFactory.getPlatformMXBean(
-                        HotSpotDiagnosticMXBean.class);
+                HotSpotDiagnosticMXBean bean = ManagementFactory.getPlatformMXBean(HotSpotDiagnosticMXBean.class);
                 String useCompressedOops = bean.getVMOption("UseCompressedOops").getValue();
                 ref = "true".equals(useCompressedOops) ? 4 : 8;
             } catch (Exception e) {
@@ -38,6 +34,8 @@ public class QueueUtils {
 
         REFERENCE_SIZE = ref;
     }
+
+    private QueueUtils() {}
 
     /// Returns the high bits of 128 bit multiplication
     public static long unsignedMultiplyHigh(long a, long b) {
@@ -78,9 +76,5 @@ public class QueueUtils {
 
         long rounded = Long.highestOneBit((chunkSize - 1) << 1);
         return rounded > MAX_SIZE ? MAX_SIZE : rounded;
-    }
-
-    private QueueUtils() {
-
     }
 }

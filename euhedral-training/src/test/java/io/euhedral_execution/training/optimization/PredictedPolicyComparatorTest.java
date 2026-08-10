@@ -18,23 +18,23 @@ class PredictedPolicyComparatorTest {
         var third = SchedulingFixtures.prediction(SchedulingFixtures.policy(4), 0.70, 0.70, 0.99);
 
         assertThat(List.of(first, second, third, robust).stream()
-                .sorted(PredictedPolicyComparator.BEST_FIRST).toList().getFirst())
+                        .sorted(PredictedPolicyComparator.BEST_FIRST)
+                        .toList()
+                        .getFirst())
                 .isEqualTo(robust);
-        assertThat(PredictedPolicyComparator.AUDIT_FIRST)
-                .isNotSameAs(PredictedPolicyComparator.BEST_FIRST);
+        assertThat(PredictedPolicyComparator.AUDIT_FIRST).isNotSameAs(PredictedPolicyComparator.BEST_FIRST);
     }
 
     @Test
     void usesGeometricEpsilonAndRejectsIncompleteCurves() {
         var policy = SchedulingFixtures.policy(5);
         var zero = SchedulingFixtures.prediction(policy, 0.0, 0.0, 0.0);
-        assertThat(zero.predictedGeometricMeanQuality()).isCloseTo(1.0e-12,
-                org.assertj.core.data.Offset.offset(1.0e-27));
+        assertThat(zero.predictedGeometricMeanQuality())
+                .isCloseTo(1.0e-12, org.assertj.core.data.Offset.offset(1.0e-27));
 
-        ScenarioPrediction only = new ScenarioPrediction(SchedulingFixtures.S1, 0.5, 0.1,
-                0.4, 0.6, 0.2, 0.5, 0.1, 0.1);
+        ScenarioPrediction only = new ScenarioPrediction(SchedulingFixtures.S1, 0.5, 0.1, 0.4, 0.6, 0.2, 0.5, 0.1, 0.1);
         assertThatThrownBy(() -> PredictedPolicyRanker.summarize(
-                new PolicyPredictionCurve(policy, List.of(only)),
-                SchedulingFixtures.SCENARIOS)).isInstanceOf(IllegalArgumentException.class);
+                        new PolicyPredictionCurve(policy, List.of(only)), SchedulingFixtures.SCENARIOS))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 }

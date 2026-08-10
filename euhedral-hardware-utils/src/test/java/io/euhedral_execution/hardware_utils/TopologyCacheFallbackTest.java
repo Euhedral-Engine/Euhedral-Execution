@@ -15,8 +15,7 @@ import org.junit.jupiter.api.Test;
 class TopologyCacheFallbackTest {
 
     private static LogicalCpu cpu(int id, int socket, int core) {
-        return new LogicalCpu(id, "linux:package:" + socket, "linux:die:0",
-                "linux:core:" + core, CoreKind.UNKNOWN);
+        return new LogicalCpu(id, "linux:package:" + socket, "linux:die:0", "linux:core:" + core, CoreKind.UNKNOWN);
     }
 
     private static BitSet bits(int... ids) {
@@ -29,10 +28,12 @@ class TopologyCacheFallbackTest {
 
     @Test
     void completesEveryActiveCpuDeterministically() {
-        TopologyInput input = new TopologyInput("linux", List.of(
-                cpu(0, 0, 0), cpu(2, 0, 0), cpu(8, 1, 1)), List.of(
-                new CacheDomain(1, 64 * 1024, 128, bits(0, 2)),
-                new CacheDomain(3, 9 * 1024 * 1024L, 64, bits(0, 8))));
+        TopologyInput input = new TopologyInput(
+                "linux",
+                List.of(cpu(0, 0, 0), cpu(2, 0, 0), cpu(8, 1, 1)),
+                List.of(
+                        new CacheDomain(1, 64 * 1024, 128, bits(0, 2)),
+                        new CacheDomain(3, 9 * 1024 * 1024L, 64, bits(0, 8))));
         TopologyModel model = new TopologyNormalizer().normalize(input);
 
         assertEquals(64 * 1024, model.cacheLayout().get(0).bytesL1());

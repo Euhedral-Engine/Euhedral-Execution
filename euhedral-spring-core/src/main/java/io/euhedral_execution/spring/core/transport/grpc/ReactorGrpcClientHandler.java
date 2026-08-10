@@ -16,31 +16,22 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Operators;
 
 @SuppressWarnings({"unchecked", "unused"})
-public class ReactorGrpcClientHandler extends Flux<GrpcMessage> implements
-        ClientResponseObserver<GrpcMessage, GrpcMessage>, Subscription {
+public class ReactorGrpcClientHandler extends Flux<GrpcMessage>
+        implements ClientResponseObserver<GrpcMessage, GrpcMessage>, Subscription {
 
-    private static final VarHandle COMPLETE = CommonVarHandles.complete(MethodHandles.lookup(),
-            ReactorGrpcClientHandler.class);
-    private static final VarHandle DOWNSTREAM = CommonVarHandles.makeHandle(MethodHandles.lookup(),
-            ReactorGrpcClientHandler.class, "downstream", CoreSubscriber.class);
-    private static final VarHandle UNLIMITED = CommonVarHandles.makeHandle(MethodHandles.lookup(),
-            ReactorGrpcClientHandler.class, "unlimited", boolean.class);
-
-    private static long addCap(long num1, long num2) {
-        long sum = num1 + num2;
-        return sum < 0 || sum > Integer.MAX_VALUE ? Integer.MAX_VALUE : sum;
-    }
-
+    private static final VarHandle COMPLETE =
+            CommonVarHandles.complete(MethodHandles.lookup(), ReactorGrpcClientHandler.class);
+    private static final VarHandle DOWNSTREAM = CommonVarHandles.makeHandle(
+            MethodHandles.lookup(), ReactorGrpcClientHandler.class, "downstream", CoreSubscriber.class);
+    private static final VarHandle UNLIMITED = CommonVarHandles.makeHandle(
+            MethodHandles.lookup(), ReactorGrpcClientHandler.class, "unlimited", boolean.class);
     private final boolean createSubscriber;
     private final int sendQueueChunkSize;
-
     private final AtomicLong demand = new AtomicLong(0);
-
     private ClientCallStreamObserver<GrpcMessage> upstream;
     private CoreSubscriber<? super GrpcMessage> downstream;
     private boolean complete = false;
     private boolean unlimited = false;
-
     @Getter
     private GrpcSubscriber subscriber;
 
@@ -55,6 +46,11 @@ public class ReactorGrpcClientHandler extends Flux<GrpcMessage> implements
     ReactorGrpcClientHandler(int sendQueueChunkSize, boolean createSubscriber) {
         this.createSubscriber = createSubscriber;
         this.sendQueueChunkSize = sendQueueChunkSize;
+    }
+
+    private static long addCap(long num1, long num2) {
+        long sum = num1 + num2;
+        return sum < 0 || sum > Integer.MAX_VALUE ? Integer.MAX_VALUE : sum;
     }
 
     @Override
@@ -91,8 +87,8 @@ public class ReactorGrpcClientHandler extends Flux<GrpcMessage> implements
             return;
         }
 
-        CoreSubscriber<? super GrpcMessage> downstream = (CoreSubscriber<? super GrpcMessage>) DOWNSTREAM.getAcquire(
-                this);
+        CoreSubscriber<? super GrpcMessage> downstream =
+                (CoreSubscriber<? super GrpcMessage>) DOWNSTREAM.getAcquire(this);
         if (downstream != null) {
             downstream.onNext(message);
 
@@ -133,8 +129,8 @@ public class ReactorGrpcClientHandler extends Flux<GrpcMessage> implements
     @Override
     public void onCompleted() {
         if (COMPLETE.compareAndSet(this, false, true)) {
-            CoreSubscriber<? super GrpcMessage> downstream = (CoreSubscriber<? super GrpcMessage>) DOWNSTREAM.getAndSetRelease(
-                    this, null);
+            CoreSubscriber<? super GrpcMessage> downstream =
+                    (CoreSubscriber<? super GrpcMessage>) DOWNSTREAM.getAndSetRelease(this, null);
             if (downstream != null) {
                 downstream.onComplete();
             }
@@ -144,8 +140,8 @@ public class ReactorGrpcClientHandler extends Flux<GrpcMessage> implements
     @Override
     public void onError(Throwable t) {
         if (COMPLETE.compareAndSet(this, false, true)) {
-            CoreSubscriber<? super GrpcMessage> downstream = (CoreSubscriber<? super GrpcMessage>) DOWNSTREAM.getAndSetRelease(
-                    this, null);
+            CoreSubscriber<? super GrpcMessage> downstream =
+                    (CoreSubscriber<? super GrpcMessage>) DOWNSTREAM.getAndSetRelease(this, null);
             if (downstream != null) {
                 downstream.onError(t);
             }
@@ -155,8 +151,8 @@ public class ReactorGrpcClientHandler extends Flux<GrpcMessage> implements
     @Override
     public void cancel() {
         if (COMPLETE.compareAndSet(this, false, true)) {
-            CoreSubscriber<? super GrpcMessage> downstream = (CoreSubscriber<? super GrpcMessage>) DOWNSTREAM.getAndSetRelease(
-                    this, null);
+            CoreSubscriber<? super GrpcMessage> downstream =
+                    (CoreSubscriber<? super GrpcMessage>) DOWNSTREAM.getAndSetRelease(this, null);
             if (downstream != null) {
                 downstream.onComplete();
             }
@@ -165,8 +161,10 @@ public class ReactorGrpcClientHandler extends Flux<GrpcMessage> implements
 
     public static class GrpcSubscriber implements CoreSubscriber<GrpcMessage> {
 
-        private static final VarHandle COMPLETE = CommonVarHandles.complete(MethodHandles.lookup(), GrpcSubscriber.class);
-        private static final VarHandle EMPTY = CommonVarHandles.makeHandle(MethodHandles.lookup(), GrpcSubscriber.class, "empty", boolean.class);
+        private static final VarHandle COMPLETE =
+                CommonVarHandles.complete(MethodHandles.lookup(), GrpcSubscriber.class);
+        private static final VarHandle EMPTY =
+                CommonVarHandles.makeHandle(MethodHandles.lookup(), GrpcSubscriber.class, "empty", boolean.class);
 
         private final ClientCallStreamObserver<GrpcMessage> upstream;
         private final SpmcQueue<GrpcMessage> sendQueue;
@@ -176,8 +174,7 @@ public class ReactorGrpcClientHandler extends Flux<GrpcMessage> implements
         private boolean empty = false;
         private boolean complete = false;
 
-        public GrpcSubscriber(ClientCallStreamObserver<GrpcMessage> upstream,
-                int sendQueueChunkSize) {
+        public GrpcSubscriber(ClientCallStreamObserver<GrpcMessage> upstream, int sendQueueChunkSize) {
             this.upstream = upstream;
             this.sendQueue = new SpmcQueue<>(sendQueueChunkSize);
             this.upstream.setOnReadyHandler(this::onReady);
@@ -198,8 +195,7 @@ public class ReactorGrpcClientHandler extends Flux<GrpcMessage> implements
                     break;
                 }
             }
-            if (drained && (boolean) EMPTY.getAcquire(this)
-                    && COMPLETE.compareAndSet(this, false, true)) {
+            if (drained && (boolean) EMPTY.getAcquire(this) && COMPLETE.compareAndSet(this, false, true)) {
                 try {
                     this.upstream.onCompleted();
                 } catch (Exception e) {

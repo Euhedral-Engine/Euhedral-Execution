@@ -7,6 +7,8 @@ public final class AffinityMasks {
 
     public static final int MAX_BITS = 1_048_576;
 
+    private AffinityMasks() {}
+
     /// Copies and validates a little-endian logical CPU mask.
     ///
     /// Word `i`, bit `b` represents logical CPU `64 * i + b`. `span` is the exclusive upper bound
@@ -25,8 +27,7 @@ public final class AffinityMasks {
         if (length == 0) {
             return null;
         }
-        long highest = ((long) (length - 1) << 6)
-                + (63 - Long.numberOfLeadingZeros(owned[length - 1]));
+        long highest = ((long) (length - 1) << 6) + (63 - Long.numberOfLeadingZeros(owned[length - 1]));
         if (highest >= span) {
             return null;
         }
@@ -58,8 +59,5 @@ public final class AffinityMasks {
 
     private static int wordCount(int span) {
         return (span + 63) >>> 6;
-    }
-
-    private AffinityMasks() {
     }
 }

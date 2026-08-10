@@ -35,8 +35,7 @@ class LatticeVertexTest {
     void setup() {
         UpstreamQueue.UP_QUEUE.remove();
 
-        node = new LatticeVertex("test-node", 4, RoutingFunction.DEFAULT,
-                32, RoutingPolicy.ANYWHERE);
+        node = new LatticeVertex("test-node", 4, RoutingFunction.DEFAULT, 32, RoutingPolicy.ANYWHERE);
         BitSet active = new BitSet(4);
         active.set(0, 4);
 
@@ -68,12 +67,8 @@ class LatticeVertexTest {
 
     @Test
     void shouldInitializeTerminalNode() {
-        LatticeVertex terminal = new LatticeVertex(
-                "terminal",
-                2,
-                LatticeVertex.RoutingFunction.DEFAULT,
-                0, RoutingPolicy.ANYWHERE
-        );
+        LatticeVertex terminal =
+                new LatticeVertex("terminal", 2, LatticeVertex.RoutingFunction.DEFAULT, 0, RoutingPolicy.ANYWHERE);
 
         assertFalse(terminal.hasCache);
         assertNull(terminal.remoteCache);
@@ -81,8 +76,7 @@ class LatticeVertexTest {
 
     @Test
     void shouldReportUpstreamCacheCapacityInsteadOfOccupancy() {
-        LatticeVertex upstream = new LatticeVertex(
-                "upstream", 1, RoutingFunction.DEFAULT, 256, RoutingPolicy.ANYWHERE);
+        LatticeVertex upstream = new LatticeVertex("upstream", 1, RoutingFunction.DEFAULT, 256, RoutingPolicy.ANYWHERE);
         LatticeEdge edge = new LatticeEdge(new AtomicBoolean());
         edge.setParent(upstream);
         node.setParent(edge);
@@ -163,8 +157,7 @@ class LatticeVertexTest {
 
     @Test
     void shouldRouteFramesToCorrectDownstream() {
-        node = new LatticeVertex("test-node", 4, RoutingFunction.DEFAULT, 0,
-                RoutingPolicy.ANYWHERE);
+        node = new LatticeVertex("test-node", 4, RoutingFunction.DEFAULT, 0, RoutingPolicy.ANYWHERE);
         node.setDrain(true);
 
         TestReceiver first = new TestReceiver();
@@ -249,8 +242,7 @@ class LatticeVertexTest {
 
     @Test
     void shouldAddInterceptorUpstream() {
-        LatticeVertex.UpstreamInterceptor interceptor =
-                node.new UpstreamInterceptor();
+        LatticeVertex.UpstreamInterceptor interceptor = node.new UpstreamInterceptor();
 
         RecordingSource source = new RecordingSource();
 
@@ -297,14 +289,13 @@ class LatticeVertexTest {
 
         doReturn(false).when(frame).isOrdered();
 
-        LatticeVertex.UpstreamInterceptor interceptor =
-                node.new UpstreamInterceptor();
+        LatticeVertex.UpstreamInterceptor interceptor = node.new UpstreamInterceptor();
 
         interceptor.push(frame);
 
         boolean hasItem = false;
-        for(var queue : node.remoteCache) {
-            if(queue != null) {
+        for (var queue : node.remoteCache) {
+            if (queue != null) {
                 hasItem |= !queue.isEmpty();
             }
         }
@@ -313,8 +304,7 @@ class LatticeVertexTest {
 
     @Test
     void shouldDirectlyRouteOrderedFrames() {
-        node = new LatticeVertex("test-node", 4, RoutingFunction.DEFAULT, 0,
-                RoutingPolicy.ANYWHERE);
+        node = new LatticeVertex("test-node", 4, RoutingFunction.DEFAULT, 0, RoutingPolicy.ANYWHERE);
         node.setDrain(true);
 
         TestReceiver terminal = new TestReceiver();
@@ -336,32 +326,30 @@ class LatticeVertexTest {
         doReturn(true).when(frame).isOrdered();
         doReturn(0L).when(frame).getRoutingHash();
 
-        LatticeVertex.UpstreamInterceptor interceptor =
-                node.new UpstreamInterceptor();
+        LatticeVertex.UpstreamInterceptor interceptor = node.new UpstreamInterceptor();
 
         interceptor.push(frame);
 
         assertEquals(1, terminal.received.size());
     }
 
-//    @Test
-//    void shouldRequestFromUpstream() {
-//        LatticeVertex.UpstreamInterceptor interceptor =
-//                node.new UpstreamInterceptor();
-//
-//        LatticeSource upstream = mock(LatticeSource.class);
-//
-//        interceptor.upstream = upstream;
-//
-//        interceptor.request(10);
-//
-//        verify(upstream).request(10);
-//    }
+    //    @Test
+    //    void shouldRequestFromUpstream() {
+    //        LatticeVertex.UpstreamInterceptor interceptor =
+    //                node.new UpstreamInterceptor();
+    //
+    //        LatticeSource upstream = mock(LatticeSource.class);
+    //
+    //        interceptor.upstream = upstream;
+    //
+    //        interceptor.request(10);
+    //
+    //        verify(upstream).request(10);
+    //    }
 
     @Test
     void shouldIgnoreInvalidRequest() {
-        LatticeVertex.UpstreamInterceptor interceptor =
-                node.new UpstreamInterceptor();
+        LatticeVertex.UpstreamInterceptor interceptor = node.new UpstreamInterceptor();
 
         RecordingSource upstream = new RecordingSource();
 
@@ -374,8 +362,7 @@ class LatticeVertexTest {
 
     @Test
     void shouldCancelUpstream() {
-        LatticeVertex.UpstreamInterceptor interceptor =
-                node.new UpstreamInterceptor();
+        LatticeVertex.UpstreamInterceptor interceptor = node.new UpstreamInterceptor();
 
         RecordingSource upstream = new RecordingSource();
         interceptor.addUpstream(upstream);
@@ -388,8 +375,7 @@ class LatticeVertexTest {
 
     @Test
     void shouldMarkCompleteOnCompletion() {
-        LatticeVertex.UpstreamInterceptor interceptor =
-                node.new UpstreamInterceptor();
+        LatticeVertex.UpstreamInterceptor interceptor = node.new UpstreamInterceptor();
         interceptor.addUpstream(new RecordingSource());
 
         interceptor.onComplete();
@@ -399,8 +385,7 @@ class LatticeVertexTest {
 
     @Test
     void shouldMarkCompleteOnError() {
-        LatticeVertex.UpstreamInterceptor interceptor =
-                node.new UpstreamInterceptor();
+        LatticeVertex.UpstreamInterceptor interceptor = node.new UpstreamInterceptor();
         interceptor.addUpstream(new RecordingSource());
 
         interceptor.onError(new RuntimeException("boom"));
@@ -410,8 +395,7 @@ class LatticeVertexTest {
 
     @Test
     void shouldReportInterceptorCompletionState() {
-        LatticeVertex.UpstreamInterceptor interceptor =
-                node.new UpstreamInterceptor();
+        LatticeVertex.UpstreamInterceptor interceptor = node.new UpstreamInterceptor();
         interceptor.addUpstream(new RecordingSource());
 
         assertFalse(interceptor.isComplete());
@@ -433,8 +417,8 @@ class LatticeVertexTest {
         }
 
         @Override
-        public long pull(Consumer<AbstractFrame> consumer,
-                Function<AbstractFrame, Boolean> stopCondition, long demand) {
+        public long pull(
+                Consumer<AbstractFrame> consumer, Function<AbstractFrame, Boolean> stopCondition, long demand) {
             return 0;
         }
 

@@ -48,8 +48,7 @@ public final class PartitionedSpmcQueue<T> extends AbstractPartitionedQueue<T> {
     }
 
     @Override
-    public long drain(int partition, Consumer<T> consumer, Function<T, Boolean> stopCondition,
-            long limit) {
+    public long drain(int partition, Consumer<T> consumer, Function<T, Boolean> stopCondition, long limit) {
         return this.queues[partition].drain(consumer, stopCondition, limit);
     }
 

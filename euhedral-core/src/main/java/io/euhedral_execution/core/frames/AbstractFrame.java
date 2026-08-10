@@ -72,11 +72,14 @@ public abstract class AbstractFrame {
 
     @Getter
     private final long idHash;
+
     @Getter
     private long routingHash;
+
     @Getter
     @Setter
     private CpuInfo origin;
+
     @Setter
     private RoutingPolicy routingPolicy;
 
@@ -84,13 +87,15 @@ public abstract class AbstractFrame {
         this(idHash, null, null);
     }
 
-    protected AbstractFrame(long idHash, @Nullable FrameManager recycler,
-            @Nullable AtomicBoolean killSwitch) {
+    protected AbstractFrame(long idHash, @Nullable FrameManager recycler, @Nullable AtomicBoolean killSwitch) {
         this(idHash, null, recycler, killSwitch);
     }
 
-    protected AbstractFrame(long idHash, @Nullable FramePusher responseReceiver,
-            @Nullable FrameManager recycler, @Nullable AtomicBoolean killSwitch) {
+    protected AbstractFrame(
+            long idHash,
+            @Nullable FramePusher responseReceiver,
+            @Nullable FrameManager recycler,
+            @Nullable AtomicBoolean killSwitch) {
         this.idHash = idHash;
         this.recycler = recycler;
         this.killSwitch = killSwitch;
@@ -99,11 +104,10 @@ public abstract class AbstractFrame {
     }
 
     /// Does the thing.
-    public void execute() {
-    }
+    public void execute() {}
 
-    protected  <T extends AbstractFrame> void giveToReceiver(T obj) {
-        if(this.responseReceiver != null) {
+    protected <T extends AbstractFrame> void giveToReceiver(T obj) {
+        if (this.responseReceiver != null) {
             this.responseReceiver.push(obj);
         }
     }

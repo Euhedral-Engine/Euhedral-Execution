@@ -36,11 +36,29 @@ import org.slf4j.LoggerFactory;
 public final class WindowsSystemLayout {
 
     public static final WindowsSystemLayout INSTANCE;
-    private static final Logger LOGGER = LoggerFactory.getLogger(Constants.getLoggerName(
-            WindowsSystemLayout.class));
+    private static final Logger LOGGER = LoggerFactory.getLogger(Constants.getLoggerName(WindowsSystemLayout.class));
 
     static {
         INSTANCE = OSName.isWindows() ? new WindowsSystemLayout() : null;
+    }
+
+    private final TopologyModel model;
+
+    private WindowsSystemLayout() {
+        this(() -> {
+            JNIClassLoader.load();
+            byte[] raw = getRawTopologyInfo();
+            return translate(raw == null ? List.of() : SystemLogicalProcessorInformation.parse(raw));
+        });
+    }
+
+    WindowsSystemLayout(List<SystemLogicalProcessorInformation> relationships) {
+        this.model = new TopologyNormalizer().normalize(translate(copyRelationships(relationships)));
+    }
+
+    private WindowsSystemLayout(io.euhedral_execution.hardware_utils.internal.topology.TopologyProvider provider) {
+        this.model =
+                TopologyBootstrap.normalize(provider, Runtime.getRuntime().availableProcessors(), LOGGER, "windows");
     }
 
     private static native byte[] getRawTopologyInfo();
@@ -56,41 +74,42 @@ public final class WindowsSystemLayout {
                 } else if (processor.relationship == Relationship.PROCESSOR_CORE) {
                     cores.add(processor);
                 }
-            } else if (relationship instanceof CacheRelationship cache
-                    && cache.type != CacheType.INSTRUCTION) {
+            } else if (relationship instanceof CacheRelationship cache && cache.type != CacheType.INSTRUCTION) {
                 BitSet mask = affinityMask(cache.groupAffinities);
-                caches.add(new CacheDomain(Byte.toUnsignedInt(cache.level), cache.cacheSizeBytes,
-                        Short.toUnsignedInt(cache.lineSize), mask));
+                caches.add(new CacheDomain(
+                        Byte.toUnsignedInt(cache.level),
+                        cache.cacheSizeBytes,
+                        Short.toUnsignedInt(cache.lineSize),
+                        mask));
             }
         }
 
         Map<Integer, Set<String>> packageOwners = new HashMap<>();
         for (ProcessorRelationship value : packages) {
             String signature = signature("package", value.groupAffinities);
-            forEachCpu(value.groupAffinities, cpu -> packageOwners.computeIfAbsent(cpu,
-                    ignored -> new HashSet<>()).add(signature));
+            forEachCpu(
+                    value.groupAffinities,
+                    cpu -> packageOwners
+                            .computeIfAbsent(cpu, ignored -> new HashSet<>())
+                            .add(signature));
         }
         boolean hasTrue = cores.stream().anyMatch(core -> core.pCore);
         boolean hasFalse = cores.stream().anyMatch(core -> !core.pCore);
         Map<Integer, LogicalCpu> cpus = new TreeMap<>();
         for (ProcessorRelationship value : cores) {
             String coreSignature = signature("core", value.groupAffinities);
-            CoreKind kind = (hasTrue && hasFalse) ? (value.pCore ? CoreKind.PERFORMANCE
-                    : CoreKind.EFFICIENCY)
+            CoreKind kind = (hasTrue && hasFalse)
+                    ? (value.pCore ? CoreKind.PERFORMANCE : CoreKind.EFFICIENCY)
                     : CoreKind.UNKNOWN;
             forEachCpu(value.groupAffinities, cpu -> {
                 Set<String> owners = packageOwners.get(cpu);
                 if (owners == null || owners.size() != 1) {
-                    throw new IllegalArgumentException("windows CPU " + cpu
-                            + " must have exactly one package owner");
+                    throw new IllegalArgumentException("windows CPU " + cpu + " must have exactly one package owner");
                 }
-                LogicalCpu prior = cpus.putIfAbsent(cpu,
-                        new LogicalCpu(cpu, owners.iterator().next(),
-                                "windows:die:0", coreSignature, kind));
-                if (prior != null && (!prior.coreKey().equals(coreSignature)
-                        || prior.coreKind() != kind)) {
-                    throw new IllegalArgumentException("windows CPU " + cpu
-                            + " has conflicting core ownership");
+                LogicalCpu prior = cpus.putIfAbsent(
+                        cpu, new LogicalCpu(cpu, owners.iterator().next(), "windows:die:0", coreSignature, kind));
+                if (prior != null && (!prior.coreKey().equals(coreSignature) || prior.coreKind() != kind)) {
+                    throw new IllegalArgumentException("windows CPU " + cpu + " has conflicting core ownership");
                 }
             });
         }
@@ -98,7 +117,8 @@ public final class WindowsSystemLayout {
     }
 
     private static String signature(String type, List<GroupAffinity> affinities) {
-        List<GroupAffinity> nonzero = affinities.stream().filter(value -> value.mask() != 0)
+        List<GroupAffinity> nonzero = affinities.stream()
+                .filter(value -> value.mask() != 0)
                 .sorted(Comparator.comparingInt(value -> Short.toUnsignedInt(value.group())))
                 .toList();
         if (nonzero.isEmpty()) {
@@ -110,7 +130,9 @@ public final class WindowsSystemLayout {
                 value.append(';');
             }
             GroupAffinity affinity = nonzero.get(i);
-            value.append('g').append(Short.toUnsignedInt(affinity.group())).append('=')
+            value.append('g')
+                    .append(Short.toUnsignedInt(affinity.group()))
+                    .append('=')
                     .append(String.format(Locale.ROOT, "%016x", affinity.mask()));
         }
         return value.toString();
@@ -122,8 +144,7 @@ public final class WindowsSystemLayout {
         return result;
     }
 
-    private static void forEachCpu(List<GroupAffinity> values,
-            java.util.function.IntConsumer consumer) {
+    private static void forEachCpu(List<GroupAffinity> values, java.util.function.IntConsumer consumer) {
         for (GroupAffinity affinity : values) {
             int group = Short.toUnsignedInt(affinity.group());
             long mask = affinity.mask();
@@ -138,15 +159,23 @@ public final class WindowsSystemLayout {
 
     private static List<SystemLogicalProcessorInformation> copyRelationships(
             List<SystemLogicalProcessorInformation> source) {
-        List<SystemLogicalProcessorInformation> result = new ArrayList<>(
-                List.copyOf(source).size());
+        List<SystemLogicalProcessorInformation> result =
+                new ArrayList<>(List.copyOf(source).size());
         for (SystemLogicalProcessorInformation value : source) {
             if (value instanceof ProcessorRelationship processor) {
-                result.add(new ProcessorRelationship(processor.relationship, processor.smt,
-                        processor.pCore, copyAffinities(processor.groupAffinities)));
+                result.add(new ProcessorRelationship(
+                        processor.relationship,
+                        processor.smt,
+                        processor.pCore,
+                        copyAffinities(processor.groupAffinities)));
             } else if (value instanceof CacheRelationship cache) {
-                result.add(new CacheRelationship(cache.level, cache.associativity, cache.lineSize,
-                        cache.cacheSizeBytes, cache.type, copyAffinities(cache.groupAffinities)));
+                result.add(new CacheRelationship(
+                        cache.level,
+                        cache.associativity,
+                        cache.lineSize,
+                        cache.cacheSizeBytes,
+                        cache.type,
+                        copyAffinities(cache.groupAffinities)));
             } else {
                 result.add(value);
             }
@@ -155,30 +184,9 @@ public final class WindowsSystemLayout {
     }
 
     private static List<GroupAffinity> copyAffinities(List<GroupAffinity> source) {
-        return source.stream().map(value -> new GroupAffinity(value.mask(), value.group()))
+        return source.stream()
+                .map(value -> new GroupAffinity(value.mask(), value.group()))
                 .toList();
-    }
-
-    private final TopologyModel model;
-
-    private WindowsSystemLayout() {
-        this(() -> {
-            JNIClassLoader.load();
-            byte[] raw = getRawTopologyInfo();
-            return translate(
-                    raw == null ? List.of() : SystemLogicalProcessorInformation.parse(raw));
-        });
-    }
-
-    WindowsSystemLayout(List<SystemLogicalProcessorInformation> relationships) {
-        this.model = new TopologyNormalizer().normalize(
-                translate(copyRelationships(relationships)));
-    }
-
-    private WindowsSystemLayout(
-            io.euhedral_execution.hardware_utils.internal.topology.TopologyProvider provider) {
-        this.model = TopologyBootstrap.normalize(provider,
-                Runtime.getRuntime().availableProcessors(), LOGGER, "windows");
     }
 
     public Map<Integer, CpuCacheLayout> getCacheLayout() {

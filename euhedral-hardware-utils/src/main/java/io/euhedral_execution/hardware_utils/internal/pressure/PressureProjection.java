@@ -10,11 +10,19 @@ import java.util.BitSet;
 
 final class PressureProjection {
 
-    static HardwareUtilization project(IntervalHardwareSample sample, double[] perQuotaCpuPressure,
-            double[] perQuotaCpuThrottle, double[] pressurePerCpu,
-            double quotaCpuUsage, double cpuThrottleRatio,
-            double memoryUtilization, double diskIOPressure,
-            double diskIOBytesPerSecond, long evaluationNs) {
+    private PressureProjection() {}
+
+    static HardwareUtilization project(
+            IntervalHardwareSample sample,
+            double[] perQuotaCpuPressure,
+            double[] perQuotaCpuThrottle,
+            double[] pressurePerCpu,
+            double quotaCpuUsage,
+            double cpuThrottleRatio,
+            double memoryUtilization,
+            double diskIOPressure,
+            double diskIOBytesPerSecond,
+            long evaluationNs) {
 
         int logicalSpan = sample.logicalSpan();
         BitSet effectiveCpus = (BitSet) sample.effectiveCpus().clone();
@@ -35,8 +43,7 @@ final class PressureProjection {
         long memoryLimit = Long.MAX_VALUE;
         if (sample.memorySignals().hardLimitBytes().resolution() != SignalResolution.UNAVAILABLE) {
             memoryLimit = sample.memorySignals().hardLimitBytes().value();
-        } else if (sample.memorySignals().highLimitBytes().resolution()
-                != SignalResolution.UNAVAILABLE) {
+        } else if (sample.memorySignals().highLimitBytes().resolution() != SignalResolution.UNAVAILABLE) {
             memoryLimit = sample.memorySignals().highLimitBytes().value();
         }
 
@@ -46,8 +53,7 @@ final class PressureProjection {
         }
 
         long inactiveFile = 0L;
-        if (sample.memorySignals().inactiveFileBytes().resolution()
-                != SignalResolution.UNAVAILABLE) {
+        if (sample.memorySignals().inactiveFileBytes().resolution() != SignalResolution.UNAVAILABLE) {
             inactiveFile = sample.memorySignals().inactiveFileBytes().value();
         }
 
@@ -60,9 +66,8 @@ final class PressureProjection {
                 0L,
                 new UnmodifiableBitSet(effectiveCpus),
                 pressurePerCpu,
-                new long[]{memoryLimit, memoryUsage, inactiveFile},
-                0L
-        );
+                new long[] {memoryLimit, memoryUsage, inactiveFile},
+                0L);
 
         return HardwareUtilization.create(
                 evaluationNs,
@@ -79,10 +84,6 @@ final class PressureProjection {
                 0L, // memPerCpuUsageBytes
                 diskIOBytesPerSecond,
                 diskIOPressure,
-                snapshot
-        );
-    }
-
-    private PressureProjection() {
+                snapshot);
     }
 }

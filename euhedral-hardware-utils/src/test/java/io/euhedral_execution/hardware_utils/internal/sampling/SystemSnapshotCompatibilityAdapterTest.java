@@ -23,11 +23,18 @@ public class SystemSnapshotCompatibilityAdapterTest {
 
     private SystemSnapshot createDummySnapshot(long period) {
         return new SystemSnapshot(
-                1000L, 4, 4, period, 1000L, 0L,
+                1000L,
+                4,
+                4,
+                period,
+                1000L,
+                0L,
                 new UnmodifiableBitSet(new BitSet(4)),
                 new UnmodifiableDoubleArray(new double[4]),
-                1024L, 512L, 256L, 100L
-        );
+                1024L,
+                512L,
+                256L,
+                100L);
     }
 
     @Test
@@ -59,8 +66,7 @@ public class SystemSnapshotCompatibilityAdapterTest {
         SystemSnapshotProvider provider = mock(SystemSnapshotProvider.class);
         when(provider.getSnapshot()).thenReturn(createDummySnapshot(100L));
 
-        SystemSnapshotCompatibilityAdapter adapter = new SystemSnapshotCompatibilityAdapter(
-                provider);
+        SystemSnapshotCompatibilityAdapter adapter = new SystemSnapshotCompatibilityAdapter(provider);
         verify(provider, times(1)).getSnapshot();
 
         SlowHardwareSample slow = adapter.sampleSlow(2000L);
@@ -69,18 +75,16 @@ public class SystemSnapshotCompatibilityAdapterTest {
         assertEquals(2000L, slow.observedAtNs());
         assertEquals(4, slow.logicalSpan());
         assertEquals(4, slow.cpuSignals().length);
-        assertEquals(SignalValidity.UNSUPPORTED,
+        assertEquals(
+                SignalValidity.UNSUPPORTED,
                 slow.cpuSignals()[0].constrainedFrequencyHz().validity());
     }
 
     @Test
     public void testSampleFastNullTransientFailure() {
         SystemSnapshotProvider provider = mock(SystemSnapshotProvider.class);
-        when(provider.getSnapshot())
-                .thenReturn(createDummySnapshot(100L))
-                .thenReturn(null);
-        SystemSnapshotCompatibilityAdapter adapter = new SystemSnapshotCompatibilityAdapter(
-                provider);
+        when(provider.getSnapshot()).thenReturn(createDummySnapshot(100L)).thenReturn(null);
+        SystemSnapshotCompatibilityAdapter adapter = new SystemSnapshotCompatibilityAdapter(provider);
 
         FastHardwareSample fast = adapter.sampleFast(2000L);
 
@@ -96,8 +100,7 @@ public class SystemSnapshotCompatibilityAdapterTest {
                 .thenReturn(createDummySnapshot(10L)) // 1st sampleFast call
                 .thenReturn(createDummySnapshot(-1L)) // 2nd sampleFast call
                 .thenReturn(createDummySnapshot(Long.MAX_VALUE)); // 3rd sampleFast call
-        SystemSnapshotCompatibilityAdapter adapter = new SystemSnapshotCompatibilityAdapter(
-                provider);
+        SystemSnapshotCompatibilityAdapter adapter = new SystemSnapshotCompatibilityAdapter(provider);
 
         FastHardwareSample fast = adapter.sampleFast(2000L);
         assertEquals(SignalValidity.VALID, fast.quotaPeriodNs().validity());
@@ -119,8 +122,7 @@ public class SystemSnapshotCompatibilityAdapterTest {
                 .thenReturn(createDummySnapshot(10_000L)) // 1st sampleFast call
                 .thenReturn(createDummySnapshot(-1L)) // 2nd sampleFast call
                 .thenReturn(createDummySnapshot(0L)); // 3rd sampleFast call
-        SystemSnapshotCompatibilityAdapter adapter = new SystemSnapshotCompatibilityAdapter(
-                provider);
+        SystemSnapshotCompatibilityAdapter adapter = new SystemSnapshotCompatibilityAdapter(provider);
 
         FastHardwareSample fast = adapter.sampleFast(2000L);
         assertEquals(SignalValidity.VALID, fast.quotaPeriodNs().validity());

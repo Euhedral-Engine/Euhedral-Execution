@@ -12,6 +12,8 @@ import java.util.List;
 public final class ArtifactFingerprint {
     private static final int BUFFER_SIZE = 128 * 1024;
 
+    private ArtifactFingerprint() {}
+
     public static String sha256(Path artifact) throws IOException {
         MessageDigest digest;
         try {
@@ -22,8 +24,9 @@ public final class ArtifactFingerprint {
         if (Files.isDirectory(artifact)) {
             digest.update("directory-artifact-v1\n".getBytes(StandardCharsets.UTF_8));
             try (var stream = Files.walk(artifact)) {
-                List<Path> paths = stream.sorted(java.util.Comparator.comparing(path ->
-                        artifact.relativize(path).toString().replace('\\', '/'))).toList();
+                List<Path> paths = stream.sorted(java.util.Comparator.comparing(
+                                path -> artifact.relativize(path).toString().replace('\\', '/')))
+                        .toList();
                 for (Path file : paths) {
                     if (Files.isSymbolicLink(file)) {
                         throw new IllegalArgumentException("Artifact must not contain symlinks");
@@ -35,8 +38,7 @@ public final class ArtifactFingerprint {
                         throw new IllegalArgumentException("Unsupported artifact entry " + file);
                     }
                     Path relative = artifact.relativize(file);
-                    digest.update(relative.toString().replace('\\', '/')
-                            .getBytes(StandardCharsets.UTF_8));
+                    digest.update(relative.toString().replace('\\', '/').getBytes(StandardCharsets.UTF_8));
                     digest.update((byte) '\t');
                     digest.update(Long.toString(Files.size(file)).getBytes(StandardCharsets.UTF_8));
                     digest.update((byte) '\t');
@@ -46,8 +48,7 @@ public final class ArtifactFingerprint {
             }
         } else {
             if (Files.isSymbolicLink(artifact)
-                    || !Files.isRegularFile(artifact,
-                    java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+                    || !Files.isRegularFile(artifact, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
                 throw new IllegalArgumentException("Artifact must be a regular file");
             }
             updateFromFile(digest, artifact);
@@ -76,8 +77,5 @@ public final class ArtifactFingerprint {
                 }
             }
         }
-    }
-
-    private ArtifactFingerprint() {
     }
 }

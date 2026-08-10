@@ -75,46 +75,54 @@ public final class ClosedLoopRunner {
     private static final int GENERATED_BOOTSTRAP_START_INDEX = 1024;
     private static final Logger LOGGER = LoggerFactory.getLogger(ClosedLoopRunner.class);
 
-    public static final class StopRequested extends RuntimeException {
-        private StopRequested() {
-            super(null, null, false, false);
-        }
-    }
+    private ClosedLoopRunner() {}
 
     static StopRequested stopSignal() {
         return new StopRequested();
     }
 
     public static ClosedLoopResult run(ClosedLoopConfig config) throws Exception {
-        return runAndPackage(config, new ProductionServices(config.stopFile()),
+        return runAndPackage(
+                config,
+                new ProductionServices(config.stopFile()),
                 config.workspace().resolve("packages"));
     }
 
-    static ClosedLoopResult runAndPackage(ClosedLoopConfig config,
-            ClosedLoopServices services, Path outputRoot) throws Exception {
+    static ClosedLoopResult runAndPackage(ClosedLoopConfig config, ClosedLoopServices services, Path outputRoot)
+            throws Exception {
         ClosedLoopResult result = run(config, services);
-        int revision = Integer.parseInt(result.latestCheckpoint().getFileName().toString()
-                .substring("checkpoint-".length()));
+        int revision = Integer.parseInt(
+                result.latestCheckpoint().getFileName().toString().substring("checkpoint-".length()));
         String packageId = result.stage() == CheckpointStage.RUN_COMPLETE
                 ? config.trainingRunId()
                 : "%s.partial.r%08d".formatted(config.trainingRunId(), revision);
-        TrainingRunPackage packaged = TrainingRunPackager.publish(
-                new TrainingRunPackageRequest(config.workspace(),
-                        outputRoot,
-                        new TrainingRunPackageInputs(packageId, config.trainingRunId(),
-                                revision, config.schedulerSeed(), config.commitSha(),
-                                config.dirtyWorkingTree(), config.benchmarkConfig(),
-                                config.requiredScenarios())));
-        return new ClosedLoopResult(result.stage(), result.nextIteration(),
-                result.latestCheckpoint(), result.latestMerge(), result.latestModel(),
-                result.awaitingScenarios(), Optional.of(packaged.directory()));
+        TrainingRunPackage packaged = TrainingRunPackager.publish(new TrainingRunPackageRequest(
+                config.workspace(),
+                outputRoot,
+                new TrainingRunPackageInputs(
+                        packageId,
+                        config.trainingRunId(),
+                        revision,
+                        config.schedulerSeed(),
+                        config.commitSha(),
+                        config.dirtyWorkingTree(),
+                        config.benchmarkConfig(),
+                        config.requiredScenarios())));
+        return new ClosedLoopResult(
+                result.stage(),
+                result.nextIteration(),
+                result.latestCheckpoint(),
+                result.latestMerge(),
+                result.latestModel(),
+                result.awaitingScenarios(),
+                Optional.of(packaged.directory()));
     }
 
     static boolean stopRequested(Path stopFile) {
         try {
-            return Files.readAttributes(stopFile,
-                    java.nio.file.attribute.BasicFileAttributes.class,
-                    LinkOption.NOFOLLOW_LINKS).isRegularFile();
+            return Files.readAttributes(
+                            stopFile, java.nio.file.attribute.BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS)
+                    .isRegularFile();
         } catch (NoSuchFileException missing) {
             return false;
         } catch (IOException error) {
@@ -122,12 +130,11 @@ public final class ClosedLoopRunner {
         }
     }
 
-    static ClosedLoopResult run(ClosedLoopConfig config, ClosedLoopServices services)
-            throws Exception {
+    static ClosedLoopResult run(ClosedLoopConfig config, ClosedLoopServices services) throws Exception {
         try (WorkspaceLock ignored = WorkspaceLock.acquire(config.workspace())) {
             String configHash = ClosedLoopConfigFingerprint.sha256(config);
-            Optional<LoadedCheckpoint> loaded = CheckpointSnapshotCodec.loadLatest(
-                    config.workspace(), config.trainingRunId(), configHash);
+            Optional<LoadedCheckpoint> loaded =
+                    CheckpointSnapshotCodec.loadLatest(config.workspace(), config.trainingRunId(), configHash);
             if (!config.resume() && loaded.isPresent()) {
                 throw new IllegalArgumentException("A complete Phase 3 checkpoint already exists");
             }
@@ -158,19 +165,19 @@ public final class ClosedLoopRunner {
                     return result(current, new TreeSet<>());
                 }
                 if (current.checkpoint().stage() == CheckpointStage.MODEL_REJECTED
-                        && !shouldContinueRejectedSeedModel(config,
-                        current.checkpoint())) {
+                        && !shouldContinueRejectedSeedModel(config, current.checkpoint())) {
                     return result(current, new TreeSet<>());
                 }
                 current = switch (current.checkpoint().stage()) {
                     case READY_TO_TRAIN -> train(config, services, current);
                     case MODEL_READY, MODEL_REJECTED -> schedule(config, services, current);
-                    case SCHEDULE_READY -> transition(config, current,
-                            copy(current.checkpoint(), CheckpointStage.BENCHMARKING));
+                    case SCHEDULE_READY ->
+                        transition(config, current, copy(current.checkpoint(), CheckpointStage.BENCHMARKING));
                     case BENCHMARKING -> benchmark(config, services, current);
                     case READY_TO_MERGE -> merge(config, services, current);
-                    default -> throw new IllegalStateException("Unexpected closed-loop stage "
-                            + current.checkpoint().stage());
+                    default ->
+                        throw new IllegalStateException("Unexpected closed-loop stage "
+                                + current.checkpoint().stage());
                 };
             }
             return result(current, new TreeSet<>());
@@ -182,16 +189,15 @@ public final class ClosedLoopRunner {
         }
     }
 
-    private static LoadedCheckpoint initialize(ClosedLoopConfig config,
-            ClosedLoopServices services, String configHash) throws Exception {
+    private static LoadedCheckpoint initialize(ClosedLoopConfig config, ClosedLoopServices services, String configHash)
+            throws Exception {
         Files.createDirectories(config.workspace());
         SortedMap<RotationGroup, Integer> cursors = initialCursors(config);
         List<EvidenceIndexEntry> initialEvidence = importInitialEvidence(config);
         if (config.initialCalibrationPlan().isPresent()) {
             Path planDirectory = config.workspace().resolve("calibration-plan");
             copyDirectoryAtomically(config.initialCalibrationPlan().get(), planDirectory);
-            CalibrationPlan plan = CalibrationPlanCsv.read(planDirectory,
-                    config.requiredScenarios());
+            CalibrationPlan plan = CalibrationPlanCsv.read(planDirectory, config.requiredScenarios());
             requireReferenceEvidence(plan, initialEvidence);
             if (plan.anchors().fixedAnchors().size() >= config.candidateBudget()) {
                 throw new IllegalArgumentException("Anchor count must be below policy budget");
@@ -199,40 +205,66 @@ public final class ClosedLoopRunner {
             Path mergeDirectory = config.workspace().resolve("merges/merge-000000");
             DataMerger.MergeArtifacts merge = services.merge(new DataMerger.MergeRequest(
                     evidencePaths(config.workspace(), initialEvidence),
-                    config.requiredScenarios(), plan, mergeDirectory, config.calibrationConfig(),
+                    config.requiredScenarios(),
+                    plan,
+                    mergeDirectory,
+                    config.calibrationConfig(),
                     config.aggregationConfig()));
-            ClosedLoopCheckpoint checkpoint = new ClosedLoopCheckpoint(1,
-                    config.trainingRunId(), 1, CheckpointStage.READY_TO_TRAIN, 1,
-                    config.initialSobolCursor(), configHash, config.requiredScenarios(), cursors,
-                    initialEvidence, List.of(), Optional.of(plan.anchors().anchorSetId()),
+            ClosedLoopCheckpoint checkpoint = new ClosedLoopCheckpoint(
+                    1,
+                    config.trainingRunId(),
+                    1,
+                    CheckpointStage.READY_TO_TRAIN,
+                    1,
+                    config.initialSobolCursor(),
+                    configHash,
+                    config.requiredScenarios(),
+                    cursors,
+                    initialEvidence,
+                    List.of(),
+                    Optional.of(plan.anchors().anchorSetId()),
                     Optional.of(reference(config.workspace(), planDirectory)),
-                    Optional.of(reference(config.workspace(), merge.robustRanking().getParent())),
-                    Optional.empty(), Optional.empty(), List.of());
+                    Optional.of(
+                            reference(config.workspace(), merge.robustRanking().getParent())),
+                    Optional.empty(),
+                    Optional.empty(),
+                    List.of());
             return CheckpointSnapshotCodec.writeNext(config.workspace(), checkpoint);
         }
-        List<io.euhedral_execution.training.data.PolicyVector> policies =
-                resolveBootstrapPolicies(config);
+        List<io.euhedral_execution.training.data.PolicyVector> policies = resolveBootstrapPolicies(config);
         int targetAnchors = config.anchorSelectionConfig().targetCount(config.candidateBudget());
         if (policies.size() <= targetAnchors) {
             throw new IllegalArgumentException("Bootstrap budget must exceed anchor target");
         }
-        ClosedLoopCheckpoint checkpoint = new ClosedLoopCheckpoint(1, config.trainingRunId(), 1,
-                CheckpointStage.BOOTSTRAP_PENDING, 1, config.initialSobolCursor(), configHash,
-                config.requiredScenarios(), cursors, initialEvidence, List.of(),
-                Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
-                Optional.empty(), List.of());
+        ClosedLoopCheckpoint checkpoint = new ClosedLoopCheckpoint(
+                1,
+                config.trainingRunId(),
+                1,
+                CheckpointStage.BOOTSTRAP_PENDING,
+                1,
+                config.initialSobolCursor(),
+                configHash,
+                config.requiredScenarios(),
+                cursors,
+                initialEvidence,
+                List.of(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                List.of());
         return CheckpointSnapshotCodec.writeNext(config.workspace(), checkpoint);
     }
 
-    private static LoadedCheckpoint runBootstrap(ClosedLoopConfig config,
-            ClosedLoopServices services, LoadedCheckpoint loaded) throws Exception {
+    private static LoadedCheckpoint runBootstrap(
+            ClosedLoopConfig config, ClosedLoopServices services, LoadedCheckpoint loaded) throws Exception {
         LOGGER.info("Running bootstrap calibration.");
 
         LoadedCheckpoint current = loaded;
         ClosedLoopCheckpoint checkpoint = current.checkpoint();
         List<SourceScenario> runnable = runnable(config, services);
-        List<io.euhedral_execution.training.data.PolicyVector> policies =
-                resolveBootstrapPolicies(config);
+        List<io.euhedral_execution.training.data.PolicyVector> policies = resolveBootstrapPolicies(config);
         Set<SourceScenario> completeScenarios = checkpoint.evidence().stream()
                 .filter(entry -> entry.source() == EvidenceSource.BOOTSTRAP)
                 .map(EvidenceIndexEntry::scenario)
@@ -241,52 +273,76 @@ public final class ClosedLoopRunner {
             if (completeScenarios.contains(scenario)) {
                 continue;
             }
-            Path scheduleDirectory = config.workspace().resolve("bootstrap/schedules")
-                    .resolve(scenario.canonical());
+            Path scheduleDirectory =
+                    config.workspace().resolve("bootstrap/schedules").resolve(scenario.canonical());
             IterationSchedule schedule;
             if (Files.exists(scheduleDirectory.resolve("COMPLETE"))) {
-                schedule = ScheduleCodec.read(scheduleDirectory, config.requiredScenarios(),
-                        config.trainingRunId(), config.schedulerSeed(), config.commitSha(),
-                        config.dirtyWorkingTree(), config.benchmarkConfig());
+                schedule = ScheduleCodec.read(
+                        scheduleDirectory,
+                        config.requiredScenarios(),
+                        config.trainingRunId(),
+                        config.schedulerSeed(),
+                        config.commitSha(),
+                        config.dirtyWorkingTree(),
+                        config.benchmarkConfig());
             } else {
-                schedule = BootstrapScheduler.create(config.trainingRunId(), scenario, policies,
-                        config.schedulerSeed(), checkpoint.sobolCursor(), config.commitSha(),
-                        config.dirtyWorkingTree(), services.activeCpuSetHex(),
+                schedule = BootstrapScheduler.create(
+                        config.trainingRunId(),
+                        scenario,
+                        policies,
+                        config.schedulerSeed(),
+                        checkpoint.sobolCursor(),
+                        config.commitSha(),
+                        config.dirtyWorkingTree(),
+                        services.activeCpuSetHex(),
                         config.benchmarkConfig());
                 ScheduleCodec.write(scheduleDirectory, schedule);
             }
             var run = schedule.runs().getFirst();
-            PendingBenchmarkRun pending = new PendingBenchmarkRun(0,
-                    io.euhedral_execution.training.scheduling.enums.RunKind.BOOTSTRAP, scenario,
-                    run.benchmarkRunId(), run.candidateCohortId(),
+            PendingBenchmarkRun pending = new PendingBenchmarkRun(
+                    0,
+                    io.euhedral_execution.training.scheduling.enums.RunKind.BOOTSTRAP,
+                    scenario,
+                    run.benchmarkRunId(),
+                    run.candidateCohortId(),
                     reference(config.workspace(), scheduleDirectory),
-                    "evidence/" + run.benchmarkRunId(), PendingRunStatus.PENDING);
-            ArrayList<PendingBenchmarkRun> pendingRows =
-                    new ArrayList<>(checkpoint.pendingRuns());
+                    "evidence/" + run.benchmarkRunId(),
+                    PendingRunStatus.PENDING);
+            ArrayList<PendingBenchmarkRun> pendingRows = new ArrayList<>(checkpoint.pendingRuns());
             pendingRows.removeIf(row -> row.scenario().equals(scenario));
             pendingRows.add(pending);
-            checkpoint = new ClosedLoopCheckpoint(1, checkpoint.trainingRunId(),
-                    checkpoint.revision() + 1, CheckpointStage.BOOTSTRAP_PENDING,
-                    checkpoint.nextIteration(), checkpoint.sobolCursor(),
-                    checkpoint.configSha256(), checkpoint.requiredScenarios(),
-                    checkpoint.rotationCursors(), checkpoint.evidence(),
-                    checkpoint.carryForward(), checkpoint.anchorSetId(),
-                    checkpoint.calibrationPlan(), checkpoint.latestMerge(),
-                    checkpoint.latestModel(), checkpoint.pendingSchedule(), pendingRows);
+            checkpoint = new ClosedLoopCheckpoint(
+                    1,
+                    checkpoint.trainingRunId(),
+                    checkpoint.revision() + 1,
+                    CheckpointStage.BOOTSTRAP_PENDING,
+                    checkpoint.nextIteration(),
+                    checkpoint.sobolCursor(),
+                    checkpoint.configSha256(),
+                    checkpoint.requiredScenarios(),
+                    checkpoint.rotationCursors(),
+                    checkpoint.evidence(),
+                    checkpoint.carryForward(),
+                    checkpoint.anchorSetId(),
+                    checkpoint.calibrationPlan(),
+                    checkpoint.latestMerge(),
+                    checkpoint.latestModel(),
+                    checkpoint.pendingSchedule(),
+                    pendingRows);
             CheckpointSnapshotCodec.writeNext(config.workspace(), checkpoint);
             Path output = config.workspace().resolve(pending.evidenceRelativePath());
             BenchmarkRunContext context;
             if (Files.isRegularFile(output.resolve("COMPLETE"))) {
                 context = adopt(output, pending);
             } else {
-                context = services.benchmark(plan(config, schedule, run, output),
-                        services::stopRequested);
+                context = services.benchmark(plan(config, schedule, run, output), services::stopRequested);
             }
-            EvidenceIndexEntry evidence = new EvidenceIndexEntry(context.descriptor()
-                    .benchmarkRunId(), scenario, reference(config.workspace(), output),
+            EvidenceIndexEntry evidence = new EvidenceIndexEntry(
+                    context.descriptor().benchmarkRunId(),
+                    scenario,
+                    reference(config.workspace(), output),
                     EvidenceSource.BOOTSTRAP);
-            checkpoint = completePending(checkpoint, pending, evidence,
-                    CheckpointStage.BOOTSTRAP_PENDING);
+            checkpoint = completePending(checkpoint, pending, evidence, CheckpointStage.BOOTSTRAP_PENDING);
             current = CheckpointSnapshotCodec.writeNext(config.workspace(), checkpoint);
         }
         Set<SourceScenario> completed = checkpoint.evidence().stream()
@@ -303,26 +359,41 @@ public final class ClosedLoopRunner {
         } else {
             plan = services.bootstrapCalibration(new DataMerger.CalibrationBootstrapRequest(
                     evidencePaths(config.workspace(), checkpoint.evidence()),
-                    config.requiredScenarios(), config.candidateBudget(),
-                    config.referenceOverrides(), planDirectory, config.anchorSelectionConfig(),
+                    config.requiredScenarios(),
+                    config.candidateBudget(),
+                    config.referenceOverrides(),
+                    planDirectory,
+                    config.anchorSelectionConfig(),
                     config.aggregationConfig()));
         }
         Path mergeDirectory = config.workspace().resolve("merges/merge-000000");
-        if(!Files.isDirectory(mergeDirectory)) {
+        if (!Files.isDirectory(mergeDirectory)) {
             services.merge(new DataMerger.MergeRequest(
                     evidencePaths(config.workspace(), checkpoint.evidence()),
-                    config.requiredScenarios(), plan, mergeDirectory, config.calibrationConfig(),
+                    config.requiredScenarios(),
+                    plan,
+                    mergeDirectory,
+                    config.calibrationConfig(),
                     config.aggregationConfig()));
         }
-        ClosedLoopCheckpoint ready = new ClosedLoopCheckpoint(1, checkpoint.trainingRunId(),
-                checkpoint.revision() + 1, CheckpointStage.READY_TO_TRAIN, 1,
-                checkpoint.sobolCursor(), checkpoint.configSha256(),
-                checkpoint.requiredScenarios(), checkpoint.rotationCursors(),
-                checkpoint.evidence(), List.of(),
+        ClosedLoopCheckpoint ready = new ClosedLoopCheckpoint(
+                1,
+                checkpoint.trainingRunId(),
+                checkpoint.revision() + 1,
+                CheckpointStage.READY_TO_TRAIN,
+                1,
+                checkpoint.sobolCursor(),
+                checkpoint.configSha256(),
+                checkpoint.requiredScenarios(),
+                checkpoint.rotationCursors(),
+                checkpoint.evidence(),
+                List.of(),
                 Optional.of(plan.anchors().anchorSetId()),
                 Optional.of(reference(config.workspace(), planDirectory)),
-                Optional.of(reference(config.workspace(), mergeDirectory)), Optional.empty(),
-                Optional.empty(), List.of());
+                Optional.of(reference(config.workspace(), mergeDirectory)),
+                Optional.empty(),
+                Optional.empty(),
+                List.of());
         return CheckpointSnapshotCodec.writeNext(config.workspace(), ready);
     }
 
@@ -338,62 +409,81 @@ public final class ClosedLoopRunner {
             return BootstrapPolicyCsv.read(persisted, config.candidateBudget());
         }
         List<io.euhedral_execution.training.data.PolicyVector> generated =
-                SequenceFinder.bootstrapVectors(GENERATED_BOOTSTRAP_START_INDEX,
-                        config.candidateBudget());
+                SequenceFinder.bootstrapVectors(GENERATED_BOOTSTRAP_START_INDEX, config.candidateBudget());
         BootstrapPolicyCsv.write(persisted, generated);
         return BootstrapPolicyCsv.read(persisted, config.candidateBudget());
     }
 
-    private static LoadedCheckpoint train(ClosedLoopConfig config,
-            ClosedLoopServices services, LoadedCheckpoint loaded) throws Exception {
+    private static LoadedCheckpoint train(ClosedLoopConfig config, ClosedLoopServices services, LoadedCheckpoint loaded)
+            throws Exception {
         ClosedLoopCheckpoint checkpoint = loaded.checkpoint();
         int iteration = checkpoint.nextIteration();
-        Path mergeDirectory = resolve(config.workspace(), checkpoint.latestMerge().orElseThrow());
+        Path mergeDirectory =
+                resolve(config.workspace(), checkpoint.latestMerge().orElseThrow());
         DataMerger.MergeArtifacts merge = artifacts(mergeDirectory);
-        Path modelDirectory = config.workspace().resolve(
-                "models/model-%06d".formatted(iteration));
+        Path modelDirectory = config.workspace().resolve("models/model-%06d".formatted(iteration));
         ScenarioTrainingArtifacts trained;
         if (Files.isDirectory(modelDirectory)) {
-            ScenarioModelMetadata metadata = ScenarioModelMetadataCodec.read(
-                    modelDirectory.resolve(ScenarioModelMetadataCodec.FILE_NAME));
-            trained = new ScenarioTrainingArtifacts(modelDirectory,
+            ScenarioModelMetadata metadata =
+                    ScenarioModelMetadataCodec.read(modelDirectory.resolve(ScenarioModelMetadataCodec.FILE_NAME));
+            trained = new ScenarioTrainingArtifacts(
+                    modelDirectory,
                     modelDirectory.resolve(ScenarioModelMetadataCodec.FILE_NAME),
                     modelDirectory.resolve("grouped-evaluation.csv"),
                     modelDirectory.resolve("loso-evaluation.csv"),
                     modelDirectory.resolve("ablation-evaluation.csv"),
-                    modelDirectory.resolve("training-history.csv"), metadata.acceptanceStatus(),
+                    modelDirectory.resolve("training-history.csv"),
+                    metadata.acceptanceStatus(),
                     metadata.featureSet());
         } else {
             boolean seedEvidence = hasSeedEvidence(checkpoint);
-            ScenarioTrainingConfig trainingConfig = iteration == 1 && seedEvidence
-                    ? config.trainingConfig().coldStart()
-                    : config.trainingConfig();
-            trained = trainWithColdStartFallback(config, services, merge, modelDirectory,
-                    trainingConfig, seedEvidence, iteration);
+            ScenarioTrainingConfig trainingConfig =
+                    iteration == 1 && seedEvidence ? config.trainingConfig().coldStart() : config.trainingConfig();
+            trained = trainWithColdStartFallback(
+                    config, services, merge, modelDirectory, trainingConfig, seedEvidence, iteration);
         }
         CheckpointStage stage = trained.acceptanceStatus() == ModelAcceptanceStatus.ACCEPTED
-                ? CheckpointStage.MODEL_READY : CheckpointStage.MODEL_REJECTED;
-        ClosedLoopCheckpoint next = new ClosedLoopCheckpoint(1, checkpoint.trainingRunId(),
-                checkpoint.revision() + 1, stage, iteration, checkpoint.sobolCursor(),
-                checkpoint.configSha256(), checkpoint.requiredScenarios(),
-                checkpoint.rotationCursors(), checkpoint.evidence(),
-                checkpoint.carryForward(), checkpoint.anchorSetId(),
-                checkpoint.calibrationPlan(), checkpoint.latestMerge(),
-                Optional.of(reference(config.workspace(), modelDirectory)), Optional.empty(),
+                ? CheckpointStage.MODEL_READY
+                : CheckpointStage.MODEL_REJECTED;
+        ClosedLoopCheckpoint next = new ClosedLoopCheckpoint(
+                1,
+                checkpoint.trainingRunId(),
+                checkpoint.revision() + 1,
+                stage,
+                iteration,
+                checkpoint.sobolCursor(),
+                checkpoint.configSha256(),
+                checkpoint.requiredScenarios(),
+                checkpoint.rotationCursors(),
+                checkpoint.evidence(),
+                checkpoint.carryForward(),
+                checkpoint.anchorSetId(),
+                checkpoint.calibrationPlan(),
+                checkpoint.latestMerge(),
+                Optional.of(reference(config.workspace(), modelDirectory)),
+                Optional.empty(),
                 List.of());
         return CheckpointSnapshotCodec.writeNext(config.workspace(), next);
     }
 
     private static ScenarioTrainingArtifacts trainWithColdStartFallback(
-            ClosedLoopConfig config, ClosedLoopServices services,
-            DataMerger.MergeArtifacts merge, Path modelDirectory,
-            ScenarioTrainingConfig trainingConfig, boolean seedEvidence,
-            int iteration) throws Exception {
+            ClosedLoopConfig config,
+            ClosedLoopServices services,
+            DataMerger.MergeArtifacts merge,
+            Path modelDirectory,
+            ScenarioTrainingConfig trainingConfig,
+            boolean seedEvidence,
+            int iteration)
+            throws Exception {
         ScenarioInputs inputs = ScenarioInputs.from(merge);
         try {
-            return services.train(new ScenarioTrainingRequest(inputs,
-                    config.requiredScenarios(), modelDirectory, config.commitSha(),
-                    config.dirtyWorkingTree(), trainingConfig));
+            return services.train(new ScenarioTrainingRequest(
+                    inputs,
+                    config.requiredScenarios(),
+                    modelDirectory,
+                    config.commitSha(),
+                    config.dirtyWorkingTree(),
+                    trainingConfig));
         } catch (InsufficientScenarioLearningDataException insufficient) {
             if (!seedEvidence) {
                 throw insufficient;
@@ -402,106 +492,149 @@ public final class ClosedLoopRunner {
             if (trainingConfig.equals(coldStart)) {
                 throw insufficient;
             }
-            LOGGER.warn("Iteration {} training data is still sparse; retrying with cold-start "
-                    + "config: {}", iteration, insufficient.getMessage());
-            return services.train(new ScenarioTrainingRequest(inputs,
-                    config.requiredScenarios(), modelDirectory, config.commitSha(),
-                    config.dirtyWorkingTree(), coldStart));
+            LOGGER.warn(
+                    "Iteration {} training data is still sparse; retrying with cold-start " + "config: {}",
+                    iteration,
+                    insufficient.getMessage());
+            return services.train(new ScenarioTrainingRequest(
+                    inputs,
+                    config.requiredScenarios(),
+                    modelDirectory,
+                    config.commitSha(),
+                    config.dirtyWorkingTree(),
+                    coldStart));
         }
     }
 
-    private static LoadedCheckpoint schedule(ClosedLoopConfig config,
-            ClosedLoopServices services, LoadedCheckpoint loaded) throws Exception {
+    private static LoadedCheckpoint schedule(
+            ClosedLoopConfig config, ClosedLoopServices services, LoadedCheckpoint loaded) throws Exception {
         ClosedLoopCheckpoint checkpoint = loaded.checkpoint();
         int iteration = checkpoint.nextIteration();
-        Path modelDirectory = resolve(config.workspace(), checkpoint.latestModel().orElseThrow());
-        ScenarioModelMetadata metadata = ScenarioModelMetadataCodec.read(
-                modelDirectory.resolve(ScenarioModelMetadataCodec.FILE_NAME));
+        Path modelDirectory =
+                resolve(config.workspace(), checkpoint.latestModel().orElseThrow());
+        ScenarioModelMetadata metadata =
+                ScenarioModelMetadataCodec.read(modelDirectory.resolve(ScenarioModelMetadataCodec.FILE_NAME));
         boolean sparseDataFallback = checkpoint.stage() == CheckpointStage.MODEL_REJECTED
                 && shouldContinueRejectedSeedModel(config, checkpoint);
         boolean isProduction = checkpoint.stage() == CheckpointStage.MODEL_READY;
-        if (checkpoint.stage() == CheckpointStage.MODEL_REJECTED
-                && !sparseDataFallback) {
-            throw new IllegalArgumentException(
-                    "Only rejected sparse-data fallback models may continue");
+        if (checkpoint.stage() == CheckpointStage.MODEL_REJECTED && !sparseDataFallback) {
+            throw new IllegalArgumentException("Only rejected sparse-data fallback models may continue");
         }
         if (isProduction && !metadata.deploymentEligible()
                 || !metadata.requiredScenarios().equals(config.requiredScenarios())) {
             throw new IllegalArgumentException("Accepted model scenario catalog mismatch");
         }
-        Path scheduleDirectory = config.workspace().resolve(
-                "iterations/iteration-%06d/schedule".formatted(iteration));
-        DataMerger.MergeArtifacts merge = artifacts(resolve(config.workspace(),
-                checkpoint.latestMerge().orElseThrow()));
-        OptimizationCorpusView corpus = OptimizationCorpusReader.read(merge,
-                config.requiredScenarios());
+        Path scheduleDirectory = config.workspace().resolve("iterations/iteration-%06d/schedule".formatted(iteration));
+        DataMerger.MergeArtifacts merge =
+                artifacts(resolve(config.workspace(), checkpoint.latestMerge().orElseThrow()));
+        OptimizationCorpusView corpus = OptimizationCorpusReader.read(merge, config.requiredScenarios());
         IterationSchedule expected;
         if (!isProduction) {
-            PolicyCurvePredictor fallbackPredictor = neutralPredictor(
-                    config.requiredScenarios());
-            var rescored = CarryForwardQueue.rescore(checkpoint.carryForward(),
-                    fallbackPredictor, iteration);
+            PolicyCurvePredictor fallbackPredictor = neutralPredictor(config.requiredScenarios());
+            var rescored = CarryForwardQueue.rescore(checkpoint.carryForward(), fallbackPredictor, iteration);
             List<SourceScenario> selected = ScenarioRotation.select(
-                    config.requiredScenarios(), checkpoint.rotationCursors(),
-                    config.activeEnvironmentId(), services.activeCoreCount(),
+                    config.requiredScenarios(),
+                    checkpoint.rotationCursors(),
+                    config.activeEnvironmentId(),
+                    services.activeCoreCount(),
                     config.scenariosPerIteration());
-            CalibrationPlan calibration = CalibrationPlanCsv.read(resolve(config.workspace(),
-                    checkpoint.calibrationPlan().orElseThrow()), config.requiredScenarios());
-            var preparation = CandidateScheduler.prepare(iteration, config.candidateBudget(),
-                    calibration, corpus, rescored, selected, config.budgetConfig(),
+            CalibrationPlan calibration = CalibrationPlanCsv.read(
+                    resolve(config.workspace(), checkpoint.calibrationPlan().orElseThrow()),
+                    config.requiredScenarios());
+            var preparation = CandidateScheduler.prepare(
+                    iteration,
+                    config.candidateBudget(),
+                    calibration,
+                    corpus,
+                    rescored,
+                    selected,
+                    config.budgetConfig(),
                     fallbackPredictor);
-            var generated = SequenceFinder.generate(new CandidateGenerationRequest(iteration,
-                    preparation.baseExplorationCount(), preparation.preAuditOverflowCount(),
-                    preparation.disagreementAuditCount(), checkpoint.sobolCursor(),
-                    config.schedulerSeed(), corpus,
+            var generated = SequenceFinder.generate(new CandidateGenerationRequest(
+                    iteration,
+                    preparation.baseExplorationCount(),
+                    preparation.preAuditOverflowCount(),
+                    preparation.disagreementAuditCount(),
+                    checkpoint.sobolCursor(),
+                    config.schedulerSeed(),
+                    corpus,
                     calibration.anchors().fixedAnchors().stream()
-                            .map(policy -> policy.id()).collect(
-                                    java.util.stream.Collectors.toSet()),
-                    fallbackPredictor, config.generationConfig()));
-            expected = CandidateScheduler.complete(config.trainingRunId(),
-                    config.schedulerSeed(), config.commitSha(), config.dirtyWorkingTree(),
-                    services.activeCpuSetHex(), config.benchmarkConfig(), preparation,
+                            .map(policy -> policy.id())
+                            .collect(java.util.stream.Collectors.toSet()),
+                    fallbackPredictor,
+                    config.generationConfig()));
+            expected = CandidateScheduler.complete(
+                    config.trainingRunId(),
+                    config.schedulerSeed(),
+                    config.commitSha(),
+                    config.dirtyWorkingTree(),
+                    services.activeCpuSetHex(),
+                    config.benchmarkConfig(),
+                    preparation,
                     generated);
         } else {
-            try (ScenarioConditionedModel model = services.loadAcceptedModel(modelDirectory,
-                    metadata.producer().trainingDevice())) {
-                PolicyCurvePredictor predictor = policies ->
-                        policies.isEmpty() ? List.of()
-                                : model.predictConfiguredCurves(policies).stream().map(curve ->
-                                PredictedPolicyRanker.summarize(curve,
-                                        config.requiredScenarios())).toList();
-                var rescored = CarryForwardQueue.rescore(checkpoint.carryForward(), predictor,
-                        iteration);
+            try (ScenarioConditionedModel model = services.loadAcceptedModel(
+                    modelDirectory, metadata.producer().trainingDevice())) {
+                PolicyCurvePredictor predictor = policies -> policies.isEmpty()
+                        ? List.of()
+                        : model.predictConfiguredCurves(policies).stream()
+                                .map(curve -> PredictedPolicyRanker.summarize(curve, config.requiredScenarios()))
+                                .toList();
+                var rescored = CarryForwardQueue.rescore(checkpoint.carryForward(), predictor, iteration);
                 List<SourceScenario> selected = ScenarioRotation.select(
-                        config.requiredScenarios(), checkpoint.rotationCursors(),
-                        config.activeEnvironmentId(), services.activeCoreCount(),
+                        config.requiredScenarios(),
+                        checkpoint.rotationCursors(),
+                        config.activeEnvironmentId(),
+                        services.activeCoreCount(),
                         config.scenariosPerIteration());
-                CalibrationPlan calibration = CalibrationPlanCsv.read(resolve(config.workspace(),
-                        checkpoint.calibrationPlan().orElseThrow()), config.requiredScenarios());
-                var preparation = CandidateScheduler.prepare(iteration, config.candidateBudget(),
-                        calibration, corpus, rescored, selected, config.budgetConfig(), predictor);
-                var generated = SequenceFinder.generate(new CandidateGenerationRequest(iteration,
-                        preparation.baseExplorationCount(), preparation.preAuditOverflowCount(),
-                        preparation.disagreementAuditCount(), checkpoint.sobolCursor(),
-                        config.schedulerSeed(), corpus,
+                CalibrationPlan calibration = CalibrationPlanCsv.read(
+                        resolve(config.workspace(), checkpoint.calibrationPlan().orElseThrow()),
+                        config.requiredScenarios());
+                var preparation = CandidateScheduler.prepare(
+                        iteration,
+                        config.candidateBudget(),
+                        calibration,
+                        corpus,
+                        rescored,
+                        selected,
+                        config.budgetConfig(),
+                        predictor);
+                var generated = SequenceFinder.generate(new CandidateGenerationRequest(
+                        iteration,
+                        preparation.baseExplorationCount(),
+                        preparation.preAuditOverflowCount(),
+                        preparation.disagreementAuditCount(),
+                        checkpoint.sobolCursor(),
+                        config.schedulerSeed(),
+                        corpus,
                         calibration.anchors().fixedAnchors().stream()
-                                .map(policy -> policy.id()).collect(
-                                        java.util.stream.Collectors.toSet()),
-                        predictor, config.generationConfig()));
-                expected = CandidateScheduler.complete(config.trainingRunId(),
-                        config.schedulerSeed(), config.commitSha(), config.dirtyWorkingTree(),
-                        services.activeCpuSetHex(), config.benchmarkConfig(), preparation,
+                                .map(policy -> policy.id())
+                                .collect(java.util.stream.Collectors.toSet()),
+                        predictor,
+                        config.generationConfig()));
+                expected = CandidateScheduler.complete(
+                        config.trainingRunId(),
+                        config.schedulerSeed(),
+                        config.commitSha(),
+                        config.dirtyWorkingTree(),
+                        services.activeCpuSetHex(),
+                        config.benchmarkConfig(),
+                        preparation,
                         generated);
             }
         }
         IterationSchedule iterationSchedule;
         if (Files.isRegularFile(scheduleDirectory.resolve("COMPLETE"))) {
-            IterationSchedule persisted = ScheduleCodec.read(scheduleDirectory,
-                    config.requiredScenarios(), config.trainingRunId(), config.schedulerSeed(),
-                    config.commitSha(), config.dirtyWorkingTree(), config.benchmarkConfig());
+            IterationSchedule persisted = ScheduleCodec.read(
+                    scheduleDirectory,
+                    config.requiredScenarios(),
+                    config.trainingRunId(),
+                    config.schedulerSeed(),
+                    config.commitSha(),
+                    config.dirtyWorkingTree(),
+                    config.benchmarkConfig());
             if (!samePersistedSchedule(persisted, expected)) {
-                throw new IllegalArgumentException(
-                        "Published schedule does not match deterministic inputs");
+                throw new IllegalArgumentException("Published schedule does not match deterministic inputs");
             }
             iterationSchedule = expected;
         } else {
@@ -509,24 +642,39 @@ public final class ClosedLoopRunner {
             iterationSchedule = expected;
         }
         ArtifactReference scheduleReference = reference(config.workspace(), scheduleDirectory);
-        List<PendingBenchmarkRun> pending = iterationSchedule.runs().stream().map(run ->
-                new PendingBenchmarkRun(iteration,
+        List<PendingBenchmarkRun> pending = iterationSchedule.runs().stream()
+                .map(run -> new PendingBenchmarkRun(
+                        iteration,
                         io.euhedral_execution.training.scheduling.enums.RunKind.NORMAL,
-                        run.scenario(), run.benchmarkRunId(), run.candidateCohortId(),
-                        scheduleReference, "evidence/" + run.benchmarkRunId(),
-                        PendingRunStatus.PENDING)).toList();
-        ClosedLoopCheckpoint next = new ClosedLoopCheckpoint(1, checkpoint.trainingRunId(),
-                checkpoint.revision() + 1, CheckpointStage.SCHEDULE_READY, iteration,
-                iterationSchedule.nextSobolCursor(), checkpoint.configSha256(),
-                checkpoint.requiredScenarios(), checkpoint.rotationCursors(),
-                checkpoint.evidence(), checkpoint.carryForward(), checkpoint.anchorSetId(),
-                checkpoint.calibrationPlan(), checkpoint.latestMerge(),
-                checkpoint.latestModel(), Optional.of(scheduleReference), pending);
+                        run.scenario(),
+                        run.benchmarkRunId(),
+                        run.candidateCohortId(),
+                        scheduleReference,
+                        "evidence/" + run.benchmarkRunId(),
+                        PendingRunStatus.PENDING))
+                .toList();
+        ClosedLoopCheckpoint next = new ClosedLoopCheckpoint(
+                1,
+                checkpoint.trainingRunId(),
+                checkpoint.revision() + 1,
+                CheckpointStage.SCHEDULE_READY,
+                iteration,
+                iterationSchedule.nextSobolCursor(),
+                checkpoint.configSha256(),
+                checkpoint.requiredScenarios(),
+                checkpoint.rotationCursors(),
+                checkpoint.evidence(),
+                checkpoint.carryForward(),
+                checkpoint.anchorSetId(),
+                checkpoint.calibrationPlan(),
+                checkpoint.latestMerge(),
+                checkpoint.latestModel(),
+                Optional.of(scheduleReference),
+                pending);
         return CheckpointSnapshotCodec.writeNext(config.workspace(), next);
     }
 
-    private static boolean samePersistedSchedule(IterationSchedule persisted,
-            IterationSchedule expected) {
+    private static boolean samePersistedSchedule(IterationSchedule persisted, IterationSchedule expected) {
         return persisted.trainingRunId().equals(expected.trainingRunId())
                 && persisted.iteration() == expected.iteration()
                 && persisted.runs().equals(expected.runs())
@@ -535,149 +683,211 @@ public final class ClosedLoopRunner {
                 && persisted.budgetReports().equals(expected.budgetReports());
     }
 
-    private static PolicyCurvePredictor neutralPredictor(
-            java.util.SortedSet<SourceScenario> requiredScenarios) {
-        List<ScenarioPrediction> template = requiredScenarios.stream().map(scenario ->
-                new ScenarioPrediction(scenario, 0.5, 0.0, 0.5,
-                        0.5, 0.0, 0.0, 0.0, 0.0)).toList();
-        return policies -> policies.stream().map(policy -> PredictedPolicyRanker.summarize(
-                new PolicyPredictionCurve(policy, template), requiredScenarios)).toList();
+    private static PolicyCurvePredictor neutralPredictor(java.util.SortedSet<SourceScenario> requiredScenarios) {
+        List<ScenarioPrediction> template = requiredScenarios.stream()
+                .map(scenario -> new ScenarioPrediction(scenario, 0.5, 0.0, 0.5, 0.5, 0.0, 0.0, 0.0, 0.0))
+                .toList();
+        return policies -> policies.stream()
+                .map(policy ->
+                        PredictedPolicyRanker.summarize(new PolicyPredictionCurve(policy, template), requiredScenarios))
+                .toList();
     }
 
-    private static LoadedCheckpoint benchmark(ClosedLoopConfig config,
-            ClosedLoopServices services, LoadedCheckpoint loaded) throws Exception {
+    private static LoadedCheckpoint benchmark(
+            ClosedLoopConfig config, ClosedLoopServices services, LoadedCheckpoint loaded) throws Exception {
         LoadedCheckpoint current = loaded;
         ClosedLoopCheckpoint checkpoint = current.checkpoint();
-        Path scheduleDirectory = resolve(config.workspace(),
-                checkpoint.pendingSchedule().orElseThrow());
-        IterationSchedule schedule = ScheduleCodec.read(scheduleDirectory,
-                config.requiredScenarios(), config.trainingRunId(), config.schedulerSeed(),
-                config.commitSha(), config.dirtyWorkingTree(), config.benchmarkConfig());
+        Path scheduleDirectory =
+                resolve(config.workspace(), checkpoint.pendingSchedule().orElseThrow());
+        IterationSchedule schedule = ScheduleCodec.read(
+                scheduleDirectory,
+                config.requiredScenarios(),
+                config.trainingRunId(),
+                config.schedulerSeed(),
+                config.commitSha(),
+                config.dirtyWorkingTree(),
+                config.benchmarkConfig());
         for (PendingBenchmarkRun pending : checkpoint.pendingRuns()) {
             if (pending.status() == PendingRunStatus.COMPLETE) {
                 continue;
             }
-            var run = schedule.runs().stream().filter(item ->
-                    item.benchmarkRunId().equals(pending.benchmarkRunId())).findFirst()
+            var run = schedule.runs().stream()
+                    .filter(item -> item.benchmarkRunId().equals(pending.benchmarkRunId()))
+                    .findFirst()
                     .orElseThrow();
             Path output = config.workspace().resolve(pending.evidenceRelativePath());
             BenchmarkRunContext context;
             try {
                 context = Files.isRegularFile(output.resolve("COMPLETE"))
                         ? adopt(output, pending)
-                        : services.benchmark(plan(config, schedule, run, output),
-                        services::stopRequested);
+                        : services.benchmark(plan(config, schedule, run, output), services::stopRequested);
             } catch (StopRequested stop) {
                 return current;
             }
-            EvidenceIndexEntry evidence = new EvidenceIndexEntry(context.descriptor()
-                    .benchmarkRunId(), pending.scenario(),
-                    reference(config.workspace(), output), EvidenceSource.ITERATION);
-            checkpoint = completePending(checkpoint, pending, evidence,
-                    CheckpointStage.BENCHMARKING);
+            EvidenceIndexEntry evidence = new EvidenceIndexEntry(
+                    context.descriptor().benchmarkRunId(),
+                    pending.scenario(),
+                    reference(config.workspace(), output),
+                    EvidenceSource.ITERATION);
+            checkpoint = completePending(checkpoint, pending, evidence, CheckpointStage.BENCHMARKING);
             current = CheckpointSnapshotCodec.writeNext(config.workspace(), checkpoint);
         }
         ClosedLoopCheckpoint ready = copy(checkpoint, CheckpointStage.READY_TO_MERGE);
         return CheckpointSnapshotCodec.writeNext(config.workspace(), ready);
     }
 
-    private static LoadedCheckpoint merge(ClosedLoopConfig config,
-            ClosedLoopServices services, LoadedCheckpoint loaded) throws Exception {
+    private static LoadedCheckpoint merge(ClosedLoopConfig config, ClosedLoopServices services, LoadedCheckpoint loaded)
+            throws Exception {
         ClosedLoopCheckpoint checkpoint = loaded.checkpoint();
         int iteration = checkpoint.nextIteration();
-        CalibrationPlan calibration = CalibrationPlanCsv.read(resolve(config.workspace(),
-                checkpoint.calibrationPlan().orElseThrow()), config.requiredScenarios());
-        Path mergeDirectory = config.workspace().resolve(
-                "merges/merge-%06d".formatted(iteration));
+        CalibrationPlan calibration = CalibrationPlanCsv.read(
+                resolve(config.workspace(), checkpoint.calibrationPlan().orElseThrow()), config.requiredScenarios());
+        Path mergeDirectory = config.workspace().resolve("merges/merge-%06d".formatted(iteration));
         DataMerger.MergeArtifacts merge = Files.isDirectory(mergeDirectory)
                 ? artifacts(mergeDirectory)
                 : services.merge(new DataMerger.MergeRequest(
-                evidencePaths(config.workspace(), checkpoint.evidence()),
-                config.requiredScenarios(), calibration, mergeDirectory,
-                config.calibrationConfig(), config.aggregationConfig()));
-        OptimizationCorpusView corpus = OptimizationCorpusReader.read(merge,
-                config.requiredScenarios());
-        IterationSchedule schedule = ScheduleCodec.read(resolve(config.workspace(),
-                checkpoint.pendingSchedule().orElseThrow()), config.requiredScenarios(),
-                config.trainingRunId(), config.schedulerSeed(), config.commitSha(),
-                config.dirtyWorkingTree(), config.benchmarkConfig());
-        var carry = CarryForwardQueue.reconcile(checkpoint.carryForward(), corpus, schedule,
-                iteration);
+                        evidencePaths(config.workspace(), checkpoint.evidence()),
+                        config.requiredScenarios(),
+                        calibration,
+                        mergeDirectory,
+                        config.calibrationConfig(),
+                        config.aggregationConfig()));
+        OptimizationCorpusView corpus = OptimizationCorpusReader.read(merge, config.requiredScenarios());
+        IterationSchedule schedule = ScheduleCodec.read(
+                resolve(config.workspace(), checkpoint.pendingSchedule().orElseThrow()),
+                config.requiredScenarios(),
+                config.trainingRunId(),
+                config.schedulerSeed(),
+                config.commitSha(),
+                config.dirtyWorkingTree(),
+                config.benchmarkConfig());
+        var carry = CarryForwardQueue.reconcile(checkpoint.carryForward(), corpus, schedule, iteration);
         SortedMap<RotationGroup, Integer> cursors = ScenarioRotation.advance(
-                config.requiredScenarios(), checkpoint.rotationCursors(),
+                config.requiredScenarios(),
+                checkpoint.rotationCursors(),
                 schedule.runs().stream().map(run -> run.scenario()).toList());
-        CheckpointStage stage = iteration == config.iterations()
-                ? CheckpointStage.RUN_COMPLETE : CheckpointStage.READY_TO_TRAIN;
-        ClosedLoopCheckpoint next = new ClosedLoopCheckpoint(1, checkpoint.trainingRunId(),
-                checkpoint.revision() + 1, stage, iteration + 1, checkpoint.sobolCursor(),
-                checkpoint.configSha256(), checkpoint.requiredScenarios(), cursors,
-                checkpoint.evidence(), carry, checkpoint.anchorSetId(),
+        CheckpointStage stage =
+                iteration == config.iterations() ? CheckpointStage.RUN_COMPLETE : CheckpointStage.READY_TO_TRAIN;
+        ClosedLoopCheckpoint next = new ClosedLoopCheckpoint(
+                1,
+                checkpoint.trainingRunId(),
+                checkpoint.revision() + 1,
+                stage,
+                iteration + 1,
+                checkpoint.sobolCursor(),
+                checkpoint.configSha256(),
+                checkpoint.requiredScenarios(),
+                cursors,
+                checkpoint.evidence(),
+                carry,
+                checkpoint.anchorSetId(),
                 checkpoint.calibrationPlan(),
                 Optional.of(reference(config.workspace(), mergeDirectory)),
-                checkpoint.latestModel(), Optional.empty(), List.of());
+                checkpoint.latestModel(),
+                Optional.empty(),
+                List.of());
         return CheckpointSnapshotCodec.writeNext(config.workspace(), next);
     }
 
-    private static ClosedLoopCheckpoint completePending(ClosedLoopCheckpoint checkpoint,
-            PendingBenchmarkRun completed, EvidenceIndexEntry evidence, CheckpointStage stage) {
+    private static ClosedLoopCheckpoint completePending(
+            ClosedLoopCheckpoint checkpoint,
+            PendingBenchmarkRun completed,
+            EvidenceIndexEntry evidence,
+            CheckpointStage stage) {
         ArrayList<EvidenceIndexEntry> evidenceRows = new ArrayList<>(checkpoint.evidence());
-        if (evidenceRows.stream().noneMatch(row ->
-                row.benchmarkRunId().equals(evidence.benchmarkRunId()))) {
+        if (evidenceRows.stream().noneMatch(row -> row.benchmarkRunId().equals(evidence.benchmarkRunId()))) {
             evidenceRows.add(evidence);
         }
-        List<PendingBenchmarkRun> pending = checkpoint.pendingRuns().stream().map(row ->
-                row.benchmarkRunId().equals(completed.benchmarkRunId())
-                        ? new PendingBenchmarkRun(row.iteration(), row.runKind(), row.scenario(),
-                        row.benchmarkRunId(), row.candidateCohortId(), row.schedule(),
-                        row.evidenceRelativePath(), PendingRunStatus.COMPLETE) : row).toList();
-        return new ClosedLoopCheckpoint(1, checkpoint.trainingRunId(),
-                checkpoint.revision() + 1, stage, checkpoint.nextIteration(),
-                checkpoint.sobolCursor(), checkpoint.configSha256(),
-                checkpoint.requiredScenarios(), checkpoint.rotationCursors(), evidenceRows,
-                checkpoint.carryForward(), checkpoint.anchorSetId(),
-                checkpoint.calibrationPlan(), checkpoint.latestMerge(),
-                checkpoint.latestModel(), checkpoint.pendingSchedule(), pending);
+        List<PendingBenchmarkRun> pending = checkpoint.pendingRuns().stream()
+                .map(row -> row.benchmarkRunId().equals(completed.benchmarkRunId())
+                        ? new PendingBenchmarkRun(
+                                row.iteration(),
+                                row.runKind(),
+                                row.scenario(),
+                                row.benchmarkRunId(),
+                                row.candidateCohortId(),
+                                row.schedule(),
+                                row.evidenceRelativePath(),
+                                PendingRunStatus.COMPLETE)
+                        : row)
+                .toList();
+        return new ClosedLoopCheckpoint(
+                1,
+                checkpoint.trainingRunId(),
+                checkpoint.revision() + 1,
+                stage,
+                checkpoint.nextIteration(),
+                checkpoint.sobolCursor(),
+                checkpoint.configSha256(),
+                checkpoint.requiredScenarios(),
+                checkpoint.rotationCursors(),
+                evidenceRows,
+                checkpoint.carryForward(),
+                checkpoint.anchorSetId(),
+                checkpoint.calibrationPlan(),
+                checkpoint.latestMerge(),
+                checkpoint.latestModel(),
+                checkpoint.pendingSchedule(),
+                pending);
     }
 
-    private static LoadedCheckpoint transition(ClosedLoopConfig config,
-            LoadedCheckpoint previous, ClosedLoopCheckpoint next) throws IOException {
+    private static LoadedCheckpoint transition(
+            ClosedLoopConfig config, LoadedCheckpoint previous, ClosedLoopCheckpoint next) throws IOException {
         return CheckpointSnapshotCodec.writeNext(config.workspace(), next);
     }
 
-    private static ClosedLoopCheckpoint copy(ClosedLoopCheckpoint checkpoint,
-            CheckpointStage stage) {
-        return new ClosedLoopCheckpoint(1, checkpoint.trainingRunId(),
-                checkpoint.revision() + 1, stage, checkpoint.nextIteration(),
-                checkpoint.sobolCursor(), checkpoint.configSha256(),
-                checkpoint.requiredScenarios(), checkpoint.rotationCursors(),
-                checkpoint.evidence(), checkpoint.carryForward(), checkpoint.anchorSetId(),
-                checkpoint.calibrationPlan(), checkpoint.latestMerge(),
-                checkpoint.latestModel(), checkpoint.pendingSchedule(),
+    private static ClosedLoopCheckpoint copy(ClosedLoopCheckpoint checkpoint, CheckpointStage stage) {
+        return new ClosedLoopCheckpoint(
+                1,
+                checkpoint.trainingRunId(),
+                checkpoint.revision() + 1,
+                stage,
+                checkpoint.nextIteration(),
+                checkpoint.sobolCursor(),
+                checkpoint.configSha256(),
+                checkpoint.requiredScenarios(),
+                checkpoint.rotationCursors(),
+                checkpoint.evidence(),
+                checkpoint.carryForward(),
+                checkpoint.anchorSetId(),
+                checkpoint.calibrationPlan(),
+                checkpoint.latestMerge(),
+                checkpoint.latestModel(),
+                checkpoint.pendingSchedule(),
                 checkpoint.pendingRuns());
     }
 
-    private static NativeBenchmarkRunPlan plan(ClosedLoopConfig config,
+    private static NativeBenchmarkRunPlan plan(
+            ClosedLoopConfig config,
             IterationSchedule schedule,
-            io.euhedral_execution.training.scheduling.data.ScheduledRun run, Path output) {
-        return new NativeBenchmarkRunPlan(config.trainingRunId(), schedule.iteration(),
-                run.benchmarkRunId(), run.candidateCohortId(), run.scenario(), run.policies(),
-                config.benchmarkConfig(), run.parameters(), config.schedulerSeed(),
-                config.commitSha(), config.dirtyWorkingTree(), output);
+            io.euhedral_execution.training.scheduling.data.ScheduledRun run,
+            Path output) {
+        return new NativeBenchmarkRunPlan(
+                config.trainingRunId(),
+                schedule.iteration(),
+                run.benchmarkRunId(),
+                run.candidateCohortId(),
+                run.scenario(),
+                run.policies(),
+                config.benchmarkConfig(),
+                run.parameters(),
+                config.schedulerSeed(),
+                config.commitSha(),
+                config.dirtyWorkingTree(),
+                output);
     }
 
     private static BenchmarkRunContext adopt(Path output, PendingBenchmarkRun pending) {
         ObservationBundle bundle = ObservationBundleReader.read(output);
         if (!bundle.run().descriptor().benchmarkRunId().equals(pending.benchmarkRunId())
-                || !bundle.run().descriptor().candidateCohortId()
-                .equals(pending.candidateCohortId())
+                || !bundle.run().descriptor().candidateCohortId().equals(pending.candidateCohortId())
                 || !bundle.run().descriptor().scenario().equals(pending.scenario())) {
             throw new IllegalArgumentException("Expected evidence bundle identity mismatch");
         }
         return bundle.run();
     }
 
-    private static void rejectUnexpectedEvidence(Path workspace,
-            ClosedLoopCheckpoint checkpoint) throws IOException {
+    private static void rejectUnexpectedEvidence(Path workspace, ClosedLoopCheckpoint checkpoint) throws IOException {
         Path evidenceDirectory = workspace.resolve("evidence");
         if (!Files.isDirectory(evidenceDirectory)) {
             return;
@@ -688,30 +898,33 @@ public final class ClosedLoopRunner {
         try (var stream = Files.list(evidenceDirectory)) {
             for (Path path : stream.filter(Files::isDirectory)
                     .filter(path -> !path.getFileName().toString().startsWith("."))
-                    .filter(path -> Files.isRegularFile(path.resolve("COMPLETE"))).toList()) {
+                    .filter(path -> Files.isRegularFile(path.resolve("COMPLETE")))
+                    .toList()) {
                 if (!expected.contains(path.getFileName().toString())) {
-                    throw new IllegalArgumentException("Unexpected complete evidence bundle "
-                            + path.getFileName());
+                    throw new IllegalArgumentException("Unexpected complete evidence bundle " + path.getFileName());
                 }
             }
         }
     }
 
-    private static void validateResumeArtifacts(ClosedLoopConfig config,
-            ClosedLoopCheckpoint checkpoint) throws IOException {
+    private static void validateResumeArtifacts(ClosedLoopConfig config, ClosedLoopCheckpoint checkpoint)
+            throws IOException {
         if (checkpoint.pendingSchedule().isPresent()) {
-            ScheduleCodec.read(resolve(config.workspace(),
-                            checkpoint.pendingSchedule().orElseThrow()),
-                    config.requiredScenarios(), config.trainingRunId(), config.schedulerSeed(),
-                    config.commitSha(), config.dirtyWorkingTree(), config.benchmarkConfig());
+            ScheduleCodec.read(
+                    resolve(config.workspace(), checkpoint.pendingSchedule().orElseThrow()),
+                    config.requiredScenarios(),
+                    config.trainingRunId(),
+                    config.schedulerSeed(),
+                    config.commitSha(),
+                    config.dirtyWorkingTree(),
+                    config.benchmarkConfig());
         }
         if (checkpoint.latestModel().isPresent()) {
             ScenarioModelMetadata metadata = ScenarioModelMetadataCodec.read(
                     resolve(config.workspace(), checkpoint.latestModel().orElseThrow())
                             .resolve(ScenarioModelMetadataCodec.FILE_NAME));
             boolean deploymentEligibleRequired = checkpoint.stage() != CheckpointStage.MODEL_REJECTED
-                    && !carriesRejectedSeedModel(config, checkpoint,
-                    metadata);
+                    && !carriesRejectedSeedModel(config, checkpoint, metadata);
             if (metadata.deploymentEligible() != deploymentEligibleRequired
                     || !metadata.requiredScenarios().equals(config.requiredScenarios())) {
                 throw new IllegalArgumentException("Checkpoint model status mismatch");
@@ -719,8 +932,8 @@ public final class ClosedLoopRunner {
         }
     }
 
-    private static boolean shouldContinueRejectedSeedModel(ClosedLoopConfig config,
-            ClosedLoopCheckpoint checkpoint) throws IOException {
+    private static boolean shouldContinueRejectedSeedModel(ClosedLoopConfig config, ClosedLoopCheckpoint checkpoint)
+            throws IOException {
         if (checkpoint.stage() != CheckpointStage.MODEL_REJECTED
                 || checkpoint.latestModel().isEmpty()) {
             return false;
@@ -731,46 +944,44 @@ public final class ClosedLoopRunner {
         return isContinuableRejectedSeedModel(config, checkpoint, metadata);
     }
 
-    private static boolean carriesRejectedSeedModel(ClosedLoopConfig config,
-            ClosedLoopCheckpoint checkpoint, ScenarioModelMetadata metadata) {
+    private static boolean carriesRejectedSeedModel(
+            ClosedLoopConfig config, ClosedLoopCheckpoint checkpoint, ScenarioModelMetadata metadata) {
         if (!isContinuableRejectedSeedModel(config, checkpoint, metadata)) {
             return false;
         }
         return switch (checkpoint.stage()) {
-            case SCHEDULE_READY, BENCHMARKING, READY_TO_MERGE,
-                    READY_TO_TRAIN, RUN_COMPLETE -> true;
+            case SCHEDULE_READY, BENCHMARKING, READY_TO_MERGE, READY_TO_TRAIN, RUN_COMPLETE -> true;
             default -> false;
         };
     }
 
-    private static boolean isContinuableRejectedSeedModel(ClosedLoopConfig config,
-            ClosedLoopCheckpoint checkpoint, ScenarioModelMetadata metadata) {
+    private static boolean isContinuableRejectedSeedModel(
+            ClosedLoopConfig config, ClosedLoopCheckpoint checkpoint, ScenarioModelMetadata metadata) {
         return hasSeedEvidence(checkpoint)
                 && !metadata.deploymentEligible()
                 && (isSparseDataModelConfig(config, metadata.trainingConfig())
-                || isLegacyImportedFirstModel(checkpoint));
+                        || isLegacyImportedFirstModel(checkpoint));
     }
 
     private static boolean hasSeedEvidence(ClosedLoopCheckpoint checkpoint) {
-        return checkpoint.evidence().stream().anyMatch(entry ->
-                entry.source() == EvidenceSource.BOOTSTRAP
-                        || entry.source() == EvidenceSource.INITIAL);
+        return checkpoint.evidence().stream()
+                .anyMatch(entry ->
+                        entry.source() == EvidenceSource.BOOTSTRAP || entry.source() == EvidenceSource.INITIAL);
     }
 
     private static boolean isLegacyImportedFirstModel(ClosedLoopCheckpoint checkpoint) {
-        return checkpoint.evidence().stream().anyMatch(entry ->
-                entry.source() == EvidenceSource.INITIAL)
-                && checkpoint.latestModel().map(model ->
-                model.relativePath().equals("models/model-000001")).orElse(false);
+        return checkpoint.evidence().stream().anyMatch(entry -> entry.source() == EvidenceSource.INITIAL)
+                && checkpoint
+                        .latestModel()
+                        .map(model -> model.relativePath().equals("models/model-000001"))
+                        .orElse(false);
     }
 
-    private static boolean isSparseDataModelConfig(ClosedLoopConfig config,
-            ScenarioTrainingConfig trainingConfig) {
+    private static boolean isSparseDataModelConfig(ClosedLoopConfig config, ScenarioTrainingConfig trainingConfig) {
         return trainingConfig.isEffectiveVersionOf(config.trainingConfig().coldStart());
     }
 
-    private static List<EvidenceIndexEntry> importInitialEvidence(ClosedLoopConfig config)
-            throws Exception {
+    private static List<EvidenceIndexEntry> importInitialEvidence(ClosedLoopConfig config) throws Exception {
         ArrayList<EvidenceIndexEntry> result = new ArrayList<>();
         Set<String> runIds = new HashSet<>();
         for (Path source : config.initialObservationBundles()) {
@@ -781,45 +992,45 @@ public final class ClosedLoopRunner {
             }
             Path target = config.workspace().resolve("evidence").resolve(runId);
             copyDirectoryAtomically(source, target);
-            result.add(new EvidenceIndexEntry(runId, bundle.run().descriptor().scenario(),
-                    reference(config.workspace(), target), EvidenceSource.INITIAL));
+            result.add(new EvidenceIndexEntry(
+                    runId,
+                    bundle.run().descriptor().scenario(),
+                    reference(config.workspace(), target),
+                    EvidenceSource.INITIAL));
         }
-        return result.stream().sorted(Comparator.comparing(
-                EvidenceIndexEntry::benchmarkRunId)).toList();
+        return result.stream()
+                .sorted(Comparator.comparing(EvidenceIndexEntry::benchmarkRunId))
+                .toList();
     }
 
-    private static void requireReferenceEvidence(CalibrationPlan plan,
-            List<EvidenceIndexEntry> evidence) {
-        Set<String> runIds = evidence.stream().map(EvidenceIndexEntry::benchmarkRunId)
-                .collect(java.util.stream.Collectors.toSet());
+    private static void requireReferenceEvidence(CalibrationPlan plan, List<EvidenceIndexEntry> evidence) {
+        Set<String> runIds =
+                evidence.stream().map(EvidenceIndexEntry::benchmarkRunId).collect(java.util.stream.Collectors.toSet());
         if (!runIds.containsAll(plan.references().referenceRunIds().values())) {
             throw new IllegalArgumentException("Calibration references lack initial evidence");
         }
     }
 
-    private static SortedMap<RotationGroup, Integer> initialCursors(
-            ClosedLoopConfig config) {
+    private static SortedMap<RotationGroup, Integer> initialCursors(ClosedLoopConfig config) {
         TreeMap<RotationGroup, Integer> result = new TreeMap<>();
-        config.requiredScenarios().forEach(scenario -> result.put(new RotationGroup(
-                scenario.environmentId(), scenario.availablePhysicalCoreCount()), 0));
+        config.requiredScenarios()
+                .forEach(scenario -> result.put(
+                        new RotationGroup(scenario.environmentId(), scenario.availablePhysicalCoreCount()), 0));
         return result;
     }
 
-    private static List<SourceScenario> runnable(ClosedLoopConfig config,
-            ClosedLoopServices services) {
+    private static List<SourceScenario> runnable(ClosedLoopConfig config, ClosedLoopServices services) {
         List<SourceScenario> result = config.requiredScenarios().stream()
-                .filter(scenario -> scenario.environmentId().equals(
-                        config.activeEnvironmentId()))
-                .filter(scenario -> scenario.availablePhysicalCoreCount()
-                        == services.activeCoreCount()).toList();
+                .filter(scenario -> scenario.environmentId().equals(config.activeEnvironmentId()))
+                .filter(scenario -> scenario.availablePhysicalCoreCount() == services.activeCoreCount())
+                .toList();
         if (result.isEmpty()) {
             throw new IllegalArgumentException("No exact required scenario is runnable");
         }
         return result;
     }
 
-    private static TreeSet<SourceScenario> awaiting(ClosedLoopConfig config,
-            ClosedLoopCheckpoint checkpoint) {
+    private static TreeSet<SourceScenario> awaiting(ClosedLoopConfig config, ClosedLoopCheckpoint checkpoint) {
         Set<SourceScenario> complete = checkpoint.evidence().stream()
                 .filter(entry -> entry.source() == EvidenceSource.BOOTSTRAP)
                 .map(EvidenceIndexEntry::scenario)
@@ -829,39 +1040,47 @@ public final class ClosedLoopRunner {
         return result;
     }
 
-    private static ClosedLoopResult result(LoadedCheckpoint loaded,
-            TreeSet<SourceScenario> awaiting) {
+    private static ClosedLoopResult result(LoadedCheckpoint loaded, TreeSet<SourceScenario> awaiting) {
         ClosedLoopCheckpoint checkpoint = loaded.checkpoint();
-        return new ClosedLoopResult(checkpoint.stage(), checkpoint.nextIteration(),
+        return new ClosedLoopResult(
+                checkpoint.stage(),
+                checkpoint.nextIteration(),
                 loaded.snapshotDirectory(),
-                checkpoint.latestMerge().map(reference ->
-                        resolve(loaded.snapshotDirectory().getParent().getParent(), reference)),
-                checkpoint.latestModel().map(reference ->
-                        resolve(loaded.snapshotDirectory().getParent().getParent(), reference)),
-                java.util.Collections.unmodifiableSortedSet(awaiting), Optional.empty());
+                checkpoint
+                        .latestMerge()
+                        .map(reference ->
+                                resolve(loaded.snapshotDirectory().getParent().getParent(), reference)),
+                checkpoint
+                        .latestModel()
+                        .map(reference ->
+                                resolve(loaded.snapshotDirectory().getParent().getParent(), reference)),
+                java.util.Collections.unmodifiableSortedSet(awaiting),
+                Optional.empty());
     }
 
-    private static List<Path> evidencePaths(Path workspace,
-            List<EvidenceIndexEntry> evidence) {
-        return evidence.stream().sorted(Comparator.comparing(
-                EvidenceIndexEntry::benchmarkRunId)).map(entry ->
-                resolve(workspace, entry.bundle())).toList();
+    private static List<Path> evidencePaths(Path workspace, List<EvidenceIndexEntry> evidence) {
+        return evidence.stream()
+                .sorted(Comparator.comparing(EvidenceIndexEntry::benchmarkRunId))
+                .map(entry -> resolve(workspace, entry.bundle()))
+                .toList();
     }
 
-    private static ArtifactReference reference(Path workspace, Path artifact)
-            throws IOException {
+    private static ArtifactReference reference(Path workspace, Path artifact) throws IOException {
         Path root = workspace.toAbsolutePath().normalize();
         Path target = artifact.toAbsolutePath().normalize();
         if (!target.startsWith(root)) {
             throw new IllegalArgumentException("Artifact is outside the closed-loop workspace");
         }
-        return new ArtifactReference(root.relativize(target).toString().replace('\\', '/'),
-                ArtifactFingerprint.sha256(target));
+        return new ArtifactReference(
+                root.relativize(target).toString().replace('\\', '/'), ArtifactFingerprint.sha256(target));
     }
 
     private static Path resolve(Path workspace, ArtifactReference reference) {
-        Path result = workspace.toAbsolutePath().normalize()
-                .resolve(reference.relativePath()).normalize();
+        Path result = workspace
+                .toAbsolutePath()
+                .normalize()
+                .resolve(reference.relativePath())
+                .normalize();
         if (!result.startsWith(workspace.toAbsolutePath().normalize())) {
             throw new IllegalArgumentException("Artifact path escapes workspace");
         }
@@ -869,7 +1088,8 @@ public final class ClosedLoopRunner {
     }
 
     private static DataMerger.MergeArtifacts artifacts(Path directory) {
-        return new DataMerger.MergeArtifacts(directory.resolve("fixed-anchors.csv"),
+        return new DataMerger.MergeArtifacts(
+                directory.resolve("fixed-anchors.csv"),
                 directory.resolve("reference-runs.csv"),
                 directory.resolve("calibration-report.csv"),
                 directory.resolve("scenario-results.csv"),
@@ -881,15 +1101,13 @@ public final class ClosedLoopRunner {
 
     private static void copyFileAtomically(Path source, Path target) throws IOException {
         if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
-            if (!ArtifactFingerprint.sha256(source).equals(
-                    ArtifactFingerprint.sha256(target))) {
+            if (!ArtifactFingerprint.sha256(source).equals(ArtifactFingerprint.sha256(target))) {
                 throw new IllegalArgumentException("Existing copied input differs");
             }
             return;
         }
         Files.createDirectories(target.getParent());
-        Path temp = target.getParent().resolve("." + target.getFileName() + ".tmp-"
-                + UUID.randomUUID());
+        Path temp = target.getParent().resolve("." + target.getFileName() + ".tmp-" + UUID.randomUUID());
         Files.copy(source, temp);
         try {
             Files.move(temp, target, StandardCopyOption.ATOMIC_MOVE);
@@ -900,15 +1118,13 @@ public final class ClosedLoopRunner {
 
     private static void copyDirectoryAtomically(Path source, Path target) throws IOException {
         if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
-            if (!ArtifactFingerprint.sha256(source).equals(
-                    ArtifactFingerprint.sha256(target))) {
+            if (!ArtifactFingerprint.sha256(source).equals(ArtifactFingerprint.sha256(target))) {
                 throw new IllegalArgumentException("Existing copied artifact differs");
             }
             return;
         }
         Files.createDirectories(target.getParent());
-        Path temp = target.getParent().resolve("." + target.getFileName() + ".tmp-"
-                + UUID.randomUUID());
+        Path temp = target.getParent().resolve("." + target.getFileName() + ".tmp-" + UUID.randomUUID());
         Files.createDirectory(temp);
         try (var stream = Files.walk(source)) {
             for (Path path : stream.sorted().toList()) {
@@ -931,6 +1147,12 @@ public final class ClosedLoopRunner {
         }
     }
 
+    public static final class StopRequested extends RuntimeException {
+        private StopRequested() {
+            super(null, null, false, false);
+        }
+    }
+
     private static final class ProductionServices implements ClosedLoopServices {
         private final Path stopFile;
 
@@ -939,32 +1161,29 @@ public final class ClosedLoopRunner {
         }
 
         @Override
-        public CalibrationPlan bootstrapCalibration(
-                DataMerger.CalibrationBootstrapRequest request) throws Exception {
+        public CalibrationPlan bootstrapCalibration(DataMerger.CalibrationBootstrapRequest request) throws Exception {
             return DataMerger.bootstrapCalibrationV1(request);
         }
 
         @Override
-        public DataMerger.MergeArtifacts merge(DataMerger.MergeRequest request)
-                throws Exception {
+        public DataMerger.MergeArtifacts merge(DataMerger.MergeRequest request) throws Exception {
             return DataMerger.mergeV1(request);
         }
 
         @Override
-        public ScenarioTrainingArtifacts train(ScenarioTrainingRequest request)
-                throws Exception {
+        public ScenarioTrainingArtifacts train(ScenarioTrainingRequest request) throws Exception {
             return ScenarioModelTrainer.train(request);
         }
 
         @Override
-        public ScenarioConditionedModel loadAcceptedModel(Path modelDirectory,
-                String producingDevice) throws Exception {
+        public ScenarioConditionedModel loadAcceptedModel(Path modelDirectory, String producingDevice)
+                throws Exception {
             return ScenarioConditionedModel.load(modelDirectory, producingDevice);
         }
 
         @Override
-        public BenchmarkRunContext benchmark(NativeBenchmarkRunPlan plan,
-                java.util.function.BooleanSupplier stopRequested) throws Exception {
+        public BenchmarkRunContext benchmark(
+                NativeBenchmarkRunPlan plan, java.util.function.BooleanSupplier stopRequested) throws Exception {
             return BenchmarkRunner.runV1(plan, stopRequested);
         }
 
@@ -978,8 +1197,5 @@ public final class ClosedLoopRunner {
         private InitializationFailure(Throwable cause) {
             super(cause);
         }
-    }
-
-    private ClosedLoopRunner() {
     }
 }

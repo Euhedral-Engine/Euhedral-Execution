@@ -51,9 +51,7 @@ class EuhedralWorkerTest {
         EuhedralWorker worker = new EuhedralWorker(4, 1);
         try {
             assertThrows(NullPointerException.class, () -> worker.schedule(null));
-            assertThrows(NullPointerException.class,
-                    () -> worker.schedule(() -> {
-                    }, 1, null));
+            assertThrows(NullPointerException.class, () -> worker.schedule(() -> {}, 1, null));
         } finally {
             worker.dispose();
         }
@@ -80,7 +78,6 @@ class EuhedralWorkerTest {
         }
 
         @Override
-        public void addUpstream(LatticeSource upstream) {
-        }
+        public void addUpstream(LatticeSource upstream) {}
     }
 }

@@ -7,9 +7,14 @@ import java.util.Objects;
 import java.util.SortedSet;
 import java.util.TreeSet;
 
-public record TrainingRunPackageInputs(String packageId, String trainingRunId,
-        int checkpointRevision, long schedulerSeed, String commitSha,
-        boolean dirtyWorkingTree, BenchmarkExecutionConfig benchmarkConfig,
+public record TrainingRunPackageInputs(
+        String packageId,
+        String trainingRunId,
+        int checkpointRevision,
+        long schedulerSeed,
+        String commitSha,
+        boolean dirtyWorkingTree,
+        BenchmarkExecutionConfig benchmarkConfig,
         SortedSet<SourceScenario> requiredScenarios) {
     public TrainingRunPackageInputs {
         Objects.requireNonNull(packageId);

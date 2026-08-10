@@ -23,13 +23,19 @@ import java.util.TreeMap;
 
 public final class ScenarioModelEvaluator {
 
-    public static EvaluationSummary evaluate(String kind, ScenarioFeatureSet set,
-            List<ScenarioLearningRow> rows, List<PolicyPredictionCurve> curves) {
+    private ScenarioModelEvaluator() {}
+
+    public static EvaluationSummary evaluate(
+            String kind, ScenarioFeatureSet set, List<ScenarioLearningRow> rows, List<PolicyPredictionCurve> curves) {
         return evaluate(kind, "all", set, rows, curves, false);
     }
 
-    static EvaluationSummary evaluate(String kind, String foldId, ScenarioFeatureSet set,
-            List<ScenarioLearningRow> rows, List<PolicyPredictionCurve> curves,
+    static EvaluationSummary evaluate(
+            String kind,
+            String foldId,
+            ScenarioFeatureSet set,
+            List<ScenarioLearningRow> rows,
+            List<PolicyPredictionCurve> curves,
             boolean insufficientContextVariation) {
         Objects.requireNonNull(kind);
         Objects.requireNonNull(foldId);
@@ -39,15 +45,13 @@ public final class ScenarioModelEvaluator {
         if (rows.isEmpty()) {
             throw new IllegalArgumentException("Evaluation rows are empty");
         }
-        record Key(PolicyId policy, SourceScenario scenario) {
+        record Key(PolicyId policy, SourceScenario scenario) {}
 
-        }
-        TreeMap<Key, ScenarioPrediction> predictions = new TreeMap<>(Comparator
-                .comparing((Key k) -> k.policy).thenComparing(k -> k.scenario));
+        TreeMap<Key, ScenarioPrediction> predictions =
+                new TreeMap<>(Comparator.comparing((Key k) -> k.policy).thenComparing(k -> k.scenario));
         for (var curve : curves) {
             for (var prediction : curve.scenarios()) {
-                if (predictions.put(new Key(curve.policy().id(), prediction.scenario()), prediction)
-                        != null) {
+                if (predictions.put(new Key(curve.policy().id(), prediction.scenario()), prediction) != null) {
                     throw new IllegalArgumentException("Duplicate prediction");
                 }
             }
@@ -118,13 +122,25 @@ public final class ScenarioModelEvaluator {
                 status = EvaluationStatus.CONSTANT_RANK;
             }
 
-            metrics.add(new ScenarioEvaluationMetrics(kind, foldId, set, entry.getKey(), n,
+            metrics.add(new ScenarioEvaluationMetrics(
+                    kind,
+                    foldId,
+                    set,
+                    entry.getKey(),
+                    n,
                     (int) group.stream().map(r -> r.policy().id()).distinct().count(),
                     ae.value() / n,
-                    StrictMath.sqrt(se.value() / n), bias.value() / n, rho, top, k,
+                    StrictMath.sqrt(se.value() / n),
+                    bias.value() / n,
+                    rho,
+                    top,
+                    k,
                     OptionalDouble.of(hits / (double) k),
                     top == 0 ? OptionalDouble.empty() : OptionalDouble.of(hits / (double) top),
-                    width.value() / n, coverage / (double) n, epi.value() / n, range.value() / n,
+                    width.value() / n,
+                    coverage / (double) n,
+                    epi.value() / n,
+                    range.value() / n,
                     status));
             microError.add(ae.value());
             total += n;
@@ -132,23 +148,28 @@ public final class ScenarioModelEvaluator {
         if (!predictions.isEmpty()) {
             throw new IllegalArgumentException("Extra predictions");
         }
-        List<ScenarioEvaluationMetrics> ok = metrics.stream()
-                .filter(m -> m.status() == EvaluationStatus.OK).toList();
-        return new EvaluationSummary(kind, set, metrics,
+        List<ScenarioEvaluationMetrics> ok =
+                metrics.stream().filter(m -> m.status() == EvaluationStatus.OK).toList();
+        return new EvaluationSummary(
+                kind,
+                set,
+                metrics,
                 average(ok, ScenarioEvaluationMetrics::mae),
                 average(ok, ScenarioEvaluationMetrics::rmse),
                 averageOptional(ok, ScenarioEvaluationMetrics::spearman),
                 averageOptional(ok, ScenarioEvaluationMetrics::precisionAtTen),
                 averageOptional(ok, ScenarioEvaluationMetrics::recallAtTen),
-                ok.isEmpty() ? OptionalDouble.empty() : OptionalDouble.of(
-                        ok.stream().mapToDouble(ScenarioEvaluationMetrics::mae).max()
+                ok.isEmpty()
+                        ? OptionalDouble.empty()
+                        : OptionalDouble.of(ok.stream()
+                                .mapToDouble(ScenarioEvaluationMetrics::mae)
+                                .max()
                                 .orElseThrow()),
-                total == 0 ? OptionalDouble.empty()
-                        : OptionalDouble.of(microError.value() / total));
+                total == 0 ? OptionalDouble.empty() : OptionalDouble.of(microError.value() / total));
     }
 
-    static EvaluationSummary evaluateMatrix(String kind, String foldId, ScenarioFeatureSet set,
-            ScenarioLearningMatrix matrix, float[] logits) {
+    static EvaluationSummary evaluateMatrix(
+            String kind, String foldId, ScenarioFeatureSet set, ScenarioLearningMatrix matrix, float[] logits) {
         if (logits.length != matrix.rows() * ScenarioOrdinalTargets.OUTPUT_WIDTH) {
             throw new IllegalArgumentException("Evaluation logits have the wrong shape");
         }
@@ -177,8 +198,8 @@ public final class ScenarioModelEvaluator {
                 for (int output = 0; output < 9; output++) {
                     rowLogits[output] = logits[row * 9 + output];
                 }
-                EnsembleOrdinalDistribution distribution = ScenarioOrdinalTargets.combine(
-                        List.of(ScenarioOrdinalTargets.decode(rowLogits)));
+                EnsembleOrdinalDistribution distribution =
+                        ScenarioOrdinalTargets.combine(List.of(ScenarioOrdinalTargets.decode(rowLogits)));
                 actual[index] = qualities[row];
                 predicted[index] = distribution.predictedQuality();
                 lows[index] = distribution.qualityIntervalLow();
@@ -187,50 +208,75 @@ public final class ScenarioModelEvaluator {
                 ranges[index] = distribution.disagreementRange();
                 ids[index] = policies[row];
             }
-            ScenarioEvaluationMetrics scenarioMetrics = metrics(kind, foldId, set,
-                    entry.getKey(), ids, actual, predicted, lows, highs, epistemic, ranges, false);
+            ScenarioEvaluationMetrics scenarioMetrics = metrics(
+                    kind, foldId, set, entry.getKey(), ids, actual, predicted, lows, highs, epistemic, ranges, false);
             metrics.add(scenarioMetrics);
             micro.add(scenarioMetrics.mae() * scenarioMetrics.rowCount());
         }
-        int total = metrics.stream().mapToInt(ScenarioEvaluationMetrics::rowCount).sum();
-        return new EvaluationSummary(kind, set, metrics,
+        int total =
+                metrics.stream().mapToInt(ScenarioEvaluationMetrics::rowCount).sum();
+        return new EvaluationSummary(
+                kind,
+                set,
+                metrics,
                 average(metrics, ScenarioEvaluationMetrics::mae),
                 average(metrics, ScenarioEvaluationMetrics::rmse),
                 averageOptional(metrics, ScenarioEvaluationMetrics::spearman),
                 averageOptional(metrics, ScenarioEvaluationMetrics::precisionAtTen),
                 averageOptional(metrics, ScenarioEvaluationMetrics::recallAtTen),
-                metrics.isEmpty() ? OptionalDouble.empty() : OptionalDouble.of(metrics.stream()
-                        .mapToDouble(ScenarioEvaluationMetrics::mae).max().orElseThrow()),
+                metrics.isEmpty()
+                        ? OptionalDouble.empty()
+                        : OptionalDouble.of(metrics.stream()
+                                .mapToDouble(ScenarioEvaluationMetrics::mae)
+                                .max()
+                                .orElseThrow()),
                 OptionalDouble.of(micro.value() / total));
     }
 
-    static EvaluationSummary summarize(String kind, ScenarioFeatureSet set,
-            List<ScenarioEvaluationMetrics> metrics) {
+    static EvaluationSummary summarize(String kind, ScenarioFeatureSet set, List<ScenarioEvaluationMetrics> metrics) {
         List<ScenarioEvaluationMetrics> ordered = metrics.stream()
-                .sorted(Comparator.comparing(ScenarioEvaluationMetrics::scenario)).toList();
+                .sorted(Comparator.comparing(ScenarioEvaluationMetrics::scenario))
+                .toList();
         List<ScenarioEvaluationMetrics> ok = ordered.stream()
-                .filter(metric -> metric.status() == EvaluationStatus.OK).toList();
+                .filter(metric -> metric.status() == EvaluationStatus.OK)
+                .toList();
         CompensatedSum micro = new CompensatedSum();
         int rows = 0;
         for (ScenarioEvaluationMetrics metric : ordered) {
             micro.add(metric.mae() * metric.rowCount());
             rows += metric.rowCount();
         }
-        return new EvaluationSummary(kind, set, ordered,
+        return new EvaluationSummary(
+                kind,
+                set,
+                ordered,
                 average(ok, ScenarioEvaluationMetrics::mae),
                 average(ok, ScenarioEvaluationMetrics::rmse),
                 averageOptional(ok, ScenarioEvaluationMetrics::spearman),
                 averageOptional(ok, ScenarioEvaluationMetrics::precisionAtTen),
                 averageOptional(ok, ScenarioEvaluationMetrics::recallAtTen),
-                ok.isEmpty() ? OptionalDouble.empty() : OptionalDouble.of(ok.stream()
-                        .mapToDouble(ScenarioEvaluationMetrics::mae).max().orElseThrow()),
+                ok.isEmpty()
+                        ? OptionalDouble.empty()
+                        : OptionalDouble.of(ok.stream()
+                                .mapToDouble(ScenarioEvaluationMetrics::mae)
+                                .max()
+                                .orElseThrow()),
                 rows == 0 ? OptionalDouble.empty() : OptionalDouble.of(micro.value() / rows));
     }
 
-    private static ScenarioEvaluationMetrics metrics(String kind, String foldId,
-            ScenarioFeatureSet set, SourceScenario scenario, PolicyId[] ids, double[] actual,
-            double[] predicted, double[] lows, double[] highs, double[] epistemic,
-            double[] ranges, boolean insufficientContext) {
+    private static ScenarioEvaluationMetrics metrics(
+            String kind,
+            String foldId,
+            ScenarioFeatureSet set,
+            SourceScenario scenario,
+            PolicyId[] ids,
+            double[] actual,
+            double[] predicted,
+            double[] lows,
+            double[] highs,
+            double[] epistemic,
+            double[] ranges,
+            boolean insufficientContext) {
         int count = actual.length;
         CompensatedSum ae = new CompensatedSum();
         CompensatedSum se = new CompensatedSum();
@@ -270,18 +316,33 @@ public final class ScenarioModelEvaluator {
             }
         }
         OptionalDouble correlation = spearman(actual, predicted);
-        EvaluationStatus status = count < 2 ? EvaluationStatus.INSUFFICIENT_ROWS
-                : insufficientContext ? EvaluationStatus.INSUFFICIENT_CONTEXT_VARIATION
-                        : top == 0 ? EvaluationStatus.NO_TOP_DECILE_TARGET
-                                : correlation.isEmpty() ? EvaluationStatus.CONSTANT_RANK
-                                        : EvaluationStatus.OK;
-        return new ScenarioEvaluationMetrics(kind, foldId, set, scenario, count,
-                (int) Arrays.stream(ids).distinct().count(), ae.value() / count,
-                StrictMath.sqrt(se.value() / count), bias.value() / count, correlation, top,
-                selected, OptionalDouble.of(hits / (double) selected),
+        EvaluationStatus status = count < 2
+                ? EvaluationStatus.INSUFFICIENT_ROWS
+                : insufficientContext
+                        ? EvaluationStatus.INSUFFICIENT_CONTEXT_VARIATION
+                        : top == 0
+                                ? EvaluationStatus.NO_TOP_DECILE_TARGET
+                                : correlation.isEmpty() ? EvaluationStatus.CONSTANT_RANK : EvaluationStatus.OK;
+        return new ScenarioEvaluationMetrics(
+                kind,
+                foldId,
+                set,
+                scenario,
+                count,
+                (int) Arrays.stream(ids).distinct().count(),
+                ae.value() / count,
+                StrictMath.sqrt(se.value() / count),
+                bias.value() / count,
+                correlation,
+                top,
+                selected,
+                OptionalDouble.of(hits / (double) selected),
                 top == 0 ? OptionalDouble.empty() : OptionalDouble.of(hits / (double) top),
-                width.value() / count, coverage / (double) count,
-                epistemicSum.value() / count, rangeSum.value() / count, status);
+                width.value() / count,
+                coverage / (double) count,
+                epistemicSum.value() / count,
+                rangeSum.value() / count,
+                status);
     }
 
     private static OptionalDouble spearman(double[] a, double[] b) {
@@ -299,8 +360,9 @@ public final class ScenarioModelEvaluator {
             va.add(x * x);
             vb.add(y * y);
         }
-        return va.value() == 0 || vb.value() == 0 ? OptionalDouble.empty() :
-                OptionalDouble.of(cov.value() / StrictMath.sqrt(va.value() * vb.value()));
+        return va.value() == 0 || vb.value() == 0
+                ? OptionalDouble.empty()
+                : OptionalDouble.of(cov.value() / StrictMath.sqrt(va.value() * vb.value()));
     }
 
     private static double[] ranks(double[] values) {
@@ -324,8 +386,8 @@ public final class ScenarioModelEvaluator {
         return ranks;
     }
 
-    private static OptionalDouble average(List<ScenarioEvaluationMetrics> rows,
-            java.util.function.ToDoubleFunction<ScenarioEvaluationMetrics> fn) {
+    private static OptionalDouble average(
+            List<ScenarioEvaluationMetrics> rows, java.util.function.ToDoubleFunction<ScenarioEvaluationMetrics> fn) {
         if (rows.isEmpty()) {
             return OptionalDouble.empty();
         }
@@ -334,7 +396,8 @@ public final class ScenarioModelEvaluator {
         return OptionalDouble.of(sum.value() / rows.size());
     }
 
-    private static OptionalDouble averageOptional(List<ScenarioEvaluationMetrics> rows,
+    private static OptionalDouble averageOptional(
+            List<ScenarioEvaluationMetrics> rows,
             java.util.function.Function<ScenarioEvaluationMetrics, OptionalDouble> fn) {
         CompensatedSum sum = new CompensatedSum();
         int n = 0;
@@ -348,9 +411,6 @@ public final class ScenarioModelEvaluator {
         return n == 0 ? OptionalDouble.empty() : OptionalDouble.of(sum.value() / n);
     }
 
-    private ScenarioModelEvaluator() {
-    }
-
     private static final class CompensatedSum {
 
         private double sum;
@@ -358,8 +418,7 @@ public final class ScenarioModelEvaluator {
 
         void add(double value) {
             double next = sum + value;
-            correction += StrictMath.abs(sum) >= StrictMath.abs(value)
-                    ? (sum - next) + value : (value - next) + sum;
+            correction += StrictMath.abs(sum) >= StrictMath.abs(value) ? (sum - next) + value : (value - next) + sum;
             sum = next;
         }
 

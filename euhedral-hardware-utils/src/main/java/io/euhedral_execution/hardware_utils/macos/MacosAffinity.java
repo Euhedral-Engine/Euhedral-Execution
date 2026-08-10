@@ -33,6 +33,18 @@ public final class MacosAffinity extends ThreadPinner {
         super(AffinityCapability.LOCALITY_HINT, MacosAffinity::setThreadAffinityNative);
     }
 
+    public static int setThreadAffinityNative(long[] masks) {
+        return setThreadAffinity(masks);
+    }
+
+    public static boolean setThreadTickPolicyNative(long nanos) {
+        return setThreadTickPolicy(nanos);
+    }
+
+    private static native int setThreadAffinity(long[] masks);
+
+    private static native boolean setThreadTickPolicy(long nanos);
+
     /// Queries physical CPU ID currently executing the thread.
     /// Returns -1 (UNSUPPORTED) on macOS platforms.
     @Override
@@ -55,16 +67,4 @@ public final class MacosAffinity extends ThreadPinner {
         nanos = Math.max(1L, nanos);
         return setThreadTickPolicy(nanos);
     }
-
-    public static int setThreadAffinityNative(long[] masks) {
-        return setThreadAffinity(masks);
-    }
-
-    public static boolean setThreadTickPolicyNative(long nanos) {
-        return setThreadTickPolicy(nanos);
-    }
-
-    private static native int setThreadAffinity(long[] masks);
-
-    private static native boolean setThreadTickPolicy(long nanos);
 }

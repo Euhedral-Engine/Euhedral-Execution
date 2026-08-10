@@ -18,8 +18,8 @@ public final class WorkspaceLock implements AutoCloseable {
 
     public static WorkspaceLock acquire(Path workspace) throws IOException {
         Files.createDirectories(workspace);
-        FileChannel channel = FileChannel.open(workspace.resolve("LOCK"), StandardOpenOption.CREATE,
-                StandardOpenOption.WRITE);
+        FileChannel channel =
+                FileChannel.open(workspace.resolve("LOCK"), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
         FileLock lock = channel.tryLock();
         if (lock == null) {
             channel.close();

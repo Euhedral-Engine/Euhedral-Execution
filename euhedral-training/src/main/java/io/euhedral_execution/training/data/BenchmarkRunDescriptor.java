@@ -16,16 +16,14 @@ public record BenchmarkRunDescriptor(
         Instant startedAt,
         BenchmarkParameters parameters) {
 
-    private static boolean validId(String value) {
-        return value != null && value.matches("[a-z0-9][a-z0-9._-]{0,95}");
-    }
-
     public BenchmarkRunDescriptor {
         Objects.requireNonNull(scenario);
         Objects.requireNonNull(evidenceOrigin);
         Objects.requireNonNull(startedAt);
         Objects.requireNonNull(parameters);
-        if (schemaVersion != 1 || !validId(benchmarkRunId) || !validId(candidateCohortId)
+        if (schemaVersion != 1
+                || !validId(benchmarkRunId)
+                || !validId(candidateCohortId)
                 || closedLoopIteration < 0
                 || parameters.frameSourceSeeds().size() != scenario.sourceCount()) {
             throw new IllegalArgumentException("Invalid run descriptor");
@@ -37,5 +35,9 @@ public record BenchmarkRunDescriptor(
         if (commitSha == null || commitSha.isBlank()) {
             throw new IllegalArgumentException("Commit SHA is required");
         }
+    }
+
+    private static boolean validId(String value) {
+        return value != null && value.matches("[a-z0-9][a-z0-9._-]{0,95}");
     }
 }

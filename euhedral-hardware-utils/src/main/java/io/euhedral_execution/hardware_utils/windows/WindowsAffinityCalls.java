@@ -6,6 +6,8 @@ import java.util.BitSet;
 
 final class WindowsAffinityCalls {
 
+    private WindowsAffinityCalls() {}
+
     /// Applies a validated mask across available Windows group words.
     ///
     /// @param masks little-endian words, one word per possible 64-CPU processor group
@@ -21,9 +23,6 @@ final class WindowsAffinityCalls {
         } catch (RuntimeException | LinkageError failure) {
             return false;
         }
-    }
-
-    private WindowsAffinityCalls() {
     }
 
     /// JNI-shaped Windows affinity setter returning `0` on success.

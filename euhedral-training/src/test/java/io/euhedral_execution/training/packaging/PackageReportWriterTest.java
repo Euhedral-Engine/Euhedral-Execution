@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test;
 class PackageReportWriterTest {
     @Test
     void reportWriterRemainsAStaticSingleOwnerUtility() {
-        assertThat(java.lang.reflect.Modifier.isFinal(
-                PackageReportWriter.class.getModifiers())).isTrue();
+        assertThat(java.lang.reflect.Modifier.isFinal(PackageReportWriter.class.getModifiers()))
+                .isTrue();
     }
 }

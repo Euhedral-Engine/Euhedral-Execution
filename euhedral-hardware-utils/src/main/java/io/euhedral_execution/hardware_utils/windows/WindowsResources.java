@@ -50,22 +50,19 @@ public final class WindowsResources implements SystemSnapshotProvider {
         INSTANCE = instance;
 
         try {
-            LOCK_STATE = MethodHandles.lookup()
-                    .findVarHandle(WindowsResources.class, "lockState", int.class);
+            LOCK_STATE = MethodHandles.lookup().findVarHandle(WindowsResources.class, "lockState", int.class);
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }
     }
 
     private final AtomicReference<SystemSnapshot> snapshot = new AtomicReference<>();
-    @SuppressWarnings("unused")
-    private volatile int lockState = 0;
-
     private final long[] buffer;
     private final double[] lastIdle;
     private final double[] currentIdle;
     private final double[] pressure;
-
+    @SuppressWarnings("unused")
+    private volatile int lockState = 0;
     private long lastTime;
 
     public WindowsResources() {
@@ -74,6 +71,28 @@ public final class WindowsResources implements SystemSnapshotProvider {
         lastIdle = new double[cpuCount];
         currentIdle = new double[cpuCount];
         pressure = new double[cpuCount];
+    }
+
+    public static native void getCpuTimes(long[] buffer);
+
+    public static native double getCpuQuota();
+
+    public static native long getAffinityMask();
+
+    public static native void getPerCpuLoad(double[] buffer);
+
+    public static native void getMemorySnapshot(long[] buffer);
+
+    public static native long getIoBytes();
+
+    private static BitSet toBitSet(long mask) {
+        BitSet bs = new BitSet();
+        while (mask != 0) {
+            int bit = Long.numberOfTrailingZeros(mask);
+            bs.set(bit);
+            mask &= ~(1L << bit);
+        }
+        return bs;
     }
 
     private void acquireLock() {
@@ -131,8 +150,7 @@ public final class WindowsResources implements SystemSnapshotProvider {
                     UnmodifiableBitSet.wrap(effectiveCpus),
                     this.pressure.clone(),
                     this.buffer.clone(),
-                    ioBytes
-            );
+                    ioBytes);
             this.snapshot.set(snap);
             return snap;
         } catch (Exception e) {
@@ -179,27 +197,25 @@ public final class WindowsResources implements SystemSnapshotProvider {
                         CounterSignal.unsupported(requestedAtNs),
                         CounterSignal.unsupported(requestedAtNs),
                         DoubleGaugeSignal.unsupported(requestedAtNs),
-                        DoubleGaugeSignal.unsupported(requestedAtNs)
-                );
+                        DoubleGaugeSignal.unsupported(requestedAtNs));
             }
 
             MemoryFastSignals memorySignals = new MemoryFastSignals(
-                    memoryLimit > 0 ? LongGaugeSignal.valid(memoryLimit, requestedAtNs)
+                    memoryLimit > 0
+                            ? LongGaugeSignal.valid(memoryLimit, requestedAtNs)
                             : LongGaugeSignal.unsupported(requestedAtNs),
                     LongGaugeSignal.unsupported(requestedAtNs),
                     LongGaugeSignal.valid(workingSet, requestedAtNs),
                     LongGaugeSignal.valid(sharedMemory, requestedAtNs),
                     CounterSignal.unsupported(requestedAtNs),
-                    CounterSignal.unsupported(requestedAtNs)
-            );
+                    CounterSignal.unsupported(requestedAtNs));
 
             IoFastSignals ioSignals = new IoFastSignals(
                     CounterSignal.valid(ioBytes, requestedAtNs),
                     CounterSignal.unsupported(requestedAtNs),
                     CounterSignal.unsupported(requestedAtNs),
                     CounterSignal.unsupported(requestedAtNs),
-                    DoubleGaugeSignal.unsupported(requestedAtNs)
-            );
+                    DoubleGaugeSignal.unsupported(requestedAtNs));
 
             return new FastHardwareSample(
                     requestedAtNs,
@@ -214,8 +230,7 @@ public final class WindowsResources implements SystemSnapshotProvider {
                     DoubleGaugeSignal.unsupported(requestedAtNs),
                     cpuSignals,
                     memorySignals,
-                    ioSignals
-            );
+                    ioSignals);
         } finally {
             releaseLock();
         }
@@ -232,46 +247,20 @@ public final class WindowsResources implements SystemSnapshotProvider {
                         DoubleGaugeSignal.unsupported(requestedAtNs),
                         LongGaugeSignal.unsupported(requestedAtNs),
                         LongGaugeSignal.unsupported(requestedAtNs),
-                        new ThermalSignal(ThermalSeverity.NOMINAL, requestedAtNs,
-                                SignalValidity.UNSUPPORTED),
-                        new BooleanSignal(false, requestedAtNs, SignalValidity.UNSUPPORTED)
-                );
+                        new ThermalSignal(ThermalSeverity.NOMINAL, requestedAtNs, SignalValidity.UNSUPPORTED),
+                        new BooleanSignal(false, requestedAtNs, SignalValidity.UNSUPPORTED));
             }
 
             SystemSlowSignals systemSlow = new SystemSlowSignals(
                     DoubleGaugeSignal.unsupported(requestedAtNs),
                     DoubleGaugeSignal.unsupported(requestedAtNs),
-                    new ThermalSignal(ThermalSeverity.NOMINAL, requestedAtNs,
-                            SignalValidity.UNSUPPORTED),
-                    new BooleanSignal(false, requestedAtNs, SignalValidity.UNSUPPORTED)
-            );
+                    new ThermalSignal(ThermalSeverity.NOMINAL, requestedAtNs, SignalValidity.UNSUPPORTED),
+                    new BooleanSignal(false, requestedAtNs, SignalValidity.UNSUPPORTED));
 
             return new SlowHardwareSample(requestedAtNs, span, cpuSlow, systemSlow);
         } finally {
             releaseLock();
         }
-    }
-
-    public static native void getCpuTimes(long[] buffer);
-
-    public static native double getCpuQuota();
-
-    public static native long getAffinityMask();
-
-    public static native void getPerCpuLoad(double[] buffer);
-
-    public static native void getMemorySnapshot(long[] buffer);
-
-    public static native long getIoBytes();
-
-    private static BitSet toBitSet(long mask) {
-        BitSet bs = new BitSet();
-        while (mask != 0) {
-            int bit = Long.numberOfTrailingZeros(mask);
-            bs.set(bit);
-            mask &= ~(1L << bit);
-        }
-        return bs;
     }
 
     private void computeCpuPressure(long now) {

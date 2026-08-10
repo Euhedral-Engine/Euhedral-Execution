@@ -12,12 +12,11 @@ class KafkaIngestSourceTest {
     @Test
     void partitionHashIsStableAcrossMetadataRepresentations() {
         TopicPartition partition = new TopicPartition("topic", 3);
-        ConsumerRecord<byte[], byte[]> record =
-                new ConsumerRecord<>("topic", 3, 7, new byte[]{1}, new byte[]{2});
+        ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>("topic", 3, 7, new byte[] {1}, new byte[] {2});
 
-        assertEquals(KafkaIngestSource.getPartitionHash(partition),
-                KafkaIngestSource.getPartitionHash(record));
-        assertNotEquals(KafkaIngestSource.getPartitionHash(partition),
+        assertEquals(KafkaIngestSource.getPartitionHash(partition), KafkaIngestSource.getPartitionHash(record));
+        assertNotEquals(
+                KafkaIngestSource.getPartitionHash(partition),
                 KafkaIngestSource.getPartitionHash(new TopicPartition("topic", 4)));
     }
 }

@@ -36,15 +36,13 @@ public final class LinuxPaths {
     public static final Path MEMORY_STAT;
     public static final Path IO_STAT;
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(
-            Constants.getLoggerName(LinuxPaths.class));
+    private static final Logger LOGGER = LoggerFactory.getLogger(Constants.getLoggerName(LinuxPaths.class));
 
     static {
         if (OSName.isLinux()) {
             LinuxPaths defaultPaths = new LinuxPaths();
             CGROUP_V2_USR_PATH =
-                    defaultPaths.cgroupV2UserPath != null ? defaultPaths.cgroupV2UserPath
-                            : CGROUP_V2_ROOT_PATH;
+                    defaultPaths.cgroupV2UserPath != null ? defaultPaths.cgroupV2UserPath : CGROUP_V2_ROOT_PATH;
             CPU_MAX = defaultPaths.resolveV2Path("cpu.max");
             CPU_STAT = defaultPaths.resolveV2Path("cpu.stat");
             EFFECTIVE_CPU = defaultPaths.resolveV2Path("cpuset.cpus.effective");
@@ -66,28 +64,11 @@ public final class LinuxPaths {
         }
     }
 
-    public static Path getCgroupV2UserPath() throws Throwable {
-        Optional<String> cgroupV2Path;
-        try (Stream<String> lines = Files.lines(Paths.get("/proc/self/cgroup"))) {
-            cgroupV2Path =
-                    lines.filter(line -> line.startsWith("0::")).map(line -> line.substring(3))
-                            .findFirst();
-        }
-
-        if (cgroupV2Path.isPresent()) {
-            String path = cgroupV2Path.get();
-            String fsPath = "/sys/fs/cgroup" + (path.equals("/") ? "" : path);
-            return Paths.get(fsPath);
-        }
-        throw new RuntimeException("cgroupV2 not supported.");
-    }
-
     @Getter
     private final CgroupMode mode;
     private final Path cgroupV2UserPath;
     private final Map<String, Path> v1ControllerMounts;
     private final Map<String, String> v1SelfPaths;
-
     public LinuxPaths() {
         this(PROC_SELF_MOUNTINFO, PROC_SELF_CGROUP, CGROUP_V2_ROOT_PATH);
     }
@@ -120,14 +101,16 @@ public final class LinuxPaths {
                             String mountPoint = parts[4];
                             if ("cgroup".equals(fsType)) {
                                 String mountOpts = parts[5];
-                                String superOpts =
-                                        parts.length > hyphenIndex + 3 ? parts[hyphenIndex + 3]
-                                                : "";
+                                String superOpts = parts.length > hyphenIndex + 3 ? parts[hyphenIndex + 3] : "";
                                 String combinedOpts = mountOpts + "," + superOpts;
                                 for (String opt : combinedOpts.split(",")) {
-                                    if (!opt.isBlank() && !"rw".equals(opt) && !"ro".equals(opt)
-                                            && !"nosuid".equals(opt) && !"nodev".equals(opt)
-                                            && !"noexec".equals(opt) && !"relatime".equals(opt)) {
+                                    if (!opt.isBlank()
+                                            && !"rw".equals(opt)
+                                            && !"ro".equals(opt)
+                                            && !"nosuid".equals(opt)
+                                            && !"nodev".equals(opt)
+                                            && !"noexec".equals(opt)
+                                            && !"relatime".equals(opt)) {
                                         v1Mounts.putIfAbsent(opt, Paths.get(mountPoint));
                                     }
                                 }
@@ -171,8 +154,7 @@ public final class LinuxPaths {
         this.v1SelfPaths = Map.copyOf(selfV1);
 
         if (selfV2Subpath != null && Files.exists(cgroupV2Root)) {
-            Path userPath = "/".equals(selfV2Subpath) ? cgroupV2Root
-                    : cgroupV2Root.resolve(selfV2Subpath.substring(1));
+            Path userPath = "/".equals(selfV2Subpath) ? cgroupV2Root : cgroupV2Root.resolve(selfV2Subpath.substring(1));
             if (!Files.exists(userPath)) {
                 userPath = cgroupV2Root;
             }
@@ -190,6 +172,22 @@ public final class LinuxPaths {
             this.mode = CgroupMode.BARE_HOST;
             this.cgroupV2UserPath = null;
         }
+    }
+
+    public static Path getCgroupV2UserPath() throws Throwable {
+        Optional<String> cgroupV2Path;
+        try (Stream<String> lines = Files.lines(Paths.get("/proc/self/cgroup"))) {
+            cgroupV2Path = lines.filter(line -> line.startsWith("0::"))
+                    .map(line -> line.substring(3))
+                    .findFirst();
+        }
+
+        if (cgroupV2Path.isPresent()) {
+            String path = cgroupV2Path.get();
+            String fsPath = "/sys/fs/cgroup" + (path.equals("/") ? "" : path);
+            return Paths.get(fsPath);
+        }
+        throw new RuntimeException("cgroupV2 not supported.");
     }
 
     public Path resolveV2Path(String filename) {
@@ -211,8 +209,8 @@ public final class LinuxPaths {
         if (mount != null) {
             String subpath = v1SelfPaths.get(controller);
             if (subpath != null && !subpath.equals("/")) {
-                Path userPath = mount.resolve(
-                        subpath.startsWith("/") ? subpath.substring(1) : subpath).resolve(filename);
+                Path userPath = mount.resolve(subpath.startsWith("/") ? subpath.substring(1) : subpath)
+                        .resolve(filename);
                 if (Files.exists(userPath)) {
                     return userPath;
                 }

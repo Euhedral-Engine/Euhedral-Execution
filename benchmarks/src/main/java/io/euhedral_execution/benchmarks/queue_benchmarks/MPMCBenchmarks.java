@@ -25,8 +25,8 @@ import org.openjdk.jmh.infra.Blackhole;
 
 @State(Scope.Benchmark)
 public class MPMCBenchmarks {
-    private record QueueConsumer(Blackhole blackhole) implements Consumer<Integer>,
-            MessagePassingQueue.Consumer<Integer> {
+    private record QueueConsumer(Blackhole blackhole)
+            implements Consumer<Integer>, MessagePassingQueue.Consumer<Integer> {
 
         @Override
         public void accept(Integer integer) {
@@ -42,15 +42,12 @@ public class MPMCBenchmarks {
     @State(Scope.Benchmark)
     public static class BatchSizeProfile {
         private final MpmcUnboundedXaddArrayQueue<Integer> jcTools = new MpmcUnboundedXaddArrayQueue<>(4096, 4);
-        private final MpmcQueue<Integer> euhedral = new MpmcQueue<>(
-                4096, 4);
+        private final MpmcQueue<Integer> euhedral = new MpmcQueue<>(4096, 4);
         private final CyclicBarrier start = new CyclicBarrier(16);
         private final CyclicBarrier end = new CyclicBarrier(17);
         private final PinnedThreadExecutor[] executors = new PinnedThreadExecutor[32];
-        private QueueConsumer consumer;
-
         private final Integer[] values = new Integer[2048];
-
+        private QueueConsumer consumer;
         @Param({"1", "2", "4", "16", "64", "512", "1024", "2048"})
         private int batchSize;
 
@@ -60,7 +57,7 @@ public class MPMCBenchmarks {
             for (int i = 0; i < executors.length; i++) {
                 executors[i] = PinnedThreadExecutor.getOrSetIfAbsent(i, "Thread-" + i, Thread.MAX_PRIORITY, true);
             }
-            for(int i = 0; i < values.length; i++){
+            for (int i = 0; i < values.length; i++) {
                 values[i] = i;
             }
         }
@@ -68,7 +65,7 @@ public class MPMCBenchmarks {
         @Benchmark
         @OperationsPerInvocation(2048 * 32)
         public void jcOfferDrain() throws Throwable {
-            for(int t = 0; t < 16; t++) {
+            for (int t = 0; t < 16; t++) {
                 executors[t].execute(() -> {
                     try {
                         start.await();
@@ -84,7 +81,7 @@ public class MPMCBenchmarks {
                 });
             }
 
-            for(int t = 16; t < 32; t++) {
+            for (int t = 16; t < 32; t++) {
                 executors[t].execute(() -> {
                     try {
                         start.await();
@@ -127,7 +124,7 @@ public class MPMCBenchmarks {
                 });
             }
 
-            for(int t = 16; t < 32; t++) {
+            for (int t = 16; t < 32; t++) {
                 executors[t].execute(() -> {
                     try {
                         start.await();

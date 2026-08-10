@@ -8,30 +8,6 @@ import io.euhedral_execution.training.scheduling.data.BudgetAllocation;
 import org.junit.jupiter.api.Test;
 
 class BudgetAllocatorTest {
-    @Test
-    void defaultHamiltonAllocationFillsEveryResidual() {
-        CandidateBudgetConfig config = CandidateBudgetConfig.defaults();
-        for (int residual = 1; residual <= 256; residual++) {
-            BudgetAllocation allocation = BudgetAllocator.allocate(residual + 5, 5, config);
-            assertThat(allocation.total()).isEqualTo(residual + 5);
-            assertThat(new int[]{allocation.exploration(), allocation.carryForward(),
-                    allocation.leaderRevalidation(), allocation.disagreementAudit()})
-                    .containsExactly(independent(residual, new int[]{68, 25, 2, 5}));
-        }
-    }
-
-    @Test
-    void reservesAnchorsAndRejectsInvalidWeightsAndBudgets() {
-        BudgetAllocation allocation = BudgetAllocator.allocate(9, 4,
-                new CandidateBudgetConfig(1, 1, 1, 1));
-        assertThat(allocation.fixedAnchors()).isEqualTo(4);
-        assertThat(allocation.carryForward()).isEqualTo(2);
-        assertThatThrownBy(() -> BudgetAllocator.allocate(4, 4,
-                CandidateBudgetConfig.defaults())).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new CandidateBudgetConfig(0, 0, 0, 0))
-                .isInstanceOf(IllegalArgumentException.class);
-    }
-
     private static int[] independent(int residual, int[] weights) {
         int sum = java.util.Arrays.stream(weights).sum();
         int[] result = new int[weights.length];
@@ -54,5 +30,31 @@ class BudgetAllocatorTest {
             remainder[best] = -1;
         }
         return result;
+    }
+
+    @Test
+    void defaultHamiltonAllocationFillsEveryResidual() {
+        CandidateBudgetConfig config = CandidateBudgetConfig.defaults();
+        for (int residual = 1; residual <= 256; residual++) {
+            BudgetAllocation allocation = BudgetAllocator.allocate(residual + 5, 5, config);
+            assertThat(allocation.total()).isEqualTo(residual + 5);
+            assertThat(new int[] {
+                        allocation.exploration(),
+                        allocation.carryForward(),
+                        allocation.leaderRevalidation(),
+                        allocation.disagreementAudit()
+                    })
+                    .containsExactly(independent(residual, new int[] {68, 25, 2, 5}));
+        }
+    }
+
+    @Test
+    void reservesAnchorsAndRejectsInvalidWeightsAndBudgets() {
+        BudgetAllocation allocation = BudgetAllocator.allocate(9, 4, new CandidateBudgetConfig(1, 1, 1, 1));
+        assertThat(allocation.fixedAnchors()).isEqualTo(4);
+        assertThat(allocation.carryForward()).isEqualTo(2);
+        assertThatThrownBy(() -> BudgetAllocator.allocate(4, 4, CandidateBudgetConfig.defaults()))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new CandidateBudgetConfig(0, 0, 0, 0)).isInstanceOf(IllegalArgumentException.class);
     }
 }

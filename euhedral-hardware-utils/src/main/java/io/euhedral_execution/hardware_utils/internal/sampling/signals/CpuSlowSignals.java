@@ -5,11 +5,9 @@ import io.euhedral_execution.hardware_utils.internal.sampling.primitives.DoubleG
 import io.euhedral_execution.hardware_utils.internal.sampling.primitives.LongGaugeSignal;
 
 public record CpuSlowSignals(
-    DoubleGaugeSignal availableCapacityUnits,
-    DoubleGaugeSignal nominalCapacityUnits,
-    LongGaugeSignal constrainedFrequencyHz,
-    LongGaugeSignal nominalFrequencyHz,
-    ThermalSignal thermalSeverity,
-    BooleanSignal lowPowerMode
-) {
-}
+        DoubleGaugeSignal availableCapacityUnits,
+        DoubleGaugeSignal nominalCapacityUnits,
+        LongGaugeSignal constrainedFrequencyHz,
+        LongGaugeSignal nominalFrequencyHz,
+        ThermalSignal thermalSeverity,
+        BooleanSignal lowPowerMode) {}

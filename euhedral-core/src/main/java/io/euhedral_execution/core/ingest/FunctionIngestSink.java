@@ -32,13 +32,12 @@ public final class FunctionIngestSink<T, R> extends AbstractIngestSink {
 
     boolean complete;
 
-    public FunctionIngestSink(@NonNull Function<T, R> function,
-            @NonNull Consumer<R> consumer,
-            boolean parallel) {
+    public FunctionIngestSink(@NonNull Function<T, R> function, @NonNull Consumer<R> consumer, boolean parallel) {
         this(function, consumer, parallel, new QueueIngestSink());
     }
 
-    public FunctionIngestSink(@NonNull Function<T, R> function,
+    public FunctionIngestSink(
+            @NonNull Function<T, R> function,
             @NonNull Consumer<R> consumer,
             boolean parallel,
             @NonNull QueueIngestSink sink) {
@@ -50,8 +49,7 @@ public final class FunctionIngestSink<T, R> extends AbstractIngestSink {
 
         final long[] seed = {HasherApi.mix(password + 1)};
         FrameCreate<T, FunctionFrame<T, R>> generate = (idHash, data) -> {
-            FunctionFrame<T, R> frame = new FunctionFrame<>(idHash, function, consumer, data,
-                    frameManager, killSwitch);
+            FunctionFrame<T, R> frame = new FunctionFrame<>(idHash, function, consumer, data, frameManager, killSwitch);
             if (parallel) {
                 frame.randomizeHash(seed[0]++);
             }

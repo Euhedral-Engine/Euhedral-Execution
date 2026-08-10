@@ -7,12 +7,15 @@ import java.util.List;
 import java.util.SortedSet;
 
 public final class ScenarioRotation {
-    public static List<SourceScenario> select(SortedSet<SourceScenario> requiredScenarios,
-            java.util.SortedMap<RotationGroup, Integer> cursors, String activeEnvironmentId,
-            int activeCoreCount, int scenariosPerIteration) {
+    public static List<SourceScenario> select(
+            SortedSet<SourceScenario> requiredScenarios,
+            java.util.SortedMap<RotationGroup, Integer> cursors,
+            String activeEnvironmentId,
+            int activeCoreCount,
+            int scenariosPerIteration) {
         RotationGroup group = new RotationGroup(activeEnvironmentId, activeCoreCount);
-        return new ScenarioRotation().select(requiredScenarios, group,
-                cursors.getOrDefault(group, 0), scenariosPerIteration);
+        return new ScenarioRotation()
+                .select(requiredScenarios, group, cursors.getOrDefault(group, 0), scenariosPerIteration);
     }
 
     public static java.util.SortedMap<RotationGroup, Integer> advance(
@@ -24,31 +27,29 @@ public final class ScenarioRotation {
             return next;
         }
         SourceScenario first = completedSelection.getFirst();
-        RotationGroup group = new RotationGroup(first.environmentId(),
-                first.availablePhysicalCoreCount());
+        RotationGroup group = new RotationGroup(first.environmentId(), first.availablePhysicalCoreCount());
         long runnable = requiredScenarios.stream()
                 .filter(scenario -> scenario.environmentId().equals(group.environmentId()))
-                .filter(scenario -> scenario.availablePhysicalCoreCount()
-                        == group.availablePhysicalCoreCount())
+                .filter(scenario -> scenario.availablePhysicalCoreCount() == group.availablePhysicalCoreCount())
                 .count();
-        next.put(group, new ScenarioRotation().advance(cursors.getOrDefault(group, 0),
-                completedSelection.size(), Math.toIntExact(runnable)));
+        next.put(
+                group,
+                new ScenarioRotation()
+                        .advance(cursors.getOrDefault(group, 0), completedSelection.size(), Math.toIntExact(runnable)));
         return java.util.Collections.unmodifiableSortedMap(next);
     }
 
-    public List<SourceScenario> select(SortedSet<SourceScenario> required, RotationGroup group,
-            int nextIndex, int scenariosPerIteration) {
+    public List<SourceScenario> select(
+            SortedSet<SourceScenario> required, RotationGroup group, int nextIndex, int scenariosPerIteration) {
         if (nextIndex < 0 || scenariosPerIteration <= 0) {
             throw new IllegalArgumentException("Invalid rotation cursor");
         }
         List<SourceScenario> runnable = required.stream()
                 .filter(scenario -> scenario.environmentId().equals(group.environmentId()))
-                .filter(scenario -> scenario.availablePhysicalCoreCount()
-                        == group.availablePhysicalCoreCount())
+                .filter(scenario -> scenario.availablePhysicalCoreCount() == group.availablePhysicalCoreCount())
                 .toList();
         if (runnable.isEmpty()) {
-            throw new IllegalArgumentException("No required scenario is runnable for "
-                    + group.canonical());
+            throw new IllegalArgumentException("No required scenario is runnable for " + group.canonical());
         }
         int count = Math.min(scenariosPerIteration, runnable.size());
         ArrayList<SourceScenario> selected = new ArrayList<>(count);

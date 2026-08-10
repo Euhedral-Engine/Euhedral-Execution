@@ -34,10 +34,8 @@ public class EuhedralConfiguration {
 
     @Bean
     @ConditionalOnMissingBean(ControlPlaneLattice.class)
-    public ControlPlaneLattice controlPlaneLattice(AbstractExecutor executor,
-            @Nullable MeterRegistry registry) {
-        LatticeConfig config = LatticeConfig.ofDefaults(
-                new BaseCloneableObject("euhedral", registry, executor));
+    public ControlPlaneLattice controlPlaneLattice(AbstractExecutor executor, @Nullable MeterRegistry registry) {
+        LatticeConfig config = LatticeConfig.ofDefaults(new BaseCloneableObject("euhedral", registry, executor));
         ControlPlaneLattice controlPlane = ControlPlaneLattice.getOrCreate(config);
         controlPlane.start();
         return controlPlane;
@@ -57,14 +55,16 @@ public class EuhedralConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    @ConditionalOnClass(name = {
-            "org.springframework.cloud.stream.binder.BinderFactory",
-            "org.springframework.cloud.stream.binder.kafka.KafkaMessageChannelBinder"
-    })
-    @ConditionalOnBean(type = {
-            "org.springframework.cloud.stream.binder.BinderFactory",
-            "org.springframework.cloud.stream.binder.kafka.KafkaMessageChannelBinder"
-    })
+    @ConditionalOnClass(
+            name = {
+                "org.springframework.cloud.stream.binder.BinderFactory",
+                "org.springframework.cloud.stream.binder.kafka.KafkaMessageChannelBinder"
+            })
+    @ConditionalOnBean(
+            type = {
+                "org.springframework.cloud.stream.binder.BinderFactory",
+                "org.springframework.cloud.stream.binder.kafka.KafkaMessageChannelBinder"
+            })
     public EuhedralKafkaBinder euhedralKafkaBinder(
             ControlPlaneLattice controlPlane,
             KafkaMessageChannelBinder kafkaBinder,
@@ -72,8 +72,7 @@ public class EuhedralConfiguration {
             ObjectProvider<BindingService> bindingService,
             ObjectProvider<KafkaProperties> kafkaProperties,
             ObjectProvider<KafkaBinderConfigurationProperties> binderConfig,
-            ObjectProvider<KafkaExtendedBindingProperties> extendedBindingProperties
-    ) {
+            ObjectProvider<KafkaExtendedBindingProperties> extendedBindingProperties) {
         return new EuhedralKafkaBinder(
                 controlPlane,
                 kafkaBinder,
@@ -81,7 +80,6 @@ public class EuhedralConfiguration {
                 bindingService,
                 kafkaProperties,
                 binderConfig,
-                extendedBindingProperties
-        );
+                extendedBindingProperties);
     }
 }

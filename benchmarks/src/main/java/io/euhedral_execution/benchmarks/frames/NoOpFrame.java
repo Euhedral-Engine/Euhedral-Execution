@@ -13,6 +13,11 @@ public class NoOpFrame extends AbstractFrame {
     public Runnable trigger;
     public int cpu;
 
+    public NoOpFrame(long idHash, PaddedLongAdder counters) {
+        super(idHash);
+        this.counters = counters;
+    }
+
     public static NoOpFrame[] generate(long idHash, int length, PaddedLongAdder counters) {
         return generate(idHash, length, counters, false);
     }
@@ -21,26 +26,21 @@ public class NoOpFrame extends AbstractFrame {
         long seed = HasherApi.mix(HasherApi.BASE_SEED + GENERATION.getAndIncrement());
 
         NoOpFrame[] frames = new NoOpFrame[length];
-        for(int i = 0; i < length; i++) {
+        for (int i = 0; i < length; i++) {
             frames[i] = new NoOpFrame(idHash, counters);
-            if(!ordered) {
+            if (!ordered) {
                 frames[i].randomizeHash(seed++);
             }
         }
         return frames;
     }
 
-    public NoOpFrame(long idHash, PaddedLongAdder counters) {
-        super(idHash);
-        this.counters = counters;
-    }
-
     @Override
     public void doFinally() {
-        if(trigger != null) {
+        if (trigger != null) {
             trigger.run();
         }
-        if(counters != null) {
+        if (counters != null) {
             counters.increment(cpu);
         }
     }

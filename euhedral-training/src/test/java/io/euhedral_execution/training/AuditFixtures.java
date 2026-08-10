@@ -26,18 +26,16 @@ import io.euhedral_execution.training.learning.ScenarioConditionedModel;
 import io.euhedral_execution.training.learning.inputs.ScenarioTrainingRequest;
 import io.euhedral_execution.training.learning.output.ScenarioTrainingArtifacts;
 import io.euhedral_execution.training.merge.data.CalibrationPlan;
-import io.euhedral_execution.training.packaging.TrainingRunPackager;
 import io.euhedral_execution.training.packaging.TrainingRunPackageValidator;
+import io.euhedral_execution.training.packaging.TrainingRunPackager;
 import io.euhedral_execution.training.packaging.config.TrainingRunPackageInputs;
 import io.euhedral_execution.training.packaging.config.TrainingRunPackageRequest;
 import io.euhedral_execution.training.packaging.data.TrainingRunPackage;
 import io.euhedral_execution.training.packaging.io.TrainingRunPackageInputsCodec;
-import io.euhedral_execution.training.scheduling.enums.RunKind;
 import io.euhedral_execution.training.scheduling.fixtures.SchedulingFixtures;
 import io.euhedral_execution.training.scheduling.io.BootstrapPolicyCsv;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -58,8 +56,9 @@ public final class AuditFixtures {
     public static final long SCHEDULER_SEED = 0x6a09e667f3bcc909L;
     public static final String COMMIT_SHA = "0".repeat(40);
     public static final Instant START = Instant.parse("2026-01-01T00:00:00Z");
-    public static final String EMPTY_SHA256 =
-            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+    public static final String EMPTY_SHA256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+
+    private AuditFixtures() {}
 
     public static Experiment execute(Path temporaryRoot) throws Exception {
         Path root = temporaryRoot.toAbsolutePath().normalize();
@@ -76,25 +75,22 @@ public final class AuditFixtures {
         Path rejectedWorkspace = root.resolve("rejected-workspace");
         Path rejectedPackages = root.resolve("rejected-packages");
 
-        ClosedLoopConfig controlAFirst = config(root, "control-a-first.conf",
-                controlWorkspace, bootstrap, "audit-a", false);
-        ClosedLoopConfig controlB = config(root, "control-b.conf",
-                controlWorkspace, bootstrap, "audit-b", true);
-        ClosedLoopConfig controlAFinal = config(root, "control-a-final.conf",
-                controlWorkspace, bootstrap, "audit-a", true);
-        ClosedLoopConfig resumedAFirst = config(root, "resumed-a-first.conf",
-                resumedWorkspace, bootstrap, "audit-a", false);
-        ClosedLoopConfig resumedB = config(root, "resumed-b.conf",
-                resumedWorkspace, bootstrap, "audit-b", true);
-        ClosedLoopConfig resumedAFinal = config(root, "resumed-a-final.conf",
-                resumedWorkspace, bootstrap, "audit-a", true);
-        ClosedLoopConfig rejectedAFirst = config(root, "rejected-a-first.conf",
-                rejectedWorkspace, bootstrap, "audit-a", false);
-        ClosedLoopConfig rejectedB = config(root, "rejected-b.conf",
-                rejectedWorkspace, bootstrap, "audit-b", true);
+        ClosedLoopConfig controlAFirst =
+                config(root, "control-a-first.conf", controlWorkspace, bootstrap, "audit-a", false);
+        ClosedLoopConfig controlB = config(root, "control-b.conf", controlWorkspace, bootstrap, "audit-b", true);
+        ClosedLoopConfig controlAFinal =
+                config(root, "control-a-final.conf", controlWorkspace, bootstrap, "audit-a", true);
+        ClosedLoopConfig resumedAFirst =
+                config(root, "resumed-a-first.conf", resumedWorkspace, bootstrap, "audit-a", false);
+        ClosedLoopConfig resumedB = config(root, "resumed-b.conf", resumedWorkspace, bootstrap, "audit-b", true);
+        ClosedLoopConfig resumedAFinal =
+                config(root, "resumed-a-final.conf", resumedWorkspace, bootstrap, "audit-a", true);
+        ClosedLoopConfig rejectedAFirst =
+                config(root, "rejected-a-first.conf", rejectedWorkspace, bootstrap, "audit-a", false);
+        ClosedLoopConfig rejectedB = config(root, "rejected-b.conf", rejectedWorkspace, bootstrap, "audit-b", true);
         String fingerprint = ClosedLoopConfigFingerprint.sha256(controlAFirst);
-        for (ClosedLoopConfig item : List.of(controlB, controlAFinal, resumedAFirst,
-                resumedB, resumedAFinal, rejectedAFirst, rejectedB)) {
+        for (ClosedLoopConfig item :
+                List.of(controlB, controlAFinal, resumedAFirst, resumedB, resumedAFinal, rejectedAFirst, rejectedB)) {
             if (!ClosedLoopConfigFingerprint.sha256(item).equals(fingerprint)) {
                 throw new IllegalStateException("Operational config changed frozen fingerprint");
             }
@@ -109,8 +105,7 @@ public final class AuditFixtures {
         controlServices.stopAfterMergeOne = false;
         var controlComplete = ClosedLoopRunner.run(controlAFinal, controlServices);
         requireStage(controlComplete.stage(), CheckpointStage.RUN_COMPLETE);
-        var controlPackagedResult = ClosedLoopRunner.runAndPackage(
-                controlAFinal, controlServices, controlPackages);
+        var controlPackagedResult = ClosedLoopRunner.runAndPackage(controlAFinal, controlServices, controlPackages);
         TrainingRunPackage controlPackage = packageFrom(controlPackagedResult);
 
         AuditServices resumedServices = new AuditServices(corpus);
@@ -120,8 +115,8 @@ public final class AuditFixtures {
         var interrupted = ClosedLoopRunner.run(resumedB, resumedServices);
         requireStage(interrupted.stage(), CheckpointStage.BENCHMARKING);
         int interruptedRevision = revision(interrupted.latestCheckpoint());
-        TrainingRunPackage interruptedPackage = publish(resumedB, interruptedRevision,
-                resumedPackages.resolve("interrupted"));
+        TrainingRunPackage interruptedPackage =
+                publish(resumedB, interruptedRevision, resumedPackages.resolve("interrupted"));
         String firstNormalFingerprint = resumedServices.firstNormalBundleSha256;
         int completedNormalInvocations = resumedServices.completedNormalInvocations;
 
@@ -131,46 +126,63 @@ public final class AuditFixtures {
         requireStage(resumedReady.stage(), CheckpointStage.READY_TO_TRAIN);
         if (resumedServices.completedNormalInvocations != completedNormalInvocations + 1
                 || !ArtifactFingerprint.sha256(resumedServices.firstNormalBundle)
-                .equals(firstNormalFingerprint)) {
+                        .equals(firstNormalFingerprint)) {
             throw new IllegalStateException("Resume rewrote or duplicated normal evidence");
         }
         resumedServices.stopAfterMergeOne = false;
         var resumedComplete = ClosedLoopRunner.run(resumedAFinal, resumedServices);
         requireStage(resumedComplete.stage(), CheckpointStage.RUN_COMPLETE);
-        var resumedPackagedResult = ClosedLoopRunner.runAndPackage(
-                resumedAFinal, resumedServices, resumedPackages.resolve("final"));
+        var resumedPackagedResult =
+                ClosedLoopRunner.runAndPackage(resumedAFinal, resumedServices, resumedPackages.resolve("final"));
         TrainingRunPackage resumedPackage = packageFrom(resumedPackagedResult);
 
         TrainingRunPackageInputs reproductionInputs = TrainingRunPackageInputsCodec.read(
-                resumedPackage.directory().resolve(
-                        "provenance/package-inputs.properties"));
+                resumedPackage.directory().resolve("provenance/package-inputs.properties"));
         TrainingRunPackage reproduced = TrainingRunPackager.publish(
-                new TrainingRunPackageRequest(resumedWorkspace, reproducedPackages,
-                        reproductionInputs));
+                new TrainingRunPackageRequest(resumedWorkspace, reproducedPackages, reproductionInputs));
 
-        if (!ArtifactFingerprint.sha256(controlPackage.directory()).equals(
-                ArtifactFingerprint.sha256(resumedPackage.directory()))
-                || !ArtifactFingerprint.sha256(resumedPackage.directory()).equals(
-                ArtifactFingerprint.sha256(reproduced.directory()))) {
+        if (!ArtifactFingerprint.sha256(controlPackage.directory())
+                        .equals(ArtifactFingerprint.sha256(resumedPackage.directory()))
+                || !ArtifactFingerprint.sha256(resumedPackage.directory())
+                        .equals(ArtifactFingerprint.sha256(reproduced.directory()))) {
             throw new IllegalStateException("Control, resumed, and reproduced packages differ");
         }
 
         AuditServices rejectedServices = new AuditServices(corpus);
         rejectedServices.rejectModel = true;
-        requireStage(ClosedLoopRunner.run(rejectedAFirst, rejectedServices).stage(),
-                CheckpointStage.BOOTSTRAP_PENDING);
-        var rejectedResult = ClosedLoopRunner.runAndPackage(
-                rejectedB, rejectedServices, rejectedPackages);
+        requireStage(ClosedLoopRunner.run(rejectedAFirst, rejectedServices).stage(), CheckpointStage.BOOTSTRAP_PENDING);
+        var rejectedResult = ClosedLoopRunner.runAndPackage(rejectedB, rejectedServices, rejectedPackages);
         requireStage(rejectedResult.stage(), CheckpointStage.MODEL_REJECTED);
         TrainingRunPackage rejectedPackage = packageFrom(rejectedResult);
 
-        return new Experiment(root, corpus, controlWorkspace, resumedWorkspace,
-                rejectedWorkspace, controlPackages, resumedPackages,
-                reproducedPackages, rejectedPackages, resumedAFinal, rejectedB,
-                controlBootstrapA, controlReady, controlComplete, resumedBootstrapA,
-                interrupted, resumedReady, resumedComplete, interruptedPackage,
-                controlPackage, resumedPackage, reproduced, rejectedResult, rejectedPackage,
-                resumedServices.failedPolicyId, firstNormalFingerprint, fingerprint);
+        return new Experiment(
+                root,
+                corpus,
+                controlWorkspace,
+                resumedWorkspace,
+                rejectedWorkspace,
+                controlPackages,
+                resumedPackages,
+                reproducedPackages,
+                rejectedPackages,
+                resumedAFinal,
+                rejectedB,
+                controlBootstrapA,
+                controlReady,
+                controlComplete,
+                resumedBootstrapA,
+                interrupted,
+                resumedReady,
+                resumedComplete,
+                interruptedPackage,
+                controlPackage,
+                resumedPackage,
+                reproduced,
+                rejectedResult,
+                rejectedPackage,
+                resumedServices.failedPolicyId,
+                firstNormalFingerprint,
+                fingerprint);
     }
 
     public static Corpus corpus() {
@@ -193,18 +205,23 @@ public final class AuditFixtures {
         return new Corpus(meanings, scenarios);
     }
 
-    public static TrainingRunPackage publish(ClosedLoopConfig config, int revision,
-            Path outputRoot) throws Exception {
-        LoadedCheckpoint loaded = CheckpointSnapshotCodec.loadRevision(
-                config.workspace(), revision);
+    public static TrainingRunPackage publish(ClosedLoopConfig config, int revision, Path outputRoot) throws Exception {
+        LoadedCheckpoint loaded = CheckpointSnapshotCodec.loadRevision(config.workspace(), revision);
         String packageId = loaded.checkpoint().stage() == CheckpointStage.RUN_COMPLETE
                 ? config.trainingRunId()
                 : "%s.partial.r%08d".formatted(config.trainingRunId(), revision);
         return TrainingRunPackager.publish(new TrainingRunPackageRequest(
-                config.workspace(), outputRoot, new TrainingRunPackageInputs(packageId,
-                config.trainingRunId(), revision, config.schedulerSeed(),
-                config.commitSha(), config.dirtyWorkingTree(),
-                config.benchmarkConfig(), config.requiredScenarios())));
+                config.workspace(),
+                outputRoot,
+                new TrainingRunPackageInputs(
+                        packageId,
+                        config.trainingRunId(),
+                        revision,
+                        config.schedulerSeed(),
+                        config.commitSha(),
+                        config.dirtyWorkingTree(),
+                        config.benchmarkConfig(),
+                        config.requiredScenarios())));
     }
 
     public static List<LoadedCheckpoint> checkpoints(Path workspace) throws Exception {
@@ -219,15 +236,14 @@ public final class AuditFixtures {
     }
 
     public static int revision(Path checkpoint) {
-        return Integer.parseInt(checkpoint.getFileName().toString()
-                .substring("checkpoint-".length()));
+        return Integer.parseInt(checkpoint.getFileName().toString().substring("checkpoint-".length()));
     }
 
-    private static void add(Map<PolicyId, PolicyMeaning> meanings, String symbol,
-            int seed, double baseline, int specialistScenario) {
+    private static void add(
+            Map<PolicyId, PolicyMeaning> meanings, String symbol, int seed, double baseline, int specialistScenario) {
         PolicyVector policy = SchedulingFixtures.policy(seed);
-        PolicyMeaning previous = meanings.put(policy.id(),
-                new PolicyMeaning(symbol, policy, baseline, specialistScenario));
+        PolicyMeaning previous =
+                meanings.put(policy.id(), new PolicyMeaning(symbol, policy, baseline, specialistScenario));
         if (previous != null) {
             throw new IllegalStateException("Audit policy hash collision");
         }
@@ -235,8 +251,7 @@ public final class AuditFixtures {
 
     private static Path writeBootstrap(Path path, Corpus corpus) throws Exception {
         Files.createDirectories(path.getParent());
-        ArrayList<String> header = new ArrayList<>(List.of(
-                "schema_version", "bootstrap_position", "policy_id"));
+        ArrayList<String> header = new ArrayList<>(List.of("schema_version", "bootstrap_position", "policy_id"));
         for (int index = 0; index < PolicyVector.WIDTH; index++) {
             header.add("weight_%02d_bits".formatted(index));
         }
@@ -249,14 +264,15 @@ public final class AuditFixtures {
             fields.add(Integer.toString(position++));
             fields.add(policy.id().canonical());
             for (int index = 0; index < PolicyVector.WIDTH; index++) {
-                fields.add("%016x".formatted(
-                        Double.doubleToRawLongBits(policy.weight(index))));
+                fields.add("%016x".formatted(Double.doubleToRawLongBits(policy.weight(index))));
             }
             text.append(CanonicalCsv.row(fields));
         }
         Files.writeString(path, text, StandardCharsets.UTF_8);
         List<PolicyVector> decoded = BootstrapPolicyCsv.read(path, 10);
-        if (!decoded.stream().map(PolicyVector::id).toList()
+        if (!decoded.stream()
+                .map(PolicyVector::id)
+                .toList()
                 .equals(List.copyOf(corpus.meanings().keySet()))) {
             throw new IllegalStateException("Bootstrap policy order differs");
         }
@@ -268,8 +284,9 @@ public final class AuditFixtures {
         return path;
     }
 
-    private static ClosedLoopConfig config(Path root, String name, Path workspace,
-            Path bootstrap, String environment, boolean resume) throws Exception {
+    private static ClosedLoopConfig config(
+            Path root, String name, Path workspace, Path bootstrap, String environment, boolean resume)
+            throws Exception {
         Path file = root.resolve("configs").resolve(name);
         Files.createDirectories(file.getParent());
         Path stop = workspace.resolve("STOP-" + environment);
@@ -328,9 +345,10 @@ public final class AuditFixtures {
 
         Map<String, String> previous = new HashMap<>();
         for (Map.Entry<String, String> property : Map.of(
-                "cycle.input", "forbidden",
-                "training.device", "gpu9",
-                "euhedral.training.path", "/forbidden").entrySet()) {
+                        "cycle.input", "forbidden",
+                        "training.device", "gpu9",
+                        "euhedral.training.path", "/forbidden")
+                .entrySet()) {
             previous.put(property.getKey(), System.getProperty(property.getKey()));
             System.setProperty(property.getKey(), property.getValue());
         }
@@ -360,12 +378,12 @@ public final class AuditFixtures {
 
     private static void assertIsolated(Path root) {
         Path repository = Path.of("").toAbsolutePath().normalize();
-        for (Path forbidden : List.of(repository.resolve("euhedral-training/input"),
+        for (Path forbidden : List.of(
+                repository.resolve("euhedral-training/input"),
                 repository.resolve("euhedral-training/output"),
                 repository.resolve("data"))) {
             if (root.startsWith(forbidden) || forbidden.startsWith(root)) {
-                throw new IllegalArgumentException(
-                        "Audit temporary root overlaps repository data");
+                throw new IllegalArgumentException("Audit temporary root overlaps repository data");
             }
         }
     }
@@ -376,29 +394,28 @@ public final class AuditFixtures {
         }
     }
 
-    private static TrainingRunPackage packageFrom(
-            io.euhedral_execution.training.data.ClosedLoopResult result) throws Exception {
-        return TrainingRunPackageValidator.validate(
-                result.packageDirectory().orElseThrow());
+    private static TrainingRunPackage packageFrom(io.euhedral_execution.training.data.ClosedLoopResult result)
+            throws Exception {
+        return TrainingRunPackageValidator.validate(result.packageDirectory().orElseThrow());
     }
 
-    public record PolicyMeaning(String symbol, PolicyVector policy, double baseline,
-                                int specialistScenario) {
+    public record PolicyMeaning(String symbol, PolicyVector policy, double baseline, int specialistScenario) {
         public double throughput(int scenarioOrdinal) {
             return specialistScenario == scenarioOrdinal ? 100 : baseline;
         }
     }
 
-    public record Corpus(SortedMap<PolicyId, PolicyMeaning> meanings,
-                         SortedSet<SourceScenario> scenarios) {
+    public record Corpus(SortedMap<PolicyId, PolicyMeaning> meanings, SortedSet<SourceScenario> scenarios) {
         public Corpus {
             meanings = java.util.Collections.unmodifiableSortedMap(new TreeMap<>(meanings));
             scenarios = java.util.Collections.unmodifiableSortedSet(new TreeSet<>(scenarios));
         }
 
         public PolicyMeaning bySymbol(String symbol) {
-            return meanings.values().stream().filter(item -> item.symbol().equals(symbol))
-                    .findFirst().orElseThrow();
+            return meanings.values().stream()
+                    .filter(item -> item.symbol().equals(symbol))
+                    .findFirst()
+                    .orElseThrow();
         }
 
         public int scenarioOrdinal(SourceScenario scenario) {
@@ -413,29 +430,34 @@ public final class AuditFixtures {
         }
     }
 
-    public record Experiment(Path root, Corpus corpus,
-                             Path controlWorkspace, Path resumedWorkspace,
-                             Path rejectedWorkspace,
-                             Path controlPackages, Path resumedPackages,
-                             Path reproducedPackages, Path rejectedPackages,
-                             ClosedLoopConfig resumedFinalConfig,
-                             ClosedLoopConfig rejectedConfig,
-                             io.euhedral_execution.training.data.ClosedLoopResult controlBootstrapA,
-                             io.euhedral_execution.training.data.ClosedLoopResult controlReady,
-                             io.euhedral_execution.training.data.ClosedLoopResult controlComplete,
-                             io.euhedral_execution.training.data.ClosedLoopResult resumedBootstrapA,
-                             io.euhedral_execution.training.data.ClosedLoopResult interrupted,
-                             io.euhedral_execution.training.data.ClosedLoopResult resumedReady,
-                             io.euhedral_execution.training.data.ClosedLoopResult resumedComplete,
-                             TrainingRunPackage interruptedPackage,
-                             TrainingRunPackage controlPackage,
-                             TrainingRunPackage resumedPackage,
-                             TrainingRunPackage reproducedPackage,
-                             io.euhedral_execution.training.data.ClosedLoopResult rejected,
-                             TrainingRunPackage rejectedPackage,
-                             PolicyId failedPolicyId, String firstNormalBundleSha256,
-                             String configSha256) {
-    }
+    public record Experiment(
+            Path root,
+            Corpus corpus,
+            Path controlWorkspace,
+            Path resumedWorkspace,
+            Path rejectedWorkspace,
+            Path controlPackages,
+            Path resumedPackages,
+            Path reproducedPackages,
+            Path rejectedPackages,
+            ClosedLoopConfig resumedFinalConfig,
+            ClosedLoopConfig rejectedConfig,
+            io.euhedral_execution.training.data.ClosedLoopResult controlBootstrapA,
+            io.euhedral_execution.training.data.ClosedLoopResult controlReady,
+            io.euhedral_execution.training.data.ClosedLoopResult controlComplete,
+            io.euhedral_execution.training.data.ClosedLoopResult resumedBootstrapA,
+            io.euhedral_execution.training.data.ClosedLoopResult interrupted,
+            io.euhedral_execution.training.data.ClosedLoopResult resumedReady,
+            io.euhedral_execution.training.data.ClosedLoopResult resumedComplete,
+            TrainingRunPackage interruptedPackage,
+            TrainingRunPackage controlPackage,
+            TrainingRunPackage resumedPackage,
+            TrainingRunPackage reproducedPackage,
+            io.euhedral_execution.training.data.ClosedLoopResult rejected,
+            TrainingRunPackage rejectedPackage,
+            PolicyId failedPolicyId,
+            String firstNormalBundleSha256,
+            String configSha256) {}
 
     private static final class AuditServices implements ClosedLoopServices {
         private final Corpus corpus;
@@ -454,46 +476,89 @@ public final class AuditFixtures {
             this.corpus = corpus;
         }
 
+        private static BenchmarkObservation failed(
+                BenchmarkRunDescriptor descriptor,
+                io.euhedral_execution.training.data.ScheduledPolicy scheduled,
+                int repetition,
+                Instant started) {
+            if (repetition == 1) {
+                return new BenchmarkObservation(
+                        new ObservationKey(
+                                descriptor.benchmarkRunId(),
+                                descriptor.scenario(),
+                                scheduled.policy().id(),
+                                repetition),
+                        descriptor,
+                        scheduled,
+                        ObservationStatus.TIMEOUT,
+                        MeasurementEncoding.COUNTER_DERIVED,
+                        started,
+                        started.plusNanos(2_000_000_000L),
+                        OptionalLong.of(2_000_000_000L),
+                        OptionalLong.of(0),
+                        OptionalDouble.of(0),
+                        "AUDIT_TIMEOUT");
+            }
+            return new BenchmarkObservation(
+                    new ObservationKey(
+                            descriptor.benchmarkRunId(),
+                            descriptor.scenario(),
+                            scheduled.policy().id(),
+                            repetition),
+                    descriptor,
+                    scheduled,
+                    ObservationStatus.SKIPPED,
+                    MeasurementEncoding.COUNTER_DERIVED,
+                    started,
+                    started,
+                    OptionalLong.of(0),
+                    OptionalLong.of(0),
+                    OptionalDouble.empty(),
+                    "AFTER_TIMEOUT");
+        }
+
         @Override
-        public CalibrationPlan bootstrapCalibration(
-                DataMerger.CalibrationBootstrapRequest request) throws Exception {
+        public CalibrationPlan bootstrapCalibration(DataMerger.CalibrationBootstrapRequest request) throws Exception {
             return DataMerger.bootstrapCalibrationV1(request);
         }
 
         @Override
-        public DataMerger.MergeArtifacts merge(DataMerger.MergeRequest request)
-                throws Exception {
+        public DataMerger.MergeArtifacts merge(DataMerger.MergeRequest request) throws Exception {
             DataMerger.MergeArtifacts result = DataMerger.mergeV1(request);
-            if (request.outputDirectory().getFileName().toString()
-                    .equals("merge-000001")) {
+            if (request.outputDirectory().getFileName().toString().equals("merge-000001")) {
                 mergeOneComplete = true;
             }
             return result;
         }
 
         @Override
-        public ScenarioTrainingArtifacts train(ScenarioTrainingRequest request)
-                throws Exception {
+        public ScenarioTrainingArtifacts train(ScenarioTrainingRequest request) throws Exception {
             return rejectModel
-                    ? AuditScenarioModelFixture.writeRejected(request.modelDirectory(),
-                    request.requiredScenarios(), request.config(),
-                    corpus.bySymbol("R").policy(), request.commitSha(),
-                    request.dirtyWorkingTree())
-                    : AuditScenarioModelFixture.write(request.modelDirectory(),
-                    request.requiredScenarios(), request.config(),
-                    corpus.bySymbol("R").policy(), request.commitSha(),
-                    request.dirtyWorkingTree());
+                    ? AuditScenarioModelFixture.writeRejected(
+                            request.modelDirectory(),
+                            request.requiredScenarios(),
+                            request.config(),
+                            corpus.bySymbol("R").policy(),
+                            request.commitSha(),
+                            request.dirtyWorkingTree())
+                    : AuditScenarioModelFixture.write(
+                            request.modelDirectory(),
+                            request.requiredScenarios(),
+                            request.config(),
+                            corpus.bySymbol("R").policy(),
+                            request.commitSha(),
+                            request.dirtyWorkingTree());
         }
 
         @Override
-        public ScenarioConditionedModel loadAcceptedModel(Path modelDirectory,
-                String producingDevice) throws Exception {
+        public ScenarioConditionedModel loadAcceptedModel(Path modelDirectory, String producingDevice)
+                throws Exception {
             return AuditScenarioModelFixture.open(modelDirectory);
         }
 
         @Override
-        public BenchmarkRunContext benchmark(NativeBenchmarkRunPlan plan,
-                BooleanSupplier stopRequested) throws Exception {
+        public BenchmarkRunContext benchmark(NativeBenchmarkRunPlan plan, BooleanSupplier stopRequested)
+                throws Exception {
             if (plan.iteration() > 0) {
                 attemptedNormalInvocations++;
                 if (interruptBeforeSecondNormalRun && attemptedNormalInvocations == 2) {
@@ -506,8 +571,7 @@ public final class AuditFixtures {
                 completedNormalInvocations++;
                 if (firstNormalBundle == null) {
                     firstNormalBundle = plan.outputBundle();
-                    firstNormalBundleSha256 =
-                            ArtifactFingerprint.sha256(firstNormalBundle);
+                    firstNormalBundleSha256 = ArtifactFingerprint.sha256(firstNormalBundle);
                 }
             }
             return result;
@@ -515,30 +579,37 @@ public final class AuditFixtures {
 
         private BenchmarkRunContext writeBundle(NativeBenchmarkRunPlan plan) {
             int scenarioOrdinal = corpus.scenarioOrdinal(plan.scenario());
-            Instant runStart = START.plusSeconds(
-                    plan.iteration() * 100_000L + scenarioOrdinal * 10_000L);
-            BenchmarkRunDescriptor descriptor = new BenchmarkRunDescriptor(1,
-                    plan.benchmarkRunId(), plan.iteration(), plan.candidateCohortId(),
-                    plan.scenario(), plan.commitSha(), plan.dirtyWorkingTree(),
-                    EvidenceOrigin.NATIVE, runStart, plan.parameters());
+            Instant runStart = START.plusSeconds(plan.iteration() * 100_000L + scenarioOrdinal * 10_000L);
+            BenchmarkRunDescriptor descriptor = new BenchmarkRunDescriptor(
+                    1,
+                    plan.benchmarkRunId(),
+                    plan.iteration(),
+                    plan.candidateCohortId(),
+                    plan.scenario(),
+                    plan.commitSha(),
+                    plan.dirtyWorkingTree(),
+                    EvidenceOrigin.NATIVE,
+                    runStart,
+                    plan.parameters());
             PolicyId failure = null;
             if (plan.iteration() == 1 && scenarioOrdinal == 2) {
                 failure = plan.policies().stream()
                         .filter(item -> item.roles().contains(PolicyRole.EXPLORATION))
-                        .map(item -> item.policy().id()).min(Comparator.naturalOrder())
+                        .map(item -> item.policy().id())
+                        .min(Comparator.naturalOrder())
                         .orElseThrow();
                 failedPolicyId = failure;
             }
             Instant completed = runStart;
-            try (ObservationBundleWriter writer = ObservationBundleWriter.open(
-                    plan.outputBundle(), descriptor)) {
+            try (ObservationBundleWriter writer = ObservationBundleWriter.open(plan.outputBundle(), descriptor)) {
                 plan.policies().forEach(writer::registerPolicy);
                 for (var scheduled : plan.policies()) {
                     for (int repetition = 1;
                             repetition <= plan.executionConfig().expectedRepetitions();
                             repetition++) {
                         long slot = Math.addExact(
-                                Math.multiplyExact(scheduled.schedulePosition() - 1L,
+                                Math.multiplyExact(
+                                        scheduled.schedulePosition() - 1L,
                                         plan.executionConfig().expectedRepetitions()),
                                 repetition - 1L);
                         Instant started = runStart.plusSeconds(slot * 3L);
@@ -546,26 +617,31 @@ public final class AuditFixtures {
                         if (scheduled.policy().id().equals(failure)) {
                             observation = failed(descriptor, scheduled, repetition, started);
                         } else {
-                            double scale = plan.iteration() == 0 ? 1.0
-                                    : plan.scenario().environmentId().equals("audit-b")
-                                    ? 0.5 : 2.0;
-                            PolicyMeaning meaning = corpus.meanings().get(
-                                    scheduled.policy().id());
-                            double baseline = meaning == null ? 1.0
-                                    : meaning.throughput(scenarioOrdinal);
+                            double scale = plan.iteration() == 0
+                                    ? 1.0
+                                    : plan.scenario().environmentId().equals("audit-b") ? 0.5 : 2.0;
+                            PolicyMeaning meaning =
+                                    corpus.meanings().get(scheduled.policy().id());
+                            double baseline = meaning == null ? 1.0 : meaning.throughput(scenarioOrdinal);
                             double throughput = baseline * scale;
                             long frames = Math.round(throughput * 2.0);
                             Instant ended = started.plusNanos(2_000_000_000L);
                             observation = new BenchmarkObservation(
-                                    new ObservationKey(plan.benchmarkRunId(),
-                                            plan.scenario(), scheduled.policy().id(),
+                                    new ObservationKey(
+                                            plan.benchmarkRunId(),
+                                            plan.scenario(),
+                                            scheduled.policy().id(),
                                             repetition),
-                                    descriptor, scheduled, ObservationStatus.SUCCESS,
-                                    MeasurementEncoding.COUNTER_DERIVED, started, ended,
+                                    descriptor,
+                                    scheduled,
+                                    ObservationStatus.SUCCESS,
+                                    MeasurementEncoding.COUNTER_DERIVED,
+                                    started,
+                                    ended,
                                     OptionalLong.of(2_000_000_000L),
                                     OptionalLong.of(frames),
-                                    OptionalDouble.of(frames * 1_000_000_000.0
-                                            / 2_000_000_000L), "");
+                                    OptionalDouble.of(frames * 1_000_000_000.0 / 2_000_000_000L),
+                                    "");
                         }
                         writer.write(observation);
                         if (observation.endedAt().isAfter(completed)) {
@@ -577,30 +653,9 @@ public final class AuditFixtures {
             }
         }
 
-        private static BenchmarkObservation failed(BenchmarkRunDescriptor descriptor,
-                io.euhedral_execution.training.data.ScheduledPolicy scheduled,
-                int repetition, Instant started) {
-            if (repetition == 1) {
-                return new BenchmarkObservation(new ObservationKey(
-                        descriptor.benchmarkRunId(), descriptor.scenario(),
-                        scheduled.policy().id(), repetition), descriptor, scheduled,
-                        ObservationStatus.TIMEOUT, MeasurementEncoding.COUNTER_DERIVED,
-                        started, started.plusNanos(2_000_000_000L),
-                        OptionalLong.of(2_000_000_000L), OptionalLong.of(0),
-                        OptionalDouble.of(0), "AUDIT_TIMEOUT");
-            }
-            return new BenchmarkObservation(new ObservationKey(
-                    descriptor.benchmarkRunId(), descriptor.scenario(),
-                    scheduled.policy().id(), repetition), descriptor, scheduled,
-                    ObservationStatus.SKIPPED, MeasurementEncoding.COUNTER_DERIVED,
-                    started, started, OptionalLong.of(0), OptionalLong.of(0),
-                    OptionalDouble.empty(), "AFTER_TIMEOUT");
-        }
-
         @Override
         public boolean stopRequested() {
-            return stopAfterMergeOne && mergeOneComplete
-                    || interruptBeforeSecondNormalRun && interruptionTriggered;
+            return stopAfterMergeOne && mergeOneComplete || interruptBeforeSecondNormalRun && interruptionTriggered;
         }
 
         @Override
@@ -612,8 +667,5 @@ public final class AuditFixtures {
         public String activeCpuSetHex() {
             return "f";
         }
-    }
-
-    private AuditFixtures() {
     }
 }

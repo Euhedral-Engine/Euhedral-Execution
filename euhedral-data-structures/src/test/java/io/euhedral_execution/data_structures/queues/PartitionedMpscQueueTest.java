@@ -16,6 +16,23 @@ import org.junit.jupiter.api.Test;
 
 class PartitionedMpscQueueTest {
 
+    private static long value(int producerId, int itemId) {
+        return ((long) producerId << 32) | itemId;
+    }
+
+    private static void await(CountDownLatch latch) {
+        try {
+            assertTrue(latch.await(5, SECONDS), "start latch timed out");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError("interrupted while awaiting test start", e);
+        }
+    }
+
+    private static void assertBefore(long deadline, String message) {
+        assertTrue(System.nanoTime() < deadline, message);
+    }
+
     @Test
     void clearOnlyRemovesTheSelectedPartition() {
         PartitionedMpscQueue<Integer> queue = new PartitionedMpscQueue<>(2, 4, 1);
@@ -56,8 +73,7 @@ class PartitionedMpscQueueTest {
             start.countDown();
             long deadline = System.nanoTime() + SECONDS.toNanos(5);
             while (consumed.size() < itemCount) {
-                queue.drain(0, value -> assertTrue(consumed.add(value), "duplicate " + value),
-                        itemCount);
+                queue.drain(0, value -> assertTrue(consumed.add(value), "duplicate " + value), itemCount);
                 if (consumed.size() < itemCount) {
                     assertBefore(deadline, "consumer timed out");
                     Thread.onSpinWait();
@@ -78,22 +94,5 @@ class PartitionedMpscQueueTest {
             }
         }
         assertTrue(queue.isEmpty());
-    }
-
-    private static long value(int producerId, int itemId) {
-        return ((long) producerId << 32) | itemId;
-    }
-
-    private static void await(CountDownLatch latch) {
-        try {
-            assertTrue(latch.await(5, SECONDS), "start latch timed out");
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new AssertionError("interrupted while awaiting test start", e);
-        }
-    }
-
-    private static void assertBefore(long deadline, String message) {
-        assertTrue(System.nanoTime() < deadline, message);
     }
 }

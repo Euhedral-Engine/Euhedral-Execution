@@ -22,8 +22,7 @@ public final class AffinityController {
     /// @param supported logical CPU IDs accepted by this controller; copied on entry
     /// @param span      exclusive upper bound for logical CPU IDs, including sparse holes
     /// @param logger    bounded diagnostics sink, or `null` in deterministic tests
-    public AffinityController(AffinityProvider provider, BitSet supported, int span,
-            Logger logger) {
+    public AffinityController(AffinityProvider provider, BitSet supported, int span, Logger logger) {
         if (span < 1 || span > AffinityMasks.MAX_BITS) {
             throw new IllegalArgumentException("Invalid logical CPU span: " + span);
         }
@@ -74,8 +73,7 @@ public final class AffinityController {
         if (request == null || capability == AffinityCapability.UNSUPPORTED) {
             return false;
         }
-        return capability == AffinityCapability.EXACT ? applyExact(request)
-                : applyLocality(request);
+        return capability == AffinityCapability.EXACT ? applyExact(request) : applyLocality(request);
     }
 
     /// Applies affinity to the current truthful or managed logical CPU.
@@ -148,9 +146,7 @@ public final class AffinityController {
             return;
         }
         try {
-            boolean restored = lease.exact
-                    ? provider.restoreExact(lease.snapshot.clone())
-                    : provider.releaseLocality();
+            boolean restored = lease.exact ? provider.restoreExact(lease.snapshot.clone()) : provider.releaseLocality();
             if (!restored) {
                 diagnostic("Affinity release failed", null);
             }
@@ -319,8 +315,7 @@ public final class AffinityController {
                 return;
             }
             if (Thread.currentThread() != thread || owners.get() != this) {
-                throw new IllegalStateException(
-                        "Managed CPU bindings must close in owner-thread LIFO order");
+                throw new IllegalStateException("Managed CPU bindings must close in owner-thread LIFO order");
             }
             if (predecessor == null) {
                 owners.remove();

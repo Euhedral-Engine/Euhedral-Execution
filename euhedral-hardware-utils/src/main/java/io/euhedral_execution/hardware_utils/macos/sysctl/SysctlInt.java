@@ -5,8 +5,7 @@ import java.util.OptionalInt;
 /// Type-safe integer sysctl key query helper.
 public final class SysctlInt {
 
-    private SysctlInt() {
-    }
+    private SysctlInt() {}
 
     /// Query sysctl integer value using the default native sysctl provider.
     public static OptionalInt query(String key) {

@@ -12,14 +12,16 @@ import org.junit.jupiter.api.Test;
 
 class KafkaFrameTest {
 
+    private static ConsumerRecord<byte[], byte[]> record(long offset) {
+        return new ConsumerRecord<>("topic", 0, offset, new byte[] {1}, new byte[] {2});
+    }
+
     @Test
     void finalizationAcknowledgesOffsetAndRecyclesFrame() {
         long password = 51;
-        FrameManager<ConsumerRecord<?, ?>, KafkaFrame> manager =
-                new FrameManager<>(4, password);
+        FrameManager<ConsumerRecord<?, ?>, KafkaFrame> manager = new FrameManager<>(4, password);
         OffsetMd acknowledgement = new OffsetMd(7);
-        KafkaFrame frame = new KafkaFrame(1, record(7), acknowledgement, manager,
-                new KillSwitch());
+        KafkaFrame frame = new KafkaFrame(1, record(7), acknowledgement, manager, new KillSwitch());
 
         frame.doFinally();
 
@@ -31,8 +33,7 @@ class KafkaFrameTest {
     void replaceUsesNewRecordAcknowledgementAndPartitionKillSwitch() {
         KillSwitch originalSwitch = new KillSwitch();
         OffsetMd originalAcknowledgement = new OffsetMd(1);
-        KafkaFrame frame = new KafkaFrame(1, record(1), originalAcknowledgement, null,
-                originalSwitch);
+        KafkaFrame frame = new KafkaFrame(1, record(1), originalAcknowledgement, null, originalSwitch);
         KillSwitch replacementSwitch = new KillSwitch();
         OffsetMd replacementAcknowledgement = new OffsetMd(2);
         ConsumerRecord<byte[], byte[]> replacement = record(2);
@@ -59,9 +60,5 @@ class KafkaFrameTest {
 
         assertFalse(first.isAlive());
         assertFalse(second.isAlive());
-    }
-
-    private static ConsumerRecord<byte[], byte[]> record(long offset) {
-        return new ConsumerRecord<>("topic", 0, offset, new byte[]{1}, new byte[]{2});
     }
 }

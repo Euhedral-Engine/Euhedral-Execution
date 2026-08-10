@@ -5,15 +5,9 @@ import java.util.Arrays;
 public final class PolicyVector {
 
     public static final int WIDTH = 28;
-
-    public static PolicyVector of(double[] weights) {
-        return new PolicyVector(weights);
-    }
-
     private final double[] weights;
     private final PolicyId id;
     private final int hashCode;
-
     private PolicyVector(double[] weights) {
         if (weights.length != WIDTH) {
             throw new IllegalArgumentException("Expected 28 weights");
@@ -26,7 +20,12 @@ public final class PolicyVector {
         }
         id = PolicyId.fromWeights(this.weights);
         hashCode = Arrays.hashCode(Arrays.stream(this.weights)
-                .mapToLong(Double::doubleToRawLongBits).toArray());
+                .mapToLong(Double::doubleToRawLongBits)
+                .toArray());
+    }
+
+    public static PolicyVector of(double[] weights) {
+        return new PolicyVector(weights);
     }
 
     public PolicyId id() {
@@ -46,8 +45,7 @@ public final class PolicyVector {
             return false;
         }
         for (int i = 0; i < WIDTH; i++) {
-            if (Double.doubleToRawLongBits(weights[i])
-                    != Double.doubleToRawLongBits(other.weights[i])) {
+            if (Double.doubleToRawLongBits(weights[i]) != Double.doubleToRawLongBits(other.weights[i])) {
                 return false;
             }
         }

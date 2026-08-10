@@ -41,19 +41,74 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
     static {
         try {
             CAP_FACTOR = MethodHandles.lookup().findVarHandle(ControlPlaneCache.class, "capFactor", double.class);
-            PRIMED = MethodHandles.lookup()
-                    .findVarHandle(ControlPlaneCache.class, "primed", boolean.class);
-            TOTAL_COUNT = MethodHandles.lookup()
-                    .findVarHandle(ControlPlaneCache.class, "totalCount", long.class);
+            PRIMED = MethodHandles.lookup().findVarHandle(ControlPlaneCache.class, "primed", boolean.class);
+            TOTAL_COUNT = MethodHandles.lookup().findVarHandle(ControlPlaneCache.class, "totalCount", long.class);
         } catch (Exception e) {
             throw new ExceptionInInitializerError(e);
         }
     }
 
+    private final Logger logger;
+    private final CacheConfig cacheConfig;
+    private final CacheMetrics metrics;
+    private final int core;
+    @Getter(AccessLevel.PROTECTED)
+    private final PartitionedMpscQueue<AbstractFrame> localCache;
+    private final int chunkSize;
+    private final CacheTerminal cacheTerminal;
+    @Getter
+    private final long frameQuota;
+    boolean primed;
+    double capFactor = 1.0;
+    long totalCount = 0L;
+    protected ControlPlaneCache(@NonNull CacheConfig cacheConfig) {
+        super(getName(cacheConfig), 1, (frame, mapSize) -> 0, 0, RoutingPolicy.CACHE_LOCAL);
+        this.cacheConfig = cacheConfig;
+
+        int partitions = cacheConfig.partitions();
+        if (partitions <= 0) {
+            throw new IllegalArgumentException(
+                    "Partitions must be greater than 0. Provided: " + cacheConfig.partitions());
+        }
+        if (cacheConfig.cloneConfig() == null) {
+            this.logger = null;
+            this.metrics = null;
+            this.localCache = null;
+            this.chunkSize = 0;
+            this.cacheTerminal = null;
+            this.frameQuota = 0;
+            this.core = -1;
+        } else {
+            this.logger = LoggerFactory.getLogger(Constants.getLoggerName(getName(cacheConfig)));
+            this.metrics = new CacheMetrics(cacheConfig, () -> (long) TOTAL_COUNT.getAcquire(this));
+            this.chunkSize = getChunkSize(cacheConfig, partitions);
+            this.frameQuota = (long) this.chunkSize * partitions;
+            this.core = cacheConfig.getCore();
+            this.localCache = new PartitionedMpscQueue<>(partitions, this.chunkSize, cacheConfig.maxPooledChunks());
+            this.cacheTerminal = new CacheTerminal(this);
+
+            BitSet mappings = new BitSet(1);
+            mappings.set(0);
+            LatticeEdge[] terminal = new LatticeEdge[] {new LatticeEdge(super.drain)};
+            terminal[0].addDownstream(this.cacheTerminal);
+
+            setDrain(true);
+            super.setDownstreamMapping(mappings, terminal);
+            setDrain(false);
+
+            String chunkSize = NumberFormat.getNumberInstance().format(this.chunkSize);
+            String cacheCapacity = NumberFormat.getNumberInstance().format((long) partitions * this.chunkSize);
+            this.logger.debug(
+                    "Partitions: {} PartitionChunkSize: {} CacheCapacity: {}", partitions, chunkSize, cacheCapacity);
+        }
+    }
+
     public static String getName(CacheConfig config) {
-        return config.cloneConfig() != null ? config.cloneConfig().shardName()
-                                              + "-ControlPlaneCache-"
-                                              + config.cloneConfig().coreId() : "ControlPlaneCache";
+        return config.cloneConfig() != null
+                ? config.cloneConfig().shardName()
+                        + "-ControlPlaneCache-"
+                        + config.cloneConfig().coreId()
+                : "ControlPlaneCache";
     }
 
     protected static int getChunkSize(CacheConfig config, int partitions) {
@@ -86,66 +141,6 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
         return Math.max(chunk, 512);
     }
 
-    private final Logger logger;
-    private final CacheConfig cacheConfig;
-    private final CacheMetrics metrics;
-    private final int core;
-
-    @Getter(AccessLevel.PROTECTED)
-    private final PartitionedMpscQueue<AbstractFrame> localCache;
-    private final int chunkSize;
-
-    private final CacheTerminal cacheTerminal;
-
-    @Getter
-    private final long frameQuota;
-
-    boolean primed;
-    double capFactor = 1.0;
-    long totalCount = 0L;
-
-    protected ControlPlaneCache(@NonNull CacheConfig cacheConfig) {
-        super(getName(cacheConfig), 1, (frame, mapSize) -> 0, 0, RoutingPolicy.CACHE_LOCAL);
-        this.cacheConfig = cacheConfig;
-
-        int partitions = cacheConfig.partitions();
-        if(partitions <= 0) {
-            throw new IllegalArgumentException("Partitions must be greater than 0. Provided: " + cacheConfig.partitions());
-        }
-        if (cacheConfig.cloneConfig() == null) {
-            this.logger = null;
-            this.metrics = null;
-            this.localCache = null;
-            this.chunkSize = 0;
-            this.cacheTerminal = null;
-            this.frameQuota = 0;
-            this.core = -1;
-        } else {
-            this.logger = LoggerFactory.getLogger(Constants.getLoggerName(getName(cacheConfig)));
-            this.metrics = new CacheMetrics(cacheConfig, () -> (long) TOTAL_COUNT.getAcquire(this));
-            this.chunkSize = getChunkSize(cacheConfig, partitions);
-            this.frameQuota = (long) this.chunkSize * partitions;
-            this.core = cacheConfig.getCore();
-            this.localCache = new PartitionedMpscQueue<>(partitions, this.chunkSize,
-                    cacheConfig.maxPooledChunks());
-            this.cacheTerminal = new CacheTerminal(this);
-
-            BitSet mappings = new BitSet(1);
-            mappings.set(0);
-            LatticeEdge[] terminal = new LatticeEdge[] {new LatticeEdge(super.drain)};
-            terminal[0].addDownstream(this.cacheTerminal);
-
-            setDrain(true);
-            super.setDownstreamMapping(mappings, terminal);
-            setDrain(false);
-
-            String chunkSize = NumberFormat.getNumberInstance().format(this.chunkSize);
-            String cacheCapacity = NumberFormat.getNumberInstance().format((long) partitions * this.chunkSize);
-            this.logger.debug("Partitions: {} PartitionChunkSize: {} CacheCapacity: {}", partitions,
-                    chunkSize, cacheCapacity);
-        }
-    }
-
     public final long pull(long limit) {
         if (limit <= 0) {
             return 0;
@@ -160,7 +155,7 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
     }
 
     public final long upstreamPull(UpstreamQueue queue, Consumer<AbstractFrame> consumer, long limit) {
-        if(limit <= 0) {
+        if (limit <= 0) {
             return 0;
         }
 
@@ -177,8 +172,7 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
         if (initialCount > 0) {
             total = this.localCache.drain(consumer, limit);
             long count = total;
-            while (total < limit
-                    && count > this.cacheConfig.ringWalkResetThreshold()) {
+            while (total < limit && count > this.cacheConfig.ringWalkResetThreshold()) {
                 count = this.localCache.drain(consumer, limit - total);
                 total += count;
             }

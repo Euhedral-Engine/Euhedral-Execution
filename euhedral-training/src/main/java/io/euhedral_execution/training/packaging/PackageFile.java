@@ -6,9 +6,17 @@ import io.euhedral_execution.training.packaging.enums.ProducingStage;
 import java.util.List;
 import java.util.Objects;
 
-record PackageFile(String path, ArtifactSemanticType semanticType, String mediaType,
-        Integer schemaVersion, Long rowCount, String sha256, ProducingStage producingStage,
-        List<String> sourceRunIds, ArtifactOrigin origin, boolean complete) {
+record PackageFile(
+        String path,
+        ArtifactSemanticType semanticType,
+        String mediaType,
+        Integer schemaVersion,
+        Long rowCount,
+        String sha256,
+        ProducingStage producingStage,
+        List<String> sourceRunIds,
+        ArtifactOrigin origin,
+        boolean complete) {
     PackageFile {
         Objects.requireNonNull(path);
         Objects.requireNonNull(semanticType);
@@ -19,8 +27,8 @@ record PackageFile(String path, ArtifactSemanticType semanticType, String mediaT
         Objects.requireNonNull(origin);
         sourceRunIds = List.copyOf(sourceRunIds);
         if (!path.matches("[^/\\\\]+(?:/[^/\\\\]+)*")
-                || java.util.Arrays.stream(path.split("/")).anyMatch(segment ->
-                segment.equals(".") || segment.equals(".."))
+                || java.util.Arrays.stream(path.split("/"))
+                        .anyMatch(segment -> segment.equals(".") || segment.equals(".."))
                 || !sha256.matches("[0-9a-f]{64}")
                 || schemaVersion != null && schemaVersion < 0
                 || rowCount != null && rowCount < 0

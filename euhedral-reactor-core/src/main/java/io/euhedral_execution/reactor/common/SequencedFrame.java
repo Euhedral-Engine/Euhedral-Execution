@@ -28,8 +28,12 @@ public class SequencedFrame<T, R> extends AbstractFrame {
     @Getter
     private boolean ready = false;
 
-    public SequencedFrame(long idHash,
-            T payload, Function<T, R> function, AtomicBoolean killSwitch, FrameSequencer<T, R> sequencer,
+    public SequencedFrame(
+            long idHash,
+            T payload,
+            Function<T, R> function,
+            AtomicBoolean killSwitch,
+            FrameSequencer<T, R> sequencer,
             FrameManager<T, SequencedFrame<T, R>> recycler) {
         super(idHash, recycler, killSwitch);
         this.sequencer = sequencer;

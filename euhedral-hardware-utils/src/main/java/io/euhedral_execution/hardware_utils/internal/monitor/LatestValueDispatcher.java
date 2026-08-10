@@ -5,7 +5,6 @@ import io.euhedral_execution.hardware_utils.common.SystemUtilization.HardwareUti
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.Objects;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.BooleanSupplier;
@@ -23,12 +22,29 @@ public final class LatestValueDispatcher {
 
     static {
         try {
-            CLOSING = MethodHandles.lookup()
-                    .findVarHandle(LatestValueDispatcher.class, "closing", boolean.class);
-            CLOSED = MethodHandles.lookup()
-                    .findVarHandle(LatestValueDispatcher.class, "closed", boolean.class);
+            CLOSING = MethodHandles.lookup().findVarHandle(LatestValueDispatcher.class, "closing", boolean.class);
+            CLOSED = MethodHandles.lookup().findVarHandle(LatestValueDispatcher.class, "closed", boolean.class);
         } catch (Exception e) {
             throw new ExceptionInInitializerError(e);
+        }
+    }
+
+    private final Thread dispatchThread;
+    private final AtomicBoolean lock = new AtomicBoolean();
+    // Identity registry
+    private MonitorListener[] listeners = new MonitorListener[0];
+
+    private @Nullable HardwareUtilization pendingUtilization = null;
+    private boolean closing = false;
+    private boolean closed = false;
+    private @Nullable Runnable terminationHook = null;
+
+    public LatestValueDispatcher() {
+        dispatchThread = new Thread(this::dispatchLoop, "Euhedral-ResourceMonitor-Dispatcher");
+        dispatchThread.setDaemon(true);
+        dispatchThread.start();
+        if (!dispatchThread.isAlive()) {
+            throw new IllegalStateException("Failed to start LatestValueDispatcher thread");
         }
     }
 
@@ -44,28 +60,6 @@ public final class LatestValueDispatcher {
             }
         }
     }
-
-    private final Thread dispatchThread;
-
-    // Identity registry
-    private MonitorListener[] listeners = new MonitorListener[0];
-
-    private @Nullable HardwareUtilization pendingUtilization = null;
-    private boolean closing = false;
-    private boolean closed = false;
-    private @Nullable Runnable terminationHook = null;
-
-
-    public LatestValueDispatcher() {
-        dispatchThread = new Thread(this::dispatchLoop,
-                "Euhedral-ResourceMonitor-Dispatcher");
-        dispatchThread.setDaemon(true);
-        dispatchThread.start();
-        if (!dispatchThread.isAlive()) {
-            throw new IllegalStateException("Failed to start LatestValueDispatcher thread");
-        }
-    }
-    private final AtomicBoolean lock = new AtomicBoolean();
 
     /// Adds a listener using object identity deduplication.
     public void addListener(@NonNull MonitorListener listener) {
@@ -132,7 +126,7 @@ public final class LatestValueDispatcher {
 
     /// Initiates shutdown. Rejects new offers and sets the termination hook.
     public void beginClose(@Nullable Runnable terminationHook) {
-        if(CLOSING.compareAndSet(this, false, true)) {
+        if (CLOSING.compareAndSet(this, false, true)) {
             acquireLock();
             try {
                 this.terminationHook = terminationHook;
@@ -149,7 +143,8 @@ public final class LatestValueDispatcher {
                 HardwareUtilization toDispatch;
                 MonitorListener[] listenersSnapshot;
 
-                awaitWhile(() -> !(boolean) CLOSING.getAcquire(this) && !this.lock.getAcquire() && pendingUtilization == null);
+                awaitWhile(() ->
+                        !(boolean) CLOSING.getAcquire(this) && !this.lock.getAcquire() && pendingUtilization == null);
                 try {
                     acquireLock();
 

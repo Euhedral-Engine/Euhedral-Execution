@@ -9,27 +9,40 @@ import java.util.Objects;
 import java.util.SortedSet;
 import java.util.TreeSet;
 
-public record PredictedPolicySummary(PolicyPredictionCurve curve,
-                                     double predictedWorstQuality, double predictedQualityP25,
-                                     double predictedGeometricMeanQuality, double predictedQualityMad,
-                                     double maximumEpistemicStdDev, double maximumDisagreementRange,
-                                     double meanOrdinalStdDev, double meanOrdinalEntropy, double pessimisticQuality) {
+public record PredictedPolicySummary(
+        PolicyPredictionCurve curve,
+        double predictedWorstQuality,
+        double predictedQualityP25,
+        double predictedGeometricMeanQuality,
+        double predictedQualityMad,
+        double maximumEpistemicStdDev,
+        double maximumDisagreementRange,
+        double meanOrdinalStdDev,
+        double meanOrdinalEntropy,
+        double pessimisticQuality) {
     private static final double EPSILON = 1.0e-12;
 
     public PredictedPolicySummary {
         Objects.requireNonNull(curve);
-        for (double value : new double[]{predictedWorstQuality, predictedQualityP25,
-                predictedGeometricMeanQuality, predictedQualityMad, maximumEpistemicStdDev,
-                maximumDisagreementRange, meanOrdinalStdDev, meanOrdinalEntropy,
-                pessimisticQuality}) {
+        for (double value : new double[] {
+            predictedWorstQuality,
+            predictedQualityP25,
+            predictedGeometricMeanQuality,
+            predictedQualityMad,
+            maximumEpistemicStdDev,
+            maximumDisagreementRange,
+            meanOrdinalStdDev,
+            meanOrdinalEntropy,
+            pessimisticQuality
+        }) {
             if (!Double.isFinite(value)) {
                 throw new IllegalArgumentException("Predicted summary fields must be finite");
             }
         }
     }
 
-    public static PredictedPolicySummary from(PolicyPredictionCurve curve,
-            SortedSet<SourceScenario> requiredScenarios) {
+    public static PredictedPolicySummary from(
+            PolicyPredictionCurve curve, SortedSet<SourceScenario> requiredScenarios) {
         Objects.requireNonNull(curve);
         TreeSet<SourceScenario> expected = new TreeSet<>(requiredScenarios);
         if (expected.isEmpty() || curve.scenarios().size() != expected.size()) {
@@ -62,12 +75,17 @@ public record PredictedPolicySummary(PolicyPredictionCurve curve,
         for (int i = 0; i < qualities.length; i++) {
             logs[i] = StrictMath.log(Math.max(qualities[i], EPSILON));
         }
-        return new PredictedPolicySummary(curve, worst,
+        return new PredictedPolicySummary(
+                curve,
+                worst,
                 VectorStatistics.quantileType7(qualities, 0.25),
                 StrictMath.exp(VectorStatistics.compensatedMean(logs)),
-                VectorStatistics.mad(qualities), maxEpistemic, maxDisagreement,
+                VectorStatistics.mad(qualities),
+                maxEpistemic,
+                maxDisagreement,
                 VectorStatistics.compensatedMean(ordinalStdDevs),
-                VectorStatistics.compensatedMean(entropies), pessimistic);
+                VectorStatistics.compensatedMean(entropies),
+                pessimistic);
     }
 
     public io.euhedral_execution.training.data.PolicyVector policy() {

@@ -15,9 +15,8 @@ class UnmodifiableDoubleArrayTest {
         UnmodifiableDoubleArray values = new UnmodifiableDoubleArray(source);
         source[0] = 9;
         assertEquals(1, values.get(0));
-        assertEquals(new UnmodifiableDoubleArray(new double[]{1, -0.0, Double.NaN}), values);
-        assertEquals(values.hashCode(), new UnmodifiableDoubleArray(
-                new double[]{1, -0.0, Double.NaN}).hashCode());
+        assertEquals(new UnmodifiableDoubleArray(new double[] {1, -0.0, Double.NaN}), values);
+        assertEquals(values.hashCode(), new UnmodifiableDoubleArray(new double[] {1, -0.0, Double.NaN}).hashCode());
 
         double[] target = new double[2];
         values.copy(target, 0, 2, 2);
@@ -30,8 +29,7 @@ class UnmodifiableDoubleArrayTest {
         assertEquals(List.of(-0.0, Double.NaN), visited);
         assertThrows(IndexOutOfBoundsException.class, () -> values.copy(target, -1, 1, 0));
         assertThrows(IndexOutOfBoundsException.class, () -> values.copy(target, 0, 1, -1));
-        assertThrows(IndexOutOfBoundsException.class, () -> values.iterate(2, 1, ignored -> {
-        }));
+        assertThrows(IndexOutOfBoundsException.class, () -> values.iterate(2, 1, ignored -> {}));
         assertThrows(NullPointerException.class, () -> values.iterate(0, 0, null));
     }
 }

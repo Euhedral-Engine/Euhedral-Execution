@@ -25,14 +25,12 @@ public final class LatticeHotSource implements LatticeSource, Consumer<AbstractF
         this.applyToEach = null;
     }
 
-    public LatticeHotSource(
-            Consumer<AbstractFrame> applyToEach) {
+    public LatticeHotSource(Consumer<AbstractFrame> applyToEach) {
         this.applyToEach = applyToEach;
     }
 
     @Override
-    public long pull(Consumer<AbstractFrame> consumer,
-            Function<AbstractFrame, Boolean> stopCondition, long demand) {
+    public long pull(Consumer<AbstractFrame> consumer, Function<AbstractFrame, Boolean> stopCondition, long demand) {
         return 0;
     }
 
@@ -54,8 +52,7 @@ public final class LatticeHotSource implements LatticeSource, Consumer<AbstractF
 
     @Override
     public void addDownstream(LatticeReceiver terminal) {
-        if (!COMPLETE.compareAndSet(this, true, false) && !DOWNSTREAM.compareAndSet(this, null,
-                terminal)) {
+        if (!COMPLETE.compareAndSet(this, true, false) && !DOWNSTREAM.compareAndSet(this, null, terminal)) {
             terminal.onError(new IllegalAccessException("This class already has a terminal"));
             return;
         }
@@ -83,4 +80,3 @@ public final class LatticeHotSource implements LatticeSource, Consumer<AbstractF
         return (boolean) COMPLETE.getOpaque(this);
     }
 }
-

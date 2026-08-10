@@ -15,6 +15,8 @@ public final class TrainingEnvironment {
     private static final Logger LOGGER = LoggerFactory.getLogger(TrainingEnvironment.class);
     private static final String ENGINE = "PyTorch";
 
+    private TrainingEnvironment() {}
+
     public static void print() {
         Engine engine = Engine.getEngine(ENGINE);
         int gpuCount = engine.getGpuCount();
@@ -28,13 +30,8 @@ public final class TrainingEnvironment {
         LOGGER.info("CUDA runtime: {}", CudaUtils.getCudaVersionString());
         for (int gpu = 0; gpu < gpuCount; gpu++) {
             MemoryUsage memory = CudaUtils.getGpuMemory(Device.gpu(gpu));
-            LOGGER.info("GPU {} compute capability: {}", gpu,
-                    CudaUtils.getComputeCapability(gpu));
-            LOGGER.info("GPU {} memory committed/max: {}/{}", gpu, memory.getCommitted(),
-                    memory.getMax());
+            LOGGER.info("GPU {} compute capability: {}", gpu, CudaUtils.getComputeCapability(gpu));
+            LOGGER.info("GPU {} memory committed/max: {}/{}", gpu, memory.getCommitted(), memory.getMax());
         }
-    }
-
-    private TrainingEnvironment() {
     }
 }

@@ -31,11 +31,10 @@ public record CounterDelta(long delta, long elapsedNs, long observedAtNs, Signal
         } else {
             if (elapsedNs <= 0) {
                 throw new IllegalArgumentException(
-                    "CounterDelta elapsedNs must be > 0 for CURRENT/CACHED; got " + elapsedNs);
+                        "CounterDelta elapsedNs must be > 0 for CURRENT/CACHED; got " + elapsedNs);
             }
             if (delta < 0) {
-                throw new IllegalArgumentException(
-                    "CounterDelta delta must be >= 0; got " + delta);
+                throw new IllegalArgumentException("CounterDelta delta must be >= 0; got " + delta);
             }
         }
     }

@@ -11,14 +11,11 @@ public class AbstractHasher {
     protected static final long P4 = 0x85EBCA77C2B2AE63L;
     protected static final long P5 = 0x27D4EB2F165667C5L;
 
-    protected AbstractHasher() {
-
-    }
+    protected AbstractHasher() {}
 
     protected static long merge(long v1, long v2, long v3, long v4) {
         long h64;
-        h64 = Long.rotateLeft(v1, 1) + Long.rotateLeft(v2, 7) +
-                Long.rotateLeft(v3, 12) + Long.rotateLeft(v4, 18);
+        h64 = Long.rotateLeft(v1, 1) + Long.rotateLeft(v2, 7) + Long.rotateLeft(v3, 12) + Long.rotateLeft(v4, 18);
         h64 = mergeRound(h64, v1);
         h64 = mergeRound(h64, v2);
         h64 = mergeRound(h64, v3);

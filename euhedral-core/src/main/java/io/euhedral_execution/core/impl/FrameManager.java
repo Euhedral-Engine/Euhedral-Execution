@@ -25,11 +25,13 @@ public final class FrameManager<D, F extends AbstractFrame> {
 
     @Getter
     private final BatchableQueue<AbstractFrame> recycleQueue;
+
     private final long password;
     private final AbstractFrame[] buffer;
 
     @Setter
     private FrameFactory<D, F> factory;
+
     @Getter
     private long totalRecycled = 0;
 
@@ -124,7 +126,7 @@ public final class FrameManager<D, F extends AbstractFrame> {
         }
 
         long total = 0;
-        final int[] drain = new int[]{(int) Math.max(0, Math.min(idx, max))};
+        final int[] drain = new int[] {(int) Math.max(0, Math.min(idx, max))};
 
         if (drain[0] > 0 && idx < max) {
             Arrays.fill(buffer, null);

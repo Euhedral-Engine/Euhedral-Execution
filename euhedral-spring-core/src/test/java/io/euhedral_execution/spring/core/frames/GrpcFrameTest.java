@@ -20,7 +20,7 @@ import org.junit.jupiter.api.Test;
 class GrpcFrameTest {
 
     private static GrpcMessage message(int value, boolean ordered) {
-        return GrpcUtils.toGrpc(null, new byte[]{(byte) value}, ordered);
+        return GrpcUtils.toGrpc(null, new byte[] {(byte) value}, ordered);
     }
 
     @Test
@@ -28,28 +28,39 @@ class GrpcFrameTest {
         for (CommunicationMethod method : CommunicationMethod.values()) {
             List<GrpcMessage> responses = new ArrayList<>();
             AtomicInteger completions = new AtomicInteger();
-            GrpcFrame frame = new GrpcFrame(1, message(1, true), method, responses::add,
-                    completions::incrementAndGet, ignored -> {
-                    }, null, new AtomicBoolean());
+            GrpcFrame frame = new GrpcFrame(
+                    1,
+                    message(1, true),
+                    method,
+                    responses::add,
+                    completions::incrementAndGet,
+                    ignored -> {},
+                    null,
+                    new AtomicBoolean());
 
             GrpcMessage response = message(2, true);
             frame.respond(response);
 
             assertEquals(List.of(response), responses);
             int expectedCompletions =
-                    method == CommunicationMethod.SINGLE_RESPONSE
-                            || method == CommunicationMethod.CLIENT_STREAM ? 1 : 0;
+                    method == CommunicationMethod.SINGLE_RESPONSE || method == CommunicationMethod.CLIENT_STREAM
+                            ? 1
+                            : 0;
             assertEquals(expectedCompletions, completions.get(), method.name());
         }
     }
 
     @Test
     void replaceRestoresOrderedRoutingAndUpdatesPayload() {
-        GrpcFrame frame = new GrpcFrame(41, message(1, true), CommunicationMethod.BIDI,
-                ignored -> {
-                }, () -> {
-                }, ignored -> {
-                }, null, new AtomicBoolean());
+        GrpcFrame frame = new GrpcFrame(
+                41,
+                message(1, true),
+                CommunicationMethod.BIDI,
+                ignored -> {},
+                () -> {},
+                ignored -> {},
+                null,
+                new AtomicBoolean());
         frame.randomizeHash(12);
         assertFalse(frame.isOrdered());
 
@@ -65,10 +76,15 @@ class GrpcFrameTest {
         long password = 77;
         FrameManager<GrpcMessage, GrpcFrame> manager = new FrameManager<>(4, password);
         List<Throwable> errors = new ArrayList<>();
-        GrpcFrame frame = new GrpcFrame(1, message(1, true),
-                CommunicationMethod.SINGLE_RESPONSE, ignored -> {
-                }, () -> {
-                }, errors::add, manager, new AtomicBoolean());
+        GrpcFrame frame = new GrpcFrame(
+                1,
+                message(1, true),
+                CommunicationMethod.SINGLE_RESPONSE,
+                ignored -> {},
+                () -> {},
+                errors::add,
+                manager,
+                new AtomicBoolean());
 
         frame.doFinallyWithError(new IllegalStateException("boom"));
 
@@ -80,11 +96,15 @@ class GrpcFrameTest {
     @Test
     void killSwitchControlsLiveness() {
         AtomicBoolean killSwitch = new AtomicBoolean();
-        GrpcFrame frame = new GrpcFrame(1, message(1, true), CommunicationMethod.BIDI,
-                ignored -> {
-                }, () -> {
-                }, ignored -> {
-                }, null, killSwitch);
+        GrpcFrame frame = new GrpcFrame(
+                1,
+                message(1, true),
+                CommunicationMethod.BIDI,
+                ignored -> {},
+                () -> {},
+                ignored -> {},
+                null,
+                killSwitch);
 
         assertTrue(frame.isAlive());
         frame.kill();

@@ -29,16 +29,11 @@ import org.slf4j.LoggerFactory;
 public final class MacosSystemLayout {
 
     public static final MacosSystemLayout INSTANCE;
-    private static final Logger LOGGER = LoggerFactory.getLogger(Constants.getLoggerName(
-            MacosSystemLayout.class));
+    private static final Logger LOGGER = LoggerFactory.getLogger(Constants.getLoggerName(MacosSystemLayout.class));
 
     static {
         INSTANCE = OSName.isMacOS() ? new MacosSystemLayout() : null;
     }
-
-    public static native long getSysctlLong(String key);
-    public static native int getSysctlInt(String key);
-    public static native String getSysctlString(String key);
 
     private final TopologyModel model;
 
@@ -48,11 +43,14 @@ public final class MacosSystemLayout {
 
     public MacosSystemLayout(SysctlProvider provider) {
         this.model = TopologyBootstrap.normalize(
-                () -> collect(provider),
-                Runtime.getRuntime().availableProcessors(),
-                LOGGER,
-                "macos");
+                () -> collect(provider), Runtime.getRuntime().availableProcessors(), LOGGER, "macos");
     }
+
+    public static native long getSysctlLong(String key);
+
+    public static native int getSysctlInt(String key);
+
+    public static native String getSysctlString(String key);
 
     private static TopologyInput collect(SysctlProvider provider) {
         if (provider == null) {
@@ -128,10 +126,14 @@ public final class MacosSystemLayout {
 
         if (l2Size > 0) {
             if (nperflevels >= 2) {
-                int pCount = SysctlInt.query(provider, "hw.perflevel0.logicalcpu").orElse(0);
-                int eCount = SysctlInt.query(provider, "hw.perflevel1.logicalcpu").orElse(0);
-                int pL2Cluster = SysctlInt.query(provider, "hw.perflevel0.cpusperl2").orElse(pCount);
-                int eL2Cluster = SysctlInt.query(provider, "hw.perflevel1.cpusperl2").orElse(eCount);
+                int pCount =
+                        SysctlInt.query(provider, "hw.perflevel0.logicalcpu").orElse(0);
+                int eCount =
+                        SysctlInt.query(provider, "hw.perflevel1.logicalcpu").orElse(0);
+                int pL2Cluster =
+                        SysctlInt.query(provider, "hw.perflevel0.cpusperl2").orElse(pCount);
+                int eL2Cluster =
+                        SysctlInt.query(provider, "hw.perflevel1.cpusperl2").orElse(eCount);
 
                 if (pCount > 0 && eCount > 0 && eCount + pCount == logicalCpus) {
                     int stepE = Math.max(1, eL2Cluster);
@@ -174,9 +176,7 @@ public final class MacosSystemLayout {
     }
 
     private static void buildHomogeneousCpus(int logicalCpus, int physicalCpus, List<LogicalCpu> cpus) {
-        int threadsPerCore = (physicalCpus > 0 && logicalCpus > physicalCpus)
-                ? (logicalCpus / physicalCpus)
-                : 1;
+        int threadsPerCore = (physicalCpus > 0 && logicalCpus > physicalCpus) ? (logicalCpus / physicalCpus) : 1;
         for (int i = 0; i < logicalCpus; i++) {
             int coreIdx = i / threadsPerCore;
             cpus.add(new LogicalCpu(
@@ -193,11 +193,7 @@ public final class MacosSystemLayout {
         List<LogicalCpu> list = new ArrayList<>(c);
         for (int i = 0; i < c; i++) {
             list.add(new LogicalCpu(
-                    i,
-                    "macos:package:0",
-                    "macos:die:0",
-                    "macos:core:" + String.format("%08x", i),
-                    CoreKind.UNKNOWN));
+                    i, "macos:package:0", "macos:die:0", "macos:core:" + String.format("%08x", i), CoreKind.UNKNOWN));
         }
         return new TopologyInput("macos", list, List.of());
     }

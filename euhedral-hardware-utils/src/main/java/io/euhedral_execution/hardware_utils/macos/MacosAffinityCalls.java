@@ -7,6 +7,8 @@ import java.util.BitSet;
 /// Single-locality mask canonicalization and ordinal-to-tag mapping helper for macOS affinity hints.
 public final class MacosAffinityCalls {
 
+    private MacosAffinityCalls() {}
+
     /// Converts one requested logical CPU ordinal to one nonzero macOS locality tag.
     ///
     /// macOS locality is scheduler preference rather than exact binding. Multiple distinct ordinals
@@ -21,7 +23,7 @@ public final class MacosAffinityCalls {
         if (bits.cardinality() != 1) {
             return false;
         }
-        return raw(new long[]{bits.nextSetBit(0) + 1L}, call);
+        return raw(new long[] {bits.nextSetBit(0) + 1L}, call);
     }
 
     /// Sends one encoded locality tag; tag `0` clears the preference.
@@ -34,9 +36,6 @@ public final class MacosAffinityCalls {
         } catch (RuntimeException | LinkageError failure) {
             return false;
         }
-    }
-
-    private MacosAffinityCalls() {
     }
 
     /// JNI-shaped macOS affinity-tag setter returning `0` on success.

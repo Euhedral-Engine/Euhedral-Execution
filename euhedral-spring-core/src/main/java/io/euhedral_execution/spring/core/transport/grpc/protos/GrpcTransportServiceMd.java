@@ -7,1699 +7,1850 @@ package io.euhedral_execution.spring.core.transport.grpc.protos;
 
 @com.google.protobuf.Generated
 public final class GrpcTransportServiceMd extends com.google.protobuf.GeneratedFile {
-  private GrpcTransportServiceMd() {}
-  static {
-    com.google.protobuf.RuntimeVersion.validateProtobufGencodeVersion(
-      com.google.protobuf.RuntimeVersion.RuntimeDomain.PUBLIC,
-      /* major= */ 4,
-      /* minor= */ 33,
-      /* patch= */ 4,
-      /* suffix= */ "",
-      "GrpcTransportServiceMd");
-  }
-  public static void registerAllExtensions(
-      com.google.protobuf.ExtensionRegistryLite registry) {
-  }
+    private static final com.google.protobuf.Descriptors.Descriptor
+            internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcMessage_descriptor;
+    private static final com.google.protobuf.GeneratedMessage.FieldAccessorTable
+            internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcMessage_fieldAccessorTable;
+    private static final com.google.protobuf.Descriptors.Descriptor
+            internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcSpringMessage_descriptor;
+    private static final com.google.protobuf.GeneratedMessage.FieldAccessorTable
+            internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcSpringMessage_fieldAccessorTable;
+    private static com.google.protobuf.Descriptors.FileDescriptor descriptor;
 
-  public static void registerAllExtensions(
-      com.google.protobuf.ExtensionRegistry registry) {
-    registerAllExtensions(
-        (com.google.protobuf.ExtensionRegistryLite) registry);
-  }
-  public interface GrpcMessageOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcMessage)
-      com.google.protobuf.MessageOrBuilder {
-
-    /**
-     * <code>bool isOrdered = 1;</code>
-     * @return The isOrdered.
-     */
-    boolean getIsOrdered();
-
-    /**
-     * <code>.io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage springMessage = 2;</code>
-     * @return Whether the springMessage field is set.
-     */
-    boolean hasSpringMessage();
-    /**
-     * <code>.io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage springMessage = 2;</code>
-     * @return The springMessage.
-     */
-    io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage getSpringMessage();
-    /**
-     * <code>.io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage springMessage = 2;</code>
-     */
-    io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessageOrBuilder getSpringMessageOrBuilder();
-
-    /**
-     * <code>.google.protobuf.Any customMessage = 3;</code>
-     * @return Whether the customMessage field is set.
-     */
-    boolean hasCustomMessage();
-    /**
-     * <code>.google.protobuf.Any customMessage = 3;</code>
-     * @return The customMessage.
-     */
-    com.google.protobuf.Any getCustomMessage();
-    /**
-     * <code>.google.protobuf.Any customMessage = 3;</code>
-     */
-    com.google.protobuf.AnyOrBuilder getCustomMessageOrBuilder();
-
-    io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage.MessageCase getMessageCase();
-  }
-  /**
-   * Protobuf type {@code io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcMessage}
-   */
-  public static final class GrpcMessage extends
-      com.google.protobuf.GeneratedMessage implements
-      // @@protoc_insertion_point(message_implements:io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcMessage)
-      GrpcMessageOrBuilder {
-  private static final long serialVersionUID = 0L;
     static {
-      com.google.protobuf.RuntimeVersion.validateProtobufGencodeVersion(
-        com.google.protobuf.RuntimeVersion.RuntimeDomain.PUBLIC,
-        /* major= */ 4,
-        /* minor= */ 33,
-        /* patch= */ 4,
-        /* suffix= */ "",
-        "GrpcMessage");
-    }
-    // Use GrpcMessage.newBuilder() to construct.
-    private GrpcMessage(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
-      super(builder);
-    }
-    private GrpcMessage() {
+        com.google.protobuf.RuntimeVersion.validateProtobufGencodeVersion(
+                com.google.protobuf.RuntimeVersion.RuntimeDomain.PUBLIC,
+                /* major= */ 4,
+                /* minor= */ 33,
+                /* patch= */ 4,
+                /* suffix= */ "",
+                "GrpcTransportServiceMd");
     }
 
-    public static final com.google.protobuf.Descriptors.Descriptor
-        getDescriptor() {
-      return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcMessage_descriptor;
+    static {
+        java.lang.String[] descriptorData = {
+            "\nRio/euhedral_execution/spring/core/tran" + "sport/grpc/protos/GrpcTransportService.p"
+                    + "roto\0227io.euhedral_execution.spring.core."
+                    + "protocols.grpc.protos\032\034google/protobuf/s"
+                    + "truct.proto\032\031google/protobuf/any.proto\"\277"
+                    + "\001\n\013GrpcMessage\022\021\n\tisOrdered\030\001 \001(\010\022c\n\rspr"
+                    + "ingMessage\030\002 \001(\0132J.io.euhedral_execution"
+                    + ".spring.core.protocols.grpc.protos.GrpcS"
+                    + "pringMessageH\000\022-\n\rcustomMessage\030\003 \001(\0132\024."
+                    + "google.protobuf.AnyH\000B\t\n\007message\"K\n\021Grpc"
+                    + "SpringMessage\022(\n\007headers\030\001 \001(\0132\027.google."
+                    + "protobuf.Struct\022\014\n\004data\030\002 \001(\0142\244\005\n\024GrpcTr"
+                    + "ansportService\022\231\001\n\013UnaryMethod\022D.io.euhe"
+                    + "dral_execution.spring.core.protocols.grp"
+                    + "c.protos.GrpcMessage\032D.io.euhedral_execu"
+                    + "tion.spring.core.protocols.grpc.protos.G"
+                    + "rpcMessage\022\242\001\n\022ClientStreamMethod\022D.io.e"
+                    + "uhedral_execution.spring.core.protocols."
+                    + "grpc.protos.GrpcMessage\032D.io.euhedral_ex"
+                    + "ecution.spring.core.protocols.grpc.proto"
+                    + "s.GrpcMessage(\001\022\242\001\n\022ServerStreamMethod\022D"
+                    + ".io.euhedral_execution.spring.core.proto"
+                    + "cols.grpc.protos.GrpcMessage\032D.io.euhedr"
+                    + "al_execution.spring.core.protocols.grpc."
+                    + "protos.GrpcMessage0\001\022\245\001\n\023BidirectionalMe"
+                    + "thod\022D.io.euhedral_execution.spring.core"
+                    + ".protocols.grpc.protos.GrpcMessage\032D.io."
+                    + "euhedral_execution.spring.core.protocols"
+                    + ".grpc.protos.GrpcMessage(\0010\001BQ\n7io.euhed"
+                    + "ral_execution.spring.core.transport.grpc"
+                    + ".protosB\026GrpcTransportServiceMdb\006proto3"
+        };
+        descriptor = com.google.protobuf.Descriptors.FileDescriptor.internalBuildGeneratedFileFrom(
+                descriptorData, new com.google.protobuf.Descriptors.FileDescriptor[] {
+                    com.google.protobuf.StructProto.getDescriptor(), com.google.protobuf.AnyProto.getDescriptor(),
+                });
+        internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcMessage_descriptor =
+                getDescriptor().getMessageType(0);
+        internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcMessage_fieldAccessorTable =
+                new com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+                        internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcMessage_descriptor,
+                        new java.lang.String[] {
+                            "IsOrdered", "SpringMessage", "CustomMessage", "Message",
+                        });
+        internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcSpringMessage_descriptor =
+                getDescriptor().getMessageType(1);
+        internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcSpringMessage_fieldAccessorTable =
+                new com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+                        internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcSpringMessage_descriptor,
+                        new java.lang.String[] {
+                            "Headers", "Data",
+                        });
+        descriptor.resolveAllFeaturesImmutable();
+        com.google.protobuf.StructProto.getDescriptor();
+        com.google.protobuf.AnyProto.getDescriptor();
+    }
+    private GrpcTransportServiceMd() {}
+
+    public static void registerAllExtensions(com.google.protobuf.ExtensionRegistryLite registry) {}
+
+    public static void registerAllExtensions(com.google.protobuf.ExtensionRegistry registry) {
+        registerAllExtensions((com.google.protobuf.ExtensionRegistryLite) registry);
     }
 
-    @java.lang.Override
-    protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
-        internalGetFieldAccessorTable() {
-      return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcMessage_fieldAccessorTable
-          .ensureFieldAccessorsInitialized(
-              io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage.class, io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage.Builder.class);
+    public static com.google.protobuf.Descriptors.FileDescriptor getDescriptor() {
+        return descriptor;
+    }
+    public interface GrpcMessageOrBuilder
+            extends
+            // @@protoc_insertion_point(interface_extends:io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcMessage)
+            com.google.protobuf.MessageOrBuilder {
+
+        /**
+         * <code>bool isOrdered = 1;</code>
+         * @return The isOrdered.
+         */
+        boolean getIsOrdered();
+
+        /**
+         * <code>.io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage springMessage = 2;</code>
+         * @return Whether the springMessage field is set.
+         */
+        boolean hasSpringMessage();
+        /**
+         * <code>.io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage springMessage = 2;</code>
+         * @return The springMessage.
+         */
+        io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage
+                getSpringMessage();
+        /**
+         * <code>.io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage springMessage = 2;</code>
+         */
+        io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessageOrBuilder
+                getSpringMessageOrBuilder();
+
+        /**
+         * <code>.google.protobuf.Any customMessage = 3;</code>
+         * @return Whether the customMessage field is set.
+         */
+        boolean hasCustomMessage();
+        /**
+         * <code>.google.protobuf.Any customMessage = 3;</code>
+         * @return The customMessage.
+         */
+        com.google.protobuf.Any getCustomMessage();
+        /**
+         * <code>.google.protobuf.Any customMessage = 3;</code>
+         */
+        com.google.protobuf.AnyOrBuilder getCustomMessageOrBuilder();
+
+        io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage.MessageCase
+                getMessageCase();
     }
 
-    private int messageCase_ = 0;
-    @SuppressWarnings("serial")
-    private java.lang.Object message_;
-    public enum MessageCase
-        implements com.google.protobuf.Internal.EnumLite,
-            com.google.protobuf.AbstractMessage.InternalOneOfEnum {
-      SPRINGMESSAGE(2),
-      CUSTOMMESSAGE(3),
-      MESSAGE_NOT_SET(0);
-      private final int value;
-      private MessageCase(int value) {
-        this.value = value;
-      }
-      /**
-       * @param value The number of the enum to look for.
-       * @return The enum associated with the given number.
-       * @deprecated Use {@link #forNumber(int)} instead.
-       */
-      @java.lang.Deprecated
-      public static MessageCase valueOf(int value) {
-        return forNumber(value);
-      }
+    public interface GrpcSpringMessageOrBuilder
+            extends
+            // @@protoc_insertion_point(interface_extends:io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage)
+            com.google.protobuf.MessageOrBuilder {
 
-      public static MessageCase forNumber(int value) {
-        switch (value) {
-          case 2: return SPRINGMESSAGE;
-          case 3: return CUSTOMMESSAGE;
-          case 0: return MESSAGE_NOT_SET;
-          default: return null;
-        }
-      }
-      public int getNumber() {
-        return this.value;
-      }
-    };
+        /**
+         * <code>.google.protobuf.Struct headers = 1;</code>
+         * @return Whether the headers field is set.
+         */
+        boolean hasHeaders();
+        /**
+         * <code>.google.protobuf.Struct headers = 1;</code>
+         * @return The headers.
+         */
+        com.google.protobuf.Struct getHeaders();
+        /**
+         * <code>.google.protobuf.Struct headers = 1;</code>
+         */
+        com.google.protobuf.StructOrBuilder getHeadersOrBuilder();
 
-    public MessageCase
-    getMessageCase() {
-      return MessageCase.forNumber(
-          messageCase_);
+        /**
+         * <code>bytes data = 2;</code>
+         * @return The data.
+         */
+        com.google.protobuf.ByteString getData();
     }
 
-    public static final int ISORDERED_FIELD_NUMBER = 1;
-    private boolean isOrdered_ = false;
-    /**
-     * <code>bool isOrdered = 1;</code>
-     * @return The isOrdered.
-     */
-    @java.lang.Override
-    public boolean getIsOrdered() {
-      return isOrdered_;
-    }
-
-    public static final int SPRINGMESSAGE_FIELD_NUMBER = 2;
-    /**
-     * <code>.io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage springMessage = 2;</code>
-     * @return Whether the springMessage field is set.
-     */
-    @java.lang.Override
-    public boolean hasSpringMessage() {
-      return messageCase_ == 2;
-    }
-    /**
-     * <code>.io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage springMessage = 2;</code>
-     * @return The springMessage.
-     */
-    @java.lang.Override
-    public io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage getSpringMessage() {
-      if (messageCase_ == 2) {
-         return (io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage) message_;
-      }
-      return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.getDefaultInstance();
-    }
-    /**
-     * <code>.io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage springMessage = 2;</code>
-     */
-    @java.lang.Override
-    public io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessageOrBuilder getSpringMessageOrBuilder() {
-      if (messageCase_ == 2) {
-         return (io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage) message_;
-      }
-      return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.getDefaultInstance();
-    }
-
-    public static final int CUSTOMMESSAGE_FIELD_NUMBER = 3;
-    /**
-     * <code>.google.protobuf.Any customMessage = 3;</code>
-     * @return Whether the customMessage field is set.
-     */
-    @java.lang.Override
-    public boolean hasCustomMessage() {
-      return messageCase_ == 3;
-    }
-    /**
-     * <code>.google.protobuf.Any customMessage = 3;</code>
-     * @return The customMessage.
-     */
-    @java.lang.Override
-    public com.google.protobuf.Any getCustomMessage() {
-      if (messageCase_ == 3) {
-         return (com.google.protobuf.Any) message_;
-      }
-      return com.google.protobuf.Any.getDefaultInstance();
-    }
-    /**
-     * <code>.google.protobuf.Any customMessage = 3;</code>
-     */
-    @java.lang.Override
-    public com.google.protobuf.AnyOrBuilder getCustomMessageOrBuilder() {
-      if (messageCase_ == 3) {
-         return (com.google.protobuf.Any) message_;
-      }
-      return com.google.protobuf.Any.getDefaultInstance();
-    }
-
-    private byte memoizedIsInitialized = -1;
-    @java.lang.Override
-    public final boolean isInitialized() {
-      byte isInitialized = memoizedIsInitialized;
-      if (isInitialized == 1) return true;
-      if (isInitialized == 0) return false;
-
-      memoizedIsInitialized = 1;
-      return true;
-    }
-
-    @java.lang.Override
-    public void writeTo(com.google.protobuf.CodedOutputStream output)
-                        throws java.io.IOException {
-      if (isOrdered_ != false) {
-        output.writeBool(1, isOrdered_);
-      }
-      if (messageCase_ == 2) {
-        output.writeMessage(2, (io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage) message_);
-      }
-      if (messageCase_ == 3) {
-        output.writeMessage(3, (com.google.protobuf.Any) message_);
-      }
-      getUnknownFields().writeTo(output);
-    }
-
-    @java.lang.Override
-    public int getSerializedSize() {
-      int size = memoizedSize;
-      if (size != -1) return size;
-
-      size = 0;
-      if (isOrdered_ != false) {
-        size += com.google.protobuf.CodedOutputStream
-          .computeBoolSize(1, isOrdered_);
-      }
-      if (messageCase_ == 2) {
-        size += com.google.protobuf.CodedOutputStream
-          .computeMessageSize(2, (io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage) message_);
-      }
-      if (messageCase_ == 3) {
-        size += com.google.protobuf.CodedOutputStream
-          .computeMessageSize(3, (com.google.protobuf.Any) message_);
-      }
-      size += getUnknownFields().getSerializedSize();
-      memoizedSize = size;
-      return size;
-    }
-
-    @java.lang.Override
-    public boolean equals(final java.lang.Object obj) {
-      if (obj == this) {
-       return true;
-      }
-      if (!(obj instanceof io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage)) {
-        return super.equals(obj);
-      }
-      io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage other = (io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage) obj;
-
-      if (getIsOrdered()
-          != other.getIsOrdered()) return false;
-      if (!getMessageCase().equals(other.getMessageCase())) return false;
-      switch (messageCase_) {
-        case 2:
-          if (!getSpringMessage()
-              .equals(other.getSpringMessage())) return false;
-          break;
-        case 3:
-          if (!getCustomMessage()
-              .equals(other.getCustomMessage())) return false;
-          break;
-        case 0:
-        default:
-      }
-      if (!getUnknownFields().equals(other.getUnknownFields())) return false;
-      return true;
-    }
-
-    @java.lang.Override
-    public int hashCode() {
-      if (memoizedHashCode != 0) {
-        return memoizedHashCode;
-      }
-      int hash = 41;
-      hash = (19 * hash) + getDescriptor().hashCode();
-      hash = (37 * hash) + ISORDERED_FIELD_NUMBER;
-      hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
-          getIsOrdered());
-      switch (messageCase_) {
-        case 2:
-          hash = (37 * hash) + SPRINGMESSAGE_FIELD_NUMBER;
-          hash = (53 * hash) + getSpringMessage().hashCode();
-          break;
-        case 3:
-          hash = (37 * hash) + CUSTOMMESSAGE_FIELD_NUMBER;
-          hash = (53 * hash) + getCustomMessage().hashCode();
-          break;
-        case 0:
-        default:
-      }
-      hash = (29 * hash) + getUnknownFields().hashCode();
-      memoizedHashCode = hash;
-      return hash;
-    }
-
-    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage parseFrom(
-        java.nio.ByteBuffer data)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      return PARSER.parseFrom(data);
-    }
-    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage parseFrom(
-        java.nio.ByteBuffer data,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      return PARSER.parseFrom(data, extensionRegistry);
-    }
-    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage parseFrom(
-        com.google.protobuf.ByteString data)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      return PARSER.parseFrom(data);
-    }
-    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage parseFrom(
-        com.google.protobuf.ByteString data,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      return PARSER.parseFrom(data, extensionRegistry);
-    }
-    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage parseFrom(byte[] data)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      return PARSER.parseFrom(data);
-    }
-    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage parseFrom(
-        byte[] data,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      return PARSER.parseFrom(data, extensionRegistry);
-    }
-    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage parseFrom(java.io.InputStream input)
-        throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
-          .parseWithIOException(PARSER, input);
-    }
-    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage parseFrom(
-        java.io.InputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
-          .parseWithIOException(PARSER, input, extensionRegistry);
-    }
-
-    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage parseDelimitedFrom(java.io.InputStream input)
-        throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
-          .parseDelimitedWithIOException(PARSER, input);
-    }
-
-    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage parseDelimitedFrom(
-        java.io.InputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
-          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
-    }
-    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage parseFrom(
-        com.google.protobuf.CodedInputStream input)
-        throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
-          .parseWithIOException(PARSER, input);
-    }
-    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage parseFrom(
-        com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
-          .parseWithIOException(PARSER, input, extensionRegistry);
-    }
-
-    @java.lang.Override
-    public Builder newBuilderForType() { return newBuilder(); }
-    public static Builder newBuilder() {
-      return DEFAULT_INSTANCE.toBuilder();
-    }
-    public static Builder newBuilder(io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage prototype) {
-      return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
-    }
-    @java.lang.Override
-    public Builder toBuilder() {
-      return this == DEFAULT_INSTANCE
-          ? new Builder() : new Builder().mergeFrom(this);
-    }
-
-    @java.lang.Override
-    protected Builder newBuilderForType(
-        com.google.protobuf.GeneratedMessage.BuilderParent parent) {
-      Builder builder = new Builder(parent);
-      return builder;
-    }
     /**
      * Protobuf type {@code io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcMessage}
      */
-    public static final class Builder extends
-        com.google.protobuf.GeneratedMessage.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcMessage)
-        io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessageOrBuilder {
-      public static final com.google.protobuf.Descriptors.Descriptor
-          getDescriptor() {
-        return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcMessage_descriptor;
-      }
+    public static final class GrpcMessage extends com.google.protobuf.GeneratedMessage
+            implements
+            // @@protoc_insertion_point(message_implements:io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcMessage)
+            GrpcMessageOrBuilder {
+        public static final int ISORDERED_FIELD_NUMBER = 1;
+        public static final int SPRINGMESSAGE_FIELD_NUMBER = 2;
+        public static final int CUSTOMMESSAGE_FIELD_NUMBER = 3;
+        private static final long serialVersionUID = 0L;
+        // @@protoc_insertion_point(class_scope:io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcMessage)
+        private static final io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage
+                DEFAULT_INSTANCE;
+        private static final com.google.protobuf.Parser<GrpcMessage> PARSER =
+                new com.google.protobuf.AbstractParser<GrpcMessage>() {
+                    @java.lang.Override
+                    public GrpcMessage parsePartialFrom(
+                            com.google.protobuf.CodedInputStream input,
+                            com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+                            throws com.google.protobuf.InvalidProtocolBufferException {
+                        Builder builder = newBuilder();
+                        try {
+                            builder.mergeFrom(input, extensionRegistry);
+                        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+                            throw e.setUnfinishedMessage(builder.buildPartial());
+                        } catch (com.google.protobuf.UninitializedMessageException e) {
+                            throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
+                        } catch (java.io.IOException e) {
+                            throw new com.google.protobuf.InvalidProtocolBufferException(e)
+                                    .setUnfinishedMessage(builder.buildPartial());
+                        }
+                        return builder.buildPartial();
+                    }
+                };
 
-      @java.lang.Override
-      protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
-          internalGetFieldAccessorTable() {
-        return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcMessage_fieldAccessorTable
-            .ensureFieldAccessorsInitialized(
-                io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage.class, io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage.Builder.class);
-      }
-
-      // Construct using io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage.newBuilder()
-      private Builder() {
-
-      }
-
-      private Builder(
-          com.google.protobuf.GeneratedMessage.BuilderParent parent) {
-        super(parent);
-
-      }
-      @java.lang.Override
-      public Builder clear() {
-        super.clear();
-        bitField0_ = 0;
-        isOrdered_ = false;
-        if (springMessageBuilder_ != null) {
-          springMessageBuilder_.clear();
+        static {
+            com.google.protobuf.RuntimeVersion.validateProtobufGencodeVersion(
+                    com.google.protobuf.RuntimeVersion.RuntimeDomain.PUBLIC,
+                    /* major= */ 4,
+                    /* minor= */ 33,
+                    /* patch= */ 4,
+                    /* suffix= */ "",
+                    "GrpcMessage");
         }
-        if (customMessageBuilder_ != null) {
-          customMessageBuilder_.clear();
+
+        static {
+            DEFAULT_INSTANCE =
+                    new io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage();
         }
-        messageCase_ = 0;
-        message_ = null;
-        return this;
-      }
 
-      @java.lang.Override
-      public com.google.protobuf.Descriptors.Descriptor
-          getDescriptorForType() {
-        return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcMessage_descriptor;
-      }
-
-      @java.lang.Override
-      public io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage getDefaultInstanceForType() {
-        return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage.getDefaultInstance();
-      }
-
-      @java.lang.Override
-      public io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage build() {
-        io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage result = buildPartial();
-        if (!result.isInitialized()) {
-          throw newUninitializedMessageException(result);
+                private int messageCase_ = 0;;
+        @SuppressWarnings("serial")
+        private java.lang.Object message_;
+        private boolean isOrdered_ = false;
+        private byte memoizedIsInitialized = -1;
+        // Use GrpcMessage.newBuilder() to construct.
+        private GrpcMessage(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
+            super(builder);
         }
-        return result;
-      }
 
-      @java.lang.Override
-      public io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage buildPartial() {
-        io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage result = new io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage(this);
-        if (bitField0_ != 0) { buildPartial0(result); }
-        buildPartialOneofs(result);
-        onBuilt();
-        return result;
-      }
+        private GrpcMessage() {}
 
-      private void buildPartial0(io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage result) {
-        int from_bitField0_ = bitField0_;
-        if (((from_bitField0_ & 0x00000001) != 0)) {
-          result.isOrdered_ = isOrdered_;
+        public static final com.google.protobuf.Descriptors.Descriptor getDescriptor() {
+            return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd
+                    .internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcMessage_descriptor;
         }
-      }
 
-      private void buildPartialOneofs(io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage result) {
-        result.messageCase_ = messageCase_;
-        result.message_ = this.message_;
-        if (messageCase_ == 2 &&
-            springMessageBuilder_ != null) {
-          result.message_ = springMessageBuilder_.build();
+        public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage
+                parseFrom(java.nio.ByteBuffer data) throws com.google.protobuf.InvalidProtocolBufferException {
+            return PARSER.parseFrom(data);
         }
-        if (messageCase_ == 3 &&
-            customMessageBuilder_ != null) {
-          result.message_ = customMessageBuilder_.build();
+
+        public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage
+                parseFrom(java.nio.ByteBuffer data, com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+                        throws com.google.protobuf.InvalidProtocolBufferException {
+            return PARSER.parseFrom(data, extensionRegistry);
         }
-      }
 
-      @java.lang.Override
-      public Builder mergeFrom(com.google.protobuf.Message other) {
-        if (other instanceof io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage) {
-          return mergeFrom((io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage)other);
-        } else {
-          super.mergeFrom(other);
-          return this;
+        public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage
+                parseFrom(com.google.protobuf.ByteString data)
+                        throws com.google.protobuf.InvalidProtocolBufferException {
+            return PARSER.parseFrom(data);
         }
-      }
 
-      public Builder mergeFrom(io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage other) {
-        if (other == io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage.getDefaultInstance()) return this;
-        if (other.getIsOrdered() != false) {
-          setIsOrdered(other.getIsOrdered());
+        public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage
+                parseFrom(
+                        com.google.protobuf.ByteString data,
+                        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+                        throws com.google.protobuf.InvalidProtocolBufferException {
+            return PARSER.parseFrom(data, extensionRegistry);
         }
-        switch (other.getMessageCase()) {
-          case SPRINGMESSAGE: {
-            mergeSpringMessage(other.getSpringMessage());
-            break;
-          }
-          case CUSTOMMESSAGE: {
-            mergeCustomMessage(other.getCustomMessage());
-            break;
-          }
-          case MESSAGE_NOT_SET: {
-            break;
-          }
+
+        public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage
+                parseFrom(byte[] data) throws com.google.protobuf.InvalidProtocolBufferException {
+            return PARSER.parseFrom(data);
         }
-        this.mergeUnknownFields(other.getUnknownFields());
-        onChanged();
-        return this;
-      }
 
-      @java.lang.Override
-      public final boolean isInitialized() {
-        return true;
-      }
-
-      @java.lang.Override
-      public Builder mergeFrom(
-          com.google.protobuf.CodedInputStream input,
-          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-          throws java.io.IOException {
-        if (extensionRegistry == null) {
-          throw new java.lang.NullPointerException();
+        public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage
+                parseFrom(byte[] data, com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+                        throws com.google.protobuf.InvalidProtocolBufferException {
+            return PARSER.parseFrom(data, extensionRegistry);
         }
-        try {
-          boolean done = false;
-          while (!done) {
-            int tag = input.readTag();
-            switch (tag) {
-              case 0:
-                done = true;
-                break;
-              case 8: {
-                isOrdered_ = input.readBool();
-                bitField0_ |= 0x00000001;
-                break;
-              } // case 8
-              case 18: {
-                input.readMessage(
-                    internalGetSpringMessageFieldBuilder().getBuilder(),
-                    extensionRegistry);
-                messageCase_ = 2;
-                break;
-              } // case 18
-              case 26: {
-                input.readMessage(
-                    internalGetCustomMessageFieldBuilder().getBuilder(),
-                    extensionRegistry);
-                messageCase_ = 3;
-                break;
-              } // case 26
-              default: {
-                if (!super.parseUnknownField(input, extensionRegistry, tag)) {
-                  done = true; // was an endgroup tag
-                }
-                break;
-              } // default:
-            } // switch (tag)
-          } // while (!done)
-        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-          throw e.unwrapIOException();
-        } finally {
-          onChanged();
-        } // finally
-        return this;
-      }
-      private int messageCase_ = 0;
-      private java.lang.Object message_;
-      public MessageCase
-          getMessageCase() {
-        return MessageCase.forNumber(
-            messageCase_);
-      }
 
-      public Builder clearMessage() {
-        messageCase_ = 0;
-        message_ = null;
-        onChanged();
-        return this;
-      }
-
-      private int bitField0_;
-
-      private boolean isOrdered_ ;
-      /**
-       * <code>bool isOrdered = 1;</code>
-       * @return The isOrdered.
-       */
-      @java.lang.Override
-      public boolean getIsOrdered() {
-        return isOrdered_;
-      }
-      /**
-       * <code>bool isOrdered = 1;</code>
-       * @param value The isOrdered to set.
-       * @return This builder for chaining.
-       */
-      public Builder setIsOrdered(boolean value) {
-
-        isOrdered_ = value;
-        bitField0_ |= 0x00000001;
-        onChanged();
-        return this;
-      }
-      /**
-       * <code>bool isOrdered = 1;</code>
-       * @return This builder for chaining.
-       */
-      public Builder clearIsOrdered() {
-        bitField0_ = (bitField0_ & ~0x00000001);
-        isOrdered_ = false;
-        onChanged();
-        return this;
-      }
-
-      private com.google.protobuf.SingleFieldBuilder<
-          io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage, io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.Builder, io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessageOrBuilder> springMessageBuilder_;
-      /**
-       * <code>.io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage springMessage = 2;</code>
-       * @return Whether the springMessage field is set.
-       */
-      @java.lang.Override
-      public boolean hasSpringMessage() {
-        return messageCase_ == 2;
-      }
-      /**
-       * <code>.io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage springMessage = 2;</code>
-       * @return The springMessage.
-       */
-      @java.lang.Override
-      public io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage getSpringMessage() {
-        if (springMessageBuilder_ == null) {
-          if (messageCase_ == 2) {
-            return (io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage) message_;
-          }
-          return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.getDefaultInstance();
-        } else {
-          if (messageCase_ == 2) {
-            return springMessageBuilder_.getMessage();
-          }
-          return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.getDefaultInstance();
+        public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage
+                parseFrom(java.io.InputStream input) throws java.io.IOException {
+            return com.google.protobuf.GeneratedMessage.parseWithIOException(PARSER, input);
         }
-      }
-      /**
-       * <code>.io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage springMessage = 2;</code>
-       */
-      public Builder setSpringMessage(io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage value) {
-        if (springMessageBuilder_ == null) {
-          if (value == null) {
-            throw new NullPointerException();
-          }
-          message_ = value;
-          onChanged();
-        } else {
-          springMessageBuilder_.setMessage(value);
-        }
-        messageCase_ = 2;
-        return this;
-      }
-      /**
-       * <code>.io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage springMessage = 2;</code>
-       */
-      public Builder setSpringMessage(
-          io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.Builder builderForValue) {
-        if (springMessageBuilder_ == null) {
-          message_ = builderForValue.build();
-          onChanged();
-        } else {
-          springMessageBuilder_.setMessage(builderForValue.build());
-        }
-        messageCase_ = 2;
-        return this;
-      }
-      /**
-       * <code>.io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage springMessage = 2;</code>
-       */
-      public Builder mergeSpringMessage(io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage value) {
-        if (springMessageBuilder_ == null) {
-          if (messageCase_ == 2 &&
-              message_ != io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.getDefaultInstance()) {
-            message_ = io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.newBuilder((io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage) message_)
-                .mergeFrom(value).buildPartial();
-          } else {
-            message_ = value;
-          }
-          onChanged();
-        } else {
-          if (messageCase_ == 2) {
-            springMessageBuilder_.mergeFrom(value);
-          } else {
-            springMessageBuilder_.setMessage(value);
-          }
-        }
-        messageCase_ = 2;
-        return this;
-      }
-      /**
-       * <code>.io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage springMessage = 2;</code>
-       */
-      public Builder clearSpringMessage() {
-        if (springMessageBuilder_ == null) {
-          if (messageCase_ == 2) {
-            messageCase_ = 0;
-            message_ = null;
-            onChanged();
-          }
-        } else {
-          if (messageCase_ == 2) {
-            messageCase_ = 0;
-            message_ = null;
-          }
-          springMessageBuilder_.clear();
-        }
-        return this;
-      }
-      /**
-       * <code>.io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage springMessage = 2;</code>
-       */
-      public io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.Builder getSpringMessageBuilder() {
-        return internalGetSpringMessageFieldBuilder().getBuilder();
-      }
-      /**
-       * <code>.io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage springMessage = 2;</code>
-       */
-      @java.lang.Override
-      public io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessageOrBuilder getSpringMessageOrBuilder() {
-        if ((messageCase_ == 2) && (springMessageBuilder_ != null)) {
-          return springMessageBuilder_.getMessageOrBuilder();
-        } else {
-          if (messageCase_ == 2) {
-            return (io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage) message_;
-          }
-          return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.getDefaultInstance();
-        }
-      }
-      /**
-       * <code>.io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage springMessage = 2;</code>
-       */
-      private com.google.protobuf.SingleFieldBuilder<
-          io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage, io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.Builder, io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessageOrBuilder> 
-          internalGetSpringMessageFieldBuilder() {
-        if (springMessageBuilder_ == null) {
-          if (!(messageCase_ == 2)) {
-            message_ = io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.getDefaultInstance();
-          }
-          springMessageBuilder_ = new com.google.protobuf.SingleFieldBuilder<
-              io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage, io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.Builder, io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessageOrBuilder>(
-                  (io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage) message_,
-                  getParentForChildren(),
-                  isClean());
-          message_ = null;
-        }
-        messageCase_ = 2;
-        onChanged();
-        return springMessageBuilder_;
-      }
 
-      private com.google.protobuf.SingleFieldBuilder<
-          com.google.protobuf.Any, com.google.protobuf.Any.Builder, com.google.protobuf.AnyOrBuilder> customMessageBuilder_;
-      /**
-       * <code>.google.protobuf.Any customMessage = 3;</code>
-       * @return Whether the customMessage field is set.
-       */
-      @java.lang.Override
-      public boolean hasCustomMessage() {
-        return messageCase_ == 3;
-      }
-      /**
-       * <code>.google.protobuf.Any customMessage = 3;</code>
-       * @return The customMessage.
-       */
-      @java.lang.Override
-      public com.google.protobuf.Any getCustomMessage() {
-        if (customMessageBuilder_ == null) {
-          if (messageCase_ == 3) {
-            return (com.google.protobuf.Any) message_;
-          }
-          return com.google.protobuf.Any.getDefaultInstance();
-        } else {
-          if (messageCase_ == 3) {
-            return customMessageBuilder_.getMessage();
-          }
-          return com.google.protobuf.Any.getDefaultInstance();
-        }
-      }
-      /**
-       * <code>.google.protobuf.Any customMessage = 3;</code>
-       */
-      public Builder setCustomMessage(com.google.protobuf.Any value) {
-        if (customMessageBuilder_ == null) {
-          if (value == null) {
-            throw new NullPointerException();
-          }
-          message_ = value;
-          onChanged();
-        } else {
-          customMessageBuilder_.setMessage(value);
-        }
-        messageCase_ = 3;
-        return this;
-      }
-      /**
-       * <code>.google.protobuf.Any customMessage = 3;</code>
-       */
-      public Builder setCustomMessage(
-          com.google.protobuf.Any.Builder builderForValue) {
-        if (customMessageBuilder_ == null) {
-          message_ = builderForValue.build();
-          onChanged();
-        } else {
-          customMessageBuilder_.setMessage(builderForValue.build());
-        }
-        messageCase_ = 3;
-        return this;
-      }
-      /**
-       * <code>.google.protobuf.Any customMessage = 3;</code>
-       */
-      public Builder mergeCustomMessage(com.google.protobuf.Any value) {
-        if (customMessageBuilder_ == null) {
-          if (messageCase_ == 3 &&
-              message_ != com.google.protobuf.Any.getDefaultInstance()) {
-            message_ = com.google.protobuf.Any.newBuilder((com.google.protobuf.Any) message_)
-                .mergeFrom(value).buildPartial();
-          } else {
-            message_ = value;
-          }
-          onChanged();
-        } else {
-          if (messageCase_ == 3) {
-            customMessageBuilder_.mergeFrom(value);
-          } else {
-            customMessageBuilder_.setMessage(value);
-          }
-        }
-        messageCase_ = 3;
-        return this;
-      }
-      /**
-       * <code>.google.protobuf.Any customMessage = 3;</code>
-       */
-      public Builder clearCustomMessage() {
-        if (customMessageBuilder_ == null) {
-          if (messageCase_ == 3) {
-            messageCase_ = 0;
-            message_ = null;
-            onChanged();
-          }
-        } else {
-          if (messageCase_ == 3) {
-            messageCase_ = 0;
-            message_ = null;
-          }
-          customMessageBuilder_.clear();
-        }
-        return this;
-      }
-      /**
-       * <code>.google.protobuf.Any customMessage = 3;</code>
-       */
-      public com.google.protobuf.Any.Builder getCustomMessageBuilder() {
-        return internalGetCustomMessageFieldBuilder().getBuilder();
-      }
-      /**
-       * <code>.google.protobuf.Any customMessage = 3;</code>
-       */
-      @java.lang.Override
-      public com.google.protobuf.AnyOrBuilder getCustomMessageOrBuilder() {
-        if ((messageCase_ == 3) && (customMessageBuilder_ != null)) {
-          return customMessageBuilder_.getMessageOrBuilder();
-        } else {
-          if (messageCase_ == 3) {
-            return (com.google.protobuf.Any) message_;
-          }
-          return com.google.protobuf.Any.getDefaultInstance();
-        }
-      }
-      /**
-       * <code>.google.protobuf.Any customMessage = 3;</code>
-       */
-      private com.google.protobuf.SingleFieldBuilder<
-          com.google.protobuf.Any, com.google.protobuf.Any.Builder, com.google.protobuf.AnyOrBuilder> 
-          internalGetCustomMessageFieldBuilder() {
-        if (customMessageBuilder_ == null) {
-          if (!(messageCase_ == 3)) {
-            message_ = com.google.protobuf.Any.getDefaultInstance();
-          }
-          customMessageBuilder_ = new com.google.protobuf.SingleFieldBuilder<
-              com.google.protobuf.Any, com.google.protobuf.Any.Builder, com.google.protobuf.AnyOrBuilder>(
-                  (com.google.protobuf.Any) message_,
-                  getParentForChildren(),
-                  isClean());
-          message_ = null;
-        }
-        messageCase_ = 3;
-        onChanged();
-        return customMessageBuilder_;
-      }
-
-      // @@protoc_insertion_point(builder_scope:io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcMessage)
-    }
-
-    // @@protoc_insertion_point(class_scope:io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcMessage)
-    private static final io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage DEFAULT_INSTANCE;
-    static {
-      DEFAULT_INSTANCE = new io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage();
-    }
-
-    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage getDefaultInstance() {
-      return DEFAULT_INSTANCE;
-    }
-
-    private static final com.google.protobuf.Parser<GrpcMessage>
-        PARSER = new com.google.protobuf.AbstractParser<GrpcMessage>() {
-      @java.lang.Override
-      public GrpcMessage parsePartialFrom(
-          com.google.protobuf.CodedInputStream input,
-          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-          throws com.google.protobuf.InvalidProtocolBufferException {
-        Builder builder = newBuilder();
-        try {
-          builder.mergeFrom(input, extensionRegistry);
-        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-          throw e.setUnfinishedMessage(builder.buildPartial());
-        } catch (com.google.protobuf.UninitializedMessageException e) {
-          throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
-        } catch (java.io.IOException e) {
-          throw new com.google.protobuf.InvalidProtocolBufferException(e)
-              .setUnfinishedMessage(builder.buildPartial());
-        }
-        return builder.buildPartial();
-      }
-    };
-
-    public static com.google.protobuf.Parser<GrpcMessage> parser() {
-      return PARSER;
-    }
-
-    @java.lang.Override
-    public com.google.protobuf.Parser<GrpcMessage> getParserForType() {
-      return PARSER;
-    }
-
-    @java.lang.Override
-    public io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage getDefaultInstanceForType() {
-      return DEFAULT_INSTANCE;
-    }
-
-  }
-
-  public interface GrpcSpringMessageOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage)
-      com.google.protobuf.MessageOrBuilder {
-
-    /**
-     * <code>.google.protobuf.Struct headers = 1;</code>
-     * @return Whether the headers field is set.
-     */
-    boolean hasHeaders();
-    /**
-     * <code>.google.protobuf.Struct headers = 1;</code>
-     * @return The headers.
-     */
-    com.google.protobuf.Struct getHeaders();
-    /**
-     * <code>.google.protobuf.Struct headers = 1;</code>
-     */
-    com.google.protobuf.StructOrBuilder getHeadersOrBuilder();
-
-    /**
-     * <code>bytes data = 2;</code>
-     * @return The data.
-     */
-    com.google.protobuf.ByteString getData();
-  }
-  /**
-   * Protobuf type {@code io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage}
-   */
-  public static final class GrpcSpringMessage extends
-      com.google.protobuf.GeneratedMessage implements
-      // @@protoc_insertion_point(message_implements:io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage)
-      GrpcSpringMessageOrBuilder {
-  private static final long serialVersionUID = 0L;
-    static {
-      com.google.protobuf.RuntimeVersion.validateProtobufGencodeVersion(
-        com.google.protobuf.RuntimeVersion.RuntimeDomain.PUBLIC,
-        /* major= */ 4,
-        /* minor= */ 33,
-        /* patch= */ 4,
-        /* suffix= */ "",
-        "GrpcSpringMessage");
-    }
-    // Use GrpcSpringMessage.newBuilder() to construct.
-    private GrpcSpringMessage(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
-      super(builder);
-    }
-    private GrpcSpringMessage() {
-      data_ = com.google.protobuf.ByteString.EMPTY;
-    }
-
-    public static final com.google.protobuf.Descriptors.Descriptor
-        getDescriptor() {
-      return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcSpringMessage_descriptor;
-    }
-
-    @java.lang.Override
-    protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
-        internalGetFieldAccessorTable() {
-      return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcSpringMessage_fieldAccessorTable
-          .ensureFieldAccessorsInitialized(
-              io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.class, io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.Builder.class);
-    }
-
-    private int bitField0_;
-    public static final int HEADERS_FIELD_NUMBER = 1;
-    private com.google.protobuf.Struct headers_;
-    /**
-     * <code>.google.protobuf.Struct headers = 1;</code>
-     * @return Whether the headers field is set.
-     */
-    @java.lang.Override
-    public boolean hasHeaders() {
-      return ((bitField0_ & 0x00000001) != 0);
-    }
-    /**
-     * <code>.google.protobuf.Struct headers = 1;</code>
-     * @return The headers.
-     */
-    @java.lang.Override
-    public com.google.protobuf.Struct getHeaders() {
-      return headers_ == null ? com.google.protobuf.Struct.getDefaultInstance() : headers_;
-    }
-    /**
-     * <code>.google.protobuf.Struct headers = 1;</code>
-     */
-    @java.lang.Override
-    public com.google.protobuf.StructOrBuilder getHeadersOrBuilder() {
-      return headers_ == null ? com.google.protobuf.Struct.getDefaultInstance() : headers_;
-    }
-
-    public static final int DATA_FIELD_NUMBER = 2;
-    private com.google.protobuf.ByteString data_ = com.google.protobuf.ByteString.EMPTY;
-    /**
-     * <code>bytes data = 2;</code>
-     * @return The data.
-     */
-    @java.lang.Override
-    public com.google.protobuf.ByteString getData() {
-      return data_;
-    }
-
-    private byte memoizedIsInitialized = -1;
-    @java.lang.Override
-    public final boolean isInitialized() {
-      byte isInitialized = memoizedIsInitialized;
-      if (isInitialized == 1) return true;
-      if (isInitialized == 0) return false;
-
-      memoizedIsInitialized = 1;
-      return true;
-    }
-
-    @java.lang.Override
-    public void writeTo(com.google.protobuf.CodedOutputStream output)
+        public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage
+                parseFrom(java.io.InputStream input, com.google.protobuf.ExtensionRegistryLite extensionRegistry)
                         throws java.io.IOException {
-      if (((bitField0_ & 0x00000001) != 0)) {
-        output.writeMessage(1, getHeaders());
-      }
-      if (!data_.isEmpty()) {
-        output.writeBytes(2, data_);
-      }
-      getUnknownFields().writeTo(output);
+            return com.google.protobuf.GeneratedMessage.parseWithIOException(PARSER, input, extensionRegistry);
+        }
+
+        public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage
+                parseDelimitedFrom(java.io.InputStream input) throws java.io.IOException {
+            return com.google.protobuf.GeneratedMessage.parseDelimitedWithIOException(PARSER, input);
+        }
+
+        public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage
+                parseDelimitedFrom(
+                        java.io.InputStream input, com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+                        throws java.io.IOException {
+            return com.google.protobuf.GeneratedMessage.parseDelimitedWithIOException(PARSER, input, extensionRegistry);
+        }
+
+        public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage
+                parseFrom(com.google.protobuf.CodedInputStream input) throws java.io.IOException {
+            return com.google.protobuf.GeneratedMessage.parseWithIOException(PARSER, input);
+        }
+
+        public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage
+                parseFrom(
+                        com.google.protobuf.CodedInputStream input,
+                        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+                        throws java.io.IOException {
+            return com.google.protobuf.GeneratedMessage.parseWithIOException(PARSER, input, extensionRegistry);
+        }
+
+        public static Builder newBuilder() {
+            return DEFAULT_INSTANCE.toBuilder();
+        }
+
+        public static Builder newBuilder(
+                io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage prototype) {
+            return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
+        }
+
+        public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage
+                getDefaultInstance() {
+            return DEFAULT_INSTANCE;
+        }
+
+        public static com.google.protobuf.Parser<GrpcMessage> parser() {
+            return PARSER;
+        }
+
+        @java.lang.Override
+        protected com.google.protobuf.GeneratedMessage.FieldAccessorTable internalGetFieldAccessorTable() {
+            return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd
+                    .internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcMessage_fieldAccessorTable
+                    .ensureFieldAccessorsInitialized(
+                            io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage
+                                    .class,
+                            io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage
+                                    .Builder.class);
+        }
+
+        public MessageCase getMessageCase() {
+            return MessageCase.forNumber(messageCase_);
+        }
+
+        /**
+         * <code>bool isOrdered = 1;</code>
+         * @return The isOrdered.
+         */
+        @java.lang.Override
+        public boolean getIsOrdered() {
+            return isOrdered_;
+        }
+
+        /**
+         * <code>.io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage springMessage = 2;</code>
+         * @return Whether the springMessage field is set.
+         */
+        @java.lang.Override
+        public boolean hasSpringMessage() {
+            return messageCase_ == 2;
+        }
+
+        /**
+         * <code>.io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage springMessage = 2;</code>
+         * @return The springMessage.
+         */
+        @java.lang.Override
+        public io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage
+                getSpringMessage() {
+            if (messageCase_ == 2) {
+                return (io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd
+                                .GrpcSpringMessage)
+                        message_;
+            }
+            return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage
+                    .getDefaultInstance();
+        }
+
+        /**
+         * <code>.io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage springMessage = 2;</code>
+         */
+        @java.lang.Override
+        public io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessageOrBuilder
+                getSpringMessageOrBuilder() {
+            if (messageCase_ == 2) {
+                return (io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd
+                                .GrpcSpringMessage)
+                        message_;
+            }
+            return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage
+                    .getDefaultInstance();
+        }
+
+        /**
+         * <code>.google.protobuf.Any customMessage = 3;</code>
+         * @return Whether the customMessage field is set.
+         */
+        @java.lang.Override
+        public boolean hasCustomMessage() {
+            return messageCase_ == 3;
+        }
+
+        /**
+         * <code>.google.protobuf.Any customMessage = 3;</code>
+         * @return The customMessage.
+         */
+        @java.lang.Override
+        public com.google.protobuf.Any getCustomMessage() {
+            if (messageCase_ == 3) {
+                return (com.google.protobuf.Any) message_;
+            }
+            return com.google.protobuf.Any.getDefaultInstance();
+        }
+
+        /**
+         * <code>.google.protobuf.Any customMessage = 3;</code>
+         */
+        @java.lang.Override
+        public com.google.protobuf.AnyOrBuilder getCustomMessageOrBuilder() {
+            if (messageCase_ == 3) {
+                return (com.google.protobuf.Any) message_;
+            }
+            return com.google.protobuf.Any.getDefaultInstance();
+        }
+
+        @java.lang.Override
+        public final boolean isInitialized() {
+            byte isInitialized = memoizedIsInitialized;
+            if (isInitialized == 1) return true;
+            if (isInitialized == 0) return false;
+
+            memoizedIsInitialized = 1;
+            return true;
+        }
+
+        @java.lang.Override
+        public void writeTo(com.google.protobuf.CodedOutputStream output) throws java.io.IOException {
+            if (isOrdered_ != false) {
+                output.writeBool(1, isOrdered_);
+            }
+            if (messageCase_ == 2) {
+                output.writeMessage(
+                        2,
+                        (io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd
+                                        .GrpcSpringMessage)
+                                message_);
+            }
+            if (messageCase_ == 3) {
+                output.writeMessage(3, (com.google.protobuf.Any) message_);
+            }
+            getUnknownFields().writeTo(output);
+        }
+
+        @java.lang.Override
+        public int getSerializedSize() {
+            int size = memoizedSize;
+            if (size != -1) return size;
+
+            size = 0;
+            if (isOrdered_ != false) {
+                size += com.google.protobuf.CodedOutputStream.computeBoolSize(1, isOrdered_);
+            }
+            if (messageCase_ == 2) {
+                size +=
+                        com.google.protobuf.CodedOutputStream.computeMessageSize(
+                                2, (io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd
+                                                .GrpcSpringMessage)
+                                        message_);
+            }
+            if (messageCase_ == 3) {
+                size += com.google.protobuf.CodedOutputStream.computeMessageSize(3, (com.google.protobuf.Any) message_);
+            }
+            size += getUnknownFields().getSerializedSize();
+            memoizedSize = size;
+            return size;
+        }
+
+        @java.lang.Override
+        public boolean equals(final java.lang.Object obj) {
+            if (obj == this) {
+                return true;
+            }
+            if (!(obj
+                    instanceof
+                    io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage)) {
+                return super.equals(obj);
+            }
+            io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage other =
+                    (io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage) obj;
+
+            if (getIsOrdered() != other.getIsOrdered()) return false;
+            if (!getMessageCase().equals(other.getMessageCase())) return false;
+            switch (messageCase_) {
+                case 2:
+                    if (!getSpringMessage().equals(other.getSpringMessage())) return false;
+                    break;
+                case 3:
+                    if (!getCustomMessage().equals(other.getCustomMessage())) return false;
+                    break;
+                case 0:
+                default:
+            }
+            if (!getUnknownFields().equals(other.getUnknownFields())) return false;
+            return true;
+        }
+
+        @java.lang.Override
+        public int hashCode() {
+            if (memoizedHashCode != 0) {
+                return memoizedHashCode;
+            }
+            int hash = 41;
+            hash = (19 * hash) + getDescriptor().hashCode();
+            hash = (37 * hash) + ISORDERED_FIELD_NUMBER;
+            hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(getIsOrdered());
+            switch (messageCase_) {
+                case 2:
+                    hash = (37 * hash) + SPRINGMESSAGE_FIELD_NUMBER;
+                    hash = (53 * hash) + getSpringMessage().hashCode();
+                    break;
+                case 3:
+                    hash = (37 * hash) + CUSTOMMESSAGE_FIELD_NUMBER;
+                    hash = (53 * hash) + getCustomMessage().hashCode();
+                    break;
+                case 0:
+                default:
+            }
+            hash = (29 * hash) + getUnknownFields().hashCode();
+            memoizedHashCode = hash;
+            return hash;
+        }
+
+        @java.lang.Override
+        public Builder newBuilderForType() {
+            return newBuilder();
+        }
+
+        @java.lang.Override
+        public Builder toBuilder() {
+            return this == DEFAULT_INSTANCE ? new Builder() : new Builder().mergeFrom(this);
+        }
+
+        @java.lang.Override
+        protected Builder newBuilderForType(com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+            Builder builder = new Builder(parent);
+            return builder;
+        }
+
+        @java.lang.Override
+        public com.google.protobuf.Parser<GrpcMessage> getParserForType() {
+            return PARSER;
+        }
+
+        @java.lang.Override
+        public io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage
+                getDefaultInstanceForType() {
+            return DEFAULT_INSTANCE;
+        }
+
+public enum MessageCase
+                implements
+                        com.google.protobuf.Internal.EnumLite, com.google.protobuf.AbstractMessage.InternalOneOfEnum {
+            SPRINGMESSAGE(2),
+            CUSTOMMESSAGE(3),
+            MESSAGE_NOT_SET(0);
+            private final int value;
+
+            private MessageCase(int value) {
+                this.value = value;
+            }
+            /**
+             * @param value The number of the enum to look for.
+             * @return The enum associated with the given number.
+             * @deprecated Use {@link #forNumber(int)} instead.
+             */
+            @java.lang.Deprecated
+            public static MessageCase valueOf(int value) {
+                return forNumber(value);
+            }
+
+            public static MessageCase forNumber(int value) {
+                switch (value) {
+                    case 2:
+                        return SPRINGMESSAGE;
+                    case 3:
+                        return CUSTOMMESSAGE;
+                    case 0:
+                        return MESSAGE_NOT_SET;
+                    default:
+                        return null;
+                }
+            }
+
+            public int getNumber() {
+                return this.value;
+            }
+        }
+
+        /**
+         * Protobuf type {@code io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcMessage}
+         */
+        public static final class Builder extends com.google.protobuf.GeneratedMessage.Builder<Builder>
+                implements
+                // @@protoc_insertion_point(builder_implements:io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcMessage)
+                io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessageOrBuilder {
+            private int messageCase_ = 0;
+            private java.lang.Object message_;
+            private int bitField0_;
+            private boolean isOrdered_;
+            private com.google.protobuf.SingleFieldBuilder<
+                            io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd
+                                    .GrpcSpringMessage,
+                            io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd
+                                    .GrpcSpringMessage.Builder,
+                            io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd
+                                    .GrpcSpringMessageOrBuilder>
+                    springMessageBuilder_;
+            private com.google.protobuf.SingleFieldBuilder<
+                            com.google.protobuf.Any, com.google.protobuf.Any.Builder, com.google.protobuf.AnyOrBuilder>
+                    customMessageBuilder_;
+
+            // Construct using
+            // io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage.newBuilder()
+            private Builder() {}
+
+            private Builder(com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+                super(parent);
+            }
+
+            public static final com.google.protobuf.Descriptors.Descriptor getDescriptor() {
+                return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd
+                        .internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcMessage_descriptor;
+            }
+
+            @java.lang.Override
+            protected com.google.protobuf.GeneratedMessage.FieldAccessorTable internalGetFieldAccessorTable() {
+                return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd
+                        .internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcMessage_fieldAccessorTable
+                        .ensureFieldAccessorsInitialized(
+                                io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd
+                                        .GrpcMessage.class,
+                                io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd
+                                        .GrpcMessage.Builder.class);
+            }
+
+            @java.lang.Override
+            public Builder clear() {
+                super.clear();
+                bitField0_ = 0;
+                isOrdered_ = false;
+                if (springMessageBuilder_ != null) {
+                    springMessageBuilder_.clear();
+                }
+                if (customMessageBuilder_ != null) {
+                    customMessageBuilder_.clear();
+                }
+                messageCase_ = 0;
+                message_ = null;
+                return this;
+            }
+
+            @java.lang.Override
+            public com.google.protobuf.Descriptors.Descriptor getDescriptorForType() {
+                return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd
+                        .internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcMessage_descriptor;
+            }
+
+            @java.lang.Override
+            public io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage
+                    getDefaultInstanceForType() {
+                return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage
+                        .getDefaultInstance();
+            }
+
+            @java.lang.Override
+            public io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage build() {
+                io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage result =
+                        buildPartial();
+                if (!result.isInitialized()) {
+                    throw newUninitializedMessageException(result);
+                }
+                return result;
+            }
+
+            @java.lang.Override
+            public io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage
+                    buildPartial() {
+                io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage result =
+                        new io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage(
+                                this);
+                if (bitField0_ != 0) {
+                    buildPartial0(result);
+                }
+                buildPartialOneofs(result);
+                onBuilt();
+                return result;
+            }
+
+            private void buildPartial0(
+                    io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage result) {
+                int from_bitField0_ = bitField0_;
+                if (((from_bitField0_ & 0x00000001) != 0)) {
+                    result.isOrdered_ = isOrdered_;
+                }
+            }
+
+            private void buildPartialOneofs(
+                    io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage result) {
+                result.messageCase_ = messageCase_;
+                result.message_ = this.message_;
+                if (messageCase_ == 2 && springMessageBuilder_ != null) {
+                    result.message_ = springMessageBuilder_.build();
+                }
+                if (messageCase_ == 3 && customMessageBuilder_ != null) {
+                    result.message_ = customMessageBuilder_.build();
+                }
+            }
+
+            @java.lang.Override
+            public Builder mergeFrom(com.google.protobuf.Message other) {
+                if (other
+                        instanceof
+                        io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage) {
+                    return mergeFrom(
+                            (io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage)
+                                    other);
+                } else {
+                    super.mergeFrom(other);
+                    return this;
+                }
+            }
+
+            public Builder mergeFrom(
+                    io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage other) {
+                if (other
+                        == io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcMessage
+                                .getDefaultInstance()) return this;
+                if (other.getIsOrdered() != false) {
+                    setIsOrdered(other.getIsOrdered());
+                }
+                switch (other.getMessageCase()) {
+                    case SPRINGMESSAGE: {
+                        mergeSpringMessage(other.getSpringMessage());
+                        break;
+                    }
+                    case CUSTOMMESSAGE: {
+                        mergeCustomMessage(other.getCustomMessage());
+                        break;
+                    }
+                    case MESSAGE_NOT_SET: {
+                        break;
+                    }
+                }
+                this.mergeUnknownFields(other.getUnknownFields());
+                onChanged();
+                return this;
+            }
+
+            @java.lang.Override
+            public final boolean isInitialized() {
+                return true;
+            }
+
+            @java.lang.Override
+            public Builder mergeFrom(
+                    com.google.protobuf.CodedInputStream input,
+                    com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+                    throws java.io.IOException {
+                if (extensionRegistry == null) {
+                    throw new java.lang.NullPointerException();
+                }
+                try {
+                    boolean done = false;
+                    while (!done) {
+                        int tag = input.readTag();
+                        switch (tag) {
+                            case 0:
+                                done = true;
+                                break;
+                            case 8: {
+                                isOrdered_ = input.readBool();
+                                bitField0_ |= 0x00000001;
+                                break;
+                            } // case 8
+                            case 18: {
+                                input.readMessage(
+                                        internalGetSpringMessageFieldBuilder().getBuilder(), extensionRegistry);
+                                messageCase_ = 2;
+                                break;
+                            } // case 18
+                            case 26: {
+                                input.readMessage(
+                                        internalGetCustomMessageFieldBuilder().getBuilder(), extensionRegistry);
+                                messageCase_ = 3;
+                                break;
+                            } // case 26
+                            default: {
+                                if (!super.parseUnknownField(input, extensionRegistry, tag)) {
+                                    done = true; // was an endgroup tag
+                                }
+                                break;
+                            } // default:
+                        } // switch (tag)
+                    } // while (!done)
+                } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+                    throw e.unwrapIOException();
+                } finally {
+                    onChanged();
+                } // finally
+                return this;
+            }
+
+            public MessageCase getMessageCase() {
+                return MessageCase.forNumber(messageCase_);
+            }
+
+            public Builder clearMessage() {
+                messageCase_ = 0;
+                message_ = null;
+                onChanged();
+                return this;
+            }
+
+            /**
+             * <code>bool isOrdered = 1;</code>
+             * @return The isOrdered.
+             */
+            @java.lang.Override
+            public boolean getIsOrdered() {
+                return isOrdered_;
+            }
+
+            /**
+             * <code>bool isOrdered = 1;</code>
+             * @param value The isOrdered to set.
+             * @return This builder for chaining.
+             */
+            public Builder setIsOrdered(boolean value) {
+
+                isOrdered_ = value;
+                bitField0_ |= 0x00000001;
+                onChanged();
+                return this;
+            }
+
+            /**
+             * <code>bool isOrdered = 1;</code>
+             * @return This builder for chaining.
+             */
+            public Builder clearIsOrdered() {
+                bitField0_ = (bitField0_ & ~0x00000001);
+                isOrdered_ = false;
+                onChanged();
+                return this;
+            }
+
+            /**
+             * <code>.io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage springMessage = 2;</code>
+             * @return Whether the springMessage field is set.
+             */
+            @java.lang.Override
+            public boolean hasSpringMessage() {
+                return messageCase_ == 2;
+            }
+
+            /**
+             * <code>.io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage springMessage = 2;</code>
+             * @return The springMessage.
+             */
+            @java.lang.Override
+            public io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage
+                    getSpringMessage() {
+                if (springMessageBuilder_ == null) {
+                    if (messageCase_ == 2) {
+                        return (io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd
+                                        .GrpcSpringMessage)
+                                message_;
+                    }
+                    return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd
+                            .GrpcSpringMessage.getDefaultInstance();
+                } else {
+                    if (messageCase_ == 2) {
+                        return springMessageBuilder_.getMessage();
+                    }
+                    return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd
+                            .GrpcSpringMessage.getDefaultInstance();
+                }
+            }
+
+            /**
+             * <code>.io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage springMessage = 2;</code>
+             */
+            public Builder setSpringMessage(
+                    io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage
+                            value) {
+                if (springMessageBuilder_ == null) {
+                    if (value == null) {
+                        throw new NullPointerException();
+                    }
+                    message_ = value;
+                    onChanged();
+                } else {
+                    springMessageBuilder_.setMessage(value);
+                }
+                messageCase_ = 2;
+                return this;
+            }
+
+            /**
+             * <code>.io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage springMessage = 2;</code>
+             */
+            public Builder setSpringMessage(
+                    io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage
+                                    .Builder
+                            builderForValue) {
+                if (springMessageBuilder_ == null) {
+                    message_ = builderForValue.build();
+                    onChanged();
+                } else {
+                    springMessageBuilder_.setMessage(builderForValue.build());
+                }
+                messageCase_ = 2;
+                return this;
+            }
+
+            /**
+             * <code>.io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage springMessage = 2;</code>
+             */
+            public Builder mergeSpringMessage(
+                    io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage
+                            value) {
+                if (springMessageBuilder_ == null) {
+                    if (messageCase_ == 2
+                            && message_
+                                    != io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd
+                                            .GrpcSpringMessage.getDefaultInstance()) {
+                        message_ = io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd
+                                .GrpcSpringMessage.newBuilder((io.euhedral_execution.spring.core.transport.grpc.protos
+                                                .GrpcTransportServiceMd.GrpcSpringMessage)
+                                        message_)
+                                .mergeFrom(value)
+                                .buildPartial();
+                    } else {
+                        message_ = value;
+                    }
+                    onChanged();
+                } else {
+                    if (messageCase_ == 2) {
+                        springMessageBuilder_.mergeFrom(value);
+                    } else {
+                        springMessageBuilder_.setMessage(value);
+                    }
+                }
+                messageCase_ = 2;
+                return this;
+            }
+
+            /**
+             * <code>.io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage springMessage = 2;</code>
+             */
+            public Builder clearSpringMessage() {
+                if (springMessageBuilder_ == null) {
+                    if (messageCase_ == 2) {
+                        messageCase_ = 0;
+                        message_ = null;
+                        onChanged();
+                    }
+                } else {
+                    if (messageCase_ == 2) {
+                        messageCase_ = 0;
+                        message_ = null;
+                    }
+                    springMessageBuilder_.clear();
+                }
+                return this;
+            }
+
+            /**
+             * <code>.io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage springMessage = 2;</code>
+             */
+            public io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage
+                            .Builder
+                    getSpringMessageBuilder() {
+                return internalGetSpringMessageFieldBuilder().getBuilder();
+            }
+
+            /**
+             * <code>.io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage springMessage = 2;</code>
+             */
+            @java.lang.Override
+            public io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd
+                            .GrpcSpringMessageOrBuilder
+                    getSpringMessageOrBuilder() {
+                if ((messageCase_ == 2) && (springMessageBuilder_ != null)) {
+                    return springMessageBuilder_.getMessageOrBuilder();
+                } else {
+                    if (messageCase_ == 2) {
+                        return (io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd
+                                        .GrpcSpringMessage)
+                                message_;
+                    }
+                    return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd
+                            .GrpcSpringMessage.getDefaultInstance();
+                }
+            }
+
+            /**
+             * <code>.io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage springMessage = 2;</code>
+             */
+            private com.google.protobuf.SingleFieldBuilder<
+                            io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd
+                                    .GrpcSpringMessage,
+                            io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd
+                                    .GrpcSpringMessage.Builder,
+                            io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd
+                                    .GrpcSpringMessageOrBuilder>
+                    internalGetSpringMessageFieldBuilder() {
+                if (springMessageBuilder_ == null) {
+                    if (!(messageCase_ == 2)) {
+                        message_ = io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd
+                                .GrpcSpringMessage.getDefaultInstance();
+                    }
+                    springMessageBuilder_ = new com.google.protobuf.SingleFieldBuilder<
+                            io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd
+                                    .GrpcSpringMessage,
+                            io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd
+                                    .GrpcSpringMessage.Builder,
+                            io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd
+                                    .GrpcSpringMessageOrBuilder>(
+                            (io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd
+                                            .GrpcSpringMessage)
+                                    message_,
+                            getParentForChildren(),
+                            isClean());
+                    message_ = null;
+                }
+                messageCase_ = 2;
+                onChanged();
+                return springMessageBuilder_;
+            }
+
+            /**
+             * <code>.google.protobuf.Any customMessage = 3;</code>
+             * @return Whether the customMessage field is set.
+             */
+            @java.lang.Override
+            public boolean hasCustomMessage() {
+                return messageCase_ == 3;
+            }
+            /**
+             * <code>.google.protobuf.Any customMessage = 3;</code>
+             * @return The customMessage.
+             */
+            @java.lang.Override
+            public com.google.protobuf.Any getCustomMessage() {
+                if (customMessageBuilder_ == null) {
+                    if (messageCase_ == 3) {
+                        return (com.google.protobuf.Any) message_;
+                    }
+                    return com.google.protobuf.Any.getDefaultInstance();
+                } else {
+                    if (messageCase_ == 3) {
+                        return customMessageBuilder_.getMessage();
+                    }
+                    return com.google.protobuf.Any.getDefaultInstance();
+                }
+            }
+            /**
+             * <code>.google.protobuf.Any customMessage = 3;</code>
+             */
+            public Builder setCustomMessage(com.google.protobuf.Any value) {
+                if (customMessageBuilder_ == null) {
+                    if (value == null) {
+                        throw new NullPointerException();
+                    }
+                    message_ = value;
+                    onChanged();
+                } else {
+                    customMessageBuilder_.setMessage(value);
+                }
+                messageCase_ = 3;
+                return this;
+            }
+            /**
+             * <code>.google.protobuf.Any customMessage = 3;</code>
+             */
+            public Builder setCustomMessage(com.google.protobuf.Any.Builder builderForValue) {
+                if (customMessageBuilder_ == null) {
+                    message_ = builderForValue.build();
+                    onChanged();
+                } else {
+                    customMessageBuilder_.setMessage(builderForValue.build());
+                }
+                messageCase_ = 3;
+                return this;
+            }
+            /**
+             * <code>.google.protobuf.Any customMessage = 3;</code>
+             */
+            public Builder mergeCustomMessage(com.google.protobuf.Any value) {
+                if (customMessageBuilder_ == null) {
+                    if (messageCase_ == 3 && message_ != com.google.protobuf.Any.getDefaultInstance()) {
+                        message_ = com.google.protobuf.Any.newBuilder((com.google.protobuf.Any) message_)
+                                .mergeFrom(value)
+                                .buildPartial();
+                    } else {
+                        message_ = value;
+                    }
+                    onChanged();
+                } else {
+                    if (messageCase_ == 3) {
+                        customMessageBuilder_.mergeFrom(value);
+                    } else {
+                        customMessageBuilder_.setMessage(value);
+                    }
+                }
+                messageCase_ = 3;
+                return this;
+            }
+            /**
+             * <code>.google.protobuf.Any customMessage = 3;</code>
+             */
+            public Builder clearCustomMessage() {
+                if (customMessageBuilder_ == null) {
+                    if (messageCase_ == 3) {
+                        messageCase_ = 0;
+                        message_ = null;
+                        onChanged();
+                    }
+                } else {
+                    if (messageCase_ == 3) {
+                        messageCase_ = 0;
+                        message_ = null;
+                    }
+                    customMessageBuilder_.clear();
+                }
+                return this;
+            }
+            /**
+             * <code>.google.protobuf.Any customMessage = 3;</code>
+             */
+            public com.google.protobuf.Any.Builder getCustomMessageBuilder() {
+                return internalGetCustomMessageFieldBuilder().getBuilder();
+            }
+            /**
+             * <code>.google.protobuf.Any customMessage = 3;</code>
+             */
+            @java.lang.Override
+            public com.google.protobuf.AnyOrBuilder getCustomMessageOrBuilder() {
+                if ((messageCase_ == 3) && (customMessageBuilder_ != null)) {
+                    return customMessageBuilder_.getMessageOrBuilder();
+                } else {
+                    if (messageCase_ == 3) {
+                        return (com.google.protobuf.Any) message_;
+                    }
+                    return com.google.protobuf.Any.getDefaultInstance();
+                }
+            }
+            /**
+             * <code>.google.protobuf.Any customMessage = 3;</code>
+             */
+            private com.google.protobuf.SingleFieldBuilder<
+                            com.google.protobuf.Any, com.google.protobuf.Any.Builder, com.google.protobuf.AnyOrBuilder>
+                    internalGetCustomMessageFieldBuilder() {
+                if (customMessageBuilder_ == null) {
+                    if (!(messageCase_ == 3)) {
+                        message_ = com.google.protobuf.Any.getDefaultInstance();
+                    }
+                    customMessageBuilder_ = new com.google.protobuf.SingleFieldBuilder<
+                            com.google.protobuf.Any, com.google.protobuf.Any.Builder, com.google.protobuf.AnyOrBuilder>(
+                            (com.google.protobuf.Any) message_, getParentForChildren(), isClean());
+                    message_ = null;
+                }
+                messageCase_ = 3;
+                onChanged();
+                return customMessageBuilder_;
+            }
+
+            // @@protoc_insertion_point(builder_scope:io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcMessage)
+        }
     }
 
-    @java.lang.Override
-    public int getSerializedSize() {
-      int size = memoizedSize;
-      if (size != -1) return size;
-
-      size = 0;
-      if (((bitField0_ & 0x00000001) != 0)) {
-        size += com.google.protobuf.CodedOutputStream
-          .computeMessageSize(1, getHeaders());
-      }
-      if (!data_.isEmpty()) {
-        size += com.google.protobuf.CodedOutputStream
-          .computeBytesSize(2, data_);
-      }
-      size += getUnknownFields().getSerializedSize();
-      memoizedSize = size;
-      return size;
-    }
-
-    @java.lang.Override
-    public boolean equals(final java.lang.Object obj) {
-      if (obj == this) {
-       return true;
-      }
-      if (!(obj instanceof io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage)) {
-        return super.equals(obj);
-      }
-      io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage other = (io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage) obj;
-
-      if (hasHeaders() != other.hasHeaders()) return false;
-      if (hasHeaders()) {
-        if (!getHeaders()
-            .equals(other.getHeaders())) return false;
-      }
-      if (!getData()
-          .equals(other.getData())) return false;
-      if (!getUnknownFields().equals(other.getUnknownFields())) return false;
-      return true;
-    }
-
-    @java.lang.Override
-    public int hashCode() {
-      if (memoizedHashCode != 0) {
-        return memoizedHashCode;
-      }
-      int hash = 41;
-      hash = (19 * hash) + getDescriptor().hashCode();
-      if (hasHeaders()) {
-        hash = (37 * hash) + HEADERS_FIELD_NUMBER;
-        hash = (53 * hash) + getHeaders().hashCode();
-      }
-      hash = (37 * hash) + DATA_FIELD_NUMBER;
-      hash = (53 * hash) + getData().hashCode();
-      hash = (29 * hash) + getUnknownFields().hashCode();
-      memoizedHashCode = hash;
-      return hash;
-    }
-
-    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage parseFrom(
-        java.nio.ByteBuffer data)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      return PARSER.parseFrom(data);
-    }
-    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage parseFrom(
-        java.nio.ByteBuffer data,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      return PARSER.parseFrom(data, extensionRegistry);
-    }
-    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage parseFrom(
-        com.google.protobuf.ByteString data)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      return PARSER.parseFrom(data);
-    }
-    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage parseFrom(
-        com.google.protobuf.ByteString data,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      return PARSER.parseFrom(data, extensionRegistry);
-    }
-    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage parseFrom(byte[] data)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      return PARSER.parseFrom(data);
-    }
-    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage parseFrom(
-        byte[] data,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      return PARSER.parseFrom(data, extensionRegistry);
-    }
-    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage parseFrom(java.io.InputStream input)
-        throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
-          .parseWithIOException(PARSER, input);
-    }
-    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage parseFrom(
-        java.io.InputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
-          .parseWithIOException(PARSER, input, extensionRegistry);
-    }
-
-    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage parseDelimitedFrom(java.io.InputStream input)
-        throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
-          .parseDelimitedWithIOException(PARSER, input);
-    }
-
-    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage parseDelimitedFrom(
-        java.io.InputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
-          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
-    }
-    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage parseFrom(
-        com.google.protobuf.CodedInputStream input)
-        throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
-          .parseWithIOException(PARSER, input);
-    }
-    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage parseFrom(
-        com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
-          .parseWithIOException(PARSER, input, extensionRegistry);
-    }
-
-    @java.lang.Override
-    public Builder newBuilderForType() { return newBuilder(); }
-    public static Builder newBuilder() {
-      return DEFAULT_INSTANCE.toBuilder();
-    }
-    public static Builder newBuilder(io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage prototype) {
-      return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
-    }
-    @java.lang.Override
-    public Builder toBuilder() {
-      return this == DEFAULT_INSTANCE
-          ? new Builder() : new Builder().mergeFrom(this);
-    }
-
-    @java.lang.Override
-    protected Builder newBuilderForType(
-        com.google.protobuf.GeneratedMessage.BuilderParent parent) {
-      Builder builder = new Builder(parent);
-      return builder;
-    }
     /**
      * Protobuf type {@code io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage}
      */
-    public static final class Builder extends
-        com.google.protobuf.GeneratedMessage.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage)
-        io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessageOrBuilder {
-      public static final com.google.protobuf.Descriptors.Descriptor
-          getDescriptor() {
-        return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcSpringMessage_descriptor;
-      }
+    public static final class GrpcSpringMessage extends com.google.protobuf.GeneratedMessage
+            implements
+            // @@protoc_insertion_point(message_implements:io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage)
+            GrpcSpringMessageOrBuilder {
+        public static final int HEADERS_FIELD_NUMBER = 1;
+        public static final int DATA_FIELD_NUMBER = 2;
+        private static final long serialVersionUID = 0L;
+        // @@protoc_insertion_point(class_scope:io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage)
+        private static final io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd
+                        .GrpcSpringMessage
+                DEFAULT_INSTANCE;
+        private static final com.google.protobuf.Parser<GrpcSpringMessage> PARSER =
+                new com.google.protobuf.AbstractParser<GrpcSpringMessage>() {
+                    @java.lang.Override
+                    public GrpcSpringMessage parsePartialFrom(
+                            com.google.protobuf.CodedInputStream input,
+                            com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+                            throws com.google.protobuf.InvalidProtocolBufferException {
+                        Builder builder = newBuilder();
+                        try {
+                            builder.mergeFrom(input, extensionRegistry);
+                        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+                            throw e.setUnfinishedMessage(builder.buildPartial());
+                        } catch (com.google.protobuf.UninitializedMessageException e) {
+                            throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
+                        } catch (java.io.IOException e) {
+                            throw new com.google.protobuf.InvalidProtocolBufferException(e)
+                                    .setUnfinishedMessage(builder.buildPartial());
+                        }
+                        return builder.buildPartial();
+                    }
+                };
 
-      @java.lang.Override
-      protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
-          internalGetFieldAccessorTable() {
-        return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcSpringMessage_fieldAccessorTable
-            .ensureFieldAccessorsInitialized(
-                io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.class, io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.Builder.class);
-      }
-
-      // Construct using io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.newBuilder()
-      private Builder() {
-        maybeForceBuilderInitialization();
-      }
-
-      private Builder(
-          com.google.protobuf.GeneratedMessage.BuilderParent parent) {
-        super(parent);
-        maybeForceBuilderInitialization();
-      }
-      private void maybeForceBuilderInitialization() {
-        if (com.google.protobuf.GeneratedMessage
-                .alwaysUseFieldBuilders) {
-          internalGetHeadersFieldBuilder();
+        static {
+            com.google.protobuf.RuntimeVersion.validateProtobufGencodeVersion(
+                    com.google.protobuf.RuntimeVersion.RuntimeDomain.PUBLIC,
+                    /* major= */ 4,
+                    /* minor= */ 33,
+                    /* patch= */ 4,
+                    /* suffix= */ "",
+                    "GrpcSpringMessage");
         }
-      }
-      @java.lang.Override
-      public Builder clear() {
-        super.clear();
-        bitField0_ = 0;
-        headers_ = null;
-        if (headersBuilder_ != null) {
-          headersBuilder_.dispose();
-          headersBuilder_ = null;
+
+        static {
+            DEFAULT_INSTANCE =
+                    new io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd
+                            .GrpcSpringMessage();
         }
-        data_ = com.google.protobuf.ByteString.EMPTY;
-        return this;
-      }
 
-      @java.lang.Override
-      public com.google.protobuf.Descriptors.Descriptor
-          getDescriptorForType() {
-        return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcSpringMessage_descriptor;
-      }
-
-      @java.lang.Override
-      public io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage getDefaultInstanceForType() {
-        return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.getDefaultInstance();
-      }
-
-      @java.lang.Override
-      public io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage build() {
-        io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage result = buildPartial();
-        if (!result.isInitialized()) {
-          throw newUninitializedMessageException(result);
+        private int bitField0_;
+        private com.google.protobuf.Struct headers_;
+        private com.google.protobuf.ByteString data_ = com.google.protobuf.ByteString.EMPTY;
+        private byte memoizedIsInitialized = -1;
+        // Use GrpcSpringMessage.newBuilder() to construct.
+        private GrpcSpringMessage(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
+            super(builder);
         }
-        return result;
-      }
 
-      @java.lang.Override
-      public io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage buildPartial() {
-        io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage result = new io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage(this);
-        if (bitField0_ != 0) { buildPartial0(result); }
-        onBuilt();
-        return result;
-      }
+        private GrpcSpringMessage() {
+            data_ = com.google.protobuf.ByteString.EMPTY;
+        }
 
-      private void buildPartial0(io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage result) {
-        int from_bitField0_ = bitField0_;
-        int to_bitField0_ = 0;
-        if (((from_bitField0_ & 0x00000001) != 0)) {
-          result.headers_ = headersBuilder_ == null
-              ? headers_
-              : headersBuilder_.build();
-          to_bitField0_ |= 0x00000001;
+        public static final com.google.protobuf.Descriptors.Descriptor getDescriptor() {
+            return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd
+                    .internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcSpringMessage_descriptor;
         }
-        if (((from_bitField0_ & 0x00000002) != 0)) {
-          result.data_ = data_;
-        }
-        result.bitField0_ |= to_bitField0_;
-      }
 
-      @java.lang.Override
-      public Builder mergeFrom(com.google.protobuf.Message other) {
-        if (other instanceof io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage) {
-          return mergeFrom((io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage)other);
-        } else {
-          super.mergeFrom(other);
-          return this;
+        public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage
+                parseFrom(java.nio.ByteBuffer data) throws com.google.protobuf.InvalidProtocolBufferException {
+            return PARSER.parseFrom(data);
         }
-      }
 
-      public Builder mergeFrom(io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage other) {
-        if (other == io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.getDefaultInstance()) return this;
-        if (other.hasHeaders()) {
-          mergeHeaders(other.getHeaders());
+        public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage
+                parseFrom(java.nio.ByteBuffer data, com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+                        throws com.google.protobuf.InvalidProtocolBufferException {
+            return PARSER.parseFrom(data, extensionRegistry);
         }
-        if (!other.getData().isEmpty()) {
-          setData(other.getData());
-        }
-        this.mergeUnknownFields(other.getUnknownFields());
-        onChanged();
-        return this;
-      }
 
-      @java.lang.Override
-      public final boolean isInitialized() {
-        return true;
-      }
-
-      @java.lang.Override
-      public Builder mergeFrom(
-          com.google.protobuf.CodedInputStream input,
-          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-          throws java.io.IOException {
-        if (extensionRegistry == null) {
-          throw new java.lang.NullPointerException();
+        public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage
+                parseFrom(com.google.protobuf.ByteString data)
+                        throws com.google.protobuf.InvalidProtocolBufferException {
+            return PARSER.parseFrom(data);
         }
-        try {
-          boolean done = false;
-          while (!done) {
-            int tag = input.readTag();
-            switch (tag) {
-              case 0:
-                done = true;
-                break;
-              case 10: {
-                input.readMessage(
-                    internalGetHeadersFieldBuilder().getBuilder(),
-                    extensionRegistry);
-                bitField0_ |= 0x00000001;
-                break;
-              } // case 10
-              case 18: {
-                data_ = input.readBytes();
-                bitField0_ |= 0x00000002;
-                break;
-              } // case 18
-              default: {
-                if (!super.parseUnknownField(input, extensionRegistry, tag)) {
-                  done = true; // was an endgroup tag
+
+        public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage
+                parseFrom(
+                        com.google.protobuf.ByteString data,
+                        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+                        throws com.google.protobuf.InvalidProtocolBufferException {
+            return PARSER.parseFrom(data, extensionRegistry);
+        }
+
+        public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage
+                parseFrom(byte[] data) throws com.google.protobuf.InvalidProtocolBufferException {
+            return PARSER.parseFrom(data);
+        }
+
+        public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage
+                parseFrom(byte[] data, com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+                        throws com.google.protobuf.InvalidProtocolBufferException {
+            return PARSER.parseFrom(data, extensionRegistry);
+        }
+
+        public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage
+                parseFrom(java.io.InputStream input) throws java.io.IOException {
+            return com.google.protobuf.GeneratedMessage.parseWithIOException(PARSER, input);
+        }
+
+        public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage
+                parseFrom(java.io.InputStream input, com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+                        throws java.io.IOException {
+            return com.google.protobuf.GeneratedMessage.parseWithIOException(PARSER, input, extensionRegistry);
+        }
+
+        public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage
+                parseDelimitedFrom(java.io.InputStream input) throws java.io.IOException {
+            return com.google.protobuf.GeneratedMessage.parseDelimitedWithIOException(PARSER, input);
+        }
+
+        public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage
+                parseDelimitedFrom(
+                        java.io.InputStream input, com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+                        throws java.io.IOException {
+            return com.google.protobuf.GeneratedMessage.parseDelimitedWithIOException(PARSER, input, extensionRegistry);
+        }
+
+        public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage
+                parseFrom(com.google.protobuf.CodedInputStream input) throws java.io.IOException {
+            return com.google.protobuf.GeneratedMessage.parseWithIOException(PARSER, input);
+        }
+
+        public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage
+                parseFrom(
+                        com.google.protobuf.CodedInputStream input,
+                        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+                        throws java.io.IOException {
+            return com.google.protobuf.GeneratedMessage.parseWithIOException(PARSER, input, extensionRegistry);
+        }
+
+        public static Builder newBuilder() {
+            return DEFAULT_INSTANCE.toBuilder();
+        }
+
+        public static Builder newBuilder(
+                io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage
+                        prototype) {
+            return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
+        }
+
+        public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage
+                getDefaultInstance() {
+            return DEFAULT_INSTANCE;
+        }
+
+        public static com.google.protobuf.Parser<GrpcSpringMessage> parser() {
+            return PARSER;
+        }
+
+        @java.lang.Override
+        protected com.google.protobuf.GeneratedMessage.FieldAccessorTable internalGetFieldAccessorTable() {
+            return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd
+                    .internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcSpringMessage_fieldAccessorTable
+                    .ensureFieldAccessorsInitialized(
+                            io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd
+                                    .GrpcSpringMessage.class,
+                            io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd
+                                    .GrpcSpringMessage.Builder.class);
+        }
+
+        /**
+         * <code>.google.protobuf.Struct headers = 1;</code>
+         * @return Whether the headers field is set.
+         */
+        @java.lang.Override
+        public boolean hasHeaders() {
+            return ((bitField0_ & 0x00000001) != 0);
+        }
+
+        /**
+         * <code>.google.protobuf.Struct headers = 1;</code>
+         * @return The headers.
+         */
+        @java.lang.Override
+        public com.google.protobuf.Struct getHeaders() {
+            return headers_ == null ? com.google.protobuf.Struct.getDefaultInstance() : headers_;
+        }
+
+        /**
+         * <code>.google.protobuf.Struct headers = 1;</code>
+         */
+        @java.lang.Override
+        public com.google.protobuf.StructOrBuilder getHeadersOrBuilder() {
+            return headers_ == null ? com.google.protobuf.Struct.getDefaultInstance() : headers_;
+        }
+
+        /**
+         * <code>bytes data = 2;</code>
+         * @return The data.
+         */
+        @java.lang.Override
+        public com.google.protobuf.ByteString getData() {
+            return data_;
+        }
+
+        @java.lang.Override
+        public final boolean isInitialized() {
+            byte isInitialized = memoizedIsInitialized;
+            if (isInitialized == 1) return true;
+            if (isInitialized == 0) return false;
+
+            memoizedIsInitialized = 1;
+            return true;
+        }
+
+        @java.lang.Override
+        public void writeTo(com.google.protobuf.CodedOutputStream output) throws java.io.IOException {
+            if (((bitField0_ & 0x00000001) != 0)) {
+                output.writeMessage(1, getHeaders());
+            }
+            if (!data_.isEmpty()) {
+                output.writeBytes(2, data_);
+            }
+            getUnknownFields().writeTo(output);
+        }
+
+        @java.lang.Override
+        public int getSerializedSize() {
+            int size = memoizedSize;
+            if (size != -1) return size;
+
+            size = 0;
+            if (((bitField0_ & 0x00000001) != 0)) {
+                size += com.google.protobuf.CodedOutputStream.computeMessageSize(1, getHeaders());
+            }
+            if (!data_.isEmpty()) {
+                size += com.google.protobuf.CodedOutputStream.computeBytesSize(2, data_);
+            }
+            size += getUnknownFields().getSerializedSize();
+            memoizedSize = size;
+            return size;
+        }
+
+        @java.lang.Override
+        public boolean equals(final java.lang.Object obj) {
+            if (obj == this) {
+                return true;
+            }
+            if (!(obj
+                    instanceof
+                    io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage)) {
+                return super.equals(obj);
+            }
+            io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage other =
+                    (io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage)
+                            obj;
+
+            if (hasHeaders() != other.hasHeaders()) return false;
+            if (hasHeaders()) {
+                if (!getHeaders().equals(other.getHeaders())) return false;
+            }
+            if (!getData().equals(other.getData())) return false;
+            if (!getUnknownFields().equals(other.getUnknownFields())) return false;
+            return true;
+        }
+
+        @java.lang.Override
+        public int hashCode() {
+            if (memoizedHashCode != 0) {
+                return memoizedHashCode;
+            }
+            int hash = 41;
+            hash = (19 * hash) + getDescriptor().hashCode();
+            if (hasHeaders()) {
+                hash = (37 * hash) + HEADERS_FIELD_NUMBER;
+                hash = (53 * hash) + getHeaders().hashCode();
+            }
+            hash = (37 * hash) + DATA_FIELD_NUMBER;
+            hash = (53 * hash) + getData().hashCode();
+            hash = (29 * hash) + getUnknownFields().hashCode();
+            memoizedHashCode = hash;
+            return hash;
+        }
+
+        @java.lang.Override
+        public Builder newBuilderForType() {
+            return newBuilder();
+        }
+
+        @java.lang.Override
+        public Builder toBuilder() {
+            return this == DEFAULT_INSTANCE ? new Builder() : new Builder().mergeFrom(this);
+        }
+
+        @java.lang.Override
+        protected Builder newBuilderForType(com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+            Builder builder = new Builder(parent);
+            return builder;
+        }
+
+        @java.lang.Override
+        public com.google.protobuf.Parser<GrpcSpringMessage> getParserForType() {
+            return PARSER;
+        }
+
+        @java.lang.Override
+        public io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage
+                getDefaultInstanceForType() {
+            return DEFAULT_INSTANCE;
+        }
+
+        /**
+         * Protobuf type {@code io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage}
+         */
+        public static final class Builder extends com.google.protobuf.GeneratedMessage.Builder<Builder>
+                implements
+                // @@protoc_insertion_point(builder_implements:io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage)
+                io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd
+                        .GrpcSpringMessageOrBuilder {
+            private int bitField0_;
+            private com.google.protobuf.Struct headers_;
+            private com.google.protobuf.SingleFieldBuilder<
+                            com.google.protobuf.Struct,
+                            com.google.protobuf.Struct.Builder,
+                            com.google.protobuf.StructOrBuilder>
+                    headersBuilder_;
+            private com.google.protobuf.ByteString data_ = com.google.protobuf.ByteString.EMPTY;
+
+            // Construct using
+            // io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage.newBuilder()
+            private Builder() {
+                maybeForceBuilderInitialization();
+            }
+
+            private Builder(com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+                super(parent);
+                maybeForceBuilderInitialization();
+            }
+
+            public static final com.google.protobuf.Descriptors.Descriptor getDescriptor() {
+                return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd
+                        .internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcSpringMessage_descriptor;
+            }
+
+            @java.lang.Override
+            protected com.google.protobuf.GeneratedMessage.FieldAccessorTable internalGetFieldAccessorTable() {
+                return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd
+                        .internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcSpringMessage_fieldAccessorTable
+                        .ensureFieldAccessorsInitialized(
+                                io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd
+                                        .GrpcSpringMessage.class,
+                                io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd
+                                        .GrpcSpringMessage.Builder.class);
+            }
+
+            private void maybeForceBuilderInitialization() {
+                if (com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders) {
+                    internalGetHeadersFieldBuilder();
                 }
-                break;
-              } // default:
-            } // switch (tag)
-          } // while (!done)
-        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-          throw e.unwrapIOException();
-        } finally {
-          onChanged();
-        } // finally
-        return this;
-      }
-      private int bitField0_;
+            }
 
-      private com.google.protobuf.Struct headers_;
-      private com.google.protobuf.SingleFieldBuilder<
-          com.google.protobuf.Struct, com.google.protobuf.Struct.Builder, com.google.protobuf.StructOrBuilder> headersBuilder_;
-      /**
-       * <code>.google.protobuf.Struct headers = 1;</code>
-       * @return Whether the headers field is set.
-       */
-      public boolean hasHeaders() {
-        return ((bitField0_ & 0x00000001) != 0);
-      }
-      /**
-       * <code>.google.protobuf.Struct headers = 1;</code>
-       * @return The headers.
-       */
-      public com.google.protobuf.Struct getHeaders() {
-        if (headersBuilder_ == null) {
-          return headers_ == null ? com.google.protobuf.Struct.getDefaultInstance() : headers_;
-        } else {
-          return headersBuilder_.getMessage();
-        }
-      }
-      /**
-       * <code>.google.protobuf.Struct headers = 1;</code>
-       */
-      public Builder setHeaders(com.google.protobuf.Struct value) {
-        if (headersBuilder_ == null) {
-          if (value == null) {
-            throw new NullPointerException();
-          }
-          headers_ = value;
-        } else {
-          headersBuilder_.setMessage(value);
-        }
-        bitField0_ |= 0x00000001;
-        onChanged();
-        return this;
-      }
-      /**
-       * <code>.google.protobuf.Struct headers = 1;</code>
-       */
-      public Builder setHeaders(
-          com.google.protobuf.Struct.Builder builderForValue) {
-        if (headersBuilder_ == null) {
-          headers_ = builderForValue.build();
-        } else {
-          headersBuilder_.setMessage(builderForValue.build());
-        }
-        bitField0_ |= 0x00000001;
-        onChanged();
-        return this;
-      }
-      /**
-       * <code>.google.protobuf.Struct headers = 1;</code>
-       */
-      public Builder mergeHeaders(com.google.protobuf.Struct value) {
-        if (headersBuilder_ == null) {
-          if (((bitField0_ & 0x00000001) != 0) &&
-            headers_ != null &&
-            headers_ != com.google.protobuf.Struct.getDefaultInstance()) {
-            getHeadersBuilder().mergeFrom(value);
-          } else {
-            headers_ = value;
-          }
-        } else {
-          headersBuilder_.mergeFrom(value);
-        }
-        if (headers_ != null) {
-          bitField0_ |= 0x00000001;
-          onChanged();
-        }
-        return this;
-      }
-      /**
-       * <code>.google.protobuf.Struct headers = 1;</code>
-       */
-      public Builder clearHeaders() {
-        bitField0_ = (bitField0_ & ~0x00000001);
-        headers_ = null;
-        if (headersBuilder_ != null) {
-          headersBuilder_.dispose();
-          headersBuilder_ = null;
-        }
-        onChanged();
-        return this;
-      }
-      /**
-       * <code>.google.protobuf.Struct headers = 1;</code>
-       */
-      public com.google.protobuf.Struct.Builder getHeadersBuilder() {
-        bitField0_ |= 0x00000001;
-        onChanged();
-        return internalGetHeadersFieldBuilder().getBuilder();
-      }
-      /**
-       * <code>.google.protobuf.Struct headers = 1;</code>
-       */
-      public com.google.protobuf.StructOrBuilder getHeadersOrBuilder() {
-        if (headersBuilder_ != null) {
-          return headersBuilder_.getMessageOrBuilder();
-        } else {
-          return headers_ == null ?
-              com.google.protobuf.Struct.getDefaultInstance() : headers_;
-        }
-      }
-      /**
-       * <code>.google.protobuf.Struct headers = 1;</code>
-       */
-      private com.google.protobuf.SingleFieldBuilder<
-          com.google.protobuf.Struct, com.google.protobuf.Struct.Builder, com.google.protobuf.StructOrBuilder> 
-          internalGetHeadersFieldBuilder() {
-        if (headersBuilder_ == null) {
-          headersBuilder_ = new com.google.protobuf.SingleFieldBuilder<
-              com.google.protobuf.Struct, com.google.protobuf.Struct.Builder, com.google.protobuf.StructOrBuilder>(
-                  getHeaders(),
-                  getParentForChildren(),
-                  isClean());
-          headers_ = null;
-        }
-        return headersBuilder_;
-      }
+            @java.lang.Override
+            public Builder clear() {
+                super.clear();
+                bitField0_ = 0;
+                headers_ = null;
+                if (headersBuilder_ != null) {
+                    headersBuilder_.dispose();
+                    headersBuilder_ = null;
+                }
+                data_ = com.google.protobuf.ByteString.EMPTY;
+                return this;
+            }
 
-      private com.google.protobuf.ByteString data_ = com.google.protobuf.ByteString.EMPTY;
-      /**
-       * <code>bytes data = 2;</code>
-       * @return The data.
-       */
-      @java.lang.Override
-      public com.google.protobuf.ByteString getData() {
-        return data_;
-      }
-      /**
-       * <code>bytes data = 2;</code>
-       * @param value The data to set.
-       * @return This builder for chaining.
-       */
-      public Builder setData(com.google.protobuf.ByteString value) {
-        if (value == null) { throw new NullPointerException(); }
-        data_ = value;
-        bitField0_ |= 0x00000002;
-        onChanged();
-        return this;
-      }
-      /**
-       * <code>bytes data = 2;</code>
-       * @return This builder for chaining.
-       */
-      public Builder clearData() {
-        bitField0_ = (bitField0_ & ~0x00000002);
-        data_ = getDefaultInstance().getData();
-        onChanged();
-        return this;
-      }
+            @java.lang.Override
+            public com.google.protobuf.Descriptors.Descriptor getDescriptorForType() {
+                return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd
+                        .internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcSpringMessage_descriptor;
+            }
 
-      // @@protoc_insertion_point(builder_scope:io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage)
+            @java.lang.Override
+            public io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage
+                    getDefaultInstanceForType() {
+                return io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage
+                        .getDefaultInstance();
+            }
+
+            @java.lang.Override
+            public io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage
+                    build() {
+                io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage
+                        result = buildPartial();
+                if (!result.isInitialized()) {
+                    throw newUninitializedMessageException(result);
+                }
+                return result;
+            }
+
+            @java.lang.Override
+            public io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage
+                    buildPartial() {
+                io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage
+                        result =
+                                new io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd
+                                        .GrpcSpringMessage(this);
+                if (bitField0_ != 0) {
+                    buildPartial0(result);
+                }
+                onBuilt();
+                return result;
+            }
+
+            private void buildPartial0(
+                    io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage
+                            result) {
+                int from_bitField0_ = bitField0_;
+                int to_bitField0_ = 0;
+                if (((from_bitField0_ & 0x00000001) != 0)) {
+                    result.headers_ = headersBuilder_ == null ? headers_ : headersBuilder_.build();
+                    to_bitField0_ |= 0x00000001;
+                }
+                if (((from_bitField0_ & 0x00000002) != 0)) {
+                    result.data_ = data_;
+                }
+                result.bitField0_ |= to_bitField0_;
+            }
+
+            @java.lang.Override
+            public Builder mergeFrom(com.google.protobuf.Message other) {
+                if (other
+                        instanceof
+                        io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd
+                                .GrpcSpringMessage) {
+                    return mergeFrom(
+                            (io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd
+                                            .GrpcSpringMessage)
+                                    other);
+                } else {
+                    super.mergeFrom(other);
+                    return this;
+                }
+            }
+
+            public Builder mergeFrom(
+                    io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage
+                            other) {
+                if (other
+                        == io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd
+                                .GrpcSpringMessage.getDefaultInstance()) return this;
+                if (other.hasHeaders()) {
+                    mergeHeaders(other.getHeaders());
+                }
+                if (!other.getData().isEmpty()) {
+                    setData(other.getData());
+                }
+                this.mergeUnknownFields(other.getUnknownFields());
+                onChanged();
+                return this;
+            }
+
+            @java.lang.Override
+            public final boolean isInitialized() {
+                return true;
+            }
+
+            @java.lang.Override
+            public Builder mergeFrom(
+                    com.google.protobuf.CodedInputStream input,
+                    com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+                    throws java.io.IOException {
+                if (extensionRegistry == null) {
+                    throw new java.lang.NullPointerException();
+                }
+                try {
+                    boolean done = false;
+                    while (!done) {
+                        int tag = input.readTag();
+                        switch (tag) {
+                            case 0:
+                                done = true;
+                                break;
+                            case 10: {
+                                input.readMessage(
+                                        internalGetHeadersFieldBuilder().getBuilder(), extensionRegistry);
+                                bitField0_ |= 0x00000001;
+                                break;
+                            } // case 10
+                            case 18: {
+                                data_ = input.readBytes();
+                                bitField0_ |= 0x00000002;
+                                break;
+                            } // case 18
+                            default: {
+                                if (!super.parseUnknownField(input, extensionRegistry, tag)) {
+                                    done = true; // was an endgroup tag
+                                }
+                                break;
+                            } // default:
+                        } // switch (tag)
+                    } // while (!done)
+                } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+                    throw e.unwrapIOException();
+                } finally {
+                    onChanged();
+                } // finally
+                return this;
+            }
+
+            /**
+             * <code>.google.protobuf.Struct headers = 1;</code>
+             * @return Whether the headers field is set.
+             */
+            public boolean hasHeaders() {
+                return ((bitField0_ & 0x00000001) != 0);
+            }
+
+            /**
+             * <code>.google.protobuf.Struct headers = 1;</code>
+             * @return The headers.
+             */
+            public com.google.protobuf.Struct getHeaders() {
+                if (headersBuilder_ == null) {
+                    return headers_ == null ? com.google.protobuf.Struct.getDefaultInstance() : headers_;
+                } else {
+                    return headersBuilder_.getMessage();
+                }
+            }
+
+            /**
+             * <code>.google.protobuf.Struct headers = 1;</code>
+             */
+            public Builder setHeaders(com.google.protobuf.Struct value) {
+                if (headersBuilder_ == null) {
+                    if (value == null) {
+                        throw new NullPointerException();
+                    }
+                    headers_ = value;
+                } else {
+                    headersBuilder_.setMessage(value);
+                }
+                bitField0_ |= 0x00000001;
+                onChanged();
+                return this;
+            }
+
+            /**
+             * <code>.google.protobuf.Struct headers = 1;</code>
+             */
+            public Builder setHeaders(com.google.protobuf.Struct.Builder builderForValue) {
+                if (headersBuilder_ == null) {
+                    headers_ = builderForValue.build();
+                } else {
+                    headersBuilder_.setMessage(builderForValue.build());
+                }
+                bitField0_ |= 0x00000001;
+                onChanged();
+                return this;
+            }
+
+            /**
+             * <code>.google.protobuf.Struct headers = 1;</code>
+             */
+            public Builder mergeHeaders(com.google.protobuf.Struct value) {
+                if (headersBuilder_ == null) {
+                    if (((bitField0_ & 0x00000001) != 0)
+                            && headers_ != null
+                            && headers_ != com.google.protobuf.Struct.getDefaultInstance()) {
+                        getHeadersBuilder().mergeFrom(value);
+                    } else {
+                        headers_ = value;
+                    }
+                } else {
+                    headersBuilder_.mergeFrom(value);
+                }
+                if (headers_ != null) {
+                    bitField0_ |= 0x00000001;
+                    onChanged();
+                }
+                return this;
+            }
+
+            /**
+             * <code>.google.protobuf.Struct headers = 1;</code>
+             */
+            public Builder clearHeaders() {
+                bitField0_ = (bitField0_ & ~0x00000001);
+                headers_ = null;
+                if (headersBuilder_ != null) {
+                    headersBuilder_.dispose();
+                    headersBuilder_ = null;
+                }
+                onChanged();
+                return this;
+            }
+
+            /**
+             * <code>.google.protobuf.Struct headers = 1;</code>
+             */
+            public com.google.protobuf.Struct.Builder getHeadersBuilder() {
+                bitField0_ |= 0x00000001;
+                onChanged();
+                return internalGetHeadersFieldBuilder().getBuilder();
+            }
+
+            /**
+             * <code>.google.protobuf.Struct headers = 1;</code>
+             */
+            public com.google.protobuf.StructOrBuilder getHeadersOrBuilder() {
+                if (headersBuilder_ != null) {
+                    return headersBuilder_.getMessageOrBuilder();
+                } else {
+                    return headers_ == null ? com.google.protobuf.Struct.getDefaultInstance() : headers_;
+                }
+            }
+
+            /**
+             * <code>.google.protobuf.Struct headers = 1;</code>
+             */
+            private com.google.protobuf.SingleFieldBuilder<
+                            com.google.protobuf.Struct,
+                            com.google.protobuf.Struct.Builder,
+                            com.google.protobuf.StructOrBuilder>
+                    internalGetHeadersFieldBuilder() {
+                if (headersBuilder_ == null) {
+                    headersBuilder_ = new com.google.protobuf.SingleFieldBuilder<
+                            com.google.protobuf.Struct,
+                            com.google.protobuf.Struct.Builder,
+                            com.google.protobuf.StructOrBuilder>(getHeaders(), getParentForChildren(), isClean());
+                    headers_ = null;
+                }
+                return headersBuilder_;
+            }
+
+            /**
+             * <code>bytes data = 2;</code>
+             * @return The data.
+             */
+            @java.lang.Override
+            public com.google.protobuf.ByteString getData() {
+                return data_;
+            }
+            /**
+             * <code>bytes data = 2;</code>
+             * @param value The data to set.
+             * @return This builder for chaining.
+             */
+            public Builder setData(com.google.protobuf.ByteString value) {
+                if (value == null) {
+                    throw new NullPointerException();
+                }
+                data_ = value;
+                bitField0_ |= 0x00000002;
+                onChanged();
+                return this;
+            }
+            /**
+             * <code>bytes data = 2;</code>
+             * @return This builder for chaining.
+             */
+            public Builder clearData() {
+                bitField0_ = (bitField0_ & ~0x00000002);
+                data_ = getDefaultInstance().getData();
+                onChanged();
+                return this;
+            }
+
+            // @@protoc_insertion_point(builder_scope:io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage)
+        }
     }
 
-    // @@protoc_insertion_point(class_scope:io.euhedral_execution.spring.core.protocols.grpc.protos.GrpcSpringMessage)
-    private static final io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage DEFAULT_INSTANCE;
-    static {
-      DEFAULT_INSTANCE = new io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage();
-    }
-
-    public static io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage getDefaultInstance() {
-      return DEFAULT_INSTANCE;
-    }
-
-    private static final com.google.protobuf.Parser<GrpcSpringMessage>
-        PARSER = new com.google.protobuf.AbstractParser<GrpcSpringMessage>() {
-      @java.lang.Override
-      public GrpcSpringMessage parsePartialFrom(
-          com.google.protobuf.CodedInputStream input,
-          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-          throws com.google.protobuf.InvalidProtocolBufferException {
-        Builder builder = newBuilder();
-        try {
-          builder.mergeFrom(input, extensionRegistry);
-        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-          throw e.setUnfinishedMessage(builder.buildPartial());
-        } catch (com.google.protobuf.UninitializedMessageException e) {
-          throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
-        } catch (java.io.IOException e) {
-          throw new com.google.protobuf.InvalidProtocolBufferException(e)
-              .setUnfinishedMessage(builder.buildPartial());
-        }
-        return builder.buildPartial();
-      }
-    };
-
-    public static com.google.protobuf.Parser<GrpcSpringMessage> parser() {
-      return PARSER;
-    }
-
-    @java.lang.Override
-    public com.google.protobuf.Parser<GrpcSpringMessage> getParserForType() {
-      return PARSER;
-    }
-
-    @java.lang.Override
-    public io.euhedral_execution.spring.core.transport.grpc.protos.GrpcTransportServiceMd.GrpcSpringMessage getDefaultInstanceForType() {
-      return DEFAULT_INSTANCE;
-    }
-
-  }
-
-  private static final com.google.protobuf.Descriptors.Descriptor
-    internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcMessage_descriptor;
-  private static final 
-    com.google.protobuf.GeneratedMessage.FieldAccessorTable
-      internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcMessage_fieldAccessorTable;
-  private static final com.google.protobuf.Descriptors.Descriptor
-    internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcSpringMessage_descriptor;
-  private static final 
-    com.google.protobuf.GeneratedMessage.FieldAccessorTable
-      internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcSpringMessage_fieldAccessorTable;
-
-  public static com.google.protobuf.Descriptors.FileDescriptor
-      getDescriptor() {
-    return descriptor;
-  }
-  private static  com.google.protobuf.Descriptors.FileDescriptor
-      descriptor;
-  static {
-    java.lang.String[] descriptorData = {
-      "\nRio/euhedral_execution/spring/core/tran" +
-      "sport/grpc/protos/GrpcTransportService.p" +
-      "roto\0227io.euhedral_execution.spring.core." +
-      "protocols.grpc.protos\032\034google/protobuf/s" +
-      "truct.proto\032\031google/protobuf/any.proto\"\277" +
-      "\001\n\013GrpcMessage\022\021\n\tisOrdered\030\001 \001(\010\022c\n\rspr" +
-      "ingMessage\030\002 \001(\0132J.io.euhedral_execution" +
-      ".spring.core.protocols.grpc.protos.GrpcS" +
-      "pringMessageH\000\022-\n\rcustomMessage\030\003 \001(\0132\024." +
-      "google.protobuf.AnyH\000B\t\n\007message\"K\n\021Grpc" +
-      "SpringMessage\022(\n\007headers\030\001 \001(\0132\027.google." +
-      "protobuf.Struct\022\014\n\004data\030\002 \001(\0142\244\005\n\024GrpcTr" +
-      "ansportService\022\231\001\n\013UnaryMethod\022D.io.euhe" +
-      "dral_execution.spring.core.protocols.grp" +
-      "c.protos.GrpcMessage\032D.io.euhedral_execu" +
-      "tion.spring.core.protocols.grpc.protos.G" +
-      "rpcMessage\022\242\001\n\022ClientStreamMethod\022D.io.e" +
-      "uhedral_execution.spring.core.protocols." +
-      "grpc.protos.GrpcMessage\032D.io.euhedral_ex" +
-      "ecution.spring.core.protocols.grpc.proto" +
-      "s.GrpcMessage(\001\022\242\001\n\022ServerStreamMethod\022D" +
-      ".io.euhedral_execution.spring.core.proto" +
-      "cols.grpc.protos.GrpcMessage\032D.io.euhedr" +
-      "al_execution.spring.core.protocols.grpc." +
-      "protos.GrpcMessage0\001\022\245\001\n\023BidirectionalMe" +
-      "thod\022D.io.euhedral_execution.spring.core" +
-      ".protocols.grpc.protos.GrpcMessage\032D.io." +
-      "euhedral_execution.spring.core.protocols" +
-      ".grpc.protos.GrpcMessage(\0010\001BQ\n7io.euhed" +
-      "ral_execution.spring.core.transport.grpc" +
-      ".protosB\026GrpcTransportServiceMdb\006proto3"
-    };
-    descriptor = com.google.protobuf.Descriptors.FileDescriptor
-      .internalBuildGeneratedFileFrom(descriptorData,
-        new com.google.protobuf.Descriptors.FileDescriptor[] {
-          com.google.protobuf.StructProto.getDescriptor(),
-          com.google.protobuf.AnyProto.getDescriptor(),
-        });
-    internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcMessage_descriptor =
-      getDescriptor().getMessageType(0);
-    internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcMessage_fieldAccessorTable = new
-      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
-        internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcMessage_descriptor,
-        new java.lang.String[] { "IsOrdered", "SpringMessage", "CustomMessage", "Message", });
-    internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcSpringMessage_descriptor =
-      getDescriptor().getMessageType(1);
-    internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcSpringMessage_fieldAccessorTable = new
-      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
-        internal_static_io_euhedral_execution_spring_core_protocols_grpc_protos_GrpcSpringMessage_descriptor,
-        new java.lang.String[] { "Headers", "Data", });
-    descriptor.resolveAllFeaturesImmutable();
-    com.google.protobuf.StructProto.getDescriptor();
-    com.google.protobuf.AnyProto.getDescriptor();
-  }
-
-  // @@protoc_insertion_point(outer_class_scope)
+    // @@protoc_insertion_point(outer_class_scope)
 }

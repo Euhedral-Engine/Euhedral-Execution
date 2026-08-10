@@ -37,14 +37,16 @@ public class LightContentionThroughput {
     private static final Logger LOGGER = LoggerFactory.getLogger(LightContentionThroughput.class);
     private static final int BATCH = 10_000_000;
 
+    private LightContentionThroughput() {}
+
     private static void await(PaddedLongAdder counters) {
         int spin = 0;
         long deadline = System.nanoTime() + TimeUnit.MINUTES.toNanos(1);
 
         while (System.nanoTime() < deadline) {
             if ((spin++ & 31) == 0 && counters.sum() >= BATCH) {
-                    break;
-                }
+                break;
+            }
 
             if ((spin & 127) == 0) {
                 Thread.yield();
@@ -54,10 +56,6 @@ public class LightContentionThroughput {
         }
     }
 
-    private LightContentionThroughput() {
-
-    }
-
     @State(Scope.Benchmark)
     @BenchmarkMode({Mode.Throughput})
     @OutputTimeUnit(TimeUnit.NANOSECONDS)
@@ -65,8 +63,8 @@ public class LightContentionThroughput {
     @Measurement(iterations = 5, time = 5, timeUnit = TimeUnit.SECONDS)
     @Fork(1)
     public static class PCore {
-        private final PaddedLongAdder counters = new PaddedLongAdder(
-                Runtime.getRuntime().availableProcessors(), true, true);
+        private final PaddedLongAdder counters =
+                new PaddedLongAdder(Runtime.getRuntime().availableProcessors(), true, true);
         private final RepeatingSink[] sinks = new RepeatingSink[10];
         private ControlPlaneLattice controlPlane;
         private boolean skip;
@@ -89,17 +87,20 @@ public class LightContentionThroughput {
             long idHash = HasherApi.mix(HasherApi.BASE_SEED);
 
             int parts = BATCH / sinks.length;
-            for(int i = 0; i < sinks.length; i++){
+            for (int i = 0; i < sinks.length; i++) {
                 sinks[i] = new RepeatingSink(NoOpFrame.generate(idHash, parts, counters));
             }
 
             LOGGER.info("Benchmark is using P cpus {}", cpus);
             BaseCloneableObject base = new BaseCloneableObject(new NoOpExecutor(blackhole));
-            LatticeConfig config = new LatticeConfig("LightContentionThroughputBenchmark", cpus,
-                    Duration.ofSeconds(1), ControlPlaneShard.createBaseShard(base));
+            LatticeConfig config = new LatticeConfig(
+                    "LightContentionThroughputBenchmark",
+                    cpus,
+                    Duration.ofSeconds(1),
+                    ControlPlaneShard.createBaseShard(base));
             this.controlPlane = ControlPlaneLattice.getOrCreate(config);
             this.controlPlane.start();
-            for(var sink : sinks) {
+            for (var sink : sinks) {
                 this.controlPlane.addUpstream(sink);
             }
         }
@@ -130,8 +131,8 @@ public class LightContentionThroughput {
     @Measurement(iterations = 5, time = 5, timeUnit = TimeUnit.SECONDS)
     @Fork(1)
     public static class ECore {
-        private final PaddedLongAdder counters = new PaddedLongAdder(
-                Runtime.getRuntime().availableProcessors(), true, true);
+        private final PaddedLongAdder counters =
+                new PaddedLongAdder(Runtime.getRuntime().availableProcessors(), true, true);
         private final RepeatingSink[] sinks = new RepeatingSink[10];
         private ControlPlaneLattice controlPlane;
         private boolean skip;
@@ -163,17 +164,20 @@ public class LightContentionThroughput {
             long idHash = HasherApi.mix(HasherApi.BASE_SEED);
 
             int parts = BATCH / sinks.length;
-            for(int i = 0; i < sinks.length; i++){
+            for (int i = 0; i < sinks.length; i++) {
                 sinks[i] = new RepeatingSink(NoOpFrame.generate(idHash, parts, counters));
             }
 
             LOGGER.info("Benchmark is using E cpus {}", cpus);
             BaseCloneableObject base = new BaseCloneableObject(new NoOpExecutor(blackhole));
-            LatticeConfig config = new LatticeConfig("LightContentionThroughputBenchmark", cpus,
-                    Duration.ofSeconds(1), ControlPlaneShard.createBaseShard(base));
+            LatticeConfig config = new LatticeConfig(
+                    "LightContentionThroughputBenchmark",
+                    cpus,
+                    Duration.ofSeconds(1),
+                    ControlPlaneShard.createBaseShard(base));
             this.controlPlane = ControlPlaneLattice.getOrCreate(config);
             this.controlPlane.start();
-            for(var sink : sinks) {
+            for (var sink : sinks) {
                 this.controlPlane.addUpstream(sink);
             }
         }

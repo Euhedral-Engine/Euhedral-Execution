@@ -25,21 +25,13 @@ class ControlPlaneCacheTest {
 
         when(clone.shardName()).thenReturn("test");
         when(clone.coreId()).thenReturn(0);
-        when(clone.getCpuSet()).thenReturn(new int[]{0});
+        when(clone.getCpuSet()).thenReturn(new int[] {0});
 
         return clone;
     }
 
     private CacheConfig config() {
-        return new CacheConfig(
-                cloneConfig(),
-                0.7,
-                1,
-                4,
-                64,
-                null,
-                null
-        );
+        return new CacheConfig(cloneConfig(), 0.7, 1, 4, 64, null, null);
     }
 
     private ControlPlaneCache manager() {
@@ -134,7 +126,7 @@ class ControlPlaneCacheTest {
 
         CoreSnapshot snapshot = mock(CoreSnapshot.class);
         CpuSnapshot cpuSnap = mock(CpuSnapshot.class);
-        when(snapshot.cpuSnapshots()).thenReturn(new CpuSnapshot[]{cpuSnap});
+        when(snapshot.cpuSnapshots()).thenReturn(new CpuSnapshot[] {cpuSnap});
         when(cpuSnap.pressure()).thenReturn(0.50);
 
         when(snapshot.memoryLimit()).thenReturn(1024L * 1024L);
@@ -157,7 +149,7 @@ class ControlPlaneCacheTest {
 
         CoreSnapshot highPressure = mock(CoreSnapshot.class);
         CpuSnapshot highCpu = mock(CpuSnapshot.class);
-        when(highPressure.cpuSnapshots()).thenReturn(new CpuSnapshot[]{highCpu});
+        when(highPressure.cpuSnapshots()).thenReturn(new CpuSnapshot[] {highCpu});
         when(highCpu.pressure()).thenReturn(0.80);
 
         manager.update(highPressure);
@@ -165,7 +157,7 @@ class ControlPlaneCacheTest {
 
         CoreSnapshot lowPressure = mock(CoreSnapshot.class);
         CpuSnapshot lowCpu = mock(CpuSnapshot.class);
-        when(lowPressure.cpuSnapshots()).thenReturn(new CpuSnapshot[]{lowCpu});
+        when(lowPressure.cpuSnapshots()).thenReturn(new CpuSnapshot[] {lowCpu});
         when(lowCpu.pressure()).thenReturn(0.00);
 
         manager.update(lowPressure);

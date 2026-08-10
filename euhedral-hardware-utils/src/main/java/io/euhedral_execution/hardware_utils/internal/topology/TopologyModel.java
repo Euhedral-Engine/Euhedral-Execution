@@ -29,12 +29,21 @@ public final class TopologyModel {
     private final int socketCount;
     private final int cacheLineBytes;
 
-    TopologyModel(int[] activeLogicalIds, UnmodifiableBitSet cpuSet,
-            UnmodifiableBitSet pCoreSet, UnmodifiableBitSet eCoreSet,
-            UnmodifiableBitSet pCpuSet, UnmodifiableBitSet eCpuSet,
-            Map<Integer, CpuCacheLayout> cacheLayout, Map<Integer, CpuInfo> cpuInfo,
-            Map<Integer, CoreInfo> coreInfo, Map<Integer, SocketInfo> socketInfo,
-            int cpuCount, int coreCount, int socketCount, int cacheLineBytes) {
+    TopologyModel(
+            int[] activeLogicalIds,
+            UnmodifiableBitSet cpuSet,
+            UnmodifiableBitSet pCoreSet,
+            UnmodifiableBitSet eCoreSet,
+            UnmodifiableBitSet pCpuSet,
+            UnmodifiableBitSet eCpuSet,
+            Map<Integer, CpuCacheLayout> cacheLayout,
+            Map<Integer, CpuInfo> cpuInfo,
+            Map<Integer, CoreInfo> coreInfo,
+            Map<Integer, SocketInfo> socketInfo,
+            int cpuCount,
+            int coreCount,
+            int socketCount,
+            int cacheLineBytes) {
         this.activeLogicalIds = activeLogicalIds.clone();
         this.cpuSet = cpuSet;
         this.pCoreSet = pCoreSet;
@@ -120,8 +129,7 @@ public final class TopologyModel {
         TopologyModel owner();
     }
 
-    private static final class ProjectionMap<V> extends AbstractMap<Integer, V>
-            implements OwnedProjection {
+    private static final class ProjectionMap<V> extends AbstractMap<Integer, V> implements OwnedProjection {
 
         private final TopologyModel owner;
         private final Map<Integer, V> delegate;

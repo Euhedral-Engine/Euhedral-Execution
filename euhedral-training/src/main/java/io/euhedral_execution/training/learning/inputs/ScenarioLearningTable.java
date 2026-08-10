@@ -11,10 +11,12 @@ import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
-public record ScenarioLearningTable(List<ScenarioLearningRow> rows,
-                                    SortedMap<PolicyId, PolicyVector> policies,
-                                    SortedSet<SourceScenario> requiredScenarios,
-                                    ScenarioDatasetAudit audit, String datasetFingerprintSha256) {
+public record ScenarioLearningTable(
+        List<ScenarioLearningRow> rows,
+        SortedMap<PolicyId, PolicyVector> policies,
+        SortedSet<SourceScenario> requiredScenarios,
+        ScenarioDatasetAudit audit,
+        String datasetFingerprintSha256) {
 
     public ScenarioLearningTable {
         rows = List.copyOf(rows);
@@ -27,16 +29,21 @@ public record ScenarioLearningTable(List<ScenarioLearningRow> rows,
         if (audit.policyCount() != policies.size()
                 || audit.requiredScenarioCount() != requiredScenarios.size()
                 || audit.includedStrongRowCount() + audit.includedWeakRowCount() != rows.size()
-                || audit.rowCount() != audit.includedStrongRowCount()
-                + audit.includedWeakRowCount() + audit.weakExcludedRowCount()
-                + audit.missingRowCount() + audit.noValidRunRowCount()
-                + audit.noAcceptedCalibrationRowCount() + audit.nonRequiredRowCount()) {
+                || audit.rowCount()
+                        != audit.includedStrongRowCount()
+                                + audit.includedWeakRowCount()
+                                + audit.weakExcludedRowCount()
+                                + audit.missingRowCount()
+                                + audit.noValidRunRowCount()
+                                + audit.noAcceptedCalibrationRowCount()
+                                + audit.nonRequiredRowCount()) {
             throw new IllegalArgumentException("Learning-table audit counts disagree");
         }
         TreeSet<SourceScenario> represented = new TreeSet<>();
         for (ScenarioLearningRow row : rows) {
             PolicyVector registered = policies.get(row.policy().id());
-            if (registered == null || !registered.bitwiseEquals(row.policy())
+            if (registered == null
+                    || !registered.bitwiseEquals(row.policy())
                     || !requiredScenarios.contains(row.scenario())) {
                 throw new IllegalArgumentException("Learning row is outside the table registry");
             }

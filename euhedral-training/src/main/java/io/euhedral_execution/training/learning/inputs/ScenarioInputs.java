@@ -6,14 +6,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Objects;
 
-public record ScenarioInputs(Path scenarioResults, Path robustLeaderVectors,
-                             Path incompletePolicyVectors) {
-
-    public static ScenarioInputs from(DataMerger.MergeArtifacts artifacts) {
-        return new ScenarioInputs(artifacts.scenarioResults(),
-                artifacts.robustLeaderVectors(),
-                artifacts.incompleteVectors());
-    }
+public record ScenarioInputs(Path scenarioResults, Path robustLeaderVectors, Path incompletePolicyVectors) {
 
     public ScenarioInputs {
         Objects.requireNonNull(scenarioResults);
@@ -21,9 +14,13 @@ public record ScenarioInputs(Path scenarioResults, Path robustLeaderVectors,
         Objects.requireNonNull(incompletePolicyVectors);
     }
 
+    public static ScenarioInputs from(DataMerger.MergeArtifacts artifacts) {
+        return new ScenarioInputs(
+                artifacts.scenarioResults(), artifacts.robustLeaderVectors(), artifacts.incompleteVectors());
+    }
+
     public void requireFiles() throws IOException {
-        for (Path path : new Path[]{scenarioResults, robustLeaderVectors,
-                incompletePolicyVectors}) {
+        for (Path path : new Path[] {scenarioResults, robustLeaderVectors, incompletePolicyVectors}) {
             if (!Files.isRegularFile(path)) {
                 throw new IOException("Not a regular Phase 1 input file: " + path);
             }

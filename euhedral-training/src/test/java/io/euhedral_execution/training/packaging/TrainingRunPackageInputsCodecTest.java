@@ -19,8 +19,14 @@ class TrainingRunPackageInputsCodecTest {
 
     @Test
     void canonicalRoundTripPreservesRawSchedulerSeed() throws Exception {
-        var inputs = new TrainingRunPackageInputs("run.partial.r00000001", "run", 1,
-                -1L, "a".repeat(40), true, BenchmarkExecutionConfig.defaults(),
+        var inputs = new TrainingRunPackageInputs(
+                "run.partial.r00000001",
+                "run",
+                1,
+                -1L,
+                "a".repeat(40),
+                true,
+                BenchmarkExecutionConfig.defaults(),
                 new TreeSet<>(java.util.List.of(SourceScenario.of("env", 3, 8))));
         Path path = temp.resolve("inputs.properties");
         Files.writeString(path, TrainingRunPackageInputsCodec.encode(inputs));
@@ -31,7 +37,6 @@ class TrainingRunPackageInputsCodecTest {
     void rejectsCarriageReturnsAndOutOfOrderKeys() throws Exception {
         Path path = temp.resolve("bad.properties");
         Files.writeString(path, "artifact_type=x\r\nschema_version=1\r\n");
-        assertThatThrownBy(() -> TrainingRunPackageInputsCodec.read(path))
-                .isInstanceOf(java.io.IOException.class);
+        assertThatThrownBy(() -> TrainingRunPackageInputsCodec.read(path)).isInstanceOf(java.io.IOException.class);
     }
 }

@@ -11,8 +11,7 @@ class TopologyMapperVersionTest {
 
     @Test
     void versionsOnlyPublishedMembershipChanges() {
-        TopologyMapper mapper = new TopologyMapper(TopologyHelpers.twoSocketModel(),
-                TopologyHelpers.bits(0, 3, 7));
+        TopologyMapper mapper = new TopologyMapper(TopologyHelpers.twoSocketModel(), TopologyHelpers.bits(0, 3, 7));
         assertEquals(-1, mapper.getGlobalVersion());
 
         mapper.update(TopologyHelpers.utilization(TopologyHelpers.bits(0, 3, 7)));

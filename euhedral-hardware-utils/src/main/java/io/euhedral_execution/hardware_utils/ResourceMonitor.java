@@ -16,7 +16,6 @@ import io.euhedral_execution.hardware_utils.internal.sampling.SystemSnapshotComp
 import io.euhedral_execution.hardware_utils.internal.sampling.samples.FastHardwareSample;
 import io.euhedral_execution.hardware_utils.internal.sampling.samples.IntervalHardwareSample;
 
-
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.time.Duration;
@@ -46,24 +45,21 @@ public class ResourceMonitor implements AutoCloseable {
         }
     }
 
-    private volatile int state = NEW;
-    private volatile boolean evaluationActive;
-    private volatile boolean publicationClaimed;
-
     private final TopologyUpdater topology;
     private final DetailedSystemSnapshotProvider provider;
     private final long sampleRateNs;
     private final MonotonicClock clock;
     private final DeadlineWaiter waiter;
     private final ThreadFactory threadFactory;
-
     private final LatestValueDispatcher dispatcher;
     private final SampleStateEngine stateEngine;
-    
+    private volatile int state = NEW;
+    private volatile boolean evaluationActive;
+    private volatile boolean publicationClaimed;
     private volatile PressureState pressureState;
     private volatile Thread pollingThread;
     private volatile HardwareUtilization lastUtilization;
-    
+
     // For coalesced stopped read
     private volatile boolean coalescedReadPending = false;
 
@@ -76,12 +72,16 @@ public class ResourceMonitor implements AutoCloseable {
     }
 
     ResourceMonitor(TopologyMapper mapper, Duration sampleRate, SystemSnapshotProvider provider) {
-        this(TopologyUpdater.from(mapper), sampleRate, provider, 
-             System::nanoTime, DeadlineWaiter.DEFAULT, Thread::new);
+        this(TopologyUpdater.from(mapper), sampleRate, provider, System::nanoTime, DeadlineWaiter.DEFAULT, Thread::new);
     }
 
-    ResourceMonitor(TopologyUpdater topology, Duration sampleRate, SystemSnapshotProvider provider,
-                    MonotonicClock clock, DeadlineWaiter waiter, ThreadFactory threadFactory) {
+    ResourceMonitor(
+            TopologyUpdater topology,
+            Duration sampleRate,
+            SystemSnapshotProvider provider,
+            MonotonicClock clock,
+            DeadlineWaiter waiter,
+            ThreadFactory threadFactory) {
         try {
             if (sampleRate == null || sampleRate.toNanos() <= 0) {
                 throw new IllegalArgumentException("Invalid sample rate");
@@ -96,12 +96,12 @@ public class ResourceMonitor implements AutoCloseable {
             this.threadFactory = threadFactory;
             this.provider = SystemSnapshotCompatibilityAdapter.wrap(provider);
             this.dispatcher = new LatestValueDispatcher();
-            
+
             // Initialization: do not sample in constructor.
             int cpuCount = SystemInfo.getCpuCount();
             this.stateEngine = new SampleStateEngine(cpuCount, this.sampleRateNs);
             this.pressureState = new PressureState(cpuCount);
-            
+
         } catch (Throwable t) {
             this.state = CLOSED;
             throw t;
@@ -113,7 +113,7 @@ public class ResourceMonitor implements AutoCloseable {
             int s = (int) STATE.getAcquire(this);
             if (s == CLOSING || s == CLOSED) return;
             if (s == RUNNING || s == STARTING) return;
-            
+
             if (STATE.compareAndSet(this, s, STARTING)) {
                 if (s == NEW) {
                     Thread t = threadFactory.newThread(this::runLoop);
@@ -151,17 +151,17 @@ public class ResourceMonitor implements AutoCloseable {
             }
             if (STATE.compareAndSet(this, s, CLOSING)) {
                 dispatcher.beginClose(this::cleanup);
-                
+
                 Thread t = pollingThread;
                 if (t != null && t != Thread.currentThread()) {
                     t.interrupt();
                 }
-                
+
                 // wait for eval & pub to finish
                 while ((boolean) EVAL_ACTIVE.getAcquire(this) || (boolean) PUB_CLAIMED.getAcquire(this)) {
                     Thread.onSpinWait();
                 }
-                
+
                 STATE.setRelease(this, CLOSED);
                 dispatcher.awaitClosed();
                 return;
@@ -172,7 +172,7 @@ public class ResourceMonitor implements AutoCloseable {
     public void addListener(MonitorListener listener) {
         dispatcher.addListener(listener);
     }
-    
+
     public void removeListener(MonitorListener listener) {
         dispatcher.removeListener(listener);
     }
@@ -192,7 +192,7 @@ public class ResourceMonitor implements AutoCloseable {
             while (true) {
                 int s = (int) STATE.getAcquire(this);
                 if (s == CLOSING || s == CLOSED) break;
-                
+
                 if (s == STOPPED) {
                     if (coalescedReadPending) {
                         evaluateAndPublish();
@@ -220,7 +220,7 @@ public class ResourceMonitor implements AutoCloseable {
                 }
 
                 waiter.await(nextTick, clock);
-                
+
                 // re-check state after wait
                 s = (int) STATE.getAcquire(this);
                 if (s == CLOSING || s == CLOSED) break;
@@ -254,7 +254,7 @@ public class ResourceMonitor implements AutoCloseable {
                 pressureState = eval.state();
                 HardwareUtilization util = eval.candidate();
                 this.lastUtilization = util;
-                
+
                 PUB_CLAIMED.setRelease(this, true);
                 try {
                     s = (int) STATE.getAcquire(this);
@@ -270,7 +270,7 @@ public class ResourceMonitor implements AutoCloseable {
             EVAL_ACTIVE.setRelease(this, false);
         }
     }
-    
+
     public final HardwareUtilization getUtilization() {
         return lastUtilization;
     }

@@ -16,8 +16,10 @@ class SystemInfoFallbackTest {
     @Test
     void initializesWithIncompletePlatformTopology() {
         TopologyModel model = TopologyBootstrap.normalize(
-                () -> new TopologyInput("macos", List.of(), List.of()), 4,
-                LoggerFactory.getLogger(getClass()), "fixture");
+                () -> new TopologyInput("macos", List.of(), List.of()),
+                4,
+                LoggerFactory.getLogger(getClass()),
+                "fixture");
 
         assertEquals(4, model.cpuCount());
         assertEquals(4, model.coreCount());

@@ -23,8 +23,10 @@ public class EuhedralGrpcClient {
 
     private final ControlPlaneLattice controlPlane;
 
-    protected EuhedralGrpcClient(ControlPlaneLattice controlPlane,
-            GrpcTransportServiceGrpc.GrpcTransportServiceStub stub, int recycleCapacity,
+    protected EuhedralGrpcClient(
+            ControlPlaneLattice controlPlane,
+            GrpcTransportServiceGrpc.GrpcTransportServiceStub stub,
+            int recycleCapacity,
             int sendQueueChunkSize) {
         this.controlPlane = controlPlane;
         this.stub = stub;
@@ -33,8 +35,7 @@ public class EuhedralGrpcClient {
     }
 
     public void unaryRequest(GrpcMessage message) {
-        EuhedralGrpcClientHandler handler = new EuhedralGrpcClientHandler(
-                CommunicationMethod.SINGLE_RESPONSE, 4, 4);
+        EuhedralGrpcClientHandler handler = new EuhedralGrpcClientHandler(CommunicationMethod.SINGLE_RESPONSE, 4, 4);
 
         this.stub.unaryMethod(message, handler);
         this.controlPlane.addUpstream(handler);
@@ -59,8 +60,8 @@ public class EuhedralGrpcClient {
     }
 
     public ServerHandle bidirectionalStream() {
-        EuhedralGrpcClientHandler handler = new EuhedralGrpcClientHandler(CommunicationMethod.BIDI,
-                this.recycleCapacity, this.sendQueueChunkSize);
+        EuhedralGrpcClientHandler handler =
+                new EuhedralGrpcClientHandler(CommunicationMethod.BIDI, this.recycleCapacity, this.sendQueueChunkSize);
 
         this.stub.bidirectionalMethod(handler);
         this.controlPlane.addUpstream(handler);

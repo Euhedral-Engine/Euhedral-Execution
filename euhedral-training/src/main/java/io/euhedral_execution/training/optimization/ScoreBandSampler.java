@@ -23,16 +23,14 @@ public final class ScoreBandSampler {
     private final Set<PolicyId> acceptedIds = new HashSet<>();
 
     @SuppressWarnings("unchecked")
-    public ScoreBandSampler(int capacity, int[] bandWeights, long bandSeed, int iteration,
-            int overflowCapacity) {
+    public ScoreBandSampler(int capacity, int[] bandWeights, long bandSeed, int iteration, int overflowCapacity) {
         if (capacity < 0 || iteration < 0 || overflowCapacity < 0) {
             throw new IllegalArgumentException("Requested counts must not be negative");
         }
         if (bandWeights.length != 10) {
             throw new IllegalArgumentException("Phase 3 score bands require ten weights");
         }
-        this.capacities = HamiltonAllocator.allocate(capacity, bandWeights.clone(),
-                BAND_TIE_ORDER);
+        this.capacities = HamiltonAllocator.allocate(capacity, bandWeights.clone(), BAND_TIE_ORDER);
         this.seed = bandSeed;
         this.iteration = iteration;
         this.bands = new List[10];
@@ -40,9 +38,37 @@ public final class ScoreBandSampler {
             bands[i] = new ArrayList<>();
         }
         this.overflowCapacity = overflowCapacity;
-        this.overflow = new PriorityQueue<>(Comparator.comparing(
-                PredictedCandidate::prediction,
-                PredictedPolicyComparator.BEST_FIRST.reversed()));
+        this.overflow = new PriorityQueue<>(
+                Comparator.comparing(PredictedCandidate::prediction, PredictedPolicyComparator.BEST_FIRST.reversed()));
+    }
+
+    public static int[] topHeavyCapacities(int total) {
+        return HamiltonAllocator.allocate(total, DEFAULT_WEIGHTS, BAND_TIE_ORDER);
+    }
+
+    public static int band(double predictedWorstQuality) {
+        if (!Double.isFinite(predictedWorstQuality) || predictedWorstQuality < 0.0 || predictedWorstQuality > 1.0) {
+            throw new IllegalArgumentException("Quality must be in [0, 1]");
+        }
+        return Math.min(9, (int) StrictMath.floor(predictedWorstQuality * 10.0));
+    }
+
+    private static int sum(int[] values) {
+        int sum = 0;
+        for (int value : values) {
+            sum = Math.addExact(sum, value);
+        }
+        return sum;
+    }
+
+    private static int compareEntry(Entry left, Entry right) {
+        int result = Long.compareUnsigned(left.samplingKey(), right.samplingKey());
+        return result != 0
+                ? result
+                : left.candidate()
+                        .policy()
+                        .id()
+                        .compareTo(right.candidate().policy().id());
     }
 
     public void accept(PredictedCandidate candidate) {
@@ -50,9 +76,12 @@ public final class ScoreBandSampler {
             return;
         }
         int band = band(candidate.prediction().predictedWorstQuality());
-        retainBand(band, new Entry(candidate,
-                SchedulerSeeds.scoreBandSamplingKey(seed, iteration, band,
-                        candidate.policy().id())));
+        retainBand(
+                band,
+                new Entry(
+                        candidate,
+                        SchedulerSeeds.scoreBandSamplingKey(
+                                seed, iteration, band, candidate.policy().id())));
         retainOverflow(candidate);
     }
 
@@ -60,16 +89,14 @@ public final class ScoreBandSampler {
         ArrayList<PredictedCandidate> result = new ArrayList<>();
         Set<PolicyId> emitted = new HashSet<>();
         for (int band = 9; band >= 0; band--) {
-            bands[band].stream().sorted(ScoreBandSampler::compareEntry)
-                    .forEach(entry -> {
-                        if (emitted.add(entry.candidate().policy().id())) {
-                            result.add(entry.candidate());
-                        }
-                    });
+            bands[band].stream().sorted(ScoreBandSampler::compareEntry).forEach(entry -> {
+                if (emitted.add(entry.candidate().policy().id())) {
+                    result.add(entry.candidate());
+                }
+            });
         }
         ArrayList<PredictedCandidate> backfill = new ArrayList<>(overflow);
-        backfill.sort(Comparator.comparing(PredictedCandidate::prediction,
-                PredictedPolicyComparator.BEST_FIRST));
+        backfill.sort(Comparator.comparing(PredictedCandidate::prediction, PredictedPolicyComparator.BEST_FIRST));
         int requested = sum(capacities);
         for (PredictedCandidate candidate : backfill) {
             if (result.size() >= requested) {
@@ -80,18 +107,6 @@ public final class ScoreBandSampler {
             }
         }
         return List.copyOf(result);
-    }
-
-    public static int[] topHeavyCapacities(int total) {
-        return HamiltonAllocator.allocate(total, DEFAULT_WEIGHTS, BAND_TIE_ORDER);
-    }
-
-    public static int band(double predictedWorstQuality) {
-        if (!Double.isFinite(predictedWorstQuality) || predictedWorstQuality < 0.0
-                || predictedWorstQuality > 1.0) {
-            throw new IllegalArgumentException("Quality must be in [0, 1]");
-        }
-        return Math.min(9, (int) StrictMath.floor(predictedWorstQuality * 10.0));
     }
 
     private void retainBand(int band, Entry entry) {
@@ -117,20 +132,5 @@ public final class ScoreBandSampler {
         }
     }
 
-    private static int sum(int[] values) {
-        int sum = 0;
-        for (int value : values) {
-            sum = Math.addExact(sum, value);
-        }
-        return sum;
-    }
-
-    private static int compareEntry(Entry left, Entry right) {
-        int result = Long.compareUnsigned(left.samplingKey(), right.samplingKey());
-        return result != 0 ? result
-                : left.candidate().policy().id().compareTo(right.candidate().policy().id());
-    }
-
-    private record Entry(PredictedCandidate candidate, long samplingKey) {
-    }
+    private record Entry(PredictedCandidate candidate, long samplingKey) {}
 }

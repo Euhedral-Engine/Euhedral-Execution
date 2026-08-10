@@ -28,6 +28,99 @@ import java.util.OptionalDouble;
 import org.junit.jupiter.api.Test;
 
 class ScenarioModelEvaluatorTest {
+    private static EvaluationSummary acceptanceSummary(
+            String kind, double mae, double spearman, double precision, double worst) {
+        SourceScenario scenario = scenarios().first();
+        ScenarioEvaluationMetrics metric = new ScenarioEvaluationMetrics(
+                kind,
+                "all",
+                ScenarioFeatureSet.RATIO_ONLY,
+                scenario,
+                10,
+                10,
+                mae,
+                mae,
+                0,
+                OptionalDouble.of(spearman),
+                1,
+                1,
+                OptionalDouble.of(precision),
+                OptionalDouble.of(1),
+                0.2,
+                1,
+                0,
+                0,
+                EvaluationStatus.OK);
+        return new EvaluationSummary(
+                kind,
+                ScenarioFeatureSet.RATIO_ONLY,
+                List.of(metric),
+                OptionalDouble.of(mae),
+                OptionalDouble.of(mae),
+                OptionalDouble.of(spearman),
+                OptionalDouble.of(precision),
+                OptionalDouble.of(1),
+                OptionalDouble.of(worst),
+                OptionalDouble.of(mae));
+    }
+
+    private static ScenarioAblationPlanner.Decision passingAblation() {
+        AblationMetric metric = new AblationMetric(
+                "VALIDATION_CONTEXT_GATE",
+                "all",
+                ScenarioFeatureSet.RATIO_ONLY,
+                ScenarioFeatureSet.POLICY_ONLY,
+                "all",
+                10,
+                OptionalDouble.of(0.19),
+                OptionalDouble.of(0.5),
+                OptionalDouble.of(-0.01),
+                OptionalDouble.of(0),
+                true,
+                "PASS",
+                "CONTEXT_VALIDATED");
+        FeatureSelectionDecision selection = new FeatureSelectionDecision(
+                FeatureSelectionMode.RATIO_ONLY,
+                ScenarioFeatureSet.RATIO_ONLY,
+                List.of(metric),
+                "RATIO_ONLY_REQUESTED");
+        return new ScenarioAblationPlanner.Decision(selection, true, true);
+    }
+
+    private static ScenarioLearningRow row(PolicyVector policy, SourceScenario scenario, double quality) {
+        return new ScenarioLearningRow(
+                policy, scenario, ScenarioResultStatus.VALID_STRONG, quality, 10, 9, 11, 1, 0.1, 0);
+    }
+
+    private static PolicyPredictionCurve curve(
+            PolicyVector policy,
+            SourceScenario scenario,
+            double prediction,
+            double epistemic,
+            double low,
+            double high) {
+        return new PolicyPredictionCurve(
+                policy,
+                List.of(new ScenarioPrediction(
+                        scenario,
+                        clamp(prediction),
+                        0.1,
+                        clamp(low),
+                        clamp(high),
+                        0.5,
+                        0.1,
+                        epistemic,
+                        epistemic * 2)));
+    }
+
+    private static ScenarioPrediction prediction(SourceScenario scenario, double prediction, double epistemic) {
+        return new ScenarioPrediction(scenario, clamp(prediction), 0.1, 0.05, 0.95, 0.5, 0.1, epistemic, epistemic * 2);
+    }
+
+    private static double clamp(double value) {
+        return StrictMath.max(0, StrictMath.min(1, value));
+    }
+
     @Test
     void computesExactErrorsCoverageAndUncertainty() {
         SourceScenario scenario = scenarios().first();
@@ -37,11 +130,16 @@ class ScenarioModelEvaluatorTest {
         for (int index = 0; index < policies.size(); index++) {
             double actual = index / 9.0;
             rows.add(row(policies.get(index), scenario, actual));
-            predictions.add(curve(policies.get(index), scenario, actual + (index % 2 == 0
-                    ? 0.05 : -0.05), 0.02, actual - 0.1, actual + 0.1));
+            predictions.add(curve(
+                    policies.get(index),
+                    scenario,
+                    actual + (index % 2 == 0 ? 0.05 : -0.05),
+                    0.02,
+                    actual - 0.1,
+                    actual + 0.1));
         }
-        EvaluationSummary result = ScenarioModelEvaluator.evaluate(
-                "GROUPED_TEST", ScenarioFeatureSet.RATIO_ONLY, rows, predictions);
+        EvaluationSummary result =
+                ScenarioModelEvaluator.evaluate("GROUPED_TEST", ScenarioFeatureSet.RATIO_ONLY, rows, predictions);
         ScenarioEvaluationMetrics metric = result.scenarios().getFirst();
         assertThat(metric.mae()).isCloseTo(0.05, within(1.0e-15));
         assertThat(metric.rmse()).isCloseTo(0.05, within(1.0e-15));
@@ -67,13 +165,16 @@ class ScenarioModelEvaluatorTest {
                 curve(policies.get(1), scenario, 0.5, 0, 0.4, 0.6),
                 curve(policies.get(2), scenario, 0.5, 0, 0.4, 0.6),
                 curve(policies.get(3), scenario, 0.9, 0, 0.8, 0.95));
-        assertThat(ScenarioModelEvaluator.evaluate("test", ScenarioFeatureSet.RATIO_ONLY,
-                rows, tied).macroSpearman()).hasValue(1);
+        assertThat(ScenarioModelEvaluator.evaluate("test", ScenarioFeatureSet.RATIO_ONLY, rows, tied)
+                        .macroSpearman())
+                .hasValue(1);
         List<PolicyPredictionCurve> constant = policies.stream()
-                .map(policy -> curve(policy, scenario, 0.5, 0, 0.05, 0.95)).toList();
+                .map(policy -> curve(policy, scenario, 0.5, 0, 0.05, 0.95))
+                .toList();
         ScenarioEvaluationMetrics metric = ScenarioModelEvaluator.evaluate(
-                "test", ScenarioFeatureSet.RATIO_ONLY, rows, constant)
-                .scenarios().getFirst();
+                        "test", ScenarioFeatureSet.RATIO_ONLY, rows, constant)
+                .scenarios()
+                .getFirst();
         assertThat(metric.spearman()).isEmpty();
         assertThat(metric.status()).isEqualTo(EvaluationStatus.CONSTANT_RANK);
     }
@@ -98,15 +199,17 @@ class ScenarioModelEvaluatorTest {
             }
             curves.add(new PolicyPredictionCurve(policies.get(index), predictions));
         }
-        EvaluationSummary original = ScenarioModelEvaluator.evaluate(
-                "test", ScenarioFeatureSet.RATIO_ONLY, rows, curves);
+        EvaluationSummary original =
+                ScenarioModelEvaluator.evaluate("test", ScenarioFeatureSet.RATIO_ONLY, rows, curves);
         java.util.Collections.shuffle(rows, new java.util.Random(1));
         java.util.Collections.shuffle(curves, new java.util.Random(2));
-        EvaluationSummary shuffled = ScenarioModelEvaluator.evaluate(
-                "test", ScenarioFeatureSet.RATIO_ONLY, rows, curves);
+        EvaluationSummary shuffled =
+                ScenarioModelEvaluator.evaluate("test", ScenarioFeatureSet.RATIO_ONLY, rows, curves);
         assertThat(shuffled).isEqualTo(original);
-        assertThat(original.macroMae().orElseThrow()).isEqualTo(
-                (original.scenarios().get(0).mae() + original.scenarios().get(1).mae()) / 2);
+        assertThat(original.macroMae().orElseThrow())
+                .isEqualTo((original.scenarios().get(0).mae()
+                                + original.scenarios().get(1).mae())
+                        / 2);
     }
 
     @Test
@@ -114,7 +217,8 @@ class ScenarioModelEvaluatorTest {
         SourceScenario scenario = scenarios().first();
         List<PolicyVector> policies = policies(10);
         PolicyVector smallest = policies.stream()
-                .min(java.util.Comparator.comparing(PolicyVector::id)).orElseThrow();
+                .min(java.util.Comparator.comparing(PolicyVector::id))
+                .orElseThrow();
         ArrayList<ScenarioLearningRow> rows = new ArrayList<>();
         ArrayList<PolicyPredictionCurve> curves = new ArrayList<>();
         for (int index = 0; index < policies.size(); index++) {
@@ -124,18 +228,21 @@ class ScenarioModelEvaluatorTest {
             curves.add(curve(policy, scenario, 0.5, 0, 0, 1));
         }
         ScenarioEvaluationMetrics byIdentity = ScenarioModelEvaluator.evaluate(
-                "test", ScenarioFeatureSet.RATIO_ONLY, rows, curves)
-                .scenarios().getFirst();
+                        "test", ScenarioFeatureSet.RATIO_ONLY, rows, curves)
+                .scenarios()
+                .getFirst();
         assertThat(byIdentity.selectedCount()).isOne();
         assertThat(byIdentity.precisionAtTen()).hasValue(1);
 
         curves = new ArrayList<>();
         for (PolicyVector policy : policies) {
-            curves.add(curve(policy, scenario, 0.5,
-                    policy.id().equals(smallest.id()) ? 0 : 0.1, 0, 1));
+            curves.add(curve(policy, scenario, 0.5, policy.id().equals(smallest.id()) ? 0 : 0.1, 0, 1));
         }
-        assertThat(ScenarioModelEvaluator.evaluate("test", ScenarioFeatureSet.RATIO_ONLY,
-                rows, curves).scenarios().getFirst().precisionAtTen()).hasValue(1);
+        assertThat(ScenarioModelEvaluator.evaluate("test", ScenarioFeatureSet.RATIO_ONLY, rows, curves)
+                        .scenarios()
+                        .getFirst()
+                        .precisionAtTen())
+                .hasValue(1);
     }
 
     @Test
@@ -145,23 +252,18 @@ class ScenarioModelEvaluatorTest {
         SourceScenario second = scenarioList.get(1);
         List<PolicyVector> policies = policies(2);
         List<ScenarioLearningRow> rows = List.of(
-                row(policies.get(0), first, 0.1),
-                row(policies.get(0), second, 0.9),
-                row(policies.get(1), first, 0.9));
+                row(policies.get(0), first, 0.1), row(policies.get(0), second, 0.9), row(policies.get(1), first, 0.9));
         List<PolicyPredictionCurve> curves = List.of(
-                new PolicyPredictionCurve(policies.get(0), List.of(
-                        prediction(first, 0.1, 0),
-                        prediction(second, 0.9, 0))),
-                new PolicyPredictionCurve(policies.get(1), List.of(
-                        prediction(first, 0.9, 0),
-                        prediction(second, 0.1, 0))));
-        List<PolicyPredictionCurve> retained =
-                ScenarioFoldRunner.retainPredictionsForRows(curves, rows);
+                new PolicyPredictionCurve(
+                        policies.get(0), List.of(prediction(first, 0.1, 0), prediction(second, 0.9, 0))),
+                new PolicyPredictionCurve(
+                        policies.get(1), List.of(prediction(first, 0.9, 0), prediction(second, 0.1, 0))));
+        List<PolicyPredictionCurve> retained = ScenarioFoldRunner.retainPredictionsForRows(curves, rows);
         assertThat(retained.get(1).scenarios()).hasSize(1);
-        assertThat(ScenarioModelEvaluator.evaluate("test", ScenarioFeatureSet.RATIO_ONLY,
-                rows, retained).scenarios()).hasSize(2);
-        assertThatThrownBy(() -> ScenarioModelEvaluator.evaluate(
-                "test", ScenarioFeatureSet.RATIO_ONLY, rows, curves))
+        assertThat(ScenarioModelEvaluator.evaluate("test", ScenarioFeatureSet.RATIO_ONLY, rows, retained)
+                        .scenarios())
+                .hasSize(2);
+        assertThatThrownBy(() -> ScenarioModelEvaluator.evaluate("test", ScenarioFeatureSet.RATIO_ONLY, rows, curves))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Extra predictions");
     }
@@ -170,123 +272,119 @@ class ScenarioModelEvaluatorTest {
     void everyAcceptanceThresholdIsInclusiveAtItsExactBoundary() {
         ScenarioTrainingConfig config = ScenarioTrainingConfig.defaults();
         EvaluationThresholds thresholds = config.thresholds();
-        EvaluationSummary grouped = acceptanceSummary("GROUPED_TEST",
+        EvaluationSummary grouped = acceptanceSummary(
+                "GROUPED_TEST",
                 thresholds.maximumGroupedMacroMae(),
                 thresholds.minimumGroupedMacroSpearman(),
                 thresholds.minimumGroupedMacroPrecisionAtTen(),
                 thresholds.maximumGroupedMacroMae());
-        EvaluationSummary loso = acceptanceSummary("TEST_LOSO",
+        EvaluationSummary loso = acceptanceSummary(
+                "TEST_LOSO",
                 thresholds.maximumLosoMacroMae(),
-                thresholds.minimumLosoMacroSpearman(), 1,
+                thresholds.minimumLosoMacroSpearman(),
+                1,
                 thresholds.maximumLosoWorstScenarioMae());
         ScenarioAblationPlanner.Decision ablation = passingAblation();
-        assertThat(ScenarioModelTrainer.acceptance(
-                ablation, grouped, loso, config).status())
+        assertThat(ScenarioModelTrainer.acceptance(ablation, grouped, loso, config)
+                        .status())
                 .isEqualTo(ModelAcceptanceStatus.ACCEPTED);
 
-        assertThat(ScenarioModelTrainer.acceptance(ablation,
-                acceptanceSummary("GROUPED_TEST",
-                        Math.nextDown(thresholds.maximumGroupedMacroMae()),
-                        Math.nextUp(thresholds.minimumGroupedMacroSpearman()),
-                        Math.nextUp(thresholds.minimumGroupedMacroPrecisionAtTen()),
-                        thresholds.maximumGroupedMacroMae()),
-                loso, config).status()).isEqualTo(ModelAcceptanceStatus.ACCEPTED);
-        assertThat(ScenarioModelTrainer.acceptance(ablation, grouped,
-                acceptanceSummary("TEST_LOSO",
-                        Math.nextDown(thresholds.maximumLosoMacroMae()),
-                        Math.nextUp(thresholds.minimumLosoMacroSpearman()), 1,
-                        Math.nextDown(thresholds.maximumLosoWorstScenarioMae())),
-                config).status()).isEqualTo(ModelAcceptanceStatus.ACCEPTED);
+        assertThat(ScenarioModelTrainer.acceptance(
+                                ablation,
+                                acceptanceSummary(
+                                        "GROUPED_TEST",
+                                        Math.nextDown(thresholds.maximumGroupedMacroMae()),
+                                        Math.nextUp(thresholds.minimumGroupedMacroSpearman()),
+                                        Math.nextUp(thresholds.minimumGroupedMacroPrecisionAtTen()),
+                                        thresholds.maximumGroupedMacroMae()),
+                                loso,
+                                config)
+                        .status())
+                .isEqualTo(ModelAcceptanceStatus.ACCEPTED);
+        assertThat(ScenarioModelTrainer.acceptance(
+                                ablation,
+                                grouped,
+                                acceptanceSummary(
+                                        "TEST_LOSO",
+                                        Math.nextDown(thresholds.maximumLosoMacroMae()),
+                                        Math.nextUp(thresholds.minimumLosoMacroSpearman()),
+                                        1,
+                                        Math.nextDown(thresholds.maximumLosoWorstScenarioMae())),
+                                config)
+                        .status())
+                .isEqualTo(ModelAcceptanceStatus.ACCEPTED);
 
-        assertThat(ScenarioModelTrainer.acceptance(ablation,
-                acceptanceSummary("GROUPED_TEST",
-                        Math.nextUp(thresholds.maximumGroupedMacroMae()),
-                        thresholds.minimumGroupedMacroSpearman(),
-                        thresholds.minimumGroupedMacroPrecisionAtTen(),
-                        thresholds.maximumGroupedMacroMae()),
-                loso, config).status())
+        assertThat(ScenarioModelTrainer.acceptance(
+                                ablation,
+                                acceptanceSummary(
+                                        "GROUPED_TEST",
+                                        Math.nextUp(thresholds.maximumGroupedMacroMae()),
+                                        thresholds.minimumGroupedMacroSpearman(),
+                                        thresholds.minimumGroupedMacroPrecisionAtTen(),
+                                        thresholds.maximumGroupedMacroMae()),
+                                loso,
+                                config)
+                        .status())
                 .isEqualTo(ModelAcceptanceStatus.GROUPED_QUALITY_GATE_FAILED);
-        assertThat(ScenarioModelTrainer.acceptance(ablation,
-                acceptanceSummary("GROUPED_TEST",
-                        thresholds.maximumGroupedMacroMae(),
-                        Math.nextDown(thresholds.minimumGroupedMacroSpearman()),
-                        thresholds.minimumGroupedMacroPrecisionAtTen(),
-                        thresholds.maximumGroupedMacroMae()),
-                loso, config).status())
+        assertThat(ScenarioModelTrainer.acceptance(
+                                ablation,
+                                acceptanceSummary(
+                                        "GROUPED_TEST",
+                                        thresholds.maximumGroupedMacroMae(),
+                                        Math.nextDown(thresholds.minimumGroupedMacroSpearman()),
+                                        thresholds.minimumGroupedMacroPrecisionAtTen(),
+                                        thresholds.maximumGroupedMacroMae()),
+                                loso,
+                                config)
+                        .status())
                 .isEqualTo(ModelAcceptanceStatus.GROUPED_QUALITY_GATE_FAILED);
-        assertThat(ScenarioModelTrainer.acceptance(ablation,
-                acceptanceSummary("GROUPED_TEST",
-                        thresholds.maximumGroupedMacroMae(),
-                        thresholds.minimumGroupedMacroSpearman(),
-                        Math.nextDown(thresholds.minimumGroupedMacroPrecisionAtTen()),
-                        thresholds.maximumGroupedMacroMae()),
-                loso, config).status())
+        assertThat(ScenarioModelTrainer.acceptance(
+                                ablation,
+                                acceptanceSummary(
+                                        "GROUPED_TEST",
+                                        thresholds.maximumGroupedMacroMae(),
+                                        thresholds.minimumGroupedMacroSpearman(),
+                                        Math.nextDown(thresholds.minimumGroupedMacroPrecisionAtTen()),
+                                        thresholds.maximumGroupedMacroMae()),
+                                loso,
+                                config)
+                        .status())
                 .isEqualTo(ModelAcceptanceStatus.GROUPED_QUALITY_GATE_FAILED);
-        assertThat(ScenarioModelTrainer.acceptance(ablation, grouped,
-                acceptanceSummary("TEST_LOSO",
-                        Math.nextUp(thresholds.maximumLosoMacroMae()),
-                        thresholds.minimumLosoMacroSpearman(), 1,
-                        thresholds.maximumLosoWorstScenarioMae()), config).status())
+        assertThat(ScenarioModelTrainer.acceptance(
+                                ablation,
+                                grouped,
+                                acceptanceSummary(
+                                        "TEST_LOSO",
+                                        Math.nextUp(thresholds.maximumLosoMacroMae()),
+                                        thresholds.minimumLosoMacroSpearman(),
+                                        1,
+                                        thresholds.maximumLosoWorstScenarioMae()),
+                                config)
+                        .status())
                 .isEqualTo(ModelAcceptanceStatus.LOSO_QUALITY_GATE_FAILED);
-        assertThat(ScenarioModelTrainer.acceptance(ablation, grouped,
-                acceptanceSummary("TEST_LOSO",
-                        thresholds.maximumLosoMacroMae(),
-                        Math.nextDown(thresholds.minimumLosoMacroSpearman()), 1,
-                        thresholds.maximumLosoWorstScenarioMae()), config).status())
+        assertThat(ScenarioModelTrainer.acceptance(
+                                ablation,
+                                grouped,
+                                acceptanceSummary(
+                                        "TEST_LOSO",
+                                        thresholds.maximumLosoMacroMae(),
+                                        Math.nextDown(thresholds.minimumLosoMacroSpearman()),
+                                        1,
+                                        thresholds.maximumLosoWorstScenarioMae()),
+                                config)
+                        .status())
                 .isEqualTo(ModelAcceptanceStatus.LOSO_QUALITY_GATE_FAILED);
-        assertThat(ScenarioModelTrainer.acceptance(ablation, grouped,
-                acceptanceSummary("TEST_LOSO",
-                        thresholds.maximumLosoMacroMae(),
-                        thresholds.minimumLosoMacroSpearman(), 1,
-                        Math.nextUp(thresholds.maximumLosoWorstScenarioMae())), config).status())
+        assertThat(ScenarioModelTrainer.acceptance(
+                                ablation,
+                                grouped,
+                                acceptanceSummary(
+                                        "TEST_LOSO",
+                                        thresholds.maximumLosoMacroMae(),
+                                        thresholds.minimumLosoMacroSpearman(),
+                                        1,
+                                        Math.nextUp(thresholds.maximumLosoWorstScenarioMae())),
+                                config)
+                        .status())
                 .isEqualTo(ModelAcceptanceStatus.LOSO_QUALITY_GATE_FAILED);
-    }
-
-    private static EvaluationSummary acceptanceSummary(String kind, double mae,
-            double spearman, double precision, double worst) {
-        SourceScenario scenario = scenarios().first();
-        ScenarioEvaluationMetrics metric = new ScenarioEvaluationMetrics(kind, "all",
-                ScenarioFeatureSet.RATIO_ONLY, scenario, 10, 10, mae, mae, 0,
-                OptionalDouble.of(spearman), 1, 1, OptionalDouble.of(precision),
-                OptionalDouble.of(1), 0.2, 1, 0, 0, EvaluationStatus.OK);
-        return new EvaluationSummary(kind, ScenarioFeatureSet.RATIO_ONLY, List.of(metric),
-                OptionalDouble.of(mae), OptionalDouble.of(mae),
-                OptionalDouble.of(spearman), OptionalDouble.of(precision),
-                OptionalDouble.of(1), OptionalDouble.of(worst), OptionalDouble.of(mae));
-    }
-
-    private static ScenarioAblationPlanner.Decision passingAblation() {
-        AblationMetric metric = new AblationMetric("VALIDATION_CONTEXT_GATE", "all",
-                ScenarioFeatureSet.RATIO_ONLY, ScenarioFeatureSet.POLICY_ONLY,
-                "all", 10, OptionalDouble.of(0.19), OptionalDouble.of(0.5),
-                OptionalDouble.of(-0.01), OptionalDouble.of(0), true,
-                "PASS", "CONTEXT_VALIDATED");
-        FeatureSelectionDecision selection = new FeatureSelectionDecision(
-                FeatureSelectionMode.RATIO_ONLY, ScenarioFeatureSet.RATIO_ONLY,
-                List.of(metric), "RATIO_ONLY_REQUESTED");
-        return new ScenarioAblationPlanner.Decision(selection, true, true);
-    }
-
-    private static ScenarioLearningRow row(PolicyVector policy, SourceScenario scenario,
-            double quality) {
-        return new ScenarioLearningRow(policy, scenario, ScenarioResultStatus.VALID_STRONG,
-                quality, 10, 9, 11, 1, 0.1, 0);
-    }
-
-    private static PolicyPredictionCurve curve(PolicyVector policy, SourceScenario scenario,
-            double prediction, double epistemic, double low, double high) {
-        return new PolicyPredictionCurve(policy,
-                List.of(new ScenarioPrediction(scenario, clamp(prediction), 0.1, clamp(low),
-                        clamp(high), 0.5, 0.1, epistemic, epistemic * 2)));
-    }
-
-    private static ScenarioPrediction prediction(SourceScenario scenario, double prediction,
-            double epistemic) {
-        return new ScenarioPrediction(scenario, clamp(prediction), 0.1, 0.05, 0.95,
-                0.5, 0.1, epistemic, epistemic * 2);
-    }
-
-    private static double clamp(double value) {
-        return StrictMath.max(0, StrictMath.min(1, value));
     }
 }

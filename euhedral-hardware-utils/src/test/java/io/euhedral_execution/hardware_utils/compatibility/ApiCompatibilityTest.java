@@ -16,13 +16,16 @@ class ApiCompatibilityTest {
         ApiSurface baseline = ApiSurface.read(TestPaths.resource("api-900d8c50.tsv"));
         ApiSurface current = ApiSurfaceReader.read(TestPaths.classesDirectory());
         CompatibilityReport report = ApiSurfaceComparator.compare(baseline, current);
-        Path reportPath = TestPaths.buildDirectory()
-                .resolve("compatibility/compatibility-report.txt");
+        Path reportPath = TestPaths.buildDirectory().resolve("compatibility/compatibility-report.txt");
         report.write(reportPath);
 
-        assertEquals(10, current.moduleEntries().stream()
-                .filter(entry -> entry.kind().equals("module-exports")).count());
-        assertTrue(report.passes(), () -> "compatibility failure; see " + reportPath
-                + System.lineSeparator() + report.render());
+        assertEquals(
+                10,
+                current.moduleEntries().stream()
+                        .filter(entry -> entry.kind().equals("module-exports"))
+                        .count());
+        assertTrue(
+                report.passes(),
+                () -> "compatibility failure; see " + reportPath + System.lineSeparator() + report.render());
     }
 }

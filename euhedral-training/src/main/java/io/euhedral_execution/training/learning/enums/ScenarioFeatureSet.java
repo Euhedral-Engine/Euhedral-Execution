@@ -18,9 +18,17 @@ public enum ScenarioFeatureSet {
         this.ablationOnly = ablationOnly;
     }
 
-    public String schemaId() { return schemaId; }
-    public int width() { return width; }
-    public boolean ablationOnly() { return ablationOnly; }
+    public String schemaId() {
+        return schemaId;
+    }
+
+    public int width() {
+        return width;
+    }
+
+    public boolean ablationOnly() {
+        return ablationOnly;
+    }
 
     public List<String> featureNames() {
         ArrayList<String> names = new ArrayList<>(width);

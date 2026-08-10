@@ -16,10 +16,9 @@ import org.slf4j.LoggerFactory;
 
 @SuppressWarnings("unused")
 public final class ThreadTools {
+    public static final UnmodifiableBitSet BASE_MASK;
     private static final Logger LOGGER = LoggerFactory.getLogger(Constants.getLoggerName(ThreadTools.class));
     private static final AffinityController CONTROLLER;
-
-    public static final UnmodifiableBitSet BASE_MASK;
 
     static {
         BitSet supported = SystemInfo.getCpuSet();
@@ -31,6 +30,8 @@ public final class ThreadTools {
             LOGGER.debug("Base Affinity Mask: {} 0x{}", BASE_MASK, SystemInfo.toHexMask(BASE_MASK));
         }
     }
+
+    private ThreadTools() {}
 
     /// Reports the affinity behavior the complete common path can apply and undo.
     ///
@@ -113,8 +114,5 @@ public final class ThreadTools {
 
         @Override
         void close();
-    }
-
-    private ThreadTools() {
     }
 }

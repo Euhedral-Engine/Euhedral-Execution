@@ -6,8 +6,8 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.Reader;
 import java.nio.channels.FileChannel;
-import java.nio.charset.StandardCharsets;
 import java.nio.charset.CodingErrorAction;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
@@ -16,6 +16,8 @@ import java.util.Comparator;
 
 final class CanonicalFileSupport {
     private static final int BUFFER_SIZE = 128 * 1024;
+
+    private CanonicalFileSupport() {}
 
     static void write(Path path, String value) throws IOException {
         if (!value.endsWith("\n") || value.indexOf('\r') >= 0) {
@@ -30,8 +32,7 @@ final class CanonicalFileSupport {
         Files.createDirectories(target.getParent());
         byte[] buffer = new byte[BUFFER_SIZE];
         try (InputStream input = Files.newInputStream(source);
-                OutputStream output = Files.newOutputStream(target,
-                        StandardOpenOption.CREATE_NEW)) {
+                OutputStream output = Files.newOutputStream(target, StandardOpenOption.CREATE_NEW)) {
             int read;
             while ((read = input.read(buffer)) >= 0) {
                 if (read != 0) output.write(buffer, 0, read);
@@ -43,8 +44,9 @@ final class CanonicalFileSupport {
         rejectSymlink(source);
         Files.createDirectories(target);
         try (var stream = Files.walk(source)) {
-            for (Path path : stream.sorted(Comparator.comparing(item ->
-                    source.relativize(item).toString().replace('\\', '/'))).toList()) {
+            for (Path path : stream.sorted(Comparator.comparing(
+                            item -> source.relativize(item).toString().replace('\\', '/')))
+                    .toList()) {
                 if (path.equals(source)) continue;
                 rejectSymlink(path);
                 Path destination = target.resolve(source.relativize(path).toString());
@@ -61,8 +63,8 @@ final class CanonicalFileSupport {
 
     static void forceTree(Path root) throws IOException {
         try (var stream = Files.walk(root)) {
-            for (Path path : stream.filter(item ->
-                    Files.isRegularFile(item, LinkOption.NOFOLLOW_LINKS)).toList()) {
+            for (Path path : stream.filter(item -> Files.isRegularFile(item, LinkOption.NOFOLLOW_LINKS))
+                    .toList()) {
                 try (FileChannel channel = FileChannel.open(path, StandardOpenOption.WRITE)) {
                     channel.force(true);
                 }
@@ -76,7 +78,8 @@ final class CanonicalFileSupport {
 
     static CsvMetadata csvMetadata(Path path) throws IOException {
         rejectSymlink(path);
-        var decoder = StandardCharsets.UTF_8.newDecoder()
+        var decoder = StandardCharsets.UTF_8
+                .newDecoder()
                 .onMalformedInput(CodingErrorAction.REPORT)
                 .onUnmappableCharacter(CodingErrorAction.REPORT);
         long records = 0;
@@ -147,13 +150,11 @@ final class CanonicalFileSupport {
         if (!sawCharacter || !endedWithLf || quoted || quoteClosed || records == 0) {
             throw new IllegalArgumentException("Incomplete CSV");
         }
-        return new CsvMetadata(schemaText == null ? null
-                : schemaText.isEmpty() ? 1 : Integer.parseInt(schemaText),
-                records - 1);
+        return new CsvMetadata(
+                schemaText == null ? null : schemaText.isEmpty() ? 1 : Integer.parseInt(schemaText), records - 1);
     }
 
-    private static String finishCsvRecord(StringBuilder first, long record,
-            String schemaText) {
+    private static String finishCsvRecord(StringBuilder first, long record, String schemaText) {
         String value = first.toString();
         first.setLength(0);
         if (record == 0) {
@@ -190,16 +191,14 @@ final class CanonicalFileSupport {
         Path current = absolute.getRoot();
         for (Path component : absolute) {
             current = current.resolve(component);
-            if (Files.exists(current, LinkOption.NOFOLLOW_LINKS)
-                    && Files.isSymbolicLink(current)) {
+            if (Files.exists(current, LinkOption.NOFOLLOW_LINKS) && Files.isSymbolicLink(current)) {
                 throw new IOException("Symlink path components are not supported");
             }
         }
     }
 
     static void deleteOwnedTree(Path directory) {
-        if (!Files.exists(directory, LinkOption.NOFOLLOW_LINKS)
-                || Files.isSymbolicLink(directory)) return;
+        if (!Files.exists(directory, LinkOption.NOFOLLOW_LINKS) || Files.isSymbolicLink(directory)) return;
         try (var stream = Files.walk(directory)) {
             for (Path path : stream.sorted(Comparator.reverseOrder()).toList()) {
                 if (Files.isSymbolicLink(path)) Files.deleteIfExists(path);
@@ -210,9 +209,5 @@ final class CanonicalFileSupport {
         }
     }
 
-    record CsvMetadata(Integer schemaVersion, long rowCount) {
-    }
-
-    private CanonicalFileSupport() {
-    }
+    record CsvMetadata(Integer schemaVersion, long rowCount) {}
 }

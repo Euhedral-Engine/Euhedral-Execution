@@ -20,20 +20,19 @@ import org.slf4j.LoggerFactory;
 @SuppressWarnings("unused")
 public final class OffsetCollector {
 
-    private static final VarHandle COMMIT = CommonVarHandles.makeHandle(MethodHandles.lookup(),
-            OffsetCollector.class, "commitPolicy", CommitPolicy.class);
+    private static final VarHandle COMMIT = CommonVarHandles.makeHandle(
+            MethodHandles.lookup(), OffsetCollector.class, "commitPolicy", CommitPolicy.class);
 
     private final Logger logger = LoggerFactory.getLogger(Constants.getLoggerName(OffsetCollector.class));
     private final long ingestPassword;
 
     private final AtomicReference<? extends Consumer<?, ?>> kafkaConsumer;
-    private final Long2ObjectArrayMap<PartitionCollector> collectors =
-            new Long2ObjectArrayMap<>(128);
+    private final Long2ObjectArrayMap<PartitionCollector> collectors = new Long2ObjectArrayMap<>(128);
 
     private CommitPolicy commitPolicy;
 
-    public OffsetCollector(AtomicReference<? extends Consumer<?, ?>> kafkaConsumer,
-            CommitPolicy commitPolicy, long ingestPassword) {
+    public OffsetCollector(
+            AtomicReference<? extends Consumer<?, ?>> kafkaConsumer, CommitPolicy commitPolicy, long ingestPassword) {
         this.ingestPassword = ingestPassword;
         this.commitPolicy = commitPolicy;
         this.kafkaConsumer = kafkaConsumer;
@@ -46,8 +45,7 @@ public final class OffsetCollector {
     public void registerFrame(TopicPartition partition, KafkaFrame frame, long ingestPassword) {
         if (this.ingestPassword == ingestPassword) {
             long key = KafkaIngestSource.getPartitionHash(partition);
-            PartitionCollector collector =
-                    collectors.computeIfAbsent(key, k -> new PartitionCollector(partition));
+            PartitionCollector collector = collectors.computeIfAbsent(key, k -> new PartitionCollector(partition));
             collector.register(frame);
         }
     }
@@ -79,12 +77,11 @@ public final class OffsetCollector {
         }
 
         logger.error("Failed to commit offsets. Retrying", ex);
-        kafkaConsumer.get().commitAsync(offsets,
-                (ignored, retryError) -> {
-                    if (retryError != null) {
-                        logger.error("Failed to commit offsets after retrying.", retryError);
-                    }
-                });
+        kafkaConsumer.get().commitAsync(offsets, (ignored, retryError) -> {
+            if (retryError != null) {
+                logger.error("Failed to commit offsets after retrying.", retryError);
+            }
+        });
     }
 
     public boolean isEmpty() {
@@ -104,8 +101,7 @@ public final class OffsetCollector {
 
         public final TopicPartition partition;
 
-        private final Long2ObjectOpenHashMap<OffsetMd> offsets =
-                new Long2ObjectOpenHashMap<>(8_096);
+        private final Long2ObjectOpenHashMap<OffsetMd> offsets = new Long2ObjectOpenHashMap<>(8_096);
         private final LongHeapPriorityQueue offsetHeap = new LongHeapPriorityQueue(8_096);
         private long lastCollect = System.nanoTime();
         private long minOffset = Long.MAX_VALUE;

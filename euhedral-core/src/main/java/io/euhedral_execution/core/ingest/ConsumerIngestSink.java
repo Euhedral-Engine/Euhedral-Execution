@@ -31,16 +31,11 @@ public final class ConsumerIngestSink<T> extends AbstractIngestSink {
 
     boolean complete;
 
-    public ConsumerIngestSink(
-            @NonNull Consumer<T> consumer,
-            boolean parallel) {
+    public ConsumerIngestSink(@NonNull Consumer<T> consumer, boolean parallel) {
         this(consumer, parallel, new QueueIngestSink());
     }
 
-    public ConsumerIngestSink(
-            @NonNull Consumer<T> consumer,
-            boolean parallel,
-            @NonNull QueueIngestSink sink) {
+    public ConsumerIngestSink(@NonNull Consumer<T> consumer, boolean parallel, @NonNull QueueIngestSink sink) {
         Objects.requireNonNull(consumer);
         Objects.requireNonNull(sink);
         this.sink = sink;
@@ -48,8 +43,7 @@ public final class ConsumerIngestSink<T> extends AbstractIngestSink {
 
         final long[] seed = {HasherApi.mix(password + 1)};
         FrameCreate<T, ConsumerFrame<T>> generate = (idHash, data) -> {
-            ConsumerFrame<T> frame = new ConsumerFrame<>(idHash, consumer, data,
-                    killSwitch, frameManager);
+            ConsumerFrame<T> frame = new ConsumerFrame<>(idHash, consumer, data, killSwitch, frameManager);
             if (parallel) {
                 frame.randomizeHash(seed[0]++);
             }

@@ -14,9 +14,7 @@ class KillSwitchTest {
         KillSwitch killSwitch = new KillSwitch();
         AtomicBoolean reactiveComplete = new AtomicBoolean();
         AtomicInteger callbacks = new AtomicInteger();
-        killSwitch.addGoner().subscribe(ignored -> {
-        }, ignored -> {
-        }, () -> reactiveComplete.set(true));
+        killSwitch.addGoner().subscribe(ignored -> {}, ignored -> {}, () -> reactiveComplete.set(true));
         killSwitch.addGoner(callbacks::incrementAndGet);
 
         killSwitch.boop();

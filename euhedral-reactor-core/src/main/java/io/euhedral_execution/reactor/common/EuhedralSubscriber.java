@@ -28,12 +28,12 @@ import org.reactivestreams.Subscription;
 @SuppressWarnings("unused")
 public final class EuhedralSubscriber implements Subscriber<AbstractFrame>, LatticeSource {
 
-    private static final VarHandle COMPLETE = CommonVarHandles.complete(MethodHandles.lookup(),
-            EuhedralSubscriber.class);
-    private static final VarHandle DOWNSTREAM = CommonVarHandles.downstream(MethodHandles.lookup(),
-            EuhedralSubscriber.class);
-    private static final VarHandle SUBSCRIBER = CommonVarHandles.makeHandle(MethodHandles.lookup(),
-            EuhedralSubscriber.class, "subscription", Subscription.class);
+    private static final VarHandle COMPLETE =
+            CommonVarHandles.complete(MethodHandles.lookup(), EuhedralSubscriber.class);
+    private static final VarHandle DOWNSTREAM =
+            CommonVarHandles.downstream(MethodHandles.lookup(), EuhedralSubscriber.class);
+    private static final VarHandle SUBSCRIBER = CommonVarHandles.makeHandle(
+            MethodHandles.lookup(), EuhedralSubscriber.class, "subscription", Subscription.class);
 
     private final AtomicBoolean subscribed = new AtomicBoolean();
 
@@ -100,8 +100,7 @@ public final class EuhedralSubscriber implements Subscriber<AbstractFrame>, Latt
     }
 
     @Override
-    public long pull(Consumer<AbstractFrame> consumer,
-            Function<AbstractFrame, Boolean> stopCondition, long demand) {
+    public long pull(Consumer<AbstractFrame> consumer, Function<AbstractFrame, Boolean> stopCondition, long demand) {
         return 0;
     }
 

@@ -8,8 +8,11 @@ import java.util.Objects;
 import java.util.SortedMap;
 import java.util.TreeMap;
 
-public record CarryForwardEntry(PolicyVector policy, int firstSeenIteration,
-        int lastUpdatedIteration, SortedMap<SourceScenario, CarryScenarioState> scenarios) {
+public record CarryForwardEntry(
+        PolicyVector policy,
+        int firstSeenIteration,
+        int lastUpdatedIteration,
+        SortedMap<SourceScenario, CarryScenarioState> scenarios) {
     public CarryForwardEntry {
         Objects.requireNonNull(policy);
         Objects.requireNonNull(scenarios);

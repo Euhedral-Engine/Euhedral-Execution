@@ -17,8 +17,11 @@ public final class ArrayFrame extends AbstractFrame {
         this(idHash, frames, null, killSwitch);
     }
 
-    public ArrayFrame(long idHash, AbstractFrame[] frames,
-            FrameManager<AbstractFrame[], ArrayFrame> frameManager, AtomicBoolean killSwitch) {
+    public ArrayFrame(
+            long idHash,
+            AbstractFrame[] frames,
+            FrameManager<AbstractFrame[], ArrayFrame> frameManager,
+            AtomicBoolean killSwitch) {
         super(idHash, frameManager, killSwitch);
         Objects.requireNonNull(frames);
 

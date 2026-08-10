@@ -24,29 +24,10 @@ import java.util.Set;
 
 public final class ObservationBundleWriter implements AutoCloseable {
 
-    private static final String RUN_HEADER = "schema_version,benchmark_run_id,closed_loop_iteration,candidate_cohort_id,scenario_id,environment_id,source_count,available_physical_core_count,source_ratio_numerator,source_ratio_denominator,commit_sha,dirty_working_tree,evidence_origin,started_at,completed_at,expected_repetitions,sample_duration_nanos,liveness_timeout_nanos,frames_per_source,reset_timeout_nanos,ordered_frames,cpu_set_hex,frame_source_seeds\n";
-    private static final String OBS_HEADER = "schema_version,observation_id,policy_id,repetition_number,status,measurement_encoding,started_at,ended_at,elapsed_nanos,completed_frames,throughput_frames_per_second,failure_code\n";
-
-    public static ObservationBundleWriter open(Path directory, BenchmarkRunDescriptor run) {
-        try {
-            Files.createDirectories(directory);
-            if (!Files.isDirectory(directory)
-                    || Files.exists(directory.resolve("COMPLETE"))) {
-                throw new IllegalArgumentException("Completed bundle already exists");
-            }
-            FileChannel policies = FileChannel.open(directory.resolve("policies.csv"),
-                    StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
-            FileChannel observations = FileChannel.open(directory.resolve("observations.csv"),
-                    StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
-            ObservationBundleWriter writer = new ObservationBundleWriter(directory, run,
-                    policies, observations);
-            writer.writeChannel(policies, writer.policiesHeader());
-            writer.writeChannel(observations, OBS_HEADER);
-            return writer;
-        } catch (IOException e) {
-            throw new IllegalStateException(e);
-        }
-    }
+    private static final String RUN_HEADER =
+            "schema_version,benchmark_run_id,closed_loop_iteration,candidate_cohort_id,scenario_id,environment_id,source_count,available_physical_core_count,source_ratio_numerator,source_ratio_denominator,commit_sha,dirty_working_tree,evidence_origin,started_at,completed_at,expected_repetitions,sample_duration_nanos,liveness_timeout_nanos,frames_per_source,reset_timeout_nanos,ordered_frames,cpu_set_hex,frame_source_seeds\n";
+    private static final String OBS_HEADER =
+            "schema_version,observation_id,policy_id,repetition_number,status,measurement_encoding,started_at,ended_at,elapsed_nanos,completed_frames,throughput_frames_per_second,failure_code\n";
     private final Path directory;
     private final BenchmarkRunDescriptor run;
     private final List<ScheduledPolicy> policies = new ArrayList<>();
@@ -57,17 +38,37 @@ public final class ObservationBundleWriter implements AutoCloseable {
     private Instant latestObservationEnd;
     private boolean observationsStarted;
     private boolean complete;
-
-    private ObservationBundleWriter(Path directory, BenchmarkRunDescriptor run,
-            FileChannel policiesChannel, FileChannel observationsChannel) {
+    private ObservationBundleWriter(
+            Path directory, BenchmarkRunDescriptor run, FileChannel policiesChannel, FileChannel observationsChannel) {
         this.directory = directory;
         this.run = run;
         this.policiesChannel = policiesChannel;
         this.observationsChannel = observationsChannel;
     }
 
+    public static ObservationBundleWriter open(Path directory, BenchmarkRunDescriptor run) {
+        try {
+            Files.createDirectories(directory);
+            if (!Files.isDirectory(directory) || Files.exists(directory.resolve("COMPLETE"))) {
+                throw new IllegalArgumentException("Completed bundle already exists");
+            }
+            FileChannel policies = FileChannel.open(
+                    directory.resolve("policies.csv"), StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+            FileChannel observations = FileChannel.open(
+                    directory.resolve("observations.csv"), StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+            ObservationBundleWriter writer = new ObservationBundleWriter(directory, run, policies, observations);
+            writer.writeChannel(policies, writer.policiesHeader());
+            writer.writeChannel(observations, OBS_HEADER);
+            return writer;
+        } catch (IOException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
     public void registerPolicy(ScheduledPolicy policy) {
-        if (complete || observationsStarted || policy.schedulePosition() != policies.size() + 1
+        if (complete
+                || observationsStarted
+                || policy.schedulePosition() != policies.size() + 1
                 || !policyIds.add(policy.policy().id())) {
             throw new IllegalStateException("Policies must be registered contiguously");
         }
@@ -88,7 +89,8 @@ public final class ObservationBundleWriter implements AutoCloseable {
         int expectedIndex = observationCount;
         int expectedPosition = expectedIndex / run.parameters().expectedRepetitions() + 1;
         int expectedRepetition = expectedIndex % run.parameters().expectedRepetitions() + 1;
-        if (position != expectedPosition || repetition != expectedRepetition
+        if (position != expectedPosition
+                || repetition != expectedRepetition
                 || position > policies.size()
                 || !policies.get(position - 1).equals(observation.scheduledPolicy())) {
             throw new IllegalStateException("Observations are out of order");
@@ -101,7 +103,8 @@ public final class ObservationBundleWriter implements AutoCloseable {
     }
 
     public BenchmarkRunContext complete(Instant completedAt) {
-        if (complete || policies.isEmpty()
+        if (complete
+                || policies.isEmpty()
                 || observationCount != policies.size() * run.parameters().expectedRepetitions()) {
             throw new IllegalStateException("Bundle is incomplete");
         }
@@ -112,13 +115,13 @@ public final class ObservationBundleWriter implements AutoCloseable {
         try {
             policiesChannel.force(true);
             observationsChannel.force(true);
-            try (FileChannel runChannel = FileChannel.open(directory.resolve("run.csv"),
-                    StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
+            try (FileChannel runChannel = FileChannel.open(
+                    directory.resolve("run.csv"), StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
                 writeChannel(runChannel, runCsv(context));
                 runChannel.force(true);
             }
-            try (FileChannel marker = FileChannel.open(directory.resolve("COMPLETE"),
-                    StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
+            try (FileChannel marker = FileChannel.open(
+                    directory.resolve("COMPLETE"), StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
                 marker.force(true);
             }
             complete = true;
@@ -129,8 +132,7 @@ public final class ObservationBundleWriter implements AutoCloseable {
     }
 
     private String policiesHeader() {
-        List<String> header = new ArrayList<>(List.of("schema_version", "schedule_position",
-                "policy_id", "roles"));
+        List<String> header = new ArrayList<>(List.of("schema_version", "schedule_position", "policy_id", "roles"));
         for (int i = 0; i < PolicyVector.WIDTH; i++) {
             header.add(String.format("weight_%02d_bits", i));
         }
@@ -138,9 +140,15 @@ public final class ObservationBundleWriter implements AutoCloseable {
     }
 
     private String policyRow(ScheduledPolicy policy) {
-        List<String> row = new ArrayList<>(List.of("1", Integer.toString(policy.schedulePosition()),
-                policy.policy().id().canonical(), policy.roles().stream().map(Enum::name)
-                        .sorted().reduce((a, b) -> a + ";" + b).orElseThrow()));
+        List<String> row = new ArrayList<>(List.of(
+                "1",
+                Integer.toString(policy.schedulePosition()),
+                policy.policy().id().canonical(),
+                policy.roles().stream()
+                        .map(Enum::name)
+                        .sorted()
+                        .reduce((a, b) -> a + ";" + b)
+                        .orElseThrow()));
         for (double weight : policy.policy().copyWeights()) {
             row.add(StrictCsv.hex(Double.doubleToRawLongBits(weight)));
         }
@@ -148,40 +156,61 @@ public final class ObservationBundleWriter implements AutoCloseable {
     }
 
     private String observationRow(BenchmarkObservation observation) {
-        return StrictCsv.row(List.of("1", observation.key().canonical(),
+        return StrictCsv.row(List.of(
+                "1",
+                observation.key().canonical(),
                 observation.key().policyId().canonical(),
                 Integer.toString(observation.key().repetitionNumber()),
-                observation.status().name(), observation.measurementEncoding().name(),
-                observation.startedAt().toString(), observation.endedAt().toString(),
+                observation.status().name(),
+                observation.measurementEncoding().name(),
+                observation.startedAt().toString(),
+                observation.endedAt().toString(),
                 observation.elapsedNanos().isPresent()
-                        ? Long.toString(observation.elapsedNanos().getAsLong()) : "",
+                        ? Long.toString(observation.elapsedNanos().getAsLong())
+                        : "",
                 observation.completedFrames().isPresent()
-                        ? Long.toString(observation.completedFrames().getAsLong()) : "",
+                        ? Long.toString(observation.completedFrames().getAsLong())
+                        : "",
                 observation.throughputFramesPerSecond().isPresent()
-                        ? Double.toString(observation.throughputFramesPerSecond().getAsDouble())
+                        ? Double.toString(
+                                observation.throughputFramesPerSecond().getAsDouble())
                         : "",
                 observation.failureCode()));
     }
 
     private String runCsv(BenchmarkRunContext context) {
         BenchmarkParameters p = run.parameters();
-        String seeds = p.frameSourceSeeds().stream().sorted(Comparator.comparingInt(
-                        FrameSourceSeed::sourceIndex)).map(seed -> seed.sourceIndex() + ":"
-                        + StrictCsv.hex(seed.idHash()) + ":" + StrictCsv.hex(seed.routingSeed()))
-                .reduce((a, b) -> a + ";" + b).orElse("");
-        return RUN_HEADER + StrictCsv.row(List.of("1", run.benchmarkRunId(),
-                Integer.toString(run.closedLoopIteration()), run.candidateCohortId(),
-                run.scenario().canonical(), run.scenario().environmentId(),
-                Integer.toString(run.scenario().sourceCount()),
-                Integer.toString(run.scenario().availablePhysicalCoreCount()),
-                Integer.toString(run.scenario().ratio().numerator()),
-                Integer.toString(run.scenario().ratio().denominator()), run.commitSha(),
-                Boolean.toString(run.dirtyWorkingTree()), run.evidenceOrigin().name(),
-                run.startedAt().toString(), context.completedAt().toString(),
-                Integer.toString(p.expectedRepetitions()), Long.toString(p.sampleDurationNanos()),
-                Long.toString(p.livenessTimeoutNanos()), Integer.toString(p.framesPerSource()),
-                Long.toString(p.resetTimeoutNanos()), Boolean.toString(p.orderedFrames()),
-                p.cpuSetHex(), seeds));
+        String seeds = p.frameSourceSeeds().stream()
+                .sorted(Comparator.comparingInt(FrameSourceSeed::sourceIndex))
+                .map(seed -> seed.sourceIndex() + ":" + StrictCsv.hex(seed.idHash()) + ":"
+                        + StrictCsv.hex(seed.routingSeed()))
+                .reduce((a, b) -> a + ";" + b)
+                .orElse("");
+        return RUN_HEADER
+                + StrictCsv.row(List.of(
+                        "1",
+                        run.benchmarkRunId(),
+                        Integer.toString(run.closedLoopIteration()),
+                        run.candidateCohortId(),
+                        run.scenario().canonical(),
+                        run.scenario().environmentId(),
+                        Integer.toString(run.scenario().sourceCount()),
+                        Integer.toString(run.scenario().availablePhysicalCoreCount()),
+                        Integer.toString(run.scenario().ratio().numerator()),
+                        Integer.toString(run.scenario().ratio().denominator()),
+                        run.commitSha(),
+                        Boolean.toString(run.dirtyWorkingTree()),
+                        run.evidenceOrigin().name(),
+                        run.startedAt().toString(),
+                        context.completedAt().toString(),
+                        Integer.toString(p.expectedRepetitions()),
+                        Long.toString(p.sampleDurationNanos()),
+                        Long.toString(p.livenessTimeoutNanos()),
+                        Integer.toString(p.framesPerSource()),
+                        Long.toString(p.resetTimeoutNanos()),
+                        Boolean.toString(p.orderedFrames()),
+                        p.cpuSetHex(),
+                        seeds));
     }
 
     @Override

@@ -19,7 +19,11 @@ public final class ConsumerFrame<T> extends AbstractFrame {
         this(idHash, consumer, payload, null, null);
     }
 
-    public ConsumerFrame(long idHash, Consumer<T> consumer, T payload, AtomicBoolean killSwitch,
+    public ConsumerFrame(
+            long idHash,
+            Consumer<T> consumer,
+            T payload,
+            AtomicBoolean killSwitch,
             FrameManager<T, ConsumerFrame<T>> recycler) {
         super(idHash, recycler, killSwitch);
         Objects.requireNonNull(consumer);

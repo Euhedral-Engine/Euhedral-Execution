@@ -18,10 +18,9 @@ public class PaddedAtomicLongArray {
 
     protected final int padding;
     protected final long[] array;
-    private final int length;
     protected final boolean pow2;
-
     protected final boolean boundsCheck;
+    private final int length;
 
     public PaddedAtomicLongArray(int length) {
         this(length, true, false);
@@ -212,7 +211,7 @@ public class PaddedAtomicLongArray {
 
     public int fromRawIdx(long rawIdx) {
         int logical;
-        if(pow2) {
+        if (pow2) {
             logical = (int) (rawIdx & (length - 1));
         } else {
             logical = Math.floorMod((int) rawIdx, this.length);
@@ -230,8 +229,7 @@ public class PaddedAtomicLongArray {
 
     private void boundsCheck(int idx) {
         if (idx < 0 || idx >= this.length) {
-            throw new IndexOutOfBoundsException(
-                    "Index " + idx + " out of bounds for length " + length);
+            throw new IndexOutOfBoundsException("Index " + idx + " out of bounds for length " + length);
         }
     }
 

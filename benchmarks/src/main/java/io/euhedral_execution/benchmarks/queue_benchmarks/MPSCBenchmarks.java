@@ -25,8 +25,8 @@ import org.openjdk.jmh.infra.Blackhole;
 
 @State(Scope.Benchmark)
 public class MPSCBenchmarks {
-    private record QueueConsumer(Blackhole blackhole) implements Consumer<Integer>,
-            MessagePassingQueue.Consumer<Integer> {
+    private record QueueConsumer(Blackhole blackhole)
+            implements Consumer<Integer>, MessagePassingQueue.Consumer<Integer> {
 
         @Override
         public void accept(Integer integer) {
@@ -47,7 +47,6 @@ public class MPSCBenchmarks {
         private final PinnedThreadExecutor[] executors = new PinnedThreadExecutor[32];
         private QueueConsumer consumer;
 
-
         @Param({"64", "512", "2048"})
         private int batchSize;
 
@@ -62,7 +61,7 @@ public class MPSCBenchmarks {
         @Benchmark
         @OperationsPerInvocation(65_536)
         public void jcOfferDrain() throws Throwable {
-            for(int t = 0; t < 16; t++) {
+            for (int t = 0; t < 16; t++) {
                 executors[t].execute(() -> {
                     try {
                         start.await();
@@ -157,7 +156,7 @@ public class MPSCBenchmarks {
         @Benchmark
         @OperationsPerInvocation(65_536)
         public void jcOffer() throws Throwable {
-            for(int t = 0; t < 16; t++) {
+            for (int t = 0; t < 16; t++) {
                 executors[t].execute(() -> {
                     try {
                         start16.await();
@@ -179,7 +178,7 @@ public class MPSCBenchmarks {
         @Benchmark
         @OperationsPerInvocation(65_536)
         public void euhedralOffer() throws Throwable {
-            for(int t = 0; t < 16; t++) {
+            for (int t = 0; t < 16; t++) {
                 executors[t].execute(() -> {
                     try {
                         start16.await();

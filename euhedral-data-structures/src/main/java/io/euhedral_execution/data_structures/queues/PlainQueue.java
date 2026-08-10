@@ -19,7 +19,7 @@ public class PlainQueue<T> extends AbstractQueue<T> implements BatchableQueue<T>
     private final boolean bounded;
     private final long capacity;
 
-    private final QueueIter iterator =  new QueueIter();
+    private final QueueIter iterator = new QueueIter();
 
     public PlainQueue(int chunkSize) {
         this(chunkSize, false);
@@ -29,7 +29,7 @@ public class PlainQueue<T> extends AbstractQueue<T> implements BatchableQueue<T>
         this.queue = new QueueHolder(new Object[QueueUtils.queueSize(chunkSize)]);
         this.chunkMask = QueueUtils.chunkMask(chunkSize);
         this.bounded = bounded;
-        if(bounded) {
+        if (bounded) {
             this.capacity = (QueueUtils.chunkMask(chunkSize) >>> QueueUtils.SHIFT);
         } else {
             this.capacity = Long.MAX_VALUE;
@@ -113,8 +113,7 @@ public class PlainQueue<T> extends AbstractQueue<T> implements BatchableQueue<T>
     @Override
     public final long drain(Consumer<T> consumer, Function<T, Boolean> stopCondition, long limit) {
         long total = 0;
-        for (long i = this.queue.head; i < this.queue.tail && total < limit;
-                i += QueueUtils.INCREMENT, total++) {
+        for (long i = this.queue.head; i < this.queue.tail && total < limit; i += QueueUtils.INCREMENT, total++) {
             T obj = poll();
             if (obj == null) {
                 break;
@@ -169,35 +168,6 @@ public class PlainQueue<T> extends AbstractQueue<T> implements BatchableQueue<T>
         return (this.queue.tail - this.queue.head) >>> QueueUtils.SHIFT;
     }
 
-    private class QueueIter implements Iterator<T> {
-        long pos;
-        Object[] queue;
-
-        @Override
-        public boolean hasNext() {
-            int cIdx = QueueUtils.chunkIndex(pos, chunkMask);
-            if(queue[cIdx] == QueueUtils.SENTINEL) {
-                queue = (Object[]) queue[queue.length - 1];
-            }
-            return queue[cIdx] != null;
-        }
-
-        @Override
-        public T next() {
-            int cIdx = QueueUtils.chunkIndex(pos, chunkMask);
-            if(queue[cIdx] == QueueUtils.SENTINEL) {
-                queue = (Object[]) queue[queue.length - 1];
-            }
-            pos += QueueUtils.INCREMENT;
-            T obj = (T) queue[cIdx];
-
-            if(obj == null) {
-                throw new NoSuchElementException();
-            }
-            return obj;
-        }
-    }
-
     @SuppressWarnings("unused")
     private static class TopPad {
 
@@ -224,6 +194,35 @@ public class PlainQueue<T> extends AbstractQueue<T> implements BatchableQueue<T>
 
         QueueHolder(Object[] queue) {
             super(queue);
+        }
+    }
+
+    private class QueueIter implements Iterator<T> {
+        long pos;
+        Object[] queue;
+
+        @Override
+        public boolean hasNext() {
+            int cIdx = QueueUtils.chunkIndex(pos, chunkMask);
+            if (queue[cIdx] == QueueUtils.SENTINEL) {
+                queue = (Object[]) queue[queue.length - 1];
+            }
+            return queue[cIdx] != null;
+        }
+
+        @Override
+        public T next() {
+            int cIdx = QueueUtils.chunkIndex(pos, chunkMask);
+            if (queue[cIdx] == QueueUtils.SENTINEL) {
+                queue = (Object[]) queue[queue.length - 1];
+            }
+            pos += QueueUtils.INCREMENT;
+            T obj = (T) queue[cIdx];
+
+            if (obj == null) {
+                throw new NoSuchElementException();
+            }
+            return obj;
         }
     }
 }

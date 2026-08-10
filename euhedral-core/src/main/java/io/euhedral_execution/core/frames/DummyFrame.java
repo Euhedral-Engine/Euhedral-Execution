@@ -9,5 +9,4 @@ public final class DummyFrame extends AbstractFrame {
     private DummyFrame() {
         super(0);
     }
-
 }

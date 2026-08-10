@@ -6,13 +6,17 @@ import java.lang.invoke.VarHandle;
 
 public class CommonVarHandles {
 
+    private CommonVarHandles() {}
+
     public static VarHandle makeHandle(Class<?> targetClass, String fieldName, Class<?> fieldClass) {
         return makeHandle(MethodHandles.lookup(), targetClass, fieldName, fieldClass);
     }
 
-    public static VarHandle makeHandle(MethodHandles.Lookup callerLookup, Class<?> targetClass, String fieldName, Class<?> fieldClass) {
+    public static VarHandle makeHandle(
+            MethodHandles.Lookup callerLookup, Class<?> targetClass, String fieldName, Class<?> fieldClass) {
         try {
-            return MethodHandles.privateLookupIn(targetClass, callerLookup).findVarHandle(targetClass, fieldName, fieldClass);
+            return MethodHandles.privateLookupIn(targetClass, callerLookup)
+                    .findVarHandle(targetClass, fieldName, fieldClass);
         } catch (Exception e) {
             throw new ExceptionInInitializerError(e);
         }
@@ -24,8 +28,7 @@ public class CommonVarHandles {
 
     public static VarHandle closed(MethodHandles.Lookup callerLookup, Class<?> clazz) {
         try {
-            return MethodHandles.privateLookupIn(clazz, callerLookup)
-                    .findVarHandle(clazz, "closed", boolean.class);
+            return MethodHandles.privateLookupIn(clazz, callerLookup).findVarHandle(clazz, "closed", boolean.class);
         } catch (Exception e) {
             throw new ExceptionInInitializerError(e);
         }
@@ -37,8 +40,7 @@ public class CommonVarHandles {
 
     public static VarHandle complete(MethodHandles.Lookup callerLookup, Class<?> clazz) {
         try {
-            return MethodHandles.privateLookupIn(clazz, callerLookup)
-                    .findVarHandle(clazz, "complete", boolean.class);
+            return MethodHandles.privateLookupIn(clazz, callerLookup).findVarHandle(clazz, "complete", boolean.class);
         } catch (Exception e) {
             throw new ExceptionInInitializerError(e);
         }
@@ -55,9 +57,5 @@ public class CommonVarHandles {
         } catch (Exception e) {
             throw new ExceptionInInitializerError(e);
         }
-    }
-
-    private CommonVarHandles() {
-
     }
 }

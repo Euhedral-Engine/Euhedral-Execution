@@ -25,7 +25,7 @@ class CoreZeroReservationCompatibilityTest {
                 0,
                 UnmodifiableBitSet.wrap((BitSet) effectiveCpus.clone()),
                 new double[cpuCount],
-                new long[]{1_000, 0, 0},
+                new long[] {1_000, 0, 0},
                 0);
         return HardwareUtilization.create(
                 1,

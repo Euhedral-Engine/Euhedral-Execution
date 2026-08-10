@@ -79,6 +79,8 @@ public final class SystemInfo {
         LOGGER.debug("\n{}", debugOut);
     }
 
+    private SystemInfo() {}
+
     public static int getCacheLineBytes() {
         return CACHE_LINE_SIZE_BYTES;
     }
@@ -215,10 +217,6 @@ public final class SystemInfo {
         return E_CPU_SET;
     }
 
-    private SystemInfo() {
-
-    }
-
     static TopologyModel topologyModel() {
         return TOPOLOGY_MODEL;
     }
@@ -226,19 +224,22 @@ public final class SystemInfo {
     private static TopologyModel selectTopology() {
         try {
             if (OSName.isLinux()) {
-                return TopologyBootstrap.extract(LinuxSystemLayout.INSTANCE.getCacheLayout(),
+                return TopologyBootstrap.extract(
+                        LinuxSystemLayout.INSTANCE.getCacheLayout(),
                         LinuxSystemLayout.INSTANCE.getCpuInfoMap(),
                         LinuxSystemLayout.INSTANCE.getCoreInfoMap(),
                         LinuxSystemLayout.INSTANCE.getSocketInfoMap());
             }
             if (OSName.isWindows()) {
-                return TopologyBootstrap.extract(WindowsSystemLayout.INSTANCE.getCacheLayout(),
+                return TopologyBootstrap.extract(
+                        WindowsSystemLayout.INSTANCE.getCacheLayout(),
                         WindowsSystemLayout.INSTANCE.getCpuInfoMap(),
                         WindowsSystemLayout.INSTANCE.getCoreInfoMap(),
                         WindowsSystemLayout.INSTANCE.getSocketInfoMap());
             }
             if (OSName.isMacOS()) {
-                return TopologyBootstrap.extract(MacosSystemLayout.INSTANCE.getCacheLayout(),
+                return TopologyBootstrap.extract(
+                        MacosSystemLayout.INSTANCE.getCacheLayout(),
                         MacosSystemLayout.INSTANCE.getCpuInfoMap(),
                         MacosSystemLayout.INSTANCE.getCoreInfoMap(),
                         MacosSystemLayout.INSTANCE.getSocketInfoMap());
@@ -304,9 +305,18 @@ public final class SystemInfo {
     }
 
     /// Shares of size 1 means only this cpu uses the level of cache.
-    public record CpuCacheLayout(int cpu, long bytesL1, long bytesL2, long bytesL3, int sharesL1,
-                                 int sharesL2, int sharesL3, String maskL1, String maskL2,
-                                 String maskL3, int cacheLineBytes) {
+    public record CpuCacheLayout(
+            int cpu,
+            long bytesL1,
+            long bytesL2,
+            long bytesL3,
+            int sharesL1,
+            int sharesL2,
+            int sharesL3,
+            String maskL1,
+            String maskL2,
+            String maskL3,
+            int cacheLineBytes) {
 
         public @NonNull BitSet getL1Mask() {
             return fromHexMask(maskL1);

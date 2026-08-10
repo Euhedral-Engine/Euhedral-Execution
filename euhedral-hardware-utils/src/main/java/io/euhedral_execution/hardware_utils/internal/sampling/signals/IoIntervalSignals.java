@@ -5,9 +5,7 @@ import io.euhedral_execution.hardware_utils.internal.sampling.primitives.Latency
 import io.euhedral_execution.hardware_utils.internal.sampling.primitives.ResolvedDouble;
 
 public record IoIntervalSignals(
-    CounterDelta productiveBytes,
-    CounterDelta stallNs,
-    LatencyInterval operationsLatency,
-    ResolvedDouble maximumQueueDepth
-) {
-}
+        CounterDelta productiveBytes,
+        CounterDelta stallNs,
+        LatencyInterval operationsLatency,
+        ResolvedDouble maximumQueueDepth) {}

@@ -42,8 +42,8 @@ public class WindowsResourcesTest {
 
     @Test
     public void testIdleCycleDeltaNormalization() {
-        double[] lastIdle = new double[]{1_000_000.0, 1_000_000.0};
-        double[] currentIdle = new double[]{1_050_000.0, 1_100_000.0};
+        double[] lastIdle = new double[] {1_000_000.0, 1_000_000.0};
+        double[] currentIdle = new double[] {1_050_000.0, 1_100_000.0};
         double[] pressure = new double[2];
         long dt = 100_000_000L; // 100 ms in nanoseconds
 

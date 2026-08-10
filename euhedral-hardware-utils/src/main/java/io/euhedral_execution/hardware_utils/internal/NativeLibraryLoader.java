@@ -9,17 +9,37 @@ import org.slf4j.Logger;
 
 final class NativeLibraryLoader {
 
-    private static String diagnostic(
-            String operatingSystem, String architecture, List<NativeLoadFailure> failures) {
-        StringBuilder message = new StringBuilder(
-                "native-loader: unable to load a native product for ")
-                .append(operatingSystem).append('/').append(architecture).append('.');
+    private final NativeProductCatalog catalog;
+    private final NativeLibraryExtractor extractor;
+    private final NativeLibrarySystem librarySystem;
+    private final Logger logger;
+    NativeLibraryLoader(
+            NativeProductCatalog catalog,
+            NativeLibraryExtractor extractor,
+            NativeLibrarySystem librarySystem,
+            Logger logger) {
+        this.catalog = Objects.requireNonNull(catalog, "catalog");
+        this.extractor = Objects.requireNonNull(extractor, "extractor");
+        this.librarySystem = Objects.requireNonNull(librarySystem, "librarySystem");
+        this.logger = Objects.requireNonNull(logger, "logger");
+    }
+
+    private static String diagnostic(String operatingSystem, String architecture, List<NativeLoadFailure> failures) {
+        StringBuilder message = new StringBuilder("native-loader: unable to load a native product for ")
+                .append(operatingSystem)
+                .append('/')
+                .append(architecture)
+                .append('.');
         for (NativeLoadFailure failure : failures) {
-            message.append(" Attempted ").append(failure.product().resourcePath())
-                    .append(" -> ").append(failure.extractionPath() == null
-                            ? "<extraction unavailable>"
-                            : failure.extractionPath().toAbsolutePath())
-                    .append(": ").append(failure.cause().getClass().getName());
+            message.append(" Attempted ")
+                    .append(failure.product().resourcePath())
+                    .append(" -> ")
+                    .append(
+                            failure.extractionPath() == null
+                                    ? "<extraction unavailable>"
+                                    : failure.extractionPath().toAbsolutePath())
+                    .append(": ")
+                    .append(failure.cause().getClass().getName());
             String causeMessage = sanitize(failure.cause().getMessage());
             if (!causeMessage.isEmpty()) {
                 message.append(": ").append(causeMessage);
@@ -43,22 +63,6 @@ final class NativeLibraryLoader {
         return sanitized.toString().strip();
     }
 
-    private final NativeProductCatalog catalog;
-    private final NativeLibraryExtractor extractor;
-    private final NativeLibrarySystem librarySystem;
-    private final Logger logger;
-
-    NativeLibraryLoader(
-            NativeProductCatalog catalog,
-            NativeLibraryExtractor extractor,
-            NativeLibrarySystem librarySystem,
-            Logger logger) {
-        this.catalog = Objects.requireNonNull(catalog, "catalog");
-        this.extractor = Objects.requireNonNull(extractor, "extractor");
-        this.librarySystem = Objects.requireNonNull(librarySystem, "librarySystem");
-        this.logger = Objects.requireNonNull(logger, "logger");
-    }
-
     NativeLoadResult load(String osName, String osArch) {
         String canonicalOs = catalog.canonicalOs(osName);
         String canonicalArchitecture = catalog.canonicalArchitecture(osArch);
@@ -69,8 +73,7 @@ final class NativeLibraryLoader {
             Path extractionPath = null;
             try {
                 extractionPath = extractor.pathFor(candidate);
-                logger.debug("Attempting to load JNI product {} from {}", candidate.id(),
-                        candidate.resourcePath());
+                logger.debug("Attempting to load JNI product {} from {}", candidate.id(), candidate.resourcePath());
                 Path extracted = extractor.extract(candidate);
                 librarySystem.load(extracted);
                 extractor.loadSucceeded(extracted);
@@ -83,8 +86,8 @@ final class NativeLibraryLoader {
         }
 
         extractor.allCandidatesFailed();
-        ExceptionInInitializerError error = new ExceptionInInitializerError(
-                diagnostic(canonicalOs, canonicalArchitecture, failures));
+        ExceptionInInitializerError error =
+                new ExceptionInInitializerError(diagnostic(canonicalOs, canonicalArchitecture, failures));
         failures.forEach(failure -> error.addSuppressed(failure.cause()));
         throw error;
     }

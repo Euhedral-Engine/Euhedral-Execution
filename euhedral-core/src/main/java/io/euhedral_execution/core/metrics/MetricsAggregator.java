@@ -20,6 +20,10 @@ public class MetricsAggregator {
     public static final String LATENCY_SUMMARY_SUFFIX = ".execution.latency";
     public static final String THROUGHPUT_SUMMARY_SUFFIX = ".execution.throughput";
 
+    private MetricsAggregator() {}
+
+    // CACHE
+
     public static String metricName(String prefix, String suffix) {
         if (prefix.endsWith(".")) {
             prefix = prefix.substring(0, prefix.length() - 1);
@@ -27,62 +31,63 @@ public class MetricsAggregator {
         return prefix + suffix;
     }
 
-    // CACHE
-
     public static Collection<Gauge> getCacheBacklogGauges(MeterRegistry registry) {
-        return registry.getMeters().stream().filter(m -> m instanceof Gauge && m.getId().getName()
-                .endsWith(CACHE_BACKLOG_SUFFIX)).map(Gauge.class::cast).toList();
+        return registry.getMeters().stream()
+                .filter(m -> m instanceof Gauge && m.getId().getName().endsWith(CACHE_BACKLOG_SUFFIX))
+                .map(Gauge.class::cast)
+                .toList();
     }
 
-    public static Collection<Gauge> getCacheBacklogGauges(String metricPrefix,
-            MeterRegistry registry) {
+    public static Collection<Gauge> getCacheBacklogGauges(String metricPrefix, MeterRegistry registry) {
         return gauges(metricPrefix, CACHE_BACKLOG_SUFFIX, registry);
     }
 
     public static Collection<DistributionSummary> getCapFactorSummaries(MeterRegistry registry) {
         return registry.getMeters().stream()
-                .filter(m -> m instanceof DistributionSummary && m.getId().getName()
-                        .endsWith(CAP_FACTOR_SUFFIX)).map(DistributionSummary.class::cast).toList();
-    }
-
-    public static Collection<DistributionSummary> getCapFactorSummaries(String metricPrefix,
-            MeterRegistry registry) {
-        return summaries(metricPrefix, CAP_FACTOR_SUFFIX, registry);
+                .filter(m ->
+                        m instanceof DistributionSummary && m.getId().getName().endsWith(CAP_FACTOR_SUFFIX))
+                .map(DistributionSummary.class::cast)
+                .toList();
     }
 
     // EXECUTION
 
-    public static Collection<Gauge> getInProgressGauges(MeterRegistry registry) {
-        return registry.getMeters().stream().filter(m -> m instanceof Gauge && m.getId().getName()
-                .endsWith(LATENCY_SUMMARY_SUFFIX)).map(Gauge.class::cast).toList();
+    public static Collection<DistributionSummary> getCapFactorSummaries(String metricPrefix, MeterRegistry registry) {
+        return summaries(metricPrefix, CAP_FACTOR_SUFFIX, registry);
     }
 
-    public static Collection<Gauge> getInProgressGauges(String metricPrefix,
-            MeterRegistry registry) {
+    public static Collection<Gauge> getInProgressGauges(MeterRegistry registry) {
+        return registry.getMeters().stream()
+                .filter(m -> m instanceof Gauge && m.getId().getName().endsWith(LATENCY_SUMMARY_SUFFIX))
+                .map(Gauge.class::cast)
+                .toList();
+    }
+
+    public static Collection<Gauge> getInProgressGauges(String metricPrefix, MeterRegistry registry) {
         return gauges(metricPrefix, IN_PROGRESS_SUFFIX, registry);
     }
 
     public static Collection<DistributionSummary> getLatencySummaries(MeterRegistry registry) {
         return registry.getMeters().stream()
-                .filter(m -> m instanceof DistributionSummary && m.getId().getName()
-                        .endsWith(LATENCY_SUMMARY_SUFFIX)).map(DistributionSummary.class::cast)
+                .filter(m ->
+                        m instanceof DistributionSummary && m.getId().getName().endsWith(LATENCY_SUMMARY_SUFFIX))
+                .map(DistributionSummary.class::cast)
                 .toList();
     }
 
-    public static Collection<DistributionSummary> getLatencySummaries(String metricPrefix,
-            MeterRegistry registry) {
+    public static Collection<DistributionSummary> getLatencySummaries(String metricPrefix, MeterRegistry registry) {
         return summaries(metricPrefix, LATENCY_SUMMARY_SUFFIX, registry);
     }
 
     public static Collection<DistributionSummary> getThroughputSummaries(MeterRegistry registry) {
         return registry.getMeters().stream()
-                .filter(m -> m instanceof DistributionSummary && m.getId().getName()
-                        .endsWith(THROUGHPUT_SUMMARY_SUFFIX)).map(DistributionSummary.class::cast)
+                .filter(m ->
+                        m instanceof DistributionSummary && m.getId().getName().endsWith(THROUGHPUT_SUMMARY_SUFFIX))
+                .map(DistributionSummary.class::cast)
                 .toList();
     }
 
-    public static Collection<DistributionSummary> getThroughputSummaries(String metricPrefix,
-            MeterRegistry registry) {
+    public static Collection<DistributionSummary> getThroughputSummaries(String metricPrefix, MeterRegistry registry) {
         return summaries(metricPrefix, THROUGHPUT_SUMMARY_SUFFIX, registry);
     }
 
@@ -94,16 +99,11 @@ public class MetricsAggregator {
         return registry.find(metricName(prefix, suffix)).gauges();
     }
 
-    private static Collection<DistributionSummary> summaries(String prefix, String suffix,
-            MeterRegistry registry) {
+    private static Collection<DistributionSummary> summaries(String prefix, String suffix, MeterRegistry registry) {
         if (prefix == null || prefix.isBlank()) {
             return List.of();
         }
 
         return registry.find(metricName(prefix, suffix)).summaries();
-    }
-
-    private MetricsAggregator() {
-
     }
 }

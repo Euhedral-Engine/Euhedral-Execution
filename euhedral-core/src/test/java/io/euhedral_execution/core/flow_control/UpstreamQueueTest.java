@@ -105,8 +105,7 @@ class UpstreamQueueTest {
         handles.offer(upstream);
         count.incrementAndGet();
 
-        queue.pull(frame -> {
-        }, frame -> false, 64);
+        queue.pull(frame -> {}, frame -> false, 64);
 
         assertEquals(0, upstream.requested);
         assertEquals(64, upstream.pulled);
@@ -149,8 +148,7 @@ class UpstreamQueueTest {
 
     @Test
     void shouldDefaultUnsupportedOperations() {
-        UpstreamQueue.UpstreamHandle handle =
-                new TestUpstreamHandle();
+        UpstreamQueue.UpstreamHandle handle = new TestUpstreamHandle();
 
         LatticeSource source = mock(LatticeSource.class);
 
@@ -161,23 +159,16 @@ class UpstreamQueueTest {
 
     @Test
     void shouldRejectTerminalDownstreamByDefault() {
-        UpstreamQueue.UpstreamHandle handle =
-                new TestUpstreamHandle();
+        UpstreamQueue.UpstreamHandle handle = new TestUpstreamHandle();
 
         TestReceiver terminal = new TestReceiver();
 
         handle.addDownstream(terminal);
 
         assertNotNull(terminal.error);
-        assertInstanceOf(
-                IllegalStateException.class,
-                terminal.error
-        );
+        assertInstanceOf(IllegalStateException.class, terminal.error);
 
-        assertEquals(
-                "Not supported",
-                terminal.error.getMessage()
-        );
+        assertEquals("Not supported", terminal.error.getMessage());
     }
 
     static class TestUpstreamHandle extends UpstreamQueue.UpstreamHandle {
@@ -190,8 +181,8 @@ class UpstreamQueueTest {
         boolean complete;
 
         @Override
-        public long pull(Consumer<AbstractFrame> consumer,
-                Function<AbstractFrame, Boolean> stopCondition, long demand) {
+        public long pull(
+                Consumer<AbstractFrame> consumer, Function<AbstractFrame, Boolean> stopCondition, long demand) {
             this.pulled += demand;
             return demand;
         }
@@ -215,6 +206,5 @@ class UpstreamQueueTest {
         public void onError(Throwable throwable) {
             // Test
         }
-
     }
 }

@@ -7,38 +7,6 @@ import java.util.function.Function;
 public class FlowThread extends Thread {
 
     private static final ThreadLocal<FlowContext> FALLBACK_CONTEXT = new ThreadLocal<>();
-
-    public static Function<Runnable, FlowThread> getFactory() {
-        return FlowThread::new;
-    }
-
-    public static FlowContext getContext() {
-        if (Thread.currentThread() instanceof FlowThread ft) {
-            if (ft.context == null) {
-                ft.context = new FlowContext();
-            }
-            return ft.context;
-        }
-        return FALLBACK_CONTEXT.get();
-    }
-
-    public static FlowContext initializeContext() {
-        FlowContext context = getContext();
-        if (context == null) {
-            context = new FlowContext();
-            FALLBACK_CONTEXT.set(context);
-        }
-        return context;
-    }
-
-    public static void clearContext() {
-        if (Thread.currentThread() instanceof FlowThread ft) {
-            ft.context = null;
-        } else {
-            FALLBACK_CONTEXT.remove();
-        }
-    }
-
     private FlowContext context;
 
     public FlowThread() {
@@ -73,9 +41,40 @@ public class FlowThread extends Thread {
         super(group, task, name, stackSize);
     }
 
-    public FlowThread(ThreadGroup group, Runnable task, String name,
-            long stackSize, boolean inheritInheritableThreadLocals) {
+    public FlowThread(
+            ThreadGroup group, Runnable task, String name, long stackSize, boolean inheritInheritableThreadLocals) {
         super(group, task, name, stackSize, inheritInheritableThreadLocals);
+    }
+
+    public static Function<Runnable, FlowThread> getFactory() {
+        return FlowThread::new;
+    }
+
+    public static FlowContext getContext() {
+        if (Thread.currentThread() instanceof FlowThread ft) {
+            if (ft.context == null) {
+                ft.context = new FlowContext();
+            }
+            return ft.context;
+        }
+        return FALLBACK_CONTEXT.get();
+    }
+
+    public static FlowContext initializeContext() {
+        FlowContext context = getContext();
+        if (context == null) {
+            context = new FlowContext();
+            FALLBACK_CONTEXT.set(context);
+        }
+        return context;
+    }
+
+    public static void clearContext() {
+        if (Thread.currentThread() instanceof FlowThread ft) {
+            ft.context = null;
+        } else {
+            FALLBACK_CONTEXT.remove();
+        }
     }
 
     public static final class FlowContext {

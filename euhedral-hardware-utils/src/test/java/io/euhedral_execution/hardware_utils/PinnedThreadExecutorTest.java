@@ -20,11 +20,12 @@ class PinnedThreadExecutorTest {
         int cpu = ThreadTools.BASE_MASK.nextSetBit(0);
         assertTrue(cpu >= 0, "no CPU is available for the test");
 
-        PinnedThreadExecutor executor = PinnedThreadExecutor.getOrSetIfAbsent(
-                Thread::new, cpu, "pinned-unit-test", 42, true);
+        PinnedThreadExecutor executor =
+                PinnedThreadExecutor.getOrSetIfAbsent(Thread::new, cpu, "pinned-unit-test", 42, true);
         try (executor) {
-            assertSame(executor, PinnedThreadExecutor.getOrSetIfAbsent(
-                    Thread::new, cpu, "ignored", Thread.MIN_PRIORITY, false));
+            assertSame(
+                    executor,
+                    PinnedThreadExecutor.getOrSetIfAbsent(Thread::new, cpu, "ignored", Thread.MIN_PRIORITY, false));
 
             CompletableFuture<Thread> executedBy = new CompletableFuture<>();
             executor.execute(() -> executedBy.complete(Thread.currentThread()));
@@ -39,7 +40,6 @@ class PinnedThreadExecutorTest {
         assertTrue(executor.isShutdown());
         assertTrue(executor.awaitTermination(5, SECONDS));
         assertNull(PinnedThreadExecutor.get(cpu));
-        assertThrows(RejectedExecutionException.class, () -> executor.execute(() -> {
-        }));
+        assertThrows(RejectedExecutionException.class, () -> executor.execute(() -> {}));
     }
 }

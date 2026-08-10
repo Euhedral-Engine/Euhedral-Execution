@@ -6,11 +6,10 @@ import io.euhedral_execution.training.optimization.data.PredictedPolicySummary;
 import java.util.SortedSet;
 
 public final class PredictedPolicyRanker {
-    public static PredictedPolicySummary summarize(PolicyPredictionCurve curve,
-            SortedSet<SourceScenario> requiredScenarios) {
-        return PredictedPolicySummary.from(curve, requiredScenarios);
-    }
+    private PredictedPolicyRanker() {}
 
-    private PredictedPolicyRanker() {
+    public static PredictedPolicySummary summarize(
+            PolicyPredictionCurve curve, SortedSet<SourceScenario> requiredScenarios) {
+        return PredictedPolicySummary.from(curve, requiredScenarios);
     }
 }

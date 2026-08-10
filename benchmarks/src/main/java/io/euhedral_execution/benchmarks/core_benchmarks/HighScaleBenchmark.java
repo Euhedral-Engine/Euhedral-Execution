@@ -42,19 +42,18 @@ import org.slf4j.LoggerFactory;
 @Fork(value = 1)
 public class HighScaleBenchmark {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(HighScaleBenchmark.class);
-
     public static final int MAX_RAY_STEPS = 200;
     public static final int ITERATION_CAP = 120;
-
     public static final double BAILOUT_RADIUS_SQ = 1_000_000.0;
-
+    private static final Logger LOGGER = LoggerFactory.getLogger(HighScaleBenchmark.class);
     private static final long SEED = HasherApi.BASE_SEED;
 
     private static final double CENTER_X = 0;
     private static final double CENTER_Y = 0;
 
     private static final long TASKS = 9_800L * 9_800L * 4 * SystemInfo.SOCKET_COUNT;
+
+    private HighScaleBenchmark() {}
 
     private static void shuffle(MandelbulbFrame[] pixels) {
         long seed = SEED;
@@ -95,13 +94,12 @@ public class HighScaleBenchmark {
         }
     }
 
-    private static MandelbulbFrame[][][] generate(Blackhole blackhole, PaddedLongAdder counters)
-            throws Exception {
+    private static MandelbulbFrame[][][] generate(Blackhole blackhole, PaddedLongAdder counters) throws Exception {
         return generate(blackhole, counters, false);
     }
 
-    private static MandelbulbFrame[][][] generate(Blackhole blackhole, PaddedLongAdder counters,
-            boolean socketLocal) throws Exception {
+    private static MandelbulbFrame[][][] generate(Blackhole blackhole, PaddedLongAdder counters, boolean socketLocal)
+            throws Exception {
         int sockets = SystemInfo.SOCKET_COUNT;
 
         MandelbulbFrame[][][] pixels = new MandelbulbFrame[sockets][][];
@@ -110,26 +108,29 @@ public class HighScaleBenchmark {
             SocketInfo info = SystemInfo.getSocketInfo(i);
             if (info != null) {
                 int cpu = info.getCpuSet().nextSetBit(0);
-                PinnedThreadExecutor executor = PinnedThreadExecutor.getOrSetIfAbsent(cpu,
-                        HighScaleBenchmark.class.getSimpleName() + " Setup", Thread.MAX_PRIORITY,
-                        true);
+                PinnedThreadExecutor executor = PinnedThreadExecutor.getOrSetIfAbsent(
+                        cpu, HighScaleBenchmark.class.getSimpleName() + " Setup", Thread.MAX_PRIORITY, true);
 
                 final int socketId = i;
-                executor.submit(() ->
-                    pixels[socketId] =
-                            MandelbulbFrame.generate(64, 1_500_625, 9_800, 9800, CENTER_X, CENTER_Y,
-                                    0.0, MAX_RAY_STEPS, ITERATION_CAP, BAILOUT_RADIUS_SQ, blackhole,
-                                    counters, socketLocal ? RoutingPolicy.SOCKET_LOCAL
-                                            : RoutingPolicy.ANYWHERE)
-                ).get();
+                executor.submit(() -> pixels[socketId] = MandelbulbFrame.generate(
+                                64,
+                                1_500_625,
+                                9_800,
+                                9800,
+                                CENTER_X,
+                                CENTER_Y,
+                                0.0,
+                                MAX_RAY_STEPS,
+                                ITERATION_CAP,
+                                BAILOUT_RADIUS_SQ,
+                                blackhole,
+                                counters,
+                                socketLocal ? RoutingPolicy.SOCKET_LOCAL : RoutingPolicy.ANYWHERE))
+                        .get();
                 executor.shutdownNow();
             }
         }
         return pixels;
-    }
-
-    private HighScaleBenchmark() {
-
     }
 
     @BenchmarkMode({Mode.AverageTime})
@@ -176,8 +177,7 @@ public class HighScaleBenchmark {
                     while (total > 0) {
                         AbstractFrame[] set = new AbstractFrame[Math.min(1024, total)];
                         System.arraycopy(row, iter * 1024, set, 0, set.length);
-                        chunkArray[iter++] = new BenchArrayFrame(pixels[0][0][0].getIdHash(), set,
-                                this.counters);
+                        chunkArray[iter++] = new BenchArrayFrame(pixels[0][0][0].getIdHash(), set, this.counters);
 
                         chunkArray[iter - 1].randomizeHash(seed++);
                         total -= Math.min(1024, total);
@@ -313,6 +313,5 @@ public class HighScaleBenchmark {
             public long invocations;
             public long measurements;
         }
-
     }
 }

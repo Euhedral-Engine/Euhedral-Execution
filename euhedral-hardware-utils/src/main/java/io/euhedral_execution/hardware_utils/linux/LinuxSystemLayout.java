@@ -35,12 +35,23 @@ import org.slf4j.LoggerFactory;
 public final class LinuxSystemLayout {
 
     public static final LinuxSystemLayout INSTANCE;
-    private static final Logger LOGGER = LoggerFactory.getLogger(Constants.getLoggerName(
-            LinuxSystemLayout.class));
+    private static final Logger LOGGER = LoggerFactory.getLogger(Constants.getLoggerName(LinuxSystemLayout.class));
     private static final Path CPU_ROOT = Path.of("/sys/devices/system/cpu");
 
     static {
         INSTANCE = OSName.isLinux() ? new LinuxSystemLayout(CPU_ROOT) : null;
+    }
+
+    private final TopologyModel model;
+
+    /// Constructs a `LinuxSystemLayout` by scanning the specified sysfs CPU root directory.
+    LinuxSystemLayout(Path cpuRoot) {
+        this(() -> collect(cpuRoot));
+    }
+
+    /// Constructs a `LinuxSystemLayout` using a custom `TopologyProvider` functional interface.
+    LinuxSystemLayout(TopologyProvider provider) {
+        this.model = TopologyBootstrap.normalize(provider, Runtime.getRuntime().availableProcessors(), LOGGER, "linux");
     }
 
     /// Scans sysfs CPU root directory for `cpu\d+` subdirectories, collecting topology
@@ -68,16 +79,20 @@ public final class LinuxSystemLayout {
             int coreId = parseAttrOrDefault(topology.resolve("core_id"), 0);
             int dieId = parseAttrOrDefault(topology.resolve("die_id"), 0);
             CacheScore cacheScore = collectCaches(directory.resolve("cache"), caches);
-            raw.add(new RawCpu(cpu, packageId, dieId, coreId, frequencyScore(directory),
-                    cacheScore.value));
+            raw.add(new RawCpu(cpu, packageId, dieId, coreId, frequencyScore(directory), cacheScore.value));
         }
         Map<CoreTuple, CoreKind> kinds = classify(raw);
-        List<LogicalCpu> cpus = raw.stream().map(cpu -> {
-            CoreTuple tuple = new CoreTuple(cpu.packageId, cpu.dieId, cpu.coreId);
-            return new LogicalCpu(cpu.id, "linux:package:" + cpu.packageId,
-                    "linux:die:" + cpu.dieId, "linux:core:" + cpu.coreId,
-                    kinds.getOrDefault(tuple, CoreKind.UNKNOWN));
-        }).toList();
+        List<LogicalCpu> cpus = raw.stream()
+                .map(cpu -> {
+                    CoreTuple tuple = new CoreTuple(cpu.packageId, cpu.dieId, cpu.coreId);
+                    return new LogicalCpu(
+                            cpu.id,
+                            "linux:package:" + cpu.packageId,
+                            "linux:die:" + cpu.dieId,
+                            "linux:core:" + cpu.coreId,
+                            kinds.getOrDefault(tuple, CoreKind.UNKNOWN));
+                })
+                .toList();
         return new TopologyInput("linux", cpus, caches);
     }
 
@@ -118,8 +133,7 @@ public final class LinuxSystemLayout {
                         l1 = saturatedMultiply(size, sharers.cardinality());
                     }
                     if (level == 2) {
-                        l2 = size / (sharers.cardinality() > 2
-                                ? sharers.cardinality() : 1);
+                        l2 = size / (sharers.cardinality() > 2 ? sharers.cardinality() : 1);
                     }
                 } catch (Exception ignored) {
                     // Cache observations are optional and completed by the common normalizer.
@@ -162,8 +176,10 @@ public final class LinuxSystemLayout {
             return result;
         }
         List<Map.Entry<CoreTuple, Long>> sorted = scores.entrySet().stream()
-                .sorted(Map.Entry.<CoreTuple, Long>comparingByValue().reversed()
-                        .thenComparing(entry -> entry.getKey().toString())).toList();
+                .sorted(Map.Entry.<CoreTuple, Long>comparingByValue()
+                        .reversed()
+                        .thenComparing(entry -> entry.getKey().toString()))
+                .toList();
         long largest = 0;
         int boundary = -1;
         for (int i = 0; i + 1 < sorted.size(); i++) {
@@ -175,8 +191,7 @@ public final class LinuxSystemLayout {
         }
         if (largest > 0) {
             for (int i = 0; i < sorted.size(); i++) {
-                result.put(sorted.get(i).getKey(),
-                        i <= boundary ? CoreKind.PERFORMANCE : CoreKind.EFFICIENCY);
+                result.put(sorted.get(i).getKey(), i <= boundary ? CoreKind.PERFORMANCE : CoreKind.EFFICIENCY);
             }
         }
         return result;
@@ -197,12 +212,10 @@ public final class LinuxSystemLayout {
     private static long toBytes(String value) {
         char suffix = value.charAt(value.length() - 1);
         if (suffix == 'K' || suffix == 'k') {
-            return Long.parseLong(value.substring(0,
-                    value.length() - 1)) * 1024L;
+            return Long.parseLong(value.substring(0, value.length() - 1)) * 1024L;
         }
         if (suffix == 'M' || suffix == 'm') {
-            return Long.parseLong(value.substring(0,
-                    value.length() - 1)) * 1024L * 1024L;
+            return Long.parseLong(value.substring(0, value.length() - 1)) * 1024L * 1024L;
         }
         return Long.parseLong(value);
     }
@@ -224,19 +237,6 @@ public final class LinuxSystemLayout {
         return left + right;
     }
 
-    private final TopologyModel model;
-
-    /// Constructs a `LinuxSystemLayout` by scanning the specified sysfs CPU root directory.
-    LinuxSystemLayout(Path cpuRoot) {
-        this(() -> collect(cpuRoot));
-    }
-
-    /// Constructs a `LinuxSystemLayout` using a custom `TopologyProvider` functional interface.
-    LinuxSystemLayout(TopologyProvider provider) {
-        this.model = TopologyBootstrap.normalize(provider,
-                Runtime.getRuntime().availableProcessors(), LOGGER, "linux");
-    }
-
     public Map<Integer, CpuCacheLayout> getCacheLayout() {
         return model.cacheLayout();
     }
@@ -253,17 +253,12 @@ public final class LinuxSystemLayout {
         return model.socketInfo();
     }
 
-    private record RawCpu(int id, int packageId, int dieId, int coreId, long frequencyScore,
-                          long cacheScore) {
-
-    }
+    private record RawCpu(int id, int packageId, int dieId, int coreId, long frequencyScore, long cacheScore) {}
 
     private record CacheScore(long value) {
 
         private static final CacheScore INVALID = new CacheScore(-1);
     }
 
-    private record CoreTuple(int packageId, int dieId, int coreId) {
-
-    }
+    private record CoreTuple(int packageId, int dieId, int coreId) {}
 }

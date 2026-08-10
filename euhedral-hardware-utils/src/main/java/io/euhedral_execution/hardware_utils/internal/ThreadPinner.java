@@ -5,8 +5,8 @@ import io.euhedral_execution.hardware_utils.linux.LinuxAffinity;
 import io.euhedral_execution.hardware_utils.macos.MacosAffinity;
 import io.euhedral_execution.hardware_utils.windows.WindowsAffinity;
 
-public abstract sealed class ThreadPinner implements AffinityProvider permits LinuxAffinity,
-        MacosAffinity, WindowsAffinity {
+public abstract sealed class ThreadPinner implements AffinityProvider
+        permits LinuxAffinity, MacosAffinity, WindowsAffinity {
 
     private final AffinityCapability capability;
     private final RawLocalityCall localityCall;
@@ -21,14 +21,16 @@ public abstract sealed class ThreadPinner implements AffinityProvider permits Li
     ///
     /// @param capability   complete common-path behavior supplied by this facade
     /// @param localityCall raw setter for one locality tag and the neutral tag `0`
-    protected ThreadPinner(io.euhedral_execution.hardware_utils.AffinityCapability capability,
-            RawLocalityCall localityCall) {
+    protected ThreadPinner(
+            io.euhedral_execution.hardware_utils.AffinityCapability capability, RawLocalityCall localityCall) {
         this(capability, localityCall, false);
     }
 
     /// Creates a facade with independently declared affinity and current-CPU operations.
-    protected ThreadPinner(io.euhedral_execution.hardware_utils.AffinityCapability capability,
-            RawLocalityCall localityCall, boolean currentCpuAvailable) {
+    protected ThreadPinner(
+            io.euhedral_execution.hardware_utils.AffinityCapability capability,
+            RawLocalityCall localityCall,
+            boolean currentCpuAvailable) {
         this.capability = capability;
         this.localityCall = localityCall;
         this.currentCpuAvailable = currentCpuAvailable;
@@ -59,13 +61,13 @@ public abstract sealed class ThreadPinner implements AffinityProvider permits Li
     /// Applies one already-resolved locality tag through the raw platform setter.
     @Override
     public final boolean applyLocality(int locality) {
-        return localityCall != null && localityCall.apply(new long[]{locality}) == 0;
+        return localityCall != null && localityCall.apply(new long[] {locality}) == 0;
     }
 
     /// Clears a locality preference by sending the neutral tag `0`.
     @Override
     public final boolean releaseLocality() {
-        return localityCall != null && localityCall.apply(new long[]{0}) == 0;
+        return localityCall != null && localityCall.apply(new long[] {0}) == 0;
     }
 
     /// Raw platform call accepting the provider's encoded locality mask.

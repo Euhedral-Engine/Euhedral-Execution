@@ -14,8 +14,7 @@ final class ChunkAllocator extends BaseConcurrentQueue {
 
     static {
         try {
-            STORED = MethodHandles.lookup()
-                    .findVarHandle(ChunkAllocator.class, "stored", int.class);
+            STORED = MethodHandles.lookup().findVarHandle(ChunkAllocator.class, "stored", int.class);
         } catch (Exception e) {
             throw new ExceptionInInitializerError(e);
         }

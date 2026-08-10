@@ -26,15 +26,14 @@ public abstract class AbstractIngestSink {
 
         protected static final VarHandle COMPLETE = CommonVarHandles.complete(Delegate.class);
         protected static final VarHandle DOWNSTREAM = CommonVarHandles.downstream(Delegate.class);
+        protected final PaddedAtomicLong demand = new PaddedAtomicLong(0);
+        protected boolean complete;
+        protected LatticeReceiver downstream;
 
         protected static long accumulate(long curr, long next) {
             long sum = curr + next;
             return sum < 0 ? Long.MAX_VALUE : sum;
         }
-
-        protected final PaddedAtomicLong demand = new PaddedAtomicLong(0);
-        protected boolean complete;
-        protected LatticeReceiver downstream;
 
         @Override
         public void addDownstream(LatticeReceiver terminal) {
@@ -52,8 +51,8 @@ public abstract class AbstractIngestSink {
         }
 
         @Override
-        public final long pull(Consumer<AbstractFrame> consumer,
-                Function<AbstractFrame, Boolean> stopCondition, long demand) {
+        public final long pull(
+                Consumer<AbstractFrame> consumer, Function<AbstractFrame, Boolean> stopCondition, long demand) {
             var receiver = getDownstream();
             if (isComplete() || receiver == null || demand <= 0) {
                 return 0;
@@ -61,8 +60,8 @@ public abstract class AbstractIngestSink {
             return hookOnPull(consumer, stopCondition, demand);
         }
 
-        public abstract long hookOnPull(Consumer<AbstractFrame> consumer,
-                Function<AbstractFrame, Boolean> stopCondition, long demand);
+        public abstract long hookOnPull(
+                Consumer<AbstractFrame> consumer, Function<AbstractFrame, Boolean> stopCondition, long demand);
 
         @Override
         public final void request(long demand) {

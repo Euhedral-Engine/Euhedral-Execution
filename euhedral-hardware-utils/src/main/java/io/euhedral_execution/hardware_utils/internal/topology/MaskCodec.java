@@ -5,6 +5,8 @@ import java.util.StringJoiner;
 
 public final class MaskCodec {
 
+    private MaskCodec() {}
+
     public static BitSet parse(String mask) {
         String[] chunks = mask.split(",");
         int bit = 0;
@@ -49,8 +51,5 @@ public final class MaskCodec {
             }
         }
         return joiner.toString();
-    }
-
-    private MaskCodec() {
     }
 }

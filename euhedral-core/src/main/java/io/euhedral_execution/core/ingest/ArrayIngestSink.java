@@ -52,8 +52,8 @@ public final class ArrayIngestSink extends AbstractIngestSink {
         }
 
         @Override
-        public long hookOnPull(Consumer<AbstractFrame> consumer,
-                Function<AbstractFrame, Boolean> stopCondition, long demand) {
+        public long hookOnPull(
+                Consumer<AbstractFrame> consumer, Function<AbstractFrame, Boolean> stopCondition, long demand) {
             if (this.start >= this.array.length) {
                 super.complete();
                 return 0;
@@ -64,7 +64,7 @@ public final class ArrayIngestSink extends AbstractIngestSink {
             long total = 0;
             while (this.start < end && this.start < this.array.length) {
                 AbstractFrame frame = this.array[this.start];
-                if(stopCondition.apply(frame)) {
+                if (stopCondition.apply(frame)) {
                     break;
                 }
                 this.start++;

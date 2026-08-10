@@ -47,8 +47,8 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
 
     public static final Function<AbstractFrame, Boolean> NO_STOP = frame -> false;
 
-    protected static final VarHandle ROUTING_STATE = CommonVarHandles.makeHandle(
-            LatticeVertex.class, "routingState", RoutingState.class);
+    protected static final VarHandle ROUTING_STATE =
+            CommonVarHandles.makeHandle(LatticeVertex.class, "routingState", RoutingState.class);
     private static final VarHandle CLOSED = CommonVarHandles.closed(LatticeVertex.class);
 
     protected final LatticeEdge[] downstreams;
@@ -70,8 +70,12 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
         this(name, downstreamCount, RoutingFunction.DEFAULT, 0, RoutingPolicy.ANYWHERE);
     }
 
-    public LatticeVertex(String name, int downstreamCount, RoutingFunction routingFunction,
-            int cachePool, RoutingPolicy cachePolicy) {
+    public LatticeVertex(
+            String name,
+            int downstreamCount,
+            RoutingFunction routingFunction,
+            int cachePool,
+            RoutingPolicy cachePolicy) {
         super(new AtomicBoolean(false));
         this.logger = LoggerFactory.getLogger(Constants.getLoggerName(name));
         this.downstreams = new LatticeEdge[downstreamCount];
@@ -145,8 +149,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
                 this.downstreams[i] = handles[i];
 
                 if (this.hasCache) {
-                    this.remoteCache[i] = new BoundedMpmcQueue<>(
-                            Math.max(4, this.cachePool / active.cardinality()));
+                    this.remoteCache[i] = new BoundedMpmcQueue<>(Math.max(4, this.cachePool / active.cardinality()));
                 }
             } else if (this.hasCache && this.remoteCache[i] != null) {
                 this.remoteCache[i].clear();
@@ -253,8 +256,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
         int logicalIdx = this.routingFunction.route(frame, mapLen);
         int idx = state.mappings[logicalIdx];
 
-        if (this.hasCache && !frame.isOrdered()
-                && frame.getRoutingPolicy().level <= this.cachePolicy.level) {
+        if (this.hasCache && !frame.isOrdered() && frame.getRoutingPolicy().level <= this.cachePolicy.level) {
             CacheHead head = this.cacheHead.get();
             if (this.remoteCache[idx].offer(frame)) {
                 FlowThread.FlowContext context = FlowThread.getContext();
@@ -276,10 +278,8 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
     /// Pulls available work from the `parallelQueue` if it is not null. Recursively climbs the
     /// graph and does the same.
     @Override
-    public long pull(Consumer<AbstractFrame> consumer,
-            Function<AbstractFrame, Boolean> stopCondition, long demand) {
-        if (demand <= 0 || consumer == null || (boolean) CLOSED.getOpaque(this)
-                || super.drain.getOpaque()) {
+    public long pull(Consumer<AbstractFrame> consumer, Function<AbstractFrame, Boolean> stopCondition, long demand) {
+        if (demand <= 0 || consumer == null || (boolean) CLOSED.getOpaque(this) || super.drain.getOpaque()) {
             return 0;
         }
 
@@ -293,8 +293,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
                 int cycles = 0;
                 while (cycles < state.mappings.length && demand > 0) {
                     int idx = state.mappings[head.idx];
-                    long count = this.remoteCache[idx].drain(consumer, stopCondition,
-                            Math.min(bucket, demand));
+                    long count = this.remoteCache[idx].drain(consumer, stopCondition, Math.min(bucket, demand));
                     total += count;
                     demand -= count;
                     cycles++;
@@ -348,8 +347,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
     @FunctionalInterface
     public interface RoutingFunction {
 
-        RoutingFunction DEFAULT =
-                (frame, mapSize) -> (int) unsignedMultiplyHigh(frame.getRoutingHash(), mapSize);
+        RoutingFunction DEFAULT = (frame, mapSize) -> (int) unsignedMultiplyHigh(frame.getRoutingHash(), mapSize);
 
         /// @param frame   Frame to route
         /// @param mapSize Length of the map array.
@@ -381,20 +379,17 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
     /// pulls are guaranteed to be made by 1 thread at a time.
     public class UpstreamInterceptor extends UpstreamHandle {
 
-        private static final VarHandle COMPLETE = CommonVarHandles.complete(
-                UpstreamInterceptor.class);
+        private static final VarHandle COMPLETE = CommonVarHandles.complete(UpstreamInterceptor.class);
+        @Getter
+        private final long id = HasherApi.mix(ThreadLocalRandom.current().nextLong());
+        private final PaddedAtomicLong wip = new PaddedAtomicLong(0);
+        public LatticeSource upstream;
+        public boolean complete = false;
 
         private static long addCap(long num1, long num2) {
             long sum = num1 + num2;
             return sum < 0 ? Long.MAX_VALUE : sum;
         }
-
-        @Getter
-        private final long id = HasherApi.mix(ThreadLocalRandom.current().nextLong());
-        private final PaddedAtomicLong wip = new PaddedAtomicLong(0);
-        public LatticeSource upstream;
-
-        public boolean complete = false;
 
         @Override
         public void addUpstream(@NonNull LatticeSource upstream) {
@@ -408,9 +403,11 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
         }
 
         @Override
-        public long pull(Consumer<AbstractFrame> consumer,
-                Function<AbstractFrame, Boolean> stopCondition, long demand) {
-            if (demand <= 0 || this.wip.getOpaque() == 0 || LatticeVertex.this.isClosed()
+        public long pull(
+                Consumer<AbstractFrame> consumer, Function<AbstractFrame, Boolean> stopCondition, long demand) {
+            if (demand <= 0
+                    || this.wip.getOpaque() == 0
+                    || LatticeVertex.this.isClosed()
                     || LatticeVertex.this.drain.getOpaque()
                     || isComplete()) {
                 return 0;
@@ -427,7 +424,9 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
 
         @Override
         public void request(long num) {
-            if (num <= 0 || this.wip.getOpaque() == 0 || LatticeVertex.this.isClosed()
+            if (num <= 0
+                    || this.wip.getOpaque() == 0
+                    || LatticeVertex.this.isClosed()
                     || LatticeVertex.this.drain.getOpaque()
                     || isComplete()) {
                 return;

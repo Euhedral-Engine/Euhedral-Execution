@@ -19,14 +19,25 @@ import org.jspecify.annotations.Nullable;
 /// @param metricPrefix           Prefix string to prepend to exported metrics.
 /// @param registry               Registry for reporting collected metrics.
 @SuppressWarnings("unused")
-public record CacheConfig(@Nullable CloneConfig cloneConfig,
-                          double memoryBudget,
-                          int partitions,
-                          int maxPooledChunks,
-                          int ringWalkResetThreshold,
-                          @Nullable String metricPrefix,
-                          @Nullable MeterRegistry registry
-) implements CloneableObject {
+public record CacheConfig(
+        @Nullable CloneConfig cloneConfig,
+        double memoryBudget,
+        int partitions,
+        int maxPooledChunks,
+        int ringWalkResetThreshold,
+        @Nullable String metricPrefix,
+        @Nullable MeterRegistry registry)
+        implements CloneableObject {
+
+    public CacheConfig {
+        if (!Double.isFinite(memoryBudget) || memoryBudget <= 0) {
+            throw new IllegalArgumentException(
+                    "memoryBudget must be finite and greater than 0. Provided: " + memoryBudget);
+        }
+        if (partitions <= 0) {
+            throw new IllegalArgumentException("partitions must be greater than 0. Provided: " + partitions);
+        }
+    }
 
     public static CacheConfig ofDefaults() {
         return ofDefaults(null, null);
@@ -36,28 +47,10 @@ public record CacheConfig(@Nullable CloneConfig cloneConfig,
         return new CacheConfig(null, 0.7, 8, 0, 4, metricPrefix, registry);
     }
 
-    public CacheConfig {
-        if (!Double.isFinite(memoryBudget) || memoryBudget <= 0) {
-            throw new IllegalArgumentException(
-                    "memoryBudget must be finite and greater than 0. Provided: " + memoryBudget);
-        }
-        if (partitions <= 0) {
-            throw new IllegalArgumentException(
-                    "partitions must be greater than 0. Provided: " + partitions);
-        }
-    }
-
     @Override
     public CacheConfig clone(CloneConfig cloneConfig) {
         return new CacheConfig(
-                cloneConfig,
-                memoryBudget,
-                partitions,
-                maxPooledChunks,
-                ringWalkResetThreshold,
-                metricPrefix,
-                registry
-        );
+                cloneConfig, memoryBudget, partitions, maxPooledChunks, ringWalkResetThreshold, metricPrefix, registry);
     }
 
     @Override

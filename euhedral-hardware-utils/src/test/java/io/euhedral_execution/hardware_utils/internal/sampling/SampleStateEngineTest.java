@@ -19,8 +19,8 @@ import org.junit.jupiter.api.Test;
 
 public class SampleStateEngineTest {
 
-    private FastHardwareSample createFastSample(long timeNs, int logicalSpan, BitSet effective,
-            long cpuUsage, long memUsage, long ioOps, long ioLatency) {
+    private FastHardwareSample createFastSample(
+            long timeNs, int logicalSpan, BitSet effective, long cpuUsage, long memUsage, long ioOps, long ioLatency) {
         CpuFastSignals[] cpus = new CpuFastSignals[logicalSpan];
         for (int i = 0; i < logicalSpan; i++) {
             cpus[i] = new CpuFastSignals(
@@ -30,8 +30,7 @@ public class SampleStateEngineTest {
                     CounterSignal.unsupported(timeNs),
                     CounterSignal.unsupported(timeNs),
                     DoubleGaugeSignal.unsupported(timeNs),
-                    DoubleGaugeSignal.unsupported(timeNs)
-            );
+                    DoubleGaugeSignal.unsupported(timeNs));
         }
         MemoryFastSignals mem = new MemoryFastSignals(
                 LongGaugeSignal.unsupported(timeNs),
@@ -39,15 +38,13 @@ public class SampleStateEngineTest {
                 LongGaugeSignal.valid(memUsage, timeNs),
                 LongGaugeSignal.unsupported(timeNs),
                 CounterSignal.unsupported(timeNs),
-                CounterSignal.unsupported(timeNs)
-        );
+                CounterSignal.unsupported(timeNs));
         IoFastSignals io = new IoFastSignals(
                 CounterSignal.unsupported(timeNs),
                 CounterSignal.unsupported(timeNs),
                 CounterSignal.valid(ioLatency, timeNs),
                 CounterSignal.valid(ioOps, timeNs),
-                DoubleGaugeSignal.unsupported(timeNs)
-        );
+                DoubleGaugeSignal.unsupported(timeNs));
 
         return new FastHardwareSample(
                 timeNs,
@@ -62,8 +59,7 @@ public class SampleStateEngineTest {
                 DoubleGaugeSignal.unsupported(timeNs),
                 cpus,
                 mem,
-                io
-        );
+                io);
     }
 
     @Test
@@ -115,27 +111,47 @@ public class SampleStateEngineTest {
         long t3 = t1 + ttlNs + 200L;
         CpuFastSignals[] cpus = new CpuFastSignals[2];
         for (int i = 0; i < 2; i++) {
-            cpus[i] = new CpuFastSignals(CounterSignal.unsupported(t3),
-                    CounterSignal.unsupported(t3), DoubleGaugeSignal.unsupported(t3),
-                    CounterSignal.unsupported(t3), CounterSignal.unsupported(t3),
-                    DoubleGaugeSignal.unsupported(t3), DoubleGaugeSignal.unsupported(t3));
+            cpus[i] = new CpuFastSignals(
+                    CounterSignal.unsupported(t3),
+                    CounterSignal.unsupported(t3),
+                    DoubleGaugeSignal.unsupported(t3),
+                    CounterSignal.unsupported(t3),
+                    CounterSignal.unsupported(t3),
+                    DoubleGaugeSignal.unsupported(t3),
+                    DoubleGaugeSignal.unsupported(t3));
         }
-        MemoryFastSignals mem = new MemoryFastSignals(LongGaugeSignal.unsupported(t3),
-                LongGaugeSignal.unsupported(t3), LongGaugeSignal.unsupported(t3),
-                LongGaugeSignal.unsupported(t3), CounterSignal.unsupported(t3),
+        MemoryFastSignals mem = new MemoryFastSignals(
+                LongGaugeSignal.unsupported(t3),
+                LongGaugeSignal.unsupported(t3),
+                LongGaugeSignal.unsupported(t3),
+                LongGaugeSignal.unsupported(t3),
+                CounterSignal.unsupported(t3),
                 CounterSignal.unsupported(t3));
-        IoFastSignals io = new IoFastSignals(CounterSignal.unsupported(t3),
-                CounterSignal.unsupported(t3), CounterSignal.unsupported(t3),
-                CounterSignal.unsupported(t3), DoubleGaugeSignal.unsupported(t3));
-        FastHardwareSample s3 = new FastHardwareSample(t3, 2, new UnmodifiableBitSet(eff),
-                LongGaugeSignal.unsupported(t3), LongGaugeSignal.unsupported(t3),
-                CounterSignal.unsupported(t3), CounterSignal.unsupported(t3),
-                CounterSignal.unsupported(t3), CounterSignal.unsupported(t3),
-                DoubleGaugeSignal.unsupported(t3), cpus, mem, io);
+        IoFastSignals io = new IoFastSignals(
+                CounterSignal.unsupported(t3),
+                CounterSignal.unsupported(t3),
+                CounterSignal.unsupported(t3),
+                CounterSignal.unsupported(t3),
+                DoubleGaugeSignal.unsupported(t3));
+        FastHardwareSample s3 = new FastHardwareSample(
+                t3,
+                2,
+                new UnmodifiableBitSet(eff),
+                LongGaugeSignal.unsupported(t3),
+                LongGaugeSignal.unsupported(t3),
+                CounterSignal.unsupported(t3),
+                CounterSignal.unsupported(t3),
+                CounterSignal.unsupported(t3),
+                CounterSignal.unsupported(t3),
+                DoubleGaugeSignal.unsupported(t3),
+                cpus,
+                mem,
+                io);
 
         IntervalHardwareSample res3 = engine.processFast(t3 + 100L, s3);
         assertNotNull(res3);
-        assertEquals(SignalResolution.UNAVAILABLE, res3.memorySignals().usageBytes().resolution());
+        assertEquals(
+                SignalResolution.UNAVAILABLE, res3.memorySignals().usageBytes().resolution());
     }
 
     @Test
@@ -158,7 +174,8 @@ public class SampleStateEngineTest {
         IntervalHardwareSample res2 = engine.processFast(t2 + 10L, s2);
 
         assertNotNull(res2);
-        assertEquals(SignalResolution.UNAVAILABLE,
+        assertEquals(
+                SignalResolution.UNAVAILABLE,
                 res2.cpuSignals()[1].schedulerWait().resolution());
     }
 

@@ -25,22 +25,50 @@ import org.slf4j.LoggerFactory;
 /// An automatic cpu pinning executor that creates one fresh thread for every accepted command.
 public final class PinnedThreadExecutor extends AbstractExecutorService implements AutoCloseable {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(
-            Constants.getLoggerName(PinnedThreadExecutor.class));
+    private static final Logger LOGGER = LoggerFactory.getLogger(Constants.getLoggerName(PinnedThreadExecutor.class));
     private static final Cleaner CLEANER = Cleaner.create();
-    private static final Registry REGISTRY = new Registry(
-            new JdkCleanupRegistrar(), new JvmHookRegistrar(), new ThreadToolsTaskBinding());
+    private static final Registry REGISTRY =
+            new Registry(new JdkCleanupRegistrar(), new JvmHookRegistrar(), new ThreadToolsTaskBinding());
+    private final Function<Runnable, ? extends Thread> threadCreator;
+    private final LifecycleControl control;
+    private final Registry registry;
+    private final EntryIdentity entryIdentity;
+    private final CleanupSlot cleanupSlot;
+    private final TaskBinding taskBinding;
+    private final ThreadConfigurator threadConfigurator;
+    @Getter
+    private final ThreadFactory pinnedFactory;
+    @Getter
+    private final int cpu;
+    /// Constructs an executor whose registry identity is not published until cleanup is installed.
+    private PinnedThreadExecutor(
+            Function<Runnable, ? extends Thread> threadCreator,
+            int cpu,
+            LifecycleControl control,
+            Registry registry,
+            EntryIdentity entryIdentity,
+            CleanupSlot cleanupSlot,
+            TaskBinding taskBinding,
+            ThreadConfigurator threadConfigurator) {
+        this.threadCreator = threadCreator;
+        this.cpu = cpu;
+        this.control = control;
+        this.registry = registry;
+        this.entryIdentity = entryIdentity;
+        this.cleanupSlot = cleanupSlot;
+        this.taskBinding = taskBinding;
+        this.threadConfigurator = threadConfigurator;
+        this.pinnedFactory = new PinnedFactory(this);
+    }
 
     /// Acquires the one live executor for a logical CPU, creating it with ordinary threads.
-    public static PinnedThreadExecutor getOrSetIfAbsent(long cpu, String name, int priority,
-            boolean daemon) {
+    public static PinnedThreadExecutor getOrSetIfAbsent(long cpu, String name, int priority, boolean daemon) {
         return getOrSetIfAbsent(Thread::new, cpu, name, priority, daemon);
     }
 
     /// Acquires the one live executor for a logical CPU with a creator fixed to a new identity.
     public static PinnedThreadExecutor getOrSetIfAbsent(
-            Function<Runnable, ? extends Thread> threadCreator,
-            long cpu, String name, int priority, boolean daemon) {
+            Function<Runnable, ? extends Thread> threadCreator, long cpu, String name, int priority, boolean daemon) {
         Objects.requireNonNull(threadCreator, "threadCreator");
         Configuration configuration = Configuration.create(name, priority, daemon);
         int validatedCpu = validateCpu(cpu);
@@ -84,44 +112,18 @@ public final class PinnedThreadExecutor extends AbstractExecutorService implemen
     }
 
     /// Provides package-local isolated lifecycle state for deterministic P3-B tests.
-    static Registry newTestRegistry(CleanupRegistrar cleanupRegistrar,
-            HookRegistrar hookRegistrar, TaskBinding taskBinding) {
+    static Registry newTestRegistry(
+            CleanupRegistrar cleanupRegistrar, HookRegistrar hookRegistrar, TaskBinding taskBinding) {
         return new Registry(cleanupRegistrar, hookRegistrar, taskBinding);
     }
 
     /// Provides an isolated registry with an injected deterministic configuration-failure seam.
-    static Registry newTestRegistry(CleanupRegistrar cleanupRegistrar,
-            HookRegistrar hookRegistrar, TaskBinding taskBinding,
+    static Registry newTestRegistry(
+            CleanupRegistrar cleanupRegistrar,
+            HookRegistrar hookRegistrar,
+            TaskBinding taskBinding,
             ThreadConfigurator threadConfigurator) {
         return new Registry(cleanupRegistrar, hookRegistrar, taskBinding, threadConfigurator);
-    }
-
-    private final Function<Runnable, ? extends Thread> threadCreator;
-    private final LifecycleControl control;
-    private final Registry registry;
-    private final EntryIdentity entryIdentity;
-    private final CleanupSlot cleanupSlot;
-    private final TaskBinding taskBinding;
-    private final ThreadConfigurator threadConfigurator;
-    @Getter
-    private final ThreadFactory pinnedFactory;
-    @Getter
-    private final int cpu;
-
-    /// Constructs an executor whose registry identity is not published until cleanup is installed.
-    private PinnedThreadExecutor(Function<Runnable, ? extends Thread> threadCreator, int cpu,
-            LifecycleControl control, Registry registry, EntryIdentity entryIdentity,
-            CleanupSlot cleanupSlot, TaskBinding taskBinding,
-            ThreadConfigurator threadConfigurator) {
-        this.threadCreator = threadCreator;
-        this.cpu = cpu;
-        this.control = control;
-        this.registry = registry;
-        this.entryIdentity = entryIdentity;
-        this.cleanupSlot = cleanupSlot;
-        this.taskBinding = taskBinding;
-        this.threadConfigurator = threadConfigurator;
-        this.pinnedFactory = new PinnedFactory(this);
     }
 
     /// Restarts a shutdown executor with new thread properties; a running executor is unchanged.
@@ -184,8 +186,8 @@ public final class PinnedThreadExecutor extends AbstractExecutorService implemen
         if (candidate == null || candidate.getState() != Thread.State.NEW) {
             throw new RejectedExecutionException("Thread creator must return a NEW thread");
         }
-        this.threadConfigurator.configure(candidate, configuration.name(),
-                configuration.priority(), configuration.daemon());
+        this.threadConfigurator.configure(
+                candidate, configuration.name(), configuration.priority(), configuration.daemon());
         if (candidate.getState() != Thread.State.NEW) {
             throw new RejectedExecutionException("Thread creator must return a NEW thread");
         }
@@ -302,21 +304,16 @@ public final class PinnedThreadExecutor extends AbstractExecutorService implemen
         /// Validates and clamps one immutable thread configuration.
         private static Configuration create(String name, int priority, boolean daemon) {
             Objects.requireNonNull(name, "name");
-            int clamped = Math.max(Thread.MIN_PRIORITY,
-                    Math.min(priority, Thread.MAX_PRIORITY));
+            int clamped = Math.max(Thread.MIN_PRIORITY, Math.min(priority, Thread.MAX_PRIORITY));
             return new Configuration(name, clamped, daemon);
         }
     }
 
     /// One coherent execute-side configuration and epoch observation.
-    private record ExecutionSnapshot(Configuration configuration, long epoch) {
-
-    }
+    private record ExecutionSnapshot(Configuration configuration, long epoch) {}
 
     /// One close-all entry and the active task snapshot captured while gated.
-    private record CloseRequest(RegistryEntry entry, List<Thread> threads) {
-
-    }
+    private record CloseRequest(RegistryEntry entry, List<Thread> threads) {}
 
     /// Holds all coherent per-executor lifecycle state behind one monitor.
     static final class LifecycleControl {
@@ -346,7 +343,8 @@ public final class PinnedThreadExecutor extends AbstractExecutorService implemen
 
         /// Registers and starts a candidate atomically with respect to shutdown and restart.
         synchronized void registerAndStart(Thread candidate, long expectedEpoch) {
-            if (this.state != State.RUNNING || this.epoch != expectedEpoch
+            if (this.state != State.RUNNING
+                    || this.epoch != expectedEpoch
                     || candidate.getState() != Thread.State.NEW) {
                 throw new RejectedExecutionException("Executor changed before task acceptance");
             }
@@ -501,24 +499,29 @@ public final class PinnedThreadExecutor extends AbstractExecutorService implemen
         private boolean shutdownInProgress;
 
         /// Creates an isolated registry from bounded cleanup, hook, and task-binding roles.
-        Registry(CleanupRegistrar cleanupRegistrar, HookRegistrar hookRegistrar,
-                TaskBinding taskBinding) {
+        Registry(CleanupRegistrar cleanupRegistrar, HookRegistrar hookRegistrar, TaskBinding taskBinding) {
             this(cleanupRegistrar, hookRegistrar, taskBinding, new JdkThreadConfigurator());
         }
 
         /// Creates an isolated registry with an explicit candidate-configuration operation.
-        Registry(CleanupRegistrar cleanupRegistrar, HookRegistrar hookRegistrar,
-                TaskBinding taskBinding, ThreadConfigurator threadConfigurator) {
+        Registry(
+                CleanupRegistrar cleanupRegistrar,
+                HookRegistrar hookRegistrar,
+                TaskBinding taskBinding,
+                ThreadConfigurator threadConfigurator) {
             this.cleanupRegistrar = Objects.requireNonNull(cleanupRegistrar, "cleanupRegistrar");
             this.hookRegistrar = Objects.requireNonNull(hookRegistrar, "hookRegistrar");
             this.taskBinding = Objects.requireNonNull(taskBinding, "taskBinding");
-            this.threadConfigurator = Objects.requireNonNull(threadConfigurator,
-                    "threadConfigurator");
+            this.threadConfigurator = Objects.requireNonNull(threadConfigurator, "threadConfigurator");
         }
 
         /// Acquires through the public validation boundary while retaining this isolated registry.
-        PinnedThreadExecutor acquire(Function<Runnable, ? extends Thread> threadCreator,
-                long cpu, String name, int priority, boolean daemon) {
+        PinnedThreadExecutor acquire(
+                Function<Runnable, ? extends Thread> threadCreator,
+                long cpu,
+                String name,
+                int priority,
+                boolean daemon) {
             Objects.requireNonNull(threadCreator, "threadCreator");
             Configuration configuration = Configuration.create(name, priority, daemon);
             int validatedCpu = validateCpu(cpu);
@@ -527,8 +530,7 @@ public final class PinnedThreadExecutor extends AbstractExecutorService implemen
 
         /// Acquires, restarts, or installs the exact identity for one validated CPU key.
         synchronized PinnedThreadExecutor acquire(
-                Function<Runnable, ? extends Thread> threadCreator, long cpuKey, int cpu,
-                Configuration configuration) {
+                Function<Runnable, ? extends Thread> threadCreator, long cpuKey, int cpu, Configuration configuration) {
             RegistryEntry current = this.entries.get(cpuKey);
             if (current != null) {
                 PinnedThreadExecutor live = current.executor().get();
@@ -541,8 +543,7 @@ public final class PinnedThreadExecutor extends AbstractExecutorService implemen
                     return live;
                 }
                 if (!current.control().isEmpty()) {
-                    throw new RejectedExecutionException(
-                            "A closed executor still owns active tasks for CPU " + cpuKey);
+                    throw new RejectedExecutionException("A closed executor still owns active tasks for CPU " + cpuKey);
                 }
                 removeStale(current);
             }
@@ -550,19 +551,26 @@ public final class PinnedThreadExecutor extends AbstractExecutorService implemen
             EntryIdentity identity = new EntryIdentity(this, cpuKey);
             LifecycleControl control = new LifecycleControl(configuration);
             CleanupSlot cleanupSlot = new CleanupSlot();
-            PinnedThreadExecutor executor = new PinnedThreadExecutor(threadCreator, cpu, control,
-                    this, identity, cleanupSlot, this.taskBinding, this.threadConfigurator);
+            PinnedThreadExecutor executor = new PinnedThreadExecutor(
+                    threadCreator,
+                    cpu,
+                    control,
+                    this,
+                    identity,
+                    cleanupSlot,
+                    this.taskBinding,
+                    this.threadConfigurator);
 
             HookRegistration selectedHook = this.hook;
             boolean addHook = selectedHook == null;
             if (addHook) {
-                selectedHook = Objects.requireNonNull(
-                        this.hookRegistrar.prepare(new HookTask(this)), "hookRegistration");
+                selectedHook =
+                        Objects.requireNonNull(this.hookRegistrar.prepare(new HookTask(this)), "hookRegistration");
             }
 
             CleanupAction action = new CleanupAction(identity, control, selectedHook);
-            CleanupRegistration cleanup = Objects.requireNonNull(
-                    this.cleanupRegistrar.register(executor, action), "cleanupRegistration");
+            CleanupRegistration cleanup =
+                    Objects.requireNonNull(this.cleanupRegistrar.register(executor, action), "cleanupRegistration");
             cleanupSlot.initialize(cleanup);
 
             if (addHook) {
@@ -579,8 +587,8 @@ public final class PinnedThreadExecutor extends AbstractExecutorService implemen
                 }
             }
 
-            RegistryEntry entry = new RegistryEntry(identity, new WeakReference<>(executor),
-                    control, action, cleanup, selectedHook);
+            RegistryEntry entry =
+                    new RegistryEntry(identity, new WeakReference<>(executor), control, action, cleanup, selectedHook);
             this.entries.put(cpuKey, entry);
             return executor;
         }
@@ -636,7 +644,9 @@ public final class PinnedThreadExecutor extends AbstractExecutorService implemen
         /// Removes only the mapped exact entry after proving its lifecycle has no active task.
         synchronized void removeExact(EntryIdentity identity) {
             RegistryEntry current = this.entries.get(identity.cpuKey());
-            if (current == null || current.identity() != identity || !current.control().isEmpty()) {
+            if (current == null
+                    || current.identity() != identity
+                    || !current.control().isEmpty()) {
                 return;
             }
             this.entries.remove(identity.cpuKey());
@@ -701,27 +711,24 @@ public final class PinnedThreadExecutor extends AbstractExecutorService implemen
             LifecycleControl control,
             CleanupAction action,
             CleanupRegistration cleanup,
-            HookRegistration hook) {
-
-    }
+            HookRegistration hook) {}
 
     /// Gives every registry entry a stable object identity and its owning isolated registry.
-    private record EntryIdentity(Registry registry, long cpuKey) {
-
-    }
+    private record EntryIdentity(Registry registry, long cpuKey) {}
 
     /// Claims cleanup once without retaining an executor, factory, command, or active wrapper.
     private static final class CleanupAction implements Runnable {
 
         private final EntryIdentity identity;
         private final LifecycleControl control;
+
         @SuppressWarnings("unused")
         private final HookRegistration hook;
+
         private final AtomicBoolean claimed = new AtomicBoolean();
 
         /// Creates one noncapturing cleanup action for an exact registry identity.
-        private CleanupAction(EntryIdentity identity, LifecycleControl control,
-                HookRegistration hook) {
+        private CleanupAction(EntryIdentity identity, LifecycleControl control, HookRegistration hook) {
             this.identity = identity;
             this.control = control;
             this.hook = hook;
@@ -817,8 +824,8 @@ public final class PinnedThreadExecutor extends AbstractExecutorService implemen
         /// Prepares a new shutdown-hook thread around a registry-only task.
         @Override
         public HookRegistration prepare(Runnable action) {
-            return new JvmHookRegistration(new Thread(action,
-                    PinnedThreadExecutor.class.getSimpleName() + "-shutdown"));
+            return new JvmHookRegistration(
+                    new Thread(action, PinnedThreadExecutor.class.getSimpleName() + "-shutdown"));
         }
     }
 

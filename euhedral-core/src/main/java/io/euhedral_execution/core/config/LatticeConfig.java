@@ -21,11 +21,19 @@ import org.jspecify.annotations.NonNull;
 /// @param baseShard       Base [ControlPlaneShard][ControlPlaneShard] that will be cloned across
 /// sockets.
 @SuppressWarnings("unused")
-public record LatticeConfig(String name, @NonNull BitSet allowedCpus,
-                            @NonNull Duration shutdownTimeout,
-                            @NonNull ControlPlaneShard baseShard) {
+public record LatticeConfig(
+        String name,
+        @NonNull BitSet allowedCpus,
+        @NonNull Duration shutdownTimeout,
+        @NonNull ControlPlaneShard baseShard) {
     public static final String DEFAULT_NAME = "EuhedralLattice";
     public static final String DEFAULT_SHARD_NAME = "EuhedralShard";
+
+    public LatticeConfig {
+        Objects.requireNonNull(allowedCpus);
+        Objects.requireNonNull(shutdownTimeout);
+        Objects.requireNonNull(baseShard);
+    }
 
     public static LatticeConfig ofDefaults() {
         return ofDefaults(DEFAULT_NAME, DEFAULT_SHARD_NAME);
@@ -41,8 +49,7 @@ public record LatticeConfig(String name, @NonNull BitSet allowedCpus,
     /// @param shardName    Second-level name
     /// @param metricPrefix Prefix prepended to collected metrics
     /// @param registry     Registry for collecting metrics
-    public static LatticeConfig ofDefaults(String name, String shardName, String metricPrefix,
-            MeterRegistry registry) {
+    public static LatticeConfig ofDefaults(String name, String shardName, String metricPrefix, MeterRegistry registry) {
         return ofDefaults(name, shardName, new BaseCloneableObject(metricPrefix, registry));
     }
 
@@ -54,8 +61,7 @@ public record LatticeConfig(String name, @NonNull BitSet allowedCpus,
     /// @param name      Top-level name
     /// @param shardName Second-level name
     /// @param executor  Executor to give to [BaseCloneableObject]
-    public static LatticeConfig ofDefaults(String name, String shardName,
-            AbstractExecutor executor) {
+    public static LatticeConfig ofDefaults(String name, String shardName, AbstractExecutor executor) {
         return ofDefaults(name, shardName, new BaseCloneableObject(executor));
     }
 
@@ -64,19 +70,20 @@ public record LatticeConfig(String name, @NonNull BitSet allowedCpus,
     /// @param metricPrefix Prefix prepended to collected metrics
     /// @param registry     Registry for collecting metrics
     /// @param executor     Executor to give to [BaseCloneableObject]
-    public static LatticeConfig ofDefaults(String name, String shardName, String metricPrefix,
-            MeterRegistry registry, AbstractExecutor executor) {
-        return ofDefaults(name, shardName,
-                new BaseCloneableObject(metricPrefix, registry, executor));
+    public static LatticeConfig ofDefaults(
+            String name, String shardName, String metricPrefix, MeterRegistry registry, AbstractExecutor executor) {
+        return ofDefaults(name, shardName, new BaseCloneableObject(metricPrefix, registry, executor));
     }
 
     /// @param name            Top-level name
     /// @param shardName       Second-level name
     /// @param cloneableObject Object to be replicated and assigned a core. See
     /// [BaseCloneableObject]
-    public static LatticeConfig ofDefaults(String name, String shardName,
-            @NonNull CloneableObject cloneableObject) {
-        return new LatticeConfig(name, SystemInfo.getCpuSet(), Duration.ofMinutes(1),
+    public static LatticeConfig ofDefaults(String name, String shardName, @NonNull CloneableObject cloneableObject) {
+        return new LatticeConfig(
+                name,
+                SystemInfo.getCpuSet(),
+                Duration.ofMinutes(1),
                 ControlPlaneShard.createBaseShard(shardName, cloneableObject));
     }
 
@@ -84,11 +91,5 @@ public record LatticeConfig(String name, @NonNull BitSet allowedCpus,
     /// [BaseCloneableObject]
     public static LatticeConfig ofDefaults(@NonNull CloneableObject cloneableObject) {
         return ofDefaults(DEFAULT_NAME, DEFAULT_SHARD_NAME, cloneableObject);
-    }
-
-    public LatticeConfig {
-        Objects.requireNonNull(allowedCpus);
-        Objects.requireNonNull(shutdownTimeout);
-        Objects.requireNonNull(baseShard);
     }
 }

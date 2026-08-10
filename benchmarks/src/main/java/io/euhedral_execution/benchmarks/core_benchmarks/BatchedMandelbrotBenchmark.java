@@ -39,8 +39,6 @@ import reactor.core.scheduler.Schedulers;
 @SuppressWarnings("unchecked")
 @BenchmarkMode({Mode.AverageTime})
 public class BatchedMandelbrotBenchmark {
-    private static final Logger LOGGER = LoggerFactory.getLogger(BatchedMandelbrotBenchmark.class);
-
     // 8K Resolution 2X SSAA (7680 * 4320 * 4 = 132,710,400 distinct tasks)
     public static final int WIDTH = 7680;
     public static final int HEIGHT = 4320;
@@ -48,10 +46,13 @@ public class BatchedMandelbrotBenchmark {
     public static final int BATCH = 1024;
     public static final int ITERATION_CAP = 5_000;
     public static final double BAILOUT_RADIUS_SQ = 1_000_000.0;
+    private static final Logger LOGGER = LoggerFactory.getLogger(BatchedMandelbrotBenchmark.class);
     private static final long SEED = HasherApi.BASE_SEED;
     private static final double CENTER_X = -0.743_644_786_0;
     private static final double CENTER_Y = 0.131_825_253_6;
     private static final double H_DIAMETER = 0.000_002_936;
+
+    private BatchedMandelbrotBenchmark() {}
 
     private static void shuffle(MandelbrotPixel[] pixels) {
         long seed = SEED;
@@ -95,10 +96,6 @@ public class BatchedMandelbrotBenchmark {
         }
     }
 
-    private BatchedMandelbrotBenchmark() {
-
-    }
-
     @BenchmarkMode({Mode.AverageTime})
     @OutputTimeUnit(TimeUnit.NANOSECONDS)
     @State(Scope.Benchmark)
@@ -134,15 +131,22 @@ public class BatchedMandelbrotBenchmark {
             }
 
             MandelbrotPixel[] pixels = new MandelbrotPixel[CANVAS];
-            MandelbrotCanvas.generate(WIDTH, HEIGHT, CENTER_X, CENTER_Y, H_DIAMETER,
-                    ITERATION_CAP, BAILOUT_RADIUS_SQ, Integer.parseInt(degree), this.magnitudes,
+            MandelbrotCanvas.generate(
+                    WIDTH,
+                    HEIGHT,
+                    CENTER_X,
+                    CENTER_Y,
+                    H_DIAMETER,
+                    ITERATION_CAP,
+                    BAILOUT_RADIUS_SQ,
+                    Integer.parseInt(degree),
+                    this.magnitudes,
                     this.escapes,
                     this.counters,
                     pixels);
             shuffle(pixels);
 
-            MandelbrotPixel[][] pixelArray = new MandelbrotPixel[CANVAS / BATCH + (
-                    CANVAS % BATCH > 0 ? 1 : 0)][];
+            MandelbrotPixel[][] pixelArray = new MandelbrotPixel[CANVAS / BATCH + (CANVAS % BATCH > 0 ? 1 : 0)][];
             BenchArrayFrame[] frames = new BenchArrayFrame[pixelArray.length];
             this.monos = new Mono[pixelArray.length];
 
@@ -169,7 +173,8 @@ public class BatchedMandelbrotBenchmark {
         @OperationsPerInvocation(CANVAS * 4)
         public void renderSchedulersParallel(Blackhole blackhole) {
             Flux.fromArray(this.monos)
-                    .flatMap(m -> m.subscribeOn(Schedulers.parallel()),
+                    .flatMap(
+                            m -> m.subscribeOn(Schedulers.parallel()),
                             Runtime.getRuntime().availableProcessors())
                     .subscribe(this.subscriber);
 
@@ -182,7 +187,8 @@ public class BatchedMandelbrotBenchmark {
         @OperationsPerInvocation(CANVAS * 4)
         public void renderSchedulersBoundedElastic(Blackhole blackhole) {
             Flux.fromArray(this.monos)
-                    .flatMap(m -> m.subscribeOn(Schedulers.boundedElastic()),
+                    .flatMap(
+                            m -> m.subscribeOn(Schedulers.boundedElastic()),
                             Runtime.getRuntime().availableProcessors())
                     .subscribe(this.subscriber);
 
@@ -222,8 +228,16 @@ public class BatchedMandelbrotBenchmark {
             }
 
             MandelbrotPixel[] pixels = new MandelbrotPixel[CANVAS];
-            MandelbrotCanvas.generate(WIDTH, HEIGHT, CENTER_X, CENTER_Y, H_DIAMETER,
-                    ITERATION_CAP, BAILOUT_RADIUS_SQ, Integer.parseInt(degree), this.magnitudes,
+            MandelbrotCanvas.generate(
+                    WIDTH,
+                    HEIGHT,
+                    CENTER_X,
+                    CENTER_Y,
+                    H_DIAMETER,
+                    ITERATION_CAP,
+                    BAILOUT_RADIUS_SQ,
+                    Integer.parseInt(degree),
+                    this.magnitudes,
                     this.escapes,
                     this.counters,
                     pixels);
@@ -252,7 +266,6 @@ public class BatchedMandelbrotBenchmark {
             LatticeConfig config = LatticeConfig.ofDefaults(base);
             this.controlPlane = ControlPlaneLattice.getOrCreate(config);
             this.controlPlane.start();
-
         }
 
         @Setup(Level.Invocation)
@@ -282,5 +295,4 @@ public class BatchedMandelbrotBenchmark {
             controlPlane.close();
         }
     }
-
 }

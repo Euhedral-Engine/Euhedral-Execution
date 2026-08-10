@@ -30,8 +30,7 @@ class DefaultExecutorTest {
 
     @Test
     void shouldCloneExecutor() {
-        DefaultExecutor cloned =
-                (DefaultExecutor) executor.clone(new CloneConfig("", 0, new BitSet()));
+        DefaultExecutor cloned = (DefaultExecutor) executor.clone(new CloneConfig("", 0, new BitSet()));
 
         assertNotNull(cloned);
         assertNotSame(executor, cloned);
@@ -41,9 +40,7 @@ class DefaultExecutorTest {
     void shouldCloneWithNewExecutorService() {
         PinnedThreadExecutor newExec = mock(PinnedThreadExecutor.class);
 
-        DefaultExecutor cloned =
-                (DefaultExecutor) executor.clone(new CloneConfig("", 0, new BitSet()),
-                        newExec);
+        DefaultExecutor cloned = (DefaultExecutor) executor.clone(new CloneConfig("", 0, new BitSet()), newExec);
 
         assertNotNull(cloned);
         assertNotSame(executor, cloned);
@@ -86,8 +83,8 @@ class DefaultExecutorTest {
         }
 
         @Override
-        public long pull(Consumer<AbstractFrame> consumer,
-                Function<AbstractFrame, Boolean> stopCondition, long demand) {
+        public long pull(
+                Consumer<AbstractFrame> consumer, Function<AbstractFrame, Boolean> stopCondition, long demand) {
             return demand;
         }
 

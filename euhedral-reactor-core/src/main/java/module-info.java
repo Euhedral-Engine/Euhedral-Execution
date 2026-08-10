@@ -1,10 +1,8 @@
 module euhedral.reactor.core {
     requires static lombok;
-
     requires euhedral.core;
     requires euhedral.data_structures;
     requires euhedral.hashing;
-
     requires micrometer.core;
     requires org.jspecify;
     requires org.reactivestreams;

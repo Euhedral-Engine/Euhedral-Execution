@@ -1,6 +1,8 @@
 package io.euhedral_execution.core.utils;
 
 public class MathFunctions {
+    private MathFunctions() {}
+
     public static long unsignedMultiplyHigh(long a, long b) {
         long signedHigh = Math.multiplyHigh(a, b);
         return signedHigh + ((a >> 63) & b) + ((b >> 63) & a);
@@ -32,9 +34,5 @@ public class MathFunctions {
 
     public static long ewma(long curr, long next, double alpha) {
         return (long) ewma((double) curr, (double) next, alpha);
-    }
-
-    private MathFunctions() {
-
     }
 }

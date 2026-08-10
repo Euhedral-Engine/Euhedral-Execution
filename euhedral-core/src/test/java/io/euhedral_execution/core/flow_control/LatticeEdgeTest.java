@@ -166,8 +166,7 @@ class LatticeEdgeTest {
 
     @Test
     void shouldIgnoreNonPositivePull() {
-        Consumer<AbstractFrame> consumer = frame -> {
-        };
+        Consumer<AbstractFrame> consumer = frame -> {};
 
         assertEquals(0, edge.pull(consumer, frame -> false, -1));
         assertEquals(0, edge.pull(consumer, frame -> false, 0));
@@ -187,8 +186,7 @@ class LatticeEdgeTest {
     void shouldIgnorePullWhenDrainActive() {
         drain.set(true);
 
-        assertDoesNotThrow(() -> edge.pull(frame -> {
-        }, frame -> false, 10));
+        assertDoesNotThrow(() -> edge.pull(frame -> {}, frame -> false, 10));
     }
 
     @Test
@@ -228,8 +226,7 @@ class LatticeEdgeTest {
 
         edge.setParent(parent);
 
-        Consumer<AbstractFrame> consumer = frame -> {
-        };
+        Consumer<AbstractFrame> consumer = frame -> {};
 
         Function<AbstractFrame, Boolean> stopCondition = frame -> false;
 
@@ -257,10 +254,7 @@ class LatticeEdgeTest {
 
         assertNotNull(second.error);
         assertInstanceOf(IllegalStateException.class, second.error);
-        assertEquals(
-                "Already added as an upstream by a terminal downstream",
-                second.error.getMessage()
-        );
+        assertEquals("Already added as an upstream by a terminal downstream", second.error.getMessage());
     }
 
     @Test

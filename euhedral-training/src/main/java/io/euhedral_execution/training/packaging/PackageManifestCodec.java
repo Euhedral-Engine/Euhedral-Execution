@@ -18,11 +18,26 @@ import java.util.List;
 import java.util.Map;
 
 final class PackageManifestCodec {
-    private static final List<String> ROOT_KEYS = List.of("artifact_type", "schema_version",
-            "package_id", "training_run_id", "checkpoint_revision", "checkpoint_stage",
-            "status", "run_complete", "config_sha256", "checkpoint_sha256", "producer",
-            "required_scenarios", "coverage_rule", "calibration_acceptance",
-            "winning_policy_ids", "files", "omissions");
+    private static final List<String> ROOT_KEYS = List.of(
+            "artifact_type",
+            "schema_version",
+            "package_id",
+            "training_run_id",
+            "checkpoint_revision",
+            "checkpoint_stage",
+            "status",
+            "run_complete",
+            "config_sha256",
+            "checkpoint_sha256",
+            "producer",
+            "required_scenarios",
+            "coverage_rule",
+            "calibration_acceptance",
+            "winning_policy_ids",
+            "files",
+            "omissions");
+
+    private PackageManifestCodec() {}
 
     static String encode(TrainingRunManifest manifest) {
         StringBuilder out = new StringBuilder();
@@ -49,8 +64,7 @@ final class PackageManifestCodec {
             field(out, 3, "scenario_id", scenario.canonical(), true);
             field(out, 3, "environment_id", scenario.environmentId(), true);
             field(out, 3, "source_count", scenario.sourceCount(), true);
-            field(out, 3, "available_physical_core_count",
-                    scenario.availablePhysicalCoreCount(), true);
+            field(out, 3, "available_physical_core_count", scenario.availablePhysicalCoreCount(), true);
             field(out, 3, "source_ratio_numerator", scenario.ratio().numerator(), true);
             field(out, 3, "source_ratio_denominator", scenario.ratio().denominator(), false);
             indent(out, 2).append('}');
@@ -58,9 +72,14 @@ final class PackageManifestCodec {
         }
         indent(out, 1).append("],\n");
         field(out, 1, "coverage_rule", "all-required-scenarios-valid-v1", true);
-        fieldNullable(out, 1, "calibration_acceptance",
-                manifest.calibrationAcceptance() == null ? null
-                        : manifest.calibrationAcceptance().name(), true);
+        fieldNullable(
+                out,
+                1,
+                "calibration_acceptance",
+                manifest.calibrationAcceptance() == null
+                        ? null
+                        : manifest.calibrationAcceptance().name(),
+                true);
         stringArray(out, 1, "winning_policy_ids", manifest.winningPolicyIds(), true);
         indent(out, 1).append("\"files\": [");
         if (!manifest.files().isEmpty()) out.append('\n');
@@ -88,8 +107,7 @@ final class PackageManifestCodec {
             indent(out, 2).append("{\n");
             field(out, 3, "semantic_group", omission.semanticGroup(), true);
             field(out, 3, "reason", omission.reason(), true);
-            field(out, 3, "required_for_complete_run",
-                    omission.requiredForCompleteRun(), false);
+            field(out, 3, "required_for_complete_run", omission.requiredForCompleteRun(), false);
             indent(out, 2).append('}');
             out.append(index + 1 == manifest.omissions().size() ? '\n' : ",\n");
         }
@@ -101,7 +119,8 @@ final class PackageManifestCodec {
         byte[] bytes = Files.readAllBytes(path);
         String text = new String(bytes, StandardCharsets.UTF_8);
         if (!java.util.Arrays.equals(bytes, text.getBytes(StandardCharsets.UTF_8))
-                || text.startsWith("\ufeff") || text.indexOf('\r') >= 0
+                || text.startsWith("\ufeff")
+                || text.indexOf('\r') >= 0
                 || !text.endsWith("\n")) {
             throw new IOException("Manifest is not canonical UTF-8/LF");
         }
@@ -121,27 +140,47 @@ final class PackageManifestCodec {
             ArrayList<SourceScenario> scenarios = new ArrayList<>();
             for (Object item : array(root, "required_scenarios")) {
                 Map<String, Object> value = object(item);
-                requireKeys(value, List.of("scenario_id", "environment_id", "source_count",
-                        "available_physical_core_count", "source_ratio_numerator",
-                        "source_ratio_denominator"));
-                SourceScenario scenario = new SourceScenario(string(value, "environment_id"),
+                requireKeys(
+                        value,
+                        List.of(
+                                "scenario_id",
+                                "environment_id",
+                                "source_count",
+                                "available_physical_core_count",
+                                "source_ratio_numerator",
+                                "source_ratio_denominator"));
+                SourceScenario scenario = new SourceScenario(
+                        string(value, "environment_id"),
                         integer(value, "source_count"),
                         integer(value, "available_physical_core_count"),
-                        new SourceRatio(integer(value, "source_ratio_numerator"),
-                                integer(value, "source_ratio_denominator")));
+                        new SourceRatio(
+                                integer(value, "source_ratio_numerator"), integer(value, "source_ratio_denominator")));
                 require(scenario.canonical().equals(string(value, "scenario_id")));
                 scenarios.add(scenario);
             }
             ArrayList<PackageFile> files = new ArrayList<>();
             for (Object item : array(root, "files")) {
                 Map<String, Object> value = object(item);
-                requireKeys(value, List.of("path", "semantic_type", "media_type",
-                        "schema_version", "row_count", "sha256", "producing_stage",
-                        "source_run_ids", "origin", "complete"));
-                files.add(new PackageFile(string(value, "path"),
+                requireKeys(
+                        value,
+                        List.of(
+                                "path",
+                                "semantic_type",
+                                "media_type",
+                                "schema_version",
+                                "row_count",
+                                "sha256",
+                                "producing_stage",
+                                "source_run_ids",
+                                "origin",
+                                "complete"));
+                files.add(new PackageFile(
+                        string(value, "path"),
                         ArtifactSemanticType.valueOf(string(value, "semantic_type")),
-                        string(value, "media_type"), nullableInteger(value.get("schema_version")),
-                        nullableLong(value.get("row_count")), string(value, "sha256"),
+                        string(value, "media_type"),
+                        nullableInteger(value.get("schema_version")),
+                        nullableLong(value.get("row_count")),
+                        string(value, "sha256"),
                         ProducingStage.valueOf(string(value, "producing_stage")),
                         strings(value, "source_run_ids"),
                         ArtifactOrigin.valueOf(string(value, "origin")),
@@ -150,24 +189,30 @@ final class PackageManifestCodec {
             ArrayList<PackageOmission> omissions = new ArrayList<>();
             for (Object item : array(root, "omissions")) {
                 Map<String, Object> value = object(item);
-                requireKeys(value, List.of("semantic_group", "reason",
-                        "required_for_complete_run"));
-                omissions.add(new PackageOmission(string(value, "semantic_group"),
-                        string(value, "reason"), bool(value, "required_for_complete_run")));
+                requireKeys(value, List.of("semantic_group", "reason", "required_for_complete_run"));
+                omissions.add(new PackageOmission(
+                        string(value, "semantic_group"),
+                        string(value, "reason"),
+                        bool(value, "required_for_complete_run")));
             }
-            require(string(root, "coverage_rule")
-                    .equals("all-required-scenarios-valid-v1"));
+            require(string(root, "coverage_rule").equals("all-required-scenarios-valid-v1"));
             Object calibration = root.get("calibration_acceptance");
-            TrainingRunManifest result = new TrainingRunManifest(string(root, "package_id"),
-                    string(root, "training_run_id"), integer(root, "checkpoint_revision"),
+            TrainingRunManifest result = new TrainingRunManifest(
+                    string(root, "package_id"),
+                    string(root, "training_run_id"),
+                    integer(root, "checkpoint_revision"),
                     CheckpointStage.valueOf(string(root, "checkpoint_stage")),
                     TrainingRunPackageStatus.valueOf(string(root, "status")),
-                    bool(root, "run_complete"), string(root, "config_sha256"),
-                    string(root, "checkpoint_sha256"), string(producer, "commit_sha"),
-                    bool(producer, "dirty_working_tree"), scenarios,
-                    calibration == null ? null
-                            : CalibrationAcceptance.valueOf((String) calibration),
-                    strings(root, "winning_policy_ids"), files, omissions);
+                    bool(root, "run_complete"),
+                    string(root, "config_sha256"),
+                    string(root, "checkpoint_sha256"),
+                    string(producer, "commit_sha"),
+                    bool(producer, "dirty_working_tree"),
+                    scenarios,
+                    calibration == null ? null : CalibrationAcceptance.valueOf((String) calibration),
+                    strings(root, "winning_policy_ids"),
+                    files,
+                    omissions);
             require(encode(result).equals(text));
             return result;
         } catch (RuntimeException error) {
@@ -175,20 +220,17 @@ final class PackageManifestCodec {
         }
     }
 
-    private static void field(StringBuilder out, int level, String name, Object value,
-            boolean comma) {
+    private static void field(StringBuilder out, int level, String name, Object value, boolean comma) {
         indent(out, level).append(quote(name)).append(": ");
         appendValue(out, value);
         out.append(comma ? ",\n" : "\n");
     }
 
-    private static void fieldNullable(StringBuilder out, int level, String name, Object value,
-            boolean comma) {
+    private static void fieldNullable(StringBuilder out, int level, String name, Object value, boolean comma) {
         field(out, level, name, value, comma);
     }
 
-    private static void stringArray(StringBuilder out, int level, String name,
-            List<String> values, boolean comma) {
+    private static void stringArray(StringBuilder out, int level, String name, List<String> values, boolean comma) {
         indent(out, level).append(quote(name)).append(": [");
         for (int index = 0; index < values.size(); index++) {
             if (index > 0) out.append(", ");
@@ -230,37 +272,46 @@ final class PackageManifestCodec {
 
     private static Map<String, Object> object(Object value) {
         if (!(value instanceof Map<?, ?> map)) throw new IllegalArgumentException();
-        @SuppressWarnings("unchecked") Map<String, Object> result = (Map<String, Object>) map;
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) map;
         return result;
     }
+
     private static List<Object> array(Map<String, Object> map, String key) {
         Object value = map.get(key);
         if (!(value instanceof List<?> list)) throw new IllegalArgumentException();
         return new ArrayList<>(list);
     }
+
     private static String string(Map<String, Object> map, String key) {
         Object value = map.get(key);
         if (!(value instanceof String string)) throw new IllegalArgumentException();
         return string;
     }
+
     private static boolean bool(Map<String, Object> map, String key) {
         Object value = map.get(key);
         if (!(value instanceof Boolean bool)) throw new IllegalArgumentException();
         return bool;
     }
+
     private static int integer(Map<String, Object> map, String key) {
         return Math.toIntExact(number(map.get(key)));
     }
+
     private static Integer nullableInteger(Object value) {
         return value == null ? null : Math.toIntExact(number(value));
     }
+
     private static Long nullableLong(Object value) {
         return value == null ? null : number(value);
     }
+
     private static long number(Object value) {
         if (!(value instanceof Long number)) throw new IllegalArgumentException();
         return number;
     }
+
     private static List<String> strings(Map<String, Object> map, String key) {
         ArrayList<String> result = new ArrayList<>();
         for (Object value : array(map, key)) {
@@ -269,9 +320,11 @@ final class PackageManifestCodec {
         }
         return List.copyOf(result);
     }
+
     private static void requireKeys(Map<String, Object> map, List<String> keys) {
         require(new ArrayList<>(map.keySet()).equals(keys));
     }
+
     private static void require(boolean condition) {
         if (!condition) throw new IllegalArgumentException();
     }
@@ -279,13 +332,18 @@ final class PackageManifestCodec {
     private static final class Parser {
         private final String input;
         private int cursor;
-        Parser(String input) { this.input = input; }
+
+        Parser(String input) {
+            this.input = input;
+        }
+
         Object parse() {
             Object value = value();
             whitespace();
             if (cursor != input.length()) throw new IllegalArgumentException();
             return value;
         }
+
         private Object value() {
             whitespace();
             if (cursor >= input.length()) throw new IllegalArgumentException();
@@ -299,6 +357,7 @@ final class PackageManifestCodec {
                 default -> number();
             };
         }
+
         private Map<String, Object> object() {
             cursor++;
             LinkedHashMap<String, Object> result = new LinkedHashMap<>();
@@ -316,6 +375,7 @@ final class PackageManifestCodec {
                 expect(',');
             }
         }
+
         private List<Object> array() {
             cursor++;
             ArrayList<Object> result = new ArrayList<>();
@@ -328,6 +388,7 @@ final class PackageManifestCodec {
                 expect(',');
             }
         }
+
         private String string() {
             expect('"');
             StringBuilder out = new StringBuilder();
@@ -348,8 +409,7 @@ final class PackageManifestCodec {
                         case 't' -> out.append('\t');
                         case 'u' -> {
                             if (cursor + 4 > input.length()) throw new IllegalArgumentException();
-                            out.append((char) Integer.parseInt(
-                                    input.substring(cursor, cursor + 4), 16));
+                            out.append((char) Integer.parseInt(input.substring(cursor, cursor + 4), 16));
                             cursor += 4;
                         }
                         default -> throw new IllegalArgumentException();
@@ -361,24 +421,27 @@ final class PackageManifestCodec {
             }
             throw new IllegalArgumentException();
         }
+
         private Long number() {
             int start = cursor;
             if (take('-')) throw new IllegalArgumentException();
-            while (cursor < input.length()
-                    && Character.isDigit(input.charAt(cursor))) cursor++;
+            while (cursor < input.length() && Character.isDigit(input.charAt(cursor))) cursor++;
             if (start == cursor) throw new IllegalArgumentException();
             return Long.parseLong(input.substring(start, cursor));
         }
+
         private Object literal(String token, Object value) {
             if (!input.startsWith(token, cursor)) throw new IllegalArgumentException();
             cursor += token.length();
             return value;
         }
+
         private void whitespace() {
             while (cursor < input.length() && " \n\r\t".indexOf(input.charAt(cursor)) >= 0) {
                 cursor++;
             }
         }
+
         private boolean take(char expected) {
             if (cursor < input.length() && input.charAt(cursor) == expected) {
                 cursor++;
@@ -386,11 +449,9 @@ final class PackageManifestCodec {
             }
             return false;
         }
+
         private void expect(char expected) {
             if (!take(expected)) throw new IllegalArgumentException();
         }
-    }
-
-    private PackageManifestCodec() {
     }
 }

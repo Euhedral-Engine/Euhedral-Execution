@@ -6,6 +6,8 @@ import java.util.BitSet;
 
 final class LinuxAffinityCalls {
 
+    private LinuxAffinityCalls() {}
+
     /// Validates the complete logical CPU mask before invoking one Linux raw setter.
     ///
     /// @param masks little-endian words whose bit indexes are logical CPU IDs
@@ -21,9 +23,6 @@ final class LinuxAffinityCalls {
         } catch (RuntimeException | LinkageError failure) {
             return false;
         }
-    }
-
-    private LinuxAffinityCalls() {
     }
 
     /// JNI-shaped Linux affinity setter returning `0` on success.

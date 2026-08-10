@@ -13,12 +13,11 @@ class TopologyMapperPublicationTest {
 
     @Test
     void publishesOwnedCoalescedTopology() throws Exception {
-        TopologyMapper mapper = new TopologyMapper(TopologyHelpers.twoSocketModel(),
-                TopologyHelpers.bits(0, 3, 7, 100));
-        Thread first = new Thread(() -> mapper.update(TopologyHelpers.utilization(
-                TopologyHelpers.bits(0, 3))));
-        Thread second = new Thread(() -> mapper.update(TopologyHelpers.utilization(
-                TopologyHelpers.bits(0, 3, 7, 100))));
+        TopologyMapper mapper =
+                new TopologyMapper(TopologyHelpers.twoSocketModel(), TopologyHelpers.bits(0, 3, 7, 100));
+        Thread first = new Thread(() -> mapper.update(TopologyHelpers.utilization(TopologyHelpers.bits(0, 3))));
+        Thread second =
+                new Thread(() -> mapper.update(TopologyHelpers.utilization(TopologyHelpers.bits(0, 3, 7, 100))));
         first.start();
         second.start();
         first.join(5_000);
@@ -36,13 +35,13 @@ class TopologyMapperPublicationTest {
         assertThrows(RuntimeException.class, () -> topology.effectiveCpus().set(0));
 
         BitSet directMask = TopologyHelpers.bits(3);
-        EffectiveSystemTopology direct = new EffectiveSystemTopology(new BitSet(), new BitSet(),
-                directMask, topology.socketTopologies(), 1);
+        EffectiveSystemTopology direct =
+                new EffectiveSystemTopology(new BitSet(), new BitSet(), directMask, topology.socketTopologies(), 1);
         directMask.clear();
         assertEquals(TopologyHelpers.bits(3), direct.effectiveCpus());
 
-        EffectiveSystemTopology sparse = new EffectiveSystemTopology(new BitSet(), new BitSet(),
-                new BitSet(), java.util.Collections.singletonList(null), 1);
+        EffectiveSystemTopology sparse = new EffectiveSystemTopology(
+                new BitSet(), new BitSet(), new BitSet(), java.util.Collections.singletonList(null), 1);
         assertNull(sparse.socketTopologies().get(0));
     }
 }

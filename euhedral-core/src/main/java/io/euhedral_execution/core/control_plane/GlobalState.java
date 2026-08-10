@@ -29,6 +29,8 @@ public class GlobalState {
         }
     }
 
+    private GlobalState() {}
+
     public static void setThroughput(int socket, int cpu, double throughput) {
         GLOBAL_THROUGHPUT[socket].setRelease(cpu, throughput);
     }
@@ -51,9 +53,5 @@ public class GlobalState {
 
     public static double maxThroughput(int socket) {
         return GLOBAL_THROUGHPUT[socket].max();
-    }
-
-    private GlobalState() {
-
     }
 }

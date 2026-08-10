@@ -24,23 +24,19 @@ class ApiComparatorTest {
                 new Entry("method", "Example#value()J", "access=public"),
                 new Entry("record", "Example#000000", "name=left;descriptor=I;signature=-"),
                 new Entry("record", "Example#000001", "name=right;descriptor=J;signature=-")));
-        CompatibilityReport descriptorReport = ApiSurfaceComparator.compare(baseline,
-                changedDescriptor);
+        CompatibilityReport descriptorReport = ApiSurfaceComparator.compare(baseline, changedDescriptor);
         assertFalse(descriptorReport.passes());
         assertTrue(descriptorReport.render().contains("REMOVED\tmethod\\tExample#value()I"));
         assertTrue(descriptorReport.render().contains("ADDED\tmethod\\tExample#value()J"));
 
         List<Entry> reordered = new ArrayList<>(baseline.entries().values());
         reordered.removeIf(entry -> entry.kind().equals("record"));
-        reordered.add(new Entry("record", "Example#000000",
-                "name=right;descriptor=J;signature=-"));
-        reordered.add(new Entry("record", "Example#000001",
-                "name=left;descriptor=I;signature=-"));
-        CompatibilityReport recordReport = ApiSurfaceComparator.compare(baseline,
-                new ApiSurface(reordered));
+        reordered.add(new Entry("record", "Example#000000", "name=right;descriptor=J;signature=-"));
+        reordered.add(new Entry("record", "Example#000001", "name=left;descriptor=I;signature=-"));
+        CompatibilityReport recordReport = ApiSurfaceComparator.compare(baseline, new ApiSurface(reordered));
         assertFalse(recordReport.passes());
-        assertTrue(recordReport.changed().stream().anyMatch(
-                difference -> difference.key().equals("record\tExample#000000")));
+        assertTrue(recordReport.changed().stream()
+                .anyMatch(difference -> difference.key().equals("record\tExample#000000")));
 
         ApiSurface changedModule = new ApiSurface(List.of(
                 new Entry("module", "module", "name=changed"),

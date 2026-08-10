@@ -4,9 +4,7 @@ import io.euhedral_execution.hardware_utils.internal.sampling.primitives.Boolean
 import io.euhedral_execution.hardware_utils.internal.sampling.primitives.DoubleGaugeSignal;
 
 public record SystemSlowSignals(
-    DoubleGaugeSignal availableCapacityUnits,
-    DoubleGaugeSignal nominalCapacityUnits,
-    ThermalSignal thermalSeverity,
-    BooleanSignal lowPowerMode
-) {
-}
+        DoubleGaugeSignal availableCapacityUnits,
+        DoubleGaugeSignal nominalCapacityUnits,
+        ThermalSignal thermalSeverity,
+        BooleanSignal lowPowerMode) {}

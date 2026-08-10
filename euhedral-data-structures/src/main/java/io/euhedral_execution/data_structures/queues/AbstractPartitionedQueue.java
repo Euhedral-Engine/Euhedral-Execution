@@ -8,8 +8,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import org.jspecify.annotations.NonNull;
 
-abstract class AbstractPartitionedQueue<T> extends AbstractQueue<T> implements
-        ConcurrentPartitionedQueue<T> {
+abstract class AbstractPartitionedQueue<T> extends AbstractQueue<T> implements ConcurrentPartitionedQueue<T> {
 
     protected final int partitions;
 

@@ -26,8 +26,8 @@ public final class TopologyNormalizer {
     private static final long DEFAULT_L3 = 4L * 1024L * 1024L;
     private static final Comparator<String> KEY_COMPARATOR = TopologyNormalizer::compareKeys;
 
-    private static List<Domain> canonicalDomains(List<CacheDomain> input, BitSet active,
-            Map<Integer, CpuInfo> identities) {
+    private static List<Domain> canonicalDomains(
+            List<CacheDomain> input, BitSet active, Map<Integer, CpuInfo> identities) {
         Map<String, Domain> unique = new TreeMap<>();
         for (CacheDomain value : input) {
             if (value == null || value.level() < 1 || value.level() > 3 || value.sizeBytes() <= 0) {
@@ -61,10 +61,10 @@ public final class TopologyNormalizer {
         return List.copyOf(unique.values());
     }
 
-    private static Selection select(List<Domain> domains, int level, int cpu, BitSet fallbackMask,
-            long fallbackBytes) {
+    private static Selection select(List<Domain> domains, int level, int cpu, BitSet fallbackMask, long fallbackBytes) {
         List<Domain> matches = domains.stream()
-                .filter(domain -> domain.level == level && domain.mask.get(cpu)).toList();
+                .filter(domain -> domain.level == level && domain.mask.get(cpu))
+                .toList();
         if (matches.size() == 1) {
             Domain domain = matches.get(0);
             return new Selection(domain.bytes, domain.line, (BitSet) domain.mask.clone());
@@ -78,8 +78,7 @@ public final class TopologyNormalizer {
 
     private static void validateKey(String provider, String key, String category) {
         if (key == null || key.isBlank() || !key.equals(key.trim())) {
-            throw failure(provider, category, String.valueOf(key),
-                    "key must be nonblank and trimmed");
+            throw failure(provider, category, String.valueOf(key), "key must be nonblank and trimmed");
         }
         for (int i = 0; i < key.length(); i++) {
             char c = key.charAt(i);
@@ -90,25 +89,31 @@ public final class TopologyNormalizer {
     }
 
     private static void validateEncoding(String provider, LogicalCpu cpu) {
-        boolean valid = switch (provider) {
-            case "linux" -> cpu.socketKey().matches("linux:package:-?(0|[1-9][0-9]*)")
-                    && cpu.dieKey().matches("linux:die:-?(0|[1-9][0-9]*)")
-                    && cpu.coreKey().matches("linux:core:-?(0|[1-9][0-9]*)");
-            case "windows" -> cpu.socketKey().matches(
-                    "windows:package:g[0-9]+=[0-9a-f]{16}(;g[0-9]+=[0-9a-f]{16})*")
-                    && cpu.dieKey().equals("windows:die:0")
-                    && cpu.coreKey().matches(
-                    "windows:core:g[0-9]+=[0-9a-f]{16}(;g[0-9]+=[0-9a-f]{16})*");
-            case "macos" -> cpu.socketKey().equals("macos:package:0")
-                    && cpu.dieKey().equals("macos:die:0")
-                    && cpu.coreKey().matches("macos:core:[0-9a-f]{8}");
-            case "fallback" -> cpu.socketKey().equals("fallback:package:0")
-                    && cpu.dieKey().equals("fallback:die:0")
-                    && cpu.coreKey().matches("fallback:core:[0-9a-f]{8}");
-            default -> false;
-        };
+        boolean valid =
+                switch (provider) {
+                    case "linux" ->
+                        cpu.socketKey().matches("linux:package:-?(0|[1-9][0-9]*)")
+                                && cpu.dieKey().matches("linux:die:-?(0|[1-9][0-9]*)")
+                                && cpu.coreKey().matches("linux:core:-?(0|[1-9][0-9]*)");
+                    case "windows" ->
+                        cpu.socketKey().matches("windows:package:g[0-9]+=[0-9a-f]{16}(;g[0-9]+=[0-9a-f]{16})*")
+                                && cpu.dieKey().equals("windows:die:0")
+                                && cpu.coreKey().matches("windows:core:g[0-9]+=[0-9a-f]{16}(;g[0-9]+=[0-9a-f]{16})*");
+                    case "macos" ->
+                        cpu.socketKey().equals("macos:package:0")
+                                && cpu.dieKey().equals("macos:die:0")
+                                && cpu.coreKey().matches("macos:core:[0-9a-f]{8}");
+                    case "fallback" ->
+                        cpu.socketKey().equals("fallback:package:0")
+                                && cpu.dieKey().equals("fallback:die:0")
+                                && cpu.coreKey().matches("fallback:core:[0-9a-f]{8}");
+                    default -> false;
+                };
         if (!valid) {
-            throw failure(provider, "source-key", Integer.toString(cpu.logicalCpuId()),
+            throw failure(
+                    provider,
+                    "source-key",
+                    Integer.toString(cpu.logicalCpuId()),
                     "keys do not match the provider's canonical encoding");
         }
     }
@@ -126,8 +131,7 @@ public final class TopologyNormalizer {
         return Integer.compare(a.length, b.length);
     }
 
-    private static TopologyValidationException failure(String provider, String category,
-            String value, String reason) {
+    private static TopologyValidationException failure(String provider, String category, String value, String reason) {
         return new TopologyValidationException(provider, category, value, reason);
     }
 
@@ -143,7 +147,10 @@ public final class TopologyNormalizer {
             throw failure(provider, "logical-cpus", "empty", "at least one CPU is required");
         }
         if (source.logicalCpus().size() > MAX_ACTIVE_CPUS) {
-            throw failure(provider, "active-count", Integer.toString(source.logicalCpus().size()),
+            throw failure(
+                    provider,
+                    "active-count",
+                    Integer.toString(source.logicalCpus().size()),
                     "active CPU count exceeds " + MAX_ACTIVE_CPUS);
         }
         for (LogicalCpu value : source.logicalCpus()) {
@@ -152,38 +159,43 @@ public final class TopologyNormalizer {
             }
             int id = value.logicalCpuId();
             if (id < 0 || id > MAX_LOGICAL_CPU_ID) {
-                throw failure(provider, "logical-id", Integer.toString(id),
+                throw failure(
+                        provider,
+                        "logical-id",
+                        Integer.toString(id),
                         "logical ID is outside [0," + MAX_LOGICAL_CPU_ID + "]");
             }
             if (!ids.add(id)) {
-                throw failure(provider, "logical-id", Integer.toString(id),
-                        "logical ID is duplicated");
+                throw failure(provider, "logical-id", Integer.toString(id), "logical ID is duplicated");
             }
             validateKey(provider, value.socketKey(), "socket-key");
             validateKey(provider, value.dieKey(), "die-key");
             validateKey(provider, value.coreKey(), "core-key");
             validateEncoding(provider, value);
-            cpus.add(new LogicalCpu(id, value.socketKey(), value.dieKey(), value.coreKey(),
-                    value.coreKind()));
+            cpus.add(new LogicalCpu(id, value.socketKey(), value.dieKey(), value.coreKey(), value.coreKind()));
         }
         cpus.sort(Comparator.comparingInt(LogicalCpu::logicalCpuId));
 
-        List<String> socketKeys = cpus.stream().map(LogicalCpu::socketKey).distinct()
-                .sorted(KEY_COMPARATOR).toList();
+        List<String> socketKeys = cpus.stream()
+                .map(LogicalCpu::socketKey)
+                .distinct()
+                .sorted(KEY_COMPARATOR)
+                .toList();
         Map<String, Integer> sockets = new HashMap<>();
         for (int i = 0; i < socketKeys.size(); i++) {
             sockets.put(socketKeys.get(i), i);
         }
 
-        record CoreKey(int socket, String die, String core) {
+        record CoreKey(int socket, String die, String core) {}
 
-        }
         Comparator<CoreKey> coreComparator = Comparator.comparingInt(CoreKey::socket)
                 .thenComparing(CoreKey::die, KEY_COMPARATOR)
                 .thenComparing(CoreKey::core, KEY_COMPARATOR);
         List<CoreKey> coreKeys = cpus.stream()
                 .map(cpu -> new CoreKey(sockets.get(cpu.socketKey()), cpu.dieKey(), cpu.coreKey()))
-                .distinct().sorted(coreComparator).toList();
+                .distinct()
+                .sorted(coreComparator)
+                .toList();
         Map<CoreKey, Integer> cores = new HashMap<>();
         for (int i = 0; i < coreKeys.size(); i++) {
             cores.put(coreKeys.get(i), i);
@@ -201,7 +213,10 @@ public final class TopologyNormalizer {
             indexSum += (long) highest + 1L;
         }
         if (indexSum > MAX_CORE_INDEX_SUM) {
-            throw failure(provider, "core-index-sum", Long.toString(indexSum),
+            throw failure(
+                    provider,
+                    "core-index-sum",
+                    Long.toString(indexSum),
                     "core index sum exceeds " + MAX_CORE_INDEX_SUM);
         }
 
@@ -215,8 +230,7 @@ public final class TopologyNormalizer {
             int core = cores.get(new CoreKey(socket, cpu.dieKey(), cpu.coreKey()));
             CoreKind previous = coreKinds.putIfAbsent(core, cpu.coreKind());
             if (previous != null && previous != cpu.coreKind()) {
-                throw failure(provider, "core-kind", cpu.coreKey(),
-                        "logical siblings disagree on core kind");
+                throw failure(provider, "core-kind", cpu.coreKey(), "logical siblings disagree on core kind");
             }
             coreCpus.computeIfAbsent(core, ignored -> new BitSet()).set(cpu.logicalCpuId());
             socketCpus.computeIfAbsent(socket, ignored -> new BitSet()).set(cpu.logicalCpuId());
@@ -233,15 +247,18 @@ public final class TopologyNormalizer {
             int firstCpu = entry.getValue().nextSetBit(0);
             int socket = cpuInfo.get(firstCpu).socket();
             boolean performance = coreKinds.get(core) != CoreKind.EFFICIENCY;
-            coreInfo.put(core, new CoreInfo(MaskCodec.format(entry.getValue()), performance, core,
-                    socket));
+            coreInfo.put(core, new CoreInfo(MaskCodec.format(entry.getValue()), performance, core, socket));
             (performance ? pCores : eCores).set(core);
             (performance ? pCpus : eCpus).or(entry.getValue());
         }
         Map<Integer, SocketInfo> socketInfo = new TreeMap<>();
         for (int socket = 0; socket < socketKeys.size(); socket++) {
-            socketInfo.put(socket, new SocketInfo(MaskCodec.format(socketCpus.get(socket)),
-                    MaskCodec.format(socketCores.get(socket)), socket));
+            socketInfo.put(
+                    socket,
+                    new SocketInfo(
+                            MaskCodec.format(socketCpus.get(socket)),
+                            MaskCodec.format(socketCores.get(socket)),
+                            socket));
         }
 
         BitSet active = new BitSet();
@@ -251,25 +268,42 @@ public final class TopologyNormalizer {
         int maxLine = 64;
         for (LogicalCpu cpu : cpus) {
             CpuInfo identity = cpuInfo.get(cpu.logicalCpuId());
-            Selection l1 = select(domains, 1, cpu.logicalCpuId(), coreCpus.get(identity.core()),
-                    DEFAULT_L1);
-            Selection l2 = select(domains, 2, cpu.logicalCpuId(), coreCpus.get(identity.core()),
-                    DEFAULT_L2);
-            Selection l3 = select(domains, 3, cpu.logicalCpuId(), socketCpus.get(identity.socket()),
-                    DEFAULT_L3);
+            Selection l1 = select(domains, 1, cpu.logicalCpuId(), coreCpus.get(identity.core()), DEFAULT_L1);
+            Selection l2 = select(domains, 2, cpu.logicalCpuId(), coreCpus.get(identity.core()), DEFAULT_L2);
+            Selection l3 = select(domains, 3, cpu.logicalCpuId(), socketCpus.get(identity.socket()), DEFAULT_L3);
             maxLine = Math.max(maxLine, Math.max(l1.line, Math.max(l2.line, l3.line)));
-            layouts.put(cpu.logicalCpuId(), new CpuCacheLayout(cpu.logicalCpuId(), l1.bytes,
-                    l2.bytes, l3.bytes, l1.mask.cardinality(), l2.mask.cardinality(),
-                    l3.mask.cardinality(), MaskCodec.format(l1.mask), MaskCodec.format(l2.mask),
-                    MaskCodec.format(l3.mask), Math.max(l1.line, Math.max(l2.line, l3.line))));
+            layouts.put(
+                    cpu.logicalCpuId(),
+                    new CpuCacheLayout(
+                            cpu.logicalCpuId(),
+                            l1.bytes,
+                            l2.bytes,
+                            l3.bytes,
+                            l1.mask.cardinality(),
+                            l2.mask.cardinality(),
+                            l3.mask.cardinality(),
+                            MaskCodec.format(l1.mask),
+                            MaskCodec.format(l2.mask),
+                            MaskCodec.format(l3.mask),
+                            Math.max(l1.line, Math.max(l2.line, l3.line))));
         }
 
         int[] activeIds = cpus.stream().mapToInt(LogicalCpu::logicalCpuId).toArray();
-        return new TopologyModel(activeIds, UnmodifiableBitSet.wrap(active),
-                UnmodifiableBitSet.wrap(pCores), UnmodifiableBitSet.wrap(eCores),
-                UnmodifiableBitSet.wrap(pCpus), UnmodifiableBitSet.wrap(eCpus), layouts, cpuInfo,
-                coreInfo, socketInfo, cpus.get(cpus.size() - 1).logicalCpuId() + 1,
-                coreKeys.size(), socketKeys.size(), maxLine);
+        return new TopologyModel(
+                activeIds,
+                UnmodifiableBitSet.wrap(active),
+                UnmodifiableBitSet.wrap(pCores),
+                UnmodifiableBitSet.wrap(eCores),
+                UnmodifiableBitSet.wrap(pCpus),
+                UnmodifiableBitSet.wrap(eCpus),
+                layouts,
+                cpuInfo,
+                coreInfo,
+                socketInfo,
+                cpus.get(cpus.size() - 1).logicalCpuId() + 1,
+                coreKeys.size(),
+                socketKeys.size(),
+                maxLine);
     }
 
     private record Domain(int level, long bytes, int line, BitSet mask) {
@@ -283,7 +317,5 @@ public final class TopologyNormalizer {
         }
     }
 
-    private record Selection(long bytes, int line, BitSet mask) {
-
-    }
+    private record Selection(long bytes, int line, BitSet mask) {}
 }

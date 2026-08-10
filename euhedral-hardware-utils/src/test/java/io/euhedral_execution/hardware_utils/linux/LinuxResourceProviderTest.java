@@ -22,8 +22,7 @@ class LinuxResourceProviderTest {
         Path cgroupRoot = tempDir.resolve("sys_cgroup");
 
         Files.createDirectories(cgroupRoot);
-        Files.writeString(mountinfo,
-                "40 28 0:34 / /sys/fs/cgroup rw,nosuid - cgroup2 cgroup2 rw\n");
+        Files.writeString(mountinfo, "40 28 0:34 / /sys/fs/cgroup rw,nosuid - cgroup2 cgroup2 rw\n");
         Files.writeString(cgroup, "0::/user.slice/user-1000.slice\n");
 
         Path userDir = cgroupRoot.resolve("user.slice/user-1000.slice");
@@ -31,8 +30,7 @@ class LinuxResourceProviderTest {
 
         Files.writeString(userDir.resolve("cpuset.cpus.effective"), "0-3\n");
         Files.writeString(userDir.resolve("cpu.max"), "200000 100000\n");
-        Files.writeString(userDir.resolve("cpu.pressure"),
-                "some avg10=0.00 avg60=0.00 avg300=0.00 total=5000\n");
+        Files.writeString(userDir.resolve("cpu.pressure"), "some avg10=0.00 avg60=0.00 avg300=0.00 total=5000\n");
 
         LinuxPaths paths = new LinuxPaths(mountinfo, cgroup, cgroupRoot);
         assertEquals(LinuxPaths.CgroupMode.CGROUP_V2, paths.getMode());
@@ -56,10 +54,11 @@ class LinuxResourceProviderTest {
         Path cpusetMount = tempDir.resolve("sys_cgroup_cpuset");
         Files.createDirectories(cpuMount);
         Files.createDirectories(cpusetMount);
-        Files.writeString(mountinfo,
+        Files.writeString(
+                mountinfo,
                 "40 28 0:34 / " + cpuMount.toAbsolutePath() + " rw,nosuid - cgroup cgroup rw,cpu\n"
-                        +
-                        "41 28 0:35 / " + cpusetMount.toAbsolutePath()
+                        + "41 28 0:35 / "
+                        + cpusetMount.toAbsolutePath()
                         + " rw,nosuid - cgroup cgroup rw,cpuset\n");
         Files.writeString(cgroup, "2:cpu:/docker/1234\n3:cpuset:/docker/1234\n");
 
@@ -92,9 +91,10 @@ class LinuxResourceProviderTest {
         Path cgroupRoot = tempDir.resolve("sys_cgroup");
 
         Files.createDirectories(cgroupRoot);
-        Files.writeString(mountinfo,
-                "40 28 0:34 / /sys/fs/cgroup rw,nosuid - cgroup2 cgroup2 rw\n" +
-                        "41 28 0:35 / /sys/fs/cgroup/cpu rw,nosuid - cgroup cgroup rw,cpu\n");
+        Files.writeString(
+                mountinfo,
+                "40 28 0:34 / /sys/fs/cgroup rw,nosuid - cgroup2 cgroup2 rw\n"
+                        + "41 28 0:35 / /sys/fs/cgroup/cpu rw,nosuid - cgroup cgroup rw,cpu\n");
         Files.writeString(cgroup, "0::/user.slice\n1:cpu:/user.slice\n");
 
         LinuxPaths paths = new LinuxPaths(mountinfo, cgroup, cgroupRoot);
@@ -120,8 +120,7 @@ class LinuxResourceProviderTest {
         Path cgroupRoot = tempDir.resolve("sys_cgroup");
 
         Files.createDirectories(cgroupRoot);
-        Files.writeString(mountinfo,
-                "40 28 0:34 / /sys/fs/cgroup rw,nosuid - cgroup2 cgroup2 rw\n");
+        Files.writeString(mountinfo, "40 28 0:34 / /sys/fs/cgroup rw,nosuid - cgroup2 cgroup2 rw\n");
         Files.writeString(cgroup, "0::/\n");
 
         Files.writeString(cgroupRoot.resolve("cpuset.cpus.effective"), "0-3\n");
@@ -156,14 +155,11 @@ class LinuxResourceProviderTest {
         Path cgroupRoot = tempDir.resolve("sys_cgroup");
 
         Files.createDirectories(cgroupRoot);
-        Files.writeString(mountinfo,
-                "40 28 0:34 / /sys/fs/cgroup rw,nosuid - cgroup2 cgroup2 rw\n");
+        Files.writeString(mountinfo, "40 28 0:34 / /sys/fs/cgroup rw,nosuid - cgroup2 cgroup2 rw\n");
         Files.writeString(cgroup, "0::/\n");
 
-        Files.writeString(cgroupRoot.resolve("cpuset.cpus.effective"),
-                "1\n"); // Constrained to CPU 1
-        Files.writeString(cgroupRoot.resolve("cpu.pressure"),
-                "some avg10=0.00 avg60=0.00 avg300=0.00 total=10000\n");
+        Files.writeString(cgroupRoot.resolve("cpuset.cpus.effective"), "1\n"); // Constrained to CPU 1
+        Files.writeString(cgroupRoot.resolve("cpu.pressure"), "some avg10=0.00 avg60=0.00 avg300=0.00 total=10000\n");
 
         LinuxPaths paths = new LinuxPaths(mountinfo, cgroup, cgroupRoot);
         try (LinuxResourceProvider provider = new LinuxResourceProvider(paths)) {
@@ -171,10 +167,8 @@ class LinuxResourceProviderTest {
             var cpuSignals = sample.cpuSignals();
             // Aggregate pressure propagation should apply stall to CPU 1 without interference from CPU 0
             assertTrue(cpuSignals.length > 1);
-            assertEquals(0L,
-                    cpuSignals[0].schedulerWait().value()); // CPU 0 is not in effective set
-            assertEquals(10000000L,
-                    cpuSignals[1].schedulerWait().value()); // 10000 us -> 10000000 ns on CPU 1
+            assertEquals(0L, cpuSignals[0].schedulerWait().value()); // CPU 0 is not in effective set
+            assertEquals(10000000L, cpuSignals[1].schedulerWait().value()); // 10000 us -> 10000000 ns on CPU 1
         }
     }
 
@@ -189,8 +183,7 @@ class LinuxResourceProviderTest {
         assertTrue(content.length() > 65536);
         Files.writeString(largeFile, content);
 
-        LinuxPaths paths = new LinuxPaths(tempDir.resolve("mountinfo"), tempDir.resolve("cgroup"),
-                tempDir);
+        LinuxPaths paths = new LinuxPaths(tempDir.resolve("mountinfo"), tempDir.resolve("cgroup"), tempDir);
         try (LinuxResourceProvider provider = new LinuxResourceProvider(paths)) {
             String readBack = provider.readFileBounded(largeFile);
             assertNotNull(readBack);
@@ -206,8 +199,7 @@ class LinuxResourceProviderTest {
         Path cgroupRoot = tempDir.resolve("sys_cgroup");
 
         Files.createDirectories(cgroupRoot);
-        Files.writeString(mountinfo,
-                "40 28 0:34 / /sys/fs/cgroup rw,nosuid - cgroup2 cgroup2 rw\n");
+        Files.writeString(mountinfo, "40 28 0:34 / /sys/fs/cgroup rw,nosuid - cgroup2 cgroup2 rw\n");
         Files.writeString(cgroup, "0::/\n");
 
         Files.writeString(cgroupRoot.resolve("cpuset.cpus.effective"), "0-3\n");
@@ -217,8 +209,8 @@ class LinuxResourceProviderTest {
         try (LinuxResourceProvider provider = new LinuxResourceProvider(paths)) {
             int numThreads = 8;
             int iterations = 100;
-            java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors.newFixedThreadPool(
-                    numThreads);
+            java.util.concurrent.ExecutorService executor =
+                    java.util.concurrent.Executors.newFixedThreadPool(numThreads);
             java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
             java.util.List<java.util.concurrent.Future<?>> futures = new java.util.ArrayList<>();
 
@@ -247,4 +239,3 @@ class LinuxResourceProviderTest {
         }
     }
 }
-

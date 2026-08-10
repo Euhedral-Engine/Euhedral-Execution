@@ -5,23 +5,20 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.function.UnaryOperator;
 
-@SuppressWarnings({"unchecked","unused"})
+@SuppressWarnings({"unchecked", "unused"})
 public final class PaddedAtomicReference<T> extends PaddedReference<T> {
 
     private static final VarHandle HANDLE;
 
     static {
         try {
-            HANDLE = MethodHandles.lookup()
-                    .findVarHandle(PaddedAtomicReference.class, "ref", Object.class);
+            HANDLE = MethodHandles.lookup().findVarHandle(PaddedAtomicReference.class, "ref", Object.class);
         } catch (Exception e) {
             throw new ExceptionInInitializerError(e);
         }
     }
 
-    public PaddedAtomicReference() {
-
-    }
+    public PaddedAtomicReference() {}
 
     public PaddedAtomicReference(T obj) {
         super.ref = obj;
@@ -42,15 +39,23 @@ public final class PaddedAtomicReference<T> extends PaddedReference<T> {
         return (T) HANDLE.getOpaque(this);
     }
 
+    public void setOpaque(T obj) {
+        HANDLE.setOpaque(this, obj);
+    }
+
     public T getPlain() {
         return super.ref;
+    }
+
+    // ----- Set -----
+
+    public void setPlain(T obj) {
+        super.ref = obj;
     }
 
     public T getAndSet(T obj) {
         return (T) HANDLE.getAndSet(this, obj);
     }
-
-    // ----- Set -----
 
     /// Atomic set
     public void set(T obj) {
@@ -59,14 +64,6 @@ public final class PaddedAtomicReference<T> extends PaddedReference<T> {
 
     public void setRelease(T obj) {
         HANDLE.setRelease(this, obj);
-    }
-
-    public void setOpaque(T obj) {
-        HANDLE.setOpaque(this, obj);
-    }
-
-    public void setPlain(T obj) {
-        super.ref = obj;
     }
 
     // ----- CAS -----

@@ -11,6 +11,7 @@ import lombok.Getter;
 public class SpmcQueue<T> extends BaseConcurrentQueue.MultiConsumer<T> implements ConcurrentQueue<T> {
 
     private final ChunkAllocator allocator;
+
     @Getter
     private final long maxConsumeBatch;
 
@@ -135,8 +136,7 @@ public class SpmcQueue<T> extends BaseConcurrentQueue.MultiConsumer<T> implement
             }
             try {
                 long batch = Math.min(limit - total, this.maxConsumeBatch);
-                long temp = scDrain((Consumer<Object>) consumer,
-                        (Function<Object, Boolean>) stopCondition, batch);
+                long temp = scDrain((Consumer<Object>) consumer, (Function<Object, Boolean>) stopCondition, batch);
                 if (temp == 0) {
                     break;
                 }

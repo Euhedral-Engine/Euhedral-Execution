@@ -11,20 +11,19 @@ import io.euhedral_execution.hardware_utils.internal.sampling.signals.MemoryFast
 import java.util.BitSet;
 
 public record FastHardwareSample(
-    long observedAtNs,
-    int logicalSpan,
-    UnmodifiableBitSet effectiveCpus,
-    LongGaugeSignal quotaCapacityCpus,
-    LongGaugeSignal quotaPeriodNs,
-    CounterSignal productiveCpuNs,
-    CounterSignal scopeQuotaThrottledNs,
-    CounterSignal scopeSchedulerWaitNs,
-    CounterSignal scopePsiStallNs,
-    DoubleGaugeSignal scopeReportedSchedulerStallRatio,
-    CpuFastSignals[] cpuSignals,
-    MemoryFastSignals memorySignals,
-    IoFastSignals ioSignals
-) {
+        long observedAtNs,
+        int logicalSpan,
+        UnmodifiableBitSet effectiveCpus,
+        LongGaugeSignal quotaCapacityCpus,
+        LongGaugeSignal quotaPeriodNs,
+        CounterSignal productiveCpuNs,
+        CounterSignal scopeQuotaThrottledNs,
+        CounterSignal scopeSchedulerWaitNs,
+        CounterSignal scopePsiStallNs,
+        DoubleGaugeSignal scopeReportedSchedulerStallRatio,
+        CpuFastSignals[] cpuSignals,
+        MemoryFastSignals memorySignals,
+        IoFastSignals ioSignals) {
     public FastHardwareSample {
         if (logicalSpan <= 0) {
             throw new IllegalArgumentException("Logical span must be positive");
@@ -37,14 +36,16 @@ public record FastHardwareSample(
             throw new IllegalArgumentException("cpuSignals length must match logicalSpan");
         }
         cpuSignals = cpuSignals.clone();
-        
-        if (scopeReportedSchedulerStallRatio != null && scopeReportedSchedulerStallRatio.validity() == SignalValidity.VALID) {
+
+        if (scopeReportedSchedulerStallRatio != null
+                && scopeReportedSchedulerStallRatio.validity() == SignalValidity.VALID) {
             if (scopeReportedSchedulerStallRatio.value() > 1.0) {
-                scopeReportedSchedulerStallRatio = new DoubleGaugeSignal(0.0, scopeReportedSchedulerStallRatio.observedAtNs(), SignalValidity.TRANSIENT_FAILURE);
+                scopeReportedSchedulerStallRatio = new DoubleGaugeSignal(
+                        0.0, scopeReportedSchedulerStallRatio.observedAtNs(), SignalValidity.TRANSIENT_FAILURE);
             }
         }
     }
-    
+
     @Override
     public CpuFastSignals[] cpuSignals() {
         return cpuSignals.clone();

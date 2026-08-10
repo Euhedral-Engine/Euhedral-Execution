@@ -12,17 +12,11 @@ import reactor.core.Disposable;
 @SuppressWarnings("unused")
 public final class TaskFrame extends AbstractFrame implements Disposable {
 
-    public static TaskFrame create(long idHash, Runnable task, EuhedralWorker sink, long delay, long period, TimeUnit unit) {
-        return new TaskFrame(idHash, task, sink, delay, period, unit);
-    }
-
     private final Runnable task;
     @Getter
     private final long periodNs;
-
     private Thread thread;
     private long seed;
-
     private TaskFrame(long idHash, Runnable task, EuhedralWorker sink, long delay, long period, TimeUnit unit) {
         super(idHash, null, new AtomicBoolean());
 
@@ -35,7 +29,7 @@ public final class TaskFrame extends AbstractFrame implements Disposable {
         long delayNs = unit.toNanos(delay);
 
         LockSupport.parkNanos(delayNs);
-        if(periodNs <= 0) {
+        if (periodNs <= 0) {
             sink.submit(this);
         } else {
             this.thread = Thread.ofVirtual().start(() -> {
@@ -45,9 +39,14 @@ public final class TaskFrame extends AbstractFrame implements Disposable {
         }
     }
 
+    public static TaskFrame create(
+            long idHash, Runnable task, EuhedralWorker sink, long delay, long period, TimeUnit unit) {
+        return new TaskFrame(idHash, task, sink, delay, period, unit);
+    }
+
     private void cycle(EuhedralWorker sink) {
         while (!Thread.interrupted() && isAlive()) {
-            if(sink.isDisposed()) {
+            if (sink.isDisposed()) {
                 break;
             }
 
@@ -71,7 +70,7 @@ public final class TaskFrame extends AbstractFrame implements Disposable {
     @Override
     public void dispose() {
         kill();
-        if(this.thread != null) {
+        if (this.thread != null) {
             this.thread.interrupt();
             LockSupport.unpark(this.thread);
         }
@@ -84,7 +83,7 @@ public final class TaskFrame extends AbstractFrame implements Disposable {
 
     @Override
     public void doFinally() {
-        if(this.thread != null) {
+        if (this.thread != null) {
             LockSupport.unpark(this.thread);
         }
     }

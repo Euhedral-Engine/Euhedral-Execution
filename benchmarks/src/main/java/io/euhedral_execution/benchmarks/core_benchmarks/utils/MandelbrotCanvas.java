@@ -7,26 +7,36 @@ import java.util.concurrent.ThreadLocalRandom;
 
 public class MandelbrotCanvas {
 
-    public static final int[] DEFAULT_PALETTE = {0x000766, // 0: Deepest Midnight Blue
-            0x011C99, // 1: Royal Blue
-            0x0066CC, // 2: Vivid Sea Blue
-            0x33CCFF, // 3: Bright Sky Blue
-            0x99FFFF, // 4: Pale Ice Cyan
-            0xFFFFFF, // 5: Pure White
-            0xFFFFCC, // 6: Soft Cream Yellow
-            0xFFCC33, // 7: Deep Gold
-            0xFF9900, // 8: Bright Orange
-            0xCC3300, // 9: Crimson Red
-            0x990000, // 10: Dark Maroon
-            0x660000, // 11: Dark Auburn Brown
-            0x330000, // 12: Espresso Black
-            0x000000, // 13: Transition back to Set Edge
-            0x000233  // 14: Closing loop back to Deep Blue
+    public static final int[] DEFAULT_PALETTE = {
+        0x000766, // 0: Deepest Midnight Blue
+        0x011C99, // 1: Royal Blue
+        0x0066CC, // 2: Vivid Sea Blue
+        0x33CCFF, // 3: Bright Sky Blue
+        0x99FFFF, // 4: Pale Ice Cyan
+        0xFFFFFF, // 5: Pure White
+        0xFFFFCC, // 6: Soft Cream Yellow
+        0xFFCC33, // 7: Deep Gold
+        0xFF9900, // 8: Bright Orange
+        0xCC3300, // 9: Crimson Red
+        0x990000, // 10: Dark Maroon
+        0x660000, // 11: Dark Auburn Brown
+        0x330000, // 12: Espresso Black
+        0x000000, // 13: Transition back to Set Edge
+        0x000233 // 14: Closing loop back to Deep Blue
     };
 
-    public static void generate(int width, int height, double centerX, double centerY,
-            double hDiameter, int iterations, double bailoutRadiusSq, int degree,
-            double[] magnitudes, int[] escapes, PaddedLongAdder counters,
+    public static void generate(
+            int width,
+            int height,
+            double centerX,
+            double centerY,
+            double hDiameter,
+            int iterations,
+            double bailoutRadiusSq,
+            int degree,
+            double[] magnitudes,
+            int[] escapes,
+            PaddedLongAdder counters,
             MandelbrotPixel[] pixels) {
         double ySpan = hDiameter / ((double) width / height);
 
@@ -53,16 +63,33 @@ public class MandelbrotCanvas {
 
                 int index = rowOffset + x;
 
-                pixels[index] =
-                        new MandelbrotPixel(idHash, null, index, degree, cr, ci, pixelWidthStep,
-                                pixelHeightStep, width, height, iterations, bailoutRadiusSq,
-                                magnitudes, escapes, counters);
+                pixels[index] = new MandelbrotPixel(
+                        idHash,
+                        null,
+                        index,
+                        degree,
+                        cr,
+                        ci,
+                        pixelWidthStep,
+                        pixelHeightStep,
+                        width,
+                        height,
+                        iterations,
+                        bailoutRadiusSq,
+                        magnitudes,
+                        escapes,
+                        counters);
             }
         }
     }
 
-    public static void render(int[] rawImageBuffer, double[] magnitudes, int[] escapes, int degree,
-            int iterationCap, double bailoutRadiusSq) {
+    public static void render(
+            int[] rawImageBuffer,
+            double[] magnitudes,
+            int[] escapes,
+            int degree,
+            int iterationCap,
+            double bailoutRadiusSq) {
         for (int index = 0; index < rawImageBuffer.length; index++) {
             int baseOffset = index * 4;
             int rSum = 0, gSum = 0, bSum = 0;

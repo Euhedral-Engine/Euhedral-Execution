@@ -6,13 +6,11 @@ import io.euhedral_execution.hardware_utils.internal.sampling.primitives.Resolve
 import io.euhedral_execution.hardware_utils.internal.sampling.primitives.ResolvedLong;
 
 public record CpuSlowIntervalSignals(
-    ResolvedDouble availableCapacityUnits,
-    ResolvedDouble nominalCapacityUnits,
-    ResolvedLong constrainedFrequencyHz,
-    ResolvedLong nominalFrequencyHz,
-    ThermalSeverity thermalSeverity,
-    boolean lowPowerMode,
-    long observedAtNs,
-    SignalResolution resolution
-) {
-}
+        ResolvedDouble availableCapacityUnits,
+        ResolvedDouble nominalCapacityUnits,
+        ResolvedLong constrainedFrequencyHz,
+        ResolvedLong nominalFrequencyHz,
+        ThermalSeverity thermalSeverity,
+        boolean lowPowerMode,
+        long observedAtNs,
+        SignalResolution resolution) {}

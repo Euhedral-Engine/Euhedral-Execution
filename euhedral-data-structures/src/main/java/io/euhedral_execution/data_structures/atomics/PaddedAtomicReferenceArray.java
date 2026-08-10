@@ -20,8 +20,7 @@ public final class PaddedAtomicReferenceArray<T> {
             ptr = 4;
         } else {
             try {
-                HotSpotDiagnosticMXBean bean = ManagementFactory.getPlatformMXBean(
-                        HotSpotDiagnosticMXBean.class);
+                HotSpotDiagnosticMXBean bean = ManagementFactory.getPlatformMXBean(HotSpotDiagnosticMXBean.class);
                 String useCompressedOops = bean.getVMOption("UseCompressedOops").getValue();
                 ptr = "true".equals(useCompressedOops) ? 4 : 8;
             } catch (Exception e) {
@@ -169,7 +168,7 @@ public final class PaddedAtomicReferenceArray<T> {
 
     public int fromRawIdx(long rawIdx) {
         int logical;
-        if(pow2) {
+        if (pow2) {
             logical = (int) (rawIdx & (length - 1));
         } else {
             logical = Math.floorMod((int) rawIdx, this.length);
@@ -187,8 +186,7 @@ public final class PaddedAtomicReferenceArray<T> {
 
     private void boundsCheck(int idx) {
         if (idx < 0 || idx >= this.length) {
-            throw new IndexOutOfBoundsException(
-                    "Index " + idx + " out of bounds for length " + length);
+            throw new IndexOutOfBoundsException("Index " + idx + " out of bounds for length " + length);
         }
     }
 

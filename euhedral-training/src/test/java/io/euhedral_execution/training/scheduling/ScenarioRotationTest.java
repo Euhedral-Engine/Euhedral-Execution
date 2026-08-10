@@ -23,8 +23,7 @@ class ScenarioRotationTest {
         cursors.put(new RotationGroup("a", 8), 3);
         cursors.put(new RotationGroup("b", 8), 0);
 
-        List<SourceScenario> selected = ScenarioRotation.select(required, cursors,
-                "a", 8, 2);
+        List<SourceScenario> selected = ScenarioRotation.select(required, cursors, "a", 8, 2);
         assertThat(selected).containsExactly(a4, a1);
         var advanced = ScenarioRotation.advance(required, cursors, selected);
         assertThat(advanced.get(new RotationGroup("a", 8))).isEqualTo(1);
@@ -35,7 +34,7 @@ class ScenarioRotationTest {
     @Test
     void rejectsAbsentExactGroup() {
         assertThatThrownBy(() -> ScenarioRotation.select(
-                new TreeSet<>(List.of(SourceScenario.of("a", 1, 8))), new TreeMap<>(),
-                "a", 4, 1)).isInstanceOf(IllegalArgumentException.class);
+                        new TreeSet<>(List.of(SourceScenario.of("a", 1, 8))), new TreeMap<>(), "a", 4, 1))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 }

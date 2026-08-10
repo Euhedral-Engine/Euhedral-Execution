@@ -11,8 +11,46 @@ import java.util.Objects;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
-public record FeatureNormalizer(String featureSchemaId, List<String> featureNames,
-                                double[] means, double[] scales, boolean[] constantFeatures) {
+public record FeatureNormalizer(
+        String featureSchemaId,
+        List<String> featureNames,
+        double[] means,
+        double[] scales,
+        boolean[] constantFeatures) {
+
+    public FeatureNormalizer {
+        Objects.requireNonNull(featureSchemaId);
+        Objects.requireNonNull(featureNames);
+        Objects.requireNonNull(means);
+        Objects.requireNonNull(scales);
+        Objects.requireNonNull(constantFeatures);
+        featureNames = List.copyOf(featureNames);
+        means = means.clone();
+        scales = scales.clone();
+        constantFeatures = constantFeatures.clone();
+        int n = featureNames.size();
+        if (n == 0 || means.length != n || scales.length != n || constantFeatures.length != n) {
+            throw new IllegalArgumentException("Normalizer lengths disagree");
+        }
+        ScenarioFeatureSet featureSet = Arrays.stream(ScenarioFeatureSet.values())
+                .filter(value -> value.schemaId().equals(featureSchemaId))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Unknown feature schema " + featureSchemaId));
+        if (!featureNames.equals(featureSet.featureNames())) {
+            throw new IllegalArgumentException("Feature names do not match schema");
+        }
+        for (int i = 0; i < n; i++) {
+            if (!Double.isFinite(means[i]) || !Double.isFinite(scales[i]) || scales[i] <= 0) {
+                throw new IllegalArgumentException("Invalid normalizer");
+            }
+            if (constantFeatures[i] && Double.compare(scales[i], 1.0) != 0) {
+                throw new IllegalArgumentException("Constant features must use unit scale");
+            }
+            if (!constantFeatures[i] && scales[i] < 1.0e-12) {
+                throw new IllegalArgumentException("Non-constant feature scale is too small");
+            }
+        }
+    }
 
     public static FeatureNormalizer fit(List<ScenarioLearningRow> rows, ScenarioFeatureSet set) {
         Objects.requireNonNull(rows);
@@ -73,8 +111,7 @@ public record FeatureNormalizer(String featureSchemaId, List<String> featureName
     private static double raw(SourceScenario scenario, int index) {
         return switch (index) {
             case 28 -> {
-                double ratio = scenario.sourceCount()
-                        / (double) scenario.availablePhysicalCoreCount();
+                double ratio = scenario.sourceCount() / (double) scenario.availablePhysicalCoreCount();
                 if (Double.compare(ratio, scenario.ratio().asDouble()) != 0) {
                     throw new IllegalArgumentException("Scenario ratio disagrees with counts");
                 }
@@ -90,45 +127,10 @@ public record FeatureNormalizer(String featureSchemaId, List<String> featureName
         double sum = 0, correction = 0;
         for (double value : values) {
             double t = sum + value;
-            correction += StrictMath.abs(sum) >= StrictMath.abs(value)
-                    ? (sum - t) + value : (value - t) + sum;
+            correction += StrictMath.abs(sum) >= StrictMath.abs(value) ? (sum - t) + value : (value - t) + sum;
             sum = t;
         }
         return sum + correction;
-    }
-
-    public FeatureNormalizer {
-        Objects.requireNonNull(featureSchemaId);
-        Objects.requireNonNull(featureNames);
-        Objects.requireNonNull(means);
-        Objects.requireNonNull(scales);
-        Objects.requireNonNull(constantFeatures);
-        featureNames = List.copyOf(featureNames);
-        means = means.clone();
-        scales = scales.clone();
-        constantFeatures = constantFeatures.clone();
-        int n = featureNames.size();
-        if (n == 0 || means.length != n || scales.length != n || constantFeatures.length != n) {
-            throw new IllegalArgumentException("Normalizer lengths disagree");
-        }
-        ScenarioFeatureSet featureSet = Arrays.stream(ScenarioFeatureSet.values())
-                .filter(value -> value.schemaId().equals(featureSchemaId))
-                .findFirst().orElseThrow(() ->
-                        new IllegalArgumentException("Unknown feature schema " + featureSchemaId));
-        if (!featureNames.equals(featureSet.featureNames())) {
-            throw new IllegalArgumentException("Feature names do not match schema");
-        }
-        for (int i = 0; i < n; i++) {
-            if (!Double.isFinite(means[i]) || !Double.isFinite(scales[i]) || scales[i] <= 0) {
-                throw new IllegalArgumentException("Invalid normalizer");
-            }
-            if (constantFeatures[i] && Double.compare(scales[i], 1.0) != 0) {
-                throw new IllegalArgumentException("Constant features must use unit scale");
-            }
-            if (!constantFeatures[i] && scales[i] < 1.0e-12) {
-                throw new IllegalArgumentException("Non-constant feature scale is too small");
-            }
-        }
     }
 
     @Override
@@ -157,8 +159,7 @@ public record FeatureNormalizer(String featureSchemaId, List<String> featureName
             double value = i < 28 ? policy.weight(i) : raw(scenario, i);
             float encoded = (float) ((value - means[i]) / scales[i]);
             if (!Float.isFinite(encoded)) {
-                throw new IllegalArgumentException(
-                        "Non-finite feature for " + policy.id() + " and " + scenario);
+                throw new IllegalArgumentException("Non-finite feature for " + policy.id() + " and " + scenario);
             }
             out[offset + i] = encoded == 0 ? 0.0f : encoded;
         }

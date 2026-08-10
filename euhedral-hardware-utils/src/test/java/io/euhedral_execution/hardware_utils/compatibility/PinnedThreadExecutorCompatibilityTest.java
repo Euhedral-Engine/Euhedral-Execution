@@ -24,11 +24,16 @@ class PinnedThreadExecutorCompatibilityTest {
         CountDownLatch start = new CountDownLatch(1);
         CountDownLatch entered = new CountDownLatch(2);
         CountDownLatch release = new CountDownLatch(1);
-        PinnedThreadExecutor executor = PinnedThreadExecutor.getOrSetIfAbsent(runnable -> {
-            Thread thread = new Thread(runnable);
-            created.add(thread);
-            return thread;
-        }, cpu, "p0-concurrent-fresh-thread", Thread.NORM_PRIORITY, true);
+        PinnedThreadExecutor executor = PinnedThreadExecutor.getOrSetIfAbsent(
+                runnable -> {
+                    Thread thread = new Thread(runnable);
+                    created.add(thread);
+                    return thread;
+                },
+                cpu,
+                "p0-concurrent-fresh-thread",
+                Thread.NORM_PRIORITY,
+                true);
         try {
             Runnable task = () -> {
                 try {
@@ -42,8 +47,7 @@ class PinnedThreadExecutorCompatibilityTest {
             executor.execute(task);
             executor.execute(task);
             start.countDown();
-            assertTrue(entered.await(5, SECONDS),
-                    "both submissions must enter before either is released");
+            assertTrue(entered.await(5, SECONDS), "both submissions must enter before either is released");
             assertEquals(2, created.size());
             Thread first = created.poll();
             Thread second = created.poll();

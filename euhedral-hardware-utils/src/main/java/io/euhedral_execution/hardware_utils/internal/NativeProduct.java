@@ -3,12 +3,7 @@ package io.euhedral_execution.hardware_utils.internal;
 import java.util.Objects;
 
 record NativeProduct(
-        String id,
-        String operatingSystem,
-        String architecture,
-        String libc,
-        int loadOrder,
-        String resourcePath) {
+        String id, String operatingSystem, String architecture, String libc, int loadOrder, String resourcePath) {
 
     NativeProduct {
         Objects.requireNonNull(id, "id");
@@ -20,13 +15,10 @@ record NativeProduct(
             throw new IllegalArgumentException("native-loader: product fields must not be empty");
         }
         if (loadOrder <= 0) {
-            throw new IllegalArgumentException(
-                    "native-loader: load order must be positive for " + id);
+            throw new IllegalArgumentException("native-loader: load order must be positive for " + id);
         }
-        if (!resourcePath.startsWith("/bin/") || resourcePath.contains("..")
-                || resourcePath.endsWith("/")) {
-            throw new IllegalArgumentException(
-                    "native-loader: invalid product resource path for " + id);
+        if (!resourcePath.startsWith("/bin/") || resourcePath.contains("..") || resourcePath.endsWith("/")) {
+            throw new IllegalArgumentException("native-loader: invalid product resource path for " + id);
         }
     }
 

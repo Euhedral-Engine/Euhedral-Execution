@@ -13,14 +13,18 @@ import java.util.TreeMap;
 
 public final class ScenarioFeatureEncoder {
 
+    private ScenarioFeatureEncoder() {}
+
     public static FeatureNormalizer fit(List<ScenarioLearningRow> rows, ScenarioFeatureSet set) {
         return FeatureNormalizer.fit(rows, set);
     }
 
-    public static ScenarioLearningMatrix matrix(List<ScenarioLearningRow> source,
-            SortedSet<SourceScenario> active, FeatureNormalizer normalizer) {
-        List<ScenarioLearningRow> rows = source.stream().filter(r -> active.contains(r.scenario()))
-                .sorted().toList();
+    public static ScenarioLearningMatrix matrix(
+            List<ScenarioLearningRow> source, SortedSet<SourceScenario> active, FeatureNormalizer normalizer) {
+        List<ScenarioLearningRow> rows = source.stream()
+                .filter(r -> active.contains(r.scenario()))
+                .sorted()
+                .toList();
         if (rows.isEmpty()) {
             throw new IllegalArgumentException("Matrix rows are empty");
         }
@@ -45,10 +49,6 @@ public final class ScenarioFeatureEncoder {
             ids[i] = row.policy().id();
             scenarios[i] = row.scenario();
         }
-        return new ScenarioLearningMatrix(n, f, features, labels, weights, qualities, ids,
-                scenarios);
-    }
-
-    private ScenarioFeatureEncoder() {
+        return new ScenarioLearningMatrix(n, f, features, labels, weights, qualities, ids, scenarios);
     }
 }

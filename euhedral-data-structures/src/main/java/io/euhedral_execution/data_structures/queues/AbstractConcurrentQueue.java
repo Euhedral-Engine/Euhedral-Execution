@@ -13,7 +13,6 @@ abstract class TailPad<T> extends AbstractQueue<T> {
 abstract class TailState<T> extends TailPad<T> {
 
     protected long tail;
-
 }
 
 @SuppressWarnings("unused")
@@ -29,7 +28,6 @@ abstract class HeadState<T> extends MidPad1<T> {
     HeadState(Object[] queue) {
         this.headQueue = queue;
     }
-
 }
 
 @SuppressWarnings("unused")
@@ -41,7 +39,6 @@ abstract class MidPad2<T> extends HeadState<T> {
     MidPad2(Object[] queue) {
         super(queue);
     }
-
 }
 
 abstract class TailState2<T> extends MidPad2<T> {
@@ -64,7 +61,7 @@ abstract class StartPad<T> extends TailState2<T> {
     }
 }
 
-@SuppressWarnings({"rawtypes","unused"})
+@SuppressWarnings({"rawtypes", "unused"})
 public abstract class AbstractConcurrentQueue<T> extends StartPad<T> {
     protected static final VarHandle HEAD;
     protected static final VarHandle TAIL;
@@ -76,7 +73,8 @@ public abstract class AbstractConcurrentQueue<T> extends StartPad<T> {
             HEAD = MethodHandles.lookup().findVarHandle(AbstractConcurrentQueue.class, "head", long.class);
             TAIL = MethodHandles.lookup().findVarHandle(AbstractConcurrentQueue.class, "tail", long.class);
             EPOCH = MethodHandles.lookup().findVarHandle(AbstractConcurrentQueue.class, "tailEpoch", long.class);
-            TAIL_QUEUE = MethodHandles.lookup().findVarHandle(AbstractConcurrentQueue.class, "tailQueue", Object[].class);
+            TAIL_QUEUE =
+                    MethodHandles.lookup().findVarHandle(AbstractConcurrentQueue.class, "tailQueue", Object[].class);
         } catch (Exception e) {
             throw new ExceptionInInitializerError(e);
         }

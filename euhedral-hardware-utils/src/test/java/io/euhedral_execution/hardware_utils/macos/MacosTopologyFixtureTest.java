@@ -137,10 +137,8 @@ class MacosTopologyFixtureTest {
 
     @Test
     void testTypeSafeSysctlParsers() {
-        Map<String, Object> map = Map.of(
-                "hw.logicalcpu", 8,
-                "hw.memsize", 17179869184L,
-                "machdep.cpu.brand_string", "Apple M1");
+        Map<String, Object> map =
+                Map.of("hw.logicalcpu", 8, "hw.memsize", 17179869184L, "machdep.cpu.brand_string", "Apple M1");
 
         SysctlProvider provider = createMockProvider(map);
 

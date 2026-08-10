@@ -18,8 +18,7 @@ public abstract class ReactorGrpcClient {
     private final GrpcTransportServiceGrpc.GrpcTransportServiceStub stub;
     private final int sendQueueChunkSize;
 
-    protected ReactorGrpcClient(GrpcTransportServiceGrpc.GrpcTransportServiceStub stub,
-            int sendQueueChunkSize) {
+    protected ReactorGrpcClient(GrpcTransportServiceGrpc.GrpcTransportServiceStub stub, int sendQueueChunkSize) {
         this.stub = stub;
         this.sendQueueChunkSize = sendQueueChunkSize;
     }
@@ -67,4 +66,3 @@ public abstract class ReactorGrpcClient {
         }
     }
 }
-

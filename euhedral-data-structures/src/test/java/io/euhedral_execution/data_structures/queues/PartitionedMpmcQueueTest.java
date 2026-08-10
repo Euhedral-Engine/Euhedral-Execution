@@ -18,6 +18,23 @@ import org.junit.jupiter.api.Test;
 
 class PartitionedMpmcQueueTest {
 
+    private static long value(int producerId, int itemId) {
+        return ((long) producerId << 32) | itemId;
+    }
+
+    private static void await(CountDownLatch latch) {
+        try {
+            assertTrue(latch.await(5, SECONDS), "start latch timed out");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError("interrupted while awaiting test start", e);
+        }
+    }
+
+    private static void assertBefore(long deadline, String message) {
+        assertTrue(System.nanoTime() < deadline, message);
+    }
+
     @Test
     void queueWideOperationsCoverEveryPartition() {
         PartitionedMpmcQueue<Integer> queue = new PartitionedMpmcQueue<>(3, 4, 2);
@@ -94,22 +111,5 @@ class PartitionedMpmcQueueTest {
             }
         }
         assertTrue(queue.isEmpty());
-    }
-
-    private static long value(int producerId, int itemId) {
-        return ((long) producerId << 32) | itemId;
-    }
-
-    private static void await(CountDownLatch latch) {
-        try {
-            assertTrue(latch.await(5, SECONDS), "start latch timed out");
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new AssertionError("interrupted while awaiting test start", e);
-        }
-    }
-
-    private static void assertBefore(long deadline, String message) {
-        assertTrue(System.nanoTime() < deadline, message);
     }
 }

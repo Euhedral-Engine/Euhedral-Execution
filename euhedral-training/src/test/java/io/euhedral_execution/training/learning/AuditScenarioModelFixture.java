@@ -32,12 +32,10 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.OptionalDouble;
 import java.util.SortedMap;
 import java.util.SortedSet;
 import java.util.TreeMap;
-import java.util.TreeSet;
 
 /**
  * Deterministic Phase 6 model artifact that exercises metadata and scheduling without loading DJL.
@@ -45,67 +43,103 @@ import java.util.TreeSet;
 public final class AuditScenarioModelFixture {
     private static final ScenarioFeatureSet FEATURES = ScenarioFeatureSet.RATIO_ONLY;
 
-    public static ScenarioTrainingArtifacts write(Path modelDirectory,
-            SortedSet<SourceScenario> requiredScenarios, ScenarioTrainingConfig trainingConfig,
-            PolicyVector probePolicy, String commitSha, boolean dirtyWorkingTree)
+    private AuditScenarioModelFixture() {}
+
+    public static ScenarioTrainingArtifacts write(
+            Path modelDirectory,
+            SortedSet<SourceScenario> requiredScenarios,
+            ScenarioTrainingConfig trainingConfig,
+            PolicyVector probePolicy,
+            String commitSha,
+            boolean dirtyWorkingTree)
             throws Exception {
-        return write(modelDirectory, requiredScenarios, trainingConfig, probePolicy,
-                commitSha, dirtyWorkingTree, ModelAcceptanceStatus.ACCEPTED, List.of());
+        return write(
+                modelDirectory,
+                requiredScenarios,
+                trainingConfig,
+                probePolicy,
+                commitSha,
+                dirtyWorkingTree,
+                ModelAcceptanceStatus.ACCEPTED,
+                List.of());
     }
 
-    public static ScenarioTrainingArtifacts writeRejected(Path modelDirectory,
-            SortedSet<SourceScenario> requiredScenarios, ScenarioTrainingConfig trainingConfig,
-            PolicyVector probePolicy, String commitSha, boolean dirtyWorkingTree)
+    public static ScenarioTrainingArtifacts writeRejected(
+            Path modelDirectory,
+            SortedSet<SourceScenario> requiredScenarios,
+            ScenarioTrainingConfig trainingConfig,
+            PolicyVector probePolicy,
+            String commitSha,
+            boolean dirtyWorkingTree)
             throws Exception {
-        return write(modelDirectory, requiredScenarios, trainingConfig, probePolicy,
-                commitSha, dirtyWorkingTree,
+        return write(
+                modelDirectory,
+                requiredScenarios,
+                trainingConfig,
+                probePolicy,
+                commitSha,
+                dirtyWorkingTree,
                 ModelAcceptanceStatus.SCENARIO_CONTEXT_GATE_FAILED,
                 List.of("AUDIT_FORCED_REJECTION"));
     }
 
-    private static ScenarioTrainingArtifacts write(Path modelDirectory,
-            SortedSet<SourceScenario> requiredScenarios, ScenarioTrainingConfig trainingConfig,
-            PolicyVector probePolicy, String commitSha, boolean dirtyWorkingTree,
-            ModelAcceptanceStatus acceptanceStatus, List<String> acceptanceReasons)
+    private static ScenarioTrainingArtifacts write(
+            Path modelDirectory,
+            SortedSet<SourceScenario> requiredScenarios,
+            ScenarioTrainingConfig trainingConfig,
+            PolicyVector probePolicy,
+            String commitSha,
+            boolean dirtyWorkingTree,
+            ModelAcceptanceStatus acceptanceStatus,
+            List<String> acceptanceReasons)
             throws Exception {
         Files.createDirectories(modelDirectory);
-        List<ScenarioLearningRow> rows = requiredScenarios.stream().map(scenario ->
-                new ScenarioLearningRow(probePolicy, scenario,
-                        ScenarioResultStatus.VALID_STRONG, 0.5, 90, 90, 90,
-                        1, 0, 0)).toList();
+        List<ScenarioLearningRow> rows = requiredScenarios.stream()
+                .map(scenario -> new ScenarioLearningRow(
+                        probePolicy, scenario, ScenarioResultStatus.VALID_STRONG, 0.5, 90, 90, 90, 1, 0, 0))
+                .toList();
         FeatureNormalizer normalizer = FeatureNormalizer.fit(rows, FEATURES);
         AblationMetric contextGate = contextGate();
 
         List<MemberMetadata> members = new ArrayList<>();
         List<TrainingHistoryEntry> history = new ArrayList<>();
         for (int index = 0; index < trainingConfig.ensembleMembers(); index++) {
-            long seed = ScenarioMemberSeeds.derive(trainingConfig.modelSeed(),
-                    "PRODUCTION", FEATURES, "all", index);
+            long seed = ScenarioMemberSeeds.derive(trainingConfig.modelSeed(), "PRODUCTION", FEATURES, "all", index);
             Path member = modelDirectory.resolve(MemberMetadata.expectedPath(index));
             Files.createDirectories(member.getParent());
-            Files.writeString(member, "phase6-audit-member-%d\n".formatted(index),
-                    StandardCharsets.US_ASCII);
-            members.add(new MemberMetadata(index, seed, 1,
-                    MemberMetadata.expectedPath(index),
-                    ScenarioConditionedModel.sha256(member)));
-            history.add(new TrainingHistoryEntry("PRODUCTION", "all", FEATURES,
-                    index, seed, 1, 0.1, OptionalDouble.of(0.8), 0.1, true));
+            Files.writeString(member, "phase6-audit-member-%d\n".formatted(index), StandardCharsets.US_ASCII);
+            members.add(new MemberMetadata(
+                    index, seed, 1, MemberMetadata.expectedPath(index), ScenarioConditionedModel.sha256(member)));
+            history.add(new TrainingHistoryEntry(
+                    "PRODUCTION", "all", FEATURES, index, seed, 1, 0.1, OptionalDouble.of(0.8), 0.1, true));
         }
 
         List<ScenarioEvaluationMetrics> groupedRows = requiredScenarios.stream()
-                .map(scenario -> metrics("GROUPED_TEST", "all", scenario)).toList();
-        EvaluationSummary grouped = new EvaluationSummary("GROUPED_TEST", FEATURES,
-                groupedRows, OptionalDouble.of(0.1), OptionalDouble.of(0.1),
-                OptionalDouble.of(0.8), OptionalDouble.of(0.5),
-                OptionalDouble.of(0.5), OptionalDouble.of(0.1),
+                .map(scenario -> metrics("GROUPED_TEST", "all", scenario))
+                .toList();
+        EvaluationSummary grouped = new EvaluationSummary(
+                "GROUPED_TEST",
+                FEATURES,
+                groupedRows,
+                OptionalDouble.of(0.1),
+                OptionalDouble.of(0.1),
+                OptionalDouble.of(0.8),
+                OptionalDouble.of(0.5),
+                OptionalDouble.of(0.5),
+                OptionalDouble.of(0.1),
                 OptionalDouble.of(0.1));
-        List<LosoEvaluationMetrics> loso = requiredScenarios.stream().map(scenario ->
-                new LosoEvaluationMetrics(metrics("LOSO_TEST", scenario.canonical(), scenario),
-                        scenario.ratio().asDouble(), false,
+        List<LosoEvaluationMetrics> loso = requiredScenarios.stream()
+                .map(scenario -> new LosoEvaluationMetrics(
+                        metrics("LOSO_TEST", scenario.canonical(), scenario),
+                        scenario.ratio().asDouble(),
+                        false,
                         requiredScenarios.size() - 1,
-                        (int) requiredScenarios.stream().filter(other ->
-                                !other.equals(scenario)).map(SourceScenario::ratio)
-                                .distinct().count())).toList();
+                        (int) requiredScenarios.stream()
+                                .filter(other -> !other.equals(scenario))
+                                .map(SourceScenario::ratio)
+                                .distinct()
+                                .count()))
+                .toList();
 
         Path groupedPath = modelDirectory.resolve("grouped-evaluation.csv");
         Path losoPath = modelDirectory.resolve("loso-evaluation.csv");
@@ -122,55 +156,75 @@ public final class AuditScenarioModelFixture {
                 OptionalDouble.of(0.5), OptionalDouble.of(0.1),
                 OptionalDouble.of(0.8), OptionalDouble.of(0.1));
         FeatureSelectionDecision selection = new FeatureSelectionDecision(
-                FeatureSelectionMode.RATIO_ONLY, FEATURES, List.of(contextGate),
-                "RATIO_ONLY_REQUESTED");
-        MetadataProbe probe = new MetadataProbe(probePolicy.id(),
-                requiredScenarios.first(), List.of("0000000000000000",
-                "0000000000000000", "0000000000000000", "0000000000000000",
-                "0000000000000000", "0000000000000000", "0000000000000000",
-                "0000000000000000"), "cpu");
+                FeatureSelectionMode.RATIO_ONLY, FEATURES, List.of(contextGate), "RATIO_ONLY_REQUESTED");
+        MetadataProbe probe = new MetadataProbe(
+                probePolicy.id(),
+                requiredScenarios.first(),
+                List.of(
+                        "0000000000000000",
+                        "0000000000000000",
+                        "0000000000000000",
+                        "0000000000000000",
+                        "0000000000000000",
+                        "0000000000000000",
+                        "0000000000000000",
+                        "0000000000000000"),
+                "cpu");
         ScenarioModelMetadata metadata = new ScenarioModelMetadata(
                 ScenarioModelMetadata.SCHEMA_VERSION,
-                ScenarioModelMetadata.OBJECTIVE_VERSION, FEATURES, normalizer,
+                ScenarioModelMetadata.OBJECTIVE_VERSION,
+                FEATURES,
+                normalizer,
                 ScenarioModelMetadata.expectedThresholdBits(),
                 ScenarioModelMetadata.ARCHITECTURE,
-                ScenarioModelMetadata.MEMBER_MODEL_NAME, members,
-                ScenarioModelMetadata.SPLIT_ALGORITHM, trainingConfig.splitSeed(),
-                trainingConfig.modelSeed(), "a".repeat(64),
-                trainingConfig.includeWeakCalibrationRows(), requiredScenarios,
-                requiredScenarios, partitionCounts(requiredScenarios),
-                trainingConfig, selection, evaluation, acceptanceStatus,
-                acceptanceReasons, new ProducerMetadata(commitSha, dirtyWorkingTree,
-                "PyTorch", "2.7.1", "cpu"), probe);
+                ScenarioModelMetadata.MEMBER_MODEL_NAME,
+                members,
+                ScenarioModelMetadata.SPLIT_ALGORITHM,
+                trainingConfig.splitSeed(),
+                trainingConfig.modelSeed(),
+                "a".repeat(64),
+                trainingConfig.includeWeakCalibrationRows(),
+                requiredScenarios,
+                requiredScenarios,
+                partitionCounts(requiredScenarios),
+                trainingConfig,
+                selection,
+                evaluation,
+                acceptanceStatus,
+                acceptanceReasons,
+                new ProducerMetadata(commitSha, dirtyWorkingTree, "PyTorch", "2.7.1", "cpu"),
+                probe);
         Path metadataPath = modelDirectory.resolve(ScenarioModelMetadataCodec.FILE_NAME);
         ScenarioModelMetadataCodec.write(metadataPath, metadata);
         ScenarioModelMetadata reopened = ScenarioModelMetadataCodec.read(metadataPath);
-        if (!ScenarioModelMetadataCodec.encode(reopened)
-                .equals(ScenarioModelMetadataCodec.encode(metadata))) {
+        if (!ScenarioModelMetadataCodec.encode(reopened).equals(ScenarioModelMetadataCodec.encode(metadata))) {
             throw new IllegalStateException("Audit model metadata did not round trip");
         }
-        return new ScenarioTrainingArtifacts(modelDirectory, metadataPath, groupedPath,
-                losoPath, ablationPath, historyPath, acceptanceStatus,
+        return new ScenarioTrainingArtifacts(
+                modelDirectory,
+                metadataPath,
+                groupedPath,
+                losoPath,
+                ablationPath,
+                historyPath,
+                acceptanceStatus,
                 FEATURES);
     }
 
     public static ScenarioConditionedModel open(Path modelDirectory) throws Exception {
-        ScenarioModelMetadata metadata = ScenarioModelMetadataCodec.read(
-                modelDirectory.resolve(ScenarioModelMetadataCodec.FILE_NAME));
+        ScenarioModelMetadata metadata =
+                ScenarioModelMetadataCodec.read(modelDirectory.resolve(ScenarioModelMetadataCodec.FILE_NAME));
         List<OrdinalMember> members = metadata.members().stream()
                 .map(ignored -> (OrdinalMember) new ConstantMember(FEATURES.width()))
                 .toList();
         return ScenarioConditionedModel.forTest(metadata, members);
     }
 
-    private static PartitionCounts partitionCounts(
-            SortedSet<SourceScenario> scenarios) {
+    private static PartitionCounts partitionCounts(SortedSet<SourceScenario> scenarios) {
         TreeMap<String, Integer> policies = new TreeMap<>();
         TreeMap<String, Integer> rows = new TreeMap<>();
-        TreeMap<String, SortedMap<SourceScenario, Integer>> byScenario =
-                new TreeMap<>();
-        for (String partition : List.of("TRAIN", "VALIDATION", "TEST",
-                "ABLATION_EARLY_STOP", "ABLATION_SCORE")) {
+        TreeMap<String, SortedMap<SourceScenario, Integer>> byScenario = new TreeMap<>();
+        for (String partition : List.of("TRAIN", "VALIDATION", "TEST", "ABLATION_EARLY_STOP", "ABLATION_SCORE")) {
             int policiesInPartition = partition.equals("VALIDATION") ? 2 : 1;
             int rowsPerScenario = partition.equals("VALIDATION") ? 2 : 1;
             policies.put(partition, policiesInPartition);
@@ -182,20 +236,44 @@ public final class AuditScenarioModelFixture {
         return new PartitionCounts(policies, rows, byScenario);
     }
 
-    private static ScenarioEvaluationMetrics metrics(String kind, String fold,
-            SourceScenario scenario) {
-        return new ScenarioEvaluationMetrics(kind, fold, FEATURES, scenario,
-                1, 1, 0.1, 0.1, 0, OptionalDouble.of(0.8),
-                1, 1, OptionalDouble.of(1), OptionalDouble.of(1),
-                0.1, 1, 0, 0, EvaluationStatus.OK);
+    private static ScenarioEvaluationMetrics metrics(String kind, String fold, SourceScenario scenario) {
+        return new ScenarioEvaluationMetrics(
+                kind,
+                fold,
+                FEATURES,
+                scenario,
+                1,
+                1,
+                0.1,
+                0.1,
+                0,
+                OptionalDouble.of(0.8),
+                1,
+                1,
+                OptionalDouble.of(1),
+                OptionalDouble.of(1),
+                0.1,
+                1,
+                0,
+                0,
+                EvaluationStatus.OK);
     }
 
     private static AblationMetric contextGate() {
-        return new AblationMetric("VALIDATION_CONTEXT_GATE", "all",
-                FEATURES, ScenarioFeatureSet.POLICY_ONLY, "all", 4,
-                OptionalDouble.of(0.1), OptionalDouble.of(0.8),
-                OptionalDouble.of(-0.1), OptionalDouble.of(0.1), true,
-                "PASS", "CONTEXT_VALIDATED");
+        return new AblationMetric(
+                "VALIDATION_CONTEXT_GATE",
+                "all",
+                FEATURES,
+                ScenarioFeatureSet.POLICY_ONLY,
+                "all",
+                4,
+                OptionalDouble.of(0.1),
+                OptionalDouble.of(0.8),
+                OptionalDouble.of(-0.1),
+                OptionalDouble.of(0.1),
+                true,
+                "PASS",
+                "CONTEXT_VALIDATED");
     }
 
     private static final class ConstantMember implements OrdinalMember {
@@ -216,10 +294,6 @@ public final class AuditScenarioModelFixture {
         }
 
         @Override
-        public void close() {
-        }
-    }
-
-    private AuditScenarioModelFixture() {
+        public void close() {}
     }
 }

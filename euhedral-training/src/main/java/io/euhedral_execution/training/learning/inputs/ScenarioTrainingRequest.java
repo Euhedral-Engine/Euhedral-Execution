@@ -8,10 +8,13 @@ import java.util.Objects;
 import java.util.SortedSet;
 import java.util.TreeSet;
 
-public record ScenarioTrainingRequest(ScenarioInputs inputs,
-                                      SortedSet<SourceScenario> requiredScenarios,
-                                      Path modelDirectory, String commitSha,
-                                      boolean dirtyWorkingTree, ScenarioTrainingConfig config) {
+public record ScenarioTrainingRequest(
+        ScenarioInputs inputs,
+        SortedSet<SourceScenario> requiredScenarios,
+        Path modelDirectory,
+        String commitSha,
+        boolean dirtyWorkingTree,
+        ScenarioTrainingConfig config) {
 
     public ScenarioTrainingRequest {
         Objects.requireNonNull(inputs);

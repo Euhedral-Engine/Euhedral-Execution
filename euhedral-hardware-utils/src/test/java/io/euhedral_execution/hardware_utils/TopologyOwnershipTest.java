@@ -18,8 +18,8 @@ class TopologyOwnershipTest {
 
     @Test
     void doesNotAliasProviderStorage() {
-        List<LogicalCpu> cpus = new ArrayList<>(List.of(new LogicalCpu(0, "fallback:package:0",
-                "fallback:die:0", "fallback:core:00000000", CoreKind.UNKNOWN)));
+        List<LogicalCpu> cpus = new ArrayList<>(List.of(
+                new LogicalCpu(0, "fallback:package:0", "fallback:die:0", "fallback:core:00000000", CoreKind.UNKNOWN)));
         BitSet mask = new BitSet();
         mask.set(0);
         CacheDomain domain = new CacheDomain(1, 12345, 64, mask);
@@ -33,7 +33,8 @@ class TopologyOwnershipTest {
         int[] ids = model.activeLogicalIds();
         ids[0] = 99;
         assertEquals(0, model.activeLogicalIds()[0]);
-        assertThrows(UnsupportedOperationException.class,
+        assertThrows(
+                UnsupportedOperationException.class,
                 () -> model.cpuInfo().put(1, model.cpuInfo().get(0)));
     }
 }

@@ -7,10 +7,6 @@ import org.jspecify.annotations.NonNull;
 
 public final class UnmodifiableBitSet extends BitSet {
 
-    public static UnmodifiableBitSet wrap(BitSet set) {
-        return new UnmodifiableBitSet(set);
-    }
-
     private final BitSet delegate;
 
     public UnmodifiableBitSet(BitSet delegate) {
@@ -20,6 +16,10 @@ public final class UnmodifiableBitSet extends BitSet {
 
     public UnmodifiableBitSet(UnmodifiableBitSet other) {
         this(other.delegate);
+    }
+
+    public static UnmodifiableBitSet wrap(BitSet set) {
+        return new UnmodifiableBitSet(set);
     }
 
     @Override

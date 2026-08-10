@@ -15,8 +15,10 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.support.MessageBuilder;
 
-@SuppressWarnings({"unchecked","unused"})
+@SuppressWarnings({"unchecked", "unused"})
 public class GrpcUtils {
+
+    private GrpcUtils() {}
 
     /// Converts a Java Map into a gRPC Struct, supporting nested maps and lists.
     public static Struct toGrpcStruct(Map<String, Object> map) {
@@ -49,8 +51,7 @@ public class GrpcUtils {
     /// Converts a gRPC Struct back into a Java Map.
     public static Map<String, Object> fromGrpcStruct(Struct struct) {
         Map<String, Object> values = new HashMap<>(struct.getFieldsCount());
-        struct.getFieldsMap()
-                .forEach((key, value) -> values.put(key, fromValue(value)));
+        struct.getFieldsMap().forEach((key, value) -> values.put(key, fromValue(value)));
         return values;
     }
 
@@ -61,7 +62,7 @@ public class GrpcUtils {
             case NULL_VALUE -> null;
             case NUMBER_VALUE -> {
                 double num = value.getNumberValue();
-                if(num == Math.rint(num)) {
+                if (num == Math.rint(num)) {
                     yield (long) num;
                 }
                 yield num;
@@ -70,8 +71,9 @@ public class GrpcUtils {
             case BOOL_VALUE -> value.getBoolValue();
             case STRUCT_VALUE -> fromGrpcStruct(value.getStructValue());
             case LIST_VALUE ->
-                    value.getListValue().getValuesList().stream().map(GrpcUtils::fromValue)
-                            .toList();
+                value.getListValue().getValuesList().stream()
+                        .map(GrpcUtils::fromValue)
+                        .toList();
             case KIND_NOT_SET -> value;
         };
     }
@@ -80,39 +82,35 @@ public class GrpcUtils {
         return toGrpc(message.getHeaders(), message.getPayload(), isOrdered);
     }
 
-    public static GrpcMessage toGrpc(@Nullable Map<String, Object> headers, Serializable payload,
-            boolean isOrdered) {
+    public static GrpcMessage toGrpc(@Nullable Map<String, Object> headers, Serializable payload, boolean isOrdered) {
         return toGrpc(headers, SerializationUtils.serialize(payload), isOrdered);
     }
 
-    public static GrpcMessage toGrpc(@Nullable Map<String, Object> headers, byte[] payload,
-            boolean isOrdered) {
+    public static GrpcMessage toGrpc(@Nullable Map<String, Object> headers, byte[] payload, boolean isOrdered) {
         if (headers == null) {
             headers = Map.of();
         }
 
         GrpcSpringMessage springMessage = GrpcSpringMessage.newBuilder()
-                .setHeaders(toGrpcStruct(headers)).setData(ByteString.copyFrom(payload))
+                .setHeaders(toGrpcStruct(headers))
+                .setData(ByteString.copyFrom(payload))
                 .build();
 
-        return GrpcMessage.newBuilder().setIsOrdered(isOrdered).setSpringMessage(springMessage)
+        return GrpcMessage.newBuilder()
+                .setIsOrdered(isOrdered)
+                .setSpringMessage(springMessage)
                 .build();
     }
 
     public static Message<byte[]> toSpringMessage(GrpcMessage message) {
         if (!message.hasSpringMessage()) {
-            throw new IllegalArgumentException(
-                    "Provided message does not contain a Spring message");
+            throw new IllegalArgumentException("Provided message does not contain a Spring message");
         }
         GrpcSpringMessage springMessage = message.getSpringMessage();
 
-        MessageBuilder<byte[]> builder = MessageBuilder.withPayload(
-                springMessage.getData().toByteArray());
+        MessageBuilder<byte[]> builder =
+                MessageBuilder.withPayload(springMessage.getData().toByteArray());
         builder.copyHeaders(fromGrpcStruct(springMessage.getHeaders()));
         return builder.build();
-    }
-
-    private GrpcUtils() {
-
     }
 }

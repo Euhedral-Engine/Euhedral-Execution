@@ -27,36 +27,42 @@ public final class SequenceFinder {
     private static final int[] MIX_TIE_ORDER = {0, 1, 2};
     private static final Logger LOGGER = LoggerFactory.getLogger(SequenceFinder.class);
 
+    private SequenceFinder() {}
+
     public static CandidateGenerationResult generate(CandidateGenerationRequest request) {
-        LOGGER.info("Generating candidate policies for iteration {}: screenCursor={}, "
-                        + "screenRows={}, requested={}", request.iteration(), request.sobolCursor(),
-                request.config().screenRows(), request.baseExplorationCount()
-                        + request.overflowExplorationCount() + request.disagreementAuditCount());
+        LOGGER.info(
+                "Generating candidate policies for iteration {}: screenCursor={}, " + "screenRows={}, requested={}",
+                request.iteration(),
+                request.sobolCursor(),
+                request.config().screenRows(),
+                request.baseExplorationCount() + request.overflowExplorationCount() + request.disagreementAuditCount());
         validateCursorRange(request.sobolCursor(), request.config().screenRows());
         Set<PolicyId> historical = new HashSet<>(request.corpus().policies().keySet());
         historical.addAll(request.fixedAnchorIds());
         PolicyRegistry registry = new PolicyRegistry();
         request.corpus().policies().values().forEach(registry::register);
 
-        List<PredictedCandidate> cmaProposals = new CmaEsOptimizer().optimize(
-                request.corpus().eligiblePolicies(), request.fixedAnchorIds(),
-                request.predictor(), request.config().cma(),
-                io.euhedral_execution.training.optimization.SchedulerSeeds.hash(
-                        "cma-islands-v1\niteration=" + request.iteration() + "\n",
-                        request.schedulerSeed()));
-        List<PredictedCandidate> cma = cmaProposals.stream().sorted(
-                Comparator.comparing(PredictedCandidate::prediction,
-                        PredictedPolicyComparator.BEST_FIRST)).toList();
+        List<PredictedCandidate> cmaProposals = new CmaEsOptimizer()
+                .optimize(
+                        request.corpus().eligiblePolicies(),
+                        request.fixedAnchorIds(),
+                        request.predictor(),
+                        request.config().cma(),
+                        io.euhedral_execution.training.optimization.SchedulerSeeds.hash(
+                                "cma-islands-v1\niteration=" + request.iteration() + "\n", request.schedulerSeed()));
+        List<PredictedCandidate> cma = cmaProposals.stream()
+                .sorted(Comparator.comparing(PredictedCandidate::prediction, PredictedPolicyComparator.BEST_FIRST))
+                .toList();
 
-        int provisionalExploration = Math.addExact(request.baseExplorationCount(),
-                request.overflowExplorationCount());
-        int bandCapacity = Math.addExact(provisionalExploration,
-                request.disagreementAuditCount());
-        ScoreBandSampler bands = new ScoreBandSampler(bandCapacity,
-                request.config().scoreBandWeights(), request.schedulerSeed(),
-                request.iteration(), bandCapacity);
-        BoundedAuditSelector audits = new BoundedAuditSelector(
-                request.disagreementAuditCount());
+        int provisionalExploration = Math.addExact(request.baseExplorationCount(), request.overflowExplorationCount());
+        int bandCapacity = Math.addExact(provisionalExploration, request.disagreementAuditCount());
+        ScoreBandSampler bands = new ScoreBandSampler(
+                bandCapacity,
+                request.config().scoreBandWeights(),
+                request.schedulerSeed(),
+                request.iteration(),
+                bandCapacity);
+        BoundedAuditSelector audits = new BoundedAuditSelector(request.disagreementAuditCount());
         for (PredictedCandidate candidate : cmaProposals) {
             if (!historical.contains(candidate.policy().id())) {
                 audits.accept(candidate);
@@ -71,31 +77,39 @@ public final class SequenceFinder {
 
         List<PredictedCandidate> selectedAudits = audits.finish().stream()
                 .filter(candidate -> !historical.contains(candidate.policy().id()))
-                .limit(request.disagreementAuditCount()).toList();
+                .limit(request.disagreementAuditCount())
+                .toList();
         Set<PolicyId> excluded = new HashSet<>(historical);
         selectedAudits.forEach(candidate -> excluded.add(candidate.policy().id()));
         int auditShortfall = request.disagreementAuditCount() - selectedAudits.size();
         int overflowCount = Math.addExact(request.overflowExplorationCount(), auditShortfall);
 
         List<PredictedCandidate> bandCandidates = bands.finish().stream()
-                .map(candidate -> new PredictedCandidate(candidate.policy(),
-                        candidate.prediction(), CandidateOrigin.SCORE_BAND))
+                .map(candidate ->
+                        new PredictedCandidate(candidate.policy(), candidate.prediction(), CandidateOrigin.SCORE_BAND))
                 .toList();
-        DirectCursor directCursor = new DirectCursor(Math.addExact(request.sobolCursor(),
-                request.config().screenRows()), registry, excluded, request);
-        Tranche base = selectTranche(request.baseExplorationCount(), cma, bandCandidates,
-                excluded, directCursor, request);
-        Tranche overflow = selectTranche(overflowCount, cma, bandCandidates, excluded,
-                directCursor, request);
-        CandidateGenerationResult result = new CandidateGenerationResult(selectedAudits, base.candidates(),
-                overflow.candidates(), directCursor.cursor(),
+        DirectCursor directCursor = new DirectCursor(
+                Math.addExact(request.sobolCursor(), request.config().screenRows()), registry, excluded, request);
+        Tranche base =
+                selectTranche(request.baseExplorationCount(), cma, bandCandidates, excluded, directCursor, request);
+        Tranche overflow = selectTranche(overflowCount, cma, bandCandidates, excluded, directCursor, request);
+        CandidateGenerationResult result = new CandidateGenerationResult(
+                selectedAudits,
+                base.candidates(),
+                overflow.candidates(),
+                directCursor.cursor(),
                 Math.addExact(base.cmaAssigned(), overflow.cmaAssigned()),
                 Math.addExact(base.bandAssigned(), overflow.bandAssigned()),
-                Math.addExact(base.directAssigned(), overflow.directAssigned()), auditShortfall);
-        LOGGER.info("Generated candidate policies for iteration {}: audits={}, base={}, "
-                        + "overflow={}, nextSobolCursor={}", request.iteration(),
-                result.disagreementAudits().size(), result.baseExploration().size(),
-                result.overflowExploration().size(), result.nextSobolCursor());
+                Math.addExact(base.directAssigned(), overflow.directAssigned()),
+                auditShortfall);
+        LOGGER.info(
+                "Generated candidate policies for iteration {}: audits={}, base={}, "
+                        + "overflow={}, nextSobolCursor={}",
+                request.iteration(),
+                result.disagreementAudits().size(),
+                result.baseExploration().size(),
+                result.overflowExploration().size(),
+                result.nextSobolCursor());
         return result;
     }
 
@@ -107,16 +121,19 @@ public final class SequenceFinder {
         for (long cursor = startIndex; cursor < exclusiveEnd; cursor++) {
             result.add(sobol(Math.toIntExact(cursor)));
             if ((cursor - startIndex + 1) % 256 == 0 || cursor + 1 == exclusiveEnd) {
-                LOGGER.info("Generated bootstrap policy vectors: {}/{}",
-                        cursor - startIndex + 1, count);
+                LOGGER.info("Generated bootstrap policy vectors: {}/{}", cursor - startIndex + 1, count);
             }
         }
         LOGGER.info("Finished generating {} bootstrap policy vectors", count);
         return List.copyOf(result);
     }
 
-    private static Tranche selectTranche(int count, List<PredictedCandidate> cma,
-            List<PredictedCandidate> bands, Set<PolicyId> excluded, DirectCursor direct,
+    private static Tranche selectTranche(
+            int count,
+            List<PredictedCandidate> cma,
+            List<PredictedCandidate> bands,
+            Set<PolicyId> excluded,
+            DirectCursor direct,
             CandidateGenerationRequest request) {
         int[] requested = mix(count, request);
         ArrayList<PredictedCandidate> selected = new ArrayList<>(count);
@@ -129,24 +146,29 @@ public final class SequenceFinder {
         if (selected.size() != count) {
             throw new IllegalStateException("Candidate generation did not fill tranche");
         }
-        return new Tranche(List.copyOf(selected), cmaAssigned, bandAssigned,
-                directCandidates.size());
+        return new Tranche(List.copyOf(selected), cmaAssigned, bandAssigned, directCandidates.size());
     }
 
     private static int[] mix(int count, CandidateGenerationRequest request) {
-        return HamiltonAllocator.allocate(count, new int[]{request.config().cmaWeight(),
-                request.config().scoreBandWeight(), request.config().directSobolWeight()},
+        return HamiltonAllocator.allocate(
+                count,
+                new int[] {
+                    request.config().cmaWeight(),
+                    request.config().scoreBandWeight(),
+                    request.config().directSobolWeight()
+                },
                 MIX_TIE_ORDER);
     }
 
-    private static void streamSobolScreen(CandidateGenerationRequest request,
-            Set<PolicyId> historical, PolicyRegistry registry,
+    private static void streamSobolScreen(
+            CandidateGenerationRequest request,
+            Set<PolicyId> historical,
+            PolicyRegistry registry,
             java.util.function.Consumer<PredictedCandidate> consumer) {
-        long exclusiveEnd = Math.addExact(request.sobolCursor(),
-                request.config().screenRows());
+        long exclusiveEnd =
+                Math.addExact(request.sobolCursor(), request.config().screenRows());
         LOGGER.info("Screening Sobol policy vectors: {}..{}", request.sobolCursor(), exclusiveEnd);
-        ArrayList<PolicyVector> batch = new ArrayList<>(
-                request.config().maximumPredictionRows());
+        ArrayList<PolicyVector> batch = new ArrayList<>(request.config().maximumPredictionRows());
         long screened = 0;
         for (long cursor = request.sobolCursor(); cursor < exclusiveEnd; cursor++) {
             PolicyVector policy = sobol(Math.toIntExact(cursor));
@@ -159,8 +181,7 @@ public final class SequenceFinder {
             }
             screened++;
             if (screened % 131_072 == 0 || cursor + 1 == exclusiveEnd) {
-                LOGGER.info("Screened Sobol policy vectors: {}/{}", screened,
-                        exclusiveEnd - request.sobolCursor());
+                LOGGER.info("Screened Sobol policy vectors: {}/{}", screened, exclusiveEnd - request.sobolCursor());
             }
         }
         if (!batch.isEmpty()) {
@@ -168,18 +189,17 @@ public final class SequenceFinder {
         }
     }
 
-    private static void predictBatch(CandidateGenerationRequest request,
+    private static void predictBatch(
+            CandidateGenerationRequest request,
             List<PolicyVector> policies,
             java.util.function.Consumer<PredictedCandidate> consumer) {
-        for (PredictedPolicySummary summary : request.predictor().predict(
-                List.copyOf(policies))) {
-            consumer.accept(new PredictedCandidate(summary.policy(), summary,
-                    CandidateOrigin.SCORE_BAND));
+        for (PredictedPolicySummary summary : request.predictor().predict(List.copyOf(policies))) {
+            consumer.accept(new PredictedCandidate(summary.policy(), summary, CandidateOrigin.SCORE_BAND));
         }
     }
 
-    private static int take(List<PredictedCandidate> source, Set<PolicyId> excluded,
-            List<PredictedCandidate> destination, int count) {
+    private static int take(
+            List<PredictedCandidate> source, Set<PolicyId> excluded, List<PredictedCandidate> destination, int count) {
         int start = destination.size();
         for (PredictedCandidate candidate : source) {
             if (destination.size() - start == count) {
@@ -206,18 +226,17 @@ public final class SequenceFinder {
         }
     }
 
-    private record Tranche(List<PredictedCandidate> candidates, int cmaAssigned,
-            int bandAssigned, int directAssigned) {
-    }
+    private record Tranche(
+            List<PredictedCandidate> candidates, int cmaAssigned, int bandAssigned, int directAssigned) {}
 
     private static final class DirectCursor {
-        private long cursor;
         private final PolicyRegistry registry;
         private final Set<PolicyId> excluded;
         private final CandidateGenerationRequest request;
+        private long cursor;
 
-        private DirectCursor(long cursor, PolicyRegistry registry, Set<PolicyId> excluded,
-                CandidateGenerationRequest request) {
+        private DirectCursor(
+                long cursor, PolicyRegistry registry, Set<PolicyId> excluded, CandidateGenerationRequest request) {
             this.cursor = cursor;
             this.registry = registry;
             this.excluded = excluded;
@@ -239,8 +258,7 @@ public final class SequenceFinder {
                 return List.of();
             }
             return request.predictor().predict(policies).stream()
-                    .map(summary -> new PredictedCandidate(summary.policy(), summary,
-                            CandidateOrigin.DIRECT_SOBOL))
+                    .map(summary -> new PredictedCandidate(summary.policy(), summary, CandidateOrigin.DIRECT_SOBOL))
                     .toList();
         }
 
@@ -251,34 +269,30 @@ public final class SequenceFinder {
 
     private static final class BoundedAuditSelector {
         private final int capacity;
-        private final LinkedHashMap<PolicyId, PredictedCandidate> distinct =
-                new LinkedHashMap<>();
+        private final LinkedHashMap<PolicyId, PredictedCandidate> distinct = new LinkedHashMap<>();
 
         private BoundedAuditSelector(int capacity) {
             this.capacity = capacity;
         }
 
         private void accept(PredictedCandidate candidate) {
-            if (capacity == 0 || distinct.putIfAbsent(candidate.policy().id(), candidate)
-                    != null) {
+            if (capacity == 0 || distinct.putIfAbsent(candidate.policy().id(), candidate) != null) {
                 return;
             }
             if (distinct.size() > capacity) {
                 PredictedCandidate worst = distinct.values().stream()
-                        .max((left, right) -> PredictedPolicyComparator.AUDIT_FIRST.compare(
-                                left.prediction(), right.prediction())).orElseThrow();
+                        .max((left, right) ->
+                                PredictedPolicyComparator.AUDIT_FIRST.compare(left.prediction(), right.prediction()))
+                        .orElseThrow();
                 distinct.remove(worst.policy().id());
             }
         }
 
         private List<PredictedCandidate> finish() {
             return distinct.values().stream()
-                    .sorted((left, right) -> PredictedPolicyComparator.AUDIT_FIRST.compare(
-                            left.prediction(), right.prediction()))
+                    .sorted((left, right) ->
+                            PredictedPolicyComparator.AUDIT_FIRST.compare(left.prediction(), right.prediction()))
                     .toList();
         }
-    }
-
-    private SequenceFinder() {
     }
 }

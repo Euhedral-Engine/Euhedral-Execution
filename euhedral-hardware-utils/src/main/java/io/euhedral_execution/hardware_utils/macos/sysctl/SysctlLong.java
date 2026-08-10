@@ -5,8 +5,7 @@ import java.util.OptionalLong;
 /// Type-safe long sysctl key query helper.
 public final class SysctlLong {
 
-    private SysctlLong() {
-    }
+    private SysctlLong() {}
 
     /// Query sysctl long value using the default native sysctl provider.
     public static OptionalLong query(String key) {

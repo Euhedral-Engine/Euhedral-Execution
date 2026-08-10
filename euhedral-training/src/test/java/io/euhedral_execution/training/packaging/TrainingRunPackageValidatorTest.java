@@ -14,7 +14,6 @@ class TrainingRunPackageValidatorTest {
     @Test
     void rejectsUnexpectedPackageInventoryBeforeTrustingMetadata() throws Exception {
         Files.writeString(temp.resolve("unexpected.txt"), "not a package\n");
-        assertThatThrownBy(() -> TrainingRunPackageValidator.validate(temp))
-                .isInstanceOf(java.io.IOException.class);
+        assertThatThrownBy(() -> TrainingRunPackageValidator.validate(temp)).isInstanceOf(java.io.IOException.class);
     }
 }

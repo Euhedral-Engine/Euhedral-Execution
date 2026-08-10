@@ -5,8 +5,7 @@ import java.util.Optional;
 /// Type-safe string sysctl key query helper.
 public final class SysctlString {
 
-    private SysctlString() {
-    }
+    private SysctlString() {}
 
     /// Query sysctl string value using the default native sysctl provider.
     public static Optional<String> query(String key) {

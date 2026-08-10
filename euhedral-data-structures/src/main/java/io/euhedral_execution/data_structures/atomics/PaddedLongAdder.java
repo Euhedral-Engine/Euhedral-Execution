@@ -112,7 +112,7 @@ public final class PaddedLongAdder extends PaddedAtomicLongArray {
             VarHandle.acquireFence();
         }
 
-        if(count == 0) {
+        if (count == 0) {
             return 0;
         }
 

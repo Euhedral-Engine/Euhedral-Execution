@@ -58,64 +58,126 @@ class ClosedLoopRunnerTest {
     @TempDir
     Path temp;
 
+    private static void writeBootstrap(Path file, int count) throws Exception {
+        List<String> header = new ArrayList<>(List.of("schema_version", "bootstrap_position", "policy_id"));
+        for (int i = 0; i < 28; i++) {
+            header.add("weight_%02d_bits".formatted(i));
+        }
+        StringBuilder output = new StringBuilder(CanonicalCsv.row(header));
+        for (int i = 0; i < count; i++) {
+            var policy = SchedulingFixtures.policy(100 + i);
+            List<String> row = new ArrayList<>(
+                    List.of("1", Integer.toString(i + 1), policy.id().canonical()));
+            for (double weight : policy.copyWeights()) {
+                row.add("%016x".formatted(Double.doubleToRawLongBits(weight)));
+            }
+            output.append(CanonicalCsv.row(row));
+        }
+        Files.writeString(file, output, StandardCharsets.UTF_8);
+    }
+
+    private static ScenarioTrainingConfig withBatchSize(ScenarioTrainingConfig source, int batchSize) {
+        return new ScenarioTrainingConfig(
+                source.splitSeed(),
+                source.modelSeed(),
+                source.device(),
+                source.ensembleMembers(),
+                source.losoEvaluationMembers(),
+                source.ablationMembers(),
+                source.maxEpochs(),
+                source.patience(),
+                batchSize,
+                source.learningRate(),
+                source.weightDecay(),
+                source.labelSmoothing(),
+                source.minimumTrainPolicyGroups(),
+                source.minimumValidationPolicyGroups(),
+                source.minimumTestPolicyGroups(),
+                source.minimumTrainRowsPerScenario(),
+                source.minimumValidationRowsPerScenario(),
+                source.minimumTestRowsPerScenario(),
+                source.includeWeakCalibrationRows(),
+                source.requireTargetVariation(),
+                source.featureSelectionMode(),
+                source.thresholds());
+    }
+
     @Test
-    void bootstrapResumesAcrossRequiredEnvironmentsAndPostMergesBeforeTraining()
-            throws Exception {
+    void bootstrapResumesAcrossRequiredEnvironmentsAndPostMergesBeforeTraining() throws Exception {
         Path bootstrap = temp.resolve("bootstrap.csv");
         writeBootstrap(bootstrap, 6);
         var a = SourceScenario.of("env-a", 1, 4);
         var b = SourceScenario.of("env-b", 1, 4);
         TreeSet<SourceScenario> required = new TreeSet<>(List.of(a, b));
         ClosedLoopServices firstServices = createMockServices(false);
-        ClosedLoopResult first = ClosedLoopRunner.run(config(bootstrap, required,
-                "env-a", false), firstServices);
-        assertThat(first.stage()).isEqualTo(
-                io.euhedral_execution.training.checkpoint.enums.CheckpointStage.BOOTSTRAP_PENDING);
+        ClosedLoopResult first = ClosedLoopRunner.run(config(bootstrap, required, "env-a", false), firstServices);
+        assertThat(first.stage())
+                .isEqualTo(io.euhedral_execution.training.checkpoint.enums.CheckpointStage.BOOTSTRAP_PENDING);
         assertThat(first.awaitingScenarios()).containsExactly(b);
 
         ClosedLoopServices secondServices = createMockServices(true);
-        ClosedLoopResult second = ClosedLoopRunner.run(config(bootstrap, required,
-                "env-b", true), secondServices);
-        assertThat(second.stage()).isEqualTo(
-                io.euhedral_execution.training.checkpoint.enums.CheckpointStage.READY_TO_TRAIN);
+        ClosedLoopResult second = ClosedLoopRunner.run(config(bootstrap, required, "env-b", true), secondServices);
+        assertThat(second.stage())
+                .isEqualTo(io.euhedral_execution.training.checkpoint.enums.CheckpointStage.READY_TO_TRAIN);
         assertThat(second.latestMerge()).isPresent();
         assertThat(second.awaitingScenarios()).isEmpty();
         verify(secondServices).merge(any());
         assertThat(second.packageDirectory()).isEmpty();
 
-        int revision = Integer.parseInt(second.latestCheckpoint().getFileName().toString()
-                .substring("checkpoint-".length()));
+        int revision = Integer.parseInt(
+                second.latestCheckpoint().getFileName().toString().substring("checkpoint-".length()));
         ClosedLoopConfig resumed = config(bootstrap, required, "env-b", true);
         var packaged = TrainingRunPackager.publish(new TrainingRunPackageRequest(
-                resumed.workspace(), temp.resolve("packages"),
-                new TrainingRunPackageInputs("training.partial.r%08d".formatted(revision),
-                        "training", revision, resumed.schedulerSeed(), resumed.commitSha(),
-                        resumed.dirtyWorkingTree(), resumed.benchmarkConfig(), required)));
+                resumed.workspace(),
+                temp.resolve("packages"),
+                new TrainingRunPackageInputs(
+                        "training.partial.r%08d".formatted(revision),
+                        "training",
+                        revision,
+                        resumed.schedulerSeed(),
+                        resumed.commitSha(),
+                        resumed.dirtyWorkingTree(),
+                        resumed.benchmarkConfig(),
+                        required)));
         assertThat(packaged.directory()).isDirectory();
         assertThat(packaged.directory().resolve("manifest.json")).isRegularFile();
         assertThat(packaged.directory().resolve("policy-scenario-measurements.csv"))
                 .isRegularFile();
         assertThat(TrainingRunPackager.publish(new TrainingRunPackageRequest(
-                resumed.workspace(), temp.resolve("packages"),
-                new TrainingRunPackageInputs("training.partial.r%08d".formatted(revision),
-                        "training", revision, resumed.schedulerSeed(), resumed.commitSha(),
-                        resumed.dirtyWorkingTree(), resumed.benchmarkConfig(), required)))
-                .directory()).isEqualTo(packaged.directory());
+                                resumed.workspace(),
+                                temp.resolve("packages"),
+                                new TrainingRunPackageInputs(
+                                        "training.partial.r%08d".formatted(revision),
+                                        "training",
+                                        revision,
+                                        resumed.schedulerSeed(),
+                                        resumed.commitSha(),
+                                        resumed.dirtyWorkingTree(),
+                                        resumed.benchmarkConfig(),
+                                        required)))
+                        .directory())
+                .isEqualTo(packaged.directory());
         var reproduced = TrainingRunPackager.publish(new TrainingRunPackageRequest(
-                resumed.workspace(), temp.resolve("reproduced"),
-                new TrainingRunPackageInputs("training.partial.r%08d".formatted(revision),
-                        "training", revision, resumed.schedulerSeed(), resumed.commitSha(),
-                        resumed.dirtyWorkingTree(), resumed.benchmarkConfig(), required)));
+                resumed.workspace(),
+                temp.resolve("reproduced"),
+                new TrainingRunPackageInputs(
+                        "training.partial.r%08d".formatted(revision),
+                        "training",
+                        revision,
+                        resumed.schedulerSeed(),
+                        resumed.commitSha(),
+                        resumed.dirtyWorkingTree(),
+                        resumed.benchmarkConfig(),
+                        required)));
         assertThat(ArtifactFingerprint.sha256(reproduced.directory()))
                 .isEqualTo(ArtifactFingerprint.sha256(packaged.directory()));
         assertThat(packaged.directory().resolve("vectors/robust-leaders.vectors.csv"))
                 .isRegularFile();
-        assertThat(packaged.directory().resolve(
-                "vectors/incomplete-promising.vectors.csv")).isRegularFile();
+        assertThat(packaged.directory().resolve("vectors/incomplete-promising.vectors.csv"))
+                .isRegularFile();
         assertThat(packaged.directory().resolve("policy-scenario-measurements.csv"))
                 .isRegularFile();
-        assertThat(packaged.directory().resolve("reports/robust-ranking.md"))
-                .isRegularFile();
+        assertThat(packaged.directory().resolve("reports/robust-ranking.md")).isRegularFile();
         Path unexpected = reproduced.directory().resolve("unexpected.txt");
         Files.writeString(unexpected, "tamper\n");
         assertThatThrownBy(() -> TrainingRunPackageValidator.validate(reproduced.directory()))
@@ -130,15 +192,12 @@ class ClosedLoopRunnerTest {
         SourceScenario scenario = SourceScenario.of("env-a", 1, 4);
         TreeSet<SourceScenario> required = new TreeSet<>(List.of(scenario));
 
-        ClosedLoopRunner.run(config(null, required, "env-a", false),
-                createBootstrapOnlyMockServices());
+        ClosedLoopRunner.run(config(null, required, "env-a", false), createBootstrapOnlyMockServices());
 
-        Path persisted = temp.resolve(
-                "workspace/bootstrap/bootstrap-policies.vectors.csv");
+        Path persisted = temp.resolve("workspace/bootstrap/bootstrap-policies.vectors.csv");
         assertThat(persisted).isRegularFile();
-        assertThat(io.euhedral_execution.training.scheduling.io.BootstrapPolicyCsv.read(
-                persisted, 6)).containsExactlyInAnyOrderElementsOf(
-                SequenceFinder.bootstrapVectors(1024, 6));
+        assertThat(io.euhedral_execution.training.scheduling.io.BootstrapPolicyCsv.read(persisted, 6))
+                .containsExactlyInAnyOrderElementsOf(SequenceFinder.bootstrapVectors(1024, 6));
     }
 
     @Test
@@ -148,16 +207,13 @@ class ClosedLoopRunnerTest {
         SourceScenario scenario = SourceScenario.of("env-a", 1, 4);
         TreeSet<SourceScenario> required = new TreeSet<>(List.of(scenario));
 
-        ClosedLoopRunner.run(config(bootstrap, required, "env-a", false),
-                createBootstrapOnlyMockServices());
+        ClosedLoopRunner.run(config(bootstrap, required, "env-a", false), createBootstrapOnlyMockServices());
 
         ClosedLoopServices services = createFallbackTrainingMockServices();
-        ClosedLoopResult result = ClosedLoopRunner.run(config(bootstrap, required,
-                "env-a", true, 1), services);
+        ClosedLoopResult result = ClosedLoopRunner.run(config(bootstrap, required, "env-a", true, 1), services);
 
         assertThat(result.stage()).isEqualTo(CheckpointStage.MODEL_REJECTED);
-        ArgumentCaptor<ScenarioTrainingRequest> captor = ArgumentCaptor.forClass(
-                ScenarioTrainingRequest.class);
+        ArgumentCaptor<ScenarioTrainingRequest> captor = ArgumentCaptor.forClass(ScenarioTrainingRequest.class);
         verify(services).train(captor.capture());
         ScenarioTrainingConfig capturedConfig = captor.getValue().config();
         assertThat(capturedConfig.requireTargetVariation()).isFalse();
@@ -171,28 +227,24 @@ class ClosedLoopRunnerTest {
         SourceScenario scenario = SourceScenario.of("env-a", 1, 4);
         TreeSet<SourceScenario> required = new TreeSet<>(List.of(scenario));
 
-        ClosedLoopRunner.run(config(bootstrap, required, "env-a", false, 2),
-                createBootstrapOnlyMockServices());
+        ClosedLoopRunner.run(config(bootstrap, required, "env-a", false, 2), createBootstrapOnlyMockServices());
 
         ClosedLoopServices firstPass = createRejectingTrainingMockServices(true, false, false);
-        ClosedLoopResult readyForSecondIteration = ClosedLoopRunner.run(
-                config(bootstrap, required, "env-a", true, 2), firstPass);
+        ClosedLoopResult readyForSecondIteration =
+                ClosedLoopRunner.run(config(bootstrap, required, "env-a", true, 2), firstPass);
 
         assertThat(readyForSecondIteration.stage()).isEqualTo(CheckpointStage.READY_TO_TRAIN);
-        ArgumentCaptor<ScenarioTrainingRequest> firstCaptor = ArgumentCaptor.forClass(
-                ScenarioTrainingRequest.class);
+        ArgumentCaptor<ScenarioTrainingRequest> firstCaptor = ArgumentCaptor.forClass(ScenarioTrainingRequest.class);
         verify(firstPass).train(firstCaptor.capture());
         ScenarioTrainingConfig firstConfig = firstCaptor.getValue().config();
         assertThat(firstConfig.requireTargetVariation()).isFalse();
         assertThat(firstConfig.minimumValidationPolicyGroups()).isEqualTo(1);
 
         ClosedLoopServices secondPass = createRejectingTrainingMockServices(false, false, false);
-        ClosedLoopResult terminal = ClosedLoopRunner.run(
-                config(bootstrap, required, "env-a", true, 2), secondPass);
+        ClosedLoopResult terminal = ClosedLoopRunner.run(config(bootstrap, required, "env-a", true, 2), secondPass);
 
         assertThat(terminal.stage()).isEqualTo(CheckpointStage.MODEL_REJECTED);
-        ArgumentCaptor<ScenarioTrainingRequest> secondCaptor = ArgumentCaptor.forClass(
-                ScenarioTrainingRequest.class);
+        ArgumentCaptor<ScenarioTrainingRequest> secondCaptor = ArgumentCaptor.forClass(ScenarioTrainingRequest.class);
         verify(secondPass).train(secondCaptor.capture());
         ScenarioTrainingConfig secondConfig = secondCaptor.getValue().config();
         assertThat(secondConfig.requireTargetVariation()).isTrue();
@@ -200,36 +252,33 @@ class ClosedLoopRunnerTest {
     }
 
     @Test
-    void importedCalibrationColdStartRejectionContinuesWithNeutralScheduling()
-            throws Exception {
+    void importedCalibrationColdStartRejectionContinuesWithNeutralScheduling() throws Exception {
         Path bootstrap = temp.resolve("bootstrap.csv");
         writeBootstrap(bootstrap, 6);
         SourceScenario scenario = SourceScenario.of("env-a", 1, 4);
         TreeSet<SourceScenario> required = new TreeSet<>(List.of(scenario));
 
-        ClosedLoopRunner.run(config(bootstrap, required, "env-a", false, 2),
-                createBootstrapOnlyMockServices());
+        ClosedLoopRunner.run(config(bootstrap, required, "env-a", false, 2), createBootstrapOnlyMockServices());
         Path sourceWorkspace = temp.resolve("workspace");
         List<Path> evidence;
         try (var paths = Files.list(sourceWorkspace.resolve("evidence"))) {
             evidence = paths.filter(Files::isDirectory).sorted().toList();
         }
         Path importedWorkspace = temp.resolve("imported-workspace");
-        ClosedLoopConfig imported = initialCalibrationConfig(importedWorkspace,
-                sourceWorkspace.resolve("calibration-plan"), evidence, required, false, 2);
+        ClosedLoopConfig imported = initialCalibrationConfig(
+                importedWorkspace, sourceWorkspace.resolve("calibration-plan"), evidence, required, false, 2);
 
-        ClosedLoopResult initialized = ClosedLoopRunner.run(imported,
-                createMockServices(true));
+        ClosedLoopResult initialized = ClosedLoopRunner.run(imported, createMockServices(true));
         assertThat(initialized.stage()).isEqualTo(CheckpointStage.READY_TO_TRAIN);
 
         ClosedLoopServices services = createRejectingTrainingMockServices(true, false, true);
-        ClosedLoopResult result = ClosedLoopRunner.run(initialCalibrationConfig(
-                importedWorkspace, sourceWorkspace.resolve("calibration-plan"), evidence,
-                required, true, 2), services);
+        ClosedLoopResult result = ClosedLoopRunner.run(
+                initialCalibrationConfig(
+                        importedWorkspace, sourceWorkspace.resolve("calibration-plan"), evidence, required, true, 2),
+                services);
 
         assertThat(result.stage()).isEqualTo(CheckpointStage.READY_TO_TRAIN);
-        ArgumentCaptor<ScenarioTrainingRequest> captor = ArgumentCaptor.forClass(
-                ScenarioTrainingRequest.class);
+        ArgumentCaptor<ScenarioTrainingRequest> captor = ArgumentCaptor.forClass(ScenarioTrainingRequest.class);
         verify(services).train(captor.capture());
         ScenarioTrainingConfig capturedConfig = captor.getValue().config();
         assertThat(capturedConfig.requireTargetVariation()).isFalse();
@@ -243,16 +292,13 @@ class ClosedLoopRunnerTest {
         SourceScenario scenario = SourceScenario.of("env-a", 1, 4);
         TreeSet<SourceScenario> required = new TreeSet<>(List.of(scenario));
 
-        ClosedLoopRunner.run(config(bootstrap, required, "env-a", false, 1),
-                createBootstrapOnlyMockServices());
+        ClosedLoopRunner.run(config(bootstrap, required, "env-a", false, 1), createBootstrapOnlyMockServices());
 
         ClosedLoopServices services = createRejectingTrainingMockServices(false, false, false);
-        ClosedLoopResult result = ClosedLoopRunner.run(
-                config(bootstrap, required, "env-a", true, 1), services);
+        ClosedLoopResult result = ClosedLoopRunner.run(config(bootstrap, required, "env-a", true, 1), services);
 
         assertThat(result.stage()).isEqualTo(CheckpointStage.RUN_COMPLETE);
-        ArgumentCaptor<ScenarioTrainingRequest> captor = ArgumentCaptor.forClass(
-                ScenarioTrainingRequest.class);
+        ArgumentCaptor<ScenarioTrainingRequest> captor = ArgumentCaptor.forClass(ScenarioTrainingRequest.class);
         verify(services).train(captor.capture());
         ScenarioTrainingConfig capturedConfig = captor.getValue().config();
         assertThat(capturedConfig.requireTargetVariation()).isFalse();
@@ -260,28 +306,23 @@ class ClosedLoopRunnerTest {
     }
 
     @Test
-    void sparseSecondIterationRetriesColdStartAndContinuesWithNeutralScheduling()
-            throws Exception {
+    void sparseSecondIterationRetriesColdStartAndContinuesWithNeutralScheduling() throws Exception {
         Path bootstrap = temp.resolve("bootstrap.csv");
         writeBootstrap(bootstrap, 6);
         SourceScenario scenario = SourceScenario.of("env-a", 1, 4);
         TreeSet<SourceScenario> required = new TreeSet<>(List.of(scenario));
 
-        ClosedLoopRunner.run(config(bootstrap, required, "env-a", false, 2),
-                createBootstrapOnlyMockServices());
+        ClosedLoopRunner.run(config(bootstrap, required, "env-a", false, 2), createBootstrapOnlyMockServices());
         ClosedLoopResult readyForSecondIteration = ClosedLoopRunner.run(
-                config(bootstrap, required, "env-a", true, 2),
-                createRejectingTrainingMockServices(true, false, false));
+                config(bootstrap, required, "env-a", true, 2), createRejectingTrainingMockServices(true, false, false));
         assertThat(readyForSecondIteration.stage()).isEqualTo(CheckpointStage.READY_TO_TRAIN);
 
-        ClosedLoopServices sparseSecondIteration =
-                createRejectingTrainingMockServices(false, true, false);
-        ClosedLoopResult completed = ClosedLoopRunner.run(
-                config(bootstrap, required, "env-a", true, 2), sparseSecondIteration);
+        ClosedLoopServices sparseSecondIteration = createRejectingTrainingMockServices(false, true, false);
+        ClosedLoopResult completed =
+                ClosedLoopRunner.run(config(bootstrap, required, "env-a", true, 2), sparseSecondIteration);
 
         assertThat(completed.stage()).isEqualTo(CheckpointStage.RUN_COMPLETE);
-        ArgumentCaptor<ScenarioTrainingRequest> captor = ArgumentCaptor.forClass(
-                ScenarioTrainingRequest.class);
+        ArgumentCaptor<ScenarioTrainingRequest> captor = ArgumentCaptor.forClass(ScenarioTrainingRequest.class);
         verify(sparseSecondIteration, times(2)).train(captor.capture());
         List<ScenarioTrainingRequest> capturedRequests = captor.getAllValues();
         assertThat(capturedRequests).hasSize(2);
@@ -289,78 +330,96 @@ class ClosedLoopRunnerTest {
         assertThat(capturedRequests.get(1).config().requireTargetVariation()).isFalse();
     }
 
-    private ClosedLoopConfig config(Path bootstrap, TreeSet<SourceScenario> scenarios,
-            String environment, boolean resume) {
+    private ClosedLoopConfig config(
+            Path bootstrap, TreeSet<SourceScenario> scenarios, String environment, boolean resume) {
         return config(bootstrap, scenarios, environment, resume, 1);
     }
 
-    private ClosedLoopConfig config(Path bootstrap, TreeSet<SourceScenario> scenarios,
-            String environment, boolean resume, int iterations) {
-        return new ClosedLoopConfig(temp.resolve("workspace"), "training", iterations, 6,
-                scenarios, environment, 1, 77L, 100, Optional.ofNullable(bootstrap),
+    private ClosedLoopConfig config(
+            Path bootstrap, TreeSet<SourceScenario> scenarios, String environment, boolean resume, int iterations) {
+        return new ClosedLoopConfig(
+                temp.resolve("workspace"),
+                "training",
+                iterations,
+                6,
+                scenarios,
+                environment,
+                1,
+                77L,
+                100,
+                Optional.ofNullable(bootstrap),
                 Optional.empty(),
-                List.of(), Map.of(), "0".repeat(40), false,
+                List.of(),
+                Map.of(),
+                "0".repeat(40),
+                false,
                 CandidateBudgetConfig.defaults(),
-                new CandidateGenerationConfig(32, 8,
-                        new int[]{1, 1, 1, 1, 2, 2, 3, 5, 8, 16},
-                        8, 7, 1, new CmaEsConfig(false, 1, 1, 8, 0.2, 2)),
+                new CandidateGenerationConfig(
+                        32,
+                        8,
+                        new int[] {1, 1, 1, 1, 2, 2, 3, 5, 8, 16},
+                        8,
+                        7,
+                        1,
+                        new CmaEsConfig(false, 1, 1, 8, 0.2, 2)),
                 new BenchmarkExecutionConfig(3, 100, 50, 8, 1_000, false),
-                AnchorSelectionConfig.defaults(), CalibrationConfig.defaults(),
-                AggregationConfig.defaults(), ScenarioTrainingConfig.defaults(), resume,
+                AnchorSelectionConfig.defaults(),
+                CalibrationConfig.defaults(),
+                AggregationConfig.defaults(),
+                ScenarioTrainingConfig.defaults(),
+                resume,
                 temp.resolve("workspace/STOP"));
     }
 
-    private ClosedLoopConfig initialCalibrationConfig(Path workspace, Path calibrationPlan,
-            List<Path> evidence, TreeSet<SourceScenario> scenarios, boolean resume,
+    private ClosedLoopConfig initialCalibrationConfig(
+            Path workspace,
+            Path calibrationPlan,
+            List<Path> evidence,
+            TreeSet<SourceScenario> scenarios,
+            boolean resume,
             int iterations) {
         ClosedLoopConfig base = config(null, scenarios, "env-a", resume, iterations);
-        return new ClosedLoopConfig(workspace, base.trainingRunId(), base.iterations(),
-                base.candidateBudget(), base.requiredScenarios(), base.activeEnvironmentId(),
-                base.scenariosPerIteration(), base.schedulerSeed(), base.initialSobolCursor(),
-                Optional.empty(), Optional.of(calibrationPlan), evidence,
-                base.referenceOverrides(), base.commitSha(), base.dirtyWorkingTree(),
-                base.budgetConfig(), base.generationConfig(), base.benchmarkConfig(),
-                base.anchorSelectionConfig(), base.calibrationConfig(),
-                base.aggregationConfig(), base.trainingConfig(), resume,
+        return new ClosedLoopConfig(
+                workspace,
+                base.trainingRunId(),
+                base.iterations(),
+                base.candidateBudget(),
+                base.requiredScenarios(),
+                base.activeEnvironmentId(),
+                base.scenariosPerIteration(),
+                base.schedulerSeed(),
+                base.initialSobolCursor(),
+                Optional.empty(),
+                Optional.of(calibrationPlan),
+                evidence,
+                base.referenceOverrides(),
+                base.commitSha(),
+                base.dirtyWorkingTree(),
+                base.budgetConfig(),
+                base.generationConfig(),
+                base.benchmarkConfig(),
+                base.anchorSelectionConfig(),
+                base.calibrationConfig(),
+                base.aggregationConfig(),
+                base.trainingConfig(),
+                resume,
                 workspace.resolve("STOP"));
-    }
-
-    private static void writeBootstrap(Path file, int count) throws Exception {
-        List<String> header = new ArrayList<>(List.of("schema_version",
-                "bootstrap_position", "policy_id"));
-        for (int i = 0; i < 28; i++) {
-            header.add("weight_%02d_bits".formatted(i));
-        }
-        StringBuilder output = new StringBuilder(CanonicalCsv.row(header));
-        for (int i = 0; i < count; i++) {
-            var policy = SchedulingFixtures.policy(100 + i);
-            List<String> row = new ArrayList<>(List.of("1", Integer.toString(i + 1),
-                    policy.id().canonical()));
-            for (double weight : policy.copyWeights()) {
-                row.add("%016x".formatted(Double.doubleToRawLongBits(weight)));
-            }
-            output.append(CanonicalCsv.row(row));
-        }
-        Files.writeString(file, output, StandardCharsets.UTF_8);
     }
 
     private ClosedLoopServices createMockServices(boolean stopAfterMerge) throws Exception {
         ClosedLoopServices services = mock(ClosedLoopServices.class);
         AtomicBoolean mergeCalled = new AtomicBoolean(false);
 
-        when(services.bootstrapCalibration(any())).thenAnswer(
-                inv -> DataMerger.bootstrapCalibrationV1(inv.getArgument(0)));
+        when(services.bootstrapCalibration(any()))
+                .thenAnswer(inv -> DataMerger.bootstrapCalibrationV1(inv.getArgument(0)));
         when(services.merge(any())).thenAnswer(inv -> {
             mergeCalled.set(true);
             return DataMerger.mergeV1(inv.getArgument(0));
         });
-        when(services.train(any())).thenThrow(
-                new AssertionError("Training must not start after requested stop"));
+        when(services.train(any())).thenThrow(new AssertionError("Training must not start after requested stop"));
         when(services.loadAcceptedModel(any(), any())).thenThrow(new AssertionError());
-        when(services.benchmark(any(), any())).thenAnswer(inv -> createBenchmarkContext(
-                inv.getArgument(0)));
-        when(services.stopRequested()).thenAnswer(
-                inv -> mergeCalled.get() && stopAfterMerge);
+        when(services.benchmark(any(), any())).thenAnswer(inv -> createBenchmarkContext(inv.getArgument(0)));
+        when(services.stopRequested()).thenAnswer(inv -> mergeCalled.get() && stopAfterMerge);
         when(services.activeCoreCount()).thenReturn(4);
         when(services.activeCpuSetHex()).thenReturn("f");
 
@@ -371,17 +430,15 @@ class ClosedLoopRunnerTest {
         ClosedLoopServices services = mock(ClosedLoopServices.class);
         AtomicBoolean mergeCalled = new AtomicBoolean(false);
 
-        when(services.bootstrapCalibration(any())).thenAnswer(
-                inv -> DataMerger.bootstrapCalibrationV1(inv.getArgument(0)));
+        when(services.bootstrapCalibration(any()))
+                .thenAnswer(inv -> DataMerger.bootstrapCalibrationV1(inv.getArgument(0)));
         when(services.merge(any())).thenAnswer(inv -> {
             mergeCalled.set(true);
             return DataMerger.mergeV1(inv.getArgument(0));
         });
-        when(services.train(any())).thenThrow(
-                new AssertionError("Training should not run during bootstrap-only pass"));
+        when(services.train(any())).thenThrow(new AssertionError("Training should not run during bootstrap-only pass"));
         when(services.loadAcceptedModel(any(), any())).thenThrow(new AssertionError());
-        when(services.benchmark(any(), any())).thenAnswer(inv -> createBenchmarkContext(
-                inv.getArgument(0)));
+        when(services.benchmark(any(), any())).thenAnswer(inv -> createBenchmarkContext(inv.getArgument(0)));
         when(services.stopRequested()).thenAnswer(inv -> mergeCalled.get());
         when(services.activeCoreCount()).thenReturn(4);
         when(services.activeCpuSetHex()).thenReturn("f");
@@ -398,13 +455,15 @@ class ClosedLoopRunnerTest {
         when(services.train(any())).thenAnswer(inv -> {
             ScenarioTrainingRequest request = inv.getArgument(0);
             if (request.config().requireTargetVariation()) {
-                throw new InsufficientScenarioLearningDataException(
-                        "validation has too few policy groups");
+                throw new InsufficientScenarioLearningDataException("validation has too few policy groups");
             }
             trained.set(true);
             return io.euhedral_execution.training.learning.AuditScenarioModelFixture.writeRejected(
-                    request.modelDirectory(), request.requiredScenarios(), request.config(),
-                    SchedulingFixtures.policy(999), request.commitSha(),
+                    request.modelDirectory(),
+                    request.requiredScenarios(),
+                    request.config(),
+                    SchedulingFixtures.policy(999),
+                    request.commitSha(),
                     request.dirtyWorkingTree());
         });
         when(services.loadAcceptedModel(any(), any())).thenThrow(new AssertionError());
@@ -416,8 +475,8 @@ class ClosedLoopRunnerTest {
         return services;
     }
 
-    private ClosedLoopServices createRejectingTrainingMockServices(boolean stopAfterFirstMerge,
-            boolean failStrictTraining, boolean storeStrictMetadata) throws Exception {
+    private ClosedLoopServices createRejectingTrainingMockServices(
+            boolean stopAfterFirstMerge, boolean failStrictTraining, boolean storeStrictMetadata) throws Exception {
         ClosedLoopServices services = mock(ClosedLoopServices.class);
         AtomicBoolean mergeCalled = new AtomicBoolean(false);
 
@@ -429,22 +488,22 @@ class ClosedLoopRunnerTest {
         when(services.train(any())).thenAnswer(inv -> {
             ScenarioTrainingRequest request = inv.getArgument(0);
             if (failStrictTraining && request.config().requireTargetVariation()) {
-                throw new InsufficientScenarioLearningDataException(
-                        "train lacks rows for a required scenario");
+                throw new InsufficientScenarioLearningDataException("train lacks rows for a required scenario");
             }
-            ScenarioTrainingConfig storedConfig = withBatchSize(storeStrictMetadata
-                    ? ScenarioTrainingConfig.defaults() : request.config(), 4);
+            ScenarioTrainingConfig storedConfig =
+                    withBatchSize(storeStrictMetadata ? ScenarioTrainingConfig.defaults() : request.config(), 4);
             return io.euhedral_execution.training.learning.AuditScenarioModelFixture.writeRejected(
-                    request.modelDirectory(), request.requiredScenarios(), storedConfig,
-                    SchedulingFixtures.policy(999), request.commitSha(),
+                    request.modelDirectory(),
+                    request.requiredScenarios(),
+                    storedConfig,
+                    SchedulingFixtures.policy(999),
+                    request.commitSha(),
                     request.dirtyWorkingTree());
         });
-        when(services.loadAcceptedModel(any(), any())).thenThrow(
-                new AssertionError("Rejected models should use the neutral predictor"));
-        when(services.benchmark(any(), any())).thenAnswer(inv -> createBenchmarkContext(
-                inv.getArgument(0)));
-        when(services.stopRequested()).thenAnswer(
-                inv -> mergeCalled.get() && stopAfterFirstMerge);
+        when(services.loadAcceptedModel(any(), any()))
+                .thenThrow(new AssertionError("Rejected models should use the neutral predictor"));
+        when(services.benchmark(any(), any())).thenAnswer(inv -> createBenchmarkContext(inv.getArgument(0)));
+        when(services.stopRequested()).thenAnswer(inv -> mergeCalled.get() && stopAfterFirstMerge);
         when(services.activeCoreCount()).thenReturn(4);
         when(services.activeCpuSetHex()).thenReturn("f");
 
@@ -453,45 +512,45 @@ class ClosedLoopRunnerTest {
 
     private BenchmarkRunContext createBenchmarkContext(NativeBenchmarkRunPlan plan) {
         Instant start = Instant.EPOCH;
-        BenchmarkRunDescriptor descriptor = new BenchmarkRunDescriptor(1,
-                plan.benchmarkRunId(), plan.iteration(), plan.candidateCohortId(),
-                plan.scenario(), plan.commitSha(), plan.dirtyWorkingTree(),
-                EvidenceOrigin.NATIVE, start, plan.parameters());
-        try (ObservationBundleWriter writer = ObservationBundleWriter.open(
-                plan.outputBundle(), descriptor)) {
+        BenchmarkRunDescriptor descriptor = new BenchmarkRunDescriptor(
+                1,
+                plan.benchmarkRunId(),
+                plan.iteration(),
+                plan.candidateCohortId(),
+                plan.scenario(),
+                plan.commitSha(),
+                plan.dirtyWorkingTree(),
+                EvidenceOrigin.NATIVE,
+                start,
+                plan.parameters());
+        try (ObservationBundleWriter writer = ObservationBundleWriter.open(plan.outputBundle(), descriptor)) {
             plan.policies().forEach(writer::registerPolicy);
             long offset = 0;
             for (var policy : plan.policies()) {
-                for (int repetition = 1;
-                        repetition <= plan.executionConfig().expectedRepetitions();
-                        repetition++) {
+                for (int repetition = 1; repetition <= plan.executionConfig().expectedRepetitions(); repetition++) {
                     Instant observationStart = start.plusNanos(offset);
                     long elapsed = 100;
                     long frames = 100;
-                    writer.write(new BenchmarkObservation(new ObservationKey(
-                            plan.benchmarkRunId(), plan.scenario(), policy.policy().id(),
-                            repetition), descriptor, policy, ObservationStatus.SUCCESS,
-                            MeasurementEncoding.COUNTER_DERIVED, observationStart,
-                            observationStart.plusNanos(elapsed), OptionalLong.of(elapsed),
-                            OptionalLong.of(frames), OptionalDouble.of(
-                            frames * 1_000_000_000.0 / elapsed), ""));
+                    writer.write(new BenchmarkObservation(
+                            new ObservationKey(
+                                    plan.benchmarkRunId(),
+                                    plan.scenario(),
+                                    policy.policy().id(),
+                                    repetition),
+                            descriptor,
+                            policy,
+                            ObservationStatus.SUCCESS,
+                            MeasurementEncoding.COUNTER_DERIVED,
+                            observationStart,
+                            observationStart.plusNanos(elapsed),
+                            OptionalLong.of(elapsed),
+                            OptionalLong.of(frames),
+                            OptionalDouble.of(frames * 1_000_000_000.0 / elapsed),
+                            ""));
                     offset += elapsed;
                 }
             }
             return writer.complete(start.plusNanos(offset));
         }
-    }
-
-    private static ScenarioTrainingConfig withBatchSize(ScenarioTrainingConfig source,
-            int batchSize) {
-        return new ScenarioTrainingConfig(source.splitSeed(), source.modelSeed(), source.device(),
-                source.ensembleMembers(), source.losoEvaluationMembers(),
-                source.ablationMembers(), source.maxEpochs(), source.patience(), batchSize,
-                source.learningRate(), source.weightDecay(), source.labelSmoothing(),
-                source.minimumTrainPolicyGroups(), source.minimumValidationPolicyGroups(),
-                source.minimumTestPolicyGroups(), source.minimumTrainRowsPerScenario(),
-                source.minimumValidationRowsPerScenario(), source.minimumTestRowsPerScenario(),
-                source.includeWeakCalibrationRows(), source.requireTargetVariation(),
-                source.featureSelectionMode(), source.thresholds());
     }
 }

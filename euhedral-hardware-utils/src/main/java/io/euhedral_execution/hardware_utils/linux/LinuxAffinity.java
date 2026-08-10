@@ -31,12 +31,15 @@ public final class LinuxAffinity extends ThreadPinner {
         INSTANCE = instance;
     }
 
+    private LinuxAffinity(boolean jniLoaded) {
+        super(jniLoaded ? AffinityCapability.EXACT : AffinityCapability.UNSUPPORTED, null, jniLoaded);
+    }
+
     private static native int getThreadAffinity(long[] masks);
 
-    private LinuxAffinity(boolean jniLoaded) {
-        super(jniLoaded ? AffinityCapability.EXACT : AffinityCapability.UNSUPPORTED, null,
-                jniLoaded);
-    }
+    private static native int setThreadAffinity(long[] masks);
+
+    private static native int prctl(long nanos);
 
     /// Returns the logical CPU ID of the calling thread.
     @Override
@@ -87,8 +90,6 @@ public final class LinuxAffinity extends ThreadPinner {
         return LinuxAffinityCalls.apply(masks, LinuxAffinity::setThreadAffinity);
     }
 
-    private static native int setThreadAffinity(long[] masks);
-
     /// Configures process timer slack resolution in nanoseconds.
     @Override
     public boolean setTimerResolution(long nanos) {
@@ -109,6 +110,4 @@ public final class LinuxAffinity extends ThreadPinner {
         }
         return true;
     }
-
-    private static native int prctl(long nanos);
 }

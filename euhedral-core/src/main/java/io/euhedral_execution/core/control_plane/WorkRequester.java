@@ -19,7 +19,8 @@ public abstract class WorkRequester extends ControlPlaneCache {
             this.pullMultiplier = 0;
         } else {
             int cores = SystemInfo.getSocketInfo(
-                            SystemInfo.getCoreInfo(cacheConfig.getCore()).socket()).getCoreSet()
+                            SystemInfo.getCoreInfo(cacheConfig.getCore()).socket())
+                    .getCoreSet()
                     .cardinality();
             this.pullMultiplier = Math.max((cores * 3L) >> 3, 2); // 37.5% of the core count
             this.safetyFactor = Math.max(this.pullMultiplier >> 1, 2);

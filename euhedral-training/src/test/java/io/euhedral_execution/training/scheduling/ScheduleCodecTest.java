@@ -21,22 +21,31 @@ class ScheduleCodecTest {
 
     @Test
     void roundTripsStrictBootstrapScheduleAndProducesIdenticalBytes() throws Exception {
-        BenchmarkExecutionConfig config = new BenchmarkExecutionConfig(2, 100, 50, 8,
-                1_000, false);
-        IterationSchedule schedule = BootstrapScheduler.create("training",
-                SchedulingFixtures.S1, List.of(SchedulingFixtures.policy(1),
-                        SchedulingFixtures.policy(2), SchedulingFixtures.policy(3)),
-                91L, 0, "0".repeat(40), false, "f", config);
+        BenchmarkExecutionConfig config = new BenchmarkExecutionConfig(2, 100, 50, 8, 1_000, false);
+        IterationSchedule schedule = BootstrapScheduler.create(
+                "training",
+                SchedulingFixtures.S1,
+                List.of(SchedulingFixtures.policy(1), SchedulingFixtures.policy(2), SchedulingFixtures.policy(3)),
+                91L,
+                0,
+                "0".repeat(40),
+                false,
+                "f",
+                config);
         Path first = ScheduleCodec.write(temp.resolve("first"), schedule);
         Path second = ScheduleCodec.write(temp.resolve("second"), schedule);
-        IterationSchedule read = ScheduleCodec.read(first,
-                new TreeSet<>(List.of(SchedulingFixtures.S1)), "training", 91L,
-                "0".repeat(40), false, config);
+        IterationSchedule read = ScheduleCodec.read(
+                first, new TreeSet<>(List.of(SchedulingFixtures.S1)), "training", 91L, "0".repeat(40), false, config);
 
         assertThat(read.trainingRunId()).isEqualTo("training");
         assertThat(read.runs()).isEqualTo(schedule.runs());
-        for (String file : List.of("runs.csv", "policies.csv", "predictions.csv",
-                "budget-report.csv", "carry-admissions.csv", "COMPLETE")) {
+        for (String file : List.of(
+                "runs.csv",
+                "policies.csv",
+                "predictions.csv",
+                "budget-report.csv",
+                "carry-admissions.csv",
+                "COMPLETE")) {
             assertThat(Files.readAllBytes(first.resolve(file)))
                     .containsExactly(Files.readAllBytes(second.resolve(file)));
         }
@@ -44,26 +53,43 @@ class ScheduleCodecTest {
 
     @Test
     void rejectsChangedIdentityAndUnexpectedFiles() throws Exception {
-        BenchmarkExecutionConfig config = new BenchmarkExecutionConfig(1, 100, 50, 8,
-                1_000, false);
-        IterationSchedule schedule = BootstrapScheduler.create("training",
-                SchedulingFixtures.S1, List.of(SchedulingFixtures.policy(1),
-                        SchedulingFixtures.policy(2)), 91L, 0, "0".repeat(40), false, "f", config);
+        BenchmarkExecutionConfig config = new BenchmarkExecutionConfig(1, 100, 50, 8, 1_000, false);
+        IterationSchedule schedule = BootstrapScheduler.create(
+                "training",
+                SchedulingFixtures.S1,
+                List.of(SchedulingFixtures.policy(1), SchedulingFixtures.policy(2)),
+                91L,
+                0,
+                "0".repeat(40),
+                false,
+                "f",
+                config);
         Path directory = ScheduleCodec.write(temp.resolve("schedule"), schedule);
         Files.writeString(directory.resolve("unexpected"), "x");
-        assertThatThrownBy(() -> ScheduleCodec.read(directory,
-                new TreeSet<>(List.of(SchedulingFixtures.S1)), "training", 91L,
-                "0".repeat(40), false, config)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> ScheduleCodec.read(
+                        directory,
+                        new TreeSet<>(List.of(SchedulingFixtures.S1)),
+                        "training",
+                        91L,
+                        "0".repeat(40),
+                        false,
+                        config))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void rejectsDuplicateSchedulePositions() throws Exception {
-        BenchmarkExecutionConfig config = new BenchmarkExecutionConfig(1, 100, 50, 8,
-                1_000, false);
-        IterationSchedule schedule = BootstrapScheduler.create("training",
-                SchedulingFixtures.S1, List.of(SchedulingFixtures.policy(1),
-                        SchedulingFixtures.policy(2), SchedulingFixtures.policy(3)),
-                91L, 0, "0".repeat(40), false, "f", config);
+        BenchmarkExecutionConfig config = new BenchmarkExecutionConfig(1, 100, 50, 8, 1_000, false);
+        IterationSchedule schedule = BootstrapScheduler.create(
+                "training",
+                SchedulingFixtures.S1,
+                List.of(SchedulingFixtures.policy(1), SchedulingFixtures.policy(2), SchedulingFixtures.policy(3)),
+                91L,
+                0,
+                "0".repeat(40),
+                false,
+                "f",
+                config);
         Path directory = ScheduleCodec.write(temp.resolve("duplicate-position"), schedule);
         List<List<String>> rows = CanonicalCsv.read(directory.resolve("policies.csv"));
         var duplicate = new java.util.ArrayList<>(rows.get(2));
@@ -75,9 +101,14 @@ class ScheduleCodecTest {
             changed.append(CanonicalCsv.row(rows.get(index)));
         }
         Files.writeString(directory.resolve("policies.csv"), changed);
-        assertThatThrownBy(() -> ScheduleCodec.read(directory,
-                new TreeSet<>(List.of(SchedulingFixtures.S1)), "training", 91L,
-                "0".repeat(40), false, config))
+        assertThatThrownBy(() -> ScheduleCodec.read(
+                        directory,
+                        new TreeSet<>(List.of(SchedulingFixtures.S1)),
+                        "training",
+                        91L,
+                        "0".repeat(40),
+                        false,
+                        config))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 }

@@ -4,19 +4,21 @@ import java.nio.ByteBuffer;
 
 public class BufferHasher extends AbstractHasher {
 
+    public BufferHasher() {}
+
     public static long getHash(ByteBuffer buffer, int start, int end, long seed) {
         final int diff = end - start;
 
         long h64;
         int i = start;
-        if(diff >= 32) {
+        if (diff >= 32) {
             long v1 = seed + AbstractHasher.P1 + AbstractHasher.P2;
             long v2 = seed + AbstractHasher.P2;
             long v3 = seed;
             long v4 = seed - AbstractHasher.P1;
 
             int limit = end - 32;
-            for(; i <= limit; i += 32) {
+            for (; i <= limit; i += 32) {
                 v1 = round(v1, buffer.getLong(i));
                 v2 = round(v2, buffer.getLong(i + 8));
                 v3 = round(v3, buffer.getLong(i + 16));
@@ -44,7 +46,4 @@ public class BufferHasher extends AbstractHasher {
 
         return mix(h64);
     }
-
-    public BufferHasher() {}
-
 }

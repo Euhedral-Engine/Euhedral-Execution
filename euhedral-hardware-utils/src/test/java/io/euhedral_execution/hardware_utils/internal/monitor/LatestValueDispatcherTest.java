@@ -1,22 +1,18 @@
 package io.euhedral_execution.hardware_utils.internal.monitor;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import io.euhedral_execution.hardware_utils.ResourceMonitor.MonitorListener;
 import io.euhedral_execution.hardware_utils.common.SystemUtilization.HardwareUtilization;
-import io.euhedral_execution.hardware_utils.common.UnmodifiableBitSet;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
-import java.util.ArrayList;
-import java.util.BitSet;
-import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 class LatestValueDispatcherTest {
 
@@ -44,13 +40,13 @@ class LatestValueDispatcherTest {
 
         dispatcher.addListener(listener);
         dispatcher.addListener(listener); // Should deduplicate
-        
+
         CountDownLatch latch = new CountDownLatch(1);
         dispatcher.addListener(util -> latch.countDown());
-        
+
         dispatcher.offer(util1);
         assertTrue(latch.await(5, TimeUnit.SECONDS));
-        
+
         assertEquals(1, calls.get());
     }
 
@@ -72,7 +68,7 @@ class LatestValueDispatcherTest {
 
         dispatcher.addListener(blockingListener);
         dispatcher.offer(util1);
-        
+
         // Wait for listener to block
         assertTrue(calledLatch.await(5, TimeUnit.SECONDS));
 
@@ -101,7 +97,7 @@ class LatestValueDispatcherTest {
             @Override
             public void update(HardwareUtilization util) {
                 // Reentrant call
-                dispatcher.addListener(u -> {}); 
+                dispatcher.addListener(u -> {});
                 dispatcher.beginClose(() -> closedInCallback.set(true));
                 latch.countDown();
             }
@@ -122,7 +118,7 @@ class LatestValueDispatcherTest {
         dispatcher.addListener(util -> {
             throw new RuntimeException("Failing listener");
         });
-        
+
         dispatcher.addListener(util -> {
             throw new Error("Failing error listener");
         });
@@ -148,7 +144,7 @@ class LatestValueDispatcherTest {
         assertTrue(hookLatch.await(5, TimeUnit.SECONDS));
         dispatcher.awaitClosed();
         dispatcher.awaitClosed(); // Reentrant close barrier check
-        
+
         assertEquals(1, hookCalls.get());
     }
 }

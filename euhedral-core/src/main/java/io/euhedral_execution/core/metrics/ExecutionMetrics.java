@@ -20,7 +20,8 @@ public final class ExecutionMetrics implements AutoCloseable {
 
     private static final long OP_NS_TO_OP_SEC = TimeUnit.SECONDS.toNanos(1);
 
-    private static final VarHandle IN_PROGRESS = CommonVarHandles.makeHandle(ExecutionMetrics.class, "inProgress", long.class);
+    private static final VarHandle IN_PROGRESS =
+            CommonVarHandles.makeHandle(ExecutionMetrics.class, "inProgress", long.class);
 
     private final MeterRegistry registry;
 
@@ -48,18 +49,18 @@ public final class ExecutionMetrics implements AutoCloseable {
                     .register(this.registry);
             this.meters.add(this.latency);
 
-            this.throughput = DistributionSummary.builder(metricName(prefix, MetricsAggregator.THROUGHPUT_SUMMARY_SUFFIX))
+            this.throughput = DistributionSummary.builder(
+                            metricName(prefix, MetricsAggregator.THROUGHPUT_SUMMARY_SUFFIX))
                     .description("Average throughput of work.")
                     .tag(CORE_TAG, coreId)
                     .baseUnit("seconds")
                     .register(this.registry);
             this.meters.add(this.throughput);
 
-            this.meters.add(
-                    Gauge.builder(metricName(prefix, MetricsAggregator.IN_PROGRESS_SUFFIX), this::getInProgress)
-                            .description("Number of frames being executed")
-                            .tag(CORE_TAG, coreId)
-                            .register(this.registry));
+            this.meters.add(Gauge.builder(metricName(prefix, MetricsAggregator.IN_PROGRESS_SUFFIX), this::getInProgress)
+                    .description("Number of frames being executed")
+                    .tag(CORE_TAG, coreId)
+                    .register(this.registry));
         } else {
             this.meters = null;
             this.latency = null;
@@ -89,7 +90,7 @@ public final class ExecutionMetrics implements AutoCloseable {
 
     @Override
     public void close() {
-        if(this.registry != null) {
+        if (this.registry != null) {
             this.meters.forEach(this.registry::remove);
             this.meters.clear();
         }

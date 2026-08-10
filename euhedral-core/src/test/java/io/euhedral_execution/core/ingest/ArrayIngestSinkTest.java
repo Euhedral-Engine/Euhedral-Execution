@@ -20,11 +20,7 @@ class ArrayIngestSinkTest {
 
     @BeforeEach
     void setup() {
-        frames = new TestFrame[]{
-                new TestFrame("a"),
-                new TestFrame("b"),
-                new TestFrame("c")
-        };
+        frames = new TestFrame[] {new TestFrame("a"), new TestFrame("b"), new TestFrame("c")};
 
         sink = new ArrayIngestSink(frames);
         delegate = (ArrayIngestSink.Delegate) sink.getDelegate();

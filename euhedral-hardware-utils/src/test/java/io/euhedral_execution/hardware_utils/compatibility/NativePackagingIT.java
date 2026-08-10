@@ -65,18 +65,22 @@ class NativePackagingIT {
                 }
             });
             assertEquals(expectedClasses, actualClasses, "native-package: class inventory differs");
-            assertEquals(EXACT_NON_CLASS_FILES, actualNonClasses,
-                    "native-package: resource inventory differs");
-            assertEquals(NativeManifestTest.CATALOG,
-                    new String(archive.getInputStream(archive.getJarEntry(
-                            "META-INF/euhedral/native-products.tsv")).readAllBytes(),
+            assertEquals(EXACT_NON_CLASS_FILES, actualNonClasses, "native-package: resource inventory differs");
+            assertEquals(
+                    NativeManifestTest.CATALOG,
+                    new String(
+                            archive.getInputStream(archive.getJarEntry("META-INF/euhedral/native-products.tsv"))
+                                    .readAllBytes(),
                             java.nio.charset.StandardCharsets.UTF_8));
 
             for (String product : NativeManifestTest.PRODUCT_PATHS) {
                 try (InputStream input = archive.getInputStream(archive.getJarEntry(product))) {
-                    assertEquals(sha256(Files.readAllBytes(TestPaths.buildDirectory()
-                                    .resolve("generated-resources/native").resolve(product))),
-                            sha256(input.readAllBytes()), product);
+                    assertEquals(
+                            sha256(Files.readAllBytes(TestPaths.buildDirectory()
+                                    .resolve("generated-resources/native")
+                                    .resolve(product))),
+                            sha256(input.readAllBytes()),
+                            product);
                 }
             }
         }
@@ -91,21 +95,23 @@ class NativePackagingIT {
         try (Stream<Path> paths = Files.walk(bundle)) {
             var regular = paths.filter(Files::isRegularFile).toList();
             files = regular.size();
-            bytes = regular.stream().mapToLong(path -> {
-                try {
-                    return Files.size(path);
-                } catch (Exception e) {
-                    throw new IllegalStateException(e);
-                }
-            }).sum();
+            bytes = regular.stream()
+                    .mapToLong(path -> {
+                        try {
+                            return Files.size(path);
+                        } catch (Exception e) {
+                            throw new IllegalStateException(e);
+                        }
+                    })
+                    .sum();
             for (Path path : regular) {
                 String name = portable(bundle.relativize(path));
-                assertTrue(name.endsWith(".jar")
+                assertTrue(
+                        name.endsWith(".jar")
                                 || name.equals(
-                                "io/euhedral_execution/hardware_utils/internal/NativeLoadSmokeMain.class"),
+                                        "io/euhedral_execution/hardware_utils/internal/NativeLoadSmokeMain.class"),
                         () -> "native-package: unexpected smoke file " + name);
-                assertFalse(name.toLowerCase().matches(".*(credential|secret|token|cache).*"),
-                        name);
+                assertFalse(name.toLowerCase().matches(".*(credential|secret|token|cache).*"), name);
             }
         }
         assertTrue(files <= 64, "native-package: smoke bundle has " + files + " files");

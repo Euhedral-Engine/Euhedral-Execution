@@ -28,19 +28,22 @@ class JniHeaderTest {
     void usesTargetCorrectPlatformHeaders() throws Exception {
         Path generatedJni = TestPaths.buildDirectory().resolve("generated-jni");
         try (Stream<Path> paths = Files.list(generatedJni.resolve("declarations"))) {
-            assertEquals(DECLARATIONS, paths.filter(Files::isRegularFile)
-                    .map(path -> path.getFileName().toString())
-                    .collect(Collectors.toSet()));
+            assertEquals(
+                    DECLARATIONS,
+                    paths.filter(Files::isRegularFile)
+                            .map(path -> path.getFileName().toString())
+                            .collect(Collectors.toSet()));
         }
         try (Stream<Path> paths = Files.list(generatedJni.resolve("include"))) {
-            assertEquals(Set.of("jni.h", "jni_md.h"), paths.filter(Files::isRegularFile)
-                    .map(path -> path.getFileName().toString())
-                    .collect(Collectors.toSet()));
+            assertEquals(
+                    Set.of("jni.h", "jni_md.h"),
+                    paths.filter(Files::isRegularFile)
+                            .map(path -> path.getFileName().toString())
+                            .collect(Collectors.toSet()));
         }
 
         String abi = Files.readString(
-                TestPaths.projectDirectory().resolve("src/main/native/include/jni_md.h"),
-                StandardCharsets.UTF_8);
+                TestPaths.projectDirectory().resolve("src/main/native/include/jni_md.h"), StandardCharsets.UTF_8);
         assertTrue(abi.contains("defined(_WIN32)"));
         assertTrue(abi.contains("defined(__linux__) || defined(__APPLE__)"));
         assertTrue(abi.contains("static_assert(sizeof(jint) == 4"));
@@ -48,7 +51,10 @@ class JniHeaderTest {
         assertTrue(abi.contains("static_assert(sizeof(void *) == 8"));
 
         String contents = Files.readString(
-                TestPaths.projectDirectory().resolve("../.github/workflows").normalize().resolve("build.yaml"),
+                TestPaths.projectDirectory()
+                        .resolve("../.github/workflows")
+                        .normalize()
+                        .resolve("build.yaml"),
                 StandardCharsets.UTF_8);
         assertFalse(contents.contains("cp \"$INCLUDE_DIR/linux/jni_md.h\""), "build.yaml");
     }

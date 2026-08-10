@@ -28,34 +28,38 @@ import java.util.stream.Stream;
 
 public class DataMerger {
 
+    private DataMerger() {}
+
     private static void deleteRecursively(Path root) throws Exception {
         if (!Files.exists(root)) {
             return;
         }
         try (Stream<Path> stream = Files.walk(root)) {
-            List<Path> paths = new ArrayList<>(stream.sorted(Comparator.reverseOrder()).toList());
+            List<Path> paths =
+                    new ArrayList<>(stream.sorted(Comparator.reverseOrder()).toList());
             for (Path path : paths) {
                 Files.deleteIfExists(path);
             }
         }
     }
 
-    public static CalibrationPlan bootstrapCalibrationV1(
-            CalibrationBootstrapRequest request) throws Exception {
+    public static CalibrationPlan bootstrapCalibrationV1(CalibrationBootstrapRequest request) throws Exception {
         Objects.requireNonNull(request);
         Path target = request.planDirectory().toAbsolutePath().normalize();
         Path temporary = temporarySibling(target);
         ensureNewTarget(target, temporary);
         try {
             PolicyRegistry policies = new PolicyRegistry();
-            var runs = RunAggregator.aggregate(request.observationBundles(), policies,
+            var runs = RunAggregator.aggregate(request.observationBundles(), policies, request.aggregation());
+            CalibrationPlan plan = AnchorBootstrapper.bootstrap(
+                    runs,
+                    request.requiredScenarios(),
+                    request.policyBudget(),
+                    request.referenceOverrides(),
+                    request.anchorSelection(),
                     request.aggregation());
-            CalibrationPlan plan = AnchorBootstrapper.bootstrap(runs, request.requiredScenarios(),
-                    request.policyBudget(), request.referenceOverrides(),
-                    request.anchorSelection(), request.aggregation());
             CalibrationPlanCsv.write(temporary, plan);
-            CalibrationPlan readBack = CalibrationPlanCsv.read(temporary,
-                    request.requiredScenarios());
+            CalibrationPlan readBack = CalibrationPlanCsv.read(temporary, request.requiredScenarios());
             if (!readBack.anchors().anchorSetId().equals(plan.anchors().anchorSetId())
                     || !readBack.references().equals(plan.references())) {
                 throw new IllegalStateException("Calibration plan validation failed");
@@ -75,20 +79,19 @@ public class DataMerger {
         ensureNewTarget(target, temporary);
         try {
             PolicyRegistry policies = new PolicyRegistry();
-            var runs = RunAggregator.aggregate(request.observationBundles(), policies,
-                    request.aggregation());
-            var calibrations = RunCalibrator.calibrate(runs, request.calibrationPlan(),
-                    request.calibration());
+            var runs = RunAggregator.aggregate(request.observationBundles(), policies, request.aggregation());
+            var calibrations = RunCalibrator.calibrate(runs, request.calibrationPlan(), request.calibration());
             var scenarios = HierarchicalAggregator.aggregateScenarios(
-                    policies.policiesInIdOrder(), runs, calibrations,
-                    request.requiredScenarios(), request.aggregation());
+                    policies.policiesInIdOrder(),
+                    runs,
+                    calibrations,
+                    request.requiredScenarios(),
+                    request.aggregation());
             scenarios = ScenarioQualityRanker.assignQualities(scenarios);
-            var summaries = ScenarioQualityRanker.summarize(policies.policiesInIdOrder(),
-                    scenarios, request.requiredScenarios());
-            MergeResult result = new MergeResult(request.calibrationPlan(), calibrations,
-                    scenarios, summaries);
-            MergeCsvWriter.write(temporary, result,
-                    request.aggregation().calibrationAcceptance());
+            var summaries = ScenarioQualityRanker.summarize(
+                    policies.policiesInIdOrder(), scenarios, request.requiredScenarios());
+            MergeResult result = new MergeResult(request.calibrationPlan(), calibrations, scenarios, summaries);
+            MergeCsvWriter.write(temporary, result, request.aggregation().calibrationAcceptance());
             validateMergeOutput(temporary, request.requiredScenarios());
             publish(temporary, target);
             return artifacts(target);
@@ -122,12 +125,17 @@ public class DataMerger {
         }
     }
 
-    private static void validateMergeOutput(Path directory,
-            SortedSet<SourceScenario> requiredScenarios) throws Exception {
+    private static void validateMergeOutput(Path directory, SortedSet<SourceScenario> requiredScenarios)
+            throws Exception {
         CalibrationPlanCsv.read(directory, requiredScenarios);
-        List<String> files = List.of("fixed-anchors.csv", "reference-runs.csv",
-                "calibration-report.csv", "scenario-results.csv", "robust-ranking.csv",
-                "coverage-report.csv", "robust-leaders.vectors.csv",
+        List<String> files = List.of(
+                "fixed-anchors.csv",
+                "reference-runs.csv",
+                "calibration-report.csv",
+                "scenario-results.csv",
+                "robust-ranking.csv",
+                "coverage-report.csv",
+                "robust-leaders.vectors.csv",
                 "incomplete-policies.vectors.csv");
         for (String file : files) {
             String text = Files.readString(directory.resolve(file));
@@ -138,7 +146,8 @@ public class DataMerger {
     }
 
     private static MergeArtifacts artifacts(Path directory) {
-        return new MergeArtifacts(directory.resolve("fixed-anchors.csv"),
+        return new MergeArtifacts(
+                directory.resolve("fixed-anchors.csv"),
                 directory.resolve("reference-runs.csv"),
                 directory.resolve("calibration-report.csv"),
                 directory.resolve("scenario-results.csv"),
@@ -146,10 +155,6 @@ public class DataMerger {
                 directory.resolve("coverage-report.csv"),
                 directory.resolve("robust-leaders.vectors.csv"),
                 directory.resolve("incomplete-policies.vectors.csv"));
-    }
-
-    private DataMerger() {
-
     }
 
     public record CalibrationBootstrapRequest(
@@ -163,8 +168,7 @@ public class DataMerger {
 
         public CalibrationBootstrapRequest {
             observationBundles = List.copyOf(observationBundles);
-            requiredScenarios = java.util.Collections.unmodifiableSortedSet(
-                    new java.util.TreeSet<>(requiredScenarios));
+            requiredScenarios = java.util.Collections.unmodifiableSortedSet(new java.util.TreeSet<>(requiredScenarios));
             referenceOverrides = Map.copyOf(referenceOverrides);
             Objects.requireNonNull(planDirectory);
             Objects.requireNonNull(anchorSelection);
@@ -182,8 +186,7 @@ public class DataMerger {
 
         public MergeRequest {
             observationBundles = List.copyOf(observationBundles);
-            requiredScenarios = java.util.Collections.unmodifiableSortedSet(
-                    new java.util.TreeSet<>(requiredScenarios));
+            requiredScenarios = java.util.Collections.unmodifiableSortedSet(new java.util.TreeSet<>(requiredScenarios));
             Objects.requireNonNull(calibrationPlan);
             Objects.requireNonNull(outputDirectory);
             Objects.requireNonNull(calibration);
@@ -199,8 +202,5 @@ public class DataMerger {
             Path robustRanking,
             Path coverageReport,
             Path robustLeaderVectors,
-            Path incompleteVectors) {
-
-    }
-
+            Path incompleteVectors) {}
 }

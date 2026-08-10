@@ -4,8 +4,8 @@ import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.generics.LatticeReceiver;
 import io.euhedral_execution.core.generics.LatticeSource;
 import io.euhedral_execution.core.ingest.AbstractIngestSink;
-import java.lang.invoke.VarHandle;
 import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -22,8 +22,7 @@ public class BenchmarkFrameSink extends AbstractIngestSink {
 
     static {
         try {
-            CONSUMED = MethodHandles.lookup().findVarHandle(Delegate.class, "consumed",
-                    long.class);
+            CONSUMED = MethodHandles.lookup().findVarHandle(Delegate.class, "consumed", long.class);
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }
@@ -92,8 +91,8 @@ public class BenchmarkFrameSink extends AbstractIngestSink {
         }
 
         @Override
-        public long hookOnPull(Consumer<AbstractFrame> consumer,
-                Function<AbstractFrame, Boolean> stopCondition, long requested) {
+        public long hookOnPull(
+                Consumer<AbstractFrame> consumer, Function<AbstractFrame, Boolean> stopCondition, long requested) {
             if (!enter()) {
                 return 0;
             }

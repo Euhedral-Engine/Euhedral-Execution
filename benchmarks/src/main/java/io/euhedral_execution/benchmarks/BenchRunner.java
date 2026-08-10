@@ -25,17 +25,25 @@ public class BenchRunner {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(BenchRunner.class);
 
-    private static final Set<String> BENCHMARKS =
-            new TreeSet<>(
-                    Set.of("all", "core-high-scale", "core-latency", "core-hc-throughput",
-                            "core-lc-throughput",
-                            "batched-mandelbrot", "mandelbrot", "queues-spsc", "queues-mpsc",
-                            "queues-mpmc"));
-    private static final List<String> FLAGS =
-            List.of("-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED",
-                    "--add-exports", "java.base/jdk.internal.platform=ALL-UNNAMED",
-                    "--add-exports", "java.base/jdk.internal.vm.annotation=ALL-UNNAMED",
-                    "-Dorg.slf4j.simpleLogger.defaultLogLevel=error");
+    private static final Set<String> BENCHMARKS = new TreeSet<>(Set.of(
+            "all",
+            "core-high-scale",
+            "core-latency",
+            "core-hc-throughput",
+            "core-lc-throughput",
+            "batched-mandelbrot",
+            "mandelbrot",
+            "queues-spsc",
+            "queues-mpsc",
+            "queues-mpmc"));
+    private static final List<String> FLAGS = List.of(
+            "-XX:+UseThreadPriorities",
+            "--enable-native-access=ALL-UNNAMED",
+            "--add-exports",
+            "java.base/jdk.internal.platform=ALL-UNNAMED",
+            "--add-exports",
+            "java.base/jdk.internal.vm.annotation=ALL-UNNAMED",
+            "-Dorg.slf4j.simpleLogger.defaultLogLevel=error");
 
     private static Set<String> getBenchmarks(String[] args) {
         Set<String> tasks = new LinkedHashSet<>();
@@ -83,12 +91,14 @@ public class BenchRunner {
 
     private static void addProfilers(ChainedOptionsBuilder opt) {
         boolean gc = "true".equalsIgnoreCase(System.getProperty("gc", "false").trim());
-        boolean perf = "true".equalsIgnoreCase(System.getProperty("perf", "false").trim());
+        boolean perf =
+                "true".equalsIgnoreCase(System.getProperty("perf", "false").trim());
         if (gc) {
             opt.addProfiler("gc");
         }
         if (perf) {
-            opt.addProfiler("perf",
+            opt.addProfiler(
+                    "perf",
                     "events=cycles,instructions,cache-misses,L1-dcache-loads,L1-dcache-load-misses,L1-icache-loads,L1-icache-load-misses,dTLB-loads,dTLB-load-misses,branch-loads,branch-misses");
         }
     }
@@ -138,8 +148,8 @@ public class BenchRunner {
 
             tests.add(benchmark.getName());
         }
-        ChainedOptionsBuilder opt = new OptionsBuilder().include(tests.toString())
-                .jvmArgsAppend(flags.toArray(new String[0]));
+        ChainedOptionsBuilder opt =
+                new OptionsBuilder().include(tests.toString()).jvmArgsAppend(flags.toArray(new String[0]));
         addProfilers(opt);
         new Runner(opt.build()).run();
     }

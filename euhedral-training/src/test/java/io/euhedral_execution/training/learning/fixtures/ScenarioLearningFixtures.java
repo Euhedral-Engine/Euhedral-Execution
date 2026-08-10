@@ -18,8 +18,7 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 
 public final class ScenarioLearningFixtures {
-    private ScenarioLearningFixtures() {
-    }
+    private ScenarioLearningFixtures() {}
 
     public static List<PolicyVector> policies(int count) {
         if (count == 160) return splitBalancedPolicies();
@@ -47,8 +46,12 @@ public final class ScenarioLearningFixtures {
         HashSet<io.euhedral_execution.training.data.PolicyId> seen = new HashSet<>();
         Random random = new Random(0x5eed1234L);
         long splitSeed = ScenarioTrainingConfig.defaults().splitSeed();
-        while (train.size() < 116 || early.size() < 12 || scoreHigh.size() < 8
-                || scoreLow.size() < 4 || testHigh.size() < 8 || testLow.size() < 12) {
+        while (train.size() < 116
+                || early.size() < 12
+                || scoreHigh.size() < 8
+                || scoreLow.size() < 4
+                || testHigh.size() < 8
+                || testLow.size() < 12) {
             double[] weights = new double[PolicyVector.WIDTH];
             for (int index = 0; index < weights.length; index++) {
                 weights[index] = random.nextDouble() * 2 - 1;
@@ -60,7 +63,7 @@ public final class ScenarioLearningFixtures {
             if (!seen.add(policy.id())) continue;
             double minimum = Double.POSITIVE_INFINITY;
             double maximum = Double.NEGATIVE_INFINITY;
-            for (double ratio : new double[]{0.25, 0.50, 0.75, 1.0}) {
+            for (double ratio : new double[] {0.25, 0.50, 0.75, 1.0}) {
                 double latent = (1 - ratio) * policy.weight(0)
                         + ratio * policy.weight(1)
                         + 0.20 * (2 * ratio - 1) * policy.weight(2);
@@ -72,15 +75,12 @@ public final class ScenarioLearningFixtures {
             if (bucket < 8 && train.size() < 116 && maximum < 0.75) {
                 train.add(policy);
             } else if (bucket == 8) {
-                long halfHash = HasherApi.getHash(policy.id().canonical(),
-                        splitSeed ^ 0x9e3779b97f4a7c15L);
+                long halfHash = HasherApi.getHash(policy.id().canonical(), splitSeed ^ 0x9e3779b97f4a7c15L);
                 if ((halfHash & 1) == 0 && early.size() < 12 && maximum < 0.30) {
                     early.add(policy);
-                } else if ((halfHash & 1) != 0 && minimum > 0.82
-                        && scoreHigh.size() < 8) {
+                } else if ((halfHash & 1) != 0 && minimum > 0.82 && scoreHigh.size() < 8) {
                     scoreHigh.add(policy);
-                } else if ((halfHash & 1) != 0 && maximum < 0.30
-                        && scoreLow.size() < 4) {
+                } else if ((halfHash & 1) != 0 && maximum < 0.30 && scoreLow.size() < 4) {
                     scoreLow.add(policy);
                 }
             } else if (bucket == 9) {
@@ -119,8 +119,8 @@ public final class ScenarioLearningFixtures {
                         + ratio * policy.weight(1)
                         + 0.20 * (2 * ratio - 1) * policy.weight(2);
                 double throughput = 10_000 + 1_000 * latent;
-                raw.add(result(scenario, policy, ScenarioResultStatus.VALID_STRONG,
-                        throughput, OptionalDouble.empty()));
+                raw.add(result(
+                        scenario, policy, ScenarioResultStatus.VALID_STRONG, throughput, OptionalDouble.empty()));
             }
         }
         return ScenarioQualityRanker.assignQualities(raw);
@@ -129,10 +129,15 @@ public final class ScenarioLearningFixtures {
     public static List<ScenarioLearningRow> learningRows() {
         ArrayList<ScenarioLearningRow> rows = new ArrayList<>();
         for (ScenarioResult result : scenarioResults()) {
-            rows.add(new ScenarioLearningRow(result.policy(), result.scenario(), result.status(),
-                    result.quality().orElseThrow(), result.throughputMedian().orElseThrow(),
+            rows.add(new ScenarioLearningRow(
+                    result.policy(),
+                    result.scenario(),
+                    result.status(),
+                    result.quality().orElseThrow(),
+                    result.throughputMedian().orElseThrow(),
                     result.bootstrapMedianCiLow().orElseThrow(),
-                    result.bootstrapMedianCiHigh().orElseThrow(), result.acceptedRunCount(),
+                    result.bootstrapMedianCiHigh().orElseThrow(),
+                    result.acceptedRunCount(),
                     result.medianWithinRunRelativeIqr().orElseThrow(),
                     result.meanNonSuccessRate().orElseThrow()));
         }
@@ -140,17 +145,35 @@ public final class ScenarioLearningFixtures {
         return List.copyOf(rows);
     }
 
-    public static ScenarioResult result(SourceScenario scenario, PolicyVector policy,
-            ScenarioResultStatus status, double throughput, OptionalDouble quality) {
-        boolean valid = status == ScenarioResultStatus.VALID_STRONG
-                || status == ScenarioResultStatus.VALID_WEAK_OVERRIDE;
+    public static ScenarioResult result(
+            SourceScenario scenario,
+            PolicyVector policy,
+            ScenarioResultStatus status,
+            double throughput,
+            OptionalDouble quality) {
+        boolean valid =
+                status == ScenarioResultStatus.VALID_STRONG || status == ScenarioResultStatus.VALID_WEAK_OVERRIDE;
         OptionalDouble present = valid ? OptionalDouble.of(throughput) : OptionalDouble.empty();
         OptionalDouble zero = valid ? OptionalDouble.of(0) : OptionalDouble.empty();
         OptionalDouble iqr = valid ? OptionalDouble.of(0.05) : OptionalDouble.empty();
-        return new ScenarioResult(scenario, policy, status, valid ? 1 : 0, valid ? 1 : 0,
+        return new ScenarioResult(
+                scenario,
+                policy,
+                status,
+                valid ? 1 : 0,
+                valid ? 1 : 0,
                 status == ScenarioResultStatus.VALID_WEAK_OVERRIDE ? 1 : 0,
-                valid ? 0 : 1, valid ? 3 : 0, valid ? 3 : 0,
-                present, present, present, zero, iqr, zero, zero, zero,
+                valid ? 0 : 1,
+                valid ? 3 : 0,
+                valid ? 3 : 0,
+                present,
+                present,
+                present,
+                zero,
+                iqr,
+                zero,
+                zero,
+                zero,
                 valid ? OptionalDouble.of(throughput * 0.99) : OptionalDouble.empty(),
                 valid ? OptionalDouble.of(throughput * 1.01) : OptionalDouble.empty(),
                 quality);

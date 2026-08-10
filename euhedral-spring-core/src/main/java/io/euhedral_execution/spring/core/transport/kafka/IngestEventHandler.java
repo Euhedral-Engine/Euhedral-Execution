@@ -14,6 +14,7 @@ public class IngestEventHandler {
 
     boolean partitionUpdate = false;
     boolean topicUpdate = false;
+
     @Getter
     Map<String, Object> newProperties = null;
 
@@ -67,11 +68,9 @@ public class IngestEventHandler {
         REMOVE_TOPIC,
     }
 
-    public record Event(EventType type, String value, Collection<String> values,
-                        Map<String, Object> properties) {
+    public record Event(EventType type, String value, Collection<String> values, Map<String, Object> properties) {
 
-        public static final Event PARTITION_UPDATE = new Event(EventType.PARTITION_UPDATE,
-                null, null, null);
+        public static final Event PARTITION_UPDATE = new Event(EventType.PARTITION_UPDATE, null, null, null);
 
         public static Event addTopic(String value) {
             return new Event(EventType.ADD_TOPIC, value, null, null);

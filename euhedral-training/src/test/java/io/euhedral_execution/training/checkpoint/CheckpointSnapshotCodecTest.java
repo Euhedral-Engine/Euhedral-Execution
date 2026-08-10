@@ -24,19 +24,33 @@ class CheckpointSnapshotCodecTest {
     void roundTripsAllBootstrapStateAndRejectsHighestCorruption() throws Exception {
         TreeMap<RotationGroup, Integer> cursors = new TreeMap<>();
         cursors.put(new RotationGroup("env-a", 4), 0);
-        ClosedLoopCheckpoint checkpoint = new ClosedLoopCheckpoint(1, "training", 1,
-                CheckpointStage.BOOTSTRAP_PENDING, 1, 131_072, "a".repeat(64),
-                SchedulingFixtures.SCENARIOS, cursors, List.of(), List.of(), Optional.empty(),
-                Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
+        ClosedLoopCheckpoint checkpoint = new ClosedLoopCheckpoint(
+                1,
+                "training",
+                1,
+                CheckpointStage.BOOTSTRAP_PENDING,
+                1,
+                131_072,
+                "a".repeat(64),
+                SchedulingFixtures.SCENARIOS,
+                cursors,
+                List.of(),
+                List.of(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
                 List.of());
         LoadedCheckpoint written = CheckpointSnapshotCodec.writeNext(temp, checkpoint);
         assertThat(CheckpointSnapshotCodec.loadLatest(temp, "training", "a".repeat(64))
-                .orElseThrow().checkpoint()).isEqualTo(checkpoint);
+                        .orElseThrow()
+                        .checkpoint())
+                .isEqualTo(checkpoint);
 
-        Files.writeString(written.snapshotDirectory().resolve("rotation-cursors.csv"),
-                "corrupt\n");
-        assertThatThrownBy(() -> CheckpointSnapshotCodec.loadLatest(temp, "training",
-                "a".repeat(64))).isInstanceOf(IllegalArgumentException.class);
+        Files.writeString(written.snapshotDirectory().resolve("rotation-cursors.csv"), "corrupt\n");
+        assertThatThrownBy(() -> CheckpointSnapshotCodec.loadLatest(temp, "training", "a".repeat(64)))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
@@ -49,33 +63,55 @@ class CheckpointSnapshotCodecTest {
         Files.writeString(first.resolve("b"), "two");
         Files.writeString(second.resolve("b"), "two");
         Files.writeString(second.resolve("a"), "one");
-        assertThat(ArtifactFingerprint.sha256(first))
-                .isEqualTo(ArtifactFingerprint.sha256(second));
+        assertThat(ArtifactFingerprint.sha256(first)).isEqualTo(ArtifactFingerprint.sha256(second));
         Files.writeString(second.resolve("a"), "changed");
-        assertThat(ArtifactFingerprint.sha256(first))
-                .isNotEqualTo(ArtifactFingerprint.sha256(second));
+        assertThat(ArtifactFingerprint.sha256(first)).isNotEqualTo(ArtifactFingerprint.sha256(second));
     }
 
     @Test
-    void loadsHistoricalRevisionAndReadsDetachedSnapshotWithoutWorkspaceDereference()
-            throws Exception {
+    void loadsHistoricalRevisionAndReadsDetachedSnapshotWithoutWorkspaceDereference() throws Exception {
         TreeMap<RotationGroup, Integer> cursors = new TreeMap<>();
         cursors.put(new RotationGroup("env-a", 4), 0);
-        ClosedLoopCheckpoint first = new ClosedLoopCheckpoint(1, "training", 1,
-                CheckpointStage.BOOTSTRAP_PENDING, 1, 100, "a".repeat(64),
-                SchedulingFixtures.SCENARIOS, cursors, List.of(), List.of(), Optional.empty(),
-                Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
+        ClosedLoopCheckpoint first = new ClosedLoopCheckpoint(
+                1,
+                "training",
+                1,
+                CheckpointStage.BOOTSTRAP_PENDING,
+                1,
+                100,
+                "a".repeat(64),
+                SchedulingFixtures.SCENARIOS,
+                cursors,
+                List.of(),
+                List.of(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
                 List.of());
         LoadedCheckpoint one = CheckpointSnapshotCodec.writeNext(temp, first);
-        ClosedLoopCheckpoint second = new ClosedLoopCheckpoint(1, "training", 2,
-                CheckpointStage.BOOTSTRAP_PENDING, 1, 100, "a".repeat(64),
-                SchedulingFixtures.SCENARIOS, cursors, List.of(), List.of(), Optional.empty(),
-                Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
+        ClosedLoopCheckpoint second = new ClosedLoopCheckpoint(
+                1,
+                "training",
+                2,
+                CheckpointStage.BOOTSTRAP_PENDING,
+                1,
+                100,
+                "a".repeat(64),
+                SchedulingFixtures.SCENARIOS,
+                cursors,
+                List.of(),
+                List.of(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
                 List.of());
         CheckpointSnapshotCodec.writeNext(temp, second);
 
-        assertThat(CheckpointSnapshotCodec.loadRevision(temp, 1).checkpoint())
-                .isEqualTo(first);
+        assertThat(CheckpointSnapshotCodec.loadRevision(temp, 1).checkpoint()).isEqualTo(first);
         assertThat(CheckpointSnapshotCodec.readDetachedForAudit(one.snapshotDirectory()))
                 .isEqualTo(first);
     }

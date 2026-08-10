@@ -38,22 +38,48 @@ import java.util.Set;
 public final class ObservationBundleReader {
 
     private static final List<String> RUN_HEADER = List.of(
-            "schema_version", "benchmark_run_id", "closed_loop_iteration",
-            "candidate_cohort_id", "scenario_id", "environment_id", "source_count",
-            "available_physical_core_count", "source_ratio_numerator",
-            "source_ratio_denominator", "commit_sha", "dirty_working_tree", "evidence_origin",
-            "started_at", "completed_at", "expected_repetitions", "sample_duration_nanos",
-            "liveness_timeout_nanos", "frames_per_source", "reset_timeout_nanos",
-            "ordered_frames", "cpu_set_hex", "frame_source_seeds");
+            "schema_version",
+            "benchmark_run_id",
+            "closed_loop_iteration",
+            "candidate_cohort_id",
+            "scenario_id",
+            "environment_id",
+            "source_count",
+            "available_physical_core_count",
+            "source_ratio_numerator",
+            "source_ratio_denominator",
+            "commit_sha",
+            "dirty_working_tree",
+            "evidence_origin",
+            "started_at",
+            "completed_at",
+            "expected_repetitions",
+            "sample_duration_nanos",
+            "liveness_timeout_nanos",
+            "frames_per_source",
+            "reset_timeout_nanos",
+            "ordered_frames",
+            "cpu_set_hex",
+            "frame_source_seeds");
     private static final List<String> OBSERVATION_HEADER = List.of(
-            "schema_version", "observation_id", "policy_id", "repetition_number", "status",
-            "measurement_encoding", "started_at", "ended_at", "elapsed_nanos",
-            "completed_frames", "throughput_frames_per_second", "failure_code");
+            "schema_version",
+            "observation_id",
+            "policy_id",
+            "repetition_number",
+            "status",
+            "measurement_encoding",
+            "started_at",
+            "ended_at",
+            "elapsed_nanos",
+            "completed_frames",
+            "throughput_frames_per_second",
+            "failure_code");
+
+    private ObservationBundleReader() {}
 
     public static ObservationBundle read(Path directory) {
         try {
-            if (!Files.isRegularFile(directory.resolve("COMPLETE"))
-                    || Files.size(directory.resolve("COMPLETE")) != 0) {
+            if (!Files.isRegularFile(directory.resolve("COMPLETE")) || Files.size(directory.resolve("COMPLETE")) != 0) {
                 throw new IllegalArgumentException("Bundle lacks COMPLETE");
             }
             List<List<String>> runRows = readCsv(directory.resolve("run.csv"));
@@ -63,8 +89,11 @@ public final class ObservationBundleReader {
             }
             List<String> r = runRows.get(1);
             requireVersion(r.get(0));
-            SourceScenario scenario = new SourceScenario(r.get(5), integer(r.get(6)),
-                    integer(r.get(7)), new SourceRatio(integer(r.get(8)), integer(r.get(9))));
+            SourceScenario scenario = new SourceScenario(
+                    r.get(5),
+                    integer(r.get(6)),
+                    integer(r.get(7)),
+                    new SourceRatio(integer(r.get(8)), integer(r.get(9))));
             if (!scenario.canonical().equals(r.get(4))) {
                 throw new IllegalArgumentException("Scenario ID mismatch");
             }
@@ -75,24 +104,37 @@ public final class ObservationBundleReader {
                     if (parts.length != 3) {
                         throw new IllegalArgumentException("Malformed source seed");
                     }
-                    seeds.add(new FrameSourceSeed(integer(parts[0]), unsignedHex(parts[1]),
-                            unsignedHex(parts[2])));
+                    seeds.add(new FrameSourceSeed(integer(parts[0]), unsignedHex(parts[1]), unsignedHex(parts[2])));
                 }
             }
-            BenchmarkParameters parameters = new BenchmarkParameters(integer(r.get(15)),
-                    number(r.get(16)), number(r.get(17)), integer(r.get(18)), number(r.get(19)),
-                    bool(r.get(20)), r.get(21), seeds);
-            BenchmarkRunDescriptor descriptor = new BenchmarkRunDescriptor(1, r.get(1),
-                    integer(r.get(2)), r.get(3), scenario, r.get(10), bool(r.get(11)),
-                    EvidenceOrigin.valueOf(r.get(12)), instant(r.get(13)), parameters);
+            BenchmarkParameters parameters = new BenchmarkParameters(
+                    integer(r.get(15)),
+                    number(r.get(16)),
+                    number(r.get(17)),
+                    integer(r.get(18)),
+                    number(r.get(19)),
+                    bool(r.get(20)),
+                    r.get(21),
+                    seeds);
+            BenchmarkRunDescriptor descriptor = new BenchmarkRunDescriptor(
+                    1,
+                    r.get(1),
+                    integer(r.get(2)),
+                    r.get(3),
+                    scenario,
+                    r.get(10),
+                    bool(r.get(11)),
+                    EvidenceOrigin.valueOf(r.get(12)),
+                    instant(r.get(13)),
+                    parameters);
             BenchmarkRunContext context = new BenchmarkRunContext(descriptor, instant(r.get(14)));
 
             List<List<String>> policyRows = readCsv(directory.resolve("policies.csv"));
             if (policyRows.size() < 2 || policyRows.getFirst().size() != 32) {
                 throw new IllegalArgumentException("Invalid policies CSV");
             }
-            List<String> policyHeader = new ArrayList<>(List.of("schema_version",
-                    "schedule_position", "policy_id", "roles"));
+            List<String> policyHeader =
+                    new ArrayList<>(List.of("schema_version", "schedule_position", "policy_id", "roles"));
             for (int i = 0; i < PolicyVector.WIDTH; i++) {
                 policyHeader.add(String.format("weight_%02d_bits", i));
             }
@@ -128,8 +170,11 @@ public final class ObservationBundleReader {
                         throw new IllegalArgumentException("Duplicate policy role");
                     }
                 }
-                String canonicalRoles = roles.stream().map(Enum::name).sorted()
-                        .reduce((left, right) -> left + ";" + right).orElseThrow();
+                String canonicalRoles = roles.stream()
+                        .map(Enum::name)
+                        .sorted()
+                        .reduce((left, right) -> left + ";" + right)
+                        .orElseThrow();
                 if (!canonicalRoles.equals(row.get(3))) {
                     throw new IllegalArgumentException("Policy roles are not sorted");
                 }
@@ -137,8 +182,7 @@ public final class ObservationBundleReader {
             }
 
             List<List<String>> observationRows = readCsv(directory.resolve("observations.csv"));
-            if (observationRows.isEmpty()
-                    || !observationRows.getFirst().equals(OBSERVATION_HEADER)) {
+            if (observationRows.isEmpty() || !observationRows.getFirst().equals(OBSERVATION_HEADER)) {
                 throw new IllegalArgumentException("Observation header");
             }
             List<BenchmarkObservation> observations = new ArrayList<>();
@@ -150,18 +194,27 @@ public final class ObservationBundleReader {
                 }
                 requireVersion(row.get(0));
                 PolicyId policyId = PolicyId.parse(row.get(2));
-                ScheduledPolicy policy = policies.stream().filter(
-                        item -> item.policy().id().equals(policyId)).findFirst().orElseThrow();
-                ObservationKey key = new ObservationKey(descriptor.benchmarkRunId(), scenario,
-                        policyId, integer(row.get(3)));
+                ScheduledPolicy policy = policies.stream()
+                        .filter(item -> item.policy().id().equals(policyId))
+                        .findFirst()
+                        .orElseThrow();
+                ObservationKey key =
+                        new ObservationKey(descriptor.benchmarkRunId(), scenario, policyId, integer(row.get(3)));
                 if (!key.canonical().equals(row.get(1)) || !keys.add(key)) {
                     throw new IllegalArgumentException("Duplicate or mismatched observation ID");
                 }
-                observations.add(new BenchmarkObservation(key, descriptor, policy,
+                observations.add(new BenchmarkObservation(
+                        key,
+                        descriptor,
+                        policy,
                         ObservationStatus.valueOf(row.get(4)),
-                        MeasurementEncoding.valueOf(row.get(5)), instant(row.get(6)),
-                        instant(row.get(7)), optionalLong(row.get(8)),
-                        optionalLong(row.get(9)), optionalDouble(row.get(10)), row.get(11)));
+                        MeasurementEncoding.valueOf(row.get(5)),
+                        instant(row.get(6)),
+                        instant(row.get(7)),
+                        optionalLong(row.get(8)),
+                        optionalLong(row.get(9)),
+                        optionalDouble(row.get(10)),
+                        row.get(11)));
                 if (observations.getLast().endedAt().isAfter(context.completedAt())) {
                     throw new IllegalArgumentException("Observation ends after run");
                 }
@@ -192,11 +245,10 @@ public final class ObservationBundleReader {
         Set<ObservationKey> keys = new HashSet<>();
         int observationCount = 0;
         validateLfFile(directory.resolve("observations.csv"));
-        try (BufferedReader reader = Files.newBufferedReader(directory.resolve("observations.csv"),
-                StandardCharsets.UTF_8)) {
+        try (BufferedReader reader =
+                Files.newBufferedReader(directory.resolve("observations.csv"), StandardCharsets.UTF_8)) {
             String header = reader.readLine();
-            if (header == null || !StrictCsv.parse(header + "\n").getFirst()
-                    .equals(OBSERVATION_HEADER)) {
+            if (header == null || !StrictCsv.parse(header + "\n").getFirst().equals(OBSERVATION_HEADER)) {
                 throw new IllegalArgumentException("Observation header");
             }
             String line;
@@ -214,23 +266,33 @@ public final class ObservationBundleReader {
                 }
                 ObservationKey key = new ObservationKey(
                         metadata.run().descriptor().benchmarkRunId(),
-                        metadata.run().descriptor().scenario(), policyId, integer(row.get(3)));
+                        metadata.run().descriptor().scenario(),
+                        policyId,
+                        integer(row.get(3)));
                 if (!key.canonical().equals(row.get(1)) || !keys.add(key)) {
                     throw new IllegalArgumentException("Duplicate or mismatched observation ID");
                 }
                 int expectedPosition = observationCount
-                        / metadata.run().descriptor().parameters().expectedRepetitions() + 1;
+                                / metadata.run().descriptor().parameters().expectedRepetitions()
+                        + 1;
                 int expectedRepetition = observationCount
-                        % metadata.run().descriptor().parameters().expectedRepetitions() + 1;
-                if (policy.schedulePosition() != expectedPosition
-                        || key.repetitionNumber() != expectedRepetition) {
+                                % metadata.run().descriptor().parameters().expectedRepetitions()
+                        + 1;
+                if (policy.schedulePosition() != expectedPosition || key.repetitionNumber() != expectedRepetition) {
                     throw new IllegalArgumentException("Observation order mismatch");
                 }
-                BenchmarkObservation observation = new BenchmarkObservation(key,
-                        metadata.run().descriptor(), policy, ObservationStatus.valueOf(row.get(4)),
-                        MeasurementEncoding.valueOf(row.get(5)), instant(row.get(6)),
-                        instant(row.get(7)), optionalLong(row.get(8)), optionalLong(row.get(9)),
-                        optionalDouble(row.get(10)), row.get(11));
+                BenchmarkObservation observation = new BenchmarkObservation(
+                        key,
+                        metadata.run().descriptor(),
+                        policy,
+                        ObservationStatus.valueOf(row.get(4)),
+                        MeasurementEncoding.valueOf(row.get(5)),
+                        instant(row.get(6)),
+                        instant(row.get(7)),
+                        optionalLong(row.get(8)),
+                        optionalLong(row.get(9)),
+                        optionalDouble(row.get(10)),
+                        row.get(11));
                 if (observation.endedAt().isAfter(metadata.run().completedAt())) {
                     throw new IllegalArgumentException("Observation ends after run");
                 }
@@ -249,8 +311,7 @@ public final class ObservationBundleReader {
 
     private static ObservationMetadata readMetadata(Path directory) {
         try {
-            if (!Files.isRegularFile(directory.resolve("COMPLETE"))
-                    || Files.size(directory.resolve("COMPLETE")) != 0) {
+            if (!Files.isRegularFile(directory.resolve("COMPLETE")) || Files.size(directory.resolve("COMPLETE")) != 0) {
                 throw new IllegalArgumentException("Bundle lacks COMPLETE");
             }
             List<List<String>> runRows = readCsv(directory.resolve("run.csv"));
@@ -260,8 +321,11 @@ public final class ObservationBundleReader {
             }
             List<String> row = runRows.get(1);
             requireVersion(row.get(0));
-            SourceScenario scenario = new SourceScenario(row.get(5), integer(row.get(6)),
-                    integer(row.get(7)), new SourceRatio(integer(row.get(8)), integer(row.get(9))));
+            SourceScenario scenario = new SourceScenario(
+                    row.get(5),
+                    integer(row.get(6)),
+                    integer(row.get(7)),
+                    new SourceRatio(integer(row.get(8)), integer(row.get(9))));
             if (!scenario.canonical().equals(row.get(4))) {
                 throw new IllegalArgumentException("Scenario ID mismatch");
             }
@@ -272,21 +336,34 @@ public final class ObservationBundleReader {
                     if (parts.length != 3) {
                         throw new IllegalArgumentException("Malformed source seed");
                     }
-                    seeds.add(new FrameSourceSeed(integer(parts[0]), unsignedHex(parts[1]),
-                            unsignedHex(parts[2])));
+                    seeds.add(new FrameSourceSeed(integer(parts[0]), unsignedHex(parts[1]), unsignedHex(parts[2])));
                 }
             }
-            BenchmarkParameters parameters = new BenchmarkParameters(integer(row.get(15)),
-                    number(row.get(16)), number(row.get(17)), integer(row.get(18)),
-                    number(row.get(19)), bool(row.get(20)), row.get(21), seeds);
-            BenchmarkRunDescriptor descriptor = new BenchmarkRunDescriptor(1, row.get(1),
-                    integer(row.get(2)), row.get(3), scenario, row.get(10), bool(row.get(11)),
-                    EvidenceOrigin.valueOf(row.get(12)), instant(row.get(13)), parameters);
+            BenchmarkParameters parameters = new BenchmarkParameters(
+                    integer(row.get(15)),
+                    number(row.get(16)),
+                    number(row.get(17)),
+                    integer(row.get(18)),
+                    number(row.get(19)),
+                    bool(row.get(20)),
+                    row.get(21),
+                    seeds);
+            BenchmarkRunDescriptor descriptor = new BenchmarkRunDescriptor(
+                    1,
+                    row.get(1),
+                    integer(row.get(2)),
+                    row.get(3),
+                    scenario,
+                    row.get(10),
+                    bool(row.get(11)),
+                    EvidenceOrigin.valueOf(row.get(12)),
+                    instant(row.get(13)),
+                    parameters);
             BenchmarkRunContext context = new BenchmarkRunContext(descriptor, instant(row.get(14)));
 
             List<List<String>> policyRows = readCsv(directory.resolve("policies.csv"));
-            List<String> expectedHeader = new ArrayList<>(List.of("schema_version",
-                    "schedule_position", "policy_id", "roles"));
+            List<String> expectedHeader =
+                    new ArrayList<>(List.of("schema_version", "schedule_position", "policy_id", "roles"));
             for (int i = 0; i < PolicyVector.WIDTH; i++) {
                 expectedHeader.add(String.format("weight_%02d_bits", i));
             }
@@ -307,12 +384,10 @@ public final class ObservationBundleReader {
                 }
                 double[] weights = new double[PolicyVector.WIDTH];
                 for (int weight = 0; weight < weights.length; weight++) {
-                    weights[weight] = Double.longBitsToDouble(
-                            unsignedHex(policyRow.get(weight + 4)));
+                    weights[weight] = Double.longBitsToDouble(unsignedHex(policyRow.get(weight + 4)));
                 }
                 PolicyVector policy = registry.register(PolicyVector.of(weights));
-                if (!policy.id().canonical().equals(policyRow.get(2))
-                        || !policyIds.add(policy.id())) {
+                if (!policy.id().canonical().equals(policyRow.get(2)) || !policyIds.add(policy.id())) {
                     throw new IllegalArgumentException("Declared or duplicate policy ID");
                 }
                 EnumSet<PolicyRole> roles = EnumSet.noneOf(PolicyRole.class);
@@ -321,8 +396,11 @@ public final class ObservationBundleReader {
                         throw new IllegalArgumentException("Duplicate policy role");
                     }
                 }
-                String canonicalRoles = roles.stream().map(Enum::name).sorted()
-                        .reduce((left, right) -> left + ";" + right).orElseThrow();
+                String canonicalRoles = roles.stream()
+                        .map(Enum::name)
+                        .sorted()
+                        .reduce((left, right) -> left + ";" + right)
+                        .orElseThrow();
                 if (!canonicalRoles.equals(policyRow.get(3))) {
                     throw new IllegalArgumentException("Policy roles are not sorted");
                 }
@@ -377,8 +455,7 @@ public final class ObservationBundleReader {
     }
 
     private static OptionalDouble optionalDouble(String value) {
-        return value.isEmpty() ? OptionalDouble.empty()
-                : OptionalDouble.of(Double.parseDouble(value));
+        return value.isEmpty() ? OptionalDouble.empty() : OptionalDouble.of(Double.parseDouble(value));
     }
 
     private static Instant instant(String value) {
@@ -417,9 +494,6 @@ public final class ObservationBundleReader {
         }
     }
 
-    private ObservationBundleReader() {
-    }
-
     public interface ObservationVisitor {
 
         void onStart(BenchmarkRunContext run, List<ScheduledPolicy> policies);
@@ -427,7 +501,5 @@ public final class ObservationBundleReader {
         void onObservation(BenchmarkObservation observation);
     }
 
-    private record ObservationMetadata(BenchmarkRunContext run, List<ScheduledPolicy> policies) {
-
-    }
+    private record ObservationMetadata(BenchmarkRunContext run, List<ScheduledPolicy> policies) {}
 }

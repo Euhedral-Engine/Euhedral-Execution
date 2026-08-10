@@ -26,10 +26,8 @@ class NativeBinaryGateTest {
     private static final int PE_ARM64 = 0xaa64;
     private static final int MACHO_X64 = 0x01000007;
     private static final int MACHO_ARM64 = 0x0100000c;
-    private static final Set<String> WINDOWS_LIBRARIES = Set.of(
-            "KERNEL32.dll",
-            "api-ms-win-crt-heap-l1-1-0.dll",
-            "api-ms-win-crt-runtime-l1-1-0.dll");
+    private static final Set<String> WINDOWS_LIBRARIES =
+            Set.of("KERNEL32.dll", "api-ms-win-crt-heap-l1-1-0.dll", "api-ms-win-crt-runtime-l1-1-0.dll");
 
     @Test
     void checksEveryManifestProduct() throws Exception {
@@ -52,17 +50,29 @@ class NativeBinaryGateTest {
             if (product.getKey().endsWith(".so")) {
                 assertEquals(0x7f, Byte.toUnsignedInt(bytes[0]));
                 machine = Short.toUnsignedInt(ByteBuffer.wrap(bytes, 18, 2)
-                        .order(ByteOrder.LITTLE_ENDIAN).getShort());
+                        .order(ByteOrder.LITTLE_ENDIAN)
+                        .getShort());
             } else if (product.getKey().endsWith(".dll")) {
-                int peOffset = ByteBuffer.wrap(bytes, 0x3c, 4).order(ByteOrder.LITTLE_ENDIAN).getInt();
-                assertEquals(0x00004550, ByteBuffer.wrap(bytes, peOffset, 4)
-                        .order(ByteOrder.LITTLE_ENDIAN).getInt());
+                int peOffset = ByteBuffer.wrap(bytes, 0x3c, 4)
+                        .order(ByteOrder.LITTLE_ENDIAN)
+                        .getInt();
+                assertEquals(
+                        0x00004550,
+                        ByteBuffer.wrap(bytes, peOffset, 4)
+                                .order(ByteOrder.LITTLE_ENDIAN)
+                                .getInt());
                 machine = Short.toUnsignedInt(ByteBuffer.wrap(bytes, peOffset + 4, 2)
-                        .order(ByteOrder.LITTLE_ENDIAN).getShort());
+                        .order(ByteOrder.LITTLE_ENDIAN)
+                        .getShort());
             } else {
-                assertEquals(0xfeedfacf, ByteBuffer.wrap(bytes, 0, 4)
-                        .order(ByteOrder.LITTLE_ENDIAN).getInt());
-                machine = ByteBuffer.wrap(bytes, 4, 4).order(ByteOrder.LITTLE_ENDIAN).getInt();
+                assertEquals(
+                        0xfeedfacf,
+                        ByteBuffer.wrap(bytes, 0, 4)
+                                .order(ByteOrder.LITTLE_ENDIAN)
+                                .getInt());
+                machine = ByteBuffer.wrap(bytes, 4, 4)
+                        .order(ByteOrder.LITTLE_ENDIAN)
+                        .getInt();
             }
             assertEquals(product.getValue().intValue(), machine, product.getKey());
         }
@@ -77,11 +87,11 @@ class NativeBinaryGateTest {
         assertTrue(Files.isExecutable(inspector), inspector.toString());
 
         Path generated = TestPaths.buildDirectory().resolve("generated-resources/native");
-        for (String resource : List.of(
-                "bin/windows/windows_jni_x64.dll",
-                "bin/windows/windows_jni_arm64.dll")) {
+        for (String resource : List.of("bin/windows/windows_jni_x64.dll", "bin/windows/windows_jni_arm64.dll")) {
             Process process = new ProcessBuilder(
-                    inspector.toString(), "--coff-imports", generated.resolve(resource).toString())
+                            inspector.toString(),
+                            "--coff-imports",
+                            generated.resolve(resource).toString())
                     .redirectErrorStream(true)
                     .start();
             String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);

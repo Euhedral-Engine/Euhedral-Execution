@@ -12,11 +12,23 @@ import java.util.List;
 import java.util.TreeSet;
 
 public final class TrainingRunPackageInputsCodec {
-    private static final List<String> KEYS = List.of("schema_version", "artifact_type",
-            "package_id", "training_run_id", "checkpoint_revision", "scheduler_seed_hex",
-            "commit_sha", "dirty_working_tree", "expected_repetitions",
-            "sample_duration_nanos", "liveness_timeout_nanos", "frames_per_source",
-            "reset_timeout_nanos", "ordered_frames");
+    private static final List<String> KEYS = List.of(
+            "schema_version",
+            "artifact_type",
+            "package_id",
+            "training_run_id",
+            "checkpoint_revision",
+            "scheduler_seed_hex",
+            "commit_sha",
+            "dirty_working_tree",
+            "expected_repetitions",
+            "sample_duration_nanos",
+            "liveness_timeout_nanos",
+            "frames_per_source",
+            "reset_timeout_nanos",
+            "ordered_frames");
+
+    private TrainingRunPackageInputsCodec() {}
 
     public static String encode(TrainingRunPackageInputs inputs) {
         BenchmarkExecutionConfig config = inputs.benchmarkConfig();
@@ -43,14 +55,13 @@ public final class TrainingRunPackageInputsCodec {
 
     public static TrainingRunPackageInputs read(Path path) throws IOException {
         byte[] bytes = Files.readAllBytes(path);
-        if (bytes.length == 0 || bytes[bytes.length - 1] != '\n'
-                || bytes.length >= 3 && bytes[0] == (byte) 0xef
-                && bytes[1] == (byte) 0xbb && bytes[2] == (byte) 0xbf) {
+        if (bytes.length == 0
+                || bytes[bytes.length - 1] != '\n'
+                || bytes.length >= 3 && bytes[0] == (byte) 0xef && bytes[1] == (byte) 0xbb && bytes[2] == (byte) 0xbf) {
             throw new IOException("Package inputs are not canonical UTF-8/LF");
         }
         String text = new String(bytes, StandardCharsets.UTF_8);
-        if (text.indexOf('\r') >= 0 || !java.util.Arrays.equals(bytes,
-                text.getBytes(StandardCharsets.UTF_8))) {
+        if (text.indexOf('\r') >= 0 || !java.util.Arrays.equals(bytes, text.getBytes(StandardCharsets.UTF_8))) {
             throw new IOException("Package inputs are not canonical UTF-8/LF");
         }
         String[] lines = text.substring(0, text.length() - 1).split("\n", -1);
@@ -60,8 +71,7 @@ public final class TrainingRunPackageInputsCodec {
         ArrayList<String> values = new ArrayList<>();
         for (int index = 0; index < KEYS.size(); index++) {
             String prefix = KEYS.get(index) + "=";
-            if (!lines[index].startsWith(prefix)
-                    || lines[index].indexOf('=', prefix.length()) >= 0) {
+            if (!lines[index].startsWith(prefix) || lines[index].indexOf('=', prefix.length()) >= 0) {
                 throw new IOException("Out-of-order or malformed package input key");
             }
             values.add(lines[index].substring(prefix.length()));
@@ -79,14 +89,12 @@ public final class TrainingRunPackageInputsCodec {
             } catch (RuntimeException error) {
                 throw new IOException("Invalid required scenario", error);
             }
-            if (previous != null && scenario.compareTo(previous) <= 0
-                    || !scenarios.add(scenario)) {
+            if (previous != null && scenario.compareTo(previous) <= 0 || !scenarios.add(scenario)) {
                 throw new IOException("Required scenarios are not canonical");
             }
             previous = scenario;
         }
-        if (!values.get(0).equals("1")
-                || !values.get(1).equals("euhedral-training-run-package-inputs")) {
+        if (!values.get(0).equals("1") || !values.get(1).equals("euhedral-training-run-package-inputs")) {
             throw new IOException("Unsupported package input schema");
         }
         try {
@@ -95,9 +103,15 @@ public final class TrainingRunPackageInputsCodec {
                     Integer.parseInt(values.get(8)), Long.parseLong(values.get(9)),
                     Long.parseLong(values.get(10)), Integer.parseInt(values.get(11)),
                     Long.parseLong(values.get(12)), parseBoolean(values.get(13)));
-            TrainingRunPackageInputs result = new TrainingRunPackageInputs(values.get(2),
-                    values.get(3), Integer.parseInt(values.get(4)), seed, values.get(6),
-                    parseBoolean(values.get(7)), config, scenarios);
+            TrainingRunPackageInputs result = new TrainingRunPackageInputs(
+                    values.get(2),
+                    values.get(3),
+                    Integer.parseInt(values.get(4)),
+                    seed,
+                    values.get(6),
+                    parseBoolean(values.get(7)),
+                    config,
+                    scenarios);
             if (!encode(result).equals(text)) {
                 throw new IOException("Package inputs are not canonically encoded");
             }
@@ -126,8 +140,5 @@ public final class TrainingRunPackageInputsCodec {
             throw new IllegalArgumentException("Invalid boolean");
         }
         return Boolean.parseBoolean(value);
-    }
-
-    private TrainingRunPackageInputsCodec() {
     }
 }

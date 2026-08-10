@@ -21,6 +21,17 @@ import org.junit.jupiter.api.Test;
 
 class OffsetCollectorTest {
 
+    private static OffsetCollector collector(TrackingConsumer consumer, long password) {
+        AtomicReference<Consumer<?, ?>> current = new AtomicReference<>(consumer);
+        return new OffsetCollector(current, new CommitPolicy(0, Long.MAX_VALUE, 1, Long.MAX_VALUE), password);
+    }
+
+    private static KafkaFrame frame(TopicPartition partition, long offset) {
+        ConsumerRecord<byte[], byte[]> record =
+                new ConsumerRecord<>(partition.topic(), partition.partition(), offset, new byte[] {1}, new byte[] {2});
+        return new KafkaFrame(1, record, new OffsetMd(offset), null, new KillSwitch());
+    }
+
     @Test
     void commitPolicyHonorsMinimumsAndEitherMaximum() {
         CommitPolicy policy = new CommitPolicy(10, 100, 3, 20);
@@ -99,19 +110,6 @@ class OffsetCollectorTest {
         assertTrue(collector.isEmpty());
     }
 
-    private static OffsetCollector collector(TrackingConsumer consumer, long password) {
-        AtomicReference<Consumer<?, ?>> current = new AtomicReference<>(consumer);
-        return new OffsetCollector(current,
-                new CommitPolicy(0, Long.MAX_VALUE, 1, Long.MAX_VALUE), password);
-    }
-
-    private static KafkaFrame frame(TopicPartition partition, long offset) {
-        ConsumerRecord<byte[], byte[]> record =
-                new ConsumerRecord<>(partition.topic(), partition.partition(), offset,
-                        new byte[]{1}, new byte[]{2});
-        return new KafkaFrame(1, record, new OffsetMd(offset), null, new KillSwitch());
-    }
-
     private static final class TrackingConsumer extends MockConsumer<Object, Object> {
 
         final Exception firstFailure;
@@ -125,8 +123,7 @@ class OffsetCollectorTest {
 
         @Override
         public synchronized void commitAsync(
-                Map<TopicPartition, OffsetAndMetadata> offsets,
-                OffsetCommitCallback callback) {
+                Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
             this.commitCalls++;
             this.offsets = Map.copyOf(offsets);
             Exception failure = this.commitCalls == 1 ? this.firstFailure : null;

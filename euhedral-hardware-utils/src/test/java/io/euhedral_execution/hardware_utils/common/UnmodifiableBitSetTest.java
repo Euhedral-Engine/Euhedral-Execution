@@ -32,12 +32,11 @@ class UnmodifiableBitSetTest {
 
     @Test
     void doubleArrayCopiesAndIteratesOnlyTheRequestedRange() {
-        UnmodifiableDoubleArray values =
-                UnmodifiableDoubleArray.wrap(new double[]{1.0, 2.0, 3.0, 4.0});
+        UnmodifiableDoubleArray values = UnmodifiableDoubleArray.wrap(new double[] {1.0, 2.0, 3.0, 4.0});
         double[] target = new double[5];
         values.copy(target, 1, 4, 2);
 
-        assertArrayEquals(new double[]{0.0, 3.0, 4.0, 0.0, 0.0}, target);
+        assertArrayEquals(new double[] {0.0, 3.0, 4.0, 0.0, 0.0}, target);
 
         List<Double> iterated = new ArrayList<>();
         values.iterate(1, 3, iterated::add);

@@ -2,6 +2,8 @@ package io.euhedral_execution.hashing;
 
 public final class ByteHasher extends AbstractHasher {
 
+    private ByteHasher() {}
+
     public static long getHash(byte[] data) {
         return getHash(data, BASE_SEED);
     }
@@ -49,28 +51,24 @@ public final class ByteHasher extends AbstractHasher {
     }
 
     private static long readLong(byte[] data, int i) {
-        return (data[i] & 0xFFL) |
-                ((data[i + 1] & 0xFFL) << 8) |
-                ((data[i + 2] & 0xFFL) << 16) |
-                ((data[i + 3] & 0xFFL) << 24) |
-                ((data[i + 4] & 0xFFL) << 32) |
-                ((data[i + 5] & 0xFFL) << 40) |
-                ((data[i + 6] & 0xFFL) << 48) |
-                ((data[i + 7] & 0xFFL) << 56);
+        return (data[i] & 0xFFL)
+                | ((data[i + 1] & 0xFFL) << 8)
+                | ((data[i + 2] & 0xFFL) << 16)
+                | ((data[i + 3] & 0xFFL) << 24)
+                | ((data[i + 4] & 0xFFL) << 32)
+                | ((data[i + 5] & 0xFFL) << 40)
+                | ((data[i + 6] & 0xFFL) << 48)
+                | ((data[i + 7] & 0xFFL) << 56);
     }
 
     private static int readInt(byte[] data, int i) {
-        return (data[i] & 0xFF) |
-                ((data[i + 1] & 0xFF) << 8) |
-                ((data[i + 2] & 0xFF) << 16) |
-                ((data[i + 3] & 0xFF) << 24);
+        return (data[i] & 0xFF)
+                | ((data[i + 1] & 0xFF) << 8)
+                | ((data[i + 2] & 0xFF) << 16)
+                | ((data[i + 3] & 0xFF) << 24);
     }
 
     public static long getHash(byte[] data1, byte[] data2) {
         return getHash(data2, getHash(data1, BASE_SEED));
-    }
-
-    private ByteHasher() {
-
     }
 }

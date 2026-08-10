@@ -7,12 +7,12 @@ import java.util.function.DoubleConsumer;
 public final class UnmodifiableDoubleArray {
     private final double[] delegate;
 
-    public static UnmodifiableDoubleArray wrap(double[] delegate) {
-        return new UnmodifiableDoubleArray(delegate);
-    }
-
     public UnmodifiableDoubleArray(double[] delegate) {
         this.delegate = Objects.requireNonNull(delegate).clone();
+    }
+
+    public static UnmodifiableDoubleArray wrap(double[] delegate) {
+        return new UnmodifiableDoubleArray(delegate);
     }
 
     public double get(int idx) {
@@ -21,8 +21,7 @@ public final class UnmodifiableDoubleArray {
 
     public void copy(double[] buffer, int bufferStart, int bufferEnd, int sourceStart) {
         Objects.requireNonNull(buffer);
-        if (bufferStart < 0 || bufferStart > bufferEnd || bufferEnd > buffer.length
-                || sourceStart < 0) {
+        if (bufferStart < 0 || bufferStart > bufferEnd || bufferEnd > buffer.length || sourceStart < 0) {
             throw new IndexOutOfBoundsException();
         }
         while (bufferStart < bufferEnd && sourceStart < delegate.length) {
@@ -51,8 +50,7 @@ public final class UnmodifiableDoubleArray {
 
     @Override
     public boolean equals(Object other) {
-        return other instanceof UnmodifiableDoubleArray values
-                && Arrays.equals(delegate, values.delegate);
+        return other instanceof UnmodifiableDoubleArray values && Arrays.equals(delegate, values.delegate);
     }
 
     @Override

@@ -30,8 +30,20 @@ public final class EuhedralScheduler implements Scheduler {
 
     private static final AtomicReference<EuhedralScheduler> INSTANCE = new AtomicReference<>();
     private static final AtomicBoolean CONSTRUCTING = new AtomicBoolean(false);
-    private static final PaddedAtomicLong SEED = new PaddedAtomicLong(ThreadLocalRandom.current()
-            .nextLong());
+    private static final PaddedAtomicLong SEED =
+            new PaddedAtomicLong(ThreadLocalRandom.current().nextLong());
+    private final AtomicBoolean disposed = new AtomicBoolean(false);
+    private final ControlPlaneLattice controlPlane;
+    private final EuhedralWorker[] sinks;
+
+    private EuhedralScheduler(ControlPlaneLattice controlPlane) {
+        this.controlPlane = controlPlane;
+        this.sinks = new EuhedralWorker[Runtime.getRuntime().availableProcessors()];
+        for (int i = 0; i < this.sinks.length; i++) {
+            this.sinks[i] = EuhedralWorker.spawn(8_096, 2);
+            controlPlane.addUpstream(this.sinks[i]);
+        }
+    }
 
     public static @Nullable EuhedralScheduler get() {
         return INSTANCE.getOpaque();
@@ -63,7 +75,8 @@ public final class EuhedralScheduler implements Scheduler {
         return getOrCreate(LatticeConfig.ofDefaults(name, workerName));
     }
 
-    public static @NonNull EuhedralScheduler getOrCreate(String name, String workerName, String metricPrefix, MeterRegistry registry) {
+    public static @NonNull EuhedralScheduler getOrCreate(
+            String name, String workerName, String metricPrefix, MeterRegistry registry) {
         return getOrCreate(LatticeConfig.ofDefaults(name, workerName, metricPrefix, registry));
     }
 
@@ -86,19 +99,6 @@ public final class EuhedralScheduler implements Scheduler {
         return instance;
     }
 
-    private final AtomicBoolean disposed = new AtomicBoolean(false);
-    private final ControlPlaneLattice controlPlane;
-    private final EuhedralWorker[] sinks;
-
-    private EuhedralScheduler(ControlPlaneLattice controlPlane) {
-        this.controlPlane = controlPlane;
-        this.sinks = new EuhedralWorker[Runtime.getRuntime().availableProcessors()];
-        for (int i = 0; i < this.sinks.length; i++) {
-            this.sinks[i] = EuhedralWorker.spawn(8_096, 2);
-            controlPlane.addUpstream(this.sinks[i]);
-        }
-    }
-
     /// This method injects a Subscriber handle into the Euhedral ControlPlaneLattice. The subscriber must
     /// have a subscription before this method is called. This is equivalent to calling
     /// `.publishOn()`
@@ -118,8 +118,7 @@ public final class EuhedralScheduler implements Scheduler {
             this.controlPlane.addUpstream(subscriber);
             return;
         }
-        throw new IllegalStateException(
-                "The subscriber must have a subscription before calling ingest");
+        throw new IllegalStateException("The subscriber must have a subscription before calling ingest");
     }
 
     @Override
@@ -128,15 +127,13 @@ public final class EuhedralScheduler implements Scheduler {
     }
 
     @Override
-    public @NonNull Disposable schedule(@NonNull Runnable task, long delay,
-            @NonNull TimeUnit unit) {
+    public @NonNull Disposable schedule(@NonNull Runnable task, long delay, @NonNull TimeUnit unit) {
         return getSink().schedule(task, delay, unit);
     }
 
     @Override
-    public @NonNull Disposable schedulePeriodically(@NonNull Runnable task,
-            long initialDelay, long period,
-            @NonNull TimeUnit unit) {
+    public @NonNull Disposable schedulePeriodically(
+            @NonNull Runnable task, long initialDelay, long period, @NonNull TimeUnit unit) {
         return getSink().schedulePeriodically(task, initialDelay, period, unit);
     }
 

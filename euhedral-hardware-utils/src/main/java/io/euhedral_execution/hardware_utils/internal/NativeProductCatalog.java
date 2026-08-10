@@ -22,6 +22,16 @@ final class NativeProductCatalog {
 
     static final String RESOURCE = "/META-INF/euhedral/native-products.tsv";
     private static final int MAX_CATALOG_BYTES = 65_536;
+    private final List<OsRule> osRules;
+    private final Map<String, String> architectureAliases;
+    private final List<NativeProduct> products;
+
+    private NativeProductCatalog(
+            List<OsRule> osRules, Map<String, String> architectureAliases, List<NativeProduct> products) {
+        this.osRules = List.copyOf(osRules);
+        this.architectureAliases = Map.copyOf(architectureAliases);
+        this.products = List.copyOf(products);
+    }
 
     static NativeProductCatalog load() throws IOException {
         InputStream catalog = JNIClassLoader.class.getResourceAsStream(RESOURCE);
@@ -35,14 +45,11 @@ final class NativeProductCatalog {
         });
     }
 
-    static NativeProductCatalog parse(String catalog, ResourceProbe resourceProbe)
-            throws IOException {
-        return parse(new ByteArrayInputStream(catalog.getBytes(StandardCharsets.UTF_8)),
-                resourceProbe);
+    static NativeProductCatalog parse(String catalog, ResourceProbe resourceProbe) throws IOException {
+        return parse(new ByteArrayInputStream(catalog.getBytes(StandardCharsets.UTF_8)), resourceProbe);
     }
 
-    static NativeProductCatalog parse(InputStream input, ResourceProbe resourceProbe)
-            throws IOException {
+    static NativeProductCatalog parse(InputStream input, ResourceProbe resourceProbe) throws IOException {
         Objects.requireNonNull(input, "input");
         Objects.requireNonNull(resourceProbe, "resourceProbe");
         byte[] bytes;
@@ -55,13 +62,13 @@ final class NativeProductCatalog {
         if (bytes.length == 0 || bytes[bytes.length - 1] != '\n') {
             throw failure("runtime catalog must be non-empty and end with LF");
         }
-        if (bytes.length >= 3 && bytes[0] == (byte) 0xef && bytes[1] == (byte) 0xbb
-                && bytes[2] == (byte) 0xbf) {
+        if (bytes.length >= 3 && bytes[0] == (byte) 0xef && bytes[1] == (byte) 0xbb && bytes[2] == (byte) 0xbf) {
             throw failure("runtime catalog must not contain a BOM");
         }
         String text;
         try {
-            text = StandardCharsets.UTF_8.newDecoder()
+            text = StandardCharsets.UTF_8
+                    .newDecoder()
                     .onMalformedInput(CodingErrorAction.REPORT)
                     .onUnmappableCharacter(CodingErrorAction.REPORT)
                     .decode(java.nio.ByteBuffer.wrap(bytes))
@@ -96,15 +103,15 @@ final class NativeProductCatalog {
             switch (fields[0]) {
                 case "os" -> {
                     if (section > 1) {
-                        throw failure(
-                                "OS row appears after a later section at line " + (lineNumber + 1));
+                        throw failure("OS row appears after a later section at line " + (lineNumber + 1));
                     }
                     requireFieldCount(fields, 4, lineNumber);
-                    Match match = switch (fields[1]) {
-                        case "exact" -> Match.EXACT;
-                        case "prefix" -> Match.PREFIX;
-                        default -> throw failure("unknown OS match at line " + (lineNumber + 1));
-                    };
+                    Match match =
+                            switch (fields[1]) {
+                                case "exact" -> Match.EXACT;
+                                case "prefix" -> Match.PREFIX;
+                                default -> throw failure("unknown OS match at line " + (lineNumber + 1));
+                            };
                     String key = "os\t" + fields[1] + '\t' + fields[2];
                     if (!rowKeys.add(key)) {
                         throw failure("duplicate OS rule at line " + (lineNumber + 1));
@@ -113,9 +120,7 @@ final class NativeProductCatalog {
                 }
                 case "arch" -> {
                     if (section > 2) {
-                        throw failure(
-                                "architecture row appears after products at line " + (lineNumber
-                                        + 1));
+                        throw failure("architecture row appears after products at line " + (lineNumber + 1));
                     }
                     section = 2;
                     requireFieldCount(fields, 3, lineNumber);
@@ -135,8 +140,7 @@ final class NativeProductCatalog {
                     }
                     NativeProduct product;
                     try {
-                        product = new NativeProduct(
-                                fields[1], fields[2], fields[3], fields[4], order, fields[6]);
+                        product = new NativeProduct(fields[1], fields[2], fields[3], fields[4], order, fields[6]);
                     } catch (IllegalArgumentException e) {
                         throw failure(e.getMessage(), e);
                     }
@@ -147,13 +151,11 @@ final class NativeProductCatalog {
                         throw failure("duplicate product resource " + product.resourcePath());
                     }
                     String candidateOrder =
-                            product.operatingSystem() + '\t' + product.architecture()
-                                    + '\t' + product.loadOrder();
+                            product.operatingSystem() + '\t' + product.architecture() + '\t' + product.loadOrder();
                     if (!candidateOrders.add(candidateOrder)) {
-                        throw failure(
-                                "duplicate candidate load order for " + product.operatingSystem()
-                                        + '/' + product.architecture() + ": "
-                                        + product.loadOrder());
+                        throw failure("duplicate candidate load order for " + product.operatingSystem()
+                                + '/' + product.architecture() + ": "
+                                + product.loadOrder());
                     }
                     products.add(product);
                 }
@@ -165,8 +167,7 @@ final class NativeProductCatalog {
         }
         validateOsRules(osRules);
         for (NativeProduct product : products) {
-            if (osRules.stream()
-                    .noneMatch(rule -> rule.canonical().equals(product.operatingSystem()))) {
+            if (osRules.stream().noneMatch(rule -> rule.canonical().equals(product.operatingSystem()))) {
                 throw failure("product " + product.id() + " references an unknown OS");
             }
             if (!architectures.containsValue(product.architecture())) {
@@ -182,13 +183,12 @@ final class NativeProductCatalog {
     private static void validateOsRules(List<OsRule> rules) throws IOException {
         Map<String, String> exact = new HashMap<>();
         for (OsRule rule : rules) {
-            if (rule.match() == Match.EXACT
-                    && exact.putIfAbsent(rule.value(), rule.canonical()) != null) {
+            if (rule.match() == Match.EXACT && exact.putIfAbsent(rule.value(), rule.canonical()) != null) {
                 throw failure("ambiguous exact OS rule " + rule.value());
             }
         }
-        List<OsRule> prefixes = rules.stream().filter(rule -> rule.match() == Match.PREFIX)
-                .toList();
+        List<OsRule> prefixes =
+                rules.stream().filter(rule -> rule.match() == Match.PREFIX).toList();
         for (int left = 0; left < prefixes.size(); left++) {
             for (int right = left + 1; right < prefixes.size(); right++) {
                 String a = prefixes.get(left).value();
@@ -208,8 +208,7 @@ final class NativeProductCatalog {
         }
     }
 
-    private static void requireFieldCount(String[] fields, int expected, int zeroBasedLine)
-            throws IOException {
+    private static void requireFieldCount(String[] fields, int expected, int zeroBasedLine) throws IOException {
         if (fields.length != expected) {
             throw failure("wrong field count at line " + (zeroBasedLine + 1));
         }
@@ -221,8 +220,7 @@ final class NativeProductCatalog {
         boolean whitespace = false;
         for (int index = 0; index < normalized.length(); index++) {
             char character = normalized.charAt(index);
-            if (character == ' ' || character == '\t' || character == '\n' || character == '\r'
-                    || character == '\f') {
+            if (character == ' ' || character == '\t' || character == '\n' || character == '\r' || character == '\f') {
                 whitespace = result.length() > 0;
             } else {
                 if (whitespace) {
@@ -259,22 +257,7 @@ final class NativeProductCatalog {
     }
 
     private static IOException failure(String message, Throwable cause) {
-        return new IOException(
-                message.startsWith("native-loader:") ? message : "native-loader: " + message,
-                cause);
-    }
-
-    private final List<OsRule> osRules;
-    private final Map<String, String> architectureAliases;
-    private final List<NativeProduct> products;
-
-    private NativeProductCatalog(
-            List<OsRule> osRules,
-            Map<String, String> architectureAliases,
-            List<NativeProduct> products) {
-        this.osRules = List.copyOf(osRules);
-        this.architectureAliases = Map.copyOf(architectureAliases);
-        this.products = List.copyOf(products);
+        return new IOException(message.startsWith("native-loader:") ? message : "native-loader: " + message, cause);
     }
 
     List<NativeProduct> select(String osName, String osArch) {
@@ -289,12 +272,10 @@ final class NativeProductCatalog {
         List<NativeProduct> selected = products.stream()
                 .filter(product -> product.operatingSystem().equals(canonicalOs))
                 .filter(product -> product.architecture().equals(canonicalArch))
-                .sorted(Comparator.comparingInt(NativeProduct::loadOrder)
-                        .thenComparing(NativeProduct::id))
+                .sorted(Comparator.comparingInt(NativeProduct::loadOrder).thenComparing(NativeProduct::id))
                 .toList();
         if (selected.isEmpty()) {
-            throw new IllegalArgumentException(
-                    "native-loader: no product for " + canonicalOs + '/' + canonicalArch);
+            throw new IllegalArgumentException("native-loader: no product for " + canonicalOs + '/' + canonicalArch);
         }
         return selected;
     }
@@ -320,13 +301,12 @@ final class NativeProductCatalog {
                 .filter(rule -> rule.match() == Match.PREFIX && normalized.startsWith(rule.value()))
                 .toList();
         if (exact.size() > 1 || prefix.size() > 1) {
-            throw new IllegalArgumentException(
-                    "native-loader: ambiguous operating system '" + original + "'");
+            throw new IllegalArgumentException("native-loader: ambiguous operating system '" + original + "'");
         }
         if (!exact.isEmpty()) {
-            if (!prefix.isEmpty() && !exact.get(0).canonical().equals(prefix.get(0).canonical())) {
-                throw new IllegalArgumentException(
-                        "native-loader: ambiguous operating system '" + original + "'");
+            if (!prefix.isEmpty()
+                    && !exact.get(0).canonical().equals(prefix.get(0).canonical())) {
+                throw new IllegalArgumentException("native-loader: ambiguous operating system '" + original + "'");
             }
             return exact.get(0).canonical();
         }
@@ -336,8 +316,7 @@ final class NativeProductCatalog {
         TreeSet<String> aliases = new TreeSet<>();
         osRules.forEach(rule -> aliases.add(rule.value()));
         throw new IllegalArgumentException(
-                "native-loader: unsupported operating system '" + original
-                        + "'; supported aliases: " + aliases);
+                "native-loader: unsupported operating system '" + original + "'; supported aliases: " + aliases);
     }
 
     private enum Match {
@@ -351,7 +330,5 @@ final class NativeProductCatalog {
         boolean exists(String path) throws IOException;
     }
 
-    private record OsRule(Match match, String value, String canonical) {
-
-    }
+    private record OsRule(Match match, String value, String canonical) {}
 }

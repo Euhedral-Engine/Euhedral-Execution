@@ -24,6 +24,8 @@ final class PressureConstants {
     static final double THERMAL_LOSS_EMERGENCY = 1.00;
     static final double LOW_POWER_LOSS = 0.15;
 
+    private PressureConstants() {}
+
     static double unit(double x) {
         if (x <= 0.0) {
             return 0.0;
@@ -59,8 +61,5 @@ final class PressureConstants {
 
     static double lowPowerLoss(boolean lowPower) {
         return lowPower ? LOW_POWER_LOSS : 0.0;
-    }
-
-    private PressureConstants() {
     }
 }

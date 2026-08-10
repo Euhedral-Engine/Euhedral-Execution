@@ -18,6 +18,19 @@ import org.junit.jupiter.api.Test;
 
 class PartitionedSpmcQueueTest {
 
+    private static void await(CountDownLatch latch) {
+        try {
+            assertTrue(latch.await(5, SECONDS), "start latch timed out");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError("interrupted while awaiting test start", e);
+        }
+    }
+
+    private static void assertBefore(long deadline, String message) {
+        assertTrue(System.nanoTime() < deadline, message);
+    }
+
     @Test
     void stopConditionLeavesTheRemainingValuesQueued() {
         PartitionedSpmcQueue<Integer> queue = new PartitionedSpmcQueue<>(1, 4, 1);
@@ -82,18 +95,5 @@ class PartitionedSpmcQueueTest {
         }
         assertFalse(consumed.contains(itemCount));
         assertTrue(queue.isEmpty());
-    }
-
-    private static void await(CountDownLatch latch) {
-        try {
-            assertTrue(latch.await(5, SECONDS), "start latch timed out");
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new AssertionError("interrupted while awaiting test start", e);
-        }
-    }
-
-    private static void assertBefore(long deadline, String message) {
-        assertTrue(System.nanoTime() < deadline, message);
     }
 }

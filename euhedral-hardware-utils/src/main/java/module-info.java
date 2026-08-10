@@ -1,7 +1,6 @@
 module euhedral.hardware_utils {
     requires static lombok;
     requires static org.jspecify;
-
     requires it.unimi.dsi.fastutil;
     requires org.slf4j;
     requires java.management;

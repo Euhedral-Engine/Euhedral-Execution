@@ -11,6 +11,8 @@ import java.util.List;
 
 final class GrpcTestSupport {
 
+    private GrpcTestSupport() {}
+
     static final class RecordingReceiver implements LatticeReceiver {
 
         final List<AbstractFrame> frames = new ArrayList<>();
@@ -33,8 +35,7 @@ final class GrpcTestSupport {
         }
 
         @Override
-        public void addUpstream(LatticeSource upstream) {
-        }
+        public void addUpstream(LatticeSource upstream) {}
     }
 
     static final class RecordingClientObserver extends ClientCallStreamObserver<GrpcMessage> {
@@ -68,6 +69,13 @@ final class GrpcTestSupport {
             return this.ready;
         }
 
+        void setReady(boolean ready) {
+            this.ready = ready;
+            if (ready && this.onReady != null) {
+                this.onReady.run();
+            }
+        }
+
         @Override
         public void setOnReadyHandler(Runnable runnable) {
             this.onReady = runnable;
@@ -84,8 +92,7 @@ final class GrpcTestSupport {
         }
 
         @Override
-        public void setMessageCompression(boolean enabled) {
-        }
+        public void setMessageCompression(boolean enabled) {}
 
         @Override
         public void onNext(GrpcMessage message) {
@@ -100,13 +107,6 @@ final class GrpcTestSupport {
         @Override
         public void onCompleted() {
             this.completions++;
-        }
-
-        void setReady(boolean ready) {
-            this.ready = ready;
-            if (ready && this.onReady != null) {
-                this.onReady.run();
-            }
         }
     }
 
@@ -134,8 +134,7 @@ final class GrpcTestSupport {
         }
 
         @Override
-        public void setCompression(String compression) {
-        }
+        public void setCompression(String compression) {}
 
         @Override
         public void disableAutoRequest() {
@@ -145,6 +144,13 @@ final class GrpcTestSupport {
         @Override
         public boolean isReady() {
             return this.ready;
+        }
+
+        void setReady(boolean ready) {
+            this.ready = ready;
+            if (ready && this.onReady != null) {
+                this.onReady.run();
+            }
         }
 
         @Override
@@ -163,8 +169,7 @@ final class GrpcTestSupport {
         }
 
         @Override
-        public void setMessageCompression(boolean enabled) {
-        }
+        public void setMessageCompression(boolean enabled) {}
 
         @Override
         public void setOnCloseHandler(Runnable runnable) {
@@ -194,15 +199,5 @@ final class GrpcTestSupport {
         void close() {
             this.onClose.run();
         }
-
-        void setReady(boolean ready) {
-            this.ready = ready;
-            if (ready && this.onReady != null) {
-                this.onReady.run();
-            }
-        }
-    }
-
-    private GrpcTestSupport() {
     }
 }

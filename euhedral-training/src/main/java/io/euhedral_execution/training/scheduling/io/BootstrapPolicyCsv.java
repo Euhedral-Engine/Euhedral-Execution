@@ -15,6 +15,8 @@ import java.util.List;
 import java.util.UUID;
 
 public final class BootstrapPolicyCsv {
+    private BootstrapPolicyCsv() {}
+
     public static Path write(Path path, List<PolicyVector> policies) throws IOException {
         if (policies.isEmpty()) {
             throw new IllegalArgumentException("Bootstrap policies are empty");
@@ -28,8 +30,8 @@ public final class BootstrapPolicyCsv {
         PolicyRegistry registry = new PolicyRegistry();
         for (int index = 0; index < policies.size(); index++) {
             PolicyVector policy = registry.register(policies.get(index));
-            ArrayList<String> row = new ArrayList<>(List.of("1",
-                    Integer.toString(index + 1), policy.id().canonical()));
+            ArrayList<String> row = new ArrayList<>(
+                    List.of("1", Integer.toString(index + 1), policy.id().canonical()));
             for (double weight : policy.copyWeights()) {
                 row.add("%016x".formatted(Double.doubleToRawLongBits(weight)));
             }
@@ -39,8 +41,7 @@ public final class BootstrapPolicyCsv {
             throw new IllegalArgumentException("Duplicate bootstrap policy");
         }
         Files.createDirectories(target.getParent());
-        Path temporary = target.getParent().resolve("." + target.getFileName()
-                + ".tmp-" + UUID.randomUUID());
+        Path temporary = target.getParent().resolve("." + target.getFileName() + ".tmp-" + UUID.randomUUID());
         try {
             Files.writeString(temporary, output, StandardCharsets.UTF_8);
             try {
@@ -65,8 +66,7 @@ public final class BootstrapPolicyCsv {
         PolicyRegistry registry = new PolicyRegistry();
         for (int row = 1; row < rows.size(); row++) {
             List<String> fields = rows.get(row);
-            if (fields.size() != 31 || !fields.get(0).equals("1")
-                    || Integer.parseInt(fields.get(1)) != row) {
+            if (fields.size() != 31 || !fields.get(0).equals("1") || Integer.parseInt(fields.get(1)) != row) {
                 throw new IllegalArgumentException("Invalid bootstrap row");
             }
             double[] weights = new double[PolicyVector.WIDTH];
@@ -82,14 +82,10 @@ public final class BootstrapPolicyCsv {
     }
 
     private static ArrayList<String> header() {
-        ArrayList<String> header = new ArrayList<>(List.of("schema_version",
-                "bootstrap_position", "policy_id"));
+        ArrayList<String> header = new ArrayList<>(List.of("schema_version", "bootstrap_position", "policy_id"));
         for (int i = 0; i < PolicyVector.WIDTH; i++) {
             header.add("weight_%02d_bits".formatted(i));
         }
         return header;
-    }
-
-    private BootstrapPolicyCsv() {
     }
 }

@@ -38,6 +38,13 @@ public class HighContentionThroughput {
     private static final Logger LOGGER = LoggerFactory.getLogger(HighContentionThroughput.class);
     private static final int PRODUCERS = SystemInfo.CPU_COUNT;
     private static final int TASKS = 32_000_000;
+    private final PaddedLongAdder counters =
+            new PaddedLongAdder(Runtime.getRuntime().availableProcessors(), true, true);
+    private final RepeatingSink[] sinks = new RepeatingSink[PRODUCERS];
+    private ControlPlaneLattice controlPlane;
+    public HighContentionThroughput() {
+        // Required for JMH
+    }
 
     private static void await(PaddedLongAdder counters) {
         int spin = 0;
@@ -61,15 +68,6 @@ public class HighContentionThroughput {
                 Thread.onSpinWait();
             }
         }
-    }
-
-    private final PaddedLongAdder counters =
-            new PaddedLongAdder(Runtime.getRuntime().availableProcessors(), true, true);
-    private final RepeatingSink[] sinks = new RepeatingSink[PRODUCERS];
-    private ControlPlaneLattice controlPlane;
-
-    public HighContentionThroughput() {
-        // Required for JMH
     }
 
     @Setup(Level.Trial)
@@ -98,7 +96,7 @@ public class HighContentionThroughput {
 
     @TearDown(Level.Trial)
     public void tearDown() {
-        for(var sink : this.sinks) {
+        for (var sink : this.sinks) {
             sink.complete();
         }
         this.controlPlane.close();

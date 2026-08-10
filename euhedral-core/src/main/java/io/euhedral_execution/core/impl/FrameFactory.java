@@ -31,7 +31,7 @@ public final class FrameFactory<D, F extends AbstractFrame> {
     /// Creates a frame with the data.
     public F create(D data) {
         F frame = frameGenerator.create(idHash, data);
-        if(!frame.isOrdered()) {
+        if (!frame.isOrdered()) {
             frame.randomizeHash(seed++);
         }
         frame.setOrigin(originLocation);
@@ -45,7 +45,7 @@ public final class FrameFactory<D, F extends AbstractFrame> {
         frame.resetHash();
 
         frameReplace.replace(data, frame);
-        if(!frame.isOrdered()) {
+        if (!frame.isOrdered()) {
             frame.randomizeHash(seed++);
         }
         frame.setOrigin(originLocation);
