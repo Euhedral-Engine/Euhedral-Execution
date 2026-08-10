@@ -43,4 +43,3 @@ gradlew.bat
 **/async-profiler*/
 **/.tool-versions
 **/.profileconfig.json
-/euhedral-training/runs/

@@ -20,8 +20,8 @@ Most performance and correctness constraints follow from that shape.
    for it.
 6. Read [AGENT_WORKFLOW.md](docs/AGENT_WORKFLOW.md)
 
-Several directories under `euhedral-training/input`, `euhedral-training/output`, and `data` may
-contain expensive local runs. Treat them as user-owned even when they are untracked.
+Several directories under `data` may contain expensive local runs. Treat them as user-owned even
+when they are untracked.
 
 ## Modules and language levels
 
@@ -38,7 +38,6 @@ must report the substituted versions and resulting limits.
 | `euhedral-hardware-utils`  |      17 | Topology, resource monitoring, affinity, and JNI      |
 | `euhedral-core`            |      21 | Control plane, frames, routing, ingest, and execution |
 | `euhedral-spring-core`     |      21 | Spring Boot, Kafka, and gRPC integration              |
-| `euhedral-training`        |      21 | Offline policy tuning and candidate benchmarking      |
 | `euhedral-reactor-core`    |      25 | Reactor scheduler and operators                       |
 | `benchmarks`               |      25 | JMH benchmarks                                        |
 
@@ -50,7 +49,7 @@ hashing + data-structures + hardware-utils
                   -> reactor-core
                   -> spring-core
 
-core + supporting modules -> training and benchmarks
+core + supporting modules -> benchmarks
 ```
 
 Keep lower-level modules independent of `euhedral-core`. Integration code belongs in the Reactor or
@@ -103,19 +102,6 @@ the cross-target JNI headers and macOS SDK before running `gradle build`.
 Hardware resource tests use Testcontainers and need a working Docker daemon. Affinity tests also
 depend on the CPUs exposed by the host or container. Report those environmental limits separately
 from Java compilation failures.
-
-For focused trainer work, the documented sequence builds upstream artifacts without compiling their
-tests, then runs trainer tests:
-
-```bash
-gradle :euhedral-training:build -x test
-gradle :euhedral-training:test
-```
-
-See [`euhedral-training/CLOSED_LOOP.md`](euhedral-training/CLOSED_LOOP.md) for packaging and runtime
-properties. CUDA is not needed for ordinary compilation or CPU tests. The packaged GPU launcher
-expects the exact PyTorch and CUDA versions described in
-[`euhedral-training/GPU_SETUP_UBUNTU.md`](euhedral-training/GPU_SETUP_UBUNTU.md).
 
 ## Runtime invariants
 
@@ -211,8 +197,8 @@ draining, remote pulls, direct upstream pulls, and demand generation. Its
 `FragmentActionPicker` evaluates four actions from six normalized measurements plus a bias. That is
 four groups of seven weights, or 28 values.
 
-The runtime evaluates fixed weights only. Neural-network training belongs in `euhedral-training`. Do
-not add DJL, PyTorch, corpus handling, or candidate search dependencies to `euhedral-core`.
+The runtime evaluates fixed weights only. Do not add neural-network training, corpus handling, or
+candidate search dependencies to `euhedral-core`.
 
 Local fragment caches are MPSC structures with an owner consumer. A reset that clears one must run
 on the owner thread and acknowledge completion. The `clear` path demonstrates this handoff.
@@ -285,8 +271,8 @@ Edit the proto, run the Spring module's generation phase, and review the generat
 edit generated Java.
 
 Native binaries under `euhedral-hardware-utils/src/main/resources/bin`, Zig caches, Gradle `build`
-directories, training outputs, and benchmark output are build or run artifacts. Do not add or remove
-them as part of an unrelated source change.
+directories, and benchmark output are build or run artifacts. Do not add or remove them as part of
+an unrelated source change.
 
 ## Testing changes well
 

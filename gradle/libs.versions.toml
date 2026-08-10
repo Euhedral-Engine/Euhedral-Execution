@@ -15,7 +15,6 @@ io-projectreactor-reactor-test = "3.8.6"
 it-unimi-dsi-fastutil = "8.5.19"
 jakarta-annotation-jakarta-annotation-api = "3.0.0"
 org-apache-commons-commons-lang3 = "3.19.0"
-org-apache-commons-commons-math4-legacy = "4.0-beta1"
 org-apache-kafka-kafka-clients = "4.1.2"
 org-assertj-assertj-core = "3.27.7"
 org-awaitility-awaitility = "4.3.0"
@@ -36,9 +35,6 @@ org-springframework-boot-spring-boot-starter-test = "4.0.7"
 org-springframework-cloud-spring-cloud-starter-config = "5.0.4"
 org-springframework-cloud-spring-cloud-stream-binder-kafka = "5.0.2"
 org-springframework-grpc-spring-grpc-spring-boot-starter = "1.0.3"
-org-tensorflow-tensorflow-core-api = "1.2.0"
-org-tensorflow-tensorflow-framework = "1.2.0"
-org-tensorflow-tensorflow-core-native = "1.2.0"
 
 [libraries]
 ch-qos-logback-logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "ch-qos-logback-logback-classic" }
@@ -54,7 +50,6 @@ io-projectreactor-reactor-test = { module = "io.projectreactor:reactor-test", ve
 it-unimi-dsi-fastutil = { module = "it.unimi.dsi:fastutil", version.ref = "it-unimi-dsi-fastutil" }
 jakarta-annotation-jakarta-annotation-api = { module = "jakarta.annotation:jakarta.annotation-api", version.ref = "jakarta-annotation-jakarta-annotation-api" }
 org-apache-commons-commons-lang3 = { module = "org.apache.commons:commons-lang3", version.ref = "org-apache-commons-commons-lang3" }
-org-apache-commons-commons-math4-legacy = { module = "org.apache.commons:commons-math4-legacy", version.ref = "org-apache-commons-commons-math4-legacy" }
 org-apache-kafka-kafka-clients = { module = "org.apache.kafka:kafka-clients", version.ref = "org-apache-kafka-kafka-clients" }
 org-assertj-assertj-core = { module = "org.assertj:assertj-core", version.ref = "org-assertj-assertj-core" }
 org-awaitility-awaitility = { module = "org.awaitility:awaitility", version.ref = "org-awaitility-awaitility" }
@@ -75,6 +70,3 @@ org-springframework-boot-spring-boot-starter-test = { module = "org.springframew
 org-springframework-cloud-spring-cloud-starter-config = { module = "org.springframework.cloud:spring-cloud-starter-config", version.ref = "org-springframework-cloud-spring-cloud-starter-config" }
 org-springframework-cloud-spring-cloud-stream-binder-kafka = { module = "org.springframework.cloud:spring-cloud-stream-binder-kafka", version.ref = "org-springframework-cloud-spring-cloud-stream-binder-kafka" }
 org-springframework-grpc-spring-grpc-spring-boot-starter = { module = "org.springframework.grpc:spring-grpc-spring-boot-starter", version.ref = "org-springframework-grpc-spring-grpc-spring-boot-starter" }
-org-tensorflow-tensorflow-core-api = { module = "org.tensorflow:tensorflow-core-api", version.ref = "org-tensorflow-tensorflow-core-api" }
-org-tensorflow-tensorflow-framework = { module = "org.tensorflow:tensorflow-framework", version.ref = "org-tensorflow-tensorflow-framework" }
-org-tensorflow-tensorflow-core-native = { module = "org.tensorflow:tensorflow-core-native", version.ref = "org-tensorflow-tensorflow-core-native" }

@@ -140,12 +140,10 @@ and shutdown.
 | `euhedral-core`            | Frames, ingest, routing, the control plane, and execution  |
 | `euhedral-reactor-core`    | Reactor scheduler and mapping operators                    |
 | `euhedral-spring-core`     | Spring Boot, Kafka, and gRPC integration                   |
-| `euhedral-training`        | Offline tuning of the fixed runtime scheduling policy      |
 | `benchmarks`               | JMH workloads and comparison harnesses                     |
 
 The lower-level hashing, data structure, and hardware modules do not depend on the Core runtime.
-Reactor and Spring are integration layers above Core. Training and benchmarks remain outside the
-runtime path.
+Reactor and Spring are integration layers above Core. Benchmarks remain outside the runtime path.
 
 ## Build from source
 
@@ -174,9 +172,7 @@ Linux and Windows are supported on x64 and arm64. macOS support is in progress.
 ## Architecture and benchmarks
 
 The [architecture guide](./docs/ARCHITECTURE.md) contains the topology, data-flow, routing, frame
-lifecycle, Reactor, and Spring diagrams. The
-[closed-loop architecture](./docs/ML_CLOSED_LOOP_ARCHITECTURE.md) explains how scheduling policies
-are trained offline and evaluated as fixed weights in the runtime.
+lifecycle, Reactor, and Spring diagrams.
 
 Benchmark results and reproduction notes live with the benchmark suite:
 

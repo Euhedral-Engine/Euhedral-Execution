@@ -24,7 +24,6 @@ between those named stages and keep most coordination local to the worker that n
 | [`euhedral-hashing`](../euhedral-hashing/)                 | xxHash64-based hashing used for identity and routing                                      |
 | [`euhedral-reactor-core`](../euhedral-reactor-core/)       | Reactor scheduler, operators, subscribers, and frame sequencing                           |
 | [`euhedral-spring-core`](../euhedral-spring-core/)         | Spring Boot auto-configuration plus Kafka and gRPC transports                             |
-| [`euhedral-training`](../euhedral-training/)               | Offline policy training, candidate generation, and closed-loop tuning                     |
 | [`benchmarks`](../benchmarks/)                             | JMH benchmarks for the engine and queue implementations                                   |
 
 The Java module descriptors are a good quick check of the public package boundaries. Start with
@@ -341,15 +340,11 @@ auto-configures the lattice, scheduler, and operator in Spring Boot. The same mo
 demand-aware gRPC handlers and a Kafka source that maps records to frames, preserves partition
 liveness, and commits offsets after frame completion.
 
-### Offline training and benchmarks
+### Policy and benchmarks
 
 The production fragment evaluates a fixed 28-weight policy. Model training stays in
-[`euhedral-training`](../euhedral-training/). Its closed loop normalizes benchmark data, trains an
-ordinal policy ranker, generates candidates, benchmarks them, and promotes only completed runs back
-into the corpus. See the
-[`training README`](../euhedral-training/README.md) for commands and properties, and
-[`ML_CLOSED_LOOP_ARCHITECTURE.md`](ML_CLOSED_LOOP_ARCHITECTURE.md) for the slower feedback loop's
-design.
+the runtime's configured weights; policy training and candidate generation are no longer part of
+this repository.
 
 The separate [`benchmarks`](../benchmarks/) module packages JMH tests for end-to-end latency,
 throughput, irregular compute workloads, and queue comparisons. Benchmark code is evidence and

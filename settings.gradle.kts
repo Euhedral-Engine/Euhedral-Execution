@@ -5,7 +5,6 @@ pluginManagement {
 rootProject.name = "euhedral-execution"
 include(":euhedral-core")
 include(":benchmarks")
-include(":euhedral-training")
 include(":euhedral-reactor-core")
 include(":euhedral-spring-core")
 include(":euhedral-data-structures")
