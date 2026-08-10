@@ -36,8 +36,6 @@ import java.util.List;
 import java.util.Map;
 
 public final class TrainingRunPackageValidator {
-    private TrainingRunPackageValidator() {}
-
     public static TrainingRunPackage validate(Path packageDirectory) throws IOException {
         Path root = packageDirectory.toAbsolutePath().normalize();
         if (Files.isSymbolicLink(root) || !Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS)) {
@@ -142,7 +140,7 @@ public final class TrainingRunPackageValidator {
                     case MODEL_REJECTED -> TrainingRunPackageStatus.PARTIAL_TERMINAL;
                     default -> TrainingRunPackageStatus.PARTIAL_RECOVERABLE;
                 };
-        if (manifest.status() != expected || !manifest.packageId().equals(PackageSourceSet.packageId(checkpoint))) {
+        if (manifest.status() != expected || !PackageSourceSet.matchesPackageId(checkpoint, manifest.packageId())) {
             throw new IOException("Package lifecycle mismatch");
         }
     }
@@ -273,14 +271,12 @@ public final class TrainingRunPackageValidator {
             }
         }
         if (checkpoint.calibrationPlan().isPresent()) {
-            validateReference(
-                    checkpoint.calibrationPlan().orElseThrow(),
-                    "calibration-plan",
-                    virtualFingerprint(Map.of(
-                            "fixed-anchors.csv",
-                            root.resolve("fixed-anchors.csv"),
-                            "reference-runs.csv",
-                            root.resolve("reference-runs.csv"))));
+            String computed = virtualFingerprint(Map.of(
+                    "fixed-anchors.csv",
+                    root.resolve("fixed-anchors.csv"),
+                    "reference-runs.csv",
+                    root.resolve("reference-runs.csv")));
+            validateReference(checkpoint.calibrationPlan().orElseThrow(), "calibration-plan", computed);
         }
         if (checkpoint.latestMerge().isPresent()) {
             Map<String, Path> files = new HashMap<>();
@@ -311,9 +307,14 @@ public final class TrainingRunPackageValidator {
 
     private static void validateReference(ArtifactReference reference, String pathPrefix, String actualHash)
             throws IOException {
-        if (!reference.relativePath().startsWith(pathPrefix)
-                || !reference.sha256().equals(actualHash)) {
-            throw new IOException("Detached artifact reference mismatch");
+        if (!reference.relativePath().startsWith(pathPrefix)) {
+            throw new IOException("Detached artifact reference path mismatch: expected prefix '" + pathPrefix
+                    + "' but got '" + reference.relativePath() + "'");
+        }
+        if (!reference.sha256().equals(actualHash)) {
+            throw new IOException("Detached artifact reference hash mismatch for '"
+                    + reference.relativePath() + "': expected " + reference.sha256()
+                    + " but computed " + actualHash);
         }
     }
 
@@ -405,7 +406,12 @@ public final class TrainingRunPackageValidator {
                 "loso-evaluation.csv",
                 "ablation-evaluation.csv",
                 "training-history.csv"));
-        metadata.members().stream().map(MemberMetadata::relativePath).forEach(expected::add);
+        metadata.members().stream().map(MemberMetadata::relativePath).forEach(path -> {
+            expected.add(path);
+            expected.add(path.replace(".index", ".data-00000-of-00001"));
+            expected.add(path.replace(".index", ".properties"));
+            expected.add(path.replace("euhedral-scenario-ordinal.index", "checkpoint"));
+        });
         expected.sort(String::compareTo);
         List<String> actual;
         try (var stream = Files.walk(root.resolve("model"))) {
@@ -456,11 +462,14 @@ public final class TrainingRunPackageValidator {
                         || Files.isSymbolicLink(entry.getValue())) {
                     throw new IOException("Virtual artifact file is absent");
                 }
-                digest.update(entry.getKey().getBytes(StandardCharsets.UTF_8));
+                String filename = entry.getKey();
+                long size = Files.size(entry.getValue());
+                String fileHash = CanonicalFileSupport.sha256(entry.getValue());
+                digest.update(filename.getBytes(StandardCharsets.UTF_8));
                 digest.update((byte) '\t');
-                digest.update(Long.toString(Files.size(entry.getValue())).getBytes(StandardCharsets.UTF_8));
+                digest.update(Long.toString(size).getBytes(StandardCharsets.UTF_8));
                 digest.update((byte) '\t');
-                digest.update(CanonicalFileSupport.sha256(entry.getValue()).getBytes(StandardCharsets.UTF_8));
+                digest.update(fileHash.getBytes(StandardCharsets.UTF_8));
                 digest.update((byte) '\n');
             }
             return HexFormat.of().formatHex(digest.digest());
@@ -508,4 +517,6 @@ public final class TrainingRunPackageValidator {
         @Override
         public void onObservation(BenchmarkObservation observation) {}
     }
+
+    private TrainingRunPackageValidator() {}
 }

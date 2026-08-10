@@ -18,7 +18,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-class BenchmarkRunnerV1Test {
+class BenchmarkRunnerTest {
     @TempDir
     Path temp;
 
@@ -41,6 +41,7 @@ class BenchmarkRunnerV1Test {
         NativeBenchmarkRunPlan plan = new NativeBenchmarkRunPlan(
                 "training",
                 0,
+                1,
                 run.benchmarkRunId(),
                 run.candidateCohortId(),
                 run.scenario(),
@@ -87,6 +88,7 @@ class BenchmarkRunnerV1Test {
         NativeBenchmarkRunPlan plan = new NativeBenchmarkRunPlan(
                 "training",
                 0,
+                1,
                 run.benchmarkRunId(),
                 run.candidateCohortId(),
                 run.scenario(),

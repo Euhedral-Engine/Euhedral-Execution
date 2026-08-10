@@ -58,8 +58,6 @@ public final class AuditFixtures {
     public static final Instant START = Instant.parse("2026-01-01T00:00:00Z");
     public static final String EMPTY_SHA256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
-    private AuditFixtures() {}
-
     public static Experiment execute(Path temporaryRoot) throws Exception {
         Path root = temporaryRoot.toAbsolutePath().normalize();
         assertIsolated(root);
@@ -476,47 +474,6 @@ public final class AuditFixtures {
             this.corpus = corpus;
         }
 
-        private static BenchmarkObservation failed(
-                BenchmarkRunDescriptor descriptor,
-                io.euhedral_execution.training.data.ScheduledPolicy scheduled,
-                int repetition,
-                Instant started) {
-            if (repetition == 1) {
-                return new BenchmarkObservation(
-                        new ObservationKey(
-                                descriptor.benchmarkRunId(),
-                                descriptor.scenario(),
-                                scheduled.policy().id(),
-                                repetition),
-                        descriptor,
-                        scheduled,
-                        ObservationStatus.TIMEOUT,
-                        MeasurementEncoding.COUNTER_DERIVED,
-                        started,
-                        started.plusNanos(2_000_000_000L),
-                        OptionalLong.of(2_000_000_000L),
-                        OptionalLong.of(0),
-                        OptionalDouble.of(0),
-                        "AUDIT_TIMEOUT");
-            }
-            return new BenchmarkObservation(
-                    new ObservationKey(
-                            descriptor.benchmarkRunId(),
-                            descriptor.scenario(),
-                            scheduled.policy().id(),
-                            repetition),
-                    descriptor,
-                    scheduled,
-                    ObservationStatus.SKIPPED,
-                    MeasurementEncoding.COUNTER_DERIVED,
-                    started,
-                    started,
-                    OptionalLong.of(0),
-                    OptionalLong.of(0),
-                    OptionalDouble.empty(),
-                    "AFTER_TIMEOUT");
-        }
-
         @Override
         public CalibrationPlan bootstrapCalibration(DataMerger.CalibrationBootstrapRequest request) throws Exception {
             return DataMerger.bootstrapCalibrationV1(request);
@@ -524,7 +481,7 @@ public final class AuditFixtures {
 
         @Override
         public DataMerger.MergeArtifacts merge(DataMerger.MergeRequest request) throws Exception {
-            DataMerger.MergeArtifacts result = DataMerger.mergeV1(request);
+            DataMerger.MergeArtifacts result = DataMerger.merge(request);
             if (request.outputDirectory().getFileName().toString().equals("merge-000001")) {
                 mergeOneComplete = true;
             }
@@ -653,6 +610,47 @@ public final class AuditFixtures {
             }
         }
 
+        private static BenchmarkObservation failed(
+                BenchmarkRunDescriptor descriptor,
+                io.euhedral_execution.training.data.ScheduledPolicy scheduled,
+                int repetition,
+                Instant started) {
+            if (repetition == 1) {
+                return new BenchmarkObservation(
+                        new ObservationKey(
+                                descriptor.benchmarkRunId(),
+                                descriptor.scenario(),
+                                scheduled.policy().id(),
+                                repetition),
+                        descriptor,
+                        scheduled,
+                        ObservationStatus.TIMEOUT,
+                        MeasurementEncoding.COUNTER_DERIVED,
+                        started,
+                        started.plusNanos(2_000_000_000L),
+                        OptionalLong.of(2_000_000_000L),
+                        OptionalLong.of(0),
+                        OptionalDouble.of(0),
+                        "AUDIT_TIMEOUT");
+            }
+            return new BenchmarkObservation(
+                    new ObservationKey(
+                            descriptor.benchmarkRunId(),
+                            descriptor.scenario(),
+                            scheduled.policy().id(),
+                            repetition),
+                    descriptor,
+                    scheduled,
+                    ObservationStatus.SKIPPED,
+                    MeasurementEncoding.COUNTER_DERIVED,
+                    started,
+                    started,
+                    OptionalLong.of(0),
+                    OptionalLong.of(0),
+                    OptionalDouble.empty(),
+                    "AFTER_TIMEOUT");
+        }
+
         @Override
         public boolean stopRequested() {
             return stopAfterMergeOne && mergeOneComplete || interruptBeforeSecondNormalRun && interruptionTriggered;
@@ -668,4 +666,6 @@ public final class AuditFixtures {
             return "f";
         }
     }
+
+    private AuditFixtures() {}
 }

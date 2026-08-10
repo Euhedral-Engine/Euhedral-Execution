@@ -19,220 +19,22 @@ class ClosedLoopConfigCodecTest {
     @TempDir
     Path temp;
 
-    private static String fullConfiguration(String bootstrapSource) {
-        return """
-            run.workspace=workspace
-            run.training_run_id=mapped-run
-            run.iterations=2
-            run.candidate_budget=64
-            run.active_environment_id=env-a
-            run.scenarios_per_iteration=3
-            run.scheduler_seed_hex=ffffffffffffffff
-            run.initial_sobol_cursor=456
-            %srun.commit_sha=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-            run.dirty_working_tree=true
-            run.resume=false
-            run.stop_file=custom.stop
-            scenario.required=s1-env-b-src4-core8-r1of2
-            scenario.required=s1-env-a-src1-core8-r1of8
-            calibration.reference_override=s1-env-a-src1-core8-r1of8|reference-a
-            budget.exploration_weight=11
-            budget.carry_forward_weight=12
-            budget.leader_revalidation_weight=13
-            budget.disagreement_audit_weight=14
-            candidate.screen_rows=101
-            candidate.maximum_prediction_rows=77
-            candidate.score_band_weights=1,2,3,4,5,6,7,8,9,10
-            candidate.cma_weight=3
-            candidate.score_band_weight=4
-            candidate.direct_sobol_weight=5
-            candidate.cma.enabled=false
-            candidate.cma.islands=2
-            candidate.cma.generations=3
-            candidate.cma.population_size=8
-            candidate.cma.initial_sigma=0.25
-            candidate.cma.minimum_seed_policies=2
-            benchmark.expected_repetitions=4
-            benchmark.sample_duration_nanos=11
-            benchmark.liveness_timeout_nanos=12
-            benchmark.frames_per_source=13
-            benchmark.reset_timeout_nanos=14
-            benchmark.ordered_frames=true
-            anchors.fixed_fraction=0.03
-            anchors.minimum_fixed_anchors=2
-            anchors.maximum_bootstrap_non_success_rate=0.11
-            anchors.maximum_bootstrap_relative_iqr=0.33
-            anchors.allow_imported_bootstrap=true
-            calibration.minimum_strong_anchors=4
-            calibration.minimum_weak_anchors=2
-            calibration.maximum_strong_residual=0.04
-            calibration.maximum_weak_residual=0.14
-            calibration.minimum_log_sigma=0.02
-            calibration.maximum_anchor_weight_share=0.4
-            aggregation.minimum_successful_repetitions=2
-            aggregation.minimum_success_fraction=0.75
-            aggregation.bootstrap_replicates=99
-            aggregation.bootstrap_seed_hex=8000000000000000
-            aggregation.calibration_acceptance=INCLUDE_WEAK
-            training.split_seed_hex=ffffffffffffffff
-            training.model_seed_hex=8000000000000000
-            training.device=GPU2
-            training.ensemble_members=5
-            training.loso_evaluation_members=2
-            training.ablation_members=3
-            training.max_epochs=9
-            training.patience=2
-            training.batch_size=7
-            training.learning_rate=0.002
-            training.weight_decay=0.003
-            training.label_smoothing=0.04
-            training.minimum_train_policy_groups=2
-            training.minimum_validation_policy_groups=3
-            training.minimum_test_policy_groups=4
-            training.minimum_train_rows_per_scenario=5
-            training.minimum_validation_rows_per_scenario=6
-            training.minimum_test_rows_per_scenario=7
-            training.include_weak_calibration_rows=true
-            training.feature_selection_mode=REQUIRE_COUNTS
-            evaluation.maximum_grouped_macro_mae=0.11
-            evaluation.minimum_grouped_macro_spearman=0.12
-            evaluation.minimum_grouped_macro_precision_at_ten=0.13
-            evaluation.maximum_loso_macro_mae=0.14
-            evaluation.minimum_loso_macro_spearman=0.15
-            evaluation.maximum_loso_worst_scenario_mae=0.16
-            evaluation.minimum_context_mae_improvement=0.17
-            evaluation.minimum_context_spearman_improvement=0.18
-            evaluation.maximum_context_mae_regression=0.19
-            evaluation.maximum_context_spearman_regression=0.20
-            evaluation.minimum_counts_cross_environment_mae_improvement=0.21
-            evaluation.maximum_counts_spearman_regression=0.22
-            evaluation.maximum_counts_worst_environment_mae_regression=0.23
-            """.formatted(bootstrapSource);
-    }
-
-    private static Map<String, String> fingerprintAlternatives() {
-        LinkedHashMap<String, String> result = new LinkedHashMap<>();
-        result.put("run.training_run_id", "mapped-run-2");
-        result.put("run.iterations", "3");
-        result.put("run.candidate_budget", "65");
-        result.put("run.scenarios_per_iteration", "2");
-        result.put("run.scheduler_seed_hex", "7fffffffffffffff");
-        result.put("run.initial_sobol_cursor", "457");
-        result.put("run.bootstrap_policies", "boot-b");
-        result.put("run.commit_sha", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
-        result.put("run.dirty_working_tree", "false");
-        result.put("scenario.required", "s1-env-a-src2-core8-r1of4");
-        result.put("calibration.reference_override", "s1-env-a-src1-core8-r1of8|reference-b");
-        result.put("budget.exploration_weight", "15");
-        result.put("budget.carry_forward_weight", "16");
-        result.put("budget.leader_revalidation_weight", "17");
-        result.put("budget.disagreement_audit_weight", "18");
-        result.put("candidate.screen_rows", "102");
-        result.put("candidate.maximum_prediction_rows", "78");
-        result.put("candidate.score_band_weights", "2,2,3,4,5,6,7,8,9,10");
-        result.put("candidate.cma_weight", "6");
-        result.put("candidate.score_band_weight", "7");
-        result.put("candidate.direct_sobol_weight", "8");
-        result.put("candidate.cma.enabled", "true");
-        result.put("candidate.cma.islands", "3");
-        result.put("candidate.cma.generations", "4");
-        result.put("candidate.cma.population_size", "9");
-        result.put("candidate.cma.initial_sigma", "0.26");
-        result.put("candidate.cma.minimum_seed_policies", "3");
-        result.put("benchmark.expected_repetitions", "5");
-        result.put("benchmark.sample_duration_nanos", "21");
-        result.put("benchmark.liveness_timeout_nanos", "22");
-        result.put("benchmark.frames_per_source", "23");
-        result.put("benchmark.reset_timeout_nanos", "24");
-        result.put("benchmark.ordered_frames", "false");
-        result.put("anchors.fixed_fraction", "0.04");
-        result.put("anchors.minimum_fixed_anchors", "3");
-        result.put("anchors.maximum_bootstrap_non_success_rate", "0.12");
-        result.put("anchors.maximum_bootstrap_relative_iqr", "0.34");
-        result.put("anchors.allow_imported_bootstrap", "false");
-        result.put("calibration.minimum_strong_anchors", "5");
-        result.put("calibration.minimum_weak_anchors", "3");
-        result.put("calibration.maximum_strong_residual", "0.05");
-        result.put("calibration.maximum_weak_residual", "0.15");
-        result.put("calibration.minimum_log_sigma", "0.03");
-        result.put("calibration.maximum_anchor_weight_share", "0.41");
-        result.put("aggregation.minimum_successful_repetitions", "3");
-        result.put("aggregation.minimum_success_fraction", "0.76");
-        result.put("aggregation.bootstrap_replicates", "100");
-        result.put("aggregation.bootstrap_seed_hex", "8000000000000001");
-        result.put("aggregation.calibration_acceptance", "STRONG_ONLY");
-        result.put("training.split_seed_hex", "fffffffffffffffe");
-        result.put("training.model_seed_hex", "8000000000000001");
-        result.put("training.device", "cpu");
-        result.put("training.ensemble_members", "7");
-        result.put("training.loso_evaluation_members", "3");
-        result.put("training.ablation_members", "5");
-        result.put("training.max_epochs", "10");
-        result.put("training.patience", "3");
-        result.put("training.batch_size", "8");
-        result.put("training.learning_rate", "0.0021");
-        result.put("training.weight_decay", "0.0031");
-        result.put("training.label_smoothing", "0.041");
-        result.put("training.minimum_train_policy_groups", "3");
-        result.put("training.minimum_validation_policy_groups", "4");
-        result.put("training.minimum_test_policy_groups", "5");
-        result.put("training.minimum_train_rows_per_scenario", "6");
-        result.put("training.minimum_validation_rows_per_scenario", "7");
-        result.put("training.minimum_test_rows_per_scenario", "8");
-        result.put("training.include_weak_calibration_rows", "false");
-        result.put("training.feature_selection_mode", "AUTO_COUNTS_IF_VALIDATED");
-        result.put("evaluation.maximum_grouped_macro_mae", "0.24");
-        result.put("evaluation.minimum_grouped_macro_spearman", "0.25");
-        result.put("evaluation.minimum_grouped_macro_precision_at_ten", "0.26");
-        result.put("evaluation.maximum_loso_macro_mae", "0.27");
-        result.put("evaluation.minimum_loso_macro_spearman", "0.28");
-        result.put("evaluation.maximum_loso_worst_scenario_mae", "0.29");
-        result.put("evaluation.minimum_context_mae_improvement", "0.30");
-        result.put("evaluation.minimum_context_spearman_improvement", "0.31");
-        result.put("evaluation.maximum_context_mae_regression", "0.32");
-        result.put("evaluation.maximum_context_spearman_regression", "0.33");
-        result.put("evaluation.minimum_counts_cross_environment_mae_improvement", "0.34");
-        result.put("evaluation.maximum_counts_spearman_regression", "0.35");
-        result.put("evaluation.maximum_counts_worst_environment_mae_regression", "0.36");
-        return Map.copyOf(result);
-    }
-
-    private static String replaceValue(String text, String key, String value) {
-        String changed = text.replaceFirst(
-                "(?m)^" + java.util.regex.Pattern.quote(key) + "=[^\\n]*$",
-                java.util.regex.Matcher.quoteReplacement(key + "=" + value));
-        if (key.equals("scenario.required")) {
-            changed = changed.replace(
-                    "calibration.reference_override=s1-env-a-src1-core8-r1of8|reference-a",
-                    "calibration.reference_override=s1-env-a-src2-core8-r1of4|reference-a");
-        }
-        return changed;
-    }
-
-    private static String replaceLine(String text, String original, String replacement) {
-        return text.replace(original, replacement);
-    }
-
-    private static String safe(String key) {
-        return key.replace('.', '-');
-    }
-
     @Test
     void minimalConfigurationBuildsTypedDefaultsAndResolvesPaths() throws Exception {
         Path configFile = write("config/closed-loop.conf", """
-            # typed configuration
+                # typed configuration
 
-            run.workspace=../workspace
-            run.training_run_id=test-run
-            run.iterations=3
-            run.candidate_budget=1024
-            run.active_environment_id=env-a
-            run.bootstrap_policies=bootstrap.csv
-            run.commit_sha=0000000000000000000000000000000000000000
-            run.dirty_working_tree=false
-            scenario.required=s1-env-b-src8-core32-r1of4
-            scenario.required=s1-env-a-src1-core32-r1of32
-            """);
+                run.workspace=../workspace
+                run.training_run_id=test-run
+                run.iterations=3
+                run.candidate_budget=1024
+                run.active_environment_id=env-a
+                run.bootstrap_policies=bootstrap.csv
+                run.commit_sha=0000000000000000000000000000000000000000
+                run.dirty_working_tree=false
+                scenario.required=s1-env-b-src8-cores32
+                scenario.required=s1-env-a-src1-cores32
+                """);
         ClosedLoopConfig config = ClosedLoopConfigCodec.read(configFile);
         assertThat(config.workspace()).isEqualTo(temp.resolve("workspace"));
         assertThat(config.bootstrapPolicies()).contains(temp.resolve("config/bootstrap.csv"));
@@ -248,33 +50,33 @@ class ClosedLoopConfigCodecTest {
     @Test
     void overridesSeedsNestedConfigurationAndReferenceInputs() throws Exception {
         Path configFile = write("full.conf", """
-            run.workspace=workspace
-            run.training_run_id=full
-            run.iterations=1
-            run.candidate_budget=32
-            run.active_environment_id=env-a
-            run.initial_calibration_plan=plan
-            run.initial_observation_bundle=bundle-b
-            run.initial_observation_bundle=bundle-a
-            run.commit_sha=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-            run.dirty_working_tree=true
-            run.scheduler_seed_hex=ffffffffffffffff
-            run.stop_file=custom.stop
-            scenario.required=s1-env-a-src1-core8-r1of8
-            calibration.reference_override=s1-env-a-src1-core8-r1of8|run-a
-            budget.exploration_weight=1
-            candidate.cma.enabled=false
-            candidate.score_band_weights=1,1,1,1,1,1,1,1,1,1
-            benchmark.expected_repetitions=7
-            anchors.fixed_fraction=0.03
-            calibration.minimum_strong_anchors=4
-            calibration.minimum_weak_anchors=2
-            aggregation.bootstrap_seed_hex=8000000000000000
-            training.split_seed_hex=ffffffffffffffff
-            training.model_seed_hex=8000000000000000
-            training.device=cpu
-            evaluation.maximum_grouped_macro_mae=0.19
-            """);
+                run.workspace=workspace
+                run.training_run_id=full
+                run.iterations=1
+                run.candidate_budget=32
+                run.active_environment_id=env-a
+                run.initial_calibration_plan=plan
+                run.initial_observation_bundle=bundle-b
+                run.initial_observation_bundle=bundle-a
+                run.commit_sha=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+                run.dirty_working_tree=true
+                run.scheduler_seed_hex=ffffffffffffffff
+                run.stop_file=custom.stop
+                scenario.required=s1-env-a-src1-cores8
+                calibration.reference_override=s1-env-a-src1-cores8|run-a
+                budget.exploration_weight=1
+                candidate.cma.enabled=false
+                candidate.score_band_weights=1,1,1,1,1,1,1,1,1,1
+                benchmark.expected_repetitions=7
+                anchors.fixed_fraction=0.03
+                calibration.minimum_strong_anchors=4
+                calibration.minimum_weak_anchors=2
+                aggregation.bootstrap_seed_hex=8000000000000000
+                training.split_seed_hex=ffffffffffffffff
+                training.model_seed_hex=8000000000000000
+                training.device=cpu
+                evaluation.maximum_grouped_macro_mae=0.19
+                """);
         ClosedLoopConfig config = ClosedLoopConfigCodec.read(configFile);
         assertThat(config.schedulerSeed()).isEqualTo(-1L);
         assertThat(config.aggregationConfig().bootstrapSeed()).isEqualTo(Long.MIN_VALUE);
@@ -286,6 +88,25 @@ class ClosedLoopConfigCodecTest {
         assertThat(config.benchmarkConfig().expectedRepetitions()).isEqualTo(7);
         assertThat(config.trainingConfig().thresholds().maximumGroupedMacroMae())
                 .isEqualTo(.19);
+    }
+
+    @Test
+    void parsesInitialObservationBundleDirectory() throws Exception {
+        Path configFile = write("bundle-directory.conf", """
+                run.workspace=workspace
+                run.training_run_id=full
+                run.iterations=1
+                run.candidate_budget=32
+                run.active_environment_id=env-a
+                run.initial_calibration_plan=plan
+                run.initial_observation_bundle_directory=bundles
+                run.commit_sha=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+                run.dirty_working_tree=true
+                scenario.required=s1-env-a-src1-cores8
+                """);
+        ClosedLoopConfig config = ClosedLoopConfigCodec.read(configFile);
+        assertThat(config.initialObservationBundleDirectory()).contains(temp.resolve("bundles"));
+        assertThat(config.initialObservationBundles()).isEmpty();
     }
 
     @Test
@@ -309,7 +130,7 @@ class ClosedLoopConfigCodecTest {
                                 "run.bootstrap_policies=boot",
                                 "run.bootstrap_policies=boot\nrun.initial_calibration_plan=plan"),
                 "mutually exclusive");
-        assertRejected(minimal("scenario.required=s1-env-a-src1-core8-r1of8"), "Duplicate list value");
+        assertRejected(minimal("scenario.required=s1-env-a-src1-cores8"), "Duplicate list value");
     }
 
     @Test
@@ -339,6 +160,7 @@ class ClosedLoopConfigCodecTest {
         assertThat(config.initialSobolCursor()).isEqualTo(456);
         assertThat(config.bootstrapPolicies()).isEmpty();
         assertThat(config.initialCalibrationPlan()).contains(temp.resolve("mapping/plan"));
+        assertThat(config.initialObservationBundleDirectory()).isEmpty();
         assertThat(config.initialObservationBundles())
                 .containsExactly(temp.resolve("mapping/bundles/b"), temp.resolve("mapping/bundles/a"));
         assertThat(config.commitSha()).isEqualTo("a".repeat(40));
@@ -477,17 +299,22 @@ class ClosedLoopConfigCodecTest {
                 "bundle-without-plan",
                 minimal("").replace("scenario.required=", "run.initial_observation_bundle=bundle\nscenario.required="));
         malformed.put(
+                "bundle-directory-without-plan",
+                minimal("")
+                        .replace(
+                                "scenario.required=",
+                                "run.initial_observation_bundle_directory=bundles\nscenario.required="));
+        malformed.put(
                 "active-environment",
                 minimal("").replace("run.active_environment_id=env-a", "run.active_environment_id=env-b"));
         malformed.put("run-id", minimal("").replace("run.training_run_id=test", "run.training_run_id=BAD"));
         malformed.put("zero-iterations", minimal("").replace("run.iterations=1", "run.iterations=0"));
         malformed.put("zero-budget-weights", minimal("").replace("scenario.required=", """
-            budget.exploration_weight=0
-            budget.carry_forward_weight=0
-            budget.leader_revalidation_weight=0
-            budget.disagreement_audit_weight=0
-            scenario.required=\
-            """));
+                budget.exploration_weight=0
+                budget.carry_forward_weight=0
+                budget.leader_revalidation_weight=0
+                budget.disagreement_audit_weight=0
+                scenario.required="""));
         malformed.put(
                 "cma",
                 minimal("").replace("scenario.required=", "candidate.cma.population_size=7\nscenario.required="));
@@ -522,10 +349,9 @@ class ClosedLoopConfigCodecTest {
                                 "calibration.reference_override=s1-env-b-src1-core8-r1of8|run\n"
                                         + "scenario.required="));
         malformed.put("normalized-path-duplicate", minimal("").replace("run.bootstrap_policies=boot", """
-            run.initial_calibration_plan=plan
-            run.initial_observation_bundle=a/../bundle
-            run.initial_observation_bundle=bundle\
-            """));
+                run.initial_calibration_plan=plan
+                run.initial_observation_bundle=a/../bundle
+                run.initial_observation_bundle=bundle"""));
         for (Map.Entry<String, String> entry : malformed.entrySet()) {
             Path file = write("malformed/" + entry.getKey() + ".conf", entry.getValue());
             assertThatThrownBy(() -> ClosedLoopConfigCodec.read(file))
@@ -580,18 +406,216 @@ class ClosedLoopConfigCodecTest {
         }
     }
 
+    private static String fullConfiguration(String bootstrapSource) {
+        return """
+                run.workspace=workspace
+                run.training_run_id=mapped-run
+                run.iterations=2
+                run.candidate_budget=64
+                run.active_environment_id=env-a
+                run.scenarios_per_iteration=3
+                run.scheduler_seed_hex=ffffffffffffffff
+                run.initial_sobol_cursor=456
+                %srun.commit_sha=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+                run.dirty_working_tree=true
+                run.resume=false
+                run.stop_file=custom.stop
+                scenario.required=s1-env-b-src4-cores8
+                scenario.required=s1-env-a-src1-cores8
+                calibration.reference_override=s1-env-a-src1-cores8|reference-a
+                budget.exploration_weight=11
+                budget.carry_forward_weight=12
+                budget.leader_revalidation_weight=13
+                budget.disagreement_audit_weight=14
+                candidate.screen_rows=101
+                candidate.maximum_prediction_rows=77
+                candidate.score_band_weights=1,2,3,4,5,6,7,8,9,10
+                candidate.cma_weight=3
+                candidate.score_band_weight=4
+                candidate.direct_sobol_weight=5
+                candidate.cma.enabled=false
+                candidate.cma.islands=2
+                candidate.cma.generations=3
+                candidate.cma.population_size=8
+                candidate.cma.initial_sigma=0.25
+                candidate.cma.minimum_seed_policies=2
+                benchmark.expected_repetitions=4
+                benchmark.sample_duration_nanos=11
+                benchmark.liveness_timeout_nanos=12
+                benchmark.frames_per_source=13
+                benchmark.reset_timeout_nanos=14
+                benchmark.ordered_frames=true
+                anchors.fixed_fraction=0.03
+                anchors.minimum_fixed_anchors=2
+                anchors.maximum_bootstrap_non_success_rate=0.11
+                anchors.maximum_bootstrap_relative_iqr=0.33
+                anchors.allow_imported_bootstrap=true
+                calibration.minimum_strong_anchors=4
+                calibration.minimum_weak_anchors=2
+                calibration.maximum_strong_residual=0.04
+                calibration.maximum_weak_residual=0.14
+                calibration.minimum_log_sigma=0.02
+                calibration.maximum_anchor_weight_share=0.4
+                aggregation.minimum_successful_repetitions=2
+                aggregation.minimum_success_fraction=0.75
+                aggregation.bootstrap_replicates=99
+                aggregation.bootstrap_seed_hex=8000000000000000
+                aggregation.calibration_acceptance=INCLUDE_WEAK
+                training.split_seed_hex=ffffffffffffffff
+                training.model_seed_hex=8000000000000000
+                training.device=GPU2
+                training.ensemble_members=5
+                training.loso_evaluation_members=2
+                training.ablation_members=3
+                training.max_epochs=9
+                training.patience=2
+                training.batch_size=7
+                training.learning_rate=0.002
+                training.weight_decay=0.003
+                training.label_smoothing=0.04
+                training.minimum_train_policy_groups=2
+                training.minimum_validation_policy_groups=3
+                training.minimum_test_policy_groups=4
+                training.minimum_train_rows_per_scenario=5
+                training.minimum_validation_rows_per_scenario=6
+                training.minimum_test_rows_per_scenario=7
+                training.include_weak_calibration_rows=true
+                training.feature_selection_mode=REQUIRE_COUNTS
+                evaluation.maximum_grouped_macro_mae=0.11
+                evaluation.minimum_grouped_macro_spearman=0.12
+                evaluation.minimum_grouped_macro_precision_at_ten=0.13
+                evaluation.maximum_loso_macro_mae=0.14
+                evaluation.minimum_loso_macro_spearman=0.15
+                evaluation.maximum_loso_worst_scenario_mae=0.16
+                evaluation.minimum_context_mae_improvement=0.17
+                evaluation.minimum_context_spearman_improvement=0.18
+                evaluation.maximum_context_mae_regression=0.19
+                evaluation.maximum_context_spearman_regression=0.20
+                evaluation.minimum_counts_cross_environment_mae_improvement=0.21
+                evaluation.maximum_counts_spearman_regression=0.22
+                evaluation.maximum_counts_worst_environment_mae_regression=0.23
+                """.formatted(bootstrapSource);
+    }
+
+    private static Map<String, String> fingerprintAlternatives() {
+        LinkedHashMap<String, String> result = new LinkedHashMap<>();
+        result.put("run.training_run_id", "mapped-run-2");
+        result.put("run.iterations", "3");
+        result.put("run.candidate_budget", "65");
+        result.put("run.scenarios_per_iteration", "2");
+        result.put("run.scheduler_seed_hex", "7fffffffffffffff");
+        result.put("run.initial_sobol_cursor", "457");
+        result.put("run.bootstrap_policies", "boot-b");
+        result.put("run.commit_sha", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+        result.put("run.dirty_working_tree", "false");
+        result.put("scenario.required", "s1-env-a-src2-cores8");
+        result.put("calibration.reference_override", "s1-env-a-src1-cores8|reference-b");
+        result.put("budget.exploration_weight", "15");
+        result.put("budget.carry_forward_weight", "16");
+        result.put("budget.leader_revalidation_weight", "17");
+        result.put("budget.disagreement_audit_weight", "18");
+        result.put("candidate.screen_rows", "102");
+        result.put("candidate.maximum_prediction_rows", "78");
+        result.put("candidate.score_band_weights", "2,2,3,4,5,6,7,8,9,10");
+        result.put("candidate.cma_weight", "6");
+        result.put("candidate.score_band_weight", "7");
+        result.put("candidate.direct_sobol_weight", "8");
+        result.put("candidate.cma.enabled", "true");
+        result.put("candidate.cma.islands", "3");
+        result.put("candidate.cma.generations", "4");
+        result.put("candidate.cma.population_size", "9");
+        result.put("candidate.cma.initial_sigma", "0.26");
+        result.put("candidate.cma.minimum_seed_policies", "3");
+        result.put("benchmark.expected_repetitions", "5");
+        result.put("benchmark.sample_duration_nanos", "21");
+        result.put("benchmark.liveness_timeout_nanos", "22");
+        result.put("benchmark.frames_per_source", "23");
+        result.put("benchmark.reset_timeout_nanos", "24");
+        result.put("benchmark.ordered_frames", "false");
+        result.put("anchors.fixed_fraction", "0.04");
+        result.put("anchors.minimum_fixed_anchors", "3");
+        result.put("anchors.maximum_bootstrap_non_success_rate", "0.12");
+        result.put("anchors.maximum_bootstrap_relative_iqr", "0.34");
+        result.put("anchors.allow_imported_bootstrap", "false");
+        result.put("calibration.minimum_strong_anchors", "5");
+        result.put("calibration.minimum_weak_anchors", "3");
+        result.put("calibration.maximum_strong_residual", "0.05");
+        result.put("calibration.maximum_weak_residual", "0.15");
+        result.put("calibration.minimum_log_sigma", "0.03");
+        result.put("calibration.maximum_anchor_weight_share", "0.41");
+        result.put("aggregation.minimum_successful_repetitions", "3");
+        result.put("aggregation.minimum_success_fraction", "0.76");
+        result.put("aggregation.bootstrap_replicates", "100");
+        result.put("aggregation.bootstrap_seed_hex", "8000000000000001");
+        result.put("aggregation.calibration_acceptance", "STRONG_ONLY");
+        result.put("training.split_seed_hex", "fffffffffffffffe");
+        result.put("training.model_seed_hex", "8000000000000001");
+        result.put("training.device", "cpu");
+        result.put("training.ensemble_members", "7");
+        result.put("training.loso_evaluation_members", "3");
+        result.put("training.ablation_members", "5");
+        result.put("training.max_epochs", "10");
+        result.put("training.patience", "3");
+        result.put("training.batch_size", "8");
+        result.put("training.learning_rate", "0.0021");
+        result.put("training.weight_decay", "0.0031");
+        result.put("training.label_smoothing", "0.041");
+        result.put("training.minimum_train_policy_groups", "3");
+        result.put("training.minimum_validation_policy_groups", "4");
+        result.put("training.minimum_test_policy_groups", "5");
+        result.put("training.minimum_train_rows_per_scenario", "6");
+        result.put("training.minimum_validation_rows_per_scenario", "7");
+        result.put("training.minimum_test_rows_per_scenario", "8");
+        result.put("training.include_weak_calibration_rows", "false");
+        result.put("training.feature_selection_mode", "AUTO_COUNTS_IF_VALIDATED");
+        result.put("evaluation.maximum_grouped_macro_mae", "0.24");
+        result.put("evaluation.minimum_grouped_macro_spearman", "0.25");
+        result.put("evaluation.minimum_grouped_macro_precision_at_ten", "0.26");
+        result.put("evaluation.maximum_loso_macro_mae", "0.27");
+        result.put("evaluation.minimum_loso_macro_spearman", "0.28");
+        result.put("evaluation.maximum_loso_worst_scenario_mae", "0.29");
+        result.put("evaluation.minimum_context_mae_improvement", "0.30");
+        result.put("evaluation.minimum_context_spearman_improvement", "0.31");
+        result.put("evaluation.maximum_context_mae_regression", "0.32");
+        result.put("evaluation.maximum_context_spearman_regression", "0.33");
+        result.put("evaluation.minimum_counts_cross_environment_mae_improvement", "0.34");
+        result.put("evaluation.maximum_counts_spearman_regression", "0.35");
+        result.put("evaluation.maximum_counts_worst_environment_mae_regression", "0.36");
+        return Map.copyOf(result);
+    }
+
+    private static String replaceValue(String text, String key, String value) {
+        String changed = text.replaceFirst(
+                "(?m)^" + java.util.regex.Pattern.quote(key) + "=[^\\n]*$",
+                java.util.regex.Matcher.quoteReplacement(key + "=" + value));
+        if (key.equals("scenario.required")) {
+            changed = changed.replace(
+                    "calibration.reference_override=s1-env-a-src1-cores8|reference-a",
+                    "calibration.reference_override=s1-env-a-src2-cores8|reference-a");
+        }
+        return changed;
+    }
+
+    private static String replaceLine(String text, String original, String replacement) {
+        return text.replace(original, replacement);
+    }
+
+    private static String safe(String key) {
+        return key.replace('.', '-');
+    }
+
     private String minimal(String extra) {
         return """
-            run.workspace=workspace
-            run.training_run_id=test
-            run.iterations=1
-            run.candidate_budget=32
-            run.active_environment_id=env-a
-            run.bootstrap_policies=boot
-            run.commit_sha=0000000000000000000000000000000000000000
-            run.dirty_working_tree=false
-            scenario.required=s1-env-a-src1-core8-r1of8
-            """ + (extra.isEmpty() ? "" : extra + "\n");
+                run.workspace=workspace
+                run.training_run_id=test
+                run.iterations=1
+                run.candidate_budget=32
+                run.active_environment_id=env-a
+                run.bootstrap_policies=boot
+                run.commit_sha=0000000000000000000000000000000000000000
+                run.dirty_working_tree=false
+                scenario.required=s1-env-a-src1-cores8
+                """ + (extra.isEmpty() ? "" : extra + "\n");
     }
 
     private void assertRejected(String text, String message) throws Exception {

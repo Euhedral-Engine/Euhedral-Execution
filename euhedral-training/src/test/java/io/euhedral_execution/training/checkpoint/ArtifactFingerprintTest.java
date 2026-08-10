@@ -19,7 +19,7 @@ class ArtifactFingerprintTest {
         for (int index = 0; index < bytes.length; index++) {
             bytes[index] = (byte) (index * 31);
         }
-        Path file = temp.resolve("model/members/member-000/euhedral-scenario-ordinal-0000.params");
+        Path file = temp.resolve("model/members/member-000/euhedral-scenario-ordinal.index");
         Files.createDirectories(file.getParent());
         Files.write(file, bytes);
         String expected =

@@ -10,11 +10,17 @@ public record ReferenceRunCatalog(
 
     public ReferenceRunCatalog {
         referenceRunIds = Collections.unmodifiableSortedMap(new TreeMap<>(referenceRunIds));
-        if (schemaVersion != 1
-                || anchorSetId == null
-                || !anchorSetId.matches("a1-[0-9a-f]{16}")
-                || referenceRunIds.isEmpty()) {
-            throw new IllegalArgumentException("Invalid reference catalog");
+        if (schemaVersion != 1) {
+            throw new IllegalArgumentException(String.format("The schema version %s is not supported", schemaVersion));
+        }
+        if (anchorSetId == null) {
+            throw new IllegalArgumentException("AnchorSetId is null");
+        }
+        if (!anchorSetId.matches("a1-[0-9a-f]{16}")) {
+            throw new IllegalArgumentException(String.format("AnchorSetId %s is malformed", anchorSetId));
+        }
+        if (referenceRunIds.isEmpty()) {
+            throw new IllegalArgumentException("ReferenceRunIds is empty");
         }
         if (referenceRunIds.values().stream()
                         .anyMatch(runId -> runId == null || !runId.matches("[a-z0-9][a-z0-9._-]{0,95}"))

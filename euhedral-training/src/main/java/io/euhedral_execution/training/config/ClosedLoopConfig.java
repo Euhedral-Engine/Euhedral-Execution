@@ -27,6 +27,7 @@ public record ClosedLoopConfig(
         long initialSobolCursor,
         Optional<Path> bootstrapPolicies,
         Optional<Path> initialCalibrationPlan,
+        Optional<Path> initialObservationBundleDirectory,
         List<Path> initialObservationBundles,
         Map<SourceScenario, String> referenceOverrides,
         String commitSha,
@@ -47,6 +48,7 @@ public record ClosedLoopConfig(
         Objects.requireNonNull(activeEnvironmentId);
         Objects.requireNonNull(bootstrapPolicies);
         Objects.requireNonNull(initialCalibrationPlan);
+        Objects.requireNonNull(initialObservationBundleDirectory);
         Objects.requireNonNull(initialObservationBundles);
         Objects.requireNonNull(referenceOverrides);
         Objects.requireNonNull(commitSha);
@@ -74,6 +76,7 @@ public record ClosedLoopConfig(
                 || requiredScenarios.stream()
                         .noneMatch(scenario -> scenario.environmentId().equals(activeEnvironmentId))
                 || !requiredScenarios.containsAll(referenceOverrides.keySet())
+                || initialObservationBundleDirectory.isPresent() && initialCalibrationPlan.isEmpty()
                 || !initialObservationBundles.isEmpty() && initialCalibrationPlan.isEmpty()
                 || bootstrapPolicies.isPresent() && initialCalibrationPlan.isPresent()) {
             throw new IllegalArgumentException("Invalid closed-loop configuration");

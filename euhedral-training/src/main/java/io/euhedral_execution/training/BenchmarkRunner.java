@@ -5,7 +5,6 @@ import io.euhedral_execution.core.config.FragmentConfig;
 import io.euhedral_execution.core.config.LatticeConfig;
 import io.euhedral_execution.core.control_plane.ControlPlaneLattice;
 import io.euhedral_execution.core.control_plane.ControlPlaneShard;
-import io.euhedral_execution.core.frames.BenchmarkFrame;
 import io.euhedral_execution.core.impl.BaseCloneableObject;
 import io.euhedral_execution.hardware_utils.SystemInfo;
 import io.euhedral_execution.hardware_utils.ThreadTools;
@@ -47,13 +46,19 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class BenchmarkRunner {
-    private static final Logger LOGGER = LoggerFactory.getLogger(BenchmarkRunner.class);
 
-    private BenchmarkRunner() {}
+    private static final Logger LOGGER = LoggerFactory.getLogger(BenchmarkRunner.class);
 
     public static BenchmarkRunContext runV1(NativeBenchmarkRunPlan plan, BooleanSupplier stopRequested)
             throws Exception {
         validatePlan(plan, true);
+        LOGGER.info(
+                "Preparing native benchmark: run={}, scenario={}, policies={}, sources={}, " + "framesPerSource={}",
+                plan.benchmarkRunId(),
+                plan.scenario(),
+                plan.policies().size(),
+                plan.parameters().frameSourceSeeds().size(),
+                plan.parameters().framesPerSource());
         try (BenchmarkBackend backend = NativeBackend.open(plan)) {
             return runV1(plan, stopRequested, backend, SystemTime.INSTANCE);
         }
@@ -90,11 +95,17 @@ public final class BenchmarkRunner {
             int policies = plan.policies().size();
             for (ScheduledPolicy policy : plan.policies()) {
                 LOGGER.info(
-                        "Scenario: {} Iteration: {} Policy: {} / {}",
-                        plan.scenario().toString(),
+                        "Benchmarking policy: run={}, scenario={}, iteration={}/{}, "
+                                + "repetitions={}, policy={}/{}, role={}, sampleMs={}",
+                        plan.benchmarkRunId(),
+                        plan.scenario(),
                         plan.iteration(),
-                        currentP++,
-                        policies);
+                        plan.totalIterations(),
+                        plan.executionConfig().expectedRepetitions(),
+                        ++currentP,
+                        policies,
+                        policy.roles(),
+                        plan.executionConfig().sampleDurationNanos() / 1_000_000L);
                 if (stopRequested.getAsBoolean()) {
                     throw ClosedLoopRunner.stopSignal();
                 }
@@ -135,8 +146,10 @@ public final class BenchmarkRunner {
                     writer.write(observation(descriptor, policy, repetition + 1, measurements.get(repetition)));
                 }
             }
+            LOGGER.info("Iteration complete.");
             context = writer.complete(time.instant());
         }
+        LOGGER.info("Reading observation bundle");
         ObservationBundle validated = ObservationBundleReader.read(attemptDirectory);
         validateBundle(plan, validated);
         try {
@@ -178,6 +191,15 @@ public final class BenchmarkRunner {
                 || !plan.outputBundle().getParent().getFileName().toString().equals("evidence")
                 || !plan.commitSha().matches("(?:[0-9a-f]{40}|[0-9a-f]{64})")
                 || plan.policies().isEmpty()) {
+            LOGGER.error(
+                    "Invalid native benchmark plan: outputBundle={}, exists={}, parentName={}, commitSha={}, policiesEmpty={}",
+                    plan.outputBundle(),
+                    Files.exists(plan.outputBundle(), LinkOption.NOFOLLOW_LINKS),
+                    plan.outputBundle().getParent() != null
+                            ? plan.outputBundle().getParent().getFileName().toString()
+                            : "null",
+                    plan.commitSha(),
+                    plan.policies().isEmpty());
             throw new IllegalArgumentException("Invalid native benchmark plan");
         }
         Set<PolicyId> ids = new HashSet<>();
@@ -187,6 +209,12 @@ public final class BenchmarkRunner {
             if (policy.schedulePosition() != i + 1
                     || policy.roles().size() != 1
                     || !ids.add(policy.policy().id())) {
+                LOGGER.error(
+                        "Invalid scheduled policy identity at index {}: schedulePosition={}, rolesSize={}, duplicateId={}",
+                        i,
+                        policy.schedulePosition(),
+                        policy.roles().size(),
+                        !ids.contains(policy.policy().id()));
                 throw new IllegalArgumentException("Invalid scheduled policy identity");
             }
             PolicyRole role = policy.roles().iterator().next();
@@ -200,6 +228,7 @@ public final class BenchmarkRunner {
                 identities,
                 planSchedulerSeed(plan));
         if (!cohort.equals(plan.candidateCohortId())) {
+            LOGGER.error("Candidate cohort mismatch: calculated={}, plan={}", cohort, plan.candidateCohortId());
             throw new IllegalArgumentException("Candidate cohort mismatch");
         }
         BenchmarkParameters parameters = plan.parameters();
@@ -210,6 +239,10 @@ public final class BenchmarkRunner {
                 || parameters.resetTimeoutNanos() != plan.executionConfig().resetTimeoutNanos()
                 || parameters.orderedFrames() != plan.executionConfig().orderedFrames()
                 || parameters.frameSourceSeeds().size() != plan.scenario().sourceCount()) {
+            LOGGER.error(
+                    "Benchmark parameters disagree with plan: params={}, config={}",
+                    parameters,
+                    plan.executionConfig());
             throw new IllegalArgumentException("Benchmark parameters disagree with plan");
         }
         String run = SchedulerSeeds.benchmarkRunId(
@@ -223,17 +256,29 @@ public final class BenchmarkRunner {
                 plan.dirtyWorkingTree(),
                 planSchedulerSeed(plan));
         if (!run.equals(plan.benchmarkRunId())) {
+            LOGGER.error("Benchmark run ID mismatch: calculated={}, plan={}", run, plan.benchmarkRunId());
             throw new IllegalArgumentException("Benchmark run ID mismatch");
         }
         for (int i = 0; i < parameters.frameSourceSeeds().size(); i++) {
             if (!SchedulerSeeds.frameSourceSeed(run, i, planSchedulerSeed(plan))
                     .equals(parameters.frameSourceSeeds().get(i))) {
+                LOGGER.error(
+                        "Hidden or changed frame source seed at index {}: calculated={}, plan={}",
+                        i,
+                        SchedulerSeeds.frameSourceSeed(run, i, planSchedulerSeed(plan)),
+                        parameters.frameSourceSeeds().get(i));
                 throw new IllegalArgumentException("Hidden or changed frame source seed");
             }
         }
         if (nativeEnvironment
                 && (SystemInfo.getCoreCount() != plan.scenario().availablePhysicalCoreCount()
                         || !SystemInfo.toHexMask(SystemInfo.getCpuSet()).equals(parameters.cpuSetHex()))) {
+            LOGGER.error(
+                    "Active topology does not match exact scenario: systemCores={}, scenarioCores={}, systemCpuMask={}, planCpuMask={}",
+                    SystemInfo.getCoreCount(),
+                    plan.scenario().availablePhysicalCoreCount(),
+                    SystemInfo.toHexMask(SystemInfo.getCpuSet()),
+                    parameters.cpuSetHex());
             throw new IllegalArgumentException("Active topology does not match exact scenario");
         }
     }
@@ -247,6 +292,12 @@ public final class BenchmarkRunner {
                 || !bundle.run().descriptor().candidateCohortId().equals(plan.candidateCohortId())
                 || !bundle.run().descriptor().scenario().equals(plan.scenario())
                 || !bundle.policies().equals(plan.policies())) {
+            LOGGER.error(
+                    "Published bundle identity mismatch: bundleDescriptor={}, planRunId={}, planCohortId={}, planScenario={}",
+                    bundle.run().descriptor(),
+                    plan.benchmarkRunId(),
+                    plan.candidateCohortId(),
+                    plan.scenario());
             throw new IllegalStateException("Published bundle identity mismatch");
         }
     }
@@ -261,6 +312,54 @@ public final class BenchmarkRunner {
                             .max()
                             .orElse(0)
                     + 1;
+        }
+    }
+
+    interface BenchmarkBackend extends AutoCloseable {
+
+        void beginPolicy(ScheduledPolicy policy) throws Exception;
+
+        Measurement measure(long sampleNanos, long livenessNanos, TimeSource time) throws PolicyMeasurementException;
+
+        void pause() throws Exception;
+
+        boolean paused();
+
+        @Override
+        void close() throws Exception;
+    }
+
+    interface TimeSource {
+
+        Instant instant();
+
+        long nanoTime();
+
+        void parkNanos(long nanos);
+    }
+
+    record Measurement(
+            ObservationStatus status, long elapsedNanos, long completedFrames, Instant startedAt, String failureCode) {
+
+        Measurement {
+            if (status == null || elapsedNanos < 0 || completedFrames < 0 || startedAt == null || failureCode == null) {
+                throw new IllegalArgumentException("Invalid benchmark measurement");
+            }
+        }
+
+        static Measurement skipped(String reason, Instant instant) {
+            return new Measurement(ObservationStatus.SKIPPED, 0, 0, instant, reason);
+        }
+
+        static Measurement failed(String reason, Instant instant) {
+            return new Measurement(ObservationStatus.FAILED, 0, 0, instant, reason);
+        }
+    }
+
+    static final class PolicyMeasurementException extends Exception {
+
+        PolicyMeasurementException(Throwable cause) {
+            super(cause);
         }
     }
 
@@ -283,51 +382,8 @@ public final class BenchmarkRunner {
         }
     }
 
-    interface BenchmarkBackend extends AutoCloseable {
-        void beginPolicy(ScheduledPolicy policy) throws Exception;
-
-        Measurement measure(long sampleNanos, long livenessNanos, TimeSource time) throws PolicyMeasurementException;
-
-        void pause() throws Exception;
-
-        boolean paused();
-
-        @Override
-        void close() throws Exception;
-    }
-
-    interface TimeSource {
-        Instant instant();
-
-        long nanoTime();
-
-        void parkNanos(long nanos);
-    }
-
-    record Measurement(
-            ObservationStatus status, long elapsedNanos, long completedFrames, Instant startedAt, String failureCode) {
-        Measurement {
-            if (status == null || elapsedNanos < 0 || completedFrames < 0 || startedAt == null || failureCode == null) {
-                throw new IllegalArgumentException("Invalid benchmark measurement");
-            }
-        }
-
-        static Measurement skipped(String reason, Instant instant) {
-            return new Measurement(ObservationStatus.SKIPPED, 0, 0, instant, reason);
-        }
-
-        static Measurement failed(String reason, Instant instant) {
-            return new Measurement(ObservationStatus.FAILED, 0, 0, instant, reason);
-        }
-    }
-
-    static final class PolicyMeasurementException extends Exception {
-        PolicyMeasurementException(Throwable cause) {
-            super(cause);
-        }
-    }
-
     private static final class NativeBackend implements BenchmarkBackend {
+
         private final FragmentActionPicker picker;
         private final ControlPlaneLattice lattice;
         private final List<BenchmarkFrameSink> sinks;
@@ -357,7 +413,7 @@ public final class BenchmarkRunner {
             ControlPlaneLattice lattice = ControlPlaneLattice.getOrCreate(config);
             ArrayList<BenchmarkFrameSink> sinks = new ArrayList<>();
             for (FrameSourceSeed seed : plan.parameters().frameSourceSeeds()) {
-                BenchmarkFrame[] frames = BenchmarkFrame.generate(
+                FixedMandelbrotFrame[] frames = FixedMandelbrotFrame.generate(
                         plan.parameters().framesPerSource(),
                         plan.parameters().orderedFrames(),
                         seed.idHash(),
@@ -461,4 +517,6 @@ public final class BenchmarkRunner {
     }
 
     private record RoleIdentity(PolicyId policyId, PolicyRole role) implements SchedulerSeeds.PolicyWithRole {}
+
+    private BenchmarkRunner() {}
 }

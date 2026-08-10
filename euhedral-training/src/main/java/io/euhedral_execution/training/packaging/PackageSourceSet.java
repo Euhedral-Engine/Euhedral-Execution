@@ -32,6 +32,7 @@ import java.util.TreeSet;
 record PackageSourceSet(
         LoadedCheckpoint loaded,
         Path workspace,
+        Path calibrationPlan,
         Path merge,
         Path model,
         Path schedule,
@@ -61,10 +62,29 @@ record PackageSourceSet(
                 || !checkpoint.requiredScenarios().equals(request.inputs().requiredScenarios())) {
             throw new IllegalArgumentException("Package inputs disagree with checkpoint");
         }
-        String expectedPackageId = packageId(checkpoint);
-        if (!expectedPackageId.equals(request.inputs().packageId())) {
+        if (!matchesPackageId(checkpoint, request.inputs().packageId())) {
             throw new IllegalArgumentException("Package ID disagrees with checkpoint lifecycle");
         }
+        Path calibrationPlan = checkpoint
+                .calibrationPlan()
+                .map(reference -> {
+                    Path path = workspace.resolve(reference.relativePath()).normalize();
+                    if (!path.startsWith(workspace)) {
+                        throw new IllegalArgumentException("Calibration plan path escapes workspace");
+                    }
+                    try {
+                        CanonicalFileSupport.rejectSymlinkComponents(path);
+                        String computedHash = ArtifactFingerprint.sha256(path);
+                        if (!computedHash.equals(reference.sha256())) {
+                            throw new IllegalArgumentException("Calibration plan fingerprint mismatch: expected "
+                                    + reference.sha256() + " but got " + computedHash);
+                        }
+                    } catch (IOException error) {
+                        throw new IllegalStateException(error);
+                    }
+                    return path;
+                })
+                .orElse(null);
         Path merge = checkpoint
                 .latestMerge()
                 .map(reference -> resolveArtifact(workspace, reference.relativePath(), reference.sha256()))
@@ -141,6 +161,7 @@ record PackageSourceSet(
         return new PackageSourceSet(
                 loaded,
                 workspace,
+                calibrationPlan,
                 merge,
                 model,
                 schedule,
@@ -157,6 +178,18 @@ record PackageSourceSet(
         return checkpoint.stage() == CheckpointStage.RUN_COMPLETE
                 ? checkpoint.trainingRunId()
                 : "%s.partial.r%08d".formatted(checkpoint.trainingRunId(), checkpoint.revision());
+    }
+
+    /// Accepts the stable first-completion ID and the exact revision-qualified ID used by later
+    /// completions. Non-complete checkpoints retain their single canonical partial ID.
+    static boolean matchesPackageId(ClosedLoopCheckpoint checkpoint, String packageId) {
+        if (checkpoint.stage() != CheckpointStage.RUN_COMPLETE) {
+            return packageId(checkpoint).equals(packageId);
+        }
+        return checkpoint.trainingRunId().equals(packageId)
+                || "%s.complete.r%08d"
+                        .formatted(checkpoint.trainingRunId(), checkpoint.revision())
+                        .equals(packageId);
     }
 
     private static Path selectSchedule(Path workspace, ClosedLoopCheckpoint checkpoint) {

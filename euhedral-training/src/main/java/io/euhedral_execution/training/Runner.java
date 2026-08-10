@@ -10,14 +10,14 @@ import io.euhedral_execution.training.packaging.config.TrainingRunPackageRequest
 import io.euhedral_execution.training.packaging.data.TrainingRunPackage;
 import io.euhedral_execution.training.packaging.io.TrainingRunPackageInputsCodec;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class Runner {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(Runner.class);
-
-    private Runner() {}
 
     public static void main(String[] args) throws Exception {
         dispatch(args, ProductionCommandServices.INSTANCE);
@@ -33,6 +33,7 @@ public class Runner {
             case "closed-loop" -> closedLoop(args, services);
             case "training-info" -> trainingInfo(args, services);
             case "package-run" -> packageRun(args, services);
+            case "merge-calibration-plan" -> mergeCalibrationPlan(args, services);
             default -> throw new IllegalArgumentException("Unknown command: " + args[0]);
         }
     }
@@ -81,19 +82,57 @@ public class Runner {
         LOGGER.info("{}", result.directory().toAbsolutePath().normalize());
     }
 
+    private static void mergeCalibrationPlan(String[] args, CommandServices services) throws Exception {
+        ArrayList<Path> workspaces = new ArrayList<>();
+        int index = 1;
+        while (index + 1 < args.length && args[index].equals("--workspace") && !args[index + 1].startsWith("--")) {
+            workspaces.add(Path.of(args[index + 1]));
+            index += 2;
+        }
+        if (workspaces.isEmpty()
+                || index != args.length - 2
+                || !args[index].equals("--output")
+                || args[index + 1].startsWith("--")) {
+            throw new IllegalArgumentException("merge-calibration-plan requires one or more "
+                    + "--workspace <path> entries followed by --output <path>");
+        }
+        Path output = services.mergeCalibrationPlans(workspaces, Path.of(args[index + 1]));
+        LOGGER.info("{}", output.toAbsolutePath().normalize());
+    }
+
     private static void printUsage() {
         LOGGER.info("""
-            Usage: Runner <command>
-              closed-loop --config <path>
-                                  Run the typed closed loop; no -Dcycle.* properties are read.
-                                  run.resume controls resume, run.stop_file requests a
-                                  checkpoint-safe stop, and the package path is printed.
-              training-info       Print scenario-model DJL, PyTorch, CUDA, and device details;
-                                  this does not train or benchmark.
-              package-run --workspace <path> --inputs <path> --output-root <path>
-                                  Reproduce a checkpoint-backed package; this does not rerun
-                                  the physical benchmark.
-            """);
+                Usage: Runner <command>
+                  closed-loop --config <path>
+                                      Run the typed closed loop; no -Dcycle.* properties are read.
+                                      run.resume controls resume, run.stop_file requests a
+                                      checkpoint-safe stop, and the package path is printed.
+                  training-info       Print scenario-model TensorFlow, CUDA, and device details;
+                                      this does not train or benchmark.
+                  package-run --workspace <path> --inputs <path> --output-root <path>
+                                      Reproduce a checkpoint-backed package; this does not rerun
+                                      the physical benchmark.
+                  merge-calibration-plan --workspace <path> [--workspace <path> ...] --output <path>
+                                      Merge compatible calibration plans from prior workspaces into
+                                      one calibration-plan directory.
+                """);
+    }
+
+    interface CommandServices {
+        ClosedLoopConfig readConfig(Path path) throws Exception;
+
+        ClosedLoopResult runClosedLoop(ClosedLoopConfig config) throws Exception;
+
+        void printTrainingEnvironment();
+
+        TrainingRunPackageInputs readPackageInputs(Path path) throws Exception;
+
+        TrainingRunPackage publishPackage(TrainingRunPackageRequest request) throws Exception;
+
+        default Path mergeCalibrationPlans(List<Path> workspaces, Path outputDirectory) throws Exception {
+            DataMerger.mergeCalibrationPlans(new DataMerger.MergeCalibrationPlansRequest(workspaces, outputDirectory));
+            return outputDirectory;
+        }
     }
 
     private enum ProductionCommandServices implements CommandServices {
@@ -125,15 +164,5 @@ public class Runner {
         }
     }
 
-    interface CommandServices {
-        ClosedLoopConfig readConfig(Path path) throws Exception;
-
-        ClosedLoopResult runClosedLoop(ClosedLoopConfig config) throws Exception;
-
-        void printTrainingEnvironment();
-
-        TrainingRunPackageInputs readPackageInputs(Path path) throws Exception;
-
-        TrainingRunPackage publishPackage(TrainingRunPackageRequest request) throws Exception;
-    }
+    private Runner() {}
 }

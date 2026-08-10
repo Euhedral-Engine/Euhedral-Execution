@@ -5,6 +5,8 @@ plugins {
 // Configure JAR with manifest and custom name
 tasks.named<Jar>("jar") {
     archiveBaseName.set("euhedral-benchmark")
+    archiveFileName.set("euhedral-benchmark.jar")
+    destinationDirectory.set(layout.buildDirectory)
     manifest {
         attributes(
             "Main-Class" to "io.euhedral_execution.benchmarks.BenchRunner",

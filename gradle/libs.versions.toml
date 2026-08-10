@@ -2,9 +2,6 @@
 # https://docs.gradle.org/current/userguide/version_catalogs.html#sec::toml-dependencies-format
 
 [versions]
-ai-djl-api = "0.36.0"
-ai-djl-pytorch-pytorch-engine = "0.36.0"
-ai-djl-pytorch-pytorch-jni = "2.7.1-0.36.0"
 ch-qos-logback-logback-classic = "1.5.34"
 com-google-guava-guava = "33.6.0-jre"
 com-google-protobuf-protobuf-java = "4.33.4"
@@ -39,11 +36,11 @@ org-springframework-boot-spring-boot-starter-test = "4.0.7"
 org-springframework-cloud-spring-cloud-starter-config = "5.0.4"
 org-springframework-cloud-spring-cloud-stream-binder-kafka = "5.0.2"
 org-springframework-grpc-spring-grpc-spring-boot-starter = "1.0.3"
+org-tensorflow-tensorflow-core-api = "1.2.0"
+org-tensorflow-tensorflow-framework = "1.2.0"
+org-tensorflow-tensorflow-core-native = "1.2.0"
 
 [libraries]
-ai-djl-api = { module = "ai.djl:api", version.ref = "ai-djl-api" }
-ai-djl-pytorch-pytorch-engine = { module = "ai.djl.pytorch:pytorch-engine", version.ref = "ai-djl-pytorch-pytorch-engine" }
-ai-djl-pytorch-pytorch-jni = { module = "ai.djl.pytorch:pytorch-jni", version.ref = "ai-djl-pytorch-pytorch-jni" }
 ch-qos-logback-logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "ch-qos-logback-logback-classic" }
 com-google-guava-guava = { module = "com.google.guava:guava", version.ref = "com-google-guava-guava" }
 com-google-protobuf-protobuf-java = { module = "com.google.protobuf:protobuf-java", version.ref = "com-google-protobuf-protobuf-java" }
@@ -78,3 +75,6 @@ org-springframework-boot-spring-boot-starter-test = { module = "org.springframew
 org-springframework-cloud-spring-cloud-starter-config = { module = "org.springframework.cloud:spring-cloud-starter-config", version.ref = "org-springframework-cloud-spring-cloud-starter-config" }
 org-springframework-cloud-spring-cloud-stream-binder-kafka = { module = "org.springframework.cloud:spring-cloud-stream-binder-kafka", version.ref = "org-springframework-cloud-spring-cloud-stream-binder-kafka" }
 org-springframework-grpc-spring-grpc-spring-boot-starter = { module = "org.springframework.grpc:spring-grpc-spring-boot-starter", version.ref = "org-springframework-grpc-spring-grpc-spring-boot-starter" }
+org-tensorflow-tensorflow-core-api = { module = "org.tensorflow:tensorflow-core-api", version.ref = "org-tensorflow-tensorflow-core-api" }
+org-tensorflow-tensorflow-framework = { module = "org.tensorflow:tensorflow-framework", version.ref = "org-tensorflow-tensorflow-framework" }
+org-tensorflow-tensorflow-core-native = { module = "org.tensorflow:tensorflow-core-native", version.ref = "org-tensorflow-tensorflow-core-native" }

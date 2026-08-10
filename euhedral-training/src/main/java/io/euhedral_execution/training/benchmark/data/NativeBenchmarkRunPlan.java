@@ -7,9 +7,11 @@ import io.euhedral_execution.training.data.SourceScenario;
 import java.nio.file.Path;
 import java.util.List;
 
+/// Defines one native benchmark run and its closed-loop progress context.
 public record NativeBenchmarkRunPlan(
         String trainingRunId,
         int iteration,
+        int totalIterations,
         String benchmarkRunId,
         String candidateCohortId,
         SourceScenario scenario,
@@ -21,6 +23,9 @@ public record NativeBenchmarkRunPlan(
         boolean dirtyWorkingTree,
         Path outputBundle) {
     public NativeBenchmarkRunPlan {
+        if (iteration < 0 || totalIterations <= 0 || iteration > totalIterations) {
+            throw new IllegalArgumentException("Invalid closed-loop iteration range");
+        }
         policies = List.copyOf(policies);
         outputBundle = outputBundle.toAbsolutePath().normalize();
     }

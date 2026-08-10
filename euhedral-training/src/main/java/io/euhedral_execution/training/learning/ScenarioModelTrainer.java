@@ -1,7 +1,5 @@
 package io.euhedral_execution.training.learning;
 
-import ai.djl.Device;
-import ai.djl.engine.Engine;
 import io.euhedral_execution.training.data.PartitionCounts;
 import io.euhedral_execution.training.data.PolicyId;
 import io.euhedral_execution.training.data.PolicyVector;
@@ -51,13 +49,13 @@ import java.util.TreeSet;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.tensorflow.TensorFlow;
 
 public final class ScenarioModelTrainer {
     private static final Logger LOGGER = LoggerFactory.getLogger(ScenarioModelTrainer.class);
 
-    private ScenarioModelTrainer() {}
-
     public static ScenarioTrainingArtifacts train(ScenarioTrainingRequest request) throws Exception {
+        long started = System.nanoTime();
         Path target = request.modelDirectory();
         if (Files.exists(target)) {
             throw new IllegalArgumentException("Model directory already exists: " + target);
@@ -74,9 +72,11 @@ public final class ScenarioModelTrainer {
         boolean published = false;
         try {
             ScenarioTrainingArtifacts artifacts = trainInto(request, temporary, foldWorkspace);
+            LOGGER.info("Cleaning temporary fold models: directory={}", foldWorkspace);
             deleteTree(foldWorkspace);
             publish(temporary, target);
             published = true;
+            LOGGER.info("Published scenario model: directory={}, elapsedMs={}", target, elapsedMillis(started));
             return new ScenarioTrainingArtifacts(
                     target,
                     target.resolve(ScenarioModelMetadataCodec.FILE_NAME),
@@ -97,6 +97,8 @@ public final class ScenarioModelTrainer {
     private static ScenarioTrainingArtifacts trainInto(
             ScenarioTrainingRequest request, Path directory, Path foldWorkspace) throws Exception {
         ScenarioTrainingConfig requestedConfig = request.config();
+        long preparationStarted = System.nanoTime();
+        LOGGER.info("Preparing scenario learning dataset: inputs={}", request.inputs());
         ScenarioLearningTable table = ScenarioLearningReader.read(
                 request.inputs(), request.requiredScenarios(), requestedConfig.includeWeakCalibrationRows());
         PolicyGroupedSplit split = PolicyGroupedSplitter.split(table, requestedConfig.splitSeed(), requestedConfig);
@@ -110,7 +112,12 @@ public final class ScenarioModelTrainer {
                 split.testRows().size(),
                 requestedConfig.device(),
                 requestedConfig.requireTargetVariation());
-        Device device = ScenarioOrdinalNetwork.resolveDevice(requestedConfig.device());
+        LOGGER.info(
+                "Prepared scenario learning dataset: policies={}, rows={}, elapsedMs={}",
+                table.policies().size(),
+                table.rows().size(),
+                elapsedMillis(preparationStarted));
+        TrainingDevice device = ScenarioOrdinalNetwork.resolveDevice(requestedConfig.device());
         int effectiveBatch = requestedConfig.batchSize() > 0
                 ? StrictMath.min(
                         requestedConfig.batchSize(), split.trainingRows().size())
@@ -236,6 +243,11 @@ public final class ScenarioModelTrainer {
                 environments.size(),
                 config.thresholds());
         ScenarioFeatureSet selectedFeatureSet = ablation.selection().selectedFeatureSet();
+        LOGGER.info(
+                "Selected scenario feature set: features={}, contextFolds={}, " + "environmentFolds={}",
+                selectedFeatureSet,
+                policyContext.size() + ratioContext.size(),
+                ratioEnvironments.size() + countEnvironments.size());
 
         FeatureNormalizer normalizer = ScenarioFeatureEncoder.fit(split.trainingRows(), selectedFeatureSet);
         ScenarioLearningMatrix training =
@@ -245,19 +257,20 @@ public final class ScenarioModelTrainer {
         ArrayList<OrdinalMember> productionMembers = new ArrayList<>();
         ArrayList<ScenarioOrdinalNetwork.TrainingResult> productionResults = new ArrayList<>();
         try {
-            for (int memberIndex = 0; memberIndex < config.ensembleMembers(); memberIndex++) {
-                LOGGER.info("Training production model member {}/{}", memberIndex + 1, config.ensembleMembers());
-                Path memberDirectory = directory.resolve("members").resolve("member-%03d".formatted(memberIndex));
-                ScenarioOrdinalNetwork.TrainingResult result = ScenarioOrdinalNetwork.train(
-                        training,
-                        validation,
-                        selectedFeatureSet,
-                        config,
-                        device,
-                        "PRODUCTION",
-                        "all",
-                        memberIndex,
-                        memberDirectory);
+            long productionStarted = System.nanoTime();
+            LOGGER.info("Training {} production model members", config.ensembleMembers());
+            List<ScenarioOrdinalNetwork.TrainingResult> trainedMembers = ScenarioOrdinalNetwork.trainMembers(
+                    training,
+                    validation,
+                    selectedFeatureSet,
+                    config,
+                    device,
+                    "PRODUCTION",
+                    "all",
+                    config.ensembleMembers(),
+                    directory.resolve("members"));
+            for (int memberIndex = 0; memberIndex < trainedMembers.size(); memberIndex++) {
+                ScenarioOrdinalNetwork.TrainingResult result = trainedMembers.get(memberIndex);
                 productionResults.add(result);
                 productionMembers.add(result.member());
                 history.addAll(result.history());
@@ -267,9 +280,17 @@ public final class ScenarioModelTrainer {
                         config.ensembleMembers(),
                         result.bestEpoch());
             }
+            LOGGER.info(
+                    "Finished production ensemble training: members={}, elapsedMs={}",
+                    config.ensembleMembers(),
+                    elapsedMillis(productionStarted));
 
             EvaluationSummary grouped;
             MetadataProbe probe;
+            long groupedStarted = System.nanoTime();
+            LOGGER.info(
+                    "Evaluating production ensemble on grouped test rows: rows={}",
+                    split.testRows().size());
             try (ScenarioConditionedModel model =
                     ScenarioConditionedModel.forTest(normalizer, table.requiredScenarios(), productionMembers)) {
                 List<PolicyPredictionCurve> testPredictions = model.predictConfiguredCurves(policies(split.testRows()));
@@ -288,9 +309,19 @@ public final class ScenarioModelTrainer {
                 probe = MetadataProbe.from(probePolicy.id(), prediction, deviceName(device));
                 productionMembers.clear();
             }
+            LOGGER.info("Finished grouped test evaluation: elapsedMs={}", elapsedMillis(groupedStarted));
 
+            long losoStarted = System.nanoTime();
+            LOGGER.info(
+                    "Running leave-one-scenario-out evaluation: scenarios={}, membersPerFold={}",
+                    table.requiredScenarios().size(),
+                    config.losoEvaluationMembers());
             LosoResult loso =
                     runLoso(table, split, selectedFeatureSet, config, device, foldWorkspace.resolve("test-loso"));
+            LOGGER.info(
+                    "Finished leave-one-scenario-out evaluation: folds={}, elapsedMs={}",
+                    loso.rows().size(),
+                    elapsedMillis(losoStarted));
             history.addAll(loso.history());
             Acceptance acceptance = acceptance(ablation, grouped, loso.summary(), config);
 
@@ -326,7 +357,7 @@ public final class ScenarioModelTrainer {
                     request.commitSha(),
                     request.dirtyWorkingTree(),
                     ScenarioOrdinalNetwork.ENGINE_NAME,
-                    Engine.getEngine(ScenarioOrdinalNetwork.ENGINE_NAME).getVersion(),
+                    TensorFlow.version(),
                     deviceName(device));
             ScenarioModelMetadata metadata = new ScenarioModelMetadata(
                     ScenarioModelMetadata.SCHEMA_VERSION,
@@ -371,12 +402,16 @@ public final class ScenarioModelTrainer {
         }
     }
 
+    private static long elapsedMillis(long started) {
+        return (System.nanoTime() - started) / 1_000_000L;
+    }
+
     private static LosoResult runLoso(
             ScenarioLearningTable table,
             PolicyGroupedSplit split,
             ScenarioFeatureSet featureSet,
             ScenarioTrainingConfig config,
-            Device device,
+            TrainingDevice device,
             Path directory)
             throws Exception {
         ArrayList<LosoEvaluationMetrics> rows = new ArrayList<>();
@@ -616,7 +651,7 @@ public final class ScenarioModelTrainer {
                 source.thresholds());
     }
 
-    private static String deviceName(Device device) {
+    private static String deviceName(TrainingDevice device) {
         return device.isGpu() ? "gpu" + device.getDeviceId() : "cpu";
     }
 
@@ -634,6 +669,8 @@ public final class ScenarioModelTrainer {
             }
         }
     }
+
+    private ScenarioModelTrainer() {}
 
     private record LosoResult(
             List<LosoEvaluationMetrics> rows, EvaluationSummary summary, List<TrainingHistoryEntry> history) {}

@@ -2,6 +2,7 @@ package io.euhedral_execution.hardware_utils;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.euhedral_execution.hardware_utils.common.SystemSnapshotProvider;
@@ -19,6 +20,28 @@ import org.junit.jupiter.api.parallel.Isolated;
 
 @Isolated
 class ResourceMonitorTest {
+
+    @Test
+    void samplesUtilizationBeforeStartAndCachesIt() {
+        IncrementingSnapshotProvider snapshots = new IncrementingSnapshotProvider();
+        MonotonicClock clock = () -> snapshots.startTime + SECONDS.toNanos(snapshots.samples.get());
+        AtomicInteger topologyUpdates = new AtomicInteger();
+
+        try (ResourceMonitor monitor = new ResourceMonitor(
+                utilization -> topologyUpdates.incrementAndGet(),
+                Duration.ofMillis(200),
+                snapshots,
+                clock,
+                (deadline, clk) -> {},
+                Thread::new)) {
+            HardwareUtilization first = monitor.getUtilization();
+            int samplesAfterFirstRead = snapshots.samples.get();
+
+            assertSame(first, monitor.getUtilization());
+            assertEquals(samplesAfterFirstRead, snapshots.samples.get());
+            assertEquals(1, topologyUpdates.get());
+        }
+    }
 
     @Test
     void calculatesUtilizationFromInjectedSnapshots() throws InterruptedException {

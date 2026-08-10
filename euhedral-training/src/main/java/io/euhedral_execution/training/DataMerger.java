@@ -1,7 +1,11 @@
 package io.euhedral_execution.training;
 
+import io.euhedral_execution.training.checkpoint.ArtifactFingerprint;
+import io.euhedral_execution.training.data.PolicyId;
 import io.euhedral_execution.training.data.PolicyRegistry;
+import io.euhedral_execution.training.data.PolicyVector;
 import io.euhedral_execution.training.data.SourceScenario;
+import io.euhedral_execution.training.data.io.ObservationBundleReader;
 import io.euhedral_execution.training.merge.AnchorBootstrapper;
 import io.euhedral_execution.training.merge.HierarchicalAggregator;
 import io.euhedral_execution.training.merge.MergeCsvWriter;
@@ -11,24 +15,32 @@ import io.euhedral_execution.training.merge.ScenarioQualityRanker;
 import io.euhedral_execution.training.merge.config.AggregationConfig;
 import io.euhedral_execution.training.merge.config.AnchorSelectionConfig;
 import io.euhedral_execution.training.merge.config.CalibrationConfig;
+import io.euhedral_execution.training.merge.data.AnchorCatalog;
 import io.euhedral_execution.training.merge.data.CalibrationPlan;
 import io.euhedral_execution.training.merge.data.CalibrationPlanCsv;
 import io.euhedral_execution.training.merge.data.MergeRecords.MergeResult;
+import io.euhedral_execution.training.merge.data.ReferenceRunCatalog;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.SortedMap;
 import java.util.SortedSet;
+import java.util.TreeMap;
 import java.util.UUID;
 import java.util.stream.Stream;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class DataMerger {
 
-    private DataMerger() {}
+    private static final Logger LOGGER = LoggerFactory.getLogger(DataMerger.class);
 
     private static void deleteRecursively(Path root) throws Exception {
         if (!Files.exists(root)) {
@@ -62,6 +74,11 @@ public class DataMerger {
             CalibrationPlan readBack = CalibrationPlanCsv.read(temporary, request.requiredScenarios());
             if (!readBack.anchors().anchorSetId().equals(plan.anchors().anchorSetId())
                     || !readBack.references().equals(plan.references())) {
+                LOGGER.error(
+                        "Calibration plan validation failed: written anchorSetId={}, readBack anchorSetId={}, referencesMatch={}",
+                        plan.anchors().anchorSetId(),
+                        readBack.anchors().anchorSetId(),
+                        readBack.references().equals(plan.references()));
                 throw new IllegalStateException("Calibration plan validation failed");
             }
             publish(temporary, target);
@@ -72,8 +89,51 @@ public class DataMerger {
         }
     }
 
-    public static MergeArtifacts mergeV1(MergeRequest request) throws Exception {
+    public static CalibrationPlan mergeCalibrationPlans(MergeCalibrationPlansRequest request) throws Exception {
         Objects.requireNonNull(request);
+        Path target = request.outputDirectory().toAbsolutePath().normalize();
+        Path temporary = temporarySibling(target);
+        ensureNewTarget(target, temporary);
+        try {
+            ResolvedCalibrationWorkspace merged = mergeCalibrationWorkspace(request.workspaces());
+            CalibrationPlan plan = merged.plan();
+            CalibrationPlanCsv.write(temporary, plan);
+            CalibrationPlan readBack = CalibrationPlanCsv.read(temporary);
+            if (!readBack.equals(plan)) {
+                LOGGER.error("Merged calibration plan validation failed: written={}, readBack={}", plan, readBack);
+                throw new IllegalStateException("Merged calibration plan validation failed");
+            }
+            Path evidenceDirectory = temporary.resolve("evidence");
+            Files.createDirectories(evidenceDirectory);
+
+            for (Path bundle : merged.evidenceBundles()) {
+                Path destination = evidenceDirectory.resolve(bundle.getFileName());
+
+                try (var stream = Files.walk(bundle)) {
+                    stream.filter(Files::isRegularFile).forEach(sourceFile -> {
+                        try {
+                            Path relativePath = bundle.relativize(sourceFile);
+                            Path dirFile = destination.resolve(relativePath);
+
+                            Files.createDirectories(dirFile.getParent());
+                            Files.copy(sourceFile, dirFile, StandardCopyOption.REPLACE_EXISTING);
+                        } catch (Exception e) {
+                            throw new RuntimeException(e);
+                        }
+                    });
+                }
+            }
+            publish(temporary, target);
+            return plan;
+        } catch (Throwable error) {
+            deleteRecursively(temporary);
+            throw error;
+        }
+    }
+
+    public static MergeArtifacts merge(MergeRequest request) throws Exception {
+        Objects.requireNonNull(request);
+        LOGGER.info("Merging calibration scenarios.");
         Path target = request.outputDirectory().toAbsolutePath().normalize();
         Path temporary = temporarySibling(target);
         ensureNewTarget(target, temporary);
@@ -125,6 +185,66 @@ public class DataMerger {
         }
     }
 
+    private static ResolvedCalibrationWorkspace mergeCalibrationWorkspace(List<Path> workspaces) throws Exception {
+        SortedMap<PolicyId, PolicyVector> anchorsById = new TreeMap<>();
+        SortedMap<SourceScenario, String> references = new TreeMap<>();
+        SortedMap<String, Path> bundlesByRunId = new TreeMap<>();
+        for (Path workspace : workspaces) {
+            Path root = workspace.toAbsolutePath().normalize();
+            CalibrationPlan plan = CalibrationPlanCsv.read(root.resolve("calibration-plan"));
+            for (PolicyVector policy : plan.anchors().fixedAnchors()) {
+                PolicyVector previous = anchorsById.putIfAbsent(policy.id(), policy);
+                if (previous != null && !previous.equals(policy)) {
+                    throw new IllegalArgumentException("Anchor policy content disagrees across workspaces: "
+                            + policy.id().canonical());
+                }
+            }
+            for (Map.Entry<SourceScenario, String> entry :
+                    plan.references().referenceRunIds().entrySet()) {
+                String previous = references.putIfAbsent(entry.getKey(), entry.getValue());
+                if (previous != null && !previous.equals(entry.getValue())) {
+                    throw new IllegalArgumentException("Scenario reference disagrees across workspaces: "
+                            + entry.getKey().canonical());
+                }
+            }
+            Set<String> accepted = new HashSet<>();
+            Path evidenceDirectory = root.resolve("evidence");
+            if (Files.isDirectory(evidenceDirectory)) {
+                try (var stream = Files.list(evidenceDirectory)) {
+                    for (Path bundle : stream.filter(Files::isDirectory)
+                            .filter(path -> Files.isRegularFile(path.resolve("COMPLETE")))
+                            .sorted(Comparator.comparing(
+                                    path -> path.getFileName().toString()))
+                            .toList()) {
+                        String runId = ObservationBundleReader.readRunId(bundle);
+                        accepted.add(runId);
+                        Path normalized = bundle.toAbsolutePath().normalize();
+                        Path previous = bundlesByRunId.putIfAbsent(runId, normalized);
+                        if (previous != null
+                                && !previous.equals(normalized)
+                                && !ArtifactFingerprint.sha256(previous)
+                                        .equals(ArtifactFingerprint.sha256(normalized))) {
+                            throw new IllegalArgumentException("Duplicate evidence bundle for benchmark run " + runId);
+                        }
+                    }
+                }
+            }
+        }
+        references.entrySet().removeIf(entry -> !bundlesByRunId.containsKey(entry.getValue()));
+        if (anchorsById.isEmpty()) {
+            throw new IllegalArgumentException("At least one workspace is required");
+        }
+        AnchorCatalog anchors = AnchorCatalog.of(List.copyOf(anchorsById.values()));
+        for (String runId : references.values()) {
+            if (!bundlesByRunId.containsKey(runId)) {
+                throw new IllegalArgumentException("Missing evidence bundle for reference run " + runId);
+            }
+        }
+        CalibrationPlan plan =
+                new CalibrationPlan(anchors, new ReferenceRunCatalog(1, anchors.anchorSetId(), references));
+        return new ResolvedCalibrationWorkspace(plan, List.copyOf(bundlesByRunId.values()));
+    }
+
     private static void validateMergeOutput(Path directory, SortedSet<SourceScenario> requiredScenarios)
             throws Exception {
         CalibrationPlanCsv.read(directory, requiredScenarios);
@@ -140,6 +260,11 @@ public class DataMerger {
         for (String file : files) {
             String text = Files.readString(directory.resolve(file));
             if (!text.startsWith("schema_version,") || !text.endsWith("\n")) {
+                LOGGER.error(
+                        "Invalid merge artifact {}: startsWithSchema={}, endsWithNewline={}",
+                        file,
+                        text.startsWith("schema_version,"),
+                        text.endsWith("\n"));
                 throw new IllegalStateException("Invalid merge artifact " + file);
             }
         }
@@ -157,6 +282,8 @@ public class DataMerger {
                 directory.resolve("incomplete-policies.vectors.csv"));
     }
 
+    private DataMerger() {}
+
     public record CalibrationBootstrapRequest(
             List<Path> observationBundles,
             SortedSet<SourceScenario> requiredScenarios,
@@ -173,6 +300,23 @@ public class DataMerger {
             Objects.requireNonNull(planDirectory);
             Objects.requireNonNull(anchorSelection);
             Objects.requireNonNull(aggregation);
+        }
+    }
+
+    public record MergeCalibrationPlansRequest(List<Path> workspaces, Path outputDirectory) {
+
+        public MergeCalibrationPlansRequest {
+            Objects.requireNonNull(workspaces);
+            workspaces = workspaces.stream()
+                    .map(path -> Objects.requireNonNull(path).toAbsolutePath().normalize())
+                    .toList();
+            if (workspaces.isEmpty()) {
+                throw new IllegalArgumentException("At least one workspace is required");
+            }
+            if (new HashSet<>(workspaces).size() != workspaces.size()) {
+                throw new IllegalArgumentException("Duplicate workspace");
+            }
+            Objects.requireNonNull(outputDirectory);
         }
     }
 
@@ -203,4 +347,6 @@ public class DataMerger {
             Path coverageReport,
             Path robustLeaderVectors,
             Path incompleteVectors) {}
+
+    private record ResolvedCalibrationWorkspace(CalibrationPlan plan, List<Path> evidenceBundles) {}
 }
