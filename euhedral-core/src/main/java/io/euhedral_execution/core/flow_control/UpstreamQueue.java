@@ -35,6 +35,7 @@ public class UpstreamQueue {
     private final MpscQueue<UpstreamHandle> upstreams;
     private final PaddedAtomicLong upstreamCount;
     long cachedUpCount = 0L;
+
     public UpstreamQueue(int core, MpscQueue<UpstreamHandle> upstreams, PaddedAtomicLong upstreamCount) {
         this.core = core;
         this.upstreams = upstreams;

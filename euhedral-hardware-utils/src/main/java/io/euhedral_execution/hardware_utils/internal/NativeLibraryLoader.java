@@ -13,6 +13,7 @@ final class NativeLibraryLoader {
     private final NativeLibraryExtractor extractor;
     private final NativeLibrarySystem librarySystem;
     private final Logger logger;
+
     NativeLibraryLoader(
             NativeProductCatalog catalog,
             NativeLibraryExtractor extractor,

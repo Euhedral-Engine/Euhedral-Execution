@@ -4,13 +4,13 @@
 
 This child implements Child B of
 [`phase-1-native-build-jni-packaging.md`](phase-1-native-build-jni-packaging.md). The parent
-blueprint's catalog schema, eight-product inventory, native graph, ABI exceptions, target flags,
-and ad-hoc macOS signing contract are immutable inputs. This child owns only the internal runtime
+blueprint's catalog schema, eight-product inventory, native graph, ABI exceptions, target flags, and
+ad-hoc macOS signing contract are immutable inputs. This child owns only the internal runtime
 loader, package/binary/runtime gates, narrow hardware-module Gradle test wiring, and
 `.github/workflows/hardware-utils-native.yaml`.
 
-The implementation does not inspect or modify training, native source semantics, the Zig graph,
-the root POM, or existing build/deploy workflow behavior.
+The implementation does not inspect or modify training, native source semantics, the Zig graph, the
+root POM, or existing build/deploy workflow behavior.
 
 ## Authorized toolchain-policy revision
 
@@ -23,8 +23,8 @@ versions and limits.
 
 `NativeProductCatalog` parses the generated UTF-8 TSV under a 65,536-byte bound, validates its
 schema and aliases, proves every declared resource exists, and publishes immutable products.
-Selection normalizes runtime properties with `Locale.ROOT`, has no architecture default, and
-orders candidates by load order and product ID.
+Selection normalizes runtime properties with `Locale.ROOT`, has no architecture default, and orders
+candidates by load order and product ID.
 
 `JNIClassLoader.load()` triggers a holder class. The holder constructs the catalog, extractor, and
 load seam exactly once; successful class initialization is the publication boundary. Linux load
@@ -33,9 +33,9 @@ attempts fall through from glibc to musl only for `IOException`, `SecurityExcept
 override.
 
 `NativeLibraryExtractor` owns one randomized process directory beneath `euhedral-native-v1`, uses
-create-new/no-follow operations, applies POSIX permissions or Windows owner-only ACLs, bounds
-copies at 64 MiB, unlinks successful POSIX loads immediately, retains Windows DLLs until shutdown,
-and performs bounded conservative stale cleanup.
+create-new/no-follow operations, applies POSIX permissions or Windows owner-only ACLs, bounds copies
+at 64 MiB, unlinks successful POSIX loads immediately, retains Windows DLLs until shutdown, and
+performs bounded conservative stale cleanup.
 
 Failsafe inspects the ordinary jar after `package`. It enforces the exact resource inventory,
 catalog and staged/jar byte identity, architecture, imports, exports including the N01/N02 and
@@ -52,8 +52,8 @@ Apple `codesign` verification for both packaged dylibs.
 
 Required evidence is:
 
-- one clean and two warm `gradle :euhedral-hardware-utils:build` runs with the pinned JDK,
-  Gradle, Zig, SDK, signer, and LLVM paths;
+- one clean and two warm `gradle :euhedral-hardware-utils:build` runs with the pinned JDK, Gradle,
+  Zig, SDK, signer, and LLVM paths;
 - all unit, P0 compatibility, package, binary, signature, warm-removal, and Linux build-host smoke
   tests passing;
 - exact jar and bounded smoke inventories;
@@ -65,14 +65,15 @@ Required evidence is:
 ## Implementation model reassessment
 
 The implementation spans immutable publication, strict serialization, cross-platform filesystem
-ownership, bounded recovery, archive identity, three binary formats, Gradle build lifecycle ordering, and
-runner behavior. These remain coupled at the native load/package boundary, so the parent-selected
+ownership, bounded recovery, archive identity, three binary formats, Gradle build lifecycle
+ordering, and runner behavior. These remain coupled at the native load/package boundary, so the
+parent-selected
 `gpt-5.6-sol` implementation at high reasoning effort remains appropriate.
 
 ## Completion record
 
-Implementation is complete in the owned source, test, POM, workflow, and documentation surfaces.
-The clean selected-module verification initially found and repaired two test-harness issues:
+Implementation is complete in the owned source, test, POM, workflow, and documentation surfaces. The
+clean selected-module verification initially found and repaired two test-harness issues:
 duplicate ELF names in LLVM version tables and a Gradle executable path missing from the forked
 Failsafe JVM. A subsequent focused binary inspection passed, and the isolated warm-removal proof
 passed.
@@ -94,8 +95,8 @@ executables were invoked by absolute path as permitted by `AGENTS.md`.
 - `git diff --check`, training scope diff, tracked source-bin inventory, and native symlink checks:
   passed/empty as required.
 
-The timings are descriptive build observations, not performance or throughput claims. Hosted
-Windows x64/JDK 17 loading, hosted macOS/JDK 17 loading and Apple `codesign`, and the static-only
+The timings are descriptive build observations, not performance or throughput claims. Hosted Windows
+x64/JDK 17 loading, hosted macOS/JDK 17 loading and Apple `codesign`, and the static-only
 cross-architecture B06 portions remain unverified locally; the new workflow is the required
 environmental gate for those results. No P5-P7 platform semantic claim is made.
 

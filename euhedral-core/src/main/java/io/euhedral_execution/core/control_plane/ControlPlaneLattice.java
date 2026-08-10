@@ -114,6 +114,7 @@ public final class ControlPlaneLattice implements LatticeTerminal {
     final AtomicReference<int[]> weightedShardMap = new AtomicReference<>(new int[0]);
     volatile int currentGlobalVersion = Integer.MIN_VALUE;
     volatile EffectiveSystemTopology effectiveTopology;
+
     ControlPlaneLattice(LatticeConfig config) {
         this.name = config.name() == null || config.name().isBlank()
                 ? this.getClass().getSimpleName()

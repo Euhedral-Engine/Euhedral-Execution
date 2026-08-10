@@ -42,8 +42,8 @@ assumption, or missing acceptance criterion was found.
 - `mvn -B -pl euhedral-training test`: `BUILD SUCCESS`; 86 tests, 0 failures, 0 errors, 1 skipped
   opt-in integration test.
 - `mvn -B -pl euhedral-training -Dtraining.djlIntegration=true
-  -Dtest=ScenarioOrdinalNetworkIntegrationTest test`: `BUILD SUCCESS`; 1 test, 0 failures,
-  0 errors, 0 skipped.
+  -Dtest=ScenarioOrdinalNetworkIntegrationTest test`: `BUILD SUCCESS`; 1 test, 0 failures, 0 errors,
+  0 skipped.
 - Targeted stale-reference searches found no prohibited pooled-data, workspace-path, or environment
   feature dependencies in the Phase 2 learner.
 - The Phase 2 implementation diff remains confined to the approved learning package, focused

@@ -19,14 +19,14 @@ splits implementation into two sequential responsibility children. There is no P
 implementation or validation action.
 
 The inherited P2 documentation still records audit-tooling and race-evidence limits, while the
-branch tip is the developer-designated completed P2 root. P3 does not reclassify or reconstruct
-that history. It consumes only P2's stable logical-ID, mask-index, bounded-span, and immutable
-topology contracts.
+branch tip is the developer-designated completed P2 root. P3 does not reclassify or reconstruct that
+history. It consumes only P2's stable logical-ID, mask-index, bounded-span, and immutable topology
+contracts.
 
 If a child needs a different public capability, mask meaning, managed-owner rule, affinity lease,
-lifecycle state, task-acceptance linearization point, registry identity rule, cleaner/hook owner,
-or memory mode, it must stop and return to this parent blueprint. Compile convenience is not
-authority to change one of these contracts.
+lifecycle state, task-acceptance linearization point, registry identity rule, cleaner/hook owner, or
+memory mode, it must stop and return to this parent blueprint. Compile convenience is not authority
+to change one of these contracts.
 
 ## Objective
 
@@ -35,10 +35,10 @@ fresh-thread executor with deterministic cleanup. Completion must:
 
 1. add one public affinity capability type and query without changing an existing descriptor or
    module export;
-2. distinguish exact placement, one locality hint, and unsupported behavior at every common
-   affinity entry point;
-3. preserve a stable Euhedral logical owner for managed worker tasks without inventing an
-   unmanaged physical CPU;
+2. distinguish exact placement, one locality hint, and unsupported behavior at every common affinity
+   entry point;
+3. preserve a stable Euhedral logical owner for managed worker tasks without inventing an unmanaged
+   physical CPU;
 4. replace destructive base-mask probing with bounded, non-destructive discovery and per-thread
    restoration leases;
 5. reject empty or unrepresentable masks before a platform call and never report partial mask
@@ -46,8 +46,8 @@ fresh-thread executor with deterministic cleanup. Completion must:
 6. preserve legacy macOS boolean success when exactly one representable locality hint is applied,
    while reporting `LOCALITY_HINT`, never `EXACT`;
 7. preserve one newly created thread per accepted `execute`, including concurrent tasks;
-8. linearize singleton acquisition, restart, execute, shutdown, close, task exit, cleaner, hook,
-   and registry removal;
+8. linearize singleton acquisition, restart, execute, shutdown, close, task exit, cleaner, hook, and
+   registry removal;
 9. make shutdown, rejection, interruption, termination, and deadlines truthful at every public
    observation; and
 10. bound and clean every global registry, thread-local lease, task reference, cleaner action, and
@@ -81,8 +81,8 @@ euhedral-hardware-utils/src/main/java/
 ```
 
 `module-info.java` remains unchanged because the root package is already exported. All existing
-public/protected types, methods, constructors, fields, descriptors, constants, and module
-directives remain P0-compatible.
+public/protected types, methods, constructors, fields, descriptors, constants, and module directives
+remain P0-compatible.
 
 Exact contract-bearing production files are:
 
@@ -126,8 +126,8 @@ P3-B owns:
 
 - `PinnedThreadExecutor` and its bounded internal registry/cleanup support;
 - fresh-thread task wrapping and its use of the P3-A managed-owner/affinity lease;
-- singleton, execute/start/shutdown/close, interruption, termination, cleaner, hook, `closeAll`,
-  and contamination tests.
+- singleton, execute/start/shutdown/close, interruption, termination, cleaner, hook, `closeAll`, and
+  contamination tests.
 
 P3-B consumes P3-A's package-private managed-task binding operation. It does not reopen affinity
 capability or mask semantics.
@@ -138,12 +138,11 @@ capability or mask semantics.
 - P1's generated-JNI/loader boundary and surviving closeout evidence.
 - P2's stable logical CPU IDs, Windows `group * 64 + processor` mapping, macOS ordinals,
   `CPU_COUNT` index span, active CPU mask, and allocation bounds.
-- Existing native affinity declarations and implementations, for signature and deferral review
-  only.
+- Existing native affinity declarations and implementations, for signature and deferral review only.
 - The exported legacy `io.euhedral_execution.hardware_utils.common.ThreadPinner` type. Its class,
   constructors, abstract methods, and descriptors remain unchanged; P3 does not add a new abstract
-  capability method that would break external subclasses. The operational platform boundary is
-  the unexported `internal.ThreadPinner`.
+  capability method that would break external subclasses. The operational platform boundary is the
+  unexported `internal.ThreadPinner`.
 - The parent plan's named non-training worker uses in `ControlPlaneFragment`,
   `BaseCloneableObject`, `ControlPlaneLattice`, the executor compatibility tests, and benchmarks.
 
@@ -160,8 +159,8 @@ thread properties constrains P3 behavior but does not enter P3 edit scope.
   assigned to P5-P7.
 - Resource providers, timer policy, `ResourceMonitor`, pressure, cadence, listeners, snapshots,
   topology production, or monitor/platform resources.
-- Core production, routing, draining, frame behavior, Reactor, Spring, benchmarks, root POM,
-  native build/package/loader, CI, or unrelated cleanup.
+- Core production, routing, draining, frame behavior, Reactor, Spring, benchmarks, root POM, native
+  build/package/loader, CI, or unrelated cleanup.
 - Any inspection, edit, build, test, documentation, or command under `euhedral-training`, or a
   reactor command that selects it.
 
@@ -185,10 +184,9 @@ Add this static method to `ThreadTools`:
 public static AffinityCapability getAffinityCapability()
 ```
 
-The result describes the operational common `ThreadTools` path on this runtime, not an OS
-marketing claim. It is non-null and stable for the initialized platform facade. Existing boolean
-methods remain the compatibility result for one request; the enum explains what a successful
-request means.
+The result describes the operational common `ThreadTools` path on this runtime, not an OS marketing
+claim. It is non-null and stable for the initialized platform facade. Existing boolean methods
+remain the compatibility result for one request; the enum explains what a successful request means.
 
 Do not add the constants to `OSName`, a topology enum, or another unrelated type. Do not export a
 new package.
@@ -210,8 +208,8 @@ The exact local file decomposition is left to each child, but these roles and na
 - `ManagedCpuBinding`: a package-private `AutoCloseable` token that installs one logical owner and
   restores/removes the prior thread-local state exactly once.
 
-These roles remain unexported. Children may combine small value roles in one internal file, but
-must not leak an internal type through an exported signature.
+These roles remain unexported. Children may combine small value roles in one internal file, but must
+not leak an internal type through an exported signature.
 
 ### Affinity data flow
 
@@ -252,34 +250,32 @@ execute(command)
   -> finally: release lease -> close owner token -> remove task -> signal termination
 ```
 
-Managed ownership is an Euhedral lane identity, not proof of physical placement. A truthful
-platform current-CPU result remains preferred independently of affinity mutation/restoration
-capability. Otherwise `ThreadTools.getCpu()` returns the managed logical owner while the token is
-active; outside managed ownership it returns `-1` when the platform cannot truthfully map the
-current CPU.
+Managed ownership is an Euhedral lane identity, not proof of physical placement. A truthful platform
+current-CPU result remains preferred independently of affinity mutation/restoration capability.
+Otherwise `ThreadTools.getCpu()` returns the managed logical owner while the token is active;
+outside managed ownership it returns `-1` when the platform cannot truthfully map the current CPU.
 `getCpuInfo()` returns the matching `CpuInfo` for a nonnegative known result and otherwise returns
-`null`; P3-A adds the JSpecify `@Nullable` return annotation without changing its JVM descriptor.
-No fallback invents CPU zero.
+`null`; P3-A adds the JSpecify `@Nullable` return annotation without changing its JVM descriptor. No
+fallback invents CPU zero.
 
 ## Affinity capability and request contract
 
 ### Capability meanings
 
 - `EXACT`: a successful common request applies the complete requested logical CPU set as an exact
-  operating-system binding. The provider can capture and restore the current thread's original
-  exact binding. If either full apply or safe capture/restore is unavailable, the common path must
-  not report `EXACT`.
+  operating-system binding. The provider can capture and restore the current thread's original exact
+  binding. If either full apply or safe capture/restore is unavailable, the common path must not
+  report `EXACT`.
 - `LOCALITY_HINT`: a successful common request applies exactly one locality hint shared by every
   requested logical CPU. It does not guarantee placement on any requested CPU. macOS reports this
   value and never `EXACT`.
 - `UNSUPPORTED`: the common path cannot safely honor a request. Every set operation returns false
   without invoking a raw platform setter and release is a no-op. It does not suppress an
-  independently truthful current-CPU query; otherwise current CPU is `-1` outside managed
-  ownership.
+  independently truthful current-CPU query; otherwise current CPU is `-1` outside managed ownership.
 
 Linux and Windows facades must not report `EXACT` in P3 merely because a legacy raw setter exists.
-They may do so only when the common capture/apply/restore contract is operational. P5 and P6 own
-the native work that makes those complete platform paths exact. P3 preserves every legacy facade
+They may do so only when the common capture/apply/restore contract is operational. P5 and P6 own the
+native work that makes those complete platform paths exact. P3 preserves every legacy facade
 descriptor but routes `ThreadTools` through the honest operational capability.
 
 The macOS facade may report `LOCALITY_HINT` in P3 only when it can validate one representable hint,
@@ -306,13 +302,11 @@ bits. Canonicalization:
 4. treats a zero-length or all-zero value as the empty request;
 5. rejects a nonzero bit at or above P2's logical index span or outside the immutable supported
    topology mask; and
-6. rejects a word count above `ceil(CPU_COUNT / 64)` before allocating a second proportional
-   buffer.
+6. rejects a word count above `ceil(CPU_COUNT / 64)` before allocating a second proportional buffer.
 
 `int[]` conversion rejects a null array, a negative ID, or an ID outside the same span. Duplicate
-IDs collapse to one requested bit and are not a failure. `BitSet` input is cloned before
-conversion. No overload intersects away an invalid or unsupported requested bit and then reports
-success.
+IDs collapse to one requested bit and are not a failure. `BitSet` input is cloned before conversion.
+No overload intersects away an invalid or unsupported requested bit and then reports success.
 
 The maximum accepted canonical mask is 1,048,576 bits, 16,384 words, or 131,072 bytes, inherited
 from P2. Size arithmetic uses `long` before a checked conversion to `int`. There is no floating
@@ -336,8 +330,8 @@ true until the common layer proves all set bits share that hint.
 
 ### Original binding, leases, and release
 
-Static initialization must never discover `BASE_MASK` by setting affinity one CPU at a time.
-Instead it performs at most one non-mutating provider capture:
+Static initialization must never discover `BASE_MASK` by setting affinity one CPU at a time. Instead
+it performs at most one non-mutating provider capture:
 
 - a successful exact capture is cloned into `BASE_MASK`;
 - otherwise `BASE_MASK` is a defensive immutable copy of the P2 active topology mask for
@@ -350,8 +344,8 @@ binding. Store the owned snapshot in one `ThreadLocal` lease. A failed capture p
 leaves no lease. Repeated successful sets before release retain the first original snapshot.
 
 For locality hints, the lease records only that one hint was successfully applied; release applies
-tag `0`. It never calls that release after a rejected/unapplied request. Unsupported requests
-create no lease.
+tag `0`. It never calls that release after a rejected/unapplied request. Unsupported requests create
+no lease.
 
 Existing `void ThreadTools.releaseAffinity()` performs at most one release for the calling thread:
 
@@ -364,8 +358,8 @@ bounded diagnostic outside hot loops, and never substitutes `BASE_MASK` for a mi
 snapshot. The void descriptor is unchanged. Executor cleanup must continue even after a release
 failure.
 
-The `ManagedCpuBinding` is independently nested-safe: closing restores the prior managed ID or
-calls `ThreadLocal.remove()` when none existed. Tokens are owner-thread-only and idempotent; a
+The `ManagedCpuBinding` is independently nested-safe: closing restores the prior managed ID or calls
+`ThreadLocal.remove()` when none existed. Tokens are owner-thread-only and idempotent; a
 wrong-thread or out-of-LIFO-order close throws `IllegalStateException` without modifying either
 thread. Closing the current top token twice is an idempotent no-op. Executor use is one unnested
 token per fresh task thread.
@@ -381,11 +375,11 @@ Retain name clamping, priority clamping, daemon configuration, CPU getter, `Thre
 `AbstractExecutorService`.
 
 The public `pinnedFactory` getter remains a construction compatibility surface. Calling
-`newThread` on it directly returns one configured NEW affinity/ownership-wrapped thread but does
-not submit, register, or start an executor task. Lifecycle and termination claims cover commands
+`newThread` on it directly returns one configured NEW affinity/ownership-wrapped thread but does not
+submit, register, or start an executor task. Lifecycle and termination claims cover commands
 accepted through `execute`/inherited `submit`; a caller that directly starts a factory thread owns
-that thread's start/join. Its wrapper still releases affinity/ownership and tolerates the absence
-of an executor task entry.
+that thread's start/join. Its wrapper still releases affinity/ownership and tolerates the absence of
+an executor task entry.
 
 Every accepted `execute` creates and starts one distinct `Thread`; there is no work queue. Two
 blocking tasks submitted to one executor must enter concurrently on different thread identities.
@@ -435,51 +429,51 @@ All per-executor state, current immutable thread configuration, epoch, and an id
 task map are guarded by one private lifecycle monitor/lock. A termination condition is signaled
 after every task removal and every state transition.
 
-- Construction validates CPU range against the P2 span, non-null thread creator/name, and stores
-  a clamped priority. The initial state is `RUNNING`, epoch 1.
+- Construction validates CPU range against the P2 span, non-null thread creator/name, and stores a
+  clamped priority. The initial state is `RUNNING`, epoch 1.
 - `start(name, priority, daemon)` validates arguments before the lock. Under the lock, `RUNNING`
   is an idempotent no-op that does not change configuration; `SHUTDOWN` publishes one new immutable
   configuration, increments the checked epoch, and becomes `RUNNING`; `CLOSED` throws
   `IllegalStateException`.
-- `execute(command)` rejects null with `NullPointerException`. It obtains one configuration
-  snapshot and asks the creator for a thread outside the lifecycle lock. A null thread or a thread
-  whose state is not `NEW` becomes `RejectedExecutionException`; the command is never run.
+- `execute(command)` rejects null with `NullPointerException`. It obtains one configuration snapshot
+  and asks the creator for a thread outside the lifecycle lock. A null thread or a thread whose
+  state is not `NEW` becomes `RejectedExecutionException`; the command is never run.
 - Under the lifecycle lock, `execute` rechecks `RUNNING` and the same epoch, rejects otherwise,
   registers the thread by identity, and invokes `Thread.start()` before releasing the lock. If
   `start()` throws, it removes the task, signals waiters, and propagates the failure without
   retaining the command/thread.
 - `shutdown()` changes `RUNNING -> SHUTDOWN` under the lock and does not interrupt accepted work.
-- `shutdownNow()` changes `RUNNING -> SHUTDOWN` when needed, snapshots every active thread under
-  the lock, then interrupts and unparks each outside the lock. A concurrent exit is harmless.
+- `shutdownNow()` changes `RUNNING -> SHUTDOWN` when needed, snapshots every active thread under the
+  lock, then interrupts and unparks each outside the lock. A concurrent exit is harmless.
 - `close()` changes any nonclosed state to `CLOSED`, snapshots active threads, performs the same
   best-effort interrupt/unpark, triggers explicit cleanup, and returns without an unbounded join.
 - A task command runs once. An unchecked failure propagates unchanged from the wrapper to that
-  thread's configured uncaught-exception handler only after nested `finally` blocks attempt
-  affinity release, owner-token close, and task removal. A recoverable release/owner cleanup
+  thread's configured uncaught-exception handler only after nested `finally` blocks attempt affinity
+  release, owner-token close, and task removal. A recoverable release/owner cleanup
   `RuntimeException` or `LinkageError` is logged and must not replace an already-running command
   failure or prevent task removal. `VirtualMachineError` and `ThreadDeath` are not normalized into
   an affinity failure, although the outer task-removal `finally` still runs. No command failure
   shuts down the executor.
-- Wrapper cleanup removes exactly the current thread identity under the lock and signals waiters.
-  It cannot remove another task with an equal name or reused numeric thread ID.
+- Wrapper cleanup removes exactly the current thread identity under the lock and signals waiters. It
+  cannot remove another task with an equal name or reused numeric thread ID.
 
 Creating a candidate thread outside the lock keeps arbitrary user `threadCreator` code out of the
 lifecycle critical section. Starting it inside the lock is required: shutdown cannot miss an
-accepted unstarted thread. A rejected race may create one never-started thread object, but it is
-not stored after `execute` returns.
+accepted unstarted thread. A rejected race may create one never-started thread object, but it is not
+stored after `execute` returns.
 
 ### Singleton registry and acquisition
 
 The registry is keyed by the requested `long cpu`, validated to the supported `int` logical span.
-Acquisition is linearized under one low-frequency registry monitor; it does not run on a worker
-hot loop.
+Acquisition is linearized under one low-frequency registry monitor; it does not run on a worker hot
+loop.
 
 `getOrSetIfAbsent` behaves as follows:
 
 1. a live `RUNNING` entry returns the same executor identity;
 2. a live `SHUTDOWN` entry is restarted with the requested configuration and returned;
-3. a `CLOSED` entry with active tasks rejects acquisition so two executor identities cannot own
-   the same CPU concurrently;
+3. a `CLOSED` entry with active tasks rejects acquisition so two executor identities cannot own the
+   same CPU concurrently;
 4. a closed/stale entry with no active task is removed only by exact registry-entry identity, then
    one new executor is installed; and
 5. concurrent absent acquisition creates and publishes exactly one winning executor/hook/cleaner
@@ -490,8 +484,8 @@ stale cleanup but never removes a replacement installed for the same CPU.
 
 Registry entries use a weak executor reference plus a cleanup control object that does not refer
 back to the executor. Each running task wrapper holds its executor strongly until its `finally`
-block, so cleaner action cannot interrupt a task merely because the submitting caller released
-its reference.
+block, so cleaner action cannot interrupt a task merely because the submitting caller released its
+reference.
 
 ### Cleaner, shutdown hook, and `closeAll`
 
@@ -502,26 +496,26 @@ not register one permanent Runtime hook per executor.
   registration identity; it contains no `PinnedThreadExecutor` reference, lambda capture of the
   executor, or command.
 - Explicit `close` invokes the same idempotent cleanup action as the cleaner. The action marks the
-  control closed and removes the exact entry immediately only when no active task remains. If a
-  task remains, its final exit performs the same identity check/removal; the tombstone continues
-  to prevent same-CPU overlap.
+  control closed and removes the exact entry immediately only when no active task remains. If a task
+  remains, its final exit performs the same identity check/removal; the tombstone continues to
+  prevent same-CPU overlap.
 - Registry removal uses `remove(cpu, exactEntry)` or an equivalent monitor-protected identity
   comparison. An old cleaner can never remove a newer executor.
-- The first installed entry registers the one hook. Removing the last exact entry removes that
-  hook when the JVM is not already shutting down. Hook add/remove failures roll back acquisition
-  or remain bounded shutdown diagnostics; no silently unhooked live registry is published.
+- The first installed entry registers the one hook. Removing the last exact entry removes that hook
+  when the JVM is not already shutting down. Hook add/remove failures roll back acquisition or
+  remain bounded shutdown diagnostics; no silently unhooked live registry is published.
 - The hook calls `closeAll` through registry/control objects and owns no executor strongly beyond
   its bounded snapshot.
 
 `closeAll` linearizes a registry-wide closing pass: acquisition cannot install/restart while the
 snapshot is being marked closed. It closes every entry present at that linearization point, then
-allows later acquisitions only after the pass completes and all same-CPU closed active entries
-still enforce the no-overlap rule. It is idempotent and does not wait forever for an interrupt-
-ignoring command. Empty-registry `closeAll` is a no-op.
+allows later acquisitions only after the pass completes and all same-CPU closed active entries still
+enforce the no-overlap rule. It is idempotent and does not wait forever for an interrupt- ignoring
+command. Empty-registry `closeAll` is a no-op.
 
-The one hook is removed when the registry becomes empty during ordinary runtime. During JVM
-shutdown `removeShutdownHook` may throw `IllegalStateException`; that case is expected and does
-not register a replacement. This is the only justified runtime-hook cleanup exception.
+The one hook is removed when the registry becomes empty during ordinary runtime. During JVM shutdown
+`removeShutdownHook` may throw `IllegalStateException`; that case is expected and does not register
+a replacement. This is the only justified runtime-hook cleanup exception.
 
 ### Termination, deadlines, and interruption
 
@@ -533,8 +527,7 @@ not register a replacement. This is the only justified runtime-hook cleanup exce
 - otherwise wait on the termination condition until active tasks reach zero, the executor is
   restarted, the budget expires, or the caller is interrupted;
 - restart while waiting returns false because the executor is no longer shutdown;
-- interruption restores the caller's interrupt flag and returns false; it is never swallowed;
-  and
+- interruption restores the caller's interrupt flag and returns false; it is never swallowed; and
 - spurious wakeups recheck the predicate and remaining budget.
 
 `TimeUnit.toNanos` supplies saturating conversion. Let `budget = max(0, convertedNanos)` and
@@ -544,10 +537,9 @@ signed 64-bit `nanoTime` horizon (about 292 years), including a saturated `Long.
 Condition waits use the returned remaining time or recompute from elapsed; no fixed polling sleep,
 busy wait, or per-thread sequential join is used.
 
-`shutdownNow` and `close` preserve the interrupt status already present on their caller because
-they do not call interrupt-clearing operations. Each active worker receives at least one
-best-effort `interrupt` and `unpark`; P3 does not claim it can terminate an interrupt-ignoring
-command.
+`shutdownNow` and `close` preserve the interrupt status already present on their caller because they
+do not call interrupt-clearing operations. Each active worker receives at least one best-effort
+`interrupt` and `unpark`; P3 does not claim it can terminate an interrupt-ignoring command.
 
 ## Java Memory Model and happens-before contract
 
@@ -576,32 +568,31 @@ command.
 - Task removal and condition signal occur under the lifecycle monitor. A later locked
   `isTerminated`/await predicate sees command completion and cleanup membership.
 - Cleaner/hook idempotence uses one `AtomicBoolean.compareAndSet(false, true)` in the cleanup
-  control. Successful CAS has volatile read/write semantics and is the single transition that
-  owns cleanup side effects. Weaker opaque access is not sufficient because registry/hook removal
-  must observe the initialized cleanup fields.
+  control. Successful CAS has volatile read/write semantics and is the single transition that owns
+  cleanup side effects. Weaker opaque access is not sufficient because registry/hook removal must
+  observe the initialized cleanup fields.
 - Hook-registration identity and registry `closeAll` gating remain monitor-protected. Do not mix a
   separate volatile hook count or state with an unlocked map snapshot.
 
-No other VarHandle is required. In particular, replacing the coherent lifecycle monitor with
-several independent booleans/counters is prohibited: it would reopen execute/shutdown and
-termination linearization. If implementation introduces another atomic or VarHandle, its exact
-happens-before role and access mode must be appended to the owning child blueprint before code is
-accepted.
+No other VarHandle is required. In particular, replacing the coherent lifecycle monitor with several
+independent booleans/counters is prohibited: it would reopen execute/shutdown and termination
+linearization. If implementation introduces another atomic or VarHandle, its exact happens-before
+role and access mode must be appended to the owning child blueprint before code is accepted.
 
 ## Memory pollution, contamination, and cleanup
 
 ### Affinity child
 
-- Request masks are bounded before proportional allocation and copied exactly at trust
-  boundaries. No platform facade retains a caller array.
+- Request masks are bounded before proportional allocation and copied exactly at trust boundaries.
+  No platform facade retains a caller array.
 - `ThreadLocal` lease and managed-owner values are removed/restored in `finally` after success,
   command failure, rejection after thread creation, affinity failure, and interruption.
 - Failed/rejected affinity requests retain neither snapshot nor request.
-- `BASE_MASK` is one bounded immutable value; no per-CPU probing threads, arrays per CPU, or
-  history list is retained.
-- Native/file/native-buffer contamination is not applicable to P3-A because native
-  implementation, resource collection, and filesystem work are prohibited. The child must state
-  this reason rather than omit the category.
+- `BASE_MASK` is one bounded immutable value; no per-CPU probing threads, arrays per CPU, or history
+  list is retained.
+- Native/file/native-buffer contamination is not applicable to P3-A because native implementation,
+  resource collection, and filesystem work are prohibited. The child must state this reason rather
+  than omit the category.
 
 ### Executor child
 
@@ -610,20 +601,20 @@ accepted.
 - A rejected candidate thread is unstarted, unregistered, and unreferenced by executor state.
 - Registry weak references, cleanup actions, hooks, and task wrappers contain no strong cycle that
   keeps an idle executor alive.
-- Exactly one hook exists while the registry is nonempty during ordinary runtime; it is removed
-  with the last entry. Repeated restart does not add hooks or cleaners.
+- Exactly one hook exists while the registry is nonempty during ordinary runtime; it is removed with
+  the last entry. Repeated restart does not add hooks or cleaners.
 - Closed entries remain only while needed to prevent same-CPU overlap with active old tasks; final
   task exit performs identity-safe removal.
 - `closeAll` snapshots are bounded by registry size and discarded after the pass.
-- Array/mask deadline precision and filesystem/native contamination are not applicable to P3-B;
-  it owns no such data. Thread/task/global-reference contamination is fully applicable and tested.
+- Array/mask deadline precision and filesystem/native contamination are not applicable to P3-B; it
+  owns no such data. Thread/task/global-reference contamination is fully applicable and tested.
 
 ## Deterministic tests and stress bounds
 
 Tests use package-private controller, registry, cleanup-registrar, and hook-registrar seams with
 fakes. They do not depend on the host OS, physical placement, `System.gc()`, arbitrary sleeps, or
-real JVM shutdown. Every blocking assertion has a five-second diagnostic timeout; the bounded
-stress test has a 30-second outer timeout.
+real JVM shutdown. Every blocking assertion has a five-second diagnostic timeout; the bounded stress
+test has a 30-second outer timeout.
 
 ### P3-A stable tests
 
@@ -683,14 +674,14 @@ The compatibility test
 `PinnedThreadExecutorCompatibilityTest#submissionsUseConcurrentFreshThreads` remains green.
 
 Run one bounded stress test for 50 rounds with eight acquisition/submitter threads per round and at
-most eight live tasks. Alternate execute-vs-shutdown and close-vs-acquire barriers. After each
-round assert zero active tasks, zero closed tombstones, an empty registry, zero fake hooks, and no
+most eight live tasks. Alternate execute-vs-shutdown and close-vs-acquire barriers. After each round
+assert zero active tasks, zero closed tombstones, an empty registry, zero fake hooks, and no
 managed-owner/affinity lease on every test thread. This is race evidence, not a throughput claim.
 
-Cleaner reachability is tested deterministically through an injected cleanup registrar that
-captures and invokes the exact action. Do not make `System.gc()` or a ReferenceQueue timing loop an
-acceptance gate. A structural assertion verifies that the cleanup action's fields do not include
-the executor or command.
+Cleaner reachability is tested deterministically through an injected cleanup registrar that captures
+and invokes the exact action. Do not make `System.gc()` or a ReferenceQueue timing loop an
+acceptance gate. A structural assertion verifies that the cleanup action's fields do not include the
+executor or command.
 
 ## Failure matrix
 
@@ -740,23 +731,23 @@ the executor or command.
 
 The parent P3 implementation is rejected and split into P3-A and P3-B.
 
-- The parent spans two independent responsibility owners: affinity capability/managed ownership
-  and executor registry/lifecycle.
+- The parent spans two independent responsibility owners: affinity capability/managed ownership and
+  executor registry/lifecycle.
 - P3-A has its own public API, platform boundary, mask mathematics, thread-local lease state, and
   platform-deferral tests. It can compile and be audited before executor repair.
-- P3-B has its own singleton, per-identity lifecycle, task membership, deadlines, cleaner/hook,
-  and high-contention race matrix. It consumes only P3-A's frozen package-private task binding.
-- Each child can be implemented and validated independently. Combining them would require one
-  agent to retain two state machines, three platform facades, public compatibility, and twelve
-  executor schedules simultaneously.
+- P3-B has its own singleton, per-identity lifecycle, task membership, deadlines, cleaner/hook, and
+  high-contention race matrix. It consumes only P3-A's frozen package-private task binding.
+- Each child can be implemented and validated independently. Combining them would require one agent
+  to retain two state machines, three platform facades, public compatibility, and twelve executor
+  schedules simultaneously.
 - The order is mandatory: P3-A blueprint -> implementation -> combined conformance/manual review,
   then P3-B blueprint -> implementation -> combined conformance/manual review, then the P3 root
   audit. Each result merges into the P3 root before the next branch is created.
 
 Do not create `hardware-utils-overhaul/phase-3-affinity-executor-implementation`. There is no P3
-validation branch or validation artifact under the current workflow. Each child blueprint must
-rerun this sizing gate against its refined inventory; it may split further or raise capability,
-but may not silently recombine or downgrade.
+validation branch or validation artifact under the current workflow. Each child blueprint must rerun
+this sizing gate against its refined inventory; it may split further or raise capability, but may
+not silently recombine or downgrade.
 
 At the parent gate, both child scopes are bounded but remain high-reasoning implementation units.
 Their exact context envelopes below avoid rereading unbounded feature history.
@@ -811,12 +802,12 @@ temporary P3 status updates.
 
 ### Parent context and coupling
 
-The provisional unsplit implementation would span one Java 17 module, the exported root package,
-one unexported affinity/lifecycle region, three exported platform facades, a new public enum, mask
+The provisional unsplit implementation would span one Java 17 module, the exported root package, one
+unexported affinity/lifecycle region, three exported platform facades, a new public enum, mask
 precision, per-thread lease ownership, managed logical identity, a restartable executor state
 machine, a singleton weak registry, cleaner/hook reachability, deadline arithmetic, and downstream
-worker compatibility. It combines concurrency, memory semantics, topology-index precision,
-recovery, and global cleanup across two independently testable responsibilities.
+worker compatibility. It combines concurrency, memory semantics, topology-index precision, recovery,
+and global cleanup across two independently testable responsibilities.
 
 P3-A still holds public API compatibility, three platform facades, bounded unsigned masks,
 original-binding ownership, thread-local nesting, and platform capability honesty together. P3-B
@@ -833,12 +824,12 @@ evidence that source inspection alone cannot replace the required barrier tests.
 
 ### Capability decisions
 
-- Selected root implementation: **none**. The former P3 root implementation prompt is superseded
-  and prohibited.
-- P3-A implementation: **`gpt-5.6-sol`, reasoning effort `high`**, subject to mandatory
-  confirmation or increase by the P3-A child blueprint.
-- P3-B implementation: **`gpt-5.6-sol`, reasoning effort `high`**, subject to mandatory
-  confirmation or increase by the P3-B child blueprint.
+- Selected root implementation: **none**. The former P3 root implementation prompt is superseded and
+  prohibited.
+- P3-A implementation: **`gpt-5.6-sol`, reasoning effort `high`**, subject to mandatory confirmation
+  or increase by the P3-A child blueprint.
+- P3-B implementation: **`gpt-5.6-sol`, reasoning effort `high`**, subject to mandatory confirmation
+  or increase by the P3-B child blueprint.
 - P3-A/P3-B combined conformance/manual reviews and the P3 root audit:
   **`gpt-5.6-sol`, reasoning effort `high`**.
 
@@ -877,10 +868,10 @@ gradle :euhedral-hardware-utils:build
 gradle :euhedral-core:test
 ```
 
-The final hardware verify rechecks P1 native/package gates but does not authorize detailed
-platform changes. The core command is read-only compatibility evidence. Host-specific physical
-affinity assertions are not substitutes for deterministic fakes; unavailable hosted platform
-runtime portions remain explicit P5-P7 work.
+The final hardware verify rechecks P1 native/package gates but does not authorize detailed platform
+changes. The core command is read-only compatibility evidence. Host-specific physical affinity
+assertions are not substitutes for deterministic fakes; unavailable hosted platform runtime portions
+remain explicit P5-P7 work.
 
 Scope/hygiene checks:
 
@@ -902,11 +893,11 @@ The two scope diffs are empty. Do not otherwise inspect training.
    invokes a partial setter.
 4. Representable macOS locality success retains legacy boolean true; multi-locality requests fail
    before mutation and release uses tag zero.
-5. Base-mask discovery is non-destructive; exact sets capture and restore the calling thread's
-   first original binding; no fallback mask expands affinity.
-6. Managed logical ownership is stable only while its token is active, nested-safe, and absent
-   after every exit; an independent truthful provider CPU is preferred and an unavailable
-   unmanaged physical CPU remains `-1`/null.
+5. Base-mask discovery is non-destructive; exact sets capture and restore the calling thread's first
+   original binding; no fallback mask expands affinity.
+6. Managed logical ownership is stable only while its token is active, nested-safe, and absent after
+   every exit; an independent truthful provider CPU is preferred and an unavailable unmanaged
+   physical CPU remains `-1`/null.
 7. Singleton acquisition returns one live identity per CPU and stale/cleaner removal is by exact
    entry identity.
 8. Every accepted execution creates one distinct NEW thread, and concurrent commands remain
@@ -921,8 +912,8 @@ The two scope diffs are empty. Do not otherwise inspect training.
     removed at ordinary empty transition, and never multiplied by restart.
 13. Task, thread-local, map, tombstone, hook, cleanable, and command references meet every cleanup
     assertion after deterministic tests and bounded stress.
-14. Every monitor/lock/atomic transition has the documented happens-before edge; no independent
-    flag weakens coherent lifecycle publication.
+14. Every monitor/lock/atomic transition has the documented happens-before edge; no independent flag
+    weakens coherent lifecycle publication.
 15. Detailed P5-P7 native/platform work, resources/monitor/pressure, topology production, core
     production, task serialization, training, and unrelated changes remain outside the diff.
 16. Both child suites, P0 gates, selected-module hardware verify, read-only core tests,
@@ -937,8 +928,8 @@ merged child evidence. A material deviation returns to the owning child or this 
 - Exact placement and safe restoration are a coupled operational promise. Until P5/P6 provide
   complete native support, Linux/Windows may truthfully report less capability through the common
   path rather than mutate and guess restoration.
-- P2 macOS topology is conservative, so P3 representability may be narrower than final P7
-  locality grouping. It may be widened later without changing the one-hint contract.
+- P2 macOS topology is conservative, so P3 representability may be narrower than final P7 locality
+  grouping. It may be widened later without changing the one-hint contract.
 - Restartable `start` means termination is a truthful instant observation, not a permanent state.
   Tests must force restart-during-await rather than assume conventional irreversible termination.
 - User thread factories are arbitrary code. Candidate creation stays outside locks and every
@@ -947,19 +938,19 @@ merged child evidence. A material deviation returns to the owning child or this 
   prevent a second same-CPU executor until actual exit rather than claim false termination.
 - Cleaner and Runtime hook tests need deterministic seams; GC and JVM shutdown timing are not
   acceptance evidence.
-- Complete hardware verification depends on the P1 native toolchain. Missing cross-platform
-  runners are explicit P5-P7 limits, but deterministic P3 Java races may not be skipped.
+- Complete hardware verification depends on the P1 native toolchain. Missing cross-platform runners
+  are explicit P5-P7 limits, but deterministic P3 Java races may not be skipped.
 
 No lifecycle, ownership, memory-order, capability, mask, deadline, cleanup, or split decision
-remains unresolved. Child blueprints refine implementation inventories and test mechanics only;
-they do not reopen the contracts above.
+remains unresolved. Child blueprints refine implementation inventories and test mechanics only; they
+do not reopen the contracts above.
 
 ## Handoff condition
 
 Hand off this parent blueprint for developer review and merge into the P3 root only when:
 
-- the plan's P3 artifact index, branch lineage, review summary, and prompt sequence name both
-  child lifecycles and the root audit;
+- the plan's P3 artifact index, branch lineage, review summary, and prompt sequence name both child
+  lifecycles and the root audit;
 - the old P3 root implementation and validation dependencies are marked superseded/non-runnable;
 - both child context envelopes and parent-selected implementation capabilities are recorded;
 - implementation can proceed without selecting a capability, mask, ownership, state, deadline,

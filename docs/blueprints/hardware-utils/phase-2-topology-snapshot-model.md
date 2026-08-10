@@ -48,8 +48,8 @@ must:
 6. defensively own every published array, `BitSet`, list, and wrapper value and make equality and
    hash behavior content-consistent;
 7. make `TopologyMapper` own its allowed mask, coalesce concurrent requests without losing the
-   newest membership, version only membership changes, and publish through a documented Java
-   Memory Model boundary; and
+   newest membership, version only membership changes, and publish through a documented Java Memory
+   Model boundary; and
 8. preserve the current core-zero management reservation while making the core-zero-only case
    nonempty.
 
@@ -112,8 +112,8 @@ Add an unexported package:
 io.euhedral_execution.hardware_utils.internal.topology
 ```
 
-It owns the high-reasoning contract types. Exact local file decomposition is left to the child,
-but the following names and roles are fixed:
+It owns the high-reasoning contract types. Exact local file decomposition is left to the child, but
+the following names and roles are fixed:
 
 - `TopologyProvider`: platform-adapter SPI whose sole operation returns one owned
   `TopologyInput`.
@@ -122,8 +122,8 @@ but the following names and roles are fixed:
   die, and core source keys plus a `CoreKind` hint.
 - `CacheDomain`: one optional L1, L2, or L3 domain with size, line size, and logical-CPU sharers.
 - `CoreKind`: `PERFORMANCE`, `EFFICIENCY`, or `UNKNOWN`.
-- `TopologyValidationException`: internal actionable failure carrying provider and offending
-  key/ID context; it never crosses a public signature.
+- `TopologyValidationException`: internal actionable failure carrying provider and offending key/ID
+  context; it never crosses a public signature.
 - `TopologyNormalizer`: validates and canonicalizes a complete input without accessing static
   `SystemInfo` topology state.
 - `TopologyModel`: the immutable validated result and the only input used to initialize the public
@@ -145,8 +145,8 @@ getters already exist.
 Each selected layout singleton owns exactly one `TopologyInput` collection and one normalized
 `TopologyModel`. A module-internal accessor gives `TopologyBootstrap` that same model; legacy map
 getters project the same instance and do not recollect or renormalize. Layout construction failure
-is allowed to escape to `TopologyBootstrap`, which installs the common fallback. No second
-platform topology singleton or mutable registry is introduced.
+is allowed to escape to `TopologyBootstrap`, which installs the common fallback. No second platform
+topology singleton or mutable registry is introduced.
 
 An adapter owns only collection and platform-to-common translation:
 
@@ -212,8 +212,8 @@ The mapping is platform-specific but deterministic:
 
 - Linux: the kernel logical CPU number. Sparse online IDs remain sparse; an absent/offline CPU is
   not renumbered and creates a hole.
-- Windows: `group * 64 + processorNumber`, with `group >= 0` and processor number in `[0, 63]`.
-  This is bijective, preserves bit 63, and is independent of relationship enumeration order.
+- Windows: `group * 64 + processorNumber`, with `group >= 0` and processor number in `[0, 63]`. This
+  is bijective, preserves bit 63, and is independent of relationship enumeration order.
 - macOS: stable process-visible logical ordinals `0..N-1`. P7 may improve topology relationships,
   but it must retain these ownership IDs for the same boot/process visibility.
 - Common fallback: ordinals `0..max(1, availableProcessors)-1`.
@@ -245,8 +245,8 @@ identity:
 
 - Linux uses physical package ID, die ID when available (otherwise the literal fallback die key),
   and package-local core ID.
-- Windows package and core keys are canonical sorted group-affinity signatures; die uses the
-  literal fallback die key until a documented source exists.
+- Windows package and core keys are canonical sorted group-affinity signatures; die uses the literal
+  fallback die key until a documented source exists.
 - macOS uses one package/die key and deterministic performance-level or synthetic core keys.
 
 Keys use lowercase ASCII, have no leading/trailing whitespace, and compare by unsigned UTF-8 byte
@@ -295,8 +295,8 @@ preserved.
 `TopologyInput` contains only logical CPUs the provider considers online and present in its
 documented topology scope. Offline or absent host IDs are omitted; their numeric positions remain
 holes. Process/configuration restrictions are applied later by utilization membership and
-`TopologyMapper.allowedCpus`; the provider does not renumber around them. The normalizer sorts
-input copies and never depends on map, directory, native-record, or set iteration order.
+`TopologyMapper.allowedCpus`; the provider does not renumber around them. The normalizer sorts input
+copies and never depends on map, directory, native-record, or set iteration order.
 
 The validated model must contain at least one active logical CPU. Empty input, missing core/socket
 identity, contradictory ownership, or a CPU without a complete projected public entry fails the
@@ -341,8 +341,8 @@ CpuCacheLayout[c]
 ```
 
 Each core and socket mask contains exactly the active IDs owned by that entity. Each cache layout's
-three masks contain its CPU. Public projections and internal collections are immutable snapshots;
-no caller/provider map, list, array, or `BitSet` can change them after normalization.
+three masks contain its CPU. Public projections and internal collections are immutable snapshots; no
+caller/provider map, list, array, or `BitSet` can change them after normalization.
 
 ## Public compatibility meanings
 
@@ -390,10 +390,10 @@ The fallback for injected processor count `N` uses `max(1, N)` CPUs, one CPU per
 sizes, shares `1/1/N`, and 64-byte lines. It is deterministic and has no dependency on native
 loading or `SystemInfo` fields.
 
-The existing resource snapshotter is retained when it initializes successfully. On an unsupported
-OS or resource-provider initialization failure, `SNAPSHOTTER` is null and
-`getSystemSnapshot()` retains its existing failure surface; P4 owns monitor/provider lifecycle.
-P2 must not fabricate resource samples.
+The existing resource snapshotter is retained when it initializes successfully. On an unsupported OS
+or resource-provider initialization failure, `SNAPSHOTTER` is null and
+`getSystemSnapshot()` retains its existing failure surface; P4 owns monitor/provider lifecycle. P2
+must not fabricate resource samples.
 
 Platform adapters and the normalizer may refer to compile-time cache defaults through an internal
 constant owner, but may not read a partially initialized `SystemInfo` topology. This breaks the
@@ -442,9 +442,9 @@ validation owned by P4.
 component, use `Arrays.equals`/`Arrays.hashCode` for nested arrays, and use content equality for
 owned bitsets. `CoreSnapshot` removes its current partial equality implementation. Two separately
 allocated but value-identical snapshot trees must be equal and have equal hashes; changing any
-component or active nested entry must make them unequal. `CpuSnapshot` remains ordinary record
-value equality. Wrapper fixes make `SystemSnapshot` and `HardwareUtilization` ordinary generated
-record equality content-correct.
+component or active nested entry must make them unequal. `CpuSnapshot` remains ordinary record value
+equality. Wrapper fixes make `SystemSnapshot` and `HardwareUtilization` ordinary generated record
+equality content-correct.
 
 ### Snapshot ID/index and value meanings
 
@@ -453,14 +453,14 @@ For a published `HardwareUtilization`:
 - `globalEffectiveCpus` contains logical CPU IDs.
 - Per-CPU wrapper indexes are logical CPU IDs and must cover every active bit; inactive holes may
   contain neutral values.
-- `getSocketSnapshot(socketId, effectiveCoreToCpu, quota)` receives a fixed global-core-indexed
-  list of length `MAX_CORE_ID + 1`, with null inactive holes.
+- `getSocketSnapshot(socketId, effectiveCoreToCpu, quota)` receives a fixed global-core-indexed list
+  of length `MAX_CORE_ID + 1`, with null inactive holes.
 - `SocketSnapshot.coreSnapshots` has that same length and is non-null at each active core in the
   socket.
 - `CoreSnapshot.cpuSnapshots` has length `highest effective logical CPU ID in that core + 1`; it is
-  non-null at each CPU in `effectiveCpus` and null at inactive/not-owned holes. This is the
-  smallest shape compatible with existing direct logical-ID indexing and the allocation budget
-  validated by P2-A.
+  non-null at each CPU in `effectiveCpus` and null at inactive/not-owned holes. This is the smallest
+  shape compatible with existing direct logical-ID indexing and the allocation budget validated by
+  P2-A.
 - Every populated `CpuSnapshot.cpuId`, `CoreSnapshot.coreId`, and `SocketSnapshot.socketId` equals
   its array/list index.
 - `globalCpuCount` in both core and CPU snapshots means
@@ -482,9 +482,9 @@ scope memoryUtilization = scope usage / max(scope memoryLimit, 1)
 ```
 
 Scope usage is `memPerCpuUsageBytes * active scope CPUs`, using saturated nonnegative
-multiplication. P2 performs only finite guards needed to avoid NaN/Infinity in newly corrected
-scope division; P4 remains responsible for canonical units, clamping all normalized public ratios,
-and the meaning of `memPerCpuUsageBytes`.
+multiplication. P2 performs only finite guards needed to avoid NaN/Infinity in newly corrected scope
+division; P4 remains responsible for canonical units, clamping all normalized public ratios, and the
+meaning of `memPerCpuUsageBytes`.
 
 For these helpers, a negative operand is treated as zero, a NaN product is zero, positive infinity
 or finite overflow saturates to `Long.MAX_VALUE`, and a finite in-range double-to-long conversion
@@ -500,13 +500,13 @@ structural error and may never take that fallback path.
 
 ### Allowed-mask ownership and membership order
 
-The constructor clones the caller mask once, intersects it with the immutable `SystemInfo` CPU
-set, and never exposes or mutates either input. Later caller mutations have no effect.
+The constructor clones the caller mask once, intersects it with the immutable `SystemInfo` CPU set,
+and never exposes or mutates either input. Later caller mutations have no effect.
 
 The two existing public constructors retain their descriptors and delegate to one package-private
-constructor accepting a validated `TopologyModel` plus an allowed mask. Production passes the
-single model owned by `SystemInfo`; deterministic P2-B tests pass fixture models. This is the only
-mapper topology-injection seam and prevents tests from mutating process-global facade state.
+constructor accepting a validated `TopologyModel` plus an allowed mask. Production passes the single
+model owned by `SystemInfo`; deterministic P2-B tests pass fixture models. This is the only mapper
+topology-injection seam and prevents tests from mutating process-global facade state.
 
 For every update, form the candidate in this exact order:
 
@@ -518,8 +518,8 @@ owned utilization.globalEffectiveCpus clone
   -> derive global cores and sockets
 ```
 
-Unknown/sparse bits disappear at the intersections. Pressure, quota, counters, timestamps, and
-every other utilization field do not affect membership or versions.
+Unknown/sparse bits disappear at the intersections. Pressure, quota, counters, timestamps, and every
+other utilization field do not affect membership or versions.
 
 ### Exact retained core-zero policy
 
@@ -532,8 +532,8 @@ After all three CPU-set intersections:
 2. If the candidate also contains at least one CPU from any other global core, remove every
    candidate CPU belonging to core 0.
 3. Otherwise retain the candidate core-zero CPUs unchanged.
-4. If the pre-reservation candidate is empty, remain empty; do not add CPUs not allowed by all
-   three masks.
+4. If the pre-reservation candidate is empty, remain empty; do not add CPUs not allowed by all three
+   masks.
 
 Thus alternatives reserve core zero for management, an allowed/effective core-zero-only machine
 continues to run, and reservation never reintroduces a disallowed CPU.
@@ -554,14 +554,14 @@ Every later publication has:
 
 The first nonidentical publication has global version 1. Global version increments by exactly one
 only when effective CPU/core/socket membership differs from the previously published topology.
-Repeating membership with different pressure or other utilization values preserves the same
-version and the same published object identity.
+Repeating membership with different pressure or other utilization values preserves the same version
+and the same published object identity.
 
-Each socket has a persistent private version counter. Its first active publication is version 1.
-The counter increments once for every actually published change to that socket's CPU/core
-membership, including deactivation; a reactivated socket therefore has a version greater than its
-prior active version. A membership change on another socket does not change this socket's version.
-Coalesced requests that are never published do not consume global or socket versions.
+Each socket has a persistent private version counter. Its first active publication is version 1. The
+counter increments once for every actually published change to that socket's CPU/core membership,
+including deactivation; a reactivated socket therefore has a version greater than its prior active
+version. A membership change on another socket does not change this socket's version. Coalesced
+requests that are never published do not consume global or socket versions.
 
 `getGlobalVersion()` returns the version from the same acquired topology object used by
 `getEffectiveTopology()`, eliminating split version/topology observations.
@@ -578,10 +578,10 @@ request, derives topology, and publishes until the slot is empty. The release/re
 close the race between clearing the work-in-progress flag and a new enqueue; a pending request is
 eventually drained by the current or newly elected owner.
 
-Intermediate pending requests may be coalesced. After all concurrent callers quiesce, the
-published membership must equal the greatest submitted sequence. No request may leave the newest
-membership permanently unpublished. P2 does not use sample timestamp ordering; P4 owns timestamp
-validity and listener ordering.
+Intermediate pending requests may be coalesced. After all concurrent callers quiesce, the published
+membership must equal the greatest submitted sequence. No request may leave the newest membership
+permanently unpublished. P2 does not use sample timestamp ordering; P4 owns timestamp validity and
+listener ordering.
 
 The `effectiveTopology` field is `volatile`:
 
@@ -608,15 +608,15 @@ They contain no host paths, timestamps, map-order expectations, or native binari
    1/die 0 all report local core 0. Shuffled input must produce three distinct dense global cores,
    two sockets, `CPU_COUNT == 17`, active cardinality 5, complete masks, deterministic socket/die/
    core ordering, and no null active cache.
-2. **Windows processor-group identity**: group 0 processors 0 and 63 and group 1 processors 0 and
-   63 map exactly to logical IDs `{0,63,64,127}`. Shuffled relationship/signature input must retain
-   the same package/core/global IDs and bit 63.
+2. **Windows processor-group identity**: group 0 processors 0 and 63 and group 1 processors 0 and 63
+   map exactly to logical IDs `{0,63,64,127}`. Shuffled relationship/signature input must retain the
+   same package/core/global IDs and bit 63.
 3. **macOS incomplete topology**: empty, missing-core, and contradictory fake provider inputs fail
    normalization; bootstrap with injected processor count 4 installs the exact one-socket/four-core
    conservative fallback and never dereferences CPU/cache zero from an empty provider map.
-4. **Missing caches**: partial L1-only and absent-cache inputs produce the exact default sizes,
-   core sibling L1/L2 masks, socket L3 mask, shares, and 64-byte fallback; shuffled valid cache
-   domains give identical projections.
+4. **Missing caches**: partial L1-only and absent-cache inputs produce the exact default sizes, core
+   sibling L1/L2 masks, socket L3 mask, shares, and 64-byte fallback; shuffled valid cache domains
+   give identical projections.
 5. **Provider mutation resistance**: mutate every source list/map/array/bitset after collection and
    normalization; the model and all public projections remain unchanged.
 
@@ -648,11 +648,11 @@ P7's final public-sysctl synthesis.
 4. **Allowed-mask ownership and core zero**: caller mutation before/after mapper creation cannot
    change ownership; alternatives remove all global-core-zero CPUs, while all allowed/effective
    core-zero-only variants retain them and remain nonempty.
-5. **Remap and versions**: initial `-1`, first publication, identical membership, one-socket
-   change, other-socket-only change, deactivation, reactivation, and empty membership assert exact
+5. **Remap and versions**: initial `-1`, first publication, identical membership, one-socket change,
+   other-socket-only change, deactivation, reactivation, and empty membership assert exact
    global/socket versions and fixed null-hole shapes.
-6. **Concurrent coalescing**: latch-controlled writers enqueue ordered distinct memberships while
-   a drain is paused. Final publication equals the greatest sequence, versions are monotonic, no
+6. **Concurrent coalescing**: latch-controlled writers enqueue ordered distinct memberships while a
+   drain is paused. Final publication equals the greatest sequence, versions are monotonic, no
    newest update is lost, and every acquired topology is internally self-consistent.
 7. **Pressure-independent membership**: multiple utilizations with identical effective masks and
    different pressure/quota/counter payloads preserve version and object identity.
@@ -667,16 +667,15 @@ TopologyMapperPublicationTest#publishesOwnedCoalescedTopology
 TopologyMapperVersionTest#versionsOnlyPublishedMembershipChanges
 ```
 
-Host-dependent smoke assertions remain separate from deterministic fixtures. Tests use latches,
-not sleeps, for publication races.
+Host-dependent smoke assertions remain separate from deterministic fixtures. Tests use latches, not
+sleeps, for publication races.
 
 ## Failure and fallback behavior
 
 - Invalid raw logical IDs, duplicate CPU ownership, conflicting core/socket identity, excessive
   index span, or empty required topology: `TopologyValidationException` with provider and stable
   key/ID; bootstrap logs once and replaces the whole topology with common fallback.
-- Missing/invalid optional cache: deterministic level-specific fallback, not whole-topology
-  failure.
+- Missing/invalid optional cache: deterministic level-specific fallback, not whole-topology failure.
 - Unsupported OS: common topology fallback and null snapshot provider.
 - Platform resource provider failure: null snapshot provider without changing valid topology.
 - Unknown allowed/effective CPU bit: intersect away; never create a synthetic public entry.
@@ -742,8 +741,8 @@ changes:
 - T06: core zero remains reserved when alternatives exist and is retained when it is the only
   allowed/effective core.
 
-There is no stored-data migration or wire-format change. That area is not applicable because all
-P2 values are in-memory records and masks whose public formats are preserved.
+There is no stored-data migration or wire-format change. That area is not applicable because all P2
+values are in-memory records and masks whose public formats are preserved.
 
 ## Dependency order and child ownership
 
@@ -797,9 +796,9 @@ P2-B owns `TopologyMapper`, `SystemUtilization`, the two wrappers, and their tes
 but not redesign P2-A's `TopologyModel` and public ID contract. Layout adapters, resource monitor,
 platform providers, affinity, and core production are read-only.
 
-After both child audits merge, the P2 root conformance audit checks the combined
-provider -> model -> facade -> mapper -> snapshot boundary and performs root closeout. There is no
-separate validation branch under the current conformance/manual-review workflow.
+After both child audits merge, the P2 root conformance audit checks the combined provider ->
+model -> facade -> mapper -> snapshot boundary and performs root closeout. There is no separate
+validation branch under the current conformance/manual-review workflow.
 
 ## Sizing and split gate
 
@@ -811,12 +810,12 @@ The unsplit P2 implementation is rejected.
   concurrent coalescing state machine, versions, and Java Memory Model publication.
 - The responsibilities can be compiled and validated independently through the frozen
   `TopologyModel` and public ID/index contract.
-- Combining them would require one implementation pass to hold platform discovery failure,
-  identity sorting, static initialization, deep record ownership, arithmetic, and concurrent
-  publication together.
+- Combining them would require one implementation pass to hold platform discovery failure, identity
+  sorting, static initialization, deep record ownership, arithmetic, and concurrent publication
+  together.
 
-P2-A and P2-B are each one module and one coherent ownership boundary. Splitting adapters away
-from the model would force adapters to choose or duplicate raw identity/cache semantics. Splitting
+P2-A and P2-B are each one module and one coherent ownership boundary. Splitting adapters away from
+the model would force adapters to choose or duplicate raw identity/cache semantics. Splitting
 snapshot ownership from `TopologyMapper` would duplicate the active-ID/null-hole and publication
 acceptance fixtures. Each child therefore passes its own parent-level gate, but its blueprint must
 rerun the workflow gate against the refined file/test inventory and split again if new independent
@@ -839,8 +838,8 @@ P2-A's audit is merged. Do not run the superseded root implementation.
 ### P2-A required inputs
 
 - `AGENTS.md`, `docs/AGENT_WORKFLOW.md`, and `docs/ARCHITECTURE.md`;
-- parent plan settled requirements, T01-T03/T05 common portions, T06, P0-P1 closeout summaries,
-  and this blueprint's topology contract;
+- parent plan settled requirements, T01-T03/T05 common portions, T06, P0-P1 closeout summaries, and
+  this blueprint's topology contract;
 - P0 API/mask/core-zero artifacts and surviving P1 closeout evidence;
 - hardware POM/module descriptor;
 - `SystemInfo`, all three layout adapters, Windows relationship value/parser types only at the
@@ -869,8 +868,8 @@ sources, CI, benchmarks, and all training paths.
 - P0 compatibility and defect-ledger contracts;
 - `TopologyMapper`, `SystemUtilization`, both wrappers, existing topology/snapshot tests, and only
   the `ResourceMonitor` call boundary;
-- core consumer locations that index `effectiveCoreToCpu`, socket/core/CPU snapshot arrays, and
-  read mapper versions; and
+- core consumer locations that index `effectiveCoreToCpu`, socket/core/CPU snapshot arrays, and read
+  mapper versions; and
 - P2-A's exact `CPU_COUNT`, `MAX_*`, stable ID, complete-entry, and null-hole guarantees.
 
 P2-B excludes layout collection internals, detailed resource math/monitor lifecycle, affinity/
@@ -891,9 +890,9 @@ executor code, native sources, CI, benchmarks, and all training paths.
 The provisional unsplit implementation would span one module but five package ownership regions,
 three platform adapters, one new internal schema, four public nested topology records, five public
 utilization records, two wrappers, static initialization/fallback, cache-domain normalization,
-sparse indexing, exact memory arithmetic, a concurrent coalescing state machine, and downstream
-core compile/test interactions. It combines topology, recovery, deterministic ordering,
-mathematical precision, defensive memory ownership, and explicit publication semantics.
+sparse indexing, exact memory arithmetic, a concurrent coalescing state machine, and downstream core
+compile/test interactions. It combines topology, recovery, deterministic ordering, mathematical
+precision, defensive memory ownership, and explicit publication semantics.
 
 - P2-A holds roughly four existing production classes, one bounded internal package, and five
   fixture families together; its lifecycle is provider selection -> collect -> validate or fail ->
@@ -915,24 +914,24 @@ is a low-effort mechanical translation.
 
 There is no prior P2 implementation attempt and therefore no evidence that a lower-capability or
 lower-effort model can preserve these coupled contracts. The current defects - aliased masks,
-dropped updates, partial equality, positional field mistakes, and platform identity collisions -
-are evidence against treating either child as mechanical compile repair.
+dropped updates, partial equality, positional field mistakes, and platform identity collisions - are
+evidence against treating either child as mechanical compile repair.
 
 ### Child capability decisions
 
-- P2-A implementation: **`gpt-5.6-sol`, reasoning effort `high`**. It must preserve global
-  identity, fallback, static initialization, cache completeness, sparse index bounds, and three
-  adapter compile surfaces together.
+- P2-A implementation: **`gpt-5.6-sol`, reasoning effort `high`**. It must preserve global identity,
+  fallback, static initialization, cache completeness, sparse index bounds, and three adapter
+  compile surfaces together.
 - P2-B implementation: **`gpt-5.6-sol`, reasoning effort `high`**. It must preserve public value
   compatibility, exact named arithmetic, deep ownership, concurrent coalescing/version state, and
   volatile publication together.
 - Child conformance/manual reviews and P2 root audit: **`gpt-5.6-sol`, reasoning effort `high`**.
 
-The selected root implementation is `none`; the parent plan's provisional root prompt must be
-marked superseded and must not run. Each child blueprint must confirm this selection after its own
-refined sizing/model gate and may raise or split, but may not silently downgrade. No evidence
-supports `medium` or `low`: the current code has the exact aliasing, identity, null-hole, and lost-
-update defects that require coupled repair.
+The selected root implementation is `none`; the parent plan's provisional root prompt must be marked
+superseded and must not run. Each child blueprint must confirm this selection after its own refined
+sizing/model gate and may raise or split, but may not silently downgrade. No evidence supports
+`medium` or `low`: the current code has the exact aliasing, identity, null-hole, and lost- update
+defects that require coupled repair.
 
 ## Commands and acceptance gates
 
@@ -976,8 +975,8 @@ gradle :euhedral-core:test
 
 The final hardware `verify` rechecks the completed P1 native/package gates. Docker/hosted
 cross-platform limitations are reported separately; P2 deterministic fixtures may not be skipped
-because the host is Linux. The core command is a read-only consumer compatibility gate and must
-not lead to core production edits.
+because the host is Linux. The core command is a read-only consumer compatibility gate and must not
+lead to core production edits.
 
 ### Scope and hygiene
 
@@ -1027,8 +1026,8 @@ P5-P7 are not silently claimed by P2.
 ## Risks and unresolved decisions
 
 - Sparse logical CPU IDs can increase array spans. The explicit 1,048,576 bound and exact
-  `CPU_COUNT` index-span meaning prevent unbounded allocation; a larger real platform observation
-  is a provider failure and common fallback, not truncation.
+  `CPU_COUNT` index-span meaning prevent unbounded allocation; a larger real platform observation is
+  a provider failure and common fallback, not truncation.
 - Static initialization can recurse through adapters or native/resource providers. The internal
   provider/model boundary and independent resource-provider bootstrap prohibit reads of partial
   facade state.
@@ -1041,9 +1040,9 @@ P5-P7 are not silently claimed by P2.
 - Full hardware `verify` depends on the P1 native toolchain, and some host affinity/container tests
   may have environmental limits. Deterministic P2 unit tests and Java compilation remain required.
 
-No unresolved architectural decision remains. In particular, ID semantics, null-hole behavior,
-cache fallbacks, count/index meanings, copy boundaries, equality, core-zero policy, version rules,
-and publication modes are settled.
+No unresolved architectural decision remains. In particular, ID semantics, null-hole behavior, cache
+fallbacks, count/index meanings, copy boundaries, equality, core-zero policy, version rules, and
+publication modes are settled.
 
 ## Handoff condition
 
@@ -1064,11 +1063,11 @@ Do not create P2-A or P2-B branches from this unmerged blueprint child. Do not s
 
 ## Root conformance audit completion evidence
 
-Root audit prepared on `hardware-utils-overhaul/phase-2-topology-snapshot-audit` from P2 root
-commit `274a6f0b`. It found one minor blueprint-settled API correction: restore the baseline
+Root audit prepared on `hardware-utils-overhaul/phase-2-topology-snapshot-audit` from P2 root commit
+`274a6f0b`. It found one minor blueprint-settled API correction: restore the baseline
 `final` flags on `SocketSnapshot.equals/hashCode` and `CoreSnapshot.hashCode`; the focused combined
 topology/snapshot suite passed 24 tests after that change. P0 reports zero removals, with only
 Java-17 module-version metadata and six authorized additions remaining. The audit records T04
-coalescing/publication, full selected-module verification, and the read-only core gate as
-unverified because the deterministic R2-R12 race matrix is absent and this host lacks mise/Zig and
-the pinned Java 21/Gradle 3.9.16 tools. P2 remains pending review/merge and explicit closeout.
+coalescing/publication, full selected-module verification, and the read-only core gate as unverified
+because the deterministic R2-R12 race matrix is absent and this host lacks mise/Zig and the pinned
+Java 21/Gradle 3.9.16 tools. P2 remains pending review/merge and explicit closeout.

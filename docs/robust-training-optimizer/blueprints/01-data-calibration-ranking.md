@@ -31,8 +31,8 @@ classes. It must not make broad changes to the predictor, optimizer, or closed-l
 
 - Do not change `SequenceFinder`, `PolicyOrdinalNetwork`, `CmaEsOptimizer`, or
   `ScoreBandSampler`. Phase 2 and Phase 3 will replace their pooled-policy inputs.
-- Do not change candidate-budget allocation, rotating scenario scheduling, carry-forward,
-  leader revalidation, or checkpoint state. Phase 3 owns those decisions.
+- Do not change candidate-budget allocation, rotating scenario scheduling, carry-forward, leader
+  revalidation, or checkpoint state. Phase 3 owns those decisions.
 - Do not make `BenchmarkRunner` emit v1 bundles yet. Phase 3 will supply stable training-run,
   cohort, role, anchor, and run IDs when it integrates the codec. Phase 1 supplies and tests the
   complete domain and serialization API that it will call.
@@ -48,26 +48,26 @@ classes. It must not make broad changes to the predictor, optimizer, or closed-l
 
 The following current behavior is the reason for each new seam.
 
-| Current code | Current contract | Phase 1 decision |
-| --- | --- | --- |
-| `DataMerger.normalize` | Divides each file by its own P99 of all finite measurements and clamps to `[0, 1]` | The new v1 path never calls it. Calibration uses only fixed anchors shared with a frozen reference run. |
-| `DataMerger.merge` | Pools every normalized repetition for an equal vector into one `TDigest` | The new path first creates a policy/run/scenario estimate, then a median of run estimates, and never weights a scenario by raw repetition count. |
-| `DataMerger` maps by `long` | Equal hashes are merged without checking vector bits | A registry verifies all 28 raw IEEE-754 values for every repeated hash and rejects a collision. |
-| `BenchmarkRunner` raw output | Alternating 28-weight and repetition-array lines, with scenario and run identity only in paths | The v1 bundle stores a validated run row, a policy dictionary, and one status-bearing row per planned repetition. |
-| `BenchmarkRunner` timeout | Breaks after the first liveness timeout, leaving unused entries in the pre-zeroed `means` array | V1 has explicit `TIMEOUT` and `SKIPPED` rows. Neither is treated as a zero-throughput success. |
-| `BenchmarkRunner` throughput | Stores frames per nanosecond as a derived `double` | V1 stores completed frames and elapsed nanoseconds and derives frames per second. |
-| `BenchmarkRunner.createSinks` and `BenchmarkFrame.generate` | Use an outer random ID hash and an unrecorded inner routing seed | The v1 parameter model records both seeds for every source. Phase 3 must add/use a deterministic frame-generation overload before it emits native v1 evidence. |
-| `BenchmarkOutputReader` and `BenchmarkOutputWriter` | Headerless signed decimal encodings of `Double.doubleToLongBits` | They remain only for current vector and pooled-data compatibility. New evidence uses a strict UTF-8 CSV bundle with headers and raw-bit vector columns. |
-| `PolicyRanking` | Higher rounded P50, then lower rounded IQR, then lower rounded tail range | It remains temporarily for the current ordinal predictor. `PolicyComparator` is separate and authoritative for v1 summaries. |
-| `Distribution` and `VectorGrouper` | Duplicate the rounded P50/IQR/tail ordering | They remain untouched in Phase 1 and are not used by the v1 merger. |
-| `SequenceFinder.loadTrainingData` | Requires alternating 28-value and five-quantile rows | Phase 1 does not emit a misleading adapter row. Phase 2 consumes `scenario-results.csv` directly. |
-| `CmaEsOptimizer.MeasuredPolicy` | Holds only a vector and five pooled quantiles | It remains untouched until Phase 3 supplies robust seeds and predicted curves. |
-| `PolicyOrdinalNetwork.save/load` | Serializes a DJL directory named `euhedral-policy-ranker` with the old 28-input pooled objective | It remains untouched in Phase 1 and is never treated as observation data or migrated into the new contract. Phase 2 versions its replacement. |
-| `ClosedLoopRunner` | Calls `mergeQuantiles`, names raw files by source count, and infers iteration from directories | It continues using the old path until Phase 3 switches the whole loop to v1. No v1 code may infer identity from these names. |
-| `ClosedLoopRunner.writeState` | Uses timestamped `Properties.store` state and absolute artifact paths | It is checkpoint state, not evidence serialization. Phase 3 replaces/version-controls scheduler state; Phase 1 does not parse it. |
-| `Runner` and the training README | Expose the pooled `merge-quantiles` command and current system properties | Phase 1 adds Java APIs only. Phase 5 owns final CLI/configuration names and documentation after all consumers exist. |
-| `HasherApi.getHash(double[])` | xxHash64 over raw IEEE-754 lanes with seed `0x9e3779b97f4a7c15L` | This exact implementation becomes policy identity scheme `p1`; no re-normalization or decimal reparse occurs before hashing. |
-| `BenchmarkRunner.configuredSourceCounts` | Uses `SystemInfo.getCoreCount()` and clamps configured counts to available cores | V1 records the actual selected source count and the same visible physical core count. The identity model itself permits a ratio above one. |
+| Current code                                                | Current contract                                                                                 | Phase 1 decision                                                                                                                                               |
+|-------------------------------------------------------------|--------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `DataMerger.normalize`                                      | Divides each file by its own P99 of all finite measurements and clamps to `[0, 1]`               | The new v1 path never calls it. Calibration uses only fixed anchors shared with a frozen reference run.                                                        |
+| `DataMerger.merge`                                          | Pools every normalized repetition for an equal vector into one `TDigest`                         | The new path first creates a policy/run/scenario estimate, then a median of run estimates, and never weights a scenario by raw repetition count.               |
+| `DataMerger` maps by `long`                                 | Equal hashes are merged without checking vector bits                                             | A registry verifies all 28 raw IEEE-754 values for every repeated hash and rejects a collision.                                                                |
+| `BenchmarkRunner` raw output                                | Alternating 28-weight and repetition-array lines, with scenario and run identity only in paths   | The v1 bundle stores a validated run row, a policy dictionary, and one status-bearing row per planned repetition.                                              |
+| `BenchmarkRunner` timeout                                   | Breaks after the first liveness timeout, leaving unused entries in the pre-zeroed `means` array  | V1 has explicit `TIMEOUT` and `SKIPPED` rows. Neither is treated as a zero-throughput success.                                                                 |
+| `BenchmarkRunner` throughput                                | Stores frames per nanosecond as a derived `double`                                               | V1 stores completed frames and elapsed nanoseconds and derives frames per second.                                                                              |
+| `BenchmarkRunner.createSinks` and `BenchmarkFrame.generate` | Use an outer random ID hash and an unrecorded inner routing seed                                 | The v1 parameter model records both seeds for every source. Phase 3 must add/use a deterministic frame-generation overload before it emits native v1 evidence. |
+| `BenchmarkOutputReader` and `BenchmarkOutputWriter`         | Headerless signed decimal encodings of `Double.doubleToLongBits`                                 | They remain only for current vector and pooled-data compatibility. New evidence uses a strict UTF-8 CSV bundle with headers and raw-bit vector columns.        |
+| `PolicyRanking`                                             | Higher rounded P50, then lower rounded IQR, then lower rounded tail range                        | It remains temporarily for the current ordinal predictor. `PolicyComparator` is separate and authoritative for v1 summaries.                                   |
+| `Distribution` and `VectorGrouper`                          | Duplicate the rounded P50/IQR/tail ordering                                                      | They remain untouched in Phase 1 and are not used by the v1 merger.                                                                                            |
+| `SequenceFinder.loadTrainingData`                           | Requires alternating 28-value and five-quantile rows                                             | Phase 1 does not emit a misleading adapter row. Phase 2 consumes `scenario-results.csv` directly.                                                              |
+| `CmaEsOptimizer.MeasuredPolicy`                             | Holds only a vector and five pooled quantiles                                                    | It remains untouched until Phase 3 supplies robust seeds and predicted curves.                                                                                 |
+| `PolicyOrdinalNetwork.save/load`                            | Serializes a DJL directory named `euhedral-policy-ranker` with the old 28-input pooled objective | It remains untouched in Phase 1 and is never treated as observation data or migrated into the new contract. Phase 2 versions its replacement.                  |
+| `ClosedLoopRunner`                                          | Calls `mergeQuantiles`, names raw files by source count, and infers iteration from directories   | It continues using the old path until Phase 3 switches the whole loop to v1. No v1 code may infer identity from these names.                                   |
+| `ClosedLoopRunner.writeState`                               | Uses timestamped `Properties.store` state and absolute artifact paths                            | It is checkpoint state, not evidence serialization. Phase 3 replaces/version-controls scheduler state; Phase 1 does not parse it.                              |
+| `Runner` and the training README                            | Expose the pooled `merge-quantiles` command and current system properties                        | Phase 1 adds Java APIs only. Phase 5 owns final CLI/configuration names and documentation after all consumers exist.                                           |
+| `HasherApi.getHash(double[])`                               | xxHash64 over raw IEEE-754 lanes with seed `0x9e3779b97f4a7c15L`                                 | This exact implementation becomes policy identity scheme `p1`; no re-normalization or decimal reparse occurs before hashing.                                   |
+| `BenchmarkRunner.configuredSourceCounts`                    | Uses `SystemInfo.getCoreCount()` and clamps configured counts to available cores                 | V1 records the actual selected source count and the same visible physical core count. The identity model itself permits a ratio above one.                     |
 
 `euhedral-training` is not a named Java module and has no `module-info.java`. No module descriptor
 change is required. Its existing Maven dependencies are sufficient; Phase 1 must not add a JSON,
@@ -94,11 +94,11 @@ listed below.
   `doubleToRawLongBits` and the current writer's `doubleToLongBits`.
 - `PolicyId` scheme `p1` is
   `HasherApi.getHash(weights)` with the repository's existing base seed and raw lane layout.
-- The canonical text is `p1-` followed by exactly 16 lowercase hexadecimal digits representing
-  the unsigned 64-bit result, including leading zeroes.
+- The canonical text is `p1-` followed by exactly 16 lowercase hexadecimal digits representing the
+  unsigned 64-bit result, including leading zeroes.
 - `PolicyId.compareTo` uses `Long.compareUnsigned`.
-- A repeated `PolicyId` must have all 28 `doubleToRawLongBits` values equal. Different bits with
-  the same hash are a fatal `PolicyHashCollisionException`; the merger never chooses one.
+- A repeated `PolicyId` must have all 28 `doubleToRawLongBits` values equal. Different bits with the
+  same hash are a fatal `PolicyHashCollisionException`; the merger never chooses one.
 
 The policy ID is stable across runs and files. The observation schema version does not change this
 hash. A future policy hash algorithm must use a new prefix rather than reinterpret `p1`.
@@ -116,23 +116,23 @@ SourceRatio(numerator, denominator)
 
 - `sourceCount` and `availablePhysicalCoreCount` are positive integers.
 - `SourceRatio.of(sourceCount, availablePhysicalCoreCount)` divides both values by their greatest
-  common divisor. The constructor rejects a ratio that is not reduced or does not equal the
-  absolute counts.
-- The identity model permits `sourceCount > availablePhysicalCoreCount`, although the current
-  runner clamps it. This avoids encoding a current scheduling limitation into stored evidence.
+  common divisor. The constructor rejects a ratio that is not reduced or does not equal the absolute
+  counts.
+- The identity model permits `sourceCount > availablePhysicalCoreCount`, although the current runner
+  clamps it. This avoids encoding a current scheduling limitation into stored evidence.
 - `EnvironmentId` is an explicitly supplied, stable machine/execution-environment label. It must
   match `[a-z0-9][a-z0-9._-]{0,63}`. It is not inferred from a hostname or path.
 - Operators must change `EnvironmentId` when performance-relevant hardware, firmware, container or
-  VM allocation, affinity exposure, OS/native runtime, or JVM configuration changes materially.
-  The commit SHA and benchmark parameters are stored separately and do not become hidden parts of
-  this ID.
+  VM allocation, affinity exposure, OS/native runtime, or JVM configuration changes materially. The
+  commit SHA and benchmark parameters are stored separately and do not become hidden parts of this
+  ID.
 - Canonical scenario text is
   `s1-<environmentId>-src<sourceCount>-core<availablePhysicalCoreCount>-r<numerator>of<denominator>`.
 - Natural scenario ordering is environment ID, available core count, source count, then the reduced
   numerator and denominator.
 
-Equal reduced ratios with different absolute counts or environment IDs are separate scenarios.
-Phase 2 may use the ratio as a portable feature, but Phase 1 never pools those rows.
+Equal reduced ratios with different absolute counts or environment IDs are separate scenarios. Phase
+2 may use the ratio as a portable feature, but Phase 1 never pools those rows.
 
 ### Run, cohort, and repetition identity
 
@@ -177,8 +177,8 @@ Phase 3 will generate and checkpoint them.
 - Imported evidence is mathematically usable only after it satisfies every v1 invariant. It is not
   eligible to bootstrap fixed anchors or reference runs unless the explicit
   `allowImportedBootstrap` option is true.
-- The later importer may write v1 bundles, but the v1 reader and merger have no legacy-layout
-  branch and no schema sniffing.
+- The later importer may write v1 bundles, but the v1 reader and merger have no legacy-layout branch
+  and no schema sniffing.
 
 ## V1 observation bundle
 
@@ -262,8 +262,8 @@ schema_version,observation_id,policy_id,repetition_number,status,measurement_enc
 `MeasurementEncoding` is `COUNTER_DERIVED` or `DIRECT_THROUGHPUT`.
 
 - `observation_id` is recomputed from the run context, policy, and repetition and must match.
-- A non-empty `failure_code` matches `[A-Z][A-Z0-9_]{0,63}`. Raw exception messages and stack
-  traces do not enter deterministic evidence files.
+- A non-empty `failure_code` matches `[A-Z][A-Z0-9_]{0,63}`. Raw exception messages and stack traces
+  do not enter deterministic evidence files.
 - `started_at` and `ended_at` are UTC instants and both lie within the run start/completion
   interval.
 - Native evidence must use `COUNTER_DERIVED`. Its elapsed time equals the timestamp difference
@@ -271,13 +271,13 @@ schema_version,observation_id,policy_id,repetition_number,status,measurement_enc
 - For a native `SUCCESS`, elapsed time and completed frames are positive, `failure_code` is empty,
   and throughput is finite, positive, and exactly the result of
   `(completedFrames * 1_000_000_000.0) / elapsedNanos` under Java `double` arithmetic.
-- For a native `TIMEOUT` or `FAILED`, elapsed time and completed frames may be zero or positive,
-  the partial throughput is stored when elapsed time is positive, and `failure_code` is non-empty.
+- For a native `TIMEOUT` or `FAILED`, elapsed time and completed frames may be zero or positive, the
+  partial throughput is stored when elapsed time is positive, and `failure_code` is non-empty.
 - `SKIPPED` represents a planned repetition not run after an earlier terminal result for that
   policy. It has equal timestamps, zero elapsed time, zero frames, an empty throughput field, and a
   non-empty failure code such as `PREVIOUS_TIMEOUT`.
-- `DIRECT_THROUGHPUT` is accepted only with `EvidenceOrigin.IMPORTED`. A successful direct row has
-  a finite positive authoritative throughput and may leave elapsed time and completed frames empty
+- `DIRECT_THROUGHPUT` is accepted only with `EvidenceOrigin.IMPORTED`. A successful direct row has a
+  finite positive authoritative throughput and may leave elapsed time and completed frames empty
   when the current workspace did not retain counters. Its run-level configured sample duration and
   audit timestamps are still required and must be established without guessing. Direct rows never
   pretend to have reconstructed counters.
@@ -315,8 +315,8 @@ target = max(config.minimumFixedAnchors,
 ```
 
 `B` must be greater than `target`. The five-anchor minimum intentionally overrides the 1-3 percent
-guidance for small smoke-test budgets. Phase 3 must reserve exactly the already frozen catalog
-size, not recalculate it when a later iteration changes budget.
+guidance for small smoke-test budgets. Phase 3 must reserve exactly the already frozen catalog size,
+not recalculate it when a later iteration changes budget.
 
 ### Bootstrap selection
 
@@ -329,11 +329,11 @@ Anchor and reference selection occurs once for a training run:
    `run.startedAt`, then `benchmarkRunId`.
 3. Intersect valid policy IDs across the chosen runs.
 4. Retain a policy only when, in every chosen run:
-   - it has at least three successful repetitions;
-   - its success fraction is at least 0.5;
-   - its total non-success rate is at most 0.10;
-   - its raw median throughput is finite and positive; and
-   - `(P75 - P25) / median` is at most 0.25.
+    - it has at least three successful repetitions;
+    - its success fraction is at least 0.5;
+    - its total non-success rate is at most 0.10;
+    - its raw median throughput is finite and positive; and
+    - `(P75 - P25) / median` is at most 0.25.
 5. If fewer than `target` policies remain, fail with the chosen run IDs, intersection count, and
    rejection counts. Do not search later runs or silently shrink the anchor set. The caller may
    provide reference overrides or run a dedicated bootstrap cohort.
@@ -363,8 +363,8 @@ using `HasherApi.getHash(byte[])`, with policy IDs in unsigned order and one LF 
 line, including the last.
 
 The anchor catalog never mutates inside a training run. If an anchor later becomes unstable, that
-run loses calibration confidence; the merger does not replace the anchor and thereby move the
-scale. A new top-level training run may deliberately create a new catalog.
+run loses calibration confidence; the merger does not replace the anchor and thereby move the scale.
+A new top-level training run may deliberately create a new catalog.
 
 ### Reference runs
 
@@ -373,8 +373,8 @@ scale. A new top-level training run may deliberately create a new catalog.
 - A reference has `deltaLog=0`, `scaleFactor=1`, residual `0`, and status `REFERENCE`.
 - A run is calibrated only against its own scenario's reference. There is no ratio-only,
   cross-environment, or transitive run-to-run calibration.
-- When a new required scenario is deliberately added after catalog creation, choose its reference
-  as the earliest complete native run containing at least five valid fixed anchors from the frozen
+- When a new required scenario is deliberately added after catalog creation, choose its reference as
+  the earliest complete native run containing at least five valid fixed anchors from the frozen
   anchor catalog. Persist the addition before merging. Do not reselect existing references.
 - `fixed-anchors.csv` and `reference-runs.csv` are durable inputs to later merges, not values
   recomputed whenever the corpus grows.
@@ -406,9 +406,9 @@ robustSigma      = max(logIqr / 1.3489795003921634, 0.01)
 medianSE         = 1.2533141373155001 * robustSigma / sqrt(effectiveN)
 ```
 
-The success fraction penalizes timeout, failed, and skipped repetitions without pretending that
-they were zero-throughput samples. The 0.01 log-sigma floor prevents a few exactly repeated values
-from receiving infinite weight.
+The success fraction penalizes timeout, failed, and skipped repetitions without pretending that they
+were zero-throughput samples. The 0.01 log-sigma floor prevents a few exactly repeated values from
+receiving infinite weight.
 
 For anchor `a` shared by run `r` and reference `ref`:
 
@@ -467,25 +467,25 @@ value.
 
 ### Confidence thresholds
 
-`CalibrationStatus` is `REFERENCE`, `CALIBRATED`, `WEAKLY_CALIBRATED`, or `UNCALIBRATED`.
-Threshold comparisons are inclusive.
+`CalibrationStatus` is `REFERENCE`, `CALIBRATED`, `WEAKLY_CALIBRATED`, or `UNCALIBRATED`. Threshold
+comparisons are inclusive.
 
-| Status | Exact rule |
-| --- | --- |
-| `REFERENCE` | The frozen reference run. |
-| `CALIBRATED` | At least 5 shared valid anchors and median absolute log residual `<= 0.05`. |
+| Status              | Exact rule                                                                              |
+|---------------------|-----------------------------------------------------------------------------------------|
+| `REFERENCE`         | The frozen reference run.                                                               |
+| `CALIBRATED`        | At least 5 shared valid anchors and median absolute log residual `<= 0.05`.             |
 | `WEAKLY_CALIBRATED` | At least 3 shared valid anchors and residual `<= 0.15`, but the strong rule is not met. |
-| `UNCALIBRATED` | Fewer than 3 shared valid anchors, residual `> 0.15`, or no finite scale estimate. |
+| `UNCALIBRATED`      | Fewer than 3 shared valid anchors, residual `> 0.15`, or no finite scale estimate.      |
 
-For orientation, the strong residual bound is approximately a 5.13 percent multiplicative error
-and the weak bound approximately 16.18 percent. The stored and compared values are exactly `0.05`
+For orientation, the strong residual bound is approximately a 5.13 percent multiplicative error and
+the weak bound approximately 16.18 percent. The stored and compared values are exactly `0.05`
 and `0.15`; they are not `log(1.05)` and `log(1.15)`.
 
 Default ranking accepts `REFERENCE` and `CALIBRATED` only.
 `CalibrationAcceptance.INCLUDE_WEAK` is an explicit API override that additionally accepts
-`WEAKLY_CALIBRATED` and marks resulting scenario rows `VALID_WEAK_OVERRIDE`. `UNCALIBRATED` is
-never accepted because it has no trustworthy scale. Every override is recorded in output metadata
-and cannot be enabled by silently lowering thresholds.
+`WEAKLY_CALIBRATED` and marks resulting scenario rows `VALID_WEAK_OVERRIDE`. `UNCALIBRATED` is never
+accepted because it has no trustworthy scale. Every override is recorded in output metadata and
+cannot be enabled by silently lowering thresholds.
 
 An excessive-residual run may report its finite candidate delta and scale for diagnosis while
 remaining `UNCALIBRATED`; aggregation must not apply them. A run with fewer than three qualifying
@@ -536,8 +536,8 @@ nonSuccessRate = (TIMEOUT + FAILED + SKIPPED) / m
 ```
 
 A run-level policy estimate is valid when it has at least three successes, success rate at least
-0.5, and a finite positive raw median. Its successful measurements produce exact type-7 P25,
-median, P75, and IQR. Failed categories never enter these quantiles.
+0.5, and a finite positive raw median. Its successful measurements produce exact type-7 P25, median,
+P75, and IQR. Failed categories never enter these quantiles.
 
 After run calibration, divide the four throughput statistics by the scale factor. Retain raw
 statistics, calibrated statistics, counts, rates, log IQR, calibration status, and invalid reason.
@@ -580,15 +580,15 @@ an explicit status; it is never dropped.
 Only required scenarios enter a policy's robust summary. Extra observed scenarios survive in
 `scenario-results.csv` but do not affect coverage or rank.
 
-Coverage counts a scenario only when it has a finite quality from an accepted scenario estimate.
-An eligible policy has valid quality for every required exact scenario. There is no minimum raw row
+Coverage counts a scenario only when it has a finite quality from an accepted scenario estimate. An
+eligible policy has valid quality for every required exact scenario. There is no minimum raw row
 count shortcut and no ratio-only substitution.
 
-`observedRequiredScenarioCount` counts required scenarios with at least one run for the policy,
-even when all such runs are invalid or uncalibrated. `validRequiredScenarioCount` counts finite
-accepted qualities. `coverageFraction` is
-`validRequiredScenarioCount / (double) requiredScenarioCount`; the required set must be non-empty.
-A required scenario with no run is missing; one with runs but no accepted estimate is rejected.
+`observedRequiredScenarioCount` counts required scenarios with at least one run for the policy, even
+when all such runs are invalid or uncalibrated. `validRequiredScenarioCount` counts finite accepted
+qualities. `coverageFraction` is
+`validRequiredScenarioCount / (double) requiredScenarioCount`; the required set must be non-empty. A
+required scenario with no run is missing; one with runs but no accepted estimate is rejected.
 
 ## Exact quantile, quality, and epsilon conventions
 
@@ -626,9 +626,8 @@ The unique worst value is 0, the unique best is 1, and an all-tied population is
 of a tie receives the same midrank. Incomplete policies may participate in a scenario's percentile
 population when that scenario row is valid; they do not need full cross-scenario coverage first.
 
-The primary `q` is retained even when bootstrap intervals overlap. The scenario throughput
-interval, run count, relative IQR, and non-success rates carry the uncertainty; no top-N flag
-replaces `q`.
+The primary `q` is retained even when bootstrap intervals overlap. The scenario throughput interval,
+run count, relative IQR, and non-success rates carry the uncertainty; no top-N flag replaces `q`.
 
 ### Robust summary metrics
 
@@ -648,8 +647,8 @@ meanTimeoutRate       = compensated arithmetic mean across scenarios
 ```
 
 `QUALITY_EPSILON` is exactly `1.0e-12` and is used only inside the geometric mean logarithm. It is
-not a tie tolerance, comparator tolerance, quantile adjustment, or substitute quality. A true
-zero remains zero in `worstQuality` and `qualityP25`.
+not a tie tolerance, comparator tolerance, quantile adjustment, or substitute quality. A true zero
+remains zero in `worstQuality` and `qualityP25`.
 
 ### Authoritative comparator
 
@@ -790,11 +789,11 @@ public record BenchmarkObservation(
 }
 ```
 
-All record compact constructors enforce the settled invariants and use `Set.copyOf`. Empty
-failure codes are represented by `""`, not `null`. `BenchmarkObservation` validates that nested
-identities agree. `PolicyVector` implements bitwise `equals` and `hashCode` consistently; it does
-not use array reference equality. `BenchmarkRunContext` additionally verifies that completion is
-not before its descriptor's start.
+All record compact constructors enforce the settled invariants and use `Set.copyOf`. Empty failure
+codes are represented by `""`, not `null`. `BenchmarkObservation` validates that nested identities
+agree. `PolicyVector` implements bitwise `equals` and `hashCode` consistently; it does not use array
+reference equality. `BenchmarkRunContext` additionally verifies that completion is not before its
+descriptor's start.
 
 `PolicyRegistry` owns the one canonical `PolicyVector` object per `PolicyId` during a merge:
 
@@ -837,16 +836,15 @@ public record ObservationBundle(
 
 The public bundle object is appropriate for fixtures and a single benchmark run. `DataMerger`
 must use the reader's streaming visitor so it can discard observation objects after updating a
-compact accumulator. Do not retain all corpus observations in memory. The visitor is public so
-Phase 3 can validate native bundles incrementally without adding a second codec; its callbacks are
+compact accumulator. Do not retain all corpus observations in memory. The visitor is public so Phase
+3 can validate native bundles incrementally without adding a second codec; its callbacks are
 synchronous, single-owner, and valid only for the duration of the call.
 
-The public writer validates ascending schedule positions and observation order as it streams.
-The public reader preserves that stored schedule order. Deterministic merger output never depends
-on schedule order: aggregation keys are sorted independently after the run has been reduced. Every
+The public writer validates ascending schedule positions and observation order as it streams. The
+public reader preserves that stored schedule order. Deterministic merger output never depends on
+schedule order: aggregation keys are sorted independently after the run has been reduced. Every
 policy must be registered before the first observation. Closing without `complete` closes/forces
-open files but deliberately leaves no `run.csv` or `COMPLETE`, so the directory remains
-unmergeable.
+open files but deliberately leaves no `run.csv` or `COMPLETE`, so the directory remains unmergeable.
 
 `StrictCsv` is package-private and owns RFC 4180 parsing/writing, exact headers, LF output, raw-bit
 hex conversion, and full-consumption checks. It is not a general CSV library.
@@ -1022,8 +1020,8 @@ weak, and uncalibrated run counts make rejected evidence explicit.
 combined across runs. Keeping it on the Stage 1 aggregate is intentional: calibration can enforce
 that a non-reference catalog member was actually scheduled as `FIXED_ANCHOR` without reopening raw
 bundles or introducing a parallel metadata index. Future scheduling roles extend `PolicyRole` and
-flow through this set without changing the aggregation or calibrator signature; only consumers
-whose semantics depend on a new role need modification.
+flow through this set without changing the aggregation or calibrator signature; only consumers whose
+semantics depend on a new role need modification.
 
 `AnchorCatalog.of` is the canonical construction path: it sorts and deduplicates policies, computes
 the settled `a1` hash, and returns the validated record. The public record constructor recomputes
@@ -1151,14 +1149,14 @@ public record MergeArtifacts(
 Bootstrap writes only `fixed-anchors.csv` and `reference-runs.csv` into a new `planDirectory` and
 returns the frozen plan. Merge requires that plan, writes a copy of both plan files into a separate
 new `outputDirectory`, and never silently bootstraps or changes references. Both operations refuse
-to overwrite their target directories. Bootstrap uses the same validated temporary-sibling
-directory publication rule as merge.
+to overwrite their target directories. Bootstrap uses the same validated temporary-sibling directory
+publication rule as merge.
 
 The existing `mergeQuentiles()`, `mergeQuantiles(...)`, and their P99 implementation remain a
 temporary compile seam because `ClosedLoopRunner` still calls them. Mark the two quantile entry
-points deprecated with the searchable comment `ROBUST_OPTIMIZER_POOLED_V0_REMOVAL`, but do not
-route v1 inputs through them and do not add new callers. `mergeVectors`, current bit-text codecs,
-and current ranking classes also remain until their owning later phases migrate them.
+points deprecated with the searchable comment `ROBUST_OPTIMIZER_POOLED_V0_REMOVAL`, but do not route
+v1 inputs through them and do not add new callers. `mergeVectors`, current bit-text codecs, and
+current ranking classes also remain until their owning later phases migrate them.
 
 ## V1 merger outputs
 
@@ -1167,8 +1165,8 @@ All outputs are UTF-8 RFC 4180 CSV with LF line endings, exact headers, determin
 optional values are empty fields. The merger creates a unique temporary sibling directory, writes
 and re-reads all eight files there, then moves the directory to the nonexistent final
 `outputDirectory`. It refuses to overwrite. If `ATOMIC_MOVE` is unsupported, use a same-filesystem
-directory move only after validation; a partially written temporary directory is never a final
-merge output. Final-package atomicity and cleanup policy remain Phase 4.
+directory move only after validation; a partially written temporary directory is never a final merge
+output. Final-package atomicity and cleanup policy remain Phase 4.
 
 ### `fixed-anchors.csv`
 
@@ -1197,8 +1195,8 @@ schema_version,calibration_acceptance,scenario_id,benchmark_run_id,reference_run
 
 Stable reason values include `REFERENCE_RUN`, `STRONG`, `WEAK_ANCHOR_COUNT`,
 `WEAK_RESIDUAL`, `INSUFFICIENT_SHARED_ANCHORS`, `EXCESSIVE_RESIDUAL`, and
-`NONFINITE_SCALE`. `MISSING_SCENARIO_REFERENCE` is emitted only for an observed scenario absent
-from the frozen reference catalog.
+`NONFINITE_SCALE`. `MISSING_SCENARIO_REFERENCE` is emitted only for an observed scenario absent from
+the frozen reference catalog.
 
 ### `scenario-results.csv`
 
@@ -1294,8 +1292,8 @@ summation order part of the result.
 - The log uncertainty floor `0.01` and confidence thresholds `0.05` and `0.15` are explicit model
   constants, not general floating-point tolerances.
 - Exact ties use `Double.compare`; no relative or absolute tie epsilon exists.
-- Overflow, underflow to a non-positive calibrated value, NaN, and infinity are validation
-  failures. They are never clamped into a plausible rank.
+- Overflow, underflow to a non-positive calibrated value, NaN, and infinity are validation failures.
+  They are never clamped into a plausible rank.
 
 ## Migration and deletion boundary
 
@@ -1314,9 +1312,9 @@ Phase 5's removable importer must either produce fully valid v1 bundles or impor
 separate vector-only path. If run, scenario, duration, status, commit, or environment metadata
 cannot be established without guessing, it rejects that measurement and reports the reason. Once a
 v1 bundle is written, the merger sees only `EvidenceOrigin.IMPORTED`; it has no current-workspace
-format dependency. `DIRECT_THROUGHPUT` is the sole compatibility seam for an otherwise
-unambiguous imported repetition whose original format retained throughput but not raw frame/time
-counters; native writers cannot use it.
+format dependency. `DIRECT_THROUGHPUT` is the sole compatibility seam for an otherwise unambiguous
+imported repetition whose original format retained throughput but not raw frame/time counters;
+native writers cannot use it.
 
 The compatibility code retained after Phase 1 is exactly:
 
@@ -1342,8 +1340,8 @@ Implement in this dependency order.
    `BenchmarkRunContext.java`, `ScheduledPolicy.java`,
    `ObservationKey.java`, `BenchmarkObservation.java`, `PolicyRegistry.java`, and the focused
    identity exceptions.
-2. Add `VectorStatistics.java` under `training/merge`. Implement type-7 quantiles, compensated
-   mean, lower weighted median, and deterministic water-filling before any calibration code.
+2. Add `VectorStatistics.java` under `training/merge`. Implement type-7 quantiles, compensated mean,
+   lower weighted median, and deterministic water-filling before any calibration code.
 3. Add `StrictCsv.java`, `ObservationBundle.java`, `ObservationBundleReader.java`, and
    `ObservationBundleWriter.java` under `training/data/io`. Keep all CSV details in this package.
 4. Add `CalibrationStatus.java`, `CalibrationAcceptance.java`,
@@ -1356,10 +1354,10 @@ Implement in this dependency order.
    reference and stratified fixed-anchor rules exactly.
 7. Add `RunCalibrator.java`. Keep calibration separate from aggregation and emit a result for every
    run, including failed confidence.
-8. Add `HierarchicalAggregator.java`. Apply acceptance policy, equal run voting, deterministic
-   run bootstrap, missing scenario rows, and stability fields.
-9. Add `ScenarioQualityRanker.java` and `PolicyComparator.java`. Keep the comparator
-   independent of CSV output and current `PolicyRanking`.
+8. Add `HierarchicalAggregator.java`. Apply acceptance policy, equal run voting, deterministic run
+   bootstrap, missing scenario rows, and stability fields.
+9. Add `ScenarioQualityRanker.java` and `PolicyComparator.java`. Keep the comparator independent of
+   CSV output and current `PolicyRanking`.
 10. Add `MergeCsvWriter.java` for all eight v1 artifacts and their exact ordering.
 11. Extend
     `euhedral-training/src/main/java/io/euhedral_execution/training/DataMerger.java` with the two v1
@@ -1370,8 +1368,8 @@ Implement in this dependency order.
     `ScoreBandSampler.java`, `Distribution.java`, `VectorGrouper.java`, or
     `PolicyRanking.java` in Prompt 1B.
 13. Do not edit `pom.xml`; use only JDK APIs and current `HasherApi`.
-14. Add the tests and small golden resources below. Do not add generated benchmark output,
-    training data, or model files.
+14. Add the tests and small golden resources below. Do not add generated benchmark output, training
+    data, or model files.
 
 ## Deterministic synthetic fixtures and assertions
 
@@ -1413,8 +1411,8 @@ five policies and five repetitions.
 `[100, 200, 400, 800, 1600]`.
 
 1. A globally two-times-faster run has anchor medians
-   `[200, 400, 800, 1600, 3200]`. Assert `deltaLog == StrictMath.log(2)`,
-   scale `2`, residual `0`, status `CALIBRATED`, and a candidate median `1000` calibrates to `500`.
+   `[200, 400, 800, 1600, 3200]`. Assert `deltaLog == StrictMath.log(2)`, scale `2`, residual `0`,
+   status `CALIBRATED`, and a candidate median `1000` calibrates to `500`.
 2. Change every non-anchor candidate from mediocre to much faster while keeping anchors fixed.
    Assert calibration bytes are unchanged. This proves cohort improvement cannot define scale.
 3. Use ratios `[2, 2, 2, 2, 8]` with equal uncertainty. Assert the unstable anchor does not move
@@ -1476,8 +1474,8 @@ policy-R         90          90          90
 ```
 
 With four distinct values per scenario, policy R has quality `2/3` in every scenario and wins on
-minimum quality even though it is second-best everywhere. Each specialist wins one scenario and
-has worst quality zero.
+minimum quality even though it is second-best everywhere. Each specialist wins one scenario and has
+worst quality zero.
 
 Add paired summaries that differ at only one comparator tier. Assert the exact priority of worst,
 P25, geometric mean, MAD, relative IQR, non-success, and policy ID. Assert the comparator rejects
@@ -1556,8 +1554,8 @@ rg -n "input/merger|iteration-.*source|graviton|zen4|latest-model|\\.bin" \
 ```
 
 Both searches must return no v1 implementation matches. If the upstream install fails during the
-hardware module's Zig/native initialization, report that environmental failure separately and
-still run the narrowest test command possible with already installed upstream artifacts.
+hardware module's Zig/native initialization, report that environmental failure separately and still
+run the narrowest test command possible with already installed upstream artifacts.
 
 ## Risks and later-phase handoff
 
@@ -1570,8 +1568,8 @@ The following are deliberate later-phase inputs, not open decisions:
 - Phase 3 generates stable run/cohort IDs, persists the calibration plan in checkpoint state,
   schedules the frozen anchors and rolling leaders, records complete v1 bundles, and defines the
   incomplete predicted priority. When no plan exists, it first benchmarks a dedicated native
-  bootstrap cohort drawn from seed vectors across every required scenario, then invokes the
-  settled bootstrap selector; it does not invent anchors before evidence exists.
+  bootstrap cohort drawn from seed vectors across every required scenario, then invokes the settled
+  bootstrap selector; it does not invent anchors before evidence exists.
 - Phase 4 packages these deterministic CSVs, provenance, checksums, and raw bundle indexes.
 - Phase 5 may convert only unambiguous current-workspace evidence into this exact v1 contract and
   must leave all layout knowledge outside the merger.
@@ -1595,8 +1593,8 @@ settled calibration invariants:
   CalibrationConfig)` receives neither observation bundles nor scheduled-policy metadata.
 - Consequently, after the required Stage 1 reduction, `RunCalibrator` cannot distinguish a policy
   deliberately scheduled as a fixed anchor from the same catalog policy scheduled under another
-  role. Accepting every catalog member would violate the explicit role requirement; adding roles
-  to `RunAggregate`, adding a separate run/policy-role index, or changing the calibrator signature
+  role. Accepting every catalog member would violate the explicit role requirement; adding roles to
+  `RunAggregate`, adding a separate run/policy-role index, or changing the calibrator signature
   would each reopen a settled public API.
 
 Reasoning decision made on 2026-07-27: `RunAggregate` owns an immutable, lexicographically sorted
@@ -1632,9 +1630,9 @@ env JAVA_HOME=/home/bagotay/.local/share/mise/installs/java/21.0.2 \
   -> approved rerun succeeded; all six selected reactor modules compiled and installed
 ```
 
-No completion commit or push was made at the original stop because the blueprint explicitly
-required implementation to stop rather than invent this design choice. Implementation resumed only
-after the user explicitly requested this reasoning amendment.
+No completion commit or push was made at the original stop because the blueprint explicitly required
+implementation to stop rather than invent this design choice. Implementation resumed only after the
+user explicitly requested this reasoning amendment.
 
 ### Final completion record - 2026-07-27
 
@@ -1691,8 +1689,8 @@ sections above:
   computed anchor-set ID.
 - The bundle streaming visitor is public for later native producer validation while remaining
   synchronous and single-owner.
-- Observed scenarios absent from the frozen reference catalog remain explicit uncalibrated rows
-  with `MISSING_SCENARIO_REFERENCE`; no reference is inferred.
+- Observed scenarios absent from the frozen reference catalog remain explicit uncalibrated rows with
+  `MISSING_SCENARIO_REFERENCE`; no reference is inferred.
 
 Validation results:
 

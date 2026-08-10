@@ -61,21 +61,21 @@ The model remains an offline trainer artifact. No network or learning dependency
 
 ## Reconciliation with the current implementation
 
-| Current code | Current contract | Phase 2 decision |
-| --- | --- | --- |
-| `SequenceFinder.loadTrainingData` | Reads alternating 28-weight and five-quantile rows | Leave it as a pooled v0 compatibility seam. The new reader accepts only the three explicit Phase 1 CSV paths. |
-| `SequenceFinder` split | Hashes each pooled vector into 80/10/10 | Add a stable `PolicyId` split. Every scenario row for a policy follows the policy group. |
-| `PolicyRanking.buildDecileThresholds` | Learns nine cohort thresholds from training quantiles | Do not use it. Phase 1 quality already lies in `[0, 1]`; fixed thresholds are `0.1` through `0.9`. |
-| `PolicyRanking.compare` | Ranks pooled P50/IQR/tail values after four-decimal rounding | Do not use it anywhere in the new learner or evaluator. Phase 1 `quality` is the target. |
-| `PolicyOrdinalNetwork` | `28 -> 128 -> 96 -> 48 -> 9`, one model | Add a separate dynamic-input network with the same hidden widths and a five-member production ensemble. |
-| `PolicyOrdinalNetwork.rankingScore` | Produces one scalar with an extra top-decile multiplier | Replace it in the new path with an ordinal probability distribution, mean quality, interval, entropy, and member disagreement. |
-| `PolicyOrdinalNetwork.trainWithEarlyStopping` | Selects by pooled validation top-10 precision, then BCE | Select each new member by validation macro scenario MAE, then macro scenario Spearman, then weighted BCE. |
-| `PolicyOrdinalNetwork.save/load` | Saves `euhedral-policy-ranker-0000.params` with no external schema | New artifacts require `model-metadata.json`, fixed member paths, checksums, and matching properties inside each DJL file. |
-| `DataMerger.MergeArtifacts` | Returns `scenario-results.csv` plus eligible and incomplete vector files | Join all three. The two vector files are disjoint and together contain the dictionary for every Phase 1 policy. |
-| `scenario-results.csv` | Contains scenario and policy ID but not the 28 weights | Preserve the exact Phase 1 header. Never add weights to it in Phase 2. |
-| `MergeRecords.ScenarioResult` | Retains quality, throughput interval, run counts, and calibration status | Use `quality` as the only target. Retain the other fields for audit only; do not make them inputs or loss weights. |
-| `ClosedLoopRunner` and `Runner` | Call pooled merge, train, scalar inference, and candidate generation | Leave them unchanged until Phase 3 switches the whole workflow. |
-| `euhedral-training/pom.xml` | Already provides DJL PyTorch and test libraries | No dependency or module descriptor change is needed. Use a purpose-built strict metadata codec and JDK APIs. |
+| Current code                                  | Current contract                                                         | Phase 2 decision                                                                                                               |
+|-----------------------------------------------|--------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------|
+| `SequenceFinder.loadTrainingData`             | Reads alternating 28-weight and five-quantile rows                       | Leave it as a pooled v0 compatibility seam. The new reader accepts only the three explicit Phase 1 CSV paths.                  |
+| `SequenceFinder` split                        | Hashes each pooled vector into 80/10/10                                  | Add a stable `PolicyId` split. Every scenario row for a policy follows the policy group.                                       |
+| `PolicyRanking.buildDecileThresholds`         | Learns nine cohort thresholds from training quantiles                    | Do not use it. Phase 1 quality already lies in `[0, 1]`; fixed thresholds are `0.1` through `0.9`.                             |
+| `PolicyRanking.compare`                       | Ranks pooled P50/IQR/tail values after four-decimal rounding             | Do not use it anywhere in the new learner or evaluator. Phase 1 `quality` is the target.                                       |
+| `PolicyOrdinalNetwork`                        | `28 -> 128 -> 96 -> 48 -> 9`, one model                                  | Add a separate dynamic-input network with the same hidden widths and a five-member production ensemble.                        |
+| `PolicyOrdinalNetwork.rankingScore`           | Produces one scalar with an extra top-decile multiplier                  | Replace it in the new path with an ordinal probability distribution, mean quality, interval, entropy, and member disagreement. |
+| `PolicyOrdinalNetwork.trainWithEarlyStopping` | Selects by pooled validation top-10 precision, then BCE                  | Select each new member by validation macro scenario MAE, then macro scenario Spearman, then weighted BCE.                      |
+| `PolicyOrdinalNetwork.save/load`              | Saves `euhedral-policy-ranker-0000.params` with no external schema       | New artifacts require `model-metadata.json`, fixed member paths, checksums, and matching properties inside each DJL file.      |
+| `DataMerger.MergeArtifacts`                   | Returns `scenario-results.csv` plus eligible and incomplete vector files | Join all three. The two vector files are disjoint and together contain the dictionary for every Phase 1 policy.                |
+| `scenario-results.csv`                        | Contains scenario and policy ID but not the 28 weights                   | Preserve the exact Phase 1 header. Never add weights to it in Phase 2.                                                         |
+| `MergeRecords.ScenarioResult`                 | Retains quality, throughput interval, run counts, and calibration status | Use `quality` as the only target. Retain the other fields for audit only; do not make them inputs or loss weights.             |
+| `ClosedLoopRunner` and `Runner`               | Call pooled merge, train, scalar inference, and candidate generation     | Leave them unchanged until Phase 3 switches the whole workflow.                                                                |
+| `euhedral-training/pom.xml`                   | Already provides DJL PyTorch and test libraries                          | No dependency or module descriptor change is needed. Use a purpose-built strict metadata codec and JDK APIs.                   |
 
 The old `PolicyOrdinalNetwork`, `SequenceFinder`, and `PolicyRanking` remain intentionally usable by
 the old closed loop during Phase 2. No new Phase 2 class may import them. They remain part of the
@@ -132,14 +132,14 @@ and audited but are not used for Phase 2 fitting or evaluation.
 
 The default row policy is:
 
-| Phase 1 status | Default action |
-| --- | --- |
-| `VALID_STRONG` | Include. |
-| `VALID_WEAK_OVERRIDE` | Exclude and count as `WEAK_EXCLUDED`. |
-| `MISSING` | Exclude and count as `MISSING`. |
-| `NO_VALID_RUN` | Exclude and count as `NO_VALID_RUN`. |
-| `NO_ACCEPTED_CALIBRATION` | Exclude and count as `NO_ACCEPTED_CALIBRATION`. |
-| valid row for a non-required scenario | Exclude and count as `NOT_REQUIRED`. |
+| Phase 1 status                        | Default action                                  |
+|---------------------------------------|-------------------------------------------------|
+| `VALID_STRONG`                        | Include.                                        |
+| `VALID_WEAK_OVERRIDE`                 | Exclude and count as `WEAK_EXCLUDED`.           |
+| `MISSING`                             | Exclude and count as `MISSING`.                 |
+| `NO_VALID_RUN`                        | Exclude and count as `NO_VALID_RUN`.            |
+| `NO_ACCEPTED_CALIBRATION`             | Exclude and count as `NO_ACCEPTED_CALIBRATION`. |
+| valid row for a non-required scenario | Exclude and count as `NOT_REQUIRED`.            |
 
 `includeWeakCalibrationRows=true` is an explicit data ablation. It includes
 `VALID_WEAK_OVERRIDE`, records the choice in metadata, and never changes the meaning of
@@ -231,8 +231,8 @@ Required scenarios use natural scenario order, policies use unsigned ID order, a
 settled row order. Raw hex fields are exactly 16 lower-case digits from
 `Double.doubleToRawLongBits`. There is one LF after every line, including the last. Excluded
 required-scenario rows affect the audit but not the fingerprint row section; the include-weak flag
-and audit counts are stored separately in metadata. Reordering CSV rows or input paths cannot
-change the fingerprint.
+and audit counts are stored separately in metadata. Reordering CSV rows or input paths cannot change
+the fingerprint.
 
 Phase 1 quality is frozen before the policy split. Although its empirical percentile population
 contains policies that later land in validation or test, it is the authoritative scenario-relative
@@ -260,8 +260,8 @@ Inference has two forms:
 2. `predictCurves` accepts an explicit non-empty scenario set and supports a deliberate future
    scenario without retraining, provided the selected feature schema can encode it.
 
-Both forms sort scenarios naturally. Policies retain caller order after duplicate-ID validation.
-The logical inference table is policy-major and scenario-minor:
+Both forms sort scenarios naturally. Policies retain caller order after duplicate-ID validation. The
+logical inference table is policy-major and scenario-minor:
 
 ```text
 row = policyIndex * scenarioCount + scenarioIndex
@@ -354,8 +354,7 @@ The fitting population is deliberately de-duplicated:
 
 - each distinct training `PolicyId` contributes once to each of the 28 policy-coordinate moments;
   and
-- each distinct exact training `SourceScenario` contributes once to each context-coordinate
-  moment.
+- each distinct exact training `SourceScenario` contributes once to each context-coordinate moment.
 
 This prevents a well-covered policy or scenario from silently receiving more normalization weight.
 Both populations are sorted before arithmetic.
@@ -377,13 +376,13 @@ else:
 encoded = (raw - mean) / scale
 ```
 
-The variance is the population variance. Means and squared-deviation sums use Neumaier
-compensation. A tiny negative variance caused only by the last rounding operation is replaced with
-zero; any other non-finite value is fatal. There is no clipping or winsorization. An encoded value
-that is not finite as a `float` is rejected with the policy and scenario identity.
+The variance is the population variance. Means and squared-deviation sums use Neumaier compensation.
+A tiny negative variance caused only by the last rounding operation is replaced with zero; any other
+non-finite value is fatal. There is no clipping or winsorization. An encoded value that is not
+finite as a `float` is rejected with the policy and scenario identity.
 
-The complete normalizer, including raw double bits and constant flags, is serialized. A loaded
-model never refits normalization from inference inputs.
+The complete normalizer, including raw double bits and constant flags, is serialized. A loaded model
+never refits normalization from inference inputs.
 
 ## Targets, row weights, and table/tensor shapes
 
@@ -455,20 +454,20 @@ public record ScenarioLearningMatrix(
 
 Shapes and lengths are:
 
-| Value | Logical shape | Flat length |
-| --- | --- | --- |
-| `features` | `[R, F]` | `R * F` |
-| `ordinalLabels` | `[R, 9]` | `R * 9` |
-| `rowWeights` | `[R, 1]` | `R` |
-| `qualities` | `[R]` | `R` |
-| `policyIds` | `[R]` | `R` |
-| `scenarios` | `[R]` | `R` |
+| Value           | Logical shape | Flat length |
+|-----------------|---------------|-------------|
+| `features`      | `[R, F]`      | `R * F`     |
+| `ordinalLabels` | `[R, 9]`      | `R * 9`     |
+| `rowWeights`    | `[R, 1]`      | `R`         |
+| `qualities`     | `[R]`         | `R`         |
+| `policyIds`     | `[R]`         | `R`         |
+| `scenarios`     | `[R]`         | `R`         |
 
 Rows use policy-major/scenario-minor table order. Features and labels are contiguous row-major
 `float[]`; authoritative evaluation qualities remain `double[]`.
 
-The DJL dataset contains one data array `[R,F]` and two label arrays `[R,9]` and `[R,1]`.
-The balanced binary cross-entropy applies label smoothing only to the BCE target:
+The DJL dataset contains one data array `[R,F]` and two label arrays `[R,9]` and `[R,1]`. The
+balanced binary cross-entropy applies label smoothing only to the BCE target:
 
 ```text
 smoothed = hardLabel * (1 - 2 * 0.02) + 0.02
@@ -522,8 +521,8 @@ Use DJL 0.36.0 defaults for AdamW parameters not shown here. Do not read trainin
 from system properties inside the network.
 
 Production uses five independently initialized members. Different member initialization and batch
-order provide epistemic disagreement while every member sees the same fitting rows. There is no
-row bootstrap in v1 because sparse scenarios must not disappear from an ensemble member.
+order provide epistemic disagreement while every member sees the same fitting rows. There is no row
+bootstrap in v1 because sparse scenarios must not disappear from an ensemble member.
 
 ### Training defaults
 
@@ -583,11 +582,11 @@ featureSelectionMode            = RATIO_ONLY
 `ensembleMembers` must be odd and in `[3, 9]` for a deployable artifact.
 `losoEvaluationMembers` is in `[1, ensembleMembers]`; one bounds final fold cost.
 `ablationMembers` must be odd and in `[3, ensembleMembers]` so feature selection is not decided by
-one initialization. Tests may use non-deployable one-member configurations through a
-package-private test factory. Production validation never weakens these public invariants.
+one initialization. Tests may use non-deployable one-member configurations through a package-private
+test factory. Production validation never weakens these public invariants.
 
-`device` accepts `auto`, `cpu`, or a DJL device name such as `gpu0`. `auto` resolves once before
-any member is created and the resolved device is used for production and temporary folds.
+`device` accepts `auto`, `cpu`, or a DJL device name such as `gpu0`. `auto` resolves once before any
+member is created and the resolved device is used for production and temporary folds.
 Device-recommended batch sizes remain 512 for CPU and 4,096 for GPU, capped at fitting row count.
 Inference defaults remain 16,384 rows for CPU and 65,536 rows for GPU.
 
@@ -621,13 +620,13 @@ memberSeed64 = HasherApi.getHash(seedMaterial, modelSeed)
 engineSeed32 = (int) (memberSeed64 ^ (memberSeed64 >>> 32))
 ```
 
-Seeds are stored as 16-digit lower-case unsigned hex. This makes production, LOSO, context
-ablation, count ablation, feature set, fold, and member identity independently reproducible.
+Seeds are stored as 16-digit lower-case unsigned hex. This makes production, LOSO, context ablation,
+count ablation, feature set, fold, and member identity independently reproducible.
 
 DJL `Engine.setRandomSeed(int)` is called immediately before trainer initialization. Because that
-seed is engine-global, member fitting is sequential and guarded by one private static monitor.
-The monitor is the publication boundary for the global seed and model initialization; no two Phase
-2 training calls may fit concurrently.
+seed is engine-global, member fitting is sequential and guarded by one private static monitor. The
+monitor is the publication boundary for the global seed and model initialization; no two Phase 2
+training calls may fit concurrently.
 
 Do not use DJL's global `RandomSampler`. Add a deterministic sampler that, for epoch `e`, performs
 Fisher-Yates over `[0, R)` with:
@@ -643,9 +642,9 @@ for i from R - 1 down to 1:
 ```
 
 Prefetch is zero on both CPU and GPU. One device trains one member at a time. These rules make
-splits, initialization seeds, and sample order reproducible. Native floating-point kernels may
-still differ across supported engine/device combinations; metadata records the producing engine,
-version, and device.
+splits, initialization seeds, and sample order reproducible. Native floating-point kernels may still
+differ across supported engine/device combinations; metadata records the producing engine, version,
+and device.
 
 ### Early stopping
 
@@ -736,8 +735,8 @@ ordinalEntropy     = -sum_b(meanMass_b * log(meanMass_b)) / log(10)
 topDecileProbability = mean projected p_8
 ```
 
-Zero masses do not enter the logarithm. The interval is a discrete ordinal predictive interval,
-not a Gaussian confidence interval.
+Zero masses do not enter the logarithm. The interval is a discrete ordinal predictive interval, not
+a Gaussian confidence interval.
 
 Ensemble disagreement is:
 
@@ -795,8 +794,8 @@ public record EnsembleOrdinalDistribution(
 ```
 
 All rates and qualities lie in `[0,1]`; standard deviation and range are finite and non-negative;
-interval endpoints enclose `predictedQuality` only when the discrete mixture makes that true, so
-the record validates ordered endpoints but does not force enclosure. Both distribution records
+interval endpoints enclose `predictedQuality` only when the discrete mixture makes that true, so the
+record validates ordered endpoints but does not force enclosure. Both distribution records
 defensively copy their arrays.
 
 ### Batched inference and memory
@@ -832,8 +831,8 @@ actualRows       = policiesInBatch * S
 ```
 
 One primitive feature batch and aggregate arrays are retained. Members run sequentially into a
-reused logit buffer; per-member corpus-sized predictions are never retained. Each member call uses
-a short-lived NDManager submanager. Output curve records are created only after all members have
+reused logit buffer; per-member corpus-sized predictions are never retained. Each member call uses a
+short-lived NDManager submanager. Output curve records are created only after all members have
 contributed to that batch.
 
 No public `predictScores(float[28], ...)` adapter is added. Phase 3 must deliberately enumerate
@@ -880,9 +879,9 @@ public final class PolicyGroupedSplitter {
 }
 ```
 
-Before training, enforce the configured minimum distinct policy groups and per-required-scenario
-row counts in every partition. Each validation and test scenario must also contain at least two
-distinct target qualities, at least one `q >= 0.9`, and at least one `q < 0.9`. Failure is
+Before training, enforce the configured minimum distinct policy groups and per-required-scenario row
+counts in every partition. Each validation and test scenario must also contain at least two distinct
+target qualities, at least one `q >= 0.9`, and at least one `q < 0.9`. Failure is
 `INSUFFICIENT_DATA`, not a fallback row split.
 
 ### Validation-only ablation subdivision
@@ -900,22 +899,22 @@ unsigned low bit 1 -> ABLATION_SCORE
 ```
 
 All rows for the policy follow the half. Both halves must satisfy the relevant fold minimums.
-`ABLATION_EARLY_STOP` selects temporary fold epochs; `ABLATION_SCORE` selects a feature schema.
-The full validation partition selects epochs only after the schema has been selected.
+`ABLATION_EARLY_STOP` selects temporary fold epochs; `ABLATION_SCORE` selects a feature schema. The
+full validation partition selects epochs only after the schema has been selected.
 
 Each half requires at least
-`ceil(minimumValidationPolicyGroups / 2.0)` distinct policies and, for every row set used by a
-fold, at least `max(2, ceil(minimumValidationRowsPerScenario / 2.0))` rows. A scoring row set also
-requires two target qualities and both top-decile classes. Failure of a required
-validation-context fold is a pre-training `InsufficientScenarioLearningDataException`. Failure
-specific to an optional count LOEO fold makes counts non-evaluable: `AUTO_COUNTS_IF_VALIDATED`
+`ceil(minimumValidationPolicyGroups / 2.0)` distinct policies and, for every row set used by a fold,
+at least `max(2, ceil(minimumValidationRowsPerScenario / 2.0))` rows. A scoring row set also
+requires two target qualities and both top-decile classes. Failure of a required validation-context
+fold is a pre-training `InsufficientScenarioLearningDataException`. Failure specific to an optional
+count LOEO fold makes counts non-evaluable: `AUTO_COUNTS_IF_VALIDATED`
 falls back to ratio-only and `REQUIRE_COUNTS` records a rejected gate. Policies never move between
 halves.
 
 ### Primary grouped evaluation
 
-The production ensemble fits training policies, uses validation policies for early stopping, and
-is evaluated once on test policies across all required scenarios.
+The production ensemble fits training policies, uses validation policies for early stopping, and is
+evaluated once on test policies across all required scenarios.
 
 Per exact scenario report:
 
@@ -1056,10 +1055,10 @@ public enum FeatureSelectionMode {
 All modes run the `POLICY_ONLY` validation LOSO negative control. `RATIO_ONLY` selects the baseline.
 The other modes compare `RATIO_ONLY` with `RATIO_AND_COUNTS`.
 
-Temporary ablation models use `ablationMembers`, the same hidden architecture, split, fold
-rows, target, loss, hyperparameters, and member-seed derivation rule. The feature schema ID makes
-the actual member seeds distinct; only the feature schema, its normalizer, and the deterministic
-seed identity differ.
+Temporary ablation models use `ablationMembers`, the same hidden architecture, split, fold rows,
+target, loss, hyperparameters, and member-seed derivation rule. The feature schema ID makes the
+actual member seeds distinct; only the feature schema, its normalizer, and the deterministic seed
+identity differ.
 
 ### Scenario-context gate
 
@@ -1079,8 +1078,8 @@ score:
     AND scenario == h
 ```
 
-No primary test policy participates. The same fold identities, rows, member count, and derived
-seeds are used for `POLICY_ONLY` and `RATIO_ONLY`.
+No primary test policy participates. The same fold identities, rows, member count, and derived seeds
+are used for `POLICY_ONLY` and `RATIO_ONLY`.
 
 On validation-only LOSO folds, the ratio model demonstrates useful scenario context when:
 
@@ -1144,10 +1143,10 @@ Environment ID is used only to form this holdout. It is never encoded.
 
 ### Weak-calibration ablation
 
-`includeWeakCalibrationRows` is recorded but does not automatically select a model variant.
-Prompt 2B tests both reader modes. A production run that deliberately enables it is deployment
-eligible only if all ordinary data and evaluation gates pass; the explicit Phase 1 override remains
-visible in metadata and later packaging.
+`includeWeakCalibrationRows` is recorded but does not automatically select a model variant. Prompt
+2B tests both reader modes. A production run that deliberately enables it is deployment eligible
+only if all ordinary data and evaluation gates pass; the explicit Phase 1 override remains visible
+in metadata and later packaging.
 
 ## Acceptance thresholds
 
@@ -1189,10 +1188,9 @@ maximumCountsSpearmanRegression           = 0.02
 maximumCountsWorstEnvironmentMaeRegression = 0.02
 ```
 
-The context and count guards are the exact rules in the ablation section, including their
-additional non-regression values. Thresholds are serialized. Changing them creates a different
-training request and different canonical metadata bytes but not a new feature schema or dataset
-fingerprint.
+The context and count guards are the exact rules in the ablation section, including their additional
+non-regression values. Thresholds are serialized. Changing them creates a different training request
+and different canonical metadata bytes but not a new feature schema or dataset fingerprint.
 
 The final selected production model is `ACCEPTED` only when:
 
@@ -1252,8 +1250,8 @@ One model directory is:
     +-- ...
 ```
 
-The target directory must not exist. Training writes a unique temporary sibling, writes member
-files and reports, calculates checksums, writes metadata last, reopens the complete artifact with
+The target directory must not exist. Training writes a unique temporary sibling, writes member files
+and reports, calculates checksums, writes metadata last, reopens the complete artifact with
 `loadForAudit`, reproduces a fixed metadata probe, then moves the directory into place. Use
 `ATOMIC_MOVE` when supported and a same-filesystem move otherwise. Failure never leaves a partial
 target and never overwrites another model.
@@ -1337,9 +1335,9 @@ metadata.
 `training_config` records every settled hyperparameter and producing effective batch size.
 `feature_selection` records requested mode, every ablation metric, chosen feature set, and reason.
 `evaluation_summary` records grouped and LOSO macro/worst metrics and the report filenames.
-`producer` records Git commit SHA, dirty flag, DJL engine, engine version, and training device.
-The commit and dirty values are explicit request inputs; they are not inferred by running Git in
-the learner.
+`producer` records Git commit SHA, dirty flag, DJL engine, engine version, and training device. The
+commit and dirty values are explicit request inputs; they are not inferred by running Git in the
+learner.
 
 `metadata_probe` contains the smallest unsigned `PolicyId` in the training table, the first required
 scenario, and all eight numeric `ScenarioPrediction` fields as raw double bits. Reopening the
@@ -1469,13 +1467,13 @@ architecture=F-128-96-48-9-gelu
 
 Loading reads metadata first, validates all checksums, builds the declared block, loads the fixed
 model name from each member directory, and verifies every embedded property. A missing metadata
-file, old `euhedral-policy-ranker` directory, legacy `.bin`, wrong feature width, changed normalizer,
-unknown schema/objective, missing member, checksum mismatch, or acceptance rejection fails before
-inference.
+file, old `euhedral-policy-ranker` directory, legacy `.bin`, wrong feature width, changed
+normalizer, unknown schema/objective, missing member, checksum mismatch, or acceptance rejection
+fails before inference.
 
-The diagnostic for a metadata-less current model must state that the pooled 28-input artifact is
-not compatible and must be retrained from Phase 1 scenario records. There is no migration or
-best-effort load.
+The diagnostic for a metadata-less current model must state that the pooled 28-input artifact is not
+compatible and must be retrained from Phase 1 scenario records. There is no migration or best-effort
+load.
 
 ### Deterministic CSV reports
 
@@ -1656,8 +1654,8 @@ model initialization, and member fitting. Monitor exit/entry supplies the requir
 edge. Do not introduce VarHandles, padded atomics, pinned threads, or parallel floating-point
 reductions.
 
-Inference model objects are owner-confined. Model metadata and feature normalizers are immutable.
-No claim of lock-free concurrent inference is made.
+Inference model objects are owner-confined. Model metadata and feature normalizers are immutable. No
+claim of lock-free concurrent inference is made.
 
 ### Memory pollution
 
@@ -1675,8 +1673,8 @@ No claim of lock-free concurrent inference is made.
 ### Mathematical precision
 
 - Phase 1 `quality` remains a `double` until label encoding.
-- Feature moments, metrics, PAV block means, distributions, uncertainty, and ensemble reductions
-  use `double`.
+- Feature moments, metrics, PAV block means, distributions, uncertainty, and ensemble reductions use
+  `double`.
 - Cast only normalized features and hard/smoothed training labels to `float`.
 - Means, variances, weighted rates, and macro metrics use fixed-order Neumaier compensation.
 - Use `StrictMath.sqrt`, `StrictMath.log`, and `StrictMath.log1p` where specified.
@@ -1703,15 +1701,13 @@ Implement in this dependency order.
    `ScenarioPrediction.java`, `PolicyPredictionCurve.java`,
    `ScenarioEvaluationMetrics.java`, `EvaluationSummary.java`,
    `InsufficientScenarioLearningDataException.java`, and `AblationMetric.java`.
-2. Add `ScenarioLearningReader.java` and package-private `LearningCsvReader.java`. Join both
-   vector dictionaries before parsing scenario rows. Implement the in-memory overload and SHA-256
-   table fingerprint in the same ownership boundary.
+2. Add `ScenarioLearningReader.java` and package-private `LearningCsvReader.java`. Join both vector
+   dictionaries before parsing scenario rows. Implement the in-memory overload and SHA-256 table
+   fingerprint in the same ownership boundary.
 3. Add `PolicyGroupedSplitter.java`. Implement stable 80/10/10 groups, the validation ablation
-   halves, minimum checks, and helpers that build LOSO/LOEO row sets without copying policy
-   vectors.
-4. Add `FeatureNormalizer.java` and `ScenarioFeatureEncoder.java`. Implement the three exact
-   feature schemas, de-duplicated training-only moments, scenario-balanced row weights, and flat
-   matrices.
+   halves, minimum checks, and helpers that build LOSO/LOEO row sets without copying policy vectors.
+4. Add `FeatureNormalizer.java` and `ScenarioFeatureEncoder.java`. Implement the three exact feature
+   schemas, de-duplicated training-only moments, scenario-balanced row weights, and flat matrices.
 5. Add `ScenarioOrdinalTargets.java`, immutable distribution records, PAV, fixed target encoding,
    member distribution decoding, and ensemble aggregation before any DJL code.
 6. Add package-private `OrdinalMember.java`, `DeterministicBatchSampler.java`,
@@ -1795,8 +1791,8 @@ control. Fixed deterministic fake ordinal members may encode this formula for no
 `ScenarioFeatureEncoderTest` must:
 
 - assert exact feature names, widths 28/29/31, raw order, and matrix lengths;
-- prove policy coordinates are fitted once per distinct training policy and context coordinates
-  once per distinct exact training scenario;
+- prove policy coordinates are fitted once per distinct training policy and context coordinates once
+  per distinct exact training scenario;
 - prove validation/test outliers do not change means or scales;
 - verify ratio and `StrictMath.log1p` count features exactly;
 - verify constant features use scale `1.0` and encoded `+0.0`;
@@ -1844,8 +1840,7 @@ control. Fixed deterministic fake ordinal members may encode this formula for no
 
 ### Inference and serialization tests
 
-`ScenarioConditionedModelTest` uses injected deterministic `OrdinalMember` implementations and
-must:
+`ScenarioConditionedModelTest` uses injected deterministic `OrdinalMember` implementations and must:
 
 - show the same policy receives different predictions at different ratios;
 - show `POLICY_ONLY` gives the same prediction for every scenario;
@@ -2025,8 +2020,8 @@ Implemented checklist:
 - Strict scenario-conditioned ordinal data ingestion from the three explicit Phase 1 CSV paths,
   including schema/header/order/count/fingerprint checks and a fatal policy-scenario Cartesian-grid
   requirement for required scenarios.
-- Predictor inputs include the 28 raw policy weights plus normalized scenario context features;
-  no environment ID feature or hardware one-hot is used.
+- Predictor inputs include the 28 raw policy weights plus normalized scenario context features; no
+  environment ID feature or hardware one-hot is used.
 - Predictor outputs are monotonic ordinal distributions decoded to quality curves with ensemble
   uncertainty and member-disagreement summaries.
 - Policy-grouped train/validation/test splits, grouped validation, and leave-one-scenario-out /
@@ -2093,8 +2088,8 @@ Deviation/blocker status:
 
 ### Conformance correction - 2026-07-27
 
-- Removed the non-atomic publication fallback from `ScenarioModelTrainer.publish`. A filesystem
-  that cannot provide `ATOMIC_MOVE` now fails publication; the existing failure path removes the
+- Removed the non-atomic publication fallback from `ScenarioModelTrainer.publish`. A filesystem that
+  cannot provide `ATOMIC_MOVE` now fails publication; the existing failure path removes the
   temporary artifact and leaves the target absent.
 - Clarified that the blueprint, completion record, and conformance report are permitted planning
   documentation changes while user-facing documentation remains outside Phase 2 scope.
@@ -2111,5 +2106,5 @@ directly in `io.euhedral_execution.training.learning`; `PartitionCounts` is the 
 `io.euhedral_execution.training.learning.fixtures.ScenarioLearningFixtures`, and the opt-in
 `ScenarioOrdinalNetworkIntegrationTest` remains in `io.euhedral_execution.training.learning`.
 
-No learning feature, metadata, persistence, memory, or precision rule changed; later phases must
-use these package locations rather than recreating flat-package imports.
+No learning feature, metadata, persistence, memory, or precision rule changed; later phases must use
+these package locations rather than recreating flat-package imports.

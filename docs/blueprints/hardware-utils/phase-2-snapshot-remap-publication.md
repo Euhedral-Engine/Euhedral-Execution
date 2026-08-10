@@ -15,9 +15,8 @@
 - Blueprint model: `gpt-5.6-sol`
 - Blueprint reasoning effort: `max`
 
-This is a planning artifact. It authorizes no production edit, implementation branch, commit,
-merge, or push. Implementation begins only after this blueprint is reviewed and merged into the
-P2 root.
+This is a planning artifact. It authorizes no production edit, implementation branch, commit, merge,
+or push. Implementation begins only after this blueprint is reviewed and merged into the P2 root.
 
 ## Objective
 
@@ -144,8 +143,8 @@ hash use `Arrays.equals` and `Arrays.hashCode`, including their exact Java doubl
 
 ### Public utilization records
 
-Do not reorder, rename, add, or remove a record component. Direct canonical constructors and
-factory methods must converge on the same ownership rules.
+Do not reorder, rename, add, or remove a record component. Direct canonical constructors and factory
+methods must converge on the same ownership rules.
 
 At every canonical-constructor boundary:
 
@@ -201,8 +200,8 @@ snapshot may escape.
 `getCoreSnapshot` requires a non-null CPU mask. For every set bit it creates one complete CPU
 snapshot at the logical index. `getCpuSnapshot` returns the compatibility-neutral value for a
 negative or inactive logical CPU ID, stamped with the current `timestampNs`. If an active ID is not
-covered by both pressure and throttle wrappers, it throws `IllegalStateException` naming the CPU
-and missing span instead of returning a neutral active entry.
+covered by both pressure and throttle wrappers, it throws `IllegalStateException` naming the CPU and
+missing span instead of returning a neutral active entry.
 
 ### Named fields and arithmetic
 
@@ -254,9 +253,9 @@ its active CPUs. Existing pressure combination logic remains unchanged except th
 finite CPU memory utilization feeds it. P2-B does not clamp usage to a limit and does not redefine
 the public pressure curve.
 
-The neutral CPU snapshot retains its supplied ID/quota and current period/global values, uses
-global active cardinality, uses the same nonnegative global memory fields, and sets local memory,
-ratios, and pressure to zero. Its timestamp is the current utilization timestamp.
+The neutral CPU snapshot retains its supplied ID/quota and current period/global values, uses global
+active cardinality, uses the same nonnegative global memory fields, and sets local memory, ratios,
+and pressure to zero. Its timestamp is the current utilization timestamp.
 
 ## `TopologyMapper` architecture
 
@@ -272,8 +271,8 @@ TopologyMapper(TopologyModel topologyModel, BitSet allowedCpus)
 The default public constructor uses `SystemInfo.topologyModel()` and that model's CPU set. The
 public mask constructor uses the same production model and the supplied mask. The package-private
 constructor is the only deterministic fixture seam; it rejects nulls, clones `allowedCpus`, and
-intersects the clone with `topologyModel.cpuSet()`. No mapper operation exposes or mutates the
-model mask or caller mask.
+intersects the clone with `topologyModel.cpuSet()`. No mapper operation exposes or mutates the model
+mask or caller mask.
 
 Initialize one deeply immutable `EffectiveSystemTopology` with empty masks, a fixed
 `topologyModel.maxSocketId() + 1` list filled with nulls, and global version `-1`.
@@ -334,8 +333,8 @@ For every derived membership:
 - effective CPU, core, and socket masks are immutable;
 - the system socket list length is `maxSocketId + 1`, null exactly at inactive sockets;
 - each active socket contains only model-owned CPUs/cores for that socket;
-- each active socket's `effectiveCoreToCpu` list length is `maxCoreId + 1`, null exactly at
-  inactive or other-socket cores;
+- each active socket's `effectiveCoreToCpu` list length is `maxCoreId + 1`, null exactly at inactive
+  or other-socket cores;
 - every non-null core mask is immutable and nonempty; and
 - the union of active socket CPU/core masks equals the system CPU/core masks.
 
@@ -353,8 +352,7 @@ Global version is stored only in the published `EffectiveSystemTopology`:
 - initial version is `-1`;
 - the first membership state different from the initial empty state is version `1`;
 - each later actually published system membership change adds exactly one;
-- identical effective CPU/core/socket membership preserves the same object identity and version;
-  and
+- identical effective CPU/core/socket membership preserves the same object identity and version; and
 - pressure-only or other non-membership changes never publish.
 
 Maintain a private `int[maxSocketId + 1]` persistent socket-version array, mutated only by the
@@ -366,12 +364,12 @@ next CPU/core membership:
 - active and membership-identical while another socket changes: do not increment;
 - active membership change: increment once;
 - active to inactive: increment once even though the next socket list entry is null; and
-- inactive to active: increment once from the retained counter, so reactivation is greater than
-  the prior active version.
+- inactive to active: increment once from the retained counter, so reactivation is greater than the
+  prior active version.
 
 Use exact checked integer increment. If a global or socket counter is already `Integer.MAX_VALUE`
-when an increment is required, fail the request before publication with `IllegalStateException`;
-do not wrap or partially update counters. Compute next counters in local owned state and commit the
+when an increment is required, fail the request before publication with `IllegalStateException`; do
+not wrap or partially update counters. Compute next counters in local owned state and commit the
 persistent socket counters only immediately before the same volatile topology publication.
 
 `getEffectiveTopology()` performs one volatile read and returns that value. `getGlobalVersion()`
@@ -404,8 +402,8 @@ Implement in this dependency order:
    failures.
 4. Add the package-private model constructor to `TopologyMapper`; own/intersect its allowed mask and
    build candidates in the frozen order with exact global-core-zero handling.
-5. Replace variable-length topology lists with fixed socket/core spans and immutable nonempty
-   active entries derived only from the injected model.
+5. Replace variable-length topology lists with fixed socket/core spans and immutable nonempty active
+   entries derived only from the injected model.
 6. Replace dropped-on-contention updates and the separate version atomic with greatest-sequence
    pending requests, exclusive draining, persistent socket counters, exact change comparison, and
    release/recheck handoff.
@@ -413,11 +411,11 @@ Implement in this dependency order:
    object. Document the writer/read happens-before argument near the field/state machine.
 8. Add the deterministic fixture and race matrix below, while retaining or adapting existing tests
    and stable P0 IDs. Use the injected model seam rather than process-global host topology.
-9. Run focused P2-B, P0 compatibility, complete hardware, and read-only core gates. Search for
-   stale variable-length list construction, aliased arrays, separate version reads, and dropped
-   writer returns.
-10. Append the implementation completion record to this blueprint and update only the temporary
-    P2 status block. Do not start the audit branch before implementation review and merge.
+9. Run focused P2-B, P0 compatibility, complete hardware, and read-only core gates. Search for stale
+   variable-length list construction, aliased arrays, separate version reads, and dropped writer
+   returns.
+10. Append the implementation completion record to this blueprint and update only the temporary P2
+    status block. Do not start the audit branch before implementation review and merge.
 
 A compile error may cause local mechanical repair inside these four production classes and owned
 tests. Any need to choose a different public field meaning, copy boundary, array shape, arithmetic,
@@ -450,8 +448,8 @@ Additional focused methods may live in those classes. Tests must cover:
 - sparse CPU IDs, fixed global-core arrays, active completeness, and null inactive holes;
 - exact global/local memory fields, saturated overflow/nonfinite products, finite zero-limit
   utilization, quota division, global active cardinality, and timestamp equality;
-- unknown allowed/effective bits, caller mutation before/after mapper construction, alternatives
-  to core zero, allowed-core-zero-only, effective-core-zero-only, and empty membership;
+- unknown allowed/effective bits, caller mutation before/after mapper construction, alternatives to
+  core zero, allowed-core-zero-only, effective-core-zero-only, and empty membership;
 - first/identical/change/deactivate/reactivate version cases; and
 - acquired topology self-consistency while latch-controlled writers contend.
 
@@ -539,23 +537,22 @@ The two scope diffs are empty. Do not otherwise inspect training.
 1. P0 reports no removed or changed public API/module/mask contract and no exported package change.
 2. Both wrappers own construction input, expose no mutable storage, enforce exact ranges, and use
    content-consistent equality/hash.
-3. Every mutable record component is copied on direct canonical construction; nested array
-   accessors clone and preserve null holes.
+3. Every mutable record component is copied on direct canonical construction; nested array accessors
+   clone and preserve null holes.
 4. Equal independently allocated snapshot trees have equal hashes and every scalar/value/nested
    component affects equality.
-5. Every active socket/core/CPU snapshot entry is complete at its frozen global/logical index;
-   every inactive position is the exact allowed null hole.
+5. Every active socket/core/CPU snapshot entry is complete at its frozen global/logical index; every
+   inactive position is the exact allowed null hole.
 6. Global count, IDs, quota, memory limit/usage/utilization, pressure inputs, and timestamps
-   populate
-   their named fields with exact nonnegative/saturating arithmetic.
+   populate their named fields with exact nonnegative/saturating arithmetic.
 7. Neutral invalid/inactive CPU results retain compatibility and current timestamp; a structurally
    uncovered active CPU fails instead of publishing a neutral active entry.
 8. The mapper owns/intersects its allowed mask, discards unknown bits, never reintroduces a removed
    bit, and uses only the injected audited model.
 9. Global core zero is removed only when another candidate global core remains; all core-zero-only
    and empty candidates retain their valid nonempty/empty meaning.
-10. Initial and every published effective topology have fixed socket/core spans, immutable masks
-    and lists, complete nonempty active entries, and exact null holes.
+10. Initial and every published effective topology have fixed socket/core spans, immutable masks and
+    lists, complete nonempty active entries, and exact null holes.
 11. Global and persistent socket versions follow every first/change/identical/deactivate/reactivate
     rule and do not wrap or change for pressure-only/coalesced-unpublished requests.
 12. Greatest-sequence pending replacement and release/recheck draining leave no newest request
@@ -577,8 +574,8 @@ P2-B remains one implementation child.
 - It owns one Java 17 module, four existing production classes, their focused tests, and a read-only
   core compatibility gate.
 - Wrapper ownership, record construction/access, and mapper topology publication meet at the same
-  active-ID/fixed-null-hole boundary. Splitting snapshots from the mapper would require two
-  children to duplicate the global-core/logical-CPU shape and mutation/race fixtures.
+  active-ID/fixed-null-hole boundary. Splitting snapshots from the mapper would require two children
+  to duplicate the global-core/logical-CPU shape and mutation/race fixtures.
 - The state machine is one lifecycle: own candidate -> greatest-sequence enqueue -> exclusive
   derive -> compare/version -> freeze -> volatile publish -> release/recheck.
 - The refined context contains no platform collection, static initialization design, monitor
@@ -626,8 +623,7 @@ completion record, and the temporary P2 status block.
 - Public schemas: five existing utilization records and two effective-topology records; their
   descriptors/component order are fixed and no wire or persisted schema exists.
 - Lifecycle states: initial empty `-1`, pending enqueue, drain ownership, derive, identical discard,
-  version calculation, volatile publication, release/recheck, socket deactivation, and
-  reactivation.
+  version calculation, volatile publication, release/recheck, socket deactivation, and reactivation.
 - Concurrency: multiple writers, greatest-sequence coalescing, failure cleanup, and one volatile
   reader boundary require a single Java Memory Model argument.
 - Precision: sparse logical/global indexes, exact null holes, checked versions, saturated long and
@@ -646,9 +642,9 @@ those coupled defects without losing a copy, arithmetic, version, or race invari
 
 Confirm the parent-selected **`gpt-5.6-sol` with `high` reasoning effort** for P2-B implementation.
 `medium` or `low` is not justified. The work combines public value compatibility, sparse topology,
-exact arithmetic, a concurrent coalescing state machine, persistent versions, and explicit
-volatile happens-before across the named core consumers. If this model/effort is unavailable, stop
-or return to the sizing gate; do not silently downgrade.
+exact arithmetic, a concurrent coalescing state machine, persistent versions, and explicit volatile
+happens-before across the named core consumers. If this model/effort is unavailable, stop or return
+to the sizing gate; do not silently downgrade.
 
 The P2-B conformance/manual-review action remains `gpt-5.6-sol` with `high` reasoning effort.
 
@@ -668,18 +664,18 @@ The P2-B conformance/manual-review action remains `gpt-5.6-sol` with `high` reas
 - Complete hardware verification still depends on P1 native tools. Deterministic Java fixtures and
   compile gates remain mandatory if a hosted native prerequisite is absent.
 
-No architectural decision remains. Copy boundaries, accessor behavior, equality/hash, active
-entry completeness, field meanings, arithmetic, array spans, null holes, allowed-mask order,
-core-zero behavior, request linearization/coalescing, failure cleanup, global/socket versions,
-overflow, and volatile publication are settled above.
+No architectural decision remains. Copy boundaries, accessor behavior, equality/hash, active entry
+completeness, field meanings, arithmetic, array spans, null holes, allowed-mask order, core-zero
+behavior, request linearization/coalescing, failure cleanup, global/socket versions, overflow, and
+volatile publication are settled above.
 
 ## Handoff condition
 
 Hand off this child blueprint for developer review and merge only when:
 
-- the implementation can follow the checklist and race matrix without selecting any copy,
-  equality, array-span, null-hole, arithmetic, coalescing, version, core-zero, failure, or
-  publication-mode rule;
+- the implementation can follow the checklist and race matrix without selecting any copy, equality,
+  array-span, null-hole, arithmetic, coalescing, version, core-zero, failure, or publication-mode
+  rule;
 - the sizing gate remains one coherent child;
 - the implementation model is confirmed as `gpt-5.6-sol`/`high` in this blueprint and the plan's
   P2-B prompt is no longer merely parent-provisional;
@@ -702,9 +698,9 @@ commit `1640b864`.
   and implements array-content equality/hash. Existing `UnmodifiableBitSet` ownership, mutator,
   ordinary-`BitSet` equality, array conversion, and mutable-clone behavior required no production
   correction.
-- `SystemUtilization` canonical constructors own every mutable wrapper/array component; nested
-  array accessors clone; socket/core equality and hash include all components; snapshot derivation
-  uses fixed indexes, complete active entries, current timestamps, global cardinality, named
+- `SystemUtilization` canonical constructors own every mutable wrapper/array component; nested array
+  accessors clone; socket/core equality and hash include all components; snapshot derivation uses
+  fixed indexes, complete active entries, current timestamps, global cardinality, named
   nonnegative/saturating memory values, and explicit active-span failures.
 - `TopologyMapper` owns and intersects constructor membership, applies core-zero reservation after
   intersection, derives fixed immutable socket/core spans from the injected P2-A model, retains
@@ -736,12 +732,12 @@ commit `1640b864`.
 ### Acceptance evidence and limits
 
 Owned inputs and accessor results cannot mutate older wrapper/snapshot/topology values; independent
-trees compare by complete content. Sparse logical CPU/global core positions retain exact null
-holes and all active entries are populated. Candidate membership never restores an intersected
-bit, core zero survives only when it is the sole candidate core, identical publications preserve
-identity, global versions count actual publications, and inactive socket increments persist into
-reactivation. The single volatile `effectiveTopology` field is the only reader publication/version
-source; all reachable masks/lists/records are frozen before assignment.
+trees compare by complete content. Sparse logical CPU/global core positions retain exact null holes
+and all active entries are populated. Candidate membership never restores an intersected bit, core
+zero survives only when it is the sole candidate core, identical publications preserve identity,
+global versions count actual publications, and inactive socket increments persist into reactivation.
+The single volatile `effectiveTopology` field is the only reader publication/version source; all
+reachable masks/lists/records are frozen before assignment.
 
 The pinned-tool API report, complete native-backed hardware verify, and read-only core test gate
 must be rerun in the documented Java 21/Gradle 3.9.16/Zig environment before audit handoff. No
@@ -755,16 +751,16 @@ Audited on `hardware-utils-overhaul/phase-2-snapshot-publication-audit` from mer
 #### Commands, correction, and limits
 
 - Re-ran the direct resource/compiler/Surefire loop with the P2-B suite plus the P0 API/mask/
-  core-zero classes using OpenJDK `17.0.19`, Gradle `3.6.3`, and workspace-local `.cache/m2`.
-  The eleven focused P2-B/mask/core-zero classes passed: 13 tests, zero failures.
+  core-zero classes using OpenJDK `17.0.19`, Gradle `3.6.3`, and workspace-local `.cache/m2`. The
+  eleven focused P2-B/mask/core-zero classes passed: 13 tests, zero failures.
 - The P0 `ApiCompatibilityTest` still fails only for its known baseline-report differences (three
   Java-17 module-version changes, four merged P2-A macOS additions, and the two required
-  `UnmodifiableDoubleArray` value methods). It is therefore unverified under the fallback tools,
-  not a P2-B API regression.
+  `UnmodifiableDoubleArray` value methods). It is therefore unverified under the fallback tools, not
+  a P2-B API regression.
 - Corrected `EffectiveSystemTopology` ownership so fixed socket lists are copied into an
   unmodifiable list that retains required inactive-socket null holes. `List.copyOf` rejected those
-  holes before publication. Added a direct canonical-constructor regression assertion and reran
-  the focused suite above.
+  holes before publication. Added a direct canonical-constructor regression assertion and reran the
+  focused suite above.
 - The implementation does not contain the blueprint's latch-controlled R2-R12 race coverage;
   greatest-sequence, release/recheck, failure handoff, and reader-publication stress remain
   unverified by deterministic tests. No redesign was made.

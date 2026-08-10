@@ -351,6 +351,7 @@ Win32 Kernel APIs / Job Objects / NtDll
   I/O bytes.
 
 ### 5.3. Child P6-C: Windows Affinity, Multi-Group Processor Sets & Native ABI (
+
 `phase-6-windows-affinity-native`)
 
 - **Required Inputs**: P3 Affinity contracts (`ThreadPinner`, `AffinityCapability`,

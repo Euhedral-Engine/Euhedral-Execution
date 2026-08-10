@@ -20,8 +20,8 @@ commit, benchmark parameters, repetition, timing, and status identity.
 
 The closed loop accepts either a strict schema-v1 bootstrap vector file or an explicit native
 calibration/evidence state. Bootstrap vectors carry no measurements and must be benchmarked
-natively. Current-layout names, alternating vector/measurement rows, old models, and old
-checkpoints are not live input formats.
+natively. Current-layout names, alternating vector/measurement rows, old models, and old checkpoints
+are not live input formats.
 
 ## Implemented flow
 
@@ -37,8 +37,8 @@ strict bootstrap vectors
 ```
 
 Bootstrap may pause across environments. Each invocation runs only exact required scenarios that
-match the active environment and visible core count. A complete checkpoint records evidence and
-the pending schedule, so resume never regenerates already published scheduling decisions.
+match the active environment and visible core count. A complete checkpoint records evidence and the
+pending schedule, so resume never regenerates already published scheduling decisions.
 
 ## Calibration and aggregation
 
@@ -64,21 +64,20 @@ cross-scenario MAD, and finally lower measurement instability and timeout rate.
 
 Incomplete policies live in a separate carry-forward queue. The scenario-conditioned ordinal model
 predicts a complete quality curve for each candidate and reports uncertainty/disagreement.
-Scheduling reserves explicit budgets for new exploration, missing-scenario completion, robust
-leader revalidation, and disagreement audits. Fixed anchors are reserved before those categories.
+Scheduling reserves explicit budgets for new exploration, missing-scenario completion, robust leader
+revalidation, and disagreement audits. Fixed anchors are reserved before those categories.
 
 ## Lifecycle and publication
 
 `ClosedLoopRunner` owns the stage machine. Immutable records cross stage boundaries; mutable
 builders, parser buffers, model tensors, and filesystem staging state remain single-owner. Native
-benchmark counter publication retains its existing acquire/release semantics. Offline
-configuration, merge, and packaging add no VarHandles or shared hot-loop state.
+benchmark counter publication retains its existing acquire/release semantics. Offline configuration,
+merge, and packaging add no VarHandles or shared hot-loop state.
 
-Checkpoints publish complete snapshots and retain carry-forward state, evidence references,
-rotation cursors, pending schedules, merge/model references, and frozen configuration identity.
-The operational active environment, resume flag, workspace paths, and stop-file path are excluded
-from the frozen fingerprint. A regular configured stop file is polled only at existing safe
-boundaries.
+Checkpoints publish complete snapshots and retain carry-forward state, evidence references, rotation
+cursors, pending schedules, merge/model references, and frozen configuration identity. The
+operational active environment, resume flag, workspace paths, and stop-file path are excluded from
+the frozen fingerprint. A regular configured stop file is polled only at existing safe boundaries.
 
 Every normal return produces a checkpoint-backed package. The packager streams raw evidence and
 model members, writes deterministic machine-readable datasets and human-readable reports into an

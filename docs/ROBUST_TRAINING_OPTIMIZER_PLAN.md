@@ -193,8 +193,8 @@ Treat the importer as a temporary bootstrap feature, not a permanent legacy fram
 - mark the temporary entry point and its focused tests with a single searchable removal marker;
 - document the exact files and tests to delete after the current workspaces have been converted.
 
-If current-layout metadata cannot be recovered without guessing, reject that item and report it.
-Do not broaden the importer to older layouts merely because a file looks similar.
+If current-layout metadata cannot be recovered without guessing, reject that item and report it. Do
+not broaden the importer to older layouts merely because a file looks similar.
 
 ## Merger outputs
 
@@ -245,7 +245,8 @@ training-run-<run-id>/
 
 The manifest must identify each file's semantic type, schema version, row count, checksum, producing
 stage, source run IDs, and whether it is complete. It must also distinguish artifacts produced by
-this upgraded run from data imported out of the current pre-upgrade workspace. Filenames must distinguish:
+this upgraded run from data imported out of the current pre-upgrade workspace. Filenames must
+distinguish:
 
 - vectors only;
 - vectors with measurements;
@@ -267,24 +268,23 @@ and audit prompts select an exact model and reasoning effort. An implementation 
 provisional until its completed blueprint performs the required post-blueprint capability
 reassessment:
 
-| Stage | Selected model | Reasoning effort |
-| --- | --- | --- |
-| Complex blueprint | `gpt-5.6-sol` | `max` or `high`, as labeled |
-| Bounded blueprint | `gpt-5.6-sol` | `medium` |
-| Implementation | Blueprint-selected coding model | `low`, `medium`, or `high` from the completed blueprint |
-| Implementation verification and blueprint-conformance audit | Phase-selected coding/audit model | `high`, as labeled |
+| Stage                                                       | Selected model                    | Reasoning effort                                        |
+|-------------------------------------------------------------|-----------------------------------|---------------------------------------------------------|
+| Complex blueprint                                           | `gpt-5.6-sol`                     | `max` or `high`, as labeled                             |
+| Bounded blueprint                                           | `gpt-5.6-sol`                     | `medium`                                                |
+| Implementation                                              | Blueprint-selected coding model   | `low`, `medium`, or `high` from the completed blueprint |
+| Implementation verification and blueprint-conformance audit | Phase-selected coding/audit model | `high`, as labeled                                      |
 
 The model names are this plan's current selections, not permanent workflow requirements. The
-completed Phase 3 history demonstrates why implementation is not fixed at `gpt-5.5 / low`: the
-first pass omitted the main state-machine and acceptance surface and required frontier-level
-remediation. Planning and blueprint prompts may make design decisions. Implementation and
-verification may only execute settled decisions. Conformance audits report drift without reopening
-the architecture.
+completed Phase 3 history demonstrates why implementation is not fixed at `gpt-5.5 / low`: the first
+pass omitted the main state-machine and acceptance surface and required frontier-level remediation.
+Planning and blueprint prompts may make design decisions. Implementation and verification may only
+execute settled decisions. Conformance audits report drift without reopening the architecture.
 
 Run the phases in order. Each phase is deliberately split into:
 
-1. a `gpt-5.6-sol` **blueprint prompt** at the stated reasoning effort that investigates, makes the difficult decisions, and
-   writes a self-contained implementation blueprint;
+1. a `gpt-5.6-sol` **blueprint prompt** at the stated reasoning effort that investigates, makes the
+   difficult decisions, and writes a self-contained implementation blueprint;
 2. an **implementation prompt** whose model and effort are finalized after the blueprint evaluates
    its actual context load, systems coupling, repair breadth, test matrix, and prior model evidence;
 3. a phase-selected **implementation-verification and blueprint-conformance-audit prompt** at
@@ -293,9 +293,9 @@ Run the phases in order. Each phase is deliberately split into:
    implementation, and completion record and writes a phase audit report.
 
 The blueprint prompts are ordered from most to least demanding: `max`, then `high`, then
-`medium`. This front-loads design judgment, but it does not prove that implementation is
-low-effort. A detailed blueprint removes ambiguity while the code change may still require
-frontier-level long-context systems reasoning.
+`medium`. This front-loads design judgment, but it does not prove that implementation is low-effort.
+A detailed blueprint removes ambiguity while the code change may still require frontier-level
+long-context systems reasoning.
 
 ### Combined C/D prompt rule
 
@@ -305,8 +305,8 @@ on one branch, with one completion record and one commit/push. The combined prom
 the C verification work, may make minor blueprint-settled fixes such as deterministic coverage,
 naming, formatting, or local validation corrections, and then performs the D classification and
 writes its audit report. It must not make an architectural decision. The Phase 4 wording below is
-the canonical merged form; later plan maintenance should fold the historical C/D text into that
-same form rather than reintroducing separate stages.
+the canonical merged form; later plan maintenance should fold the historical C/D text into that same
+form rather than reintroducing separate stages.
 
 ### Blueprint handoff contract
 
@@ -330,16 +330,16 @@ essay. It must contain:
 A blueprint pass must inspect enough current code to make the blueprint executable, but must not
 implement production code. It may add or edit only its blueprint and closely related planning
 documentation. It should reference prior blueprints instead of repeating their full analysis, and
-must keep stable decisions in the earliest applicable blueprint. Before handoff it must replace
-the plan's provisional implementation prompt label and body with the selected model and effort. If
-that model is unavailable, stop for an explicit alternative rather than silently downgrade.
+must keep stable decisions in the earliest applicable blueprint. Before handoff it must replace the
+plan's provisional implementation prompt label and body with the selected model and effort. If that
+model is unavailable, stop for an explicit alternative rather than silently downgrade.
 
-Every implementation pass must use the model and effort selected by its completed blueprint. It
-must read `AGENTS.md`, this plan, its phase blueprint, and the exact prior context named by the
+Every implementation pass must use the model and effort selected by its completed blueprint. It must
+read `AGENTS.md`, this plan, its phase blueprint, and the exact prior context named by the
 blueprint. It should then implement only the checklist, run the specified tests, and append a
 concise completion record to the blueprint containing changed files, commands run, results, and
-deviations. If implementation reveals a decision that the blueprint did not settle, stop and
-record the question; do not invent a new architecture in implementation mode.
+deviations. If implementation reveals a decision that the blueprint did not settle, stop and record
+the question; do not invent a new architecture in implementation mode.
 
 Every combined verification-and-conformance pass must rerun the blueprint's validation commands,
 check each acceptance criterion, fix only minor defects whose resolution is already determined by
@@ -349,8 +349,8 @@ satisfied, deviated, unverified, or ambiguous, and avoid architectural suggestio
 implementation violates the approved blueprint.
 
 Start each prompt on a dedicated `agent/...` branch from the completed previous prompt's branch.
-When authorized, uncommitted changes from the current or immediately previous prompt may be added
-to that prompt's commit or amend the immediately previous commit after inspecting the diff; never
+When authorized, uncommitted changes from the current or immediately previous prompt may be added to
+that prompt's commit or amend the immediately previous commit after inspecting the diff; never
 include pre-existing user-owned changes. Commit and push after each completed prompt so the next
 prompt can rely on that branch as its complete context. Temporary workflows remain permitted under
 the restrictions at the end of this document.
@@ -383,7 +383,8 @@ the restrictions at the end of this document.
 
 #### Prompt 1C - IMPLEMENTATION VERIFICATION - gpt-5.5 / medium
 
-> Read docs/AGENT_WORKFLOW.md, AGENTS.md, this plan, the Phase 1 blueprint, and its completion notes.
+> Read docs/AGENT_WORKFLOW.md, AGENTS.md, this plan, the Phase 1 blueprint, and its completion
+> notes.
 > Execute every Phase 1 validation command and check every acceptance criterion. Fix only defects
 > whose resolution is already settled by the blueprint; do not redesign data identity, calibration,
 > aggregation, or ranking. Append verification commands, results, skipped checks, and environmental
@@ -409,8 +410,10 @@ the restrictions at the end of this document.
 > feature schema, normalization, scenario enumeration, targets, uncertainty/disagreement output,
 > grouped-by-policy validation, leave-one-source-scenario-out evaluation, model metadata/versioning,
 > ablation switches, deterministic seeds, and compatibility with Phase 1 records. Specify exact
-> APIs, tensor/table shapes, file edits, tests, and acceptance thresholds. Make the handoff sufficient
-> for `low`-effort implementation without rereading unrelated trainer code. Commit and push the blueprint
+> APIs, tensor/table shapes, file edits, tests, and acceptance thresholds. Make the handoff
+> sufficient
+> for `low`-effort implementation without rereading unrelated trainer code. Commit and push the
+> blueprint
 > only.
 
 #### Prompt 2B - IMPLEMENTATION - gpt-5.5 / low
@@ -424,7 +427,8 @@ the restrictions at the end of this document.
 
 #### Prompt 2C - IMPLEMENTATION VERIFICATION - gpt-5.5 / medium
 
-> Read docs/AGENT_WORKFLOW.md, AGENTS.md, this plan, both completed blueprints, and the Phase 2 completion
+> Read docs/AGENT_WORKFLOW.md, AGENTS.md, this plan, both completed blueprints, and the Phase 2
+> completion
 > notes. Execute every Phase 2 validation command, including the opt-in DJL integration smoke when
 > its environment is available, and check every acceptance criterion. Fix only implementation
 > defects already settled by the blueprint. Append exact evidence and environmental limitations to
@@ -446,7 +450,8 @@ the restrictions at the end of this document.
 > Read the Phase 1 and 2 blueprints and completion notes, then inspect SequenceFinder,
 > CmaEsOptimizer, ScoreBandSampler, ClosedLoopRunner, checkpointing, and source-configuration
 > rotation. Do not implement production code. Write
-> `docs/robust-training-optimizer/blueprints/03-optimizer-scheduling.md`. Settle how robust predicted
+> `docs/robust-training-optimizer/blueprints/03-optimizer-scheduling.md`. Settle how robust
+> predicted
 > curves are compared, how islands and bands are seeded, exact candidate-budget partitions and
 > rounding, carry-forward eligibility and prioritization, anchor and leader selection, disagreement
 > audits, deduplication, deterministic tie-breaking, checkpoint schema, restart behavior, and
@@ -465,7 +470,8 @@ the restrictions at the end of this document.
 
 #### Prompt 3C - IMPLEMENTATION VERIFICATION - gpt-5.5 / medium
 
-> Read docs/AGENT_WORKFLOW.md, AGENTS.md, this plan, the completed Phase 3 blueprint, and its completion
+> Read docs/AGENT_WORKFLOW.md, AGENTS.md, this plan, the completed Phase 3 blueprint, and its
+> completion
 > notes. Execute its validation commands and check restart, rotation, budget, carry-forward,
 > deduplication, checkpoint, and deterministic-selection acceptance criteria. Fix only defects with
 > blueprint-settled resolutions. Append evidence and limitations, commit, and push.
@@ -487,11 +493,13 @@ the restrictions at the end of this document.
 > checkpoint/model output, shutdown and partial-failure behavior, and user-facing reports. Do not
 > implement production code. Write
 > `docs/robust-training-optimizer/blueprints/04-final-packaging.md`. Map every current artifact to
-> the required shallow package, and settle manifest schemas and semantic types, filenames, checksums,
+> the required shallow package, and settle manifest schemas and semantic types, filenames,
+> checksums,
 > provenance, raw-data indexing versus copying, README/report contents, complete versus partial
 > status, atomic filesystem protocol, collision behavior, reproducibility command, deterministic
 > bytes, cleanup, and failure recovery. Specify exact classes/APIs, file edits, golden fixtures, and
-> acceptance tests. Make vector-only, vectors-with-measurements, machine-readable, and human-readable
+> acceptance tests. Make vector-only, vectors-with-measurements, machine-readable, and
+> human-readable
 > files unmistakable without opening them. After completing the blueprint, reassess the
 > implementation model and effort from its actual context load, systems coupling, failure/test
 > matrix, and the Phase 3 implementation evidence; record the selection and update Prompt 4B
@@ -552,7 +560,8 @@ the restrictions at the end of this document.
 
 #### Prompt 5C - IMPLEMENTATION VERIFICATION - gpt-5.5 / medium
 
-> Read docs/AGENT_WORKFLOW.md, AGENTS.md, this plan, the Phase 5 blueprint, and completion notes. Execute
+> Read docs/AGENT_WORKFLOW.md, AGENTS.md, this plan, the Phase 5 blueprint, and completion notes.
+> Execute
 > every importer, CLI, configuration, documentation, rejection, disabled-path, and deletion-boundary
 > validation. Fix only blueprint-settled implementation defects. Append evidence and environmental
 > limitations, commit, and push.
@@ -626,7 +635,8 @@ the restrictions at the end of this document.
 #### Prompt 7B - IMPLEMENTATION - gpt-5.6-sol / medium
 
 > Use `gpt-5.6-sol` at `medium` reasoning effort. Read AGENTS.md, docs/AGENT_WORKFLOW.md, this
-> plan's Phase 7 section, `docs/robust-training-optimizer/audits/06-verification-audit-conformance.md`,
+> plan's Phase 7 section,
+> `docs/robust-training-optimizer/audits/06-verification-audit-conformance.md`,
 > the Phase 6 completion/fingerprint and static-search sections, and
 > `docs/robust-training-optimizer/blueprints/07-cleanup-handoff.md`; follow the blueprint's exact
 > minimal context envelope. Perform only its enumerated cleanup: remove the temporary importer and
@@ -634,12 +644,14 @@ the restrictions at the end of this document.
 > translate the end-to-end fixture to the strict bootstrap contract without changing package bytes,
 > remove the trainer-only stale dependency, and update the exact CLI/script/docs surface. Prove
 > permanent workflows are unchanged and generated/user-owned files remain excluded. Run the full
-> final validation and package-evidence sequence, inspect both the Phase 7 and complete branch diffs,
+> final validation and package-evidence sequence, inspect both the Phase 7 and complete branch
+> diffs,
 > append exact completion evidence, commit, and push. Do not broaden scope or update golden outputs.
 
 #### Prompt 7C - IMPLEMENTATION VERIFICATION - gpt-5.5 / medium
 
-> Read docs/AGENT_WORKFLOW.md, AGENTS.md, this plan, the Phase 7 blueprint, and final completion notes.
+> Read docs/AGENT_WORKFLOW.md, AGENTS.md, this plan, the Phase 7 blueprint, and final completion
+> notes.
 > Execute the final validation sequence, inspect the full diff and package evidence, and confirm
 > every enumerated cleanup without broadening scope. Fix only blueprint-settled defects. Append
 > exact evidence and limitations, commit, and push.
@@ -676,8 +688,8 @@ At minimum, include deterministic synthetic cases for:
 - identical inputs producing byte-stable machine-readable outputs where timestamps are excluded or
   controlled.
 
-For implementation work, use a new `agent/...` branch. The user has authorized commits and pushes
-to that branch. Temporary GitHub Actions workflows may be created when the normal workflow cannot
+For implementation work, use a new `agent/...` branch. The user has authorized commits and pushes to
+that branch. Temporary GitHub Actions workflows may be created when the normal workflow cannot
 exercise the required environment, but they must be narrowly scoped, must not expose secrets or
 publish artifacts externally, and must be removed before handoff unless the user explicitly asks to
 keep them.

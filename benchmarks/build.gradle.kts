@@ -15,7 +15,7 @@ tasks.named<Jar>("jar") {
 
 val copyRuntimeDependencies = tasks.register<Copy>("copyRuntimeDependencies") {
     dependsOn(tasks.named("jar"))
-    
+
     from(configurations.runtimeClasspath)
     into(layout.buildDirectory.dir("lib"))
 

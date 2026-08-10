@@ -380,8 +380,10 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
     public class UpstreamInterceptor extends UpstreamHandle {
 
         private static final VarHandle COMPLETE = CommonVarHandles.complete(UpstreamInterceptor.class);
+
         @Getter
         private final long id = HasherApi.mix(ThreadLocalRandom.current().nextLong());
+
         private final PaddedAtomicLong wip = new PaddedAtomicLong(0);
         public LatticeSource upstream;
         public boolean complete = false;

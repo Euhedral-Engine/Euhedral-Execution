@@ -50,6 +50,7 @@ final class ScenarioOrdinalNetwork implements OrdinalMember {
     private final Model model;
     private final ParameterStore inferenceParameters;
     private boolean closed;
+
     private ScenarioOrdinalNetwork(int featureWidth, Device device) {
         this.featureWidth = featureWidth;
         this.device = device;

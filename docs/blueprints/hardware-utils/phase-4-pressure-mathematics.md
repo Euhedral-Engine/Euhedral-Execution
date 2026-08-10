@@ -15,11 +15,11 @@ before the P4-B implementation branch is created.
 
 ## Purpose and fixed boundaries
 
-P4-B owns the unexported pressure package (`io.euhedral_execution.hardware_utils.internal.pressure`),
-public ratio sanitation in `common/SystemUtilization.java`, and math/projection tests. It consumes
-only P4-A's immutable interval contract (`IntervalHardwareSample` plus prior fixed smoother state
-and `evaluationNs`). Output is one validated `HardwareUtilization` candidate plus new fixed
-smoother state.
+P4-B owns the unexported pressure package
+(`io.euhedral_execution.hardware_utils.internal.pressure`), public ratio sanitation in
+`common/SystemUtilization.java`, and math/projection tests. It consumes only P4-A's immutable
+interval contract (`IntervalHardwareSample` plus prior fixed smoother state and `evaluationNs`).
+Output is one validated `HardwareUtilization` candidate plus new fixed smoother state.
 
 P4-B must prove every formula/constant, correlated max, validity neutrality, finite outputs, field
 mapping, first/reset behavior, actual-time alpha, byte units/rounding, identical timestamps, deep
@@ -61,8 +61,8 @@ projection" with one owner state machine and a testable immutable boundary. P4-B
   `PressureEvaluator`, `PressureProjection`).
 - Public ratio sanitation changes to `SystemUtilization.java` compact constructors.
 - 7 required test classes (`PressureEvaluatorTest`, `PressureCompositionTest`,
-  `PressurePropertiesTest`, `PressureSignalAvailabilityTest`, `RatioAccessorContractTest`,
-  plus updated `SystemUtilizationTest`, `SnapshotOwnershipTest`, `SnapshotIndexContractTest`).
+  `PressurePropertiesTest`, `PressureSignalAvailabilityTest`, `RatioAccessorContractTest`, plus
+  updated `SystemUtilizationTest`, `SnapshotOwnershipTest`, `SnapshotIndexContractTest`).
 
 No second independent responsibility exists. P4-B does not need further splitting.
 
@@ -130,8 +130,8 @@ Finiteness is validated before calling `unit()`.
 
 ### PressureState
 
-Mutable, single-owner, not thread-safe. Holds the fixed smoother arrays and per-evaluation
-transient state. Constructed once per monitor instance with the stable logical CPU span.
+Mutable, single-owner, not thread-safe. Holds the fixed smoother arrays and per-evaluation transient
+state. Constructed once per monitor instance with the stable logical CPU span.
 
 Fields:
 
@@ -149,36 +149,36 @@ scheme mapping (cpuId, signalOrdinal) or (globalSignalOrdinal) to flat array pos
 
 Per-CPU cells (one per effective logical CPU, `logicalSpan` entries each):
 
-| Signal                       | Source                                                |
-|------------------------------|-------------------------------------------------------|
-| `scopeWait`                  | `IntervalHardwareSample.scopeSchedulerWaitNs`         |
-| `scopePsi`                   | `IntervalHardwareSample.scopePsiStallNs`              |
-| `scopeReported`              | `IntervalHardwareSample.scopeReportedSchedulerStallRatio` |
-| `wait_i`                     | `CpuIntervalSignals.schedulerWait`                    |
-| `psi_i`                      | `CpuIntervalSignals.psiStall`                         |
-| `reported_i`                 | `CpuIntervalSignals.reportedSchedulerStallRatio`      |
-| `runQueue_i`                 | `CpuIntervalSignals.runnablePerCapacity`              |
-| `globalThrottle` (shared)    | `IntervalHardwareSample.scopeQuotaThrottledNs`        |
-| `cpuThrottle_i`              | `CpuIntervalSignals.quotaThrottle`                    |
-| `steal_i`                    | `CpuIntervalSignals.steal`                            |
-| `external_i`                 | `CpuIntervalSignals.externalContentionRatio`          |
-| `capacityLoss_i`             | `CpuSlowIntervalSignals.availableCapacityUnits / nominalCapacityUnits` |
-| `frequencyLoss_i`            | `CpuSlowIntervalSignals.constrainedFrequencyHz / nominalFrequencyHz`   |
-| `perCpuThermal_i`            | `CpuSlowIntervalSignals.thermalSeverity`              |
-| `systemThermal` (shared)     | `SystemSlowIntervalSignals.thermalSeverity`           |
-| `perCpuLowPower_i` (shared)  | `CpuSlowIntervalSignals.lowPowerMode`                 |
-| `systemLowPower` (shared)    | `SystemSlowIntervalSignals.lowPowerMode`              |
+| Signal                      | Source                                                                 |
+|-----------------------------|------------------------------------------------------------------------|
+| `scopeWait`                 | `IntervalHardwareSample.scopeSchedulerWaitNs`                          |
+| `scopePsi`                  | `IntervalHardwareSample.scopePsiStallNs`                               |
+| `scopeReported`             | `IntervalHardwareSample.scopeReportedSchedulerStallRatio`              |
+| `wait_i`                    | `CpuIntervalSignals.schedulerWait`                                     |
+| `psi_i`                     | `CpuIntervalSignals.psiStall`                                          |
+| `reported_i`                | `CpuIntervalSignals.reportedSchedulerStallRatio`                       |
+| `runQueue_i`                | `CpuIntervalSignals.runnablePerCapacity`                               |
+| `globalThrottle` (shared)   | `IntervalHardwareSample.scopeQuotaThrottledNs`                         |
+| `cpuThrottle_i`             | `CpuIntervalSignals.quotaThrottle`                                     |
+| `steal_i`                   | `CpuIntervalSignals.steal`                                             |
+| `external_i`                | `CpuIntervalSignals.externalContentionRatio`                           |
+| `capacityLoss_i`            | `CpuSlowIntervalSignals.availableCapacityUnits / nominalCapacityUnits` |
+| `frequencyLoss_i`           | `CpuSlowIntervalSignals.constrainedFrequencyHz / nominalFrequencyHz`   |
+| `perCpuThermal_i`           | `CpuSlowIntervalSignals.thermalSeverity`                               |
+| `systemThermal` (shared)    | `SystemSlowIntervalSignals.thermalSeverity`                            |
+| `perCpuLowPower_i` (shared) | `CpuSlowIntervalSignals.lowPowerMode`                                  |
+| `systemLowPower` (shared)   | `SystemSlowIntervalSignals.lowPowerMode`                               |
 
 Global/memory/I/O cells (one each, independent of CPU count):
 
-| Signal              | Source                                                |
-|---------------------|-------------------------------------------------------|
-| `headroom`          | Derived from memory occupancy formula                 |
-| `reclaim`           | `MemoryIntervalSignals.cumulativeReclaimBytes`        |
-| `memoryStall`       | `MemoryIntervalSignals.memoryStallNs`                 |
-| `ioStall`           | `IoIntervalSignals.stallNs`                           |
-| `ioLatency`         | `IoIntervalSignals.operationsLatency`                 |
-| `ioQueue`           | `IoIntervalSignals.maximumQueueDepth`                 |
+| Signal        | Source                                         |
+|---------------|------------------------------------------------|
+| `headroom`    | Derived from memory occupancy formula          |
+| `reclaim`     | `MemoryIntervalSignals.cumulativeReclaimBytes` |
+| `memoryStall` | `MemoryIntervalSignals.memoryStallNs`          |
+| `ioStall`     | `IoIntervalSignals.stallNs`                    |
+| `ioLatency`   | `IoIntervalSignals.operationsLatency`          |
+| `ioQueue`     | `IoIntervalSignals.maximumQueueDepth`          |
 
 Scope smoothers (`scopeWait`, `scopePsi`, `scopeReported`, `globalThrottle`, `systemThermal`,
 `systemLowPower`) are stored once and their smoothed values apply to every effective CPU.
@@ -211,10 +211,9 @@ else:
 Asymmetric behavior:
 
 - Rising pressure: `ATTACK_TAU_SECONDS` (0.896...) produces alpha ~0.20 at 200 ms -> fast attack.
-- Falling pressure: `RELEASE_TAU_SECONDS` (3.899...) produces alpha ~0.05 at 200 ms -> slow
-  release.
-- At 200 ms: attack alpha = `0.19999999999999996`, release alpha = `0.050000000000000044`.
-  Tests compare to conceptual `0.20`/`0.05` within 8 ULPs.
+- Falling pressure: `RELEASE_TAU_SECONDS` (3.899...) produces alpha ~0.05 at 200 ms -> slow release.
+- At 200 ms: attack alpha = `0.19999999999999996`, release alpha = `0.050000000000000044`. Tests
+  compare to conceptual `0.20`/`0.05` within 8 ULPs.
 - Exponential underflow naturally gives alpha 1.0 (huge dt/tau).
 - Overflow cannot occur after positive finite time/tau validation.
 
@@ -228,9 +227,9 @@ Asymmetric behavior:
 
 #### Evaluation order
 
-Stable logical CPU ID ascending, then signal order as listed above, then CPU domain, memory
-domain, I/O domain, then public projection. `max` starts from `+0.0`. This makes the result
-monotonic in every supported pressure input and reproducible independent of hash or listener order.
+Stable logical CPU ID ascending, then signal order as listed above, then CPU domain, memory domain,
+I/O domain, then public projection. `max` starts from `+0.0`. This makes the result monotonic in
+every supported pressure input and reproducible independent of hash or listener order.
 
 ### PressureEvaluation
 
@@ -278,8 +277,8 @@ The evaluation proceeds through these exact stages:
 
 ## Exact pressure formulas
 
-All symbols below are valid normalized values after delta, age, sanitation, and per-signal
-smoothing unless marked `raw`. Missing/unsupported values are omitted from `max`; an empty `max`
+All symbols below are valid normalized values after delta, age, sanitation, and per-signal smoothing
+unless marked `raw`. Missing/unsupported values are omitted from `max`; an empty `max`
 is `+0.0`. These formulas are transcribed from the parent blueprint without alteration.
 
 ### Productive CPU utilization (telemetry, not pressure)
@@ -323,6 +322,7 @@ Run-queue normalization: at or below 1.0 runnable per capacity -> zero pressure;
 `(runnablePerCapacity - 1.0) / 3.0` maps [1, 4] to [0, 1].
 
 Publication:
+
 - `SystemSnapshot.pressurePerCpu[i]` and `CpuSnapshot.stallRatio` publish `scheduler_i_raw`.
 - Composite uses `scheduler_i` (the smoothed version).
 
@@ -337,6 +337,7 @@ throttle_i        = max(smooth(globalThrottleRaw), smooth(cpuThrottleRaw_i))
 ```
 
 Publication:
+
 - `cpuThrottleRatio` is the smoothed global value when available, otherwise the max supported
   per-CPU throttle.
 - `perQuotaCpuThrottleRatio[i]` = `throttle_i`.
@@ -379,8 +380,8 @@ capacityDomain_i  = max(capacityLoss_i, frequencyLoss_i,
                         smooth(perCpuLowPowerLoss_i), smooth(systemLowPowerLoss))
 ```
 
-Nominal denominators must be finite and strictly positive. Zero/negative/missing -> unavailable,
-not full loss. Available at or above nominal -> zero loss.
+Nominal denominators must be finite and strictly positive. Zero/negative/missing -> unavailable, not
+full loss. Available at or above nominal -> zero loss.
 
 Source: `CpuSlowIntervalSignals` (per-CPU capacity/frequency/thermal/low-power),
 `SystemSlowIntervalSignals` (system thermal/low-power).
@@ -554,11 +555,13 @@ contract. These are the existing records; P4-B does not change component names, 
 ### `SystemSnapshot` compact constructor changes
 
 Reject (throw `IllegalArgumentException`):
+
 - `totalCpus <= 0` (nonpositive span).
 - `pressurePerCpu.length() != totalCpus`.
 - Any effective bit `>= totalCpus`.
 
 Sanitize:
+
 - `cpuUsage`, `cpuThrottle`, `diskIOBytes`: negative -> `0`.
 - `memoryUsage`, `inactiveFileMemory`: negative -> `0`.
 - `memoryLimit`: negative -> `Long.MAX_VALUE` (unknown sentinel).
@@ -571,11 +574,13 @@ Sanitize:
 ### `HardwareUtilization` compact constructor changes
 
 Reject (throw `IllegalArgumentException`):
+
 - `snapshot.timeNs() != timestampNs` (timestamp mismatch).
 - `!snapshot.effectiveCpus().equals(globalEffectiveCpus)` (membership mismatch).
 - Quota or period mismatch with nested snapshot (after sanitation).
 
 Sanitize:
+
 - `quotaCpuUsage`: `nonnegativeTelemetry()`. Then clamp to `[0.0, 1.0]`; `-0.0` -> `+0.0`.
 - `cpuThrottleRatio`: clamp finite to `[0.0, 1.0]`; NaN/non-finite -> `0.0`; `-0.0` -> `+0.0`.
 - `perQuotaCpuThrottleRatio[i]`, `perQuotaCpuPressure[i]`: each entry clamp to `[0.0, 1.0]`;
@@ -701,8 +706,8 @@ Receives one immutable `IntervalHardwareSample`, normalized pressure result, and
 Constructs the complete public object graph. Construction order:
 
 1. Sanitize and copy canonical telemetry and membership.
-2. Allocate exact logical-span scheduler (`pressurePerCpu`), throttle
-   (`perQuotaCpuThrottleRatio`), and composite (`perQuotaCpuPressure`) arrays.
+2. Allocate exact logical-span scheduler (`pressurePerCpu`), throttle (`perQuotaCpuThrottleRatio`),
+   and composite (`perQuotaCpuPressure`) arrays.
 3. Fill effective CPU entries in ascending ID; inactive entries = canonical zero.
 4. Construct deep-copied `SystemSnapshot` with `timeNs = evaluationNs`.
 5. Construct `HardwareUtilization` with `timestampNs = evaluationNs` and that snapshot.
@@ -711,21 +716,21 @@ Constructs the complete public object graph. Construction order:
 ### Unavailable signal projection
 
 - Unavailable public gauges/rates -> canonical zero, except:
-  - Unsupported/unbounded memory limit -> `Long.MAX_VALUE`.
-  - Unsupported quota capacity -> fallback to current effective cardinality with period `0`.
+    - Unsupported/unbounded memory limit -> `Long.MAX_VALUE`.
+    - Unsupported quota capacity -> fallback to current effective cardinality with period `0`.
 - `BASELINE` counters publish their current cumulative value; interval contribution is zero.
 - After TTL, last nonneg cumulative value may remain public; delta/rate/pressure is `UNAVAILABLE`.
 
 ### Byte allocation and memory layout
 
-| Record | Payload bytes | Estimated total (HotSpot 64-bit, compressed oops) |
-|---|---|---|
-| `SystemSnapshot` | 12 fields: 1 long `timeNs` + 1 int `totalCpus` + 1 double `quotaCpus` + 1 long `period` + 1 long `cpuUsage` + 1 long `cpuThrottle` + 1 ref `effectiveCpus` + 1 ref `pressurePerCpu` + 1 long `memoryLimit` + 1 long `memoryUsage` + 1 long `inactiveFileMemory` + 1 long `diskIOBytes` = ~88 bytes payload | ~104 bytes |
-| `HardwareUtilization` | 15 fields: 1 long `timestampNs` + 1 double `quotaCpus` + 1 double `quotaCpuUsage` + 1 long `period` + 1 ref `globalEffectiveCpus` + 1 double `cpuThrottleRatio` + 1 ref `perQuotaCpuThrottleRatio` + 1 ref `perQuotaCpuPressure` + 1 long `globalMemoryPool` + 1 long `perCpuMemoryPool` + 1 double `totalMemoryUtilization` + 1 long `memPerCpuUsageBytes` + 1 double `diskIOBytesPerSecond` + 1 double `diskIOPressure` + 1 ref `snapshot` = ~120 bytes payload | ~136 bytes |
-| `CpuSnapshot` | 12 fields: 1 int + 5 doubles + 3 longs + 1 int + 1 double + 1 long = ~88 bytes | ~104 bytes |
-| `CoreSnapshot` | 10 fields: 1 int + 1 double + 1 long + 1 long + 1 long + 1 long + 1 long + 1 double + 1 ref + 1 ref = ~72 bytes | ~88 bytes |
-| `SocketSnapshot` | 8 fields: 1 int + 1 ref + 2 longs + 1 long + 1 double + 1 ref + 1 long = ~56 bytes | ~72 bytes |
-| `PressureState` | 3 arrays: `boolean[N]` + `double[N]` + `long[N]` where N = smoother cell count | Proportional to logical CPU span |
+| Record                | Payload bytes                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Estimated total (HotSpot 64-bit, compressed oops) |
+|-----------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------|
+| `SystemSnapshot`      | 12 fields: 1 long `timeNs` + 1 int `totalCpus` + 1 double `quotaCpus` + 1 long `period` + 1 long `cpuUsage` + 1 long `cpuThrottle` + 1 ref `effectiveCpus` + 1 ref `pressurePerCpu` + 1 long `memoryLimit` + 1 long `memoryUsage` + 1 long `inactiveFileMemory` + 1 long `diskIOBytes` = ~88 bytes payload                                                                                                                                                        | ~104 bytes                                        |
+| `HardwareUtilization` | 15 fields: 1 long `timestampNs` + 1 double `quotaCpus` + 1 double `quotaCpuUsage` + 1 long `period` + 1 ref `globalEffectiveCpus` + 1 double `cpuThrottleRatio` + 1 ref `perQuotaCpuThrottleRatio` + 1 ref `perQuotaCpuPressure` + 1 long `globalMemoryPool` + 1 long `perCpuMemoryPool` + 1 double `totalMemoryUtilization` + 1 long `memPerCpuUsageBytes` + 1 double `diskIOBytesPerSecond` + 1 double `diskIOPressure` + 1 ref `snapshot` = ~120 bytes payload | ~136 bytes                                        |
+| `CpuSnapshot`         | 12 fields: 1 int + 5 doubles + 3 longs + 1 int + 1 double + 1 long = ~88 bytes                                                                                                                                                                                                                                                                                                                                                                                    | ~104 bytes                                        |
+| `CoreSnapshot`        | 10 fields: 1 int + 1 double + 1 long + 1 long + 1 long + 1 long + 1 long + 1 double + 1 ref + 1 ref = ~72 bytes                                                                                                                                                                                                                                                                                                                                                   | ~88 bytes                                         |
+| `SocketSnapshot`      | 8 fields: 1 int + 1 ref + 2 longs + 1 long + 1 double + 1 ref + 1 long = ~56 bytes                                                                                                                                                                                                                                                                                                                                                                                | ~72 bytes                                         |
+| `PressureState`       | 3 arrays: `boolean[N]` + `double[N]` + `long[N]` where N = smoother cell count                                                                                                                                                                                                                                                                                                                                                                                    | Proportional to logical CPU span                  |
 
 One evaluation allocates one bounded graph proportional to the stable logical CPU span plus the
 fixed record headers above.
@@ -758,8 +763,8 @@ fixed record headers above.
 
 ### P4-B owned test classes
 
-1. **`PressureEvaluatorTest`**: Every threshold and thermal mapping, correlated golden case,
-   healthy high-throughput I/O, low-throughput stall, productive CPU neutrality, no effective CPU
+1. **`PressureEvaluatorTest`**: Every threshold and thermal mapping, correlated golden case, healthy
+   high-throughput I/O, low-throughput stall, productive CPU neutrality, no effective CPU
    (`pressure() == 1.0`), and unsupported/transient/reset behavior.
 
 2. **`PressureCompositionTest`**: Correlated `max` golden (composite 0.50 from three domains at
@@ -768,27 +773,27 @@ fixed record headers above.
 
 3. **`PressurePropertiesTest`**: Fixed-seed `SplittableRandom`, 20,000+ generated cases per
    property. Properties:
-   - Boundedness: all ratio outputs in `[0.0, 1.0]`.
-   - Finiteness: no NaN/Infinity in any published ratio.
-   - Per-signal monotonicity: increasing one supported input must not decrease its domain output.
-   - `max` idempotence: `max(x, x) == x`.
-   - Correlation: independent domains compose with `max`, not sum.
-   - Invalid doubles/divisors: NaN, infinity, negative zero, extreme values.
-   - Counter extremes: `Long.MAX_VALUE` deltas and near-max elapsed time.
-   - Irregular elapsed time: very short and very long dt.
-   - Smoothing attack faster than release: verify alpha_attack > alpha_release at 200 ms.
+    - Boundedness: all ratio outputs in `[0.0, 1.0]`.
+    - Finiteness: no NaN/Infinity in any published ratio.
+    - Per-signal monotonicity: increasing one supported input must not decrease its domain output.
+    - `max` idempotence: `max(x, x) == x`.
+    - Correlation: independent domains compose with `max`, not sum.
+    - Invalid doubles/divisors: NaN, infinity, negative zero, extreme values.
+    - Counter extremes: `Long.MAX_VALUE` deltas and near-max elapsed time.
+    - Irregular elapsed time: very short and very long dt.
+    - Smoothing attack faster than release: verify alpha_attack > alpha_release at 200 ms.
 
 4. **`PressureSignalAvailabilityTest`**: Each individual signal unavailable/unsupported/baseline
-   produces validity-neutral output (that signal contributes zero, not missing-domain-error).
-   All signals unavailable -> all pressure zero (except `pressure()` with no effective CPU ->
+   produces validity-neutral output (that signal contributes zero, not missing-domain-error). All
+   signals unavailable -> all pressure zero (except `pressure()` with no effective CPU ->
    1.0).
 
 5. **`RatioAccessorContractTest`**: Reflection-backed exhaustive manifest of every ratio-valued
    public accessor on `SystemSnapshot`, `HardwareUtilization`, `CpuSnapshot`, `CoreSnapshot`,
    `SocketSnapshot`. Classifies each `double` accessor and `UnmodifiableDoubleArray` component as
    normalized ratio, capacity, rate, or ratio array. Unclassified additions fail. Only
-   normalized/array entries receive `[0,1]` assertions. Covers direct public constructors with
-   NaN, infinities, negative zero, and out-of-range values.
+   normalized/array entries receive `[0,1]` assertions. Covers direct public constructors with NaN,
+   infinities, negative zero, and out-of-range values.
 
 ### P4-B updated inherited tests
 
@@ -800,8 +805,8 @@ fixed record headers above.
    compact-constructor sanitation of ratio fields (NaN -> 0.0, out-of-range clamping, `-0.0`
    canonicalization).
 
-8. **`SnapshotIndexContractTest`**: Existing index/boundary tests remain. Verify corrected
-   memory utilization and pressure field values under the new projection.
+8. **`SnapshotIndexContractTest`**: Existing index/boundary tests remain. Verify corrected memory
+   utilization and pressure field values under the new projection.
 
 ### Golden test mechanics
 
@@ -891,27 +896,48 @@ rerun P4-B's sizing/model gate.
 ## Completion Record
 
 ### Changed Files
-- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/pressure/PressureConstants.java`
-- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/pressure/PressureEvaluation.java`
-- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/pressure/PressureEvaluator.java`
-- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/pressure/PressureProjection.java`
-- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/pressure/PressureState.java`
-- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/common/SystemUtilization.java`
-- `euhedral-hardware-utils/src/test/java/io/euhedral_execution/hardware_utils/internal/pressure/PressureCompositionTest.java`
-- `euhedral-hardware-utils/src/test/java/io/euhedral_execution/hardware_utils/internal/pressure/PressureEvaluatorTest.java`
-- `euhedral-hardware-utils/src/test/java/io/euhedral_execution/hardware_utils/internal/pressure/PressurePropertiesTest.java`
-- `euhedral-hardware-utils/src/test/java/io/euhedral_execution/hardware_utils/internal/pressure/PressureSignalAvailabilityTest.java`
-- `euhedral-hardware-utils/src/test/java/io/euhedral_execution/hardware_utils/common/RatioAccessorContractTest.java`
+
+-
+`euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/pressure/PressureConstants.java`
+-
+`euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/pressure/PressureEvaluation.java`
+-
+`euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/pressure/PressureEvaluator.java`
+-
+`euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/pressure/PressureProjection.java`
+-
+`euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/pressure/PressureState.java`
+-
+`euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/common/SystemUtilization.java`
+-
+`euhedral-hardware-utils/src/test/java/io/euhedral_execution/hardware_utils/internal/pressure/PressureCompositionTest.java`
+-
+`euhedral-hardware-utils/src/test/java/io/euhedral_execution/hardware_utils/internal/pressure/PressureEvaluatorTest.java`
+-
+`euhedral-hardware-utils/src/test/java/io/euhedral_execution/hardware_utils/internal/pressure/PressurePropertiesTest.java`
+-
+`euhedral-hardware-utils/src/test/java/io/euhedral_execution/hardware_utils/internal/pressure/PressureSignalAvailabilityTest.java`
+-
+`euhedral-hardware-utils/src/test/java/io/euhedral_execution/hardware_utils/common/RatioAccessorContractTest.java`
 
 ### Commands and Results
-- `gradle :euhedral-hardware-utils:test --tests "io.euhedral_execution.hardware_utils.internal.pressure.*"` - Passed.
-- `gradle :euhedral-hardware-utils:test --tests "io.euhedral_execution.hardware_utils.common.RatioAccessorContractTest"` - Passed.
+
+-
+`gradle :euhedral-hardware-utils:test --tests "io.euhedral_execution.hardware_utils.internal.pressure.*"` -
+Passed.
+-
+`gradle :euhedral-hardware-utils:test --tests "io.euhedral_execution.hardware_utils.common.RatioAccessorContractTest"` -
+Passed.
 
 ### Acceptance Evidence
-Evaluates multidomain hardware pressure signals with actual-time EWMA smoothing, finite ratio sanitation in [0.0, 1.0], composite max, and public record projection.
+
+Evaluates multidomain hardware pressure signals with actual-time EWMA smoothing, finite ratio
+sanitation in [0.0, 1.0], composite max, and public record projection.
 
 ### Deviations
+
 None.
 
 ### Environmental Limits
+
 None.

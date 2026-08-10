@@ -43,7 +43,7 @@ guarantees zero mutation of host or controller cgroup settings.
 ### 2.2. Non-Goals
 
 - Modifying or redesigning the common pressure formulas or normalization curves established in Phase
-  4.
+    4.
 - Windows or macOS implementation changes (reserved for Phase 6 and Phase 7).
 - Modifying core fragment execution or action-picker policies (reserved for Phase 8).
 - Writing or mutating host cgroup settings (e.g., writing to `cgroup.subtree_control`).

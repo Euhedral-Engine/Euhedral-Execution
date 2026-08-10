@@ -1,6 +1,5 @@
 package io.euhedral_execution.core.config;
 
-import io.euhedral_execution.core.control_plane.ControlPlaneCache;
 import io.euhedral_execution.core.generics.CloneableObject;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.jspecify.annotations.Nullable;

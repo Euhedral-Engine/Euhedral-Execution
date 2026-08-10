@@ -58,7 +58,7 @@ P2 topology snapshot model.
     - `/sys/devices/system/cpu/cpuX/topology/die_id` (optional, default 0 if absent)
     - `/sys/devices/system/cpu/cpuX/topology/core_id`
     -
-    `/sys/devices/system/cpu/cpuX/cache/indexY/{type, level, size, coherency_line_size, shared_cpu_map}`
+  `/sys/devices/system/cpu/cpuX/cache/indexY/{type, level, size, coherency_line_size, shared_cpu_map}`
     - `/sys/devices/system/cpu/cpuX/cpufreq/cpuinfo_max_freq`
 - **Data Model Integration**: Translating raw sysfs observations into `TopologyInput`, containing
   `List<LogicalCpu>` and `List<CacheDomain>`, for normalization via `TopologyBootstrap.normalize()`.
@@ -310,26 +310,41 @@ gradle :euhedral-hardware-utils:test
 
 ### Changed Files
 
-- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/linux/LinuxSystemLayout.java`
-- `euhedral-hardware-utils/src/test/java/io/euhedral_execution/hardware_utils/linux/LinuxSystemLayoutFixtureTest.java`
+-
+`euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/linux/LinuxSystemLayout.java`
+-
+`euhedral-hardware-utils/src/test/java/io/euhedral_execution/hardware_utils/linux/LinuxSystemLayoutFixtureTest.java`
 - `docs/audits/hardware-utils/phase-5-linux-topology-model-conformance.md`
 
 ### Commands Run & Results
 
-- `gradle :euhedral-hardware-utils:test --tests "io.euhedral_execution.hardware_utils.linux.LinuxSystemLayoutFixtureTest"` - Passed 6/6 tests cleanly.
+-
+`gradle :euhedral-hardware-utils:test --tests "io.euhedral_execution.hardware_utils.linux.LinuxSystemLayoutFixtureTest"` -
+Passed 6/6 tests cleanly.
 - `gradle :euhedral-hardware-utils:test` - Passed all 67 hardware-utils tests cleanly.
-- `gradle :euhedral-hardware-utils:test --rerun-tasks` - Passed all 67 hardware-utils tests cleanly with fresh execution.
-- `gradle :euhedral-hardware-utils:build` - Build successful, native packaging, test compilation, and verification passed.
+- `gradle :euhedral-hardware-utils:test --rerun-tasks` - Passed all 67 hardware-utils tests cleanly
+  with fresh execution.
+- `gradle :euhedral-hardware-utils:build` - Build successful, native packaging, test compilation,
+  and verification passed.
 
 ### Acceptance Evidence
 
-- `LinuxSystemLayout` correctly scans sysfs `/sys/devices/system/cpu/` with directory stream closure via try-with-resources.
-- OS CPU IDs are preserved directly in logical CPU IDs, mapping sparse CPU sets with explicit null holes for unmapped indices.
-- Multi-socket/multi-die topologies generate unique global core tuples `(packageId, dieId, coreId)` preventing core aliasing across packages.
-- Cache domains are extracted from sysfs cache index nodes and fall back cleanly to P2 synthesized L1/L2/L3 domains if sysfs cache entries are missing or unreadable.
-- P/E core gap classification correctly identifies performance vs efficiency cores from cpufreq max frequency or cache capacity scores, falling back to `CoreKind.UNKNOWN` when scores are homogeneous.
-- Missing or unreadable sysfs root directories fall back cleanly to the conservative whole-model fallback topology without throwing exceptions.
-- Independent conformance audit completed in `docs/audits/hardware-utils/phase-5-linux-topology-model-conformance.md` verifying all 5 acceptance criteria satisfied with 0 deviations.
+- `LinuxSystemLayout` correctly scans sysfs `/sys/devices/system/cpu/` with directory stream closure
+  via try-with-resources.
+- OS CPU IDs are preserved directly in logical CPU IDs, mapping sparse CPU sets with explicit null
+  holes for unmapped indices.
+- Multi-socket/multi-die topologies generate unique global core tuples `(packageId, dieId, coreId)`
+  preventing core aliasing across packages.
+- Cache domains are extracted from sysfs cache index nodes and fall back cleanly to P2 synthesized
+  L1/L2/L3 domains if sysfs cache entries are missing or unreadable.
+- P/E core gap classification correctly identifies performance vs efficiency cores from cpufreq max
+  frequency or cache capacity scores, falling back to `CoreKind.UNKNOWN` when scores are
+  homogeneous.
+- Missing or unreadable sysfs root directories fall back cleanly to the conservative whole-model
+  fallback topology without throwing exceptions.
+- Independent conformance audit completed in
+  `docs/audits/hardware-utils/phase-5-linux-topology-model-conformance.md` verifying all 5
+  acceptance criteria satisfied with 0 deviations.
 
 ### Approved Deviations
 

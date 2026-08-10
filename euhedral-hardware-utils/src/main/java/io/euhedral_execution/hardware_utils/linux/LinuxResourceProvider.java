@@ -65,6 +65,7 @@ public class LinuxResourceProvider implements DetailedSystemSnapshotProvider, Au
     private final long[] lastCpuStealJiffies = new long[SystemInfo.getCpuCount()];
     private final double[] perCpuWaitStallNs = new double[SystemInfo.getCpuCount()];
     private long lastCgroupTotalStallNs = 0;
+
     @SuppressWarnings("unused")
     private volatile int lockState = 0;
 

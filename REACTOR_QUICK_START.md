@@ -1,8 +1,8 @@
 # Euhedral Reactor quick start
 
-`euhedral-reactor-core` connects Reactor pipelines to Euhedral's topology-aware execution engine.
-It provides a standard Reactor `Scheduler` implementation and mapping operators that create, route,
-and recycle Euhedral frames for you.
+`euhedral-reactor-core` connects Reactor pipelines to Euhedral's topology-aware execution engine. It
+provides a standard Reactor `Scheduler` implementation and mapping operators that create, route, and
+recycle Euhedral frames for you.
 
 For context, the
 [high-scale scheduler comparison](./benchmarks/HIGH_SCALE_BENCHMARKS.md) runs an 8K Mandelbrot
@@ -67,8 +67,8 @@ public final class ReactorExample {
 ```
 
 The scheduler registers its worker sources with the lattice, which starts lazily. The operator
-handles the Reactor subscription, backpressure requests, frame creation, routing, response
-delivery, cancellation, and recycling.
+handles the Reactor subscription, backpressure requests, frame creation, routing, response delivery,
+cancellation, and recycling.
 
 ## Choose an operator
 

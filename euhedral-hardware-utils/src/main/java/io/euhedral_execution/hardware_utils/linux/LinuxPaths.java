@@ -66,9 +66,11 @@ public final class LinuxPaths {
 
     @Getter
     private final CgroupMode mode;
+
     private final Path cgroupV2UserPath;
     private final Map<String, Path> v1ControllerMounts;
     private final Map<String, String> v1SelfPaths;
+
     public LinuxPaths() {
         this(PROC_SELF_MOUNTINFO, PROC_SELF_CGROUP, CGROUP_V2_ROOT_PATH);
     }

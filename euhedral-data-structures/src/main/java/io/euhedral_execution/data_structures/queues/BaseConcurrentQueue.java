@@ -24,6 +24,7 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue<T> 
     protected final int linkIndex;
     protected final boolean bounded;
     protected final ThreadSafeIterator iterator = new ThreadSafeIterator();
+
     protected BaseConcurrentQueue(int chunkSize, boolean bounded) {
         super(new Object[QueueUtils.queueSize(Math.max(chunkSize, 2))]);
         this.chunkMask = QueueUtils.chunkMask(Math.max(chunkSize, 2));

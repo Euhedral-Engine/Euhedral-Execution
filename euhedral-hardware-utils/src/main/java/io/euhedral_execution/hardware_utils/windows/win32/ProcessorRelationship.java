@@ -11,6 +11,7 @@ public final class ProcessorRelationship extends SystemLogicalProcessorInformati
     public final boolean smt;
     public final boolean pCore;
     public final List<GroupAffinity> groupAffinities;
+
     public ProcessorRelationship(
             Relationship relationship, boolean smt, boolean pCore, List<GroupAffinity> groupAffinities) {
         super(relationship);

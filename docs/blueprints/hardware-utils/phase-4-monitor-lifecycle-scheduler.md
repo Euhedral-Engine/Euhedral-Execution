@@ -135,21 +135,33 @@ Package: `io.euhedral_execution.hardware_utils` (and `internal` as necessary).
 ## Completion Record
 
 ### Changed Files
+
 - `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/ResourceMonitor.java`
-- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/monitor/MonotonicClock.java`
-- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/monitor/DeadlineWaiter.java`
-- `euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/monitor/TopologyUpdater.java`
-- `euhedral-hardware-utils/src/test/java/io/euhedral_execution/hardware_utils/ResourceMonitorTest.java`
+-
+`euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/monitor/MonotonicClock.java`
+-
+`euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/monitor/DeadlineWaiter.java`
+-
+`euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/internal/monitor/TopologyUpdater.java`
+-
+`euhedral-hardware-utils/src/test/java/io/euhedral_execution/hardware_utils/ResourceMonitorTest.java`
 
 ### Commands and Results
-- `gradle :euhedral-hardware-utils:test --tests "io.euhedral_execution.hardware_utils.ResourceMonitorTest"` - Passed.
+
+-
+`gradle :euhedral-hardware-utils:test --tests "io.euhedral_execution.hardware_utils.ResourceMonitorTest"` -
+Passed.
 - `gradle :euhedral-hardware-utils:test --rerun-tasks` - All 67 hardware-utils tests passed.
 
 ### Acceptance Evidence
-Implements the six-state monitor lifecycle, 200 ms anchored recurrence with overrun handling, single release publication, topology integration, and clean teardown.
+
+Implements the six-state monitor lifecycle, 200 ms anchored recurrence with overrun handling, single
+release publication, topology integration, and clean teardown.
 
 ### Deviations
+
 None.
 
 ### Environmental Limits
+
 None.

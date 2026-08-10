@@ -13,6 +13,7 @@ public final class CacheRelationship extends SystemLogicalProcessorInformation {
     public final int cacheSizeBytes;
     public final CacheType type;
     public final List<GroupAffinity> groupAffinities;
+
     public CacheRelationship(
             byte level,
             byte associativity,

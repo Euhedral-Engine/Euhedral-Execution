@@ -7,8 +7,8 @@ Audited `hardware-utils-overhaul/phase-3-executor-lifecycle-audit` from the upda
 blueprint and implementation completion record. There is no separate validation artifact.
 
 Inspection was limited to the P3-B context/diff, `PinnedThreadExecutor`, its owned and compatibility
-tests, settled P3/P3-A summaries, the P0 A02/fresh-thread anchors, and the named caller snippets.
-No training, platform/native, resource, topology, or core ownership work was inspected or changed.
+tests, settled P3/P3-A summaries, the P0 A02/fresh-thread anchors, and the named caller snippets. No
+training, platform/native, resource, topology, or core ownership work was inspected or changed.
 
 No correction was needed. The implementation follows the settled single lifecycle monitor, registry
 monitor, identity cleanup, and noncapturing-cleaner design. This audit is ready for developer review
@@ -34,7 +34,7 @@ and merge; the P3 root audit remains subsequent work.
 | Parent 13                                   | satisfied      | Active membership is identity-keyed and removed on start failure/final exit; actions exclude executor/factory/command/thread paths; fakes finish empty.                                                            |
 | Parent 14                                   | satisfied      | Registry/lifecycle monitor publication, final construction, `Thread.start()`, wait/notify, fixed lock order, and cleanup-CAS semantics match the frozen JMM proof.                                                 |
 | Parent 15                                   | satisfied      | Scope diff is empty for training, core/benchmark production, P3-A controller/`ThreadTools`, and platform affinity paths.                                                                                           |
-| Parent 16                                   | satisfied      | Focused lifecycle/P0 gates, repeated lifecycle runs, diff hygiene, and scope checks pass; unavailable pinned Java/Gradle/Zig verification is recorded below.                                                        |
+| Parent 16                                   | satisfied      | Focused lifecycle/P0 gates, repeated lifecycle runs, diff hygiene, and scope checks pass; unavailable pinned Java/Gradle/Zig verification is recorded below.                                                       |
 | A02                                         | satisfied      | The A02 anchor forces candidate rejection after shutdown and register/start-before-shutdown visibility; E1-E12 cover the remaining repaired state-machine races.                                                   |
 
 ## JMM and cleanup review

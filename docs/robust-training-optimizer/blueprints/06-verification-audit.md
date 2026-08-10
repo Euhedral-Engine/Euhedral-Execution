@@ -2,10 +2,10 @@
 
 Status: Prompt 6B completed on 2026-07-29
 
-This blueprint defines the Phase 6 executable audit. It does not change any statistical,
-scheduling, checkpoint, packaging, import, or CLI contract settled by Phases 1-5. Prompt 6B must
-add the fixtures and test harness below, execute the commands in order, and repair only defects
-whose resolution is already fixed by an approved blueprint.
+This blueprint defines the Phase 6 executable audit. It does not change any statistical, scheduling,
+checkpoint, packaging, import, or CLI contract settled by Phases 1-5. Prompt 6B must add the
+fixtures and test harness below, execute the commands in order, and repair only defects whose
+resolution is already fixed by an approved blueprint.
 
 ## Scope
 
@@ -21,8 +21,8 @@ Phase 6 must prove the integrated upgraded path, not merely rerun isolated unit 
 7. compare the resumed run to an uninterrupted control using the same seeds and immutable inputs;
 8. validate every lifecycle package, final inventory, checksums, provenance, reports, collision,
    tamper, atomicity, and deterministic-byte requirement already settled by Phase 4;
-9. close the parser, filesystem, configuration, stop, and command test gaps recorded by the Phase
-   5 conformance audit;
+9. close the parser, filesystem, configuration, stop, and command test gaps recorded by the Phase 5
+   conformance audit;
 10. run the focused and full deterministic suites; and
 11. classify failures as code defects, environment limitations, or deliberately retained Phase 7
     cleanup seams using the criteria below.
@@ -32,8 +32,8 @@ without the assertions below is not equivalent evidence.
 
 ### Explicit non-goals
 
-- Do not change policy or scenario identity, anchor selection, calibration, aggregation,
-  percentile quality, the robust comparator, or uncertainty mathematics.
+- Do not change policy or scenario identity, anchor selection, calibration, aggregation, percentile
+  quality, the robust comparator, or uncertainty mathematics.
 - Do not change model features, targets, split rules, acceptance gates, or artifact schema.
 - Do not change budget allocation, candidate comparison, carry rules, rotation, run identity,
   checkpoint transitions, or evidence schema.
@@ -64,9 +64,9 @@ The completed history establishes these facts:
   comprehensive tamper/collision/failure tests, command integration, and some streaming proof as
   unverified.
 - Phase 5 has the intended removable vector-only importer and typed runtime path, but its
-  conformance audit still classifies several parser variants, unsafe-file cases, injected
-  filesystem failures, all-key config mapping/fingerprinting, stop behavior, help, command
-  dispatch, and no-implicit-import assertions as unverified.
+  conformance audit still classifies several parser variants, unsafe-file cases, injected filesystem
+  failures, all-key config mapping/fingerprinting, stop behavior, help, command dispatch, and
+  no-implicit-import assertions as unverified.
 
 Phase 6 must implement those already-specified test surfaces. It must not relabel the Phase 4 or
 Phase 5 findings as satisfied merely because the current suite passes.
@@ -75,9 +75,8 @@ The current generated package inspected during Prompt 6A was a deterministic
 `READY_TO_TRAIN` partial package from `ClosedLoopRunnerTest`. It contained 31 files, two native
 bootstrap bundles, merge/checkpoint/report artifacts, no model or schedule, and the expected
 `MODEL` and `SCHEDULE` omissions. Its empty `COMPLETE` markers had SHA-256
-`e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`.
-This is useful baseline evidence, but it is not the complete-package or lifecycle proof required
-below.
+`e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`. This is useful baseline
+evidence, but it is not the complete-package or lifecycle proof required below.
 
 ## Deterministic end-to-end experiment
 
@@ -95,8 +94,8 @@ resumed-packages/
 reproduced-packages/
 ```
 
-The test must fail if any resolved path enters the repository's real training input/output trees.
-It must not read a hostname, wall clock, process ID, environment variable, system property, file
+The test must fail if any resolved path enters the repository's real training input/output trees. It
+must not read a hostname, wall clock, process ID, environment variable, system property, file
 modification time, or filesystem enumeration order as experiment identity.
 
 Add these test fixtures:
@@ -114,18 +113,18 @@ state are thread-confined to the test invocation.
 
 Use ten `PolicyVector` instances created by `SchedulingFixtures.policy(seed)`:
 
-| Symbol | Seed | Benchmark meaning |
-| --- | ---: | --- |
-| `A0` | 100 | stable baseline 10 |
-| `A1` | 101 | stable baseline 20 |
-| `A2` | 102 | stable baseline 30 |
-| `A3` | 103 | stable baseline 40 |
-| `A4` | 104 | stable baseline 50 |
-| `R` | 105 | robust baseline 90 in every scenario |
-| `S0` | 106 | baseline 100 only in scenario 0, otherwise 5 |
-| `S1` | 107 | baseline 100 only in scenario 1, otherwise 5 |
-| `S2` | 108 | baseline 100 only in scenario 2, otherwise 5 |
-| `S3` | 109 | baseline 100 only in scenario 3, otherwise 5 |
+| Symbol | Seed | Benchmark meaning                            |
+|--------|-----:|----------------------------------------------|
+| `A0`   |  100 | stable baseline 10                           |
+| `A1`   |  101 | stable baseline 20                           |
+| `A2`   |  102 | stable baseline 30                           |
+| `A3`   |  103 | stable baseline 40                           |
+| `A4`   |  104 | stable baseline 50                           |
+| `R`    |  105 | robust baseline 90 in every scenario         |
+| `S0`   |  106 | baseline 100 only in scenario 0, otherwise 5 |
+| `S1`   |  107 | baseline 100 only in scenario 1, otherwise 5 |
+| `S2`   |  108 | baseline 100 only in scenario 2, otherwise 5 |
+| `S3`   |  109 | baseline 100 only in scenario 3, otherwise 5 |
 
 The fixture must build a `SortedMap<PolicyId, PolicyMeaning>` and never infer a meaning from policy
 hash magnitude. The exact raw weights produced by the seeds are written as signed decimal
@@ -135,8 +134,8 @@ imported catalog must reproduce every one of the 280 raw lanes.
 Create:
 
 - `euhedral-training/output/temp_data` containing all ten vector rows;
-- `euhedral-training/input/merger/raw_data.txt` containing one duplicate `R` vector followed by
-  one ten-value finite legacy-measurement row;
+- `euhedral-training/input/merger/raw_data.txt` containing one duplicate `R` vector followed by one
+  ten-value finite legacy-measurement row;
 - one mapped human-readable summary with deliberately non-machine-readable content;
 - unexpected `.bin`, `.params`, `state.properties`, and checkpoint-like files.
 
@@ -186,9 +185,9 @@ orderedFrames             = false
 ```
 
 Use `CandidateBudgetConfig.defaults()`. Disable CMA-ES and use a small deterministic direct-Sobol
-test configuration with `screenRows=64`, `maximumPredictionRows=40`, ten score-band weights of
-one, and candidate-generation weights `0, 0, 1`. This keeps the audit bounded without changing
-scheduler semantics.
+test configuration with `screenRows=64`, `maximumPredictionRows=40`, ten score-band weights of one,
+and candidate-generation weights `0, 0, 1`. This keeps the audit bounded without changing scheduler
+semantics.
 
 Write the configuration through the exact Phase 5 text syntax and read it with
 `training.config.ClosedLoopConfigCodec`; do not construct the primary experiment configuration
@@ -237,9 +236,9 @@ For bootstrap runs (`iteration == 0`), emit the policy baseline in the table abo
 
 Use elapsed time `2_000_000_000` nanoseconds and an integer completed-frame count that derives the
 exact requested throughput. Timestamps start at
-`2026-01-01T00:00:00Z` plus a deterministic offset derived from iteration, natural scenario
-ordinal, schedule position, and repetition. Do not derive time from a hash collision-prone
-truncation or wall clock.
+`2026-01-01T00:00:00Z` plus a deterministic offset derived from iteration, natural scenario ordinal,
+schedule position, and repetition. Do not derive time from a hash collision-prone truncation or wall
+clock.
 
 In iteration 1's first normal scenario only, select the unsigned-lowest non-anchor exploration
 policy and emit `TIMEOUT` for repetition 1 followed by `SKIPPED` for repetitions 2 and 3. It must
@@ -247,15 +246,15 @@ have no success value and must remain rejected/incomplete; no zero-throughput su
 
 The calibration oracle is exact:
 
-| Run class | Expected `delta_log` | Expected `scale_factor` | Expected residual/status |
-| --- | --- | --- | --- |
-| four frozen references | `0.0` | `1.0` | `0.0 / REFERENCE` |
-| iteration 1 `audit-b` | `StrictMath.log(0.5)` | `0.5` | `0.0 / CALIBRATED` |
-| iteration 2 `audit-a` | `StrictMath.log(2.0)` | `2.0` | `0.0 / CALIBRATED` |
+| Run class              | Expected `delta_log`  | Expected `scale_factor` | Expected residual/status |
+|------------------------|-----------------------|-------------------------|--------------------------|
+| four frozen references | `0.0`                 | `1.0`                   | `0.0 / REFERENCE`        |
+| iteration 1 `audit-b`  | `StrictMath.log(0.5)` | `0.5`                   | `0.0 / CALIBRATED`       |
+| iteration 2 `audit-a`  | `StrictMath.log(2.0)` | `2.0`                   | `0.0 / CALIBRATED`       |
 
-Compare parsed doubles by raw bits to the results of the shown `StrictMath` calls. Assert a
-baseline 90 policy remains calibrated to 90 after both global transformations. Cohort composition
-and generated low policies must not change any scale. The existing `RunCalibratorTest` remains the
+Compare parsed doubles by raw bits to the results of the shown `StrictMath` calls. Assert a baseline
+90 policy remains calibrated to 90 after both global transformations. Cohort composition and
+generated low policies must not change any scale. The existing `RunCalibratorTest` remains the
 required proof for an unstable anchor and water-filling cap; rerun it in the focused sequence.
 
 ### Known ranking oracle
@@ -289,26 +288,26 @@ geometric_mean_quality       = 8/9
 cross_scenario_quality_mad   = 0
 ```
 
-Each specialist has qualities `{1, 1/9, 1/9, 1/9}`, minimum and type-7 P25 `1/9`, and cannot
-outrank `R`.
+Each specialist has qualities `{1, 1/9, 1/9, 1/9}`, minimum and type-7 P25 `1/9`, and cannot outrank
+`R`.
 
-After normal iterations, generated policies may enlarge a scenario's percentile population.
-The final oracle therefore asserts exact relative ordering rather than reusing the bootstrap
-numeric denominator:
+After normal iterations, generated policies may enlarge a scenario's percentile population. The
+final oracle therefore asserts exact relative ordering rather than reusing the bootstrap numeric
+denominator:
 
 - `R` is published rank 1;
 - `R` is second by calibrated throughput in every required scenario;
 - all four specialist policies remain eligible but rank below `R`;
-- every scenario row for `R` has the independently calculated midrank quality among that
-  scenario's valid rows, and its minimum, type-7 P25, geometric mean, and type-7 MAD are
-  independently recalculated from those four persisted qualities;
-- the intentionally failed generated policy is ineligible with the exact rejected/missing
-  scenarios; and
+- every scenario row for `R` has the independently calculated midrank quality among that scenario's
+  valid rows, and its minimum, type-7 P25, geometric mean, and type-7 MAD are independently
+  recalculated from those four persisted qualities;
+- the intentionally failed generated policy is ineligible with the exact rejected/missing scenarios;
+  and
 - no incomplete policy has a published rank or leader-revalidation role.
 
-The test must calculate the expected final midranks independently from sorted calibrated
-throughput rows, using the settled tie formula, and compare them to persisted `quality` values.
-It must not call `ScenarioQualityRanker` to construct the expected values.
+The test must calculate the expected final midranks independently from sorted calibrated throughput
+rows, using the settled tie formula, and compare them to persisted `quality` values. It must not
+call `ScenarioQualityRanker` to construct the expected values.
 
 ### Exact run sequence and restart interruption
 
@@ -327,17 +326,17 @@ Control:
 Resumed:
 
 1. Repeat control step 1.
-2. Resume with `audit-b`, but interrupt during iteration 1 after its first normal scenario bundle
-   is complete and checkpointed and before its second scenario begins. The fake service throws
-   only `ClosedLoopRunner.stopSignal()` at that boundary. Assert:
-   - stage `BENCHMARKING`;
-   - one pending normal run `COMPLETE` and one `PENDING`;
-   - exactly five indexed evidence bundles: four bootstrap plus one normal;
-   - the persisted iteration-1 schedule has not changed; and
-   - the complete first bundle is not rewritten on resume.
+2. Resume with `audit-b`, but interrupt during iteration 1 after its first normal scenario bundle is
+   complete and checkpointed and before its second scenario begins. The fake service throws only
+   `ClosedLoopRunner.stopSignal()` at that boundary. Assert:
+    - stage `BENCHMARKING`;
+    - one pending normal run `COMPLETE` and one `PENDING`;
+    - exactly five indexed evidence bundles: four bootstrap plus one normal;
+    - the persisted iteration-1 schedule has not changed; and
+    - the complete first bundle is not rewritten on resume.
 3. Package this exact checkpoint and validate the partial package.
-4. Resume with `audit-b`. Adopt/skip the completed run, execute only the second run, merge once,
-   and stop at the same `READY_TO_TRAIN` boundary as the control.
+4. Resume with `audit-b`. Adopt/skip the completed run, execute only the second run, merge once, and
+   stop at the same `READY_TO_TRAIN` boundary as the control.
 5. Resume with `audit-a` and finish at `RUN_COMPLETE`.
 
 Record benchmark invocation counts and the SHA-256 of the first completed normal bundle before and
@@ -368,22 +367,22 @@ The final experiment has:
 
 The complete package must contain exactly 70 regular files:
 
-| Group | Count |
-| --- | ---: |
-| `README.md`, `manifest.json` | 2 |
-| six top-level merge CSVs plus `policy-scenario-measurements.csv` | 7 |
-| three vector CSVs | 3 |
-| two Markdown reports | 2 |
-| model metadata, four model CSVs, three member files | 8 |
-| five scheduler CSVs plus `scheduler/COMPLETE` | 6 |
-| seven checkpoint CSVs plus `checkpoints/latest/COMPLETE` | 8 |
-| reproduction properties plus raw-data index | 2 |
-| eight raw bundles times four files | 32 |
+| Group                                                            | Count |
+|------------------------------------------------------------------|------:|
+| `README.md`, `manifest.json`                                     |     2 |
+| six top-level merge CSVs plus `policy-scenario-measurements.csv` |     7 |
+| three vector CSVs                                                |     3 |
+| two Markdown reports                                             |     2 |
+| model metadata, four model CSVs, three member files              |     8 |
+| five scheduler CSVs plus `scheduler/COMPLETE`                    |     6 |
+| seven checkpoint CSVs plus `checkpoints/latest/COMPLETE`         |     8 |
+| reproduction properties plus raw-data index                      |     2 |
+| eight raw bundles times four files                               |    32 |
 
 `manifest.files` therefore has exactly 69 entries because it does not list itself. The interrupted
 `BENCHMARKING` package has five raw bundles and exactly 58 regular files, with 57 manifest file
-entries. It has all merge/model/schedule groups, `PARTIAL_RECOVERABLE`, `run_complete=false`, and
-no omission.
+entries. It has all merge/model/schedule groups, `PARTIAL_RECOVERABLE`, `run_complete=false`, and no
+omission.
 
 Every inventory comparison uses normalized `/` paths and an explicitly sorted expected list.
 Directories do not count. No `.tmp-*`, staging marker, Maven output, log, imported source file, or
@@ -403,10 +402,10 @@ euhedral-training/src/test/resources/robust-training/v1/golden-package/
 `complete-inventory.txt` and `interrupted-inventory.txt` are hand-authored from the exact tables and
 path rules above, not copied from `Files.walk` output. `complete-files.sha256` lists every
 deterministic non-manifest payload path and expected SHA-256 in path order. Prompt 6B may obtain the
-candidate digest list with the external `sha256sum` utility only after all semantic assertions
-pass; it must review each path against the hand-authored inventory, commit the reviewed fixed list,
-delete the generated candidate list, rerun from a fresh root, and require equality. The completion
-record must include the final recursive package fingerprint.
+candidate digest list with the external `sha256sum` utility only after all semantic assertions pass;
+it must review each path against the hand-authored inventory, commit the reviewed fixed list, delete
+the generated candidate list, rerun from a fresh root, and require equality. The completion record
+must include the final recursive package fingerprint.
 
 In addition:
 
@@ -424,17 +423,17 @@ In addition:
 Package exact historical checkpoints from the end-to-end workspaces plus one rejected-model fork.
 Assert:
 
-| Stage | Required groups and result |
-| --- | --- |
-| `BOOTSTRAP_PENDING` | checkpoint/raw/report only; merge/model/schedule omissions; recoverable |
-| first `READY_TO_TRAIN` | merge present; model/schedule omitted; recoverable |
-| `MODEL_READY` | merge/model present; schedule omitted; recoverable |
-| `MODEL_REJECTED` | merge/rejected model present; schedule reason `MODEL_REJECTED_BEFORE_SCHEDULING`; terminal |
-| `SCHEDULE_READY` | merge/model/schedule present; recoverable |
-| `BENCHMARKING` | same groups; only complete indexed raw evidence copied; recoverable |
-| `READY_TO_MERGE` | same groups and all scheduled evidence; recoverable |
-| later `READY_TO_TRAIN` | prior derived schedule required and present; recoverable |
-| `RUN_COMPLETE` | every group present, zero omissions, complete |
+| Stage                  | Required groups and result                                                                 |
+|------------------------|--------------------------------------------------------------------------------------------|
+| `BOOTSTRAP_PENDING`    | checkpoint/raw/report only; merge/model/schedule omissions; recoverable                    |
+| first `READY_TO_TRAIN` | merge present; model/schedule omitted; recoverable                                         |
+| `MODEL_READY`          | merge/model present; schedule omitted; recoverable                                         |
+| `MODEL_REJECTED`       | merge/rejected model present; schedule reason `MODEL_REJECTED_BEFORE_SCHEDULING`; terminal |
+| `SCHEDULE_READY`       | merge/model/schedule present; recoverable                                                  |
+| `BENCHMARKING`         | same groups; only complete indexed raw evidence copied; recoverable                        |
+| `READY_TO_MERGE`       | same groups and all scheduled evidence; recoverable                                        |
+| later `READY_TO_TRAIN` | prior derived schedule required and present; recoverable                                   |
+| `RUN_COMPLETE`         | every group present, zero omissions, complete                                              |
 
 For every row assert deterministic package ID, status, `run_complete`, exact omissions, inventory,
 raw run count, checkpoint revision, and selected schedule identity.
@@ -492,10 +491,9 @@ Add or complete tests for every Phase 4 case:
 
 Filesystem failure injection must be deterministic. If current code has no injection boundary, add
 only a package-private test harness seam to `TrainingRunPackager`: a no-op default probe receives
-the five settled publication checkpoints and may throw `IOException`. The public API always uses
-the no-op probe. The seam must not change file order, bytes, cleanup ownership, or exception
-semantics. This is test harness for the already-settled Phase 4 failure matrix, not a new
-publication design.
+the five settled publication checkpoints and may throw `IOException`. The public API always uses the
+no-op probe. The seam must not change file order, bytes, cleanup ownership, or exception semantics.
+This is test harness for the already-settled Phase 4 failure matrix, not a new publication design.
 
 Likewise, factor the public `ClosedLoopRunner.run(ClosedLoopConfig)` body through a package-private
 `runAndPackage(config, services, outputRoot)` helper. The public method supplies
@@ -518,8 +516,8 @@ Complete the existing focused tests rather than creating a second importer/confi
 
 If deterministic I/O injection is required, add only a package-private no-op probe to
 `CurrentWorkspaceImporter` at the three settled publication points. The public API uses the no-op
-probe. A platform that cannot create a FIFO skips only that FIFO assertion after proving the
-symlink case; this is an environment limitation, not permission to weaken production checks.
+probe. A platform that cannot create a FIFO skips only that FIFO assertion after proving the symlink
+case; this is an environment limitation, not permission to weaken production checks.
 
 `ClosedLoopConfigCodecTest` must add:
 
@@ -540,8 +538,8 @@ symlink case; this is an environment limitation, not permission to weaken produc
 - proof that no command except explicit import invokes the importer.
 
 Use a package-private `Runner.CommandServices` test seam only if needed. Production dispatch uses
-the concrete existing services. The seam may record decoded arguments/results but may not change
-the public command grammar or log formatting.
+the concrete existing services. The seam may record decoded arguments/results but may not change the
+public command grammar or log formatting.
 
 Rerun the importer deletion-boundary searches after these tests. Test-only seams must remain inside
 the temporary package or package-private owning class and must not create a Phase 1-4 dependency on
@@ -562,14 +560,13 @@ the importer.
 ### Memory semantics
 
 The end-to-end audit is single-threaded above the production benchmark boundary. Fake services,
-fault probes, row buffers, and invocation counters are thread-confined. Published production
-records remain immutable and publication remains through the existing atomic filesystem
-boundaries.
+fault probes, row buffers, and invocation counters are thread-confined. Published production records
+remain immutable and publication remains through the existing atomic filesystem boundaries.
 
 No Phase 6 test seam may alter the release/acquire semantics of benchmark counters, checkpoint
 ownership, workspace locking, or atomic rename. The existing core `BenchmarkFrameTest` and Phase 3
-fake benchmark tests remain the evidence for hot-path ordering. Any production memory-access
-change is outside Phase 6 and requires a new blueprint.
+fake benchmark tests remain the evidence for hot-path ordering. Any production memory-access change
+is outside Phase 6 and requires a new blueprint.
 
 ### Memory pollution
 
@@ -587,8 +584,8 @@ change is outside Phase 6 and requires a new blueprint.
 - Use integer frames and elapsed nanoseconds for native observation throughput.
 - Compare exact calibration values using the specified `StrictMath` evaluation order and raw bits.
 - Independently calculate type-7/midrank expectations from exact sorted doubles.
-- Do not round, format-parse, use a tolerance as comparator authority, pool repetitions across
-  runs, or use a candidate cohort to define scale.
+- Do not round, format-parse, use a tolerance as comparator authority, pool repetitions across runs,
+  or use a candidate cohort to define scale.
 - SHA-256 is over exact bytes. Text is UTF-8, LF-terminated, and locale-independent.
 
 ## File-by-file implementation checklist
@@ -611,13 +608,13 @@ In dependency order:
    enumerated Phase 5 matrix.
 9. Extend the existing Phase 4 focused tests for tamper, collision, failure, streaming, and command
    cases rather than duplicating codec unit tests in Phase 6.
-10. Run the complete validation sequence below, inspect the generated packages/reports manually,
-    and append exact results to this blueprint.
+10. Run the complete validation sequence below, inspect the generated packages/reports manually, and
+    append exact results to this blueprint.
 
 No POM, module descriptor, persisted schema, production record, public method signature, user
-workspace data, or user-facing documentation change is expected. A production behavior correction
-is permitted only when a failing audit demonstrates a deviation whose correct result is explicit
-in an earlier blueprint. Record the failing assertion, owning blueprint clause, fix, and rerun.
+workspace data, or user-facing documentation change is expected. A production behavior correction is
+permitted only when a failing audit demonstrates a deviation whose correct result is explicit in an
+earlier blueprint. Record the failing assertion, owning blueprint clause, fix, and rerun.
 
 ## Acceptance criteria
 
@@ -642,8 +639,8 @@ Prompt 6B is complete only when:
 
 ## Full validation command sequence
 
-Run from the repository root with the pinned installed Java 21 and Maven paths when `mise` is not
-on `PATH`.
+Run from the repository root with the pinned installed Java 21 and Maven paths when `mise` is not on
+`PATH`.
 
 ### 1. Toolchain and clean scope
 
@@ -847,18 +844,17 @@ ownership boundaries and their prior acceptance history:
 
 - exact Phase 1 statistical oracles and immutable evidence;
 - Phase 2 metadata/model test construction without DJL pollution;
-- Phase 3 multi-environment state transitions, scheduler identity, restart/adoption, and
-  checkpoint equivalence;
+- Phase 3 multi-environment state transitions, scheduler identity, restart/adoption, and checkpoint
+  equivalence;
 - Phase 4 lifecycle selection, cross-artifact validation, deterministic serialization, fault
   cleanup, collision, and 70-file package inventory; and
 - Phase 5 streaming grammar, configuration-to-record mapping, fingerprint exclusions, stop/CLI
   behavior, and removable dependency boundary.
 
-The work combines mathematical precision, filesystem safety, recovery, deterministic
-serialization, streaming memory behavior, and a broad failure matrix. Phase 3's original lower
-capability pass omitted its main state machine, and the Phase 4/5 audits show that passing focused
-suites can still omit required matrices. The implementation is therefore not a bounded mechanical
-test addition.
+The work combines mathematical precision, filesystem safety, recovery, deterministic serialization,
+streaming memory behavior, and a broad failure matrix. Phase 3's original lower capability pass
+omitted its main state machine, and the Phase 4/5 audits show that passing focused suites can still
+omit required matrices. The implementation is therefore not a bounded mechanical test addition.
 
 ### Selected model and effort
 
@@ -873,8 +869,8 @@ The exact minimal context envelope is:
 3. the Phase 6 section of `docs/ROBUST_TRAINING_OPTIMIZER_PLAN.md`;
 4. this blueprint in full;
 5. the Phase 3, Phase 4, and Phase 5 conformance audits;
-6. prior blueprint sections referenced explicitly by this document only when an assertion or
-   fixture contract needs its exact schema;
+6. prior blueprint sections referenced explicitly by this document only when an assertion or fixture
+   contract needs its exact schema;
 7. the production/test files named in the file checklist;
 8. `SyntheticObservations`, `ScenarioLearningFixtures`, and `SchedulingFixtures`; and
 9. no real workspace input/output data.
@@ -897,9 +893,8 @@ oracle, or precision rule changes.
 
 ### Repackage compatibility addendum (2026-07-29)
 
-The Phase 2-and-later repackage changes package locations only; the Phase 6 contract and class
-names remain valid. Prompt 6B must use these current locations when adding imports or extending
-tests:
+The Phase 2-and-later repackage changes package locations only; the Phase 6 contract and class names
+remain valid. Prompt 6B must use these current locations when adding imports or extending tests:
 
 - `io.euhedral_execution.training.scheduling.fixtures.SchedulingFixtures`
   (`euhedral-training/src/test/java/io/euhedral_execution/training/scheduling/fixtures/SchedulingFixtures.java`);
@@ -929,17 +924,16 @@ The deterministic experiment is implemented by:
 
 - `AuditFixtures.java`, which creates the exact ten-policy/four-scenario corpus, imports it in
   forward and reverse creation order, runs control/interrupted/resumed/reproduced/rejected
-  workspaces, and uses the real merger, schedulers, checkpoint codec, bundle codecs, and
-  packager;
-- `AuditScenarioModelFixture.java`, which writes and reopens the accepted/rejected Phase 2
-  metadata and report surface and supplies constant test members without loading DJL;
+  workspaces, and uses the real merger, schedulers, checkpoint codec, bundle codecs, and packager;
+- `AuditScenarioModelFixture.java`, which writes and reopens the accepted/rejected Phase 2 metadata
+  and report surface and supplies constant test members without loading DJL;
 - `EndToEndAuditTest.java`, which independently checks bootstrap and final ordering, raw-bit
-  calibration, type-7/midrank aggregates, the exact timeout/skipped grid, incomplete-role
-  exclusion, restart adoption, byte equivalence, and package counts; and
-- `PackageLifecycleAuditTest.java`, which checks all historical stages, the 70/58-file
-  inventories, 69/57 manifest-entry counts, reports, checksums, collisions, five publication
-  failures, staging ownership, semantic schedule/evidence mismatch, artifact-family mutation,
-  and the canonical manifest matrix.
+  calibration, type-7/midrank aggregates, the exact timeout/skipped grid, incomplete-role exclusion,
+  restart adoption, byte equivalence, and package counts; and
+- `PackageLifecycleAuditTest.java`, which checks all historical stages, the 70/58-file inventories,
+  69/57 manifest-entry counts, reports, checksums, collisions, five publication failures, staging
+  ownership, semantic schedule/evidence mismatch, artifact-family mutation, and the canonical
+  manifest matrix.
 
 The three reviewed golden resources are:
 
@@ -970,30 +964,30 @@ The audit exposed and fixed only behavior already settled by earlier phases:
    `ClosedLoopRunner` now returns an empty prediction list without invoking model inference.
 2. `OptimizationCorpusReader` incorrectly placed rejected required scenarios in
    `measuredScenarios` and compared `observedRequiredScenarioCount` only to that set. Phase 1
-   defines observed as valid plus rejected, while measured contains valid estimates. The reader
-   now recomputes those fields separately.
-3. Phase 4 semantic validation gaps allowed vector identity/order, scenario identity,
-   duplicate scenario-policy, and schedule/raw-evidence inconsistencies to rely only on copied
-   checksums. `PackageDatasetWriter` and `TrainingRunPackageValidator` now enforce those settled
-   joins directly.
-4. A package collision with unchanged input properties but a different selected checkpoint could
-   be accepted as idempotent. Collision validation now resolves the requested source and compares
-   checkpoint hash/stage/status, calibration, winners, and omissions before returning the
-   existing target.
+   defines observed as valid plus rejected, while measured contains valid estimates. The reader now
+   recomputes those fields separately.
+3. Phase 4 semantic validation gaps allowed vector identity/order, scenario identity, duplicate
+   scenario-policy, and schedule/raw-evidence inconsistencies to rely only on copied checksums.
+   `PackageDatasetWriter` and `TrainingRunPackageValidator` now enforce those settled joins
+   directly.
+4. A package collision with unchanged input properties but a different selected checkpoint could be
+   accepted as idempotent. Collision validation now resolves the requested source and compares
+   checkpoint hash/stage/status, calibration, winners, and omissions before returning the existing
+   target.
 5. The exact Phase 5 command grammar did not reject a flag token in an argument-value position.
    `Runner` now rejects those malformed forms before invoking any service.
 
 The original final-oracle sentence saying all four final `R` qualities were equal conflicted with
-the Phase 1 valid-row population rule: the intentional rejected row changes one scenario's
-midrank denominator. The oracle above now requires independent scenario midranks and independent
+the Phase 1 valid-row population rule: the intentional rejected row changes one scenario's midrank
+denominator. The oracle above now requires independent scenario midranks and independent
 type-7/minimum/geometric-mean/MAD aggregation. This is a correction to an internally inconsistent
 fixture assertion, not a new statistical decision.
 
 No hot-loop, VarHandle, queue, affinity, frame, or runtime publication semantics changed. All
 fixture counters, probes, and buffers are single-threaded and thread-confined; the existing atomic
-filesystem moves remain the publication boundaries. All 28 vector lanes are checked by raw
-IEEE-754 bits, native throughput is derived from integer frames/nanoseconds, and calibration
-comparisons use raw bits of the prescribed `StrictMath` expressions.
+filesystem moves remain the publication boundaries. All 28 vector lanes are checked by raw IEEE-754
+bits, native throughput is derived from integer frames/nanoseconds, and calibration comparisons use
+raw bits of the prescribed `StrictMath` expressions.
 
 ### Deterministic artifact evidence
 
@@ -1009,16 +1003,16 @@ recursive_package_sha256     f1734475fd29f0abb2a95c181777e312713dd12363f8a627a02
 first_normal_bundle_sha256   852dc47e69bfdc8e0d57e3f17b2aa0b5389d5df11b87bb6c4c295777214601f6
 ```
 
-The first normal bundle remains byte-identical across interruption and adoption. Control,
-resumed, and package-run reproduction directories have the same recursive fingerprint.
+The first normal bundle remains byte-identical across interruption and adoption. Control, resumed,
+and package-run reproduction directories have the same recursive fingerprint.
 
-Manual report inspection confirmed the ten README headings in order, `RUN_COMPLETE` revision 24,
-no omissions, `R` (`p1-4e8bd733c51b5dab`) at rank 1, all four exact scenarios, four reference and
-four strong calibrated runs, accepted model labeling, artifact guide, provenance, and exact
+Manual report inspection confirmed the ten README headings in order, `RUN_COMPLETE` revision 24, no
+omissions, `R` (`p1-4e8bd733c51b5dab`) at rank 1, all four exact scenarios, four reference and four
+strong calibrated runs, accepted model labeling, artifact guide, provenance, and exact
 `package-run` command. The ranking report preserves every CSV metric string and identifies
-`p1-4831d7dc86decb8d` as incomplete. The scenario report contains four naturally ordered
-headings and shows `R` at calibrated throughput 90 with exactly one faster policy in each
-scenario. The manifest canonically re-encodes and has 69 sorted file entries.
+`p1-4831d7dc86decb8d` as incomplete. The scenario report contains four naturally ordered headings
+and shows `R` at calibrated throughput 90 with exactly one faster policy in each scenario. The
+manifest canonically re-encodes and has 69 sorted file entries.
 
 ### Validation
 

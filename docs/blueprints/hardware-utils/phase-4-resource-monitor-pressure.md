@@ -10,8 +10,8 @@ prepared on `hardware-utils-overhaul/phase-4-pressure-monitor-blueprint`.
 This action is planning-only. It changes this blueprint, the controlling plan, and the narrow
 developer-authorized integrated-conformance exception in `docs/AGENT_WORKFLOW.md`; it does not
 change production or test source, inspect training, or authorize a commit, merge, push,
-implementation branch, or child branch. After review, this parent blueprint must merge into the
-P4 root before the first child branch is created.
+implementation branch, or child branch. After review, this parent blueprint must merge into the P4
+root before the first child branch is created.
 
 ## Purpose and fixed boundaries
 
@@ -82,9 +82,9 @@ compact completion/review summary.
 ## Evidence and current defects
 
 The inherited P0-P3 artifacts establish the public API baseline, immutable snapshot ownership,
-stable logical CPU indexing, topology update semantics, and managed hardware lifecycle behavior.
-The P3 root audit classifies all 16 parent criteria and A01-A02 as satisfied. P1-A and the P1-B
-audit paths absent from the current tree are intentionally absent historical artifacts and are not
+stable logical CPU indexing, topology update semantics, and managed hardware lifecycle behavior. The
+P3 root audit classifies all 16 parent criteria and A01-A02 as satisfied. P1-A and the P1-B audit
+paths absent from the current tree are intentionally absent historical artifacts and are not
 reconstructed.
 
 Current code establishes the following P4 repair inputs:
@@ -96,20 +96,20 @@ Current code establishes the following P4 repair inputs:
 - Listener work uses the common pool, is unbounded and overlapping, and holds a spin guard while
   invoking callbacks; a reentrant `addListener` can deadlock and an `Error` can wedge the guard.
 - Mutable evaluation fields are published incrementally before one complete result exists.
-- Throughput is treated as I/O pressure, productive work leaks into pressure, and the existing
-  CPU, memory, and throttle formulas are dimensionally or semantically incorrect.
+- Throughput is treated as I/O pressure, productive work leaks into pressure, and the existing CPU,
+  memory, and throttle formulas are dimensionally or semantically incorrect.
 - Linux pressure is scope-mismatched host apportionment, Windows pressure is productive busy time,
   and macOS pressure is host load adjusted by process utilization. P4 adapters must mark those
   legacy signals unsupported rather than make them authoritative before P5-P7.
-- `ControlPlaneFragment` consumes only `CpuSnapshot.pressure()`. `ControlPlaneCache` applies its
-  own already-settled control-policy hysteresis. Both remain read-only.
+- `ControlPlaneFragment` consumes only `CpuSnapshot.pressure()`. `ControlPlaneCache` applies its own
+  already-settled control-policy hysteresis. Both remain read-only.
 
 ## Sizing and split gate
 
 One P4 implementation fails every split-gate test. It combines four independently testable
 responsibilities, three independent concurrency/state machines, mathematical precision, public
-compatibility projection, and broad failure coverage. A single implementation context would need
-to hold all platform adapter inputs, counter recovery, pressure math, Java Memory Model edges,
+compatibility projection, and broad failure coverage. A single implementation context would need to
+hold all platform adapter inputs, counter recovery, pressure math, Java Memory Model edges,
 lifecycle transitions, and adversarial listener behavior at once.
 
 P4 is therefore split, in this mandatory order:
@@ -128,9 +128,9 @@ or validation branch. After P4-D implementation merges, the only conformance act
 `hardware-utils-overhaul/phase-4-pressure-monitor-audit` and audits the integrated P4 result.
 
 The child envelopes later in this document show that each child has one owner state machine and a
-testable immutable boundary. None needs another split now. If a child discovers a second
-independent responsibility, it must stop in its blueprint and split again; it may not defer design
-to implementation.
+testable immutable boundary. None needs another split now. If a child discovers a second independent
+responsibility, it must stop in its blueprint and split again; it may not defer design to
+implementation.
 
 ## Package ownership and names
 
@@ -146,8 +146,8 @@ The settled high-reasoning packages and types are:
     - `SignalResolution`, `CounterDelta`, `ResolvedLong`, `ResolvedDouble`,
       `LatencyInterval`, and `IntervalHardwareSample`
     - `SampleStateEngine` and `SlowSampleCache`
-    - `ThermalSeverity`, `CompatibilityProfile`, `SystemSnapshotCompatibilityAdapter`, and its
-      fixed legacy mappings
+    - `ThermalSeverity`, `CompatibilityProfile`, `SystemSnapshotCompatibilityAdapter`, and its fixed
+      legacy mappings
 - `io.euhedral_execution.hardware_utils.internal.pressure`
     - `PressureConstants`, `PressureState`, `PressureEvaluation`, `PressureEvaluator`, and
       `PressureProjection`
@@ -197,16 +197,16 @@ record must contain canonical payload `0`, `0.0`, `false`, or `NOMINAL` respecti
 adapters use static factories; compact constructors enforce the same invariants for every caller.
 Group compact constructors additionally require every already-normalized ratio leaf in
 `[0.0, 1.0]`; an out-of-range ratio is transient failure, not silently clamped at the SPI boundary.
-Unnormalized capacity, runnable-work, and queue gauges remain finite/nonnegative and may exceed
-one before their named formula.
+Unnormalized capacity, runnable-work, and queue gauges remain finite/nonnegative and may exceed one
+before their named formula.
 
 For `VALID`, `observedAtNs` is the monotonic instant at which that value was completed. For
 `TRANSIENT_FAILURE`, it is the failed attempt instant; for `UNSUPPORTED`, it is that sample's
 requested instant. Neither nonvalid timestamp refreshes value age: all TTL calculation uses the
 stored last-valid timestamp. Timestamp payloads may be any signed `System.nanoTime` value.
 
-Signal records deep-copy any array or `BitSet` in their compact constructors. Their accessors
-return copies or the P2 immutable wrappers. No record retains provider-owned mutable storage.
+Signal records deep-copy any array or `BitSet` in their compact constructors. Their accessors return
+copies or the P2 immutable wrappers. No record retains provider-owned mutable storage.
 
 ### Resolved interval boundary
 
@@ -242,10 +242,10 @@ effective-CPU set, and these leaves:
 - cumulative scope quota-throttled time in nanoseconds;
 - optional cumulative scope scheduler-wait and PSI/scheduler-stall time plus an optional
   already-normalized scope scheduler-stall ratio;
-- one `CpuFastSignals` entry per logical CPU containing cumulative scheduler-wait time,
-  cumulative PSI/scheduler-stall time, an optional already-normalized scheduler-stall ratio,
-  cumulative per-CPU quota-throttle time, cumulative steal time, an external-contention ratio,
-  and runnable work per unit of available CPU capacity;
+- one `CpuFastSignals` entry per logical CPU containing cumulative scheduler-wait time, cumulative
+  PSI/scheduler-stall time, an optional already-normalized scheduler-stall ratio, cumulative per-CPU
+  quota-throttle time, cumulative steal time, an external-contention ratio, and runnable work per
+  unit of available CPU capacity;
 - `MemoryFastSignals`: hard-limit bytes, high-limit bytes, usage bytes, inactive-file bytes,
   cumulative reclaim bytes, and cumulative memory-stall nanoseconds; and
 - `IoFastSignals`: cumulative productive bytes, cumulative stall nanoseconds, cumulative operation
@@ -266,10 +266,9 @@ from effective cardinality, `BitSet.length()`, or a sample. The package-private 
 accepts an explicit positive logical span and rejects `<= 0` with `IllegalArgumentException`. CPU
 array position `i` is logical CPU `i`; signal records do not carry a second CPU identity. Every
 fast/slow CPU array must have exactly that length and every effective bit must be below it. A span
-mismatch,
-null/short/long array, or out-of-span bit invalidates the outer sample for that attempt; it is not
-truncated, padded, or remapped. An empty effective set remains a valid sample representing complete
-capacity loss.
+mismatch, null/short/long array, or out-of-span bit invalidates the outer sample for that attempt;
+it is not truncated, padded, or remapped. An empty effective set remains a valid sample representing
+complete capacity loss.
 
 ### Slow sample schema
 
@@ -285,20 +284,19 @@ A capacity unit is a nonnegative provider-native relative capacity scalar; avail
 must come from the same API/scale and are used only as their within-CPU ratio. Frequencies are
 nonnegative hertz. Thermal and low-power fields are enums/booleans, not numeric platform ordinals.
 
-A current opportunistic clock frequency is not a constrained ceiling. A provider that cannot
-prove a capacity or frequency ceiling marks it unsupported, preventing idle frequency scaling
-from becoming pressure. Per-CPU values override nothing: CPU and system thermal/low-power losses
-are correlated with `max` as specified below.
+A current opportunistic clock frequency is not a constrained ceiling. A provider that cannot prove a
+capacity or frequency ceiling marks it unsupported, preventing idle frequency scaling from becoming
+pressure. Per-CPU values override nothing: CPU and system thermal/low-power losses are correlated
+with `max` as specified below.
 
 ### SPI call contract
 
 `DetailedSystemSnapshotProvider.sampleFast(long requestedAtNs)` is attempted once per monitor poll.
 `sampleSlow(long requestedAtNs)` is attempted on the independent slow grid. Implementations return
-fresh immutable records, may throw any `Exception` or `LinkageError`, and must not return null.
-The monitor catches those failures at the provider boundary and supplies transient-failure leaves;
-fatal VM conditions are not deliberately swallowed there. Platform implementations must keep
-sensor calls bounded and responsive to interruption where their API permits; P5-P7 own those
-collection details.
+fresh immutable records, may throw any `Exception` or `LinkageError`, and must not return null. The
+monitor catches those failures at the provider boundary and supplies transient-failure leaves; fatal
+VM conditions are not deliberately swallowed there. Platform implementations must keep sensor calls
+bounded and responsive to interruption where their API permits; P5-P7 own those collection details.
 
 Evaluation call order is fixed: capture `pollStartNs`; if the slow boundary is due, attempt
 `sampleSlow(pollStartNs)`; then attempt `sampleFast(pollStartNs)` regardless of slow success; then
@@ -309,8 +307,8 @@ sample/cache. This sensor order precedes the logical-CPU/signal evaluation order
 The requested timestamp is an observation aid, not publication authority. Each signal reports its
 own observation timestamp. Outer `observedAtNs` is captured after that sample's leaf reads; every
 valid leaf must not be after its outer time, and the outer time must not be after `evaluationNs`
-under signed elapsed ordering. Violations follow the transient/outer-failure rules. Only the
-monitor clock sets public publication time.
+under signed elapsed ordering. Violations follow the transient/outer-failure rules. Only the monitor
+clock sets public publication time.
 
 ## Canonical public units and field mapping
 
@@ -354,13 +352,13 @@ saturated working set. Scoped byte fields use nonnegative saturating multiplicat
 Every populated CPU and socket snapshot derived from one utilization has
 `lastUsageNs == HardwareUtilization.timestampNs()`. No method substitutes call time. All ratio
 accessors listed in the plan are finite in `[0.0, 1.0]`, including objects constructed through
-public record constructors. Compact constructors canonicalize `-0.0` to `+0.0`, map malformed
-ratio inputs to `0.0`, and clamp finite out-of-range values. They reject null owned objects and
-active CPU spans not covered by required arrays. `HardwareUtilization` also rejects a nested
+public record constructors. Compact constructors canonicalize `-0.0` to `+0.0`, map malformed ratio
+inputs to `0.0`, and clamp finite out-of-range values. They reject null owned objects and active CPU
+spans not covered by required arrays. `HardwareUtilization` also rejects a nested
 `SystemSnapshot.timeNs` that differs from its `timestampNs`, a membership set that differs from
 `snapshot.effectiveCpus`, or quota/period values that differ from the canonical nested snapshot.
-`SystemSnapshot` rejects a nonpositive span, a pressure array whose length is not exactly that
-span, or an effective bit outside it.
+`SystemSnapshot` rejects a nonpositive span, a pressure array whose length is not exactly that span,
+or an effective bit outside it.
 
 Public compact-constructor sanitation for non-ratio telemetry is also exact: negative cumulative
 counters, usage/inactive/I/O/pool/scoped bytes, and period become zero; a negative
@@ -371,8 +369,8 @@ above.
 
 ## Compatibility adapter
 
-`SystemSnapshotCompatibilityAdapter` selects one immutable profile at construction; selection is
-not keyed by a sample identity or timestamp:
+`SystemSnapshotCompatibilityAdapter` selects one immutable profile at construction; selection is not
+keyed by a sample identity or timestamp:
 
 | Profile            | Mapping before its platform phase                                                                                                                                                                      |
 |--------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -381,8 +379,8 @@ not keyed by a sample identity or timestamp:
 | `WINDOWS_LEGACY`   | Accept safely dimensional byte gauges/counters only. Mark current cycle-derived CPU/throttle and busy-time pressure unsupported.                                                                       |
 | `MACOS_LEGACY`     | Accept safely dimensional byte gauges/I/O counters only. Mark current delta CPU time and load-derived pressure unsupported.                                                                            |
 
-The adapter is an honest bridge, not the P5-P7 collection fix. It never guesses a missing unit,
-keys mutable recovery state by class/thread, inspects provider identity changes, or reinterprets
+The adapter is an honest bridge, not the P5-P7 collection fix. It never guesses a missing unit, keys
+mutable recovery state by class/thread, inspects provider identity changes, or reinterprets
 productive busy time as contention. A built-in class maps to its named fixed profile once. Null
 providers fail construction as specified under lifecycle; a provider returning null is a transient
 sample failure.
@@ -401,9 +399,9 @@ timestamped at `requestedAtNs`. The slow grid therefore cannot double-sample a l
 provider.
 
 Checked legacy period conversion uses `Math.multiplyExact(periodMicros, 1_000L)` after rejecting a
-negative input. Overflow is transient failure and publishes period `0`; it cannot wrap. The
-adapter immediately deep-copies the effective set and pressure array. Unsupported rich values are
-explicit validity, not public sentinel inference. At the public compatibility boundary only,
+negative input. Overflow is transient failure and publishes period `0`; it cannot wrap. The adapter
+immediately deep-copies the effective set and pressure array. Unsupported rich values are explicit
+validity, not public sentinel inference. At the public compatibility boundary only,
 `memoryLimit == Long.MAX_VALUE` is the documented unknown/unbounded sentinel and maps to an
 unsupported internal limit; zero is a valid zero limit and any other nonnegative value is a valid
 byte limit. Internal detailed providers never encode validity with that sentinel.
@@ -412,8 +410,8 @@ byte limit. Internal detailed providers never encode validity with that sentinel
 
 ### Counter state
 
-`SampleStateEngine` is monitor-instance-owned. It stores a fixed field per global counter and
-fixed arrays indexed by stable Euhedral logical CPU ID. It uses no `Map`, static mutable state,
+`SampleStateEngine` is monitor-instance-owned. It stores a fixed field per global counter and fixed
+arrays indexed by stable Euhedral logical CPU ID. It uses no `Map`, static mutable state,
 `ThreadLocal`, timestamp-keyed sidecar, identity-keyed sidecar, or global registry.
 
 For a valid cumulative counter pair `(p, tp)` and `(c, tc)`:
@@ -428,11 +426,11 @@ otherwise                -> delta = c - p; replace baseline; evaluate delta over
 ```
 
 All canonical counters are signed nonnegative `long` values. P4 never assumes an unknown native
-counter width, so `c < p` is reset/wrap and never modular subtraction. A first value, reset,
-wrap, or per-signal timestamp regression establishes a baseline and cannot emit a since-boot
-usage, throttle, reclaim, latency, I/O rate, or stall spike. It also refreshes that affected
-signal's normalized input to valid zero so an old nonzero sample is not mistaken for the reset
-interval. Other counter baselines remain intact.
+counter width, so `c < p` is reset/wrap and never modular subtraction. A first value, reset, wrap,
+or per-signal timestamp regression establishes a baseline and cannot emit a since-boot usage,
+throttle, reclaim, latency, I/O rate, or stall spike. It also refreshes that affected signal's
+normalized input to valid zero so an old nonzero sample is not mistaken for the reset interval.
+Other counter baselines remain intact.
 
 `c - p` cannot overflow after the nonnegative and `c >= p` checks. Nanosecond differences use Java
 signed subtraction, which remains valid across `System.nanoTime()` wrap for elapsed intervals less
@@ -440,34 +438,34 @@ than `2^63` nanoseconds. A negative signed difference is regression and rebaseli
 positive duration.
 
 Paired latency is valid only when both latency and operation counters produce deltas over the same
-observation interval. A missing/reset member makes latency unavailable for that interval and
-rebases the affected members.
+observation interval. A missing/reset member makes latency unavailable for that interval and rebases
+the affected members.
 
 Noncumulative gauge/ratio/boolean/thermal state refreshes only from a strictly newer valid leaf
 timestamp. A duplicate or regressing leaf is a transient attempt: it does not replace the stored
 value or its observation time and resolves from that prior value only while still within TTL. This
-rule also covers a duplicate timestamp carrying a different payload; payload equality does not
-turn a duplicate into a refresh. A newly observed valid leaf already older than its TTL may be
-stored for ordering/baseline purposes but resolves `UNAVAILABLE` immediately.
+rule also covers a duplicate timestamp carrying a different payload; payload equality does not turn
+a duplicate into a refresh. A newly observed valid leaf already older than its TTL may be stored for
+ordering/baseline purposes but resolves `UNAVAILABLE` immediately.
 
-Effective membership owns one fixed `lastMembershipObservedAtNs`, not a timestamp-keyed sidecar.
-The first valid outer fast sample establishes it. Thereafter only a strictly newer outer fast
-timestamp may replace membership; a duplicate/regressing outer timestamp retains the previous
-copied set while its cumulative leaves independently resolve or rebaseline under the counter
-rules above. Thus stale provider output cannot remap topology.
+Effective membership owns one fixed `lastMembershipObservedAtNs`, not a timestamp-keyed sidecar. The
+first valid outer fast sample establishes it. Thereafter only a strictly newer outer fast timestamp
+may replace membership; a duplicate/regressing outer timestamp retains the previous copied set while
+its cumulative leaves independently resolve or rebaseline under the counter rules above. Thus stale
+provider output cannot remap topology.
 
 ### Monitor time and publication
 
-The poll-start clock, signal timestamps, evaluation time, completion time, and public timestamp
-are monotonic nanoseconds. Immediately after all due sensor reads, the monitor reads its injected
-clock once as `evaluationNs`. That value drives ages, smoothing elapsed time, and every timestamp in
-the candidate public snapshot. After topology update, atomic publication, and nonblocking listener
+The poll-start clock, signal timestamps, evaluation time, completion time, and public timestamp are
+monotonic nanoseconds. Immediately after all due sensor reads, the monitor reads its injected clock
+once as `evaluationNs`. That value drives ages, smoothing elapsed time, and every timestamp in the
+candidate public snapshot. After topology update, atomic publication, and nonblocking listener
 offer, it reads the clock again as `completionNs` for scheduling.
 
 Every monotonic comparison uses signed elapsed subtraction, not numeric timestamp ordering:
 `after(a, b)` is exactly `(a - b) > 0`, valid for separations below `2^63` nanoseconds. The same
-helper governs publication acceptance, cache age, deadline checks, and listener timestamp order,
-so a normal `System.nanoTime()` signed wrap does not look like regression.
+helper governs publication acceptance, cache age, deadline checks, and listener timestamp order, so
+a normal `System.nanoTime()` signed wrap does not look like regression.
 
 `evaluationNs` must be strictly later than the prior publication timestamp. A duplicate or
 regressing monitor time produces no publication, rebases all currently valid cumulative inputs,
@@ -493,21 +491,20 @@ cleared to zero immediately. A valid zero refreshes and replaces a stale nonzero
 also clears immediately. Thus unsupported and expired signals are validity-neutral rather than a
 slowly decaying hidden input.
 
-TTL is enforced at evaluation boundaries; no auxiliary expiry timer publishes by itself. The
-first evaluation after `age > TTL` clears the value, so observable retention is bounded above by
+TTL is enforced at evaluation boundaries; no auxiliary expiry timer publishes by itself. The first
+evaluation after `age > TTL` clears the value, so observable retention is bounded above by
 `TTL + P` (plus one in-flight evaluation) and is about TTL at the default 200 ms cadence. A caller
 choosing a very long valid public period intentionally accepts that coarser expiry observation.
 
 Logical span is construction-fixed. Effective membership is structural outer-sample state, not a
-pressure signal: after the first valid outer sample, a complete fast failure retains the last
-copied set until a successful sample (including a valid empty set) replaces it or close clears it.
-This prevents sensor failure from fabricating a topology remap. Every pressure-bearing value and
-current gauge/rate still expires by its own bounded TTL, so continued failure produces timestamped
+pressure signal: after the first valid outer sample, a complete fast failure retains the last copied
+set until a successful sample (including a valid empty set) replaces it or close clears it. This
+prevents sensor failure from fabricating a topology remap. Every pressure-bearing value and current
+gauge/rate still expires by its own bounded TTL, so continued failure produces timestamped
 neutral-pressure/current-rate-zero publications rather than retaining stale pressure. The last
 nonnegative cumulative counter value remains a monotonic public telemetry/baseline value but cannot
 produce an interval contribution after TTL. Before any valid membership exists, a complete failure
-cannot publish.
-Membership is never inferred from per-CPU signal availability.
+cannot publish. Membership is never inferred from per-CPU signal availability.
 
 `SlowSampleCache` has its own anchored 5-second attempt grid and per-field age. A slow failure does
 not trigger an immediate retry and does not change the fast 200 ms grid. An overrun skips slow
@@ -552,31 +549,31 @@ its denominator before division, performs the division in `double`, then checks 
 clamps. Intermediate invalidity makes that signal transient failure; it is not silently pressure
 zero while a fresh cached value exists.
 
-Every scaled long calculation casts the nonnegative numerator to `double` before multiplication
-(for example `((double) deltaBytes * 1_000_000_000.0) / elapsedNs`); no long multiplication is
-allowed to wrap before conversion.
+Every scaled long calculation casts the nonnegative numerator to `double` before multiplication (for
+example `((double) deltaBytes * 1_000_000_000.0) / elapsedNs`); no long multiplication is allowed to
+wrap before conversion.
 
 All floating-point expressions use Java 17 strict evaluation in the written order. Do not use
-`float`, decimal formatting, quantization, `BigDecimal`, or platform-dependent fused operations.
-No normalized result is rounded for publication. Tests use exact boundaries or at most eight ULPs
-for `StrictMath.expm1` results. Integer byte allocation uses floor division; nonnegative scoped
-products saturate at `Long.MAX_VALUE`. Subtraction clamps inactive file bytes before conversion:
+`float`, decimal formatting, quantization, `BigDecimal`, or platform-dependent fused operations. No
+normalized result is rounded for publication. Tests use exact boundaries or at most eight ULPs for
+`StrictMath.expm1` results. Integer byte allocation uses floor division; nonnegative scoped products
+saturate at `Long.MAX_VALUE`. Subtraction clamps inactive file bytes before conversion:
 `working = usage >= inactive ? usage - inactive : 0`.
 
 ### Actual-time asymmetric smoothing
 
-Only pressure-bearing signals are smoothed. Productive CPU utilization, memory occupancy,
-scheduler interval telemetry, and byte rate are not. Each supported signal owns one smoother; a
-domain/composite is the deterministic `max` of those smoothed signals, so correlated signals are
-not counted twice.
+Only pressure-bearing signals are smoothed. Productive CPU utilization, memory occupancy, scheduler
+interval telemetry, and byte rate are not. Each supported signal owns one smoother; a
+domain/composite is the deterministic `max` of those smoothed signals, so correlated signals are not
+counted twice.
 
-Each fixed `PressureState` smoother cell is exactly `(initialized, previous, lastEvaluationNs)`.
-For a `CURRENT`, `CACHED`, or `BASELINE` input at a valid publication evaluation,
+Each fixed `PressureState` smoother cell is exactly `(initialized, previous, lastEvaluationNs)`. For
+a `CURRENT`, `CACHED`, or `BASELINE` input at a valid publication evaluation,
 `dtNs = evaluationNs - lastEvaluationNs`; the first cell value is installed directly. A cached raw
 input is deliberately re-applied at each publication while it remains within TTL, using actual
 evaluation elapsed time, then clears immediately on expiry. A `BASELINE` counter supplies valid
-zero; a reset therefore releases from any prior value without fabricating a delta. Prospective
-cells and their timestamps commit only in the one-publication transaction below.
+zero; a reset therefore releases from any prior value without fabricating a delta. Prospective cells
+and their timestamps commit only in the one-publication transaction below.
 
 The constants intentionally produce attack alpha `0.20` and release alpha `0.05` at 200 ms:
 
@@ -606,8 +603,8 @@ order.
 
 ## Exact pressure mathematics
 
-All symbols below are valid normalized values after delta, age, sanitation, and per-signal
-smoothing unless marked `raw`. Missing/unsupported values are omitted from `max`; an empty `max`
+All symbols below are valid normalized values after delta, age, sanitation, and per-signal smoothing
+unless marked `raw`. Missing/unsupported values are omitted from `max`; an empty `max`
 is `0.0`.
 
 ### CPU scheduler, throttle, external contention, and capacity
@@ -620,8 +617,8 @@ quotaCpuUsage = unit(deltaProductiveCpuNs / denominator)
 ```
 
 If `quotaCpus <= 0`, elapsed time is invalid, the double denominator is non-finite, or the
-productive counter is baseline/unavailable, utilization is `0.0`. A valid aggregate productive
-delta may exceed the nominal capacity transiently but the public ratio clamps only after division.
+productive counter is baseline/unavailable, utilization is `0.0`. A valid aggregate productive delta
+may exceed the nominal capacity transiently but the public ratio clamps only after division.
 
 For logical CPU `i`:
 
@@ -643,8 +640,8 @@ scheduler_i      = max(smooth(scopeWaitRaw), smooth(scopePsiRaw),
 
 Runnable work at or below one per available CPU adds no pressure; four or more is full scheduler
 pressure. `SystemSnapshot.pressurePerCpu[i]` and `CpuSnapshot.stallRatio` publish
-`scheduler_i_raw`; the composite uses `scheduler_i`. Each scope smoother is stored once and its
-same value applies to every effective CPU. Scope scheduler/PSI evidence is never apportioned by
+`scheduler_i_raw`; the composite uses `scheduler_i`. Each scope smoother is stored once and its same
+value applies to every effective CPU. Scope scheduler/PSI evidence is never apportioned by
 productive activity; if honest scope alignment is unavailable, it is unsupported rather than
 attributed.
 
@@ -654,8 +651,8 @@ cpuThrottleRaw_i  = unit(deltaCpuThrottleNs_i / deltaTimeNs_i)
 throttle_i        = max(smooth(globalThrottleRaw), smooth(cpuThrottleRaw_i))
 ```
 
-When only global quota evidence exists, the same honest global value applies to every effective
-CPU. P4 never apportions it by host activity. `cpuThrottleRatio` is the smoothed global value when
+When only global quota evidence exists, the same honest global value applies to every effective CPU.
+P4 never apportions it by host activity. `cpuThrottleRatio` is the smoothed global value when
 available, otherwise the maximum supported per-CPU throttle. Each
 `perQuotaCpuThrottleRatio[i]` is `throttle_i`.
 
@@ -677,8 +674,8 @@ cpuDomain_i       = max(scheduler_i, throttle_i, externalDomain_i, capacityDomai
 ```
 
 Nominal denominators must be finite and strictly positive. A zero/negative/missing denominator is
-unavailable, not full loss. A valid available value at or above nominal is zero loss. Productive
-CPU usage is absent from every pressure expression.
+unavailable, not full loss. A valid available value at or above nominal is zero loss. Productive CPU
+usage is absent from every pressure expression.
 
 ### Memory
 
@@ -708,9 +705,9 @@ memoryStallRaw = unit(deltaMemoryStallNs / deltaTimeNs)
 memoryDomain = max(smooth(headroomRaw), smooth(reclaimRaw), smooth(memoryStallRaw))
 ```
 
-Reclaim is unavailable when `L <= 0`. Occupancy up to 80 percent has zero headroom pressure and
-100 percent is full. Reclaiming two percent of the effective limit per second is full reclaim
-pressure. A valid zero limit is complete headroom pressure. `totalMemoryUtilization` publishes `U`
+Reclaim is unavailable when `L <= 0`. Occupancy up to 80 percent has zero headroom pressure and 100
+percent is full. Reclaiming two percent of the effective limit per second is full reclaim pressure.
+A valid zero limit is complete headroom pressure. `totalMemoryUtilization` publishes `U`
 but is not itself substituted for `memoryDomain`.
 
 ### I/O
@@ -725,9 +722,9 @@ ioDomain = max(smooth(ioStallRaw), smooth(latencyRaw), smooth(queueRaw))
 diskIOBytesPerSecond = deltaIoBytes * 1_000_000_000.0 / deltaTimeNs
 ```
 
-No completed operation makes latency unavailable for that interval. Latency at or below 1 ms is
-zero and 50 ms or above is full. The maximum in-scope queue depth at or below one is zero and eight
-or above is full. Bytes per second is sanitized telemetry and never enters `ioDomain`.
+No completed operation makes latency unavailable for that interval. Latency at or below 1 ms is zero
+and 50 ms or above is full. The maximum in-scope queue depth at or below one is zero and eight or
+above is full. Bytes per second is sanitized telemetry and never enters `ioDomain`.
 
 ### Composite and public values
 
@@ -767,8 +764,8 @@ last publication. Construction order is:
 5. construct `HardwareUtilization` with `timestampNs = evaluationNs` and that snapshot; and
 6. validate finite ratios, span coverage, and timestamp equality before returning the candidate.
 
-Unavailable public gauges/rates project as canonical zero, except unsupported/unbounded memory
-limit projects as `Long.MAX_VALUE` and unsupported quota capacity falls back to current effective
+Unavailable public gauges/rates project as canonical zero, except unsupported/unbounded memory limit
+projects as `Long.MAX_VALUE` and unsupported quota capacity falls back to current effective
 cardinality with period zero. Baseline counters publish their current cumulative value while their
 interval contribution remains zero. After counter TTL, the last nonnegative cumulative value may
 remain public to avoid a fabricated regression, but its delta/rate/pressure resolution is
@@ -799,8 +796,8 @@ publications. Listener objects are borrowed and are never invoked after the clos
 
 - at most one callback is active globally;
 - at most one pending `HardwareUtilization` reference is retained; and
-- the listener registry contains at most one entry per listener object identity, in insertion
-  order, until monitor close.
+- the listener registry contains at most one entry per listener object identity, in insertion order,
+  until monitor close.
 
 That identity registry is solely the public listener registration set. It never stores or recovers
 sensor, pressure, timestamp, or snapshot state and therefore is not a prohibited measurement
@@ -825,27 +822,27 @@ and leaves `OPEN` for an identical or newer offer to retry.
 The worker waits on the dispatcher-state condition with the monitor released. It atomically takes
 and clears `pending`, snapshots the registry under only the registry monitor, and, before each
 listener invocation, briefly enters the state monitor to require `OPEN` and mark
-`callbackInProgress`. Its `finally` clears that flag and signals waiters before considering the
-next listener or pending value. Consequently an accepted value exists only as the current worker
-local or the one replaceable pending reference, and `beginClose` can stop a frozen batch before
-any not-yet-started callback.
+`callbackInProgress`. Its `finally` clears that flag and signals waiters before considering the next
+listener or pending value. Consequently an accepted value exists only as the current worker local or
+the one replaceable pending reference, and `beginClose` can stop a frozen batch before any
+not-yet-started callback.
 
 `offer(value)` is nonblocking. While a callback is active, a newer offer atomically replaces the
 pending value. Intermediate values are intentionally coalesced. Older/equal timestamps are
-discarded. The dispatcher takes the pending value, snapshots the current registry under its
-registry monitor, releases that monitor, then invokes the snapshot sequentially in insertion
-order. Delivery timestamps for each listener are strictly increasing, but best effort does not
-promise every publication or an initial replay.
+discarded. The dispatcher takes the pending value, snapshots the current registry under its registry
+monitor, releases that monitor, then invokes the snapshot sequentially in insertion order. Delivery
+timestamps for each listener are strictly increasing, but best effort does not promise every
+publication or an initial replay.
 
 `addListener` rejects null with `NullPointerException("listener")`. Adding the identical object is
 an idempotent no-op. It never invokes user `equals`/`hashCode`. Most importantly, no callback runs
-under the registry monitor. A callback that calls `addListener` completes registration safely;
-the new listener is not part of the current frozen batch and becomes eligible for the next
-retained publication.
+under the registry monitor. A callback that calls `addListener` completes registration safely; the
+new listener is not part of the current frozen batch and becomes eligible for the next retained
+publication.
 
 Each callback is an isolation boundary that catches `Throwable`, records it through parameterized
-logging, restores dispatcher invariants in `finally`, and proceeds to the next listener unless
-close has linearized. Callback-set interrupt status is cleared before the next callback; dispatcher
+logging, restores dispatcher invariants in `finally`, and proceeds to the next listener unless close
+has linearized. Callback-set interrupt status is cleared before the next callback; dispatcher
 shutdown is controlled by its state predicate, not an untrusted callback's interrupt bit.
 
 The dispatcher close protocol has two package-private phases. `beginClose(Runnable
@@ -855,26 +852,26 @@ only on the first transition, retained at most until termination, and invoked ex
 dispatcher state/references are cleared and outside every dispatcher/registry lock. When no
 dispatcher thread or callback exists it may run synchronously before `beginClose` returns.
 `awaitClosed()` waits on a condition, without spinning, until an active callback and dispatcher
-thread finish; if interrupted, it completes the barrier and restores the caller's interrupt
-status. A close called reentrantly by the dispatcher callback performs `beginClose`, clears
-remaining callbacks, and returns without self-join; the dispatch loop invokes the hook after that
-callback returns. Thus no callback begins after `beginClose` and reentrant close cannot deadlock or
-strand monitor teardown. `stop()` does not destroy the dispatcher because the monitor may restart;
-only `close()` does.
+thread finish; if interrupted, it completes the barrier and restores the caller's interrupt status.
+A close called reentrantly by the dispatcher callback performs `beginClose`, clears remaining
+callbacks, and returns without self-join; the dispatch loop invokes the hook after that callback
+returns. Thus no callback begins after `beginClose` and reentrant close cannot deadlock or strand
+monitor teardown. `stop()` does not destroy the dispatcher because the monitor may restart; only
+`close()` does.
 
 The dispatcher uses one dedicated daemon thread named `euhedral-resource-monitor-listener`.
 Thread-start failure leaves sampling/publication intact, makes that `offer` return `false`, clears
 its pending value and thread reference, and permits a later offer to retry. Listener callbacks never
 execute on the polling thread or the common pool. A package-private constructor accepts a JDK
-`ThreadFactory` for deterministic start-failure and identity tests; production uses its fixed
-daemon factory.
+`ThreadFactory` for deterministic start-failure and identity tests; production uses its fixed daemon
+factory.
 
 ## ResourceMonitor lifecycle
 
 ### Construction and duration validation
 
-The default public constructor uses exactly `Duration.ofMillis(200)`. Public constructors perform
-no sensor read and no topology update. Validation order and exceptions are fixed:
+The default public constructor uses exactly `Duration.ofMillis(200)`. Public constructors perform no
+sensor read and no topology update. Validation order and exceptions are fixed:
 
 1. null `TopologyMapper` -> `NullPointerException("mapper")`;
 2. null `Duration` -> `NullPointerException("sampleRate")`;
@@ -886,14 +883,14 @@ no sensor read and no topology update. Validation order and exceptions are fixed
 
 No duration is rounded; a converted zero follows the nonpositive rule. The bounded range makes TTL
 and deadline calculations representable; multiplication still uses saturating helpers. A null
-injected provider is `NullPointerException("snapshotProvider")`.
-If `SystemInfo.SNAPSHOTTER` is unavailable, public construction throws
+injected provider is `NullPointerException("snapshotProvider")`. If `SystemInfo.SNAPSHOTTER` is
+unavailable, public construction throws
 `IllegalStateException("Resource monitoring is unavailable on this platform")`; a null provider
 cannot survive to race with `start` or `getUtilization`.
 
-P4 adds an additive `public void stop()` method; existing signatures remain unchanged. P0's API
-gate must classify it as additive and record duration/lifecycle behavior corrections exactly in
-the defect ledger.
+P4 adds an additive `public void stop()` method; existing signatures remain unchanged. P0's API gate
+must classify it as additive and record duration/lifecycle behavior corrections exactly in the
+defect ledger.
 
 ### State machine
 
@@ -906,12 +903,12 @@ separate evaluation gate owns all sample/delta/smoother mutation.
 An evaluator is claimed by setting `evaluationActive` under the lifecycle monitor, releases that
 monitor, and only then acquires the evaluation gate. No lifecycle path acquires or waits for the
 evaluation gate while holding the lifecycle monitor. While it holds the evaluation gate, the
-evaluator may briefly acquire the lifecycle monitor to claim publication or finish; this is the
-only nested order, evaluation -> lifecycle. Provider and topology calls occur under the evaluation
-gate but under neither the lifecycle nor registry monitor. The only lifecycle -> dispatcher-state
-nests are `addListener`, delivery `offer`, and `beginClose`; the dispatcher never enters the
-lifecycle monitor while holding one of its monitors, callbacks run under none of them, and its
-internal termination hook runs after all dispatcher locks are released.
+evaluator may briefly acquire the lifecycle monitor to claim publication or finish; this is the only
+nested order, evaluation -> lifecycle. Provider and topology calls occur under the evaluation gate
+but under neither the lifecycle nor registry monitor. The only lifecycle -> dispatcher-state nests
+are `addListener`, delivery `offer`, and `beginClose`; the dispatcher never enters the lifecycle
+monitor while holding one of its monitors, callbacks run under none of them, and its internal
+termination hook runs after all dispatcher locks are released.
 
 | Operation/state                                          | Settled behavior                                                                                                                                                                                                |
 |----------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -935,13 +932,12 @@ internal termination hook runs after all dispatcher locks are released.
 | `close`, `CLOSED`                                        | Idempotent no-op.                                                                                                                                                                                               |
 
 An external `stop`/`close` waits with condition rechecks, not a busy loop or arbitrary timeout. It
-preserves interruption by completing the safety barrier and restoring the caller interrupt flag.
-A call from the polling or current evaluation-owner thread requests the transition and returns
-without self-wait; its `finally` publishes the terminal state. Reentrant listener close follows
-the dispatcher rule.
-Every join/`awaitClosed` uses a locally captured owner reference after releasing the lifecycle
-monitor; a lifecycle-condition wait also releases that monitor. No barrier wait holds lifecycle,
-evaluation, dispatcher, or registry ownership.
+preserves interruption by completing the safety barrier and restoring the caller interrupt flag. A
+call from the polling or current evaluation-owner thread requests the transition and returns without
+self-wait; its `finally` publishes the terminal state. Reentrant listener close follows the
+dispatcher rule. Every join/`awaitClosed` uses a locally captured owner reference after releasing
+the lifecycle monitor; a lifecycle-condition wait also releases that monitor. No barrier wait holds
+lifecycle, evaluation, dispatcher, or registry ownership.
 
 External close barriers use one order: stop/await the poll thread or synchronous evaluator, then
 `awaitClosed()` on the dispatcher. The polling thread never waits for dispatcher callbacks during
@@ -950,13 +946,13 @@ without self-waiting; a dispatcher-callback close may await poll termination and
 dispatcher's reentrant no-self-wait rule. Poll/evaluation `finally` and the one-shot dispatcher
 termination hook each signal the lifecycle condition and call the same idempotent
 `tryFinalizeClose` under the lifecycle monitor. It changes `CLOSING -> CLOSED` only when no
-evaluation/poll owner remains and dispatcher termination was observed. Every non-owner close
-returns only after observing `CLOSED`. This order prevents a poll close and callback close from
-waiting on each other. `CLOSED` retains only the last immutable publication; all other monitor/
-dispatcher dynamic references are cleared.
+evaluation/poll owner remains and dispatcher termination was observed. Every non-owner close returns
+only after observing `CLOSED`. This order prevents a poll close and callback close from waiting on
+each other. `CLOSED` retains only the last immutable publication; all other monitor/ dispatcher
+dynamic references are cleared.
 
-The production poll thread is non-daemon, named `euhedral-resource-monitor`, and held by exactly
-one state. Thread creation/start failure rolls `STARTING` back to `STOPPED`, clears identity, wakes
+The production poll thread is non-daemon, named `euhedral-resource-monitor`, and held by exactly one
+state. Thread creation/start failure rolls `STARTING` back to `STOPPED`, clears identity, wakes
 waiters, and throws. A complete fast-provider failure before membership has ever been established
 during the required initial evaluation also rolls back and throws `IllegalStateException` with
 cause. With prior membership, that failure follows normal bounded transient publication. A partial
@@ -981,8 +977,8 @@ evaluation gate. If state is `CLOSING` or `CLOSED`, it aborts before topology an
 it sets `publicationClaimed = true`; that claim orders this one overlapping evaluation before a
 later close request. Close may then enter `CLOSING`, but it must wait for the claimed topology/
 release attempt to finish, and no second evaluation can be claimed. Thus at most one already-
-claimed publication may become visible after `CLOSING` begins, always before external close
-returns. An unclaimed evaluation cannot update topology or publish, no listener offer occurs once
+claimed publication may become visible after `CLOSING` begins, always before external close returns.
+An unclaimed evaluation cannot update topology or publish, no listener offer occurs once
 `CLOSING` begins, and any accepted sampling state is cleared by close.
 
 ### Initial sample and restart
@@ -990,8 +986,8 @@ returns. An unclaimed evaluation cannot update topology or publish, no listener 
 `start` reads the clock at `t0`. If a successful stopped evaluation exists and its age is in
 `[0, P)`, `start` reuses it and schedules the first poll at `t0 + P`; this prevents the production
 `getUtilization(); start()` sequence from double-priming. Otherwise `start` performs one synchronous
-poll whose start is `t0`, returns only after its publication, and schedules from the same anchor.
-A restart uses the same freshness rule. Constructor sampling is prohibited.
+poll whose start is `t0`, returns only after its publication, and schedules from the same anchor. A
+restart uses the same freshness rule. Constructor sampling is prohibited.
 
 Stopped `getUtilization` and `start` share one initial-evaluation generation. A caller arriving
 while that generation is in flight waits on the lifecycle condition and observes the same
@@ -1001,9 +997,9 @@ retry. A concurrent `start` that observes the failed generation rolls back to `S
 it does not silently launch a retry thread.
 
 The first cumulative detailed sample establishes baselines. It may legitimately publish current
-gauge pressure such as zero memory headroom, but it publishes zero contributions for all
-cumulative CPU, throttle, reclaim, latency, I/O-rate, and stall inputs. There is no public
-pre-first-sample placeholder.
+gauge pressure such as zero memory headroom, but it publishes zero contributions for all cumulative
+CPU, throttle, reclaim, latency, I/O-rate, and stall inputs. There is no public pre-first-sample
+placeholder.
 
 ## Anchored polling recurrence
 
@@ -1036,9 +1032,9 @@ Consequences are exact:
 `MonotonicClock` and `DeadlineWaiter` are package-private injectable seams. The production waiter
 uses interruptible park/unpark with predicate rechecks. Tests use a manual clock/deadline waiter and
 latches; they contain no wall-clock sleep. The package-private `ResourceMonitor` test constructor
-also accepts the explicit logical span, a JDK `ThreadFactory` for the non-daemon polling thread,
-and already-constructed A-C dependencies. Public constructors use only the P2 `SystemInfo` span
-and fixed production factories.
+also accepts the explicit logical span, a JDK `ThreadFactory` for the non-daemon polling thread, and
+already-constructed A-C dependencies. Public constructors use only the P2 `SystemInfo` span and
+fixed production factories.
 
 `ResourceMonitor` does not call `ThreadTools.setTimerResolution`. A 200 ms grid does not justify a
 process- or thread-level 1 ns timer/scheduler mutation, and the current macOS path conflicts with
@@ -1053,9 +1049,8 @@ accepted, even if a later projection/topology call prevents public publication; 
 combining a later interval with an already consumed sample. P4-B separately builds immutable
 `PressureEvaluation(newPressureState, candidate)`. Its prospective smoother state commits only after
 the production `TopologyUpdater` (`TopologyMapper.update`) succeeds and immediately before the
-release publication. A
-failed candidate therefore consumes real counter observations but not an unpublished smoothing
-transition. No partial public field is visible.
+release publication. A failed candidate therefore consumes real counter observations but not an
+unpublished smoothing transition. No partial public field is visible.
 
 For every completed successful evaluation, ordering is:
 
@@ -1069,17 +1064,17 @@ collect/copy -> resolve/commit sample state -> evaluate prospective pressure sta
 ```
 
 If no membership context has ever been established, projection fails, or topology update throws,
-there is no release store and no listener offer; the previous publication remains. After
-membership exists, per-signal failures or a complete transient fast attempt can still produce one
-publication using retained membership plus bounded caches/neutral values. Logging is parameterized
-and outside hot ownership locks.
+there is no release store and no listener offer; the previous publication remains. After membership
+exists, per-signal failures or a complete transient fast attempt can still produce one publication
+using retained membership plus bounded caches/neutral values. Logging is parameterized and outside
+hot ownership locks.
 
 In a `finally` path the evaluator reacquires the lifecycle monitor, clears
 `publicationClaimed`/`evaluationActive`/`evaluationOwner`, records the generation result, and
 signals all waiters. After a successful release and before clearing those fields, it may call
 nonblocking
-`dispatcher.offer(candidate)` while holding the lifecycle monitor only when this is a periodic
-poll and state is still `RUNNING`. Close performs its state change and dispatcher `beginClose`
+`dispatcher.offer(candidate)` while holding the lifecycle monitor only when this is a periodic poll
+and state is still `RUNNING`. Close performs its state change and dispatcher `beginClose`
 under that same monitor, so an offer is wholly ordered before close or is rejected; it cannot
 straddle the close point.
 
@@ -1094,16 +1089,16 @@ callback.
 deep-copied record graph and all prior topology-update effects to a reader that observes it.
 Dispatcher-state monitor exit/entry publishes the same immutable candidate to the listener thread;
 registry monitor exit/entry publishes copy-on-write listener arrays. Lifecycle monitor exit/entry
-publishes state and thread identities; `Thread.start` and join/condition completion publish
-run-loop setup/teardown. Dispatcher termination clears its owned references before invoking the
-hook; the hook's lifecycle-monitor exit publishes that fact and the `CLOSED` transition to an
-external close waiter entering the same monitor. No plain/opaque access substitutes for a required
-edge; no volatile/atomic field duplicates an already monitor-guarded dispatcher field or the
-authoritative utilization publication.
+publishes state and thread identities; `Thread.start` and join/condition completion publish run-loop
+setup/teardown. Dispatcher termination clears its owned references before invoking the hook; the
+hook's lifecycle-monitor exit publishes that fact and the `CLOSED` transition to an external close
+waiter entering the same monitor. No plain/opaque access substitutes for a required edge; no
+volatile/atomic field duplicates an already monitor-guarded dispatcher field or the authoritative
+utilization publication.
 
 Topology mapping may have its own internal publication, but `ResourceMonitor` performs exactly one
-atomic utilization publication per successful evaluation. Listener coalescing is deliberately not
-a publication count.
+atomic utilization publication per successful evaluation. Listener coalescing is deliberately not a
+publication count.
 
 ## Child action items and context envelopes
 
@@ -1113,8 +1108,7 @@ P4-A owns the unexported sampling package, canonical documentation on
 `common/SystemSnapshotProvider.java`, compatibility adapters/profiles, fixed counter/cache state,
 and focused sampling tests/resources. It reads current platform providers only to fixture the
 profile table and does not edit them. It does not edit `ResourceMonitor`, `SystemUtilization`,
-listener code, core, native code, or Maven/module declarations; training is prohibited and not
-read.
+listener code, core, native code, or Maven/module declarations; training is prohibited and not read.
 
 Input is a provider or detailed sample plus evaluation time and logical span. Output is one deeply
 immutable `IntervalHardwareSample` containing canonical telemetry, physical interval quantities,
@@ -1142,8 +1136,8 @@ P4-C owns `internal.monitor.LatestValueDispatcher` and its deterministic tests. 
 sampling/pressure/public records. Platform, core, native, and Maven/module files are read-only;
 training is prohibited and not read.
 
-Input is a strictly timestamped immutable utilization and identity-based listener additions.
-Output is ordered best-effort delivery with one active/one latest pending, reentrant add/close,
+Input is a strictly timestamped immutable utilization and identity-based listener additions. Output
+is ordered best-effort delivery with one active/one latest pending, reentrant add/close,
 `Throwable` isolation, nonblocking offer, and the two-phase `beginClose(terminationHook)`/
 `awaitClosed()` barrier. Tests prove exactly-once unlocked termination notification, bounds, and
 cleanup without sleeping or the common pool.
@@ -1179,17 +1173,17 @@ Required test groups are:
    valid zero replacement, and fixed-index cleanup.
 2. `SlowSampleCacheTest`: `0, 5, 10... s` attempts, overrun skip, 15-second inclusive freshness,
    expiry, independent fast polls, unsupported clear, and mutation isolation.
-3. `SystemSnapshotCompatibilityAdapterTest` and the ledger-anchored `ProviderContractTest`: all
-   four profiles, checked unit conversion, null/malformed values, deep copy, and explicit neutral
-   legacy Linux/Windows/macOS pressure.
+3. `SystemSnapshotCompatibilityAdapterTest` and the ledger-anchored `ProviderContractTest`: all four
+   profiles, checked unit conversion, null/malformed values, deep copy, and explicit neutral legacy
+   Linux/Windows/macOS pressure.
 4. `PressureEvaluatorTest` and the ledger-anchored `PressureCompositionTest`: every threshold and
    thermal mapping, correlated golden case, healthy high-throughput I/O, low-throughput stall,
    productive CPU neutrality, no effective CPU, and unsupported/transient/reset behavior.
 5. `PressurePropertiesTest`: bounds, finiteness, per-signal monotonicity, max idempotence,
    correlation, invalid doubles/divisors, counter extremes, irregular elapsed time, and smoothing
    attack faster than release.
-6. `RatioAccessorContractTest`: a reflection-backed exhaustive manifest of every ratio-valued
-   public accessor named in the parent plan. Reflection enumerates every public zero-argument
+6. `RatioAccessorContractTest`: a reflection-backed exhaustive manifest of every ratio-valued public
+   accessor named in the parent plan. Reflection enumerates every public zero-argument
    `double` accessor and every `UnmodifiableDoubleArray` record component on the five record types;
    an exact manifest classifies each as normalized ratio, capacity, rate, or ratio array. Any
    unclassified addition fails. Only the normalized/array entries receive `[0,1]` assertions. The
@@ -1203,10 +1197,9 @@ Required test groups are:
    exactly-once unlocked termination hook, external `awaitClosed()` barrier, callback
    `RuntimeException`/`Error`/interrupt, thread-start failure, and zero retained references.
 9. Ledger-anchored `ResourceMonitorLifecycleTest`: all state-table transitions and concurrent
-   operations with
-   latches, including provider/topology/thread failures and self-stop/close. Its duration table
-   includes null, zero, negative, 1 ns, 9,999,999 ns, 10 ms, 200 ms, exactly 24 hours, 24 hours plus
-   1 ns, and `Duration.toNanos()` overflow.
+   operations with latches, including provider/topology/thread failures and self-stop/close. Its
+   duration table includes null, zero, negative, 1 ns, 9,999,999 ns, 10 ms, 200 ms, exactly 24
+   hours, 24 hours plus 1 ns, and `Duration.toNanos()` overflow.
 10. Ledger-anchored `ResourceMonitorSchedulerTest`: fresh starts `0, 200, 400`, exact-boundary skip,
     the
     `0 -> 450 -> 600 ms` golden, multi-period overrun, stopped-read coalescing, restart freshness,
@@ -1220,8 +1213,8 @@ Required test groups are:
     read-only focused core compile/test gate.
 
 Required tabular fixtures under `euhedral-hardware-utils/src/test/resources/sampling/` encode
-counter timelines, slow-sensor timelines, normalization boundaries, mixed-domain golden values,
-and legacy profile snapshots. They are small deterministic text, not captured host data. The Linux
+counter timelines, slow-sensor timelines, normalization boundaries, mixed-domain golden values, and
+legacy profile snapshots. They are small deterministic text, not captured host data. The Linux
 scope-mismatch row requires global pressure propagation or neutral attribution and explicitly
 forbids host-jiffy apportionment.
 
@@ -1230,8 +1223,8 @@ forbids host-jiffy apportionment.
 Every child records exact commands/results in its completion section. Use the pinned tools from
 `mise.toml` and never run a training command.
 
-Fast Java-only compilation and focused tests avoid the bound Zig lifecycle when native setup is
-not the subject:
+Fast Java-only compilation and focused tests avoid the bound Zig lifecycle when native setup is not
+the subject:
 
 ```bash
 mise exec -- mvn -B -pl euhedral-hardware-utils \
@@ -1275,11 +1268,10 @@ git diff --exit-code <action-start>..HEAD -- \
   benchmarks/src/main euhedral-core/src/main
 ```
 
-The name-only scope list must contain no training path; do not run a path-specific training check
-or inspect training files. The final integrated P4 conformance audit additionally checks that no
-root implementation/
-validation artifact, per-child validation/conformance/audit artifact, or corresponding branch was
-used and that every indexed child completion record is present.
+The name-only scope list must contain no training path; do not run a path-specific training check or
+inspect training files. The final integrated P4 conformance audit additionally checks that no root
+implementation/ validation artifact, per-child validation/conformance/audit artifact, or
+corresponding branch was used and that every indexed child completion record is present.
 
 ## P4 acceptance matrix
 
@@ -1312,8 +1304,7 @@ The single integrated P4 conformance audit classifies each item exactly as `sati
     and closed truthfully with no common-pool work.
 20. Allocation/retention is bounded by CPU span/listener count and close leaves no dynamic state,
     thread, pending value, provider buffer, or cross-test contamination.
-21. Platform collection and core production remain unchanged; training is neither inspected nor
-    run.
+21. Platform collection and core production remain unchanged; training is neither inspected nor run.
 22. P0 compatibility, focused hardware tests, applicable full verification, read-only core tests,
     diff hygiene, and environmental limits are recorded.
 
@@ -1325,14 +1316,13 @@ blueprint redesign and stops the implementation action.
 ## Implementation model reassessment
 
 The unsplit P4 pass would span one module but four ownership packages, two public contracts, many
-immutable schemas, six lifecycle states, three concurrent state machines, numerical recovery,
-strict floating-point behavior, compatibility migration, and broad deterministic test repair. It
-would require simultaneous knowledge of provider quirks, math, public projection, scheduler JMM,
-listener safety, and downstream core semantics. Earlier P2/P3 evidence also shows that
-responsibility splits materially improve implementation reviewability for immutable publication
-and lifecycle work. The root implementation is therefore rejected and superseded. The developer
-has selected one integrated conformance action after all four implementations instead of four
-child conformance actions.
+immutable schemas, six lifecycle states, three concurrent state machines, numerical recovery, strict
+floating-point behavior, compatibility migration, and broad deterministic test repair. It would
+require simultaneous knowledge of provider quirks, math, public projection, scheduler JMM, listener
+safety, and downstream core semantics. Earlier P2/P3 evidence also shows that responsibility splits
+materially improve implementation reviewability for immutable publication and lifecycle work. The
+root implementation is therefore rejected and superseded. The developer has selected one integrated
+conformance action after all four implementations instead of four child conformance actions.
 
 After the split:
 
@@ -1345,11 +1335,10 @@ After the split:
 
 Each remains implementation-complex despite a complete design: A and B combine recovery/precision,
 and C and D combine concurrency/failure/JMM behavior. A lower-capability or medium-effort pass is
-not selected. Each child blueprint must confirm or upgrade this selection after inspecting only
-its bounded context; it may not downgrade silently. The single final conformance audit uses
-`gpt-5.6-sol`, `high`. Child
-blueprints use `gpt-5.6-sol`, `max` because they must validate inventory and translate this parent
-contract into exact local tests without reopening it.
+not selected. Each child blueprint must confirm or upgrade this selection after inspecting only its
+bounded context; it may not downgrade silently. The single final conformance audit uses
+`gpt-5.6-sol`, `high`. Child blueprints use `gpt-5.6-sol`, `max` because they must validate
+inventory and translate this parent contract into exact local tests without reopening it.
 
 ## Risks and unresolved decisions
 
@@ -1380,9 +1369,9 @@ Hand this parent blueprint off for review and authorized merge into the P4 root 
   every per-child conformance action as superseded;
 - the plan contains the P3 closeout and P4 developer-review summary;
 - every child has a bounded context, acceptance surface, complete prompt, and selected capability;
-- implementation can translate this contract without choosing a unit, formula, threshold,
-  rounding rule, TTL, smoothing constant, state transition, recurrence, memory mode, or listener
-  queue design;
+- implementation can translate this contract without choosing a unit, formula, threshold, rounding
+  rule, TTL, smoothing constant, state transition, recurrence, memory mode, or listener queue
+  design;
 - only this blueprint and authorized plan/planning text differ from the P4 root;
 - `git diff --check`, link/path checks, and planning-scope checks pass; and
 - no child or implementation branch has been created before this parent blueprint merge.

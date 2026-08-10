@@ -33,6 +33,7 @@ class AnchorBootstrapperTest {
     private final SourceScenario two = SourceScenario.of("host-a", 4, 32);
     private final List<PolicyVector> policies =
             List.of(policy(1), policy(2), policy(3), policy(4), policy(5), policy(6));
+
     @TempDir
     java.nio.file.Path temporary;
 

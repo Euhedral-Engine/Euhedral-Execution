@@ -52,15 +52,20 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
     private final CacheConfig cacheConfig;
     private final CacheMetrics metrics;
     private final int core;
+
     @Getter(AccessLevel.PROTECTED)
     private final PartitionedMpscQueue<AbstractFrame> localCache;
+
     private final int chunkSize;
     private final CacheTerminal cacheTerminal;
+
     @Getter
     private final long frameQuota;
+
     boolean primed;
     double capFactor = 1.0;
     long totalCount = 0L;
+
     protected ControlPlaneCache(@NonNull CacheConfig cacheConfig) {
         super(getName(cacheConfig), 1, (frame, mapSize) -> 0, 0, RoutingPolicy.CACHE_LOCAL);
         this.cacheConfig = cacheConfig;

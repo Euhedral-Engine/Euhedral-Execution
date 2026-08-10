@@ -1,8 +1,6 @@
 package io.euhedral_execution.core.frames;
 
-import io.euhedral_execution.core.control_plane.ControlPlaneFragment;
 import io.euhedral_execution.core.flow_control.RoutingPolicy;
-import io.euhedral_execution.core.generics.AbstractExecutor;
 import io.euhedral_execution.core.generics.FramePusher;
 import io.euhedral_execution.core.impl.FrameManager;
 import io.euhedral_execution.hardware_utils.SystemInfo.CpuInfo;

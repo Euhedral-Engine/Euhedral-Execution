@@ -21,6 +21,7 @@ public final class EuhedralWorker extends AbstractIngestSink implements Worker {
 
     private final Delegate delegate;
     private final long idHash;
+
     EuhedralWorker(int chunkSize, int maxPooledChunks) {
         this.delegate = new Delegate(chunkSize, maxPooledChunks);
         this.idHash = HasherApi.mix(ThreadLocalRandom.current().nextLong());

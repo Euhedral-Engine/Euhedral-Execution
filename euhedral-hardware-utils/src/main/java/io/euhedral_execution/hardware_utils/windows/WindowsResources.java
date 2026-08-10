@@ -61,8 +61,10 @@ public final class WindowsResources implements SystemSnapshotProvider {
     private final double[] lastIdle;
     private final double[] currentIdle;
     private final double[] pressure;
+
     @SuppressWarnings("unused")
     private volatile int lockState = 0;
+
     private long lastTime;
 
     public WindowsResources() {

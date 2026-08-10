@@ -91,7 +91,8 @@ jar (creates final artifact)
 zig version
 ```
 
-2. Make sure your installations are in the places `mise` says they should be or override `mise.toml` locally.
+2. Make sure your installations are in the places `mise` says they should be or override `mise.toml`
+   locally.
 
 ```
 SDKROOT = "{{env.HOME}}/.local/share/mise/installs/macos-sdk/MacOSX26.1.sdk"

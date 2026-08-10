@@ -30,22 +30,22 @@ Overhaul `euhedral-hardware-utils` so that:
 1. macOS has as much topology, resource-monitoring, affinity/locality, and lifecycle capability as
    public macOS APIs can honestly provide on Intel and Apple Silicon;
 2. Linux and Windows defects are corrected rather than merely preserving their current behavior;
-3. all platforms feed one well-defined, robust pressure calculation whose exposed values are
-   finite doubles in the inclusive range `[0.0, 1.0]`;
+3. all platforms feed one well-defined, robust pressure calculation whose exposed values are finite
+   doubles in the inclusive range `[0.0, 1.0]`;
 4. relevant hardware contention and capacity-loss state contributes to pressure without treating
    productive utilization or throughput as pressure;
-5. the default metric polling cadence remains 200 ms and is efficient, deterministic, and
-   safe under poll overruns and slow listeners;
+5. the default metric polling cadence remains 200 ms and is efficient, deterministic, and safe under
+   poll overruns and slow listeners;
 6. `euhedral-core`'s `ControlPlaneFragment` consumes the improved pressure safely without a public
    core API change or hot-loop regressions;
 7. the JNI binaries remain compatible with the lowest practical runtime environments described
    below; and
-8. the universal Zig build remains automatic while becoming manifest-driven, deterministic,
-   parallel where independent work exists, and free of stale source-tree artifacts.
+8. the universal Zig build remains automatic while becoming manifest-driven, deterministic, parallel
+   where independent work exists, and free of stale source-tree artifacts.
 
 The public Java API and its effective role remain compatible. Dependents should not require
-significant source changes. Corrected values, newly working platforms, safer lifecycle behavior,
-and improved adaptive responses are intentional behavior changes.
+significant source changes. Corrected values, newly working platforms, safer lifecycle behavior, and
+improved adaptive responses are intentional behavior changes.
 
 ## Settled developer requirements
 
@@ -78,37 +78,37 @@ baseline.
 - A Mach affinity tag is a locality hint, not hard CPU pinning. macOS must report
   `LOCALITY_HINT`, apply tag `0` when releasing the hint, and never claim exact placement.
 - Existing boolean `setAffinity` overloads return `true` on macOS only when the requested mask can
-  be represented by one locality tag and that hint was successfully applied. The separate
-  capability query remains `LOCALITY_HINT`; boolean success does not mean exact pinning.
+  be represented by one locality tag and that hint was successfully applied. The separate capability
+  query remains `LOCALITY_HINT`; boolean success does not mean exact pinning.
 - Euhedral-managed macOS worker threads must retain a stable logical ownership ID for routing and
-  monitoring. Outside managed ownership, an unavailable physical/current CPU must remain
-  explicitly unsupported or use a documented conservative fallback; it must not be fabricated.
+  monitoring. Outside managed ownership, an unavailable physical/current CPU must remain explicitly
+  unsupported or use a documented conservative fallback; it must not be fabricated.
 - Do not use private APIs or realtime `THREAD_TIME_CONSTRAINT_POLICY` scheduling.
-- Public mask-shaped affinity overloads have deterministic semantics for empty, one-CPU,
-  same-group multi-CPU, cross-Windows-group, and multi-locality macOS masks. They fail rather than
-  partially applying a request while reporting exact/successful coverage.
+- Public mask-shaped affinity overloads have deterministic semantics for empty, one-CPU, same-group
+  multi-CPU, cross-Windows-group, and multi-locality macOS masks. They fail rather than partially
+  applying a request while reporting exact/successful coverage.
 
 ### Runtime floors
 
 - Linux:
-  - x86-64 and AArch64;
-  - target a libc-neutral JNI library through direct stable syscalls where validation proves that
-    safe;
-  - otherwise retain separately validated glibc 2.17 and musl artifacts;
-  - no unexpected `libstdc++` or compiler-runtime dependency;
-  - P5 must derive and prove the lowest practical kernel floor per architecture from the required
-    syscall/JDK surface rather than inheriting the build host's kernel; it must not select a floor
-    newer than 3.10 without developer approval;
-  - every newer cgroup, pressure, topology, frequency, and thermal feature is detected at runtime;
-  - cgroup v1, v2, hybrid, and bare-host execution are supported without mutating controller
-    state.
+    - x86-64 and AArch64;
+    - target a libc-neutral JNI library through direct stable syscalls where validation proves that
+      safe;
+    - otherwise retain separately validated glibc 2.17 and musl artifacts;
+    - no unexpected `libstdc++` or compiler-runtime dependency;
+    - P5 must derive and prove the lowest practical kernel floor per architecture from the required
+      syscall/JDK surface rather than inheriting the build host's kernel; it must not select a floor
+      newer than 3.10 without developer approval;
+    - every newer cgroup, pressure, topology, frequency, and thermal feature is detected at runtime;
+    - cgroup v1, v2, hybrid, and bare-host execution are supported without mutating controller
+      state.
 - macOS:
-  - macOS 11 or newer;
-  - Intel x86-64 and Apple Silicon AArch64.
+    - macOS 11 or newer;
+    - Intel x86-64 and Apple Silicon AArch64.
 - Windows:
-  - Windows 10 and Windows Server 2016 or newer on x86-64;
-  - Windows 11 on ARM64 for ARM64 runtime validation;
-  - resolve newer processor-group APIs dynamically and retain older documented fallbacks.
+    - Windows 10 and Windows Server 2016 or newer on x86-64;
+    - Windows 11 on ARM64 for ARM64 runtime validation;
+    - resolve newer processor-group APIs dynamically and retain older documented fallbacks.
 
 If the libc-neutral Linux attempt fails a binary or runtime gate, the blueprint must record the
 evidence and use the accepted glibc 2.17 plus musl fallback. It must not silently raise a floor.
@@ -121,8 +121,8 @@ evidence and use the accepted glibc 2.17 plus musl fallback. It must not silentl
 - Do not run a root reactor command that selects `euhedral-training`.
 - Core production work targets `ControlPlaneFragment`.
 - `ControlPlaneCache` is an existing pressure consumer and must be covered by compatibility tests.
-  It is test-only in the approved scope. If P8 proves a production correction is necessary, stop
-  and obtain separate developer approval before editing it.
+  It is test-only in the approved scope. If P8 proves a production correction is necessary, stop and
+  obtain separate developer approval before editing it.
 - `FragmentActionPicker`'s input count, weight shape, and policy semantics are unchanged.
 
 ### Pressure
@@ -155,8 +155,8 @@ evidence and use the accepted glibc 2.17 plus musl fallback. It must not silentl
   poll that starts at `0` ms and finishes at `450` ms starts its next attempt at `600` ms, not at
   `450` ms and not in catch-up attempts for `200` and `400` ms.
 - Counter deltas and smoothing use actual monotonic elapsed time, not an assumed sample count.
-- Expensive sensors may run at slower, independently cached cadences, but they do not change the
-  200 ms poll-attempt grid and internal validity includes the value age.
+- Expensive sensors may run at slower, independently cached cadences, but they do not change the 200
+  ms poll-attempt grid and internal validity includes the value age.
 - Listener delivery is ordered, non-overlapping, bounded, and latest-value coalesced. At most one
   callback is active and at most one pending latest update is retained.
 - Listener notification is best-effort and coalesced. A listener is not guaranteed to observe one
@@ -168,9 +168,9 @@ evidence and use the accepted glibc 2.17 plus musl fallback. It must not silentl
   declared platform/architecture/runtime product.
 - Add one checked-in manifest/configuration file that is the sole inventory for designated native
   source folders and target metadata.
-- Runtime loader lookup metadata is generated from or directly consumes that manifest; output
-  names, architecture/runtime variants, and lookup paths are not maintained in a second hardcoded
-  product table.
+- Runtime loader lookup metadata is generated from or directly consumes that manifest; output names,
+  architecture/runtime variants, and lookup paths are not maintained in a second hardcoded product
+  table.
 - Adding or removing a designated source folder must not require editing build graph logic.
 - All eligible native sources under designated folders are discovered automatically according to
   explicit recursive and extension rules, sorted deterministically, and compiled into the
@@ -183,8 +183,8 @@ evidence and use the accepted glibc 2.17 plus musl fallback. It must not silentl
 - Build output belongs under Gradle/Zig target or generated-resource directories, never under
   `src/main/resources/bin`.
 - P1 must explicitly select optimization and native hardening/portability settings. Any disabled
-  stack protector/check, unwind/frame-pointer behavior, compiler-runtime bundling, or framework
-  link needs a measured ABI/compatibility reason rather than inheritance from the current script.
+  stack protector/check, unwind/frame-pointer behavior, compiler-runtime bundling, or framework link
+  needs a measured ABI/compatibility reason rather than inheritance from the current script.
 
 ## Scope
 
@@ -258,9 +258,9 @@ implementation), it should not rely on memorized Zig syntax from training data -
 any current model is likely to contain a mix of pre-0.16 API shapes that will silently fail to
 compile or, worse, compile with different semantics than intended. Before writing or reviewing any
 `build.zig` manifest logic, the agent should pull current Zig 0.16 documentation/source (or run
-`zig build --help` / inspect the pinned toolchain directly in the environment) to confirm the
-actual API surface, rather than trust pattern-matched recall. This applies equally to the
-OpenAI and Anthropic options above - it's a model-agnostic risk, not one the vendor choice fixes.
+`zig build --help` / inspect the pinned toolchain directly in the environment) to confirm the actual
+API surface, rather than trust pattern-matched recall. This applies equally to the OpenAI and
+Anthropic options above - it's a model-agnostic risk, not one the vendor choice fixes.
 
 ## Current-state findings
 
@@ -269,10 +269,10 @@ fallback, Windows loading, and macOS initialization have confirmed blockers. The
 resources also contain stale per-source libraries in addition to the intended aggregate JNI
 libraries.
 
-The architectural problem is not just missing macOS code. Platform providers currently disagree
-on whether counters are cumulative, deltas, durations, or ratios; `ResourceMonitor` then applies
-one set of assumptions to all of them. Pressure, topology, and lifecycle need common internal
-contracts before platform parity can be reliable.
+The architectural problem is not just missing macOS code. Platform providers currently disagree on
+whether counters are cumulative, deltas, durations, or ratios; `ResourceMonitor` then applies one
+set of assumptions to all of them. Pressure, topology, and lifecycle need common internal contracts
+before platform parity can be reliable.
 
 ### Known-defect ledger
 
@@ -283,43 +283,43 @@ until P8 closes the whole ID. A known item may not disappear without a regressio
 disposition. Newly found local defects may be fixed inside the approved blueprint; a newly found
 architectural choice returns to blueprint.
 
-| ID | Owning phase | Known defect and required disposition |
-| --- | --- | --- |
-| B01 | P1 | Native compilation writes into source resources, allowing stale binaries and headers into jars. Stage only generated resources and prove exact clean/rebuild contents. |
-| B02 | P1 | Build targets and folders are hardcoded; discovery is shallow, unsorted, and silently skips failures. Replace with one validated folder manifest and deterministic discovery that fails loudly. |
-| B03 | P1 | macOS signing is ordered after install and signs the emitted cache file, not necessarily the packaged copy. Sign and verify the staged artifact before its install/package edge completes. |
-| B04 | P1 | Build and deploy CI copy Linux `jni_md.h` into Darwin and Win32 include folders. Replace both copies with platform-correct generated declarations and ABI headers. |
-| B05 | P1 | `JNIClassLoader` unconditionally sets POSIX permissions, misses `LinkageError` fallback, maps unknown architectures to x64, and has weak temp-file/noexec-filesystem diagnostics and cleanup. Correct all loader paths without changing its public trigger; provide a safe configurable/fallback extraction location or an actionable noexec diagnosis. |
-| B06 | P1, P5-P7 | Native binaries lack enforceable architecture, export, import, runtime-floor, and deployment-target gates. Add binary inspection and real smoke calls. |
-| B07 | P1 | The build hardcodes `ReleaseFast` plus `-O3`, disables several hardening/debuggability features, bundles compiler runtime despite low-dependency goals, scans SDK paths blindly, and links an apparently unused framework. Select and justify optimization, safety, runtime, SDK, and framework settings explicitly. |
-| T01 | P2, P7 | macOS initializes empty topology maps and dereferences CPU/cache zero, causing class initialization failure. Common fallback and the final macOS provider must both be safe. |
-| T02 | P2, P5 | Linux treats local `core_id` as globally unique, assumes dense/online CPU IDs, depends on filesystem order, and mishandles missing cache data. Normalize and validate deterministic global identities. |
-| T03 | P2, P6 | Windows topology parsing uses incorrect offsets, lacks bounds, drops mask bit 63, mishandles group IDs, and cannot represent multiple groups reliably. Use bounded fixture-driven parsing and a bijective logical-ID mapping. |
-| T04 | P2 | `TopologyMapper` aliases caller masks, publishes without a clear memory boundary, drops concurrent updates, and has inconsistent socket version behavior. Define ownership, coalescing, and publication semantics. |
-| T05 | P2, P4 | Snapshot arrays/bitsets are mutable after publication; `CoreSnapshot.equals` disagrees with record hash behavior; `SocketSnapshot` field values are populated positionally with wrong meanings. Correct values and deep immutability while preserving record shapes. |
-| T06 | P2 | Core-zero reservation can produce an empty topology after intersecting the allowed set. Preserve the reservation when alternatives exist and correctly fall back when core zero is the only allowed core. |
-| A01 | P3 | `ThreadTools` base-mask probing is destructive, off by one for sparse IDs, fails to restore the original mask, and can dereference an unsupported pinner. Make probing non-destructive and capability-aware. |
-| A02 | P3 | `PinnedThreadExecutor` has singleton acquisition, execute/shutdown, identity-removal, cleaner, shutdown-hook, termination, and interruption races. Repair its state machine while preserving concurrent fresh-thread execution. |
-| A03 | P6 | Windows affinity overwrites multi-group success, uses group-relative current CPU values, and has unsafe array/initialization behavior. Return stable Euhedral logical ownership and validate every native buffer. |
-| A04 | P7 | macOS reports an unavailable current CPU, treats a locality tag as hard pinning, releases incorrectly, and uses dangerous realtime timer policy with wrong timebase math. Provide honest locality semantics and a safe timer no-op/unsupported path. |
-| R01 | P4, P5-P7 | Platform pressure/counter inputs mix cumulative values, interval deltas, durations, ratios, ns, and microseconds. Define canonical units and adapt every provider. |
-| R02 | P4, P5 | Linux unlimited quota divides CPU cardinality by a 100000 period; pressure is scaled twice; stale PSI can survive a zero-stall interval. Correct quota, unit, and reset semantics. |
-| R03 | P4, P7 | macOS system load is cumulative since boot while process CPU is emitted as a delta, and inactive-memory semantics do not match the public working-set calculation. Emit canonical cumulative counters and correct memory semantics. |
-| R04 | P4, P6 | Windows cycle counts are divided by nanosecond time, job quota fraction is treated as CPU count, primary-group masks omit processors, and private working-set subtraction can underflow. Correct units and fallbacks. |
-| R05 | P4 | Per-CPU memory usage is dimensionless but labeled bytes, memory divisions can yield NaN/Infinity, and memory pressure is nearly ineffective. Restore dimensional correctness and zero-limit behavior. |
-| R06 | P4, P5 | Adaptive disk throughput is called pressure, causing healthy I/O to throttle, while Linux device filtering selects loop devices and excludes ordinary devices. Keep bytes/sec as telemetry and use contention/stall evidence for pressure. |
-| R07 | P4 | Per-CPU throttle uses the prior quota and multiplies throttle by pressure; total pressure omits important CPU signals and contains a tautological throttle expression. Define independent normalized domain signals and composition. |
-| R08 | P4 | EWMA coefficients assume exactly one 200 ms sample and poll timing subtracts work twice. Use actual elapsed-time constants and fixed-rate deadlines without catch-up. |
-| R09 | P4 | Listener callbacks use common-pool futures, can backlog, overlap, arrive out of order, spin, deadlock when a callback calls `addListener`, remain locked after `Error`, and run after close. Use bounded ordered latest-value delivery, permit safe reentrant registration, and catch `Throwable` at the isolation boundary. |
-| R10 | P4 | Constructor/start double-prime samples, null providers race, stopped reads poll concurrently, timestamps are insufficiently validated, and close can lose or self-join the polling thread. Define a complete idempotent lifecycle. |
-| R11 | P5 | Linux file channels leak, missing paths can log every 200 ms, and a single bounded read may truncate proc/cgroup data. Close resources and use bounded complete reads with rate-limited diagnostics. |
-| R12 | P5 | Linux cgroup discovery can write a parent `cgroup.subtree_control`, changes scope during fallback, and does not support cgroup v1. Make all discovery read-only and scope-preserving across v1/v2/hybrid/bare host. |
-| R13 | P4-P7 | Pressure omits reliable scheduler, quota, memory reclaim/headroom, I/O stall, steal, thermal, frequency, power, and low-power capacity signals. Add only supported, validity-tracked signals at appropriate cadences. |
-| R14 | P4, P5 | Linux cgroup PSI is aggregate but is apportioned to CPUs using unrelated host jiffy activity, fabricating per-CPU contention when host and cgroup scope differ. Define honest global-to-effective-CPU propagation or neutral per-CPU attribution when evidence is unavailable; prohibit host-activity apportionment and fixture the scope mismatch. |
-| N01 | P6 | Windows native code uses unchecked array lengths, VLAs, racy initialization, inconsistent timer JNI symbol owners, and newer APIs without robust fallback. Correct ABI and initialization before resource parity is accepted. |
-| N02 | P7 | macOS native code leaks Mach buffers, assumes efficiency-core ordering, uses unsafe 64-bit mask shifts, and has incomplete resource/timebase cleanup. Correct ownership and derive conservative topology. |
-| C01 | P8 | `ControlPlaneFragment` assumes a non-null, dense current snapshot, reads raw pressure in its hot path, and applies unexplained P/E attenuation. Freeze a safe monotonic response contract and cache a validated primitive cap. |
-| C02 | P8 | `ControlPlaneCache` consumes the same pressure with per-update hysteresis and assumes valid dense input. Keep it test-only: reject malformed/older input in the fragment before delegation, validate the combined response, and return for separate developer approval if cache production work is necessary. |
+| ID  | Owning phase | Known defect and required disposition                                                                                                                                                                                                                                                                                                                   |
+|-----|--------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| B01 | P1           | Native compilation writes into source resources, allowing stale binaries and headers into jars. Stage only generated resources and prove exact clean/rebuild contents.                                                                                                                                                                                  |
+| B02 | P1           | Build targets and folders are hardcoded; discovery is shallow, unsorted, and silently skips failures. Replace with one validated folder manifest and deterministic discovery that fails loudly.                                                                                                                                                         |
+| B03 | P1           | macOS signing is ordered after install and signs the emitted cache file, not necessarily the packaged copy. Sign and verify the staged artifact before its install/package edge completes.                                                                                                                                                              |
+| B04 | P1           | Build and deploy CI copy Linux `jni_md.h` into Darwin and Win32 include folders. Replace both copies with platform-correct generated declarations and ABI headers.                                                                                                                                                                                      |
+| B05 | P1           | `JNIClassLoader` unconditionally sets POSIX permissions, misses `LinkageError` fallback, maps unknown architectures to x64, and has weak temp-file/noexec-filesystem diagnostics and cleanup. Correct all loader paths without changing its public trigger; provide a safe configurable/fallback extraction location or an actionable noexec diagnosis. |
+| B06 | P1, P5-P7    | Native binaries lack enforceable architecture, export, import, runtime-floor, and deployment-target gates. Add binary inspection and real smoke calls.                                                                                                                                                                                                  |
+| B07 | P1           | The build hardcodes `ReleaseFast` plus `-O3`, disables several hardening/debuggability features, bundles compiler runtime despite low-dependency goals, scans SDK paths blindly, and links an apparently unused framework. Select and justify optimization, safety, runtime, SDK, and framework settings explicitly.                                    |
+| T01 | P2, P7       | macOS initializes empty topology maps and dereferences CPU/cache zero, causing class initialization failure. Common fallback and the final macOS provider must both be safe.                                                                                                                                                                            |
+| T02 | P2, P5       | Linux treats local `core_id` as globally unique, assumes dense/online CPU IDs, depends on filesystem order, and mishandles missing cache data. Normalize and validate deterministic global identities.                                                                                                                                                  |
+| T03 | P2, P6       | Windows topology parsing uses incorrect offsets, lacks bounds, drops mask bit 63, mishandles group IDs, and cannot represent multiple groups reliably. Use bounded fixture-driven parsing and a bijective logical-ID mapping.                                                                                                                           |
+| T04 | P2           | `TopologyMapper` aliases caller masks, publishes without a clear memory boundary, drops concurrent updates, and has inconsistent socket version behavior. Define ownership, coalescing, and publication semantics.                                                                                                                                      |
+| T05 | P2, P4       | Snapshot arrays/bitsets are mutable after publication; `CoreSnapshot.equals` disagrees with record hash behavior; `SocketSnapshot` field values are populated positionally with wrong meanings. Correct values and deep immutability while preserving record shapes.                                                                                    |
+| T06 | P2           | Core-zero reservation can produce an empty topology after intersecting the allowed set. Preserve the reservation when alternatives exist and correctly fall back when core zero is the only allowed core.                                                                                                                                               |
+| A01 | P3           | `ThreadTools` base-mask probing is destructive, off by one for sparse IDs, fails to restore the original mask, and can dereference an unsupported pinner. Make probing non-destructive and capability-aware.                                                                                                                                            |
+| A02 | P3           | `PinnedThreadExecutor` has singleton acquisition, execute/shutdown, identity-removal, cleaner, shutdown-hook, termination, and interruption races. Repair its state machine while preserving concurrent fresh-thread execution.                                                                                                                         |
+| A03 | P6           | Windows affinity overwrites multi-group success, uses group-relative current CPU values, and has unsafe array/initialization behavior. Return stable Euhedral logical ownership and validate every native buffer.                                                                                                                                       |
+| A04 | P7           | macOS reports an unavailable current CPU, treats a locality tag as hard pinning, releases incorrectly, and uses dangerous realtime timer policy with wrong timebase math. Provide honest locality semantics and a safe timer no-op/unsupported path.                                                                                                    |
+| R01 | P4, P5-P7    | Platform pressure/counter inputs mix cumulative values, interval deltas, durations, ratios, ns, and microseconds. Define canonical units and adapt every provider.                                                                                                                                                                                      |
+| R02 | P4, P5       | Linux unlimited quota divides CPU cardinality by a 100000 period; pressure is scaled twice; stale PSI can survive a zero-stall interval. Correct quota, unit, and reset semantics.                                                                                                                                                                      |
+| R03 | P4, P7       | macOS system load is cumulative since boot while process CPU is emitted as a delta, and inactive-memory semantics do not match the public working-set calculation. Emit canonical cumulative counters and correct memory semantics.                                                                                                                     |
+| R04 | P4, P6       | Windows cycle counts are divided by nanosecond time, job quota fraction is treated as CPU count, primary-group masks omit processors, and private working-set subtraction can underflow. Correct units and fallbacks.                                                                                                                                   |
+| R05 | P4           | Per-CPU memory usage is dimensionless but labeled bytes, memory divisions can yield NaN/Infinity, and memory pressure is nearly ineffective. Restore dimensional correctness and zero-limit behavior.                                                                                                                                                   |
+| R06 | P4, P5       | Adaptive disk throughput is called pressure, causing healthy I/O to throttle, while Linux device filtering selects loop devices and excludes ordinary devices. Keep bytes/sec as telemetry and use contention/stall evidence for pressure.                                                                                                              |
+| R07 | P4           | Per-CPU throttle uses the prior quota and multiplies throttle by pressure; total pressure omits important CPU signals and contains a tautological throttle expression. Define independent normalized domain signals and composition.                                                                                                                    |
+| R08 | P4           | EWMA coefficients assume exactly one 200 ms sample and poll timing subtracts work twice. Use actual elapsed-time constants and fixed-rate deadlines without catch-up.                                                                                                                                                                                   |
+| R09 | P4           | Listener callbacks use common-pool futures, can backlog, overlap, arrive out of order, spin, deadlock when a callback calls `addListener`, remain locked after `Error`, and run after close. Use bounded ordered latest-value delivery, permit safe reentrant registration, and catch `Throwable` at the isolation boundary.                            |
+| R10 | P4           | Constructor/start double-prime samples, null providers race, stopped reads poll concurrently, timestamps are insufficiently validated, and close can lose or self-join the polling thread. Define a complete idempotent lifecycle.                                                                                                                      |
+| R11 | P5           | Linux file channels leak, missing paths can log every 200 ms, and a single bounded read may truncate proc/cgroup data. Close resources and use bounded complete reads with rate-limited diagnostics.                                                                                                                                                    |
+| R12 | P5           | Linux cgroup discovery can write a parent `cgroup.subtree_control`, changes scope during fallback, and does not support cgroup v1. Make all discovery read-only and scope-preserving across v1/v2/hybrid/bare host.                                                                                                                                     |
+| R13 | P4-P7        | Pressure omits reliable scheduler, quota, memory reclaim/headroom, I/O stall, steal, thermal, frequency, power, and low-power capacity signals. Add only supported, validity-tracked signals at appropriate cadences.                                                                                                                                   |
+| R14 | P4, P5       | Linux cgroup PSI is aggregate but is apportioned to CPUs using unrelated host jiffy activity, fabricating per-CPU contention when host and cgroup scope differ. Define honest global-to-effective-CPU propagation or neutral per-CPU attribution when evidence is unavailable; prohibit host-activity apportionment and fixture the scope mismatch.     |
+| N01 | P6           | Windows native code uses unchecked array lengths, VLAs, racy initialization, inconsistent timer JNI symbol owners, and newer APIs without robust fallback. Correct ABI and initialization before resource parity is accepted.                                                                                                                           |
+| N02 | P7           | macOS native code leaks Mach buffers, assumes efficiency-core ordering, uses unsafe 64-bit mask shifts, and has incomplete resource/timebase cleanup. Correct ownership and derive conservative topology.                                                                                                                                               |
+| C01 | P8           | `ControlPlaneFragment` assumes a non-null, dense current snapshot, reads raw pressure in its hot path, and applies unexplained P/E attenuation. Freeze a safe monotonic response contract and cache a validated primitive cap.                                                                                                                          |
+| C02 | P8           | `ControlPlaneCache` consumes the same pressure with per-update hysteresis and assumes valid dense input. Keep it test-only: reject malformed/older input in the fragment before delegation, validate the combined response, and return for separate developer approval if cache production work is necessary.                                           |
 
 ## Target architecture
 
@@ -379,22 +379,22 @@ The public compatibility fields have these fixed semantic roles:
 - `CpuSnapshot.stallRatio` and `CpuSnapshot.throttleRatio` carry the corresponding normalized
   compatibility-domain ratios.
 - `CpuSnapshot.pressure` carries the final composite for that logical CPU.
-- `HardwareUtilization.diskIOPressure` is I/O-domain contention only, never throughput divided by
-  a peak.
+- `HardwareUtilization.diskIOPressure` is I/O-domain contention only, never throughput divided by a
+  peak.
 - `HardwareUtilization.pressure()` returns the maximum final composite across effective CPUs. A
   valid sample with no effective CPU represents complete capacity loss and returns `1.0`; the
   pre-first-sample state is handled internally and does not synthesize a public utilization.
 
 The phase-4 blueprint must settle exact internal names, units, validity states, age policy, and
 adapter behavior within those roles. Rich memory, thermal, power, and other signals may be folded
-into the final composite without exposing them individually. No rich signal requires a public
-record component, and the design must not use timestamp-keyed, thread-local, static-global, or
+into the final composite without exposing them individually. No rich signal requires a public record
+component, and the design must not use timestamp-keyed, thread-local, static-global, or
 identity-keyed sidecars to recover information after public snapshot construction.
 
 Every populated `CpuSnapshot` derived from one `HardwareUtilization` has
 `lastUsageNs == HardwareUtilization.timestampNs()`. `SocketSnapshot.lastUsageNs` carries that same
-publication timestamp. This is the timestamp used by downstream acceptance logic; wall-clock
-arrival order is not a substitute.
+publication timestamp. This is the timestamp used by downstream acceptance logic; wall-clock arrival
+order is not a substitute.
 
 ### Pressure semantics
 
@@ -408,9 +408,8 @@ Candidate inputs, when supported and reliable, are:
 - System state: thermal pressure and low-power mode where public APIs expose them.
 
 The phase-4 blueprint exclusively owns per-signal age, transient-failure retention,
-expiry-to-unsupported, normalization curves, measurement smoothing constants, and
-correlated-signal composition. Core does not apply a second sensor TTL or reinterpret sensor age.
-Requirements:
+expiry-to-unsupported, normalization curves, measurement smoothing constants, and correlated-signal
+composition. Core does not apply a second sensor TTL or reinterpret sensor age. Requirements:
 
 - every individual normalized signal is finite and clamped;
 - increasing one pressure signal while all else is fixed cannot lower pressure;
@@ -463,8 +462,8 @@ Recommended implementation boundary:
 - perform only a weakly ordered primitive read plus final bound enforcement in the hot path.
 
 P4 supplies the only measurement smoothing consumed by `ControlPlaneFragment`; P8 maps that
-already-smoothed composite directly unless its blueprint proves a separate control-policy filter
-is required. A single accepted snapshot feeds both fragment batch and cache policy from the same
+already-smoothed composite directly unless its blueprint proves a separate control-policy filter is
+required. A single accepted snapshot feeds both fragment batch and cache policy from the same
 sanitized composite. A rejected older or malformed snapshot updates neither consumer.
 
 `ControlPlaneCache` remains a consumer because `ControlPlaneFragment.update` delegates to it. The
@@ -481,24 +480,24 @@ alpha(dt) = -expm1(-dt / tau)
 The P8 blueprint records this elapsed-time analysis and tests the established response at the
 default cadence. It does not add time normalization in the approved scope. If missed periods or
 direct malformed callers prove a material cache correctness problem, the blueprint stops and asks
-the developer to authorize a separately bounded cache correction. Cache policy hysteresis is not
-a second interpretation of hardware pressure.
+the developer to authorize a separately bounded cache correction. Cache policy hysteresis is not a
+second interpretation of hardware pressure.
 
 ## Platform capability targets
 
-| Capability | Linux | Windows | macOS |
-| --- | --- | --- | --- |
-| Logical CPU topology | Exact from sysfs/proc with validated fallback | Exact processor-group mapping from documented APIs | Deterministic public-sysctl model with conservative fallback |
-| Core/socket/cache model | Exact where kernel exports it | Exact where GLPIEx exports it | Best public representation; synthetic stable siblings where exact mapping is unavailable |
-| P/E classification | Kernel topology/frequency evidence when reliable | Efficiency class when exported | `hw.perflevel*` on Apple Silicon; conservative homogeneous fallback |
-| Effective CPU/quota | cgroup v1/v2/cpuset/bare host | process/job/group restrictions | process-visible logical CPUs; no cgroup equivalent |
-| CPU contention | PSI/scheduler/quota/steal | documented system/job/capacity evidence | Unsupported/neutral unless a documented public wait or capacity-loss signal is proven; host/process CPU counters are telemetry |
-| Memory pressure | cgroup/proc/PSI/reclaim | documented memory status/performance APIs | host/task VM headroom plus public pageout/reclaim evidence; thermal state stays in capacity |
-| I/O pressure | PSI/wait; bytes/sec telemetry | documented I/O/capacity evidence; bytes/sec telemetry | Unsupported/neutral unless a documented public stall/latency signal is proven; process I/O is telemetry |
-| Thermal/power | feature-detected sysfs at slower cadence | documented power/frequency APIs when available | Runtime-available `NSProcessInfo` thermal and low-power state, weak-linked/guarded to preserve macOS 11 |
-| Affinity capability | `EXACT` | `EXACT` when group API succeeds | `LOCALITY_HINT` |
-| Current CPU | Kernel CPU ID | Stable mapped group/processor ID | Managed logical owner; physical CPU unsupported |
-| Timer adjustment | Safe existing documented behavior | Safe documented behavior | Idempotent no-op/unsupported; no realtime policy |
+| Capability              | Linux                                            | Windows                                               | macOS                                                                                                                          |
+|-------------------------|--------------------------------------------------|-------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------|
+| Logical CPU topology    | Exact from sysfs/proc with validated fallback    | Exact processor-group mapping from documented APIs    | Deterministic public-sysctl model with conservative fallback                                                                   |
+| Core/socket/cache model | Exact where kernel exports it                    | Exact where GLPIEx exports it                         | Best public representation; synthetic stable siblings where exact mapping is unavailable                                       |
+| P/E classification      | Kernel topology/frequency evidence when reliable | Efficiency class when exported                        | `hw.perflevel*` on Apple Silicon; conservative homogeneous fallback                                                            |
+| Effective CPU/quota     | cgroup v1/v2/cpuset/bare host                    | process/job/group restrictions                        | process-visible logical CPUs; no cgroup equivalent                                                                             |
+| CPU contention          | PSI/scheduler/quota/steal                        | documented system/job/capacity evidence               | Unsupported/neutral unless a documented public wait or capacity-loss signal is proven; host/process CPU counters are telemetry |
+| Memory pressure         | cgroup/proc/PSI/reclaim                          | documented memory status/performance APIs             | host/task VM headroom plus public pageout/reclaim evidence; thermal state stays in capacity                                    |
+| I/O pressure            | PSI/wait; bytes/sec telemetry                    | documented I/O/capacity evidence; bytes/sec telemetry | Unsupported/neutral unless a documented public stall/latency signal is proven; process I/O is telemetry                        |
+| Thermal/power           | feature-detected sysfs at slower cadence         | documented power/frequency APIs when available        | Runtime-available `NSProcessInfo` thermal and low-power state, weak-linked/guarded to preserve macOS 11                        |
+| Affinity capability     | `EXACT`                                          | `EXACT` when group API succeeds                       | `LOCALITY_HINT`                                                                                                                |
+| Current CPU             | Kernel CPU ID                                    | Stable mapped group/processor ID                      | Managed logical owner; physical CPU unsupported                                                                                |
+| Timer adjustment        | Safe existing documented behavior                | Safe documented behavior                              | Idempotent no-op/unsupported; no realtime policy                                                                               |
 
 macOS parity means a usable and truthful implementation, not invented information. Missing public
 topology relationships or hard affinity remain explicitly limited.
@@ -535,10 +534,10 @@ topology relationships or hard affinity remain explicitly limited.
 - exact jar resource inventory
 
 Native binaries already present under `src/main/resources/bin` are build artifacts. They are not
-tracked by Git and are user-owned even though ignored. P1 must fingerprint and preserve them; it
-may not delete, move, rewrite, or clean them. P1 instead relocates only tracked native inputs,
-deletes only the tracked obsolete `build.sh`, allowlists source resources, and stages generated
-products under `target`. Builds must never create, delete, or modify the ignored source binary or
+tracked by Git and are user-owned even though ignored. P1 must fingerprint and preserve them; it may
+not delete, move, rewrite, or clean them. P1 instead relocates only tracked native inputs, deletes
+only the tracked obsolete `build.sh`, allowlists source resources, and stages generated products
+under `target`. Builds must never create, delete, or modify the ignored source binary or
 source-local Zig cache paths.
 
 ### Tests and fixtures
@@ -569,8 +568,8 @@ scope:
 - core flow/lifecycle: `LatticeEdge`, `LatticeVertex`, `UpstreamQueue`, `AbstractFrame`,
   `AbstractExecutor`, `CloneableObject`, `BaseCloneableObject`, and `FrameFactory`;
 - their focused existing tests;
-- non-training callers under `benchmarks`, including core contention/scale/latency, frame, and
-  queue benchmarks; and
+- non-training callers under `benchmarks`, including core contention/scale/latency, frame, and queue
+  benchmarks; and
 - Reactor and Spring startup paths that depend transitively on the default
   `ControlPlaneLattice`.
 
@@ -583,8 +582,8 @@ approved prompt names the file, and no training consumer is part of this invento
   where required to remove invalid JNI header preparation or supply the P1-settled explicit SDK,
   signer, and release credential-file paths; their pre-existing Gradle commands are outside this
   initiative, remain unchanged, and never count as task validation evidence
-- a hardware-specific cross-platform workflow with explicit selected-module jobs; no new or
-  modified task command may select training
+- a hardware-specific cross-platform workflow with explicit selected-module jobs; no new or modified
+  task command may select training
 - no root POM/plugin change whose behavior is inherited by `euhedral-training`
 - `README.md` platform-support claims and `AGENTS.md` native build/resource instructions when P1
   makes them stale
@@ -609,30 +608,29 @@ P0 compatibility and deterministic baseline
 ```
 
 Each unsplit phase has a blueprint, implementation, conformance check, and manual-review/audit path.
-A phase
-whose sizing gate splits work uses the child and root-integration sequence recorded in its artifact
-index. A phase cannot hand off with a material deviation.
+A phase whose sizing gate splits work uses the child and root-integration sequence recorded in its
+artifact index. A phase cannot hand off with a material deviation.
 
 ## Success criteria
 
 ### Compatibility
 
 - An automated comparison against `900d8c50` proves unchanged:
-  - the complete module descriptor, including name, `requires`, `exports`, `opens`, `uses`, and
-    `provides`;
-  - all five exported packages;
-  - public/protected types, hierarchy/interfaces, modifiers, generic signatures, fields, methods,
-    constructors, checked exceptions, and descriptors;
-  - public compile-time constant names/types/values and nested types;
-  - public record component names/order;
-  - existing static entry points;
-  - CPU-mask text format; and
-  - intended aggregate native resource paths/library names and JNI entry names.
+    - the complete module descriptor, including name, `requires`, `exports`, `opens`, `uses`, and
+      `provides`;
+    - all five exported packages;
+    - public/protected types, hierarchy/interfaces, modifiers, generic signatures, fields, methods,
+      constructors, checked exceptions, and descriptors;
+    - public compile-time constant names/types/values and nested types;
+    - public record component names/order;
+    - existing static entry points;
+    - CPU-mask text format; and
+    - intended aggregate native resource paths/library names and JNI entry names.
 - Additive public types/members are allowed; removal or modification of an existing surface is not.
 - Every intentional behavior correction is an exact allowlist record containing its defect-ledger
-  ID, fully qualified member or resource, old behavior, new invariant, and regression-test ID.
-  Broad categorical exceptions fail compatibility. Expected records include deep snapshot
-  immutability, equality/hash consistency, corrected topology/resource units and values, ordered
+  ID, fully qualified member or resource, old behavior, new invariant, and regression-test ID. Broad
+  categorical exceptions fail compatibility. Expected records include deep snapshot immutability,
+  equality/hash consistency, corrected topology/resource units and values, ordered
   lifecycle/listener behavior, newly working native loading/platforms, affinity capability
   truthfulness, normalized pressure changes, the phase-8 monotonic fragment curve/P/E attenuation
   disposition, and one-time removal of stale per-source native resources while preserving intended
@@ -676,29 +674,29 @@ index. A phase cannot hand off with a material deviation.
 - Slow listeners cannot overlap, reorder timestamps, grow an unbounded queue, block sampling, stay
   wedged after `Throwable`, or run after close. A callback may call `addListener` without spinning,
   deadlocking, or corrupting the current iteration.
-- Reflection-backed parameterized coverage maintains an exhaustive list of every ratio-valued
-  public accessor. Each is finite and in `[0.0, 1.0]`, including:
-  - `SystemSnapshot.pressurePerCpu` entries;
-  - `HardwareUtilization.quotaCpuUsage`;
-  - `HardwareUtilization.cpuThrottleRatio`;
-  - `HardwareUtilization.perQuotaCpuThrottleRatio` entries;
-  - `HardwareUtilization.perQuotaCpuPressure` entries;
-  - `HardwareUtilization.totalMemoryUtilization`;
-  - `HardwareUtilization.diskIOPressure`;
-  - `SocketSnapshot.memoryUtilization`;
-  - `CoreSnapshot.memoryUtilization`;
-  - `CpuSnapshot.memoryUtilization`;
-  - `CpuSnapshot.stallRatio`;
-  - `CpuSnapshot.throttleRatio`;
-  - `CpuSnapshot.pressure`;
-  - `HardwareUtilization.pressure()`.
+- Reflection-backed parameterized coverage maintains an exhaustive list of every ratio-valued public
+  accessor. Each is finite and in `[0.0, 1.0]`, including:
+    - `SystemSnapshot.pressurePerCpu` entries;
+    - `HardwareUtilization.quotaCpuUsage`;
+    - `HardwareUtilization.cpuThrottleRatio`;
+    - `HardwareUtilization.perQuotaCpuThrottleRatio` entries;
+    - `HardwareUtilization.perQuotaCpuPressure` entries;
+    - `HardwareUtilization.totalMemoryUtilization`;
+    - `HardwareUtilization.diskIOPressure`;
+    - `SocketSnapshot.memoryUtilization`;
+    - `CoreSnapshot.memoryUtilization`;
+    - `CpuSnapshot.memoryUtilization`;
+    - `CpuSnapshot.stallRatio`;
+    - `CpuSnapshot.throttleRatio`;
+    - `CpuSnapshot.pressure`;
+    - `HardwareUtilization.pressure()`.
 - Property tests cover bounds, idle baseline, monotonicity per signal, mixed/correlated inputs,
   unsupported/stale signals, reset/wrap, and zero divisors.
 - Productive CPU work alone does not create pressure.
 - Healthy high-throughput I/O remains low pressure; sustained low-throughput I/O stall can become
   high pressure.
-- Memory headroom, reclaim/stall, quota throttle, scheduler wait, steal, thermal/frequency loss,
-  and low-power state affect pressure only where supported and valid.
+- Memory headroom, reclaim/stall, quota throttle, scheduler wait, steal, thermal/frequency loss, and
+  low-power state affect pressure only where supported and valid.
 - Previously published snapshots cannot change when provider buffers are reused.
 
 ### `ControlPlaneFragment` and cache
@@ -714,16 +712,16 @@ index. A phase cannot hand off with a material deviation.
 - All populated CPU snapshots and the socket snapshot from one publication carry the identical
   `HardwareUtilization.timestampNs`.
 - Timestamp acceptance, primitive-cap publication, and cache update are linearized. A
-  latch-controlled older writer that finishes after a newer writer cannot regress either batch
-  cap or cache factor; a rejected snapshot updates neither consumer.
+  latch-controlled older writer that finishes after a newer writer cannot regress either batch cap
+  or cache factor; a rejected snapshot updates neither consumer.
 - Core does not apply signal staleness or measurement smoothing beyond P4's final composite.
 - The pressure read in the hot loop performs no allocation, lock, I/O, formatting, or logging.
 - The publication/read VarHandle modes have a documented happens-before/freshness argument.
 - `ControlPlaneCache.capFactor` remains finite in `[0.15, 1.0]`; greater pressure cannot increase
   its target capacity; attack remains faster than recovery.
 - At regular 200 ms updates, cache policy preserves its established attack `alpha = 0.20` and
-  recovery `alpha = 0.02` response. The blueprint records the equivalent time constants
-  (`~0.8963 s` and `~9.8997 s`) and any missed-period limitation without editing cache production.
+  recovery `alpha = 0.02` response. The blueprint records the equivalent time constants (`~0.8963 s`
+  and `~9.8997 s`) and any missed-period limitation without editing cache production.
 - Invalid/missing/older snapshots are rejected in `ControlPlaneFragment` before either fragment or
   cache policy changes.
 - Combined maximum pressure still permits progress, demand, drain, reset, and shutdown.
@@ -740,8 +738,8 @@ index. A phase cannot hand off with a material deviation.
 - Windows fixtures cover one and multiple processor groups, more than 64 processors, mask bit 63,
   packages/cores/caches/efficiency classes, and malformed/truncated blobs.
 - Affinity tests cover empty, one-CPU, same-group multi-CPU, and cross-group masks. Windows must not
-  report exact success for a cross-group mask when only one group was applied; macOS must not
-  report success for an arbitrary CPU set that cannot be represented by one locality tag.
+  report exact success for a cross-group mask when only one group was applied; macOS must not report
+  success for an arbitrary CPU set that cannot be represented by one locality tag.
 - Windows x86-64 runtime smoke passes on the minimum supported family; ARM64 smoke is validated on
   Windows 11 when runner availability permits.
 - macOS fixtures cover Intel SMT, Apple Silicon performance levels, homogeneous systems, missing
@@ -749,18 +747,18 @@ index. A phase cannot hand off with a material deviation.
 - macOS 11 deployment metadata is present; Intel and Apple Silicon runtime smoke passes.
 - macOS topology/resources/thermal/low-power use public APIs; affinity reports
   `LOCALITY_HINT`; a representable successfully applied hint preserves legacy boolean `true`;
-  unrepresentable multi-locality masks fail rather than partially succeed; release sets tag `0`;
-  no realtime scheduling policy is present.
+  unrepresentable multi-locality masks fail rather than partially succeed; release sets tag `0`; no
+  realtime scheduling policy is present.
 - Host/process CPU load alone does not raise macOS pressure. Runtime availability/weak-link checks
   for thermal/low-power APIs preserve the macOS 11 floor.
-- Native null/short arrays, repeated/concurrent initialization, resource cleanup, and loader
-  failure diagnostics are tested.
+- Native null/short arrays, repeated/concurrent initialization, resource cleanup, and loader failure
+  diagnostics are tested.
 
 Binary metadata and fixtures do not prove a runtime floor. A missing real smoke run on P5's
-blueprint-selected minimum Linux kernel with glibc 2.17/musl, Windows 10/Server 2016 x86-64,
-Windows 11 ARM64, or macOS 11 Intel/ARM64 is `unverified` and blocks the corresponding support
-claim and final release-ready result unless the developer explicitly approves that deviation. A
-modern hosted runner proves only its actual environment, not a minimum-family floor.
+blueprint-selected minimum Linux kernel with glibc 2.17/musl, Windows 10/Server 2016 x86-64, Windows
+11 ARM64, or macOS 11 Intel/ARM64 is `unverified` and blocks the corresponding support claim and
+final release-ready result unless the developer explicitly approves that deviation. A modern hosted
+runner proves only its actual environment, not a minimum-family floor.
 
 ### Build and package
 
@@ -795,8 +793,8 @@ modern hosted runner proves only its actual environment, not a minimum-family fl
 - No root Gradle command that selects training is used as validation.
 - `git diff --check` is clean.
 - Searches find no stale native names, source-tree package paths, invalid header-copy workaround,
-  obsolete resource references, or root documentation that still describes macOS as unsupported/
-  in progress after P7 succeeds.
+  obsolete resource references, or root documentation that still describes macOS as unsupported/ in
+  progress after P7 succeeds.
 - Only blueprint-authorized paths change.
 - All skipped runtime checks state the exact environmental limitation and remain `unverified`, not
   silently passed.
@@ -851,17 +849,17 @@ Cross-compilation/package validation and real runtime validation are separate:
 - Cross-build every manifest product on the normal build job.
 - Run deterministic fixtures on any compatible host.
 - Add real smoke jobs for:
-  - Linux glibc x86-64 as a required gate;
-  - Linux musl x86-64 as a required gate;
-  - Linux glibc/musl AArch64 where stable runners or emulation provide reliable JNI execution;
-  - Windows x86-64 as a required gate;
-  - Windows ARM64 when a runner is available;
-  - macOS Intel as a required gate when the repository has access to `macos-*-intel`; and
-  - macOS Apple Silicon as a required gate when the repository has access to an ARM64 macOS
-    runner.
+    - Linux glibc x86-64 as a required gate;
+    - Linux musl x86-64 as a required gate;
+    - Linux glibc/musl AArch64 where stable runners or emulation provide reliable JNI execution;
+    - Windows x86-64 as a required gate;
+    - Windows ARM64 when a runner is available;
+    - macOS Intel as a required gate when the repository has access to `macos-*-intel`; and
+    - macOS Apple Silicon as a required gate when the repository has access to an ARM64 macOS
+      runner.
 - Runner-unavailable architectures remain fixture and binary-gated and are classified
-  `unverified` for runtime, never silently treated as passed. An unverified minimum floor blocks
-  its support claim/final release-ready classification unless the developer explicitly accepts the
+  `unverified` for runtime, never silently treated as passed. An unverified minimum floor blocks its
+  support claim/final release-ready classification unless the developer explicitly accepts the
   deviation.
 - Signing credentials, if any are introduced, are unavailable to untrusted pull requests. PRs use
   only an explicitly safe ad hoc/test signature path.
@@ -883,44 +881,43 @@ Cross-compilation/package validation and real runtime validation are separate:
 
 ## Risks and mitigations
 
-| Risk | Mitigation |
-| --- | --- |
-| Correct topology changes effective worker placement | Preserve stable deterministic logical IDs, core-zero policy, and API shapes; fixture every remap boundary and test a real lattice. |
-| New pressure changes throughput/latency | Define pressure as lost capacity, use property and golden response tests, validate batch plus cache together, and benchmark only explicit performance claims. |
-| Rich signals differ by OS | Track validity/age internally, normalize by semantic domain, and keep unsupported inputs neutral. |
-| macOS cannot provide Linux-equivalent pinning/topology detail | Report `LOCALITY_HINT`, maintain managed logical ownership, document unsupported physical identity, and use conservative public-sysctl topology. |
-| Lowest-runtime native goals conflict with available APIs | Feature-probe dynamically, enforce binary import/version gates, and use the accepted glibc 2.17 plus musl fallback if libc neutrality is disproven. |
-| Automatic folder discovery compiles unintended files | Manifest only designated production roots; explicit extensions, recursion, deterministic order, duplicate detection, and fail-loud validation. |
-| Parallel signing packages an unsigned copy | Sign a target-local staged copy and make its install edge depend on signature verification. |
-| 200 ms polling makes slow sensors expensive | Decimate/cache expensive sensors with age validity while preserving the poll-start grid. |
-| Slow listeners create backlog or reorder data | Single bounded dispatcher with one active and one coalesced latest value; monotonic timestamp tests and close barrier. |
-| Public snapshots retain mutable provider storage | Deep-copy at the publication boundary and add mutation-after-publication regression tests. |
-| Native tests are host-dependent | Pair deterministic fixtures and binary inspection with explicitly classified real-runner smoke jobs. |
-| Scope expands into training or broader core policy | Mechanical path/command checks, explicit prompt prohibitions, and phase-8 production boundary. |
-| "Fix any bugs" becomes unbounded | Maintain the known-defect ledger; fix newly found local defects only inside settled scope and return new design choices to blueprint. |
+| Risk                                                          | Mitigation                                                                                                                                                    |
+|---------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Correct topology changes effective worker placement           | Preserve stable deterministic logical IDs, core-zero policy, and API shapes; fixture every remap boundary and test a real lattice.                            |
+| New pressure changes throughput/latency                       | Define pressure as lost capacity, use property and golden response tests, validate batch plus cache together, and benchmark only explicit performance claims. |
+| Rich signals differ by OS                                     | Track validity/age internally, normalize by semantic domain, and keep unsupported inputs neutral.                                                             |
+| macOS cannot provide Linux-equivalent pinning/topology detail | Report `LOCALITY_HINT`, maintain managed logical ownership, document unsupported physical identity, and use conservative public-sysctl topology.              |
+| Lowest-runtime native goals conflict with available APIs      | Feature-probe dynamically, enforce binary import/version gates, and use the accepted glibc 2.17 plus musl fallback if libc neutrality is disproven.           |
+| Automatic folder discovery compiles unintended files          | Manifest only designated production roots; explicit extensions, recursion, deterministic order, duplicate detection, and fail-loud validation.                |
+| Parallel signing packages an unsigned copy                    | Sign a target-local staged copy and make its install edge depend on signature verification.                                                                   |
+| 200 ms polling makes slow sensors expensive                   | Decimate/cache expensive sensors with age validity while preserving the poll-start grid.                                                                      |
+| Slow listeners create backlog or reorder data                 | Single bounded dispatcher with one active and one coalesced latest value; monotonic timestamp tests and close barrier.                                        |
+| Public snapshots retain mutable provider storage              | Deep-copy at the publication boundary and add mutation-after-publication regression tests.                                                                    |
+| Native tests are host-dependent                               | Pair deterministic fixtures and binary inspection with explicitly classified real-runner smoke jobs.                                                          |
+| Scope expands into training or broader core policy            | Mechanical path/command checks, explicit prompt prohibitions, and phase-8 production boundary.                                                                |
+| "Fix any bugs" becomes unbounded                              | Maintain the known-defect ledger; fix newly found local defects only inside settled scope and return new design choices to blueprint.                         |
 
 ## Branch lineage
 
 No branch creation, merge, rebase, deletion, commit, or push is authorized by this plan alone.
-Before every action item, inspect `git status --short` and preserve pre-existing user-owned
-changes.
+Before every action item, inspect `git status --short` and preserve pre-existing user-owned changes.
 
 The completed planning branch `agent/hardware-utils-overhaul-plan` predates the updated branch
 format and is retained. Each future P0-P8 work phase uses one compliant root phase branch. A root
 begins from the completed preceding root; its action items use child branches with `-blueprint`,
 `-implementation`, and `-audit` suffixes.
 
-| Plan phase | Root phase branch |
-| --- | --- |
-| P0 | `hardware-utils-overhaul/phase-0-compatibility-baseline` |
-| P1 | `hardware-utils-overhaul/phase-1-native-build` |
-| P2 | `hardware-utils-overhaul/phase-2-topology-snapshot` |
-| P3 | `hardware-utils-overhaul/phase-3-affinity-executor` |
-| P4 | `hardware-utils-overhaul/phase-4-pressure-monitor` |
-| P5 | `hardware-utils-overhaul/phase-5-linux` |
-| P6 | `hardware-utils-overhaul/phase-6-windows` |
-| P7 | `hardware-utils-overhaul/phase-7-macos` |
-| P8 | `hardware-utils-overhaul/phase-8-core-release` |
+| Plan phase | Root phase branch                                        |
+|------------|----------------------------------------------------------|
+| P0         | `hardware-utils-overhaul/phase-0-compatibility-baseline` |
+| P1         | `hardware-utils-overhaul/phase-1-native-build`           |
+| P2         | `hardware-utils-overhaul/phase-2-topology-snapshot`      |
+| P3         | `hardware-utils-overhaul/phase-3-affinity-executor`      |
+| P4         | `hardware-utils-overhaul/phase-4-pressure-monitor`       |
+| P5         | `hardware-utils-overhaul/phase-5-linux`                  |
+| P6         | `hardware-utils-overhaul/phase-6-windows`                |
+| P7         | `hardware-utils-overhaul/phase-7-macos`                  |
+| P8         | `hardware-utils-overhaul/phase-8-core-release`           |
 
 For each root phase:
 
@@ -936,15 +933,14 @@ For each root phase:
 
 If a blueprint's sizing gate creates child blueprints, use the same root phase prefix with a
 specific responsibility suffix, give every child its own implementation/conformance/manual-review
-action
-items, and merge all child results into the root before phase-level audit and closeout. The
+action items, and merge all child results into the root before phase-level audit and closeout. The
 blueprint must update this plan's prompts, parent artifacts, lineage, and phase artifact index
 before handoff. Replace or expand that phase's index entry to name every parent/child blueprint and
-completion record, every child conformance/manual-review record, and any root conformance/audit.
-An explicit developer-authorized integrated-conformance exception may omit child conformance
-actions only when the plan names the exception, retains reviewed sequential child implementations,
-and assigns every child criterion to one final independent conformance action. P4 uses that
-exception; it has one integrated conformance action after P4-D and no child validation/audit.
+completion record, every child conformance/manual-review record, and any root conformance/audit. An
+explicit developer-authorized integrated-conformance exception may omit child conformance actions
+only when the plan names the exception, retains reviewed sequential child implementations, and
+assigns every child criterion to one final independent conformance action. P4 uses that exception;
+it has one integrated conformance action after P4-D and no child validation/audit.
 
 P1 uses that split rule with a developer-authorized conformance-only exception: the validation
 action is skipped in favor of conformance checking and manual review. After the parent blueprint
@@ -956,38 +952,38 @@ predecessor merges. The superseded
 `phase-1-native-build-implementation` branch is never created.
 
 P2 also uses the split rule. Its parent blueprint freezes the shared identity, count/index,
-fallback, immutability, null-hole, core-zero, version, and publication contracts. After that
-parent blueprint merges, the root advances through the
+fallback, immutability, null-hole, core-zero, version, and publication contracts. After that parent
+blueprint merges, the root advances through the
 `phase-2-topology-model-{blueprint,implementation,audit}` family and then the
 `phase-2-snapshot-publication-{blueprint,implementation,audit}` family. Each action starts only
 after its predecessor is reviewed and merged. The superseded
-`phase-2-topology-snapshot-implementation` branch is never created. Under the current workflow,
-each audit is the combined conformance check and manual review; no P2 validation branch or
-validation artifact exists.
+`phase-2-topology-snapshot-implementation` branch is never created. Under the current workflow, each
+audit is the combined conformance check and manual review; no P2 validation branch or validation
+artifact exists.
 
-P3 uses the split rule as well. Its parent blueprint freezes the public affinity capability,
-mask, managed-owner, restoration, executor state, registry, cleaner/hook, deadline, and memory-
-ordering contracts. After that parent blueprint merges, the root advances through the
+P3 uses the split rule as well. Its parent blueprint freezes the public affinity capability, mask,
+managed-owner, restoration, executor state, registry, cleaner/hook, deadline, and memory- ordering
+contracts. After that parent blueprint merges, the root advances through the
 `phase-3-affinity-capability-{blueprint,implementation,audit}` family and then the
-`phase-3-executor-lifecycle-{blueprint,implementation,audit}` family. Each action starts only
-after its predecessor is reviewed and merged. The superseded
-`phase-3-affinity-executor-implementation` branch is never created. Under the current workflow,
-each child audit is the combined conformance check and manual review; there is no P3 validation
-branch or validation artifact. A P3 root audit follows both child audits.
+`phase-3-executor-lifecycle-{blueprint,implementation,audit}` family. Each action starts only after
+its predecessor is reviewed and merged. The superseded
+`phase-3-affinity-executor-implementation` branch is never created. Under the current workflow, each
+child audit is the combined conformance check and manual review; there is no P3 validation branch or
+validation artifact. A P3 root audit follows both child audits.
 
 P4 uses a four-way responsibility split. Its parent blueprint freezes canonical units, detailed
-sample/validity and compatibility contracts, delta/age rules, pressure formulas/constants,
-public projection, duration/lifecycle/scheduler behavior, listener ownership, and memory-ordering
-edges. After that parent blueprint merges, the root advances through the
+sample/validity and compatibility contracts, delta/age rules, pressure formulas/constants, public
+projection, duration/lifecycle/scheduler behavior, listener ownership, and memory-ordering edges.
+After that parent blueprint merges, the root advances through the
 `phase-4-sample-validity-{blueprint,implementation}` family, then
 `phase-4-pressure-math-{blueprint,implementation}`, then
 `phase-4-listener-publication-{blueprint,implementation}`, and finally
 `phase-4-monitor-lifecycle-{blueprint,implementation}`. Each action starts only after its
 predecessor is reviewed and merged. By explicit developer direction, P4 is an exception to the
-per-child conformance rule: no child validation/conformance/audit branch or artifact is created.
-The superseded `phase-4-pressure-monitor-implementation` branch and every P4 validation branch are
-never created. One integrated `phase-4-pressure-monitor-audit` conformance action follows the
-reviewed and merged P4-D implementation and owns phase closeout.
+per-child conformance rule: no child validation/conformance/audit branch or artifact is created. The
+superseded `phase-4-pressure-monitor-implementation` branch and every P4 validation branch are never
+created. One integrated `phase-4-pressure-monitor-audit` conformance action follows the reviewed and
+merged P4-D implementation and owns phase closeout.
 
 The audit action remains responsible for root closeout. It first produces its audit on the audit
 child. If the developer has not authorized the merge and closeout, it hands off a review-ready
@@ -1019,36 +1015,35 @@ requirement status, approved deviations, and environmental limits. When a prompt
 artifact-index entries, read these exact files plus those compact closeout summaries; do not infer
 an unbounded feature-history context.
 
-| Phase                         | Blueprint and completion record                                               | Conformance/manual review                                        | Audit                                                                                 |
-|-------------------------------|-------------------------------------------------------------------------------|------------------------------------------------------------------|---------------------------------------------------------------------------------------|
-| P0                            | `docs/blueprints/hardware-utils/phase-0-compatibility-test-baseline.md`       | conformance/manual review; historical validation record retained | `docs/audits/hardware-utils/phase-0-compatibility-test-baseline-conformance.md`       |
-| P1 parent/root integration    | `docs/blueprints/hardware-utils/phase-1-native-build-jni-packaging.md`        | skipped; conformance check and manual review                     | `docs/audits/hardware-utils/phase-1-native-build-jni-packaging-conformance.md`        |
-| P1-A native graph/JNI/signing | `docs/blueprints/hardware-utils/phase-1-native-graph-jni-signing.md`          | skipped; conformance check and manual review                     | `docs/audits/hardware-utils/phase-1-native-graph-jni-signing-conformance.md`          |
-| P1-B loader/package/CI        | `docs/blueprints/hardware-utils/phase-1-loader-gradle-packaging.md`            | skipped; conformance check and manual review                     | `docs/audits/hardware-utils/phase-1-loader-gradle-packaging-conformance.md`            |
-| P2 parent/root integration    | `docs/blueprints/hardware-utils/phase-2-topology-snapshot-model.md`           | child conformance/manual reviews plus root manual review         | `docs/audits/hardware-utils/phase-2-topology-snapshot-model-conformance.md`           |
-| P2-A topology model/adapters  | `docs/blueprints/hardware-utils/phase-2-topology-model-adapters.md`           | conformance check and manual review                              | `docs/audits/hardware-utils/phase-2-topology-model-adapters-conformance.md`           |
-| P2-B snapshots/publication    | `docs/blueprints/hardware-utils/phase-2-snapshot-remap-publication.md`        | conformance check and manual review                              | `docs/audits/hardware-utils/phase-2-snapshot-remap-publication-conformance.md`        |
-| P3 parent/root integration    | `docs/blueprints/hardware-utils/phase-3-affinity-executor-lifecycle.md`       | child conformance/manual reviews plus root manual review         | `docs/audits/hardware-utils/phase-3-affinity-executor-lifecycle-conformance.md`       |
-| P3-A affinity capability      | `docs/blueprints/hardware-utils/phase-3-affinity-capability.md`               | conformance check and manual review                              | `docs/audits/hardware-utils/phase-3-affinity-capability-conformance.md`               |
-| P3-B executor lifecycle       | `docs/blueprints/hardware-utils/phase-3-executor-lifecycle.md`                | conformance check and manual review                              | `docs/audits/hardware-utils/phase-3-executor-lifecycle-conformance.md`                |
-| P4 parent/root integration    | `docs/blueprints/hardware-utils/phase-4-resource-monitor-pressure.md`         | one integrated conformance/manual review after P4-D              | `docs/audits/hardware-utils/phase-4-resource-monitor-pressure-conformance.md`         |
-| P4-A sample/validity          | `docs/blueprints/hardware-utils/phase-4-sample-validity-contract.md`          | covered by final integrated P4 conformance                       | none; developer-authorized single-conformance flow                                    |
-| P4-B pressure/projection      | `docs/blueprints/hardware-utils/phase-4-pressure-mathematics.md`              | covered by final integrated P4 conformance                       | none; developer-authorized single-conformance flow                                    |
-| P4-C listener publication     | `docs/blueprints/hardware-utils/phase-4-listener-publication.md`              | covered by final integrated P4 conformance                       | none; developer-authorized single-conformance flow                                    |
-| P4-D monitor lifecycle        | `docs/blueprints/hardware-utils/phase-4-monitor-lifecycle-scheduler.md`       | covered by final integrated P4 conformance                       | none; developer-authorized single-conformance flow                                    |
-| P5 parent/root integration    | `docs/blueprints/hardware-utils/phase-5-linux-platform.md`                    | child conformance/manual reviews plus root manual review         | `docs/audits/hardware-utils/phase-5-linux-platform-conformance.md`                    |
-| P5-A Linux topology model     | `docs/blueprints/hardware-utils/phase-5-linux-topology-model.md`               | conformance check and manual review                              | `docs/audits/hardware-utils/phase-5-linux-topology-model-conformance.md`               |
-| P5-B Linux resource provider  | `docs/blueprints/hardware-utils/phase-5-linux-resource-provider.md`             | conformance check and manual review                              | `docs/audits/hardware-utils/phase-5-linux-resource-provider-conformance.md`             |
-| P5-C Linux affinity & native  | `docs/blueprints/hardware-utils/phase-5-linux-affinity-native.md`              | conformance check and manual review                              | `docs/audits/hardware-utils/phase-5-linux-affinity-native-conformance.md`              |
-| P6 parent/root integration    | `docs/blueprints/hardware-utils/phase-6-windows-platform.md`                 | child conformance/manual reviews plus root manual review         | `docs/audits/hardware-utils/phase-6-windows-platform-conformance.md`                 |
-| P6-A Windows topology model   | `docs/blueprints/hardware-utils/phase-6-windows-topology-model.md`            | conformance check and manual review                              | `docs/audits/hardware-utils/phase-6-windows-topology-model-conformance.md`            |
-| P6-B Windows resource provider| `docs/blueprints/hardware-utils/phase-6-windows-resource-provider.md`          | conformance check and manual review                              | `docs/audits/hardware-utils/phase-6-windows-resource-provider-conformance.md`          |
-| P7 parent/root integration    | `docs/blueprints/hardware-utils/phase-7-macos-platform.md`                    | child conformance/manual reviews plus root manual review         | `docs/audits/hardware-utils/phase-7-macos-platform-conformance.md`                    |
-| P7-A macOS topology model     | `docs/blueprints/hardware-utils/phase-7-macos-topology-model.md`              | conformance check and manual review                              | `docs/audits/hardware-utils/phase-7-macos-topology-model-conformance.md`              |
-| P7-B macOS resource provider  | `docs/blueprints/hardware-utils/phase-7-macos-resource-provider.md`            | conformance check and manual review                              | `docs/audits/hardware-utils/phase-7-macos-resource-provider-conformance.md`            |
-| P7-C macOS affinity & native  | `docs/blueprints/hardware-utils/phase-7-macos-affinity-native.md`             | conformance check and manual review                              | `docs/audits/hardware-utils/phase-7-macos-affinity-native-conformance.md`             |
-| P8                            | `docs/blueprints/hardware-utils/phase-8-control-plane-integration-release.md` | conformance/manual review                                        | `docs/audits/hardware-utils/phase-8-control-plane-integration-release-conformance.md` |
-
+| Phase                          | Blueprint and completion record                                               | Conformance/manual review                                        | Audit                                                                                 |
+|--------------------------------|-------------------------------------------------------------------------------|------------------------------------------------------------------|---------------------------------------------------------------------------------------|
+| P0                             | `docs/blueprints/hardware-utils/phase-0-compatibility-test-baseline.md`       | conformance/manual review; historical validation record retained | `docs/audits/hardware-utils/phase-0-compatibility-test-baseline-conformance.md`       |
+| P1 parent/root integration     | `docs/blueprints/hardware-utils/phase-1-native-build-jni-packaging.md`        | skipped; conformance check and manual review                     | `docs/audits/hardware-utils/phase-1-native-build-jni-packaging-conformance.md`        |
+| P1-A native graph/JNI/signing  | `docs/blueprints/hardware-utils/phase-1-native-graph-jni-signing.md`          | skipped; conformance check and manual review                     | `docs/audits/hardware-utils/phase-1-native-graph-jni-signing-conformance.md`          |
+| P1-B loader/package/CI         | `docs/blueprints/hardware-utils/phase-1-loader-gradle-packaging.md`           | skipped; conformance check and manual review                     | `docs/audits/hardware-utils/phase-1-loader-gradle-packaging-conformance.md`           |
+| P2 parent/root integration     | `docs/blueprints/hardware-utils/phase-2-topology-snapshot-model.md`           | child conformance/manual reviews plus root manual review         | `docs/audits/hardware-utils/phase-2-topology-snapshot-model-conformance.md`           |
+| P2-A topology model/adapters   | `docs/blueprints/hardware-utils/phase-2-topology-model-adapters.md`           | conformance check and manual review                              | `docs/audits/hardware-utils/phase-2-topology-model-adapters-conformance.md`           |
+| P2-B snapshots/publication     | `docs/blueprints/hardware-utils/phase-2-snapshot-remap-publication.md`        | conformance check and manual review                              | `docs/audits/hardware-utils/phase-2-snapshot-remap-publication-conformance.md`        |
+| P3 parent/root integration     | `docs/blueprints/hardware-utils/phase-3-affinity-executor-lifecycle.md`       | child conformance/manual reviews plus root manual review         | `docs/audits/hardware-utils/phase-3-affinity-executor-lifecycle-conformance.md`       |
+| P3-A affinity capability       | `docs/blueprints/hardware-utils/phase-3-affinity-capability.md`               | conformance check and manual review                              | `docs/audits/hardware-utils/phase-3-affinity-capability-conformance.md`               |
+| P3-B executor lifecycle        | `docs/blueprints/hardware-utils/phase-3-executor-lifecycle.md`                | conformance check and manual review                              | `docs/audits/hardware-utils/phase-3-executor-lifecycle-conformance.md`                |
+| P4 parent/root integration     | `docs/blueprints/hardware-utils/phase-4-resource-monitor-pressure.md`         | one integrated conformance/manual review after P4-D              | `docs/audits/hardware-utils/phase-4-resource-monitor-pressure-conformance.md`         |
+| P4-A sample/validity           | `docs/blueprints/hardware-utils/phase-4-sample-validity-contract.md`          | covered by final integrated P4 conformance                       | none; developer-authorized single-conformance flow                                    |
+| P4-B pressure/projection       | `docs/blueprints/hardware-utils/phase-4-pressure-mathematics.md`              | covered by final integrated P4 conformance                       | none; developer-authorized single-conformance flow                                    |
+| P4-C listener publication      | `docs/blueprints/hardware-utils/phase-4-listener-publication.md`              | covered by final integrated P4 conformance                       | none; developer-authorized single-conformance flow                                    |
+| P4-D monitor lifecycle         | `docs/blueprints/hardware-utils/phase-4-monitor-lifecycle-scheduler.md`       | covered by final integrated P4 conformance                       | none; developer-authorized single-conformance flow                                    |
+| P5 parent/root integration     | `docs/blueprints/hardware-utils/phase-5-linux-platform.md`                    | child conformance/manual reviews plus root manual review         | `docs/audits/hardware-utils/phase-5-linux-platform-conformance.md`                    |
+| P5-A Linux topology model      | `docs/blueprints/hardware-utils/phase-5-linux-topology-model.md`              | conformance check and manual review                              | `docs/audits/hardware-utils/phase-5-linux-topology-model-conformance.md`              |
+| P5-B Linux resource provider   | `docs/blueprints/hardware-utils/phase-5-linux-resource-provider.md`           | conformance check and manual review                              | `docs/audits/hardware-utils/phase-5-linux-resource-provider-conformance.md`           |
+| P5-C Linux affinity & native   | `docs/blueprints/hardware-utils/phase-5-linux-affinity-native.md`             | conformance check and manual review                              | `docs/audits/hardware-utils/phase-5-linux-affinity-native-conformance.md`             |
+| P6 parent/root integration     | `docs/blueprints/hardware-utils/phase-6-windows-platform.md`                  | child conformance/manual reviews plus root manual review         | `docs/audits/hardware-utils/phase-6-windows-platform-conformance.md`                  |
+| P6-A Windows topology model    | `docs/blueprints/hardware-utils/phase-6-windows-topology-model.md`            | conformance check and manual review                              | `docs/audits/hardware-utils/phase-6-windows-topology-model-conformance.md`            |
+| P6-B Windows resource provider | `docs/blueprints/hardware-utils/phase-6-windows-resource-provider.md`         | conformance check and manual review                              | `docs/audits/hardware-utils/phase-6-windows-resource-provider-conformance.md`         |
+| P7 parent/root integration     | `docs/blueprints/hardware-utils/phase-7-macos-platform.md`                    | child conformance/manual reviews plus root manual review         | `docs/audits/hardware-utils/phase-7-macos-platform-conformance.md`                    |
+| P7-A macOS topology model      | `docs/blueprints/hardware-utils/phase-7-macos-topology-model.md`              | conformance check and manual review                              | `docs/audits/hardware-utils/phase-7-macos-topology-model-conformance.md`              |
+| P7-B macOS resource provider   | `docs/blueprints/hardware-utils/phase-7-macos-resource-provider.md`           | conformance check and manual review                              | `docs/audits/hardware-utils/phase-7-macos-resource-provider-conformance.md`           |
+| P7-C macOS affinity & native   | `docs/blueprints/hardware-utils/phase-7-macos-affinity-native.md`             | conformance check and manual review                              | `docs/audits/hardware-utils/phase-7-macos-affinity-native-conformance.md`             |
+| P8                             | `docs/blueprints/hardware-utils/phase-8-control-plane-integration-release.md` | conformance/manual review                                        | `docs/audits/hardware-utils/phase-8-control-plane-integration-release-conformance.md` |
 
 ## Prompt sequence
 
@@ -1060,43 +1055,43 @@ split, and implementation-model reassessments. P2-A/P2-B and P4-A through P4-D s
 parent-blueprint selections; their child blueprints must confirm or upgrade them before
 implementation.
 
-| Rank | Prompt                                                     | Selection               |
-|-----:|------------------------------------------------------------|-------------------------|
-|    1 | P4 parent/child blueprints - sampling/pressure/lifecycle   | `gpt-5.6-sol`, `max`    |
-|    2 | P7 blueprint - macOS public-API parity                     | `gpt-5.6-sol`, `max`    |
-|    3 | P6 blueprint - Windows processor-group/native parity       | `gpt-5.6-sol`, `max`    |
-|    4 | P5 parent & child blueprints - Linux topology/resources/ABI| `gpt-5.6-sol`, `max`    |
-|    5 | P3 parent/child blueprints - affinity/executor concurrency | `gpt-5.6-sol`, `max`    |
-|    6 | P2 blueprint - topology and snapshot ownership             | `gpt-5.6-sol`, `max`    |
-|    7 | P1 blueprint - native build/JNI/package ABI                | `gpt-5.6-sol`, `max`    |
-|    8 | P8 blueprint - core hot-loop and release integration       | `gpt-5.6-sol`, `max`    |
-|    9 | P0 blueprint - compatibility/test baseline                 | `gpt-5.6-sol`, `high`   |
-|   10 | P4-A through P4-D parent-selected implementations          | `gpt-5.6-sol`, `high`   |
-|   11 | P5-A, P5-B, P5-C parent-selected implementations           | `gpt-5.6-sol`, `high`   |
-|   12 | P7 provisional implementation                              | `gpt-5.6-sol`, `high`   |
-|   13 | P6 provisional implementation                              | `gpt-5.6-sol`, `high`   |
-|   14 | P3-A and P3-B selected implementations                     | `gpt-5.6-sol`, `high`   |
-|   15 | P2-A and P2-B selected implementations                     | `gpt-5.6-sol`, `high`   |
-|   16 | P1-A and P1-B selected implementations                     | `gpt-5.6-sol`, `high`   |
-|   17 | P8 provisional implementation                              | `gpt-5.6-sol`, `high`   |
-|   18 | P0 implementation - compiled compatibility/test baseline   | `gpt-5.6-sol`, `medium` |
-|   19 | P8 conformance/manual review                               | `gpt-5.6-sol`, `high`   |
-|   20 | P7 conformance/manual review                               | `gpt-5.6-sol`, `high`   |
-|   21 | P6 conformance/manual review                               | `gpt-5.6-sol`, `high`   |
-|   22 | P5 child/root conformance/manual reviews                   | `gpt-5.6-sol`, `high`   |
-|   23 | P3 child/root conformance/manual review                    | `gpt-5.6-sol`, `high`   |
-|   24 | P2 child/root conformance/manual review                    | `gpt-5.6-sol`, `high`   |
-|   25 | P1 child and root conformance/manual review                | `gpt-5.6-sol`, `high`   |
-|   26 | P0 conformance/manual review                               | `gpt-5.6-sol`, `medium` |
-|   27 | P8 final conformance audit                                 | `gpt-5.6-sol`, `high`   |
-|   28 | P5 child/root conformance audits                           | `gpt-5.6-sol`, `high`   |
-|   29 | P4 single integrated conformance/manual-review audit       | `gpt-5.6-sol`, `high`   |
-|   30 | P7 conformance audit                                       | `gpt-5.6-sol`, `high`   |
-|   31 | P6 conformance audit                                       | `gpt-5.6-sol`, `high`   |
-|   32 | P3 child/root conformance audits                           | `gpt-5.6-sol`, `high`   |
-|   33 | P2 child/root conformance audits                           | `gpt-5.6-sol`, `high`   |
-|   34 | P1 child and root conformance audits                       | `gpt-5.6-sol`, `high`   |
-|   35 | P0 conformance audit                                       | `gpt-5.6-sol`, `medium` |
+| Rank | Prompt                                                      | Selection               |
+|-----:|-------------------------------------------------------------|-------------------------|
+|    1 | P4 parent/child blueprints - sampling/pressure/lifecycle    | `gpt-5.6-sol`, `max`    |
+|    2 | P7 blueprint - macOS public-API parity                      | `gpt-5.6-sol`, `max`    |
+|    3 | P6 blueprint - Windows processor-group/native parity        | `gpt-5.6-sol`, `max`    |
+|    4 | P5 parent & child blueprints - Linux topology/resources/ABI | `gpt-5.6-sol`, `max`    |
+|    5 | P3 parent/child blueprints - affinity/executor concurrency  | `gpt-5.6-sol`, `max`    |
+|    6 | P2 blueprint - topology and snapshot ownership              | `gpt-5.6-sol`, `max`    |
+|    7 | P1 blueprint - native build/JNI/package ABI                 | `gpt-5.6-sol`, `max`    |
+|    8 | P8 blueprint - core hot-loop and release integration        | `gpt-5.6-sol`, `max`    |
+|    9 | P0 blueprint - compatibility/test baseline                  | `gpt-5.6-sol`, `high`   |
+|   10 | P4-A through P4-D parent-selected implementations           | `gpt-5.6-sol`, `high`   |
+|   11 | P5-A, P5-B, P5-C parent-selected implementations            | `gpt-5.6-sol`, `high`   |
+|   12 | P7 provisional implementation                               | `gpt-5.6-sol`, `high`   |
+|   13 | P6 provisional implementation                               | `gpt-5.6-sol`, `high`   |
+|   14 | P3-A and P3-B selected implementations                      | `gpt-5.6-sol`, `high`   |
+|   15 | P2-A and P2-B selected implementations                      | `gpt-5.6-sol`, `high`   |
+|   16 | P1-A and P1-B selected implementations                      | `gpt-5.6-sol`, `high`   |
+|   17 | P8 provisional implementation                               | `gpt-5.6-sol`, `high`   |
+|   18 | P0 implementation - compiled compatibility/test baseline    | `gpt-5.6-sol`, `medium` |
+|   19 | P8 conformance/manual review                                | `gpt-5.6-sol`, `high`   |
+|   20 | P7 conformance/manual review                                | `gpt-5.6-sol`, `high`   |
+|   21 | P6 conformance/manual review                                | `gpt-5.6-sol`, `high`   |
+|   22 | P5 child/root conformance/manual reviews                    | `gpt-5.6-sol`, `high`   |
+|   23 | P3 child/root conformance/manual review                     | `gpt-5.6-sol`, `high`   |
+|   24 | P2 child/root conformance/manual review                     | `gpt-5.6-sol`, `high`   |
+|   25 | P1 child and root conformance/manual review                 | `gpt-5.6-sol`, `high`   |
+|   26 | P0 conformance/manual review                                | `gpt-5.6-sol`, `medium` |
+|   27 | P8 final conformance audit                                  | `gpt-5.6-sol`, `high`   |
+|   28 | P5 child/root conformance audits                            | `gpt-5.6-sol`, `high`   |
+|   29 | P4 single integrated conformance/manual-review audit        | `gpt-5.6-sol`, `high`   |
+|   30 | P7 conformance audit                                        | `gpt-5.6-sol`, `high`   |
+|   31 | P6 conformance audit                                        | `gpt-5.6-sol`, `high`   |
+|   32 | P3 child/root conformance audits                            | `gpt-5.6-sol`, `high`   |
+|   33 | P2 child/root conformance audits                            | `gpt-5.6-sol`, `high`   |
+|   34 | P1 child and root conformance audits                        | `gpt-5.6-sol`, `high`   |
+|   35 | P0 conformance audit                                        | `gpt-5.6-sol`, `medium` |
 
 ### P0 - compatibility contract and deterministic test baseline
 
@@ -1131,7 +1126,8 @@ implementation.
 > and regression-test ID; unmatched drift fails. Specify contract-bearing files,
 > tool/plugin choice, deterministic output format, commands, failures, and acceptance assertions.
 > Generate the branch-point baseline through source-level signature extraction or an isolated
-> temporary worktree/output path. Do not invoke the current native-generating Gradle build lifecycle in
+> temporary worktree/output path. Do not invoke the current native-generating Gradle build lifecycle
+> in
 > the active worktree before P1; prove the active worktree and source-resource inventory are
 > unchanged before and after baseline generation.
 >
@@ -1169,8 +1165,8 @@ implementation.
   `900d8c50` without running or publishing the native build.
 - Ownership: hardware-module test-scoped ASM configuration, the
   `io.euhedral_execution.hardware_utils.compatibility` test package, three compatibility resources,
-  and the blueprint completion record. Production, downstream modules, CI, benchmarks, and
-  training remain read-only/prohibited.
+  and the blueprint completion record. Production, downstream modules, CI, benchmarks, and training
+  remain read-only/prohibited.
 - Key contracts: exact complete module descriptor; baseline public/protected classfile surface as a
   required subset with additive members allowed; typed constants, Lombok-generated members,
   descriptors/generics/exceptions, records/nested/sealed metadata; eight intended aggregate native
@@ -1180,9 +1176,9 @@ implementation.
   responsibility.
 - Implementation selection: `gpt-5.6-sol`, `medium`.
 - Principal risks: subtle classfile normalization, JPMS test compilation, accidentally loading
-  hardware classes during extraction, host cleanup in the executor test, and accidentally
-  triggering the bound Zig lifecycle. The blueprint fixes each boundary and uses direct Gradle
-  plugin goals plus source/resource fingerprints.
+  hardware classes during extraction, host cleanup in the executor test, and accidentally triggering
+  the bound Zig lifecycle. The blueprint fixes each boundary and uses direct Gradle plugin goals
+  plus source/resource fingerprints.
 - Unresolved decisions: none.
 
 #### P0 implementation prompt
@@ -1346,7 +1342,8 @@ commit.
 > musl fallback only on recorded failure.
 >
 > Specify each affected file in dependency order, exact manifest examples, deterministic product
-> ordering, failure diagnostics, Gradle build lifecycle/resource wiring, CI signing safety, clean/rebuild
+> ordering, failure diagnostics, Gradle build lifecycle/resource wiring, CI signing safety,
+> clean/rebuild
 > tests, timing evidence, and binary commands. Platform sensor/topology/pressure/affinity semantics,
 > core, benchmarks without an approved measurement need, unrelated CI, and all training work are
 > prohibited. Task validation/runtime jobs must use a hardware-specific selected-module workflow;
@@ -1362,7 +1359,8 @@ commit.
 > only where justified. Apply the workflow sizing/split gate. If independent build, JNI, loader,
 > or signing responsibilities exceed one implementation context, define responsibility-scoped
 > child blueprint action items, branch names, and context envelopes now, then update all P1
-> implementation/conformance/manual-review prompts, parents, and the phase artifact index in this plan.
+> implementation/conformance/manual-review prompts, parents, and the phase artifact index in this
+> plan.
 > Only after this parent blueprint child is merged may those branches be created from the updated
 > P1 root; rerun the gate per child. The root implementation prompt must not run after a split.
 >
@@ -1393,11 +1391,11 @@ commit.
   loader table; exact jar inventory; bounded owner-private extraction/cleanup; and LLVM plus real
   runner gates.
 - Children: P1-A owns the native graph, JNI, signing, and Gradle staging. After its audit merges,
-  P1-B owns loader, package/binary gates, runtime smoke, and CI. Root conformance checking,
-  manual review, and root audit follow both child audits; validation is skipped.
+  P1-B owns loader, package/binary gates, runtime smoke, and CI. Root conformance checking, manual
+  review, and root audit follow both child audits; validation is skipped.
 - Implementation capability: both child implementations, conformance audits/manual reviews, and root
-  integration use `gpt-5.6-sol` with `high` reasoning. Each child blueprint must rerun the gate
-  and may raise capability/effort, but may not silently downgrade.
+  integration use `gpt-5.6-sol` with `high` reasoning. Each child blueprint must rerun the gate and
+  may raise capability/effort, but may not silently downgrade.
 - Primary risks: Zig 0.16 API drift, strict Windows UCRT imports, cross-tool signature semantics,
   safe treatment of ignored source artifacts, and hosted runner/Docker availability.
 - Unresolved decisions: none. Protected release configuration must supply the two named signing
@@ -1499,7 +1497,8 @@ sequential child lifecycles below.
 > After P1-A implementation is reviewed and merged, create
 > `hardware-utils-overhaul/phase-1-native-graph-audit` from the P1 root. The parent artifact is
 > the P1-A completion record and implementation evidence. Read the
-> summarized parent contract and exact P1-A blueprint/completion, diff, tests, and conformance/manual-review evidence.
+> summarized parent contract and exact P1-A blueprint/completion, diff, tests, and
+> conformance/manual-review evidence.
 > Do not inspect training or expand into P1-B ownership.
 >
 > Independently classify every Child A requirement and its portions of B01-B04, B06, and B07 as
@@ -1523,7 +1522,8 @@ sequential child lifecycles below.
 > `docs/blueprints/hardware-utils/phase-1-native-build-jni-packaging.md`. Inspect
 > `git status --short`. Read `AGENTS.md`, `docs/AGENT_WORKFLOW.md`, completed P0 artifacts/
 > closeout, the parent blueprint's Child B envelope, and the exact P1-A blueprint/completion,
-> conformance/manual-review, catalog/staging handoff, and relevant diff. Read only the existing loader,
+> conformance/manual-review, catalog/staging handoff, and relevant diff. Read only the existing
+> loader,
 > module packaging/test wiring, Child A's summarized existing-workflow native setup, and the new
 > hardware-workflow path. Do not inspect training.
 >
@@ -1655,17 +1655,21 @@ sequential child lifecycles below.
 > Ownership is limited to independent P1 root conformance and minor blueprint-settled corrections.
 > Inspect `git status --short`. Read `AGENTS.md`, `docs/AGENT_WORKFLOW.md`, completed P0
 > artifacts/closeout, the parent P1 blueprint and review summary, both child
-> blueprint/completion/conformance/manual-review summaries, the root conformance record, final P1 diff,
+> blueprint/completion/conformance/manual-review summaries, the root conformance record, final P1
+> diff,
 > package inventories, and relevant tests. Do not inspect or run training.
 >
-> Independently evaluate every P1 requirement and the implementation/conformance evidence for deterministic
+> Independently evaluate every P1 requirement and the implementation/conformance evidence for
+> deterministic
 > discovery, source-tree non-mutation, manifest failures, JNI ABI, jar/loader coverage, fallback
 > and extraction behavior, hardening, graph independence, signing, architectures, exports,
 > imports, deployment targets, runtime floors, and timing claims. Allowed edits are
 > `docs/audits/hardware-utils/phase-1-native-build-jni-packaging-conformance.md`, completion and
-> conformance/manual-review records, the P1 closeout summary in this plan, the temporary phase-status block, and
+> conformance/manual-review records, the P1 closeout summary in this plan, the temporary
+> phase-status block, and
 > minor blueprint-settled corrections. If a correction is made, rerun and record the affected
-> conformance check. Redesign, new ABI/manifest decisions, unrelated files, and training are prohibited.
+> conformance check. Redesign, new ABI/manifest decisions, unrelated files, and training are
+> prohibited.
 >
 > The output artifacts are the audit above, child/root record corrections, P1 closeout summary in
 > this plan, and, after the authorized merge, removal of the temporary P1 status block on the root
@@ -1680,11 +1684,11 @@ sequential child lifecycles below.
 
 #### P1 closeout summary
 
-P1 is complete under the developer-authorized conformance-only workflow. Validation was removed
-from the global workflow; conformance checking and manual review are the sole verification path.
-The direct audit recorded 21 satisfied criteria, criteria 19/24 unverified, criterion 22 deviated,
-Child A ambiguous because its historical artifact chain is absent, Child B satisfied, and B01-B05,
-B07, and the P1 B06 gate framework satisfied. No production correction was made. The audit is
+P1 is complete under the developer-authorized conformance-only workflow. Validation was removed from
+the global workflow; conformance checking and manual review are the sole verification path. The
+direct audit recorded 21 satisfied criteria, criteria 19/24 unverified, criterion 22 deviated, Child
+A ambiguous because its historical artifact chain is absent, Child B satisfied, and B01-B05, B07,
+and the P1 B06 gate framework satisfied. No production correction was made. The audit is
 `docs/audits/hardware-utils/phase-1-native-build-jni-packaging-conformance.md`; no P2 work was
 created.
 
@@ -1710,28 +1714,27 @@ before creating any P2-A branch.
   adapter boundaries, and topology fixtures. P2-B owns `TopologyMapper`, `SystemUtilization`, the
   wrappers, and snapshot/remap fixtures.
 - Key contracts: Linux logical CPU IDs remain kernel IDs; Windows IDs are
-  `group * 64 + processor`; macOS/fallback IDs are deterministic ordinals. Global sockets/cores
-  are dense and sorted from source identity including die. `CPU_COUNT` is the logical CPU index
-  span, core/socket counts are dense cardinalities, and inactive array/list positions are null
-  holes while every active entry is complete. Missing caches use exact core-local L1/L2 and
-  socket-local L3 defaults. Provider and public storage is defensively owned; snapshot equality
-  and hash use every component. Mapper requests are sequence-coalesced, versions change only for
-  actually published membership, and one volatile topology write/read publishes the whole graph.
-  Core zero means global core ID zero and is removed only when another allowed/effective core
-  remains.
+  `group * 64 + processor`; macOS/fallback IDs are deterministic ordinals. Global sockets/cores are
+  dense and sorted from source identity including die. `CPU_COUNT` is the logical CPU index span,
+  core/socket counts are dense cardinalities, and inactive array/list positions are null holes while
+  every active entry is complete. Missing caches use exact core-local L1/L2 and socket-local L3
+  defaults. Provider and public storage is defensively owned; snapshot equality and hash use every
+  component. Mapper requests are sequence-coalesced, versions change only for actually published
+  membership, and one volatile topology write/read publishes the whole graph. Core zero means global
+  core ID zero and is removed only when another allowed/effective core remains.
 - Children: P2-A `phase-2-topology-model-*` must complete and merge before P2-B
   `phase-2-snapshot-publication-*`. Each has blueprint, implementation, and combined conformance/
   manual-review audit actions. There is no root implementation or validation branch.
-- Selected implementation model: `gpt-5.6-sol` with `high` reasoning for both P2-A and P2-B,
-  subject to mandatory confirmation by each child blueprint. Child/root audits use the same model
-  and effort.
+- Selected implementation model: `gpt-5.6-sol` with `high` reasoning for both P2-A and P2-B, subject
+  to mandatory confirmation by each child blueprint. Child/root audits use the same model and
+  effort.
 - Risks: sparse IDs can enlarge bounded arrays; static initialization can recurse; mutable record
-  component types require accessor as well as constructor protection; coalescing intentionally
-  hides intermediate states; common Windows/macOS fixtures do not prove P6/P7 platform parity;
-  full verify depends on the completed P1 native toolchain.
-- Unresolved decisions: none. ID semantics, count/index meanings, null holes, cache fallbacks,
-  copy boundaries, equality, fallback behavior, core-zero policy, version rules, and publication
-  modes are settled in the parent blueprint.
+  component types require accessor as well as constructor protection; coalescing intentionally hides
+  intermediate states; common Windows/macOS fixtures do not prove P6/P7 platform parity; full verify
+  depends on the completed P1 native toolchain.
+- Unresolved decisions: none. ID semantics, count/index meanings, null holes, cache fallbacks, copy
+  boundaries, equality, fallback behavior, core-zero policy, version rules, and publication modes
+  are settled in the parent blueprint.
 
 #### P2 root implementation prompt - SUPERSEDED, DO NOT RUN
 
@@ -1774,10 +1777,9 @@ families below, sequentially from the updated P2 root.
 - Purpose: install the common owned topology input/model/normalizer and make `SystemInfo` initialize
   from one complete deterministic platform model or one whole-model fallback.
 - Ownership: P2-A owns `SystemInfo`, one unexported internal topology package, the common
-  collection/
-  projection boundaries of all three layout singletons, current Windows relationship values only
-  after parsing, and five deterministic topology fixture families. Mapper/snapshots, resources,
-  pressure, affinity/executor, native parity, core, and training remain prohibited.
+  collection/ projection boundaries of all three layout singletons, current Windows relationship
+  values only after parsing, and five deterministic topology fixture families. Mapper/snapshots,
+  resources, pressure, affinity/executor, native parity, core, and training remain prohibited.
 - Key contracts: Linux IDs remain kernel IDs; Windows uses unsigned `group * 64 + processor`;
   macOS/fallback uses ordinals. Socket/core IDs are dense and source-key sorted, `CPU_COUNT` is the
   logical index span, active entries are complete, and invalid/missing cache data receives exact
@@ -1871,16 +1873,16 @@ families below, sequentially from the updated P2 root.
   mapper membership as one immutable fixed-shape topology with exact coalescing and versions.
 - Ownership: P2-B owns `TopologyMapper`, `SystemUtilization`, `UnmodifiableBitSet`,
   `UnmodifiableDoubleArray`, and focused wrapper/snapshot/remap/race tests. P2-A model/adapters,
-  ResourceMonitor lifecycle/pressure, affinity/executor, core production, detailed platforms,
-  native sources, and training remain read-only or prohibited.
-- Key contracts: canonical record constructors copy mutable values and nested array accessors
-  clone; equality/hash includes every component. Socket arrays use the global core span and core
-  arrays use logical CPU indexes with exact null holes. Named memory fields use nonnegative,
-  saturating arithmetic. Mapper candidates intersect model, allowed, and utilization masks before
-  reserving global core zero only when another core remains. Greatest-sequence requests drain
-  through release/recheck; global and persistent socket versions count actual membership
-  publications, including socket deactivation/reactivation. One volatile topology write/read
-  publishes the complete graph and its version.
+  ResourceMonitor lifecycle/pressure, affinity/executor, core production, detailed platforms, native
+  sources, and training remain read-only or prohibited.
+- Key contracts: canonical record constructors copy mutable values and nested array accessors clone;
+  equality/hash includes every component. Socket arrays use the global core span and core arrays use
+  logical CPU indexes with exact null holes. Named memory fields use nonnegative, saturating
+  arithmetic. Mapper candidates intersect model, allowed, and utilization masks before reserving
+  global core zero only when another core remains. Greatest-sequence requests drain through
+  release/recheck; global and persistent socket versions count actual membership publications,
+  including socket deactivation/reactivation. One volatile topology write/read publishes the
+  complete graph and its version.
 - Work unit: one implementation and one combined conformance/manual-review audit remain. The child
   stays unsplit because wrapper/snapshot ownership and mapper publication share the same active-ID,
   fixed-null-hole, mutation, and race acceptance boundary.
@@ -1891,8 +1893,8 @@ families below, sequentially from the updated P2 root.
   accessors both need ownership protection; coalescing intentionally hides intermediate states;
   inactive socket versions persist privately; final verify depends on P1 native tools.
 - Unresolved decisions: none. Copy/accessor behavior, equality/hash, named fields, arithmetic,
-  spans/null holes, allowed/core-zero membership, coalescing/failure cleanup, versions/overflow,
-  and volatile publication are settled in the child blueprint.
+  spans/null holes, allowed/core-zero membership, coalescing/failure cleanup, versions/overflow, and
+  volatile publication are settled in the child blueprint.
 
 #### P2-B immutable snapshots/remap publication implementation prompt
 
@@ -1988,10 +1990,10 @@ neither topology publication nor the missing P2 race tests.
 
 The completed output is
 `docs/blueprints/hardware-utils/phase-3-affinity-executor-lifecycle.md` on
-`hardware-utils-overhaul/phase-3-affinity-executor-blueprint`. It freezes capability, masks,
-managed ownership, leases/restoration, executor state, registry, cleaner/hook, deadline, and Java
-Memory Model contracts. Its sizing gate splits P3 into sequential P3-A and P3-B children and
-prohibits a root implementation or validation branch. The reviewed parent is merged into
+`hardware-utils-overhaul/phase-3-affinity-executor-blueprint`. It freezes capability, masks, managed
+ownership, leases/restoration, executor state, registry, cleaner/hook, deadline, and Java Memory
+Model contracts. Its sizing gate splits P3 into sequential P3-A and P3-B children and prohibits a
+root implementation or validation branch. The reviewed parent is merged into
 `hardware-utils-overhaul/phase-3-affinity-executor` at `7d3abea7`; P3-A was created from that root.
 
 #### P3 developer-review summary
@@ -2000,32 +2002,32 @@ prohibits a root implementation or validation branch. The reviewed parent is mer
   linearizable, concurrent fresh-thread executor with bounded global cleanup.
 - Ownership: the parent spans hardware root/internal affinity and lifecycle, three Java affinity
   facades, and focused hardware tests. P3-A owns the additive enum/query, `ThreadTools`, internal
-  pinner/controller/lease/managed-owner roles, platform Java facade conformance, and affinity
-  tests. P3-B owns `PinnedThreadExecutor`, bounded registry/cleanup support, and lifecycle/race/
-  cleanup tests. Native implementations, resources/pressure, topology production, core
-  production, and training remain read-only or prohibited.
+  pinner/controller/lease/managed-owner roles, platform Java facade conformance, and affinity tests.
+  P3-B owns `PinnedThreadExecutor`, bounded registry/cleanup support, and lifecycle/race/ cleanup
+  tests. Native implementations, resources/pressure, topology production, core production, and
+  training remain read-only or prohibited.
 - Key contracts: `AffinityCapability` is exactly `EXACT`, `LOCALITY_HINT`, or `UNSUPPORTED` and
   `ThreadTools.getAffinityCapability()` reports the operational common path. Requests are copied,
   bounded to the P2 logical span, all-or-nothing, and never partially intersected into success.
   Exact work captures/restores the calling thread's first original binding; macOS applies one
-  representable hint and releases tag zero. Managed IDs are scoped tokens, not physical claims.
-  The executor has RUNNING/SHUTDOWN/CLOSED states, one NEW thread per accepted execute, lock-
-  linearized start/execute/shutdown, truthful instant termination, overflow-safe await, exact
-  registry identity removal, noncapturing cleaner action, one bounded hook, and gated `closeAll`.
+  representable hint and releases tag zero. Managed IDs are scoped tokens, not physical claims. The
+  executor has RUNNING/SHUTDOWN/CLOSED states, one NEW thread per accepted execute, lock- linearized
+  start/execute/shutdown, truthful instant termination, overflow-safe await, exact registry identity
+  removal, noncapturing cleaner action, one bounded hook, and gated `closeAll`.
 - Children: P3-A `phase-3-affinity-capability-*` completes and merges before P3-B
   `phase-3-executor-lifecycle-*`. Each has blueprint, implementation, and combined conformance/
   manual-review audit actions. The root has no implementation/validation action; one root audit
   follows both children.
-- Selected implementation model: `gpt-5.6-sol` with `high` reasoning for both P3-A and P3-B,
-  subject to mandatory confirmation/increase by each child blueprint. Child/root audits use the
-  same model and effort.
+- Selected implementation model: `gpt-5.6-sol` with `high` reasoning for both P3-A and P3-B, subject
+  to mandatory confirmation/increase by each child blueprint. Child/root audits use the same model
+  and effort.
 - Risks: exact apply cannot outrun safe capture/restoration; P3 macOS locality grouping may be
   narrower than P7; restart makes termination an instant observation; arbitrary thread creators
   require create-outside/start-inside locking; interrupt-ignoring tasks retain closed tombstones;
   cleaner/hook tests require deterministic seams; final verify depends on P1 native tools.
 - Unresolved decisions: none. Public naming, masks, capability meaning, owner/lease cleanup,
-  lifecycle transitions, task acceptance, registry overlap, deadlines, interruption, hooks,
-  cleaner reachability, memory modes, split order, and implementation capability are settled.
+  lifecycle transitions, task acceptance, registry overlap, deadlines, interruption, hooks, cleaner
+  reachability, memory modes, split order, and implementation capability are settled.
 
 #### P3 root implementation prompt - SUPERSEDED, DO NOT RUN
 
@@ -2066,10 +2068,10 @@ families below, sequentially from the updated P3 root.
   bounded unsigned requests, first-original restoration, conservative locality release, and scoped
   managed logical ownership.
 - Package boundary: P3-A owns the additive root enum/query, `ThreadTools`, unexported affinity
-  controller/provider/value roles, the three Java affinity facades, and focused deterministic
-  tests. Module directives, legacy exported `common.ThreadPinner`, JNI declarations/bodies,
-  executor lifecycle, resource/pressure code, topology production, core production, and training
-  are unchanged or prohibited.
+  controller/provider/value roles, the three Java affinity facades, and focused deterministic tests.
+  Module directives, legacy exported `common.ThreadPinner`, JNI declarations/bodies, executor
+  lifecycle, resource/pressure code, topology production, core production, and training are
+  unchanged or prohibited.
 - Key contracts: P3 Linux/Windows common capability remains `UNSUPPORTED` until P5/P6 supply exact
   capture/restore; macOS is a conservative single-ordinal `LOCALITY_HINT` with tag-zero release
   until P7. Every request is copied, bounded by the P2 span/active mask, all-or-nothing, and bit-63
@@ -2159,31 +2161,30 @@ families below, sequentially from the updated P3 root.
   clearing, per-instance hook, capturing cleaner, and polling deadline with one linearizable
   restartable lifecycle while retaining a fresh concurrent thread for every accepted execution.
 - Package boundary: P3-B owns `PinnedThreadExecutor`, optional bounded unexported lifecycle/
-  registry support, one new focused lifecycle test, and bounded updates to the two existing
-  executor tests. P3-A, platform/native affinity, topology, resources/pressure, core/benchmark
-  production, CI, and training are unchanged or prohibited.
+  registry support, one new focused lifecycle test, and bounded updates to the two existing executor
+  tests. P3-A, platform/native affinity, topology, resources/pressure, core/benchmark production,
+  CI, and training are unchanged or prohibited.
 - Key contracts: one synchronized lifecycle monitor owns RUNNING/SHUTDOWN/CLOSED, immutable
   configuration, checked epoch, task identity, wait/notify, and create-outside/start-inside
   acceptance. One registry monitor uses registry -> lifecycle lock order, exact weak entries,
   CLOSED-active tombstones, a noncapturing one-CAS cleanup action, one reusable hook identity, and
   gated bounded `closeAll`. Interrupt delivery and registry callbacks stay outside the lifecycle
   monitor.
-- P3-A boundary: wrappers bind managed logical ownership before attempting affinity or running
-  user code, then attempt release, owner close, and exact task removal in nested cleanup. False
-  affinity does not skip work, independent current CPU remains preferred, and the audited Linux
-  non-null current-CPU correction is consumed without reopening capability semantics.
+- P3-A boundary: wrappers bind managed logical ownership before attempting affinity or running user
+  code, then attempt release, owner close, and exact task removal in nested cleanup. False affinity
+  does not skip work, independent current CPU remains preferred, and the audited Linux non-null
+  current-CPU correction is consumed without reopening capability semantics.
 - Tests: A02 and the existing fresh-thread anchor remain stable. E1-E12, direct factory and failure
-  boundaries, deterministic cleanup/hook/task-affinity fakes, structural noncapture assertions,
-  and 50 bounded stress rounds cover lifecycle, registry, interruption, deadlines, no-overlap,
+  boundaries, deterministic cleanup/hook/task-affinity fakes, structural noncapture assertions, and
+  50 bounded stress rounds cover lifecycle, registry, interruption, deadlines, no-overlap,
   happens-before, and contamination.
 - Sizing/model: the child remains one bounded but irreducibly coupled lifecycle owner. The parent
-  selection is confirmed as **`gpt-5.6-sol` with `high` reasoning**; a downgrade is not justified
-  by the two-monitor ordering, restartable termination, weak cleanup, and forced race schedules.
-- Risks/unresolved items: arbitrary creators may allocate one discarded NEW candidate during a
-  race; interrupt-ignoring tasks deliberately retain CLOSED tombstones; real cleaner/GC and JVM
-  shutdown timing are not test gates. No state, lock, acceptance, restart, interrupt, deadline,
-  registry, cleaner, hook, cleanup, memory-mode, sizing, or implementation-model choice remains
-  unresolved.
+  selection is confirmed as **`gpt-5.6-sol` with `high` reasoning**; a downgrade is not justified by
+  the two-monitor ordering, restartable termination, weak cleanup, and forced race schedules.
+- Risks/unresolved items: arbitrary creators may allocate one discarded NEW candidate during a race;
+  interrupt-ignoring tasks deliberately retain CLOSED tombstones; real cleaner/GC and JVM shutdown
+  timing are not test gates. No state, lock, acceptance, restart, interrupt, deadline, registry,
+  cleaner, hook, cleanup, memory-mode, sizing, or implementation-model choice remains unresolved.
 
 #### P3-B executor lifecycle implementation prompt
 
@@ -2230,8 +2231,8 @@ families below, sequentially from the updated P3 root.
 
 #### P3 validation prompt - SUPERSEDED, DO NOT RUN
 
-The current workflow uses each child audit as its combined conformance check and manual review.
-Do not create `hardware-utils-overhaul/phase-3-affinity-executor-validation` or
+The current workflow uses each child audit as its combined conformance check and manual review. Do
+not create `hardware-utils-overhaul/phase-3-affinity-executor-validation` or
 `docs/validations/hardware-utils/phase-3-affinity-executor-lifecycle-validation.md`. The root audit
 consumes the two child blueprint/completion/conformance triples directly.
 
@@ -2268,21 +2269,21 @@ consumes the two child blueprint/completion/conformance triples directly.
 
 The developer's authorization to begin P4 design designates
 `hardware-utils-overhaul/phase-3-affinity-executor` at `748f34d5` as the completed P3 predecessor.
-That root contains the P3-A affinity-capability implementation/audit merged at `2027a47b`, the
-P3-B executor-lifecycle implementation/audit merged at `d6389711`, and the combined root audit.
+That root contains the P3-A affinity-capability implementation/audit merged at `2027a47b`, the P3-B
+executor-lifecycle implementation/audit merged at `d6389711`, and the combined root audit.
 
 The root audit classifies all 16 P3 parent criteria and A01-A02 as `satisfied`; it records no P3
 deviation, ambiguity, or unverified criterion. Its independent fallback run passed the 30-test
-combined deterministic suite and five repeated 14-test lifecycle runs, including the 50-round
-stress schedule. The child evidence records the passing pinned Java 21 P0/API gate, selected
-hardware verification, and 99-test read-only core gate.
+combined deterministic suite and five repeated 14-test lifecycle runs, including the 50-round stress
+schedule. The child evidence records the passing pinned Java 21 P0/API gate, selected hardware
+verification, and 99-test read-only core gate.
 
 The closeout retains the exact audit environment limit: the audit host exposed OpenJDK 17.0.19 and
 Maven 3.6.3 but not the pinned Java 21/Maven 3.9.16 selection or Zig. A fresh hardware `verify` and
 the Maven-lifecycle core gate therefore stopped at the missing Zig executable; no source/build
 workaround was made. Native/platform parity remains assigned to P5-P7. Training was neither
-inspected nor run. The authorization to start P4 is the explicit closeout authority; the compact
-P3 status text inherited in `AGENTS.md` is not edited by this planning-only P4 blueprint action.
+inspected nor run. The authorization to start P4 is the explicit closeout authority; the compact P3
+status text inherited in `AGENTS.md` is not edited by this planning-only P4 blueprint action.
 
 ### P4 - 200 ms sampling engine and normalized pressure
 
@@ -2335,7 +2336,8 @@ P3 status text inherited in `AGENTS.md` is not edited by this planning-only P4 b
 > Define package ownership, naming, raw-sample-to-publication data flow, and all high-reasoning
 > contracts without enumerating minor files unnecessarily. Include a bounded implementation
 > context envelope naming required inputs and owned outputs. The required formula/constants/
-> precision work must include rounding and clamp order, floating-point error/overflow/NaN handling, time
+> precision work must include rounding and clamp order, floating-point error/overflow/NaN handling,
+> time
 > arithmetic, deterministic evaluation order, allocation/retention and memory
 > pollution/contamination, publication memory modes and happens-before edges, listener ownership,
 > safety, and compatibility. Apply the workflow sizing/split gate. If sensor SPI, scheduler/
@@ -2347,7 +2349,8 @@ P3 status text inherited in `AGENTS.md` is not edited by this planning-only P4 b
 > after a split.
 >
 > Perform the mandatory `Implementation model reassessment` and replace the provisional P4
-> implementation selection and complete prompt body. Append the developer-review summary to the P4 plan section
+> implementation selection and complete prompt body. Append the developer-review summary to the P4
+> plan section
 > with purpose, ownership, key contracts/formulas, children, model, risks, and unresolved
 > decisions. The output artifact is the finalized blueprint, plan summary, and implementation
 > prompt. Handoff for review and merge into the P4 root only when implementation can translate it
@@ -2365,15 +2368,15 @@ P3 status text inherited in `AGENTS.md` is not edited by this planning-only P4 b
   read-only.
 - Key contracts: cumulative nanosecond/byte counters establish baselines before deltas; fast TTL is
   `min(30 s, max(1 s, 5P))`, slow cadence/TTL are 5/15 seconds; reset/wrap/regression cannot spike;
-  correlated signals and independent bottleneck domains compose by `max`; memory headroom begins
-  at 80 percent and reaches full at 100 percent; reclaim reaches full at two percent of limit per
+  correlated signals and independent bottleneck domains compose by `max`; memory headroom begins at
+  80 percent and reaches full at 100 percent; reclaim reaches full at two percent of limit per
   second; I/O latency spans 1-50 ms; attack/release EWMA alphas are 0.20/0.05 at 200 ms; public
   ratios are finite `[0.0, 1.0]`; productive utilization/bytes are telemetry; every derived
   CPU/socket timestamp equals the publication timestamp.
 - Lifecycle/publication: public periods are 10 ms through 24 hours, constructor sampling is
   prohibited, one stopped initial read is coalesced, `stop()` is additive/restartable, the explicit
-  six-state lifecycle distinguishes permanent `CLOSING` from completed `CLOSED`, an already-
-  claimed publication may finish only before external close returns, poll starts follow anchored
+  six-state lifecycle distinguishes permanent `CLOSING` from completed `CLOSED`, an already- claimed
+  publication may finish only before external close returns, poll starts follow anchored
   `t0 + kP` first-future scheduling, `0 -> 450 -> 600 ms` is mandatory, the monitor no longer
   requests a 1 ns platform timer/scheduler mutation, and one release store follows topology update
   per successful evaluation.
@@ -2389,9 +2392,9 @@ P3 status text inherited in `AGENTS.md` is not edited by this planning-only P4 b
 - Risks: current platform pressure is intentionally validity-neutral until P5-P7; due slow sensors
   may skip fast boundaries; truthful external close may wait for user/provider work; fixed
   thresholds become observable when later providers supply rich signals.
-- Unresolved decisions: none. Units, schema, validity, TTLs, formulas, constants, precision,
-  public mapping, duration bounds, states, recurrence, memory modes, listener queue, split order,
-  and the single-conformance workflow are settled in the parent blueprint.
+- Unresolved decisions: none. Units, schema, validity, TTLs, formulas, constants, precision, public
+  mapping, duration bounds, states, recurrence, memory modes, listener queue, split order, and the
+  single-conformance workflow are settled in the parent blueprint.
 
 #### P4 root implementation prompt - SUPERSEDED, DO NOT RUN
 
@@ -2473,8 +2476,8 @@ action.
 
 #### P4-B pressure mathematics implementation prompt
 
-**Parent-selected model: `gpt-5.6-sol`; reasoning effort: `high`. The P4-B blueprint must confirm
-or upgrade this selection before this prompt is runnable.**
+**Parent-selected model: `gpt-5.6-sol`; reasoning effort: `high`. The P4-B blueprint must confirm or
+upgrade this selection before this prompt is runnable.**
 
 > After the P4-B blueprint is reviewed and merged, create
 > `hardware-utils-overhaul/phase-4-pressure-math-implementation` from the updated P4 root. Read
@@ -2521,8 +2524,8 @@ or upgrade this selection before this prompt is runnable.**
 
 #### P4-C listener publication implementation prompt
 
-**Parent-selected model: `gpt-5.6-sol`; reasoning effort: `low`. The P4-C blueprint must confirm
-or upgrade this selection before this prompt is runnable.**
+**Parent-selected model: `gpt-5.6-sol`; reasoning effort: `low`. The P4-C blueprint must confirm or
+upgrade this selection before this prompt is runnable.**
 
 > After the P4-C blueprint is reviewed and merged, create
 > `hardware-utils-overhaul/phase-4-listener-publication-implementation` from the updated P4 root.
@@ -2569,8 +2572,8 @@ or upgrade this selection before this prompt is runnable.**
 
 #### P4-D monitor lifecycle/scheduler implementation prompt
 
-**Parent-selected model: `gpt-5.6-sol`; reasoning effort: `high`. The P4-D blueprint must confirm
-or upgrade this selection before this prompt is runnable.**
+**Parent-selected model: `gpt-5.6-sol`; reasoning effort: `high`. The P4-D blueprint must confirm or
+upgrade this selection before this prompt is runnable.**
 
 > After the P4-D blueprint is reviewed and merged, create
 > `hardware-utils-overhaul/phase-4-monitor-lifecycle-implementation` from the updated P4 root.
@@ -2597,10 +2600,10 @@ or upgrade this selection before this prompt is runnable.**
 
 #### P4 validation prompts - SUPERSEDED, DO NOT RUN
 
-By explicit developer direction, do not create a P4 root or child validation branch/artifact and
-do not create P4-A/P4-B/P4-C/P4-D conformance or audit branches. Implementation actions run and
-record their owned tests; the one integrated conformance action below independently reviews the
-merged result.
+By explicit developer direction, do not create a P4 root or child validation branch/artifact and do
+not create P4-A/P4-B/P4-C/P4-D conformance or audit branches. Implementation actions run and record
+their owned tests; the one integrated conformance action below independently reviews the merged
+result.
 
 #### P4 conformance audit prompt
 
@@ -2648,21 +2651,36 @@ merged result.
 
 **Model: `gpt-5.6-sol`; reasoning effort: `max`.**
 
-The completed output is `docs/blueprints/hardware-utils/phase-5-linux-platform.md` on `hardware-utils-overhaul/phase-5-linux-blueprint`. It froze cgroup v1/v2/hybrid/bare-host discovery, complete bounded reads, unlimited quota, honest cgroup-aggregate pressure propagation, sparse multisocket topology, Linux 3.10 kernel floor derivation, and glibc 2.17 / musl native ABI contracts. Its sizing gate splits P5 into sequential P5-A, P5-B, and P5-C children. Review and merge it into `hardware-utils-overhaul/phase-5-linux` before creating any child branch.
+The completed output is `docs/blueprints/hardware-utils/phase-5-linux-platform.md` on
+`hardware-utils-overhaul/phase-5-linux-blueprint`. It froze cgroup v1/v2/hybrid/bare-host discovery,
+complete bounded reads, unlimited quota, honest cgroup-aggregate pressure propagation, sparse
+multisocket topology, Linux 3.10 kernel floor derivation, and glibc 2.17 / musl native ABI
+contracts. Its sizing gate splits P5 into sequential P5-A, P5-B, and P5-C children. Review and merge
+it into `hardware-utils-overhaul/phase-5-linux` before creating any child branch.
 
 #### P5 developer-review summary
 
-- Purpose: deliver read-only cgroup v1/v2/hybrid/bare-host resource collection, sparse multisocket Linux topology parsing, direct syscall affinity, and glibc 2.17 / musl ABI portability on Linux 3.10+.
-- Ownership: `io.euhedral_execution.hardware_utils.linux.*` (Java), `src/main/native/linux/*` (C++), `native-products.json` (Manifest).
-- Key contracts: read-only discovery (zero controller writes); unlimited quota equals effective cpuset cardinality; honest cgroup pressure propagation without host jiffy apportionment; Linux 3.10 kernel floor; glibc 2.17 + musl dual ELF artifacts without C++ runtimes; complete bounded file reads with channel cleanup; block-device loop filter; 60 s rate-limited diagnostic logging.
+- Purpose: deliver read-only cgroup v1/v2/hybrid/bare-host resource collection, sparse multisocket
+  Linux topology parsing, direct syscall affinity, and glibc 2.17 / musl ABI portability on Linux
+  3.10+.
+- Ownership: `io.euhedral_execution.hardware_utils.linux.*` (Java), `src/main/native/linux/*` (C++),
+  `native-products.json` (Manifest).
+- Key contracts: read-only discovery (zero controller writes); unlimited quota equals effective
+  cpuset cardinality; honest cgroup pressure propagation without host jiffy apportionment; Linux
+  3.10 kernel floor; glibc 2.17 + musl dual ELF artifacts without C++ runtimes; complete bounded
+  file reads with channel cleanup; block-device loop filter; 60 s rate-limited diagnostic logging.
 - Children: P5-A (Topology), P5-B (Resources), P5-C (Affinity & Native ABI).
 - Selected model: `gpt-5.6-sol` with `high` reasoning for all implementation and audit action items.
-- Risks: sysfs path variations across Linux distros; cgroup v1 vs v2 permission differences; host vs container CPU ID mismatches; JNI array pin safety.
-- Unresolved decisions: none. Cgroup scope, units, file-read bounds, device filters, sensor cadences, syscalls, libc targets, and fallbacks are fully settled.
+- Risks: sysfs path variations across Linux distros; cgroup v1 vs v2 permission differences; host vs
+  container CPU ID mismatches; JNI array pin safety.
+- Unresolved decisions: none. Cgroup scope, units, file-read bounds, device filters, sensor
+  cadences, syscalls, libc targets, and fallbacks are fully settled.
 
 #### P5 root implementation prompt - SUPERSEDED, DO NOT RUN
 
-The sizing gate rejected one P5 root implementation context. Do not create `hardware-utils-overhaul/phase-5-linux-implementation`. Use P5-A, P5-B, and P5-C action families below, sequentially from the updated P5 root.
+The sizing gate rejected one P5 root implementation context. Do not create
+`hardware-utils-overhaul/phase-5-linux-implementation`. Use P5-A, P5-B, and P5-C action families
+below, sequentially from the updated P5 root.
 
 #### P5-A Linux topology model blueprint prompt
 
@@ -2670,7 +2688,8 @@ The sizing gate rejected one P5 root implementation context. Do not create `hard
 
 > After the parent P5 blueprint is reviewed and merged, create
 > `hardware-utils-overhaul/phase-5-linux-topology-blueprint` from the updated P5 root. The parent
-> artifact is `docs/blueprints/hardware-utils/phase-5-linux-platform.md`. Inspect `git status --short`.
+> artifact is `docs/blueprints/hardware-utils/phase-5-linux-platform.md`. Inspect
+> `git status --short`.
 > Read `AGENTS.md`, `docs/AGENT_WORKFLOW.md`, `docs/ARCHITECTURE.md`, the parent's P5-A context
 > envelope, summarized P0-P4 closeouts, `LinuxSystemLayout`, sysfs cpu topology files, and existing
 > topology tests. Do not inspect resource collection, native C++ bodies, core, or training.
@@ -2692,9 +2711,11 @@ The sizing gate rejected one P5 root implementation context. Do not create `hard
 > `hardware-utils-overhaul/phase-5-linux-topology-implementation` from the updated P5 root. Read
 > `AGENTS.md`, the plan's P5 summary, finalized P5-A blueprint, and its exact context envelope.
 >
-> Implement `LinuxSystemLayout`, sparse OS CPU ID indexing, compound global core tuples, cache fallbacks,
+> Implement `LinuxSystemLayout`, sparse OS CPU ID indexing, compound global core tuples, cache
+> fallbacks,
 > and P5-A fixture tests. Do not edit resource collection, native C++ files, core, or training.
-> Append completion notes to the P5-A blueprint and update the temporary P5 status block in `AGENTS.md`.
+> Append completion notes to the P5-A blueprint and update the temporary P5 status block in
+> `AGENTS.md`.
 >
 > Run P5-A topology tests, sparse/multisocket fixtures, P0 compatibility gate, and hardware verify.
 > Merge implementation before its audit.
@@ -2721,10 +2742,13 @@ The sizing gate rejected one P5 root implementation context. Do not create `hard
 > envelope, P4 sampling contract, `LinuxResourceProvider`, `LinuxPaths`, cgroup/procfs fixtures.
 >
 > Write `docs/blueprints/hardware-utils/phase-5-linux-resource-provider.md`. Translate parent
-> contract into implementation checklist: read-only v1/v2/hybrid/bare-host discovery, mountinfo/cgroup
-> parsing, complete bounded file reads via reusable `ByteBuffer`, 60 s rate-limited diagnostic logging,
+> contract into implementation checklist: read-only v1/v2/hybrid/bare-host discovery,
+> mountinfo/cgroup
+> parsing, complete bounded file reads via reusable `ByteBuffer`, 60 s rate-limited diagnostic
+> logging,
 > unlimited quota calculation (`effectiveCpus.cardinality()`), cgroup-aggregate pressure propagation
-> without host jiffy apportionment, block-device filtering (excluding `loop`/`ram`), fast/slow cadences,
+> without host jiffy apportionment, block-device filtering (excluding `loop`/`ram`), fast/slow
+> cadences,
 > and `SignalValidity` state tracking.
 >
 > Reapply sizing/model gates and confirm `gpt-5.6-sol`/`high` implementation model. Edit planning
@@ -2739,10 +2763,12 @@ The sizing gate rejected one P5 root implementation context. Do not create `hard
 > finalized P5-B blueprint and context envelope.
 >
 > Implement `LinuxResourceProvider`, `LinuxPaths`, read-only cgroup discovery, bounded file reads,
-> block-device filter, unlimited quota fix, and cgroup-aggregate pressure propagation. Append completion
+> block-device filter, unlimited quota fix, and cgroup-aggregate pressure propagation. Append
+> completion
 > record to P5-B blueprint and update status block in `AGENTS.md`.
 >
-> Run cgroup v1/v2/hybrid/bare-host fixtures, unlimited quota tests, host-activity isolation fixtures,
+> Run cgroup v1/v2/hybrid/bare-host fixtures, unlimited quota tests, host-activity isolation
+> fixtures,
 > block-device filter tests, and hardware verify. Merge implementation before its audit.
 
 #### P5-B Linux resource provider conformance/manual-review prompt
@@ -2753,7 +2779,8 @@ The sizing gate rejected one P5 root implementation context. Do not create `hard
 > `hardware-utils-overhaul/phase-5-linux-resources-audit` from the updated P5 root. Read P5-B
 > blueprint, completion record, and diff.
 >
-> Independently audit read-only cgroup discovery, unlimited quota math, host-activity isolation, bounded
+> Independently audit read-only cgroup discovery, unlimited quota math, host-activity isolation,
+> bounded
 > reads, block-device filter, and sensor validity. Write
 > `docs/audits/hardware-utils/phase-5-linux-resource-provider-conformance.md`, append evidence, and
 > hand off for merge.
@@ -2765,12 +2792,15 @@ The sizing gate rejected one P5 root implementation context. Do not create `hard
 > After P5-B audit is reviewed and merged, create
 > `hardware-utils-overhaul/phase-5-linux-affinity-native-blueprint` from the updated P5 root. The
 > parent artifact is `docs/blueprints/hardware-utils/phase-5-linux-platform.md`. Read parent P5-C
-> envelope, `LinuxAffinity`, `LinuxAffinityCalls`, `linux_affinity.cpp`, `linux_jni.h`, and P1 native
+> envelope, `LinuxAffinity`, `LinuxAffinityCalls`, `linux_affinity.cpp`, `linux_jni.h`, and P1
+> native
 > build graph.
 >
 > Write `docs/blueprints/hardware-utils/phase-5-linux-affinity-native.md`. Translate parent contract
-> into implementation checklist: direct Linux syscalls (`sys_sched_setaffinity`, `sys_sched_getaffinity`,
-> `sys_getcpu`, `sys_prctl`), Linux 3.10 kernel floor verification, glibc 2.17 + musl dual ELF gates,
+> into implementation checklist: direct Linux syscalls (`sys_sched_setaffinity`,
+> `sys_sched_getaffinity`,
+> `sys_getcpu`, `sys_prctl`), Linux 3.10 kernel floor verification, glibc 2.17 + musl dual ELF
+> gates,
 > JNI array pinning safety, errno handling, timer slack, and affinity lease capture/restoration.
 >
 > Reapply sizing/model gates and confirm `gpt-5.6-sol`/`high` implementation model. Edit planning
@@ -2781,13 +2811,17 @@ The sizing gate rejected one P5 root implementation context. Do not create `hard
 **Child-confirmed model: `gpt-5.6-sol`; reasoning effort: `high`.**
 
 > After P5-C blueprint is reviewed and merged, create
-> `hardware-utils-overhaul/phase-5-linux-affinity-native-implementation` from the updated P5 root. Read
+> `hardware-utils-overhaul/phase-5-linux-affinity-native-implementation` from the updated P5 root.
+> Read
 > finalized P5-C blueprint and context envelope.
 >
-> Implement `LinuxAffinity`, `LinuxAffinityCalls`, `linux_affinity.cpp`, `linux_jni.h`, direct syscall
-> wrappers, and affinity lease restoration. Append completion record to P5-C blueprint and update status block.
+> Implement `LinuxAffinity`, `LinuxAffinityCalls`, `linux_affinity.cpp`, `linux_jni.h`, direct
+> syscall
+> wrappers, and affinity lease restoration. Append completion record to P5-C blueprint and update
+> status block.
 >
-> Run affinity matrix tests, original mask restoration tests, glibc 2.17 / musl binary gates, and JNI
+> Run affinity matrix tests, original mask restoration tests, glibc 2.17 / musl binary gates, and
+> JNI
 > load smoke tests. Merge implementation before its audit.
 
 #### P5-C Linux affinity & native ABI conformance/manual-review prompt
@@ -2800,7 +2834,8 @@ The sizing gate rejected one P5 root implementation context. Do not create `hard
 >
 > Independently audit direct syscalls, errno translation, Linux 3.10 kernel floor, glibc 2.17 / musl
 > gates, and affinity lease restoration. Write
-> `docs/audits/hardware-utils/phase-5-linux-affinity-native-conformance.md`, append evidence, and hand
+> `docs/audits/hardware-utils/phase-5-linux-affinity-native-conformance.md`, append evidence, and
+> hand
 > off for merge.
 
 #### P5 root conformance audit prompt
@@ -2842,7 +2877,8 @@ The sizing gate rejected one P5 root implementation context. Do not create `hard
 > bijective `(group, processor)` to Euhedral logical IDs; packages/cores/caches/efficiency; group
 > affinity apply/release/current ownership, including deterministic rejection rather than partial
 > success for unrepresentable cross-group masks; documented dynamic API lookup and Windows 10/
-> Server 2016 fallbacks; job/process quota and effective masks; cumulative CPU/throttle/I/O counters;
+> Server 2016 fallbacks; job/process quota and effective masks; cumulative CPU/throttle/I/O
+> counters;
 > memory units; scheduler/capacity/frequency/power signals; timer JNI ownership; buffer validation;
 > thread-safe initialization; and x86-64/ARM64 PE ABI/import floors.
 >
@@ -2876,13 +2912,23 @@ The sizing gate rejected one P5 root implementation context. Do not create `hard
 
 #### P6 developer-review summary
 
-- Purpose: Deliver GLPIEx topology parsing, multi-group processor mapping, Job Object quota and memory tracking, multi-group thread affinity with lease restoration, VLA-free native code, and PE ABI hardening for Windows 10/11 platforms.
-- Ownership: `io.euhedral_execution.hardware_utils.windows.*` (Java), `src/main/native/windows/*` (C++), `native-products.json` (Manifest).
-- Key contracts: Exact GLPIEx structure offsets; bijective `(group, processor)` to logical ID mapping; `CpuRate / 10000.0` quota scaling; `WorkingSetSize - PrivateUsage` underflow protection; deterministic multi-group affinity rejection (`false`); timer resolution shutdown hook cleanup; zero VLAs in C++; PE ABI hardening without C++ runtimes.
-- Child Action Items: P6-A (Topology & GLPIEx), P6-B (Resources & Job Objects), P6-C (Affinity & PE ABI).
-- Selected Model: `gpt-5.6-sol` with `high` reasoning effort for all implementation and audit action items.
-- Principal Risks: Win32 structure alignment across 64-bit boundaries; processor group mask bit 63 signed shift bugs; legacy cycle count time division; VLA stack allocations in JNI.
-- Unresolved Items: None. GLPIEx offsets, group mapping, units, underflow bounds, affinity fallbacks, timer hooks, PE floors, and CRT policies are fully settled.
+- Purpose: Deliver GLPIEx topology parsing, multi-group processor mapping, Job Object quota and
+  memory tracking, multi-group thread affinity with lease restoration, VLA-free native code, and PE
+  ABI hardening for Windows 10/11 platforms.
+- Ownership: `io.euhedral_execution.hardware_utils.windows.*` (Java), `src/main/native/windows/*`
+  (C++), `native-products.json` (Manifest).
+- Key contracts: Exact GLPIEx structure offsets; bijective `(group, processor)` to logical ID
+  mapping; `CpuRate / 10000.0` quota scaling; `WorkingSetSize - PrivateUsage` underflow protection;
+  deterministic multi-group affinity rejection (`false`); timer resolution shutdown hook cleanup;
+  zero VLAs in C++; PE ABI hardening without C++ runtimes.
+- Child Action Items: P6-A (Topology & GLPIEx), P6-B (Resources & Job Objects), P6-C (Affinity & PE
+  ABI).
+- Selected Model: `gpt-5.6-sol` with `high` reasoning effort for all implementation and audit action
+  items.
+- Principal Risks: Win32 structure alignment across 64-bit boundaries; processor group mask bit 63
+  signed shift bugs; legacy cycle count time division; VLA stack allocations in JNI.
+- Unresolved Items: None. GLPIEx offsets, group mapping, units, underflow bounds, affinity
+  fallbacks, timer hooks, PE floors, and CRT policies are fully settled.
 
 #### P6-A Windows topology model blueprint prompt
 
@@ -2893,13 +2939,19 @@ The sizing gate rejected one P5 root implementation context. Do not create `hard
 > artifact is `docs/blueprints/hardware-utils/phase-6-windows-platform.md`. Read parent P6-A context
 > envelope, P2 topology model, `WindowsSystemLayout`, `win32.*` parsers, GLPIEx fixtures.
 >
-> Write `docs/blueprints/hardware-utils/phase-6-windows-topology-model.md`. Translate parent contract
-> into implementation checklist: exact GLPIEx structure offset parsing (`SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX`,
-> `PROCESSOR_RELATIONSHIP`, `CACHE_RELATIONSHIP`, `GROUP_AFFINITY`), bit 63 KAFFINITY mask math, bijective
-> `(group, processor)` to Euhedral logical ID mapping (`group * 64 + processor`), P/E core classification via
-> `EfficiencyClass`, SMT detection, cache domain BitSet masks spanning multi-group logical IDs, and malformed buffer error handling.
+> Write `docs/blueprints/hardware-utils/phase-6-windows-topology-model.md`. Translate parent
+> contract
+> into implementation checklist: exact GLPIEx structure offset parsing
+> (`SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX`,
+> `PROCESSOR_RELATIONSHIP`, `CACHE_RELATIONSHIP`, `GROUP_AFFINITY`), bit 63 KAFFINITY mask math,
+> bijective
+> `(group, processor)` to Euhedral logical ID mapping (`group * 64 + processor`), P/E core
+> classification via
+> `EfficiencyClass`, SMT detection, cache domain BitSet masks spanning multi-group logical IDs, and
+> malformed buffer error handling.
 >
-> Reapply sizing/model gates and confirm `gpt-5.6-sol`/`high` implementation model. Edit planning docs only. Handoff for review and merge into the P6 root before creating P6-A implementation.
+> Reapply sizing/model gates and confirm `gpt-5.6-sol`/`high` implementation model. Edit planning
+> docs only. Handoff for review and merge into the P6 root before creating P6-A implementation.
 
 #### P6-A Windows topology model implementation prompt
 
@@ -2910,9 +2962,11 @@ The sizing gate rejected one P5 root implementation context. Do not create `hard
 > finalized P6-A blueprint and context envelope.
 >
 > Implement `WindowsSystemLayout`, `win32.*` parsers, GLPIEx record offset parser, bit 63 mask math,
-> global logical ID mapping, and multi-group cache domains. Append completion record to P6-A blueprint and update status block.
+> global logical ID mapping, and multi-group cache domains. Append completion record to P6-A
+> blueprint and update status block.
 >
-> Run GLPIEx single-group, multi-group, >64 CPU, bit 63, and malformed buffer fixtures. Merge implementation before its audit.
+> Run GLPIEx single-group, multi-group, >64 CPU, bit 63, and malformed buffer fixtures. Merge
+> implementation before its audit.
 
 #### P6-B Windows resource provider blueprint prompt
 
@@ -2923,13 +2977,19 @@ The sizing gate rejected one P5 root implementation context. Do not create `hard
 > artifact is `docs/blueprints/hardware-utils/phase-6-windows-platform.md`. Read parent P6-B context
 > envelope, P4 sampling contract, `WindowsResources`, Win32 job object APIs.
 >
-> Write `docs/blueprints/hardware-utils/phase-6-windows-resource-provider.md`. Translate parent contract
-> into implementation checklist: Job Object CPU rate control (`CpuRate / 10000.0` quota scaling), effective quota CPUs
-> (`quotaFraction * availableCpus`), process working set underflow protection (`Math.max(0L, WorkingSetSize - PrivateUsage)`),
-> `GetProcessTimes` 100-ns to nanosecond conversion (`* 100L`), `QueryIdleProcessorCycleTime` idle cycle delta normalization,
-> cumulative I/O bytes (`ReadTransferCount + WriteTransferCount`), and `SignalValidity` state tracking.
+> Write `docs/blueprints/hardware-utils/phase-6-windows-resource-provider.md`. Translate parent
+> contract
+> into implementation checklist: Job Object CPU rate control (`CpuRate / 10000.0` quota scaling),
+> effective quota CPUs
+> (`quotaFraction * availableCpus`), process working set underflow protection
+> (`Math.max(0L, WorkingSetSize - PrivateUsage)`),
+> `GetProcessTimes` 100-ns to nanosecond conversion (`* 100L`), `QueryIdleProcessorCycleTime` idle
+> cycle delta normalization,
+> cumulative I/O bytes (`ReadTransferCount + WriteTransferCount`), and `SignalValidity` state
+> tracking.
 >
-> Reapply sizing/model gates and confirm `gpt-5.6-sol`/`high` implementation model. Edit planning docs only. Handoff for review and merge into the P6 root before creating P6-B implementation.
+> Reapply sizing/model gates and confirm `gpt-5.6-sol`/`high` implementation model. Edit planning
+> docs only. Handoff for review and merge into the P6 root before creating P6-B implementation.
 
 #### P6-B Windows resource provider implementation prompt
 
@@ -2939,38 +2999,58 @@ The sizing gate rejected one P5 root implementation context. Do not create `hard
 > `hardware-utils-overhaul/phase-6-windows-resources-implementation` from the updated P6 root. Read
 > finalized P6-B blueprint and context envelope.
 >
-> Implement `WindowsResources`, Job Object `CpuRate` quota scaling, working set underflow guard, process
-> CPU time conversion, idle cycle delta normalization, and cumulative I/O bytes. Append completion record to P6-B blueprint and update status block.
+> Implement `WindowsResources`, Job Object `CpuRate` quota scaling, working set underflow guard,
+> process
+> CPU time conversion, idle cycle delta normalization, and cumulative I/O bytes. Append completion
+> record to P6-B blueprint and update status block.
 >
-> Run Job Object quota scaling tests, working set underflow boundary tests, idle cycle delta tests, and provider contract tests. Merge implementation before its audit.
+> Run Job Object quota scaling tests, working set underflow boundary tests, idle cycle delta tests,
+> and provider contract tests. Merge implementation before its audit.
 
 #### P6-C Windows affinity & native ABI blueprint prompt
 
 **Model: `gpt-5.6-sol`; reasoning effort: `max`.**
 
 > After P6-B audit is reviewed and merged, create
-> `hardware-utils-overhaul/phase-6-windows-affinity-native-blueprint` from the updated P6 root. The parent
+> `hardware-utils-overhaul/phase-6-windows-affinity-native-blueprint` from the updated P6 root. The
+> parent
 > artifact is `docs/blueprints/hardware-utils/phase-6-windows-platform.md`. Read parent P6-C context
-> envelope, `WindowsAffinity`, `WindowsAffinityCalls`, `windows_affinity.cpp`, `windows_resources.cpp`, `windows_system_layout.cpp`, `windows_hardening.cpp`, `windows_jni.h`, and P1 native build graph.
+> envelope, `WindowsAffinity`, `WindowsAffinityCalls`, `windows_affinity.cpp`,
+> `windows_resources.cpp`, `windows_system_layout.cpp`, `windows_hardening.cpp`, `windows_jni.h`, and
+> P1 native build graph.
 >
-> Write `docs/blueprints/hardware-utils/phase-6-windows-affinity-native.md`. Translate parent contract
-> into implementation checklist: multi-group affinity application via `SetThreadSelectedCpuSetMasks` (or `SetThreadGroupAffinity`),
-> deterministic rejection (`false`) for unrepresentable multi-group requests, original thread group affinity restoration,
-> `GetCurrentProcessorNumberEx` global ID query (`group * 64 + processor`), `NtSetTimerResolution` JNI wrapper with thread-safe `std::atomic<bool>` init and `win-timer-release` shutdown hook, complete elimination of VLAs in C++ native code (using fixed stack buffers or dynamic vector allocation), JNI array null/length checks, x86-64 (Win10/Server 2016) and ARM64 (Win11) PE ABI hardening with zero CRT/compiler runtime dependencies (`-fno-exceptions -fno-rtti`).
+> Write `docs/blueprints/hardware-utils/phase-6-windows-affinity-native.md`. Translate parent
+> contract
+> into implementation checklist: multi-group affinity application via `SetThreadSelectedCpuSetMasks`
+> (or `SetThreadGroupAffinity`),
+> deterministic rejection (`false`) for unrepresentable multi-group requests, original thread group
+> affinity restoration,
+> `GetCurrentProcessorNumberEx` global ID query (`group * 64 + processor`), `NtSetTimerResolution`
+> JNI wrapper with thread-safe `std::atomic<bool>` init and `win-timer-release` shutdown hook,
+> complete elimination of VLAs in C++ native code (using fixed stack buffers or dynamic vector
+> allocation), JNI array null/length checks, x86-64 (Win10/Server 2016) and ARM64 (Win11) PE ABI
+> hardening with zero CRT/compiler runtime dependencies (`-fno-exceptions -fno-rtti`).
 >
-> Reapply sizing/model gates and confirm `gpt-5.6-sol`/`high` implementation model. Edit planning docs only. Handoff for review and merge into the P6 root before creating P6-C implementation.
+> Reapply sizing/model gates and confirm `gpt-5.6-sol`/`high` implementation model. Edit planning
+> docs only. Handoff for review and merge into the P6 root before creating P6-C implementation.
 
 #### P6-C Windows affinity & native ABI implementation prompt
 
 **Child-confirmed model: `gpt-5.6-sol`; reasoning effort: `high`.**
 
 > After P6-C blueprint is reviewed and merged, create
-> `hardware-utils-overhaul/phase-6-windows-affinity-native-implementation` from the updated P6 root. Read
+> `hardware-utils-overhaul/phase-6-windows-affinity-native-implementation` from the updated P6 root.
+> Read
 > finalized P6-C blueprint and context envelope.
 >
-> Implement `WindowsAffinity`, `WindowsAffinityCalls`, `windows_affinity.cpp`, `windows_resources.cpp`, `windows_system_layout.cpp`, `windows_hardening.cpp`, `windows_jni.h`, multi-group affinity with deterministic rejection, lease restoration, `NtSetTimerResolution` shutdown hook, VLA elimination, and PE hardening. Append completion record to P6-C blueprint and update status block.
+> Implement `WindowsAffinity`, `WindowsAffinityCalls`, `windows_affinity.cpp`,
+> `windows_resources.cpp`, `windows_system_layout.cpp`, `windows_hardening.cpp`, `windows_jni.h`,
+> multi-group affinity with deterministic rejection, lease restoration, `NtSetTimerResolution`
+> shutdown hook, VLA elimination, and PE hardening. Append completion record to P6-C blueprint and
+> update status block.
 >
-> Run affinity matrix tests, multi-group rejection tests, lease restoration tests, VLA compliance checks, PE binary import gates, and JNI load smoke tests. Merge implementation before its audit.
+> Run affinity matrix tests, multi-group rejection tests, lease restoration tests, VLA compliance
+> checks, PE binary import gates, and JNI load smoke tests. Merge implementation before its audit.
 
 #### P6 root conformance audit prompt
 
@@ -2980,14 +3060,27 @@ The sizing gate rejected one P5 root implementation context. Do not create `hard
 > `hardware-utils-overhaul/phase-6-windows-audit` from the updated P6 root. The parent artifacts are
 > the P6 parent blueprint and the three indexed child blueprint/completion/conformance triples.
 >
-> Independently audit the end-to-end Windows platform provider: GLPIEx topology discovery -> Job Object/process resource metrics -> multi-group native affinity and PE ABI. Classify all Windows requirements and defect ledger items (T03, A03, R04, N01, B06) as `satisfied`, `deviated`, `unverified`, or `ambiguous`.
+> Independently audit the end-to-end Windows platform provider: GLPIEx topology discovery -> Job
+> Object/process resource metrics -> multi-group native affinity and PE ABI. Classify all Windows
+> requirements and defect ledger items (T03, A03, R04, N01, B06) as `satisfied`, `deviated`,
+> `unverified`, or `ambiguous`.
 >
-> Write `docs/audits/hardware-utils/phase-6-windows-platform-conformance.md`, append the P6 closeout summary to the parent plan, remove the temporary P6 status block upon authorized merge, and record the resulting root commit. P6 is complete only after this authorized closeout; do not create P7 earlier.
+> Write `docs/audits/hardware-utils/phase-6-windows-platform-conformance.md`, append the P6 closeout
+> summary to the parent plan, remove the temporary P6 status block upon authorized merge, and record
+> the resulting root commit. P6 is complete only after this authorized closeout; do not create P7
+> earlier.
 
 #### P6 closeout summary
 
-The Phase 6 Windows platform provider implementation and conformance audit are complete on `hardware-utils-overhaul/phase-6-windows` (root commit `04b0111`). The audit artifact `docs/audits/hardware-utils/phase-6-windows-platform-conformance.md` evaluates the end-to-end Windows platform provider (GLPIEx topology parsing -> Job Object/process resource metrics -> multi-group native affinity and PE ABI). All 5 Windows defect ledger items (**T03, A03, R04, N01, B06**) and all 9 core platform requirements are classified as `satisfied`. P6-A, P6-B, and P6-C child blueprints, implementations, and audits are fully integrated and verified. The developer authorized closeout; temporary P6 status block removed from `AGENTS.md`. P6 closeout authorizes Phase 7 work.
-
+The Phase 6 Windows platform provider implementation and conformance audit are complete on
+`hardware-utils-overhaul/phase-6-windows` (root commit `04b0111`). The audit artifact
+`docs/audits/hardware-utils/phase-6-windows-platform-conformance.md` evaluates the end-to-end
+Windows platform provider (GLPIEx topology parsing -> Job Object/process resource metrics ->
+multi-group native affinity and PE ABI). All 5 Windows defect ledger items (**T03, A03, R04, N01,
+B06**) and all 9 core platform requirements are classified as `satisfied`. P6-A, P6-B, and P6-C
+child blueprints, implementations, and audits are fully integrated and verified. The developer
+authorized closeout; temporary P6 status block removed from `AGENTS.md`. P6 closeout authorizes
+Phase 7 work.
 
 ### P7 - public-API macOS parity with honest locality semantics
 
@@ -2995,21 +3088,44 @@ The Phase 6 Windows platform provider implementation and conformance audit are c
 
 **Model: `gpt-5.6-sol`; reasoning effort: `max`.**
 
-The completed output is `docs/blueprints/hardware-utils/phase-7-macos-platform.md` on `hardware-utils-overhaul/phase-7-macos-blueprint`. It froze public sysctl topology discovery (`hw.logicalcpu`, `hw.nperflevels`, `hw.perflevel*`), Apple Silicon P/E-core vs Intel SMT modeling, `proc_pid_rusage` CPU/IO telemetry, `task_info` resident memory, `NSProcessInfo` thermal/low-power signals, locality-hint thread affinity tag semantics with tag `0` release and single-locality enforcement, physical current CPU returning `-1`, safe idempotent timer resolution without `THREAD_TIME_CONSTRAINT_POLICY` realtime scheduling, and Mach-O universal binary (`x86_64` + `arm64`) ABI contracts. Its sizing gate splits P7 into sequential P7-A, P7-B, and P7-C children. Review and merge it into `hardware-utils-overhaul/phase-7-macos` before creating any child branch.
+The completed output is `docs/blueprints/hardware-utils/phase-7-macos-platform.md` on
+`hardware-utils-overhaul/phase-7-macos-blueprint`. It froze public sysctl topology discovery
+(`hw.logicalcpu`, `hw.nperflevels`, `hw.perflevel*`), Apple Silicon P/E-core vs Intel SMT modeling,
+`proc_pid_rusage` CPU/IO telemetry, `task_info` resident memory, `NSProcessInfo` thermal/low-power
+signals, locality-hint thread affinity tag semantics with tag `0` release and single-locality
+enforcement, physical current CPU returning `-1`, safe idempotent timer resolution without
+`THREAD_TIME_CONSTRAINT_POLICY` realtime scheduling, and Mach-O universal binary (`x86_64` +
+`arm64`) ABI contracts. Its sizing gate splits P7 into sequential P7-A, P7-B, and P7-C children.
+Review and merge it into `hardware-utils-overhaul/phase-7-macos` before creating any child branch.
 
 #### P7 developer-review summary
 
-- Purpose: deliver public sysctl topology discovery, Apple Silicon P/E-core and Intel SMT modeling, `proc_pid_rusage` CPU/IO telemetry, `task_info` memory tracking, `NSProcessInfo` thermal/low-power signals, locality-hint thread affinity with release tag `0`, safe timer policy without realtime constraints, and Mach-O universal binary ABI hardening for macOS 11+ platforms.
-- Ownership: `io.euhedral_execution.hardware_utils.macos.*` (Java), `src/main/native/macos/*` (C++), `native-products.json` (Manifest).
-- Key contracts: Public sysctl discovery (`hw.logicalcpu`, `hw.nperflevels`, `hw.perflevel*`); bijective logical CPU mapping (`0..N-1`); telemetry rule (process CPU/IO counters do not become artificial pressure); resident memory via `task_info`; thermal state (`NSProcessInfoThermalState`) and low-power mode (`isLowPowerModeEnabled`); locality-hint affinity with single-locality enforcement and tag `0` release; physical current CPU returns `-1`; safe timer policy without `THREAD_TIME_CONSTRAINT_POLICY` realtime constraints; universal Mach-O binaries (`x86_64` + `arm64`) with zero C++ runtimes (`-fno-exceptions -fno-rtti`) and codesign verification.
+- Purpose: deliver public sysctl topology discovery, Apple Silicon P/E-core and Intel SMT modeling,
+  `proc_pid_rusage` CPU/IO telemetry, `task_info` memory tracking, `NSProcessInfo` thermal/low-power
+  signals, locality-hint thread affinity with release tag `0`, safe timer policy without realtime
+  constraints, and Mach-O universal binary ABI hardening for macOS 11+ platforms.
+- Ownership: `io.euhedral_execution.hardware_utils.macos.*` (Java), `src/main/native/macos/*` (C++),
+  `native-products.json` (Manifest).
+- Key contracts: Public sysctl discovery (`hw.logicalcpu`, `hw.nperflevels`, `hw.perflevel*`);
+  bijective logical CPU mapping (`0..N-1`); telemetry rule (process CPU/IO counters do not become
+  artificial pressure); resident memory via `task_info`; thermal state (`NSProcessInfoThermalState`)
+  and low-power mode (`isLowPowerModeEnabled`); locality-hint affinity with single-locality
+  enforcement and tag `0` release; physical current CPU returns `-1`; safe timer policy without
+  `THREAD_TIME_CONSTRAINT_POLICY` realtime constraints; universal Mach-O binaries (`x86_64` +
+  `arm64`) with zero C++ runtimes (`-fno-exceptions -fno-rtti`) and codesign verification.
 - Children: P7-A (Topology & Sysctl), P7-B (Resources & Signals), P7-C (Affinity & Native ABI).
-- Selected Model: `gpt-5.6-sol` with `high` reasoning effort for all implementation and audit action items.
-- Principal Risks: Missing sysctl keys on older macOS releases or Intel hardware; Objective-C runtime linkage in native C++; `THREAD_TIME_CONSTRAINT_POLICY` realtime scheduling traps; Mach timebase divide-by-zero.
-- Unresolved Items: None. sysctl keys, unit scaling, core classification, thermal state mapping, locality tag rules, timer policy, and Mach-O ABI floors are fully settled.
+- Selected Model: `gpt-5.6-sol` with `high` reasoning effort for all implementation and audit action
+  items.
+- Principal Risks: Missing sysctl keys on older macOS releases or Intel hardware; Objective-C
+  runtime linkage in native C++; `THREAD_TIME_CONSTRAINT_POLICY` realtime scheduling traps; Mach
+  timebase divide-by-zero.
+- Unresolved Items: None. sysctl keys, unit scaling, core classification, thermal state mapping,
+  locality tag rules, timer policy, and Mach-O ABI floors are fully settled.
 
 #### P7 root implementation prompt - SUPERSEDED, DO NOT RUN
 
-This prompt is superseded by the child implementation prompts below. Do not execute a single integrated implementation pass for P7.
+This prompt is superseded by the child implementation prompts below. Do not execute a single
+integrated implementation pass for P7.
 
 #### P7-A macOS topology model blueprint prompt - COMPLETED AND MERGED
 
@@ -3018,12 +3134,19 @@ This prompt is superseded by the child implementation prompts below. Do not exec
 > After P7 parent blueprint child is reviewed and merged, create
 > `hardware-utils-overhaul/phase-7-macos-topology-blueprint` from the updated P7 root. The parent
 > artifact is `docs/blueprints/hardware-utils/phase-7-macos-platform.md`. Read parent P7-A context
-> envelope, P2 topology model, `MacosSystemLayout`, `sysctl.*` parsers, Apple Silicon and Intel fixtures.
+> envelope, P2 topology model, `MacosSystemLayout`, `sysctl.*` parsers, Apple Silicon and Intel
+> fixtures.
 >
 > Write `docs/blueprints/hardware-utils/phase-7-macos-topology-model.md`. Translate parent contract
-> into implementation checklist: exact sysctl key queries (`hw.logicalcpu`, `hw.physicalcpu`, `hw.packages`, `hw.nperflevels`, `hw.perflevel0.logicalcpu`, `hw.perflevel0.cpusperl2`, `hw.perflevel1.logicalcpu`, `hw.perflevel1.cpusperl2`, cache sizes), Apple Silicon P/E-core classification (`CoreKind.PERFORMANCE` vs `CoreKind.EFFICIENCY`), Intel SMT hyperthreading discovery (`logicalcpu > physicalcpu`), cache domain BitSet assembly spanning logical CPUs, and conservative missing-key fallback topology generation.
+> into implementation checklist: exact sysctl key queries (`hw.logicalcpu`, `hw.physicalcpu`,
+> `hw.packages`, `hw.nperflevels`, `hw.perflevel0.logicalcpu`, `hw.perflevel0.cpusperl2`,
+> `hw.perflevel1.logicalcpu`, `hw.perflevel1.cpusperl2`, cache sizes), Apple Silicon P/E-core
+> classification (`CoreKind.PERFORMANCE` vs `CoreKind.EFFICIENCY`), Intel SMT hyperthreading discovery
+> (`logicalcpu > physicalcpu`), cache domain BitSet assembly spanning logical CPUs, and conservative
+> missing-key fallback topology generation.
 >
-> Reapply sizing/model gates and confirm `gpt-5.6-sol`/`high` implementation model. Edit planning docs only. Handoff for review and merge into the P7 root before creating P7-A implementation.
+> Reapply sizing/model gates and confirm `gpt-5.6-sol`/`high` implementation model. Edit planning
+> docs only. Handoff for review and merge into the P7 root before creating P7-A implementation.
 
 #### P7-A macOS topology model implementation prompt - COMPLETED AND MERGED
 
@@ -3033,9 +3156,12 @@ This prompt is superseded by the child implementation prompts below. Do not exec
 > `hardware-utils-overhaul/phase-7-macos-topology-implementation` from the updated P7 root. Read
 > finalized P7-A blueprint and context envelope.
 >
-> Implement `MacosSystemLayout`, `sysctl.*` parsers, sysctl key queries, Apple Silicon P/E-core classification, Intel SMT discovery, and cache domain BitSet assembly. Append completion record to P7-A blueprint and update status block.
+> Implement `MacosSystemLayout`, `sysctl.*` parsers, sysctl key queries, Apple Silicon P/E-core
+> classification, Intel SMT discovery, and cache domain BitSet assembly. Append completion record to
+> P7-A blueprint and update status block.
 >
-> Run Apple Silicon, Intel, missing-key, and homogeneous topology fixture tests. Merge implementation before its audit.
+> Run Apple Silicon, Intel, missing-key, and homogeneous topology fixture tests. Merge
+> implementation before its audit.
 
 #### P7-A macOS topology model conformance/manual-review prompt - COMPLETED, REVIEW AND MERGE REQUIRED
 
@@ -3045,8 +3171,10 @@ This prompt is superseded by the child implementation prompts below. Do not exec
 > `hardware-utils-overhaul/phase-7-macos-topology-audit` from the updated P7 root. Read P7-A
 > blueprint, completion record, and diff.
 >
-> Independently audit sysctl key parsing, Apple Silicon vs Intel core modeling, cache domains, and fallback logic. Write
-> `docs/audits/hardware-utils/phase-7-macos-topology-model-conformance.md`, append evidence, and hand
+> Independently audit sysctl key parsing, Apple Silicon vs Intel core modeling, cache domains, and
+> fallback logic. Write
+> `docs/audits/hardware-utils/phase-7-macos-topology-model-conformance.md`, append evidence, and
+> hand
 > off for merge.
 
 #### P7-B macOS resource provider blueprint prompt
@@ -3058,10 +3186,17 @@ This prompt is superseded by the child implementation prompts below. Do not exec
 > artifact is `docs/blueprints/hardware-utils/phase-7-macos-platform.md`. Read parent P7-B context
 > envelope, P4 sampling contract, `MacosResources`, `proc_pid_rusage`, `task_info`, `NSProcessInfo`.
 >
-> Write `docs/blueprints/hardware-utils/phase-7-macos-resource-provider.md`. Translate parent contract
-> into implementation checklist: `proc_pid_rusage` nanosecond CPU time (`ri_user_time + ri_system_time`) and cumulative I/O bytes (`ri_diskio_bytesread + ri_diskio_byteswritten`), `task_info` resident memory (`info.resident_size`) and virtual memory, `NSProcessInfo` thermal severity (`NSProcessInfoThermalState`) and low-power mode (`isLowPowerModeEnabled`), and telemetry pressure isolation (`SignalValidity.UNSUPPORTED` for unsupported pressure metrics).
+> Write `docs/blueprints/hardware-utils/phase-7-macos-resource-provider.md`. Translate parent
+> contract
+> into implementation checklist: `proc_pid_rusage` nanosecond CPU time
+> (`ri_user_time + ri_system_time`) and cumulative I/O bytes
+> (`ri_diskio_bytesread + ri_diskio_byteswritten`), `task_info` resident memory (`info.resident_size`)
+> and virtual memory, `NSProcessInfo` thermal severity (`NSProcessInfoThermalState`) and low-power
+> mode (`isLowPowerModeEnabled`), and telemetry pressure isolation (`SignalValidity.UNSUPPORTED` for
+> unsupported pressure metrics).
 >
-> Reapply sizing/model gates and confirm `gpt-5.6-sol`/`high` implementation model. Edit planning docs only. Handoff for review and merge into the P7 root before creating P7-B implementation.
+> Reapply sizing/model gates and confirm `gpt-5.6-sol`/`high` implementation model. Edit planning
+> docs only. Handoff for review and merge into the P7 root before creating P7-B implementation.
 
 #### P7-B macOS resource provider implementation prompt
 
@@ -3071,9 +3206,12 @@ This prompt is superseded by the child implementation prompts below. Do not exec
 > `hardware-utils-overhaul/phase-7-macos-resources-implementation` from the updated P7 root. Read
 > finalized P7-B blueprint and context envelope.
 >
-> Implement `MacosResources`, process CPU nanoseconds, disk I/O bytes, resident memory tracking, `NSProcessInfo` thermal state, low-power mode signals, and telemetry pressure isolation. Append completion record to P7-B blueprint and update status block.
+> Implement `MacosResources`, process CPU nanoseconds, disk I/O bytes, resident memory tracking,
+> `NSProcessInfo` thermal state, low-power mode signals, and telemetry pressure isolation. Append
+> completion record to P7-B blueprint and update status block.
 >
-> Run process CPU time tests, I/O byte accumulation tests, memory snapshot tests, thermal severity state tests, and provider contract tests. Merge implementation before its audit.
+> Run process CPU time tests, I/O byte accumulation tests, memory snapshot tests, thermal severity
+> state tests, and provider contract tests. Merge implementation before its audit.
 
 #### P7-B macOS resource provider conformance/manual-review prompt
 
@@ -3083,8 +3221,10 @@ This prompt is superseded by the child implementation prompts below. Do not exec
 > `hardware-utils-overhaul/phase-7-macos-resources-audit` from the updated P7 root. Read P7-B
 > blueprint, completion record, and diff.
 >
-> Independently audit `proc_pid_rusage`, `task_info`, `NSProcessInfo` signals, and telemetry pressure isolation. Write
-> `docs/audits/hardware-utils/phase-7-macos-resource-provider-conformance.md`, append evidence, and hand
+> Independently audit `proc_pid_rusage`, `task_info`, `NSProcessInfo` signals, and telemetry
+> pressure isolation. Write
+> `docs/audits/hardware-utils/phase-7-macos-resource-provider-conformance.md`, append evidence, and
+> hand
 > off for merge.
 
 #### P7-C macOS affinity & native ABI blueprint prompt
@@ -3092,26 +3232,40 @@ This prompt is superseded by the child implementation prompts below. Do not exec
 **Model: `gpt-5.6-sol`; reasoning effort: `max`.**
 
 > After P7-B audit is reviewed and merged, create
-> `hardware-utils-overhaul/phase-7-macos-affinity-native-blueprint` from the updated P7 root. The parent
+> `hardware-utils-overhaul/phase-7-macos-affinity-native-blueprint` from the updated P7 root. The
+> parent
 > artifact is `docs/blueprints/hardware-utils/phase-7-macos-platform.md`. Read parent P7-C context
-> envelope, `MacosAffinity`, `MacosAffinityCalls`, `macos_affinity.cpp`, `macos_resources.cpp`, `macos_system_layout.cpp`, `macos_jni.h`, and P1 native build graph.
+> envelope, `MacosAffinity`, `MacosAffinityCalls`, `macos_affinity.cpp`, `macos_resources.cpp`,
+> `macos_system_layout.cpp`, `macos_jni.h`, and P1 native build graph.
 >
 > Write `docs/blueprints/hardware-utils/phase-7-macos-affinity-native.md`. Translate parent contract
-> into implementation checklist: Mach thread affinity tag mapping (`thread_policy_set`), tag `0` release preference, single-locality mask enforcement with deterministic multi-locality rejection (`false`), physical current CPU query returning `-1`, safe idempotent timer policy without `THREAD_TIME_CONSTRAINT_POLICY` realtime scheduling, macOS 11 deployment floor, universal Mach-O binary compilation (`x86_64` + `arm64`) with zero C++ runtimes (`-fno-exceptions -fno-rtti`), and bundled `codesign -v` verification.
+> into implementation checklist: Mach thread affinity tag mapping (`thread_policy_set`), tag `0`
+> release preference, single-locality mask enforcement with deterministic multi-locality rejection
+> (`false`), physical current CPU query returning `-1`, safe idempotent timer policy without
+> `THREAD_TIME_CONSTRAINT_POLICY` realtime scheduling, macOS 11 deployment floor, universal Mach-O
+> binary compilation (`x86_64` + `arm64`) with zero C++ runtimes (`-fno-exceptions -fno-rtti`), and
+> bundled `codesign -v` verification.
 >
-> Reapply sizing/model gates and confirm `gpt-5.6-sol`/`high` implementation model. Edit planning docs only. Handoff for review and merge into the P7 root before creating P7-C implementation.
+> Reapply sizing/model gates and confirm `gpt-5.6-sol`/`high` implementation model. Edit planning
+> docs only. Handoff for review and merge into the P7 root before creating P7-C implementation.
 
 #### P7-C macOS affinity & native ABI implementation prompt
 
 **Child-confirmed model: `gpt-5.6-sol`; reasoning effort: `high`.**
 
 > After P7-C blueprint is reviewed and merged, create
-> `hardware-utils-overhaul/phase-7-macos-affinity-native-implementation` from the updated P7 root. Read
+> `hardware-utils-overhaul/phase-7-macos-affinity-native-implementation` from the updated P7 root.
+> Read
 > finalized P7-C blueprint and context envelope.
 >
-> Implement `MacosAffinity`, `MacosAffinityCalls`, `macos_affinity.cpp`, `macos_resources.cpp`, `macos_system_layout.cpp`, `macos_jni.h`, Mach affinity tag mapping, single-locality enforcement, tag `0` release, safe timer policy, universal Mach-O ABI compilation, and codesign checks. Append completion record to P7-C blueprint and update status block.
+> Implement `MacosAffinity`, `MacosAffinityCalls`, `macos_affinity.cpp`, `macos_resources.cpp`,
+> `macos_system_layout.cpp`, `macos_jni.h`, Mach affinity tag mapping, single-locality enforcement,
+> tag `0` release, safe timer policy, universal Mach-O ABI compilation, and codesign checks. Append
+> completion record to P7-C blueprint and update status block.
 >
-> Run affinity capability tests, single-locality vs multi-locality rejection tests, tag `0` release tests, safe timer resolution tests, universal Mach-O binary gates, and codesign inspection. Merge implementation before its audit.
+> Run affinity capability tests, single-locality vs multi-locality rejection tests, tag `0` release
+> tests, safe timer resolution tests, universal Mach-O binary gates, and codesign inspection. Merge
+> implementation before its audit.
 
 #### P7-C macOS affinity & native ABI conformance/manual-review prompt
 
@@ -3121,8 +3275,10 @@ This prompt is superseded by the child implementation prompts below. Do not exec
 > `hardware-utils-overhaul/phase-7-macos-affinity-native-audit` from the updated P7 root. Read P7-C
 > blueprint, completion record, and diff.
 >
-> Independently audit Mach thread affinity tags, tag `0` release, single-locality enforcement, safe timer resolution, universal Mach-O binary gates, and codesign verification. Write
-> `docs/audits/hardware-utils/phase-7-macos-affinity-native-conformance.md`, append evidence, and hand
+> Independently audit Mach thread affinity tags, tag `0` release, single-locality enforcement, safe
+> timer resolution, universal Mach-O binary gates, and codesign verification. Write
+> `docs/audits/hardware-utils/phase-7-macos-affinity-native-conformance.md`, append evidence, and
+> hand
 > off for merge.
 
 #### P7 root conformance audit prompt
@@ -3133,9 +3289,14 @@ This prompt is superseded by the child implementation prompts below. Do not exec
 > `hardware-utils-overhaul/phase-7-macos-audit` from the updated P7 root. The parent artifacts are
 > the P7 parent blueprint and the three indexed child blueprint/completion/conformance triples.
 >
-> Independently audit the end-to-end macOS platform provider: sysctl topology discovery -> resource & thermal metrics -> locality affinity & Mach-O ABI. Classify all macOS requirements and defect ledger items as `satisfied`, `deviated`, `unverified`, or `ambiguous`.
+> Independently audit the end-to-end macOS platform provider: sysctl topology discovery ->
+> resource & thermal metrics -> locality affinity & Mach-O ABI. Classify all macOS requirements and
+> defect ledger items as `satisfied`, `deviated`, `unverified`, or `ambiguous`.
 >
-> Write `docs/audits/hardware-utils/phase-7-macos-platform-conformance.md`, append the P7 closeout summary to the parent plan, remove the temporary P7 status block upon authorized merge, and record the resulting root commit. P7 is complete only after this authorized closeout; do not create P8 earlier.
+> Write `docs/audits/hardware-utils/phase-7-macos-platform-conformance.md`, append the P7 closeout
+> summary to the parent plan, remove the temporary P7 status block upon authorized merge, and record
+> the resulting root commit. P7 is complete only after this authorized closeout; do not create P8
+> earlier.
 
 > environmental limits to the completion record. A material deviation returns to the exact
 > blueprint or implementation action. Handoff follows the audit/root-closeout contract: P7 is
@@ -3207,18 +3368,28 @@ This prompt is superseded by the child implementation prompts below. Do not exec
 
 #### P8 blueprint review and implementation model reassessment — 2026-08-07
 
-The Phase 8 blueprint (`docs/blueprints/hardware-utils/phase-8-control-plane-integration-release.md`) has been created and finalized.
+The Phase 8 blueprint
+(`docs/blueprints/hardware-utils/phase-8-control-plane-integration-release.md`) has been created and
+finalized.
 
 ##### Implementation model reassessment
 
-1. **Context and Ownership Load**: The implementation pass touches 1 production Java file (`ControlPlaneFragment.java`) in `euhedral-core` and extends existing test files (`ControlPlaneFragmentTest.java`, `ControlPlaneFragmentThreadTest.java`, `ControlPlaneCacheTest.java`, `ControlPlaneLatticeTest.java`). No new test files are created.
-2. **Technical Complexity**: High-precision concurrency (VarHandle acquire/release ordering, lock-free timestamp CAS loop), exact integer rounding math for pressure response curve, unattenuated P/E capacity mapping, and zero-allocation hot-loop verification.
-3. **Execution Safety**: Production edits are strictly confined to `ControlPlaneFragment.java`. `ControlPlaneCache.java` is test-only. No training modules or Reactor/Spring production paths are touched.
+1. **Context and Ownership Load**: The implementation pass touches 1 production Java file
+   (`ControlPlaneFragment.java`) in `euhedral-core` and extends existing test files
+   (`ControlPlaneFragmentTest.java`, `ControlPlaneFragmentThreadTest.java`,
+   `ControlPlaneCacheTest.java`, `ControlPlaneLatticeTest.java`). No new test files are created.
+2. **Technical Complexity**: High-precision concurrency (VarHandle acquire/release ordering,
+   lock-free timestamp CAS loop), exact integer rounding math for pressure response curve,
+   unattenuated P/E capacity mapping, and zero-allocation hot-loop verification.
+3. **Execution Safety**: Production edits are strictly confined to `ControlPlaneFragment.java`.
+   `ControlPlaneCache.java` is test-only. No training modules or Reactor/Spring production paths are
+   touched.
 4. **Selected Model and Effort**: Strong coding model with medium reasoning effort.
 
 #### P8 implementation prompt
 
-**Model: Strong coding model; reasoning effort: `medium`. (Finalized via Phase 8 blueprint reassessment)**
+**Model: Strong coding model; reasoning effort: `medium`. (Finalized via Phase 8 blueprint
+reassessment)**
 
 > After the P8 blueprint is reviewed and merged, start
 > `hardware-utils-overhaul/phase-8-core-release-implementation` from the P8 root. The parent
@@ -3262,19 +3433,25 @@ The Phase 8 blueprint (`docs/blueprints/hardware-utils/phase-8-control-plane-int
 
 #### P8 Developer Review Summary
 
-- **Purpose**: Integrate normalized hardware pressure into `ControlPlaneFragment` adaptive batch capping, finalize defect ledger items C01 and C02, establish release CI and signing gates, and close out the platform parity initiative.
-- **Package Ownership Boundaries**: `io.euhedral_execution.core.control_plane` (`ControlPlaneFragment.java` production edit only; `ControlPlaneCache.java` test-only coverage).
+- **Purpose**: Integrate normalized hardware pressure into `ControlPlaneFragment` adaptive batch
+  capping, finalize defect ledger items C01 and C02, establish release CI and signing gates, and
+  close out the platform parity initiative.
+- **Package Ownership Boundaries**: `io.euhedral_execution.core.control_plane`
+  (`ControlPlaneFragment.java` production edit only; `ControlPlaneCache.java` test-only coverage).
 - **Key Contracts**:
-  - Unattenuated pressure response curve: $\text{eligibleMax} = \max(2, \min(\text{maxBatchSize}, \text{frameQuota}))$, $\text{eligibleMin} = 2$, $C(p) = \text{clampLong}(\text{Math.round}(\text{eligibleMax} - p \cdot (\text{eligibleMax} - 2)), 2, \text{eligibleMax})$.
-  - Minimum batch size floor $\ge 2$ enforced across all pressure values and configuration bounds.
-  - Removed P/E attenuation multiplier ($0.5/0.7$).
-  - Lock-free VarHandle timestamp CAS loop (`compareAndSet`) under concurrent monitor updates.
-  - Zero-allocation hot-loop read (`getOpaque`) in `cycle()`.
-  - Delegation to `ControlPlaneCache.update()` for EWMA attack/release hysteresis.
+    - Unattenuated pressure response
+      curve: $\text{eligibleMax} = \max (2, \min (\text{maxBatchSize}, \text{frameQuota}))$, $\text{eligibleMin} = 2$, $C (p) = \text{clampLong} (\text{Math.round} (\text{eligibleMax} - p \cdot (\text{eligibleMax} - 2)), 2, \text{eligibleMax})$.
+    - Minimum batch size floor $\ge 2$ enforced across all pressure values and configuration bounds.
+    - Removed P/E attenuation multiplier ($0.5/0.7$).
+    - Lock-free VarHandle timestamp CAS loop (`compareAndSet`) under concurrent monitor updates.
+    - Zero-allocation hot-loop read (`getOpaque`) in `cycle()`.
+    - Delegation to `ControlPlaneCache.update()` for EWMA attack/release hysteresis.
 - **Child Work Units**: None (irreducible single deliverable; no workflow split required).
 - **Selected Implementation Capability**: Strong coding model with medium reasoning effort.
-- **Risks**: Ensuring zero allocation in hot loop; preventing out-of-order snapshot overwrites under concurrent updates; preserving test-only boundary of `ControlPlaneCache`.
-- **Unresolved Decisions**: None. All pressure formulas, memory modes, cache boundaries, and release criteria are fully settled.
+- **Risks**: Ensuring zero allocation in hot loop; preventing out-of-order snapshot overwrites under
+  concurrent updates; preserving test-only boundary of `ControlPlaneCache`.
+- **Unresolved Decisions**: None. All pressure formulas, memory modes, cache boundaries, and release
+  criteria are fully settled.
 
 #### P8 final conformance audit prompt
 
@@ -3321,12 +3498,13 @@ The Phase 8 blueprint (`docs/blueprints/hardware-utils/phase-8-control-plane-int
 
 ## P7 closeout (macOS platform) — 2026-08-07
 
-P7 delivered the end-to-end macOS platform provider (sysctl topology -> resource/thermal metrics
--> locality affinity & Mach-O ABI) across three child action items, each with an independent
+P7 delivered the end-to-end macOS platform provider (sysctl topology -> resource/thermal metrics ->
+locality affinity & Mach-O ABI) across three child action items, each with an independent
 conformance audit, plus a root end-to-end conformance audit
 (`docs/audits/hardware-utils/phase-7-macos-platform-conformance.md`).
 
 Outcome by child:
+
 - **P7-A (topology & sysctl):** all 5 acceptance criteria `satisfied`. Apple Silicon P/E vs Intel
   SMT classification, cache-domain BitSets, and conservative missing-key fallbacks
   (`MacosTopologyFixtureTest`, 6 tests). Closes the macOS portion of T01.
@@ -3338,39 +3516,57 @@ Outcome by child:
   uniform with Linux/Windows; `VALID` surfacing is deferred to a future canonical macOS
   `DetailedSystemSnapshotProvider`. Native probes remain in place for that provider. Closes R01,
   R03, and the macOS portion of R13.
-- **P7-C (affinity, timer & native ABI):** all 6 acceptance criteria `satisfied`. Mach affinity
-  tag mapping (ordinal `c` -> tag `c+1`, tag `0` release), single-locality enforcement,
-  `getCpu()==-1`, safe idempotent timer policy (no realtime traps), and universal Mach-O
-  (`x86_64`+`arm64`, macOS 11.0 floor, no C++ runtime, codesigned). Closes A04 and the macOS
-  portion of N02.
+- **P7-C (affinity, timer & native ABI):** all 6 acceptance criteria `satisfied`. Mach affinity tag
+  mapping (ordinal `c` -> tag `c+1`, tag `0` release), single-locality enforcement,
+  `getCpu()==-1`, safe idempotent timer policy (no realtime traps), and universal Mach-O (`x86_64`+
+  `arm64`, macOS 11.0 floor, no C++ runtime, codesigned). Closes A04 and the macOS portion of N02.
 
 Root-audit dispositions of note:
-- One material blueprint-vs-architecture item (thermal/low-power) was raised, returned to the
-  P7-B blueprint, and resolved there via developer-authorized **fix 1** (internal-only /
-  deferred). The frozen P4 contract (`ProviderContractTest.testOSXProfile`) and the P6 Windows
-  precedent are preserved; no change to `MacosResources`, the shared `SystemSnapshot` DTO, or P4
-  was required.
-- One audit-integrity defect (the P7-B child audit cited six nonexistent tests and an "8/8
-  passed" result) was corrected in the child audit.
-- **B06 / requirement #12 (on-host macOS 11 Intel/arm64 smoke):** `satisfied` — the developer
-  confirmed the hardware-utils GitHub CI workflow (which runs the macOS jobs) passed on
-  2026-08-07 (developer-attested; not re-run in the Linux authoring environment).
 
-Ledger items T01, A04, R01, R03, R13, N02, and B06 are all `satisfied` for macOS. The temporary
-P7 status block was removed from `AGENTS.md` as part of this closeout. Resulting P7 root commit
+- One material blueprint-vs-architecture item (thermal/low-power) was raised, returned to the P7-B
+  blueprint, and resolved there via developer-authorized **fix 1** (internal-only / deferred). The
+  frozen P4 contract (`ProviderContractTest.testOSXProfile`) and the P6 Windows precedent are
+  preserved; no change to `MacosResources`, the shared `SystemSnapshot` DTO, or P4 was required.
+- One audit-integrity defect (the P7-B child audit cited six nonexistent tests and an "8/8 passed"
+  result) was corrected in the child audit.
+- **B06 / requirement #12 (on-host macOS 11 Intel/arm64 smoke):** `satisfied` — the developer
+  confirmed the hardware-utils GitHub CI workflow (which runs the macOS jobs) passed on 2026-08-07
+  (developer-attested; not re-run in the Linux authoring environment).
+
+Ledger items T01, A04, R01, R03, R13, N02, and B06 are all `satisfied` for macOS. The temporary P7
+status block was removed from `AGENTS.md` as part of this closeout. Resulting P7 root commit
 recorded in the Plan status list above. P8 is not started by this action.
 
 ## P8 closeout (control plane integration and release) — 2026-08-07
 
-Phase 8 delivered the core control plane integration of the normalized hardware pressure engine into `ControlPlaneFragment` and completed the initiative release audit (`docs/audits/hardware-utils/phase-8-control-plane-integration-release-conformance.md`).
+Phase 8 delivered the core control plane integration of the normalized hardware pressure engine into
+`ControlPlaneFragment` and completed the initiative release audit
+(`docs/audits/hardware-utils/phase-8-control-plane-integration-release-conformance.md`).
 
 Key achievements and dispositions:
-- **Defect Ledger Closeout**:
-  - **C01 (`ControlPlaneFragment` pressure curve & attenuation)**: `satisfied`. Monotonic linear adaptive batch cap formula $C(p) = \text{clampLong}(\text{Math.round}(\text{eligibleMax} - p \cdot (\text{eligibleMax} - 2)), 2, \text{eligibleMax})$ implemented; P/E core pressure attenuation multiplier (`0.5`/`0.7`) removed; zero-allocation primitive hot-loop read (`getOpaque`) verified in `cycle()`.
-  - **C02 (`ControlPlaneCache` delegation & hysteresis)**: `satisfied`. `ControlPlaneCache.java` production source code untouched (test-only scope preserved); update delegation executed on valid monotonic snapshots; EWMA attack/release hysteresis verified.
-- **Timestamp Linearization and Concurrency**: Monotonic timestamp ordering enforced via VarHandle `LAST_ACCEPTED_TIMESTAMP_NS.compareAndSet(...)` CAS loop; memory publication bounded by `ADAPTIVE_BATCH_CAP.setRelease(...)`.
-- **Snapshot Sanitization**: Null snapshots, empty `cpuSnapshots` arrays, out-of-bounds CPU indices, and NaN/Infinite pressure values correctly sanitized and rejected.
-- **Component & Module Isolation**: Monitor-to-Lattice component wiring verified in `ControlPlaneLatticeTest`. Build and tests pass cleanly across all 6 non-training modules (`core`, `hardware-utils`, `data-structures`, `hashing`, `reactor-core`, `spring-core`) with zero training module edits or dependencies.
-- **Platform Native & Binary Gates**: Universal JNI native libraries for Linux, Windows, macOS (`x86_64`, `aarch64`) cross-built via Zig 0.16.0 verified (`NativeBinaryGateTest`); macOS binaries signed via `rcodesign`.
 
-All requirements are `satisfied` (with non-Linux real-host smoke `unverified` in container but satisfied via developer-attested CI results). The entire non-training Hardware-Utils Platform Parity Initiative is complete and closed out.
+- **Defect Ledger Closeout**:
+    - **C01 (`ControlPlaneFragment` pressure curve & attenuation)**: `satisfied`. Monotonic linear
+      adaptive batch cap
+      formula $C (p) = \text{clampLong} (\text{Math.round} (\text{eligibleMax} - p \cdot (\text{eligibleMax} - 2)), 2, \text{eligibleMax})$
+      implemented; P/E core pressure attenuation multiplier (`0.5`/`0.7`) removed; zero-allocation
+      primitive hot-loop read (`getOpaque`) verified in `cycle()`.
+    - **C02 (`ControlPlaneCache` delegation & hysteresis)**: `satisfied`. `ControlPlaneCache.java`
+      production source code untouched (test-only scope preserved); update delegation executed on
+      valid monotonic snapshots; EWMA attack/release hysteresis verified.
+- **Timestamp Linearization and Concurrency**: Monotonic timestamp ordering enforced via VarHandle
+  `LAST_ACCEPTED_TIMESTAMP_NS.compareAndSet(...)` CAS loop; memory publication bounded by
+  `ADAPTIVE_BATCH_CAP.setRelease(...)`.
+- **Snapshot Sanitization**: Null snapshots, empty `cpuSnapshots` arrays, out-of-bounds CPU indices,
+  and NaN/Infinite pressure values correctly sanitized and rejected.
+- **Component & Module Isolation**: Monitor-to-Lattice component wiring verified in
+  `ControlPlaneLatticeTest`. Build and tests pass cleanly across all 6 non-training modules (`core`,
+  `hardware-utils`, `data-structures`, `hashing`, `reactor-core`, `spring-core`) with zero training
+  module edits or dependencies.
+- **Platform Native & Binary Gates**: Universal JNI native libraries for Linux, Windows, macOS
+  (`x86_64`, `aarch64`) cross-built via Zig 0.16.0 verified (`NativeBinaryGateTest`); macOS binaries
+  signed via `rcodesign`.
+
+All requirements are `satisfied` (with non-Linux real-host smoke `unverified` in container but
+satisfied via developer-attested CI results). The entire non-training Hardware-Utils Platform Parity
+Initiative is complete and closed out.

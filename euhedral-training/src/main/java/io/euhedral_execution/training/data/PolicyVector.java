@@ -8,6 +8,7 @@ public final class PolicyVector {
     private final double[] weights;
     private final PolicyId id;
     private final int hashCode;
+
     private PolicyVector(double[] weights) {
         if (weights.length != WIDTH) {
             throw new IllegalArgumentException("Expected 28 weights");

@@ -42,6 +42,7 @@ public class HighContentionThroughput {
             new PaddedLongAdder(Runtime.getRuntime().availableProcessors(), true, true);
     private final RepeatingSink[] sinks = new RepeatingSink[PRODUCERS];
     private ControlPlaneLattice controlPlane;
+
     public HighContentionThroughput() {
         // Required for JMH
     }

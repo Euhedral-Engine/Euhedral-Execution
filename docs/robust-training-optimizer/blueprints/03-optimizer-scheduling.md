@@ -16,24 +16,24 @@ Phase 3 replaces the pooled closed-loop path with a scenario-aware path that:
    comparator;
 3. screens Sobol candidates into deterministic robust-quality bands while retaining a direct
    exploration fraction;
-4. divides each exact source scenario's policy budget among fixed anchors, carry-forward
-   completion, robust-leader revalidation, disagreement audits, and new exploration;
+4. divides each exact source scenario's policy budget among fixed anchors, carry-forward completion,
+   robust-leader revalidation, disagreement audits, and new exploration;
 5. keeps admitted incomplete policies in a persisted carry-forward queue until every required
    scenario has valid coverage;
 6. rotates only exact scenarios runnable by the active environment and persists a separate cursor
    for each environment/core group;
 7. writes complete native Phase 1 observation bundles with stable policy, scenario, run, cohort,
    role, seed, repetition, and status identity;
-8. retrains only the accepted Phase 2 scenario-conditioned model and never schedules from a
-   rejected or pooled model;
-9. checkpoints every state transition in atomic, versioned snapshots and resumes a pending
-   schedule without changing it; and
+8. retrains only the accepted Phase 2 scenario-conditioned model and never schedules from a rejected
+   or pooled model;
+9. checkpoints every state transition in atomic, versioned snapshots and resumes a pending schedule
+   without changing it; and
 10. finishes every successful iteration with a new Phase 1 merge so its latest robust ranking and
     coverage include that iteration's evidence.
 
-The scheduling unit is one exact `SourceScenario` run with a fixed policy budget. A normal
-iteration may contain several scenario runs. It is not one global candidate file blindly
-benchmarked under every source count.
+The scheduling unit is one exact `SourceScenario` run with a fixed policy budget. A normal iteration
+may contain several scenario runs. It is not one global candidate file blindly benchmarked under
+every source count.
 
 ### Explicit non-goals
 
@@ -46,8 +46,8 @@ benchmarked under every source count.
   prediction.
 - Do not use rolling leaders as calibration anchors. Only `FIXED_ANCHOR` observations affect run
   calibration.
-- Do not infer environment identity, required scenarios, run identity, or benchmark parameters
-  from a path.
+- Do not infer environment identity, required scenarios, run identity, or benchmark parameters from
+  a path.
 - Do not read current alternating vector/measurement files, old pooled models, old checkpoints, or
   user-owned `euhedral-training/input`, `output`, or `data` trees as new-format evidence.
 - Do not implement the Phase 5 current-workspace importer or its final CLI/configuration surface.
@@ -61,38 +61,38 @@ benchmarked under every source count.
 
 ## Reconciliation with the current implementation
 
-| Current code | Current contract | Phase 3 decision |
-| --- | --- | --- |
-| `SequenceFinder.loadTrainingData` | Reads pooled alternating vector/five-quantile rows | Move this implementation behind the pooled-v0 compatibility boundary. The new `SequenceFinder` accepts Phase 1 merge state and a loaded accepted Phase 2 curve predictor. |
-| `SequenceFinder.generate` | Produces one headerless vector file and uses one classifier scalar | Produce typed predicted candidates and per-scenario schedules. No new path writes or reads the headerless format. |
-| `PolicyOrdinalNetwork.predictScores` | Scores only 28 weights | The new path calls `ScenarioConditionedModel.predictConfiguredCurves`; there is no 28-value adapter. |
-| `CmaEsOptimizer.MeasuredPolicy` | Holds a vector plus five pooled quantiles | Replace it with Phase 1 eligible `RobustPolicySummary` seeds. |
-| `CmaEsOptimizer.BatchScorer` | Returns one `float` per candidate | Replace it with a curve prediction service returning exact `PredictedPolicySummary` records. |
-| `CmaEsOptimizer` population order | Descending scalar score with a `1.0e-6f` stagnation tolerance | Use the exact predicted robust comparator. Comparator improvement resets stagnation; there is no score epsilon. |
-| `ScoreBandSampler` | Uses empirical scalar thresholds and order-sensitive random reservoirs | Use ten fixed worst-scenario-quality bands and seeded, hash-priority bottom-k reservoirs that are independent of arrival order. |
-| `ClosedLoopRunner` | P99 merge -> pooled train -> global vector generation -> text benchmark | Calibration-plan bootstrap -> Phase 1 merge -> Phase 2 train -> per-scenario schedule -> native v1 benchmark -> Phase 1 post-merge. |
-| `ClosedLoopRunner.writeState` | Timestamped `Properties.store` with an absolute artifact path | Replace it with strict atomic checkpoint snapshot directories, relative paths, artifact hashes, carry state, rotation cursors, and pending run identity. |
-| `ClosedLoopRunner` resume | Deletes an incomplete iteration and starts it again | Reuse verified merge/model/schedule artifacts, adopt complete expected bundles, and rerun only an incomplete scenario attempt under the already persisted run identity. |
-| `BenchmarkRunner.runAcrossSourceCounts` | Rotates clamped integer source counts from the iteration number | Move it behind the pooled-v0 compatibility boundary. The new `BenchmarkRunner` consumes persisted exact `SourceScenario` plans selected by a checkpointed per-environment cursor and never clamps a scenario. |
-| `BenchmarkRunner` raw output | Alternating vector and zero-filled repetition arrays | Stream a complete Phase 1 bundle with explicit `SUCCESS`, `TIMEOUT`, `FAILED`, and `SKIPPED` observations. |
-| `BenchmarkRunner.createSinks` | Chooses hidden `ThreadLocalRandom` ID/routing seeds | Derive and persist one ID hash and routing seed per source before the run. |
-| `BenchmarkFrame.generate` | Chooses its routing seed internally | Add a deterministic overload accepting the routing seed; retain the random overload only for legacy callers. |
-| `BenchmarkRunner` repetition reset | Resets a shared counter while sources are flowing | Keep counters monotonic within a policy and measure deltas. Reset only behind the established pause barrier. |
-| `BenchmarkRunner` evidence writes | Writes a policy after its trial, while the next trial is not yet active | Continue writing only while sources are paused; collect one policy's small repetition record in memory first. |
-| `Runner train-vector-finder` | Instantiates `SequenceFinder` for pooled train/generate | Point this transitional command to a dedicated pooled-v0 compatibility class. Phase 5 owns its final replacement. |
-| Current tests | Cover scalar CMA-ES and scalar score bands only | Replace those expectations and add deterministic budget, queue, rotation, schedule, checkpoint, resume, and v1 benchmark coverage. |
+| Current code                            | Current contract                                                        | Phase 3 decision                                                                                                                                                                                              |
+|-----------------------------------------|-------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `SequenceFinder.loadTrainingData`       | Reads pooled alternating vector/five-quantile rows                      | Move this implementation behind the pooled-v0 compatibility boundary. The new `SequenceFinder` accepts Phase 1 merge state and a loaded accepted Phase 2 curve predictor.                                     |
+| `SequenceFinder.generate`               | Produces one headerless vector file and uses one classifier scalar      | Produce typed predicted candidates and per-scenario schedules. No new path writes or reads the headerless format.                                                                                             |
+| `PolicyOrdinalNetwork.predictScores`    | Scores only 28 weights                                                  | The new path calls `ScenarioConditionedModel.predictConfiguredCurves`; there is no 28-value adapter.                                                                                                          |
+| `CmaEsOptimizer.MeasuredPolicy`         | Holds a vector plus five pooled quantiles                               | Replace it with Phase 1 eligible `RobustPolicySummary` seeds.                                                                                                                                                 |
+| `CmaEsOptimizer.BatchScorer`            | Returns one `float` per candidate                                       | Replace it with a curve prediction service returning exact `PredictedPolicySummary` records.                                                                                                                  |
+| `CmaEsOptimizer` population order       | Descending scalar score with a `1.0e-6f` stagnation tolerance           | Use the exact predicted robust comparator. Comparator improvement resets stagnation; there is no score epsilon.                                                                                               |
+| `ScoreBandSampler`                      | Uses empirical scalar thresholds and order-sensitive random reservoirs  | Use ten fixed worst-scenario-quality bands and seeded, hash-priority bottom-k reservoirs that are independent of arrival order.                                                                               |
+| `ClosedLoopRunner`                      | P99 merge -> pooled train -> global vector generation -> text benchmark | Calibration-plan bootstrap -> Phase 1 merge -> Phase 2 train -> per-scenario schedule -> native v1 benchmark -> Phase 1 post-merge.                                                                           |
+| `ClosedLoopRunner.writeState`           | Timestamped `Properties.store` with an absolute artifact path           | Replace it with strict atomic checkpoint snapshot directories, relative paths, artifact hashes, carry state, rotation cursors, and pending run identity.                                                      |
+| `ClosedLoopRunner` resume               | Deletes an incomplete iteration and starts it again                     | Reuse verified merge/model/schedule artifacts, adopt complete expected bundles, and rerun only an incomplete scenario attempt under the already persisted run identity.                                       |
+| `BenchmarkRunner.runAcrossSourceCounts` | Rotates clamped integer source counts from the iteration number         | Move it behind the pooled-v0 compatibility boundary. The new `BenchmarkRunner` consumes persisted exact `SourceScenario` plans selected by a checkpointed per-environment cursor and never clamps a scenario. |
+| `BenchmarkRunner` raw output            | Alternating vector and zero-filled repetition arrays                    | Stream a complete Phase 1 bundle with explicit `SUCCESS`, `TIMEOUT`, `FAILED`, and `SKIPPED` observations.                                                                                                    |
+| `BenchmarkRunner.createSinks`           | Chooses hidden `ThreadLocalRandom` ID/routing seeds                     | Derive and persist one ID hash and routing seed per source before the run.                                                                                                                                    |
+| `BenchmarkFrame.generate`               | Chooses its routing seed internally                                     | Add a deterministic overload accepting the routing seed; retain the random overload only for legacy callers.                                                                                                  |
+| `BenchmarkRunner` repetition reset      | Resets a shared counter while sources are flowing                       | Keep counters monotonic within a policy and measure deltas. Reset only behind the established pause barrier.                                                                                                  |
+| `BenchmarkRunner` evidence writes       | Writes a policy after its trial, while the next trial is not yet active | Continue writing only while sources are paused; collect one policy's small repetition record in memory first.                                                                                                 |
+| `Runner train-vector-finder`            | Instantiates `SequenceFinder` for pooled train/generate                 | Point this transitional command to a dedicated pooled-v0 compatibility class. Phase 5 owns its final replacement.                                                                                             |
+| Current tests                           | Cover scalar CMA-ES and scalar score bands only                         | Replace those expectations and add deterministic budget, queue, rotation, schedule, checkpoint, resume, and v1 benchmark coverage.                                                                            |
 
 `euhedral-training` remains an unnamed module and needs no `module-info.java`. The deterministic
 `BenchmarkFrame` overload stays in the already exported `io.euhedral_execution.core.frames`
-package, so `euhedral-core/src/main/java/module-info.java` also does not change. No Maven
-dependency is needed.
+package, so `euhedral-core/src/main/java/module-info.java` also does not change. No Maven dependency
+is needed.
 
 ## Settled closed-loop vocabulary
 
 - **Training run**: one checkpoint lineage identified by an explicit `trainingRunId`.
 - **Required scenario**: one exact Phase 1 `SourceScenario` in the immutable run catalog.
-- **Runnable group**: required scenarios with the active `environmentId` and the physical core
-  count currently exposed by `SystemInfo`.
+- **Runnable group**: required scenarios with the active `environmentId` and the physical core count
+  currently exposed by `SystemInfo`.
 - **Iteration**: one accepted model, one persisted schedule over a rotating runnable scenario
   subset, its complete native bundles, and the post-benchmark merge.
 - **Policy budget `B`**: the number of unique scheduled policies in each normal scenario run.
@@ -106,11 +106,11 @@ dependency is needed.
   final bundle enters the corpus.
 
 The required-scenario catalog, training run ID, policy budget, statistical configuration, model
-training configuration, candidate-generation configuration, benchmark parameters, and scheduler
-seed are frozen by the first checkpoint. A resume with different frozen values fails before
-writing. The active environment may change between completed iterations so one workspace can be
-advanced sequentially on multiple required machines. It may not change while an iteration has a
-pending schedule.
+training configuration, candidate-generation configuration, benchmark parameters, and scheduler seed
+are frozen by the first checkpoint. A resume with different frozen values fails before writing. The
+active environment may change between completed iterations so one workspace can be advanced
+sequentially on multiple required machines. It may not change while an iteration has a pending
+schedule.
 
 ## Exact required-scenario and rotation contract
 
@@ -156,12 +156,12 @@ selected[i] = runnable[(nextIndex + i) mod runnableScenarioCount], i in [0, K)
 
 The selected list and current cursor are written into the iteration schedule before benchmarking.
 The cursor advances by `K mod runnableScenarioCount` only after every expected run is complete and
-the post-benchmark merge publishes successfully. A restart of a pending iteration uses its
-persisted selected list and does not consult the cursor again.
+the post-benchmark merge publishes successfully. A restart of a pending iteration uses its persisted
+selected list and does not consult the cursor again.
 
 Changing active environments is allowed only when no pending schedule exists. A group not yet used
-has cursor zero. Bootstrap does not use rotation; it needs one dedicated reference candidate
-cohort in every required scenario.
+has cursor zero. Bootstrap does not use rotation; it needs one dedicated reference candidate cohort
+in every required scenario.
 
 ## Predicted robust curve mathematics
 
@@ -169,8 +169,8 @@ cohort in every required scenario.
 
 Every candidate considered by the new optimizer has exactly one `ScenarioPrediction` for every
 required scenario, in natural scenario order. A missing, duplicate, extra, differently ordered, or
-catalog-mismatched prediction is fatal. The loaded model metadata's required-scenario set must
-equal the checkpoint catalog exactly.
+catalog-mismatched prediction is fatal. The loaded model metadata's required-scenario set must equal
+the checkpoint catalog exactly.
 
 For candidate `p`, let `q_s` be `predictedQuality` in scenario `s`. In natural scenario order,
 calculate:
@@ -210,8 +210,8 @@ aggregator retains the Phase 1 epsilon rule rather than relying on that current 
 
 The first four tiers are exactly the quality portion of the Phase 1 robust comparator. Prediction
 uncertainty occupies the later stability tiers because measured IQR and failure rate do not exist
-for a new policy. Every comparison uses exact `Double.compare`. No weighted sum, formatted
-rounding, tolerance, top-N flag, or float conversion is authoritative.
+for a new policy. Every comparison uses exact `Double.compare`. No weighted sum, formatted rounding,
+tolerance, top-N flag, or float conversion is authoritative.
 
 `PredictedPolicyComparator.AUDIT_FIRST` compares:
 
@@ -232,8 +232,8 @@ Every normal scenario run has exactly `B` unique policies and contains all `A` f
 `B > A` is required. The frozen catalog size is used directly; it is never recalculated when a
 checkpoint is resumed or when a later merge changes policy coverage.
 
-Bootstrap runs occur before a catalog exists. They contain exactly `B` bootstrap policies, all
-with `EXPLORATION`, and use iteration zero.
+Bootstrap runs occur before a catalog exists. They contain exactly `B` bootstrap policies, all with
+`EXPLORATION`, and use iteration zero.
 
 ### Hamilton allocation of the residual
 
@@ -252,9 +252,8 @@ LEADER_REVALIDATION   = 2
 DISAGREEMENT_AUDIT    = 5
 ```
 
-Weights are non-negative integers, at least one is positive, and their sum must fit a signed
-32-bit integer. Allocate the `R` slots by the Hamilton largest-remainder method using integer
-arithmetic:
+Weights are non-negative integers, at least one is positive, and their sum must fit a signed 32-bit
+integer. Allocate the `R` slots by the Hamilton largest-remainder method using integer arithmetic:
 
 ```text
 floor_i     = floor(R * weight_i / weightSum)
@@ -304,8 +303,8 @@ explorationAssigned ==
 ```
 
 Phase 3 normally assigns one role per scheduled policy. The Phase 1 `Set<PolicyRole>` remains
-supported by the bundle schema, but category overlap in a Phase 3 schedule is a scheduler defect
-and is rejected rather than hidden by a multi-role union.
+supported by the bundle schema, but category overlap in a Phase 3 schedule is a scheduler defect and
+is rejected rather than hidden by a multi-role union.
 
 ## Fixed-anchor and measured-leader selection
 
@@ -334,8 +333,8 @@ Read robust summaries from the latest complete Phase 1 merge. Filter to:
 - `eligible == true`; and
 - policy not in the fixed-anchor catalog.
 
-Sort with `PolicyComparator.BEST_FIRST` and take the requested leader count. If fewer exist,
-take all and transfer the shortfall to exploration. Every selected leader is scheduled under
+Sort with `PolicyComparator.BEST_FIRST` and take the requested leader count. If fewer exist, take
+all and transfer the shortfall to exploration. Every selected leader is scheduled under
 `LEADER_REVALIDATION` in each scenario run in the iteration.
 
 No predicted summary, coverage fraction below one, observed-only scenario, or imported robust rank
@@ -346,14 +345,14 @@ summary under Phase 1 rules, but the leader's new revalidation run is native.
 
 ### Admission
 
-Carry admission is bounded so exploration cannot create an ever-growing completion backlog.
-After an iteration schedule is complete, form the unique set of policies with
+Carry admission is bounded so exploration cannot create an ever-growing completion backlog. After an
+iteration schedule is complete, form the unique set of policies with
 `EXPLORATION` or `DISAGREEMENT_AUDIT`. Sort it by
 `PredictedPolicyComparator.BEST_FIRST`.
 
-The iteration's admission capacity is the maximum requested carry count across its selected
-scenario runs. Take that many policies, or all if fewer. This selection is persisted in the
-schedule before benchmarking.
+The iteration's admission capacity is the maximum requested carry count across its selected scenario
+runs. Take that many policies, or all if fewer. This selection is persisted in the schedule before
+benchmarking.
 
 After the post-benchmark merge:
 
@@ -379,9 +378,9 @@ REJECTED  one or more runs exist but no accepted Phase 1 quality exists
 `MISSING` and `REJECTED` both require completion work. `VALID` is never remeasured under the carry
 role, although the same policy may later be remeasured after it becomes an eligible leader.
 
-After each accepted model is trained, rescore every queue policy over the complete required
-catalog. Persist the new curve before using it for priority. A model rejection stops the loop; an
-older curve is not silently used.
+After each accepted model is trained, rescore every queue policy over the complete required catalog.
+Persist the new curve before using it for priority. A model rejection stops the loop; an older curve
+is not silently used.
 
 ### Carry priority
 
@@ -417,8 +416,8 @@ delay = min(1L << min(attemptCount - 1, 3), 8)
 nextEligibleIteration = i + delay
 ```
 
-Thus repeated rejected runs back off by 1, 2, 4, then 8 iterations, capped at 8, without removal.
-A successful valid row ignores the backoff because its state becomes `VALID`.
+Thus repeated rejected runs back off by 1, 2, 4, then 8 iterations, capped at 8, without removal. A
+successful valid row ignores the backoff because its state becomes `VALID`.
 
 For a newly admitted policy, its `EXPLORATION` or `DISAGREEMENT_AUDIT` measurements in the admission
 iteration count as its first attempts in those scenarios. Attempt accounting follows persisted
@@ -435,9 +434,9 @@ carry policies, policy hash duplicates, and candidates already selected into a b
 position.
 
 The selected audit set is common to every scenario run in the iteration. A policy is labeled only
-`DISAGREEMENT_AUDIT`, not also `EXPLORATION`. Audit observations enter Phase 1 like all other
-native measurements. Only the separate carry-admission rule determines whether an incomplete audit
-policy remains scheduled in future iterations.
+`DISAGREEMENT_AUDIT`, not also `EXPLORATION`. Audit observations enter Phase 1 like all other native
+measurements. Only the separate carry-admission rule determines whether an incomplete audit policy
+remains scheduled in future iterations.
 
 If the finite model-scored stream cannot supply the requested distinct audit count, report the
 shortfall and transfer it to new exploration. Direct Sobol candidates do not fill the audit quota
@@ -455,8 +454,8 @@ checks every repeated ID:
 - no code treats a 64-bit hash alone as sufficient evidence that two unknown vectors are equal.
 
 The latest Phase 1 merge supplies the complete historical policy dictionary, including eligible,
-missing, and rejected policies. Every historical ID is excluded from new exploration. Queue,
-anchor, and leader policies are selected through their own roles, never rediscovered as new.
+missing, and rejected policies. Every historical ID is excluded from new exploration. Queue, anchor,
+and leader policies are selected through their own roles, never rediscovered as new.
 
 Policy normalization remains a proposal-space operation:
 
@@ -466,17 +465,17 @@ Policy normalization remains a proposal-space operation:
 
 ### New-exploration suballocation
 
-Let `E` be the requested new-exploration allocation, which is the same for every selected
-scenario. Before proposal generation, let `knownShortfall_s` be that scenario's carry plus leader
-transfer and `X0 = max(knownShortfall_s)`. Candidate generation then determines the common audit
-shortfall `D`. Generate two disjoint tranches:
+Let `E` be the requested new-exploration allocation, which is the same for every selected scenario.
+Before proposal generation, let `knownShortfall_s` be that scenario's carry plus leader transfer and
+`X0 = max(knownShortfall_s)`. Candidate generation then determines the common audit shortfall `D`.
+Generate two disjoint tranches:
 
 - a base tranche of exactly `E`, used by every scenario; and
 - an overflow tranche of exactly `X0 + D`, from which scenario `s` uses the first
   `knownShortfall_s + D`.
 
-Allocate each tranche independently with the same exact Hamilton implementation and default
-integer weights:
+Allocate each tranche independently with the same exact Hamilton implementation and default integer
+weights:
 
 ```text
 CMA_ES       = 8
@@ -487,8 +486,8 @@ DIRECT_SOBOL = 1
 Exact remainder ties use the order shown. These defaults retain one-sixteenth direct Sobol
 exploration while dividing the rest between robust exploitation and band diversity.
 
-Select audit candidates before resolving these pools. Resolve the base tranche first and exclude
-it while resolving overflow. Within each tranche:
+Select audit candidates before resolving these pools. Resolve the base tranche first and exclude it
+while resolving overflow. Within each tranche:
 
 1. take best-first unique CMA-ES proposals up to the CMA quota;
 2. take deterministic score-band candidates not already selected up to the band quota;
@@ -497,16 +496,15 @@ it while resolving overflow. Within each tranche:
 5. transfer any remaining shortfall to direct Sobol generation.
 
 The result contains exactly `E + X0 + D` distinct unseen policies. Every selected direct Sobol
-policy is
-scored after selection so its prediction is available for audit output and carry admission, but
-that score did not affect its selection.
+policy is scored after selection so its prediction is available for audit output and carry
+admission, but that score did not affect its selection.
 
 Each scenario run takes the complete common base tranche and the required prefix of the common
 overflow tranche. Within a tranche the list is in category order above and then each category's
 settled order. Every run therefore receives the configured direct-exploration share of its base
-partition; a small overflow prefix may legitimately contain only earlier categories. Final
-benchmark trial order is independently pseudorandomized, so category order does not create a
-temporal benchmark bias.
+partition; a small overflow prefix may legitimately contain only earlier categories. Final benchmark
+trial order is independently pseudorandomized, so category order does not create a temporal
+benchmark bias.
 
 ### CMA-ES
 
@@ -600,9 +598,9 @@ use a stateful reservoir `Random`.
 Also retain a bounded best-first overflow heap of size `bandQuota + auditQuota`. If sparse bands
 leave capacity unused, fill from that heap under the predicted robust comparator. `finish` returns
 band nine through band zero, sampling key ascending within a band, followed by best-first overflow
-backfill. It returns fewer than requested only when the entire distinct input stream is short.
-Feed model-scored CMA proposals first and screened Sobol proposals second; hash-priority retention
-makes the retained band set independent of that arrival convention.
+backfill. It returns fewer than requested only when the entire distinct input stream is short. Feed
+model-scored CMA proposals first and screened Sobol proposals second; hash-priority retention makes
+the retained band set independent of that arrival convention.
 
 ### Sobol cursor and screening
 
@@ -622,8 +620,8 @@ Screen exactly `screenRows` Sobol points in ascending index order in bounded bat
 deduplicate, predict complete curves, and feed the CMA/top, audit, and band selectors without
 retaining the full screen. Direct Sobol generation begins at the exclusive screened end and
 continues until its transferred quota is full. Persist the exclusive index after the last Sobol
-point consumed, including historical duplicates. A pending persisted schedule owns that next
-cursor; restart never screens the range again.
+point consumed, including historical duplicates. A pending persisted schedule owns that next cursor;
+restart never screens the range again.
 
 ## Stable cohort, run, trial, and frame-seed identity
 
@@ -768,9 +766,9 @@ public record NativeBenchmarkRunPlan(
 }
 ```
 
-`BenchmarkRunner.runV1(NativeBenchmarkRunPlan, BooleanSupplier stopRequested)` returns the
-completed `BenchmarkRunContext`. `outputBundle` is an absolute normalized path inside the
-closed-loop evidence directory and must not exist.
+`BenchmarkRunner.runV1(NativeBenchmarkRunPlan, BooleanSupplier stopRequested)` returns the completed
+`BenchmarkRunContext`. `outputBundle` is an absolute normalized path inside the closed-loop evidence
+directory and must not exist.
 
 Defaults preserve the current benchmark intent:
 
@@ -820,8 +818,7 @@ completed frames from the later monotonic count. There is no cache reset between
 
 For a repetition:
 
-- `SUCCESS`: the sample deadline is reached with positive completed frames and no liveness
-  timeout;
+- `SUCCESS`: the sample deadline is reached with positive completed frames and no liveness timeout;
 - `TIMEOUT/NO_PROGRESS`: no counter increase before the liveness deadline;
 - `TIMEOUT/ZERO_COMPLETED_FRAMES`: the sample deadline is reached with zero completed frames;
 - `FAILED/MEASUREMENT_ERROR`: a recoverable policy-local measurement exception; and
@@ -847,11 +844,11 @@ throughputFramesPerSecond =
 with the exact Phase 1 evaluation order. A timeout may retain finite partial throughput, including
 zero. Completion time is not before any observation end.
 
-Check the stop supplier only while all sources are paused, between policies. A requested stop
-aborts the current attempt rather than writing fabricated `SKIPPED` evidence for policies that were
-never tried. `BenchmarkRunner` throws the existing stackless `ClosedLoopRunner.StopRequested`;
-the closed-loop owner catches it and returns the latest complete checkpoint without advancing a
-stage, cursor, attempt count, or evidence index.
+Check the stop supplier only while all sources are paused, between policies. A requested stop aborts
+the current attempt rather than writing fabricated `SKIPPED` evidence for policies that were never
+tried. `BenchmarkRunner` throws the existing stackless `ClosedLoopRunner.StopRequested`; the
+closed-loop owner catches it and returns the latest complete checkpoint without advancing a stage,
+cursor, attempt count, or evidence index.
 
 ### Bundle publication and incomplete attempts
 
@@ -861,8 +858,8 @@ Run the Phase 1 `ObservationBundleWriter` in a unique temporary sibling:
 evidence/.<benchmarkRunId>.attempt-<monotonic-local-number>/
 ```
 
-Register every policy before starting work. Retain at most one policy's repetition metadata in
-small primitive/object arrays. Write its observations only after the policy is paused. After
+Register every policy before starting work. Retain at most one policy's repetition metadata in small
+primitive/object arrays. Write its observations only after the policy is paused. After
 `complete`, reopen the bundle with `ObservationBundleReader.stream`, validate
 run/cohort/scenario/policy identity without retaining all observations, then atomically move the
 directory to:
@@ -887,16 +884,16 @@ schema_version,bootstrap_position,policy_id,weight_00_bits,...,weight_27_bits
 ```
 
 Rows use schema version 1, contiguous one-based positions, unique bit-validated policy IDs, and LF
-UTF-8 CSV. This is a new-format vector-only input, not the Phase 5 current-workspace importer.
-Copy it into the workspace on first initialization and fingerprint it. Resume requires the same
-bytes. Validate `B > anchorSelectionConfig.targetCount(B)` before any bootstrap benchmark.
+UTF-8 CSV. This is a new-format vector-only input, not the Phase 5 current-workspace importer. Copy
+it into the workspace on first initialization and fingerprint it. Resume requires the same bytes.
+Validate `B > anchorSelectionConfig.targetCount(B)` before any bootstrap benchmark.
 
 ### Dedicated bootstrap runs
 
 Use the identical bootstrap policy set in every required exact scenario. Every policy has only
-`EXPLORATION`. Iteration is zero. A scenario receives one deterministic bootstrap cohort and run
-ID. The active environment executes all still-missing bootstrap scenarios in its runnable group,
-without rotation.
+`EXPLORATION`. Iteration is zero. A scenario receives one deterministic bootstrap cohort and run ID.
+The active environment executes all still-missing bootstrap scenarios in its runnable group, without
+rotation.
 
 After the active environment's runs complete:
 
@@ -927,8 +924,8 @@ Given latest post-merge `M_(i-1)`:
 
 1. Build `ScenarioInputs.from(M_(i-1))`.
 2. Train a fresh Phase 2 artifact at `models/model-<six-digit-i>`.
-3. Require `ModelAcceptanceStatus.ACCEPTED`, deployment eligibility, exact scenario catalog, and
-   a dataset fingerprint derived from `M_(i-1)`.
+3. Require `ModelAcceptanceStatus.ACCEPTED`, deployment eligibility, exact scenario catalog, and a
+   dataset fingerprint derived from `M_(i-1)`.
 4. Load the model on its producing device and rescore all persisted carry entries.
 5. Read measured eligible/incomplete state from `M_(i-1)`.
 6. Select the runnable scenarios without advancing the rotation cursor.
@@ -991,8 +988,8 @@ single-writer protection, not a distributed filesystem lock guarantee.
 
 With `resume=false`, any existing complete Phase 3 checkpoint is an error; the runner never clears
 the workspace to simulate a fresh run. With `resume=true`, load the highest complete snapshot or
-initialize only when none exists. In both modes, unrelated or unexpected existing files are
-reported and preserved.
+initialize only when none exists. In both modes, unrelated or unexpected existing files are reported
+and preserved.
 
 A stop observed between offline stages returns `ClosedLoopResult` for the latest snapshot. A stop
 during a benchmark preserves the incomplete attempt and returns the existing `BENCHMARKING`
@@ -1109,11 +1106,11 @@ schema_version,benchmark_run_id,scenario_id,evidence_path,evidence_sha256,source
 ```
 
 `source` is `INITIAL`, `BOOTSTRAP`, or `ITERATION`. Every row points to one complete, strictly
-validated bundle under `evidence/`; the directory fingerprint, run ID, and scenario are
-recomputed. A run ID appears exactly once. `DataMerger.mergeV1` receives exactly the paths in this
-index, in run-ID order. A `pending-runs.csv` row marked `COMPLETE` must also have an identical index
-entry. This index is the authoritative corpus membership used to distinguish an expected
-crash-window publication from unexpected evidence.
+validated bundle under `evidence/`; the directory fingerprint, run ID, and scenario are recomputed.
+A run ID appears exactly once. `DataMerger.mergeV1` receives exactly the paths in this index, in
+run-ID order. A `pending-runs.csv` row marked `COMPLETE` must also have an identical index entry.
+This index is the authoritative corpus membership used to distinguish an expected crash-window
+publication from unexpected evidence.
 
 ### `carry-forward.csv`
 
@@ -1123,8 +1120,8 @@ Sorted by unsigned policy ID:
 schema_version,policy_id,first_seen_iteration,last_updated_iteration,valid_required_scenario_count,observed_required_scenario_count,pessimistic_missing_quality,maximum_missing_epistemic_stddev,maximum_missing_disagreement_range,weight_00_bits,...,weight_27_bits
 ```
 
-Summary values use `Double.toString` and are recomputed from the scenario rows during validation.
-An eligible policy may not appear.
+Summary values use `Double.toString` and are recomputed from the scenario rows during validation. An
+eligible policy may not appear.
 
 ### `carry-forward-scenarios.csv`
 
@@ -1147,8 +1144,8 @@ schema_version,iteration,run_kind,scenario_id,benchmark_run_id,candidate_cohort_
 ```
 
 `run_kind` is `BOOTSTRAP` or `NORMAL`; status is `PENDING` or `COMPLETE`. A normal pending set is
-exactly the selected rotation subset. Bootstrap may accumulate rows across sequential
-environments. All paths are workspace-relative.
+exactly the selected rotation subset. Bootstrap may accumulate rows across sequential environments.
+All paths are workspace-relative.
 
 ### Configuration fingerprint
 
@@ -1169,19 +1166,19 @@ Then emit one `name=value\n` line in Java record-component order for:
 6. every `ScenarioTrainingConfig` field followed by every `EvaluationThresholds` field;
 7. explicit reference overrides sorted by scenario;
 8. commit SHA and dirty-working-tree flag; and
-9. the bootstrap-policy file SHA-256 or supplied calibration-plan SHA-256, followed by every
-   initial schema-v1 observation-bundle directory fingerprint in benchmark-run-ID order.
+9. the bootstrap-policy file SHA-256 or supplied calibration-plan SHA-256, followed by every initial
+   schema-v1 observation-bundle directory fingerprint in benchmark-run-ID order.
 
 Encode integers in canonical decimal, long seeds as 16 lower-case hex, `float` values as eight
 raw-bit hex digits, `double` values as 16 raw-bit hex digits, booleans as lower-case, enums by
 `name()`, and strings as their validated ASCII form. Paths, resume flag, stop-file path, and active
-environment are excluded: they do not change scheduling semantics and the workspace is
-relocatable. Tests change every included component individually and require a different hash.
+environment are excluded: they do not change scheduling semantics and the workspace is relocatable.
+Tests change every included component individually and require a different hash.
 
 ### Artifact fingerprints
 
-For a regular file, use lower-case SHA-256 of its bytes. For an artifact directory, reject
-symlinks and hash:
+For a regular file, use lower-case SHA-256 of its bytes. For an artifact directory, reject symlinks
+and hash:
 
 ```text
 directory-artifact-v1
@@ -1227,9 +1224,9 @@ Write `iterations/iteration-<six digits>/schedule/` atomically with:
 ```
 
 Bootstrap uses the same five-file schema under
-`bootstrap/schedules/<scenario-canonical>/`: it has one `BOOTSTRAP` run, header-only predictions
-and admissions, and one budget row with zero fixed/carry/leader/audit and all `B` policies assigned
-to exploration. This avoids a second schedule format while making the absence of a model explicit.
+`bootstrap/schedules/<scenario-canonical>/`: it has one `BOOTSTRAP` run, header-only predictions and
+admissions, and one budget row with zero fixed/carry/leader/audit and all `B` policies assigned to
+exploration. This avoids a second schedule format while making the absence of a model explicit.
 `ScheduleCodec` validates the normal and bootstrap invariants separately.
 
 ### `runs.csv`
@@ -1250,8 +1247,8 @@ Sorted by scenario then schedule position:
 schema_version,scenario_id,benchmark_run_id,schedule_position,policy_id,roles,weight_00_bits,...,weight_27_bits
 ```
 
-It is the benchmark-ready machine-readable schedule and must not be confused with the old
-headerless vector file.
+It is the benchmark-ready machine-readable schedule and must not be confused with the old headerless
+vector file.
 
 ### `predictions.csv`
 
@@ -1712,20 +1709,20 @@ Retain `ClosedLoopRunner.StopRequested` as a stackless internal signal and add p
 making the constructor public.
 
 The no-argument `run()` remains a transitional Phase 3 property adapter and is marked
-`ROBUST_OPTIMIZER_PHASE5_CONFIG`. It may construct only a single active-environment required
-catalog from explicit environment ID plus configured absolute source counts, and it requires the
-strict bootstrap policy path and explicit commit SHA. It does not accept `cycle.seed`, old model,
-or old checkpoint inputs. Phase 5 replaces this adapter and documents final keys.
+`ROBUST_OPTIMIZER_PHASE5_CONFIG`. It may construct only a single active-environment required catalog
+from explicit environment ID plus configured absolute source counts, and it requires the strict
+bootstrap policy path and explicit commit SHA. It does not accept `cycle.seed`, old model, or old
+checkpoint inputs. Phase 5 replaces this adapter and documents final keys.
 
 `trainingRunId` uses the Phase 1 opaque-ID syntax
-`[a-z0-9][a-z0-9._-]{0,95}`. `initialObservationBundles` is allowed only with an explicit
-new-format calibration plan. On first initialization, validate each complete schema-v1 bundle,
-reject duplicate run identity, and atomically copy it to `evidence/<benchmarkRunId>/`. Include the
-sorted bundle fingerprints in the frozen configuration hash. This is a strict new-format seed
-path, not legacy import or format detection.
+`[a-z0-9][a-z0-9._-]{0,95}`. `initialObservationBundles` is allowed only with an explicit new-format
+calibration plan. On first initialization, validate each complete schema-v1 bundle, reject duplicate
+run identity, and atomically copy it to `evidence/<benchmarkRunId>/`. Include the sorted bundle
+fingerprints in the frozen configuration hash. This is a strict new-format seed path, not legacy
+import or format detection.
 
-Checkpoint operations remain under `io.euhedral_execution.training.checkpoint`. Immutable
-checkpoint state belongs to `checkpoint.data`, and lifecycle/source enums belong to
+Checkpoint operations remain under `io.euhedral_execution.training.checkpoint`. Immutable checkpoint
+state belongs to `checkpoint.data`, and lifecycle/source enums belong to
 `checkpoint.enums`:
 
 ```java
@@ -1816,9 +1813,9 @@ interface ClosedLoopServices {
 }
 ```
 
-The production implementation delegates directly to Phase 1, Phase 2, and `BenchmarkRunner`.
-There is no public plugin mechanism. The checkpoint codec is strict for this one schema, not a
-general CSV or version registry.
+The production implementation delegates directly to Phase 1, Phase 2, and `BenchmarkRunner`. There
+is no public plugin mechanism. The checkpoint codec is strict for this one schema, not a general CSV
+or version registry.
 
 ## Data flow and dependency boundaries
 
@@ -1924,9 +1921,9 @@ without a separate happens-before argument.
   model on its producing device, and the persisted schedule prevents a resume from reranking it.
 - Raw policy weights and metadata seeds use exact bits. Derived CSV doubles use
   `Double.toString`.
-- No output ordering relies on `HashMap`, filesystem enumeration, thread completion, locale,
-  current time, or random UUID. UUIDs may distinguish temporary directories only and never enter
-  artifact bytes or semantic IDs.
+- No output ordering relies on `HashMap`, filesystem enumeration, thread completion, locale, current
+  time, or random UUID. UUIDs may distinguish temporary directories only and never enter artifact
+  bytes or semantic IDs.
 - Benchmark timestamps and measurements are intentionally nondeterministic evidence. Given the same
   evidence bundles, merger outputs and subsequent schedules are deterministic.
 
@@ -1975,8 +1972,8 @@ Implement in this dependency order.
    `OptimizationCorpusReader.java` and `BootstrapPolicyCsv.java` under `scheduling/io`. Strictly
    reconstruct the Phase 1 records without changing Phase 1 files or mathematics.
 7. Add `CandidateBudgetConfig.java` under `scheduling/config`, `BudgetAllocation.java` under
-   `scheduling/data`, and `BudgetAllocator.java` under `scheduling`. Share one package-private
-   exact integer Hamilton helper with exploration and score-band allocation.
+   `scheduling/data`, and `BudgetAllocator.java` under `scheduling`. Share one package-private exact
+   integer Hamilton helper with exploration and score-band allocation.
 8. Add `CoverageState.java` under `scheduling/enums`, `CarryScenarioState.java` and
    `CarryForwardEntry.java` under `scheduling/data`, and `CarryForwardQueue.java` under
    `scheduling` with admission, rescore, coverage reconciliation, priority, attempts, and capped
@@ -2127,13 +2124,13 @@ unless an existing opt-in Phase 2 integration test does so.
   row, carry row, prediction, attempt, and pending run;
 - changes `config_sha256` when every included config component is changed individually;
 - permits active-environment/path relocation without changing the config hash;
-- rejects invalid stage transitions, missing stage-required artifacts, bad hashes, an eligible
-  queue policy, incomplete scenario grids, duplicate/unindexed evidence, non-contiguous revisions,
-  and a missing `COMPLETE`;
+- rejects invalid stage transitions, missing stage-required artifacts, bad hashes, an eligible queue
+  policy, incomplete scenario grids, duplicate/unindexed evidence, non-contiguous revisions, and a
+  missing `COMPLETE`;
 - ignores incomplete temporary snapshots but rejects corruption in the highest complete snapshot;
   and
-- proves a directory fingerprint is path-order independent and changes for filename, length, or
-  byte changes.
+- proves a directory fingerprint is path-order independent and changes for filename, length, or byte
+  changes.
 
 ### Native benchmark tests
 
@@ -2163,10 +2160,10 @@ unless an existing opt-in Phase 2 integration test does so.
 1. Bootstrap on environment A, stop awaiting environment B, resume on B, freeze one common anchor
    plan, and create `merge-000000`.
 2. Run an uninterrupted two-iteration loop and a loop interrupted:
-   - after model publication;
-   - after schedule publication;
-   - after the first of two scenario bundles; and
-   - after final bundle publication but before checkpoint.
+    - after model publication;
+    - after schedule publication;
+    - after the first of two scenario bundles; and
+    - after final bundle publication but before checkpoint.
 3. Assert every resumed case has byte-identical iteration schedules, final merge datasets/ranking,
    carry queue semantics, Sobol cursor, and rotation cursors to the uninterrupted case.
 4. Assert a complete expected bundle is adopted but an unexpected complete run is rejected.
@@ -2260,8 +2257,8 @@ rg -n "input/merger|state\\.properties|latest-model|latest-training-data|iterati
 
 Both searches must return no new-path matches. Matches inside the two marked
 `training/legacy/PooledSequenceFinder.java` and
-`training/legacy/PooledBenchmarkRunner.java` compatibility classes are expected and are not
-included in these search roots.
+`training/legacy/PooledBenchmarkRunner.java` compatibility classes are expected and are not included
+in these search roots.
 
 Also inspect:
 
@@ -2357,18 +2354,18 @@ Implementation verification performed on 2026-07-28.
 
 Result:
 
-- Prompt 3C could not verify the full Phase 3 acceptance surface because Prompt 3B remains a
-  partial implementation. The restart, checkpoint, schedule-codec, native-v1 benchmark,
-  closed-loop adoption, and final post-merge paths required by this blueprint are absent.
+- Prompt 3C could not verify the full Phase 3 acceptance surface because Prompt 3B remains a partial
+  implementation. The restart, checkpoint, schedule-codec, native-v1 benchmark, closed-loop
+  adoption, and final post-merge paths required by this blueprint are absent.
 - Fixed only blueprint-settled defects in the implemented subset:
-  - `ScoreBandSampler` now exposes the Phase 3 constructor shape with explicit iteration and
-    overflow capacity, and includes the iteration in the score-band sampling-key hash material.
-  - `ScoreBandSamplerTest` now asserts iteration-specific deterministic selection for the
-    implemented score-band sampler.
-  - `CarryForwardEntry` now rejects carry scenario maps whose key does not match the contained
-    scenario state.
-  - `BenchmarkOutputReader` now declares `getLines()` explicitly; relying on the Lombok-generated
-    accessor did not compile after a clean recompilation.
+    - `ScoreBandSampler` now exposes the Phase 3 constructor shape with explicit iteration and
+      overflow capacity, and includes the iteration in the score-band sampling-key hash material.
+    - `ScoreBandSamplerTest` now asserts iteration-specific deterministic selection for the
+      implemented score-band sampler.
+    - `CarryForwardEntry` now rejects carry scenario maps whose key does not match the contained
+      scenario state.
+    - `BenchmarkOutputReader` now declares `getLines()` explicitly; relying on the Lombok-generated
+      accessor did not compile after a clean recompilation.
 
 Commands run:
 
@@ -2412,18 +2409,18 @@ rg -n "input/merger|state\.properties|latest-model|latest-training-data|iteratio
 Acceptance-criteria status:
 
 - Verified for the implemented subset:
-  - deterministic `BenchmarkFrame` routing overload;
-  - score-band fixed-band allocation and deterministic iteration-specific hash-priority selection;
-  - full training module regression suite after the subset fixes.
+    - deterministic `BenchmarkFrame` routing overload;
+    - score-band fixed-band allocation and deterministic iteration-specific hash-priority selection;
+    - full training module regression suite after the subset fixes.
 - Not verifiable because required Phase 3 implementation is absent:
-  - restart equivalence;
-  - checkpoint snapshot schema, strict validation, and recovery/adoption;
-  - exact schedule codec and stable run/cohort/trial/source seed reconstruction;
-  - per-scenario budget reports from `CandidateScheduler`;
-  - carry-forward persistence across restart/model changes and reconciliation from post-merge
-    coverage;
-  - complete native-v1 benchmark bundle publication and paused evidence writes;
-  - final iteration post-merge and closed-loop rejection of pooled files/models/checkpoints.
+    - restart equivalence;
+    - checkpoint snapshot schema, strict validation, and recovery/adoption;
+    - exact schedule codec and stable run/cohort/trial/source seed reconstruction;
+    - per-scenario budget reports from `CandidateScheduler`;
+    - carry-forward persistence across restart/model changes and reconciliation from post-merge
+      coverage;
+    - complete native-v1 benchmark bundle publication and paused evidence writes;
+    - final iteration post-merge and closed-loop rejection of pooled files/models/checkpoints.
 
 Environmental and workspace limits:
 
@@ -2450,16 +2447,17 @@ Implemented:
   while retaining pooled-v0 adapter records only for the legacy class.
 - Added `SchedulerSeeds`, `PredictedPolicyRanker`, and candidate-generation request/result/config
   records.
-- Added scheduling records and helpers for optimization corpus view, bootstrap vectors,
-  budgeted schedule preparation/completion, bootstrap scheduling, schedule CSV writing/reading,
-  scenario rotation, and carry queue static APIs.
-- Added benchmark configuration and request records and a typed `BenchmarkRunner.runV1` that emits strict
-  schema-v1 observation bundles through `ObservationBundleWriter` and validates them with
+- Added scheduling records and helpers for optimization corpus view, bootstrap vectors, budgeted
+  schedule preparation/completion, bootstrap scheduling, schedule CSV writing/reading, scenario
+  rotation, and carry queue static APIs.
+- Added benchmark configuration and request records and a typed `BenchmarkRunner.runV1` that emits
+  strict schema-v1 observation bundles through `ObservationBundleWriter` and validates them with
   `ObservationBundleReader.stream`.
 - Added checkpoint state under `checkpoint/data`, lifecycle/source enums under
-  `checkpoint/enums`, and artifact fingerprinting, workspace locking, and atomic snapshot
-  directory writing/loading under `training/checkpoint`.
-- Added typed `config.ClosedLoopConfig`, `data.ClosedLoopResult`, and `ClosedLoopServices`, and replaced
+  `checkpoint/enums`, and artifact fingerprinting, workspace locking, and atomic snapshot directory
+  writing/loading under `training/checkpoint`.
+- Added typed `config.ClosedLoopConfig`, `data.ClosedLoopResult`, and `ClosedLoopServices`, and
+  replaced
   `ClosedLoopRunner`'s new path with a typed checkpoint-owning entry point. The no-arg adapter now
   rejects use until Phase 5 supplies final configuration.
 - Updated `Runner` so transitional pooled commands call the legacy classes explicitly.
@@ -2534,8 +2532,8 @@ git diff --check
 Acceptance evidence:
 
 - Pooled-v0 classes and old model/file dependencies are isolated outside the new-path search roots.
-- Score-band deterministic selection, deterministic `BenchmarkFrame` routing, Phase 1 merger,
-  Phase 2 learning, and existing optimizer regression tests pass.
+- Score-band deterministic selection, deterministic `BenchmarkFrame` routing, Phase 1 merger, Phase
+  2 learning, and existing optimizer regression tests pass.
 - Checkpoint, schedule, benchmark, and closed-loop APIs now compile and expose the blueprint-settled
   typed contracts.
 
@@ -2561,9 +2559,9 @@ Rename-only cleanup performed on 2026-07-29:
 - Removed phase-number prefixes from seed, identity, configuration-fingerprint, directory-
   fingerprint, and benchmark lattice-name strings. The settled material and ordering are otherwise
   unchanged.
-- Sorted configuration, immutable data, enums, and I/O types into the `config`, `data`, `enums`,
-  and `io` subpackages documented above. Algorithm ownership, visibility, memory behavior,
-  concurrency semantics, and mathematical precision are unchanged.
+- Sorted configuration, immutable data, enums, and I/O types into the `config`, `data`, `enums`, and
+  `io` subpackages documented above. Algorithm ownership, visibility, memory behavior, concurrency
+  semantics, and mathematical precision are unchanged.
 - Updated this blueprint and the Phase 3 conformance audit to use the final Phase 1 and Phase 3
   domain names, including `VectorStatistics`, `PolicyComparator`, `ScenarioInputs`,
   `CanonicalCsv`, and `SchedulingFixtures`.
@@ -2580,12 +2578,12 @@ mvn -B -pl euhedral-training test
 
 ### Repackage compatibility addendum (2026-07-29)
 
-The Phase 3 names remain valid at the locations stated by its cleanup record: algorithm classes
-are in `training.optimization`, `training.scheduling`, and `training.checkpoint`; their immutable
+The Phase 3 names remain valid at the locations stated by its cleanup record: algorithm classes are
+in `training.optimization`, `training.scheduling`, and `training.checkpoint`; their immutable
 records, configuration, enums, and codecs are in the corresponding `data`, `config`, `enums`, and
 `io` subpackages. `CanonicalCsv` is
 `io.euhedral_execution.training.data.io.CanonicalCsv`, `SchedulingFixtures` is
 `io.euhedral_execution.training.scheduling.fixtures.SchedulingFixtures`, and the package-private
-`ClosedLoopServices`, `ClosedLoopRunner`, `BenchmarkRunner`, and `SequenceFinder` remain in the
-root `io.euhedral_execution.training` package. No Phase 4-6 consumer should use pre-cleanup
+`ClosedLoopServices`, `ClosedLoopRunner`, `BenchmarkRunner`, and `SequenceFinder` remain in the root
+`io.euhedral_execution.training` package. No Phase 4-6 consumer should use pre-cleanup
 phase-prefixed imports.

@@ -1,8 +1,19 @@
 {
   "schemaVersion": 1,
   "sourceRules": {
-    "compiledExtensions": [".c", ".cc", ".cpp", ".cxx"],
-    "passiveExtensions": [".h", ".hh", ".hpp", ".hxx", ".inc"],
+    "compiledExtensions": [
+      ".c",
+      ".cc",
+      ".cpp",
+      ".cxx"
+    ],
+    "passiveExtensions": [
+      ".h",
+      ".hh",
+      ".hpp",
+      ".hxx",
+      ".inc"
+    ],
     "recursive": true,
     "followSymlinks": false
   },
@@ -10,21 +21,36 @@
     {
       "id": "linux",
       "runtimeAliases": [
-        {"match": "exact", "value": "linux"}
+        {
+          "match": "exact",
+          "value": "linux"
+        }
       ]
     },
     {
       "id": "macos",
       "runtimeAliases": [
-        {"match": "exact", "value": "darwin"},
-        {"match": "exact", "value": "mac os x"},
-        {"match": "exact", "value": "macos"}
+        {
+          "match": "exact",
+          "value": "darwin"
+        },
+        {
+          "match": "exact",
+          "value": "mac os x"
+        },
+        {
+          "match": "exact",
+          "value": "macos"
+        }
       ]
     },
     {
       "id": "windows",
       "runtimeAliases": [
-        {"match": "prefix", "value": "windows"}
+        {
+          "match": "prefix",
+          "value": "windows"
+        }
       ]
     }
   ],
@@ -32,7 +58,11 @@
     {
       "id": "x64",
       "zig": "x86_64",
-      "runtimeAliases": ["amd64", "x86-64", "x86_64"],
+      "runtimeAliases": [
+        "amd64",
+        "x86-64",
+        "x86_64"
+      ],
       "elfMachine": "EM_X86_64",
       "peMachine": "IMAGE_FILE_MACHINE_AMD64",
       "machoCpu": "X86_64"
@@ -40,7 +70,10 @@
     {
       "id": "arm64",
       "zig": "aarch64",
-      "runtimeAliases": ["aarch64", "arm64"],
+      "runtimeAliases": [
+        "aarch64",
+        "arm64"
+      ],
       "elfMachine": "EM_AARCH64",
       "peMachine": "IMAGE_FILE_MACHINE_ARM64",
       "machoCpu": "ARM64"
@@ -50,21 +83,30 @@
     {
       "id": "linux-jni",
       "os": "linux",
-      "sourceRoots": ["common", "linux"],
+      "sourceRoots": [
+        "common",
+        "linux"
+      ],
       "outputStem": "linux_jni",
       "extension": "so"
     },
     {
       "id": "macos-jni",
       "os": "macos",
-      "sourceRoots": ["common", "macos"],
+      "sourceRoots": [
+        "common",
+        "macos"
+      ],
       "outputStem": "osx_jni",
       "extension": "dylib"
     },
     {
       "id": "windows-jni",
       "os": "windows",
-      "sourceRoots": ["common", "windows"],
+      "sourceRoots": [
+        "common",
+        "windows"
+      ],
       "outputStem": "windows_jni",
       "extension": "dll"
     }
@@ -73,22 +115,40 @@
     {
       "id": "linux-glibc",
       "format": "elf",
-      "allowedLibraries": ["libc.so.6"],
-      "forbiddenLibraryFragments": ["libc++", "libgcc_s", "libstdc++"],
+      "allowedLibraries": [
+        "libc.so.6"
+      ],
+      "forbiddenLibraryFragments": [
+        "libc++",
+        "libgcc_s",
+        "libstdc++"
+      ],
       "maximumSymbolVersion": "GLIBC_2.17"
     },
     {
       "id": "linux-musl",
       "format": "elf",
-      "allowedLibraries": ["libc.so"],
-      "forbiddenLibraryFragments": ["libc++", "libgcc_s", "libstdc++"],
+      "allowedLibraries": [
+        "libc.so"
+      ],
+      "forbiddenLibraryFragments": [
+        "libc++",
+        "libgcc_s",
+        "libstdc++"
+      ],
       "maximumSymbolVersion": "none"
     },
     {
       "id": "macos-11",
       "format": "macho",
-      "allowedLibraries": ["/usr/lib/libSystem.B.dylib"],
-      "forbiddenLibraryFragments": ["CoreFoundation", "libc++", "libobjc"],
+      "allowedLibraries": [
+        "/usr/lib/libSystem.B.dylib"
+      ],
+      "forbiddenLibraryFragments": [
+        "CoreFoundation",
+        "libc++",
+        "libobjc"
+      ],
       "installNameTemplate": "@rpath/{outputFilename}",
       "minimumDeploymentTarget": "11.0"
     },
@@ -100,7 +160,12 @@
         "api-ms-win-crt-heap-l1-1-0.dll",
         "api-ms-win-crt-runtime-l1-1-0.dll"
       ],
-      "forbiddenLibraryFragments": ["libc++", "libgcc", "libstdc++", "stdio"],
+      "forbiddenLibraryFragments": [
+        "libc++",
+        "libgcc",
+        "libstdc++",
+        "stdio"
+      ],
       "minimumRuntime": "windows-10"
     }
   ],
