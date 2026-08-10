@@ -1,6 +1,7 @@
 plugins {
     `java-library`
     `maven-publish`
+    id("com.palantir.java-format")
     signing
 }
 
@@ -136,4 +137,3 @@ tasks.test {
         excludeTags("integration")
     }
 }
-
