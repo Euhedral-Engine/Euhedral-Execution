@@ -1,27 +1,48 @@
 package io.euhedral_execution.core.control_plane;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.euhedral_execution.core.config.CloneConfig;
 import io.euhedral_execution.core.config.FragmentActionPicker;
 import io.euhedral_execution.core.config.FragmentConfig;
+import io.euhedral_execution.core.flow_control.LatticeEdge;
+import io.euhedral_execution.core.flow_control.LatticeVertex;
+import io.euhedral_execution.core.flow_control.RoutingPolicy;
+import io.euhedral_execution.core.flow_control.UpstreamQueue;
+import io.euhedral_execution.core.frames.AbstractFrame;
+import io.euhedral_execution.core.frames.BenchmarkFrame;
+import io.euhedral_execution.core.generics.LatticeReceiver;
+import io.euhedral_execution.core.generics.LatticeSource;
+import io.euhedral_execution.core.ingest.ArrayIngestSink;
+import io.euhedral_execution.core.metrics.MetricsAggregator;
 import io.euhedral_execution.core.utils.FlowThread;
 import io.euhedral_execution.hardware_utils.PinnedThreadExecutor;
 import io.euhedral_execution.hardware_utils.SystemInfo;
 import io.euhedral_execution.hardware_utils.common.SystemUtilization;
+import io.micrometer.core.instrument.DistributionSummary;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Duration;
+import java.util.Arrays;
 import java.util.BitSet;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.LockSupport;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Isolated;
 import org.mockito.Mockito;
 
 @Isolated
 class ControlPlaneFragmentThreadTest {
+
+    private static final Duration TIMEOUT = Duration.ofSeconds(2);
 
     @Test
     void shouldRunWhenTheCpuExecutorWasCreatedWithRegularThreads() throws Exception {
@@ -101,5 +122,213 @@ class ControlPlaneFragmentThreadTest {
             assertTrue(fragment.getAdaptiveBatchCap() >= 2L);
             executor.close();
         }
+    }
+
+    @Test
+    void normalModeDoesNotConsultTheActionPicker() {
+        FailOnUseActionPicker actionPicker = new FailOnUseActionPicker();
+        FragmentConfig defaults = FragmentConfig.ofDefaults();
+        FragmentConfig config = new FragmentConfig(
+                        null,
+                        defaults.cacheConfig(),
+                        actionPicker,
+                        defaults.maxBatchSize(),
+                        false,
+                        defaults.metricPrefix(),
+                        defaults.registry())
+                .clone(cloneConfig());
+
+        BenchmarkFrame ordered = new BenchmarkFrame(1L);
+        BenchmarkFrame unordered = new BenchmarkFrame(2L);
+        unordered.randomizeHash(3L);
+        ArrayIngestSink sink = new ArrayIngestSink(new AbstractFrame[] {ordered, unordered});
+        CountingReceiver receiver = new CountingReceiver();
+        ControlPlaneFragment fragment = new ControlPlaneFragment(config);
+        LatticeVertex distributor = connect(fragment);
+
+        try {
+            fragment.output().addDownstream(receiver);
+            fragment.start();
+            Awaitility.await().atMost(TIMEOUT).until(fragment::ready);
+
+            distributor.ingest(sink.getDelegate());
+
+            Awaitility.await().atMost(TIMEOUT).until(() -> receiver.received.get() == 2);
+            assertNull(receiver.error.get());
+        } finally {
+            sink.complete();
+            fragment.close();
+            distributor.close();
+            PinnedThreadExecutor.closeAll();
+        }
+    }
+
+    @Test
+    void benchmarkModeRetainsVectorHaltAndResume() {
+        FragmentActionPicker actionPicker = new FragmentActionPicker(new double[28]);
+        ControlPlaneFragment fragment = new ControlPlaneFragment(
+                FragmentConfig.ofBenchmark(actionPicker).clone(cloneConfig()));
+        LatticeVertex distributor = connect(fragment);
+        ArrayIngestSink sink = new ArrayIngestSink(BenchmarkFrame.generate(2, false, 7L, 11L));
+        CountingReceiver receiver = new CountingReceiver();
+
+        try {
+            fragment.output().addDownstream(receiver);
+            fragment.start();
+            Awaitility.await().atMost(TIMEOUT).until(fragment::ready);
+            distributor.ingest(sink.getDelegate());
+
+            LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(50));
+            assertEquals(0, receiver.received.get());
+
+            double[] activeWeights = new double[28];
+            Arrays.fill(activeWeights, 1.0);
+            actionPicker.setWeights(activeWeights);
+
+            Awaitility.await().atMost(TIMEOUT).until(() -> receiver.received.get() == 2);
+            assertNull(receiver.error.get());
+        } finally {
+            sink.complete();
+            fragment.close();
+            distributor.close();
+            PinnedThreadExecutor.closeAll();
+        }
+    }
+
+    @Test
+    void normalModeReportsPositiveLatencyAndThroughput() {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        FragmentConfig config =
+                FragmentConfig.ofDefaults("fragment-cycle-test", registry).clone(cloneConfig());
+        ControlPlaneFragment fragment = new ControlPlaneFragment(config);
+        LatticeVertex distributor = connect(fragment);
+        ArrayIngestSink sink = new ArrayIngestSink(BenchmarkFrame.generate(64, false, 13L, 17L));
+        CountingReceiver receiver = new CountingReceiver();
+
+        try {
+            fragment.output().addDownstream(receiver);
+            fragment.start();
+            Awaitility.await().atMost(TIMEOUT).until(fragment::ready);
+            distributor.ingest(sink.getDelegate());
+
+            Awaitility.await().atMost(TIMEOUT).until(() -> receiver.received.get() == 64);
+
+            DistributionSummary latency = registry.find(MetricsAggregator.metricName(
+                            "fragment-cycle-test", MetricsAggregator.LATENCY_SUMMARY_SUFFIX))
+                    .summary();
+            DistributionSummary throughput = registry.find(MetricsAggregator.metricName(
+                            "fragment-cycle-test", MetricsAggregator.THROUGHPUT_SUMMARY_SUFFIX))
+                    .summary();
+            Awaitility.await().atMost(TIMEOUT).until(() -> latency.count() > 0 && throughput.count() > 0);
+
+            assertTrue(Double.isFinite(latency.totalAmount()));
+            assertTrue(latency.totalAmount() > 0);
+            assertTrue(Double.isFinite(throughput.totalAmount()));
+            assertTrue(throughput.totalAmount() > 0);
+            assertNull(receiver.error.get());
+        } finally {
+            sink.complete();
+            fragment.close();
+            distributor.close();
+            registry.close();
+            PinnedThreadExecutor.closeAll();
+        }
+    }
+
+    /// Returns a clone configuration for the first CPU available to the test process.
+    private static CloneConfig cloneConfig() {
+        int cpu = SystemInfo.getCpuSet().nextSetBit(0);
+        if (cpu < 0) {
+            throw new IllegalStateException("No CPU is available for the unit test");
+        }
+
+        BitSet cpus = new BitSet();
+        cpus.set(cpu);
+        return new CloneConfig("fragment-cycle-test", SystemInfo.getCpuInfo(cpu).core(), cpus);
+    }
+
+    /// Connects the fragment behind the cached single-route topology used in production.
+    private static LatticeVertex connect(ControlPlaneFragment fragment) {
+        TestDistributor.resetSharedRoutingState();
+        LatticeVertex distributor = new TestDistributor();
+        LatticeEdge handle = new LatticeEdge(distributor.getDrainFlag());
+        BitSet active = new BitSet(1);
+        active.set(0);
+
+        distributor.setDrain(true);
+        assertTrue(distributor.setDownstreamMapping(active, new LatticeEdge[] {handle}));
+        distributor.setDrain(false);
+        fragment.input(handle);
+        return distributor;
+    }
+
+    private static final class TestDistributor extends LatticeVertex {
+
+        private TestDistributor() {
+            super("fragment-cycle-test", 1, RoutingFunction.DEFAULT, 256, RoutingPolicy.ANYWHERE);
+        }
+
+        /// Restores the isolated test's JVM-wide upstream registry to an empty state.
+        private static void resetSharedRoutingState() {
+            UpstreamQueue.UP_QUEUE.remove();
+            UPSTREAM_COUNT.set(0L);
+            THREAD_COUNT.set(0L);
+            for (int i = 0; i < UPSTREAMS.length; i++) {
+                if (UPSTREAMS[i] != null) {
+                    UPSTREAMS[i].clear();
+                }
+                ACTIVE_PARTITIONS.set(i, 0L);
+            }
+        }
+    }
+
+    private static final class FailOnUseActionPicker extends FragmentActionPicker {
+
+        private FailOnUseActionPicker() {
+            super(rejectingWeights());
+        }
+
+        @Override
+        public boolean halted() {
+            throw new IllegalStateException("Normal mode consulted the action picker");
+        }
+
+        @Override
+        public void normalize(double[] inputs) {
+            throw new IllegalStateException("Normal mode consulted the action picker");
+        }
+
+        @Override
+        public boolean performAction(Action action, double[] inputs) {
+            throw new IllegalStateException("Normal mode consulted the action picker");
+        }
+
+        private static double[] rejectingWeights() {
+            double[] weights = new double[28];
+            Arrays.fill(weights, -1.0);
+            return weights;
+        }
+    }
+
+    private static final class CountingReceiver implements LatticeReceiver {
+
+        private final AtomicInteger received = new AtomicInteger();
+        private final AtomicReference<Throwable> error = new AtomicReference<>();
+
+        @Override
+        public void push(AbstractFrame frame) {
+            this.received.incrementAndGet();
+        }
+
+        @Override
+        public void onComplete() {}
+
+        @Override
+        public void onError(Throwable throwable) {
+            this.error.set(throwable);
+        }
+
+        @Override
+        public void addUpstream(LatticeSource upstream) {}
     }
 }

@@ -11,5 +11,6 @@ else
 fi
 
 exec "$JAVA_COMMAND" \
+  -Dlogback.configurationFile=benchmark-logback.xml \
   -cp "$BENCHMARK_DIR/euhedral-benchmark.jar:$BENCHMARK_DIR/lib/*" \
   io.euhedral_execution.benchmarks.BenchRunner "$@"

@@ -15,7 +15,7 @@ tasks.named<Jar>("jar") {
     }
 }
 
-val copyRuntimeDependencies = tasks.register<Copy>("copyRuntimeDependencies") {
+val copyRuntimeDependencies = tasks.register<Sync>("copyRuntimeDependencies") {
     dependsOn(tasks.named("jar"))
 
     from(configurations.runtimeClasspath)
@@ -52,6 +52,11 @@ tasks.named<ProcessResources>("processResources") {
     }
 }
 
+tasks.withType<Test>().configureEach {
+    systemProperty("AllEuhedralLogs", "ERROR")
+    systemProperty("logback.configurationFile", "benchmark-logback.xml")
+}
+
 dependencies {
     api(project(":euhedral-core"))
     api(project(":euhedral-data-structures"))
@@ -64,7 +69,8 @@ dependencies {
     api(libs.org.hdrhistogram.hdrhistogram)
     api(libs.org.jspecify.jspecify)
     api(libs.org.slf4j.slf4j.api)
-    runtimeOnly(libs.org.slf4j.slf4j.simple)
+    runtimeOnly(libs.ch.qos.logback.logback.classic)
+    testImplementation(libs.org.junit.jupiter.junit.jupiter)
     annotationProcessor(libs.org.openjdk.jmh.jmh.generator.annprocess)
 }
 
