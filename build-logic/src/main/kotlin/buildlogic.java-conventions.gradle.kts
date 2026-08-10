@@ -1,3 +1,5 @@
+import com.diffplug.gradle.spotless.SpotlessTask
+
 plugins {
     `java-library`
     `maven-publish`
@@ -18,6 +20,17 @@ spotless {
     java {
         palantirJavaFormat("2.96.0")
     }
+}
+
+val cleanTaskPaths = rootProject.subprojects.map { "${it.path}:clean" }
+
+tasks.withType<SpotlessTask>().configureEach {
+    // Each project's clean task closes Spotless' shared formatter classloaders. Keep those
+    // parallel clean tasks from racing with formatter tasks in other projects.
+    mustRunAfter(cleanTaskPaths)
+
+    // Do not restore lint failures cached before the cross-project clean barrier was added.
+    inputs.property("euhedralCleanBarrierVersion", 1)
 }
 
 dependencies {
