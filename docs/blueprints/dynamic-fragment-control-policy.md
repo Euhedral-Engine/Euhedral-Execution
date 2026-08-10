@@ -427,3 +427,41 @@ flow tests remain green, `mise exec -- gradle :euhedral-core:test` passes, bench
 the payoff gate, `git diff --check` is clean, stale threshold/target names are absent from production
 code, and completion notes are appended here with commands, results, hardware, and any environmental
 limits.
+
+## Implementation Attempt: Returned to Design
+
+Date: 2026-08-10.
+
+The bounded controller was implemented through the focused Core and diagnostic benchmark stages,
+then removed after the diagnostic hit this blueprint's explicit stable-workload oscillation and
+inconsistent-convergence stop condition. No constants were retuned and no coordination mechanism
+was added.
+
+Evidence before removal:
+
+- `mise exec -- gradle :euhedral-core:test --tests
+  io.euhedral_execution.core.control_plane.FragmentControlPolicyTest --tests
+  io.euhedral_execution.core.control_plane.GlobalStateTest --tests
+  io.euhedral_execution.core.control_plane.ControlPlaneFragmentTest --tests
+  io.euhedral_execution.core.control_plane.ControlPlaneFragmentThreadTest --tests
+  io.euhedral_execution.core.control_plane.ControlPlaneShardTest` passed 42 focused tests.
+- `mise exec -- gradle :benchmarks:assemble` passed.
+- `benchmarks/build/bin/euhedral-benchmarks core-dynamic-policy` ran three one-shot forks. Fork 1
+  settled direct -> staged -> direct, with staged convergence in 0.857 seconds and return to direct
+  in 2.723 seconds. Fork 2 ended the cheap/scarce/cheap phases staged -> direct -> staged and
+  recorded three committed changes. Fork 3 reached staged in 0.658 seconds but did not return to
+  direct within the five-second phase timeout.
+- The three-fork JMH single-shot total was 7,247.671 ms/op mean, with a 28,558.092 ms/op 99.9
+  percent error interval. Phase throughput varied too widely to support a payoff claim.
+
+The run used Linux x86-64 on one Intel Core i9-14900K socket with 24 physical cores and 32 logical
+CPUs. JMH reported OpenJDK 21.0.11 with three forks and the launcher flags
+`-XX:+UseThreadPriorities`, `--enable-native-access=ALL-UNNAMED`, and the existing internal-package
+exports. Gradle verification used the mise-selected OpenJDK 21.0.2 toolchain.
+
+Result: the first implementation did not meet the convergence gate, so the scarce-work gain and
+existing-benchmark regression gates were not evaluated. The experimental diff also exceeded 1,400
+tracked insertions before counting the new benchmark and controller fixture, which is too much
+runtime and maintenance surface for an unproven payoff. A future attempt must return to the mode
+and batch-probe interaction in design; implementation must not guess by tuning windows, margins,
+work tokens, or adding coordination.
