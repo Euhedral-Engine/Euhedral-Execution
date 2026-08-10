@@ -3,6 +3,7 @@ package io.euhedral_execution.core.control_plane;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.euhedral_execution.core.config.CloneConfig;
@@ -31,9 +32,12 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.LockSupport;
+import java.util.function.Consumer;
+import java.util.function.Function;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Isolated;
@@ -163,32 +167,111 @@ class ControlPlaneFragmentThreadTest {
         }
     }
 
+    /// Verifies owner-local cached work is delivered before newly available direct upstream work.
     @Test
-    void benchmarkModeRetainsVectorHaltAndResume() {
-        FragmentActionPicker actionPicker = new FragmentActionPicker(new double[28]);
-        ControlPlaneFragment fragment = new ControlPlaneFragment(
-                FragmentConfig.ofBenchmark(actionPicker).clone(cloneConfig()));
+    void loopAlwaysExecutesLocalCacheFirst() {
+        ControlPlaneFragment fragment =
+                new ControlPlaneFragment(FragmentConfig.ofDefaults().clone(cloneConfig()));
         LatticeVertex distributor = connect(fragment);
-        ArrayIngestSink sink = new ArrayIngestSink(BenchmarkFrame.generate(2, false, 7L, 11L));
+        BenchmarkFrame local = BenchmarkFrame.generate(1, false, 31L, 37L)[0];
+        TrackingSource source = new TrackingSource(BenchmarkFrame.generate(1, false, 41L, 43L));
+        CountingReceiver receiver = new CountingReceiver();
+
+        try {
+            fragment.output().addDownstream(receiver);
+            fragment.push(local);
+            assertEquals(1L, fragment.getLocalCacheCount());
+
+            fragment.start();
+            Awaitility.await().atMost(TIMEOUT).until(fragment::ready);
+            distributor.ingest(source);
+
+            Awaitility.await().atMost(TIMEOUT).until(() -> receiver.received.get() == 2);
+            assertSame(local, receiver.first.get());
+            assertNull(receiver.error.get());
+        } finally {
+            source.complete();
+            fragment.close();
+            distributor.close();
+            PinnedThreadExecutor.closeAll();
+        }
+    }
+
+    /// Verifies low-cost unordered work uses direct pulls without issuing eager requests.
+    @Test
+    void loopDirectlyPullsLowCostWorkWithoutRequesting() {
+        ControlPlaneFragment fragment =
+                new ControlPlaneFragment(FragmentConfig.ofDefaults().clone(cloneConfig()));
+        LatticeVertex distributor = connect(fragment);
+        TrackingSource source = new TrackingSource(BenchmarkFrame.generate(8, false, 47L, 53L));
         CountingReceiver receiver = new CountingReceiver();
 
         try {
             fragment.output().addDownstream(receiver);
             fragment.start();
             Awaitility.await().atMost(TIMEOUT).until(fragment::ready);
-            distributor.ingest(sink.getDelegate());
+            distributor.ingest(source);
 
-            LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(50));
-            assertEquals(0, receiver.received.get());
-
-            double[] activeWeights = new double[28];
-            Arrays.fill(activeWeights, 1.0);
-            actionPicker.setWeights(activeWeights);
-
-            Awaitility.await().atMost(TIMEOUT).until(() -> receiver.received.get() == 2);
+            Awaitility.await().atMost(TIMEOUT).until(() -> receiver.received.get() == 8);
+            assertEquals(8, source.directFrames.get());
+            assertEquals(0, source.requestCalls.get());
             assertNull(receiver.error.get());
         } finally {
-            sink.complete();
+            source.complete();
+            fragment.close();
+            distributor.close();
+            PinnedThreadExecutor.closeAll();
+        }
+    }
+
+    /// Verifies ordered work that stops direct pulls is requested into the local execution path.
+    @Test
+    void loopRequestsOrderedWorkAfterDirectPullStops() {
+        ControlPlaneFragment fragment =
+                new ControlPlaneFragment(FragmentConfig.ofDefaults().clone(cloneConfig()));
+        LatticeVertex distributor = connect(fragment);
+        TrackingSource source = new TrackingSource(BenchmarkFrame.generate(4, true, 59L, 61L));
+        CountingReceiver receiver = new CountingReceiver();
+
+        try {
+            fragment.output().addDownstream(receiver);
+            fragment.start();
+            Awaitility.await().atMost(TIMEOUT).until(fragment::ready);
+            distributor.ingest(source);
+
+            Awaitility.await().atMost(TIMEOUT).until(() -> receiver.received.get() == 4);
+            assertEquals(0, source.directFrames.get());
+            assertTrue(source.requestCalls.get() > 0);
+            assertNull(receiver.error.get());
+        } finally {
+            source.complete();
+            fragment.close();
+            distributor.close();
+            PinnedThreadExecutor.closeAll();
+        }
+    }
+
+    /// Verifies sustained high service time crosses hysteresis before staged requests begin.
+    @Test
+    void loopStagesHighLatencyWorkAfterEightBatches() {
+        ControlPlaneFragment fragment =
+                new ControlPlaneFragment(FragmentConfig.ofDefaults().clone(cloneConfig()));
+        LatticeVertex distributor = connect(fragment);
+        TrackingSource source = new TrackingSource(BenchmarkFrame.generate(128, false, 67L, 71L));
+        CountingReceiver receiver = new CountingReceiver(50_000L);
+
+        try {
+            fragment.output().addDownstream(receiver);
+            fragment.start();
+            Awaitility.await().atMost(TIMEOUT).until(fragment::ready);
+            distributor.ingest(source);
+
+            Awaitility.await().atMost(TIMEOUT).until(() -> source.requestCalls.get() > 0);
+            assertTrue(source.directFramesAtFirstRequest.get() >= 16);
+            Awaitility.await().atMost(TIMEOUT).until(() -> receiver.received.get() == 128);
+            assertNull(receiver.error.get());
+        } finally {
+            source.complete();
             fragment.close();
             distributor.close();
             PinnedThreadExecutor.closeAll();
@@ -310,13 +393,116 @@ class ControlPlaneFragmentThreadTest {
         }
     }
 
+    private static final class TrackingSource implements LatticeSource {
+
+        private final AbstractFrame[] frames;
+        private final AtomicInteger index = new AtomicInteger();
+        private final AtomicBoolean complete = new AtomicBoolean();
+        private final AtomicReference<LatticeReceiver> downstream = new AtomicReference<>();
+        private final AtomicInteger directFrames = new AtomicInteger();
+        private final AtomicInteger requestCalls = new AtomicInteger();
+        private final AtomicInteger directFramesAtFirstRequest = new AtomicInteger(-1);
+
+        /// Creates a deterministic pull/request source over the supplied frame array.
+        private TrackingSource(AbstractFrame[] frames) {
+            this.frames = frames;
+        }
+
+        @Override
+        public void addDownstream(LatticeReceiver receiver) {
+            if (!this.downstream.compareAndSet(null, receiver)) {
+                receiver.onError(new IllegalStateException("Tracking source already has a downstream"));
+            }
+        }
+
+        @Override
+        public long pull(
+                Consumer<AbstractFrame> consumer, Function<AbstractFrame, Boolean> stopCondition, long demand) {
+            long pulled = 0L;
+            while (pulled < demand) {
+                int next = this.index.get();
+                if (next >= this.frames.length) {
+                    break;
+                }
+                AbstractFrame frame = this.frames[next];
+                if (stopCondition.apply(frame)) {
+                    break;
+                }
+                if (!this.index.compareAndSet(next, next + 1)) {
+                    continue;
+                }
+                consumer.accept(frame);
+                this.directFrames.incrementAndGet();
+                pulled++;
+            }
+            completeWhenExhausted();
+            return pulled;
+        }
+
+        @Override
+        public void request(long demand) {
+            this.requestCalls.incrementAndGet();
+            this.directFramesAtFirstRequest.compareAndSet(-1, this.directFrames.get());
+            LatticeReceiver receiver = this.downstream.get();
+            long pushed = 0L;
+            while (receiver != null && pushed < demand) {
+                int next = this.index.getAndIncrement();
+                if (next >= this.frames.length) {
+                    this.index.set(this.frames.length);
+                    break;
+                }
+                receiver.push(this.frames[next]);
+                pushed++;
+            }
+            completeWhenExhausted();
+        }
+
+        @Override
+        public void complete() {
+            if (this.complete.compareAndSet(false, true)) {
+                LatticeReceiver receiver = this.downstream.getAndSet(null);
+                if (receiver != null) {
+                    receiver.onComplete();
+                }
+            }
+        }
+
+        @Override
+        public boolean isComplete() {
+            return this.complete.get();
+        }
+
+        /// Completes exactly once after the last array element has been claimed.
+        private void completeWhenExhausted() {
+            if (this.index.get() >= this.frames.length) {
+                complete();
+            }
+        }
+    }
+
     private static final class CountingReceiver implements LatticeReceiver {
 
+        private final long delayNanos;
         private final AtomicInteger received = new AtomicInteger();
         private final AtomicReference<Throwable> error = new AtomicReference<>();
+        private final AtomicReference<AbstractFrame> first = new AtomicReference<>();
+
+        /// Creates a receiver that records frames without an artificial service delay.
+        private CountingReceiver() {
+            this(0L);
+        }
+
+        /// Creates a receiver whose `push` contributes `delayNanos` to measured service time.
+        private CountingReceiver(long delayNanos) {
+            this.delayNanos = delayNanos;
+        }
 
         @Override
         public void push(AbstractFrame frame) {
+            if (this.delayNanos > 0L) {
+                LockSupport.parkNanos(this.delayNanos);
+            }
+            this.first.compareAndSet(null, frame);
             this.received.incrementAndGet();
         }
 

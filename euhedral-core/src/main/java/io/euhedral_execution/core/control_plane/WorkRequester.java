@@ -53,6 +53,7 @@ public abstract class WorkRequester extends ControlPlaneCache {
     }
 
     protected void requestAndPull(FlowThread.FlowContext context, long batchSize) {
+        context.clearCounters();
         long localCache = super.getLocalCacheCount();
 
         long maxLocalCache = super.getMaxLocalCacheCount();
