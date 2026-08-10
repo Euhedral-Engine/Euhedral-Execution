@@ -1,9 +1,14 @@
 package io.euhedral_execution.core.control_plane;
 
+import java.util.Objects;
+import java.util.concurrent.atomic.AtomicReference;
+
 /// Owner-thread policy for choosing direct or staged execution and a bounded batch size.
 ///
 /// All fields use plain access because one pinned fragment thread owns the policy for its lifetime.
 final class FragmentControlPolicy {
+
+    private static final AtomicReference<DiagnosticOverride> DIAGNOSTIC_OVERRIDE = new AtomicReference<>();
 
     static final long DIRECT_TARGET_BATCH_WORK_NS = 250_000L;
     static final long STAGED_TARGET_BATCH_WORK_NS = 8_000_000L;
@@ -12,15 +17,36 @@ final class FragmentControlPolicy {
     static final int TRANSITION_BATCHES = 8;
     static final int SPIN_MISSES = 64;
 
+    private final DiagnosticOverride diagnosticOverride;
     private Mode mode;
     private long batchSize;
     private double serviceTimeNs;
     private int transitionStreak;
     private int activeMissStreak;
 
-    /// Creates a policy in its deterministic direct-mode initial state.
+    /// Creates a policy, capturing any setup-only diagnostic override before owner-thread use.
     FragmentControlPolicy() {
+        this.diagnosticOverride = DIAGNOSTIC_OVERRIDE.getAcquire();
         reset();
+    }
+
+    /// Installs one process-local diagnostic override before benchmark fragments are constructed.
+    static DiagnosticOverride installDiagnosticOverride(Mode mode, long batchSize) {
+        DiagnosticOverride next = new DiagnosticOverride(mode, batchSize);
+        DiagnosticOverride witness = DIAGNOSTIC_OVERRIDE.compareAndExchangeRelease(null, next);
+        if (witness != null) {
+            throw new IllegalStateException("A fragment diagnostic override is already installed");
+        }
+        return next;
+    }
+
+    /// Clears the exact diagnostic override after all fragments that captured it have closed.
+    static void clearDiagnosticOverride(DiagnosticOverride expected) {
+        Objects.requireNonNull(expected);
+        DiagnosticOverride witness = DIAGNOSTIC_OVERRIDE.compareAndExchangeRelease(expected, null);
+        if (witness != expected) {
+            throw new IllegalStateException("The fragment diagnostic override changed before cleanup");
+        }
     }
 
     /// Records one aggregate execution sample in nanoseconds across `frames` completed frames.
@@ -41,6 +67,14 @@ final class FragmentControlPolicy {
 
     /// Completes a productive batch and returns the next batch within `eligibleCap`.
     long completeBatch(long eligibleCap) {
+        if (this.diagnosticOverride != null) {
+            this.mode = this.diagnosticOverride.mode();
+            this.transitionStreak = 0;
+            long cap = Math.max(2L, eligibleCap);
+            this.batchSize = Math.max(2L, Math.min(this.diagnosticOverride.batchSize(), cap));
+            return this.batchSize;
+        }
+
         updateMode();
 
         long cap = Math.max(2L, eligibleCap);
@@ -73,9 +107,9 @@ final class FragmentControlPolicy {
         this.activeMissStreak = 0;
     }
 
-    /// Restores direct mode, batch two, and empty timing and hysteresis state.
+    /// Restores the captured initial mode, batch two, and empty timing and hysteresis state.
     void reset() {
-        this.mode = Mode.DIRECT;
+        this.mode = this.diagnosticOverride == null ? Mode.DIRECT : this.diagnosticOverride.mode();
         this.batchSize = 2L;
         this.serviceTimeNs = 0.0;
         this.transitionStreak = 0;
@@ -128,5 +162,16 @@ final class FragmentControlPolicy {
     enum Mode {
         DIRECT,
         STAGED
+    }
+
+    /// Immutable setup-only mode and batch target captured by diagnostic benchmark policies.
+    record DiagnosticOverride(Mode mode, long batchSize) {
+
+        DiagnosticOverride {
+            Objects.requireNonNull(mode);
+            if (batchSize < 2L) {
+                throw new IllegalArgumentException("Diagnostic batch size must be at least two");
+            }
+        }
     }
 }
