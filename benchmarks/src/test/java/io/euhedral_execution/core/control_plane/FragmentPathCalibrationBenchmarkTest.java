@@ -3,6 +3,7 @@ package io.euhedral_execution.core.control_plane;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
 import java.util.BitSet;
@@ -32,6 +33,18 @@ class FragmentPathCalibrationBenchmarkTest {
         assertEquals(9.0, samples[4]);
         assertThrows(
                 IllegalArgumentException.class, () -> FragmentPathCalibrationBenchmark.median(new double[] {1.0, 2.0}));
+    }
+
+    /// Verifies the sweep body preserves the fixed anchor and validates its round count.
+    @Test
+    void appliesDeterministicParameterizedWork() {
+        long input = 17L;
+
+        assertEquals(input, FragmentPathCalibrationBenchmark.cpuWork(input, 0));
+        assertEquals(
+                FragmentPathCalibrationBenchmark.cpuWork(input),
+                FragmentPathCalibrationBenchmark.cpuWork(input, FragmentPathCalibrationBenchmark.CPU_WORK_ROUNDS));
+        assertThrows(IllegalArgumentException.class, () -> FragmentPathCalibrationBenchmark.cpuWork(input, -1));
     }
 
     /// Verifies source availability changes only the number of otherwise identical sources.
@@ -179,6 +192,35 @@ class FragmentPathCalibrationBenchmarkTest {
         assertArrayEquals(new long[] {0L, 2L}, delta.failures()[0]);
         assertArrayEquals(new long[] {64L, 96L}, delta.pulledFrames()[0]);
         assertThrows(IllegalArgumentException.class, () -> FragmentPathCalibrationBenchmark.handleDelta(after, before));
+    }
+
+    /// Verifies measurement-only latency deltas and estimates preserve worker alignment.
+    @Test
+    void computesExistingServiceMetricEstimate() {
+        FragmentPathCalibrationBenchmark.ServiceMetricSnapshot before =
+                new FragmentPathCalibrationBenchmark.ServiceMetricSnapshot(
+                        new long[] {10L, 20L}, new double[] {1_000.0, 4_000.0});
+        FragmentPathCalibrationBenchmark.ServiceMetricSnapshot after =
+                new FragmentPathCalibrationBenchmark.ServiceMetricSnapshot(
+                        new long[] {14L, 25L}, new double[] {1_800.0, 5_500.0});
+
+        FragmentPathCalibrationBenchmark.ServiceMetricSnapshot delta =
+                FragmentPathCalibrationBenchmark.serviceMetricDelta(before, after);
+
+        assertArrayEquals(new long[] {4L, 5L}, delta.counts());
+        assertArrayEquals(new double[] {800.0, 1_500.0}, delta.totals());
+        assertArrayEquals(new double[] {200.0, 300.0}, FragmentPathCalibrationBenchmark.serviceEstimates(delta));
+
+        long[] isolatedCounts = delta.counts();
+        isolatedCounts[0] = 99L;
+        assertEquals(4L, delta.counts()[0]);
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> FragmentPathCalibrationBenchmark.serviceMetricDelta(after, before));
+        assertTrue(Double.isNaN(
+                FragmentPathCalibrationBenchmark.serviceEstimates(
+                        new FragmentPathCalibrationBenchmark.ServiceMetricSnapshot(
+                                new long[] {0L}, new double[] {0.0}))[0]));
     }
 
     /// Verifies source identity and lifecycle report formatting remain deterministic.

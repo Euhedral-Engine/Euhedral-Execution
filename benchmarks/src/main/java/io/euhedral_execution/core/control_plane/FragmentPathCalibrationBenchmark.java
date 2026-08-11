@@ -4,6 +4,7 @@ import static io.euhedral_execution.core.utils.MathFunctions.unsignedMultiplyHig
 
 import io.euhedral_execution.benchmarks.utils.RepeatingSink;
 import io.euhedral_execution.core.config.CloneConfig;
+import io.euhedral_execution.core.config.FragmentConfig;
 import io.euhedral_execution.core.flow_control.LatticeEdge;
 import io.euhedral_execution.core.flow_control.LatticeVertex;
 import io.euhedral_execution.core.flow_control.RoutingPolicy;
@@ -14,6 +15,7 @@ import io.euhedral_execution.core.generics.AbstractExecutor;
 import io.euhedral_execution.core.generics.CloneableObject;
 import io.euhedral_execution.core.generics.LatticeSource;
 import io.euhedral_execution.core.impl.BaseCloneableObject;
+import io.euhedral_execution.core.metrics.MetricsAggregator;
 import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
 import io.euhedral_execution.data_structures.queues.common.QueueUtils;
 import io.euhedral_execution.hardware_utils.PinnedThreadExecutor;
@@ -22,6 +24,8 @@ import io.euhedral_execution.hardware_utils.SystemInfo.CoreInfo;
 import io.euhedral_execution.hardware_utils.SystemInfo.SocketInfo;
 import io.euhedral_execution.hardware_utils.ThreadTools;
 import io.euhedral_execution.hashing.HasherApi;
+import io.micrometer.core.instrument.DistributionSummary;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
@@ -50,8 +54,8 @@ import org.openjdk.jmh.runner.IterationType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/// Forced-mode diagnostic for deciding whether direct no-op overhead predicts the faster fragment
-/// path independently of upstream-source availability.
+/// Forced-mode diagnostic for discovering how work cost and upstream availability select the faster
+/// fragment path.
 @BenchmarkMode(Mode.Throughput)
 @OutputTimeUnit(TimeUnit.SECONDS)
 @Warmup(iterations = 3, time = 3, timeUnit = TimeUnit.SECONDS)
@@ -64,6 +68,7 @@ public class FragmentPathCalibrationBenchmark {
     static final int FRAME_POOL_SIZE = 16_384;
     static final int SAMPLE_COUNT = 9;
     static final int CPU_WORK_ROUNDS = 256;
+    static final String WORK_COST_METRIC_PREFIX = "fragment-work-cost";
     static final long TIMEOUT_NS = TimeUnit.MINUTES.toNanos(1);
     /// The blueprint's 225 ns theoretical one-worker ceiling for CPU-work lane estimates.
     static final double CPU_SINGLE_LANE_CEILING_FRAMES_PER_SECOND = 1_000_000_000.0 / 225.0;
@@ -95,6 +100,13 @@ public class FragmentPathCalibrationBenchmark {
         state.awaitInvocation();
     }
 
+    /// Measures a coarse deterministic work cost through either real forced fragment path.
+    @Benchmark
+    @OperationsPerInvocation(INVOCATION_FRAMES)
+    public void workCostDecision(WorkCostDecisionState state) {
+        state.awaitInvocation();
+    }
+
     /// Measures the effectively empty `BenchmarkFrame.execute()` body without the scheduler.
     @Benchmark
     @BenchmarkMode(Mode.AverageTime)
@@ -110,6 +122,15 @@ public class FragmentPathCalibrationBenchmark {
     @OutputTimeUnit(TimeUnit.NANOSECONDS)
     public long cpuWorkOnly(WorkOnlyState state) {
         state.value = cpuWork(state.value);
+        return state.value;
+    }
+
+    /// Measures one parameterized arithmetic body without scheduler or frame-path work.
+    @Benchmark
+    @BenchmarkMode(Mode.AverageTime)
+    @OutputTimeUnit(TimeUnit.NANOSECONDS)
+    public long workCostOnly(WorkCostOnlyState state) {
+        state.value = cpuWork(state.value, state.workRounds);
         return state.value;
     }
 
@@ -151,8 +172,16 @@ public class FragmentPathCalibrationBenchmark {
 
     /// Applies the deterministic arithmetic workload used by both scheduled and work-only cases.
     static long cpuWork(long input) {
+        return cpuWork(input, CPU_WORK_ROUNDS);
+    }
+
+    /// Applies a deterministic number of arithmetic rounds for the coarse work-cost sweep.
+    static long cpuWork(long input, int rounds) {
+        if (rounds < 0) {
+            throw new IllegalArgumentException("Work rounds must be non-negative");
+        }
         long value = input;
-        for (int i = 0; i < CPU_WORK_ROUNDS; i++) {
+        for (int i = 0; i < rounds; i++) {
             value ^= 0x9e3779b97f4a7c15L + i;
             value = Long.rotateLeft(value * 0xbf58476d1ce4e5b9L, 17);
         }
@@ -280,6 +309,89 @@ public class FragmentPathCalibrationBenchmark {
         public long[] firstProductiveOrder() {
             return this.firstProductiveOrder.clone();
         }
+    }
+
+    /// Cumulative existing latency-summary state in stable worker order at one lifecycle boundary.
+    record ServiceMetricSnapshot(long[] counts, double[] totals) {
+
+        /// Isolates registry-derived arrays retained beyond the lifecycle callback.
+        ServiceMetricSnapshot {
+            if (counts.length != totals.length) {
+                throw new IllegalArgumentException("Service metric arrays must have equal lengths");
+            }
+            counts = counts.clone();
+            totals = totals.clone();
+        }
+
+        /// Returns isolated report counts for deterministic diagnostics.
+        @Override
+        public long[] counts() {
+            return this.counts.clone();
+        }
+
+        /// Returns isolated reported-latency totals for deterministic diagnostics.
+        @Override
+        public double[] totals() {
+            return this.totals.clone();
+        }
+    }
+
+    /// Computes one monotonic measurement-only delta from existing latency summaries.
+    static ServiceMetricSnapshot serviceMetricDelta(ServiceMetricSnapshot before, ServiceMetricSnapshot after) {
+        long[] beforeCounts = before.counts;
+        long[] afterCounts = after.counts;
+        double[] beforeTotals = before.totals;
+        double[] afterTotals = after.totals;
+        if (beforeCounts.length != afterCounts.length) {
+            throw new IllegalArgumentException("Service metric snapshots must have equal worker counts");
+        }
+        long[] counts = new long[beforeCounts.length];
+        double[] totals = new double[beforeCounts.length];
+        for (int worker = 0; worker < counts.length; worker++) {
+            counts[worker] = afterCounts[worker] - beforeCounts[worker];
+            totals[worker] = afterTotals[worker] - beforeTotals[worker];
+            if (counts[worker] < 0L || !Double.isFinite(totals[worker]) || totals[worker] < 0.0) {
+                throw new IllegalArgumentException("Service metric values must be finite and monotonic");
+            }
+        }
+        return new ServiceMetricSnapshot(counts, totals);
+    }
+
+    /// Converts latency-summary totals to per-worker nanoseconds per frame estimates.
+    static double[] serviceEstimates(ServiceMetricSnapshot snapshot) {
+        long[] counts = snapshot.counts;
+        double[] totals = snapshot.totals;
+        double[] estimates = new double[counts.length];
+        for (int worker = 0; worker < estimates.length; worker++) {
+            estimates[worker] = counts[worker] == 0L ? Double.NaN : totals[worker] / counts[worker];
+        }
+        return estimates;
+    }
+
+    /// Resolves Core's existing per-worker latency summaries in stable core order.
+    static DistributionSummary[] serviceSummaries(SimpleMeterRegistry registry, int[] workerCores) {
+        DistributionSummary[] summaries = new DistributionSummary[workerCores.length];
+        String name = MetricsAggregator.metricName(WORK_COST_METRIC_PREFIX, MetricsAggregator.LATENCY_SUMMARY_SUFFIX);
+        for (int worker = 0; worker < workerCores.length; worker++) {
+            summaries[worker] = registry.find(name)
+                    .tag(MetricsAggregator.CORE_TAG, Integer.toString(workerCores[worker]))
+                    .summary();
+            if (summaries[worker] == null) {
+                throw new IllegalStateException("Missing execution-latency summary for diagnostic worker");
+            }
+        }
+        return summaries;
+    }
+
+    /// Snapshots existing latency summary counts and totals without changing fragment behavior.
+    static ServiceMetricSnapshot serviceMetricSnapshot(DistributionSummary[] summaries) {
+        long[] counts = new long[summaries.length];
+        double[] totals = new double[summaries.length];
+        for (int worker = 0; worker < summaries.length; worker++) {
+            counts[worker] = summaries[worker].count();
+            totals[worker] = summaries[worker].totalAmount();
+        }
+        return new ServiceMetricSnapshot(counts, totals);
     }
 
     /// Computes one monotonic handle-diagnostic delta while preserving first-event order metadata.
@@ -557,11 +669,38 @@ public class FragmentPathCalibrationBenchmark {
         }
     }
 
+    /// Two-worker corrected-path state for one source shape and deterministic arithmetic cost.
+    @State(Scope.Benchmark)
+    public static class WorkCostDecisionState extends PathState {
+
+        @Param({"PLENTIFUL", "SCARCE"})
+        public SourceShape sourceShape;
+
+        @Param({"0", "8", "24", "48", "64", "80", "96", "176", "256", "512"})
+        public int workRounds;
+
+        /// Starts one forced-path work-cost row with the existing latency metric enabled.
+        @Setup(Level.Trial)
+        public void setup() {
+            setupPath(2, this.sourceShape, Workload.CPU_WORK, this.workRounds, true);
+        }
+    }
+
     /// Owner-local state for the scheduler-free work-body measurements.
     @State(Scope.Thread)
     public static class WorkOnlyState {
 
         final BenchmarkFrame frame = new BenchmarkFrame(HasherApi.BASE_SEED);
+        long value = HasherApi.BASE_SEED;
+    }
+
+    /// Owner-local state for the scheduler-free parameterized work-cost measurements.
+    @State(Scope.Thread)
+    public static class WorkCostOnlyState {
+
+        @Param({"0", "8", "24", "48", "64", "80", "96", "176", "256", "512"})
+        public int workRounds;
+
         long value = HasherApi.BASE_SEED;
     }
 
@@ -602,18 +741,42 @@ public class FragmentPathCalibrationBenchmark {
         private final List<HandleSnapshot> warmupHandleDeltas = new ArrayList<>();
         /// Raw acquisition deltas aligned with the five JMH measurement iterations.
         private final List<HandleSnapshot> measurementHandleDeltas = new ArrayList<>();
+        /// Existing execution-latency metric deltas aligned with measurement iterations.
+        private final List<ServiceMetricSnapshot> measurementServiceDeltas = new ArrayList<>();
+        /// Trial-local registry used only to observe Core's existing execution-latency signal.
+        private SimpleMeterRegistry serviceRegistry;
+        /// Per-worker latency summaries aligned with `workerCpus` and `workerCores`.
+        private DistributionSummary[] serviceSummaries;
+        /// Existing service metric state captured at the start of the current iteration.
+        private ServiceMetricSnapshot iterationServiceBefore;
         /// True only while JMH is invoking the measured, non-warmup iteration.
         private boolean measurementIteration;
         /// Source availability retained for the fork-level diagnostic report.
         private SourceShape sourceShape;
         /// Executor work body retained for the fork-level diagnostic report.
         private Workload workload;
+        /// Deterministic arithmetic rounds retained for reports; zero for no-op work.
+        private int workRounds;
 
         /// Builds and starts the requested pinned fragment graph without the lattice monitor.
         protected final void setupPath(int workerCount, SourceShape sourceShape, Workload workload) {
+            setupPath(workerCount, sourceShape, workload, workload == Workload.CPU_WORK ? CPU_WORK_ROUNDS : 0, false);
+        }
+
+        /// Builds the path with one deterministic body cost and optional existing latency telemetry.
+        protected final void setupPath(
+                int workerCount,
+                SourceShape sourceShape,
+                Workload workload,
+                int workRounds,
+                boolean observeServiceMetric) {
             try {
+                if (workRounds < 0 || (workload == Workload.NO_OP && workRounds != 0)) {
+                    throw new IllegalArgumentException("Work rounds must match a non-negative CPU workload");
+                }
                 this.sourceShape = sourceShape;
                 this.workload = workload;
+                this.workRounds = workRounds;
                 this.workerCpus = new int[workerCount];
                 this.workerCores = new int[workerCount];
                 this.measurementWorkerDeltas.clear();
@@ -622,8 +785,13 @@ public class FragmentPathCalibrationBenchmark {
                 this.iterationHandleBefore = null;
                 this.warmupHandleDeltas.clear();
                 this.measurementHandleDeltas.clear();
+                this.measurementServiceDeltas.clear();
+                this.iterationServiceBefore = null;
                 DiagnosticDistributor.resetSharedRoutingState();
                 this.diagnosticLease = new DiagnosticLease(this.mode, FIXED_BATCH_SIZE);
+                if (observeServiceMetric) {
+                    this.serviceRegistry = new SimpleMeterRegistry();
+                }
 
                 BitSet workerCores = selectWorkerCores(workerCount);
                 pinHarness(workerCores);
@@ -638,7 +806,11 @@ public class FragmentPathCalibrationBenchmark {
                     throw new IllegalStateException("Unable to publish the diagnostic core mapping");
                 }
 
-                BaseCloneableObject base = new BaseCloneableObject(new CountingExecutor(-1, this.counters, workload));
+                CountingExecutor executor = new CountingExecutor(-1, this.counters, workload, workRounds);
+                BaseCloneableObject base = this.serviceRegistry == null
+                        ? new BaseCloneableObject(executor)
+                        : new BaseCloneableObject(
+                                FragmentConfig.ofDefaults(WORK_COST_METRIC_PREFIX, this.serviceRegistry), executor);
                 int workerIndex = 0;
                 for (int core = workerCores.nextSetBit(0); core >= 0; core = workerCores.nextSetBit(core + 1)) {
                     BitSet cpus =
@@ -655,6 +827,9 @@ public class FragmentPathCalibrationBenchmark {
                     pipeline.setDrainMode(true);
                     pipeline.start();
                     this.pipelines.add(pipeline);
+                }
+                if (this.serviceRegistry != null) {
+                    this.serviceSummaries = serviceSummaries(this.serviceRegistry, this.workerCores);
                 }
                 awaitRegisteredWorkers(workerCount);
                 for (CloneableObject pipeline : this.pipelines) {
@@ -691,6 +866,9 @@ public class FragmentPathCalibrationBenchmark {
         @Setup(Level.Iteration)
         public final void setupIteration(IterationParams iterationParams) {
             this.iterationHandleBefore = this.handleRecorder.snapshot();
+            if (this.serviceSummaries != null) {
+                this.iterationServiceBefore = serviceMetricSnapshot(this.serviceSummaries);
+            }
             if (this.preFirstIterationHandles == null) {
                 this.preFirstIterationHandles = this.iterationHandleBefore;
             }
@@ -705,6 +883,9 @@ public class FragmentPathCalibrationBenchmark {
         @TearDown(Level.Iteration)
         public final void tearDownIteration(IterationParams iterationParams) {
             HandleSnapshot handleDeltas = handleDelta(this.iterationHandleBefore, this.handleRecorder.snapshot());
+            ServiceMetricSnapshot serviceDelta = this.serviceSummaries == null
+                    ? null
+                    : serviceMetricDelta(this.iterationServiceBefore, serviceMetricSnapshot(this.serviceSummaries));
             if (iterationParams.getType() == IterationType.WARMUP) {
                 this.warmupHandleDeltas.add(handleDeltas);
             } else if (iterationParams.getType() == IterationType.MEASUREMENT) {
@@ -713,11 +894,15 @@ public class FragmentPathCalibrationBenchmark {
             if (iterationParams.getType() == IterationType.MEASUREMENT) {
                 this.measurementWorkerDeltas.add(this.iterationWorkerDeltas.clone());
                 this.measurementElapsedNanos.add(this.iterationElapsedNanos);
+                if (serviceDelta != null) {
+                    this.measurementServiceDeltas.add(serviceDelta);
+                }
             }
             this.measurementIteration = false;
             this.iterationWorkerDeltas = null;
             this.iterationElapsedNanos = 0L;
             this.iterationHandleBefore = null;
+            this.iterationServiceBefore = null;
         }
 
         /// Waits for one JMH invocation's additional completed frames.
@@ -749,6 +934,7 @@ public class FragmentPathCalibrationBenchmark {
         protected void beforeClose() {
             reportParticipation();
             reportHandleAcquisition();
+            reportServiceEstimate();
         }
 
         /// Reports raw measurement splits and fork-level participation metrics before graph close.
@@ -757,11 +943,12 @@ public class FragmentPathCalibrationBenchmark {
             long[] finalWorkerCounts = workerCounts(this.counters, this.workerCpus);
             if (rawDeltas.length == 0) {
                 LOGGER.info(
-                        "Fragment worker participation mode={} sourceShape={} workload={} handleLayout={} batch={} workerCpus={} "
+                        "Fragment worker participation mode={} sourceShape={} workload={} workRounds={} handleLayout={} batch={} workerCpus={} "
                                 + "rawMeasurementDeltas=[] finalWorkerCounts={} verdict=NO_MEASUREMENT_SAMPLES",
                         this.mode,
                         this.sourceShape,
                         this.workload,
+                        this.workRounds,
                         this.handleLayout,
                         FIXED_BATCH_SIZE,
                         Arrays.toString(this.workerCpus),
@@ -773,13 +960,15 @@ public class FragmentPathCalibrationBenchmark {
             double[] effectiveLanes = new double[rawDeltas.length];
             long[] aggregateDeltas = new long[this.workerCpus.length];
             long aggregateElapsedNanos = 0L;
-            double singleLaneCeilingFramesPerSecond = singleLaneCeiling(this.workload, this.mode);
+            boolean lanesComparable = this.serviceSummaries == null || this.workRounds == CPU_WORK_ROUNDS;
+            double singleLaneCeilingFramesPerSecond =
+                    lanesComparable ? singleLaneCeiling(this.workload, this.mode) : 1.0;
             for (int i = 0; i < rawDeltas.length; i++) {
                 ParticipationMetrics metrics = participationMetrics(
                         rawDeltas[i], this.measurementElapsedNanos.get(i), singleLaneCeilingFramesPerSecond);
                 fractions[i] = metrics.fractions();
                 dominance[i] = metrics.dominance();
-                effectiveLanes[i] = metrics.effectiveLanes();
+                effectiveLanes[i] = lanesComparable ? metrics.effectiveLanes() : Double.NaN;
                 for (int worker = 0; worker < aggregateDeltas.length; worker++) {
                     aggregateDeltas[worker] = Math.addExact(aggregateDeltas[worker], rawDeltas[i][worker]);
                 }
@@ -788,7 +977,7 @@ public class FragmentPathCalibrationBenchmark {
             ParticipationMetrics aggregate =
                     participationMetrics(aggregateDeltas, aggregateElapsedNanos, singleLaneCeilingFramesPerSecond);
             LOGGER.info(
-                    "Fragment worker participation mode={} sourceShape={} workload={} handleLayout={} batch={} workerCpus={} "
+                    "Fragment worker participation mode={} sourceShape={} workload={} workRounds={} handleLayout={} batch={} workerCpus={} "
                             + "rawMeasurementDeltas={} perMeasurementFractions={} perMeasurementDominance={} "
                             + "perMeasurementEffectiveLanes={} aggregateDeltas={} aggregateFractions={} "
                             + "aggregateDominance={} aggregateEffectiveLanes={} finalWorkerCounts={} "
@@ -796,6 +985,7 @@ public class FragmentPathCalibrationBenchmark {
                     this.mode,
                     this.sourceShape,
                     this.workload,
+                    this.workRounds,
                     this.handleLayout,
                     FIXED_BATCH_SIZE,
                     Arrays.toString(this.workerCpus),
@@ -806,7 +996,7 @@ public class FragmentPathCalibrationBenchmark {
                     Arrays.toString(aggregateDeltas),
                     Arrays.toString(aggregate.fractions()),
                     aggregate.dominance(),
-                    aggregate.effectiveLanes(),
+                    lanesComparable ? aggregate.effectiveLanes() : Double.NaN,
                     Arrays.toString(finalWorkerCounts),
                     singleLaneCeilingFramesPerSecond);
         }
@@ -815,13 +1005,14 @@ public class FragmentPathCalibrationBenchmark {
         private void reportHandleAcquisition() {
             HandleSnapshot finalSnapshot = this.handleRecorder.snapshot();
             LOGGER.info(
-                    "Fragment handle acquisition mode={} sourceShape={} workload={} handleLayout={} batch={} workerCpus={} "
+                    "Fragment handle acquisition mode={} sourceShape={} workload={} workRounds={} handleLayout={} batch={} workerCpus={} "
                             + "workerCores={} sourceOrdinals={} sourceHandleIds={} preFirstIteration={} "
                             + "warmupDeltas={} measurementDeltas={} aggregateAttempts={} aggregateFailures={} "
                             + "aggregatePulledFrames={} firstProductiveOrder={}",
                     this.mode,
                     this.sourceShape,
                     this.workload,
+                    this.workRounds,
                     this.handleLayout,
                     FIXED_BATCH_SIZE,
                     Arrays.toString(this.workerCpus),
@@ -835,6 +1026,54 @@ public class FragmentPathCalibrationBenchmark {
                     Arrays.deepToString(finalSnapshot.failures()),
                     Arrays.deepToString(finalSnapshot.pulledFrames()),
                     Arrays.toString(finalSnapshot.firstProductiveOrder()));
+        }
+
+        /// Reports measurement-only observations of Core's existing execution-latency signal.
+        private void reportServiceEstimate() {
+            if (this.measurementServiceDeltas.isEmpty()) {
+                return;
+            }
+            long[][] rawCounts = new long[this.measurementServiceDeltas.size()][];
+            double[][] rawTotals = new double[this.measurementServiceDeltas.size()][];
+            double[][] perMeasurementEstimates = new double[this.measurementServiceDeltas.size()][];
+            long[] aggregateCounts = new long[this.workerCpus.length];
+            double[] aggregateTotals = new double[this.workerCpus.length];
+            for (int iteration = 0; iteration < this.measurementServiceDeltas.size(); iteration++) {
+                ServiceMetricSnapshot delta = this.measurementServiceDeltas.get(iteration);
+                rawCounts[iteration] = delta.counts();
+                rawTotals[iteration] = delta.totals();
+                perMeasurementEstimates[iteration] = serviceEstimates(delta);
+                for (int worker = 0; worker < aggregateCounts.length; worker++) {
+                    aggregateCounts[worker] = Math.addExact(aggregateCounts[worker], rawCounts[iteration][worker]);
+                    aggregateTotals[worker] += rawTotals[iteration][worker];
+                }
+            }
+            ServiceMetricSnapshot aggregate = new ServiceMetricSnapshot(aggregateCounts, aggregateTotals);
+            double total = 0.0;
+            long count = 0L;
+            for (int worker = 0; worker < aggregateCounts.length; worker++) {
+                count = Math.addExact(count, aggregateCounts[worker]);
+                total += aggregateTotals[worker];
+            }
+            double aggregateEstimate = count == 0L ? Double.NaN : total / count;
+            LOGGER.info(
+                    "Fragment work cost estimate mode={} sourceShape={} workload={} workRounds={} batch={} workerCpus={} "
+                            + "rawReportCounts={} rawReportedTotalsNs={} perMeasurementWorkerEstimatesNs={} "
+                            + "aggregateReportCounts={} aggregateReportedTotalsNs={} aggregateWorkerEstimatesNs={} "
+                            + "aggregateEstimateNs={}",
+                    this.mode,
+                    this.sourceShape,
+                    this.workload,
+                    this.workRounds,
+                    FIXED_BATCH_SIZE,
+                    Arrays.toString(this.workerCpus),
+                    Arrays.deepToString(rawCounts),
+                    Arrays.deepToString(rawTotals),
+                    Arrays.deepToString(perMeasurementEstimates),
+                    Arrays.toString(aggregateCounts),
+                    Arrays.toString(aggregateTotals),
+                    Arrays.toString(serviceEstimates(aggregate)),
+                    aggregateEstimate);
         }
 
         /// Collects nine fixed-completion samples from the continuously running graph.
@@ -889,6 +1128,11 @@ public class FragmentPathCalibrationBenchmark {
             }
             this.handleRecorder = null;
             this.sourceHandleIds = null;
+            this.serviceSummaries = null;
+            if (this.serviceRegistry != null) {
+                this.serviceRegistry.close();
+                this.serviceRegistry = null;
+            }
             PinnedThreadExecutor.closeAll();
             DiagnosticDistributor.resetSharedRoutingState();
             if (this.diagnosticLease != null) {
@@ -924,13 +1168,15 @@ public class FragmentPathCalibrationBenchmark {
 
         private final PaddedLongAdder counters;
         private final Workload workload;
+        private final int workRounds;
         private long workSink = HasherApi.BASE_SEED;
 
         /// Creates an executor prototype or pinned clone for the selected work body.
-        CountingExecutor(int cpu, PaddedLongAdder counters, Workload workload) {
+        CountingExecutor(int cpu, PaddedLongAdder counters, Workload workload, int workRounds) {
             super(cpu);
             this.counters = counters;
             this.workload = workload;
+            this.workRounds = workRounds;
         }
 
         /// Executes the no-op frame, optionally performs CPU work, and publishes completion.
@@ -938,7 +1184,7 @@ public class FragmentPathCalibrationBenchmark {
         public void execute(AbstractFrame frame) {
             frame.execute();
             if (this.workload == Workload.CPU_WORK) {
-                this.workSink = cpuWork(this.workSink ^ frame.getRoutingHash());
+                this.workSink = cpuWork(this.workSink ^ frame.getRoutingHash(), this.workRounds);
             }
             this.counters.increment(super.cpu);
         }
@@ -946,7 +1192,7 @@ public class FragmentPathCalibrationBenchmark {
         /// Clones the benchmark executor for the fragment's selected logical CPU.
         @Override
         public CountingExecutor hookOnClone(int cpu) {
-            return new CountingExecutor(cpu, this.counters, this.workload);
+            return new CountingExecutor(cpu, this.counters, this.workload, this.workRounds);
         }
     }
 
