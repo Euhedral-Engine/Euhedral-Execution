@@ -46,9 +46,9 @@ Out of scope:
 
 The production branches are not two interchangeable calls with different fixed overhead:
 
-| Branch | Productive path | Important effect |
-|---|---|---|
-| Direct | local cache -> remote cache -> upstream `pull` -> execute | The upstream handle remains acquired while `pull` invokes the execution consumer. |
+| Branch | Productive path                                                        | Important effect                                                                                                               |
+|--------|------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------|
+| Direct | local cache -> remote cache -> upstream `pull` -> execute              | The upstream handle remains acquired while `pull` invokes the execution consumer.                                              |
 | Staged | `request` -> local cache -> remote cache -> upstream `pull` -> execute | Unordered requested frames can be routed into caches, allowing sibling workers to execute after the source handle is released. |
 
 Ordered frames already stop direct pulling and use the established request path. Both branches also
@@ -141,8 +141,165 @@ behavior with the new evidence.
 
 ## Work Sequence
 
-1. Follow [`startup-fragment-path-calibration.md`](../blueprints/startup-fragment-path-calibration.md)
+1. Follow [
+   `startup-fragment-path-calibration.md`](../blueprints/startup-fragment-path-calibration.md)
    and implement only the forced-mode fixture and diagnostic benchmark.
 2. Run its focused Core and benchmark tests, then the JMH comparison with recorded hardware, JVM,
    batch cap, raw samples, medians, means, and confidence intervals.
 3. Record either `supported` or `disproved`. Do not implement a startup threshold in the same pass.
+
+## Next Stage
+
+Plan the next fragment-control blueprint around experimental decision-tree discovery from
+`docs/blueprints/startup-fragment-path-calibration.md`
+
+The goal is no longer to jump directly from one benchmark result to a production threshold. The
+broader idea is to build the scheduler policy incrementally as an explicit decision tree whose
+branches are discovered and justified through controlled benchmarks.
+
+Start with the simplest known split, vary one meaningful input at a time, and only add a new branch
+when the current tree cannot explain a resolved change in which execution path wins.
+
+Current known execution paths:
+
+* Tier 1:
+
+    1. Execute owner-local cached work first.
+    2. Execute remote cached work directly.
+    3. Request upstream work and pull it directly for execution.
+
+* Tier 2:
+
+    1. Request upstream work first.
+    2. Execute owner-local cached work.
+    3. Execute remote cached work through the cache path.
+    4. Execute remaining remote work directly.
+
+Tier 1 is the lower-overhead path. Tier 2 changes the ordering and uses the request/cache path more
+aggressively. Both paths can consume local and remote work, so do not reduce this to "direct versus
+cached execution." The relevant behavior is the complete ordering of request, local-cache execution,
+remote-cache handling, and direct remote execution.
+
+The first feasibility experiment established:
+
+* intrinsic Tier 1 overhead is about 11.3 ns/frame;
+* intrinsic Tier 2 overhead is about 28.0 ns/frame;
+* no-op work is about 0.285 ns/op and clearly favors Tier 1;
+* fixed CPU work is about 225 ns/op and favors Tier 2 under the predeclared rule;
+* Tier 2 CPU throughput is extremely stable around 7.44-7.47 million frames/s across plentiful and
+  scarce source shapes;
+* scarce Tier 1 CPU throughput is extremely stable around 4.25 million frames/s;
+* plentiful Tier 1 CPU throughput is strongly bimodal across JVM forks, with one regime around 4.24
+  million frames/s and another around 8.5 million frames/s;
+* plentiful Tier 1 no-op shows a similar bimodality, around 81 million versus 144 million frames/s;
+* startup versus warmed intrinsic-path differences are small, so ordinary warmup does not explain
+  the bimodality;
+* similar inflection behavior has previously been observed on both homogeneous and heterogeneous CPU
+  architectures.
+
+Do not treat the bimodality as ordinary benchmark noise. It is too discrete and repeatable within
+each fork.
+
+The strongest hypothesis to investigate next is that Tier 1 has two stable worker-participation
+regimes.
+
+For the 225 ns CPU workload:
+
+* one execution lane has a theoretical ceiling near 4.44 million ops/s;
+* two execution lanes have a theoretical ceiling near 8.88 million ops/s;
+* the observed Tier 1 regimes at roughly 4.24 million and 8.5 million frames/s closely match one
+  productive worker versus two productive workers.
+
+The no-op results point in the same direction: the low Tier 1 regime is close to isolated one-worker
+Tier 1 throughput, while the high regime appears to reflect useful participation from both workers.
+
+The working hypothesis is therefore:
+
+Tier 1 performance has an inflection based on effective worker participation. Under some
+source/request/cache conditions, its ordering may leave only one worker productively supplied. Under
+others, both workers remain productively supplied. Tier 2's request-first ordering and stronger use
+of the cache path may make work availability more stable across workers, explaining why its CPU
+throughput remains nearly constant while Tier 1 exhibits distinct low- and high-throughput regimes.
+
+This is only a hypothesis. The next blueprint must design experiments that can prove or falsify it
+before changing production policy.
+
+Primary next experiment:
+
+Add benchmark-only per-worker completed-frame accounting to the existing forced-path fixture and
+determine whether the two Tier 1 regimes correspond to different worker participation.
+
+Expected evidence if the hypothesis is correct:
+
+* low Tier 1 regime: approximately one worker accounts for nearly all useful work;
+* high Tier 1 regime: both workers account for substantial work, approximately doubling aggregate
+  throughput for CPU-heavy work.
+
+If that is confirmed, drill down systematically to identify what selects the participation regime.
+
+Candidate independent variables include:
+
+1. source count;
+2. source-to-worker ratio;
+3. source ownership or assignment;
+4. insertion/order effects;
+5. worker/core affinity;
+6. which worker receives or pulls work first;
+7. upstream handle serialization or independent pullability;
+8. request timing and request ownership;
+9. local-cache occupancy;
+10. remote-cache availability and ownership;
+11. whether work is consumed directly from the remote path or enters the cache path first;
+12. routing/hash decisions established during graph construction;
+13. effective source parallelism relative to execution parallelism.
+
+Do not assume "scarce versus plentiful" is itself the final decision-tree feature. Treat it as the
+variable that exposed the phenomenon. Prefer discovering the underlying physical condition, such as
+effective source parallelism being lower than available execution parallelism, or Tier 1's
+request/pull ordering failing to expose enough work to all workers under a specific topology.
+
+The blueprint should define an iterative experimental method:
+
+1. Start from the current smallest decision tree.
+2. Select one unresolved leaf or unexplained regime.
+3. State the simplest physical hypothesis explaining it.
+4. Design the smallest controlled benchmark that can falsify that hypothesis.
+5. Change one variable at a time when practical.
+6. Preserve raw per-fork and per-worker evidence.
+7. Add a decision-tree split only when a variable produces a reproducible, meaningful winner or
+   behavior reversal.
+8. Once a split is established, recursively investigate only the leaves that still contain
+   materially different behavior.
+9. Stop splitting when additional variables do not meaningfully change the execution-path decision.
+
+The intended eventual policy should remain an explicit, understandable decision tree. Benchmarking
+may discover machine-specific thresholds inside that tree, but do not turn this into:
+
+* an ML model;
+* a 28-dimensional search problem;
+* a general adaptive controller;
+* continuous online experimentation;
+* a large coordination subsystem;
+* arbitrary source classification based on labels rather than measurable runtime structure.
+
+The decision tree should encode physical scheduler behavior that can be explained from measurements.
+
+The next blueprint is investigative only. It should specify:
+
+* exact hypotheses;
+* benchmark fixtures;
+* diagnostic counters;
+* variables to sweep;
+* controls;
+* evidence needed to accept or reject each hypothesis;
+* how to distinguish worker-participation changes from cache, affinity, JIT, request-ordering,
+  lifecycle, or timing artifacts;
+* how results feed into the next decision-tree split;
+* explicit stop conditions;
+* the minimal production implications if the hypothesis is eventually confirmed.
+
+Do not implement the production policy in this phase.
+
+The immediate objective is to explain the Tier 1 4.24M versus 8.5M CPU throughput regimes and
+determine whether effective worker participation is the next real branching variable in the
+scheduler decision tree.
