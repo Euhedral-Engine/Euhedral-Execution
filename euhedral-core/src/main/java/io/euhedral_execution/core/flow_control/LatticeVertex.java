@@ -385,6 +385,8 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
         @Getter
         private final long id = HasherApi.mix(ThreadLocalRandom.current().nextLong());
 
+        private final ThreadLocal<Boolean> productive = new ThreadLocal<>();
+
         private final PaddedAtomicLong wip = new PaddedAtomicLong(0);
         public LatticeSource upstream;
         public boolean complete = false;
@@ -402,6 +404,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
 
         @Override
         public void push(AbstractFrame frame) {
+            this.productive.set(Boolean.TRUE);
             LatticeVertex.this.push(frame);
         }
 
@@ -417,7 +420,11 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
             }
 
             try {
-                return this.upstream.pull(consumer, stopCondition, demand);
+                long pulled = this.upstream.pull(consumer, stopCondition, demand);
+                if (pulled > 0) {
+                    this.productive.set(Boolean.TRUE);
+                }
+                return pulled;
             } catch (Throwable t) {
                 logger.error("Upstream threw an exception during a pull", t);
                 this.complete();
@@ -474,8 +481,22 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
         }
 
         @Override
+        public boolean isProductive() {
+            Boolean prod = this.productive.get();
+            if (prod == null) {
+                this.productive.set(Boolean.TRUE);
+                return true;
+            }
+            return prod;
+        }
+
+        @Override
         public boolean acquireLock() {
-            return this.wip.getAndIncrement() == 0;
+            boolean acquired = this.wip.getAndIncrement() == 0;
+            if (acquired) {
+                this.productive.set(Boolean.FALSE);
+            }
+            return acquired;
         }
 
         @Override

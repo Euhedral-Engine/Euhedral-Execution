@@ -346,9 +346,9 @@ public final class ControlPlaneFragment extends WorkRequester {
             return;
         }
         this.state.completed = 0L;
-        long liveHandles = context.upstream.getTrueUpstreamCount();
+        long productiveHandles = context.upstream.getProductiveHandleCount();
         int registeredWorkers = super.getThreadCount();
-        this.state.batchSize = this.controlPolicy.completeBatch(getBatchLimit(), liveHandles, registeredWorkers);
+        this.state.batchSize = this.controlPolicy.completeBatch(getBatchLimit(), productiveHandles, registeredWorkers);
         reportMetrics();
     }
 

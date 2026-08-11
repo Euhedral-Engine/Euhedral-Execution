@@ -34,6 +34,7 @@ public class UpstreamQueue {
     private final MpscQueue<UpstreamHandle> upstreams;
     private final PaddedAtomicLong upstreamCount;
     long cachedUpCount = 0L;
+    long productiveCount = 0L;
 
     public UpstreamQueue(int core, MpscQueue<UpstreamHandle> upstreams, PaddedAtomicLong upstreamCount) {
         this.core = core;
@@ -70,14 +71,21 @@ public class UpstreamQueue {
 
     public long getCachedUpCount() {
         if (this.cachedUpCount == 0L) {
-            return getTrueUpstreamCount();
+            this.productiveCount = getTrueUpstreamCount();
+            return this.productiveCount;
         }
         return this.cachedUpCount;
     }
 
     public long getTrueUpstreamCount() {
         this.cachedUpCount = this.upstreamCount.getAcquire();
+        this.productiveCount = Math.min(this.cachedUpCount, this.productiveCount);
         return this.cachedUpCount;
+    }
+
+    public long getProductiveHandleCount() {
+        getTrueUpstreamCount();
+        return this.productiveCount;
     }
 
     public void request(long demand) {
@@ -108,12 +116,14 @@ public class UpstreamQueue {
             }
             if (handle.isComplete()) {
                 this.cachedUpCount--;
+                if (handle.isProductive()) {
+                    this.productiveCount = Math.max(0, this.productiveCount - 1);
+                }
                 continue;
             }
 
+            boolean wasProductive = handle.isProductive();
             if (!handle.acquireLock()) {
-                // A transient acquisition failure must not permanently remove a live handle from
-                // this owner-local queue. The cycle bound prevents immediate unbounded retries.
                 this.upstreams.offer(handle);
                 cycles++;
                 continue;
@@ -122,7 +132,17 @@ public class UpstreamQueue {
             try {
                 long request = Math.min(limit, bucketSize);
                 limit -= request;
+
+                // If the consumer is null, drian() sends a request and returns 0. Using the returned value to indicate
+                // productivity would not be accurate.
                 totalPull += drain(handle, consumer, stopCondition, request);
+
+                boolean produced = handle.isProductive();
+                if (!wasProductive && produced) {
+                    this.productiveCount++;
+                } else if (wasProductive && !produced) {
+                    this.productiveCount--;
+                }
             } finally {
                 handle.releaseLock();
             }
@@ -160,6 +180,10 @@ public class UpstreamQueue {
 
         public void addDownstream(LatticeReceiver terminal) {
             terminal.onError(new IllegalStateException("Not supported"));
+        }
+
+        public boolean isProductive() {
+            return true;
         }
 
         public boolean acquireLock() {
