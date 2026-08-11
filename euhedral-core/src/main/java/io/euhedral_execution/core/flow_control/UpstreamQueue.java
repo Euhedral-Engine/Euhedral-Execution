@@ -114,6 +114,9 @@ public class UpstreamQueue {
             }
 
             if (!handle.acquireLock()) {
+                // A transient acquisition failure must not permanently remove a live handle from
+                // this owner-local queue. The cycle bound prevents immediate unbounded retries.
+                this.upstreams.offer(handle);
                 cycles++;
                 continue;
             }

@@ -111,6 +111,43 @@ class UpstreamQueueTest {
         assertEquals(64, upstream.pulled);
     }
 
+    /// Verifies a transient acquisition failure retains the live handle for a later pull.
+    @Test
+    void shouldRetainLiveHandleAfterFailedAcquisition() {
+        TestUpstreamHandle upstream = new TestUpstreamHandle();
+        upstream.available = false;
+        handles.offer(upstream);
+        count.incrementAndGet();
+
+        assertEquals(0L, queue.pull(frame -> {}, frame -> false, 64));
+        assertEquals(1L, handles.sizeLong());
+        assertEquals(1L, upstream.acquisitionAttempts);
+
+        upstream.available = true;
+
+        assertEquals(64L, queue.pull(frame -> {}, frame -> false, 64));
+        assertEquals(1L, handles.sizeLong());
+        assertEquals(2L, upstream.acquisitionAttempts);
+    }
+
+    /// Verifies unavailable live handles remain bounded to one attempt per pull cycle.
+    @Test
+    void shouldBoundRetriesWhileRetainingUnavailableHandles() {
+        TestUpstreamHandle first = new TestUpstreamHandle();
+        TestUpstreamHandle second = new TestUpstreamHandle();
+        first.available = false;
+        second.available = false;
+        handles.offer(first);
+        handles.offer(second);
+        count.getAndAdd(2L);
+
+        assertEquals(0L, queue.pull(frame -> {}, frame -> false, 64));
+
+        assertEquals(2L, handles.sizeLong());
+        assertEquals(1L, first.acquisitionAttempts);
+        assertEquals(1L, second.acquisitionAttempts);
+    }
+
     @Test
     void shouldIgnoreZeroDemand() {
         TestUpstreamHandle upstream = new TestUpstreamHandle();
@@ -178,7 +215,16 @@ class UpstreamQueueTest {
 
         long requested;
         long pulled;
+        long acquisitionAttempts;
         boolean complete;
+        boolean available = true;
+
+        /// Returns the configured availability while retaining the number of bounded attempts.
+        @Override
+        public boolean acquireLock() {
+            this.acquisitionAttempts++;
+            return this.available;
+        }
 
         @Override
         public long pull(

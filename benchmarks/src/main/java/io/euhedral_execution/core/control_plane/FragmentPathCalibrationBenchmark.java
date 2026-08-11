@@ -12,6 +12,7 @@ import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.frames.BenchmarkFrame;
 import io.euhedral_execution.core.generics.AbstractExecutor;
 import io.euhedral_execution.core.generics.CloneableObject;
+import io.euhedral_execution.core.generics.LatticeSource;
 import io.euhedral_execution.core.impl.BaseCloneableObject;
 import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
 import io.euhedral_execution.data_structures.queues.common.QueueUtils;
@@ -26,6 +27,10 @@ import java.util.Arrays;
 import java.util.BitSet;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicLongArray;
+import java.util.function.Consumer;
+import java.util.function.Function;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -241,6 +246,227 @@ public class FragmentPathCalibrationBenchmark {
         }
     }
 
+    /// Cumulative per-source acquisition state in stable worker order at one lifecycle boundary.
+    record HandleSnapshot(long[][] attempts, long[][] failures, long[][] pulledFrames, long[] firstProductiveOrder) {
+
+        /// Isolates all mutable arrays retained by one diagnostic snapshot.
+        HandleSnapshot {
+            attempts = deepCopy(attempts);
+            failures = deepCopy(failures);
+            pulledFrames = deepCopy(pulledFrames);
+            firstProductiveOrder = firstProductiveOrder.clone();
+        }
+
+        /// Returns isolated attempt totals for stable reporting and tests.
+        @Override
+        public long[][] attempts() {
+            return deepCopy(this.attempts);
+        }
+
+        /// Returns isolated failure totals for stable reporting and tests.
+        @Override
+        public long[][] failures() {
+            return deepCopy(this.failures);
+        }
+
+        /// Returns isolated productive-frame totals for stable reporting and tests.
+        @Override
+        public long[][] pulledFrames() {
+            return deepCopy(this.pulledFrames);
+        }
+
+        /// Returns isolated first-productive order values for stable reporting and tests.
+        @Override
+        public long[] firstProductiveOrder() {
+            return this.firstProductiveOrder.clone();
+        }
+    }
+
+    /// Computes one monotonic handle-diagnostic delta while preserving first-event order metadata.
+    static HandleSnapshot handleDelta(HandleSnapshot before, HandleSnapshot after) {
+        long[][] attempts = matrixDelta(before.attempts, after.attempts);
+        long[][] failures = matrixDelta(before.failures, after.failures);
+        long[][] pulledFrames = matrixDelta(before.pulledFrames, after.pulledFrames);
+        return new HandleSnapshot(attempts, failures, pulledFrames, after.firstProductiveOrder);
+    }
+
+    /// Copies a rectangular diagnostic matrix without exposing recorder-owned rows.
+    private static long[][] deepCopy(long[][] matrix) {
+        long[][] copy = new long[matrix.length][];
+        for (int i = 0; i < matrix.length; i++) {
+            copy[i] = matrix[i].clone();
+        }
+        return copy;
+    }
+
+    /// Subtracts two equally shaped monotonic diagnostic matrices.
+    private static long[][] matrixDelta(long[][] before, long[][] after) {
+        if (before.length != after.length) {
+            throw new IllegalArgumentException("Handle diagnostic matrices must have equal source counts");
+        }
+        long[][] delta = new long[before.length][];
+        for (int source = 0; source < before.length; source++) {
+            if (before[source].length != after[source].length) {
+                throw new IllegalArgumentException("Handle diagnostic matrices must have equal worker counts");
+            }
+            delta[source] = new long[before[source].length];
+            for (int worker = 0; worker < before[source].length; worker++) {
+                long value = after[source][worker] - before[source][worker];
+                if (value < 0L) {
+                    throw new IllegalArgumentException("Handle diagnostic counters must be monotonic");
+                }
+                delta[source][worker] = value;
+            }
+        }
+        return delta;
+    }
+
+    /// Preallocated acquisition accounting updated once per handle attempt or productive pull.
+    static final class HandleAcquisitionRecorder {
+
+        private final int[] workerCpus;
+        private final int[] workerByCore;
+        private final PaddedLongAdder[] attempts;
+        private final PaddedLongAdder[] failures;
+        private final PaddedLongAdder[] pulledFrames;
+        private final AtomicLong firstSequence = new AtomicLong();
+        private final AtomicLongArray firstProductiveOrder;
+
+        /// Creates source-by-worker counters and the stable core-to-worker lookup used in hot callbacks.
+        HandleAcquisitionRecorder(int sourceCount, int[] workerCpus, int[] workerCores) {
+            if (sourceCount <= 0 || workerCpus.length == 0 || workerCpus.length != workerCores.length) {
+                throw new IllegalArgumentException("Sources and equally shaped worker identities are required");
+            }
+            this.workerCpus = workerCpus.clone();
+            this.workerByCore = new int[SystemInfo.MAX_CORE_ID + 1];
+            Arrays.fill(this.workerByCore, -1);
+            for (int worker = 0; worker < workerCores.length; worker++) {
+                int core = workerCores[worker];
+                if (core < 0 || core >= this.workerByCore.length || this.workerByCore[core] >= 0) {
+                    throw new IllegalArgumentException("Worker cores must be unique and in range");
+                }
+                this.workerByCore[core] = worker;
+            }
+            this.attempts = counters(sourceCount);
+            this.failures = counters(sourceCount);
+            this.pulledFrames = counters(sourceCount);
+            this.firstProductiveOrder = new AtomicLongArray(sourceCount * workerCpus.length);
+            for (int i = 0; i < this.firstProductiveOrder.length(); i++) {
+                this.firstProductiveOrder.setPlain(i, -1L);
+            }
+        }
+
+        /// Resolves the calling fragment's stable worker ordinal from its existing owner-local queue.
+        int currentWorker() {
+            UpstreamQueue queue = UpstreamQueue.UP_QUEUE.get();
+            if (queue == null || queue.core < 0 || queue.core >= this.workerByCore.length) {
+                throw new IllegalStateException("Handle acquisition did not originate from a diagnostic worker");
+            }
+            int worker = this.workerByCore[queue.core];
+            if (worker < 0) {
+                throw new IllegalStateException("Handle acquisition originated from an unselected worker core");
+            }
+            return worker;
+        }
+
+        /// Records one acquisition result in a worker-exclusive padded counter cell.
+        void recordAcquisition(int source, int worker, boolean acquired) {
+            int cpu = workerCpu(source, worker);
+            this.attempts[source].increment(cpu);
+            if (!acquired) {
+                this.failures[source].increment(cpu);
+            }
+        }
+
+        /// Records productive frames and the globally ordered first productive event for one cell.
+        void recordPulledFrames(int source, int worker, long frames) {
+            if (frames <= 0L) {
+                return;
+            }
+            int cpu = workerCpu(source, worker);
+            this.pulledFrames[source].add(cpu, frames);
+            int cell = source * this.workerCpus.length + worker;
+            if (this.firstProductiveOrder.getPlain(cell) < 0L) {
+                this.firstProductiveOrder.setRelease(cell, this.firstSequence.getAndIncrement());
+            }
+        }
+
+        /// Captures all counters with acquire semantics in source-major, stable-worker order.
+        HandleSnapshot snapshot() {
+            long[][] attemptSnapshot = snapshot(this.attempts);
+            long[][] failureSnapshot = snapshot(this.failures);
+            long[][] frameSnapshot = snapshot(this.pulledFrames);
+            long[] firstOrder = new long[this.firstProductiveOrder.length()];
+            for (int i = 0; i < firstOrder.length; i++) {
+                firstOrder[i] = this.firstProductiveOrder.getAcquire(i);
+            }
+            return new HandleSnapshot(attemptSnapshot, failureSnapshot, frameSnapshot, firstOrder);
+        }
+
+        /// Returns a fresh padded counter for every independently identified source.
+        private static PaddedLongAdder[] counters(int sourceCount) {
+            PaddedLongAdder[] counters = new PaddedLongAdder[sourceCount];
+            for (int source = 0; source < sourceCount; source++) {
+                counters[source] = new PaddedLongAdder(SystemInfo.CPU_COUNT, true, true);
+            }
+            return counters;
+        }
+
+        /// Reads one counter family in the recorder's stable worker order.
+        private long[][] snapshot(PaddedLongAdder[] counters) {
+            long[][] values = new long[counters.length][this.workerCpus.length];
+            for (int source = 0; source < counters.length; source++) {
+                for (int worker = 0; worker < this.workerCpus.length; worker++) {
+                    values[source][worker] = counters[source].getAcquire(this.workerCpus[worker]);
+                }
+            }
+            return values;
+        }
+
+        /// Validates source/worker coordinates and returns the worker's logical CPU counter index.
+        private int workerCpu(int source, int worker) {
+            if (source < 0 || source >= this.attempts.length || worker < 0 || worker >= this.workerCpus.length) {
+                throw new IllegalArgumentException("Handle diagnostic coordinate is outside the fixture");
+            }
+            return this.workerCpus[worker];
+        }
+    }
+
+    /// Creates the stable zero-based source identities retained in each fork report.
+    static int[] sourceOrdinals(int sourceCount) {
+        if (sourceCount < 0) {
+            throw new IllegalArgumentException("Source count must be non-negative");
+        }
+        int[] ordinals = new int[sourceCount];
+        for (int source = 0; source < sourceCount; source++) {
+            ordinals[source] = source;
+        }
+        return ordinals;
+    }
+
+    /// Formats one lifecycle snapshot with explicit primitive-array contents.
+    static String formatHandleSnapshot(HandleSnapshot snapshot) {
+        if (snapshot == null) {
+            return "null";
+        }
+        return "{attempts=" + Arrays.deepToString(snapshot.attempts())
+                + ", failures=" + Arrays.deepToString(snapshot.failures())
+                + ", pulledFrames=" + Arrays.deepToString(snapshot.pulledFrames())
+                + ", firstProductiveOrder=" + Arrays.toString(snapshot.firstProductiveOrder()) + '}';
+    }
+
+    /// Formats lifecycle-aligned snapshots without relying on record array identity strings.
+    static String formatHandleSnapshots(List<HandleSnapshot> snapshots) {
+        StringBuilder builder = new StringBuilder("[");
+        for (int i = 0; i < snapshots.size(); i++) {
+            if (i > 0) {
+                builder.append(", ");
+            }
+            builder.append(formatHandleSnapshot(snapshots.get(i)));
+        }
+        return builder.append(']').toString();
+    }
+
     /// Benchmark source-availability fixtures.
     public enum SourceShape {
         PLENTIFUL,
@@ -257,6 +483,13 @@ public class FragmentPathCalibrationBenchmark {
     enum Workload {
         NO_OP,
         CPU_WORK
+    }
+
+    /// Benchmark-only upstream publication layouts used after natural acquisition is classified.
+    public enum HandleLayout {
+        NATURAL,
+        BATCH_ALIGNED,
+        PHASED
     }
 
     /// One-worker state that records cold and post-warmup no-op path samples.
@@ -339,13 +572,20 @@ public class FragmentPathCalibrationBenchmark {
         @Param({"DIRECT", "STAGED"})
         public ForcedMode mode;
 
+        @Param({"NATURAL"})
+        public HandleLayout handleLayout;
+
         private final PaddedLongAdder counters = new PaddedLongAdder(SystemInfo.CPU_COUNT, true, true);
         private final List<CloneableObject> pipelines = new ArrayList<>();
         private DiagnosticLease diagnosticLease;
         private DiagnosticDistributor distributor;
         private RepeatingSink[] sources;
+        private HandleAcquisitionRecorder handleRecorder;
+        private long[] sourceHandleIds;
         /// Logical CPUs in the same stable order as the selected worker cores.
         private int[] workerCpus;
+        /// Physical cores aligned with `workerCpus` for owner-local acquisition attribution.
+        private int[] workerCores;
         /// Per-worker completion totals accumulated during the current measurement iteration.
         private long[] iterationWorkerDeltas;
         /// Sum of fixed completion-window durations during the current measurement iteration.
@@ -354,6 +594,14 @@ public class FragmentPathCalibrationBenchmark {
         private final List<long[]> measurementWorkerDeltas = new ArrayList<>();
         /// Fixed-window elapsed totals aligned with `measurementWorkerDeltas`.
         private final List<Long> measurementElapsedNanos = new ArrayList<>();
+        /// Cumulative acquisition state before the first JMH warmup iteration.
+        private HandleSnapshot preFirstIterationHandles;
+        /// Acquisition state captured at the start of the current JMH iteration.
+        private HandleSnapshot iterationHandleBefore;
+        /// Raw acquisition deltas aligned with the three JMH warmup iterations.
+        private final List<HandleSnapshot> warmupHandleDeltas = new ArrayList<>();
+        /// Raw acquisition deltas aligned with the five JMH measurement iterations.
+        private final List<HandleSnapshot> measurementHandleDeltas = new ArrayList<>();
         /// True only while JMH is invoking the measured, non-warmup iteration.
         private boolean measurementIteration;
         /// Source availability retained for the fork-level diagnostic report.
@@ -367,8 +615,13 @@ public class FragmentPathCalibrationBenchmark {
                 this.sourceShape = sourceShape;
                 this.workload = workload;
                 this.workerCpus = new int[workerCount];
+                this.workerCores = new int[workerCount];
                 this.measurementWorkerDeltas.clear();
                 this.measurementElapsedNanos.clear();
+                this.preFirstIterationHandles = null;
+                this.iterationHandleBefore = null;
+                this.warmupHandleDeltas.clear();
+                this.measurementHandleDeltas.clear();
                 DiagnosticDistributor.resetSharedRoutingState();
                 this.diagnosticLease = new DiagnosticLease(this.mode, FIXED_BATCH_SIZE);
 
@@ -395,7 +648,8 @@ public class FragmentPathCalibrationBenchmark {
                     if (workerCpu < 0) {
                         throw new IllegalStateException("Selected worker core has no effective logical CPU");
                     }
-                    this.workerCpus[workerIndex++] = workerCpu;
+                    this.workerCpus[workerIndex] = workerCpu;
+                    this.workerCores[workerIndex++] = core;
                     CloneableObject pipeline = base.clone(new CloneConfig("FragmentPathCalibration", core, cpus));
                     pipeline.input(handles[core]);
                     pipeline.setDrainMode(true);
@@ -409,13 +663,23 @@ public class FragmentPathCalibrationBenchmark {
                 this.distributor.setDrain(false);
 
                 int sourceCount = sourceCount(sourceShape, workerCount);
+                this.handleRecorder = new HandleAcquisitionRecorder(sourceCount, this.workerCpus, this.workerCores);
+                this.sourceHandleIds = new long[sourceCount];
                 this.sources = new RepeatingSink[sourceCount];
+                LatticeSource[] delegates = new LatticeSource[sourceCount];
                 long idHash = HasherApi.mix(HasherApi.BASE_SEED);
                 for (int i = 0; i < sourceCount; i++) {
                     BenchmarkFrame[] frames = BenchmarkFrame.generate(
                             FRAME_POOL_SIZE, false, idHash + i, HasherApi.BASE_SEED + (long) i * FRAME_POOL_SIZE);
                     this.sources[i] = new RepeatingSink(frames);
-                    this.distributor.ingest(this.sources[i].getDelegate());
+                    delegates[i] = this.sources[i].getDelegate();
+                    if (this.handleLayout == HandleLayout.NATURAL) {
+                        this.sourceHandleIds[i] = this.distributor.ingestTracked(delegates[i], i, this.handleRecorder);
+                    }
+                }
+                if (this.handleLayout != HandleLayout.NATURAL) {
+                    this.sourceHandleIds = this.distributor.ingestTracked(
+                            delegates, this.workerCores, this.handleLayout, this.handleRecorder);
                 }
             } catch (RuntimeException e) {
                 closePath();
@@ -426,6 +690,10 @@ public class FragmentPathCalibrationBenchmark {
         /// Opens one measurement-only participation accumulator and ignores warmup iterations.
         @Setup(Level.Iteration)
         public final void setupIteration(IterationParams iterationParams) {
+            this.iterationHandleBefore = this.handleRecorder.snapshot();
+            if (this.preFirstIterationHandles == null) {
+                this.preFirstIterationHandles = this.iterationHandleBefore;
+            }
             this.measurementIteration = iterationParams.getType() == IterationType.MEASUREMENT;
             if (this.measurementIteration) {
                 this.iterationWorkerDeltas = new long[this.workerCpus.length];
@@ -436,6 +704,12 @@ public class FragmentPathCalibrationBenchmark {
         /// Retains one raw per-worker split aligned with the completed JMH measurement iteration.
         @TearDown(Level.Iteration)
         public final void tearDownIteration(IterationParams iterationParams) {
+            HandleSnapshot handleDeltas = handleDelta(this.iterationHandleBefore, this.handleRecorder.snapshot());
+            if (iterationParams.getType() == IterationType.WARMUP) {
+                this.warmupHandleDeltas.add(handleDeltas);
+            } else if (iterationParams.getType() == IterationType.MEASUREMENT) {
+                this.measurementHandleDeltas.add(handleDeltas);
+            }
             if (iterationParams.getType() == IterationType.MEASUREMENT) {
                 this.measurementWorkerDeltas.add(this.iterationWorkerDeltas.clone());
                 this.measurementElapsedNanos.add(this.iterationElapsedNanos);
@@ -443,6 +717,7 @@ public class FragmentPathCalibrationBenchmark {
             this.measurementIteration = false;
             this.iterationWorkerDeltas = null;
             this.iterationElapsedNanos = 0L;
+            this.iterationHandleBefore = null;
         }
 
         /// Waits for one JMH invocation's additional completed frames.
@@ -473,6 +748,7 @@ public class FragmentPathCalibrationBenchmark {
         /// Allows the single-worker state to sample the warmed graph before common teardown.
         protected void beforeClose() {
             reportParticipation();
+            reportHandleAcquisition();
         }
 
         /// Reports raw measurement splits and fork-level participation metrics before graph close.
@@ -481,11 +757,12 @@ public class FragmentPathCalibrationBenchmark {
             long[] finalWorkerCounts = workerCounts(this.counters, this.workerCpus);
             if (rawDeltas.length == 0) {
                 LOGGER.info(
-                        "Fragment worker participation mode={} sourceShape={} workload={} batch={} workerCpus={} "
+                        "Fragment worker participation mode={} sourceShape={} workload={} handleLayout={} batch={} workerCpus={} "
                                 + "rawMeasurementDeltas=[] finalWorkerCounts={} verdict=NO_MEASUREMENT_SAMPLES",
                         this.mode,
                         this.sourceShape,
                         this.workload,
+                        this.handleLayout,
                         FIXED_BATCH_SIZE,
                         Arrays.toString(this.workerCpus),
                         Arrays.toString(finalWorkerCounts));
@@ -511,7 +788,7 @@ public class FragmentPathCalibrationBenchmark {
             ParticipationMetrics aggregate =
                     participationMetrics(aggregateDeltas, aggregateElapsedNanos, singleLaneCeilingFramesPerSecond);
             LOGGER.info(
-                    "Fragment worker participation mode={} sourceShape={} workload={} batch={} workerCpus={} "
+                    "Fragment worker participation mode={} sourceShape={} workload={} handleLayout={} batch={} workerCpus={} "
                             + "rawMeasurementDeltas={} perMeasurementFractions={} perMeasurementDominance={} "
                             + "perMeasurementEffectiveLanes={} aggregateDeltas={} aggregateFractions={} "
                             + "aggregateDominance={} aggregateEffectiveLanes={} finalWorkerCounts={} "
@@ -519,6 +796,7 @@ public class FragmentPathCalibrationBenchmark {
                     this.mode,
                     this.sourceShape,
                     this.workload,
+                    this.handleLayout,
                     FIXED_BATCH_SIZE,
                     Arrays.toString(this.workerCpus),
                     Arrays.deepToString(rawDeltas),
@@ -531,6 +809,32 @@ public class FragmentPathCalibrationBenchmark {
                     aggregate.effectiveLanes(),
                     Arrays.toString(finalWorkerCounts),
                     singleLaneCeilingFramesPerSecond);
+        }
+
+        /// Reports source/handle acquisition and productive-service matrices for the complete fork.
+        private void reportHandleAcquisition() {
+            HandleSnapshot finalSnapshot = this.handleRecorder.snapshot();
+            LOGGER.info(
+                    "Fragment handle acquisition mode={} sourceShape={} workload={} handleLayout={} batch={} workerCpus={} "
+                            + "workerCores={} sourceOrdinals={} sourceHandleIds={} preFirstIteration={} "
+                            + "warmupDeltas={} measurementDeltas={} aggregateAttempts={} aggregateFailures={} "
+                            + "aggregatePulledFrames={} firstProductiveOrder={}",
+                    this.mode,
+                    this.sourceShape,
+                    this.workload,
+                    this.handleLayout,
+                    FIXED_BATCH_SIZE,
+                    Arrays.toString(this.workerCpus),
+                    Arrays.toString(this.workerCores),
+                    Arrays.toString(sourceOrdinals(this.sourceHandleIds.length)),
+                    Arrays.toString(this.sourceHandleIds),
+                    formatHandleSnapshot(this.preFirstIterationHandles),
+                    formatHandleSnapshots(this.warmupHandleDeltas),
+                    formatHandleSnapshots(this.measurementHandleDeltas),
+                    Arrays.deepToString(finalSnapshot.attempts()),
+                    Arrays.deepToString(finalSnapshot.failures()),
+                    Arrays.deepToString(finalSnapshot.pulledFrames()),
+                    Arrays.toString(finalSnapshot.firstProductiveOrder()));
         }
 
         /// Collects nine fixed-completion samples from the continuously running graph.
@@ -583,6 +887,8 @@ public class FragmentPathCalibrationBenchmark {
                 this.distributor.close();
                 this.distributor = null;
             }
+            this.handleRecorder = null;
+            this.sourceHandleIds = null;
             PinnedThreadExecutor.closeAll();
             DiagnosticDistributor.resetSharedRoutingState();
             if (this.diagnosticLease != null) {
@@ -658,6 +964,41 @@ public class FragmentPathCalibrationBenchmark {
                     RoutingPolicy.SOCKET_LOCAL);
         }
 
+        /// Connects one source through the production interceptor path with batch-level diagnostics.
+        long ingestTracked(LatticeSource source, int sourceOrdinal, HandleAcquisitionRecorder recorder) {
+            DiagnosticUpstreamInterceptor interceptor = new DiagnosticUpstreamInterceptor(sourceOrdinal, recorder);
+            source.addDownstream(interceptor);
+            interceptor.addUpstream(source);
+            return interceptor.getId();
+        }
+
+        /// Publishes a complete two-source diagnostic layout before making its global count visible.
+        long[] ingestTracked(
+                LatticeSource[] sources, int[] workerCores, HandleLayout layout, HandleAcquisitionRecorder recorder) {
+            if (sources.length != 2 || workerCores.length != 2 || layout == HandleLayout.NATURAL) {
+                throw new IllegalArgumentException("Custom handle layouts require two sources and two workers");
+            }
+            DiagnosticUpstreamInterceptor[] interceptors = new DiagnosticUpstreamInterceptor[sources.length];
+            long[] handleIds = new long[sources.length];
+            for (int source = 0; source < sources.length; source++) {
+                DiagnosticUpstreamInterceptor interceptor = new DiagnosticUpstreamInterceptor(source, recorder);
+                sources[source].addDownstream(interceptor);
+                interceptor.upstream = sources[source];
+                interceptors[source] = interceptor;
+                handleIds[source] = interceptor.getId();
+            }
+
+            for (int worker = 0; worker < workerCores.length; worker++) {
+                int core = workerCores[worker];
+                int first = layout == HandleLayout.PHASED && worker == 1 ? 1 : 0;
+                int second = first ^ 1;
+                UPSTREAMS[core].offer(interceptors[first]);
+                UPSTREAMS[core].offer(interceptors[second]);
+            }
+            UPSTREAM_COUNT.getAndAdd(sources.length);
+            return handleIds;
+        }
+
         /// Restores the JVM-wide upstream registry after every isolated diagnostic trial.
         static void resetSharedRoutingState() {
             UpstreamQueue.UP_QUEUE.remove();
@@ -676,6 +1017,38 @@ public class FragmentPathCalibrationBenchmark {
             int socket = SystemInfo.getCoreInfo(firstCore).socket();
             long references = (long) (SystemInfo.socketL3Cache(socket) * 0.7) / QueueUtils.REFERENCE_SIZE;
             return (int) Math.min(Math.max(0L, references), Integer.MAX_VALUE);
+        }
+
+        /// Production interceptor behavior plus per-acquisition benchmark accounting.
+        final class DiagnosticUpstreamInterceptor extends UpstreamInterceptor {
+
+            private final int sourceOrdinal;
+            private final HandleAcquisitionRecorder recorder;
+
+            /// Retains the deterministic source identity and trial-owned diagnostic recorder.
+            DiagnosticUpstreamInterceptor(int sourceOrdinal, HandleAcquisitionRecorder recorder) {
+                this.sourceOrdinal = sourceOrdinal;
+                this.recorder = recorder;
+            }
+
+            /// Records whether the calling worker obtained this handle without changing lock behavior.
+            @Override
+            public boolean acquireLock() {
+                int worker = this.recorder.currentWorker();
+                boolean acquired = super.acquireLock();
+                this.recorder.recordAcquisition(this.sourceOrdinal, worker, acquired);
+                return acquired;
+            }
+
+            /// Records productive frames after delegating the complete production pull behavior.
+            @Override
+            public long pull(
+                    Consumer<AbstractFrame> consumer, Function<AbstractFrame, Boolean> stopCondition, long demand) {
+                int worker = this.recorder.currentWorker();
+                long frames = super.pull(consumer, stopCondition, demand);
+                this.recorder.recordPulledFrames(this.sourceOrdinal, worker, frames);
+                return frames;
+            }
         }
     }
 

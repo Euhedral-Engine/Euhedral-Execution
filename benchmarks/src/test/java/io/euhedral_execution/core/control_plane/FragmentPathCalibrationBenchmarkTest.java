@@ -1,10 +1,12 @@
 package io.euhedral_execution.core.control_plane;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
 import java.util.BitSet;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Isolated;
 
@@ -115,8 +117,7 @@ class FragmentPathCalibrationBenchmarkTest {
                 () -> FragmentPathCalibrationBenchmark.participationMetrics(new long[] {1L}, 0L));
         assertThrows(
                 IllegalArgumentException.class,
-                () -> FragmentPathCalibrationBenchmark.participationMetrics(
-                        new long[] {1L}, 1L, Double.NaN));
+                () -> FragmentPathCalibrationBenchmark.participationMetrics(new long[] {1L}, 1L, Double.NaN));
     }
 
     /// Verifies lane estimates use the fixed CPU body or matching phase 1 no-op control.
@@ -137,6 +138,60 @@ class FragmentPathCalibrationBenchmarkTest {
                 FragmentPathCalibrationBenchmark.singleLaneCeiling(
                         FragmentPathCalibrationBenchmark.Workload.NO_OP,
                         FragmentPathCalibrationBenchmark.ForcedMode.STAGED));
+    }
+
+    /// Verifies acquisition snapshots retain raw events, first-productivity order, and isolation.
+    @Test
+    void recordsHandleAcquisitionBySourceAndWorker() {
+        FragmentPathCalibrationBenchmark.HandleAcquisitionRecorder recorder =
+                new FragmentPathCalibrationBenchmark.HandleAcquisitionRecorder(2, new int[] {0}, new int[] {0});
+
+        recorder.recordAcquisition(0, 0, false);
+        recorder.recordAcquisition(0, 0, true);
+        recorder.recordPulledFrames(0, 0, 32L);
+        recorder.recordAcquisition(1, 0, true);
+        recorder.recordPulledFrames(1, 0, 16L);
+
+        FragmentPathCalibrationBenchmark.HandleSnapshot snapshot = recorder.snapshot();
+        assertArrayEquals(new long[] {2L}, snapshot.attempts()[0]);
+        assertArrayEquals(new long[] {1L}, snapshot.failures()[0]);
+        assertArrayEquals(new long[] {32L}, snapshot.pulledFrames()[0]);
+        assertArrayEquals(new long[] {16L}, snapshot.pulledFrames()[1]);
+        assertArrayEquals(new long[] {0L, 1L}, snapshot.firstProductiveOrder());
+
+        long[][] isolated = snapshot.pulledFrames();
+        isolated[0][0] = 99L;
+        assertEquals(32L, snapshot.pulledFrames()[0][0]);
+    }
+
+    /// Verifies lifecycle deltas preserve raw matrix shape and reject counter regression.
+    @Test
+    void computesMonotonicHandleLifecycleDelta() {
+        FragmentPathCalibrationBenchmark.HandleSnapshot before = new FragmentPathCalibrationBenchmark.HandleSnapshot(
+                new long[][] {{2L, 3L}}, new long[][] {{1L, 0L}}, new long[][] {{32L, 64L}}, new long[] {0L, 1L});
+        FragmentPathCalibrationBenchmark.HandleSnapshot after = new FragmentPathCalibrationBenchmark.HandleSnapshot(
+                new long[][] {{5L, 9L}}, new long[][] {{1L, 2L}}, new long[][] {{96L, 160L}}, new long[] {0L, 1L});
+
+        FragmentPathCalibrationBenchmark.HandleSnapshot delta =
+                FragmentPathCalibrationBenchmark.handleDelta(before, after);
+
+        assertArrayEquals(new long[] {3L, 6L}, delta.attempts()[0]);
+        assertArrayEquals(new long[] {0L, 2L}, delta.failures()[0]);
+        assertArrayEquals(new long[] {64L, 96L}, delta.pulledFrames()[0]);
+        assertThrows(IllegalArgumentException.class, () -> FragmentPathCalibrationBenchmark.handleDelta(after, before));
+    }
+
+    /// Verifies source identity and lifecycle report formatting remain deterministic.
+    @Test
+    void formatsHandleLifecycleEvidenceDeterministically() {
+        FragmentPathCalibrationBenchmark.HandleSnapshot snapshot = new FragmentPathCalibrationBenchmark.HandleSnapshot(
+                new long[][] {{1L}}, new long[][] {{0L}}, new long[][] {{32L}}, new long[] {0L});
+
+        assertArrayEquals(new int[] {0, 1}, FragmentPathCalibrationBenchmark.sourceOrdinals(2));
+        assertEquals(
+                "[{attempts=[[1]], failures=[[0]], pulledFrames=[[32]], firstProductiveOrder=[0]}]",
+                FragmentPathCalibrationBenchmark.formatHandleSnapshots(List.of(snapshot)));
+        assertThrows(IllegalArgumentException.class, () -> FragmentPathCalibrationBenchmark.sourceOrdinals(-1));
     }
 
     /// Verifies benchmark teardown can release the process-wide diagnostic slot for another trial.
