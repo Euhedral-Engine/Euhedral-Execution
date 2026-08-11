@@ -1,5 +1,7 @@
 # Phase 6 Executor Body-Cost Sensor Plan
 
+Status: completed; sparse executor-only timing passed the predeclared signal and overhead gates
+
 ## Objective
 
 Determine whether the executor boundary can provide a low-cost, tier-neutral body-work signal that

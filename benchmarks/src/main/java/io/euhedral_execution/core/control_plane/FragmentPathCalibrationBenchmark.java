@@ -68,6 +68,10 @@ public class FragmentPathCalibrationBenchmark {
     static final int FRAME_POOL_SIZE = 16_384;
     static final int SAMPLE_COUNT = 9;
     static final int CPU_WORK_ROUNDS = 256;
+    static final int BODY_TIMING_INTERVAL = 256;
+    static final double BODY_TIMING_SEPARATION_MARGIN_NS = 5.0;
+    static final double BODY_TIMING_NEUTRALITY_LIMIT_NS = 5.0;
+    static final String BODY_TIMING_ENABLED_PROPERTY = "euhedral.fragment.bodyTiming.enabled";
     static final String WORK_COST_METRIC_PREFIX = "fragment-work-cost";
     static final long TIMEOUT_NS = TimeUnit.MINUTES.toNanos(1);
     /// The blueprint's 225 ns theoretical one-worker ceiling for CPU-work lane estimates.
@@ -104,6 +108,13 @@ public class FragmentPathCalibrationBenchmark {
     @Benchmark
     @OperationsPerInvocation(INVOCATION_FRAMES)
     public void workCostDecision(WorkCostDecisionState state) {
+        state.awaitInvocation();
+    }
+
+    /// Measures the sparse executor-only body-cost sensor through either forced fragment path.
+    @Benchmark
+    @OperationsPerInvocation(INVOCATION_FRAMES)
+    public void executorBodyCost(ExecutorBodyCostState state) {
         state.awaitInvocation();
     }
 
@@ -258,6 +269,136 @@ public class FragmentPathCalibrationBenchmark {
                 ? DIRECT_NO_OP_SINGLE_LANE_CEILING_FRAMES_PER_SECOND
                 : STAGED_NO_OP_SINGLE_LANE_CEILING_FRAMES_PER_SECOND;
     }
+
+    /// Cumulative sparse executor-body timing state in stable worker order.
+    record BodyTimingSnapshot(long[] counts, long[] elapsedNanos) {
+
+        /// Isolates counter arrays retained beyond an iteration boundary.
+        BodyTimingSnapshot {
+            if (counts.length != elapsedNanos.length) {
+                throw new IllegalArgumentException("Body timing arrays must have equal lengths");
+            }
+            counts = counts.clone();
+            elapsedNanos = elapsedNanos.clone();
+        }
+
+        /// Returns isolated sample counts for deterministic diagnostics.
+        @Override
+        public long[] counts() {
+            return this.counts.clone();
+        }
+
+        /// Returns isolated elapsed totals for deterministic diagnostics.
+        @Override
+        public long[] elapsedNanos() {
+            return this.elapsedNanos.clone();
+        }
+    }
+
+    /// Computes one monotonic sparse body-timing delta in stable worker order.
+    static BodyTimingSnapshot bodyTimingDelta(BodyTimingSnapshot before, BodyTimingSnapshot after) {
+        long[] beforeCounts = before.counts;
+        long[] afterCounts = after.counts;
+        long[] beforeElapsed = before.elapsedNanos;
+        long[] afterElapsed = after.elapsedNanos;
+        if (beforeCounts.length != afterCounts.length) {
+            throw new IllegalArgumentException("Body timing snapshots must have equal worker counts");
+        }
+        long[] counts = new long[beforeCounts.length];
+        long[] elapsedNanos = new long[beforeCounts.length];
+        for (int worker = 0; worker < counts.length; worker++) {
+            counts[worker] = afterCounts[worker] - beforeCounts[worker];
+            elapsedNanos[worker] = afterElapsed[worker] - beforeElapsed[worker];
+            if (counts[worker] < 0L || elapsedNanos[worker] < 0L) {
+                throw new IllegalArgumentException("Body timing counters must be monotonic");
+            }
+        }
+        return new BodyTimingSnapshot(counts, elapsedNanos);
+    }
+
+    /// Converts sparse timing totals to per-worker nanoseconds per sampled executor call.
+    static double[] bodyTimingEstimates(BodyTimingSnapshot snapshot) {
+        long[] counts = snapshot.counts;
+        long[] elapsedNanos = snapshot.elapsedNanos;
+        double[] estimates = new double[counts.length];
+        for (int worker = 0; worker < estimates.length; worker++) {
+            if (counts[worker] <= 0L) {
+                throw new IllegalArgumentException("Every retained worker must have a body timing sample");
+            }
+            estimates[worker] = (double) elapsedNanos[worker] / counts[worker];
+        }
+        return estimates;
+    }
+
+    /// Returns a median without mutating the retained fork-worker evidence.
+    static double bodyTimingMedian(double[] estimates) {
+        if (estimates.length == 0) {
+            throw new IllegalArgumentException("At least one retained body estimate is required");
+        }
+        double[] sorted = estimates.clone();
+        for (double estimate : sorted) {
+            if (!Double.isFinite(estimate) || estimate < 0.0) {
+                throw new IllegalArgumentException("Body timing estimates must be finite and non-negative");
+            }
+        }
+        Arrays.sort(sorted);
+        int middle = sorted.length >>> 1;
+        return (sorted.length & 1) == 0 ? (sorted[middle - 1] + sorted[middle]) / 2.0 : sorted[middle];
+    }
+
+    /// Returns the inclusive range of one retained fork-worker estimate set.
+    static RetainedRange retainedRange(double[] estimates) {
+        bodyTimingMedian(estimates);
+        double minimum = Double.POSITIVE_INFINITY;
+        double maximum = Double.NEGATIVE_INFINITY;
+        for (double estimate : estimates) {
+            minimum = Math.min(minimum, estimate);
+            maximum = Math.max(maximum, estimate);
+        }
+        return new RetainedRange(minimum, maximum);
+    }
+
+    /// Applies the predeclared monotonic-median and five-nanosecond separation gates.
+    static boolean bodyTimingSeparationPassed(double[] rounds24, double[] rounds80, double[] rounds96) {
+        double median24 = bodyTimingMedian(rounds24);
+        double median80 = bodyTimingMedian(rounds80);
+        double median96 = bodyTimingMedian(rounds96);
+        RetainedRange range80 = retainedRange(rounds80);
+        RetainedRange range96 = retainedRange(rounds96);
+        return median24 < median80
+                && median80 < median96
+                && range80.maximum() + BODY_TIMING_SEPARATION_MARGIN_NS <= range96.minimum();
+    }
+
+    /// Applies the predeclared per-point worker and fork dispersion bound.
+    static boolean bodyTimingStabilityPassed(double[] estimates) {
+        double median = bodyTimingMedian(estimates);
+        double tolerance = Math.max(5.0, median * 0.10);
+        for (double estimate : estimates) {
+            if (Math.abs(estimate - median) > tolerance) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /// Applies the five-nanosecond span bound to four mode-and-availability groups.
+    static boolean bodyTimingNeutralityPassed(double[][] groupEstimates) {
+        if (groupEstimates.length != 4) {
+            throw new IllegalArgumentException("Exactly four mode-and-availability groups are required");
+        }
+        double minimum = Double.POSITIVE_INFINITY;
+        double maximum = Double.NEGATIVE_INFINITY;
+        for (double[] group : groupEstimates) {
+            double median = bodyTimingMedian(group);
+            minimum = Math.min(minimum, median);
+            maximum = Math.max(maximum, median);
+        }
+        return maximum - minimum <= BODY_TIMING_NEUTRALITY_LIMIT_NS;
+    }
+
+    /// Inclusive extrema for one retained body-timing estimate set.
+    record RetainedRange(double minimum, double maximum) {}
 
     /// Immutable derived participation values for one fixed measurement window.
     record ParticipationMetrics(
@@ -686,6 +827,25 @@ public class FragmentPathCalibrationBenchmark {
         }
     }
 
+    /// Two-worker forced-path state for the diagnostic executor-only timing candidate.
+    @State(Scope.Benchmark)
+    public static class ExecutorBodyCostState extends PathState {
+
+        @Param({"PLENTIFUL", "SCARCE"})
+        public SourceShape sourceShape;
+
+        @Param({"24", "80", "96"})
+        public int workRounds;
+
+        /// Starts one fixed validation point; a diagnostic property disables timing for overhead control.
+        @Setup(Level.Trial)
+        public void setup() {
+            boolean bodyTimingEnabled =
+                    Boolean.parseBoolean(System.getProperty(BODY_TIMING_ENABLED_PROPERTY, Boolean.TRUE.toString()));
+            setupPath(2, this.sourceShape, Workload.CPU_WORK, this.workRounds, false, bodyTimingEnabled);
+        }
+    }
+
     /// Owner-local state for the scheduler-free work-body measurements.
     @State(Scope.Thread)
     public static class WorkOnlyState {
@@ -715,6 +875,8 @@ public class FragmentPathCalibrationBenchmark {
         public HandleLayout handleLayout;
 
         private final PaddedLongAdder counters = new PaddedLongAdder(SystemInfo.CPU_COUNT, true, true);
+        private final PaddedLongAdder bodyTimingSampleCounts = new PaddedLongAdder(SystemInfo.CPU_COUNT, true, true);
+        private final PaddedLongAdder bodyTimingElapsedNanos = new PaddedLongAdder(SystemInfo.CPU_COUNT, true, true);
         private final List<CloneableObject> pipelines = new ArrayList<>();
         private DiagnosticLease diagnosticLease;
         private DiagnosticDistributor distributor;
@@ -749,6 +911,14 @@ public class FragmentPathCalibrationBenchmark {
         private DistributionSummary[] serviceSummaries;
         /// Existing service metric state captured at the start of the current iteration.
         private ServiceMetricSnapshot iterationServiceBefore;
+        /// Sparse body-timing state captured at the start of the current JMH iteration.
+        private BodyTimingSnapshot iterationBodyTimingBefore;
+        /// Raw sparse timing deltas aligned with the three JMH warmup iterations.
+        private final List<BodyTimingSnapshot> warmupBodyTimingDeltas = new ArrayList<>();
+        /// Raw sparse timing deltas aligned with the five JMH measurement iterations.
+        private final List<BodyTimingSnapshot> measurementBodyTimingDeltas = new ArrayList<>();
+        /// True only for the bounded executor-body sensor validation state.
+        private boolean observeBodyTiming;
         /// True only while JMH is invoking the measured, non-warmup iteration.
         private boolean measurementIteration;
         /// Source availability retained for the fork-level diagnostic report.
@@ -770,6 +940,17 @@ public class FragmentPathCalibrationBenchmark {
                 Workload workload,
                 int workRounds,
                 boolean observeServiceMetric) {
+            setupPath(workerCount, sourceShape, workload, workRounds, observeServiceMetric, false);
+        }
+
+        /// Builds the path with independently gated service telemetry and executor-body timing.
+        protected final void setupPath(
+                int workerCount,
+                SourceShape sourceShape,
+                Workload workload,
+                int workRounds,
+                boolean observeServiceMetric,
+                boolean observeBodyTiming) {
             try {
                 if (workRounds < 0 || (workload == Workload.NO_OP && workRounds != 0)) {
                     throw new IllegalArgumentException("Work rounds must match a non-negative CPU workload");
@@ -787,6 +968,10 @@ public class FragmentPathCalibrationBenchmark {
                 this.measurementHandleDeltas.clear();
                 this.measurementServiceDeltas.clear();
                 this.iterationServiceBefore = null;
+                this.observeBodyTiming = observeBodyTiming;
+                this.iterationBodyTimingBefore = null;
+                this.warmupBodyTimingDeltas.clear();
+                this.measurementBodyTimingDeltas.clear();
                 DiagnosticDistributor.resetSharedRoutingState();
                 this.diagnosticLease = new DiagnosticLease(this.mode, FIXED_BATCH_SIZE);
                 if (observeServiceMetric) {
@@ -806,7 +991,14 @@ public class FragmentPathCalibrationBenchmark {
                     throw new IllegalStateException("Unable to publish the diagnostic core mapping");
                 }
 
-                CountingExecutor executor = new CountingExecutor(-1, this.counters, workload, workRounds);
+                CountingExecutor executor = observeBodyTiming
+                        ? CountingExecutor.bodyTimingPrototype(
+                                this.counters,
+                                workload,
+                                workRounds,
+                                this.bodyTimingSampleCounts,
+                                this.bodyTimingElapsedNanos)
+                        : new CountingExecutor(-1, this.counters, workload, workRounds);
                 BaseCloneableObject base = this.serviceRegistry == null
                         ? new BaseCloneableObject(executor)
                         : new BaseCloneableObject(
@@ -869,6 +1061,9 @@ public class FragmentPathCalibrationBenchmark {
             if (this.serviceSummaries != null) {
                 this.iterationServiceBefore = serviceMetricSnapshot(this.serviceSummaries);
             }
+            if (this.observeBodyTiming) {
+                this.iterationBodyTimingBefore = bodyTimingSnapshot();
+            }
             if (this.preFirstIterationHandles == null) {
                 this.preFirstIterationHandles = this.iterationHandleBefore;
             }
@@ -886,8 +1081,14 @@ public class FragmentPathCalibrationBenchmark {
             ServiceMetricSnapshot serviceDelta = this.serviceSummaries == null
                     ? null
                     : serviceMetricDelta(this.iterationServiceBefore, serviceMetricSnapshot(this.serviceSummaries));
+            BodyTimingSnapshot bodyTimingDelta = this.observeBodyTiming
+                    ? bodyTimingDelta(this.iterationBodyTimingBefore, bodyTimingSnapshot())
+                    : null;
             if (iterationParams.getType() == IterationType.WARMUP) {
                 this.warmupHandleDeltas.add(handleDeltas);
+                if (bodyTimingDelta != null) {
+                    this.warmupBodyTimingDeltas.add(bodyTimingDelta);
+                }
             } else if (iterationParams.getType() == IterationType.MEASUREMENT) {
                 this.measurementHandleDeltas.add(handleDeltas);
             }
@@ -897,12 +1098,16 @@ public class FragmentPathCalibrationBenchmark {
                 if (serviceDelta != null) {
                     this.measurementServiceDeltas.add(serviceDelta);
                 }
+                if (bodyTimingDelta != null) {
+                    this.measurementBodyTimingDeltas.add(bodyTimingDelta);
+                }
             }
             this.measurementIteration = false;
             this.iterationWorkerDeltas = null;
             this.iterationElapsedNanos = 0L;
             this.iterationHandleBefore = null;
             this.iterationServiceBefore = null;
+            this.iterationBodyTimingBefore = null;
         }
 
         /// Waits for one JMH invocation's additional completed frames.
@@ -935,6 +1140,7 @@ public class FragmentPathCalibrationBenchmark {
             reportParticipation();
             reportHandleAcquisition();
             reportServiceEstimate();
+            reportBodyTimingEstimate();
         }
 
         /// Reports raw measurement splits and fork-level participation metrics before graph close.
@@ -1076,6 +1282,82 @@ public class FragmentPathCalibrationBenchmark {
                     aggregateEstimate);
         }
 
+        /// Snapshots sparse body-timing counters with acquire semantics in stable worker order.
+        private BodyTimingSnapshot bodyTimingSnapshot() {
+            return new BodyTimingSnapshot(
+                    workerCounts(this.bodyTimingSampleCounts, this.workerCpus),
+                    workerCounts(this.bodyTimingElapsedNanos, this.workerCpus));
+        }
+
+        /// Reports raw iteration deltas and the retained fork-worker body-cost estimates.
+        private void reportBodyTimingEstimate() {
+            if (!this.observeBodyTiming) {
+                return;
+            }
+            long[][] warmupCounts = new long[this.warmupBodyTimingDeltas.size()][];
+            long[][] warmupElapsed = new long[this.warmupBodyTimingDeltas.size()][];
+            double[][] warmupEstimates = new double[this.warmupBodyTimingDeltas.size()][];
+            for (int iteration = 0; iteration < this.warmupBodyTimingDeltas.size(); iteration++) {
+                BodyTimingSnapshot delta = this.warmupBodyTimingDeltas.get(iteration);
+                warmupCounts[iteration] = delta.counts();
+                warmupElapsed[iteration] = delta.elapsedNanos();
+                warmupEstimates[iteration] = bodyTimingEstimates(delta);
+            }
+
+            long[][] measurementCounts = new long[this.measurementBodyTimingDeltas.size()][];
+            long[][] measurementElapsed = new long[this.measurementBodyTimingDeltas.size()][];
+            double[][] measurementEstimates = new double[this.measurementBodyTimingDeltas.size()][];
+            long[] aggregateCounts = new long[this.workerCpus.length];
+            long[] aggregateElapsed = new long[this.workerCpus.length];
+            for (int iteration = 0; iteration < this.measurementBodyTimingDeltas.size(); iteration++) {
+                BodyTimingSnapshot delta = this.measurementBodyTimingDeltas.get(iteration);
+                measurementCounts[iteration] = delta.counts();
+                measurementElapsed[iteration] = delta.elapsedNanos();
+                measurementEstimates[iteration] = bodyTimingEstimates(delta);
+                for (int worker = 0; worker < aggregateCounts.length; worker++) {
+                    aggregateCounts[worker] =
+                            Math.addExact(aggregateCounts[worker], measurementCounts[iteration][worker]);
+                    aggregateElapsed[worker] =
+                            Math.addExact(aggregateElapsed[worker], measurementElapsed[iteration][worker]);
+                }
+            }
+            BodyTimingSnapshot aggregate = new BodyTimingSnapshot(aggregateCounts, aggregateElapsed);
+            LOGGER.info(
+                    "Fragment executor body timing mode={} sourceShape={} workRounds={} batch={} sampleInterval={} "
+                            + "workerCpus={} isolatedBodyCostNs={} liveHandles={} registeredWorkers={} "
+                            + "warmupSampleCounts={} warmupElapsedNanos={} warmupWorkerEstimatesNs={} "
+                            + "measurementSampleCounts={} measurementElapsedNanos={} measurementWorkerEstimatesNs={} "
+                            + "aggregateSampleCounts={} aggregateElapsedNanos={} aggregateWorkerEstimatesNs={}",
+                    this.mode,
+                    this.sourceShape,
+                    this.workRounds,
+                    FIXED_BATCH_SIZE,
+                    BODY_TIMING_INTERVAL,
+                    Arrays.toString(this.workerCpus),
+                    isolatedBodyCost(this.workRounds),
+                    this.distributor.getUpstreamHandleCount(),
+                    this.distributor.getThreadCount(),
+                    Arrays.deepToString(warmupCounts),
+                    Arrays.deepToString(warmupElapsed),
+                    Arrays.deepToString(warmupEstimates),
+                    Arrays.deepToString(measurementCounts),
+                    Arrays.deepToString(measurementElapsed),
+                    Arrays.deepToString(measurementEstimates),
+                    Arrays.toString(aggregateCounts),
+                    Arrays.toString(aggregateElapsed),
+                    Arrays.toString(bodyTimingEstimates(aggregate)));
+        }
+
+        /// Returns the completed isolated-work calibration value for one retained validation point.
+        private static double isolatedBodyCost(int workRounds) {
+            return switch (workRounds) {
+                case 24 -> 21.566;
+                case 80 -> 70.689;
+                case 96 -> 84.657;
+                default -> Double.NaN;
+            };
+        }
+
         /// Collects nine fixed-completion samples from the continuously running graph.
         protected final double[] collectSamples() {
             double[] samples = new double[SAMPLE_COUNT];
@@ -1169,6 +1451,8 @@ public class FragmentPathCalibrationBenchmark {
         private final PaddedLongAdder counters;
         private final Workload workload;
         private final int workRounds;
+        private final PaddedLongAdder bodyTimingSampleCounts;
+        private final PaddedLongAdder bodyTimingElapsedNanos;
         private long workSink = HasherApi.BASE_SEED;
 
         /// Creates an executor prototype or pinned clone for the selected work body.
@@ -1177,6 +1461,53 @@ public class FragmentPathCalibrationBenchmark {
             this.counters = counters;
             this.workload = workload;
             this.workRounds = workRounds;
+            this.bodyTimingSampleCounts = null;
+            this.bodyTimingElapsedNanos = null;
+        }
+
+        /// Creates a sampling-disabled prototype that produces diagnostic pinned clones.
+        private CountingExecutor(
+                PaddedLongAdder counters,
+                Workload workload,
+                int workRounds,
+                PaddedLongAdder bodyTimingSampleCounts,
+                PaddedLongAdder bodyTimingElapsedNanos) {
+            super(-1);
+            this.counters = counters;
+            this.workload = workload;
+            this.workRounds = workRounds;
+            this.bodyTimingSampleCounts = bodyTimingSampleCounts;
+            this.bodyTimingElapsedNanos = bodyTimingElapsedNanos;
+        }
+
+        /// Creates one pinned clone with sparse timing around only its executor override.
+        private CountingExecutor(
+                int cpu,
+                PaddedLongAdder counters,
+                Workload workload,
+                int workRounds,
+                PaddedLongAdder bodyTimingSampleCounts,
+                PaddedLongAdder bodyTimingElapsedNanos,
+                int sampleInterval) {
+            super(cpu, sampleInterval, System::nanoTime, elapsedNanos -> {
+                bodyTimingSampleCounts.increment(cpu);
+                bodyTimingElapsedNanos.add(cpu, elapsedNanos);
+            });
+            this.counters = counters;
+            this.workload = workload;
+            this.workRounds = workRounds;
+            this.bodyTimingSampleCounts = bodyTimingSampleCounts;
+            this.bodyTimingElapsedNanos = bodyTimingElapsedNanos;
+        }
+
+        /// Returns the trial prototype used only by the executor-body validation state.
+        static CountingExecutor bodyTimingPrototype(
+                PaddedLongAdder counters,
+                Workload workload,
+                int workRounds,
+                PaddedLongAdder bodyTimingSampleCounts,
+                PaddedLongAdder bodyTimingElapsedNanos) {
+            return new CountingExecutor(counters, workload, workRounds, bodyTimingSampleCounts, bodyTimingElapsedNanos);
         }
 
         /// Executes the no-op frame, optionally performs CPU work, and publishes completion.
@@ -1192,6 +1523,16 @@ public class FragmentPathCalibrationBenchmark {
         /// Clones the benchmark executor for the fragment's selected logical CPU.
         @Override
         public CountingExecutor hookOnClone(int cpu) {
+            if (this.bodyTimingSampleCounts != null) {
+                return new CountingExecutor(
+                        cpu,
+                        this.counters,
+                        this.workload,
+                        this.workRounds,
+                        this.bodyTimingSampleCounts,
+                        this.bodyTimingElapsedNanos,
+                        BODY_TIMING_INTERVAL);
+            }
             return new CountingExecutor(cpu, this.counters, this.workload, this.workRounds);
         }
     }

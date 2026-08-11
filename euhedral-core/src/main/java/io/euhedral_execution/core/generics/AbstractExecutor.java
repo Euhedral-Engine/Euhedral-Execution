@@ -4,6 +4,9 @@ import io.euhedral_execution.core.config.CloneConfig;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.internal.Constants;
 import io.euhedral_execution.hardware_utils.PinnedThreadExecutor;
+import java.util.Objects;
+import java.util.function.LongConsumer;
+import java.util.function.LongSupplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -17,11 +20,33 @@ import org.slf4j.LoggerFactory;
 public abstract class AbstractExecutor implements CloneableObject {
 
     protected final int cpu;
+    private final int bodyTimingInterval;
+    private final LongSupplier bodyTimingClock;
+    private final LongConsumer bodyTimingRecorder;
     private final Logger logger =
             LoggerFactory.getLogger(Constants.getLoggerName(this.getClass().getSimpleName()));
 
+    /// Creates a production executor with diagnostic body timing disabled.
     protected AbstractExecutor(int cpu) {
         this.cpu = cpu;
+        this.bodyTimingInterval = 0;
+        this.bodyTimingClock = null;
+        this.bodyTimingRecorder = null;
+    }
+
+    /// Creates an executor whose owner-local terminal samples only the virtual executor call.
+    ///
+    /// The clock and recorder are invoked once per `bodyTimingInterval` live frames. The caller
+    /// owns publication of the recorded nanoseconds; this class adds no shared coordination.
+    protected AbstractExecutor(
+            int cpu, int bodyTimingInterval, LongSupplier bodyTimingClock, LongConsumer bodyTimingRecorder) {
+        if (bodyTimingInterval <= 0) {
+            throw new IllegalArgumentException("Body timing interval must be positive");
+        }
+        this.cpu = cpu;
+        this.bodyTimingInterval = bodyTimingInterval;
+        this.bodyTimingClock = Objects.requireNonNull(bodyTimingClock, "Body timing clock is required");
+        this.bodyTimingRecorder = Objects.requireNonNull(bodyTimingRecorder, "Body timing recorder is required");
     }
 
     @Override
@@ -45,6 +70,8 @@ public abstract class AbstractExecutor implements CloneableObject {
 
     private class ExecutionTerminal implements LatticeReceiver {
 
+        private int callsUntilBodyTimingSample = AbstractExecutor.this.bodyTimingInterval;
+
         @Override
         public void addUpstream(LatticeSource stream) {
             stream.request(Long.MAX_VALUE);
@@ -64,7 +91,7 @@ public abstract class AbstractExecutor implements CloneableObject {
                 if (!frame.isAlive()) {
                     frame.throwCancelSignal();
                 }
-                AbstractExecutor.this.execute(frame);
+                executeBody(frame);
             } catch (Exception e) {
                 if (!(e instanceof AbstractFrame.CancelSignal)) {
                     logger.error("Uncaught exception while executing frame. {}", frame, e);
@@ -78,6 +105,20 @@ public abstract class AbstractExecutor implements CloneableObject {
             } catch (Exception e) {
                 logger.error("Uncaught exception while running doFinally. {}", frame);
             }
+        }
+
+        /// Executes one frame body and samples only the configured sparse diagnostic calls.
+        private void executeBody(AbstractFrame frame) {
+            LongSupplier clock = AbstractExecutor.this.bodyTimingClock;
+            if (clock == null || --this.callsUntilBodyTimingSample > 0) {
+                AbstractExecutor.this.execute(frame);
+                return;
+            }
+
+            this.callsUntilBodyTimingSample = AbstractExecutor.this.bodyTimingInterval;
+            long start = clock.getAsLong();
+            AbstractExecutor.this.execute(frame);
+            AbstractExecutor.this.bodyTimingRecorder.accept(clock.getAsLong() - start);
         }
 
         @Override

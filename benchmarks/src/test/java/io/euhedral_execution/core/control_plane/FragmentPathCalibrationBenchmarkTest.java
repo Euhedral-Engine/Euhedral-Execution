@@ -223,6 +223,73 @@ class FragmentPathCalibrationBenchmarkTest {
                                 new long[] {0L}, new double[] {0.0}))[0]));
     }
 
+    /// Verifies sparse body timing retains worker alignment and rejects invalid deltas or samples.
+    @Test
+    void computesSparseBodyTimingDeltasAndEstimates() {
+        FragmentPathCalibrationBenchmark.BodyTimingSnapshot before =
+                new FragmentPathCalibrationBenchmark.BodyTimingSnapshot(
+                        new long[] {10L, 20L}, new long[] {1_000L, 4_000L});
+        FragmentPathCalibrationBenchmark.BodyTimingSnapshot after =
+                new FragmentPathCalibrationBenchmark.BodyTimingSnapshot(
+                        new long[] {14L, 25L}, new long[] {1_800L, 5_500L});
+
+        FragmentPathCalibrationBenchmark.BodyTimingSnapshot delta =
+                FragmentPathCalibrationBenchmark.bodyTimingDelta(before, after);
+
+        assertArrayEquals(new long[] {4L, 5L}, delta.counts());
+        assertArrayEquals(new long[] {800L, 1_500L}, delta.elapsedNanos());
+        assertArrayEquals(new double[] {200.0, 300.0}, FragmentPathCalibrationBenchmark.bodyTimingEstimates(delta));
+        assertThrows(
+                IllegalArgumentException.class, () -> FragmentPathCalibrationBenchmark.bodyTimingDelta(after, before));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> FragmentPathCalibrationBenchmark.bodyTimingEstimates(
+                        new FragmentPathCalibrationBenchmark.BodyTimingSnapshot(new long[] {0L}, new long[] {0L})));
+    }
+
+    /// Verifies retained extrema and even-sized medians preserve raw fork-worker interpretation.
+    @Test
+    void constructsRetainedBodyTimingRange() {
+        double[] estimates = {84.0, 82.0, 88.0, 86.0};
+
+        FragmentPathCalibrationBenchmark.RetainedRange range =
+                FragmentPathCalibrationBenchmark.retainedRange(estimates);
+
+        assertEquals(82.0, range.minimum());
+        assertEquals(88.0, range.maximum());
+        assertEquals(85.0, FragmentPathCalibrationBenchmark.bodyTimingMedian(estimates));
+        assertArrayEquals(new double[] {84.0, 82.0, 88.0, 86.0}, estimates);
+    }
+
+    /// Verifies the declared margin requires all retained 80-round values below all 96-round values.
+    @Test
+    void appliesBodyTimingSeparationMargin() {
+        double[] rounds24 = {21.0, 22.0};
+        double[] rounds80 = {70.0, 72.0};
+        double[] separated96 = {77.0, 79.0};
+        double[] overlapping96 = {76.9, 79.0};
+
+        assertTrue(FragmentPathCalibrationBenchmark.bodyTimingSeparationPassed(rounds24, rounds80, separated96));
+        assertEquals(
+                false, FragmentPathCalibrationBenchmark.bodyTimingSeparationPassed(rounds24, rounds80, overlapping96));
+    }
+
+    /// Verifies the fixed stability and four-group neutrality formulas at their exact bounds.
+    @Test
+    void appliesBodyTimingStabilityAndNeutralityBounds() {
+        assertTrue(FragmentPathCalibrationBenchmark.bodyTimingStabilityPassed(new double[] {95.0, 100.0, 105.0}));
+        assertEquals(
+                false, FragmentPathCalibrationBenchmark.bodyTimingStabilityPassed(new double[] {89.0, 100.0, 111.0}));
+        assertTrue(FragmentPathCalibrationBenchmark.bodyTimingNeutralityPassed(
+                new double[][] {{80.0, 82.0}, {81.0, 83.0}, {84.0, 86.0}, {85.0, 87.0}}));
+        assertEquals(false, FragmentPathCalibrationBenchmark.bodyTimingNeutralityPassed(new double[][] {
+            {80.0}, {82.0}, {84.0}, {85.1}
+        }));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> FragmentPathCalibrationBenchmark.bodyTimingNeutralityPassed(new double[][] {{80.0}}));
+    }
+
     /// Verifies source identity and lifecycle report formatting remain deterministic.
     @Test
     void formatsHandleLifecycleEvidenceDeterministically() {

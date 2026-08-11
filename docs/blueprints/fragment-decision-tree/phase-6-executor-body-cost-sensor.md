@@ -1,6 +1,6 @@
 # Phase 6: Executor Body-Cost Sensor
 
-Status: planned; diagnostic implementation is gated by the fixed tests below
+Status: completed; signal accepted on 2026-08-11
 
 Plan:
 [
@@ -316,3 +316,144 @@ git diff --check
 Search for accidental additions to `FragmentControlPolicy`, `ControlPlaneFragment`, normal policy
 selection, or `EXPENSIVE_WORK_BOUNDARY_NS`. Confirm new documentation is ASCII and final status
 contains only intended source, test, benchmark, and completion-record changes.
+
+## Completion record
+
+Outcome: **Signal accepted.** Sparse timing around only `AbstractExecutor.execute(frame)` passed the
+separation, stability, tier/availability-neutrality, and overhead gates. The diagnostic seam is
+retained for a later production-tree integration blueprint. This phase adds no work-cost threshold
+and does not change normal DIRECT/STAGED selection.
+
+### Implementation
+
+- `AbstractExecutor` retains its existing sampling-disabled constructor and adds one protected,
+  opt-in diagnostic constructor. Its terminal owns a plain countdown and reads the supplied clock
+  only around every 256th live executor call. Failed and cancelled sampled calls reset the cadence
+  but publish no sample; finalization stays outside the interval.
+- `FragmentPathCalibrationBenchmark.executorBodyCost` is limited to rounds 24, 80, and 96 under
+  forced DIRECT/STAGED and plentiful/scarce natural-handle fixtures. Its `CountingExecutor` clones
+  publish sample counts and elapsed nanoseconds into worker-indexed padded counters.
+- The benchmark retains raw warmup and measurement deltas, per-iteration estimates, and aggregate
+  fork-worker estimates. A trial-only system property,
+  `euhedral.fragment.bodyTiming.enabled=false`, disables the sampler solely for the reproducible
+  same-build overhead control; it does not affect normal scheduler behavior.
+- Deterministic Core tests cover disabled execution, exact cadence, timing boundaries, error and
+  cancellation behavior, positive sample publication, and constructor validation. Benchmark tests
+  cover deltas, zero-sample rejection, retained ranges, separation, stability, and neutrality.
+
+### Environment and raw evidence
+
+The validation host was the established Intel Core i9-14900K fixture: one socket, 24 physical
+cores, 32 logical CPUs, and diagnostic worker CPUs 0 and 6. The run used Linux
+`7.0.0-28-generic`, OpenJDK 21.0.2, and Gradle 9.6.1. The candidate started from commit
+`3a1c7549c90a4e2cc04ee5570fe988994007ae96`; disabled-branch comparison used clean commit
+`33317474673b2834ad774b2c76adfa35b8a41fef`.
+
+Raw evidence is outside the repository at:
+
+- `/tmp/euhedral-phase6-20260811/executor-body-validation.json`
+- `/tmp/euhedral-phase6-20260811/executor-body-validation-jmh.log`
+- `/tmp/euhedral-phase6-20260811/executor-body-validation.log`
+- `/tmp/euhedral-phase6-20260811/retained-estimates.csv`
+- `/tmp/euhedral-phase6-20260811/signal-gates.txt`
+- `/tmp/euhedral-phase6-20260811/{baseline,candidate}-disabled-*.json`
+- `/tmp/euhedral-phase6-20260811/candidate-sampling-disabled-*.json`
+- `/tmp/euhedral-phase6-20260811/repeat-sampling-{disabled,enabled}-*.json`
+
+The signal matrix command was:
+
+```text
+mise exec -- java --enable-native-access=ALL-UNNAMED \
+  --add-exports java.base/jdk.internal.platform=ALL-UNNAMED \
+  --add-exports java.base/jdk.internal.vm.annotation=ALL-UNNAMED \
+  -Dlogback.configurationFile=/tmp/euhedral-phase6-20260811/phase6-logback.xml \
+  -cp benchmarks/build/euhedral-benchmark.jar:benchmarks/build/lib/* \
+  org.openjdk.jmh.Main '.*FragmentPathCalibrationBenchmark.executorBodyCost' \
+  -p mode=DIRECT,STAGED -p sourceShape=PLENTIFUL,SCARCE \
+  -p workRounds=24,80,96 -p handleLayout=NATURAL \
+  -o /tmp/euhedral-phase6-20260811/executor-body-validation-jmh.log \
+  -rf json -rff /tmp/euhedral-phase6-20260811/executor-body-validation.json
+```
+
+The annotations supplied three forks, three 3-second warmups, five 5-second measurements, and
+1,048,576-frame completion windows. Overhead controls used the same command shape and annotations,
+restricted to rounds 24 and each of `mode=DIRECT, sourceShape=PLENTIFUL` and
+`mode=STAGED, sourceShape=SCARCE`. Sampling-disabled same-build runs added exactly:
+
+```text
+-Deuhedral.fragment.bodyTiming.enabled=false
+```
+
+The dormant-branch baseline used `workCostDecision` at commit `3331747`; the candidate used the
+same benchmark and parameters. The permitted repeat reran both enabled and disabled controls for
+both fixtures without changing any argument, cadence, or bound.
+
+### Retained signal evidence
+
+Each table cell contains `[worker 0, worker 1]` nanoseconds for one fork, in execution order.
+
+| Rounds | Mode | Source shape | Fork 1 | Fork 2 | Fork 3 |
+|-------:|------|--------------|--------|--------|--------|
+| 24 | DIRECT | PLENTIFUL | [35.968, 35.932] | [36.014, 35.721] | [35.944, 35.544] |
+| 24 | DIRECT | SCARCE | [36.163, 35.946] | [36.122, 35.756] | [36.421, 36.036] |
+| 24 | STAGED | PLENTIFUL | [37.545, 37.909] | [39.370, 37.058] | [37.980, 38.372] |
+| 24 | STAGED | SCARCE | [35.952, 36.277] | [36.285, 36.280] | [36.650, 36.178] |
+| 80 | DIRECT | PLENTIFUL | [85.635, 85.312] | [85.624, 86.115] | [86.096, 85.418] |
+| 80 | DIRECT | SCARCE | [85.806, 85.784] | [86.352, 85.543] | [85.495, 86.253] |
+| 80 | STAGED | PLENTIFUL | [85.977, 86.915] | [85.546, 85.232] | [87.393, 87.337] |
+| 80 | STAGED | SCARCE | [85.963, 85.842] | [88.421, 85.276] | [86.330, 86.314] |
+| 96 | DIRECT | PLENTIFUL | [99.255, 99.432] | [99.940, 99.225] | [99.772, 99.830] |
+| 96 | DIRECT | SCARCE | [100.402, 100.242] | [100.571, 100.192] | [100.966, 100.029] |
+| 96 | STAGED | PLENTIFUL | [101.304, 102.006] | [103.118, 102.397] | [101.597, 101.099] |
+| 96 | STAGED | SCARCE | [99.808, 99.767] | [100.686, 99.966] | [100.170, 100.315] |
+
+All 24 retained estimates at each point passed the fixed stability rule:
+
+| Rounds | Minimum ns | Median ns | Maximum ns | Allowed deviation ns | Observed maximum deviation ns |
+|-------:|-----------:|----------:|-----------:|---------------------:|------------------------------:|
+| 24 | 35.544 | 36.170 | 39.370 | 5.000 | 3.200 |
+| 80 | 85.232 | 85.903 | 88.421 | 8.590 | 2.518 |
+| 96 | 99.225 | 100.217 | 103.118 | 10.022 | 2.901 |
+
+The four `(mode, sourceShape)` group-median spans were 2.006 ns at rounds 24, 0.816 ns at rounds
+80, and 2.199 ns at rounds 96, all below the 5 ns neutrality limit. The work-point medians were
+strictly monotonic. The primary retained separation was:
+
+```text
+max(rounds 80) = 88.420588 ns
+min(rounds 96) = 99.224869 ns
+raw gap        = 10.804281 ns
+gap after the required 5 ns margin = 5.804281 ns
+```
+
+### Overhead and participation evidence
+
+The dormant-branch comparison passed on its first run:
+
+| Fixture | Baseline median frames/s | Candidate median frames/s | Median loss | Lowest-fork ratio |
+|---------|-------------------------:|--------------------------:|------------:|------------------:|
+| DIRECT / plentiful | 58,051,300 | 58,580,058 | -0.91% | 98.98% |
+| STAGED / scarce | 30,257,551 | 30,473,450 | -0.71% | 99.52% |
+
+The initial enabled-versus-disabled run passed both median-loss bounds but the STAGED/scarce
+lowest-fork ratio was 97.87%, 0.13 percentage points below the 98% floor. This was treated as the
+blueprint's one allowed inconclusive result. The complete protocol was repeated once unchanged.
+The repeat passed:
+
+| Fixture | Disabled median frames/s | Enabled median frames/s | Median loss | Lowest-fork ratio |
+|---------|--------------------------:|-------------------------:|------------:|------------------:|
+| DIRECT / plentiful | 59,697,476 | 60,581,871 | -1.48% | 101.69% |
+| STAGED / scarce | 31,730,772 | 32,018,621 | -0.91% | 99.91% |
+
+Across all retained signal and overhead fork reports, aggregate completion dominance stayed in the
+corrected balanced regime: 0.500006-0.504978 for DIRECT/plentiful and 0.500023-0.528667 for
+STAGED/scarce. No worker disappeared and no new fork-level regime appeared.
+
+### Acceptance conclusion
+
+The measured value contains a common executor-call/completion-accounting offset, visible in the
+24-round control, but its shift by tier and handle availability is bounded well below the required
+80-versus-96 separation. The signal is therefore sufficiently tier-neutral and availability-neutral
+for the already-designed broad cheap/transition/expensive production input. Selecting and
+integrating the conservative production boundary remains the next blueprint; it is not implemented
+here.
