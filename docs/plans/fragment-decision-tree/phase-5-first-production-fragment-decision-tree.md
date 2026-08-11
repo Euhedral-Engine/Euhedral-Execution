@@ -109,3 +109,11 @@ and four normal-tree rows. Then run the Core and benchmark builds, the repositor
    two-input tree and preserve the separate batch controller and forced modes.
 4. High intensity: add deterministic policy/integration tests, run representative forced and normal
    JMH rows, and append completion evidence to the blueprint.
+
+## Implementation outcome
+
+Implementation stopped at step 2 on 2026-08-11. The live-handle/registered-worker input passed its
+deterministic and three-fork fixture checks. The corrected common executor-dispatch EWMA remained
+materially path/core dependent and its retained 80-round and 96-round ranges overlapped, so the
+blueprint's predeclared boundary rule could not produce a valid constant. The normal selector was
+not changed. Full evidence and the next single design question are recorded in the blueprint.

@@ -9,7 +9,6 @@ import io.euhedral_execution.data_structures.atomics.PaddedAtomicLong;
 import io.euhedral_execution.data_structures.queues.MpscQueue;
 import io.euhedral_execution.hardware_utils.SystemInfo;
 import io.euhedral_execution.hardware_utils.ThreadTools;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -42,14 +41,13 @@ public class UpstreamQueue {
         this.upstreamCount = upstreamCount;
     }
 
-    public static UpstreamQueue get(
-            MpscQueue<UpstreamHandle>[] upstreams, PaddedAtomicLong upstreamCount, AtomicLong counter) {
+    /// Returns the caller's thread-local queue without changing active-worker registration state.
+    public static UpstreamQueue get(MpscQueue<UpstreamHandle>[] upstreams, PaddedAtomicLong upstreamCount) {
         UpstreamQueue queue = UP_QUEUE.get();
         if (queue == null) {
             int core = SystemInfo.getCpuInfo(ThreadTools.getCpu()).core();
             queue = new UpstreamQueue(core, upstreams[core], upstreamCount);
             UP_QUEUE.set(queue);
-            counter.incrementAndGet();
         }
         return queue;
     }

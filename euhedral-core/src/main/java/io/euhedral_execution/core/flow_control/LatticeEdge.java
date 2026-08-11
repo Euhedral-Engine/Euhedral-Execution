@@ -92,8 +92,10 @@ public class LatticeEdge extends UpstreamHandle {
         } else {
             UpstreamQueue queue = getThreadUpstreamQueue();
             int core = queue.core;
-            ACTIVE_PARTITIONS.setRelease(core, 1);
-            LOGGER.trace("Registered thread on core {}", core);
+            if (ACTIVE_PARTITIONS.compareAndSet(core, 0L, 1L)) {
+                THREAD_COUNT.incrementAndGet();
+                LOGGER.trace("Registered thread on core {}", core);
+            }
         }
     }
 
@@ -105,7 +107,7 @@ public class LatticeEdge extends UpstreamHandle {
             return parent.getThreadUpstreamQueue();
         }
 
-        UpstreamQueue queue = UpstreamQueue.get(UPSTREAMS, UPSTREAM_COUNT, THREAD_COUNT);
+        UpstreamQueue queue = UpstreamQueue.get(UPSTREAMS, UPSTREAM_COUNT);
         queue.getTrueUpstreamCount();
 
         return queue;
@@ -122,17 +124,16 @@ public class LatticeEdge extends UpstreamHandle {
 
         UpstreamQueue queue = UpstreamQueue.UP_QUEUE.get();
         if (queue != null) {
-            THREAD_COUNT.decrementAndGet();
             UpstreamQueue.UP_QUEUE.remove();
             int core = queue.core;
-            if (core >= 0 && core < UPSTREAMS.length) {
-                ACTIVE_PARTITIONS.setRelease(core, 0);
+            if (core >= 0 && core < UPSTREAMS.length && ACTIVE_PARTITIONS.compareAndSet(core, 1L, 0L)) {
+                THREAD_COUNT.decrementAndGet();
                 MpscQueue<UpstreamHandle> upstreams = UPSTREAMS[core];
                 if (upstreams != null) {
                     upstreams.clear();
                 }
+                LOGGER.trace("Removed entry for thread on core {}", core);
             }
-            LOGGER.trace("Removed entry for thread on core {}", core);
         }
     }
 
@@ -192,7 +193,7 @@ public class LatticeEdge extends UpstreamHandle {
             return;
         }
 
-        UpstreamQueue queue = UpstreamQueue.get(UPSTREAMS, UPSTREAM_COUNT, THREAD_COUNT);
+        UpstreamQueue queue = UpstreamQueue.get(UPSTREAMS, UPSTREAM_COUNT);
         queue.request(num);
     }
 
@@ -208,7 +209,7 @@ public class LatticeEdge extends UpstreamHandle {
         if (parent != null) {
             return parent.pull(consumer, stopCondition, demand);
         }
-        UpstreamQueue queue = UpstreamQueue.get(UPSTREAMS, UPSTREAM_COUNT, THREAD_COUNT);
+        UpstreamQueue queue = UpstreamQueue.get(UPSTREAMS, UPSTREAM_COUNT);
         return queue.pull(consumer, stopCondition, demand);
     }
 

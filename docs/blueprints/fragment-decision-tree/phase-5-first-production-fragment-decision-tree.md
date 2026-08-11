@@ -1,9 +1,10 @@
 # Phase 5: First Production Fragment Decision Tree
 
-Status: planned; implementation is gated on the two input validations below
+Status: stopped at Input B validation; production selector not enabled
 
 Plan:
-[`phase-5-first-production-fragment-decision-tree.md`](../../plans/fragment-decision-tree/phase-5-first-production-fragment-decision-tree.md)
+[
+`phase-5-first-production-fragment-decision-tree.md`](../../plans/fragment-decision-tree/phase-5-first-production-fragment-decision-tree.md)
 
 Blueprint intensity: maximum
 
@@ -11,8 +12,8 @@ Implementation intensity: high after validation
 
 ## Decision and scope
 
-Implement the first production DIRECT/STAGED tree only after validating its two physical inputs.
-The tree selects the existing paths; it does not change their operation order, rediscover the broad
+Implement the first production DIRECT/STAGED tree only after validating its two physical inputs. The
+tree selects the existing paths; it does not change their operation order, rediscover the broad
 surface, or introduce an adaptive controller.
 
 The corrected fixed-batch-32 evidence supports only this structure:
@@ -83,16 +84,16 @@ behavior. After both workers register and after sources are ingested, retain per
 - source-handle identities; and
 - existing per-worker productive-pull and completion evidence.
 
-The required cases are one repeating source/two workers and two repeating sources/two workers.
-They pass only when the runtime reports `1/2` and `2/2`, respectively, and the established handle
+The required cases are one repeating source/two workers and two repeating sources/two workers. They
+pass only when the runtime reports `1/2` and `2/2`, respectively, and the established handle
 recorder confirms that the two-handle case exposes two independently acquired productive handles.
 Also prove deterministically that handle completion decrements the numerator, worker removal
 decrements the denominator, repeated registration is idempotent, and merely obtaining an
 unregistered thread-local queue does not change the denominator. These are count-semantics checks,
 not a rerun of the failed-acquisition investigation.
 
-No additional source counts are required unless `1/2` and `2/2` leave the count semantics
-ambiguous. Any mismatch is a stop condition for production implementation.
+No additional source counts are required unless `1/2` and `2/2` leave the count semantics ambiguous.
+Any mismatch is a stop condition for production implementation.
 
 ## Input B: tier-neutral executor work cost
 
@@ -101,9 +102,9 @@ ambiguous. Any mismatch is a stop condition for production implementation.
 Add a second owner-local cost estimate; do not repurpose `serviceTimeNs` or the existing execution
 latency metric.
 
-`ControlPlaneFragment.accept` is the common boundary after a frame has crossed local cache,
-remote cache, or direct upstream acquisition and before it enters the synchronous executor
-terminal. For a sampled accepted frame, time only:
+`ControlPlaneFragment.accept` is the common boundary after a frame has crossed local cache, remote
+cache, or direct upstream acquisition and before it enters the synchronous executor terminal. For a
+sampled accepted frame, time only:
 
 ```text
 start = System.nanoTime()
@@ -111,8 +112,8 @@ outputStream.accept(frame)
 end = System.nanoTime()
 ```
 
-Keep the existing in-progress metric updates outside this interval. The interval includes the
-common `LatticeHotSource` dispatch, executor liveness check, application executor body, and frame
+Keep the existing in-progress metric updates outside this interval. The interval includes the common
+`LatticeHotSource` dispatch, executor liveness check, application executor body, and frame
 finalization. It excludes the DIRECT/STAGED request, cache, routing, and handle-acquisition work
 that contaminated the existing service estimate. This common dispatch cost is the production
 work-cost axis; it is intentionally not described as pure isolated body nanoseconds.
@@ -139,9 +140,9 @@ existing latency metric; it must not enter the new path decision.
 
 Add a validation-only option to the existing package-private diagnostic override that enables the
 new sampler while holding DIRECT or STAGED. The existing two-argument override installs with
-sampling disabled, so current forced-path behavior and cost remain unchanged. The option is
-captured at construction like the existing immutable mode and batch target; it adds no shared read
-to the hot path.
+sampling disabled, so current forced-path behavior and cost remain unchanged. The option is captured
+at construction like the existing immutable mode and batch target; it adds no shared read to the hot
+path.
 
 Under both forced modes and both one-handle/two-handle and two-handle/two-worker fixtures, measure
 at least rounds `24`, `80`, and `96`, corresponding to isolated body costs 21.566, 70.689, and
@@ -169,8 +170,8 @@ If the signal passes, choose one `EXPENSIVE_WORK_BOUNDARY_NS` in dispatch-cost u
 4. round upward to the next whole 5 ns for an understandable conservative constant.
 
 The rounded value must remain strictly above every retained 80-round estimate and no greater than
-the minimum retained 96-round estimate. If rounding destroys that property or no gap exists, do
-not implement the branch. Return to design for a better body-cost measurement; do not use the old
+the minimum retained 96-round estimate. If rounding destroys that property or no gap exists, do not
+implement the branch. Return to design for a better body-cost measurement; do not use the old
 service estimate, tune per-mode constants, or classify the unresolved interval.
 
 Record the selected numeric boundary and all calibration evidence in this blueprint's completion
@@ -221,8 +222,8 @@ At a completed boundary:
 5. calculate the next batch size with the existing eligible cap and target-work rule.
 
 The current top-of-cycle response to an upstream-count change broadly calls `CycleState.reset`,
-which can discard partial batch accounting and reset mode immediately. Replace that coupling with
-an owner-local count update. Ordinary handle-count changes must not reset `completed`, batch size,
+which can discard partial batch accounting and reset mode immediately. Replace that coupling with an
+owner-local count update. Ordinary handle-count changes must not reset `completed`, batch size,
 service history, work-cost history, or mode. If no batch is in progress, the new counts may be
 applied before the next frame; otherwise they remain inputs for the next completed boundary.
 
@@ -319,12 +320,12 @@ Add one bounded normal-policy JMH state using the same real graph, two workers, 
 batch cap 32, completion windows, routing, and work body. It does not install a forced mode. Run
 only rounds `24` and `96` with one and two sources:
 
-| Availability | Rounds | Expected normal leaf |
-|--------------|-------:|----------------------|
-| two handles / two workers | 24 | DIRECT |
-| two handles / two workers | 96 | DIRECT |
-| one handle / two workers  | 24 | DIRECT |
-| one handle / two workers  | 96 | STAGED |
+| Availability              | Rounds | Expected normal leaf |
+|---------------------------|-------:|----------------------|
+| two handles / two workers |     24 | DIRECT               |
+| two handles / two workers |     96 | DIRECT               |
+| one handle / two workers  |     24 | DIRECT               |
+| one handle / two workers  |     96 | STAGED               |
 
 Retain per fork:
 
@@ -370,8 +371,144 @@ handles, registered workers, work-cost history count, and smoothed dispatch cost
 split a leaf by adding one explicit conditional to that method; callers and execution paths should
 not require restructuring.
 
-Exactly one unresolved production leaf follows this phase: whether the sufficient-handle DIRECT
-leaf remains valid when live handle count overstates currently productive pull opportunities. A
-future bounded experiment may compare live handles with ready/productive opportunities while
-holding one cheap and one expensive cost fixed. Batch size, hardware topology, and the scarcity
-transition remain out of scope until that availability semantic is tested.
+Exactly one unresolved production leaf follows this phase: whether the sufficient-handle DIRECT leaf
+remains valid when live handle count overstates currently productive pull opportunities. A future
+bounded experiment may compare live handles with ready/productive opportunities while holding one
+cheap and one expensive cost fixed. Batch size, hardware topology, and the scarcity transition
+remain out of scope until that availability semantic is tested.
+
+## Implementation stop record
+
+Date: 2026-08-11
+
+The implementation followed the validation gate and stopped before replacing normal-mode selection.
+Input A passed; the selected Input B did not.
+
+### Input A result
+
+`THREAD_COUNT` now changes only when the root active-partition CAS registers or removes a fragment
+worker. Creating or reusing an unregistered `UpstreamQueue` no longer changes the count, and
+repeated registration/removal is idempotent. Focused tests cover those semantics and upstream count
+removal.
+
+The corrected three-fork diagnostic retained 36 handle reports. All 18 plentiful reports observed
+two configured sources, two live upstream handles, and two registered workers. All 18 scarce reports
+observed one configured source, one live upstream handle, and two registered workers. Aggregate
+completion dominance ranged from 0.500030 to 0.534176, so no worker disappeared and no pre-fix
+failed-handle regime returned.
+
+Input A is therefore validated for the repeating-source fixtures as:
+
+```text
+live upstream handles / registered active fragment workers
+```
+
+### Input B result
+
+The first validation implementation accidentally routed every sampled-fixture frame through the
+registry-backed in-progress wrapper, adding two atomic updates per frame outside the intended
+sample. That instrumentation defect reduced throughput and blurred the known scarce/96 winner. It
+was removed by using a dedicated dispatch wrapper that performs timer reads only for the selected
+one-in-eight-batches frame. The standard forced override still uses `outputStream` directly and pays
+no wrapper or timer cost.
+
+The corrected validation then ran the declared protocol: three forks, three 3-second warmups, five
+5-second measurements, forced DIRECT and STAGED, one and two natural handles, fixed batch 32, and
+rounds 24, 80, and 96. The raw local evidence is retained in:
+
+```text
+/tmp/phase5-signal-corrected.log
+/tmp/phase5-signal-corrected.json
+```
+
+The dispatch EWMA was monotonic in aggregate, and forced throughput/participation retained the
+corrected path shape. It nevertheless failed both predeclared decision-usefulness conditions:
+
+| Interpretation         | 24-round range ns | 80-round range ns | 96-round range ns | 80/96 gap ns |
+|------------------------|------------------:|------------------:|------------------:|-------------:|
+| worker estimate        |     43.246-63.779 |    89.064-112.300 |   104.466-127.505 |       -7.834 |
+| fork-weighted estimate |     44.138-62.723 |    90.361-109.590 |   106.181-121.876 |       -3.409 |
+
+The retained worker-pair estimates below are in fork order and preserve the discrete evidence used
+for those ranges:
+
+| Mode   | Shape     | Rounds | Fork dispatch estimates ns (`worker0/worker1`)    |
+|--------|-----------|-------:|---------------------------------------------------|
+| DIRECT | PLENTIFUL |     24 | 45.956/45.017; 50.863/47.374; 43.246/45.054       |
+| DIRECT | PLENTIFUL |     80 | 96.055/93.568; 94.492/91.855; 91.659/89.064       |
+| DIRECT | PLENTIFUL |     96 | 108.110/109.521; 106.868/112.020; 113.861/109.055 |
+| DIRECT | SCARCE    |     24 | 48.027/46.792; 46.299/44.709; 45.230/46.325       |
+| DIRECT | SCARCE    |     80 | 91.179/97.580; 90.813/90.250; 92.403/91.051       |
+| DIRECT | SCARCE    |     96 | 110.296/109.081; 104.466/107.852; 112.394/112.874 |
+| STAGED | PLENTIFUL |     24 | 62.779/58.357; 61.667/63.779; 63.258/51.494       |
+| STAGED | PLENTIFUL |     80 | 112.300/97.980; 111.332/105.655; 109.912/109.268  |
+| STAGED | PLENTIFUL |     96 | 127.505/112.248; 122.516/119.272; 123.914/119.839 |
+| STAGED | SCARCE    |     24 | 50.855/50.316; 62.279/61.658; 50.088/52.463       |
+| STAGED | SCARCE    |     80 | 101.412/100.456; 103.249/104.567; 105.476/96.483  |
+| STAGED | SCARCE    |     96 | 109.770/114.569; 120.315/117.502; 119.907/111.526 |
+
+Corrected sampled-fixture throughput and JMH 99.9% errors were:
+
+| Mode   | Shape     | Rounds |   Frames/s |     Error |
+|--------|-----------|-------:|-----------:|----------:|
+| DIRECT | PLENTIFUL |     24 | 56,071,641 | 2,175,655 |
+| DIRECT | PLENTIFUL |     80 | 23,694,272 |    98,474 |
+| DIRECT | PLENTIFUL |     96 | 20,221,737 |    36,494 |
+| DIRECT | SCARCE    |     24 | 35,235,599 |   166,283 |
+| DIRECT | SCARCE    |     80 | 17,771,837 |   424,061 |
+| DIRECT | SCARCE    |     96 | 15,521,045 |   332,695 |
+| STAGED | PLENTIFUL |     24 | 28,841,358 | 1,083,425 |
+| STAGED | PLENTIFUL |     80 | 16,908,311 |   143,049 |
+| STAGED | PLENTIFUL |     96 | 15,162,105 |    90,577 |
+| STAGED | SCARCE    |     24 | 31,205,766 | 1,285,697 |
+| STAGED | SCARCE    |     80 | 18,195,164 |   280,409 |
+| STAGED | SCARCE    |     96 | 16,170,452 |   208,518 |
+
+For worker estimates, the 24-to-96 mean distance is about 62.14 ns, so its one-quarter neutrality
+limit is about 15.54 ns. The 24-round within-cost spread is 20.53 ns and exceeds that limit. More
+importantly, the maximum retained 80-round estimate is above the minimum retained 96-round estimate
+under both interpretations. The midpoint-and-rounding rule therefore cannot produce a constant that
+is strictly above every 80-round sample and no greater than every 96-round sample.
+
+The common `LatticeHotSource`/terminal/finalization interval is not tier-neutral and stable enough
+to distinguish the unresolved 70.689 ns body region from the first resolved 84.657 ns body region.
+No `EXPENSIVE_WORK_BOUNDARY_NS` was selected.
+
+### Resulting production state
+
+- The validated worker-count semantic correction remains.
+- The rejected sampled-dispatch wrapper, policy state, metric, tests, and benchmark entry were
+  removed after preserving the fork-level evidence above. They are not a production or diagnostic
+  compatibility surface for the next measurement.
+- The existing two-argument forced override is unchanged.
+- The existing normal latency/service selector, upstream-count reset behavior, batch sizing, and
+  DIRECT/STAGED paths remain unchanged.
+- No normal-tree benchmark was added because there is no validated work-cost input or production
+  tree to exercise.
+
+### Acceptance and next design leaf
+
+Acceptance criteria 1, 7, and 8 are satisfied for the retained correction and diagnostic seam.
+Criteria 2-6 cannot be satisfied because Input B failed, so criteria 9-10 for a completed production
+tree are not claimed. This is the blueprint's explicit stop condition, not a threshold-tuning
+opportunity.
+
+The next bounded design question is exactly one leaf: identify a narrower or otherwise more stable
+tier-neutral executor-body measurement that separates the retained 80-round and 96-round work
+regions without per-frame timing or path-specific correction. Availability readiness, batch size,
+hardware topology, and the scarcity transition remain deferred until that input exists.
+
+### Verification
+
+The following commands passed with the repository's `mise.toml` toolchain:
+
+```text
+mise exec -- gradle :euhedral-core:test :benchmarks:test :benchmarks:assemble
+mise exec -- gradle build
+git diff --check
+```
+
+The full build completed all 64 tasks/checks. No environmental limitation was encountered. After
+the failed-signal instrumentation was removed, the retained change set is limited to this
+plan/blueprint pair and the registration-count correction with its tests. No generated benchmark
+output or data directory was added.

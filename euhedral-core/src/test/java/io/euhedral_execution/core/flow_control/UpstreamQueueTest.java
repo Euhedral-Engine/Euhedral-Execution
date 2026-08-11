@@ -14,7 +14,6 @@ import io.euhedral_execution.data_structures.atomics.PaddedAtomicLong;
 import io.euhedral_execution.data_structures.queues.MpscQueue;
 import io.euhedral_execution.hardware_utils.SystemInfo;
 import java.util.Arrays;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import lombok.Getter;
@@ -47,12 +46,9 @@ class UpstreamQueueTest {
         MpscQueue<UpstreamHandle>[] arr = new MpscQueue[SystemInfo.getMaxCoreId() + 1];
         Arrays.fill(arr, this.handles);
 
-        AtomicLong counter = new AtomicLong();
-
-        UpstreamQueue created = UpstreamQueue.get(arr, count, counter);
+        UpstreamQueue created = UpstreamQueue.get(arr, count);
 
         assertNotNull(created);
-        assertEquals(1, counter.get());
         assertSame(created, UpstreamQueue.UP_QUEUE.get());
     }
 
@@ -61,13 +57,10 @@ class UpstreamQueueTest {
         MpscQueue<UpstreamHandle>[] arr = new MpscQueue[SystemInfo.getMaxCoreId() + 1];
         Arrays.fill(arr, this.handles);
 
-        AtomicLong counter = new AtomicLong();
-
-        UpstreamQueue first = UpstreamQueue.get(arr, count, counter);
-        UpstreamQueue second = UpstreamQueue.get(arr, count, counter);
+        UpstreamQueue first = UpstreamQueue.get(arr, count);
+        UpstreamQueue second = UpstreamQueue.get(arr, count);
 
         assertSame(first, second);
-        assertEquals(1, counter.get());
     }
 
     @Test

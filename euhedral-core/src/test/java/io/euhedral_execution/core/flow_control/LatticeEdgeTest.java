@@ -102,6 +102,15 @@ class LatticeEdgeTest {
         UpstreamQueue second = edge.getThreadUpstreamQueue();
 
         assertSame(first, second);
+        assertEquals(threadCountBefore, edge.getThreadCount());
+    }
+
+    /// Verifies repeated active-partition registration is idempotent.
+    @Test
+    void shouldCountOneRegistrationPerActivePartition() {
+        edge.register();
+        edge.register();
+
         assertEquals(threadCountBefore + 1, edge.getThreadCount());
     }
 
@@ -287,6 +296,7 @@ class LatticeEdgeTest {
 
         assertEquals(upstreamCountBefore + 1, edge.getUpstreamHandleCount());
         edge.removeUpstream();
+        assertEquals(upstreamCountBefore, edge.getUpstreamHandleCount());
     }
 
     @Test
@@ -327,6 +337,10 @@ class LatticeEdgeTest {
         edge.register();
 
         assertEquals(threadCountBefore + 1, edge.getThreadCount());
+
+        edge.removeThread();
+
+        assertEquals(threadCountBefore, edge.getThreadCount());
 
         edge.removeThread();
 
