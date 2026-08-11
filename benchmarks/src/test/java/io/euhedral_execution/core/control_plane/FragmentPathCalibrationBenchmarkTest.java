@@ -2,6 +2,7 @@ package io.euhedral_execution.core.control_plane;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -314,6 +315,63 @@ class FragmentPathCalibrationBenchmarkTest {
         FragmentPathCalibrationBenchmark.DiagnosticLease second = new FragmentPathCalibrationBenchmark.DiagnosticLease(
                 FragmentPathCalibrationBenchmark.ForcedMode.STAGED, 32L);
         second.close();
+    }
+
+    /// Verifies the five normal rows and two overhead controls remain fixed before JMH execution.
+    @Test
+    void retainsPredeclaredProductionPolicyCases() {
+        FragmentPathCalibrationBenchmark.NormalPolicyCase guard =
+                FragmentPathCalibrationBenchmark.NormalPolicyCase.SCARCE_88;
+        FragmentPathCalibrationBenchmark.ProductionEstimatorCase direct =
+                FragmentPathCalibrationBenchmark.ProductionEstimatorCase.PLENTIFUL_DIRECT;
+        FragmentPathCalibrationBenchmark.ProductionEstimatorCase staged =
+                FragmentPathCalibrationBenchmark.ProductionEstimatorCase.SCARCE_STAGED;
+
+        assertEquals(FragmentPathCalibrationBenchmark.SourceShape.SCARCE, guard.sourceShape);
+        assertEquals(88, guard.workRounds);
+        assertEquals(FragmentPathCalibrationBenchmark.SourceShape.PLENTIFUL, direct.sourceShape);
+        assertEquals(FragmentPathCalibrationBenchmark.ForcedMode.DIRECT, direct.mode);
+        assertEquals(FragmentPathCalibrationBenchmark.SourceShape.SCARCE, staged.sourceShape);
+        assertEquals(FragmentPathCalibrationBenchmark.ForcedMode.STAGED, staged.mode);
+        assertEquals(5, FragmentPathCalibrationBenchmark.NormalPolicyCase.values().length);
+    }
+
+    /// Verifies production estimator timing remains opt-in for a forced diagnostic lease.
+    @Test
+    void forcedProductionSamplingIsExplicit() {
+        try (FragmentPathCalibrationBenchmark.DiagnosticLease ignored =
+                new FragmentPathCalibrationBenchmark.DiagnosticLease(
+                        FragmentPathCalibrationBenchmark.ForcedMode.DIRECT, 32L)) {
+            assertFalse(new FragmentControlPolicy().bodyCostSamplingEnabled());
+        }
+
+        try (FragmentPathCalibrationBenchmark.DiagnosticLease ignored =
+                new FragmentPathCalibrationBenchmark.DiagnosticLease(
+                        FragmentPathCalibrationBenchmark.ForcedMode.STAGED, 32L, true)) {
+            assertTrue(new FragmentControlPolicy().bodyCostSamplingEnabled());
+        }
+    }
+
+    /// Verifies the normal benchmark rejects a guard-mode change without constraining estimator shape.
+    @Test
+    void validatesResolvedAndGuardPolicySnapshots() {
+        FragmentPathCalibrationBenchmark.NormalPolicyState state =
+                new FragmentPathCalibrationBenchmark.NormalPolicyState();
+        state.policyCase = FragmentPathCalibrationBenchmark.NormalPolicyCase.SCARCE_88;
+        ControlPlaneFragment.FragmentPolicySnapshot guarded = new ControlPlaneFragment.FragmentPolicySnapshot(
+                FragmentControlPolicy.Mode.DIRECT, FragmentControlPolicy.BODY_COST_MIN_HISTORY, 92.0, 100.0, 32L);
+
+        state.validatePolicySnapshots(
+                org.openjdk.jmh.runner.IterationType.MEASUREMENT,
+                new ControlPlaneFragment.FragmentPolicySnapshot[] {guarded});
+
+        ControlPlaneFragment.FragmentPolicySnapshot staged = new ControlPlaneFragment.FragmentPolicySnapshot(
+                FragmentControlPolicy.Mode.STAGED, FragmentControlPolicy.BODY_COST_MIN_HISTORY, 92.0, 100.0, 32L);
+        state.validatePolicySnapshots(
+                org.openjdk.jmh.runner.IterationType.MEASUREMENT,
+                new ControlPlaneFragment.FragmentPolicySnapshot[] {staged});
+
+        assertTrue(state.policyValidationFailure().contains("wrong resolved or guard mode"));
     }
 
     /// Creates a compact deterministic core set.

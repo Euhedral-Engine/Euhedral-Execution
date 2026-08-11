@@ -31,6 +31,7 @@ import java.util.Arrays;
 import java.util.BitSet;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicLongArray;
 import java.util.function.Consumer;
@@ -69,9 +70,11 @@ public class FragmentPathCalibrationBenchmark {
     static final int SAMPLE_COUNT = 9;
     static final int CPU_WORK_ROUNDS = 256;
     static final int BODY_TIMING_INTERVAL = 256;
+    static final long DYNAMIC_RESPONSE_MAX_FRAMES = INVOCATION_FRAMES + FIXED_BATCH_SIZE;
     static final double BODY_TIMING_SEPARATION_MARGIN_NS = 5.0;
     static final double BODY_TIMING_NEUTRALITY_LIMIT_NS = 5.0;
     static final String BODY_TIMING_ENABLED_PROPERTY = "euhedral.fragment.bodyTiming.enabled";
+    static final String PRODUCTION_TIMING_ENABLED_PROPERTY = "euhedral.fragment.productionTiming.enabled";
     static final String WORK_COST_METRIC_PREFIX = "fragment-work-cost";
     static final long TIMEOUT_NS = TimeUnit.MINUTES.toNanos(1);
     /// The blueprint's 225 ns theoretical one-worker ceiling for CPU-work lane estimates.
@@ -116,6 +119,26 @@ public class FragmentPathCalibrationBenchmark {
     @OperationsPerInvocation(INVOCATION_FRAMES)
     public void executorBodyCost(ExecutorBodyCostState state) {
         state.awaitInvocation();
+    }
+
+    /// Measures forced paths with the complete production estimator plumbing enabled or disabled.
+    @Benchmark
+    @OperationsPerInvocation(INVOCATION_FRAMES)
+    public void productionEstimatorOverhead(ProductionEstimatorState state) {
+        state.awaitInvocation();
+    }
+
+    /// Measures the first production tree at the five predeclared resolved or guard-band rows.
+    @Benchmark
+    @OperationsPerInvocation(INVOCATION_FRAMES)
+    public void normalPolicy(NormalPolicyState state) {
+        state.awaitInvocation();
+    }
+
+    /// Executes one bounded cheap-expensive-cheap response sequence under normal scarce policy.
+    @Benchmark
+    public void dynamicPolicyResponse(DynamicPolicyState state) {
+        state.runSequence();
     }
 
     /// Measures the effectively empty `BenchmarkFrame.execute()` body without the scheduler.
@@ -732,6 +755,39 @@ public class FragmentPathCalibrationBenchmark {
         STAGED
     }
 
+    /// Predeclared normal-tree rows without benchmark source labels entering production policy.
+    public enum NormalPolicyCase {
+        PLENTIFUL_24(SourceShape.PLENTIFUL, 24),
+        PLENTIFUL_96(SourceShape.PLENTIFUL, 96),
+        SCARCE_24(SourceShape.SCARCE, 24),
+        SCARCE_88(SourceShape.SCARCE, 88),
+        SCARCE_96(SourceShape.SCARCE, 96);
+
+        final SourceShape sourceShape;
+        final int workRounds;
+
+        /// Retains the exact availability and work point represented by one bounded row.
+        NormalPolicyCase(SourceShape sourceShape, int workRounds) {
+            this.sourceShape = sourceShape;
+            this.workRounds = workRounds;
+        }
+    }
+
+    /// Forced production-sensor overhead controls selected by the Phase 7 blueprint.
+    public enum ProductionEstimatorCase {
+        PLENTIFUL_DIRECT(SourceShape.PLENTIFUL, ForcedMode.DIRECT),
+        SCARCE_STAGED(SourceShape.SCARCE, ForcedMode.STAGED);
+
+        final SourceShape sourceShape;
+        final ForcedMode mode;
+
+        /// Retains the exact source shape and forced winner used by one overhead row.
+        ProductionEstimatorCase(SourceShape sourceShape, ForcedMode mode) {
+            this.sourceShape = sourceShape;
+            this.mode = mode;
+        }
+    }
+
     /// Benchmark executor bodies.
     enum Workload {
         NO_OP,
@@ -745,9 +801,21 @@ public class FragmentPathCalibrationBenchmark {
         PHASED
     }
 
+    /// Shared JMH parameter for states that intentionally force one existing fragment path.
+    public abstract static class ForcedPathState extends PathState {
+
+        @Param({"DIRECT", "STAGED"})
+        public ForcedMode mode;
+
+        @Override
+        final ForcedMode forcedMode() {
+            return this.mode;
+        }
+    }
+
     /// One-worker state that records cold and post-warmup no-op path samples.
     @State(Scope.Benchmark)
-    public static class SingleWorkerState extends PathState {
+    public static class SingleWorkerState extends ForcedPathState {
 
         private double[] startupSamples;
 
@@ -784,7 +852,7 @@ public class FragmentPathCalibrationBenchmark {
 
     /// Two-worker no-op state parameterized only by mode and source availability.
     @State(Scope.Benchmark)
-    public static class NoOpDecisionState extends PathState {
+    public static class NoOpDecisionState extends ForcedPathState {
 
         @Param({"PLENTIFUL", "SCARCE"})
         public SourceShape sourceShape;
@@ -798,7 +866,7 @@ public class FragmentPathCalibrationBenchmark {
 
     /// Two-worker CPU state parameterized only by mode and source availability.
     @State(Scope.Benchmark)
-    public static class CpuWorkDecisionState extends PathState {
+    public static class CpuWorkDecisionState extends ForcedPathState {
 
         @Param({"PLENTIFUL", "SCARCE"})
         public SourceShape sourceShape;
@@ -812,7 +880,7 @@ public class FragmentPathCalibrationBenchmark {
 
     /// Two-worker corrected-path state for one source shape and deterministic arithmetic cost.
     @State(Scope.Benchmark)
-    public static class WorkCostDecisionState extends PathState {
+    public static class WorkCostDecisionState extends ForcedPathState {
 
         @Param({"PLENTIFUL", "SCARCE"})
         public SourceShape sourceShape;
@@ -829,7 +897,7 @@ public class FragmentPathCalibrationBenchmark {
 
     /// Two-worker forced-path state for the diagnostic executor-only timing candidate.
     @State(Scope.Benchmark)
-    public static class ExecutorBodyCostState extends PathState {
+    public static class ExecutorBodyCostState extends ForcedPathState {
 
         @Param({"PLENTIFUL", "SCARCE"})
         public SourceShape sourceShape;
@@ -843,6 +911,184 @@ public class FragmentPathCalibrationBenchmark {
             boolean bodyTimingEnabled =
                     Boolean.parseBoolean(System.getProperty(BODY_TIMING_ENABLED_PROPERTY, Boolean.TRUE.toString()));
             setupPath(2, this.sourceShape, Workload.CPU_WORK, this.workRounds, false, bodyTimingEnabled);
+        }
+    }
+
+    /// Same-build forced controls for the complete production estimator's overhead.
+    @State(Scope.Benchmark)
+    public static class ProductionEstimatorState extends PathState {
+
+        @Param({"PLENTIFUL_DIRECT", "SCARCE_STAGED"})
+        public ProductionEstimatorCase estimatorCase;
+
+        private boolean samplingEnabled;
+
+        @Override
+        final ForcedMode forcedMode() {
+            return this.estimatorCase.mode;
+        }
+
+        /// Starts a forced rounds-24 row with production sampling controlled by one property.
+        @Setup(Level.Trial)
+        public void setup() {
+            this.samplingEnabled = Boolean.parseBoolean(
+                    System.getProperty(PRODUCTION_TIMING_ENABLED_PROPERTY, Boolean.TRUE.toString()));
+            setupPath(
+                    2,
+                    this.estimatorCase.sourceShape,
+                    Workload.CPU_WORK,
+                    24,
+                    false,
+                    false,
+                    this.samplingEnabled,
+                    true,
+                    null);
+        }
+
+        /// Checks that forced mode remains fixed and sampling follows only the explicit property.
+        @Override
+        void validatePolicySnapshots(
+                IterationType iterationType, ControlPlaneFragment.FragmentPolicySnapshot[] snapshots) {
+            FragmentControlPolicy.Mode expected = FragmentControlPolicy.Mode.valueOf(this.estimatorCase.mode.name());
+            for (ControlPlaneFragment.FragmentPolicySnapshot snapshot : snapshots) {
+                if (snapshot.mode() != expected) {
+                    failPolicyValidation("Forced production estimator changed mode: " + snapshot);
+                }
+                if (this.samplingEnabled
+                        && snapshot.bodyCostHistoryCount() < FragmentControlPolicy.BODY_COST_WINDOW_SAMPLES) {
+                    failPolicyValidation("Enabled production estimator did not initialize: " + snapshot);
+                }
+                if (!this.samplingEnabled && snapshot.bodyCostHistoryCount() != 0) {
+                    failPolicyValidation("Disabled production estimator collected history: " + snapshot);
+                }
+            }
+        }
+    }
+
+    /// Normal production-tree rows selected before measurement rather than searched afterward.
+    @State(Scope.Benchmark)
+    public static class NormalPolicyState extends PathState {
+
+        @Param({"PLENTIFUL_24", "PLENTIFUL_96", "SCARCE_24", "SCARCE_88", "SCARCE_96"})
+        public NormalPolicyCase policyCase;
+
+        @Override
+        final ForcedMode forcedMode() {
+            return null;
+        }
+
+        /// Starts the normal tree with a fixed production maximum batch of 32.
+        @Setup(Level.Trial)
+        public void setup() {
+            setupPath(
+                    2,
+                    this.policyCase.sourceShape,
+                    Workload.CPU_WORK,
+                    this.policyCase.workRounds,
+                    false,
+                    false,
+                    false,
+                    true,
+                    null);
+        }
+
+        /// Enforces the four resolved leaves and the predeclared stable rounds-88 guard row.
+        @Override
+        void validatePolicySnapshots(
+                IterationType iterationType, ControlPlaneFragment.FragmentPolicySnapshot[] snapshots) {
+            FragmentControlPolicy.Mode expected = this.policyCase == NormalPolicyCase.SCARCE_96
+                    ? FragmentControlPolicy.Mode.STAGED
+                    : FragmentControlPolicy.Mode.DIRECT;
+            for (ControlPlaneFragment.FragmentPolicySnapshot snapshot : snapshots) {
+                if (snapshot.bodyCostHistoryCount() < FragmentControlPolicy.BODY_COST_MIN_HISTORY) {
+                    failPolicyValidation("Normal production estimator did not initialize: " + snapshot);
+                }
+                if (snapshot.mode() != expected) {
+                    failPolicyValidation(
+                            "Normal production policy selected the wrong resolved or guard mode: " + snapshot);
+                }
+            }
+        }
+    }
+
+    /// One long-lived scarce fixture that repeatedly validates bounded normal-tree response.
+    @State(Scope.Benchmark)
+    public static class DynamicPolicyState extends PathState {
+
+        private final AtomicInteger dynamicWorkRounds = new AtomicInteger(24);
+        private final long[] transitionCounts = new long[3];
+        private final long[] transitionCompletedFrames = new long[3];
+        private final long[] transitionMaxCompletedFrames = new long[3];
+        private final long[] transitionSamples = new long[3];
+        private final long[] transitionMaxSamples = new long[3];
+
+        @Override
+        final ForcedMode forcedMode() {
+            return null;
+        }
+
+        /// Starts normal policy at the stable cheap point without resetting between later phases.
+        @Setup(Level.Trial)
+        public void setup() {
+            setupPath(2, SourceShape.SCARCE, Workload.CPU_WORK, 24, false, false, false, true, this.dynamicWorkRounds);
+            awaitSettledMode(
+                    0,
+                    "startup-cheap",
+                    FragmentControlPolicy.Mode.DIRECT,
+                    FragmentControlPolicy.BODY_COST_MIN_HISTORY,
+                    0,
+                    DYNAMIC_RESPONSE_MAX_FRAMES);
+        }
+
+        /// Runs one expensive and one cheap step without recreating or resetting the graph.
+        final void runSequence() {
+            if (policyValidationFailure() != null) {
+                return;
+            }
+            this.dynamicWorkRounds.set(96);
+            awaitSettledMode(
+                    1,
+                    "cheap-to-expensive",
+                    FragmentControlPolicy.Mode.STAGED,
+                    FragmentControlPolicy.BODY_COST_MIN_HISTORY,
+                    FragmentControlPolicy.EXPENSIVE_CONFIRMATION_SAMPLES,
+                    DYNAMIC_RESPONSE_MAX_FRAMES);
+            if (policyValidationFailure() != null) {
+                return;
+            }
+            this.dynamicWorkRounds.set(24);
+            awaitSettledMode(
+                    2,
+                    "expensive-to-cheap",
+                    FragmentControlPolicy.Mode.DIRECT,
+                    FragmentControlPolicy.BODY_COST_MIN_HISTORY,
+                    FragmentControlPolicy.BODY_COST_WINDOW_SAMPLES,
+                    DYNAMIC_RESPONSE_MAX_FRAMES);
+        }
+
+        /// Aggregates bounded response evidence without logging inside each JMH invocation.
+        @Override
+        void recordDynamicResponse(int phase, long completedFrames, int samples) {
+            this.transitionCounts[phase]++;
+            this.transitionCompletedFrames[phase] += completedFrames;
+            this.transitionMaxCompletedFrames[phase] =
+                    Math.max(this.transitionMaxCompletedFrames[phase], completedFrames);
+            this.transitionSamples[phase] += samples;
+            this.transitionMaxSamples[phase] = Math.max(this.transitionMaxSamples[phase], samples);
+        }
+
+        /// Reports aggregate startup and step-response evidence once before common close-safe checks.
+        @Override
+        protected void beforeClose() {
+            LOGGER.info(
+                    "Fragment dynamic policy phases=[startup-cheap, cheap-to-expensive, expensive-to-cheap] "
+                            + "counts={} completedFrames={} maxCompletedFrames={} samples={} maxSamples={}",
+                    Arrays.toString(this.transitionCounts),
+                    Arrays.toString(this.transitionCompletedFrames),
+                    Arrays.toString(this.transitionMaxCompletedFrames),
+                    Arrays.toString(this.transitionSamples),
+                    Arrays.toString(this.transitionMaxSamples));
+            super.beforeClose();
         }
     }
 
@@ -868,9 +1114,6 @@ public class FragmentPathCalibrationBenchmark {
     @State(Scope.Benchmark)
     public abstract static class PathState {
 
-        @Param({"DIRECT", "STAGED"})
-        public ForcedMode mode;
-
         @Param({"NATURAL"})
         public HandleLayout handleLayout;
 
@@ -878,6 +1121,10 @@ public class FragmentPathCalibrationBenchmark {
         private final PaddedLongAdder bodyTimingSampleCounts = new PaddedLongAdder(SystemInfo.CPU_COUNT, true, true);
         private final PaddedLongAdder bodyTimingElapsedNanos = new PaddedLongAdder(SystemInfo.CPU_COUNT, true, true);
         private final List<CloneableObject> pipelines = new ArrayList<>();
+        private final List<ObservedPipeline> observedPipelines = new ArrayList<>();
+        private final List<ControlPlaneFragment.FragmentPolicySnapshot[]> warmupPolicySnapshots = new ArrayList<>();
+        private final List<ControlPlaneFragment.FragmentPolicySnapshot[]> measurementPolicySnapshots =
+                new ArrayList<>();
         private DiagnosticLease diagnosticLease;
         private DiagnosticDistributor distributor;
         private RepeatingSink[] sources;
@@ -927,6 +1174,15 @@ public class FragmentPathCalibrationBenchmark {
         private Workload workload;
         /// Deterministic arithmetic rounds retained for reports; zero for no-op work.
         private int workRounds;
+        /// Fixed mode for forced states, or null when the production selector owns the choice.
+        private ForcedMode selectedForcedMode;
+        /// True when cloned fragments are retained for production-policy diagnostics.
+        private boolean observeProductionPolicy;
+        /// First predeclared policy-gate failure retained until close-safe trial teardown.
+        private String policyValidationFailure;
+
+        /// Returns the forced path for diagnostic states, or null for normal policy.
+        abstract ForcedMode forcedMode();
 
         /// Builds and starts the requested pinned fragment graph without the lattice monitor.
         protected final void setupPath(int workerCount, SourceShape sourceShape, Workload workload) {
@@ -951,6 +1207,29 @@ public class FragmentPathCalibrationBenchmark {
                 int workRounds,
                 boolean observeServiceMetric,
                 boolean observeBodyTiming) {
+            setupPath(
+                    workerCount,
+                    sourceShape,
+                    workload,
+                    workRounds,
+                    observeServiceMetric,
+                    observeBodyTiming,
+                    false,
+                    false,
+                    null);
+        }
+
+        /// Builds the path with independently gated raw timing, production timing, and policy observation.
+        protected final void setupPath(
+                int workerCount,
+                SourceShape sourceShape,
+                Workload workload,
+                int workRounds,
+                boolean observeServiceMetric,
+                boolean observeBodyTiming,
+                boolean productionBodyTiming,
+                boolean observeProductionPolicy,
+                AtomicInteger dynamicWorkRounds) {
             try {
                 if (workRounds < 0 || (workload == Workload.NO_OP && workRounds != 0)) {
                     throw new IllegalArgumentException("Work rounds must match a non-negative CPU workload");
@@ -972,8 +1251,17 @@ public class FragmentPathCalibrationBenchmark {
                 this.iterationBodyTimingBefore = null;
                 this.warmupBodyTimingDeltas.clear();
                 this.measurementBodyTimingDeltas.clear();
+                this.warmupPolicySnapshots.clear();
+                this.measurementPolicySnapshots.clear();
+                this.observedPipelines.clear();
+                this.selectedForcedMode = forcedMode();
+                this.observeProductionPolicy = observeProductionPolicy;
+                this.policyValidationFailure = null;
                 DiagnosticDistributor.resetSharedRoutingState();
-                this.diagnosticLease = new DiagnosticLease(this.mode, FIXED_BATCH_SIZE);
+                if (this.selectedForcedMode != null) {
+                    this.diagnosticLease =
+                            new DiagnosticLease(this.selectedForcedMode, FIXED_BATCH_SIZE, productionBodyTiming);
+                }
                 if (observeServiceMetric) {
                     this.serviceRegistry = new SimpleMeterRegistry();
                 }
@@ -991,18 +1279,19 @@ public class FragmentPathCalibrationBenchmark {
                     throw new IllegalStateException("Unable to publish the diagnostic core mapping");
                 }
 
-                CountingExecutor executor = observeBodyTiming
-                        ? CountingExecutor.bodyTimingPrototype(
-                                this.counters,
-                                workload,
-                                workRounds,
-                                this.bodyTimingSampleCounts,
-                                this.bodyTimingElapsedNanos)
-                        : new CountingExecutor(-1, this.counters, workload, workRounds);
-                BaseCloneableObject base = this.serviceRegistry == null
-                        ? new BaseCloneableObject(executor)
-                        : new BaseCloneableObject(
-                                FragmentConfig.ofDefaults(WORK_COST_METRIC_PREFIX, this.serviceRegistry), executor);
+                CountingExecutor executor = dynamicWorkRounds != null
+                        ? CountingExecutor.dynamicPrototype(this.counters, workload, dynamicWorkRounds)
+                        : observeBodyTiming
+                                ? CountingExecutor.bodyTimingPrototype(
+                                        this.counters,
+                                        workload,
+                                        workRounds,
+                                        this.bodyTimingSampleCounts,
+                                        this.bodyTimingElapsedNanos)
+                                : new CountingExecutor(-1, this.counters, workload, workRounds);
+                FragmentConfig fragmentConfig = fragmentConfig(this.serviceRegistry, this.selectedForcedMode == null);
+                BaseCloneableObject base =
+                        observeProductionPolicy ? null : new BaseCloneableObject(fragmentConfig, executor);
                 int workerIndex = 0;
                 for (int core = workerCores.nextSetBit(0); core >= 0; core = workerCores.nextSetBit(core + 1)) {
                     BitSet cpus =
@@ -1014,7 +1303,15 @@ public class FragmentPathCalibrationBenchmark {
                     }
                     this.workerCpus[workerIndex] = workerCpu;
                     this.workerCores[workerIndex++] = core;
-                    CloneableObject pipeline = base.clone(new CloneConfig("FragmentPathCalibration", core, cpus));
+                    CloneConfig cloneConfig = new CloneConfig("FragmentPathCalibration", core, cpus);
+                    CloneableObject pipeline;
+                    if (observeProductionPolicy) {
+                        ObservedPipeline observed = new ObservedPipeline(fragmentConfig, executor, cloneConfig);
+                        this.observedPipelines.add(observed);
+                        pipeline = observed;
+                    } else {
+                        pipeline = base.clone(cloneConfig);
+                    }
                     pipeline.input(handles[core]);
                     pipeline.setDrainMode(true);
                     pipeline.start();
@@ -1084,13 +1381,21 @@ public class FragmentPathCalibrationBenchmark {
             BodyTimingSnapshot bodyTimingDelta = this.observeBodyTiming
                     ? bodyTimingDelta(this.iterationBodyTimingBefore, bodyTimingSnapshot())
                     : null;
+            ControlPlaneFragment.FragmentPolicySnapshot[] policySnapshots =
+                    this.observeProductionPolicy ? policySnapshots() : null;
             if (iterationParams.getType() == IterationType.WARMUP) {
                 this.warmupHandleDeltas.add(handleDeltas);
                 if (bodyTimingDelta != null) {
                     this.warmupBodyTimingDeltas.add(bodyTimingDelta);
                 }
+                if (policySnapshots != null) {
+                    this.warmupPolicySnapshots.add(policySnapshots);
+                }
             } else if (iterationParams.getType() == IterationType.MEASUREMENT) {
                 this.measurementHandleDeltas.add(handleDeltas);
+                if (policySnapshots != null) {
+                    this.measurementPolicySnapshots.add(policySnapshots);
+                }
             }
             if (iterationParams.getType() == IterationType.MEASUREMENT) {
                 this.measurementWorkerDeltas.add(this.iterationWorkerDeltas.clone());
@@ -1108,6 +1413,25 @@ public class FragmentPathCalibrationBenchmark {
             this.iterationHandleBefore = null;
             this.iterationServiceBefore = null;
             this.iterationBodyTimingBefore = null;
+            if (policySnapshots != null) {
+                validatePolicySnapshots(iterationParams.getType(), policySnapshots);
+            }
+        }
+
+        /// Allows a bounded production-policy state to enforce its predeclared iteration result.
+        void validatePolicySnapshots(
+                IterationType iterationType, ControlPlaneFragment.FragmentPolicySnapshot[] snapshots) {}
+
+        /// Retains the first policy-gate failure so trial teardown can still close worker threads.
+        final void failPolicyValidation(String message) {
+            if (this.policyValidationFailure == null) {
+                this.policyValidationFailure = message;
+            }
+        }
+
+        /// Returns the retained gate failure for deterministic benchmark-helper tests.
+        final String policyValidationFailure() {
+            return this.policyValidationFailure;
         }
 
         /// Waits for one JMH invocation's additional completed frames.
@@ -1141,23 +1465,32 @@ public class FragmentPathCalibrationBenchmark {
             reportHandleAcquisition();
             reportServiceEstimate();
             reportBodyTimingEstimate();
+            reportProductionPolicy();
+            if (this.policyValidationFailure != null) {
+                throw new IllegalStateException(this.policyValidationFailure);
+            }
         }
 
         /// Reports raw measurement splits and fork-level participation metrics before graph close.
         private void reportParticipation() {
             long[][] rawDeltas = this.measurementWorkerDeltas.toArray(long[][]::new);
             long[] finalWorkerCounts = workerCounts(this.counters, this.workerCpus);
-            if (rawDeltas.length == 0) {
+            boolean hasTimedMeasurement = rawDeltas.length > 0;
+            for (long elapsedNs : this.measurementElapsedNanos) {
+                hasTimedMeasurement &= elapsedNs > 0L;
+            }
+            if (!hasTimedMeasurement) {
                 LOGGER.info(
                         "Fragment worker participation mode={} sourceShape={} workload={} workRounds={} handleLayout={} batch={} workerCpus={} "
-                                + "rawMeasurementDeltas=[] finalWorkerCounts={} verdict=NO_MEASUREMENT_SAMPLES",
-                        this.mode,
+                                + "rawMeasurementDeltas={} finalWorkerCounts={} verdict=NO_TIMED_FRAME_WINDOW",
+                        policyLabel(),
                         this.sourceShape,
                         this.workload,
                         this.workRounds,
                         this.handleLayout,
                         FIXED_BATCH_SIZE,
                         Arrays.toString(this.workerCpus),
+                        Arrays.deepToString(rawDeltas),
                         Arrays.toString(finalWorkerCounts));
                 return;
             }
@@ -1166,9 +1499,12 @@ public class FragmentPathCalibrationBenchmark {
             double[] effectiveLanes = new double[rawDeltas.length];
             long[] aggregateDeltas = new long[this.workerCpus.length];
             long aggregateElapsedNanos = 0L;
-            boolean lanesComparable = this.serviceSummaries == null || this.workRounds == CPU_WORK_ROUNDS;
-            double singleLaneCeilingFramesPerSecond =
-                    lanesComparable ? singleLaneCeiling(this.workload, this.mode) : 1.0;
+            boolean lanesComparable = this.workload == Workload.NO_OP || this.workRounds == CPU_WORK_ROUNDS;
+            double singleLaneCeilingFramesPerSecond = lanesComparable
+                    ? singleLaneCeiling(
+                            this.workload,
+                            this.selectedForcedMode == null ? ForcedMode.DIRECT : this.selectedForcedMode)
+                    : 1.0;
             for (int i = 0; i < rawDeltas.length; i++) {
                 ParticipationMetrics metrics = participationMetrics(
                         rawDeltas[i], this.measurementElapsedNanos.get(i), singleLaneCeilingFramesPerSecond);
@@ -1188,7 +1524,7 @@ public class FragmentPathCalibrationBenchmark {
                             + "perMeasurementEffectiveLanes={} aggregateDeltas={} aggregateFractions={} "
                             + "aggregateDominance={} aggregateEffectiveLanes={} finalWorkerCounts={} "
                             + "singleLaneCeilingFramesPerSecond={}",
-                    this.mode,
+                    policyLabel(),
                     this.sourceShape,
                     this.workload,
                     this.workRounds,
@@ -1215,7 +1551,7 @@ public class FragmentPathCalibrationBenchmark {
                             + "workerCores={} sourceOrdinals={} sourceHandleIds={} preFirstIteration={} "
                             + "warmupDeltas={} measurementDeltas={} aggregateAttempts={} aggregateFailures={} "
                             + "aggregatePulledFrames={} firstProductiveOrder={}",
-                    this.mode,
+                    policyLabel(),
                     this.sourceShape,
                     this.workload,
                     this.workRounds,
@@ -1267,7 +1603,7 @@ public class FragmentPathCalibrationBenchmark {
                             + "rawReportCounts={} rawReportedTotalsNs={} perMeasurementWorkerEstimatesNs={} "
                             + "aggregateReportCounts={} aggregateReportedTotalsNs={} aggregateWorkerEstimatesNs={} "
                             + "aggregateEstimateNs={}",
-                    this.mode,
+                    policyLabel(),
                     this.sourceShape,
                     this.workload,
                     this.workRounds,
@@ -1328,7 +1664,7 @@ public class FragmentPathCalibrationBenchmark {
                             + "warmupSampleCounts={} warmupElapsedNanos={} warmupWorkerEstimatesNs={} "
                             + "measurementSampleCounts={} measurementElapsedNanos={} measurementWorkerEstimatesNs={} "
                             + "aggregateSampleCounts={} aggregateElapsedNanos={} aggregateWorkerEstimatesNs={}",
-                    this.mode,
+                    policyLabel(),
                     this.sourceShape,
                     this.workRounds,
                     FIXED_BATCH_SIZE,
@@ -1346,6 +1682,112 @@ public class FragmentPathCalibrationBenchmark {
                     Arrays.toString(aggregateCounts),
                     Arrays.toString(aggregateElapsed),
                     Arrays.toString(bodyTimingEstimates(aggregate)));
+        }
+
+        /// Reports production estimator and selected-mode snapshots at JMH iteration boundaries.
+        private void reportProductionPolicy() {
+            if (!this.observeProductionPolicy) {
+                return;
+            }
+            ControlPlaneFragment.FragmentPolicySnapshot[] finalSnapshots = policySnapshots();
+            LOGGER.info(
+                    "Fragment production policy policy={} sourceShape={} workRounds={} batchCap={} workerCpus={} "
+                            + "liveHandles={} registeredWorkers={} warmupSnapshots={} measurementSnapshots={} finalSnapshots={}",
+                    policyLabel(),
+                    this.sourceShape,
+                    this.workRounds,
+                    FIXED_BATCH_SIZE,
+                    Arrays.toString(this.workerCpus),
+                    this.distributor.getUpstreamHandleCount(),
+                    this.distributor.getThreadCount(),
+                    Arrays.deepToString(
+                            this.warmupPolicySnapshots.toArray(ControlPlaneFragment.FragmentPolicySnapshot[][]::new)),
+                    Arrays.deepToString(this.measurementPolicySnapshots.toArray(
+                            ControlPlaneFragment.FragmentPolicySnapshot[][]::new)),
+                    Arrays.toString(finalSnapshots));
+            validatePolicySnapshots(IterationType.MEASUREMENT, finalSnapshots);
+        }
+
+        /// Reads the retained fragment references for benchmark-only policy diagnostics.
+        private ControlPlaneFragment.FragmentPolicySnapshot[] policySnapshots() {
+            ControlPlaneFragment.FragmentPolicySnapshot[] snapshots =
+                    new ControlPlaneFragment.FragmentPolicySnapshot[this.observedPipelines.size()];
+            for (int i = 0; i < snapshots.length; i++) {
+                snapshots[i] = this.observedPipelines.get(i).policySnapshot();
+            }
+            return snapshots;
+        }
+
+        /// Waits for the most productive owner-local policy to settle within a completed-work bound.
+        final void awaitSettledMode(
+                int phaseIndex,
+                String phase,
+                FragmentControlPolicy.Mode expectedMode,
+                int minimumHistory,
+                int minimumNewSamples,
+                long maximumCompletedFrames) {
+            long startFrames = this.counters.sum();
+            ControlPlaneFragment.FragmentPolicySnapshot[] startingSnapshots = policySnapshots();
+            int[] startingHistory = new int[startingSnapshots.length];
+            for (int worker = 0; worker < startingSnapshots.length; worker++) {
+                ControlPlaneFragment.FragmentPolicySnapshot snapshot = startingSnapshots[worker];
+                startingHistory[worker] = snapshot == null ? 0 : snapshot.bodyCostHistoryCount();
+            }
+            long deadline = System.nanoTime() + TIMEOUT_NS;
+            while (System.nanoTime() < deadline && this.counters.sum() - startFrames <= maximumCompletedFrames) {
+                ControlPlaneFragment.FragmentPolicySnapshot[] snapshots = policySnapshots();
+                int selectedWorker = -1;
+                int selectedProgress = -1;
+                for (int worker = 0; worker < snapshots.length; worker++) {
+                    ControlPlaneFragment.FragmentPolicySnapshot snapshot = snapshots[worker];
+                    if (snapshot == null) {
+                        continue;
+                    }
+                    int progress = minimumNewSamples == 0
+                            ? snapshot.bodyCostHistoryCount()
+                            : Math.max(0, snapshot.bodyCostHistoryCount() - startingHistory[worker]);
+                    if (progress > selectedProgress) {
+                        selectedWorker = worker;
+                        selectedProgress = progress;
+                    }
+                }
+                if (selectedWorker >= 0
+                        && snapshots[selectedWorker].bodyCostHistoryCount() >= minimumHistory
+                        && selectedProgress >= minimumNewSamples
+                        && snapshots[selectedWorker].mode() == expectedMode) {
+                    recordDynamicResponse(phaseIndex, this.counters.sum() - startFrames, selectedProgress);
+                    return;
+                }
+                Thread.onSpinWait();
+            }
+            failPolicyValidation("Production policy phase " + phase + " did not settle " + expectedMode + " within "
+                    + maximumCompletedFrames + " completed frames; snapshots=" + Arrays.toString(policySnapshots()));
+        }
+
+        /// Retains dynamic response evidence when the specialized state requests it.
+        void recordDynamicResponse(int phase, long completedFrames, int samples) {}
+
+        /// Returns the report label without turning normal selection into a forced benchmark mode.
+        private String policyLabel() {
+            return this.selectedForcedMode == null ? "NORMAL" : this.selectedForcedMode.name();
+        }
+
+        /// Creates the normal fixed-cap fixture or the unchanged forced-path fragment configuration.
+        private static FragmentConfig fragmentConfig(SimpleMeterRegistry registry, boolean normalPolicy) {
+            FragmentConfig defaults = registry == null
+                    ? FragmentConfig.ofDefaults()
+                    : FragmentConfig.ofDefaults(WORK_COST_METRIC_PREFIX, registry);
+            if (!normalPolicy) {
+                return defaults;
+            }
+            return new FragmentConfig(
+                    null,
+                    defaults.cacheConfig(),
+                    defaults.actionPicker(),
+                    FIXED_BATCH_SIZE,
+                    false,
+                    defaults.metricPrefix(),
+                    defaults.registry());
         }
 
         /// Returns the completed isolated-work calibration value for one retained validation point.
@@ -1424,6 +1866,64 @@ public class FragmentPathCalibrationBenchmark {
         }
     }
 
+    /// Benchmark-owned clone pair that preserves production wiring while retaining fragment diagnostics.
+    static final class ObservedPipeline implements CloneableObject {
+
+        private final ControlPlaneFragment fragment;
+        private final AbstractExecutor executor;
+
+        /// Clones and connects the exact fragment/executor pair before either side starts.
+        ObservedPipeline(FragmentConfig fragmentConfig, AbstractExecutor executorPrototype, CloneConfig cloneConfig) {
+            this.fragment = new ControlPlaneFragment(fragmentConfig.clone(cloneConfig));
+            this.executor = executorPrototype.clone(cloneConfig);
+            this.fragment.connectBodyCostRecorder(this.executor);
+        }
+
+        @Override
+        public CloneableObject clone(CloneConfig cloneConfig) {
+            throw new UnsupportedOperationException("Observed benchmark pipelines are already cloned");
+        }
+
+        @Override
+        public void start() {
+            this.executor.start();
+            this.fragment.start();
+            this.executor.input(this.fragment.output());
+        }
+
+        @Override
+        public void input(LatticeSource stream) {
+            this.fragment.input(stream);
+        }
+
+        @Override
+        public boolean isDrained() {
+            return this.fragment.isDrained() && this.executor.isDrained();
+        }
+
+        @Override
+        public void setDrainMode(boolean value) {
+            this.executor.setDrainMode(value);
+            this.fragment.setDrainMode(value);
+        }
+
+        @Override
+        public long resetForNextTrial(long deadlineNanos) {
+            return this.fragment.resetForNextTrial(deadlineNanos) + this.executor.resetForNextTrial(deadlineNanos);
+        }
+
+        /// Returns the benchmark-only best-effort policy view from the retained fragment.
+        ControlPlaneFragment.FragmentPolicySnapshot policySnapshot() {
+            return this.fragment.policySnapshot();
+        }
+
+        @Override
+        public void close() {
+            this.fragment.close();
+            this.executor.close();
+        }
+    }
+
     /// Setup-only lease that guarantees the package-private policy override is cleared exactly once.
     static final class DiagnosticLease implements AutoCloseable {
 
@@ -1431,8 +1931,13 @@ public class FragmentPathCalibrationBenchmark {
 
         /// Publishes a fixed mode and batch before any benchmark fragment policy is constructed.
         DiagnosticLease(ForcedMode mode, long batchSize) {
+            this(mode, batchSize, false);
+        }
+
+        /// Publishes a fixed mode with optional production estimator sampling.
+        DiagnosticLease(ForcedMode mode, long batchSize, boolean productionBodyTiming) {
             this.override = FragmentControlPolicy.installDiagnosticOverride(
-                    FragmentControlPolicy.Mode.valueOf(mode.name()), batchSize);
+                    FragmentControlPolicy.Mode.valueOf(mode.name()), batchSize, productionBodyTiming);
         }
 
         /// Clears the captured override after all owning fragments have closed.
@@ -1451,6 +1956,7 @@ public class FragmentPathCalibrationBenchmark {
         private final PaddedLongAdder counters;
         private final Workload workload;
         private final int workRounds;
+        private final AtomicInteger dynamicWorkRounds;
         private final PaddedLongAdder bodyTimingSampleCounts;
         private final PaddedLongAdder bodyTimingElapsedNanos;
         private long workSink = HasherApi.BASE_SEED;
@@ -1461,6 +1967,7 @@ public class FragmentPathCalibrationBenchmark {
             this.counters = counters;
             this.workload = workload;
             this.workRounds = workRounds;
+            this.dynamicWorkRounds = null;
             this.bodyTimingSampleCounts = null;
             this.bodyTimingElapsedNanos = null;
         }
@@ -1476,6 +1983,7 @@ public class FragmentPathCalibrationBenchmark {
             this.counters = counters;
             this.workload = workload;
             this.workRounds = workRounds;
+            this.dynamicWorkRounds = null;
             this.bodyTimingSampleCounts = bodyTimingSampleCounts;
             this.bodyTimingElapsedNanos = bodyTimingElapsedNanos;
         }
@@ -1496,8 +2004,21 @@ public class FragmentPathCalibrationBenchmark {
             this.counters = counters;
             this.workload = workload;
             this.workRounds = workRounds;
+            this.dynamicWorkRounds = null;
             this.bodyTimingSampleCounts = bodyTimingSampleCounts;
             this.bodyTimingElapsedNanos = bodyTimingElapsedNanos;
+        }
+
+        /// Creates a prototype or clone whose benchmark-owned work body can change between phases.
+        private CountingExecutor(
+                int cpu, PaddedLongAdder counters, Workload workload, AtomicInteger dynamicWorkRounds) {
+            super(cpu);
+            this.counters = counters;
+            this.workload = workload;
+            this.workRounds = 0;
+            this.dynamicWorkRounds = dynamicWorkRounds;
+            this.bodyTimingSampleCounts = null;
+            this.bodyTimingElapsedNanos = null;
         }
 
         /// Returns the trial prototype used only by the executor-body validation state.
@@ -1510,12 +2031,19 @@ public class FragmentPathCalibrationBenchmark {
             return new CountingExecutor(counters, workload, workRounds, bodyTimingSampleCounts, bodyTimingElapsedNanos);
         }
 
+        /// Returns the prototype used only by the bounded dynamic normal-policy diagnostic.
+        static CountingExecutor dynamicPrototype(
+                PaddedLongAdder counters, Workload workload, AtomicInteger dynamicWorkRounds) {
+            return new CountingExecutor(-1, counters, workload, dynamicWorkRounds);
+        }
+
         /// Executes the no-op frame, optionally performs CPU work, and publishes completion.
         @Override
         public void execute(AbstractFrame frame) {
             frame.execute();
             if (this.workload == Workload.CPU_WORK) {
-                this.workSink = cpuWork(this.workSink ^ frame.getRoutingHash(), this.workRounds);
+                int rounds = this.dynamicWorkRounds == null ? this.workRounds : this.dynamicWorkRounds.getAcquire();
+                this.workSink = cpuWork(this.workSink ^ frame.getRoutingHash(), rounds);
             }
             this.counters.increment(super.cpu);
         }
@@ -1523,6 +2051,9 @@ public class FragmentPathCalibrationBenchmark {
         /// Clones the benchmark executor for the fragment's selected logical CPU.
         @Override
         public CountingExecutor hookOnClone(int cpu) {
+            if (this.dynamicWorkRounds != null) {
+                return new CountingExecutor(cpu, this.counters, this.workload, this.dynamicWorkRounds);
+            }
             if (this.bodyTimingSampleCounts != null) {
                 return new CountingExecutor(
                         cpu,

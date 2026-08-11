@@ -4,6 +4,7 @@ import io.euhedral_execution.core.config.CloneConfig;
 import io.euhedral_execution.core.config.FragmentConfig;
 import io.euhedral_execution.core.flow_control.LatticeHotSource;
 import io.euhedral_execution.core.frames.AbstractFrame;
+import io.euhedral_execution.core.generics.AbstractExecutor;
 import io.euhedral_execution.core.generics.LatticeSource;
 import io.euhedral_execution.core.internal.Constants;
 import io.euhedral_execution.core.metrics.ExecutionMetrics;
@@ -32,7 +33,7 @@ import org.slf4j.LoggerFactory;
 /// ## The core of Euhedral Core
 ///
 /// `ControlPlaneFragment` is the control loop that sits between ingress and execution. Normal mode
-/// uses a deterministic latency-aware direct/staged policy, while benchmark mode evaluates the
+/// uses a deterministic availability/body-cost direct/staged policy, while benchmark mode evaluates the
 /// existing action-picker vectors on an independent loop.
 public final class ControlPlaneFragment extends WorkRequester {
 
@@ -146,6 +147,13 @@ public final class ControlPlaneFragment extends WorkRequester {
         return this.outputStream;
     }
 
+    /// Connects the paired cloned executor's setup-only body-cost callback before worker start.
+    public void connectBodyCostRecorder(AbstractExecutor executor) {
+        if (this.controlPolicy != null && this.controlPolicy.bodyCostSamplingEnabled()) {
+            executor.attachProductionBodyTimingRecorder(this.controlPolicy::recordBodyCost);
+        }
+    }
+
     @Override
     public boolean isStarted() {
         return this.running.getAcquire();
@@ -204,7 +212,6 @@ public final class ControlPlaneFragment extends WorkRequester {
 
                 long newUpCount = context.upstream.getCachedUpCount();
                 if (this.state.upstreamCount != newUpCount) {
-                    this.state.reset();
                     this.state.upstreamCount = newUpCount;
                 }
                 if (this.state.upstreamCount == 0
@@ -297,7 +304,7 @@ public final class ControlPlaneFragment extends WorkRequester {
                 this.state.totalExecutions += processed;
                 long nowNs = System.nanoTime();
                 if (processed > 0L) {
-                    recordProgress(nowNs, executionElapsedNs, executionFrames, processed);
+                    recordProgress(context, nowNs, executionElapsedNs, executionFrames, processed);
                     this.controlPolicy.recordProgress();
                     Thread.onSpinWait();
                 } else if (this.controlPolicy.missRequiresPark()) {
@@ -326,7 +333,8 @@ public final class ControlPlaneFragment extends WorkRequester {
     }
 
     /// Records loop execution telemetry and advances policy only at a batch boundary.
-    private void recordProgress(long nowNs, long executionElapsedNs, long executionFrames, long processed) {
+    private void recordProgress(
+            FlowThread.FlowContext context, long nowNs, long executionElapsedNs, long executionFrames, long processed) {
         this.controlPolicy.recordExecution(executionElapsedNs, executionFrames);
         if (executionElapsedNs > 0L && executionFrames > 0L) {
             long serviceTime = Math.max(1L, executionElapsedNs / executionFrames);
@@ -338,7 +346,9 @@ public final class ControlPlaneFragment extends WorkRequester {
             return;
         }
         this.state.completed = 0L;
-        this.state.batchSize = this.controlPolicy.completeBatch(getBatchLimit());
+        long liveHandles = context.upstream.getTrueUpstreamCount();
+        int registeredWorkers = super.getThreadCount();
+        this.state.batchSize = this.controlPolicy.completeBatch(getBatchLimit(), liveHandles, registeredWorkers);
         reportMetrics();
     }
 
@@ -370,6 +380,19 @@ public final class ControlPlaneFragment extends WorkRequester {
 
     long getAdaptiveBatchCap() {
         return (long) ADAPTIVE_BATCH_CAP.getOpaque(this);
+    }
+
+    /// Returns a best-effort diagnostic view of owner-local policy state without publication.
+    FragmentPolicySnapshot policySnapshot() {
+        if (this.controlPolicy == null) {
+            return null;
+        }
+        return new FragmentPolicySnapshot(
+                this.controlPolicy.mode(),
+                this.controlPolicy.bodyCostHistoryCount(),
+                this.controlPolicy.smoothedBodyCostNs(),
+                this.controlPolicy.serviceTimeNs(),
+                this.controlPolicy.batchSize());
     }
 
     /// Waits with the established idle delay while there is no source or cached work.
@@ -547,4 +570,12 @@ public final class ControlPlaneFragment extends WorkRequester {
             Arrays.fill(this.actionInputs, 0.0);
         }
     }
+
+    /// Benchmark-only snapshot whose plain fields remain owned by the fragment worker.
+    record FragmentPolicySnapshot(
+            FragmentControlPolicy.Mode mode,
+            int bodyCostHistoryCount,
+            double smoothedBodyCostNs,
+            double serviceTimeNs,
+            long batchSize) {}
 }

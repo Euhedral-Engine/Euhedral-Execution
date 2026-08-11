@@ -12,6 +12,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.euhedral_execution.core.config.CloneConfig;
 import io.euhedral_execution.core.config.FragmentConfig;
+import io.euhedral_execution.core.frames.AbstractFrame;
+import io.euhedral_execution.core.generics.AbstractExecutor;
+import io.euhedral_execution.core.generics.LatticeReceiver;
+import io.euhedral_execution.core.generics.LatticeSource;
 import io.euhedral_execution.hardware_utils.PinnedThreadExecutor;
 import io.euhedral_execution.hardware_utils.SystemInfo;
 import io.euhedral_execution.hardware_utils.SystemInfo.CpuInfo;
@@ -19,6 +23,9 @@ import io.euhedral_execution.hardware_utils.common.SystemUtilization;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
+import java.util.function.Function;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Isolated;
@@ -28,6 +35,7 @@ import org.mockito.Mockito;
 class ControlPlaneFragmentTest {
 
     private final List<ControlPlaneFragment> fragments = new ArrayList<>();
+    private FragmentControlPolicy.DiagnosticOverride diagnosticOverride;
 
     private static FragmentConfig workerConfig() {
         return FragmentConfig.ofDefaults().clone(cloneConfig());
@@ -50,6 +58,10 @@ class ControlPlaneFragmentTest {
             fragment.close();
         }
         PinnedThreadExecutor.closeAll();
+        if (this.diagnosticOverride != null) {
+            FragmentControlPolicy.clearDiagnosticOverride(this.diagnosticOverride);
+            this.diagnosticOverride = null;
+        }
     }
 
     @Test
@@ -116,6 +128,56 @@ class ControlPlaneFragmentTest {
 
             assertTrue(fragment.isDrained());
             assertEquals(0, fragment.resetForNextTrial(System.nanoTime()));
+        }
+    }
+
+    @Test
+    void normalFragmentConnectsAndResetsItsProductionBodyEstimator() {
+        try (ControlPlaneFragment fragment = create(workerConfig())) {
+            TimedExecutor executor = new TimedExecutor(100L);
+            ImmediateSource source =
+                    new ImmediateSource(new TestFrame(), 256 * FragmentControlPolicy.EXPENSIVE_CONFIRMATION_SAMPLES);
+
+            fragment.connectBodyCostRecorder(executor);
+            executor.input(source);
+
+            ControlPlaneFragment.FragmentPolicySnapshot sampled = fragment.policySnapshot();
+            assertEquals(FragmentControlPolicy.EXPENSIVE_CONFIRMATION_SAMPLES, sampled.bodyCostHistoryCount());
+            assertEquals(100.0, sampled.smoothedBodyCostNs());
+            assertThrows(IllegalStateException.class, () -> executor.attachProductionBodyTimingRecorder(ignored -> {}));
+
+            fragment.resetForNextTrial(System.nanoTime());
+
+            ControlPlaneFragment.FragmentPolicySnapshot reset = fragment.policySnapshot();
+            assertEquals(FragmentControlPolicy.Mode.DIRECT, reset.mode());
+            assertEquals(0, reset.bodyCostHistoryCount());
+            assertEquals(0.0, reset.smoothedBodyCostNs());
+        }
+    }
+
+    @Test
+    void standardForcedModeLeavesProductionSamplingDisabled() {
+        this.diagnosticOverride =
+                FragmentControlPolicy.installDiagnosticOverride(FragmentControlPolicy.Mode.STAGED, 32L);
+        try (ControlPlaneFragment fragment = create(workerConfig())) {
+            TimedExecutor executor = new TimedExecutor(100L);
+
+            fragment.connectBodyCostRecorder(executor);
+
+            assertDoesNotThrow(() -> executor.attachProductionBodyTimingRecorder(ignored -> {}));
+        }
+    }
+
+    @Test
+    void explicitlySampledForcedModeConnectsTheProductionEstimator() {
+        this.diagnosticOverride =
+                FragmentControlPolicy.installDiagnosticOverride(FragmentControlPolicy.Mode.STAGED, 32L, true);
+        try (ControlPlaneFragment fragment = create(workerConfig())) {
+            TimedExecutor executor = new TimedExecutor(100L);
+
+            fragment.connectBodyCostRecorder(executor);
+
+            assertThrows(IllegalStateException.class, () -> executor.attachProductionBodyTimingRecorder(ignored -> {}));
         }
     }
 
@@ -223,5 +285,78 @@ class ControlPlaneFragmentTest {
         ControlPlaneFragment fragment = new ControlPlaneFragment(config);
         this.fragments.add(fragment);
         return fragment;
+    }
+
+    private static final class TimedExecutor extends AbstractExecutor {
+
+        private final AtomicLong time;
+        private final long elapsedNanos;
+
+        /// Creates a deterministic executor with the validated timing cadence and logical clock.
+        private TimedExecutor(long elapsedNanos) {
+            this(new AtomicLong(), elapsedNanos);
+        }
+
+        /// Shares one logical clock between the timing seam and the executor body.
+        private TimedExecutor(AtomicLong time, long elapsedNanos) {
+            super(0, PRODUCTION_BODY_TIMING_INTERVAL, time::get, ignored -> {});
+            this.time = time;
+            this.elapsedNanos = elapsedNanos;
+        }
+
+        @Override
+        public void execute(AbstractFrame frame) {
+            this.time.addAndGet(this.elapsedNanos);
+        }
+
+        @Override
+        public AbstractExecutor hookOnClone(int cpu) {
+            throw new UnsupportedOperationException("Test executor is not cloned");
+        }
+    }
+
+    private static final class TestFrame extends AbstractFrame {
+
+        /// Creates one reusable live frame for synchronous executor tests.
+        private TestFrame() {
+            super(1L);
+        }
+    }
+
+    private static final class ImmediateSource implements LatticeSource {
+
+        private final AbstractFrame frame;
+        private final int count;
+
+        /// Creates a source that synchronously supplies a fixed number of executor calls.
+        private ImmediateSource(AbstractFrame frame, int count) {
+            this.frame = frame;
+            this.count = count;
+        }
+
+        @Override
+        public void addDownstream(LatticeReceiver receiver) {
+            receiver.addUpstream(this);
+            for (int i = 0; i < this.count; i++) {
+                receiver.push(this.frame);
+            }
+        }
+
+        @Override
+        public long pull(
+                Consumer<AbstractFrame> consumer, Function<AbstractFrame, Boolean> stopCondition, long demand) {
+            return 0L;
+        }
+
+        @Override
+        public void request(long demand) {}
+
+        @Override
+        public void complete() {}
+
+        @Override
+        public boolean isComplete() {
+            return false;
+        }
     }
 }

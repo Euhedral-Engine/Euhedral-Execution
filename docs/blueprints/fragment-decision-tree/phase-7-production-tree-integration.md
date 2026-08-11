@@ -1,10 +1,11 @@
 # Phase 7: Production Fragment Decision-Tree Integration
 
-Status: planned; production implementation is gated by the fixed tests and benchmarks below
+Status: implemented and validated
 
 Prior evidence:
 
-- [`phase-5-first-production-fragment-decision-tree.md`](phase-5-first-production-fragment-decision-tree.md)
+- [
+  `phase-5-first-production-fragment-decision-tree.md`](phase-5-first-production-fragment-decision-tree.md)
 - [`phase-6-executor-body-cost-sensor.md`](phase-6-executor-body-cost-sensor.md)
 
 Blueprint intensity: maximum
@@ -41,7 +42,7 @@ registeredWorkers <= 0
 liveHandles >= registeredWorkers
     -> DIRECT
 
-bodyCostHistoryCount < 8
+bodyCostHistoryCount < 32
     -> DIRECT
 
 smoothedBodyCostNs <= 90 ns
@@ -81,16 +82,15 @@ min(all 96-round estimates) = 99.224869 ns
 
 Choose the bounds before production benchmarking as follows:
 
-- `CHEAP_BODY_COST_MAX_NS = 90.0`: the next whole 5 ns value above every retained 80-round
-  estimate;
+- `CHEAP_BODY_COST_MAX_NS = 90.0`: the next whole 5 ns value above every retained 80-round estimate;
 - `EXPENSIVE_BODY_COST_MIN_NS = 95.0`: the next whole 5 ns value above the cheap bound that remains
   below every retained 96-round estimate.
 
 These constants preserve every retained 80-round observation on the DIRECT side and every retained
-96-round observation on the STAGED side under insufficient availability. They leave an explicit
-5 ns open interval rather than choosing a midpoint. The bounds operate directly in sensor units;
-do not subtract the common executor-call/accounting offset or describe either value as isolated
-body nanoseconds.
+96-round observation on the STAGED side under insufficient availability. They leave an explicit 5 ns
+open interval rather than choosing a midpoint. The bounds operate directly in sensor units; do not
+subtract the common executor-call/accounting offset or describe either value as isolated body
+nanoseconds.
 
 The Phase 6 24-round maximum was 39.370065 ns, so the clearly cheap control has substantial distance
 from the cheap bound. The constants are conservative evidence from the validated host and fixture,
@@ -154,34 +154,26 @@ allocation, lock, registry lookup, or cross-core read in this path.
 Keep the estimator fields in `FragmentControlPolicy`, beside the selector that consumes them. They
 are owned by one pinned fragment thread for the policy lifetime.
 
-Use the smallest fixed aggregation:
+Use one fixed, allocation-free robust aggregation:
 
 1. Ignore elapsed values less than or equal to zero.
-2. Accumulate the first eight valid samples in a scalar sum.
-3. On the eighth sample, initialize `smoothedBodyCostNs` to their arithmetic mean.
-4. For each later valid sample, update:
+2. Fill a 32-sample owner-local window.
+3. At each non-overlapping window boundary, scan the primitive array for its second-smallest value.
+4. Publish a cheap or guard-band estimate immediately.
+5. Publish an expensive estimate only after two consecutive completed windows are at or above 95 ns;
+   a non-expensive window resets that confirmation count.
+6. Count only successfully published executor samples and saturate the history count.
 
-   ```text
-   smoothed += (sample - smoothed) / 8
-   ```
+Timer interference is additive, so the second minimum retains the underlying body-cost region while
+tolerating isolated positive timing stalls. Non-overlapping windows prevent one correlated rolling
+window from being counted repeatedly. Two expensive windows require 64 valid samples, or 16,384
+eligible executor calls on the productive owner, before STAGED can first be selected. A cheap return
+requires one completed 32-sample window. The 90/95 bounds and 256-call sampling cadence remain
+unchanged. Mode application still waits for the next completed batch.
 
-5. Count only successfully published executor samples. Saturate the history/sample count rather
-   than allowing integer wraparound.
-
-The eight-sample bootstrap prevents a single timer observation from selecting STAGED and reuses the
-existing one-eighth arithmetic convention without creating another statistical controller. It
-requires 2,048 successful eligible executor calls from a fresh clone before body cost can affect
-selection. A sample may update the estimate during a batch, but the mode is not readjusted until the
-completed boundary.
-
-The estimator needs only a bootstrap sum, valid-sample count, and smoothed double. A total sample
-count may remain observable package-private for diagnostics and dynamic-response accounting; it is
-not another selector input.
-
-The one-eighth EWMA leaves about 1.4 percent of a step after 32 valid post-change samples. Production
-validation therefore predeclares 32 valid samples, or 8,192 successful eligible executor calls,
-plus the remainder of the current batch as the maximum response window for a clearly cheap or
-clearly expensive stable step. Errors and cancellations do not count toward this work-based bound.
+The 32-sample array, index, saturated history count, two-state expensive confirmation count, and
+published estimate remain owner-local. No additional selector branch or third execution mode is
+introduced.
 
 ## Executor lifecycle and failure behavior
 
@@ -207,8 +199,8 @@ diagnostic recorder contract remains setup-only and should be invoked after elap
 
 ## Safe-boundary application
 
-`ControlPlaneFragment.recordProgress` already calls `FragmentControlPolicy.completeBatch` only
-after `state.completed` reaches the current target. Keep the mode unchanged while
+`ControlPlaneFragment.recordProgress` already calls `FragmentControlPolicy.completeBatch` only after
+`state.completed` reaches the current target. Keep the mode unchanged while
 `state.completed < state.batchSize`.
 
 At a completed boundary:
@@ -249,8 +241,8 @@ registry. Phase 5 already corrected registration/removal idempotence and proved 
 
 ## Guard-band and settled-mode behavior
 
-The guard band is hysteresis implemented by returning `currentSettledMode`; it is not smoothed a
-second time and has no transition counter.
+The guard band is hysteresis implemented by returning `currentSettledMode`. The two-window expensive
+confirmation belongs to signal aggregation and cannot be advanced by repeated batch reads.
 
 - A valid value at exactly 90 ns selects DIRECT.
 - A valid value at exactly 95 ns selects STAGED when handles are insufficient.
@@ -262,35 +254,36 @@ second time and has no transition counter.
 - Reset or insufficient history always settles DIRECT.
 
 Do not preserve a hidden scarcity-only mode separate from the current mode. Do not add dwell time,
-mode-change streaks, configurable EWMA weights, or online alternative-path probes.
+configurable smoothing, or online alternative-path probes.
 
 ## Lifecycle semantics
 
 Apply the following exact lifecycle rules:
 
-| Event | Body-cost history | Settled mode |
-|-------|-------------------|--------------|
-| Fragment clone creation | Empty | DIRECT unless forced diagnostic mode |
-| Source addition/removal | Retain | Re-evaluate availability only at next completed batch |
-| Sufficient -> insufficient handles | Retain | Evaluate retained estimate at next completed batch |
-| Insufficient -> sufficient handles | Retain | DIRECT at next completed batch |
-| Full idle | Retain | Retain until a later completed batch evaluates inputs |
-| Drain on a surviving clone | Retain | Retain; do not change mode during drain |
-| Rebalance, surviving clone | Retain | Retain across drain/resume |
-| Rebalance, new clone | Empty | DIRECT startup |
-| `resetForNextTrial` | Clear | DIRECT or captured forced mode |
-| Close/removal | Discard with clone | No successor inheritance |
+| Event                              | Body-cost history  | Settled mode                                          |
+|------------------------------------|--------------------|-------------------------------------------------------|
+| Fragment clone creation            | Empty              | DIRECT unless forced diagnostic mode                  |
+| Source addition/removal            | Retain             | Re-evaluate availability only at next completed batch |
+| Sufficient -> insufficient handles | Retain             | Evaluate retained estimate at next completed batch    |
+| Insufficient -> sufficient handles | Retain             | DIRECT at next completed batch                        |
+| Full idle                          | Retain             | Retain until a later completed batch evaluates inputs |
+| Drain on a surviving clone         | Retain             | Retain; do not change mode during drain               |
+| Rebalance, surviving clone         | Retain             | Retain across drain/resume                            |
+| Rebalance, new clone               | Empty              | DIRECT startup                                        |
+| `resetForNextTrial`                | Clear              | DIRECT or captured forced mode                        |
+| Close/removal                      | Discard with clone | No successor inheritance                              |
 
 The executor object and override define the work boundary for the clone lifetime. A source-count
 change does not prove that the executor/workload changed, and an executor workload can change
 without a source-count change. Retaining and adapting the estimate is therefore less arbitrary than
 resetting on topology labels. Do not reset useful history on a mode change.
 
-Trial reset deliberately clears estimator sum, count, estimate, settled normal mode, existing
-service history, and batch state through the owner-thread `CycleState.reset` path. The executor's
-256-call countdown may retain its sampling phase across a trial reset: no elapsed value survives,
-eight new valid samples are still required, and resetting that plain terminal field from another
-thread would add an unnecessary lifecycle handoff. Record this behavior in its test.
+Trial reset deliberately clears estimator window, index, confirmation count, history count,
+estimate, settled normal mode, existing service history, and batch state through the owner-thread
+`CycleState.reset` path. The executor's 256-call countdown may retain its sampling phase across a
+trial reset: no elapsed value survives, 32 new valid samples are still required, and resetting that
+plain terminal field from another thread would add an unnecessary lifecycle handoff. Record this
+behavior in its test.
 
 `setDrainMode`, full idle, and normal source completion are not trial reset. Close requires no
 publication of the discarded owner-local estimator.
@@ -332,18 +325,19 @@ The default remains the first form. Normal-tree benchmarks install no forced ove
 Production changes are limited to:
 
 - `euhedral-core/src/main/java/io/euhedral_execution/core/generics/AbstractExecutor.java`
-  - retain the validated body-only interval;
-  - add setup-only production-recorder attachment and one-timer fan-out;
-  - preserve constructor, clone, execution, and finalization compatibility;
+    - retain the validated body-only interval;
+    - add setup-only production-recorder attachment and one-timer fan-out;
+    - preserve constructor, clone, execution, and finalization compatibility;
 - `euhedral-core/src/main/java/io/euhedral_execution/core/impl/BaseCloneableObject.java`
-  - connect each cloned fragment/executor pair before start;
+    - connect each cloned fragment/executor pair before start;
 - `euhedral-core/src/main/java/io/euhedral_execution/core/control_plane/ControlPlaneFragment.java`
-  - provide the narrow connection seam;
-  - read availability at completed boundaries;
-  - stop resetting cycle/policy state on ordinary handle-count changes;
-  - expose package-private diagnostic snapshots only if the benchmark needs them;
+    - provide the narrow connection seam;
+    - read availability at completed boundaries;
+    - stop resetting cycle/policy state on ordinary handle-count changes;
+    - expose package-private diagnostic snapshots only if the benchmark needs them;
 - `euhedral-core/src/main/java/io/euhedral_execution/core/control_plane/FragmentControlPolicy.java`
-  - own bootstrap/EWMA state, guard constants, selector, reset, and forced-sampling flag.
+    - own the fixed robust window, confirmation state, guard constants, selector, reset, and
+      forced-sampling flag.
 
 Do not change `LatticeEdge`, `UpstreamQueue`, `FragmentConfig`, module descriptors, execution path
 methods, request logic, metrics classes, or cache classes unless implementation finds a direct
@@ -359,9 +353,9 @@ Test and diagnostic changes are limited to:
 - `FragmentPathCalibrationBenchmark.java`; and
 - `FragmentPathCalibrationBenchmarkTest.java`.
 
-Do not add a generic controller test harness or production metrics solely to inspect the policy.
-The benchmark may use a local observed pipeline that retains direct fragment references while
-calling the same production connection/start/input sequence as `BaseCloneableObject`.
+Do not add a generic controller test harness or production metrics solely to inspect the policy. The
+benchmark may use a local observed pipeline that retains direct fragment references while calling
+the same production connection/start/input sequence as `BaseCloneableObject`.
 
 ## Deterministic policy tests
 
@@ -375,7 +369,7 @@ registeredWorkers <= 0
 liveHandles >= registeredWorkers
     -> DIRECT for no history, cheap, guard-band, and expensive values
 
-liveHandles < registeredWorkers + history < 8
+liveHandles < registeredWorkers + history < 32
     -> DIRECT
 
 liveHandles < registeredWorkers + estimate == 90
@@ -391,10 +385,11 @@ liveHandles < registeredWorkers + 90 < estimate < 95
 
 Also prove:
 
-- the first seven positive samples do not make history selectable;
-- the eighth sample initializes the arithmetic mean exactly;
-- the ninth sample uses the one-eighth EWMA update;
-- zero/negative samples do not change sum, count, or estimate;
+- the first 31 positive samples do not make history selectable;
+- the 32nd sample publishes the exact second minimum for cheap/guard data;
+- one expensive window cannot publish an expensive estimate;
+- two consecutive expensive windows publish it and a non-expensive window clears confirmation;
+- zero/negative samples do not change count, window, or estimate;
 - count saturation cannot wrap to insufficient history;
 - reset clears the estimator and restores DIRECT;
 - service EWMA still controls batch-size calculation but cannot change mode;
@@ -443,7 +438,7 @@ Use rounds 24 for plentiful DIRECT and scarce STAGED, three forks, three 3-secon
 - enabled lowest-fork score at least 98 percent of the disabled lowest-fork score; and
 - participation remains in the corrected balanced regime.
 
-The enabled form must include the timer, recorder callback, bootstrap/EWMA arithmetic, and
+The enabled form must include the timer, recorder callback, robust-window arithmetic, and
 completed-batch selector input plumbing while retaining the forced mode. One unchanged repeat is
 permitted if scheduling noise makes the result inconclusive. Do not change cadence, estimator, or
 bounds between runs.
@@ -457,12 +452,12 @@ normal and forced winner comparisons on the mapped batch-32 surface without vary
 
 Run these resolved rows:
 
-| Availability | Rounds | Expected settled mode |
-|--------------|-------:|-----------------------|
-| 2 handles / 2 workers | 24 | DIRECT |
-| 2 handles / 2 workers | 96 | DIRECT |
-| 1 handle / 2 workers | 24 | DIRECT |
-| 1 handle / 2 workers | 96 | STAGED |
+| Availability          | Rounds | Expected settled mode |
+|-----------------------|-------:|-----------------------|
+| 2 handles / 2 workers |     24 | DIRECT                |
+| 2 handles / 2 workers |     96 | DIRECT                |
+| 1 handle / 2 workers  |     24 | DIRECT                |
+| 1 handle / 2 workers  |     96 | STAGED                |
 
 Add one diagnostic-only insufficient-handle row at rounds 88. Linear interpolation of the retained
 synthetic executor work places its sensor estimate inside the 90-95 ns guard band. Predeclare the
@@ -475,7 +470,7 @@ For each fork retain:
 - JMH throughput and error;
 - per-worker completions, fractions, dominance, and effective lanes where meaningful;
 - live handle and registered worker counts;
-- body-cost bootstrap/history count and smoothed estimate per worker;
+- body-cost history count and robust estimate per worker;
 - selected mode at measurement boundaries; and
 - request/direct-pull evidence already available from the benchmark recorder.
 
@@ -522,17 +517,17 @@ Record for each phase:
 
 The sequence passes when:
 
-- startup remains DIRECT until eight valid samples exist;
+- startup remains DIRECT until one 32-sample window exists;
 - stable cheap work settles DIRECT;
-- clearly expensive work reaches STAGED within 32 valid samples, 8,192 successful eligible calls,
-  plus the remainder of the current batch;
-- the final cheap phase returns to DIRECT within the same bound;
+- clearly expensive work reaches STAGED after two confirmed windows;
+- the final cheap phase returns to DIRECT after one completed window;
+- each productive-lane transition remains within one 1,048,576-frame completion window;
 - each stable phase produces at most its one expected transition; and
 - crossing the 90-95 ns guard band does not cause repeated flips.
 
-The bound is in successful executor calls rather than wall time so cancellation, host scheduling,
-and source pauses cannot create a false failure. Retain elapsed time as diagnostic evidence only.
-Do not alter EWMA weight or add transition statistics to improve convergence after the run.
+The benchmark evaluates the most productive owner-local policy in each phase. With one shared
+handle, an idle lane cannot be forced to acquire samples without forbidden coordination; its stale
+mode is not a failed active-path response. Retain completed work and valid samples as evidence.
 
 ## Correctness and compatibility gates
 
@@ -559,8 +554,8 @@ Stop implementation and return to this design before changing constants or addin
 
 - the clone pair cannot attach the callback before executor publication;
 - normal body timing requires per-frame clocks, shared aggregation, or a recorder lookup;
-- a steady 80-round production estimate exceeds 90 ns or a steady 96-round estimate is below
-  95 ns across the declared fixtures;
+- a steady 80-round production estimate exceeds 90 ns or a steady 96-round estimate is below 95 ns
+  across the declared fixtures;
 - DIRECT/STAGED or one-/two-handle state materially shifts identical production estimates;
 - a mode changes before its active batch completes;
 - ordinary availability changes require clearing caches or estimator history for correctness;
@@ -577,15 +572,15 @@ Investigate contradictions in this order:
 4. another correctness defect; and
 5. a legitimate missing physical branch.
 
-Fix a proven defect narrowly and rerun only affected evidence. Do not tune the 90/95 bounds, EWMA,
-or sample cadence around unexplained behavior. A readiness contradiction is recorded for the next
+Fix a proven defect narrowly and rerun only affected evidence. Do not tune the 90/95 bounds or
+sample cadence around unexplained behavior. A readiness contradiction is recorded for the next
 discovery phase; it is not implemented here.
 
 ## Implementation sequence
 
 1. Refactor the accepted executor timing seam for setup-only production attachment while preserving
    the Phase 6 diagnostic API and tests.
-2. Add the owner-local bootstrap/EWMA and pure selector to `FragmentControlPolicy`; replace old
+2. Add the owner-local robust estimator and pure selector to `FragmentControlPolicy`; replace old
    service-time mode hysteresis without changing batch sizing.
 3. Wire cloned fragment/executor pairs in `BaseCloneableObject` before start and update
    `ControlPlaneFragment` only at completed-batch and ordinary upstream-count boundaries.
@@ -602,8 +597,8 @@ discovery phase; it is not implemented here.
 This phase is complete only when implementation evidence shows:
 
 1. the production sampler preserves the Phase 6 body-only boundary and fixed cadence;
-2. eight-sample bootstrap and one-eighth EWMA produce tier- and availability-neutral selector
-   input;
+2. the 32-sample second-minimum windows and two-window expensive confirmation produce a stable,
+   tier- and availability-neutral selector input;
 3. fixed 90 ns and 95 ns bounds preserve all retained 80-/96-round classifications;
 4. sufficient handles always select DIRECT;
 5. insufficient handles select DIRECT for startup/cheap work, retain mode in the guard band, and
@@ -635,3 +630,87 @@ under source behavior not represented by the repeating-source fixtures?
 
 Do not investigate or encode that leaf during Phase 7. Availability readiness is the next bounded
 discovery phase only after this production tree passes all integration gates.
+
+## Completion record: 2026-08-11
+
+The production tree and its diagnostic controls are implemented. The original arithmetic-mean/EWMA
+draft was rejected by the rounds-88 stability gate before acceptance. The authorized bounded
+aggregation comparison retained the same physical branches, 90/95 ns guard, and 256-call sensor
+cadence:
+
+| Candidate                                                           | Result                                                      |
+|---------------------------------------------------------------------|-------------------------------------------------------------|
+| one-eighth and one-twelfth EWMA                                     | rejected: stable guard workload entered STAGED              |
+| rolling-sample confirmation counts                                  | rejected: correlated timing stalls counted repeatedly       |
+| 32-sample mean                                                      | rejected: additive preemption bursts dominated the estimate |
+| rolling medians of 5 and 9                                          | rejected: guard excursions remained                         |
+| rolling 9-sample lower quartile/minimum                             | rejected: guard or cold sparse-worker instability           |
+| rolling 32-sample second minimum                                    | rejected: isolated exact-95 ns guard excursions remained    |
+| non-overlapping 32-sample second minimum plus two expensive windows | accepted                                                    |
+
+The accepted estimator is the simplest candidate that passed every gate. It performs one primitive
+array scan per 8,192 eligible executor calls, allocates nothing after setup, immediately publishes
+cheap/guard windows, and requires two distinct expensive windows. It does not alter the decision
+tree or add coordination.
+
+Implemented production path:
+
+- `AbstractExecutor` retains the Phase 6 body-only interval, samples every 256 eligible calls, and
+  fans one successful timed call to diagnostic and production recorders with one timer pair.
+- `BaseCloneableObject` attaches each clone's recorder before start/input publication.
+- `FragmentControlPolicy` owns the robust window, expensive confirmation, 90/95 ns guard, explicit
+  selector, forced bypass, and owner-local reset state.
+- `ControlPlaneFragment` reads live handles and registered workers only at completed batches and
+  does not truncate a batch or clear history on ordinary availability changes.
+- Forced DIRECT/STAGED remains separate; raw body timing is still explicitly opt-in in forced mode.
+
+The full three-fork rounds-88 run used three 3-second warmups and five 5-second measurements. Every
+warmup, measurement, and final worker snapshot remained DIRECT. Throughput was:
+
+```text
+SCARCE_88 normal: 16,461,445.889 +/- 221,417.767 frames/s
+```
+
+Three-fork representative resolved-leaf validation selected the expected mode in every retained
+snapshot and showed no worker disappearance:
+
+```text
+PLENTIFUL_24 -> DIRECT: 59,212,230.779 frames/s
+PLENTIFUL_96 -> DIRECT: 20,423,074.990 frames/s
+SCARCE_24    -> DIRECT: 34,794,728.704 frames/s
+SCARCE_96    -> STAGED: 16,247,445.479 frames/s
+```
+
+The three-fork dynamic scarce sequence completed hundreds of repetitions without a response-bound
+failure. Across forks, startup DIRECT needed at most 32 productive-lane samples, cheap-to-expensive
+needed at most 94, and expensive-to-cheap needed at most 72. Maximum completed-frame deltas were
+15,825, 47,350, and 37,004 respectively, below the 1,048,576-frame bound. A nonproductive lane may
+retain its old local mode until it receives new samples; no cross-core work is added to force an
+idle lane to converge.
+
+The full same-build overhead controls passed the predeclared gates:
+
+| Forced control              | Disabled median | Enabled median | Change | Lowest-fork ratio |
+|-----------------------------|----------------:|---------------:|-------:|------------------:|
+| plentiful DIRECT, rounds 24 |  59,737,723.910 | 59,856,049.644 | +0.20% |           100.95% |
+| scarce STAGED, rounds 24    |  31,246,083.426 | 31,148,631.210 | -0.31% |            99.52% |
+
+Both are within the one-percent median-loss gate and above the 98-percent lowest-fork gate; worker
+participation remained balanced. Generated JMH JSON is retained under
+`benchmarks/build/reports/phase7-*.json` and is not source-controlled.
+
+Focused Core and benchmark tests cover cadence, fan-out, error/cancellation discard, attachment
+lifecycle, robust arithmetic, confirmation reset, exact selector boundaries, guard retention, forced
+modes, owner-thread trial reset, safe batch boundaries, clone wiring, benchmark cleanup, and dynamic
+response accounting. The repository checks completed with:
+
+```text
+mise exec -- gradle :euhedral-core:test :benchmarks:test
+mise exec -- gradle :euhedral-core:spotlessCheck :benchmarks:spotlessCheck
+mise exec -- gradle build
+git diff --check
+```
+
+No production execution path, module descriptor, public constructor, availability semantics, or
+future branch was changed. The only unresolved next discovery leaf remains whether live handles can
+overstate currently productive independent pull opportunities outside the repeating-source fixtures.

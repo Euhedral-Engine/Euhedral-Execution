@@ -63,6 +63,9 @@ public final class BaseCloneableObject implements CloneableObject {
         this.config = config;
         this.fragment = fragment;
         this.executor = executor;
+        if (config != null && fragment != null && executor != null) {
+            fragment.connectBodyCostRecorder(executor);
+        }
     }
 
     @Override

@@ -2,6 +2,7 @@ package io.euhedral_execution.core.generics;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.euhedral_execution.core.frames.AbstractFrame;
 import java.util.ArrayList;
@@ -43,6 +44,61 @@ class AbstractExecutorTest {
     }
 
     @Test
+    void productionRecorderSamplesAtTheFixedCadence() {
+        List<Long> samples = new ArrayList<>();
+        RecordingFrame frame = new RecordingFrame();
+        TestExecutor executor = new TestExecutor(() -> {});
+        executor.attachProductionBodyTimingRecorder(samples::add);
+
+        executor.input(new RepeatingTestSource(frame, 512));
+
+        assertEquals(2, samples.size());
+        assertTrue(samples.get(0) >= 0L);
+        assertTrue(samples.get(1) >= 0L);
+        assertEquals(512, frame.finalizations);
+    }
+
+    @Test
+    void diagnosticAndProductionRecordersShareOneTimerPair() {
+        AtomicLong time = new AtomicLong();
+        AtomicInteger clockReads = new AtomicInteger();
+        List<Long> diagnosticSamples = new ArrayList<>();
+        List<Long> productionSamples = new ArrayList<>();
+        RecordingFrame frame = new RecordingFrame();
+        TestExecutor executor = new TestExecutor(
+                AbstractExecutor.PRODUCTION_BODY_TIMING_INTERVAL,
+                () -> {
+                    clockReads.incrementAndGet();
+                    return time.get();
+                },
+                diagnosticSamples::add,
+                () -> time.addAndGet(37L));
+        executor.attachProductionBodyTimingRecorder(productionSamples::add);
+
+        executor.input(new RepeatingTestSource(frame, AbstractExecutor.PRODUCTION_BODY_TIMING_INTERVAL));
+
+        assertEquals(List.of(37L), diagnosticSamples);
+        assertEquals(List.of(37L), productionSamples);
+        assertEquals(2, clockReads.get());
+    }
+
+    @Test
+    void rejectsLateDuplicateAndIncompatibleProductionAttachment() {
+        TestExecutor duplicate = new TestExecutor(() -> {});
+        duplicate.attachProductionBodyTimingRecorder(ignored -> {});
+        assertThrows(IllegalStateException.class, () -> duplicate.attachProductionBodyTimingRecorder(ignored -> {}));
+
+        TestExecutor late = new TestExecutor(() -> {});
+        late.input(new RepeatingTestSource(new RecordingFrame(), 0));
+        assertThrows(IllegalStateException.class, () -> late.attachProductionBodyTimingRecorder(ignored -> {}));
+
+        TestExecutor incompatible = new TestExecutor(8, System::nanoTime, ignored -> {}, () -> {});
+        assertThrows(IllegalStateException.class, () -> incompatible.attachProductionBodyTimingRecorder(ignored -> {}));
+        assertThrows(
+                NullPointerException.class, () -> new TestExecutor(() -> {}).attachProductionBodyTimingRecorder(null));
+    }
+
+    @Test
     void excludesLivenessAndFinalizationFromRecordedInterval() {
         AtomicLong time = new AtomicLong();
         List<Long> samples = new ArrayList<>();
@@ -68,10 +124,13 @@ class AbstractExecutorTest {
                 throw new IllegalStateException("expected");
             }
         });
+        List<Long> productionSamples = new ArrayList<>();
+        executor.attachProductionBodyTimingRecorder(productionSamples::add);
 
         executor.input(new RepeatingTestSource(frame, 512));
 
         assertEquals(List.of(31L), samples);
+        assertEquals(List.of(31L), productionSamples);
         assertEquals(511, frame.finalizations);
         assertEquals(1, frame.errorFinalizations);
     }
@@ -88,6 +147,45 @@ class AbstractExecutorTest {
         assertEquals(List.of(), samples);
         assertEquals(1, frame.finalizations);
         assertEquals(0, frame.errorFinalizations);
+    }
+
+    @Test
+    void recorderFailureDoesNotBecomeAFrameFailureOrBlockFanOut() {
+        AtomicLong time = new AtomicLong();
+        List<Long> productionSamples = new ArrayList<>();
+        RecordingFrame frame = new RecordingFrame();
+        TestExecutor executor = new TestExecutor(
+                AbstractExecutor.PRODUCTION_BODY_TIMING_INTERVAL,
+                time::get,
+                ignored -> {
+                    throw new IllegalStateException("expected diagnostic recorder failure");
+                },
+                () -> time.addAndGet(19L));
+        executor.attachProductionBodyTimingRecorder(productionSamples::add);
+
+        executor.input(new RepeatingTestSource(frame, AbstractExecutor.PRODUCTION_BODY_TIMING_INTERVAL));
+
+        assertEquals(List.of(19L), productionSamples);
+        assertEquals(AbstractExecutor.PRODUCTION_BODY_TIMING_INTERVAL, frame.finalizations);
+        assertEquals(0, frame.errorFinalizations);
+    }
+
+    @Test
+    void terminalCountdownRetainsPhaseWhenRecorderStateIsCleared() {
+        AtomicLong time = new AtomicLong();
+        List<Long> productionSamples = new ArrayList<>();
+        RecordingFrame frame = new RecordingFrame();
+        TestExecutor executor = new TestExecutor(
+                AbstractExecutor.PRODUCTION_BODY_TIMING_INTERVAL, time::get, ignored -> {}, () -> time.addAndGet(29L));
+        executor.attachProductionBodyTimingRecorder(productionSamples::add);
+        ManualTestSource source = new ManualTestSource(frame);
+
+        executor.input(source);
+        source.push(128);
+        productionSamples.clear();
+        source.push(128);
+
+        assertEquals(List.of(29L), productionSamples);
     }
 
     @Test
@@ -183,6 +281,47 @@ class AbstractExecutorTest {
             terminal.addUpstream(this);
             for (int i = 0; i < this.pushes; i++) {
                 terminal.push(this.frame);
+            }
+        }
+
+        @Override
+        public long pull(
+                Consumer<AbstractFrame> consumer, Function<AbstractFrame, Boolean> stopCondition, long demand) {
+            return 0L;
+        }
+
+        @Override
+        public void request(long demand) {}
+
+        @Override
+        public void complete() {}
+
+        @Override
+        public boolean isComplete() {
+            return false;
+        }
+    }
+
+    private static final class ManualTestSource implements LatticeSource {
+
+        private final AbstractFrame frame;
+        private LatticeReceiver terminal;
+
+        /// Creates a source whose single terminal can be driven across diagnostic phase changes.
+        private ManualTestSource(AbstractFrame frame) {
+            this.frame = frame;
+        }
+
+        @Override
+        public void addDownstream(LatticeReceiver terminal) {
+            this.terminal = terminal;
+            terminal.addUpstream(this);
+        }
+
+        /// Pushes a fixed number of eligible calls through the already-created terminal.
+        private void push(int count) {
+            for (int i = 0; i < count; i++) {
+                this.terminal.push(this.frame);
             }
         }
 

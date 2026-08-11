@@ -251,9 +251,9 @@ class ControlPlaneFragmentThreadTest {
         }
     }
 
-    /// Verifies sustained high service time crosses hysteresis before staged requests begin.
+    /// Verifies downstream terminal delay cannot masquerade as executor-body cost.
     @Test
-    void loopStagesHighLatencyWorkAfterEightBatches() {
+    void loopDoesNotStageForPathExternalTerminalDelay() {
         ControlPlaneFragment fragment =
                 new ControlPlaneFragment(FragmentConfig.ofDefaults().clone(cloneConfig()));
         LatticeVertex distributor = connect(fragment);
@@ -266,9 +266,9 @@ class ControlPlaneFragmentThreadTest {
             Awaitility.await().atMost(TIMEOUT).until(fragment::ready);
             distributor.ingest(source);
 
-            Awaitility.await().atMost(TIMEOUT).until(() -> source.requestCalls.get() > 0);
-            assertTrue(source.directFramesAtFirstRequest.get() >= 16);
             Awaitility.await().atMost(TIMEOUT).until(() -> receiver.received.get() == 128);
+            assertEquals(128, source.directFrames.get());
+            assertEquals(0, source.requestCalls.get());
             assertNull(receiver.error.get());
         } finally {
             source.complete();
@@ -401,7 +401,6 @@ class ControlPlaneFragmentThreadTest {
         private final AtomicReference<LatticeReceiver> downstream = new AtomicReference<>();
         private final AtomicInteger directFrames = new AtomicInteger();
         private final AtomicInteger requestCalls = new AtomicInteger();
-        private final AtomicInteger directFramesAtFirstRequest = new AtomicInteger(-1);
 
         /// Creates a deterministic pull/request source over the supplied frame array.
         private TrackingSource(AbstractFrame[] frames) {
@@ -442,7 +441,6 @@ class ControlPlaneFragmentThreadTest {
         @Override
         public void request(long demand) {
             this.requestCalls.incrementAndGet();
-            this.directFramesAtFirstRequest.compareAndSet(-1, this.directFrames.get());
             LatticeReceiver receiver = this.downstream.get();
             long pushed = 0L;
             while (receiver != null && pushed < demand) {
