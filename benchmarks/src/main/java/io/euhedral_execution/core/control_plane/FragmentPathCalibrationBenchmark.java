@@ -15,6 +15,8 @@ import io.euhedral_execution.core.generics.AbstractExecutor;
 import io.euhedral_execution.core.generics.CloneableObject;
 import io.euhedral_execution.core.generics.LatticeSource;
 import io.euhedral_execution.core.impl.BaseCloneableObject;
+import io.euhedral_execution.core.ingest.AbstractIngestSink;
+import io.euhedral_execution.core.ingest.QueueIngestSink;
 import io.euhedral_execution.core.metrics.MetricsAggregator;
 import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
 import io.euhedral_execution.data_structures.queues.common.QueueUtils;
@@ -125,6 +127,13 @@ public class FragmentPathCalibrationBenchmark {
     @Benchmark
     @OperationsPerInvocation(INVOCATION_FRAMES)
     public void productionEstimatorOverhead(ProductionEstimatorState state) {
+        state.awaitInvocation();
+    }
+
+    /// Measures whether nominally live handles correspond to independently productive pull opportunities.
+    @Benchmark
+    @OperationsPerInvocation(INVOCATION_FRAMES)
+    public void productivePullOpportunity(ProductivePullOpportunityState state) {
         state.awaitInvocation();
     }
 
@@ -475,6 +484,15 @@ public class FragmentPathCalibrationBenchmark {
         }
     }
 
+    /// Lifecycle evidence for the production-reachable empty-live-source fixture.
+    record OpportunitySnapshot(
+            int liveHandles,
+            int registeredWorkers,
+            long emptyQueueSize,
+            long emptyQueueDemand,
+            long emptyQueueOfferCount,
+            boolean emptyQueueComplete) {}
+
     /// Cumulative existing latency-summary state in stable worker order at one lifecycle boundary.
     record ServiceMetricSnapshot(long[] counts, double[] totals) {
 
@@ -566,6 +584,11 @@ public class FragmentPathCalibrationBenchmark {
         return new HandleSnapshot(attempts, failures, pulledFrames, after.firstProductiveOrder);
     }
 
+    /// Derives successful service attempts from the acquisition evidence without another hot counter.
+    static long[][] successfulServiceAttempts(HandleSnapshot snapshot) {
+        return matrixDifferenceSaturated(snapshot.attempts, snapshot.failures);
+    }
+
     /// Copies a rectangular diagnostic matrix without exposing recorder-owned rows.
     private static long[][] deepCopy(long[][] matrix) {
         long[][] copy = new long[matrix.length][];
@@ -595,6 +618,24 @@ public class FragmentPathCalibrationBenchmark {
             }
         }
         return delta;
+    }
+
+    /// Applies checked source-by-worker subtraction for derived diagnostic matrices.
+    private static long[][] matrixDifferenceSaturated(long[][] left, long[][] right) {
+        if (left.length != right.length) {
+            throw new IllegalArgumentException("Handle diagnostic matrices must have equal source counts");
+        }
+        long[][] result = new long[left.length][];
+        for (int source = 0; source < left.length; source++) {
+            if (left[source].length != right[source].length) {
+                throw new IllegalArgumentException("Handle diagnostic matrices must have equal worker counts");
+            }
+            result[source] = new long[left[source].length];
+            for (int worker = 0; worker < left[source].length; worker++) {
+                result[source][worker] = Math.max(0L, left[source][worker] - right[source][worker]);
+            }
+        }
+        return result;
     }
 
     /// Preallocated acquisition accounting updated once per handle attempt or productive pull.
@@ -654,13 +695,17 @@ public class FragmentPathCalibrationBenchmark {
             }
         }
 
-        /// Records productive frames and the globally ordered first productive event for one cell.
-        void recordPulledFrames(int source, int worker, long frames) {
-            if (frames <= 0L) {
-                return;
+        /// Records one delegated pull result and any productive frames with one callback per pull.
+        void recordPullResult(int source, int worker, long frames) {
+            if (frames > 0L) {
+                int cpu = workerCpu(source, worker);
+                this.pulledFrames[source].add(cpu, frames);
+                recordFirstProductive(source, worker);
             }
-            int cpu = workerCpu(source, worker);
-            this.pulledFrames[source].add(cpu, frames);
+        }
+
+        /// Publishes the globally ordered first productive source/worker event once per cell.
+        private void recordFirstProductive(int source, int worker) {
             int cell = source * this.workerCpus.length + worker;
             if (this.firstProductiveOrder.getPlain(cell) < 0L) {
                 this.firstProductiveOrder.setRelease(cell, this.firstSequence.getAndIncrement());
@@ -727,6 +772,7 @@ public class FragmentPathCalibrationBenchmark {
         }
         return "{attempts=" + Arrays.deepToString(snapshot.attempts())
                 + ", failures=" + Arrays.deepToString(snapshot.failures())
+                + ", successfulServiceAttempts=" + Arrays.deepToString(successfulServiceAttempts(snapshot))
                 + ", pulledFrames=" + Arrays.deepToString(snapshot.pulledFrames())
                 + ", firstProductiveOrder=" + Arrays.toString(snapshot.firstProductiveOrder()) + '}';
     }
@@ -747,6 +793,22 @@ public class FragmentPathCalibrationBenchmark {
     public enum SourceShape {
         PLENTIFUL,
         SCARCE
+    }
+
+    /// Phase 8 fixtures that vary only live and independently productive upstream opportunities.
+    public enum OpportunityFixture {
+        TWO_PRODUCTIVE_HANDLES(2, 2),
+        ONE_PRODUCTIVE_HANDLE(1, 1),
+        TWO_LIVE_ONE_PRODUCTIVE(2, 1);
+
+        final int liveHandles;
+        final int productiveHandles;
+
+        /// Retains the expected physical handle counts used by fixture validation and reporting.
+        OpportunityFixture(int liveHandles, int productiveHandles) {
+            this.liveHandles = liveHandles;
+            this.productiveHandles = productiveHandles;
+        }
     }
 
     /// Public JMH parameter mapped to the package-private production mode during trial setup.
@@ -911,6 +973,23 @@ public class FragmentPathCalibrationBenchmark {
             boolean bodyTimingEnabled =
                     Boolean.parseBoolean(System.getProperty(BODY_TIMING_ENABLED_PROPERTY, Boolean.TRUE.toString()));
             setupPath(2, this.sourceShape, Workload.CPU_WORK, this.workRounds, false, bodyTimingEnabled);
+        }
+    }
+
+    /// Two-worker forced-path state for the Phase 8 productive-opportunity experiment.
+    @State(Scope.Benchmark)
+    public static class ProductivePullOpportunityState extends ForcedPathState {
+
+        @Param({"TWO_PRODUCTIVE_HANDLES", "ONE_PRODUCTIVE_HANDLE", "TWO_LIVE_ONE_PRODUCTIVE"})
+        public OpportunityFixture opportunityFixture;
+
+        @Param({"512"})
+        public int workRounds;
+
+        /// Starts one physical availability row with raw executor timing and existing handle evidence.
+        @Setup(Level.Trial)
+        public void setup() {
+            setupOpportunityPath(this.opportunityFixture, this.workRounds);
         }
     }
 
@@ -1127,7 +1206,10 @@ public class FragmentPathCalibrationBenchmark {
                 new ArrayList<>();
         private DiagnosticLease diagnosticLease;
         private DiagnosticDistributor distributor;
-        private RepeatingSink[] sources;
+        private AbstractIngestSink[] sources;
+        private String[] sourceTypes;
+        private QueueIngestSink emptyQueueSource;
+        private long emptyQueueOfferCount;
         private HandleAcquisitionRecorder handleRecorder;
         private long[] sourceHandleIds;
         /// Logical CPUs in the same stable order as the selected worker cores.
@@ -1180,6 +1262,18 @@ public class FragmentPathCalibrationBenchmark {
         private boolean observeProductionPolicy;
         /// First predeclared policy-gate failure retained until close-safe trial teardown.
         private String policyValidationFailure;
+        /// Phase 8 physical fixture, or null for all existing calibration states.
+        private OpportunityFixture opportunityFixture;
+        /// Fixture state retained immediately after source publication.
+        private OpportunitySnapshot setupOpportunitySnapshot;
+        /// Fixture state retained at each JMH iteration entry.
+        private final List<OpportunitySnapshot> warmupOpportunityStarts = new ArrayList<>();
+        private final List<OpportunitySnapshot> measurementOpportunityStarts = new ArrayList<>();
+        /// Fixture state retained at each JMH iteration exit.
+        private final List<OpportunitySnapshot> warmupOpportunityEnds = new ArrayList<>();
+        private final List<OpportunitySnapshot> measurementOpportunityEnds = new ArrayList<>();
+        /// Current iteration's physical state for lifecycle-aligned reporting.
+        private OpportunitySnapshot iterationOpportunityBefore;
 
         /// Returns the forced path for diagnostic states, or null for normal policy.
         abstract ForcedMode forcedMode();
@@ -1230,11 +1324,42 @@ public class FragmentPathCalibrationBenchmark {
                 boolean productionBodyTiming,
                 boolean observeProductionPolicy,
                 AtomicInteger dynamicWorkRounds) {
+            setupPath(
+                    workerCount,
+                    sourceShape,
+                    workload,
+                    workRounds,
+                    observeServiceMetric,
+                    observeBodyTiming,
+                    productionBodyTiming,
+                    observeProductionPolicy,
+                    dynamicWorkRounds,
+                    null);
+        }
+
+        /// Builds the fixed Phase 8 graph while leaving production selection and aggregation disabled.
+        protected final void setupOpportunityPath(OpportunityFixture opportunityFixture, int workRounds) {
+            setupPath(2, null, Workload.CPU_WORK, workRounds, false, true, false, false, null, opportunityFixture);
+        }
+
+        /// Builds one graph with an optional physical opportunity fixture.
+        private void setupPath(
+                int workerCount,
+                SourceShape sourceShape,
+                Workload workload,
+                int workRounds,
+                boolean observeServiceMetric,
+                boolean observeBodyTiming,
+                boolean productionBodyTiming,
+                boolean observeProductionPolicy,
+                AtomicInteger dynamicWorkRounds,
+                OpportunityFixture opportunityFixture) {
             try {
                 if (workRounds < 0 || (workload == Workload.NO_OP && workRounds != 0)) {
                     throw new IllegalArgumentException("Work rounds must match a non-negative CPU workload");
                 }
                 this.sourceShape = sourceShape;
+                this.opportunityFixture = opportunityFixture;
                 this.workload = workload;
                 this.workRounds = workRounds;
                 this.workerCpus = new int[workerCount];
@@ -1257,6 +1382,15 @@ public class FragmentPathCalibrationBenchmark {
                 this.selectedForcedMode = forcedMode();
                 this.observeProductionPolicy = observeProductionPolicy;
                 this.policyValidationFailure = null;
+                this.sourceTypes = null;
+                this.emptyQueueSource = null;
+                this.emptyQueueOfferCount = 0L;
+                this.setupOpportunitySnapshot = null;
+                this.iterationOpportunityBefore = null;
+                this.warmupOpportunityStarts.clear();
+                this.measurementOpportunityStarts.clear();
+                this.warmupOpportunityEnds.clear();
+                this.measurementOpportunityEnds.clear();
                 DiagnosticDistributor.resetSharedRoutingState();
                 if (this.selectedForcedMode != null) {
                     this.diagnosticLease =
@@ -1326,16 +1460,27 @@ public class FragmentPathCalibrationBenchmark {
                 }
                 this.distributor.setDrain(false);
 
-                int sourceCount = sourceCount(sourceShape, workerCount);
+                int sourceCount = opportunityFixture == null
+                        ? sourceCount(sourceShape, workerCount)
+                        : opportunityFixture.liveHandles;
                 this.handleRecorder = new HandleAcquisitionRecorder(sourceCount, this.workerCpus, this.workerCores);
                 this.sourceHandleIds = new long[sourceCount];
-                this.sources = new RepeatingSink[sourceCount];
+                this.sources = new AbstractIngestSink[sourceCount];
+                this.sourceTypes = new String[sourceCount];
                 LatticeSource[] delegates = new LatticeSource[sourceCount];
                 long idHash = HasherApi.mix(HasherApi.BASE_SEED);
                 for (int i = 0; i < sourceCount; i++) {
-                    BenchmarkFrame[] frames = BenchmarkFrame.generate(
-                            FRAME_POOL_SIZE, false, idHash + i, HasherApi.BASE_SEED + (long) i * FRAME_POOL_SIZE);
-                    this.sources[i] = new RepeatingSink(frames);
+                    boolean emptyLive = opportunityFixture == OpportunityFixture.TWO_LIVE_ONE_PRODUCTIVE && i == 1;
+                    if (emptyLive) {
+                        this.emptyQueueSource = new QueueIngestSink();
+                        this.sources[i] = this.emptyQueueSource;
+                        this.sourceTypes[i] = "EMPTY_QUEUE";
+                    } else {
+                        BenchmarkFrame[] frames = BenchmarkFrame.generate(
+                                FRAME_POOL_SIZE, false, idHash + i, HasherApi.BASE_SEED + (long) i * FRAME_POOL_SIZE);
+                        this.sources[i] = new RepeatingSink(frames);
+                        this.sourceTypes[i] = "REPEATING";
+                    }
                     delegates[i] = this.sources[i].getDelegate();
                     if (this.handleLayout == HandleLayout.NATURAL) {
                         this.sourceHandleIds[i] = this.distributor.ingestTracked(delegates[i], i, this.handleRecorder);
@@ -1344,6 +1489,10 @@ public class FragmentPathCalibrationBenchmark {
                 if (this.handleLayout != HandleLayout.NATURAL) {
                     this.sourceHandleIds = this.distributor.ingestTracked(
                             delegates, this.workerCores, this.handleLayout, this.handleRecorder);
+                }
+                if (this.opportunityFixture != null) {
+                    this.setupOpportunitySnapshot = captureOpportunitySnapshot();
+                    requireValidOpportunitySnapshot(this.setupOpportunitySnapshot, "trial setup");
                 }
             } catch (RuntimeException e) {
                 closePath();
@@ -1354,6 +1503,10 @@ public class FragmentPathCalibrationBenchmark {
         /// Opens one measurement-only participation accumulator and ignores warmup iterations.
         @Setup(Level.Iteration)
         public final void setupIteration(IterationParams iterationParams) {
+            if (this.opportunityFixture != null) {
+                this.iterationOpportunityBefore = captureOpportunitySnapshot();
+                requireValidOpportunitySnapshot(this.iterationOpportunityBefore, "iteration start");
+            }
             this.iterationHandleBefore = this.handleRecorder.snapshot();
             if (this.serviceSummaries != null) {
                 this.iterationServiceBefore = serviceMetricSnapshot(this.serviceSummaries);
@@ -1374,6 +1527,11 @@ public class FragmentPathCalibrationBenchmark {
         /// Retains one raw per-worker split aligned with the completed JMH measurement iteration.
         @TearDown(Level.Iteration)
         public final void tearDownIteration(IterationParams iterationParams) {
+            OpportunitySnapshot opportunityAfter = null;
+            if (this.opportunityFixture != null) {
+                opportunityAfter = captureOpportunitySnapshot();
+                requireValidOpportunitySnapshot(opportunityAfter, "iteration end");
+            }
             HandleSnapshot handleDeltas = handleDelta(this.iterationHandleBefore, this.handleRecorder.snapshot());
             ServiceMetricSnapshot serviceDelta = this.serviceSummaries == null
                     ? null
@@ -1385,6 +1543,10 @@ public class FragmentPathCalibrationBenchmark {
                     this.observeProductionPolicy ? policySnapshots() : null;
             if (iterationParams.getType() == IterationType.WARMUP) {
                 this.warmupHandleDeltas.add(handleDeltas);
+                if (this.iterationOpportunityBefore != null) {
+                    this.warmupOpportunityStarts.add(this.iterationOpportunityBefore);
+                    this.warmupOpportunityEnds.add(opportunityAfter);
+                }
                 if (bodyTimingDelta != null) {
                     this.warmupBodyTimingDeltas.add(bodyTimingDelta);
                 }
@@ -1393,6 +1555,10 @@ public class FragmentPathCalibrationBenchmark {
                 }
             } else if (iterationParams.getType() == IterationType.MEASUREMENT) {
                 this.measurementHandleDeltas.add(handleDeltas);
+                if (this.iterationOpportunityBefore != null) {
+                    this.measurementOpportunityStarts.add(this.iterationOpportunityBefore);
+                    this.measurementOpportunityEnds.add(opportunityAfter);
+                }
                 if (policySnapshots != null) {
                     this.measurementPolicySnapshots.add(policySnapshots);
                 }
@@ -1413,6 +1579,7 @@ public class FragmentPathCalibrationBenchmark {
             this.iterationHandleBefore = null;
             this.iterationServiceBefore = null;
             this.iterationBodyTimingBefore = null;
+            this.iterationOpportunityBefore = null;
             if (policySnapshots != null) {
                 validatePolicySnapshots(iterationParams.getType(), policySnapshots);
             }
@@ -1463,11 +1630,39 @@ public class FragmentPathCalibrationBenchmark {
         protected void beforeClose() {
             reportParticipation();
             reportHandleAcquisition();
+            reportProductiveOpportunity();
             reportServiceEstimate();
             reportBodyTimingEstimate();
             reportProductionPolicy();
             if (this.policyValidationFailure != null) {
                 throw new IllegalStateException(this.policyValidationFailure);
+            }
+        }
+
+        /// Captures live registration and empty-source state without changing source behavior.
+        private OpportunitySnapshot captureOpportunitySnapshot() {
+            return new OpportunitySnapshot(
+                    Math.toIntExact(this.distributor.getUpstreamHandleCount()),
+                    this.distributor.getThreadCount(),
+                    this.emptyQueueSource == null ? -1L : this.emptyQueueSource.size(),
+                    this.emptyQueueSource == null ? -1L : this.emptyQueueSource.getDemand(),
+                    this.emptyQueueSource == null ? -1L : this.emptyQueueOfferCount,
+                    this.emptyQueueSource != null && this.emptyQueueSource.isComplete());
+        }
+
+        /// Enforces the predeclared physical fixture invariants at every lifecycle snapshot.
+        private void requireValidOpportunitySnapshot(OpportunitySnapshot snapshot, String phase) {
+            if (snapshot.liveHandles() != this.opportunityFixture.liveHandles
+                    || snapshot.registeredWorkers() != this.workerCpus.length) {
+                throw new IllegalStateException(
+                        "Invalid Phase 8 live handle or worker count at " + phase + ": " + snapshot);
+            }
+            if (this.opportunityFixture == OpportunityFixture.TWO_LIVE_ONE_PRODUCTIVE
+                    && (snapshot.emptyQueueSize() != 0L
+                            || snapshot.emptyQueueOfferCount() != 0L
+                            || snapshot.emptyQueueComplete())) {
+                throw new IllegalStateException(
+                        "Invalid Phase 8 empty-live source state at " + phase + ": " + snapshot);
             }
         }
 
@@ -1547,12 +1742,15 @@ public class FragmentPathCalibrationBenchmark {
         private void reportHandleAcquisition() {
             HandleSnapshot finalSnapshot = this.handleRecorder.snapshot();
             LOGGER.info(
-                    "Fragment handle acquisition mode={} sourceShape={} workload={} workRounds={} handleLayout={} batch={} workerCpus={} "
-                            + "workerCores={} sourceOrdinals={} sourceHandleIds={} preFirstIteration={} "
+                    "Fragment handle acquisition mode={} sourceShape={} opportunityFixture={} workload={} workRounds={} "
+                            + "handleLayout={} batch={} workerCpus={} workerCores={} sourceOrdinals={} sourceTypes={} "
+                            + "sourceHandleIds={} preFirstIteration={} "
                             + "warmupDeltas={} measurementDeltas={} aggregateAttempts={} aggregateFailures={} "
-                            + "aggregatePulledFrames={} firstProductiveOrder={}",
+                            + "aggregateSuccessfulServiceAttempts={} aggregatePulledFrames={} "
+                            + "firstProductiveOrder={}",
                     policyLabel(),
                     this.sourceShape,
+                    this.opportunityFixture,
                     this.workload,
                     this.workRounds,
                     this.handleLayout,
@@ -1560,14 +1758,40 @@ public class FragmentPathCalibrationBenchmark {
                     Arrays.toString(this.workerCpus),
                     Arrays.toString(this.workerCores),
                     Arrays.toString(sourceOrdinals(this.sourceHandleIds.length)),
+                    Arrays.toString(this.sourceTypes),
                     Arrays.toString(this.sourceHandleIds),
                     formatHandleSnapshot(this.preFirstIterationHandles),
                     formatHandleSnapshots(this.warmupHandleDeltas),
                     formatHandleSnapshots(this.measurementHandleDeltas),
                     Arrays.deepToString(finalSnapshot.attempts()),
                     Arrays.deepToString(finalSnapshot.failures()),
+                    Arrays.deepToString(successfulServiceAttempts(finalSnapshot)),
                     Arrays.deepToString(finalSnapshot.pulledFrames()),
                     Arrays.toString(finalSnapshot.firstProductiveOrder()));
+        }
+
+        /// Reports the complete Phase 8 lifecycle state and declared physical source counts.
+        private void reportProductiveOpportunity() {
+            if (this.opportunityFixture == null) {
+                return;
+            }
+            OpportunitySnapshot finalSnapshot = captureOpportunitySnapshot();
+            requireValidOpportunitySnapshot(finalSnapshot, "trial close");
+            LOGGER.info(
+                    "Fragment productive opportunity mode={} opportunityFixture={} expectedLiveHandles={} "
+                            + "expectedProductiveHandles={} sourceTypes={} setupSnapshot={} warmupStarts={} "
+                            + "warmupEnds={} measurementStarts={} measurementEnds={} finalSnapshot={}",
+                    policyLabel(),
+                    this.opportunityFixture,
+                    this.opportunityFixture.liveHandles,
+                    this.opportunityFixture.productiveHandles,
+                    Arrays.toString(this.sourceTypes),
+                    this.setupOpportunitySnapshot,
+                    this.warmupOpportunityStarts,
+                    this.warmupOpportunityEnds,
+                    this.measurementOpportunityStarts,
+                    this.measurementOpportunityEnds,
+                    finalSnapshot);
         }
 
         /// Reports measurement-only observations of Core's existing execution-latency signal.
@@ -1796,6 +2020,7 @@ public class FragmentPathCalibrationBenchmark {
                 case 24 -> 21.566;
                 case 80 -> 70.689;
                 case 96 -> 84.657;
+                case 512 -> 449.914;
                 default -> Double.NaN;
             };
         }
@@ -1835,7 +2060,7 @@ public class FragmentPathCalibrationBenchmark {
         /// Completes sources before workers, queues, and the setup-only override are released.
         private void closePath() {
             if (this.sources != null) {
-                for (RepeatingSink source : this.sources) {
+                for (AbstractIngestSink source : this.sources) {
                     if (source != null) {
                         source.complete();
                     }
@@ -1852,6 +2077,8 @@ public class FragmentPathCalibrationBenchmark {
             }
             this.handleRecorder = null;
             this.sourceHandleIds = null;
+            this.sourceTypes = null;
+            this.emptyQueueSource = null;
             this.serviceSummaries = null;
             if (this.serviceRegistry != null) {
                 this.serviceRegistry.close();
@@ -2164,7 +2391,7 @@ public class FragmentPathCalibrationBenchmark {
                     Consumer<AbstractFrame> consumer, Function<AbstractFrame, Boolean> stopCondition, long demand) {
                 int worker = this.recorder.currentWorker();
                 long frames = super.pull(consumer, stopCondition, demand);
-                this.recorder.recordPulledFrames(this.sourceOrdinal, worker, frames);
+                this.recorder.recordPullResult(this.sourceOrdinal, worker, frames);
                 return frames;
             }
         }

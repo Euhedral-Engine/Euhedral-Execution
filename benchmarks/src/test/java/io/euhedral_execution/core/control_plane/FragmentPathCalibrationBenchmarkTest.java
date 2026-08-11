@@ -6,9 +6,12 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.euhedral_execution.core.generics.LatticeReceiver;
+import io.euhedral_execution.core.ingest.QueueIngestSink;
 import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
 import java.util.BitSet;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Isolated;
 
@@ -162,15 +165,18 @@ class FragmentPathCalibrationBenchmarkTest {
 
         recorder.recordAcquisition(0, 0, false);
         recorder.recordAcquisition(0, 0, true);
-        recorder.recordPulledFrames(0, 0, 32L);
+        recorder.recordPullResult(0, 0, 32L);
         recorder.recordAcquisition(1, 0, true);
-        recorder.recordPulledFrames(1, 0, 16L);
+        recorder.recordPullResult(1, 0, 16L);
+        recorder.recordAcquisition(1, 0, true);
 
         FragmentPathCalibrationBenchmark.HandleSnapshot snapshot = recorder.snapshot();
         assertArrayEquals(new long[] {2L}, snapshot.attempts()[0]);
         assertArrayEquals(new long[] {1L}, snapshot.failures()[0]);
         assertArrayEquals(new long[] {32L}, snapshot.pulledFrames()[0]);
         assertArrayEquals(new long[] {16L}, snapshot.pulledFrames()[1]);
+        assertArrayEquals(new long[] {1L}, FragmentPathCalibrationBenchmark.successfulServiceAttempts(snapshot)[0]);
+        assertArrayEquals(new long[] {2L}, FragmentPathCalibrationBenchmark.successfulServiceAttempts(snapshot)[1]);
         assertArrayEquals(new long[] {0L, 1L}, snapshot.firstProductiveOrder());
 
         long[][] isolated = snapshot.pulledFrames();
@@ -192,6 +198,7 @@ class FragmentPathCalibrationBenchmarkTest {
         assertArrayEquals(new long[] {3L, 6L}, delta.attempts()[0]);
         assertArrayEquals(new long[] {0L, 2L}, delta.failures()[0]);
         assertArrayEquals(new long[] {64L, 96L}, delta.pulledFrames()[0]);
+        assertArrayEquals(new long[] {3L, 4L}, FragmentPathCalibrationBenchmark.successfulServiceAttempts(delta)[0]);
         assertThrows(IllegalArgumentException.class, () -> FragmentPathCalibrationBenchmark.handleDelta(after, before));
     }
 
@@ -295,11 +302,12 @@ class FragmentPathCalibrationBenchmarkTest {
     @Test
     void formatsHandleLifecycleEvidenceDeterministically() {
         FragmentPathCalibrationBenchmark.HandleSnapshot snapshot = new FragmentPathCalibrationBenchmark.HandleSnapshot(
-                new long[][] {{1L}}, new long[][] {{0L}}, new long[][] {{32L}}, new long[] {0L});
+                new long[][] {{2L}}, new long[][] {{0L}}, new long[][] {{32L}}, new long[] {0L});
 
         assertArrayEquals(new int[] {0, 1}, FragmentPathCalibrationBenchmark.sourceOrdinals(2));
         assertEquals(
-                "[{attempts=[[1]], failures=[[0]], pulledFrames=[[32]], firstProductiveOrder=[0]}]",
+                "[{attempts=[[2]], failures=[[0]], successfulServiceAttempts=[[2]], "
+                        + "pulledFrames=[[32]], firstProductiveOrder=[0]}]",
                 FragmentPathCalibrationBenchmark.formatHandleSnapshots(List.of(snapshot)));
         assertThrows(IllegalArgumentException.class, () -> FragmentPathCalibrationBenchmark.sourceOrdinals(-1));
     }
@@ -317,7 +325,7 @@ class FragmentPathCalibrationBenchmarkTest {
         second.close();
     }
 
-    /// Verifies the five normal rows and two overhead controls remain fixed before JMH execution.
+    /// Verifies the five normal rows remain fixed before JMH execution.
     @Test
     void retainsPredeclaredProductionPolicyCases() {
         FragmentPathCalibrationBenchmark.NormalPolicyCase guard =
@@ -352,6 +360,38 @@ class FragmentPathCalibrationBenchmarkTest {
         }
     }
 
+    /// Verifies the three Phase 8 rows retain their declared live and productive handle counts.
+    @Test
+    void retainsProductiveOpportunityFixtures() {
+        assertEquals(2, FragmentPathCalibrationBenchmark.OpportunityFixture.TWO_PRODUCTIVE_HANDLES.liveHandles);
+        assertEquals(2, FragmentPathCalibrationBenchmark.OpportunityFixture.TWO_PRODUCTIVE_HANDLES.productiveHandles);
+        assertEquals(1, FragmentPathCalibrationBenchmark.OpportunityFixture.ONE_PRODUCTIVE_HANDLE.liveHandles);
+        assertEquals(1, FragmentPathCalibrationBenchmark.OpportunityFixture.ONE_PRODUCTIVE_HANDLE.productiveHandles);
+        assertEquals(2, FragmentPathCalibrationBenchmark.OpportunityFixture.TWO_LIVE_ONE_PRODUCTIVE.liveHandles);
+        assertEquals(1, FragmentPathCalibrationBenchmark.OpportunityFixture.TWO_LIVE_ONE_PRODUCTIVE.productiveHandles);
+        assertEquals(3, FragmentPathCalibrationBenchmark.OpportunityFixture.values().length);
+    }
+
+    /// Verifies an empty production queue remains live while pulls and requests produce no frames.
+    @Test
+    void emptyQueueSourceRemainsLiveAndNonproductive() {
+        QueueIngestSink sink = new QueueIngestSink();
+        AtomicLong pushed = new AtomicLong();
+        sink.getDelegate().addDownstream(receiver(pushed));
+
+        long pulled = sink.getDelegate().pull(frame -> pushed.incrementAndGet(), frame -> false, 32L);
+        sink.getDelegate().request(32L);
+
+        assertEquals(0L, pulled);
+        assertEquals(0L, pushed.get());
+        assertEquals(0L, sink.size());
+        assertEquals(32L, sink.getDemand());
+        assertFalse(sink.isComplete());
+
+        sink.complete();
+        assertTrue(sink.isComplete());
+    }
+
     /// Verifies the normal benchmark rejects a guard-mode change without constraining estimator shape.
     @Test
     void validatesResolvedAndGuardPolicySnapshots() {
@@ -372,6 +412,27 @@ class FragmentPathCalibrationBenchmarkTest {
                 new ControlPlaneFragment.FragmentPolicySnapshot[] {staged});
 
         assertTrue(state.policyValidationFailure().contains("wrong resolved or guard mode"));
+    }
+
+    /// Creates a receiver that counts synchronously pushed frames for source-contract tests.
+    private static LatticeReceiver receiver(AtomicLong pushed) {
+        return new LatticeReceiver() {
+            @Override
+            public void addUpstream(io.euhedral_execution.core.generics.LatticeSource upstream) {}
+
+            @Override
+            public void push(io.euhedral_execution.core.frames.AbstractFrame frame) {
+                pushed.incrementAndGet();
+            }
+
+            @Override
+            public void onComplete() {}
+
+            @Override
+            public void onError(Throwable e) {
+                throw new AssertionError(e);
+            }
+        };
     }
 
     /// Creates a compact deterministic core set.

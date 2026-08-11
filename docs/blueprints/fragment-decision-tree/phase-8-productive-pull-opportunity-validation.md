@@ -1,6 +1,6 @@
 # Phase 8: Productive Pull Opportunity Validation
 
-Status: implementation-ready experimental blueprint
+Status: complete - Outcome 2, productive opportunity confirmed
 
 Prior evidence:
 
@@ -77,15 +77,16 @@ queue algorithm, routing rule, request rule, or production source implementation
 
 ### 4. What direct evidence proves productive opportunity rather than merely throughput?
 
-Retain source-by-worker acquisition attempts, failures, pull calls, empty pull calls, and pulled
-frames. Also retain request calls and request-produced frame totals at source-service-call
-granularity. For the empty queue retain queue size, accumulated demand, completion state, and a
-fixture assertion that no offer occurred. Pair those values with live-handle count, registered
-worker count, and per-worker executor completions.
+Retain the existing source-by-worker acquisition attempts, failures, productive pulled-frame
+totals, and first-productivity order. Derive successful source services as attempts minus failures.
+For the empty queue retain queue size, accumulated demand, completion state, and a fixture assertion
+that no offer occurred. Pair those values with live-handle count, registered worker count, and
+per-worker executor completions.
 
-The candidate is valid only when both handles remain live, both workers remain registered, one
-handle has repeated service attempts but zero productive frames, and the other handle accounts for
-all source-produced frames. Throughput alone cannot classify the state.
+The candidate is valid only when both handles remain live, both workers remain registered, the
+empty handle is acquired successfully by both workers but has zero pulled frames and no possible
+request production under the asserted empty-queue invariant, and the repeating handle accounts for
+all directly observed production. Throughput alone cannot classify the state.
 
 ### 5. What forced-path result falsifies the current live-handle proxy?
 
@@ -218,58 +219,35 @@ trial teardown.
 
 ## Benchmark-only diagnostics
 
-Extend the existing `HandleAcquisitionRecorder` and `HandleSnapshot` rather than creating another
-registry. Add source-by-worker padded counters for:
-
-- successful service attempts, derived from attempts minus acquisition failures;
-- pull calls;
-- empty pull calls;
-- frames returned by pulls;
-- request calls; and
-- frames synchronously produced by request where the benchmark source exposes that count.
-
-Keep the existing first-productive order and completion counters. Update pull statistics once after
-each delegated `pull`, never once per returned frame. Update request-call statistics once per
-delegated `request`.
-
-Add an optional benchmark-only request-result observer to `RepeatingSink`. Its existing constructor
-must delegate to an observer-disabled constructor. `hookOnRequest` already has the local delivered
-frame total; publish that total once after the loop. Do not wrap every pushed frame or add an atomic
-write per frame. The observer runs synchronously while the source handle is acquired and can record
-the current diagnostic worker without another ownership protocol.
-
-The empty queue needs no request-result wrapper: setup makes zero offers, lifecycle snapshots prove
-its size remains zero, and the production queue implementation can produce no requested frames from
-an empty queue. Record its handle's request calls plus the queue's accumulated demand and zero size.
-Do not generalize this inference to a future asynchronously fed source.
-
-Snapshot all counters only at existing JMH iteration boundaries. The productive diagnostic adds no
-timer reads, allocations, locks, logging, formatting, production fields, or cross-core controller
-to a source service call.
-
-For source `s` and interval `i`, report:
+Reuse `HandleAcquisitionRecorder` and `HandleSnapshot`; do not create another registry. Retain their
+existing source-by-worker acquisition attempts, failures, productive pulled-frame totals, and
+first-productivity order. Derive successful service attempts after snapshot as:
 
 ```text
-productiveFrames[s,i] = pulledFrames[s,i] + requestProducedFrames[s,i]
-
-nonproductivePullRate[s,i] =
-    emptyPullCalls[s,i] / max(1, pullCalls[s,i])
+successfulServiceAttempts = max(0, attempts - failures)
 ```
 
-Do not collapse request and pull into a guessed readiness score. Raw matrices remain the evidence.
+No new counter is updated in a source-service call. The empty queue needs no request-result wrapper:
+setup makes zero offers, every lifecycle snapshot proves its size remains zero and incomplete, and
+the production queue implementation can produce no requested frames from that state. Accumulated
+demand proves that it continues accepting service rather than disappearing.
+
+Snapshot only at existing JMH iteration boundaries. The Phase 8 diagnostic adds no timer reads,
+allocations, locks, logging, formatting, production fields, or cross-core controller to the hot
+source path. Do not collapse the raw evidence into a guessed readiness score.
 
 ### Instrumentation overhead gate
 
-Before the full primary run, compare the added diagnostics enabled and disabled in the same build.
-Use the existing Phase 7 overhead controls at rounds 24:
+Before the full primary run, compare any added hot diagnostic enabled and disabled in the same
+build. Use the existing Phase 7 overhead controls at rounds 24:
 
 - plentiful forced DIRECT; and
 - scarce forced STAGED.
 
 Predeclare the same gate used for Phase 7 integration: no more than one percent median throughput
 loss and no enabled lowest-fork score below 98 percent of the disabled lowest-fork score. Use three
-forks and the full warmup/measurement protocol. If the diagnostic fails, remove or narrow it; do not
-run the primary experiment with perturbing observation.
+forks and the full warmup/measurement protocol. If a candidate diagnostic fails, remove it and use
+only the existing recorder evidence; do not run the primary experiment with perturbing observation.
 
 ## Experimental sequence
 
@@ -279,12 +257,10 @@ Add benchmark-helper tests proving:
 
 1. the three fixture definitions create the exact live/productive source counts;
 2. the empty queue remains live and incomplete after empty pulls and requests;
-3. no offered frame means queue size and request-produced frames remain zero while demand can grow;
-4. pull-call, empty-pull, request-call, request-produced, acquisition, and first-productive deltas
-   retain stable source/worker coordinates;
-5. the optional repeating-source observer runs once per request with the batch total, not per frame;
-6. diagnostic enable/disable does not change forced mode or source behavior; and
-7. teardown completes both source kinds and restores the shared upstream registry.
+3. no offered frame means queue size and possible request production remain zero while demand grows;
+4. acquisition, productive-frame, successful-service, and first-productive deltas retain stable
+   source/worker coordinates;
+5. teardown completes both source kinds and restores the shared upstream registry.
 
 Do not change Core tests unless the experiment exposes a correctness defect. Existing
 `UpstreamQueueTest` remains the regression authority for transient acquisition reinsertion.
@@ -300,8 +276,7 @@ Run the six primary rows in one same-build JMH group. For every fork retain:
 - per-worker completion deltas, fractions, dominance, and effective lanes;
 - handle IDs and source ordinals/types;
 - acquisition attempts and failures;
-- pull calls, empty pulls, and pulled frames;
-- request calls and request-produced frames where observed;
+- successful source services and pulled frames;
 - empty queue size, demand, completion state, and offer count; and
 - raw executor-body diagnostic snapshots as an unchanged control, with no production selector
   publication.
@@ -528,3 +503,185 @@ record Outcome 1 or Outcome 2 instead and retain the defect as an intermediate f
 The phase is complete only when the outcome is supported by production-reachable source semantics,
 direct handle evidence, forced-path results, participation evidence, and the predeclared uncertainty
 and materiality gates.
+
+## Completion record
+
+Completed: 2026-08-11
+
+Final classification: **Outcome 2: productive opportunity confirmed.**
+
+The production selector remains unchanged. A production-reachable fixture retained two live handles
+and two registered workers while only one handle could produce frames. At the fixed expensive work
+point, STAGED beat DIRECT by 5.668 percent with non-overlapping confidence intervals, and every
+retained STAGED fork exceeded every retained DIRECT fork. Live-handle count can therefore overstate
+sustained, independently productive pull opportunity.
+
+The only authorized next blueprint is design of the cheapest reliable runtime observable for
+sustained productive pull opportunity. This phase does not authorize a sensor or production-tree
+change.
+
+### Implementation
+
+The retained implementation changes only:
+
+- `FragmentPathCalibrationBenchmark`: adds the three physical fixtures, forced-path benchmark,
+  lifecycle snapshots, and reporting based on the existing handle recorder;
+- `FragmentPathCalibrationBenchmarkTest`: adds deterministic fixture, queue-liveness, recorder, and
+  lifecycle tests; and
+- this blueprint and completion record.
+
+Candidate C uses a real `QueueIngestSink`, publishes it through the same interceptor path as the
+repeating source, never offers it a frame, and completes it only during common trial teardown. No
+Core production file, source implementation, execution path, selector, module descriptor, or public
+constructor changed.
+
+Two richer diagnostic candidates were rejected before the clean primary run. Request/pull-result
+accounting first exceeded the overhead gate. A narrowed pull-call/empty-pull version still caused a
+1.818 percent DIRECT median loss and reduced the enabled lowest DIRECT fork to 97.656 percent of the
+disabled lowest fork. Both were removed. The retained experiment adds no new hot source-service
+counter: successful services are derived after snapshot from the pre-existing acquisition attempts
+and failures, and productive frames use the pre-existing recorder.
+
+### Environment
+
+```text
+host: Intel Core i9-14900K
+topology: 1 socket, 24 physical cores, 32 logical CPUs
+workers: logical CPUs [0,6], physical cores [0,1]
+kernel: Linux 7.0.0-28-generic x86_64
+JVM: OpenJDK 64-Bit Server VM 21.0.2+13-58
+Gradle: 9.6.1
+JMH: 1.37
+baseline commit: 023ec20ba293ba92b5576ca74777315b51547c8a
+batch target: 32
+completion window: 1,048,576 frames
+protocol: 3 forks, 3 x 3 s warmup, 5 x 5 s measurement
+work: 512 rounds, isolated body approximately 449.914 ns
+raw executor timing cadence: 256 calls
+```
+
+### Clean forced-path results
+
+| Fixture | Mode | Mean frames/s | JMH error | 99.9% confidence interval | Fork means |
+|---|---|---:|---:|---|---|
+| two productive handles | DIRECT | 4,290,928 | 3,297 | `[4287631,4294224]` | `[4289929,4288152,4294701]` |
+| two productive handles | STAGED | 3,996,873 | 23,020 | `[3973853,4019893]` | `[3971156,4006804,4012659]` |
+| one productive handle | DIRECT | 2,691,208 | 34,760 | `[2656448,2725968]` | `[2676176,2719529,2677920]` |
+| one productive handle | STAGED | 4,074,980 | 6,961 | `[4068019,4081941]` | `[4066598,4080595,4077749]` |
+| two live, one productive | DIRECT | 3,818,428 | 61,242 | `[3757186,3879671]` | `[3855364,3859602,3740319]` |
+| two live, one productive | STAGED | 4,034,865 | 59,484 | `[3975381,4094349]` | `[4055115,4042521,4006959]` |
+
+The controls reproduce the mapped surface:
+
+- two productive handles: DIRECT leads STAGED by 7.357 percent, with non-overlapping confidence
+  intervals and the lowest DIRECT fork above the highest STAGED fork;
+- one productive handle: STAGED leads DIRECT by 51.418 percent, with non-overlapping confidence
+  intervals and the lowest STAGED fork above the highest DIRECT fork; and
+- two live, one productive: STAGED leads DIRECT by 5.668 percent, its confidence interval does not
+  overlap DIRECT, and its lowest fork exceeds DIRECT's highest fork.
+
+All 18 forks passed the worker-presence gate. Aggregate dominance ranged from 0.50005 to 0.51766,
+below the declared 0.60 limit. Candidate dominance ranged from 0.50005 to 0.50167. The executor-body
+control stayed in one expensive region: all 36 fork-worker estimates were 469.567-483.741 ns/call.
+No worker disappearance or path-dependent body-cost regime appeared.
+
+### Direct candidate evidence
+
+Every setup, warmup, measurement, and final candidate snapshot retained:
+
+```text
+live handles = 2
+registered workers = 2
+empty queue size = 0
+empty queue offers = 0
+empty queue complete = false
+```
+
+Final accumulated demand on the empty queue was 3.064-4.070 billion in DIRECT forks and
+1.218-1.283 billion in STAGED forks. The source therefore remained live and accepted sustained
+demand for the entire fork rather than exhausting or disappearing.
+
+The following values are fork aggregates across warmup and measurement. Successful service is
+derived from acquisition attempts minus failures. Source ordinal 0 is the repeating source; source
+ordinal 1 is the empty queue.
+
+| Mode/fork | Repeating successful services | Empty successful services | Repeating pulled frames | Empty pulled frames | Aggregate D |
+|---|---:|---:|---:|---:|---:|
+| DIRECT 1 | 3,182,352 | 24,981,612 | 32,469,411 | 0 | 0.50109 |
+| DIRECT 2 | 3,214,176 | 27,246,451 | 33,293,404 | 0 | 0.50152 |
+| DIRECT 3 | 3,049,398 | 31,715,508 | 33,268,558 | 0 | 0.50167 |
+| STAGED 1 | 5,354,037 | 6,890,649 | 36,848,773 | 0 | 0.50014 |
+| STAGED 2 | 5,307,866 | 6,864,156 | 36,680,653 | 0 | 0.50005 |
+| STAGED 3 | 5,193,953 | 6,710,800 | 36,444,187 | 0 | 0.50014 |
+
+Both workers successfully acquired the empty handle millions of times in every fork. It produced no
+pulled frames, could not produce requested frames while its production queue remained empty, and
+never completed. The repeating handle was directly productive for both workers, while both workers
+also executed approximately half of all completions. This proves reduced independent source
+productivity directly rather than inferring it from throughput.
+
+### Bug-first and time-scale review
+
+The clean controls and candidate showed no worker disappearance, lost handle, registration change,
+source completion, productive empty-source event, or unresolved discrete regime. Candidate DIRECT
+had one lower fork, but its worker split, lifecycle state, body-cost region, and source-service
+evidence matched the other forks; the candidate acceptance result does not depend on averaging
+because the lowest STAGED fork still exceeds the highest DIRECT fork.
+
+A bounded dynamic smoke was attempted only after the static candidate first indicated H1. A gate
+checked once per source service cannot promptly stop a large synchronous repeating-source request
+already in progress. Prompt transition would require observing shared gate state inside the
+per-frame delivery loop, violating the no-per-frame-coordination stop rule and no longer matching
+the real empty queue, whose empty request returns immediately. The attempt was stopped and all gate
+code removed. The static real queue proves that nonproductivity persists across setup, all warmups,
+all measurements, and teardown.
+
+### Raw evidence and exact primary command
+
+Generated evidence remains outside source control:
+
+```text
+benchmarks/build/reports/phase8-overhead-disabled.json
+benchmarks/build/reports/phase8-overhead-enabled.json
+benchmarks/build/reports/phase8-productive-pull-opportunity.json
+benchmarks/build/reports/phase8-productive-pull-opportunity.log
+benchmarks/build/reports/phase8-transition-smoke.log
+```
+
+The first two files document the rejected pull-only diagnostic gate. The final six-row report and
+log contain only the clean primary benchmark:
+
+```text
+mise exec -- java -XX:+UseThreadPriorities --enable-native-access=ALL-UNNAMED \
+  --add-exports=java.base/jdk.internal.platform=ALL-UNNAMED \
+  --add-exports=java.base/jdk.internal.vm.annotation=ALL-UNNAMED \
+  -Dlogback.configurationFile=benchmark-logback.xml \
+  -cp 'benchmarks/build/euhedral-benchmark.jar:benchmarks/build/lib/*' \
+  org.openjdk.jmh.Main \
+  'io.euhedral_execution.core.control_plane.FragmentPathCalibrationBenchmark.productivePullOpportunity' \
+  -p mode=DIRECT,STAGED \
+  -p opportunityFixture=TWO_PRODUCTIVE_HANDLES,ONE_PRODUCTIVE_HANDLE,TWO_LIVE_ONE_PRODUCTIVE \
+  -p workRounds=512 -p handleLayout=NATURAL \
+  -f 3 -wi 3 -w 3s -i 5 -r 5s -tu s -foe true \
+  -rf json -rff benchmarks/build/reports/phase8-productive-pull-opportunity.json \
+  -jvmArgsAppend '-XX:+UseThreadPriorities --enable-native-access=ALL-UNNAMED --add-exports=java.base/jdk.internal.platform=ALL-UNNAMED --add-exports=java.base/jdk.internal.vm.annotation=ALL-UNNAMED' \
+  > benchmarks/build/reports/phase8-productive-pull-opportunity.log 2>&1
+```
+
+### Verification
+
+```text
+mise exec -- gradle :euhedral-core:test --no-daemon                     PASS
+mise exec -- gradle :benchmarks:test :benchmarks:assemble --no-daemon  PASS
+mise exec -- gradle build --no-daemon                                  PASS
+git diff --check                                                        PASS
+```
+
+Direct inspection must also confirm:
+
+- `FragmentControlPolicy` retains the 90/95 ns guard, 32-sample non-overlapping second-minimum
+  windows, two-window expensive confirmation, and `liveHandles >= registeredWorkers` root;
+- `AbstractExecutor.PRODUCTION_BODY_TIMING_INTERVAL` remains 256;
+- normal selection, safe batch-boundary application, and forced modes are unchanged;
+- no production availability state, generic controller, or cross-core coordination was added; and
+- all changed source and documentation text is ASCII.
